@@ -1,12 +1,14 @@
 #include "audio.h"
 
 #include <math.h>
+#include <string.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 #include "main.h"
+#include "usart.h"
 
 #define AUDIO_SAMPLE_RATE_HZ 48000.0f
 #define AUDIO_TONE_HZ 440.0f
@@ -15,9 +17,19 @@
 #define AUDIO_BUFFER_SAMPLES (AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS)
 
 extern SAI_HandleTypeDef hsai_BlockA1;
+extern UART_HandleTypeDef husart1;
 
 static int16_t audio_buffer[AUDIO_BUFFER_SAMPLES] __attribute__((aligned(32)));
 static float audio_phase = 0.0f;
+
+static void audio_log(const char *message)
+{
+  if (message == NULL)
+  {
+    return;
+  }
+  HAL_UART_Transmit(&husart1, (uint8_t *)message, (uint16_t)strlen(message), HAL_MAX_DELAY);
+}
 
 static void audio_clean_dcache(void *addr, size_t size)
 {
@@ -36,7 +48,7 @@ static void audio_clean_dcache(void *addr, size_t size)
 void audio_fill_buffer(int16_t *buffer, size_t frames)
 {
   const float phase_increment = 2.0f * (float)M_PI * (AUDIO_TONE_HZ / AUDIO_SAMPLE_RATE_HZ);
-  const float amplitude = 16000.0f;
+  const float amplitude = 30000.0f;
 
   for (size_t i = 0; i < frames; ++i)
   {
@@ -58,13 +70,20 @@ void audio_fill_buffer(int16_t *buffer, size_t frames)
 
 void audio_init(void)
 {
+  audio_log("audio_init()\r\n");
   audio_fill_buffer(audio_buffer, AUDIO_BUFFER_FRAMES / 2U);
   audio_fill_buffer(&audio_buffer[AUDIO_BUFFER_SAMPLES / 2U], AUDIO_BUFFER_FRAMES / 2U);
+  audio_log("Buffer filled\r\n");
 }
 
 void audio_start(void)
 {
-  (void)HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)audio_buffer, AUDIO_BUFFER_SAMPLES);
+  audio_log("audio_start()\r\n");
+  if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)audio_buffer, AUDIO_BUFFER_SAMPLES) == HAL_OK)
+  {
+    audio_log("SAI started\r\n");
+    audio_log("DMA started\r\n");
+  }
 }
 
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
@@ -75,6 +94,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
   }
 
   audio_fill_buffer(audio_buffer, AUDIO_BUFFER_FRAMES / 2U);
+  audio_log("DMA half callback\r\n");
 }
 
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
@@ -85,4 +105,5 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
   }
 
   audio_fill_buffer(&audio_buffer[AUDIO_BUFFER_SAMPLES / 2U], AUDIO_BUFFER_FRAMES / 2U);
+  audio_log("DMA complete callback\r\n");
 }
