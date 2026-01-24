@@ -3,6 +3,7 @@ CAD.formats=
 CAD.pinconfig=
 CAD.provider=
 CORTEX_M7.IPParameters=default_mode_Activation
+CORTEX_M7.MPU_Control=__NULL
 CORTEX_M7.default_mode_Activation=1
 Dma.Request0=SAI1_A
 Dma.RequestsNb=1
