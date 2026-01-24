@@ -22,9 +22,16 @@
 #include "sai.h"
 #include "usart.h"
 #include "gpio.h"
+#include "codec_pcm5100a.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -35,6 +42,16 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define AUDIO_SAMPLE_RATE_HZ 44100U
+#define AUDIO_TONE_HZ 1000U
+#define AUDIO_FRAMES_PER_BUFFER 1024U
+#define AUDIO_CHANNELS 2U
+#define AUDIO_BUFFER_SAMPLES (AUDIO_FRAMES_PER_BUFFER * AUDIO_CHANNELS)
+#define UART_LOG_TIMEOUT_MS 10U
+#define AUDIO_LOG_DECIMATION 200U
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 /* USER CODE END PD */
 
@@ -46,17 +63,79 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static int16_t audio_buffer[AUDIO_BUFFER_SAMPLES];
+static volatile bool audio_half_ready = false;
+static volatile bool audio_full_ready = false;
+static volatile uint32_t audio_half_count = 0;
+static volatile uint32_t audio_full_count = 0;
+static float audio_phase = 0.0f;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+static void UART_Log(const char *message);
+static void UART_Logf(const char *format, ...);
+static void FillAudioBuffer(int16_t *buffer, uint32_t frames);
+static void StartAudioPlayback(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void UART_Log(const char *message)
+{
+  if (message == NULL)
+  {
+    return;
+  }
+
+  HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), UART_LOG_TIMEOUT_MS);
+}
+
+static void UART_Logf(const char *format, ...)
+{
+  char buffer[128];
+  va_list args;
+
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
+
+  UART_Log(buffer);
+}
+
+static void FillAudioBuffer(int16_t *buffer, uint32_t frames)
+{
+  const float phase_increment = 2.0f * (float)M_PI * ((float)AUDIO_TONE_HZ / (float)AUDIO_SAMPLE_RATE_HZ);
+  const float amplitude = 0.7f * (float)INT16_MAX;
+
+  for (uint32_t i = 0; i < frames; i++)
+  {
+    int16_t sample = (int16_t)(sinf(audio_phase) * amplitude);
+
+    buffer[i * 2U] = sample;
+    buffer[(i * 2U) + 1U] = sample;
+
+    audio_phase += phase_increment;
+    if (audio_phase >= 2.0f * (float)M_PI)
+    {
+      audio_phase -= 2.0f * (float)M_PI;
+    }
+  }
+}
+
+static void StartAudioPlayback(void)
+{
+  FillAudioBuffer(audio_buffer, AUDIO_FRAMES_PER_BUFFER);
+
+  if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)audio_buffer, AUDIO_BUFFER_SAMPLES) != HAL_OK)
+  {
+    UART_Log("ERROR: SAI DMA start failed\r\n");
+    Error_Handler();
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -89,10 +168,21 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_SAI1_Init();
   MX_USART1_UART_Init();
+  UART_Log("Clock init OK\r\n");
+  UART_Log("GPIO init OK\r\n");
+  MX_DMA_Init();
+  UART_Log("DMA init OK\r\n");
+  MX_SAI1_Init();
+  UART_Log("SAI1 init OK\r\n");
   /* USER CODE BEGIN 2 */
+  UART_Log("UART1 init OK\r\n");
+  PCM5100A_Init();
+  UART_Log("PCM5100A init (mute)\r\n");
+  PCM5100A_Mute(false);
+  UART_Log("PCM5100A unmute\r\n");
+  StartAudioPlayback();
+  UART_Log("Audio start\r\n");
 
   /* USER CODE END 2 */
 
@@ -103,6 +193,28 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (audio_half_ready)
+    {
+      audio_half_ready = false;
+      FillAudioBuffer(audio_buffer, AUDIO_FRAMES_PER_BUFFER / 2U);
+      if ((audio_half_count % AUDIO_LOG_DECIMATION) == 0U)
+      {
+        UART_Logf("DMA half callback: %lu\r\n", (unsigned long)audio_half_count);
+      }
+    }
+
+    if (audio_full_ready)
+    {
+      audio_full_ready = false;
+      FillAudioBuffer(&audio_buffer[AUDIO_FRAMES_PER_BUFFER], AUDIO_FRAMES_PER_BUFFER / 2U);
+      if ((audio_full_count % AUDIO_LOG_DECIMATION) == 0U)
+      {
+        UART_Logf("DMA full callback: %lu\r\n", (unsigned long)audio_full_count);
+      }
+    }
+
+    HAL_GPIO_TogglePin(LED_DEBUG_GPIO_Port, LED_DEBUG_Pin);
+    HAL_Delay(200);
   }
   /* USER CODE END 3 */
 }
@@ -166,6 +278,23 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_A)
+  {
+    audio_half_ready = true;
+    audio_half_count++;
+  }
+}
+
+void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_A)
+  {
+    audio_full_ready = true;
+    audio_full_count++;
+  }
+}
 
 /* USER CODE END 4 */
 
@@ -177,6 +306,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
+  UART_Log("ERROR: Error_Handler entered\r\n");
   __disable_irq();
   while (1)
   {

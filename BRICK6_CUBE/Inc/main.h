@@ -61,6 +61,8 @@ void Error_Handler(void);
 #define LED_DEBUG_GPIO_Port GPIOH
 
 /* USER CODE BEGIN Private defines */
+#define PCM5100A_MUTE_Pin GPIO_PIN_0
+#define PCM5100A_MUTE_GPIO_Port GPIOB
 
 /* USER CODE END Private defines */
 
