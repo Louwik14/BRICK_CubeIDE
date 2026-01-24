@@ -1,0 +1,7 @@
+../Src/main.c:107:13:uart_log	1
+../Src/main.c:112:13:audio_fill_samples	2
+../Src/main.c:134:5:main	6
+../Src/main.c:235:6:SystemClock_Config	4
+../Src/main.c:291:6:HAL_SAI_TxHalfCpltCallback	2
+../Src/main.c:300:6:HAL_SAI_TxCpltCallback	2
+../Src/main.c:315:6:Error_Handler	1
