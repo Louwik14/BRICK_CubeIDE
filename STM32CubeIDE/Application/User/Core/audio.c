@@ -30,10 +30,13 @@ static void audio_log(const char *message)
   if (message == NULL)
     return;
 
+  if (__get_IPSR() != 0U)
+    return;
+
   HAL_USART_Transmit(&husart1,
                      (uint8_t *)message,
                      (uint16_t)strlen(message),
-                     HAL_MAX_DELAY);
+                     10U);
 }
 
 /* ------------------------------------------------------------------ */
@@ -119,7 +122,6 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     return;
 
   audio_fill_buffer(audio_buffer, AUDIO_BUFFER_FRAMES / 2U);
-  audio_log("DMA half callback\r\n");
 }
 
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
@@ -128,5 +130,4 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
     return;
 
   audio_fill_buffer(&audio_buffer[AUDIO_BUFFER_SAMPLES / 2U], AUDIO_BUFFER_FRAMES / 2U);
-  audio_log("DMA complete callback\r\n");
 }
