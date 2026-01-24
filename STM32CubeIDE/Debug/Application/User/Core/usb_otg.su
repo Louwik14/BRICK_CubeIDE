@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usb_otg.c:32:6:MX_USB_OTG_FS_PCD_Init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usb_otg.c:64:6:MX_USB_OTG_HS_HCD_Init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usb_otg.c:92:6:HAL_PCD_MspInit	240	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usb_otg.c:140:6:HAL_HCD_MspInit	240	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usb_otg.c:188:6:HAL_PCD_MspDeInit	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usb_otg.c:213:6:HAL_HCD_MspDeInit	16	static

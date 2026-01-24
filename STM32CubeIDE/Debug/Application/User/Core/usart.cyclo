@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usart.c:31:6:MX_UART5_Init	5
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usart.c:74:6:MX_USART1_Init	5
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usart.c:117:6:HAL_UART_MspInit	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usart.c:158:6:HAL_USART_MspInit	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usart.c:200:6:HAL_UART_MspDeInit	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/usart.c:223:6:HAL_USART_MspDeInit	2

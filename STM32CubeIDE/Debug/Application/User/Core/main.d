@@ -51,7 +51,12 @@ Application/User/Core/main.o: \
  ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h
+ ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
+ ../../Core/Inc/adc.h ../../Core/Inc/main.h ../../Core/Inc/dma.h \
+ ../../Core/Inc/i2c.h ../../Core/Inc/sai.h ../../Core/Inc/sdmmc.h \
+ ../../Core/Inc/spi.h ../../Core/Inc/tim.h ../../Core/Inc/usart.h \
+ ../../Core/Inc/usb_otg.h ../../Core/Inc/gpio.h ../../Core/Inc/fmc.h \
+ ../../Core/Inc/audio.h
 ../../Core/Inc/main.h:
 ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../../Core/Inc/stm32h7xx_hal_conf.h:
@@ -104,3 +109,16 @@ Application/User/Core/main.o: \
 ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
+../../Core/Inc/adc.h:
+../../Core/Inc/main.h:
+../../Core/Inc/dma.h:
+../../Core/Inc/i2c.h:
+../../Core/Inc/sai.h:
+../../Core/Inc/sdmmc.h:
+../../Core/Inc/spi.h:
+../../Core/Inc/tim.h:
+../../Core/Inc/usart.h:
+../../Core/Inc/usb_otg.h:
+../../Core/Inc/gpio.h:
+../../Core/Inc/fmc.h:
+../../Core/Inc/audio.h:
