@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -36,7 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define AUDIO_TWO_PI 6.28318530717958647692f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -52,14 +53,14 @@ enum
 {
   AUDIO_SAMPLE_RATE = 44100U,
   AUDIO_TONE_HZ = 1000U,
-  AUDIO_TABLE_SIZE = 256U,
   AUDIO_CHANNELS = 2U,
   AUDIO_FRAMES_PER_HALF = 256U,
   AUDIO_BUFFER_FRAMES = (AUDIO_FRAMES_PER_HALF * 2U),
   AUDIO_BUFFER_SAMPLES = (AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS)
 };
 
-static int16_t audio_buffer[AUDIO_BUFFER_SAMPLES];
+/* 24-bit audio samples packed in 32-bit words (MSB aligned for SAI 24-in-32). */
+static int32_t audio_buffer[AUDIO_BUFFER_SAMPLES];
 static volatile uint32_t audio_half_events = 0;
 static volatile uint32_t audio_full_events = 0;
 static uint32_t audio_phase = 0;
@@ -77,34 +78,6 @@ static void MPU_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-static const int16_t audio_sine_table[AUDIO_TABLE_SIZE] = {
-  0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512, 10278,
-  11039, 11793, 12539, 13279, 14010, 14732, 15446, 16151, 16846, 17530, 18204,
-  18868, 19519, 20159, 20787, 21403, 22005, 22594, 23170, 23731, 24279, 24811,
-  25329, 25832, 26319, 26790, 27245, 27683, 28105, 28510, 28898, 29268, 29621,
-  29956, 30273, 30571, 30852, 31113, 31356, 31580, 31785, 31971, 32137, 32285,
-  32412, 32521, 32609, 32678, 32728, 32757, 32767, 32757, 32728, 32678, 32609,
-  32521, 32412, 32285, 32137, 31971, 31785, 31580, 31356, 31113, 30852, 30571,
-  30273, 29956, 29621, 29268, 28898, 28510, 28105, 27683, 27245, 26790, 26319,
-  25832, 25329, 24811, 24279, 23731, 23170, 22594, 22005, 21403, 20787, 20159,
-  19519, 18868, 18204, 17530, 16846, 16151, 15446, 14732, 14010, 13279, 12539,
-  11793, 11039, 10278, 9512, 8739, 7962, 7179, 6393, 5602, 4808, 4011, 3212,
-  2410, 1608, 804, 0, -804, -1608, -2410, -3212, -4011, -4808, -5602, -6393,
-  -7179, -7962, -8739, -9512, -10278, -11039, -11793, -12539, -13279, -14010,
-  -14732, -15446, -16151, -16846, -17530, -18204, -18868, -19519, -20159,
-  -20787, -21403, -22005, -22594, -23170, -23731, -24279, -24811, -25329,
-  -25832, -26319, -26790, -27245, -27683, -28105, -28510, -28898, -29268,
-  -29621, -29956, -30273, -30571, -30852, -31113, -31356, -31580, -31785,
-  -31971, -32137, -32285, -32412, -32521, -32609, -32678, -32728, -32757,
-  -32767, -32757, -32728, -32678, -32609, -32521, -32412, -32285, -32137,
-  -31971, -31785, -31580, -31356, -31113, -30852, -30571, -30273, -29956,
-  -29621, -29268, -28898, -28510, -28105, -27683, -27245, -26790, -26319,
-  -25832, -25329, -24811, -24279, -23731, -23170, -22594, -22005, -21403,
-  -20787, -20159, -19519, -18868, -18204, -17530, -16846, -16151, -15446,
-  -14732, -14010, -13279, -12539, -11793, -11039, -10278, -9512, -8739,
-  -7962, -7179, -6393, -5602, -4808, -4011, -3212, -2410, -1608, -804
-};
-
 static void uart_log(const char *message)
 {
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
@@ -116,11 +89,13 @@ static void audio_fill_samples(uint32_t sample_offset, uint32_t frame_count)
 
   for (uint32_t frame = 0; frame < frame_count; ++frame)
   {
-    uint32_t table_index = (audio_phase >> 16) & (AUDIO_TABLE_SIZE - 1U);
-    int16_t sample = audio_sine_table[table_index];
+    float phase = (float)audio_phase * (AUDIO_TWO_PI / 4294967296.0f);
+    int32_t sample24 = (int32_t)(sinf(phase) * 0x7FFFFF);
+    /* 24-bit signed sample packed into 32-bit word: MSB aligned (<< 8). */
+    int32_t sample32 = sample24 << 8;
 
-    audio_buffer[sample_index++] = sample;
-    audio_buffer[sample_index++] = sample;
+    audio_buffer[sample_index++] = sample32;
+    audio_buffer[sample_index++] = sample32;
 
     audio_phase += audio_phase_inc;
   }
@@ -168,7 +143,8 @@ int main(void)
   HAL_StatusTypeDef sai_status;
 
   audio_phase = 0;
-  audio_phase_inc = (AUDIO_TONE_HZ * AUDIO_TABLE_SIZE * 65536U) / AUDIO_SAMPLE_RATE;
+  /* 32-bit phase accumulator for sinf(): phase maps to 0..2π over 2^32 steps. */
+  audio_phase_inc = (uint32_t)(((uint64_t)AUDIO_TONE_HZ << 32) / AUDIO_SAMPLE_RATE);
   audio_fill_samples(0U, AUDIO_BUFFER_FRAMES);
 
   uart_log("SAI1 PCM5100A audio start\r\n");
