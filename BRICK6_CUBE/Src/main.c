@@ -54,12 +54,15 @@ enum
   AUDIO_TONE_HZ = 1000U,
   AUDIO_TABLE_SIZE = 256U,
   AUDIO_CHANNELS = 2U,
+  AUDIO_BYTES_PER_SAMPLE = 3U,
   AUDIO_FRAMES_PER_HALF = 256U,
   AUDIO_BUFFER_FRAMES = (AUDIO_FRAMES_PER_HALF * 2U),
-  AUDIO_BUFFER_SAMPLES = (AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS)
+  AUDIO_BUFFER_SAMPLES = (AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS),
+  AUDIO_BUFFER_BYTES = (AUDIO_BUFFER_SAMPLES * AUDIO_BYTES_PER_SAMPLE)
 };
 
-static int16_t audio_buffer[AUDIO_BUFFER_SAMPLES];
+/* 24-bit native stream: L0[3] R0[3] L1[3] R1[3] ... */
+static uint8_t audio_buffer[AUDIO_BUFFER_BYTES];
 static volatile uint32_t audio_half_events = 0;
 static volatile uint32_t audio_full_events = 0;
 static uint32_t audio_phase = 0;
@@ -110,17 +113,69 @@ static void uart_log(const char *message)
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
 }
 
-static void audio_fill_samples(uint32_t sample_offset, uint32_t frame_count)
+static HAL_StatusTypeDef audio_configure_dma_24bit(void)
 {
-  uint32_t sample_index = sample_offset;
+  HAL_StatusTypeDef status;
+
+  /* Reconfigure DMA for 1-byte transfers so the wire sees exactly 24 bits/slot. */
+  status = HAL_DMA_DeInit(&hdma_sai1_a);
+  if (status != HAL_OK)
+  {
+    return status;
+  }
+
+  hdma_sai1_a.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  hdma_sai1_a.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+  hdma_sai1_a.Init.MemBurst = DMA_MBURST_SINGLE;
+  hdma_sai1_a.Init.PeriphBurst = DMA_PBURST_SINGLE;
+
+  status = HAL_DMA_Init(&hdma_sai1_a);
+  if (status != HAL_OK)
+  {
+    return status;
+  }
+
+  __HAL_LINKDMA(&hsai_BlockA1, hdmatx, hdma_sai1_a);
+  return HAL_OK;
+}
+
+static int32_t audio_clamp_24bit(int32_t sample)
+{
+  if (sample > 0x7FFFFF)
+  {
+    return 0x7FFFFF;
+  }
+  if (sample < -0x800000)
+  {
+    return -0x800000;
+  }
+  return sample;
+}
+
+static void audio_write_sample_24(uint8_t *dst, int32_t sample)
+{
+  int32_t clamped = audio_clamp_24bit(sample);
+  uint32_t packed = (uint32_t)clamped & 0x00FFFFFFU;
+
+  /* Store MSB-first for 24-bit I2S/SAI data slots. */
+  dst[0] = (uint8_t)((packed >> 16) & 0xFFU);
+  dst[1] = (uint8_t)((packed >> 8) & 0xFFU);
+  dst[2] = (uint8_t)(packed & 0xFFU);
+}
+
+static void audio_fill_samples(uint32_t byte_offset, uint32_t frame_count)
+{
+  uint32_t byte_index = byte_offset;
 
   for (uint32_t frame = 0; frame < frame_count; ++frame)
   {
     uint32_t table_index = (audio_phase >> 16) & (AUDIO_TABLE_SIZE - 1U);
-    int16_t sample = audio_sine_table[table_index];
+    int32_t sample = (int32_t)audio_sine_table[table_index] * 256;
 
-    audio_buffer[sample_index++] = sample;
-    audio_buffer[sample_index++] = sample;
+    audio_write_sample_24(&audio_buffer[byte_index], sample);
+    byte_index += AUDIO_BYTES_PER_SAMPLE;
+    audio_write_sample_24(&audio_buffer[byte_index], sample);
+    byte_index += AUDIO_BYTES_PER_SAMPLE;
 
     audio_phase += audio_phase_inc;
   }
@@ -166,13 +221,23 @@ int main(void)
   /* USER CODE BEGIN 2 */
   char log_buffer[128];
   HAL_StatusTypeDef sai_status;
+  HAL_StatusTypeDef dma_status;
 
   audio_phase = 0;
   audio_phase_inc = (AUDIO_TONE_HZ * AUDIO_TABLE_SIZE * 65536U) / AUDIO_SAMPLE_RATE;
   audio_fill_samples(0U, AUDIO_BUFFER_FRAMES);
 
   uart_log("SAI1 PCM5100A audio start\r\n");
-  sai_status = HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)audio_buffer, AUDIO_BUFFER_SAMPLES);
+  dma_status = audio_configure_dma_24bit();
+  if (dma_status != HAL_OK)
+  {
+    snprintf(log_buffer, sizeof(log_buffer),
+             "DMA 24-bit config failed: %lu\r\n", (unsigned long)dma_status);
+    uart_log(log_buffer);
+    Error_Handler();
+  }
+
+  sai_status = HAL_SAI_Transmit_DMA(&hsai_BlockA1, audio_buffer, AUDIO_BUFFER_BYTES);
   if (sai_status != HAL_OK)
   {
     snprintf(log_buffer, sizeof(log_buffer),
@@ -300,7 +365,8 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    audio_fill_samples(AUDIO_FRAMES_PER_HALF * AUDIO_CHANNELS, AUDIO_FRAMES_PER_HALF);
+    audio_fill_samples(AUDIO_FRAMES_PER_HALF * AUDIO_CHANNELS * AUDIO_BYTES_PER_SAMPLE,
+                       AUDIO_FRAMES_PER_HALF);
     audio_full_events++;
   }
 }
