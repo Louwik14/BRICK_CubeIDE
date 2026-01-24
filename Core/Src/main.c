@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "audio.h"
 
 /* USER CODE END Includes */
 
@@ -144,6 +145,8 @@ int main(void)
   MX_TIM8_Init();
   MX_USART1_Init();
   /* USER CODE BEGIN 2 */
+  audio_init();
+  audio_start();
 
   /* USER CODE END 2 */
 
