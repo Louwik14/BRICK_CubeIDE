@@ -1,0 +1,9 @@
+../Src/audio.c:58:13:uart_log	16	static
+../Src/audio.c:63:16:audio_clamp_24bit	16	static
+../Src/audio.c:76:13:audio_write_sample_24	24	static
+../Src/audio.c:87:13:audio_fill_samples	32	static
+../Src/audio.c:105:6:audio_init	8	static
+../Src/audio.c:115:6:audio_start	144	static
+../Src/audio.c:135:6:audio_get_stats	16	static
+../Src/audio.c:147:6:HAL_SAI_TxHalfCpltCallback	16	static
+../Src/audio.c:156:6:HAL_SAI_TxCpltCallback	16	static

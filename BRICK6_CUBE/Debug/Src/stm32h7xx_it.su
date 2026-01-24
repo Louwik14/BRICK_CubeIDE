@@ -9,4 +9,3 @@
 ../Src/stm32h7xx_it.c:184:6:SysTick_Handler	8	static
 ../Src/stm32h7xx_it.c:205:6:DMA1_Stream0_IRQHandler	8	static
 ../Src/stm32h7xx_it.c:219:6:SAI1_IRQHandler	8	static
-../Src/stm32h7xx_it.c:233:6:DMAMUX1_OVR_IRQHandler	4	static
