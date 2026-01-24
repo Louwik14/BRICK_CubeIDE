@@ -1,5 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:77:5:main	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:142:6:SystemClock_Config	120	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:204:6:PeriphCommonClock_Config	200	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:236:6:MPU_Config	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:267:6:Error_Handler	4	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:76:5:main	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:144:6:SystemClock_Config	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:203:6:PeriphCommonClock_Config	200	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:245:6:MPU_Config	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/Core/Src/main.c:276:6:Error_Handler	4	static,ignoring_inline_asm

@@ -277,11 +277,6 @@
 			<locationURI>PARENT-1-PROJECT_LOC/Core/Src/gpio.c</locationURI>
 		</link>
 		<link>
-			<name>Application/User/Core/i2c.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Core/Src/i2c.c</locationURI>
-		</link>
-		<link>
 			<name>Application/User/Core/main.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Core/Src/main.c</locationURI>

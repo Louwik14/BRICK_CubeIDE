@@ -87,6 +87,8 @@ void Error_Handler(void);
 #define ENC2_A_EXTI_IRQn EXTI15_10_IRQn
 #define ENC2_B_Pin GPIO_PIN_11
 #define ENC2_B_GPIO_Port GPIOB
+#define LED_DEBUG_Pin GPIO_PIN_7
+#define LED_DEBUG_GPIO_Port GPIOH
 #define ENC3_A_Pin GPIO_PIN_10
 #define ENC3_A_GPIO_Port GPIOH
 #define ENC3_B_Pin GPIO_PIN_11

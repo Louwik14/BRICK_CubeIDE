@@ -11,26 +11,34 @@
 #include "usart.h"
 
 #define AUDIO_SAMPLE_RATE_HZ 48000.0f
-#define AUDIO_TONE_HZ 440.0f
-#define AUDIO_CHANNELS 2U
-#define AUDIO_BUFFER_FRAMES 256U
+#define AUDIO_TONE_HZ        440.0f
+#define AUDIO_CHANNELS       2U
+#define AUDIO_BUFFER_FRAMES  256U
 #define AUDIO_BUFFER_SAMPLES (AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS)
 
-extern SAI_HandleTypeDef hsai_BlockA1;
-extern UART_HandleTypeDef husart1;
+extern SAI_HandleTypeDef   hsai_BlockA1;
+extern USART_HandleTypeDef husart1;
 
 static int16_t audio_buffer[AUDIO_BUFFER_SAMPLES] __attribute__((aligned(32)));
-static float audio_phase = 0.0f;
+static float   audio_phase = 0.0f;
 
+/* ------------------------------------------------------------------ */
+/* UART LOG                                                           */
+/* ------------------------------------------------------------------ */
 static void audio_log(const char *message)
 {
   if (message == NULL)
-  {
     return;
-  }
-  HAL_UART_Transmit(&husart1, (uint8_t *)message, (uint16_t)strlen(message), HAL_MAX_DELAY);
+
+  HAL_USART_Transmit(&husart1,
+                     (uint8_t *)message,
+                     (uint16_t)strlen(message),
+                     HAL_MAX_DELAY);
 }
 
+/* ------------------------------------------------------------------ */
+/* DCACHE CLEAN                                                       */
+/* ------------------------------------------------------------------ */
 static void audio_clean_dcache(void *addr, size_t size)
 {
 #if defined(__DCACHE_PRESENT) && (__DCACHE_PRESENT == 1U)
@@ -45,6 +53,9 @@ static void audio_clean_dcache(void *addr, size_t size)
 #endif
 }
 
+/* ------------------------------------------------------------------ */
+/* AUDIO BUFFER FILL                                                  */
+/* ------------------------------------------------------------------ */
 void audio_fill_buffer(int16_t *buffer, size_t frames)
 {
   const float phase_increment = 2.0f * (float)M_PI * (AUDIO_TONE_HZ / AUDIO_SAMPLE_RATE_HZ);
@@ -55,43 +66,57 @@ void audio_fill_buffer(int16_t *buffer, size_t frames)
     float sample = sinf(audio_phase) * amplitude;
     int16_t sample_i16 = (int16_t)sample;
 
-    buffer[i * AUDIO_CHANNELS] = sample_i16;
-    buffer[i * AUDIO_CHANNELS + 1U] = sample_i16;
+    buffer[i * AUDIO_CHANNELS]       = sample_i16;
+    buffer[i * AUDIO_CHANNELS + 1U]  = sample_i16;
 
     audio_phase += phase_increment;
     if (audio_phase >= 2.0f * (float)M_PI)
-    {
       audio_phase -= 2.0f * (float)M_PI;
-    }
   }
 
   audio_clean_dcache(buffer, frames * AUDIO_CHANNELS * sizeof(int16_t));
 }
 
+/* ------------------------------------------------------------------ */
+/* INIT                                                               */
+/* ------------------------------------------------------------------ */
 void audio_init(void)
 {
   audio_log("audio_init()\r\n");
+
   audio_fill_buffer(audio_buffer, AUDIO_BUFFER_FRAMES / 2U);
   audio_fill_buffer(&audio_buffer[AUDIO_BUFFER_SAMPLES / 2U], AUDIO_BUFFER_FRAMES / 2U);
+
   audio_log("Buffer filled\r\n");
 }
 
+/* ------------------------------------------------------------------ */
+/* START                                                              */
+/* ------------------------------------------------------------------ */
 void audio_start(void)
 {
   audio_log("audio_start()\r\n");
-  if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)audio_buffer, AUDIO_BUFFER_SAMPLES) == HAL_OK)
+
+  if (HAL_SAI_Transmit_DMA(&hsai_BlockA1,
+                           (uint8_t *)audio_buffer,
+                           AUDIO_BUFFER_SAMPLES) == HAL_OK)
   {
     audio_log("SAI started\r\n");
     audio_log("DMA started\r\n");
   }
+  else
+  {
+    audio_log("ERROR: HAL_SAI_Transmit_DMA failed\r\n");
+  }
 }
 
+/* ------------------------------------------------------------------ */
+/* DMA CALLBACKS                                                      */
+/* ------------------------------------------------------------------ */
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai != &hsai_BlockA1)
-  {
     return;
-  }
 
   audio_fill_buffer(audio_buffer, AUDIO_BUFFER_FRAMES / 2U);
   audio_log("DMA half callback\r\n");
@@ -100,9 +125,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai != &hsai_BlockA1)
-  {
     return;
-  }
 
   audio_fill_buffer(&audio_buffer[AUDIO_BUFFER_SAMPLES / 2U], AUDIO_BUFFER_FRAMES / 2U);
   audio_log("DMA complete callback\r\n");

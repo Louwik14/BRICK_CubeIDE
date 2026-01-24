@@ -1,6 +1,7 @@
-../Application/User/Core/audio.c:22:13:audio_clean_dcache	3
-../Application/User/Core/audio.c:36:6:audio_fill_buffer	3
-../Application/User/Core/audio.c:59:6:audio_init	1
-../Application/User/Core/audio.c:65:6:audio_start	1
-../Application/User/Core/audio.c:70:6:HAL_SAI_TxHalfCpltCallback	2
-../Application/User/Core/audio.c:80:6:HAL_SAI_TxCpltCallback	2
+../Application/User/Core/audio.c:28:13:audio_log	2
+../Application/User/Core/audio.c:42:13:audio_clean_dcache	3
+../Application/User/Core/audio.c:59:6:audio_fill_buffer	3
+../Application/User/Core/audio.c:83:6:audio_init	1
+../Application/User/Core/audio.c:96:6:audio_start	2
+../Application/User/Core/audio.c:116:6:HAL_SAI_TxHalfCpltCallback	2
+../Application/User/Core/audio.c:125:6:HAL_SAI_TxCpltCallback	2

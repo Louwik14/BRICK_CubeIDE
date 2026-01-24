@@ -60,8 +60,6 @@ void DMA1_Stream0_IRQHandler(void);
 void DMA1_Stream2_IRQHandler(void);
 void DMA1_Stream3_IRQHandler(void);
 void EXTI15_10_IRQHandler(void);
-void I2C3_EV_IRQHandler(void);
-void I2C3_ER_IRQHandler(void);
 void OTG_HS_IRQHandler(void);
 void SAI1_IRQHandler(void);
 void OTG_FS_IRQHandler(void);

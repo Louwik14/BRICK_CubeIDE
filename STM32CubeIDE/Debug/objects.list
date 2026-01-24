@@ -3,7 +3,6 @@
 "./Application/User/Core/dma.o"
 "./Application/User/Core/fmc.o"
 "./Application/User/Core/gpio.o"
-"./Application/User/Core/i2c.o"
 "./Application/User/Core/main.o"
 "./Application/User/Core/sai.o"
 "./Application/User/Core/sdmmc.o"
