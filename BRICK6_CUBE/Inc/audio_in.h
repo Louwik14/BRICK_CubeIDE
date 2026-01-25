@@ -20,6 +20,7 @@ void AudioIn_ProcessHalf(void);
 void AudioIn_ProcessFull(void);
 void AudioIn_DebugDump(void);
 int32_t *AudioIn_GetBuffer(void);
+const int32_t *AudioIn_GetLatestBlock(void);
 uint32_t AudioIn_GetBufferSamples(void);
 uint32_t AudioIn_GetHalfEvents(void);
 uint32_t AudioIn_GetFullEvents(void);
