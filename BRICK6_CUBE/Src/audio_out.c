@@ -2,6 +2,7 @@
 #include "audio_in.h"
 #include "sai.h"
 #include "usart.h"
+#include "usb_audio.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -26,6 +27,7 @@ static SAI_HandleTypeDef *audio_out_sai = NULL;
 
 bool audio_test_sine_enable = false;
 bool audio_test_loopback_enable = true;
+bool audio_usb_playback_enable = false;
 
 static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
   0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512, 10278,
@@ -62,7 +64,32 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 
   for (uint32_t frame = 0; frame < frame_count; ++frame)
   {
-    if (audio_test_sine_enable)
+    if (audio_usb_playback_enable)
+    {
+      int32_t left = 0;
+      int32_t right = 0;
+
+      if (USBAudio_PopFrame(&left, &right))
+      {
+        audio_out_buffer[index + 0] = left;
+        audio_out_buffer[index + 1] = right;
+        audio_out_buffer[index + 2] = left;
+        audio_out_buffer[index + 3] = right;
+      }
+      else
+      {
+        audio_out_buffer[index + 0] = 0;
+        audio_out_buffer[index + 1] = 0;
+        audio_out_buffer[index + 2] = 0;
+        audio_out_buffer[index + 3] = 0;
+      }
+
+      for (uint32_t slot = AUDIO_OUT_DAC_CHANNELS; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
+      {
+        audio_out_buffer[index + slot] = 0;
+      }
+    }
+    else if (audio_test_sine_enable)
     {
       uint32_t table_index = (audio_out_phase >> 16) & (AUDIO_OUT_TABLE_SIZE - 1U);
       int32_t sample24 = ((int32_t)audio_out_sine_table[table_index]) << 8;

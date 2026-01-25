@@ -18,6 +18,7 @@ enum
 
 extern bool audio_test_sine_enable;
 extern bool audio_test_loopback_enable;
+extern bool audio_usb_playback_enable;
 
 void AudioOut_Init(SAI_HandleTypeDef *hsai);
 void AudioOut_Start(void);
