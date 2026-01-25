@@ -1,0 +1,10 @@
+../Src/main.c:68:13:uart_log	1
+../Src/main.c:79:5:main	5
+../Src/main.c:193:6:SystemClock_Config	4
+../Src/main.c:251:6:PeriphCommonClock_Config	2
+../Src/main.c:275:6:HAL_SAI_TxHalfCpltCallback	2
+../Src/main.c:283:6:HAL_SAI_TxCpltCallback	2
+../Src/main.c:291:6:HAL_SAI_RxHalfCpltCallback	2
+../Src/main.c:299:6:HAL_SAI_RxCpltCallback	2
+../Src/main.c:311:6:MPU_Config	1
+../Src/main.c:342:6:Error_Handler	1
