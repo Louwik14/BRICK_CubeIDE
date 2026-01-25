@@ -1,19 +1,22 @@
 #include "audio.h"
-
 #include "sai.h"
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
 
 enum
 {
-  AUDIO_SAMPLE_RATE = 44100U,
-  AUDIO_TONE_HZ = 1000U,
+  AUDIO_SAMPLE_RATE = 48000U,
+  AUDIO_TONE_HZ = 100U,
   AUDIO_TABLE_SIZE = 256U,
-  AUDIO_CHANNELS = 2U,
+
+  AUDIO_CHANNELS = 4U,
   AUDIO_FRAMES_PER_HALF = 256U,
   AUDIO_BUFFER_FRAMES = (AUDIO_FRAMES_PER_HALF * 2U),
   AUDIO_BUFFER_SAMPLES = (AUDIO_BUFFER_FRAMES * AUDIO_CHANNELS)
 };
 
-static int16_t audio_buffer[AUDIO_BUFFER_SAMPLES];
+static int32_t audio_buffer[AUDIO_BUFFER_SAMPLES];
 static volatile uint32_t audio_half_events = 0;
 static volatile uint32_t audio_full_events = 0;
 static uint32_t audio_phase = 0;
@@ -48,20 +51,43 @@ static const int16_t audio_sine_table[AUDIO_TABLE_SIZE] = {
   -7962, -7179, -6393, -5602, -4808, -4011, -3212, -2410, -1608, -804
 };
 
-static void audio_fill_samples(uint32_t sample_offset, uint32_t frame_count)
+static void audio_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 {
-  uint32_t sample_index = sample_offset;
+  uint32_t index = frame_offset * AUDIO_CHANNELS;
 
   for (uint32_t frame = 0; frame < frame_count; ++frame)
   {
     uint32_t table_index = (audio_phase >> 16) & (AUDIO_TABLE_SIZE - 1U);
-    int16_t sample = audio_sine_table[table_index];
+    int32_t sample24 = ((int32_t)audio_sine_table[table_index]) << 8;
 
-    audio_buffer[sample_index++] = sample;
-    audio_buffer[sample_index++] = sample;
+    audio_buffer[index + 0] = sample24;
+    audio_buffer[index + 1] = sample24;
+    audio_buffer[index + 2] = sample24;
+    audio_buffer[index + 3] = sample24;
 
+    index += AUDIO_CHANNELS;
     audio_phase += audio_phase_inc;
   }
+}
+
+void Audio_DebugDump(void)
+{
+    char buf[128];
+
+    HAL_UART_Transmit(&huart1, (uint8_t*)"\r\n--- TDM DUMP ---\r\n", 18, 100);
+
+    for (int i = 0; i < 8; i++)
+    {
+        int idx = i * 4;
+        snprintf(buf, sizeof(buf),
+                 "F%02d: %08lX %08lX %08lX %08lX\r\n",
+                 i,
+                 (unsigned long)audio_buffer[idx + 0],
+                 (unsigned long)audio_buffer[idx + 1],
+                 (unsigned long)audio_buffer[idx + 2],
+                 (unsigned long)audio_buffer[idx + 3]);
+        HAL_UART_Transmit(&huart1, (uint8_t*)buf, strlen(buf), 100);
+    }
 }
 
 void Audio_Init(SAI_HandleTypeDef *hsai)
@@ -93,7 +119,7 @@ void Audio_Process_Half(void)
 
 void Audio_Process_Full(void)
 {
-  audio_fill_samples(AUDIO_FRAMES_PER_HALF * AUDIO_CHANNELS, AUDIO_FRAMES_PER_HALF);
+  audio_fill_samples(AUDIO_FRAMES_PER_HALF, AUDIO_FRAMES_PER_HALF);
   audio_full_events++;
 }
 

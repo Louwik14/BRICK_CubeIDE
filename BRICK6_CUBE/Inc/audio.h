@@ -9,6 +9,7 @@ void Audio_Init(SAI_HandleTypeDef *hsai);
 void Audio_Start(void);
 void Audio_Process_Half(void);
 void Audio_Process_Full(void);
+void Audio_DebugDump(void);
 uint32_t Audio_GetHalfEvents(void);
 uint32_t Audio_GetFullEvents(void);
 

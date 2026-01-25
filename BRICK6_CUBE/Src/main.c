@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "i2c.h"
 #include "sai.h"
 #include "usart.h"
 #include "gpio.h"
@@ -53,6 +54,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void PeriphCommonClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 
@@ -94,6 +96,9 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  /* Configure the peripherals common clocks */
+  PeriphCommonClock_Config();
+
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -103,6 +108,7 @@ int main(void)
   MX_DMA_Init();
   MX_SAI1_Init();
   MX_USART1_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   char log_buffer[128];
   Audio_Init(&hsai_BlockA1);
@@ -110,6 +116,9 @@ int main(void)
   uart_log("SAI1 PCM5100A audio start\r\n");
   Audio_Start();
   uart_log("SAI1 DMA started\r\n");
+
+  HAL_Delay(200);        // on laisse le DMA démarrer
+  Audio_DebugDump();     // <<< AJOUTE CETTE LIGNE
 
   /* USER CODE END 2 */
 
@@ -134,12 +143,21 @@ int main(void)
     if ((now - last_log_tick) >= 1000U)
     {
       uint32_t error = HAL_SAI_GetError(&hsai_BlockA1);
+      uint32_t half = Audio_GetHalfEvents();
+      uint32_t full = Audio_GetFullEvents();
+
+      uint32_t frames_per_sec = full * 512;  // 512 = AUDIO_BUFFER_FRAMES
+
       snprintf(log_buffer, sizeof(log_buffer),
-               "SAI state=%lu err=0x%08lX half=%lu full=%lu\r\n",
+               "SAI state=%lu err=0x%08lX half=%lu full=%lu frames/s=%lu\r\n",
                (unsigned long)hsai_BlockA1.State,
                (unsigned long)error,
-               (unsigned long)Audio_GetHalfEvents(),
-               (unsigned long)Audio_GetFullEvents());
+               (unsigned long)half,
+               (unsigned long)full,
+               (unsigned long)frames_per_sec);
+
+      uart_log(log_buffer);
+
       uart_log(log_buffer);
 
       if (error != 0U && error != last_error)
@@ -209,6 +227,32 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief Peripherals Common Clock Configuration
+  * @retval None
+  */
+void PeriphCommonClock_Config(void)
+{
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SAI1;
+  PeriphClkInitStruct.PLL3.PLL3M = 25;
+  PeriphClkInitStruct.PLL3.PLL3N = 491;
+  PeriphClkInitStruct.PLL3.PLL3P = 40;
+  PeriphClkInitStruct.PLL3.PLL3Q = 2;
+  PeriphClkInitStruct.PLL3.PLL3R = 2;
+  PeriphClkInitStruct.PLL3.PLL3RGE = RCC_PLL3VCIRANGE_0;
+  PeriphClkInitStruct.PLL3.PLL3VCOSEL = RCC_PLL3VCOWIDE;
+  PeriphClkInitStruct.PLL3.PLL3FRACN = 4260;
+  PeriphClkInitStruct.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PLL3;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
   }

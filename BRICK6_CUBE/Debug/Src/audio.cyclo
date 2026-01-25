@@ -1,9 +1,8 @@
-../Src/audio.c:58:13:uart_log	1
-../Src/audio.c:63:16:audio_clamp_24bit	3
-../Src/audio.c:76:13:audio_write_sample_24	1
-../Src/audio.c:87:13:audio_fill_samples	2
-../Src/audio.c:105:6:audio_init	1
-../Src/audio.c:115:6:audio_start	2
-../Src/audio.c:135:6:audio_get_stats	3
-../Src/audio.c:147:6:HAL_SAI_TxHalfCpltCallback	2
-../Src/audio.c:156:6:HAL_SAI_TxCpltCallback	2
+../Src/audio.c:54:13:audio_fill_samples	2
+../Src/audio.c:73:6:Audio_DebugDump	2
+../Src/audio.c:93:6:Audio_Init	1
+../Src/audio.c:104:6:Audio_Start	2
+../Src/audio.c:114:6:Audio_Process_Half	1
+../Src/audio.c:120:6:Audio_Process_Full	1
+../Src/audio.c:126:10:Audio_GetHalfEvents	1
+../Src/audio.c:131:10:Audio_GetFullEvents	1
