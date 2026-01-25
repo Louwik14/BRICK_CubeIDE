@@ -1,4 +1,5 @@
-Src/main.o: ../Src/main.c ../Inc/main.h \
+Src/audio_out.o: ../Src/audio_out.c ../Inc/audio_out.h ../Inc/audio_in.h \
+ ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -30,9 +31,11 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h ../Inc/dma.h \
- ../Inc/main.h ../Inc/i2c.h ../Inc/sai.h ../Inc/usart.h ../Inc/gpio.h \
- ../Inc/adau1979.h ../Inc/audio_in.h ../Inc/audio_out.h
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h \
+ ../Inc/usart.h
+../Inc/audio_out.h:
+../Inc/audio_in.h:
+../Inc/sai.h:
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -66,12 +69,4 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h:
-../Inc/dma.h:
-../Inc/main.h:
-../Inc/i2c.h:
-../Inc/sai.h:
 ../Inc/usart.h:
-../Inc/gpio.h:
-../Inc/adau1979.h:
-../Inc/audio_in.h:
-../Inc/audio_out.h:

@@ -7,7 +7,7 @@
 
 enum
 {
-  AUDIO_OUT_TONE_HZ = 100U,
+  AUDIO_OUT_TONE_HZ = 1000U,
   AUDIO_OUT_TABLE_SIZE = 256U,
   AUDIO_OUT_DAC_CHANNELS = 4U
 };
@@ -24,8 +24,8 @@ static uint32_t audio_out_phase = 0;
 static uint32_t audio_out_phase_inc = 0;
 static SAI_HandleTypeDef *audio_out_sai = NULL;
 
-bool audio_test_sine_enable = true;
-bool audio_test_loopback_enable = false;
+bool audio_test_sine_enable = false;
+bool audio_test_loopback_enable = true;
 
 static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
   0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512, 10278,
