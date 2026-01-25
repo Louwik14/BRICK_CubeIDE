@@ -28,7 +28,9 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
-#include "audio.h"
+#include "adau1979.h"
+#include "audio_in.h"
+#include "audio_out.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -111,14 +113,20 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   char log_buffer[128];
-  Audio_Init(&hsai_BlockA1);
+  AudioOut_Init(&hsai_BlockA1);
+  AudioIn_Init(&hsai_BlockB1);
+  adau1979_init_all();
 
-  uart_log("SAI1 PCM5100A audio start\r\n");
-  Audio_Start();
+  uart_log("SAI1 PCM4104 audio start\r\n");
+  AudioOut_Start();
+  (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
+                            (uint8_t *)AudioIn_GetBuffer(),
+                            AudioIn_GetBufferSamples());
   uart_log("SAI1 DMA started\r\n");
 
   HAL_Delay(200);        // on laisse le DMA démarrer
-  Audio_DebugDump();     // <<< AJOUTE CETTE LIGNE
+  AudioOut_DebugDump();
+  AudioIn_DebugDump();
 
   /* USER CODE END 2 */
 
@@ -143,17 +151,21 @@ int main(void)
     if ((now - last_log_tick) >= 1000U)
     {
       uint32_t error = HAL_SAI_GetError(&hsai_BlockA1);
-      uint32_t half = Audio_GetHalfEvents();
-      uint32_t full = Audio_GetFullEvents();
+      uint32_t half = AudioOut_GetHalfEvents();
+      uint32_t full = AudioOut_GetFullEvents();
+      uint32_t rx_half = AudioIn_GetHalfEvents();
+      uint32_t rx_full = AudioIn_GetFullEvents();
 
       uint32_t frames_per_sec = full * 512;  // 512 = AUDIO_BUFFER_FRAMES
 
       snprintf(log_buffer, sizeof(log_buffer),
-               "SAI state=%lu err=0x%08lX half=%lu full=%lu frames/s=%lu\r\n",
+               "SAI TX state=%lu err=0x%08lX tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu frames/s=%lu\r\n",
                (unsigned long)hsai_BlockA1.State,
                (unsigned long)error,
                (unsigned long)half,
                (unsigned long)full,
+               (unsigned long)rx_half,
+               (unsigned long)rx_full,
                (unsigned long)frames_per_sec);
 
       uart_log(log_buffer);
@@ -264,7 +276,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    Audio_Process_Half();
+    AudioOut_ProcessHalf();
   }
 }
 
@@ -272,7 +284,23 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    Audio_Process_Full();
+    AudioOut_ProcessFull();
+  }
+}
+
+void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_B)
+  {
+    AudioIn_ProcessHalf();
+  }
+}
+
+void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_B)
+  {
+    AudioIn_ProcessFull();
   }
 }
 
