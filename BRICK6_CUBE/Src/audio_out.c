@@ -25,8 +25,8 @@ static uint32_t audio_out_phase = 0;
 static uint32_t audio_out_phase_inc = 0;
 static SAI_HandleTypeDef *audio_out_sai = NULL;
 
-bool audio_test_sine_enable = false;
-bool audio_test_loopback_enable = true;
+bool audio_test_sine_enable = true;
+bool audio_test_loopback_enable = false;
 bool audio_usb_playback_enable = false;
 
 static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {

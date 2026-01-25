@@ -32,7 +32,10 @@ Src/audio_out.o: ../Src/audio_out.c ../Inc/audio_out.h ../Inc/audio_in.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h \
- ../Inc/usart.h
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
+ ../Inc/usart.h ../Inc/usb_audio.h
 ../Inc/audio_out.h:
 ../Inc/audio_in.h:
 ../Inc/sai.h:
@@ -69,4 +72,8 @@ Src/audio_out.o: ../Src/audio_out.c ../Inc/audio_out.h ../Inc/audio_in.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Inc/usart.h:
+../Inc/usb_audio.h:

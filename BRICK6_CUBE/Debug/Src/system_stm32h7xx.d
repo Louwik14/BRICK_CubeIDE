@@ -30,7 +30,10 @@ Src/system_stm32h7xx.o: ../Src/system_stm32h7xx.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h
 ../Drivers/CMSIS/Device/ST/STM32H7xx/Include/stm32h7xx.h:
 ../Drivers/CMSIS/Device/ST/STM32H7xx/Include/stm32h743xx.h:
 ../Drivers/CMSIS/Include/core_cm7.h:
@@ -63,3 +66,6 @@ Src/system_stm32h7xx.o: ../Src/system_stm32h7xx.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sai_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:

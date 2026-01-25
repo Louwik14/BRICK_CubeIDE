@@ -2,16 +2,6 @@
 #include "stm32h7xx_hal.h"
 #include <string.h>
 
-/*
- * MODIFICATIONS À FAIRE DANS CUBEMX
- * - Activer USB OTG FS
- * - Activer USB Device
- * - Activer Audio Class
- * - Configurer 48kHz / 24-bit / Stereo
- * - Activer l’horloge 48 MHz USB (PLL3 ou autre)
- * - Activer les IRQ USB
- */
-
 enum
 {
   USB_AUDIO_CHANNELS = 2U,

@@ -1,0 +1,4 @@
+../Src/usb_audio.c:16:13:usb_audio_enter_critical	1
+../Src/usb_audio.c:22:13:usb_audio_exit_critical	2
+../Src/usb_audio.c:30:6:USBAudio_PopFrame	4
+../Src/usb_audio.c:59:6:USBAudio_PushFrames	5

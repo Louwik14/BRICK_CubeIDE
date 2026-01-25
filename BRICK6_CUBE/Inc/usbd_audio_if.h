@@ -1,12 +1,13 @@
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    USB_Device/Audio_Standalone/Inc/usbd_audio_if.h
-  * @author  MCD Application Team
-  * @brief   Header for usbd_audio_if.c file.
+  * @file           : usbd_audio_if.h
+  * @version        : v1.0_Cube
+  * @brief          : Header for usbd_audio_if.c file.
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2017 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -15,27 +16,122 @@
   *
   ******************************************************************************
   */
-
+/* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __USBD_AUDIO_IF_H
-#define __USBD_AUDIO_IF_H
+#ifndef __USBD_AUDIO_IF_H__
+#define __USBD_AUDIO_IF_H__
+
+#ifdef __cplusplus
+ extern "C" {
+#endif
 
 /* Includes ------------------------------------------------------------------*/
-#if defined(__has_include)
-#if __has_include("usbd_audio.h")
 #include "usbd_audio.h"
-#else
-typedef struct _USBD_AUDIO_ItfTypeDef USBD_AUDIO_ItfTypeDef;
+
+/* USER CODE BEGIN INCLUDE */
+
+/* USER CODE END INCLUDE */
+
+/** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
+  * @brief For Usb device.
+  * @{
+  */
+
+/** @defgroup USBD_AUDIO_IF USBD_AUDIO_IF
+  * @brief Usb audio interface device module.
+  * @{
+  */
+
+/** @defgroup USBD_AUDIO_IF_Exported_Defines USBD_AUDIO_IF_Exported_Defines
+  * @brief Defines.
+  * @{
+  */
+
+/* USER CODE BEGIN EXPORTED_DEFINES */
+
+/* USER CODE END EXPORTED_DEFINES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_AUDIO_IF_Exported_Types USBD_AUDIO_IF_Exported_Types
+  * @brief Types.
+  * @{
+  */
+
+/* USER CODE BEGIN EXPORTED_TYPES */
+
+/* USER CODE END EXPORTED_TYPES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_AUDIO_IF_Exported_Macros USBD_AUDIO_IF_Exported_Macros
+  * @brief Aliases.
+  * @{
+  */
+
+/* USER CODE BEGIN EXPORTED_MACRO */
+
+/* USER CODE END EXPORTED_MACRO */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_AUDIO_IF_Exported_Variables USBD_AUDIO_IF_Exported_Variables
+  * @brief Public variables.
+  * @{
+  */
+
+/** AUDIO_IF Interface callback. */
+extern USBD_AUDIO_ItfTypeDef USBD_AUDIO_fops_FS;
+
+/* USER CODE BEGIN EXPORTED_VARIABLES */
+
+/* USER CODE END EXPORTED_VARIABLES */
+
+/**
+  * @}
+  */
+
+/** @defgroup USBD_AUDIO_IF_Exported_FunctionsPrototype USBD_AUDIO_IF_Exported_FunctionsPrototype
+  * @brief Public functions declaration.
+  * @{
+  */
+
+/**
+  * @brief  Manages the DMA full transfer complete event.
+  * @retval None
+  */
+void TransferComplete_CallBack_FS(void);
+
+/**
+  * @brief  Manages the DMA half transfer complete event.
+  * @retval None
+  */
+void HalfTransfer_CallBack_FS(void);
+
+/* USER CODE BEGIN EXPORTED_FUNCTIONS */
+
+/* USER CODE END EXPORTED_FUNCTIONS */
+
+/**
+  * @}
+  */
+
+/**
+  * @}
+  */
+
+/**
+  * @}
+  */
+
+#ifdef __cplusplus
+}
 #endif
-#else
-typedef struct _USBD_AUDIO_ItfTypeDef USBD_AUDIO_ItfTypeDef;
-#endif
 
-/* Exported types ------------------------------------------------------------*/
-/* Exported constants --------------------------------------------------------*/
-extern USBD_AUDIO_ItfTypeDef USBD_AUDIO_fops;
-
-/* Exported macro ------------------------------------------------------------*/
-/* Exported functions ------------------------------------------------------- */
-
-#endif /* __USBD_AUDIO_IF_H */
+#endif /* __USBD_AUDIO_IF_H__ */
