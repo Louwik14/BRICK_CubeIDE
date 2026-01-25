@@ -13,8 +13,23 @@ enum
   ADAU1979_REG_SAI_CTRL1 = 0x06,
   ADAU1979_REG_SAI_CMAP12 = 0x07,
   ADAU1979_REG_SAI_CMAP34 = 0x08,
-  ADAU1979_REG_SAI_OVERTEMP = 0x09
+  ADAU1979_REG_SAI_OVERTEMP = 0x09,
+  ADAU1979_REG_POSTADC_GAIN1 = 0x0A,
+  ADAU1979_REG_POSTADC_GAIN2 = 0x0B,
+  ADAU1979_REG_POSTADC_GAIN3 = 0x0C,
+  ADAU1979_REG_POSTADC_GAIN4 = 0x0D
 };
+
+/* ADAU1979 post-ADC gain limits and step size (datasheet Table 25-28). */
+enum
+{
+  ADAU1979_INPUT_GAIN_MIN_REG = 0xFE,
+  ADAU1979_INPUT_GAIN_MUTE_REG = 0xFF
+};
+
+static const float ADAU1979_INPUT_GAIN_MAX_DB = 60.0f;
+static const float ADAU1979_INPUT_GAIN_MIN_DB = -35.625f;
+static const float ADAU1979_INPUT_GAIN_STEP_DB = 0.375f;
 
 /* M_POWER bits. */
 enum
@@ -104,6 +119,61 @@ static bool adau1979_is_present(uint8_t addr)
   return HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 3U, 100U) == HAL_OK;
 }
 
+static uint8_t adau1979_gain_db_to_reg(float gain_db)
+{
+  float clamped_gain = gain_db;
+  float steps = 0.0f;
+  uint8_t reg_value = 0U;
+
+  if (clamped_gain > ADAU1979_INPUT_GAIN_MAX_DB)
+  {
+    clamped_gain = ADAU1979_INPUT_GAIN_MAX_DB;
+  }
+  else if (clamped_gain < ADAU1979_INPUT_GAIN_MIN_DB)
+  {
+    clamped_gain = ADAU1979_INPUT_GAIN_MIN_DB;
+  }
+
+  /* Datasheet mapping:
+   * 0x00 = +60 dB, 0xA0 = 0 dB, 1 LSB = -0.375 dB, 0xFF = Mute.
+   * Convert dB to register with rounding to the nearest 0.375 dB step.
+   */
+  steps = (ADAU1979_INPUT_GAIN_MAX_DB - clamped_gain) / ADAU1979_INPUT_GAIN_STEP_DB;
+  reg_value = (uint8_t)(steps + 0.5f);
+
+  if (reg_value >= ADAU1979_INPUT_GAIN_MUTE_REG)
+  {
+    reg_value = ADAU1979_INPUT_GAIN_MIN_REG;
+  }
+
+  return reg_value;
+}
+
+static bool adau1979_set_input_gain_reg(uint8_t addr, adau1979_channel_t ch, uint8_t reg_value)
+{
+  uint8_t reg = 0U;
+
+  switch (ch)
+  {
+    case ADAU1979_CH1:
+      reg = ADAU1979_REG_POSTADC_GAIN1;
+      break;
+    case ADAU1979_CH2:
+      reg = ADAU1979_REG_POSTADC_GAIN2;
+      break;
+    case ADAU1979_CH3:
+      reg = ADAU1979_REG_POSTADC_GAIN3;
+      break;
+    case ADAU1979_CH4:
+      reg = ADAU1979_REG_POSTADC_GAIN4;
+      break;
+    default:
+      return false;
+  }
+
+  return adau1979_write_reg(addr, reg, reg_value) == HAL_OK;
+}
+
 void adau1979_init(uint8_t addr, uint8_t first_slot)
 {
   /* Slot mapping values follow the datasheet slot numbering:
@@ -173,4 +243,35 @@ void adau1979_init_all(void)
 {
   adau1979_init(ADAU1979_ADDR_0, 0U);
   adau1979_init(ADAU1979_ADDR_1, 4U);
+}
+
+bool adau1979_set_input_gain_db(uint8_t addr, adau1979_channel_t ch, float gain_db)
+{
+  uint8_t reg_value = adau1979_gain_db_to_reg(gain_db);
+
+  return adau1979_set_input_gain_reg(addr, ch, reg_value);
+}
+
+bool adau1979_set_all_inputs_gain_db(uint8_t addr, float gain_db)
+{
+  uint8_t reg_value = adau1979_gain_db_to_reg(gain_db);
+
+  if (!adau1979_set_input_gain_reg(addr, ADAU1979_CH1, reg_value))
+  {
+    return false;
+  }
+  if (!adau1979_set_input_gain_reg(addr, ADAU1979_CH2, reg_value))
+  {
+    return false;
+  }
+  if (!adau1979_set_input_gain_reg(addr, ADAU1979_CH3, reg_value))
+  {
+    return false;
+  }
+  if (!adau1979_set_input_gain_reg(addr, ADAU1979_CH4, reg_value))
+  {
+    return false;
+  }
+
+  return true;
 }
