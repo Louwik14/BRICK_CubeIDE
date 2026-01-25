@@ -58,7 +58,7 @@ static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
 static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 {
   uint32_t index = frame_offset * AUDIO_OUT_WORDS_PER_FRAME;
-  const int32_t *audio_in_buffer = AudioIn_GetBuffer();
+  const int32_t *audio_in_block = AudioIn_GetLatestBlock();
 
   for (uint32_t frame = 0; frame < frame_count; ++frame)
   {
@@ -79,13 +79,18 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 
       audio_out_phase += audio_out_phase_inc;
     }
-    else if (audio_test_loopback_enable && audio_in_buffer != NULL)
+    else if (audio_test_loopback_enable && audio_in_block != NULL)
     {
-      uint32_t in_index = index;
+      uint32_t in_index = frame * AUDIO_OUT_WORDS_PER_FRAME;
 
-      for (uint32_t slot = 0; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
+      for (uint32_t slot = 0; slot < AUDIO_OUT_DAC_CHANNELS; ++slot)
       {
-        audio_out_buffer[index + slot] = audio_in_buffer[in_index + slot];
+        audio_out_buffer[index + slot] = audio_in_block[in_index + slot];
+      }
+
+      for (uint32_t slot = AUDIO_OUT_DAC_CHANNELS; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
+      {
+        audio_out_buffer[index + slot] = 0;
       }
     }
     else
