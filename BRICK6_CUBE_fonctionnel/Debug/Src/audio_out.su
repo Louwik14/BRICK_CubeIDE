@@ -1,8 +1,0 @@
-../Src/audio_out.c:58:13:audio_out_fill_samples	56	static
-../Src/audio_out.c:108:6:AudioOut_DebugDump	248	static
-../Src/audio_out.c:134:6:AudioOut_Init	16	static
-../Src/audio_out.c:145:6:AudioOut_Start	8	static
-../Src/audio_out.c:155:6:AudioOut_ProcessHalf	8	static
-../Src/audio_out.c:161:6:AudioOut_ProcessFull	8	static
-../Src/audio_out.c:167:10:AudioOut_GetHalfEvents	4	static
-../Src/audio_out.c:172:10:AudioOut_GetFullEvents	4	static
