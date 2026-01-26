@@ -292,26 +292,6 @@ void PeriphCommonClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void ADAU1979_DumpGains(uint8_t addr)
-{
-  uint8_t g1, g2, g3, g4;
-  char buf[128];
-
-  adau1979_debug_read_reg(addr, 0x0A, &g1);
-  adau1979_debug_read_reg(addr, 0x0B, &g2);
-  adau1979_debug_read_reg(addr, 0x0C, &g3);
-  adau1979_debug_read_reg(addr, 0x0D, &g4);
-
-  snprintf(buf, sizeof(buf),
-           "ADAU1979 0x%02X GAINS: %02X(%+.1fdB) %02X(%+.1fdB) %02X(%+.1fdB) %02X(%+.1fdB)\r\n",
-           addr,
-           g1, adau1979_gain_reg_to_db(g1),
-           g2, adau1979_gain_reg_to_db(g2),
-           g3, adau1979_gain_reg_to_db(g3),
-           g4, adau1979_gain_reg_to_db(g4));
-
-  HAL_UART_Transmit(&huart1, (uint8_t*)buf, strlen(buf), 100);
-}
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
