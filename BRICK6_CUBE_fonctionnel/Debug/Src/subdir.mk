@@ -5,9 +5,9 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Src/adau1979.c \
 ../Src/audio_in.c \
 ../Src/audio_out.c \
+../Src/cs42448.c \
 ../Src/dma.c \
 ../Src/gpio.c \
 ../Src/i2c.c \
@@ -21,9 +21,9 @@ C_SRCS += \
 ../Src/usart.c 
 
 OBJS += \
-./Src/adau1979.o \
 ./Src/audio_in.o \
 ./Src/audio_out.o \
+./Src/cs42448.o \
 ./Src/dma.o \
 ./Src/gpio.o \
 ./Src/i2c.o \
@@ -37,9 +37,9 @@ OBJS += \
 ./Src/usart.o 
 
 C_DEPS += \
-./Src/adau1979.d \
 ./Src/audio_in.d \
 ./Src/audio_out.d \
+./Src/cs42448.d \
 ./Src/dma.d \
 ./Src/gpio.d \
 ./Src/i2c.d \
@@ -60,7 +60,6 @@ Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
 clean: clean-Src
 
 clean-Src:
-	-$(RM) ./Src/adau1979.cyclo ./Src/adau1979.d ./Src/adau1979.o ./Src/adau1979.su ./Src/audio_in.cyclo ./Src/audio_in.d ./Src/audio_in.o ./Src/audio_in.su ./Src/audio_out.cyclo ./Src/audio_out.d ./Src/audio_out.o ./Src/audio_out.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su
+	-$(RM) ./Src/audio_in.cyclo ./Src/audio_in.d ./Src/audio_in.o ./Src/audio_in.su ./Src/audio_out.cyclo ./Src/audio_out.d ./Src/audio_out.o ./Src/audio_out.su ./Src/cs42448.cyclo ./Src/cs42448.d ./Src/cs42448.o ./Src/cs42448.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su
 
 .PHONY: clean-Src
-

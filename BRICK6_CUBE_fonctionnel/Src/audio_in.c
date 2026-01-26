@@ -12,8 +12,8 @@ enum
 
 /*
  * TDM8 receive layout (256-bit frame, 8 slots x 32-bit words):
- *   Slots 0..3 -> ADAU1979 #1 channels 1..4
- *   Slots 4..7 -> ADAU1979 #2 channels 1..4
+ *   Slots 0..5 -> CS42448 ADC channels 1..6 (3 stereo pairs)
+ *   Slots 6..7 -> unused (drive zeros on the codec side)
  * Data is 24-bit left aligned in 32-bit words.
  *
  * The DMA runs in circular mode. We treat the buffer as two halves and expose

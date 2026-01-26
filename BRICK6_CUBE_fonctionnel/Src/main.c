@@ -28,9 +28,9 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
-#include "adau1979.h"
 #include "audio_in.h"
 #include "audio_out.h"
+#include "cs42448.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -111,9 +111,13 @@ int main(void)
   char log_buffer[128];
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
-  adau1979_init_all();
+  bool codec_ok = CS42448_Init(CS42448_I2C_ADDR);
 
-  uart_log("SAI1 PCM4104 audio start\r\n");
+  uart_log("SAI1 CS42448 audio start\r\n");
+  if (!codec_ok)
+  {
+    uart_log("CS42448 init failed\r\n");
+  }
   AudioOut_Start();
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
                             (uint8_t *)AudioIn_GetBuffer(),
@@ -163,8 +167,6 @@ int main(void)
                (unsigned long)rx_half,
                (unsigned long)rx_full,
                (unsigned long)frames_per_sec);
-
-      uart_log(log_buffer);
 
       uart_log(log_buffer);
 
