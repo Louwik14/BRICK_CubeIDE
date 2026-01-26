@@ -26,6 +26,8 @@ static SAI_HandleTypeDef *audio_out_sai = NULL;
 
 bool audio_test_sine_enable = false;
 bool audio_test_loopback_enable = true;
+float g_audio_gain = 2.0f;
+bool g_audio_enable_processing = true;
 
 static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
   0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512, 10278,
@@ -54,6 +56,31 @@ static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
   -14732, -14010, -13279, -12539, -11793, -11039, -10278, -9512, -8739,
   -7962, -7179, -6393, -5602, -4808, -4011, -3212, -2410, -1608, -804
 };
+
+int32_t Audio_ProcessSample(int32_t in)
+{
+  if (!g_audio_enable_processing)
+  {
+    return in;
+  }
+
+  const double scaled = (double)in * (double)g_audio_gain;
+  const double max_sample = 2147483392.0;
+  const double min_sample = -2147483648.0;
+
+  if (scaled > max_sample)
+  {
+    return (int32_t)max_sample;
+  }
+  if (scaled < min_sample)
+  {
+    return (int32_t)min_sample;
+  }
+
+  int32_t out = (int32_t)scaled;
+  out &= (int32_t)0xFFFFFF00;
+  return out;
+}
 
 static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 {
@@ -85,7 +112,7 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 
       for (uint32_t slot = 0; slot < AUDIO_OUT_DAC_CHANNELS; ++slot)
       {
-        audio_out_buffer[index + slot] = audio_in_block[in_index + slot];
+        audio_out_buffer[index + slot] = Audio_ProcessSample(audio_in_block[in_index + slot]);
       }
 
       for (uint32_t slot = AUDIO_OUT_DAC_CHANNELS; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
