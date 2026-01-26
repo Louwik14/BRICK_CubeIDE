@@ -18,8 +18,6 @@ enum
 
 extern bool audio_test_sine_enable;
 extern bool audio_test_loopback_enable;
-extern float g_audio_gain;
-extern bool g_audio_enable_processing;
 
 void AudioOut_Init(SAI_HandleTypeDef *hsai);
 void AudioOut_Start(void);
@@ -28,6 +26,5 @@ void AudioOut_ProcessFull(void);
 void AudioOut_DebugDump(void);
 uint32_t AudioOut_GetHalfEvents(void);
 uint32_t AudioOut_GetFullEvents(void);
-int32_t Audio_ProcessSample(int32_t in);
 
 #endif /* AUDIO_OUT_H */

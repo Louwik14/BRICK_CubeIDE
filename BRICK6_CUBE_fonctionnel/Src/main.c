@@ -57,6 +57,7 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
+static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -81,6 +82,9 @@ int main(void)
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
+
+  /* MPU Configuration--------------------------------------------------------*/
+  MPU_Config();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -112,26 +116,6 @@ int main(void)
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
   adau1979_init_all();
-  adau1979_set_all_inputs_gain_db(ADAU1979_ADDR_0, 20.0f);
-  adau1979_set_all_inputs_gain_db(ADAU1979_ADDR_1, 20.0f);
-  ADAU1979_DumpGains(ADAU1979_ADDR_0);
-  ADAU1979_DumpGains(ADAU1979_ADDR_1);
-
-  uint8_t g1,g2,g3,g4;
-
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0A, &g1);
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0B, &g2);
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0C, &g3);
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0D, &g4);
-
-  printf("ADC0 GAINS = %02X %02X %02X %02X\r\n", g1,g2,g3,g4);
-
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0A, &g1);
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0B, &g2);
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0C, &g3);
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0D, &g4);
-
-  printf("ADC1 GAINS = %02X %02X %02X %02X\r\n", g1,g2,g3,g4);
 
   uart_log("SAI1 PCM4104 audio start\r\n");
   AudioOut_Start();
@@ -143,7 +127,6 @@ int main(void)
   HAL_Delay(200);        // on laisse le DMA démarrer
   AudioOut_DebugDump();
   AudioIn_DebugDump();
-
 
   /* USER CODE END 2 */
 
@@ -288,6 +271,7 @@ void PeriphCommonClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
@@ -321,6 +305,35 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 }
 
 /* USER CODE END 4 */
+
+ /* MPU Configuration */
+
+void MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+  /* Disables the MPU */
+  HAL_MPU_Disable();
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+  MPU_InitStruct.BaseAddress = 0x0;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;
+  MPU_InitStruct.SubRegionDisable = 0x87;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+  /* Enables the MPU */
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
