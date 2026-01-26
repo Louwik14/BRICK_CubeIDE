@@ -70,6 +70,65 @@ static void uart_log(const char *message)
 {
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
 }
+static void compute_audio_freq(void)
+{
+  char buf[256];
+
+  uint32_t sai_clk = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SAI1);
+
+  // MCKDIV bits = CR1[23:20]
+  uint32_t mckdiv = (SAI1_Block_A->CR1 >> 20) & 0xF;
+  uint32_t presc = (mckdiv == 0) ? 1 : (mckdiv * 2);
+
+  // 8 slots * 32 bits = 256 bits par frame
+  uint32_t fs = sai_clk / (256 * presc);
+
+  snprintf(buf, sizeof(buf),
+           "AUDIO COMPUTE:\r\n"
+           "  SAI_CLK = %lu Hz\r\n"
+           "  MCKDIV  = %lu\r\n"
+           "  FS      = %lu Hz (expected ~48000)\r\n\r\n",
+           sai_clk, mckdiv, fs);
+
+  uart_log(buf);
+}
+
+static void dump_sai_regs(void)
+{
+  char buf[256];
+  SAI_Block_TypeDef *A = SAI1_Block_A;
+
+  snprintf(buf, sizeof(buf),
+           "SAI1 REG:\r\n"
+           "  CR1=0x%08lX CR2=0x%08lX\r\n"
+           "  FRCR=0x%08lX SLOTR=0x%08lX\r\n"
+           "  SR=0x%08lX CLRFR=0x%08lX\r\n\r\n",
+           (unsigned long)A->CR1,
+           (unsigned long)A->CR2,
+           (unsigned long)A->FRCR,
+           (unsigned long)A->SLOTR,
+           (unsigned long)A->SR,
+           (unsigned long)A->CLRFR);
+
+  uart_log(buf);
+}
+static void dump_audio_state(const char *tag)
+{
+  char buf[256];
+
+  uint32_t sai_clk = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SAI1);
+  uint32_t cr1 = SAI1_Block_A->CR1;
+  uint32_t mckdiv = (cr1 >> 20) & 0xF;
+
+  snprintf(buf, sizeof(buf),
+           "\r\n[%s]\r\nSAI_CLK=%lu Hz CR1=0x%08lX MCKDIV=%lu\r\n",
+           tag,
+           (unsigned long)sai_clk,
+           (unsigned long)cr1,
+           (unsigned long)mckdiv);
+
+  uart_log(buf);
+}
 
 /* USER CODE END 0 */
 
@@ -103,6 +162,26 @@ int main(void)
   PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  {
+    char buf[256];
+
+    uint32_t sai_clk = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SAI1);
+    uint32_t pll1_q = HAL_RCC_GetSysClockFreq();
+    uint32_t hclk = HAL_RCC_GetHCLKFreq();
+    uint32_t pclk1 = HAL_RCC_GetPCLK1Freq();
+    uint32_t pclk2 = HAL_RCC_GetPCLK2Freq();
+
+    snprintf(buf, sizeof(buf),
+             "\r\nCLOCKS:\r\n"
+             "  SAI1 clk = %lu Hz\r\n"
+             "  SYSCLK   = %lu Hz\r\n"
+             "  HCLK     = %lu Hz\r\n"
+             "  PCLK1    = %lu Hz\r\n"
+             "  PCLK2    = %lu Hz\r\n\r\n",
+             sai_clk, pll1_q, hclk, pclk1, pclk2);
+
+    uart_log(buf);
+  }
 
   /* USER CODE END SysInit */
 
@@ -121,6 +200,10 @@ int main(void)
 
   uart_log("SAI1 PCM4104 audio start\r\n");
   AudioOut_Start();
+  dump_audio_state("after AudioOut_Start");
+  dump_sai_regs();
+  compute_audio_freq();
+
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
                             (uint8_t *)AudioIn_GetBuffer(),
                             AudioIn_GetBufferSamples());

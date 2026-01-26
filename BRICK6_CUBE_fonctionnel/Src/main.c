@@ -116,6 +116,26 @@ int main(void)
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
   adau1979_init_all();
+  adau1979_set_all_inputs_gain_db(ADAU1979_ADDR_0, 20.0f);
+  adau1979_set_all_inputs_gain_db(ADAU1979_ADDR_1, 20.0f);
+  ADAU1979_DumpGains(ADAU1979_ADDR_0);
+  ADAU1979_DumpGains(ADAU1979_ADDR_1);
+
+  uint8_t g1,g2,g3,g4;
+
+  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0A, &g1);
+  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0B, &g2);
+  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0C, &g3);
+  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0D, &g4);
+
+  printf("ADC0 GAINS = %02X %02X %02X %02X\r\n", g1,g2,g3,g4);
+
+  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0A, &g1);
+  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0B, &g2);
+  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0C, &g3);
+  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0D, &g4);
+
+  printf("ADC1 GAINS = %02X %02X %02X %02X\r\n", g1,g2,g3,g4);
 
   uart_log("SAI1 PCM4104 audio start\r\n");
   AudioOut_Start();
@@ -127,6 +147,7 @@ int main(void)
   HAL_Delay(200);        // on laisse le DMA démarrer
   AudioOut_DebugDump();
   AudioIn_DebugDump();
+
 
   /* USER CODE END 2 */
 
@@ -271,7 +292,26 @@ void PeriphCommonClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void ADAU1979_DumpGains(uint8_t addr)
+{
+  uint8_t g1, g2, g3, g4;
+  char buf[128];
 
+  adau1979_debug_read_reg(addr, 0x0A, &g1);
+  adau1979_debug_read_reg(addr, 0x0B, &g2);
+  adau1979_debug_read_reg(addr, 0x0C, &g3);
+  adau1979_debug_read_reg(addr, 0x0D, &g4);
+
+  snprintf(buf, sizeof(buf),
+           "ADAU1979 0x%02X GAINS: %02X(%+.1fdB) %02X(%+.1fdB) %02X(%+.1fdB) %02X(%+.1fdB)\r\n",
+           addr,
+           g1, adau1979_gain_reg_to_db(g1),
+           g2, adau1979_gain_reg_to_db(g2),
+           g3, adau1979_gain_reg_to_db(g3),
+           g4, adau1979_gain_reg_to_db(g4));
+
+  HAL_UART_Transmit(&huart1, (uint8_t*)buf, strlen(buf), 100);
+}
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
