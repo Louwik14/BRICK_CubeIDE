@@ -9,13 +9,12 @@ enum
 {
   AUDIO_OUT_TONE_HZ = 100U,
   AUDIO_OUT_TABLE_SIZE = 256U,
-  AUDIO_OUT_DAC_CHANNELS = 4U
+  AUDIO_OUT_DAC_CHANNELS = 8U
 };
 
 /*
  * TDM8 frame layout (256-bit frame, 8 slots x 32-bit words):
- *   Slot 0..3 -> PCM4104 DAC channels (24-bit left aligned)
- *   Slot 4..7 -> unused by DAC (set to 0 or loopback for debug)
+ *   Slot 0..7 -> CS42448 DAC channels 1..8 (24-bit left aligned)
  */
 static int32_t audio_out_buffer[AUDIO_OUT_BUFFER_SAMPLES];
 static volatile uint32_t audio_out_half_events = 0;
@@ -67,14 +66,9 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
       uint32_t table_index = (audio_out_phase >> 16) & (AUDIO_OUT_TABLE_SIZE - 1U);
       int32_t sample24 = ((int32_t)audio_out_sine_table[table_index]) << 8;
 
-      audio_out_buffer[index + 0] = sample24;
-      audio_out_buffer[index + 1] = sample24;
-      audio_out_buffer[index + 2] = sample24;
-      audio_out_buffer[index + 3] = sample24;
-
-      for (uint32_t slot = AUDIO_OUT_DAC_CHANNELS; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
+      for (uint32_t slot = 0; slot < AUDIO_OUT_DAC_CHANNELS; ++slot)
       {
-        audio_out_buffer[index + slot] = 0;
+        audio_out_buffer[index + slot] = sample24;
       }
 
       audio_out_phase += audio_out_phase_inc;
@@ -83,12 +77,12 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
     {
       uint32_t in_index = frame * AUDIO_OUT_WORDS_PER_FRAME;
 
-      for (uint32_t slot = 0; slot < AUDIO_OUT_DAC_CHANNELS; ++slot)
+      for (uint32_t slot = 0; slot < AUDIO_IN_ACTIVE_SLOTS; ++slot)
       {
         audio_out_buffer[index + slot] = audio_in_block[in_index + slot];
       }
 
-      for (uint32_t slot = AUDIO_OUT_DAC_CHANNELS; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
+      for (uint32_t slot = AUDIO_IN_ACTIVE_SLOTS; slot < AUDIO_OUT_TDM_SLOTS; ++slot)
       {
         audio_out_buffer[index + slot] = 0;
       }
