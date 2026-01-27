@@ -34,6 +34,7 @@
 #include "audio_in.h"
 #include "audio_out.h"
 #include "midi.h"
+#include "midi_host.h"
 
 /* USER CODE END Includes */
 
@@ -149,6 +150,7 @@ int main(void)
   {
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
+    midi_host_poll();
 
     /* USER CODE BEGIN 3 */
     static uint32_t last_led_tick = 0;
