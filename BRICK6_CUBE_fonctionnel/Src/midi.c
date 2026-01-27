@@ -15,6 +15,7 @@
 
 #include "midi.h"
 #include "main.h"
+#include "midi_host.h"
 #include "usbd_midi.h"
 #include <string.h>
 
@@ -83,7 +84,7 @@ static inline bool midi_in_isr(void) {
 
 static void midi_send(midi_dest_t dest, const uint8_t *msg, size_t len);
 static void backend_usb_device_send(const uint8_t *msg, size_t len);
-static void backend_usb_host_send(const uint8_t *msg, size_t len) __attribute__((unused));
+static void backend_usb_host_send(const uint8_t *msg, size_t len);
 static void backend_din_send(const uint8_t *msg, size_t len);
 
 static bool usb_device_ready(void) {
@@ -394,9 +395,7 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
 }
 
 static void backend_usb_host_send(const uint8_t *msg, size_t len) {
-  (void)msg;
-  (void)len;
-  /* Stub: USB Host MIDI backend à implémenter plus tard. */
+  (void)midi_host_send(msg, len);
 }
 
 static void backend_din_send(const uint8_t *msg, size_t len) {
@@ -469,6 +468,7 @@ void midi_poll(void) {
 
   midi_process_usb_rx();
   midi_usb_try_flush();
+  midi_host_poll();
 }
 
 void midi_send_raw(midi_dest_t dest, const uint8_t *msg, size_t len) {
@@ -521,6 +521,9 @@ static void midi_send(midi_dest_t dest, const uint8_t *msg, size_t len) {
       break;
     case MIDI_DEST_USB:
       backend_usb_device_send(msg, len);
+      break;
+    case MIDI_DEST_USB_HOST:
+      backend_usb_host_send(msg, len);
       break;
     case MIDI_DEST_BOTH:
       backend_din_send(msg, len);
@@ -682,6 +685,7 @@ void midi_stats_reset(void) {
   midi_tx_stats = (midi_tx_stats_t){0};
   midi_rx_stats = (midi_rx_stats_t){0};
   midi_usb_rx_drops = 0U;
+  midi_host_stats_reset();
 }
 
 /* ====================================================================== */

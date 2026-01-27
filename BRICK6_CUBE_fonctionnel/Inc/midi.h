@@ -44,6 +44,7 @@ typedef enum {
   MIDI_DEST_NONE = 0,  /**< Aucune sortie */
   MIDI_DEST_UART,      /**< Envoi uniquement via port UART DIN */
   MIDI_DEST_USB,       /**< Envoi uniquement via USB MIDI */
+  MIDI_DEST_USB_HOST,  /**< Envoi uniquement via USB MIDI Host */
   MIDI_DEST_BOTH       /**< Envoi sur les deux sorties */
 } midi_dest_t;
 
