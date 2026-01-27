@@ -1,0 +1,11 @@
+../Src/usbh_midi.c:67:13:uart_log	1
+../Src/usbh_midi.c:72:13:uart_log_value	1
+../Src/usbh_midi.c:90:27:USBH_MIDI_InterfaceInit	12
+../Src/usbh_midi.c:179:27:USBH_MIDI_InterfaceDeInit	2
+../Src/usbh_midi.c:199:27:USBH_MIDI_ClassRequest	1
+../Src/usbh_midi.c:205:13:USBH_MIDI_PushRx	2
+../Src/usbh_midi.c:221:13:USBH_MIDI_PopTx	2
+../Src/usbh_midi.c:238:27:USBH_MIDI_Process	16
+../Src/usbh_midi.c:300:20:USBH_MIDI_ReadPacket	5
+../Src/usbh_midi.c:325:20:USBH_MIDI_Transmit	5
+../Src/usbh_midi.c:350:6:USBH_MIDI_IsReady	5

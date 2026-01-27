@@ -1,0 +1,5 @@
+../Src/usb_host.c:38:13:uart_log	1
+../Src/usb_host.c:43:13:uart_log_status	1
+../Src/usb_host.c:58:6:MX_USB_HOST_Init	4
+../Src/usb_host.c:96:6:MX_USB_HOST_Process	1
+../Src/usb_host.c:104:13:USBH_UserProcess	5
