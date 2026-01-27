@@ -66,9 +66,9 @@
 #define USBD_LANGID_STRING     1033
 #define USBD_MANUFACTURER_STRING     "STMicroelectronics"
 #define USBD_PID_FS     22315
-#define USBD_PRODUCT_STRING_FS     "STM32 Human interface"
-#define USBD_CONFIGURATION_STRING_FS     "HID Config"
-#define USBD_INTERFACE_STRING_FS     "HID Interface"
+#define USBD_PRODUCT_STRING_FS     "STM32 USB MIDI"
+#define USBD_CONFIGURATION_STRING_FS     "MIDI Config"
+#define USBD_INTERFACE_STRING_FS     "MIDI Interface"
 
 #define USB_SIZ_BOS_DESC            0x0C
 
@@ -415,4 +415,3 @@ static void IntToUnicode(uint32_t value, uint8_t * pbuf, uint8_t len)
 /**
   * @}
   */
-
