@@ -1,4 +1,4 @@
 ../Src/midi_host.c:13:16:midi_host_cin_to_length	16	static
-../Src/midi_host.c:36:6:midi_host_poll	16	static
-../Src/midi_host.c:63:13:midi_host_encode_packet	40	static
-../Src/midi_host.c:158:6:midi_host_send	24	static
+../Src/midi_host.c:37:6:midi_host_poll	16	static
+../Src/midi_host.c:64:13:midi_host_encode_packet	40	static
+../Src/midi_host.c:159:6:midi_host_send	24	static
