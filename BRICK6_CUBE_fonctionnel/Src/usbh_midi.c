@@ -314,7 +314,12 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
   USBH_MIDI_HandleTypeDef *handle = (USBH_MIDI_HandleTypeDef *)phost->pActiveClass->pData;
   USBH_URBStateTypeDef urb_state;
   static uint32_t log_tick = 0U;
+  static uint32_t process_seq = 0U;
   uint32_t now = HAL_GetTick();
+
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_value("USBH MIDI: process seq=", process_seq++);
+#endif
 
   if (handle == NULL)
   {
@@ -331,11 +336,17 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 
   if (handle->state != USBH_MIDI_STATE_TRANSFER)
   {
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log_value("USBH MIDI: state=", handle->state);
+#endif
     return USBH_OK;
   }
 
   if (!handle->rx_in_progress)
   {
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log("USBH MIDI: rx submit\r\n");
+#endif
     (void)USBH_BulkReceiveData(phost, handle->rx_buffer, handle->rx_buffer_size, handle->InPipe);
     handle->rx_in_progress = true;
 #if USBH_MIDI_LOG_VERBOSE
@@ -346,10 +357,16 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 
   if (handle->rx_in_progress)
   {
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log("USBH MIDI: rx check urb\r\n");
+#endif
     urb_state = USBH_LL_GetURBState(phost, handle->InPipe);
 
     if (urb_state == USBH_URB_DONE)
     {
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log("USBH MIDI: rx urb done\r\n");
+#endif
       uint16_t received = USBH_LL_GetLastXferSize(phost, handle->InPipe);
 #if USBH_MIDI_LOG_VERBOSE
       uart_log_value("USBH MIDI: rx done bytes=", received);
@@ -366,6 +383,9 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
     }
     else if ((urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
     {
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log("USBH MIDI: rx urb error/stall\r\n");
+#endif
       handle->rx_in_progress = false;
 #if USBH_MIDI_LOG_VERBOSE
       uart_log_value("USBH MIDI: rx urb error=", urb_state);
@@ -375,9 +395,15 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 
   if (handle->tx_in_progress)
   {
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log("USBH MIDI: tx check urb\r\n");
+#endif
     urb_state = USBH_LL_GetURBState(phost, handle->OutPipe);
     if ((urb_state == USBH_URB_DONE) || (urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
     {
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log("USBH MIDI: tx urb complete\r\n");
+#endif
       handle->tx_in_progress = false;
 #if USBH_MIDI_LOG_VERBOSE
       uart_log_value("USBH MIDI: tx done state=", urb_state);
@@ -387,6 +413,9 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 
   if ((!handle->tx_in_progress) && (handle->tx_count > 0U))
   {
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log("USBH MIDI: tx submit\r\n");
+#endif
     uint8_t packet[USBH_MIDI_PACKET_SIZE];
     if (USBH_MIDI_PopTx(handle, packet))
     {
