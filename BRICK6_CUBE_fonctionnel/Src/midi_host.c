@@ -123,6 +123,17 @@ static bool midi_host_tx_queue_pop(midi_host_packet_t *out) {
   return true;
 }
 
+static void midi_host_reset_queues(void) {
+  uint32_t primask = midi_host_enter_critical();
+  midi_host_rx_head = 0U;
+  midi_host_rx_tail = 0U;
+  midi_host_rx_count = 0U;
+  midi_host_tx_head = 0U;
+  midi_host_tx_tail = 0U;
+  midi_host_tx_count = 0U;
+  midi_host_exit_critical(primask);
+}
+
 static bool midi_host_decode_packet(const uint8_t packet[USBH_MIDI_PACKET_SIZE], midi_msg_t *out) {
   if (out == NULL) {
     return false;
@@ -253,9 +264,9 @@ static bool midi_host_encode_packet(const uint8_t *msg, size_t len,
 
 void midi_host_poll(void) {
   uint32_t processed = 0U;
-  bool ready = USBH_MIDI_IsReady(&hUsbHostHS);
 
-  if (ready) {
+  /* Do not cache ready: the USB stack can deinit between stages after refactor. */
+  if (USBH_MIDI_IsReady(&hUsbHostHS)) {
     uint8_t packet_bytes[USBH_MIDI_PACKET_SIZE];
     while (USBH_MIDI_ReadPacket(&hUsbHostHS, packet_bytes) == USBH_OK) {
       if (!midi_host_rx_queue_push(packet_bytes)) {
@@ -280,7 +291,7 @@ void midi_host_poll(void) {
     processed++;
   }
 
-  if (!ready) {
+  if (!USBH_MIDI_IsReady(&hUsbHostHS)) {
     return;
   }
 
@@ -288,6 +299,10 @@ void midi_host_poll(void) {
   while (processed < MIDI_HOST_MAX_BURST) {
     midi_host_packet_t packet;
     if (!midi_host_tx_queue_peek(&packet)) {
+      break;
+    }
+
+    if (!USBH_MIDI_IsReady(&hUsbHostHS)) {
       break;
     }
 
@@ -319,9 +334,31 @@ bool midi_host_send(const uint8_t *msg, size_t len) {
     return false;
   }
 
+  if (!USBH_MIDI_IsReady(&hUsbHostHS)) {
+    midi_host_stats.tx_not_ready++;
+  }
+
   return true;
 }
 
+bool midi_host_is_connected(void) {
+  return USBH_MIDI_IsReady(&hUsbHostHS);
+}
+
 void midi_host_stats_reset(void) {
+  midi_host_reset_queues();
   midi_host_stats = (midi_host_stats_t){0};
+}
+
+void midi_host_on_disconnect(void) {
+  midi_host_reset_queues();
+  midi_host_stats.rx_packets = 0U;
+  midi_host_stats.rx_drops = 0U;
+  midi_host_stats.tx_packets = 0U;
+  midi_host_stats.tx_drops = 0U;
+  midi_host_stats.tx_busy = 0U;
+  midi_host_stats.tx_not_ready = 0U;
+  midi_host_stats.high_water_rx = 0U;
+  midi_host_stats.high_water_tx = 0U;
+  midi_host_stats.disconnect_count++;
 }
