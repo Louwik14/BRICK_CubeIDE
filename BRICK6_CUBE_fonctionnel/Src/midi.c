@@ -81,6 +81,7 @@ static inline bool midi_in_isr(void) {
 /*                              BACKENDS                                 */
 /* ====================================================================== */
 
+static void midi_send(midi_dest_t dest, const uint8_t *msg, size_t len);
 static void backend_usb_device_send(const uint8_t *msg, size_t len);
 static void backend_usb_host_send(const uint8_t *msg, size_t len) __attribute__((unused));
 static void backend_din_send(const uint8_t *msg, size_t len);
