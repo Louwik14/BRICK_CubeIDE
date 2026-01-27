@@ -16,6 +16,8 @@ typedef struct {
   volatile uint32_t tx_packets;
   volatile uint32_t tx_drops;
   volatile uint32_t tx_busy;
+  volatile uint32_t tx_not_ready;
+  volatile uint32_t disconnect_count;
   volatile uint32_t high_water_rx;
   volatile uint32_t high_water_tx;
 } midi_host_stats_t;
@@ -26,6 +28,10 @@ void midi_host_poll(void);
 
 bool midi_host_send(const uint8_t *msg, size_t len);
 
+bool midi_host_is_connected(void);
+
 void midi_host_stats_reset(void);
+
+void midi_host_on_disconnect(void);
 
 #endif /* MIDI_HOST_H */

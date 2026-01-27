@@ -6,6 +6,7 @@
   */
 
 #include "usbh_midi.h"
+#include "midi_host.h"
 
 #ifndef USB_EP_TYPE_MASK
 #define USB_EP_TYPE_MASK 0x03U
@@ -248,6 +249,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
     handle->OutPipe = 0xFFU;
   }
 
+  midi_host_on_disconnect();
   USBH_MIDI_ResetHandle(handle);
   phost->pActiveClass->pData = NULL;
 
