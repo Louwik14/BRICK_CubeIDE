@@ -99,6 +99,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   USBH_MIDI_HandleTypeDef *handle = &midi_handle;
   uint8_t interface = USBH_FindInterface(phost, USBH_MIDI_CLASS,
                                          USBH_MIDI_SUBCLASS, USBH_MIDI_PROTOCOL);
+  uint8_t max_ep;
   if ((interface == 0xFFU) || (interface >= USBH_MAX_NUM_INTERFACES))
   {
     USBH_DbgLog("Cannot Find the interface for %s class.", phost->pActiveClass->Name);
@@ -120,7 +121,8 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   USBH_InterfaceDescTypeDef *itf = &phost->device.CfgDesc.Itf_Desc[interface];
   uart_log_value("USBH MIDI: endpoints=", itf->bNumEndpoints);
 
-  for (uint8_t idx = 0U; idx < itf->bNumEndpoints; idx++)
+  max_ep = (itf->bNumEndpoints <= USBH_MAX_NUM_ENDPOINTS) ? itf->bNumEndpoints : USBH_MAX_NUM_ENDPOINTS;
+  for (uint8_t idx = 0U; idx < max_ep; idx++)
   {
     USBH_EpDescTypeDef *ep = &itf->Ep_Desc[idx];
 
@@ -148,6 +150,13 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
     return USBH_FAIL;
   }
 
+  if ((handle->InEpSize == 0U) || (handle->OutEpSize == 0U))
+  {
+    USBH_DbgLog("MIDI endpoints have invalid sizes.");
+    uart_log("USBH MIDI: endpoint sizes invalid\r\n");
+    return USBH_FAIL;
+  }
+
   handle->InPipe = USBH_AllocPipe(phost, handle->InEp);
   handle->OutPipe = USBH_AllocPipe(phost, handle->OutEp);
   uart_log_value("USBH MIDI: InPipe=", handle->InPipe);
@@ -166,6 +175,8 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   (void)USBH_OpenPipe(phost, handle->OutPipe, handle->OutEp,
                       phost->device.address, phost->device.speed,
                       USB_EP_TYPE_BULK, handle->OutEpSize);
+  (void)USBH_LL_SetToggle(phost, handle->InPipe, 0U);
+  (void)USBH_LL_SetToggle(phost, handle->OutPipe, 0U);
 
   handle->rx_buffer_size = (handle->InEpSize <= USBH_MIDI_RX_BUF_SIZE)
                              ? handle->InEpSize
