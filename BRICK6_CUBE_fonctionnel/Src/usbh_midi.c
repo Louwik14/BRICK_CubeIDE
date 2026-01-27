@@ -53,14 +53,13 @@ typedef struct {
   uint16_t rx_last_count;
   bool rx_busy;
   bool tx_busy;
-  bool process_logged;
   uint8_t rx_buffer[USBH_MIDI_RX_BUF_SIZE] USBH_MIDI_ALIGN_32;
   uint8_t tx_buffer[USBH_MIDI_TX_BUF_SIZE] USBH_MIDI_ALIGN_32;
-  USBH_MIDI_PacketTypeDef rx_queue[USBH_MIDI_RX_QUEUE_LEN];
+  USBH_MIDI_PacketTypeDef rx_queue[USBH_MIDI_RX_QUEUE_LEN] USBH_MIDI_ALIGN_32;
   uint16_t rx_head;
   uint16_t rx_tail;
   uint16_t rx_count;
-  USBH_MIDI_PacketTypeDef tx_queue[USBH_MIDI_TX_QUEUE_LEN];
+  USBH_MIDI_PacketTypeDef tx_queue[USBH_MIDI_TX_QUEUE_LEN] USBH_MIDI_ALIGN_32;
   uint16_t tx_head;
   uint16_t tx_tail;
   uint16_t tx_count;
@@ -207,7 +206,6 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   handle->tx_state = USBH_MIDI_TX_IDLE;
   handle->rx_busy = false;
   handle->tx_busy = false;
-  handle->process_logged = false;
 
   USBH_UsrLog("USBH_MIDI_InterfaceInit: IN=0x%02X OUT=0x%02X", handle->InEp, handle->OutEp);
 
@@ -304,6 +302,7 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
         (void)USBH_BulkReceiveData(phost, handle->rx_buffer, handle->rx_buffer_size, handle->InPipe);
         handle->rx_busy = true;
         handle->rx_state = USBH_MIDI_RX_POLL;
+        USBH_UsrLog("USBH_MIDI_RX_RECEIVE -> RX_POLL (arm)");
       }
       break;
 
@@ -317,6 +316,10 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
         handle->rx_state = USBH_MIDI_RX_DONE;
         USBH_UsrLog("USBH_MIDI_RX_DONE: %u bytes", (unsigned int)handle->rx_last_count);
       }
+      else if (urb_state == USBH_URB_NOTREADY)
+      {
+        /* Stay in POLL until data is ready. */
+      }
       else if ((urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
       {
         USBH_ErrLog("USBH_MIDI_RX_URB_ERROR: %u", (unsigned int)urb_state);
@@ -329,6 +332,7 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
 
     case USBH_MIDI_RX_DONE:
       handle->rx_state = USBH_MIDI_RX_DISPATCH;
+      USBH_UsrLog("USBH_MIDI_RX_DONE -> RX_DISPATCH");
       break;
 
     case USBH_MIDI_RX_DISPATCH:
@@ -360,7 +364,7 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
                                   handle->OutPipe, 1U);
           handle->tx_busy = true;
           handle->tx_state = USBH_MIDI_TX_POLL;
-          USBH_UsrLog("USBH_MIDI_TX_SEND");
+          USBH_UsrLog("USBH_MIDI_TX_IDLE -> TX_SEND");
         }
       }
       break;
@@ -372,7 +376,11 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
       {
         handle->tx_busy = false;
         handle->tx_state = USBH_MIDI_TX_DONE;
-        USBH_UsrLog("USBH_MIDI_TX_DONE");
+        USBH_UsrLog("USBH_MIDI_TX_POLL -> TX_DONE");
+      }
+      else if (urb_state == USBH_URB_NOTREADY)
+      {
+        /* Stay in POLL until data is sent. */
       }
       else if ((urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
       {
@@ -405,12 +413,6 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
   if ((handle == NULL) || (handle->state != USBH_MIDI_STATE_TRANSFER))
   {
     return USBH_OK;
-  }
-
-  if (!handle->process_logged)
-  {
-    USBH_UsrLog("USBH_MIDI_Process");
-    handle->process_logged = true;
   }
 
   USBH_MIDI_ProcessRx(phost, handle);
