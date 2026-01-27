@@ -115,7 +115,9 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_USB_DEVICE_Init();
+  uart_log("boot: before MX_USB_HOST_Init\r\n");
   MX_USB_HOST_Init();
+  uart_log("boot: after MX_USB_HOST_Init\r\n");
   /* USER CODE BEGIN 2 */
   char log_buffer[128];
   AudioOut_Init(&hsai_BlockA1);
