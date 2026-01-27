@@ -8,6 +8,8 @@
 #include "usbh_midi.h"
 #include "midi_host.h"
 
+#include <stdio.h>
+
 #ifndef USB_EP_TYPE_MASK
 #define USB_EP_TYPE_MASK 0x03U
 #endif
@@ -16,6 +18,14 @@
 #define USBH_MIDI_DEBUG 1
 #endif
 #define USBH_MIDI_ALIGN_32 __attribute__((aligned(32)))
+
+extern void uart_log(const char *message);
+
+static void usbh_midi_log(const char *s)
+{
+  uart_log(s);
+  uart_log("\r\n");
+}
 
 typedef enum {
   USBH_MIDI_STATE_IDLE = 0U,
@@ -90,12 +100,15 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_SOFProcess(USBH_HandleTypeDef *phost)
 {
   static uint32_t sof_calls = 0U;
+  char log_buffer[128];
   (void)phost;
   sof_calls++;
 #if USBH_MIDI_DEBUG
   if ((sof_calls % 1000U) == 0U)
   {
-    USBH_UsrLog("USBH_MIDI_SOFProcess: calls=%lu", (unsigned long)sof_calls);
+    snprintf(log_buffer, sizeof(log_buffer),
+             "USBH_MIDI_SOFProcess: calls=%lu", (unsigned long)sof_calls);
+    usbh_midi_log(log_buffer);
   }
 #endif
   return USBH_OK;
@@ -107,6 +120,9 @@ static USBH_URBStateTypeDef usbh_midi_last_urb_rx = USBH_URB_IDLE;
 static USBH_URBStateTypeDef usbh_midi_last_urb_tx = USBH_URB_IDLE;
 static uint32_t usbh_midi_rx_poll_calls = 0U;
 static uint32_t usbh_midi_tx_poll_calls = 0U;
+static uint32_t dbg_process_calls = 0U;
+static uint32_t dbg_rx_calls = 0U;
+static uint32_t dbg_tx_calls = 0U;
 
 USBH_ClassTypeDef USBH_MIDI_Class = {
   "MIDI",
@@ -131,8 +147,9 @@ static void USBH_MIDI_ResetHandle(USBH_MIDI_HandleTypeDef *handle)
 
 static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
 {
+  usbh_midi_log("MIDI InterfaceInit CALLED");
 #if USBH_MIDI_DEBUG
-  USBH_UsrLog("USBH_MIDI_InterfaceInit");
+  usbh_midi_log("USBH_MIDI_InterfaceInit");
 #endif
   (void)USBH_memset(&usbh_midi_debug_stats, 0, sizeof(usbh_midi_debug_stats));
 
@@ -160,7 +177,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   if (interface == 0xFFU)
   {
 #if USBH_MIDI_DEBUG
-    USBH_ErrLog("USBH_MIDI_InterfaceInit: no MIDI interface");
+    usbh_midi_log("USBH_MIDI_InterfaceInit: no MIDI interface");
 #endif
     return USBH_FAIL;
   }
@@ -168,7 +185,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   if (USBH_SelectInterface(phost, interface) != USBH_OK)
   {
 #if USBH_MIDI_DEBUG
-    USBH_ErrLog("USBH_MIDI_InterfaceInit: select interface failed");
+    usbh_midi_log("USBH_MIDI_InterfaceInit: select interface failed");
 #endif
     return USBH_FAIL;
   }
@@ -217,7 +234,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   if ((handle->InEp == 0U) || (handle->OutEp == 0U))
   {
 #if USBH_MIDI_DEBUG
-    USBH_ErrLog("USBH_MIDI_InterfaceInit: missing endpoints");
+    usbh_midi_log("USBH_MIDI_InterfaceInit: missing endpoints");
 #endif
     return USBH_FAIL;
   }
@@ -225,7 +242,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   if ((handle->InEpSize == 0U) || (handle->OutEpSize == 0U))
   {
 #if USBH_MIDI_DEBUG
-    USBH_ErrLog("USBH_MIDI_InterfaceInit: invalid endpoint sizes");
+    usbh_midi_log("USBH_MIDI_InterfaceInit: invalid endpoint sizes");
 #endif
     return USBH_FAIL;
   }
@@ -236,7 +253,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   if ((handle->InPipe == 0xFFU) || (handle->OutPipe == 0xFFU))
   {
 #if USBH_MIDI_DEBUG
-    USBH_ErrLog("USBH_MIDI_InterfaceInit: pipe alloc failed");
+    usbh_midi_log("USBH_MIDI_InterfaceInit: pipe alloc failed");
 #endif
     return USBH_FAIL;
   }
@@ -258,7 +275,13 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   handle->tx_busy = false;
 
 #if USBH_MIDI_DEBUG
-  USBH_UsrLog("USBH_MIDI_InterfaceInit: IN=0x%02X OUT=0x%02X", handle->InEp, handle->OutEp);
+  {
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "USBH_MIDI_InterfaceInit: IN=0x%02X OUT=0x%02X",
+             handle->InEp, handle->OutEp);
+    usbh_midi_log(log_buffer);
+  }
 #endif
 
   return USBH_OK;
@@ -267,7 +290,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
 static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
 {
 #if USBH_MIDI_DEBUG
-  USBH_UsrLog("USBH_MIDI_InterfaceDeInit (disconnect)");
+  usbh_midi_log("USBH_MIDI_InterfaceDeInit (disconnect)");
 #endif
 
   if ((phost == NULL) || (phost->pActiveClass == NULL))
@@ -307,7 +330,7 @@ static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
 {
   (void)phost;
 #if USBH_MIDI_DEBUG
-  USBH_UsrLog("USBH_MIDI_ClassRequest");
+  usbh_midi_log("USBH_MIDI_ClassRequest");
 #endif
   return USBH_OK;
 }
@@ -348,6 +371,15 @@ static bool USBH_MIDI_PopTx(USBH_MIDI_HandleTypeDef *handle,
 static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeDef *handle)
 {
   USBH_MIDI_RxStateTypeDef prev_state = handle->rx_state;
+  dbg_rx_calls++;
+  if ((dbg_rx_calls == 1U) || ((dbg_rx_calls % 1000U) == 0U))
+  {
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "ENTER USBH_MIDI_ProcessRx calls=%lu",
+             (unsigned long)dbg_rx_calls);
+    usbh_midi_log(log_buffer);
+  }
   usbh_midi_debug_stats.rx_process_calls++;
   switch (handle->rx_state)
   {
@@ -363,7 +395,7 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
         handle->rx_busy = true;
         handle->rx_state = USBH_MIDI_RX_POLL;
 #if USBH_MIDI_DEBUG
-        USBH_UsrLog("USBH_MIDI_RX_RECEIVE -> RX_POLL (arm)");
+        usbh_midi_log("USBH_MIDI_RX_RECEIVE -> RX_POLL (arm)");
 #endif
       }
       break;
@@ -376,11 +408,14 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
 #if USBH_MIDI_DEBUG
       if ((usbh_midi_rx_poll_calls % 1000U) == 0U)
       {
-        USBH_UsrLog("USBH_MIDI_RX_URB: state=%u rx_state=%u rx_busy=%u rx_last=%u",
-                    (unsigned int)urb_state,
-                    (unsigned int)handle->rx_state,
-                    (unsigned int)handle->rx_busy,
-                    (unsigned int)handle->rx_last_count);
+        char log_buffer[128];
+        snprintf(log_buffer, sizeof(log_buffer),
+                 "USBH_MIDI_RX_URB: state=%u rx_state=%u rx_busy=%u rx_last=%u",
+                 (unsigned int)urb_state,
+                 (unsigned int)handle->rx_state,
+                 (unsigned int)handle->rx_busy,
+                 (unsigned int)handle->rx_last_count);
+        usbh_midi_log(log_buffer);
       }
 #endif
       if (urb_state == USBH_URB_DONE)
@@ -390,7 +425,13 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
         handle->rx_busy = false;
         handle->rx_state = USBH_MIDI_RX_DONE;
 #if USBH_MIDI_DEBUG
-        USBH_UsrLog("USBH_MIDI_RX_DONE: %u bytes", (unsigned int)handle->rx_last_count);
+        {
+          char log_buffer[128];
+          snprintf(log_buffer, sizeof(log_buffer),
+                   "USBH_MIDI_RX_DONE: %u bytes",
+                   (unsigned int)handle->rx_last_count);
+          usbh_midi_log(log_buffer);
+        }
 #endif
       }
       else if (urb_state == USBH_URB_NOTREADY)
@@ -404,7 +445,13 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
       {
         usbh_midi_debug_stats.bulk_rx_error++;
 #if USBH_MIDI_DEBUG
-        USBH_ErrLog("USBH_MIDI_RX_URB_ERROR: %u", (unsigned int)urb_state);
+        {
+          char log_buffer[128];
+          snprintf(log_buffer, sizeof(log_buffer),
+                   "USBH_MIDI_RX_URB_ERROR: %u",
+                   (unsigned int)urb_state);
+          usbh_midi_log(log_buffer);
+        }
 #endif
         (void)USBH_ClrFeature(phost, handle->InEp);
         handle->rx_busy = false;
@@ -416,7 +463,7 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
     case USBH_MIDI_RX_DONE:
       handle->rx_state = USBH_MIDI_RX_DISPATCH;
 #if USBH_MIDI_DEBUG
-      USBH_UsrLog("USBH_MIDI_RX_DONE -> RX_DISPATCH");
+      usbh_midi_log("USBH_MIDI_RX_DONE -> RX_DISPATCH");
 #endif
       break;
 
@@ -437,15 +484,18 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
 #if USBH_MIDI_DEBUG
   if (handle->rx_state != prev_state)
   {
-    USBH_UsrLog("USBH_MIDI_RX_STATE: %u -> %u state=%u rx_busy=%u tx_busy=%u urb_rx=%u rx_last=%u rx_count=%u",
-                (unsigned int)prev_state,
-                (unsigned int)handle->rx_state,
-                (unsigned int)handle->state,
-                (unsigned int)handle->rx_busy,
-                (unsigned int)handle->tx_busy,
-                (unsigned int)usbh_midi_last_urb_rx,
-                (unsigned int)handle->rx_last_count,
-                (unsigned int)handle->rx_count);
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "USBH_MIDI_RX_STATE: %u -> %u state=%u rx_busy=%u tx_busy=%u urb_rx=%u rx_last=%u rx_count=%u",
+             (unsigned int)prev_state,
+             (unsigned int)handle->rx_state,
+             (unsigned int)handle->state,
+             (unsigned int)handle->rx_busy,
+             (unsigned int)handle->tx_busy,
+             (unsigned int)usbh_midi_last_urb_rx,
+             (unsigned int)handle->rx_last_count,
+             (unsigned int)handle->rx_count);
+    usbh_midi_log(log_buffer);
   }
 #endif
 }
@@ -453,6 +503,15 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
 static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeDef *handle)
 {
   USBH_MIDI_TxStateTypeDef prev_state = handle->tx_state;
+  dbg_tx_calls++;
+  if ((dbg_tx_calls == 1U) || ((dbg_tx_calls % 1000U) == 0U))
+  {
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "ENTER USBH_MIDI_ProcessTx calls=%lu",
+             (unsigned long)dbg_tx_calls);
+    usbh_midi_log(log_buffer);
+  }
   usbh_midi_debug_stats.tx_process_calls++;
   switch (handle->tx_state)
   {
@@ -467,7 +526,7 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
           handle->tx_busy = true;
           handle->tx_state = USBH_MIDI_TX_POLL;
 #if USBH_MIDI_DEBUG
-          USBH_UsrLog("USBH_MIDI_TX_IDLE -> TX_SEND");
+          usbh_midi_log("USBH_MIDI_TX_IDLE -> TX_SEND");
 #endif
         }
       }
@@ -481,11 +540,14 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
 #if USBH_MIDI_DEBUG
       if ((usbh_midi_tx_poll_calls % 1000U) == 0U)
       {
-        USBH_UsrLog("USBH_MIDI_TX_URB: state=%u tx_state=%u tx_busy=%u tx_count=%u",
-                    (unsigned int)urb_state,
-                    (unsigned int)handle->tx_state,
-                    (unsigned int)handle->tx_busy,
-                    (unsigned int)handle->tx_count);
+        char log_buffer[128];
+        snprintf(log_buffer, sizeof(log_buffer),
+                 "USBH_MIDI_TX_URB: state=%u tx_state=%u tx_busy=%u tx_count=%u",
+                 (unsigned int)urb_state,
+                 (unsigned int)handle->tx_state,
+                 (unsigned int)handle->tx_busy,
+                 (unsigned int)handle->tx_count);
+        usbh_midi_log(log_buffer);
       }
 #endif
       if (urb_state == USBH_URB_DONE)
@@ -494,7 +556,7 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
         handle->tx_busy = false;
         handle->tx_state = USBH_MIDI_TX_DONE;
 #if USBH_MIDI_DEBUG
-        USBH_UsrLog("USBH_MIDI_TX_POLL -> TX_DONE");
+        usbh_midi_log("USBH_MIDI_TX_POLL -> TX_DONE");
 #endif
       }
       else if (urb_state == USBH_URB_NOTREADY)
@@ -508,7 +570,13 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
       {
         usbh_midi_debug_stats.bulk_tx_error++;
 #if USBH_MIDI_DEBUG
-        USBH_ErrLog("USBH_MIDI_TX_URB_ERROR: %u", (unsigned int)urb_state);
+        {
+          char log_buffer[128];
+          snprintf(log_buffer, sizeof(log_buffer),
+                   "USBH_MIDI_TX_URB_ERROR: %u",
+                   (unsigned int)urb_state);
+          usbh_midi_log(log_buffer);
+        }
 #endif
         (void)USBH_ClrFeature(phost, handle->OutEp);
         handle->tx_busy = false;
@@ -528,14 +596,17 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
 #if USBH_MIDI_DEBUG
   if (handle->tx_state != prev_state)
   {
-    USBH_UsrLog("USBH_MIDI_TX_STATE: %u -> %u state=%u rx_busy=%u tx_busy=%u urb_tx=%u tx_count=%u",
-                (unsigned int)prev_state,
-                (unsigned int)handle->tx_state,
-                (unsigned int)handle->state,
-                (unsigned int)handle->rx_busy,
-                (unsigned int)handle->tx_busy,
-                (unsigned int)usbh_midi_last_urb_tx,
-                (unsigned int)handle->tx_count);
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "USBH_MIDI_TX_STATE: %u -> %u state=%u rx_busy=%u tx_busy=%u urb_tx=%u tx_count=%u",
+             (unsigned int)prev_state,
+             (unsigned int)handle->tx_state,
+             (unsigned int)handle->state,
+             (unsigned int)handle->rx_busy,
+             (unsigned int)handle->tx_busy,
+             (unsigned int)usbh_midi_last_urb_tx,
+             (unsigned int)handle->tx_count);
+    usbh_midi_log(log_buffer);
   }
 #endif
 }
@@ -553,20 +624,32 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
     return USBH_OK;
   }
 
+  dbg_process_calls++;
+  if ((dbg_process_calls == 1U) || ((dbg_process_calls % 1000U) == 0U))
+  {
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "ENTER USBH_MIDI_Process calls=%lu",
+             (unsigned long)dbg_process_calls);
+    usbh_midi_log(log_buffer);
+  }
   usbh_midi_debug_stats.process_calls++;
 #if USBH_MIDI_DEBUG
   if ((usbh_midi_debug_stats.process_calls % 1000U) == 0U)
   {
-    USBH_UsrLog("USBH_MIDI_Process: state=%u rx_state=%u tx_state=%u rx_busy=%u tx_busy=%u urb_rx=%u urb_tx=%u rx_count=%u tx_count=%u",
-                (unsigned int)handle->state,
-                (unsigned int)handle->rx_state,
-                (unsigned int)handle->tx_state,
-                (unsigned int)handle->rx_busy,
-                (unsigned int)handle->tx_busy,
-                (unsigned int)usbh_midi_last_urb_rx,
-                (unsigned int)usbh_midi_last_urb_tx,
-                (unsigned int)handle->rx_count,
-                (unsigned int)handle->tx_count);
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "USBH_MIDI_Process: state=%u rx_state=%u tx_state=%u rx_busy=%u tx_busy=%u urb_rx=%u urb_tx=%u rx_count=%u tx_count=%u",
+             (unsigned int)handle->state,
+             (unsigned int)handle->rx_state,
+             (unsigned int)handle->tx_state,
+             (unsigned int)handle->rx_busy,
+             (unsigned int)handle->tx_busy,
+             (unsigned int)usbh_midi_last_urb_rx,
+             (unsigned int)usbh_midi_last_urb_tx,
+             (unsigned int)handle->rx_count,
+             (unsigned int)handle->tx_count);
+    usbh_midi_log(log_buffer);
   }
 #endif
   USBH_MIDI_ProcessRx(phost, handle);
@@ -610,7 +693,10 @@ USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
 #if USBH_MIDI_DEBUG
   if ((status != last_status) || ((read_calls % 1000U) == 0U))
   {
-    USBH_UsrLog("USBH_MIDI_ReadPacket: status=%u", (unsigned int)status);
+    char log_buffer[128];
+    snprintf(log_buffer, sizeof(log_buffer),
+             "USBH_MIDI_ReadPacket: status=%u", (unsigned int)status);
+    usbh_midi_log(log_buffer);
   }
 #endif
   last_status = status;
@@ -657,33 +743,44 @@ void USBH_MIDI_DebugDump(void)
 {
 #if USBH_MIDI_DEBUG
   USBH_MIDI_HandleTypeDef *handle = &midi_handle;
-  USBH_UsrLog("USBH_MIDI_DebugDump");
-  USBH_UsrLog("  process_calls=%lu rx_process_calls=%lu tx_process_calls=%lu",
-              (unsigned long)usbh_midi_debug_stats.process_calls,
-              (unsigned long)usbh_midi_debug_stats.rx_process_calls,
-              (unsigned long)usbh_midi_debug_stats.tx_process_calls);
-  USBH_UsrLog("  bulk_rx_arms=%lu bulk_rx_done=%lu bulk_rx_notready=%lu bulk_rx_error=%lu",
-              (unsigned long)usbh_midi_debug_stats.bulk_rx_arms,
-              (unsigned long)usbh_midi_debug_stats.bulk_rx_done,
-              (unsigned long)usbh_midi_debug_stats.bulk_rx_notready,
-              (unsigned long)usbh_midi_debug_stats.bulk_rx_error);
-  USBH_UsrLog("  bulk_tx_arms=%lu bulk_tx_done=%lu bulk_tx_notready=%lu bulk_tx_error=%lu",
-              (unsigned long)usbh_midi_debug_stats.bulk_tx_arms,
-              (unsigned long)usbh_midi_debug_stats.bulk_tx_done,
-              (unsigned long)usbh_midi_debug_stats.bulk_tx_notready,
-              (unsigned long)usbh_midi_debug_stats.bulk_tx_error);
-  USBH_UsrLog("  state=%u rx_state=%u tx_state=%u rx_busy=%u tx_busy=%u urb_rx=%u urb_tx=%u",
-              (unsigned int)handle->state,
-              (unsigned int)handle->rx_state,
-              (unsigned int)handle->tx_state,
-              (unsigned int)handle->rx_busy,
-              (unsigned int)handle->tx_busy,
-              (unsigned int)usbh_midi_last_urb_rx,
-              (unsigned int)usbh_midi_last_urb_tx);
-  USBH_UsrLog("  rx_count=%u tx_count=%u rx_last_count=%u rx_buf_size=%u",
-              (unsigned int)handle->rx_count,
-              (unsigned int)handle->tx_count,
-              (unsigned int)handle->rx_last_count,
-              (unsigned int)handle->rx_buffer_size);
+  char log_buffer[128];
+  usbh_midi_log("USBH_MIDI_DebugDump");
+  snprintf(log_buffer, sizeof(log_buffer),
+           "  process_calls=%lu rx_process_calls=%lu tx_process_calls=%lu",
+           (unsigned long)usbh_midi_debug_stats.process_calls,
+           (unsigned long)usbh_midi_debug_stats.rx_process_calls,
+           (unsigned long)usbh_midi_debug_stats.tx_process_calls);
+  usbh_midi_log(log_buffer);
+  snprintf(log_buffer, sizeof(log_buffer),
+           "  bulk_rx_arms=%lu bulk_rx_done=%lu bulk_rx_notready=%lu bulk_rx_error=%lu",
+           (unsigned long)usbh_midi_debug_stats.bulk_rx_arms,
+           (unsigned long)usbh_midi_debug_stats.bulk_rx_done,
+           (unsigned long)usbh_midi_debug_stats.bulk_rx_notready,
+           (unsigned long)usbh_midi_debug_stats.bulk_rx_error);
+  usbh_midi_log(log_buffer);
+  snprintf(log_buffer, sizeof(log_buffer),
+           "  bulk_tx_arms=%lu bulk_tx_done=%lu bulk_tx_notready=%lu bulk_tx_error=%lu",
+           (unsigned long)usbh_midi_debug_stats.bulk_tx_arms,
+           (unsigned long)usbh_midi_debug_stats.bulk_tx_done,
+           (unsigned long)usbh_midi_debug_stats.bulk_tx_notready,
+           (unsigned long)usbh_midi_debug_stats.bulk_tx_error);
+  usbh_midi_log(log_buffer);
+  snprintf(log_buffer, sizeof(log_buffer),
+           "  state=%u rx_state=%u tx_state=%u rx_busy=%u tx_busy=%u urb_rx=%u urb_tx=%u",
+           (unsigned int)handle->state,
+           (unsigned int)handle->rx_state,
+           (unsigned int)handle->tx_state,
+           (unsigned int)handle->rx_busy,
+           (unsigned int)handle->tx_busy,
+           (unsigned int)usbh_midi_last_urb_rx,
+           (unsigned int)usbh_midi_last_urb_tx);
+  usbh_midi_log(log_buffer);
+  snprintf(log_buffer, sizeof(log_buffer),
+           "  rx_count=%u tx_count=%u rx_last_count=%u rx_buf_size=%u",
+           (unsigned int)handle->rx_count,
+           (unsigned int)handle->tx_count,
+           (unsigned int)handle->rx_last_count,
+           (unsigned int)handle->rx_buffer_size);
+  usbh_midi_log(log_buffer);
 #endif
 }
