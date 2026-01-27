@@ -1,6 +1,0 @@
-../Src/adau1979.c:63:26:adau1979_write_reg	1
-../Src/adau1979.c:74:26:adau1979_read_reg	1
-../Src/adau1979.c:85:13:adau1979_write_verify	3
-../Src/adau1979.c:102:13:adau1979_is_present	1
-../Src/adau1979.c:107:6:adau1979_init	2
-../Src/adau1979.c:172:6:adau1979_init_all	1

@@ -23,15 +23,18 @@
 #include "sai.h"
 #include "usart.h"
 #include "usb_device.h"
+#include "usb_host.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
-#include "adau1979.h"
+#include "cs42448.h"
 #include "audio_in.h"
 #include "audio_out.h"
+#include "midi.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,6 +61,8 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
+void MX_USB_HOST_Process(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -109,13 +114,21 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_USB_DEVICE_Init();
+  MX_USB_HOST_Init();
   /* USER CODE BEGIN 2 */
   char log_buffer[128];
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
-  adau1979_init_all();
+  bool codec_ok = CS42448_Init(CS42448_I2C_ADDR);
 
-  uart_log("SAI1 PCM4104 audio start\r\n");
+
+  uart_log("SAI1 CS42448 audio start\r\n");
+  if (!codec_ok)
+  {
+    uart_log("CS42448 init failed\r\n");
+  }
+
+
   AudioOut_Start();
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
                             (uint8_t *)AudioIn_GetBuffer(),
@@ -125,6 +138,8 @@ int main(void)
   HAL_Delay(200);        // on laisse le DMA démarrer
   AudioOut_DebugDump();
   AudioIn_DebugDump();
+  midi_init();
+  uart_log("MIDI init done\r\n");
 
   /* USER CODE END 2 */
 
@@ -133,11 +148,15 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
     static uint32_t last_led_tick = 0;
     static uint32_t last_log_tick = 0;
     static uint32_t last_error = 0;
+    static uint32_t last_midi_tick = 0;
+    static bool midi_note_state = false;
+
     uint32_t now = HAL_GetTick();
 
     if ((now - last_led_tick) >= 500U)
@@ -145,6 +164,26 @@ int main(void)
       HAL_GPIO_TogglePin(LED_DEBUG_GPIO_Port, LED_DEBUG_Pin);
       last_led_tick = now;
     }
+
+    /* ===== TEST MIDI : Note ON / OFF toutes les secondes ===== */
+    if ((now - last_midi_tick) >= 1000U)
+    {
+      if (!midi_note_state)
+      {
+        midi_note_on(MIDI_DEST_USB, 0, 60, 100);  // C4
+        uart_log("MIDI Note ON\r\n");
+        midi_note_state = true;
+      }
+      else
+      {
+        midi_note_off(MIDI_DEST_USB, 0, 60, 0);
+        uart_log("MIDI Note OFF\r\n");
+        midi_note_state = false;
+      }
+
+      last_midi_tick = now;
+    }
+    /* ======================================================== */
 
     if ((now - last_log_tick) >= 1000U)
     {
@@ -166,9 +205,6 @@ int main(void)
                (unsigned long)rx_full,
                (unsigned long)frames_per_sec);
 
-      uart_log(log_buffer);
-
-      uart_log(log_buffer);
 
       if (error != 0U && error != last_error)
       {
@@ -181,6 +217,7 @@ int main(void)
       last_log_tick = now;
     }
   }
+
   /* USER CODE END 3 */
 }
 

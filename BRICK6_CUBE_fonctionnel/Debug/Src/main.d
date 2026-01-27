@@ -37,8 +37,8 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  ../Inc/main.h ../Inc/i2c.h ../Inc/sai.h ../Inc/usart.h \
  ../Inc/usb_device.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h \
- ../Inc/usbd_conf.h ../Inc/gpio.h ../Inc/adau1979.h ../Inc/audio_in.h \
- ../Inc/audio_out.h
+ ../Inc/usbd_conf.h ../Inc/gpio.h ../Inc/cs42448.h ../Inc/audio_in.h \
+ ../Inc/audio_out.h ../Inc/midi.h
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -84,6 +84,7 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h:
 ../Inc/usbd_conf.h:
 ../Inc/gpio.h:
-../Inc/adau1979.h:
+../Inc/cs42448.h:
 ../Inc/audio_in.h:
 ../Inc/audio_out.h:
+../Inc/midi.h:
