@@ -13,6 +13,8 @@ extern USBH_HandleTypeDef hUsbHostHS;
 #define MIDI_HOST_TX_QUEUE_LEN 128U
 #define MIDI_HOST_RX_QUEUE_LEN 128U
 #define MIDI_HOST_MAX_BURST    16U
+#define MIDI_HOST_LOG_INTERVAL_MS 1000U
+#define MIDI_HOST_RX_WATCHDOG_MS  2000U
 
 typedef struct {
   uint8_t bytes[USBH_MIDI_PACKET_SIZE];
@@ -30,6 +32,12 @@ static volatile uint16_t midi_host_tx_tail = 0U;
 static volatile uint16_t midi_host_tx_count = 0U;
 
 midi_host_stats_t midi_host_stats = {0};
+static bool midi_host_last_ready = false;
+static uint32_t midi_host_last_rx_tick = 0U;
+static uint32_t midi_host_last_no_rx_warning = 0U;
+static uint32_t midi_host_last_ok_log = 0U;
+static uint32_t midi_host_last_busy_log = 0U;
+static uint32_t midi_host_last_fail_log = 0U;
 
 static inline uint32_t midi_host_enter_critical(void) {
   uint32_t primask = __get_PRIMASK();
@@ -264,15 +272,39 @@ static bool midi_host_encode_packet(const uint8_t *msg, size_t len,
 
 void midi_host_poll(void) {
   uint32_t processed = 0U;
+  uint32_t now = HAL_GetTick();
+  bool ready = USBH_MIDI_IsReady(&hUsbHostHS);
+
+  if (ready != midi_host_last_ready) {
+    USBH_UsrLog("midi_host: USBH_MIDI_IsReady -> %u", (unsigned int)ready);
+    midi_host_last_ready = ready;
+    midi_host_last_rx_tick = now;
+    midi_host_last_no_rx_warning = now;
+  }
 
   /* Do not cache ready: the USB stack can deinit between stages after refactor. */
-  if (USBH_MIDI_IsReady(&hUsbHostHS)) {
+  if (ready) {
     uint8_t packet_bytes[USBH_MIDI_PACKET_SIZE];
-    while (USBH_MIDI_ReadPacket(&hUsbHostHS, packet_bytes) == USBH_OK) {
+    while (true) {
+      USBH_StatusTypeDef status = USBH_MIDI_ReadPacket(&hUsbHostHS, packet_bytes);
+      if ((status == USBH_OK) && ((now - midi_host_last_ok_log) >= MIDI_HOST_LOG_INTERVAL_MS)) {
+        USBH_UsrLog("midi_host: USBH_MIDI_ReadPacket -> OK");
+        midi_host_last_ok_log = now;
+      } else if ((status == USBH_BUSY) && ((now - midi_host_last_busy_log) >= MIDI_HOST_LOG_INTERVAL_MS)) {
+        USBH_UsrLog("midi_host: USBH_MIDI_ReadPacket -> BUSY");
+        midi_host_last_busy_log = now;
+      } else if ((status == USBH_FAIL) && ((now - midi_host_last_fail_log) >= MIDI_HOST_LOG_INTERVAL_MS)) {
+        USBH_UsrLog("midi_host: USBH_MIDI_ReadPacket -> FAIL");
+        midi_host_last_fail_log = now;
+      }
+      if (status != USBH_OK) {
+        break;
+      }
       if (!midi_host_rx_queue_push(packet_bytes)) {
         midi_host_stats.rx_drops++;
       } else {
         midi_host_stats.rx_packets++;
+        midi_host_last_rx_tick = now;
       }
     }
   }
@@ -317,6 +349,15 @@ void midi_host_poll(void) {
     } else {
       midi_host_tx_queue_pop(&packet);
       midi_host_stats.tx_drops++;
+    }
+  }
+
+  if (USBH_MIDI_IsReady(&hUsbHostHS)) {
+    if ((now - midi_host_last_rx_tick) >= MIDI_HOST_RX_WATCHDOG_MS) {
+      if ((now - midi_host_last_no_rx_warning) >= MIDI_HOST_RX_WATCHDOG_MS) {
+        USBH_UsrLog("WARNING: MIDI Host alive but no RX traffic");
+        midi_host_last_no_rx_warning = now;
+      }
     }
   }
 }
