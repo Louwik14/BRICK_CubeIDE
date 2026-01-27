@@ -29,6 +29,7 @@
 #include "usbh_mtp.h"
 
 /* USER CODE BEGIN Includes */
+#include "usbh_midi.h"
 
 /* USER CODE END Includes */
 
@@ -100,6 +101,10 @@ void MX_USB_HOST_Init(void)
   {
     Error_Handler();
   }
+  if (USBH_RegisterClass(&hUsbHostHS, &USBH_MIDI_Class) != USBH_OK)
+  {
+    Error_Handler();
+  }
   if (USBH_Start(&hUsbHostHS) != USBH_OK)
   {
     Error_Handler();
@@ -153,4 +158,3 @@ static void USBH_UserProcess  (USBH_HandleTypeDef *phost, uint8_t id)
 /**
   * @}
   */
-
