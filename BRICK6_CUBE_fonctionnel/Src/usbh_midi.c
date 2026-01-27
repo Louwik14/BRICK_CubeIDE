@@ -16,6 +16,9 @@
   */
 
 #include "usbh_midi.h"
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
 
 #ifndef USB_EP_TYPE_MASK
 #define USB_EP_TYPE_MASK 0x03U
@@ -61,6 +64,18 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost);
 
 static USBH_MIDI_HandleTypeDef midi_handle;
 
+static void uart_log(const char *message)
+{
+  (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
+}
+
+static void uart_log_value(const char *label, uint32_t value)
+{
+  char buffer[96];
+  snprintf(buffer, sizeof(buffer), "%s%lu\r\n", label, (unsigned long)value);
+  uart_log(buffer);
+}
+
 USBH_ClassTypeDef USBH_MIDI_Class = {
   "MIDI",
   USBH_MIDI_CLASS,
@@ -74,25 +89,36 @@ USBH_ClassTypeDef USBH_MIDI_Class = {
 
 static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
 {
+  uart_log("USBH MIDI: InterfaceInit begin\r\n");
+  if (phost == NULL)
+  {
+    uart_log("USBH MIDI: phost NULL\r\n");
+    return USBH_FAIL;
+  }
+
   USBH_MIDI_HandleTypeDef *handle = &midi_handle;
   uint8_t interface = USBH_FindInterface(phost, USBH_MIDI_CLASS,
                                          USBH_MIDI_SUBCLASS, USBH_MIDI_PROTOCOL);
   if ((interface == 0xFFU) || (interface >= USBH_MAX_NUM_INTERFACES))
   {
     USBH_DbgLog("Cannot Find the interface for %s class.", phost->pActiveClass->Name);
+    uart_log("USBH MIDI: interface not found\r\n");
     return USBH_FAIL;
   }
 
   if (USBH_SelectInterface(phost, interface) != USBH_OK)
   {
+    uart_log("USBH MIDI: SelectInterface failed\r\n");
     return USBH_FAIL;
   }
 
   (void)USBH_memset(handle, 0, sizeof(*handle));
   phost->pActiveClass->pData = handle;
   handle->interface = interface;
+  uart_log_value("USBH MIDI: interface=", interface);
 
   USBH_InterfaceDescTypeDef *itf = &phost->device.CfgDesc.Itf_Desc[interface];
+  uart_log_value("USBH MIDI: endpoints=", itf->bNumEndpoints);
 
   for (uint8_t idx = 0U; idx < itf->bNumEndpoints; idx++)
   {
@@ -118,15 +144,19 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   if ((handle->InEp == 0U) || (handle->OutEp == 0U))
   {
     USBH_DbgLog("MIDI endpoints not found.");
+    uart_log("USBH MIDI: endpoints missing\r\n");
     return USBH_FAIL;
   }
 
   handle->InPipe = USBH_AllocPipe(phost, handle->InEp);
   handle->OutPipe = USBH_AllocPipe(phost, handle->OutEp);
+  uart_log_value("USBH MIDI: InPipe=", handle->InPipe);
+  uart_log_value("USBH MIDI: OutPipe=", handle->OutPipe);
 
   if ((handle->InPipe == 0xFFU) || (handle->OutPipe == 0xFFU))
   {
     USBH_DbgLog("MIDI pipe allocation failed.");
+    uart_log("USBH MIDI: pipe allocation failed\r\n");
     return USBH_FAIL;
   }
 
@@ -141,6 +171,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
                              ? handle->InEpSize
                              : USBH_MIDI_RX_BUF_SIZE;
   handle->state = USBH_MIDI_STATE_TRANSFER;
+  uart_log("USBH MIDI: InterfaceInit end\r\n");
 
   return USBH_OK;
 }

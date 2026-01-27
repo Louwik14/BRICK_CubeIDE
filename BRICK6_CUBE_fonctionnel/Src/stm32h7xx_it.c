@@ -22,6 +22,9 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usart.h"
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,6 +54,17 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void uart_log(const char *message)
+{
+  (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
+}
+
+static void uart_log_hex(const char *label, uint32_t value)
+{
+  char buffer[96];
+  snprintf(buffer, sizeof(buffer), "%s0x%08lX\r\n", label, (unsigned long)value);
+  uart_log(buffer);
+}
 
 /* USER CODE END 0 */
 
@@ -89,7 +103,12 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  __disable_irq();
+  uart_log("\r\nHardFault\r\n");
+  uart_log_hex("CFSR=", SCB->CFSR);
+  uart_log_hex("HFSR=", SCB->HFSR);
+  uart_log_hex("MMFAR=", SCB->MMFAR);
+  uart_log_hex("BFAR=", SCB->BFAR);
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
