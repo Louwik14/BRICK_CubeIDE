@@ -1,34 +1,26 @@
 /**
  * @file midi.h
- * @brief Interface du module MIDI (UART + USB) pour ChibiOS.
+ * @brief Interface du module MIDI pour STM32 HAL (USB Device + backends futurs).
  *
- * Fournit une API unifiée pour l’envoi de messages MIDI sur ports :
- * - **UART DIN (31250 bauds)**
- * - **USB MIDI Class Compliant**
- *
- * Fonctions principales :
- * - Envoi des messages MIDI standards (Note On/Off, CC, Program Change, etc.)
- * - Gestion des messages “System Common” et “System Realtime”
- * - Statistiques de transmission détaillées
- * - Routage entre plusieurs destinations : UART, USB, ou les deux
- *
- * @note L’implémentation est dans `midi.c`
- * @ingroup drivers
+ * Fournit une API unifiée pour l'envoi de messages MIDI sur différents transports :
+ * - USB Device (usbd_midi)
+ * - USB Host (stub pour l'instant)
+ * - DIN UART (stub pour l'instant)
  */
 
 #ifndef MIDI_H
 #define MIDI_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /* ====================================================================== */
 /*                        CONFIGURATION GLOBALE                           */
 /* ====================================================================== */
 
 /**
- * @brief Comportement en cas de débordement de la file d’attente USB MIDI.
+ * @brief Comportement en cas de débordement de la file d'attente USB MIDI.
  *
  * Si défini à 1, le message le plus ancien est supprimé pour insérer le nouveau.
  * Sinon, le nouveau message est perdu.
@@ -38,14 +30,7 @@
 #endif
 
 /**
- * @brief Délai (en µs) avant de relâcher le sémaphore d’envoi pour les messages temps réel.
- */
-#ifndef MIDI_RT_MICROWAIT_US
-#define MIDI_RT_MICROWAIT_US 50
-#endif
-
-/**
- * @brief Numéro de câble USB MIDI (0 pour unique interface).
+ * @brief Numéro de câble USB MIDI (0 pour interface unique).
  */
 #ifndef MIDI_USB_CABLE
 #define MIDI_USB_CABLE  0u
@@ -55,13 +40,6 @@
 /*                              TYPES ET STRUCTURES                       */
 /* ====================================================================== */
 
-/**
- * @enum midi_dest_t
- * @brief Sélectionne la ou les destinations d’envoi MIDI.
- *
- * Le paramètre `dest` est appliqué de manière uniforme, y compris pour les
- * messages System Common / Realtime qui peuvent sinon être diffusés.
- */
 typedef enum {
   MIDI_DEST_NONE = 0,  /**< Aucune sortie */
   MIDI_DEST_UART,      /**< Envoi uniquement via port UART DIN */
@@ -69,21 +47,25 @@ typedef enum {
   MIDI_DEST_BOTH       /**< Envoi sur les deux sorties */
 } midi_dest_t;
 
+typedef enum {
+  MIDI_CLOCK_MODE_SLAVE = 0,
+  MIDI_CLOCK_MODE_MASTER
+} midi_clock_mode_t;
+
 /**
  * @struct midi_tx_stats_t
  * @brief Statistiques de transmission MIDI (pour diagnostic et debug).
  */
 typedef struct {
-  volatile uint32_t tx_sent_immediate;      /**< Messages envoyés immédiatement (EP libre) */
-  volatile uint32_t tx_sent_batched;        /**< Messages regroupés et envoyés par lot */
+  volatile uint32_t tx_sent_immediate;      /**< Messages envoyés immédiatement (USB idle) */
+  volatile uint32_t tx_sent_batched;        /**< Messages envoyés par lot depuis la file */
   volatile uint32_t rt_f8_drops;            /**< Messages Clock (0xF8) perdus faute de place */
-  volatile uint32_t rt_f8_burst_sent;       /**< Groupes de messages Clock envoyés en rafale */
-  volatile uint32_t rt_other_enq_fallback;  /**< Autres messages temps réel mis en file (fallback) */
-  volatile uint32_t tx_mb_drops;            /**< Messages perdus (mailbox pleine) */
+  volatile uint32_t rt_f8_burst_sent;       /**< Rafales de Clock envoyées (réservé) */
+  volatile uint32_t rt_other_enq_fallback;  /**< Realtime mis en file (réservé) */
+  volatile uint32_t tx_mb_drops;            /**< Messages perdus (file pleine) */
   volatile uint32_t usb_not_ready_drops;    /**< Messages perdus (USB non prêt) */
 } midi_tx_stats_t;
 
-/** @brief Statistiques globales d’état et de performance MIDI. */
 extern midi_tx_stats_t midi_tx_stats;
 
 /**
@@ -97,16 +79,10 @@ typedef struct {
   volatile uint32_t usb_rx_ignored;    /**< Paquets/CIN ignorés */
 } midi_rx_stats_t;
 
-/** @brief Statistiques globales de réception MIDI. */
 extern midi_rx_stats_t midi_rx_stats;
 
-/** @brief Compteur de paquets USB-MIDI rejetés faute de place (RX). */
 extern volatile uint32_t midi_usb_rx_drops;
 
-/**
- * @struct midi_msg_t
- * @brief Message MIDI décodé (1 à 3 octets).
- */
 typedef struct {
   uint8_t data[3];
   uint8_t len;
@@ -117,10 +93,7 @@ typedef struct {
 /* ====================================================================== */
 
 /**
- * @brief Initialise le module MIDI (UART + thread TX USB).
- *
- * Configure le port UART DIN à 31250 bauds, initialise la mailbox et crée
- * le thread responsable de l’envoi USB.
+ * @brief Initialise le module MIDI.
  */
 void midi_init(void);
 
@@ -131,58 +104,53 @@ bool midi_is_initialized(void);
 
 /**
  * @brief Configure la destination des messages MIDI entrants (USB → moteur/DIN).
- *
- * - @ref MIDI_DEST_UART  : moteur interne + renvoi DIN uniquement
- * - @ref MIDI_DEST_USB   : moteur interne uniquement (pas de boucle USB)
- * - @ref MIDI_DEST_BOTH  : moteur interne + renvoi DIN
  */
 void midi_set_rx_destination(midi_dest_t dest);
 
 /** @brief Retourne la destination de routage des messages MIDI entrants. */
 midi_dest_t midi_get_rx_destination(void);
 
+/**
+ * @brief Traitement périodique (à appeler dans la boucle principale).
+ *
+ * - Vide la file RX USB (décodage + injection moteur)
+ * - Tente d'émettre les messages USB en attente
+ */
+void midi_poll(void);
+
+/* ====================================================================== */
+/*                                 CLOCK                                  */
+/* ====================================================================== */
+
+void midi_clock_set_mode(midi_clock_mode_t mode);
+
+midi_clock_mode_t midi_clock_get_mode(void);
+
+void midi_clock_set_running(bool running);
+
+bool midi_clock_is_running(void);
+
+void midi_clock_set_destination(midi_dest_t dest);
+
+midi_dest_t midi_clock_get_destination(void);
+
+/**
+ * @brief Callback à appeler depuis HAL_TIM_PeriodElapsedCallback.
+ *
+ * // TODO CubeMX: configure TIMx à 24 PPQN
+ */
+void midi_clock_on_timer_tick(void);
+
 /* ====================================================================== */
 /*                        COMMANDES “CHANNEL VOICE”                       */
 /* ====================================================================== */
 
-/**
- * @brief Envoie une note ON.
- * @param dest Destination d’envoi (UART/USB/BOTH)
- * @param ch Canal MIDI [0–15]
- * @param note Numéro de note [0–127]
- * @param vel Vélocité [0–127] (0 = Note Off)
- */
 void midi_note_on(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
-
-/**
- * @brief Envoie une note OFF.
- */
 void midi_note_off(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t vel);
-
-/**
- * @brief Envoie un message de pression polyphonique (aftertouch).
- */
 void midi_poly_aftertouch(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t pressure);
-
-/**
- * @brief Envoie un message de changement de contrôle (Control Change).
- */
 void midi_cc(midi_dest_t dest, uint8_t ch, uint8_t cc, uint8_t val);
-
-/**
- * @brief Envoie un changement de programme (Program Change).
- */
 void midi_program_change(midi_dest_t dest, uint8_t ch, uint8_t program);
-
-/**
- * @brief Envoie une pression de canal (Channel Pressure).
- */
 void midi_channel_pressure(midi_dest_t dest, uint8_t ch, uint8_t pressure);
-
-/**
- * @brief Envoie un pitch bend 14 bits.
- * @param value14b Valeur entre -8192 et +8191
- */
 void midi_pitchbend(midi_dest_t dest, uint8_t ch, int16_t value14b);
 
 /* ====================================================================== */
@@ -222,29 +190,18 @@ void midi_poly_mode_on(midi_dest_t dest, uint8_t ch);
 /*                              OUTILS                                    */
 /* ====================================================================== */
 
-/**
- * @brief Réinitialise les compteurs de statistiques MIDI.
- */
 void midi_stats_reset(void);
 
-/** @brief Retourne le plus haut niveau de remplissage observé sur la mailbox USB. */
 uint16_t midi_usb_queue_high_watermark(void);
-
-/** @brief Retourne le plus haut niveau de remplissage observé sur la file RX USB. */
 uint16_t midi_usb_rx_high_watermark(void);
 
 /**
  * @brief Callback faible injectant un message MIDI dans le moteur interne.
- *
- * Peut être redéfini par une autre unité de compilation pour brancher le
- * moteur MIDI applicatif. Par défaut, cette implémentation est vide.
  */
 void midi_internal_receive(const uint8_t *msg, size_t len);
 
 /**
- * @brief Alimente la file RX USB (appel depuis l’ISR USB OUT).
- * @param packet Paquet USB-MIDI (1 à 16 messages de 4 octets agrégés).
- * @param len    Taille réelle en octets (multiple de 4 attendu).
+ * @brief Alimente la file RX USB (appel depuis l'ISR USB OUT).
  */
 void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len);
 
