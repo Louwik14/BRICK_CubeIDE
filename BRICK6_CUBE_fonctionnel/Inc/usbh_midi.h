@@ -24,6 +24,7 @@ extern "C" {
 #define USBH_MIDI_RX_QUEUE_LEN  64U
 #define USBH_MIDI_TX_QUEUE_LEN  64U
 #define USBH_MIDI_RX_BUF_SIZE   64U
+#define USBH_MIDI_TX_BUF_SIZE   64U
 
 USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
                                         uint8_t packet[USBH_MIDI_PACKET_SIZE]);

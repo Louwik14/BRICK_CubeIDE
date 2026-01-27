@@ -10,6 +10,9 @@
 
 extern USBH_HandleTypeDef hUsbHostHS;
 
+static uint8_t midi_host_rx_packet[USBH_MIDI_PACKET_SIZE];
+static uint8_t midi_host_tx_packet[USBH_MIDI_PACKET_SIZE];
+
 static uint8_t midi_host_cin_to_length(uint8_t cin)
 {
   static const uint8_t cin_len[16] = {
@@ -43,21 +46,20 @@ void midi_host_poll(void)
 
   while (1)
   {
-    uint8_t packet[USBH_MIDI_PACKET_SIZE];
-    if (USBH_MIDI_ReadPacket(&hUsbHostHS, packet) != USBH_OK)
+    if (USBH_MIDI_ReadPacket(&hUsbHostHS, midi_host_rx_packet) != USBH_OK)
     {
       break;
     }
 
-    uint8_t cin = packet[0] & 0x0FU;
+    uint8_t cin = midi_host_rx_packet[0] & 0x0FU;
     uint8_t length = midi_host_cin_to_length(cin);
     if (length == 0U)
     {
       continue;
     }
 
-    midi_internal_receive(&packet[1], length);
-    midi_send_raw(MIDI_DEST_USB, &packet[1], length);
+    midi_internal_receive(&midi_host_rx_packet[1], length);
+    midi_send_raw(MIDI_DEST_USB, &midi_host_rx_packet[1], length);
   }
 }
 
@@ -163,11 +165,10 @@ bool midi_host_send(const uint8_t *msg, size_t len)
     return false;
   }
 
-  uint8_t packet[USBH_MIDI_PACKET_SIZE];
-  if (!midi_host_encode_packet(msg, len, packet))
+  if (!midi_host_encode_packet(msg, len, midi_host_tx_packet))
   {
     return false;
   }
 
-  return (USBH_MIDI_Transmit(&hUsbHostHS, packet) == USBH_OK);
+  return (USBH_MIDI_Transmit(&hUsbHostHS, midi_host_tx_packet) == USBH_OK);
 }
