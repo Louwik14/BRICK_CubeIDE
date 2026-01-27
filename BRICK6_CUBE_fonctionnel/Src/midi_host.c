@@ -56,6 +56,7 @@ void midi_host_poll(void)
     }
 
     midi_internal_receive(&packet[1], length);
+    midi_send_raw(MIDI_DEST_USB, &packet[1], length);
   }
 }
 
