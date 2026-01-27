@@ -118,6 +118,15 @@ midi_dest_t midi_get_rx_destination(void);
  */
 void midi_poll(void);
 
+/**
+ * @brief Envoie un message MIDI brut vers une destination.
+ *
+ * @param dest Destination(s) de sortie.
+ * @param msg Buffer MIDI (1 à 3 octets).
+ * @param len Taille du message.
+ */
+void midi_send_raw(midi_dest_t dest, const uint8_t *msg, size_t len);
+
 /* ====================================================================== */
 /*                                 CLOCK                                  */
 /* ====================================================================== */

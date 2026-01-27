@@ -470,6 +470,14 @@ void midi_poll(void) {
   midi_usb_try_flush();
 }
 
+void midi_send_raw(midi_dest_t dest, const uint8_t *msg, size_t len) {
+  if ((msg == NULL) || (len == 0U)) {
+    return;
+  }
+
+  midi_send(dest, msg, len);
+}
+
 void midi_clock_set_mode(midi_clock_mode_t mode) {
   midi_clock_mode = mode;
 }

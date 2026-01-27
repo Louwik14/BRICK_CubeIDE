@@ -17,6 +17,10 @@
 
 #include "usbh_midi.h"
 
+#ifndef USB_EP_TYPE_MASK
+#define USB_EP_TYPE_MASK 0x03U
+#endif
+
 typedef enum {
   USBH_MIDI_STATE_IDLE = 0U,
   USBH_MIDI_STATE_TRANSFER,
