@@ -326,8 +326,10 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
       }
       else if (urb_state == USBH_URB_NOTREADY)
       {
-        /* Stay in POLL until data is ready. */
+        handle->rx_busy = false;
+        handle->rx_state = USBH_MIDI_RX_RECEIVE;   // 🔴 RÉARMER !
       }
+
       else if ((urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
       {
         USBH_ErrLog("USBH_MIDI_RX_URB_ERROR: %u", (unsigned int)urb_state);
@@ -388,8 +390,10 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
       }
       else if (urb_state == USBH_URB_NOTREADY)
       {
-        /* Stay in POLL until data is sent. */
+        handle->tx_busy = false;
+        handle->tx_state = USBH_MIDI_TX_IDLE;   // 🔴 Réessayer plus tard
       }
+
       else if ((urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
       {
         USBH_ErrLog("USBH_MIDI_TX_URB_ERROR: %u", (unsigned int)urb_state);
