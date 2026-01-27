@@ -69,6 +69,11 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost);
+static USBH_StatusTypeDef USBH_MIDI_SOFProcess(USBH_HandleTypeDef *phost)
+{
+    (void)phost;
+    return USBH_OK;
+}
 
 static USBH_MIDI_HandleTypeDef midi_handle;
 
@@ -79,9 +84,10 @@ USBH_ClassTypeDef USBH_MIDI_Class = {
   USBH_MIDI_InterfaceDeInit,
   USBH_MIDI_ClassRequest,
   USBH_MIDI_Process,
-  NULL,
+  USBH_MIDI_SOFProcess,   // <-- IMPORTANT
   NULL,
 };
+
 
 static void USBH_MIDI_ResetHandle(USBH_MIDI_HandleTypeDef *handle)
 {

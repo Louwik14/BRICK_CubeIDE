@@ -158,8 +158,6 @@ int main(void)
     static uint32_t last_led_tick = 0;
     static uint32_t last_log_tick = 0;
     static uint32_t last_error = 0;
-    static uint32_t last_midi_tick = 0;
-    static bool midi_note_state = false;
 
     uint32_t now = HAL_GetTick();
 
@@ -169,24 +167,7 @@ int main(void)
       last_led_tick = now;
     }
 
-    /* ===== TEST MIDI : Note ON / OFF toutes les secondes ===== */
-    if ((now - last_midi_tick) >= 1000U)
-    {
-      if (!midi_note_state)
-      {
-        midi_note_on(MIDI_DEST_USB, 0, 60, 100);  // C4
-        uart_log("MIDI Note ON\r\n");
-        midi_note_state = true;
-      }
-      else
-      {
-        midi_note_off(MIDI_DEST_USB, 0, 60, 0);
-        uart_log("MIDI Note OFF\r\n");
-        midi_note_state = false;
-      }
 
-      last_midi_tick = now;
-    }
     /* ======================================================== */
 
     if ((now - last_log_tick) >= 1000U)
