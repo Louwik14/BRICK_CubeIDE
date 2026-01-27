@@ -1,0 +1,6 @@
+../Src/adau1979.c:63:26:adau1979_write_reg	32	static
+../Src/adau1979.c:74:26:adau1979_read_reg	32	static
+../Src/adau1979.c:85:13:adau1979_write_verify	32	static
+../Src/adau1979.c:102:13:adau1979_is_present	16	static
+../Src/adau1979.c:107:6:adau1979_init	24	static
+../Src/adau1979.c:172:6:adau1979_init_all	8	static
