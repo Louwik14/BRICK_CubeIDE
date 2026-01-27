@@ -78,6 +78,25 @@ static void uart_log_value(const char *label, uint32_t value)
   uart_log(buffer);
 }
 
+static void uart_log_packet(const char *label, const uint8_t *data, size_t len)
+{
+  char buffer[128];
+  if ((data == NULL) || (len == 0U))
+  {
+    snprintf(buffer, sizeof(buffer), "%s<empty>\r\n", label);
+    uart_log(buffer);
+    return;
+  }
+  snprintf(buffer, sizeof(buffer), "%s%02X %02X %02X %02X (len=%lu)\r\n",
+           label,
+           data[0],
+           (len > 1U) ? data[1] : 0U,
+           (len > 2U) ? data[2] : 0U,
+           (len > 3U) ? data[3] : 0U,
+           (unsigned long)len);
+  uart_log(buffer);
+}
+
 USBH_ClassTypeDef USBH_MIDI_Class = {
   "MIDI",
   USBH_MIDI_CLASS,
@@ -231,6 +250,9 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
 static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
 {
   (void)phost;
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log("USBH MIDI: ClassRequest\r\n");
+#endif
   return USBH_OK;
 }
 
@@ -303,6 +325,10 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
       uint16_t received = USBH_LL_GetLastXferSize(phost, handle->InPipe);
 #if USBH_MIDI_LOG_VERBOSE
       uart_log_value("USBH MIDI: rx done bytes=", received);
+      if (received >= USBH_MIDI_PACKET_SIZE)
+      {
+        uart_log_packet("USBH MIDI: rx first packet=", handle->rx_buffer, received);
+      }
 #endif
       for (uint16_t offset = 0U; (offset + 3U) < received; offset += USBH_MIDI_PACKET_SIZE)
       {
@@ -377,6 +403,9 @@ USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
   packet[3] = handle->rx_queue[handle->rx_tail].data[3];
   handle->rx_tail = (uint16_t)((handle->rx_tail + 1U) % USBH_MIDI_RX_QUEUE_LEN);
   handle->rx_count--;
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_packet("USBH MIDI: rx pop=", packet, USBH_MIDI_PACKET_SIZE);
+#endif
 
   return USBH_OK;
 }
@@ -402,6 +431,9 @@ USBH_StatusTypeDef USBH_MIDI_Transmit(USBH_HandleTypeDef *phost,
   handle->tx_queue[handle->tx_head].data[3] = packet[3];
   handle->tx_head = (uint16_t)((handle->tx_head + 1U) % USBH_MIDI_TX_QUEUE_LEN);
   handle->tx_count++;
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_packet("USBH MIDI: tx queued=", packet, USBH_MIDI_PACKET_SIZE);
+#endif
 
   return USBH_OK;
 }
