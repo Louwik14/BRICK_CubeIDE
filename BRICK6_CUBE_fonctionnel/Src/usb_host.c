@@ -121,9 +121,18 @@ static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
     Appli_state = APPLICATION_READY;
     break;
 
+  case HOST_USER_CLASS_SELECTED:
+    uart_log("USBH: USER_CLASS_SELECTED\r\n");
+    break;
+
   case HOST_USER_CONNECTION:
     uart_log("USBH: USER_CONNECTION\r\n");
     Appli_state = APPLICATION_START;
+    break;
+
+  case HOST_USER_UNRECOVERED_ERROR:
+    uart_log("USBH: USER_UNRECOVERED_ERROR\r\n");
+    Appli_state = APPLICATION_DISCONNECT;
     break;
 
   default:
