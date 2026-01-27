@@ -23,8 +23,15 @@ C_DEPS :=
 # Every subdirectory with source files must be described here
 SUBDIRS := \
 Drivers/STM32H7xx_HAL_Driver/Src \
+Middlewares/ST/STM32_USB_Device_Library/Class/HID/Src \
 Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src \
 Middlewares/ST/STM32_USB_Device_Library/Core/Src \
+Middlewares/ST/STM32_USB_Host_Library/Class/AUDIO/Src \
+Middlewares/ST/STM32_USB_Host_Library/Class/CDC/Src \
+Middlewares/ST/STM32_USB_Host_Library/Class/HID/Src \
+Middlewares/ST/STM32_USB_Host_Library/Class/MSC/Src \
+Middlewares/ST/STM32_USB_Host_Library/Class/MTP/Src \
+Middlewares/ST/STM32_USB_Host_Library/Core/Src \
 Src \
 Startup \
 

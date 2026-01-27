@@ -1,9 +1,0 @@
-../Src/audio_in.c:29:6:AudioIn_Init	16	static
-../Src/audio_in.c:39:6:AudioIn_ProcessHalf	4	static
-../Src/audio_in.c:52:6:AudioIn_ProcessFull	4	static
-../Src/audio_in.c:65:6:AudioIn_DebugDump	296	static
-../Src/audio_in.c:100:10:AudioIn_GetBuffer	4	static
-../Src/audio_in.c:105:16:AudioIn_GetLatestBlock	16	static
-../Src/audio_in.c:116:10:AudioIn_GetBufferSamples	4	static
-../Src/audio_in.c:121:10:AudioIn_GetHalfEvents	4	static
-../Src/audio_in.c:126:10:AudioIn_GetFullEvents	4	static
