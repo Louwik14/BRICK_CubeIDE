@@ -97,6 +97,13 @@ static void uart_log_packet(const char *label, const uint8_t *data, size_t len)
   uart_log(buffer);
 }
 
+static void uart_log_ptr(const char *label, const void *ptr)
+{
+  char buffer[96];
+  snprintf(buffer, sizeof(buffer), "%s%p\r\n", label, ptr);
+  uart_log(buffer);
+}
+
 USBH_ClassTypeDef USBH_MIDI_Class = {
   "MIDI",
   USBH_MIDI_CLASS,
@@ -138,6 +145,11 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   phost->pActiveClass->pData = handle;
   handle->interface = interface;
   uart_log_value("USBH MIDI: interface=", interface);
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_ptr("USBH MIDI: phost=", phost);
+  uart_log_ptr("USBH MIDI: active class=", phost->pActiveClass);
+  uart_log_ptr("USBH MIDI: class data=", phost->pActiveClass->pData);
+#endif
 
   USBH_InterfaceDescTypeDef *itf = &phost->device.CfgDesc.Itf_Desc[interface];
   uart_log_value("USBH MIDI: endpoints=", itf->bNumEndpoints);
@@ -249,9 +261,17 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
 
 static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
 {
-  (void)phost;
 #if USBH_MIDI_LOG_VERBOSE
   uart_log("USBH MIDI: ClassRequest\r\n");
+  uart_log_ptr("USBH MIDI: ClassRequest phost=", phost);
+  if (phost != NULL)
+  {
+    uart_log_ptr("USBH MIDI: ClassRequest class=", phost->pActiveClass);
+    if (phost->pActiveClass != NULL)
+    {
+      uart_log_ptr("USBH MIDI: ClassRequest data=", phost->pActiveClass->pData);
+    }
+  }
 #endif
   return USBH_OK;
 }
@@ -298,6 +318,14 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 
   if (handle == NULL)
   {
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log("USBH MIDI: handle NULL in process\r\n");
+    uart_log_ptr("USBH MIDI: process phost=", phost);
+    if (phost != NULL)
+    {
+      uart_log_ptr("USBH MIDI: process class=", phost->pActiveClass);
+    }
+#endif
     return USBH_FAIL;
   }
 
