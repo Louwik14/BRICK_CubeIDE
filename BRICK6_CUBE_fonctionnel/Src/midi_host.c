@@ -12,25 +12,26 @@ extern USBH_HandleTypeDef hUsbHostHS;
 
 static uint8_t midi_host_cin_to_length(uint8_t cin)
 {
-  switch (cin)
-  {
-  case 0x2U: /* System Common (2 bytes) */
-  case 0xCU: /* Program Change */
-  case 0xDU: /* Channel Pressure */
-    return 2U;
-  case 0x3U: /* System Common (3 bytes) */
-  case 0x8U: /* Note Off */
-  case 0x9U: /* Note On */
-  case 0xAU: /* Poly Key Pressure */
-  case 0xBU: /* Control Change */
-  case 0xEU: /* Pitch Bend */
-    return 3U;
-  case 0x5U: /* Single-byte System Common */
-  case 0xFU: /* Single-byte System Realtime */
-    return 1U;
-  default:
-    return 0U;
-  }
+  static const uint8_t cin_len[16] = {
+    0U, /* 0x0 */
+    0U, /* 0x1 */
+    2U, /* 0x2: System Common (2 bytes) */
+    3U, /* 0x3: System Common (3 bytes) */
+    3U, /* 0x4: SysEx start/continue */
+    1U, /* 0x5: SysEx ends with 1 byte */
+    2U, /* 0x6: SysEx ends with 2 bytes */
+    3U, /* 0x7: SysEx ends with 3 bytes */
+    3U, /* 0x8: Note Off */
+    3U, /* 0x9: Note On */
+    3U, /* 0xA: Poly Key Pressure */
+    3U, /* 0xB: Control Change */
+    2U, /* 0xC: Program Change */
+    2U, /* 0xD: Channel Pressure */
+    3U, /* 0xE: Pitch Bend */
+    1U  /* 0xF: Single-byte System Realtime */
+  };
+
+  return cin_len[cin & 0x0FU];
 }
 
 void midi_host_poll(void)
