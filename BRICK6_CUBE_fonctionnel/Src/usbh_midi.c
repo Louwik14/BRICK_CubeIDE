@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define USBH_MIDI_LOG_VERBOSE 1
+
 #ifndef USB_EP_TYPE_MASK
 #define USB_EP_TYPE_MASK 0x03U
 #endif
@@ -76,6 +78,25 @@ static void uart_log_value(const char *label, uint32_t value)
   uart_log(buffer);
 }
 
+static void uart_log_packet(const char *label, const uint8_t *data, size_t len)
+{
+  char buffer[128];
+  if ((data == NULL) || (len == 0U))
+  {
+    snprintf(buffer, sizeof(buffer), "%s<empty>\r\n", label);
+    uart_log(buffer);
+    return;
+  }
+  snprintf(buffer, sizeof(buffer), "%s%02X %02X %02X %02X (len=%lu)\r\n",
+           label,
+           data[0],
+           (len > 1U) ? data[1] : 0U,
+           (len > 2U) ? data[2] : 0U,
+           (len > 3U) ? data[3] : 0U,
+           (unsigned long)len);
+  uart_log(buffer);
+}
+
 USBH_ClassTypeDef USBH_MIDI_Class = {
   "MIDI",
   USBH_MIDI_CLASS,
@@ -99,6 +120,7 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   USBH_MIDI_HandleTypeDef *handle = &midi_handle;
   uint8_t interface = USBH_FindInterface(phost, USBH_MIDI_CLASS,
                                          USBH_MIDI_SUBCLASS, USBH_MIDI_PROTOCOL);
+  uint8_t max_ep;
   if ((interface == 0xFFU) || (interface >= USBH_MAX_NUM_INTERFACES))
   {
     USBH_DbgLog("Cannot Find the interface for %s class.", phost->pActiveClass->Name);
@@ -119,8 +141,16 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
 
   USBH_InterfaceDescTypeDef *itf = &phost->device.CfgDesc.Itf_Desc[interface];
   uart_log_value("USBH MIDI: endpoints=", itf->bNumEndpoints);
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_value("USBH MIDI: itf class=", itf->bInterfaceClass);
+  uart_log_value("USBH MIDI: itf subclass=", itf->bInterfaceSubClass);
+  uart_log_value("USBH MIDI: itf protocol=", itf->bInterfaceProtocol);
+  uart_log_value("USBH MIDI: device addr=", phost->device.address);
+  uart_log_value("USBH MIDI: device speed=", phost->device.speed);
+#endif
 
-  for (uint8_t idx = 0U; idx < itf->bNumEndpoints; idx++)
+  max_ep = (itf->bNumEndpoints <= USBH_MAX_NUM_ENDPOINTS) ? itf->bNumEndpoints : USBH_MAX_NUM_ENDPOINTS;
+  for (uint8_t idx = 0U; idx < max_ep; idx++)
   {
     USBH_EpDescTypeDef *ep = &itf->Ep_Desc[idx];
 
@@ -133,11 +163,23 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
     {
       handle->InEp = ep->bEndpointAddress;
       handle->InEpSize = ep->wMaxPacketSize;
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log_value("USBH MIDI: ep in addr=", ep->bEndpointAddress);
+      uart_log_value("USBH MIDI: ep in mps=", ep->wMaxPacketSize);
+      uart_log_value("USBH MIDI: ep in attr=", ep->bmAttributes);
+      uart_log_value("USBH MIDI: ep in interval=", ep->bInterval);
+#endif
     }
     else
     {
       handle->OutEp = ep->bEndpointAddress;
       handle->OutEpSize = ep->wMaxPacketSize;
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log_value("USBH MIDI: ep out addr=", ep->bEndpointAddress);
+      uart_log_value("USBH MIDI: ep out mps=", ep->wMaxPacketSize);
+      uart_log_value("USBH MIDI: ep out attr=", ep->bmAttributes);
+      uart_log_value("USBH MIDI: ep out interval=", ep->bInterval);
+#endif
     }
   }
 
@@ -145,6 +187,13 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   {
     USBH_DbgLog("MIDI endpoints not found.");
     uart_log("USBH MIDI: endpoints missing\r\n");
+    return USBH_FAIL;
+  }
+
+  if ((handle->InEpSize == 0U) || (handle->OutEpSize == 0U))
+  {
+    USBH_DbgLog("MIDI endpoints have invalid sizes.");
+    uart_log("USBH MIDI: endpoint sizes invalid\r\n");
     return USBH_FAIL;
   }
 
@@ -166,6 +215,8 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   (void)USBH_OpenPipe(phost, handle->OutPipe, handle->OutEp,
                       phost->device.address, phost->device.speed,
                       USB_EP_TYPE_BULK, handle->OutEpSize);
+  (void)USBH_LL_SetToggle(phost, handle->InPipe, 0U);
+  (void)USBH_LL_SetToggle(phost, handle->OutPipe, 0U);
 
   handle->rx_buffer_size = (handle->InEpSize <= USBH_MIDI_RX_BUF_SIZE)
                              ? handle->InEpSize
@@ -199,6 +250,9 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
 static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
 {
   (void)phost;
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log("USBH MIDI: ClassRequest\r\n");
+#endif
   return USBH_OK;
 }
 
@@ -239,6 +293,8 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 {
   USBH_MIDI_HandleTypeDef *handle = (USBH_MIDI_HandleTypeDef *)phost->pActiveClass->pData;
   USBH_URBStateTypeDef urb_state;
+  static uint32_t log_tick = 0U;
+  uint32_t now = HAL_GetTick();
 
   if (handle == NULL)
   {
@@ -254,6 +310,10 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
   {
     (void)USBH_BulkReceiveData(phost, handle->rx_buffer, handle->rx_buffer_size, handle->InPipe);
     handle->rx_in_progress = true;
+#if USBH_MIDI_LOG_VERBOSE
+    uart_log_value("USBH MIDI: rx start pipe=", handle->InPipe);
+    uart_log_value("USBH MIDI: rx size=", handle->rx_buffer_size);
+#endif
   }
 
   if (handle->rx_in_progress)
@@ -263,6 +323,13 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
     if (urb_state == USBH_URB_DONE)
     {
       uint16_t received = USBH_LL_GetLastXferSize(phost, handle->InPipe);
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log_value("USBH MIDI: rx done bytes=", received);
+      if (received >= USBH_MIDI_PACKET_SIZE)
+      {
+        uart_log_packet("USBH MIDI: rx first packet=", handle->rx_buffer, received);
+      }
+#endif
       for (uint16_t offset = 0U; (offset + 3U) < received; offset += USBH_MIDI_PACKET_SIZE)
       {
         USBH_MIDI_PushRx(handle, &handle->rx_buffer[offset]);
@@ -272,6 +339,9 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
     else if ((urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
     {
       handle->rx_in_progress = false;
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log_value("USBH MIDI: rx urb error=", urb_state);
+#endif
     }
   }
 
@@ -281,6 +351,9 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
     if ((urb_state == USBH_URB_DONE) || (urb_state == USBH_URB_ERROR) || (urb_state == USBH_URB_STALL))
     {
       handle->tx_in_progress = false;
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log_value("USBH MIDI: tx done state=", urb_state);
+#endif
     }
   }
 
@@ -291,8 +364,20 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
     {
       (void)USBH_BulkSendData(phost, packet, USBH_MIDI_PACKET_SIZE, handle->OutPipe, 1U);
       handle->tx_in_progress = true;
+#if USBH_MIDI_LOG_VERBOSE
+      uart_log_value("USBH MIDI: tx start pipe=", handle->OutPipe);
+#endif
     }
   }
+
+#if USBH_MIDI_LOG_VERBOSE
+  if ((now - log_tick) >= 1000U)
+  {
+    uart_log_value("USBH MIDI: rx queued=", handle->rx_count);
+    uart_log_value("USBH MIDI: tx queued=", handle->tx_count);
+    log_tick = now;
+  }
+#endif
 
   return USBH_OK;
 }
@@ -318,6 +403,9 @@ USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
   packet[3] = handle->rx_queue[handle->rx_tail].data[3];
   handle->rx_tail = (uint16_t)((handle->rx_tail + 1U) % USBH_MIDI_RX_QUEUE_LEN);
   handle->rx_count--;
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_packet("USBH MIDI: rx pop=", packet, USBH_MIDI_PACKET_SIZE);
+#endif
 
   return USBH_OK;
 }
@@ -343,6 +431,9 @@ USBH_StatusTypeDef USBH_MIDI_Transmit(USBH_HandleTypeDef *phost,
   handle->tx_queue[handle->tx_head].data[3] = packet[3];
   handle->tx_head = (uint16_t)((handle->tx_head + 1U) % USBH_MIDI_TX_QUEUE_LEN);
   handle->tx_count++;
+#if USBH_MIDI_LOG_VERBOSE
+  uart_log_packet("USBH MIDI: tx queued=", packet, USBH_MIDI_PACKET_SIZE);
+#endif
 
   return USBH_OK;
 }
