@@ -351,6 +351,9 @@ int main(void)
 #if BRICK6_REFACTOR_STEP_3
     engine_tasklet_poll();
 #endif
+#if BRICK6_REFACTOR_STEP_4
+    sd_tasklet_poll();
+#endif
     MX_USB_HOST_Process();
 #if BRICK6_REFACTOR_STEP_1
     brick6_usb_host_poll_count++;

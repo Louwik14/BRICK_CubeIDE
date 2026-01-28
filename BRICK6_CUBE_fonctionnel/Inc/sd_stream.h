@@ -39,6 +39,9 @@ uint32_t sd_stream_get_read_buf0_count(void);
 uint32_t sd_stream_get_read_buf1_count(void);
 const uint32_t *sd_stream_get_buffer0(void);
 const uint32_t *sd_stream_get_buffer1(void);
+#if BRICK6_REFACTOR_STEP_4
+void sd_tasklet_poll(void);
+#endif
 
 #ifdef __cplusplus
 }

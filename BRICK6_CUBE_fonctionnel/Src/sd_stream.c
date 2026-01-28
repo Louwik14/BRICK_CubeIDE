@@ -19,12 +19,29 @@ typedef enum
   SD_STREAM_OP_WRITE
 } sd_stream_operation_t;
 
+#if BRICK6_REFACTOR_STEP_4
+typedef enum
+{
+  SD_FSM_IDLE,
+  SD_FSM_START_CHUNK,
+  SD_FSM_WAIT_TRANSFER,
+  SD_FSM_DONE,
+  SD_FSM_ERROR
+} sd_fsm_state_t;
+#endif
+
 static SD_HandleTypeDef *sd_handle = NULL;
 static void (*sd_logger)(const char *message) = NULL;
 static __IO uint8_t sd_log_callbacks = 0U;
 static __IO uint8_t sd_rx_complete = 0U;
 static __IO uint8_t sd_tx_complete = 0U;
 static __IO uint8_t sd_error = 0U;
+#if BRICK6_REFACTOR_STEP_4
+static __IO uint8_t sd_rx_done_flag = 0U;
+static __IO uint8_t sd_tx_done_flag = 0U;
+static __IO uint8_t sd_error_flag = 0U;
+static sd_fsm_state_t sd_fsm_state = SD_FSM_IDLE;
+#endif
 __IO uint32_t read_buf0_count = 0U;
 __IO uint32_t read_buf1_count = 0U;
 static __IO uint32_t sd_write_count_buffer0 = 0U;
@@ -135,6 +152,7 @@ static HAL_StatusTypeDef sd_stream_start_chunk(sd_stream_operation_t operation)
   return hal_status;
 }
 
+#if !BRICK6_REFACTOR_STEP_4
 static HAL_StatusTypeDef Wait_SDCARD_Ready(void)
 {
   uint32_t timeout = HAL_GetTick() + SD_STREAM_READY_TIMEOUT_MS;
@@ -148,6 +166,7 @@ static HAL_StatusTypeDef Wait_SDCARD_Ready(void)
   }
   return HAL_OK;
 }
+#endif
 
 HAL_StatusTypeDef sd_stream_init(SD_HandleTypeDef *hsd)
 {
@@ -160,6 +179,12 @@ HAL_StatusTypeDef sd_stream_init(SD_HandleTypeDef *hsd)
   sd_error = 0U;
   sd_rx_complete = 0U;
   sd_tx_complete = 0U;
+#if BRICK6_REFACTOR_STEP_4
+  sd_rx_done_flag = 0U;
+  sd_tx_done_flag = 0U;
+  sd_error_flag = 0U;
+  sd_fsm_state = SD_FSM_IDLE;
+#endif
   read_buf0_count = 0U;
   read_buf1_count = 0U;
   sd_write_count_buffer0 = 0U;
@@ -255,6 +280,13 @@ HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_bloc
   sd_stats.buffer1_count = 0U;
   sd_operation = SD_STREAM_OP_READ;
 
+#if BRICK6_REFACTOR_STEP_4
+  sd_rx_done_flag = 0U;
+  sd_tx_done_flag = 0U;
+  sd_error_flag = 0U;
+  sd_fsm_state = SD_FSM_START_CHUNK;
+  return HAL_OK;
+#else
   if (Wait_SDCARD_Ready() != HAL_OK)
   {
     sd_stream_logf3("SD wait ready timeout: hal=%lu err=%lu state=%lu\r\n",
@@ -267,6 +299,7 @@ HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_bloc
   hal_status = sd_stream_start_chunk(SD_STREAM_OP_READ);
 
   return hal_status;
+#endif
 }
 
 HAL_StatusTypeDef sd_stream_start_write(uint32_t start_block, uint32_t total_blocks,
@@ -302,6 +335,13 @@ HAL_StatusTypeDef sd_stream_start_write(uint32_t start_block, uint32_t total_blo
   Fill_Buffer(Buffer0, SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t), sd_write_pattern0);
   Fill_Buffer(Buffer1, SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t), sd_write_pattern1);
 
+#if BRICK6_REFACTOR_STEP_4
+  sd_rx_done_flag = 0U;
+  sd_tx_done_flag = 0U;
+  sd_error_flag = 0U;
+  sd_fsm_state = SD_FSM_START_CHUNK;
+  return HAL_OK;
+#else
   if (Wait_SDCARD_Ready() != HAL_OK)
   {
     sd_error = 1U;
@@ -309,6 +349,7 @@ HAL_StatusTypeDef sd_stream_start_write(uint32_t start_block, uint32_t total_blo
   }
 
   return sd_stream_start_chunk(SD_STREAM_OP_WRITE);
+#endif
 }
 
 bool sd_stream_is_busy(void)
@@ -355,6 +396,93 @@ const uint32_t *sd_stream_get_buffer1(void)
   return Buffer1;
 }
 
+#if BRICK6_REFACTOR_STEP_4
+void sd_tasklet_poll(void)
+{
+  switch (sd_fsm_state)
+  {
+    case SD_FSM_IDLE:
+      break;
+
+    case SD_FSM_START_CHUNK:
+      if ((sd_handle == NULL) || (sd_operation == SD_STREAM_OP_NONE))
+      {
+        sd_fsm_state = SD_FSM_IDLE;
+        break;
+      }
+      if (HAL_SD_GetCardState(sd_handle) != HAL_SD_CARD_TRANSFER)
+      {
+        break;
+      }
+      sd_rx_done_flag = 0U;
+      sd_tx_done_flag = 0U;
+      if (sd_stream_start_chunk(sd_operation) == HAL_OK)
+      {
+        sd_fsm_state = SD_FSM_WAIT_TRANSFER;
+      }
+      else
+      {
+        sd_error_flag = 1U;
+        sd_fsm_state = SD_FSM_ERROR;
+      }
+      break;
+
+    case SD_FSM_WAIT_TRANSFER:
+      if (sd_error_flag != 0U)
+      {
+        sd_error_flag = 0U;
+        sd_error = 1U;
+        sd_operation = SD_STREAM_OP_NONE;
+        sd_fsm_state = SD_FSM_ERROR;
+        break;
+      }
+
+      if ((sd_operation == SD_STREAM_OP_READ && sd_rx_done_flag == 0U) ||
+          (sd_operation == SD_STREAM_OP_WRITE && sd_tx_done_flag == 0U))
+      {
+        break;
+      }
+
+      if (sd_operation == SD_STREAM_OP_READ)
+      {
+        sd_rx_done_flag = 0U;
+      }
+      else
+      {
+        sd_tx_done_flag = 0U;
+      }
+
+      sd_current_block += sd_active_chunk_blocks;
+      sd_remaining_blocks -= sd_active_chunk_blocks;
+
+      if (sd_remaining_blocks > 0U)
+      {
+        sd_fsm_state = SD_FSM_START_CHUNK;
+      }
+      else
+      {
+        if (sd_operation == SD_STREAM_OP_READ)
+        {
+          sd_rx_complete = 1U;
+        }
+        else
+        {
+          sd_tx_complete = 1U;
+        }
+        sd_operation = SD_STREAM_OP_NONE;
+        sd_fsm_state = SD_FSM_DONE;
+      }
+      break;
+
+    case SD_FSM_DONE:
+      break;
+
+    case SD_FSM_ERROR:
+      break;
+  }
+}
+#endif
+
 void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
@@ -362,6 +490,9 @@ void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
 #if BRICK6_REFACTOR_STEP_1
     brick6_sd_rx_cplt_count++;
 #endif
+#if BRICK6_REFACTOR_STEP_4
+    sd_rx_done_flag = 1U;
+#else
     if (sd_operation != SD_STREAM_OP_READ)
     {
       return;
@@ -388,6 +519,7 @@ void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
       sd_rx_complete = 1U;
       sd_operation = SD_STREAM_OP_NONE;
     }
+#endif
   }
 }
 
@@ -398,6 +530,9 @@ void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
 #if BRICK6_REFACTOR_STEP_1
     brick6_sd_tx_cplt_count++;
 #endif
+#if BRICK6_REFACTOR_STEP_4
+    sd_tx_done_flag = 1U;
+#else
     if (sd_operation != SD_STREAM_OP_WRITE)
     {
       return;
@@ -424,6 +559,7 @@ void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
       sd_tx_complete = 1U;
       sd_operation = SD_STREAM_OP_NONE;
     }
+#endif
   }
 }
 
@@ -435,6 +571,9 @@ void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd)
     brick6_sd_err_count++;
 #endif
     sd_error = 1U;
+#if BRICK6_REFACTOR_STEP_4
+    sd_error_flag = 1U;
+#endif
   }
 }
 

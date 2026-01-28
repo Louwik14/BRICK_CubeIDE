@@ -74,3 +74,26 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_3` à 0 dans `Inc/brick6_refactor.h`.
+
+## Step 4 — SD non bloquant (FSM)
+
+### Changements effectués
+- Ajout de `BRICK6_REFACTOR_STEP_4` et création d'une FSM SD non bloquante pilotée par `sd_tasklet_poll()`.
+- Les callbacks SD ne font plus que poser des flags (RX/TX/erreur) et incrémenter les compteurs STEP 1.
+- La progression des transferts SD (découpage en chunks, avance des compteurs, fin de transfert) est traitée dans la tasklet.
+- Appel de `sd_tasklet_poll()` dans la boucle principale juste après `engine_tasklet_poll()`.
+
+### Fichiers modifiés
+- Inc/brick6_refactor.h
+- Inc/sd_stream.h
+- Src/sd_stream.c
+- Src/main.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Même API publique SD (start/read/write, stats, buffers).
+- Même comportement fonctionnel attendu côté streaming et tests SD.
+- Les compteurs STEP 1 continuent de s'incrémenter.
+
+### Rollback
+- Mettre `BRICK6_REFACTOR_STEP_4` à 0 dans `Inc/brick6_refactor.h` pour revenir au flux SD avec attentes actives.
