@@ -519,12 +519,7 @@ int main(void)
           uint32_t buf1 = sd_stream_get_read_buf1_count();
           uint32_t delta = (buf0 - sd_last_buf0_count) + (buf1 - sd_last_buf1_count);
           uint32_t bytes = delta * SD_STREAM_BUFFER_SIZE_BYTES;
-          uint32_t kbps = bytes / 1024U;
-          LOGF("SD long run buffers=%lu buf0=%lu buf1=%lu kb/s=%lu\r\n",
-               (unsigned long)(buf0 + buf1),
-               (unsigned long)buf0,
-               (unsigned long)buf1,
-               (unsigned long)kbps);
+          (void)bytes;
           sd_last_buf0_count = buf0;
           sd_last_buf1_count = buf1;
           sd_last_stats_tick = now;
@@ -534,7 +529,6 @@ int main(void)
         {
           if (sd_stream_start_read(0U, SD_TEST_LONG_BLOCKS) != HAL_OK)
           {
-            LOG("SD long run restart FAILED\r\n");
             sd_test_failed = 1U;
           }
         }
