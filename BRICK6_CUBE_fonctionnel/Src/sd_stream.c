@@ -114,8 +114,6 @@ static HAL_StatusTypeDef sd_stream_start_chunk(sd_stream_operation_t operation)
 
   sd_active_chunk_blocks = chunk_blocks;
 
-  sd_stream_logf2("SD chunk start: block=%lu count=%lu\r\n", sd_current_block, chunk_blocks);
-
   if (operation == SD_STREAM_OP_READ)
   {
     hal_status = HAL_SDEx_ReadBlocksDMAMultiBuffer(sd_handle, sd_current_block, chunk_blocks);
@@ -439,10 +437,7 @@ void HAL_SDEx_Read_DMADoubleBuffer0CpltCallback(SD_HandleTypeDef *hsd)
 
   read_buf0_count++;
   sd_stats.buffer0_count = read_buf0_count;
-  if (sd_log_callbacks != 0U)
-  {
-    sd_stream_logf("SD buf0 done %lu\r\n", read_buf0_count);
-  }
+  (void)sd_log_callbacks;
 }
 
 void HAL_SDEx_Read_DMADoubleBuffer1CpltCallback(SD_HandleTypeDef *hsd)
@@ -454,10 +449,7 @@ void HAL_SDEx_Read_DMADoubleBuffer1CpltCallback(SD_HandleTypeDef *hsd)
 
   read_buf1_count++;
   sd_stats.buffer1_count = read_buf1_count;
-  if (sd_log_callbacks != 0U)
-  {
-    sd_stream_logf("SD buf1 done %lu\r\n", read_buf1_count);
-  }
+  (void)sd_log_callbacks;
 }
 
 void HAL_SDEx_Write_DMADoubleBuffer0CpltCallback(SD_HandleTypeDef *hsd)
