@@ -251,11 +251,6 @@ void DMA1_Stream1_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles USB On The Go HS global interrupt.
-  */
-
-
-/**
   * @brief This function handles SAI1 global interrupt.
   */
 void SAI1_IRQHandler(void)
@@ -269,8 +264,6 @@ void SAI1_IRQHandler(void)
 
   /* USER CODE END SAI1_IRQn 1 */
 }
-
-
 
 /* USER CODE BEGIN 1 */
 void OTG_HS_IRQHandler(void)

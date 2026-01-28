@@ -22,7 +22,6 @@
 #include "i2c.h"
 #include "sai.h"
 #include "usart.h"
-
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -64,8 +63,6 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
-void MX_USB_HOST_Process(void);
-
 /* USER CODE BEGIN PFP */
 void MX_USB_HOST_Process(void);
 void MX_USB_HOST_Init(void);
@@ -118,10 +115,6 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
-  MX_USB_DEVICE_Init();
-  uart_log("boot: before MX_USB_HOST_Init\r\n");
-  MX_USB_HOST_Init();
-  uart_log("boot: after MX_USB_HOST_Init\r\n");
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
   MX_USB_HOST_Init();
@@ -131,7 +124,6 @@ int main(void)
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
 
-  bool codec_ok = CS42448_Init(CS42448_I2C_ADDR);
 
   AudioOut_Start();
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
@@ -144,7 +136,6 @@ int main(void)
   midi_init();
 
   /* USER CODE END 2 */
-
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
