@@ -54,6 +54,7 @@
 "./Src/midi_host.o"
 "./Src/sai.o"
 "./Src/sdram.o"
+"./Src/sdram_alloc.o"
 "./Src/stm32h7xx_hal_msp.o"
 "./Src/stm32h7xx_it.o"
 "./Src/syscalls.o"

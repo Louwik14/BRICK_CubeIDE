@@ -21,6 +21,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "sai.h"
+#include "sdmmc.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
@@ -197,6 +198,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_FMC_Init();
+  MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
   LOG("FMC init OK\r\n");
   LOG("Starting SDRAM init...\r\n");

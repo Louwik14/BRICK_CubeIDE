@@ -1,5 +1,5 @@
-Src/main.o: ../Src/main.c ../Inc/main.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
+Src/sdram_alloc.o: ../Src/sdram_alloc.c ../Inc/sdram_alloc.h \
+ ../Inc/sdram.h ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_def.h \
@@ -36,16 +36,9 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/dma.h \
- ../Inc/main.h ../Inc/i2c.h ../Inc/sai.h ../Inc/usart.h ../Inc/gpio.h \
- ../Inc/fmc.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_device.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usbd_conf.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h \
- ../Inc/cs42448.h ../Inc/audio_in.h ../Inc/audio_out.h ../Inc/midi.h \
- ../Inc/midi_host.h ../Inc/sdram.h ../Inc/sdram_alloc.h
-../Inc/main.h:
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h
+../Inc/sdram_alloc.h:
+../Inc/sdram.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:
@@ -84,21 +77,3 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
-../Inc/dma.h:
-../Inc/main.h:
-../Inc/i2c.h:
-../Inc/sai.h:
-../Inc/usart.h:
-../Inc/gpio.h:
-../Inc/fmc.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_device.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usbd_conf.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h:
-../Inc/cs42448.h:
-../Inc/audio_in.h:
-../Inc/audio_out.h:
-../Inc/midi.h:
-../Inc/midi_host.h:
-../Inc/sdram.h:
-../Inc/sdram_alloc.h:
