@@ -1,5 +1,6 @@
 #pragma once
 
+#include "brick6_refactor.h"
 #include "stm32h7xx_hal.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,6 +42,9 @@ const uint32_t *sd_stream_get_buffer0(void);
 const uint32_t *sd_stream_get_buffer1(void);
 #if BRICK6_REFACTOR_STEP_4
 void sd_tasklet_poll(void);
+#endif
+#if BRICK6_REFACTOR_STEP_6
+void sd_tasklet_poll_bounded(uint32_t max_steps);
 #endif
 
 #ifdef __cplusplus

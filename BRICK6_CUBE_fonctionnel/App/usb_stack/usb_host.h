@@ -31,7 +31,7 @@
 #include "stm32h7xx_hal.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "brick6_refactor.h"
 /* USER CODE END INCLUDE */
 
 /** @addtogroup USBH_OTG_DRIVER
@@ -71,6 +71,9 @@ typedef enum {
 void MX_USB_HOST_Init(void);
 
 void MX_USB_HOST_Process(void);
+#if BRICK6_REFACTOR_STEP_6
+void usb_host_tasklet_poll_bounded(uint32_t max_packets);
+#endif
 
 /**
   * @}
@@ -89,4 +92,3 @@ void MX_USB_HOST_Process(void);
 #endif
 
 #endif /* __USB_HOST__H__ */
-

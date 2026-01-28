@@ -509,7 +509,14 @@ const uint32_t *sd_stream_get_buffer1(void)
 }
 
 #if BRICK6_REFACTOR_STEP_4
-void sd_tasklet_poll(void)
+static bool sd_tasklet_is_active(void)
+{
+  return (sd_fsm_state != SD_FSM_IDLE) &&
+         (sd_fsm_state != SD_FSM_DONE) &&
+         (sd_fsm_state != SD_FSM_ERROR);
+}
+
+static void sd_tasklet_step(void)
 {
 #if BRICK6_REFACTOR_STEP_5
   sd_stream_process_ready_buffers();
@@ -604,6 +611,31 @@ void sd_tasklet_poll(void)
       break;
   }
 }
+
+void sd_tasklet_poll(void)
+{
+  sd_tasklet_step();
+}
+
+#if BRICK6_REFACTOR_STEP_6
+void sd_tasklet_poll_bounded(uint32_t max_steps)
+{
+  uint32_t n = 0U;
+  for (; n < max_steps; n++)
+  {
+    sd_tasklet_step();
+    if (!sd_tasklet_is_active())
+    {
+      break;
+    }
+  }
+
+  if ((max_steps > 0U) && (n >= max_steps) && sd_tasklet_is_active())
+  {
+    sd_budget_hit_count++;
+  }
+}
+#endif
 #endif
 
 void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)

@@ -353,13 +353,25 @@ int main(void)
     engine_tasklet_poll();
 #endif
 #if BRICK6_REFACTOR_STEP_4
+#if BRICK6_REFACTOR_STEP_6
+    sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
+#else
     sd_tasklet_poll();
 #endif
+#endif
+#if BRICK6_REFACTOR_STEP_6
+    usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
+#else
     MX_USB_HOST_Process();
+#endif
 #if BRICK6_REFACTOR_STEP_1
     brick6_usb_host_poll_count++;
 #endif
+#if BRICK6_REFACTOR_STEP_6
+    midi_host_poll_bounded(MIDI_BUDGET_MSGS);
+#else
     midi_host_poll();
+#endif
 #if BRICK6_REFACTOR_STEP_1
     brick6_midi_host_poll_count++;
 #endif
@@ -390,6 +402,46 @@ int main(void)
       uint32_t frames_per_sec = full * 512;  // 512 = AUDIO_BUFFER_FRAMES
 
 #if BRICK6_REFACTOR_STEP_1
+#if BRICK6_REFACTOR_STEP_6
+#if BRICK6_REFACTOR_STEP_3
+      LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
+           "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu "
+           "engine_ticks=%lu usb_budget=%lu midi_budget=%lu sd_budget=%lu\r\n",
+           (unsigned long)brick6_audio_tx_half_count,
+           (unsigned long)brick6_audio_tx_full_count,
+           (unsigned long)brick6_audio_rx_half_count,
+           (unsigned long)brick6_audio_rx_full_count,
+           (unsigned long)brick6_sd_rx_cplt_count,
+           (unsigned long)brick6_sd_tx_cplt_count,
+           (unsigned long)brick6_sd_buf0_cplt_count,
+           (unsigned long)brick6_sd_buf1_cplt_count,
+           (unsigned long)brick6_sd_err_count,
+           (unsigned long)brick6_usb_host_poll_count,
+           (unsigned long)brick6_midi_host_poll_count,
+           (unsigned long)engine_tick_count,
+           (unsigned long)usb_budget_hit_count,
+           (unsigned long)midi_budget_hit_count,
+           (unsigned long)sd_budget_hit_count);
+#else
+      LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
+           "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu "
+           "usb_budget=%lu midi_budget=%lu sd_budget=%lu\r\n",
+           (unsigned long)brick6_audio_tx_half_count,
+           (unsigned long)brick6_audio_tx_full_count,
+           (unsigned long)brick6_audio_rx_half_count,
+           (unsigned long)brick6_audio_rx_full_count,
+           (unsigned long)brick6_sd_rx_cplt_count,
+           (unsigned long)brick6_sd_tx_cplt_count,
+           (unsigned long)brick6_sd_buf0_cplt_count,
+           (unsigned long)brick6_sd_buf1_cplt_count,
+           (unsigned long)brick6_sd_err_count,
+           (unsigned long)brick6_usb_host_poll_count,
+           (unsigned long)brick6_midi_host_poll_count,
+           (unsigned long)usb_budget_hit_count,
+           (unsigned long)midi_budget_hit_count,
+           (unsigned long)sd_budget_hit_count);
+#endif
+#else
 #if BRICK6_REFACTOR_STEP_3
       LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
            "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu engine_ticks=%lu\r\n",
@@ -419,6 +471,7 @@ int main(void)
            (unsigned long)brick6_sd_err_count,
            (unsigned long)brick6_usb_host_poll_count,
            (unsigned long)brick6_midi_host_poll_count);
+#endif
 #endif
 #endif
 
