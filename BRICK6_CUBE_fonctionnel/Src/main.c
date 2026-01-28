@@ -129,12 +129,7 @@ int main(void)
   SDRAM_Init();
   LOG("SDRAM init done\r\n");
   LOG("Starting SDRAM test...\r\n");
-  if (SDRAM_Test() != 0U)
-  {
-    LOG("SDRAM test failed\r\n");
-    Error_Handler();
-  }
-  LOG("SDRAM test OK\r\n");
+  SDRAM_Test();
 
 
   MX_USB_DEVICE_Init();

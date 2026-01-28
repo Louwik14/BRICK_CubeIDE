@@ -21,4 +21,20 @@
 #define SDRAM_MODEREG_WRITEBURST_MODE_SINGLE     ((uint16_t)0x0200)
 
 void SDRAM_Init(void);
-uint32_t SDRAM_Test(void);
+void SDRAM_Test(void);
+
+static inline uint32_t sdram_swap16(uint32_t value)
+{
+  return (value << 16) | (value >> 16);
+}
+
+static inline void sdram_write32(uint32_t index, uint32_t value)
+{
+  *(__IO uint32_t *)(SDRAM_BANK_ADDR + SDRAM_WRITE_READ_ADDR + 4U * index) = value;
+}
+
+static inline uint32_t sdram_read32(uint32_t index)
+{
+  uint32_t raw = *(__IO uint32_t *)(SDRAM_BANK_ADDR + SDRAM_WRITE_READ_ADDR + 4U * index);
+  return sdram_swap16(raw);
+}

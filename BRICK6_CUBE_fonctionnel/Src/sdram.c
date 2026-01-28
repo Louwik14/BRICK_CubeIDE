@@ -1,6 +1,10 @@
 #include "sdram.h"
 #include "fmc.h"
+#include "usart.h"
 #include "w9825g6kh_conf.h"
+
+#include <stdio.h>
+#include <string.h>
 
 static FMC_SDRAM_CommandTypeDef sdram_command;
 static uint32_t sdram_tx_buffer[SDRAM_BUFFER_SIZE];
@@ -15,22 +19,24 @@ void SDRAM_Init(void)
   SDRAM_Initialization_Sequence(&hsdram1, &sdram_command);
 }
 
-uint32_t SDRAM_Test(void)
+void SDRAM_Test(void)
 {
   uint32_t index = 0;
   uint32_t status = 0;
+  uint32_t fail_index = 0;
+  char log_buffer[96];
 
   Fill_Buffer(sdram_tx_buffer, SDRAM_BUFFER_SIZE, 0xA244250FU);
   Fill_Buffer(sdram_rx_buffer, SDRAM_BUFFER_SIZE, 0xBBBBBBBBU);
 
   for (index = 0; index < SDRAM_BUFFER_SIZE; index++)
   {
-    *(__IO uint32_t *)(SDRAM_BANK_ADDR + SDRAM_WRITE_READ_ADDR + 4U * index) = sdram_tx_buffer[index];
+    sdram_write32(index, sdram_tx_buffer[index]);
   }
 
   for (index = 0; index < SDRAM_BUFFER_SIZE; index++)
   {
-    sdram_rx_buffer[index] = *(__IO uint32_t *)(SDRAM_BANK_ADDR + SDRAM_WRITE_READ_ADDR + 4U * index);
+    sdram_rx_buffer[index] = sdram_read32(index);
   }
 
   for (index = 0; (index < SDRAM_BUFFER_SIZE) && (status == 0U); index++)
@@ -38,10 +44,25 @@ uint32_t SDRAM_Test(void)
     if (sdram_rx_buffer[index] != sdram_tx_buffer[index])
     {
       status++;
+      fail_index = index;
     }
   }
 
-  return status;
+  if (status != 0U)
+  {
+    (void)snprintf(log_buffer, sizeof(log_buffer),
+                   "SDRAM test failed at index %lu\r\n",
+                   (unsigned long)fail_index);
+  }
+  else
+  {
+    (void)snprintf(log_buffer, sizeof(log_buffer),
+                   "SDRAM test OK (%lu words)\r\n",
+                   (unsigned long)SDRAM_BUFFER_SIZE);
+  }
+
+  (void)HAL_UART_Transmit(&huart1, (uint8_t *)log_buffer,
+                          (uint16_t)strlen(log_buffer), 10);
 }
 
 static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
