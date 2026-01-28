@@ -39,6 +39,7 @@
 #include "midi_host.h"
 #include "sdram.h"
 #include "sdram_alloc.h"
+#include "sd_stream.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +60,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static uint8_t sd_test_running = 0U;
+static uint8_t sd_test_done_logged = 0U;
 
 /* USER CODE END PV */
 
@@ -208,6 +211,23 @@ int main(void)
   SDRAM_Test();
   SDRAM_Alloc_Test();
 
+  if (sd_stream_init(&hsd1) == HAL_OK)
+  {
+    LOG("SD stream init OK\r\n");
+    if (sd_stream_start_read(0U, SD_STREAM_BLOCKS_PER_BUFFER * 2U) == HAL_OK)
+    {
+      sd_test_running = 1U;
+      LOG("SD stream read start\r\n");
+    }
+    else
+    {
+      LOG("SD stream read start FAILED\r\n");
+    }
+  }
+  else
+  {
+    LOG("SD stream init FAILED\r\n");
+  }
 
   MX_USB_DEVICE_Init();
   MX_USB_HOST_Init();
@@ -285,6 +305,20 @@ int main(void)
       }
 
       last_log_tick = now;
+    }
+
+    if ((sd_test_running != 0U) && (sd_test_done_logged == 0U))
+    {
+      if (sd_stream_has_error())
+      {
+        LOG("SD stream read error\r\n");
+        sd_test_done_logged = 1U;
+      }
+      else if (sd_stream_is_complete())
+      {
+        LOG("SD stream read complete\r\n");
+        sd_test_done_logged = 1U;
+      }
     }
   }
 
