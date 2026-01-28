@@ -123,3 +123,31 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_5` à 0 dans `Inc/brick6_refactor.h` pour revenir au remplissage audio précédent.
+
+## Step 6 — Budgets CPU des tasklets
+
+### Changements effectués
+- Ajout de `BRICK6_REFACTOR_STEP_6` et des budgets `USB_BUDGET_PACKETS`, `MIDI_BUDGET_MSGS`, `SD_BUDGET_STEPS` pour borner les pollers lourds.
+- Création des versions bornées `usb_host_tasklet_poll_bounded`, `midi_host_poll_bounded` et `sd_tasklet_poll_bounded`.
+- Ajout des compteurs de famine `usb_budget_hit_count`, `midi_budget_hit_count`, `sd_budget_hit_count` et intégration dans le log 1 Hz.
+- Boucle principale mise à jour pour appeler les tasklets bornées, tout en gardant l’audio/engine en priorité.
+
+### Fichiers modifiés
+- Inc/brick6_refactor.h
+- Src/brick6_refactor.c
+- App/usb_stack/usb_host.h
+- App/usb_stack/usb_host.c
+- Inc/midi_host.h
+- Src/midi_host.c
+- Inc/sd_stream.h
+- Src/sd_stream.c
+- Src/main.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Pas de RTOS, pas de malloc, pas de changement CubeMX.
+- L’ordre de priorité audio/engine dans la main loop reste inchangé.
+- Les APIs publiques existantes restent disponibles.
+
+### Rollback
+- Mettre `BRICK6_REFACTOR_STEP_6` à 0 dans `Inc/brick6_refactor.h` pour revenir aux pollers non bornés.

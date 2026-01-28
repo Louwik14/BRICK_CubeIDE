@@ -13,3 +13,9 @@ volatile uint32_t brick6_sd_buf1_cplt_count = 0U;
 volatile uint32_t brick6_usb_host_poll_count = 0U;
 volatile uint32_t brick6_midi_host_poll_count = 0U;
 #endif
+
+#if BRICK6_REFACTOR_STEP_6
+volatile uint32_t usb_budget_hit_count = 0U;
+volatile uint32_t midi_budget_hit_count = 0U;
+volatile uint32_t sd_budget_hit_count = 0U;
+#endif

@@ -98,6 +98,26 @@ void MX_USB_HOST_Process(void)
   USBH_Process(&hUsbHostHS);
 }
 
+#if BRICK6_REFACTOR_STEP_6
+void usb_host_tasklet_poll_bounded(uint32_t max_packets)
+{
+  uint32_t n = 0U;
+  for (; n < max_packets; n++)
+  {
+    USBH_Process(&hUsbHostHS);
+    if (hUsbHostHS.gState == HOST_IDLE)
+    {
+      break;
+    }
+  }
+
+  if ((max_packets > 0U) && (n >= max_packets) && (hUsbHostHS.gState != HOST_IDLE))
+  {
+    usb_budget_hit_count++;
+  }
+}
+#endif
+
 /*
  * user callback definition
  */
