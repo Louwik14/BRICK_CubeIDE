@@ -30,9 +30,6 @@ bool audio_test_sine_enable = true;
 bool audio_test_loopback_enable = false;
 volatile uint8_t audio_dma_half_ready = 0U;
 volatile uint8_t audio_dma_full_ready = 0U;
-#if BRICK6_REFACTOR_STEP_5
-volatile uint32_t audio_underflow_count = 0U;
-#endif
 
 static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
   0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512, 10278,

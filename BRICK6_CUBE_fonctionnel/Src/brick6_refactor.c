@@ -19,3 +19,7 @@ volatile uint32_t usb_budget_hit_count = 0U;
 volatile uint32_t midi_budget_hit_count = 0U;
 volatile uint32_t sd_budget_hit_count = 0U;
 #endif
+
+#if BRICK6_REFACTOR_STEP_5
+volatile uint32_t audio_underflow_count = 0U;
+#endif

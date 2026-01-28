@@ -27,6 +27,10 @@
 #define BRICK6_REFACTOR_STEP_6 1U
 #endif
 
+#ifndef BRICK6_REFACTOR_STEP_7
+#define BRICK6_REFACTOR_STEP_7 1U
+#endif
+
 #if BRICK6_REFACTOR_STEP_6
 #define USB_BUDGET_PACKETS   4U
 #define MIDI_BUDGET_MSGS     8U
@@ -51,6 +55,10 @@ extern volatile uint32_t brick6_midi_host_poll_count;
 extern volatile uint32_t usb_budget_hit_count;
 extern volatile uint32_t midi_budget_hit_count;
 extern volatile uint32_t sd_budget_hit_count;
+#endif
+
+#if BRICK6_REFACTOR_STEP_5
+extern volatile uint32_t audio_underflow_count;
 #endif
 
 #endif /* BRICK6_REFACTOR_H */
