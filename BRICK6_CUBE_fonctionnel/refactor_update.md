@@ -180,3 +180,20 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_7` à 0 dans `Inc/brick6_refactor.h` pour revenir au diagnostics/loop précédent dans `main.c`.
+
+## Step 8 — PASS 1 : Suppression du code mort dans main.c
+
+### Changements effectués
+- Suppression de tout le code conditionnel `#if !BRICK6_REFACTOR_STEP_7` dans `main.c` (anciens tests SDRAM/SD, logs legacy, FSM de tests, helpers UART/CRC/hex).
+- Simplification des sections USER CODE BEGIN 0/2/3 pour ne conserver que le chemin STEP 7 validé.
+- Nettoyage des `#include` devenus inutiles après suppression du code mort.
+
+### Fichiers modifiés
+- Src/main.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Aucun changement fonctionnel : initialisation, logs diagnostics, audio/SD/USB/MIDI et ordre d’exécution restent identiques.
+
+### Rollback
+- Revenir au commit précédent pour restaurer les blocs legacy supprimés.
