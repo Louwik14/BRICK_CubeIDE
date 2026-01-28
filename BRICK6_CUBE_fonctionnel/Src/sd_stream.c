@@ -1,4 +1,5 @@
 #include "sd_stream.h"
+#include "brick6_refactor.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -358,6 +359,9 @@ void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_sd_rx_cplt_count++;
+#endif
     if (sd_operation != SD_STREAM_OP_READ)
     {
       return;
@@ -391,6 +395,9 @@ void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_sd_tx_cplt_count++;
+#endif
     if (sd_operation != SD_STREAM_OP_WRITE)
     {
       return;
@@ -424,6 +431,9 @@ void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_sd_err_count++;
+#endif
     sd_error = 1U;
   }
 }
@@ -435,6 +445,9 @@ void HAL_SDEx_Read_DMADoubleBuffer0CpltCallback(SD_HandleTypeDef *hsd)
     return;
   }
 
+#if BRICK6_REFACTOR_STEP_1
+  brick6_sd_buf0_cplt_count++;
+#endif
   read_buf0_count++;
   sd_stats.buffer0_count = read_buf0_count;
   (void)sd_log_callbacks;
@@ -447,6 +460,9 @@ void HAL_SDEx_Read_DMADoubleBuffer1CpltCallback(SD_HandleTypeDef *hsd)
     return;
   }
 
+#if BRICK6_REFACTOR_STEP_1
+  brick6_sd_buf1_cplt_count++;
+#endif
   read_buf1_count++;
   sd_stats.buffer1_count = read_buf1_count;
   (void)sd_log_callbacks;
