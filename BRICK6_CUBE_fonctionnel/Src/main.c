@@ -44,11 +44,29 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef enum
+{
+  SD_TEST_STATE_IDLE = 0,
+  SD_TEST_STATE_MEMCHECK,
+  SD_TEST_STATE_SECTOR0_WAIT,
+  SD_TEST_STATE_KNOWN_WAIT,
+  SD_TEST_STATE_LONG_RUN
+} sd_test_state_t;
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SD_TEST_ENABLE                 1U
+#define SD_TEST_MEMORY_PLACEMENT       1U
+#define SD_TEST_SECTOR0                1U
+#define SD_TEST_KNOWN_REGION           0U
+#define SD_TEST_LONG_RUN               1U
+#define SD_TEST_LOG_CALLBACKS          1U
+#define SD_TEST_LONG_BLOCKS            (1024U * 1024U)
+#define SD_TEST_KNOWN_START_BLOCK      2048U
+#define SD_TEST_KNOWN_BLOCKS           SD_STREAM_BLOCKS_PER_BUFFER
+#define SD_TEST_KNOWN_CRC32            0x00000000U
 
 /* USER CODE END PD */
 
@@ -62,6 +80,14 @@
 /* USER CODE BEGIN PV */
 static uint8_t sd_test_running = 0U;
 static uint8_t sd_test_done_logged = 0U;
+static sd_test_state_t sd_test_state = SD_TEST_STATE_IDLE;
+static uint8_t sd_test_failed = 0U;
+static uint32_t sd_test_timeout = 0U;
+static uint32_t sd_last_stats_tick = 0U;
+static uint32_t sd_last_buf0_count = 0U;
+static uint32_t sd_last_buf1_count = 0U;
+static uint8_t sd_test_sector0_done = 0U;
+static uint8_t sd_test_known_done = 0U;
 
 /* USER CODE END PV */
 
@@ -162,6 +188,65 @@ static void SDRAM_Alloc_Test(void)
   LOG("SDRAM alloc test OK\r\n");
 }
 
+static const char *SD_MemoryRegion(const void *address)
+{
+  uintptr_t addr = (uintptr_t)address;
+  if (addr >= 0x20000000U && addr < 0x20020000U)
+  {
+    return "DTCM";
+  }
+  if (addr >= 0x24000000U && addr < 0x24080000U)
+  {
+    return "AXI SRAM";
+  }
+  if (addr >= 0x30000000U && addr < 0x30048000U)
+  {
+    return "D2 SRAM";
+  }
+  if (addr >= 0x38000000U && addr < 0x38010000U)
+  {
+    return "D3 SRAM";
+  }
+  if (addr >= 0xC0000000U && addr < 0xD0000000U)
+  {
+    return "SDRAM";
+  }
+  return "UNKNOWN";
+}
+
+static void SD_LogHex(const uint8_t *data, uint32_t length)
+{
+  char line[80];
+  uint32_t offset = 0U;
+  while (offset < length)
+  {
+    uint32_t count = (length - offset > 16U) ? 16U : (length - offset);
+    int pos = snprintf(line, sizeof(line), "%04lX:", (unsigned long)offset);
+    for (uint32_t i = 0; i < count && pos < (int)sizeof(line) - 4; i++)
+    {
+      pos += snprintf(&line[pos], sizeof(line) - (size_t)pos, " %02X", data[offset + i]);
+    }
+    snprintf(&line[pos], sizeof(line) - (size_t)pos, "\r\n");
+    uart_log(line);
+    offset += count;
+  }
+}
+
+static uint32_t SD_CRC32(const uint8_t *data, uint32_t length)
+{
+  uint32_t crc = 0xFFFFFFFFU;
+  for (uint32_t i = 0U; i < length; i++)
+  {
+    crc ^= data[i];
+    for (uint32_t bit = 0U; bit < 8U; bit++)
+    {
+      uint32_t mask = 0U - (crc & 1U);
+      crc = (crc >> 1U) ^ (0xEDB88320U & mask);
+    }
+  }
+  return ~crc;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -214,15 +299,12 @@ int main(void)
   if (sd_stream_init(&hsd1) == HAL_OK)
   {
     LOG("SD stream init OK\r\n");
-    if (sd_stream_start_read(0U, SD_STREAM_BLOCKS_PER_BUFFER * 2U) == HAL_OK)
-    {
-      sd_test_running = 1U;
-      LOG("SD stream read start\r\n");
-    }
-    else
-    {
-      LOG("SD stream read start FAILED\r\n");
-    }
+    sd_stream_set_logger(uart_log);
+    sd_stream_set_callback_logging(SD_TEST_LOG_CALLBACKS != 0U);
+    sd_test_running = (SD_TEST_ENABLE != 0U);
+    sd_test_state = SD_TEST_STATE_MEMCHECK;
+    sd_test_sector0_done = 0U;
+    sd_test_known_done = 0U;
   }
   else
   {
@@ -307,17 +389,161 @@ int main(void)
       last_log_tick = now;
     }
 
-    if ((sd_test_running != 0U) && (sd_test_done_logged == 0U))
+    if ((sd_test_running != 0U) && (sd_test_state == SD_TEST_STATE_MEMCHECK))
+    {
+      if (sd_test_failed != 0U)
+      {
+        if (sd_test_done_logged == 0U)
+        {
+          LOG("SD test FAILED\r\n");
+          sd_test_done_logged = 1U;
+        }
+      }
+      else if (SD_TEST_MEMORY_PLACEMENT != 0U)
+      {
+        const uint32_t *buf0 = sd_stream_get_buffer0();
+        const uint32_t *buf1 = sd_stream_get_buffer1();
+        const char *region0 = SD_MemoryRegion(buf0);
+        const char *region1 = SD_MemoryRegion(buf1);
+
+        LOGF("SD buf0 addr=%p region=%s\r\n", (void *)buf0, region0);
+        LOGF("SD buf1 addr=%p region=%s\r\n", (void *)buf1, region1);
+
+        if ((strcmp(region0, "DTCM") == 0) || (strcmp(region1, "DTCM") == 0))
+        {
+          LOG("SD buffer placement ERROR: DTCM not allowed\r\n");
+          sd_test_failed = 1U;
+        }
+
+        sd_test_running = (sd_test_failed == 0U);
+        sd_test_state = SD_TEST_STATE_IDLE;
+      }
+      else
+      {
+        sd_test_state = SD_TEST_STATE_IDLE;
+      }
+    }
+
+    if ((sd_test_running != 0U) && (sd_test_state == SD_TEST_STATE_IDLE) && (sd_test_failed == 0U))
+    {
+      if ((SD_TEST_SECTOR0 != 0U) && (sd_test_sector0_done == 0U))
+      {
+        if (sd_stream_start_read(0U, SD_STREAM_BLOCKS_PER_BUFFER) == HAL_OK)
+        {
+          sd_test_state = SD_TEST_STATE_SECTOR0_WAIT;
+          sd_test_timeout = now + 2000U;
+          LOG("SD test sector0 start\r\n");
+        }
+        else
+        {
+          LOG("SD test sector0 FAILED to start\r\n");
+          sd_test_failed = 1U;
+        }
+      }
+      else if ((SD_TEST_KNOWN_REGION != 0U) && (sd_test_known_done == 0U))
+      {
+        if (sd_stream_start_read(SD_TEST_KNOWN_START_BLOCK, SD_TEST_KNOWN_BLOCKS) == HAL_OK)
+        {
+          sd_test_state = SD_TEST_STATE_KNOWN_WAIT;
+          sd_test_timeout = now + 2000U;
+          LOG("SD test known region start\r\n");
+        }
+        else
+        {
+          LOG("SD test known region FAILED to start\r\n");
+          sd_test_failed = 1U;
+        }
+      }
+      else if (SD_TEST_LONG_RUN != 0U)
+      {
+        if (sd_stream_start_read(0U, SD_TEST_LONG_BLOCKS) == HAL_OK)
+        {
+          sd_test_state = SD_TEST_STATE_LONG_RUN;
+          sd_last_stats_tick = now;
+          sd_last_buf0_count = 0U;
+          sd_last_buf1_count = 0U;
+          LOG("SD test long run start\r\n");
+        }
+        else
+        {
+          LOG("SD test long run FAILED to start\r\n");
+          sd_test_failed = 1U;
+        }
+      }
+      else
+      {
+        sd_test_running = 0U;
+      }
+    }
+
+    if ((sd_test_running != 0U) && (sd_test_failed == 0U))
     {
       if (sd_stream_has_error())
       {
-        LOG("SD stream read error\r\n");
-        sd_test_done_logged = 1U;
+        LOG("SD stream error\r\n");
+        sd_test_failed = 1U;
       }
-      else if (sd_stream_is_complete())
+      else if ((sd_test_state == SD_TEST_STATE_SECTOR0_WAIT) && sd_stream_is_complete())
       {
-        LOG("SD stream read complete\r\n");
-        sd_test_done_logged = 1U;
+        const uint8_t *bytes = (const uint8_t *)sd_stream_get_buffer0();
+        if ((bytes[510] == 0x55U) && (bytes[511] == 0xAAU))
+        {
+          LOG("SD sector0 signature OK (0x55AA)\r\n");
+        }
+        else
+        {
+          LOG("SD sector0 signature missing, dump first 64 bytes:\r\n");
+          SD_LogHex(bytes, 64U);
+        }
+        sd_test_sector0_done = 1U;
+        sd_test_state = SD_TEST_STATE_IDLE;
+      }
+      else if ((sd_test_state == SD_TEST_STATE_KNOWN_WAIT) && sd_stream_is_complete())
+      {
+        const uint8_t *bytes = (const uint8_t *)sd_stream_get_buffer0();
+        uint32_t crc = SD_CRC32(bytes, SD_TEST_KNOWN_BLOCKS * SD_STREAM_BLOCK_SIZE_BYTES);
+        LOGF("SD known region CRC32=0x%08lX\r\n", (unsigned long)crc);
+        if ((SD_TEST_KNOWN_CRC32 != 0U) && (crc != SD_TEST_KNOWN_CRC32))
+        {
+          LOG("SD known region CRC mismatch\r\n");
+          sd_test_failed = 1U;
+        }
+        sd_test_known_done = 1U;
+        sd_test_state = SD_TEST_STATE_IDLE;
+      }
+      else if (sd_test_state == SD_TEST_STATE_LONG_RUN)
+      {
+        if ((now - sd_last_stats_tick) >= 1000U)
+        {
+          uint32_t buf0 = sd_stream_get_read_buf0_count();
+          uint32_t buf1 = sd_stream_get_read_buf1_count();
+          uint32_t delta = (buf0 - sd_last_buf0_count) + (buf1 - sd_last_buf1_count);
+          uint32_t bytes = delta * SD_STREAM_BUFFER_SIZE_BYTES;
+          uint32_t kbps = bytes / 1024U;
+          LOGF("SD long run buffers=%lu buf0=%lu buf1=%lu kb/s=%lu\r\n",
+               (unsigned long)(buf0 + buf1),
+               (unsigned long)buf0,
+               (unsigned long)buf1,
+               (unsigned long)kbps);
+          sd_last_buf0_count = buf0;
+          sd_last_buf1_count = buf1;
+          sd_last_stats_tick = now;
+        }
+
+        if (sd_stream_is_complete())
+        {
+          if (sd_stream_start_read(0U, SD_TEST_LONG_BLOCKS) != HAL_OK)
+          {
+            LOG("SD long run restart FAILED\r\n");
+            sd_test_failed = 1U;
+          }
+        }
+      }
+      else if ((sd_test_state == SD_TEST_STATE_SECTOR0_WAIT ||
+                sd_test_state == SD_TEST_STATE_KNOWN_WAIT) && (now > sd_test_timeout))
+      {
+        LOG("SD test timeout\r\n");
+        sd_test_failed = 1U;
       }
     }
   }

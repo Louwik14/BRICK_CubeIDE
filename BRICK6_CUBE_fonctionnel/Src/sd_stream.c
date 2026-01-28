@@ -1,5 +1,6 @@
 #include "sd_stream.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "sdmmc.h"
@@ -7,11 +8,13 @@
 #define SD_STREAM_DATA_PATTERN_STEP 0x00010000U
 
 static SD_HandleTypeDef *sd_handle = NULL;
+static void (*sd_logger)(const char *message) = NULL;
+static __IO uint8_t sd_log_callbacks = 0U;
 static __IO uint8_t sd_rx_complete = 0U;
 static __IO uint8_t sd_tx_complete = 0U;
 static __IO uint8_t sd_error = 0U;
-static __IO uint32_t sd_read_count_buffer0 = 0U;
-static __IO uint32_t sd_read_count_buffer1 = 0U;
+__IO uint32_t read_buf0_count = 0U;
+__IO uint32_t read_buf1_count = 0U;
 static __IO uint32_t sd_write_count_buffer0 = 0U;
 static __IO uint32_t sd_write_count_buffer1 = 0U;
 static __IO uint32_t sd_total_blocks = 0U;
@@ -30,6 +33,24 @@ static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offs
   for (uint32_t index = 0; index < buffer_length; index++)
   {
     pBuffer[index] = index + offset;
+  }
+}
+
+static void sd_stream_log(const char *message)
+{
+  if (sd_logger != NULL)
+  {
+    sd_logger(message);
+  }
+}
+
+static void sd_stream_logf(const char *format, uint32_t value)
+{
+  if (sd_logger != NULL)
+  {
+    char buffer[64];
+    (void)snprintf(buffer, sizeof(buffer), format, (unsigned long)value);
+    sd_logger(buffer);
   }
 }
 
@@ -58,8 +79,8 @@ HAL_StatusTypeDef sd_stream_init(SD_HandleTypeDef *hsd)
   sd_error = 0U;
   sd_rx_complete = 0U;
   sd_tx_complete = 0U;
-  sd_read_count_buffer0 = 0U;
-  sd_read_count_buffer1 = 0U;
+  read_buf0_count = 0U;
+  read_buf1_count = 0U;
   sd_write_count_buffer0 = 0U;
   sd_write_count_buffer1 = 0U;
   sd_total_blocks = 0U;
@@ -68,6 +89,16 @@ HAL_StatusTypeDef sd_stream_init(SD_HandleTypeDef *hsd)
 
   return HAL_SDEx_ConfigDMAMultiBuffer(sd_handle, Buffer0, Buffer1,
                                        SD_STREAM_BLOCKS_PER_BUFFER);
+}
+
+void sd_stream_set_logger(void (*logger)(const char *message))
+{
+  sd_logger = logger;
+}
+
+void sd_stream_set_callback_logging(bool enable)
+{
+  sd_log_callbacks = enable ? 1U : 0U;
 }
 
 HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_blocks)
@@ -86,8 +117,8 @@ HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_bloc
   sd_error = 0U;
   sd_total_blocks = total_blocks;
   sd_start_block = start_block;
-  sd_read_count_buffer0 = 0U;
-  sd_read_count_buffer1 = 0U;
+  read_buf0_count = 0U;
+  read_buf1_count = 0U;
   sd_stats.start_block = start_block;
   sd_stats.total_blocks = total_blocks;
   sd_stats.buffer0_count = 0U;
@@ -164,6 +195,16 @@ const sd_stream_stats_t *sd_stream_get_stats(void)
   return &sd_stats;
 }
 
+uint32_t sd_stream_get_read_buf0_count(void)
+{
+  return read_buf0_count;
+}
+
+uint32_t sd_stream_get_read_buf1_count(void)
+{
+  return read_buf1_count;
+}
+
 const uint32_t *sd_stream_get_buffer0(void)
 {
   return Buffer0;
@@ -205,8 +246,12 @@ void HAL_SDEx_Read_DMADoubleBuffer0CpltCallback(SD_HandleTypeDef *hsd)
     return;
   }
 
-  sd_read_count_buffer0++;
-  sd_stats.buffer0_count = sd_read_count_buffer0;
+  read_buf0_count++;
+  sd_stats.buffer0_count = read_buf0_count;
+  if (sd_log_callbacks != 0U)
+  {
+    sd_stream_logf("SD buf0 done %lu\r\n", read_buf0_count);
+  }
 }
 
 void HAL_SDEx_Read_DMADoubleBuffer1CpltCallback(SD_HandleTypeDef *hsd)
@@ -216,8 +261,12 @@ void HAL_SDEx_Read_DMADoubleBuffer1CpltCallback(SD_HandleTypeDef *hsd)
     return;
   }
 
-  sd_read_count_buffer1++;
-  sd_stats.buffer1_count = sd_read_count_buffer1;
+  read_buf1_count++;
+  sd_stats.buffer1_count = read_buf1_count;
+  if (sd_log_callbacks != 0U)
+  {
+    sd_stream_logf("SD buf1 done %lu\r\n", read_buf1_count);
+  }
 }
 
 void HAL_SDEx_Write_DMADoubleBuffer0CpltCallback(SD_HandleTypeDef *hsd)
