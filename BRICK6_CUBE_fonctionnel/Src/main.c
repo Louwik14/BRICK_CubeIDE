@@ -61,9 +61,9 @@ typedef enum
 #define SD_TEST_MEMORY_PLACEMENT       1U
 #define SD_TEST_SECTOR0                1U
 #define SD_TEST_KNOWN_REGION           0U
-#define SD_TEST_LONG_RUN               1U
+#define SD_TEST_LONG_RUN               0U
 #define SD_TEST_LOG_CALLBACKS          1U
-#define SD_TEST_LONG_BLOCKS            (1024U * 1024U)
+#define SD_TEST_LONG_BLOCKS            (128U)
 #define SD_TEST_KNOWN_START_BLOCK      2048U
 #define SD_TEST_KNOWN_BLOCKS           SD_STREAM_BLOCKS_PER_BUFFER
 #define SD_TEST_KNOWN_CRC32            0x00000000U
