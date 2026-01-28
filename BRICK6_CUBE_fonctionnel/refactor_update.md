@@ -197,3 +197,23 @@
 
 ### Rollback
 - Revenir au commit précédent pour restaurer les blocs legacy supprimés.
+
+## Step 8 — PASS 2 : Déplacement des callbacks SAI hors de main.c
+
+### Changements effectués
+- Déplacement des callbacks SAI TX (half/full) de `main.c` vers `Src/audio_out.c`.
+- Déplacement des callbacks SAI RX (half/full) de `main.c` vers `Src/audio_in.c`.
+- Ajout des includes nécessaires dans les modules audio pour conserver les compteurs STEP 1.
+
+### Fichiers modifiés
+- Src/main.c
+- Src/audio_out.c
+- Src/audio_in.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Même contenu des callbacks SAI, mêmes compteurs et mêmes appels `AudioOut_Process*` / `AudioIn_Process*`.
+- Aucun changement fonctionnel audio, ni sur les timings DMA.
+
+### Rollback
+- Revenir au commit précédent pour restaurer les callbacks SAI dans `main.c`.

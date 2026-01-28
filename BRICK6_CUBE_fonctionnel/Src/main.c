@@ -277,51 +277,6 @@ void PeriphCommonClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_A)
-  {
-#if BRICK6_REFACTOR_STEP_1
-    brick6_audio_tx_half_count++;
-#endif
-    AudioOut_ProcessHalf();
-  }
-}
-
-void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_A)
-  {
-#if BRICK6_REFACTOR_STEP_1
-    brick6_audio_tx_full_count++;
-#endif
-    AudioOut_ProcessFull();
-  }
-}
-
-void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_B)
-  {
-#if BRICK6_REFACTOR_STEP_1
-    brick6_audio_rx_half_count++;
-#endif
-    AudioIn_ProcessHalf();
-  }
-}
-
-void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_B)
-  {
-#if BRICK6_REFACTOR_STEP_1
-    brick6_audio_rx_full_count++;
-#endif
-    AudioIn_ProcessFull();
-  }
-}
-
 /* USER CODE END 4 */
 
 /**

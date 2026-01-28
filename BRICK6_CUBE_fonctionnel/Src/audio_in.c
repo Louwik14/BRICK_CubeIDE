@@ -1,4 +1,5 @@
 #include "audio_in.h"
+#include "brick6_refactor.h"
 #include "sai.h"
 #include "usart.h"
 #include <stdbool.h>
@@ -126,4 +127,26 @@ uint32_t AudioIn_GetHalfEvents(void)
 uint32_t AudioIn_GetFullEvents(void)
 {
   return audio_in_full_events;
+}
+
+void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_B)
+  {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_rx_half_count++;
+#endif
+    AudioIn_ProcessHalf();
+  }
+}
+
+void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_B)
+  {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_rx_full_count++;
+#endif
+    AudioIn_ProcessFull();
+  }
 }

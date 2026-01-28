@@ -218,6 +218,28 @@ void AudioOut_ProcessFull(void)
 #endif
 }
 
+void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_A)
+  {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_tx_half_count++;
+#endif
+    AudioOut_ProcessHalf();
+  }
+}
+
+void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_A)
+  {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_tx_full_count++;
+#endif
+    AudioOut_ProcessFull();
+  }
+}
+
 void audio_tasklet_poll(void)
 {
 #if BRICK6_REFACTOR_STEP_2
