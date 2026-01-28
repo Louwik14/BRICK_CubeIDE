@@ -1,8 +1,9 @@
-../Src/audio_out.c:57:13:audio_out_fill_samples	64	static
-../Src/audio_out.c:107:6:AudioOut_DebugDump	248	static
-../Src/audio_out.c:133:6:AudioOut_Init	16	static
-../Src/audio_out.c:144:6:AudioOut_Start	8	static
-../Src/audio_out.c:154:6:AudioOut_ProcessHalf	8	static
-../Src/audio_out.c:160:6:AudioOut_ProcessFull	8	static
-../Src/audio_out.c:166:10:AudioOut_GetHalfEvents	4	static
-../Src/audio_out.c:171:10:AudioOut_GetFullEvents	4	static
+../Src/audio_out.c:61:13:audio_out_fill_samples	64	static
+../Src/audio_out.c:111:6:AudioOut_DebugDump	248	static
+../Src/audio_out.c:137:6:AudioOut_Init	16	static
+../Src/audio_out.c:150:6:AudioOut_Start	8	static
+../Src/audio_out.c:160:6:AudioOut_ProcessHalf	4	static
+../Src/audio_out.c:171:6:AudioOut_ProcessFull	4	static
+../Src/audio_out.c:182:6:audio_tasklet_poll	8	static
+../Src/audio_out.c:210:10:AudioOut_GetHalfEvents	4	static
+../Src/audio_out.c:215:10:AudioOut_GetFullEvents	4	static

@@ -49,7 +49,8 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h \
  ../Inc/cs42448.h ../Inc/audio_in.h ../Inc/audio_out.h ../Inc/midi.h \
  ../Inc/midi_host.h ../Inc/sdram.h ../Inc/sdram_alloc.h \
- ../Inc/sd_stream.h
+ ../Inc/sd_stream.h ../Inc/brick6_refactor.h ../Inc/engine_tasklet.h \
+ ../Inc/brick6_refactor.h
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -113,3 +114,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_s
 ../Inc/sdram.h:
 ../Inc/sdram_alloc.h:
 ../Inc/sd_stream.h:
+../Inc/brick6_refactor.h:
+../Inc/engine_tasklet.h:
+../Inc/brick6_refactor.h:

@@ -112,7 +112,7 @@ static void uart_log(const char *message)
 #define LOG(msg) uart_log(msg)
 #define LOGF(fmt, ...) \
   do { \
-    char __buf[128]; \
+    char __buf[256]; \
     snprintf(__buf, sizeof(__buf), fmt, __VA_ARGS__); \
     uart_log(__buf); \
   } while(0)
