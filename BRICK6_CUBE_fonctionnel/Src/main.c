@@ -43,10 +43,13 @@
 #include "sdram_alloc.h"
 #include "sd_stream.h"
 #include "engine_tasklet.h"
+#include "diagnostics_tasklet.h"
+#include "ui_tasklet.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+#if !BRICK6_REFACTOR_STEP_7
 typedef enum
 {
   SD_TEST_STATE_IDLE = 0,
@@ -55,11 +58,13 @@ typedef enum
   SD_TEST_STATE_KNOWN_WAIT,
   SD_TEST_STATE_LONG_RUN
 } sd_test_state_t;
+#endif
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#if !BRICK6_REFACTOR_STEP_7
 #define SD_TEST_ENABLE                 1U
 #define SD_TEST_MEMORY_PLACEMENT       1U
 #define SD_TEST_SECTOR0                1U
@@ -70,6 +75,7 @@ typedef enum
 #define SD_TEST_KNOWN_START_BLOCK      2048U
 #define SD_TEST_KNOWN_BLOCKS           SD_STREAM_BLOCKS_PER_BUFFER
 #define SD_TEST_KNOWN_CRC32            0x00000000U
+#endif
 
 /* USER CODE END PD */
 
@@ -81,6 +87,7 @@ typedef enum
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+#if !BRICK6_REFACTOR_STEP_7
 static uint8_t sd_test_running = 0U;
 static uint8_t sd_test_done_logged = 0U;
 static sd_test_state_t sd_test_state = SD_TEST_STATE_IDLE;
@@ -91,6 +98,7 @@ static uint32_t sd_last_buf0_count = 0U;
 static uint32_t sd_last_buf1_count = 0U;
 static uint8_t sd_test_sector0_done = 0U;
 static uint8_t sd_test_known_done = 0U;
+#endif
 
 /* USER CODE END PV */
 
@@ -105,6 +113,7 @@ void MX_USB_DEVICE_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#if !BRICK6_REFACTOR_STEP_7
 
 static void uart_log(const char *message)
 {
@@ -250,6 +259,7 @@ static uint32_t SD_CRC32(const uint8_t *data, uint32_t length)
   return ~crc;
 }
 
+#endif
 /* USER CODE END 0 */
 
 /**
@@ -291,14 +301,31 @@ int main(void)
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
+#if BRICK6_REFACTOR_STEP_7
+  diagnostics_log("FMC init OK\r\n");
+  diagnostics_log("Starting SDRAM init...\r\n");
+#else
   LOG("FMC init OK\r\n");
   LOG("Starting SDRAM init...\r\n");
+#endif
   SDRAM_Init();
+#if BRICK6_REFACTOR_STEP_7
+  diagnostics_log("SDRAM init done\r\n");
+  diagnostics_log("Starting SDRAM test...\r\n");
+#else
   LOG("SDRAM init done\r\n");
   LOG("Starting SDRAM test...\r\n");
+#endif
   SDRAM_Test();
+#if BRICK6_REFACTOR_STEP_7
+  diagnostics_sdram_alloc_test();
+#else
   SDRAM_Alloc_Test();
+#endif
 
+#if BRICK6_REFACTOR_STEP_7
+  diagnostics_on_sd_stream_init(sd_stream_init(&hsd1));
+#else
   if (sd_stream_init(&hsd1) == HAL_OK)
   {
     LOG("SD stream init OK\r\n");
@@ -313,11 +340,10 @@ int main(void)
   {
     LOG("SD stream init FAILED\r\n");
   }
+#endif
 
   MX_USB_DEVICE_Init();
   MX_USB_HOST_Init();
-  char log_buffer[128];
-
   /* Init audio */
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
@@ -376,6 +402,10 @@ int main(void)
     brick6_midi_host_poll_count++;
 #endif
 
+#if BRICK6_REFACTOR_STEP_7
+    ui_tasklet_poll();
+    diagnostics_tasklet_poll();
+#else
     static uint32_t last_led_tick = 0;
     static uint32_t last_log_tick = 0;
     static uint32_t last_error = 0;
@@ -648,6 +678,7 @@ int main(void)
         sd_test_failed = 1U;
       }
     }
+#endif
   }
 
   /* USER CODE END 3 */

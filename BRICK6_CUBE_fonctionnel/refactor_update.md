@@ -151,3 +151,32 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_6` à 0 dans `Inc/brick6_refactor.h` pour revenir aux pollers non bornés.
+
+## Step 7 — Nettoyage & diagnostics
+
+### Changements effectués
+- Ajout du module `diagnostics_tasklet` pour centraliser les logs 1 Hz, les compteurs et les diagnostics SD/SAI.
+- Déplacement des logs et du test SDRAM alloc vers le module diagnostics, avec une boucle principale simplifiée.
+- Centralisation du compteur `audio_underflow_count` dans `brick6_refactor`.
+- Ajout d’un stub `ui_tasklet_poll()` pour clarifier la boucle principale.
+- Ajout de la macro `BRICK6_REFACTOR_STEP_7` pour isoler le nettoyage.
+
+### Fichiers modifiés
+- Inc/brick6_refactor.h
+- Src/brick6_refactor.c
+- Inc/audio_out.h
+- Src/audio_out.c
+- Inc/diagnostics_tasklet.h
+- Src/diagnostics_tasklet.c
+- Inc/ui_tasklet.h
+- Src/ui_tasklet.c
+- Src/main.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Aucun changement fonctionnel audio/SD/USB/MIDI.
+- Pas de RTOS, pas de malloc, pas de changement CubeMX.
+- Les logs 1 Hz et diagnostics restent identiques, simplement centralisés.
+
+### Rollback
+- Mettre `BRICK6_REFACTOR_STEP_7` à 0 dans `Inc/brick6_refactor.h` pour revenir au diagnostics/loop précédent dans `main.c`.

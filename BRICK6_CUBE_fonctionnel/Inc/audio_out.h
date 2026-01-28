@@ -22,9 +22,6 @@ extern bool audio_test_sine_enable;
 extern bool audio_test_loopback_enable;
 extern volatile uint8_t audio_dma_half_ready;
 extern volatile uint8_t audio_dma_full_ready;
-#if BRICK6_REFACTOR_STEP_5
-extern volatile uint32_t audio_underflow_count;
-#endif
 
 void AudioOut_Init(SAI_HandleTypeDef *hsai);
 void AudioOut_Start(void);
