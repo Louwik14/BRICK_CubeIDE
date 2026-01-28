@@ -6,6 +6,7 @@
 #include "sdmmc.h"
 
 #define SD_STREAM_DATA_PATTERN_STEP 0x00010000U
+#define SD_STREAM_READY_TIMEOUT_MS  1000U
 
 static SD_HandleTypeDef *sd_handle = NULL;
 static void (*sd_logger)(const char *message) = NULL;
@@ -54,9 +55,21 @@ static void sd_stream_logf(const char *format, uint32_t value)
   }
 }
 
+static void sd_stream_logf3(const char *format, uint32_t value0, uint32_t value1,
+                            uint32_t value2)
+{
+  if (sd_logger != NULL)
+  {
+    char buffer[96];
+    (void)snprintf(buffer, sizeof(buffer), format, (unsigned long)value0,
+                   (unsigned long)value1, (unsigned long)value2);
+    sd_logger(buffer);
+  }
+}
+
 static HAL_StatusTypeDef Wait_SDCARD_Ready(void)
 {
-  uint32_t timeout = HAL_GetTick() + 1000U;
+  uint32_t timeout = HAL_GetTick() + SD_STREAM_READY_TIMEOUT_MS;
 
   while (HAL_SD_GetCardState(sd_handle) != HAL_SD_CARD_TRANSFER)
   {
@@ -103,14 +116,56 @@ void sd_stream_set_callback_logging(bool enable)
 
 HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_blocks)
 {
+  SD_CardInfoTypeDef card_info;
+  HAL_StatusTypeDef hal_status;
+  uint32_t available_blocks;
+
   if (sd_handle == NULL)
   {
     return HAL_ERROR;
   }
 
-  if ((total_blocks == 0U) || ((total_blocks % SD_STREAM_BLOCKS_PER_BUFFER) != 0U))
+  if (total_blocks == 0U)
   {
     return HAL_ERROR;
+  }
+
+  hal_status = HAL_SD_GetCardInfo(sd_handle, &card_info);
+  if (hal_status != HAL_OK)
+  {
+    sd_stream_logf3("SD card info failed: hal=%lu err=%lu state=%lu\r\n",
+                    (uint32_t)hal_status, (uint32_t)HAL_SD_GetError(sd_handle),
+                    (uint32_t)HAL_SD_GetCardState(sd_handle));
+    return HAL_ERROR;
+  }
+
+  if (start_block >= card_info.LogBlockNbr)
+  {
+    sd_stream_logf3("SD start beyond card: start=%lu total=%lu card=%lu\r\n",
+                    start_block, total_blocks, card_info.LogBlockNbr);
+    return HAL_ERROR;
+  }
+
+  available_blocks = card_info.LogBlockNbr - start_block;
+  if (total_blocks > available_blocks)
+  {
+    total_blocks = available_blocks;
+  }
+
+  if (total_blocks == 0U)
+  {
+    sd_stream_log("SD start read rejected: zero blocks after clamp\r\n");
+    return HAL_ERROR;
+  }
+
+  if ((total_blocks % SD_STREAM_BLOCKS_PER_BUFFER) != 0U)
+  {
+    total_blocks = (total_blocks / SD_STREAM_BLOCKS_PER_BUFFER) * SD_STREAM_BLOCKS_PER_BUFFER;
+    if (total_blocks == 0U)
+    {
+      sd_stream_log("SD start read rejected: block count too small\r\n");
+      return HAL_ERROR;
+    }
   }
 
   sd_rx_complete = 0U;
@@ -126,11 +181,23 @@ HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_bloc
 
   if (Wait_SDCARD_Ready() != HAL_OK)
   {
+    sd_stream_logf3("SD wait ready timeout: hal=%lu err=%lu state=%lu\r\n",
+                    (uint32_t)HAL_TIMEOUT, (uint32_t)HAL_SD_GetError(sd_handle),
+                    (uint32_t)HAL_SD_GetCardState(sd_handle));
     sd_error = 1U;
     return HAL_ERROR;
   }
 
-  return HAL_SDEx_ReadBlocksDMAMultiBuffer(sd_handle, sd_start_block, sd_total_blocks);
+  hal_status = HAL_SDEx_ReadBlocksDMAMultiBuffer(sd_handle, sd_start_block, sd_total_blocks);
+  if (hal_status != HAL_OK)
+  {
+    sd_stream_logf3("SD start read failed: hal=%lu err=%lu state=%lu\r\n",
+                    (uint32_t)hal_status, (uint32_t)HAL_SD_GetError(sd_handle),
+                    (uint32_t)HAL_SD_GetCardState(sd_handle));
+    sd_error = 1U;
+  }
+
+  return hal_status;
 }
 
 HAL_StatusTypeDef sd_stream_start_write(uint32_t start_block, uint32_t total_blocks,
