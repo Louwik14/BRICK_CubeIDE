@@ -36,7 +36,6 @@
 #include "audio_out.h"
 #include "midi.h"
 #include "midi_host.h"
-#include "w9825g6kh.h"
 #include "sdram.h"
 /* USER CODE END Includes */
 
@@ -128,32 +127,9 @@ int main(void)
   LOG("FMC init OK\r\n");
   LOG("Starting SDRAM init...\r\n");
   SDRAM_Init();
-  LOG("SDRAM init returned\r\n");
+  LOG("SDRAM init done\r\n");
   LOG("Starting SDRAM test...\r\n");
-  volatile uint32_t *p = (uint32_t*)0xC0000000;
-
-  LOG("SDRAM 32-bit RAW test start\r\n");
-
-  // Write
-  for (uint32_t i = 0; i < 1024; i++)
-  {
-      p[i] = 0x12340000 + i;
-  }
-
-  LOG("SDRAM write done\r\n");
-
-  // Read + verify
-  for (uint32_t i = 0; i < 1024; i++)
-  {
-      uint32_t v = p[i];
-      if (v != (0x12340000 + i))
-      {
-          LOGF("SDRAM ERROR at %lu: 0x%08lX\r\n", i, v);
-          Error_Handler();
-      }
-  }
-
-  LOG("SDRAM 32-bit RAW test OK\r\n");
+  SDRAM_Test();
 
 
   MX_USB_DEVICE_Init();
