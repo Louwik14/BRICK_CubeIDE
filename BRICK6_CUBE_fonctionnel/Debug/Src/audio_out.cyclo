@@ -1,9 +1,0 @@
-../Src/audio_out.c:61:13:audio_out_fill_samples	9
-../Src/audio_out.c:111:6:AudioOut_DebugDump	2
-../Src/audio_out.c:137:6:AudioOut_Init	1
-../Src/audio_out.c:150:6:AudioOut_Start	2
-../Src/audio_out.c:160:6:AudioOut_ProcessHalf	1
-../Src/audio_out.c:171:6:AudioOut_ProcessFull	1
-../Src/audio_out.c:182:6:audio_tasklet_poll	3
-../Src/audio_out.c:210:10:AudioOut_GetHalfEvents	1
-../Src/audio_out.c:215:10:AudioOut_GetFullEvents	1

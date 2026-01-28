@@ -30,6 +30,8 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
+#include "brick6_refactor.h"
+
 #include "usb_device.h"
 #include "usb_host.h"
 #include "cs42448.h"
@@ -40,7 +42,6 @@
 #include "sdram.h"
 #include "sdram_alloc.h"
 #include "sd_stream.h"
-#include "brick6_refactor.h"
 #include "engine_tasklet.h"
 /* USER CODE END Includes */
 
