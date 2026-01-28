@@ -2,6 +2,7 @@
 #include "audio_in.h"
 #include "sai.h"
 #include "usart.h"
+#include "brick6_refactor.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -25,6 +26,8 @@ static SAI_HandleTypeDef *audio_out_sai = NULL;
 
 bool audio_test_sine_enable = true;
 bool audio_test_loopback_enable = false;
+volatile uint8_t audio_dma_half_ready = 0U;
+volatile uint8_t audio_dma_full_ready = 0U;
 
 static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
   0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512, 10278,
@@ -137,6 +140,8 @@ void AudioOut_Init(SAI_HandleTypeDef *hsai)
   audio_out_phase_inc = (AUDIO_OUT_TONE_HZ * AUDIO_OUT_TABLE_SIZE * 65536U) / AUDIO_OUT_SAMPLE_RATE;
   audio_out_half_events = 0;
   audio_out_full_events = 0;
+  audio_dma_half_ready = 0U;
+  audio_dma_full_ready = 0U;
 
   audio_out_fill_samples(0U, AUDIO_OUT_BUFFER_FRAMES);
 }
@@ -153,14 +158,46 @@ void AudioOut_Start(void)
 
 void AudioOut_ProcessHalf(void)
 {
+#if BRICK6_REFACTOR_STEP_2
+  audio_dma_half_ready = 1U;
+  audio_out_half_events++;
+#else
   audio_out_fill_samples(0U, AUDIO_OUT_FRAMES_PER_HALF);
   audio_out_half_events++;
+#endif
 }
 
 void AudioOut_ProcessFull(void)
 {
+#if BRICK6_REFACTOR_STEP_2
+  audio_dma_full_ready = 1U;
+  audio_out_full_events++;
+#else
   audio_out_fill_samples(AUDIO_OUT_FRAMES_PER_HALF, AUDIO_OUT_FRAMES_PER_HALF);
   audio_out_full_events++;
+#endif
+}
+
+void audio_tasklet_poll(void)
+{
+#if BRICK6_REFACTOR_STEP_2
+  if (audio_dma_half_ready != 0U)
+  {
+    audio_dma_half_ready = 0U;
+    /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
+    audio_out_fill_samples(0U, AUDIO_OUT_FRAMES_PER_HALF);
+  }
+
+  if (audio_dma_full_ready != 0U)
+  {
+    audio_dma_full_ready = 0U;
+    /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
+    audio_out_fill_samples(AUDIO_OUT_FRAMES_PER_HALF, AUDIO_OUT_FRAMES_PER_HALF);
+  }
+#else
+  (void)audio_dma_half_ready;
+  (void)audio_dma_full_ready;
+#endif
 }
 
 uint32_t AudioOut_GetHalfEvents(void)

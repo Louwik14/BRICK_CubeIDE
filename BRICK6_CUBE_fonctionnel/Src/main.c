@@ -340,6 +340,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+#if BRICK6_REFACTOR_STEP_2
+    audio_tasklet_poll(); // PRIORITÉ ABSOLUE
+#endif
     MX_USB_HOST_Process();
 #if BRICK6_REFACTOR_STEP_1
     brick6_usb_host_poll_count++;

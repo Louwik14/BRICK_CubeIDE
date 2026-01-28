@@ -24,3 +24,29 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_1` à 0 dans `Inc/brick6_refactor.h`.
+
+## Step 2 — Move audio processing out of IRQ
+
+### Changements effectués
+- Ajout de `BRICK6_REFACTOR_STEP_2` pour activer le déplacement du traitement audio hors IRQ.
+- Ajout des flags DMA `audio_dma_half_ready` / `audio_dma_full_ready` et création de `audio_tasklet_poll()` pour déclencher le remplissage buffer hors IRQ.
+- Les callbacks audio (TX half/full) ne font plus que poser des flags et incrémenter les compteurs existants.
+- Appel de `audio_tasklet_poll()` en tout début de boucle principale.
+- Ajout de TODO pour la maintenance cache à venir (DCache/MPU STM32H7 désactivés pour l'instant).
+
+### Fichiers modifiés
+- Inc/brick6_refactor.h
+- Inc/audio_out.h
+- Src/audio_out.c
+- Src/main.c
+- refactor_update.md
+
+### Ce qui reste identique
+- La logique de génération/remplissage audio est inchangée, elle est seulement déplacée hors IRQ.
+- Les compteurs STEP 1 continuent de s'incrémenter.
+
+### TODO cache STM32H7
+- Ajouter les opérations de maintenance DCache/MPU autour du buffer DMA audio quand elles seront activées.
+
+### Rollback
+- Mettre `BRICK6_REFACTOR_STEP_2` à 0 dans `Inc/brick6_refactor.h` pour revenir au traitement audio en IRQ.

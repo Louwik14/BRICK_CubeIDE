@@ -19,11 +19,14 @@ enum
 
 extern bool audio_test_sine_enable;
 extern bool audio_test_loopback_enable;
+extern volatile uint8_t audio_dma_half_ready;
+extern volatile uint8_t audio_dma_full_ready;
 
 void AudioOut_Init(SAI_HandleTypeDef *hsai);
 void AudioOut_Start(void);
 void AudioOut_ProcessHalf(void);
 void AudioOut_ProcessFull(void);
+void audio_tasklet_poll(void);
 void AudioOut_DebugDump(void);
 uint32_t AudioOut_GetHalfEvents(void);
 uint32_t AudioOut_GetFullEvents(void);
