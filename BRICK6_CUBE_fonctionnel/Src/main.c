@@ -40,6 +40,7 @@
 #include "sdram.h"
 #include "sdram_alloc.h"
 #include "sd_stream.h"
+#include "brick6_refactor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -339,8 +340,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	MX_USB_HOST_Process();
+    MX_USB_HOST_Process();
+#if BRICK6_REFACTOR_STEP_1
+    brick6_usb_host_poll_count++;
+#endif
     midi_host_poll();
+#if BRICK6_REFACTOR_STEP_1
+    brick6_midi_host_poll_count++;
+#endif
 
     static uint32_t last_led_tick = 0;
     static uint32_t last_log_tick = 0;
@@ -366,6 +373,22 @@ int main(void)
       uint32_t rx_full = AudioIn_GetFullEvents();
 
       uint32_t frames_per_sec = full * 512;  // 512 = AUDIO_BUFFER_FRAMES
+
+#if BRICK6_REFACTOR_STEP_1
+      LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
+           "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu\r\n",
+           (unsigned long)brick6_audio_tx_half_count,
+           (unsigned long)brick6_audio_tx_full_count,
+           (unsigned long)brick6_audio_rx_half_count,
+           (unsigned long)brick6_audio_rx_full_count,
+           (unsigned long)brick6_sd_rx_cplt_count,
+           (unsigned long)brick6_sd_tx_cplt_count,
+           (unsigned long)brick6_sd_buf0_cplt_count,
+           (unsigned long)brick6_sd_buf1_cplt_count,
+           (unsigned long)brick6_sd_err_count,
+           (unsigned long)brick6_usb_host_poll_count,
+           (unsigned long)brick6_midi_host_poll_count);
+#endif
 
       snprintf(log_buffer, sizeof(log_buffer),
                "SAI TX state=%lu err=0x%08lX tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu frames/s=%lu\r\n",
@@ -636,6 +659,9 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_tx_half_count++;
+#endif
     AudioOut_ProcessHalf();
   }
 }
@@ -644,6 +670,9 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_tx_full_count++;
+#endif
     AudioOut_ProcessFull();
   }
 }
@@ -652,6 +681,9 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_B)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_rx_half_count++;
+#endif
     AudioIn_ProcessHalf();
   }
 }
@@ -660,6 +692,9 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_B)
   {
+#if BRICK6_REFACTOR_STEP_1
+    brick6_audio_rx_full_count++;
+#endif
     AudioIn_ProcessFull();
   }
 }
