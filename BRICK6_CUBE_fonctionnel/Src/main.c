@@ -23,6 +23,7 @@
 #include "sai.h"
 #include "usart.h"
 #include "gpio.h"
+#include "fmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -35,8 +36,8 @@
 #include "audio_out.h"
 #include "midi.h"
 #include "midi_host.h"
-
-
+#include "w9825g6kh.h"
+#include "sdram.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,6 +77,13 @@ static void uart_log(const char *message)
 {
   (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
 }
+#define LOG(msg) uart_log(msg)
+#define LOGF(fmt, ...) \
+  do { \
+    char __buf[128]; \
+    snprintf(__buf, sizeof(__buf), fmt, __VA_ARGS__); \
+    uart_log(__buf); \
+  } while(0)
 
 /* USER CODE END 0 */
 
@@ -115,7 +123,39 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
+  MX_FMC_Init();
   /* USER CODE BEGIN 2 */
+  LOG("FMC init OK\r\n");
+  LOG("Starting SDRAM init...\r\n");
+  SDRAM_Init();
+  LOG("SDRAM init returned\r\n");
+  LOG("Starting SDRAM test...\r\n");
+  volatile uint32_t *p = (uint32_t*)0xC0000000;
+
+  LOG("SDRAM 32-bit RAW test start\r\n");
+
+  // Write
+  for (uint32_t i = 0; i < 1024; i++)
+  {
+      p[i] = 0x12340000 + i;
+  }
+
+  LOG("SDRAM write done\r\n");
+
+  // Read + verify
+  for (uint32_t i = 0; i < 1024; i++)
+  {
+      uint32_t v = p[i];
+      if (v != (0x12340000 + i))
+      {
+          LOGF("SDRAM ERROR at %lu: 0x%08lX\r\n", i, v);
+          Error_Handler();
+      }
+  }
+
+  LOG("SDRAM 32-bit RAW test OK\r\n");
+
+
   MX_USB_DEVICE_Init();
   MX_USB_HOST_Init();
   char log_buffer[128];
@@ -328,6 +368,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  __BKPT(0);   // 🔥 force un break debugger ICI
   while (1)
   {
   }
