@@ -116,8 +116,8 @@ void sd_stream_set_callback_logging(bool enable)
 
 HAL_StatusTypeDef sd_stream_start_read(uint32_t start_block, uint32_t total_blocks)
 {
-  SD_CardInfoTypeDef card_info;
-  HAL_StatusTypeDef hal_status;
+	HAL_SD_CardInfoTypeDef card_info;
+	HAL_StatusTypeDef hal_status;
   uint32_t available_blocks;
 
   if (sd_handle == NULL)
