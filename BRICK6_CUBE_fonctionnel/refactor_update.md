@@ -50,3 +50,27 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_2` à 0 dans `Inc/brick6_refactor.h` pour revenir au traitement audio en IRQ.
+
+## Step 3 — Engine tasklet
+
+### Description
+- Ajout du module `engine_tasklet` cadencé par les frames audio (accumulateur + seuil de tick).
+- `audio_tasklet_poll()` notifie le moteur à chaque demi-buffer/plein-buffer traité.
+- `engine_tasklet_poll()` est appelé dans la boucle principale juste après l'audio.
+- Ajout du compteur `engine_tick_count` dans le log 1 Hz de STEP 1.
+
+### Fichiers modifiés
+- Inc/brick6_refactor.h
+- Inc/engine_tasklet.h
+- Src/engine_tasklet.c
+- Src/audio_out.c
+- Src/main.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Aucune logique musicale ni séquenceur.
+- Aucun changement de comportement audio (même rendu, hors IRQ).
+- Pas de modification SD/MIDI/USB/IRQ.
+
+### Rollback
+- Mettre `BRICK6_REFACTOR_STEP_3` à 0 dans `Inc/brick6_refactor.h`.
