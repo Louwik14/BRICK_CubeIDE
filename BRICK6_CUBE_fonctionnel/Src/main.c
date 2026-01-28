@@ -37,6 +37,7 @@
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
+#include "sdram_alloc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -84,6 +85,79 @@ static void uart_log(const char *message)
     uart_log(__buf); \
   } while(0)
 
+static void SDRAM_Alloc_Test_Stop(uint32_t index, uint32_t got, uint32_t expected)
+{
+  LOGF("SDRAM alloc test FAILED idx=%lu got=0x%08lX expected=0x%08lX\r\n",
+       (unsigned long)index,
+       (unsigned long)got,
+       (unsigned long)expected);
+  while (1)
+  {
+    HAL_Delay(100);
+  }
+}
+
+static void SDRAM_Alloc_Test(void)
+{
+  const uint32_t block1_size = 1024U * 1024U;
+  const uint32_t block2_size = 512U * 1024U;
+
+  SDRAM_Alloc_Reset();
+
+  uint16_t *block16 = (uint16_t *)SDRAM_Alloc(block1_size, 2U);
+  uint32_t *block32 = (uint32_t *)SDRAM_Alloc(block2_size, 4U);
+
+  LOGF("SDRAM alloc block1=%p size=%lu\r\n", (void *)block16, (unsigned long)block1_size);
+  LOGF("SDRAM alloc block2=%p size=%lu\r\n", (void *)block32, (unsigned long)block2_size);
+
+  if ((block16 == NULL) || (block32 == NULL))
+  {
+    LOG("SDRAM alloc test FAILED: out of memory\r\n");
+    while (1)
+    {
+      HAL_Delay(100);
+    }
+  }
+
+  /* 16-bit pattern test (safe on x16 bus). */
+  uint32_t count16 = block1_size / sizeof(uint16_t);
+  for (uint32_t i = 0; i < count16; i++)
+  {
+    block16[i] = (uint16_t)(0xA500U ^ (uint16_t)i);
+  }
+
+  for (uint32_t i = 0; i < count16; i++)
+  {
+    uint16_t expected = (uint16_t)(0xA500U ^ (uint16_t)i);
+    if (block16[i] != expected)
+    {
+      SDRAM_Alloc_Test_Stop(i, block16[i], expected);
+    }
+  }
+
+  /* 32-bit pattern test using swap-safe helpers. */
+  uint32_t count32 = block2_size / sizeof(uint32_t);
+  uint32_t base_index = ((uint32_t)(uintptr_t)block32 - SDRAM_BANK_ADDR) / sizeof(uint32_t);
+
+  for (uint32_t i = 0; i < count32; i++)
+  {
+    uint32_t value = 0x5A5A0000U | (i & 0xFFFFU);
+    sdram_write32(base_index + i, value);
+  }
+
+  for (uint32_t i = 0; i < count32; i++)
+  {
+    uint32_t expected = 0x5A5A0000U | (i & 0xFFFFU);
+    uint32_t read_value = sdram_read32(base_index + i);
+    if (read_value != expected)
+    {
+      SDRAM_Alloc_Test_Stop(i, read_value, expected);
+    }
+  }
+
+  LOG("SDRAM alloc test OK\r\n");
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -130,6 +204,7 @@ int main(void)
   LOG("SDRAM init done\r\n");
   LOG("Starting SDRAM test...\r\n");
   SDRAM_Test();
+  SDRAM_Alloc_Test();
 
 
   MX_USB_DEVICE_Init();

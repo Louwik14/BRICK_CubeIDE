@@ -28,8 +28,19 @@ void SDRAM_Init(void);
 void SDRAM_Test(void);
 
 /* =========================================================
- * 32-bit access helpers for x16 FMC bus (STM32H7)
- * FMC swaps halfwords => we compensate in software
+ * ⚠️ Important note about 32-bit access on x16 FMC (STM32H7)
+ *
+ * The FMC bus is configured in x16 mode. When the CPU performs
+ * 32-bit accesses, the FMC swaps the two 16-bit halfwords.
+ * This means *direct* 32-bit reads/writes in SDRAM are corrupted.
+ *
+ * Rules of thumb:
+ *  - ✅ 16-bit buffers are safe for audio/streaming.
+ *  - ✅ Use sdram_write32/sdram_read32 (or an adapted memcpy) when
+ *    you need 32-bit data.
+ *  - ✅ If needed later, add an abstraction layer to hide this.
+ *
+ * Do NOT use direct 32-bit pointers on SDRAM without the swap.
  * ========================================================= */
 
 static inline uint32_t sdram_swap16(uint32_t value)
