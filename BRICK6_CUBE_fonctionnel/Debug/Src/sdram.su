@@ -1,0 +1,7 @@
+../Inc/sdram.h:46:24:sdram_swap16	16	static
+../Inc/sdram.h:51:20:sdram_write32	32	static
+../Inc/sdram.h:57:24:sdram_read32	24	static
+../Src/sdram.c:27:6:SDRAM_Init	16	static
+../Src/sdram.c:38:6:SDRAM_Test	160	static
+../Src/sdram.c:97:13:SDRAM_Initialization_Sequence	24	static
+../Src/sdram.c:146:13:Fill_Buffer	32	static

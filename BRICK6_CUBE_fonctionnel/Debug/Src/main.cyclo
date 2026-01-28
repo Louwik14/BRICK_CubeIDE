@@ -1,0 +1,17 @@
+../Inc/sdram.h:46:24:sdram_swap16	1
+../Inc/sdram.h:51:20:sdram_write32	1
+../Inc/sdram.h:57:24:sdram_read32	1
+../Src/main.c:109:13:uart_log	1
+../Src/main.c:121:13:SDRAM_Alloc_Test_Stop	1
+../Src/main.c:133:13:SDRAM_Alloc_Test	9
+../Src/main.c:194:20:SD_MemoryRegion	11
+../Src/main.c:220:13:SD_LogHex	4
+../Src/main.c:238:17:SD_CRC32	3
+../Src/main.c:259:5:main	33
+../Src/main.c:607:6:SystemClock_Config	4
+../Src/main.c:666:6:PeriphCommonClock_Config	2
+../Src/main.c:690:6:HAL_SAI_TxHalfCpltCallback	2
+../Src/main.c:701:6:HAL_SAI_TxCpltCallback	2
+../Src/main.c:712:6:HAL_SAI_RxHalfCpltCallback	2
+../Src/main.c:723:6:HAL_SAI_RxCpltCallback	2
+../Src/main.c:740:6:Error_Handler	1

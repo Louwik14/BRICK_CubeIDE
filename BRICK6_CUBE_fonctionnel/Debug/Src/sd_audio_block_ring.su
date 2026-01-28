@@ -1,0 +1,7 @@
+../Src/sd_audio_block_ring.c:4:17:audio_block_ring_advance	16	static
+../Src/sd_audio_block_ring.c:11:6:audio_block_ring_init	16	static
+../Src/sd_audio_block_ring.c:23:10:audio_block_ring_get_write_ptr	16	static
+../Src/sd_audio_block_ring.c:33:6:audio_block_ring_produce	16	static
+../Src/sd_audio_block_ring.c:44:10:audio_block_ring_get_read_ptr	16	static
+../Src/sd_audio_block_ring.c:54:6:audio_block_ring_consume	16	static
+../Src/sd_audio_block_ring.c:65:10:audio_block_ring_fill_level	16	static

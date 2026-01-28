@@ -61,6 +61,7 @@
 "./Src/midi.o"
 "./Src/midi_host.o"
 "./Src/sai.o"
+"./Src/sd_audio_block_ring.o"
 "./Src/sd_stream.o"
 "./Src/sdmmc.o"
 "./Src/sdram.o"

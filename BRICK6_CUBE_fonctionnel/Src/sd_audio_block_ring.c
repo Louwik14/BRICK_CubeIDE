@@ -1,4 +1,5 @@
 #include "sd_audio_block_ring.h"
+#include <stddef.h>
 
 static uint32_t audio_block_ring_advance(uint32_t index)
 {
