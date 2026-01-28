@@ -41,6 +41,7 @@
 #include "sdram_alloc.h"
 #include "sd_stream.h"
 #include "brick6_refactor.h"
+#include "engine_tasklet.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -320,6 +321,10 @@ int main(void)
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
 
+#if BRICK6_REFACTOR_STEP_3
+  engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
+#endif
+
 
   AudioOut_Start();
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
@@ -342,6 +347,9 @@ int main(void)
     /* USER CODE BEGIN 3 */
 #if BRICK6_REFACTOR_STEP_2
     audio_tasklet_poll(); // PRIORITÉ ABSOLUE
+#endif
+#if BRICK6_REFACTOR_STEP_3
+    engine_tasklet_poll();
 #endif
     MX_USB_HOST_Process();
 #if BRICK6_REFACTOR_STEP_1
@@ -378,6 +386,22 @@ int main(void)
       uint32_t frames_per_sec = full * 512;  // 512 = AUDIO_BUFFER_FRAMES
 
 #if BRICK6_REFACTOR_STEP_1
+#if BRICK6_REFACTOR_STEP_3
+      LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
+           "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu engine_ticks=%lu\r\n",
+           (unsigned long)brick6_audio_tx_half_count,
+           (unsigned long)brick6_audio_tx_full_count,
+           (unsigned long)brick6_audio_rx_half_count,
+           (unsigned long)brick6_audio_rx_full_count,
+           (unsigned long)brick6_sd_rx_cplt_count,
+           (unsigned long)brick6_sd_tx_cplt_count,
+           (unsigned long)brick6_sd_buf0_cplt_count,
+           (unsigned long)brick6_sd_buf1_cplt_count,
+           (unsigned long)brick6_sd_err_count,
+           (unsigned long)brick6_usb_host_poll_count,
+           (unsigned long)brick6_midi_host_poll_count,
+           (unsigned long)engine_tick_count);
+#else
       LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
            "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu\r\n",
            (unsigned long)brick6_audio_tx_half_count,
@@ -391,6 +415,7 @@ int main(void)
            (unsigned long)brick6_sd_err_count,
            (unsigned long)brick6_usb_host_poll_count,
            (unsigned long)brick6_midi_host_poll_count);
+#endif
 #endif
 
       snprintf(log_buffer, sizeof(log_buffer),

@@ -1,5 +1,6 @@
 #include "audio_out.h"
 #include "audio_in.h"
+#include "engine_tasklet.h"
 #include "sai.h"
 #include "usart.h"
 #include "brick6_refactor.h"
@@ -186,6 +187,9 @@ void audio_tasklet_poll(void)
     audio_dma_half_ready = 0U;
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
     audio_out_fill_samples(0U, AUDIO_OUT_FRAMES_PER_HALF);
+#if BRICK6_REFACTOR_STEP_3
+    engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
+#endif
   }
 
   if (audio_dma_full_ready != 0U)
@@ -193,6 +197,9 @@ void audio_tasklet_poll(void)
     audio_dma_full_ready = 0U;
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
     audio_out_fill_samples(AUDIO_OUT_FRAMES_PER_HALF, AUDIO_OUT_FRAMES_PER_HALF);
+#if BRICK6_REFACTOR_STEP_3
+    engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
+#endif
   }
 #else
   (void)audio_dma_half_ready;
