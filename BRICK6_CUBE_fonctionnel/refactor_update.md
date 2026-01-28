@@ -217,3 +217,24 @@
 
 ### Rollback
 - Revenir au commit précédent pour restaurer les callbacks SAI dans `main.c`.
+
+## Step 8 — PASS 3 : Extraction de l’initialisation applicative (CubeMX-safe)
+
+### Changements effectués
+- Création du module `brick6_app_init` pour encapsuler l'initialisation applicative non CubeMX.
+- Déplacement dans `brick6_app_init()` de la logique SDRAM, SD, USB, audio et MIDI initialement située dans `main.c` (USER CODE BEGIN 2).
+- Remplacement du bloc USER CODE BEGIN 2 de `main.c` par un simple appel à `brick6_app_init()`.
+
+### Fichiers modifiés
+- Inc/brick6_app_init.h
+- Src/brick6_app_init.c
+- Src/main.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- Ordre d'initialisation identique, mêmes appels et mêmes paramètres.
+- Aucun déplacement de code CubeMX (`MX_*_Init()` conservés dans `main.c`).
+- Aucun changement fonctionnel (SDRAM/SD/USB/audio/MIDI strictement identiques).
+
+### Rollback
+- Revenir au commit précédent ou replacer le contenu de `brick6_app_init()` dans `main.c` (USER CODE BEGIN 2).

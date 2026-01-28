@@ -42,6 +42,7 @@
 #include "engine_tasklet.h"
 #include "diagnostics_tasklet.h"
 #include "ui_tasklet.h"
+#include "brick6_app_init.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -114,36 +115,7 @@ int main(void)
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
-  diagnostics_log("FMC init OK\r\n");
-  diagnostics_log("Starting SDRAM init...\r\n");
-  SDRAM_Init();
-  diagnostics_log("SDRAM init done\r\n");
-  diagnostics_log("Starting SDRAM test...\r\n");
-  SDRAM_Test();
-  diagnostics_sdram_alloc_test();
-
-  diagnostics_on_sd_stream_init(sd_stream_init(&hsd1));
-
-  MX_USB_DEVICE_Init();
-  MX_USB_HOST_Init();
-  /* Init audio */
-  AudioOut_Init(&hsai_BlockA1);
-  AudioIn_Init(&hsai_BlockB1);
-
-#if BRICK6_REFACTOR_STEP_3
-  engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
-#endif
-
-
-  AudioOut_Start();
-  (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
-                            (uint8_t *)AudioIn_GetBuffer(),
-                            AudioIn_GetBufferSamples());
-
-  HAL_Delay(200);
-
-  /* Init MIDI */
-  midi_init();
+  brick6_app_init();
 
   /* USER CODE END 2 */
 
