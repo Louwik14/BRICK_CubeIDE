@@ -97,3 +97,29 @@
 
 ### Rollback
 - Mettre `BRICK6_REFACTOR_STEP_4` à 0 dans `Inc/brick6_refactor.h` pour revenir au flux SD avec attentes actives.
+
+## Step 5 — Ring buffer blocs SD → Audio
+
+### Changements effectués
+- Ajout d'un module de ring buffer de blocs audio (tableau statique) avec API minimale de production/consommation.
+- Le SD ne remplit plus directement les buffers audio : les callbacks SD posent des flags et la tasklet copie les buffers DMA dans le ring buffer.
+- L'audio consomme désormais des blocs du ring buffer pour remplir le DMA, et joue du silence en cas d'underflow avec compteur dédié.
+- Mise en place d'une logique de pré-remplissage des blocs côté SD avant d'entrer en streaming, et limitation du démarrage des chunks si le ring est plein.
+- Ajout de la macro `BRICK6_REFACTOR_STEP_5` pour isoler le nouveau flux.
+
+### Fichiers modifiés
+- Inc/brick6_refactor.h
+- Inc/audio_out.h
+- Inc/sd_audio_block_ring.h
+- Src/audio_out.c
+- Src/sd_audio_block_ring.c
+- Src/sd_stream.c
+- refactor_update.md
+
+### Ce qui ne change pas
+- L'API publique SD reste identique (start/read/write, stats, buffers).
+- Les callbacks IRQ restent courts (flags uniquement).
+- Aucune modification CubeMX, pas de RTOS, pas de malloc.
+
+### Rollback
+- Mettre `BRICK6_REFACTOR_STEP_5` à 0 dans `Inc/brick6_refactor.h` pour revenir au remplissage audio précédent.
