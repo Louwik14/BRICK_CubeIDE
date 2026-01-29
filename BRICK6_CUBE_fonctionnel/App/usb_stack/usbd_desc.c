@@ -181,6 +181,16 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   0x80,                           /* bmAttributes: Bus Powered */
   0xFA,                           /* MaxPower 500 mA */
 
+  /* Audio Function IAD */
+  0x08,                           /* bLength */
+  0x0B,                           /* bDescriptorType: IAD */
+  BRICK6_AUDIO_CONTROL_IF,        /* bFirstInterface */
+  0x02,                           /* bInterfaceCount */
+  0x01,                           /* bFunctionClass: AUDIO */
+  0x00,                           /* bFunctionSubClass */
+  0x00,                           /* bFunctionProtocol */
+  0x00,                           /* iFunction */
+
   /* Audio Control Interface */
   0x09,                           /* bLength */
   USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
@@ -300,8 +310,8 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   0x01,                           /* bDescriptorSubtype: MS_HEADER subtype */
   0x00,
   0x01,                           /* BcdADC: Revision of this class specification */
-  USB_MIDI_INTERFACE_DESC_SIZE,
-  0x00,                           /* wTotalLength: Total size of class-specific descriptors */
+  LOBYTE(BRICK6_MIDI_CLASS_DESC_SIZE),
+  HIBYTE(BRICK6_MIDI_CLASS_DESC_SIZE), /* wTotalLength: Total size of class-specific descriptors */
 
 #if MIDI_IN_PORTS_NUM >= 1
   /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
@@ -640,7 +650,7 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
 #endif
 
   /******************** MIDI Adapter Standard Bulk OUT Endpoint Descriptor ********************/
-  0x09,                           /* bLength: Endpoint Descriptor size */
+  0x07,                           /* bLength: Endpoint Descriptor size */
   USB_DESC_TYPE_ENDPOINT,         /* bDescriptorType: Endpoint */
   MIDI_EPOUT_ADDR,                /* bEndpointAddress: OUT Endpoint */
   0x02,                           /* bmAttributes: Bulk */
@@ -679,7 +689,7 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
 #endif
 
   /******************** MIDI Adapter Standard Bulk IN Endpoint Descriptor ********************/
-  0x09,                           /* bLength: Endpoint Descriptor size */
+  0x07,                           /* bLength: Endpoint Descriptor size */
   USB_DESC_TYPE_ENDPOINT,         /* bDescriptorType: Endpoint */
   MIDI_EPIN_ADDR,                 /* bEndpointAddress: IN Endpoint */
   0x02,                           /* bmAttributes: Bulk */
