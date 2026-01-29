@@ -1,4 +1,5 @@
 #include "usbd_brick6_composite.h"
+#include "usbd_desc.h"
 #include "usbd_midi.h"
 
 static uint8_t USBD_BRICK6_COMPOSITE_Init(USBD_HandleTypeDef *pdev, uint8_t cfgidx);
@@ -55,11 +56,7 @@ static uint8_t USBD_BRICK6_COMPOSITE_Setup(USBD_HandleTypeDef *pdev, USBD_SetupR
 
 static uint8_t *USBD_BRICK6_COMPOSITE_GetCfgDesc(uint16_t *length)
 {
-  if (USBD_MIDI.GetFSConfigDescriptor != NULL)
-  {
-    return USBD_MIDI.GetFSConfigDescriptor(length);
-  }
-  return NULL;
+  return USBD_BRICK6_CompositeCfgDesc(length);
 }
 
 static uint8_t *USBD_BRICK6_COMPOSITE_GetDeviceQualifierDesc(uint16_t *length)

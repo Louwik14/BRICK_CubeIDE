@@ -46,3 +46,25 @@
 
 ### Prochaine étape prévue
 - Passe 3 : ajouter les descripteurs audio dans la classe composite (sans activer la logique audio).
+
+## Passe 3 — Descripteurs USB Audio
+
+### Ce que j'ai fait
+- Étendu le descripteur de configuration pour exposer une interface Audio Control et une interface Audio Streaming IN (UAC1, 48 kHz, stéréo, 24 bits dans 32 bits).
+- Branché le composite sur ce nouveau descripteur afin que l'énumération présente MIDI + Audio.
+
+### Fichiers modifiés
+- Modification : `App/usb_stack/usbd_desc.c`
+- Modification : `App/usb_stack/usbd_desc.h`
+- Modification : `App/usb_stack/usbd_brick6_composite.c`
+- Modification : `update_usb_audio.md`
+
+### Ce que le PC voit maintenant
+- Le périphérique MIDI existant (inchangé).
+- Un périphérique Audio (carte son) en plus, sans flux actif.
+
+### Ce qui ne fait encore rien
+- Aucun endpoint audio n'est ouvert ni alimenté : pas de streaming, pas de silence, pas de logique audio.
+
+### Prochaine étape prévue
+- Passe 4 : activer l'endpoint IN et envoyer du silence.

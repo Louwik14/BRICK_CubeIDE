@@ -120,6 +120,7 @@ extern USBD_DescriptorsTypeDef FS_Desc;
   */
 
 /* USER CODE BEGIN EXPORTED_FUNCTIONS */
+uint8_t *USBD_BRICK6_CompositeCfgDesc(uint16_t *length);
 
 /* USER CODE END EXPORTED_FUNCTIONS */
 
@@ -140,4 +141,3 @@ extern USBD_DescriptorsTypeDef FS_Desc;
 #endif
 
 #endif /* __USBD_DESC__C__ */
-
