@@ -7,8 +7,10 @@
 C_SRCS += \
 ../Src/audio_in.c \
 ../Src/audio_out.c \
+../Src/brick6_app_init.c \
 ../Src/brick6_refactor.c \
 ../Src/cs42448.c \
+../Src/diagnostics_tasklet.c \
 ../Src/dma.c \
 ../Src/engine_tasklet.c \
 ../Src/fmc.c \
@@ -28,6 +30,7 @@ C_SRCS += \
 ../Src/syscalls.c \
 ../Src/sysmem.c \
 ../Src/system_stm32h7xx.c \
+../Src/ui_tasklet.c \
 ../Src/usart.c \
 ../Src/usbh_midi.c \
 ../Src/w9825g6kh.c 
@@ -35,8 +38,10 @@ C_SRCS += \
 OBJS += \
 ./Src/audio_in.o \
 ./Src/audio_out.o \
+./Src/brick6_app_init.o \
 ./Src/brick6_refactor.o \
 ./Src/cs42448.o \
+./Src/diagnostics_tasklet.o \
 ./Src/dma.o \
 ./Src/engine_tasklet.o \
 ./Src/fmc.o \
@@ -56,6 +61,7 @@ OBJS += \
 ./Src/syscalls.o \
 ./Src/sysmem.o \
 ./Src/system_stm32h7xx.o \
+./Src/ui_tasklet.o \
 ./Src/usart.o \
 ./Src/usbh_midi.o \
 ./Src/w9825g6kh.o 
@@ -63,8 +69,10 @@ OBJS += \
 C_DEPS += \
 ./Src/audio_in.d \
 ./Src/audio_out.d \
+./Src/brick6_app_init.d \
 ./Src/brick6_refactor.d \
 ./Src/cs42448.d \
+./Src/diagnostics_tasklet.d \
 ./Src/dma.d \
 ./Src/engine_tasklet.d \
 ./Src/fmc.d \
@@ -84,6 +92,7 @@ C_DEPS += \
 ./Src/syscalls.d \
 ./Src/sysmem.d \
 ./Src/system_stm32h7xx.d \
+./Src/ui_tasklet.d \
 ./Src/usart.d \
 ./Src/usbh_midi.d \
 ./Src/w9825g6kh.d 
@@ -96,7 +105,7 @@ Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
 clean: clean-Src
 
 clean-Src:
-	-$(RM) ./Src/audio_in.cyclo ./Src/audio_in.d ./Src/audio_in.o ./Src/audio_in.su ./Src/audio_out.cyclo ./Src/audio_out.d ./Src/audio_out.o ./Src/audio_out.su ./Src/brick6_refactor.cyclo ./Src/brick6_refactor.d ./Src/brick6_refactor.o ./Src/brick6_refactor.su ./Src/cs42448.cyclo ./Src/cs42448.d ./Src/cs42448.o ./Src/cs42448.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/engine_tasklet.cyclo ./Src/engine_tasklet.d ./Src/engine_tasklet.o ./Src/engine_tasklet.su ./Src/fmc.cyclo ./Src/fmc.d ./Src/fmc.o ./Src/fmc.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/midi.cyclo ./Src/midi.d ./Src/midi.o ./Src/midi.su ./Src/midi_host.cyclo ./Src/midi_host.d ./Src/midi_host.o ./Src/midi_host.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/sd_audio_block_ring.cyclo ./Src/sd_audio_block_ring.d ./Src/sd_audio_block_ring.o ./Src/sd_audio_block_ring.su ./Src/sd_stream.cyclo ./Src/sd_stream.d ./Src/sd_stream.o ./Src/sd_stream.su ./Src/sdmmc.cyclo ./Src/sdmmc.d ./Src/sdmmc.o ./Src/sdmmc.su ./Src/sdram.cyclo ./Src/sdram.d ./Src/sdram.o ./Src/sdram.su ./Src/sdram_alloc.cyclo ./Src/sdram_alloc.d ./Src/sdram_alloc.o ./Src/sdram_alloc.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su ./Src/usbh_midi.cyclo ./Src/usbh_midi.d ./Src/usbh_midi.o ./Src/usbh_midi.su ./Src/w9825g6kh.cyclo ./Src/w9825g6kh.d ./Src/w9825g6kh.o ./Src/w9825g6kh.su
+	-$(RM) ./Src/audio_in.cyclo ./Src/audio_in.d ./Src/audio_in.o ./Src/audio_in.su ./Src/audio_out.cyclo ./Src/audio_out.d ./Src/audio_out.o ./Src/audio_out.su ./Src/brick6_app_init.cyclo ./Src/brick6_app_init.d ./Src/brick6_app_init.o ./Src/brick6_app_init.su ./Src/brick6_refactor.cyclo ./Src/brick6_refactor.d ./Src/brick6_refactor.o ./Src/brick6_refactor.su ./Src/cs42448.cyclo ./Src/cs42448.d ./Src/cs42448.o ./Src/cs42448.su ./Src/diagnostics_tasklet.cyclo ./Src/diagnostics_tasklet.d ./Src/diagnostics_tasklet.o ./Src/diagnostics_tasklet.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/engine_tasklet.cyclo ./Src/engine_tasklet.d ./Src/engine_tasklet.o ./Src/engine_tasklet.su ./Src/fmc.cyclo ./Src/fmc.d ./Src/fmc.o ./Src/fmc.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/midi.cyclo ./Src/midi.d ./Src/midi.o ./Src/midi.su ./Src/midi_host.cyclo ./Src/midi_host.d ./Src/midi_host.o ./Src/midi_host.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/sd_audio_block_ring.cyclo ./Src/sd_audio_block_ring.d ./Src/sd_audio_block_ring.o ./Src/sd_audio_block_ring.su ./Src/sd_stream.cyclo ./Src/sd_stream.d ./Src/sd_stream.o ./Src/sd_stream.su ./Src/sdmmc.cyclo ./Src/sdmmc.d ./Src/sdmmc.o ./Src/sdmmc.su ./Src/sdram.cyclo ./Src/sdram.d ./Src/sdram.o ./Src/sdram.su ./Src/sdram_alloc.cyclo ./Src/sdram_alloc.d ./Src/sdram_alloc.o ./Src/sdram_alloc.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/ui_tasklet.cyclo ./Src/ui_tasklet.d ./Src/ui_tasklet.o ./Src/ui_tasklet.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su ./Src/usbh_midi.cyclo ./Src/usbh_midi.d ./Src/usbh_midi.o ./Src/usbh_midi.su ./Src/w9825g6kh.cyclo ./Src/w9825g6kh.d ./Src/w9825g6kh.o ./Src/w9825g6kh.su
 
 .PHONY: clean-Src
 

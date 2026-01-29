@@ -2,4 +2,5 @@
 ../App/usb_stack/usb_host.c:43:13:uart_log_status	120	static
 ../App/usb_stack/usb_host.c:58:6:MX_USB_HOST_Init	16	static
 ../App/usb_stack/usb_host.c:96:6:MX_USB_HOST_Process	8	static
-../App/usb_stack/usb_host.c:104:13:USBH_UserProcess	16	static
+../App/usb_stack/usb_host.c:101:6:usb_host_tasklet_poll_bounded	24	static
+../App/usb_stack/usb_host.c:127:13:USBH_UserProcess	16	static

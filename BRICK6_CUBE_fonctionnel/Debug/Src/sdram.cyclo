@@ -1,7 +1,7 @@
 ../Inc/sdram.h:46:24:sdram_swap16	1
 ../Inc/sdram.h:51:20:sdram_write32	1
 ../Inc/sdram.h:57:24:sdram_read32	1
-../Src/sdram.c:27:6:SDRAM_Init	1
-../Src/sdram.c:38:6:SDRAM_Test	6
-../Src/sdram.c:97:13:SDRAM_Initialization_Sequence	1
-../Src/sdram.c:146:13:Fill_Buffer	2
+../Src/sdram.c:55:6:SDRAM_Init	1
+../Src/sdram.c:66:6:SDRAM_Test	6
+../Src/sdram.c:125:13:SDRAM_Initialization_Sequence	1
+../Src/sdram.c:174:13:Fill_Buffer	2

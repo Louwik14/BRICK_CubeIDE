@@ -1,4 +1,4 @@
-../Src/sdram_alloc.c:10:6:SDRAM_Alloc_Init	1
-../Src/sdram_alloc.c:17:6:SDRAM_Alloc_Reset	1
-../Src/sdram_alloc.c:22:17:Align_Up	2
-../Src/sdram_alloc.c:33:7:SDRAM_Alloc	2
+../Src/sdram_alloc.c:38:6:SDRAM_Alloc_Init	1
+../Src/sdram_alloc.c:45:6:SDRAM_Alloc_Reset	1
+../Src/sdram_alloc.c:50:17:Align_Up	2
+../Src/sdram_alloc.c:61:7:SDRAM_Alloc	2

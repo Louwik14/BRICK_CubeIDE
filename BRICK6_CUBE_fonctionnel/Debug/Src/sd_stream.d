@@ -1,4 +1,5 @@
 Src/sd_stream.o: ../Src/sd_stream.c ../Inc/sd_stream.h \
+ ../Inc/brick6_refactor.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -44,6 +45,7 @@ Src/sd_stream.o: ../Src/sd_stream.c ../Inc/sd_stream.h \
  ../Inc/brick6_refactor.h ../Inc/sd_audio_block_ring.h ../Inc/sdmmc.h \
  ../Inc/main.h
 ../Inc/sd_stream.h:
+../Inc/brick6_refactor.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:

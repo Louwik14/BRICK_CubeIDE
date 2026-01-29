@@ -434,7 +434,6 @@ HAL_StatusTypeDef sd_stream_start_write(uint32_t start_block, uint32_t total_blo
   return HAL_OK;
 
   return sd_stream_start_chunk(SD_STREAM_OP_WRITE);
-#endif
 }
 
 bool sd_stream_is_busy(void)
