@@ -48,6 +48,7 @@
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths.1236227422" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/usb_stack&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Class/CompositeBuilder/Inc&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc&quot;"/>
@@ -132,6 +133,7 @@
 						<entry excluding="usb_otg.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Src"/>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Host_Library/Core/Src"/>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Device_Library/Core/Src"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Device_Library/Class/CompositeBuilder/Src"/>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 					</sourceEntries>
@@ -181,6 +183,12 @@
 									<listOptionValue builtIn="false" value="STM32H743xx"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths.1125602316" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/usb_stack&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Class/CompositeBuilder/Inc&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI&quot;"/>
 									<listOptionValue builtIn="false" value="../Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32H7xx_HAL_Driver/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"/>
@@ -213,8 +221,13 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/usb_stack"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
 						<entry excluding="usb_otg.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Src"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Host_Library/Core/Src"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Device_Library/Core/Src"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Device_Library/Class/CompositeBuilder/Src"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 					</sourceEntries>
 				</configuration>
