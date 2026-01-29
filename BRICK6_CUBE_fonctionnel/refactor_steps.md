@@ -38,7 +38,7 @@ Contraintes :
 
 **Modifs**
 
-* Ajouter compteurs `volatile` sous macro `BRICK6_REFACTOR_STEP_1`
+* Ajouter compteurs `volatile` sous macro STEP 1
 * Incrémenter dans :
 
   * callbacks audio DMA
@@ -74,7 +74,7 @@ Contraintes :
 * `main.c` :
 
   * appeler `audio_tasklet_poll()` **en premier**
-* Macro : `BRICK6_REFACTOR_STEP_2`
+* Macro : STEP 2
 
 **Attention STM32H7**
 
@@ -111,7 +111,7 @@ Contraintes :
   * `engine_tasklet.c/.h`
   * compteur de frames, rien de plus
 * Appelé après audio tasklet
-* Macro : `BRICK6_REFACTOR_STEP_3`
+* Macro : STEP 3
 
 **Tests**
 
@@ -135,7 +135,7 @@ Contraintes :
 
   * callbacks = flags seulement
   * supprimer `Wait_SDCARD_Ready()` en IRQ
-* Macro : `BRICK6_REFACTOR_STEP_4A`
+* Macro : STEP 4A
 
 **Tests**
 
@@ -247,7 +247,7 @@ Contraintes :
 
 * Macros :
 
-  * `BRICK6_REFACTOR_STEP_*`
+  * STEP_* (déprécié)
   * `BRICK6_DEBUG_PIN`
 * Logs :
 
@@ -283,4 +283,3 @@ Quand tu les réactiveras :
 > C’est une **trajectoire de migration contrôlée** vers une architecture solide pour une groovebox complète (UI, séquenceur, synthés, streaming, etc).
 
 ---
-

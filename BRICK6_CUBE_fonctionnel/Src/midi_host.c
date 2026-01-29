@@ -62,10 +62,8 @@ static uint8_t midi_host_cin_to_length(uint8_t cin)
 
 void midi_host_poll(void)
 {
-#if BRICK6_REFACTOR_STEP_6
   midi_host_poll_bounded(MIDI_BUDGET_MSGS);
   return;
-#endif
 
   if (!USBH_MIDI_IsReady(&hUsbHostHS))
   {
@@ -91,9 +89,11 @@ void midi_host_poll(void)
   }
 }
 
-#if BRICK6_REFACTOR_STEP_6
 void midi_host_poll_bounded(uint32_t max_msgs)
 {
+#if BRICK6_ENABLE_DIAGNOSTICS
+  brick6_midi_host_poll_count++;
+#endif
   if (!USBH_MIDI_IsReady(&hUsbHostHS))
   {
     return;
@@ -120,10 +120,11 @@ void midi_host_poll_bounded(uint32_t max_msgs)
 
   if ((max_msgs > 0U) && (n >= max_msgs))
   {
+#if BRICK6_ENABLE_DIAGNOSTICS
     midi_budget_hit_count++;
+#endif
   }
 }
-#endif
 
 static bool midi_host_encode_packet(const uint8_t *msg, size_t len,
                                     uint8_t packet[USBH_MIDI_PACKET_SIZE])

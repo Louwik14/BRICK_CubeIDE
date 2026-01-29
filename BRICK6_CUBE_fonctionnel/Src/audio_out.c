@@ -139,7 +139,6 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
   }
 }
 
-#if BRICK6_REFACTOR_STEP_5
 static void audio_out_copy_ring_block(uint32_t frame_offset)
 {
   uint32_t sample_offset = frame_offset * AUDIO_OUT_WORDS_PER_FRAME;
@@ -169,10 +168,11 @@ static void audio_out_copy_ring_block(uint32_t frame_offset)
 
   if (underflow != 0U)
   {
+#if BRICK6_ENABLE_DIAGNOSTICS
     audio_underflow_count++;
+#endif
   }
 }
-#endif
 
 void AudioOut_DebugDump(void)
 {
@@ -209,7 +209,7 @@ void AudioOut_Init(SAI_HandleTypeDef *hsai)
   audio_out_full_events = 0;
   audio_dma_half_ready = 0U;
   audio_dma_full_ready = 0U;
-#if BRICK6_REFACTOR_STEP_5
+#if BRICK6_ENABLE_DIAGNOSTICS
   audio_underflow_count = 0U;
 #endif
 
@@ -228,31 +228,21 @@ void AudioOut_Start(void)
 
 void AudioOut_ProcessHalf(void)
 {
-#if BRICK6_REFACTOR_STEP_2
   audio_dma_half_ready = 1U;
   audio_out_half_events++;
-#else
-  audio_out_fill_samples(0U, AUDIO_OUT_FRAMES_PER_HALF);
-  audio_out_half_events++;
-#endif
 }
 
 void AudioOut_ProcessFull(void)
 {
-#if BRICK6_REFACTOR_STEP_2
   audio_dma_full_ready = 1U;
   audio_out_full_events++;
-#else
-  audio_out_fill_samples(AUDIO_OUT_FRAMES_PER_HALF, AUDIO_OUT_FRAMES_PER_HALF);
-  audio_out_full_events++;
-#endif
 }
 
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-#if BRICK6_REFACTOR_STEP_1
+#if BRICK6_ENABLE_DIAGNOSTICS
     brick6_audio_tx_half_count++;
 #endif
     AudioOut_ProcessHalf();
@@ -263,7 +253,7 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-#if BRICK6_REFACTOR_STEP_1
+#if BRICK6_ENABLE_DIAGNOSTICS
     brick6_audio_tx_full_count++;
 #endif
     AudioOut_ProcessFull();
@@ -272,38 +262,21 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 
 void audio_tasklet_poll(void)
 {
-#if BRICK6_REFACTOR_STEP_2
   if (audio_dma_half_ready != 0U)
   {
     audio_dma_half_ready = 0U;
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-#if BRICK6_REFACTOR_STEP_5
     audio_out_copy_ring_block(0U);
-#else
-    audio_out_fill_samples(0U, AUDIO_OUT_FRAMES_PER_HALF);
-#endif
-#if BRICK6_REFACTOR_STEP_3
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
-#endif
   }
 
   if (audio_dma_full_ready != 0U)
   {
     audio_dma_full_ready = 0U;
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-#if BRICK6_REFACTOR_STEP_5
     audio_out_copy_ring_block(AUDIO_OUT_FRAMES_PER_HALF);
-#else
-    audio_out_fill_samples(AUDIO_OUT_FRAMES_PER_HALF, AUDIO_OUT_FRAMES_PER_HALF);
-#endif
-#if BRICK6_REFACTOR_STEP_3
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
-#endif
   }
-#else
-  (void)audio_dma_half_ready;
-  (void)audio_dma_full_ready;
-#endif
 }
 
 uint32_t AudioOut_GetHalfEvents(void)
