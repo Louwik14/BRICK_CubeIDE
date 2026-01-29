@@ -66,6 +66,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_midi.h"
+#include "usbd_core.h"
 #include "usbd_desc.h"
 #include "usbd_ctlreq.h"
 
@@ -127,6 +128,8 @@ static uint8_t  USBD_MIDI_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum);
   */ 
 
 static uint8_t usb_rx_buffer[MIDI_EPOUT_SIZE] = {0};
+static uint8_t midi_in_ep_addr = MIDI_EPIN_ADDR;
+static uint8_t midi_out_ep_addr = MIDI_EPOUT_ADDR;
 
 
 /* USB MIDI class type definition */
@@ -149,7 +152,7 @@ USBD_ClassTypeDef  USBD_MIDI =
 };
 
 /* USB MIDI device Configuration Descriptor */
-__ALIGN_BEGIN static uint8_t USBD_MIDI_CfgDesc[USB_MIDI_CONFIG_DESC_SIZE]  __ALIGN_END =
+__ALIGN_BEGIN uint8_t USBD_MIDI_CfgDesc[USB_MIDI_CONFIG_DESC_SIZE]  __ALIGN_END =
 {
   0x09,                       /* bLength: Configuration Descriptor size */
   USB_DESC_TYPE_CONFIGURATION,/* bDescriptorType: Configuration */
@@ -164,7 +167,7 @@ __ALIGN_BEGIN static uint8_t USBD_MIDI_CfgDesc[USB_MIDI_CONFIG_DESC_SIZE]  __ALI
   /************** MIDI Adapter Standard MS Interface Descriptor ****************/
   0x09,                   /*bLength: Interface Descriptor size*/
   USB_DESC_TYPE_INTERFACE,/*bDescriptorType: Interface descriptor type*/
-  0x00,                   /*bInterfaceNumber: Index of this interface.*/
+  0x02,                   /*bInterfaceNumber: Index of this interface.*/
   0x00,                   /*bAlternateSetting: Alternate setting*/
   0x02,                   /*bNumEndpoints*/
   0x01,                   /*bInterfaceClass: AUDIO*/
@@ -635,31 +638,37 @@ static uint8_t  USBD_MIDI_Init (USBD_HandleTypeDef *pdev,
                                uint8_t cfgidx)
 {
   uint8_t ret = 0;
+
+#ifdef USE_USBD_COMPOSITE
+  midi_in_ep_addr = USBD_CoreGetEPAdd(pdev, USBD_EP_IN, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
+  midi_out_ep_addr = USBD_CoreGetEPAdd(pdev, USBD_EP_OUT, USBD_EP_TYPE_BULK, (uint8_t)pdev->classId);
+#endif
   
   USBD_LL_OpenEP(pdev,
-                 MIDI_EPIN_ADDR,
+                 midi_in_ep_addr,
                  USBD_EP_TYPE_BULK,
                  MIDI_EPIN_SIZE);  
 
   USBD_LL_OpenEP(pdev,
-               MIDI_EPOUT_ADDR,
+               midi_out_ep_addr,
                USBD_EP_TYPE_BULK,
                MIDI_EPOUT_SIZE);
   
   USBD_LL_PrepareReceive(pdev, 
-               MIDI_EPOUT_ADDR,                                      
+               midi_out_ep_addr,                                      
                usb_rx_buffer,
                MIDI_EPOUT_SIZE);    
   
-  pdev->pClassData = USBD_malloc(sizeof (USBD_MIDI_HandleTypeDef));
+  pdev->pClassDataCmsit[pdev->classId] = USBD_malloc(sizeof (USBD_MIDI_HandleTypeDef));
+  pdev->pClassData = pdev->pClassDataCmsit[pdev->classId];
   
-  if(pdev->pClassData == NULL)
+  if(pdev->pClassDataCmsit[pdev->classId] == NULL)
   {
     ret = 1; 
   }
   else
   {
-    ((USBD_MIDI_HandleTypeDef *)pdev->pClassData)->state = MIDI_IDLE;
+    ((USBD_MIDI_HandleTypeDef *)pdev->pClassDataCmsit[pdev->classId])->state = MIDI_IDLE;
   }
   return ret;
 }
@@ -675,12 +684,14 @@ static uint8_t  USBD_MIDI_DeInit (USBD_HandleTypeDef *pdev,
                                  uint8_t cfgidx)
 {
   /* Close MIDI EPs */
-  USBD_LL_CloseEP(pdev, MIDI_EPIN_SIZE);
+  USBD_LL_CloseEP(pdev, midi_in_ep_addr);
+  USBD_LL_CloseEP(pdev, midi_out_ep_addr);
   
   /* FRee allocated memory */
-  if(pdev->pClassData != NULL)
+  if(pdev->pClassDataCmsit[pdev->classId] != NULL)
   {
-    USBD_free(pdev->pClassData);
+    USBD_free(pdev->pClassDataCmsit[pdev->classId]);
+    pdev->pClassDataCmsit[pdev->classId] = NULL;
     pdev->pClassData = NULL;
   } 
   
@@ -699,7 +710,7 @@ static uint8_t  USBD_MIDI_Setup (USBD_HandleTypeDef *pdev,
 {
   uint16_t len = 0;
   uint8_t  *pbuf = NULL;
-  USBD_MIDI_HandleTypeDef     *hmidi = pdev->pClassData;
+  USBD_MIDI_HandleTypeDef     *hmidi = pdev->pClassDataCmsit[pdev->classId];
   
   switch (req->bmRequest & USB_REQ_TYPE_MASK)
   {
@@ -778,7 +789,7 @@ uint8_t USBD_MIDI_GetDeviceState(USBD_HandleTypeDef  *pdev)
   */
 uint8_t USBD_MIDI_GetState(USBD_HandleTypeDef  *pdev)
 {
-  return ((USBD_MIDI_HandleTypeDef *)pdev->pClassData)->state;
+  return ((USBD_MIDI_HandleTypeDef *)pdev->pClassDataCmsit[pdev->classId])->state;
 }
 
 /**
@@ -793,14 +804,14 @@ uint8_t USBD_MIDI_SendPackets(USBD_HandleTypeDef  *pdev,
                                  uint8_t *data,
                                  uint16_t len)
 {
-  USBD_MIDI_HandleTypeDef *hmidi = pdev->pClassData;
+  USBD_MIDI_HandleTypeDef *hmidi = pdev->pClassDataCmsit[pdev->classId];
   
   if (pdev->dev_state == USBD_STATE_CONFIGURED)
   {
     if(hmidi->state == MIDI_IDLE)
     {
       hmidi->state = MIDI_BUSY;
-      USBD_LL_Transmit(pdev, MIDI_EPIN_ADDR, data, len);
+      USBD_LL_Transmit(pdev, midi_in_ep_addr, data, len);
     }
   }
   return USBD_OK;
@@ -845,7 +856,7 @@ static uint8_t  USBD_MIDI_DataIn (USBD_HandleTypeDef *pdev,
   UNUSED(epnum);
   /* Ensure that the FIFO is empty before a new transfer, this condition could 
   be caused by  a new transfer before the end of the previous transfer */
-  ((USBD_MIDI_HandleTypeDef *)pdev->pClassData)->state = MIDI_IDLE;
+  ((USBD_MIDI_HandleTypeDef *)pdev->pClassDataCmsit[pdev->classId])->state = MIDI_IDLE;
 
   USBD_MIDI_OnPacketsSent();
 
@@ -871,13 +882,16 @@ static uint8_t  USBD_MIDI_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
   uint8_t len;
 
-  if (epnum != (MIDI_EPOUT_ADDR & 0x0F)) return USBD_FAIL;
+  if (epnum != (midi_out_ep_addr & 0x0F))
+  {
+    return USBD_FAIL;
+  }
   
   len = (uint8_t)HAL_PCD_EP_GetRxCount((PCD_HandleTypeDef*) pdev->pData, epnum);
 
   USBD_MIDI_OnPacketsReceived(usb_rx_buffer, len);
   
-  USBD_LL_PrepareReceive(pdev, MIDI_EPOUT_ADDR, usb_rx_buffer, MIDI_EPOUT_SIZE);  
+  USBD_LL_PrepareReceive(pdev, midi_out_ep_addr, usb_rx_buffer, MIDI_EPOUT_SIZE);  
   
   return USBD_OK;
 }

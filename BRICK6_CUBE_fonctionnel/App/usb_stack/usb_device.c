@@ -23,6 +23,9 @@
 #include "usb_device.h"
 #include "usbd_core.h"
 #include "usbd_desc.h"
+#include "usbd_audio.h"
+#include "usbd_audio_if.h"
+#include "usbd_composite_builder.h"
 #include "usbd_midi.h"
 
 /* USER CODE BEGIN Includes */
@@ -31,6 +34,8 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+static uint8_t audio_ep_address = AUDIO_OUT_EP;
+static uint8_t midi_ep_address = MIDI_EPIN_ADDR;
 
 /* USER CODE END PV */
 
@@ -71,9 +76,20 @@ void MX_USB_DEVICE_Init(void)
   {
     Error_Handler();
   }
-  if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_MIDI) != USBD_OK)
+  if (USBD_RegisterClassComposite(&hUsbDeviceFS, &USBD_AUDIO, CLASS_TYPE_AUDIO, &audio_ep_address) != USBD_OK)
   {
     Error_Handler();
+  }
+  if (USBD_RegisterClassComposite(&hUsbDeviceFS, &USBD_MIDI, CLASS_TYPE_MIDI, &midi_ep_address) != USBD_OK)
+  {
+    Error_Handler();
+  }
+  if (USBD_CMPSIT_SetClassID(&hUsbDeviceFS, CLASS_TYPE_AUDIO, 0U) != 0xFFU)
+  {
+    if (USBD_AUDIO_RegisterInterface(&hUsbDeviceFS, &USBD_AUDIO_fops_FS) != USBD_OK)
+    {
+      Error_Handler();
+    }
   }
   if (USBD_Start(&hUsbDeviceFS) != USBD_OK)
   {

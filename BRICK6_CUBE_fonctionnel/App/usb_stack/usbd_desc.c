@@ -66,9 +66,9 @@
 #define USBD_LANGID_STRING     1033
 #define USBD_MANUFACTURER_STRING     "STMicroelectronics"
 #define USBD_PID_FS     22315
-#define USBD_PRODUCT_STRING_FS     "STM32 USB MIDI"
-#define USBD_CONFIGURATION_STRING_FS     "MIDI Config"
-#define USBD_INTERFACE_STRING_FS     "MIDI Interface"
+#define USBD_PRODUCT_STRING_FS     "STM32 USB Audio + MIDI"
+#define USBD_CONFIGURATION_STRING_FS     "Audio+MIDI Config"
+#define USBD_INTERFACE_STRING_FS     "Audio+MIDI Interface"
 
 #define USB_SIZ_BOS_DESC            0x0C
 
@@ -152,9 +152,9 @@ __ALIGN_BEGIN uint8_t USBD_FS_DeviceDesc[USB_LEN_DEV_DESC] __ALIGN_END =
   USB_DESC_TYPE_DEVICE,       /*bDescriptorType*/
   0x00,                       /*bcdUSB */
   0x02,
-  0x00,                       /*bDeviceClass*/
-  0x00,                       /*bDeviceSubClass*/
-  0x00,                       /*bDeviceProtocol*/
+  0xEF,                       /*bDeviceClass*/
+  0x02,                       /*bDeviceSubClass*/
+  0x01,                       /*bDeviceProtocol*/
   USB_MAX_EP0_SIZE,           /*bMaxPacketSize*/
   LOBYTE(USBD_VID),           /*idVendor*/
   HIBYTE(USBD_VID),           /*idVendor*/

@@ -23,6 +23,7 @@
 #include "stm32h7xx_hal.h"
 #include "usbd_def.h"
 #include "usbd_core.h"
+#include "usbd_audio.h"
 #include "usbd_midi.h"
 
 /* USER CODE BEGIN Includes */
@@ -637,9 +638,24 @@ USBD_StatusTypeDef USBD_LL_SetTestMode(USBD_HandleTypeDef *pdev, uint8_t testmod
   */
 void *USBD_static_malloc(uint32_t size)
 {
-  UNUSED(size);
-  static uint32_t mem[(sizeof(USBD_MIDI_HandleTypeDef)/4)+1];/* On 32-bit boundary */
-  return mem;
+  static uint32_t mem[(sizeof(USBD_AUDIO_HandleTypeDef) + sizeof(USBD_MIDI_HandleTypeDef)) / 4U + 2U];
+  static uint32_t mem_index = 0U;
+  uint32_t *ptr;
+
+  if (size == 0U)
+  {
+    return NULL;
+  }
+
+  if ((mem_index + (size + 3U) / 4U) > (sizeof(mem) / sizeof(mem[0])))
+  {
+    return NULL;
+  }
+
+  ptr = &mem[mem_index];
+  mem_index += (size + 3U) / 4U;
+
+  return ptr;
 }
 
 /**

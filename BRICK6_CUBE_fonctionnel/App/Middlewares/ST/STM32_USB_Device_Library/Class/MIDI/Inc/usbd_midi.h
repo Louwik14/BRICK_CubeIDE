@@ -63,10 +63,10 @@
 /** @defgroup USBD_MIDI_Exported_Defines
   * @{
   */ 
-#define MIDI_EPIN_ADDR                 0x81
+#define MIDI_EPIN_ADDR                 0x82
 #define MIDI_EPIN_SIZE                 0x40
 
-#define MIDI_EPOUT_ADDR                0x01
+#define MIDI_EPOUT_ADDR                0x02
 #define MIDI_EPOUT_SIZE                0x40
 
 #define USB_MIDI_CLASS_DESC_SHIFT      18
@@ -158,6 +158,7 @@ USBD_MIDI_HandleTypeDef;
   */ 
 
 extern USBD_ClassTypeDef  USBD_MIDI;
+extern uint8_t USBD_MIDI_CfgDesc[USB_MIDI_CONFIG_DESC_SIZE];
 extern void USBD_MIDI_OnPacketsReceived(uint8_t *data, uint8_t len);
 extern void USBD_MIDI_OnPacketsSent(void);
 

@@ -18,6 +18,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_core.h"
+#ifdef USE_USBD_COMPOSITE
+#include "usbd_composite_builder.h"
+#endif
 
 #ifdef USE_USBD_COMPOSITE
 #include "usbd_composite_builder.h"
@@ -1212,4 +1215,3 @@ USBD_DescHeaderTypeDef *USBD_GetNextDesc(uint8_t *pbuf, uint16_t *ptr)
 /**
   * @}
   */
-
