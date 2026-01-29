@@ -129,6 +129,10 @@ static void  USBD_CMPSIT_CDC_ECMDesc(USBD_HandleTypeDef *pdev, uint32_t pConf, _
 static void  USBD_CMPSIT_AUDIODesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __IO uint32_t *Sze, uint8_t speed);
 #endif /* USBD_CMPSIT_ACTIVATE_AUDIO == 1U */
 
+#if USBD_CMPSIT_ACTIVATE_MIDI == 1U
+static void  USBD_CMPSIT_MIDIDesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __IO uint32_t *Sze, uint8_t speed);
+#endif /* USBD_CMPSIT_ACTIVATE_MIDI == 1U */
+
 #if USBD_CMPSIT_ACTIVATE_CUSTOMHID == 1
 static void  USBD_CMPSIT_CUSTOMHIDDesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __IO uint32_t *Sze, uint8_t speed);
 #endif /* USBD_CMPSIT_ACTIVATE_CUSTOMHID == 1U */
@@ -518,7 +522,7 @@ uint8_t  USBD_CMPSIT_AddToConfDesc(USBD_HandleTypeDef *pdev)
       USBD_CMPSIT_AssignEp(pdev, iEp, USBD_EP_TYPE_BULK, MIDI_EPOUT_SIZE);
 
       /* Append descriptor */
-      USBD_MIDI_Desc(pdev, (uint32_t)pCmpstFSConfDesc, &CurrFSConfDescSz);
+      USBD_CMPSIT_MIDIDesc(pdev, (uint32_t)pCmpstFSConfDesc, &CurrFSConfDescSz, (uint8_t)USBD_SPEED_FULL);
 
       break;
 #endif
@@ -1299,6 +1303,486 @@ static void  USBD_CMPSIT_AUDIODesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __I
 }
 #endif /* USBD_CMPSIT_ACTIVATE_AUDIO */
 
+#if USBD_CMPSIT_ACTIVATE_MIDI == 1
+/**
+  * @brief  USBD_CMPSIT_MIDIDesc
+  *         Configure and Append the MIDI Descriptor
+  * @param  pdev: device instance
+  * @param  pConf: Configuration descriptor pointer
+  * @param  Sze: pointer to the current configuration descriptor size
+  * @retval None
+  */
+static void  USBD_CMPSIT_MIDIDesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __IO uint32_t *Sze, uint8_t speed)
+{
+  uint8_t *pdesc;
+  uint8_t idx;
+  uint16_t midi_cs_total_len;
+
+  UNUSED(speed);
+
+  midi_cs_total_len = (uint16_t)((MIDI_IN_PORTS_NUM * 16U) + (MIDI_OUT_PORTS_NUM * 16U) + 33U);
+
+  /* Append MIDI Interface descriptor */
+  __USBD_CMPSIT_SET_IF(pdev->tclasslist[pdev->classId].Ifs[0], 0U, \
+                       (uint8_t)(pdev->tclasslist[pdev->classId].NumEps), 0x01U, 0x03U, 0x00U, 0x00U);
+
+  /* Append MIDI Class-specific MS Interface Descriptor */
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x07U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x01U;
+  pdesc[3] = 0x00U;
+  pdesc[4] = 0x01U;
+  pdesc[5] = (uint8_t)(midi_cs_total_len & 0xFFU);
+  pdesc[6] = (uint8_t)((midi_cs_total_len >> 8) & 0xFFU);
+  *Sze += 0x07U;
+
+#if MIDI_IN_PORTS_NUM >= 1
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_1;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_2;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_1;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 2
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_3;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_4;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_3;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 3
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_5;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_6;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_5;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 4
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_7;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_8;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_7;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 5
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_9;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_10;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_9;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 6
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_11;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_12;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_11;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 7
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_13;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_14;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_13;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 8
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_15;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_16;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_15;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 1
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_17;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_18;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_17;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 2
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_19;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_20;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_19;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 3
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_21;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_22;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_21;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 4
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_23;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_24;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_23;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 5
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_25;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_26;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_25;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 6
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_27;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_28;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_27;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 7
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_29;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_30;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_29;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 8
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x06U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x02U;
+  pdesc[3] = 0x01U;
+  pdesc[4] = MIDI_JACK_31;
+  pdesc[5] = 0x00U;
+  *Sze += 0x06U;
+
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = 0x09U;
+  pdesc[1] = 0x24U;
+  pdesc[2] = 0x03U;
+  pdesc[3] = 0x02U;
+  pdesc[4] = MIDI_JACK_32;
+  pdesc[5] = 0x01U;
+  pdesc[6] = MIDI_JACK_31;
+  pdesc[7] = 0x01U;
+  pdesc[8] = 0x00U;
+  *Sze += 0x09U;
+#endif
+
+  /* Append standard Bulk OUT endpoint descriptor */
+  __USBD_CMPSIT_SET_EP(pdev->tclasslist[pdev->classId].Eps[1].add, USBD_EP_TYPE_BULK, MIDI_EPOUT_SIZE, 0x00U, 0x00U);
+
+  /* Append class-specific Bulk OUT endpoint descriptor */
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = (uint8_t)(4U + MIDI_OUT_PORTS_NUM);
+  pdesc[1] = 0x25U;
+  pdesc[2] = 0x01U;
+  pdesc[3] = (uint8_t)MIDI_OUT_PORTS_NUM;
+  idx = 0x04U;
+#if MIDI_OUT_PORTS_NUM >= 1
+  pdesc[idx++] = MIDI_JACK_17;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 2
+  pdesc[idx++] = MIDI_JACK_19;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 3
+  pdesc[idx++] = MIDI_JACK_21;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 4
+  pdesc[idx++] = MIDI_JACK_23;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 5
+  pdesc[idx++] = MIDI_JACK_25;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 6
+  pdesc[idx++] = MIDI_JACK_27;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 7
+  pdesc[idx++] = MIDI_JACK_29;
+#endif
+#if MIDI_OUT_PORTS_NUM >= 8
+  pdesc[idx++] = MIDI_JACK_31;
+#endif
+  *Sze += (uint32_t)(4U + MIDI_OUT_PORTS_NUM);
+
+  /* Append standard Bulk IN endpoint descriptor */
+  __USBD_CMPSIT_SET_EP(pdev->tclasslist[pdev->classId].Eps[0].add, USBD_EP_TYPE_BULK, MIDI_EPIN_SIZE, 0x00U, 0x00U);
+
+  /* Append class-specific Bulk IN endpoint descriptor */
+  pdesc = (uint8_t *)(pConf + *Sze);
+  pdesc[0] = (uint8_t)(4U + MIDI_IN_PORTS_NUM);
+  pdesc[1] = 0x25U;
+  pdesc[2] = 0x01U;
+  pdesc[3] = (uint8_t)MIDI_IN_PORTS_NUM;
+  idx = 0x04U;
+#if MIDI_IN_PORTS_NUM >= 1
+  pdesc[idx++] = MIDI_JACK_2;
+#endif
+#if MIDI_IN_PORTS_NUM >= 2
+  pdesc[idx++] = MIDI_JACK_4;
+#endif
+#if MIDI_IN_PORTS_NUM >= 3
+  pdesc[idx++] = MIDI_JACK_6;
+#endif
+#if MIDI_IN_PORTS_NUM >= 4
+  pdesc[idx++] = MIDI_JACK_8;
+#endif
+#if MIDI_IN_PORTS_NUM >= 5
+  pdesc[idx++] = MIDI_JACK_10;
+#endif
+#if MIDI_IN_PORTS_NUM >= 6
+  pdesc[idx++] = MIDI_JACK_12;
+#endif
+#if MIDI_IN_PORTS_NUM >= 7
+  pdesc[idx++] = MIDI_JACK_14;
+#endif
+#if MIDI_IN_PORTS_NUM >= 8
+  pdesc[idx++] = MIDI_JACK_16;
+#endif
+  *Sze += (uint32_t)(4U + MIDI_IN_PORTS_NUM);
+
+  /* Update Config Descriptor */
+  ((USBD_ConfigDescTypeDef *)pConf)->bNumInterfaces += 1U;
+  ((USBD_ConfigDescTypeDef *)pConf)->wTotalLength  = *Sze;
+}
+#endif /* USBD_CMPSIT_ACTIVATE_MIDI == 1 */
+
 #if USBD_CMPSIT_ACTIVATE_RNDIS == 1
 /**
   * @brief  USBD_CMPSIT_MSCDesc
@@ -1902,5 +2386,3 @@ uint8_t USBD_CMPST_ClearConfDesc(USBD_HandleTypeDef *pdev)
 /**
   * @}
   */
-
-
