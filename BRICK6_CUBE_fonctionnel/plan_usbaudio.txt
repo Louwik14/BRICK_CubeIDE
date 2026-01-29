@@ -1,0 +1,185 @@
+Ci-dessous, l’analyse détaillée demandée (avec citations), suivie d’un plan d’action structuré et d’une proposition d’architecture cible.
+✅ Commandes utilisées
+
+    find .. -name AGENTS.md -print
+
+    ls BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Device_Library/Class
+
+    ls BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI
+
+    sed -n '1,200p' .../Class/MIDI/Inc/usbd_midi.h
+
+    sed -n '1,240p' .../Class/MIDI/Src/usbd_midi.c
+
+    rg -n "Descriptor|Desc" .../usbd_midi.c
+
+    sed -n '440,560p' .../Class/CompositeBuilder/Src/usbd_composite_builder.c
+
+    rg -n "MIDI" .../Class/CompositeBuilder
+
+    rg -n "USE_USBD_COMPOSITE|USBD_CMPSIT" .../Class/HID
+
+    sed -n '70,150p' .../Class/HID/Src/usbd_hid.c
+
+    rg -n "usbd_desc.c" ...
+
+    sed -n '1,200p' .../App/usb_stack/usbd_desc.c
+
+1) Analyse de la classe MIDI standalone : où sont les descripteurs ?
+✅ Device descriptor (USB standard)
+
+Le device descriptor global n’est pas dans la classe MIDI : il est défini dans App/usb_stack/usbd_desc.c (table USBD_FS_DeviceDesc).
+✅ Device qualifier descriptor (dans la classe MIDI)
+
+La classe MIDI définit un device qualifier descriptor local (pas le device descriptor standard), dans usbd_midi.c : USBD_MIDI_DeviceQualifierDesc.
+✅ Configuration + Interface + Endpoint descriptors
+
+La configuration descriptor complète (incluant interface + endpoints + class-specific MIDI) est dans la classe MIDI : tableau USBD_MIDI_CfgDesc dans usbd_midi.c.
+
+Elle comprend :
+
+    Configuration Descriptor (bNumInterfaces = 1, etc.).
+
+    Interface descriptor (Audio/MIDI Streaming).
+
+    Class-specific MS interface descriptors (MS_HEADER, IN/OUT Jack).
+
+    Endpoint descriptors (Bulk IN/OUT) + class-specific endpoint descriptors MS_GENERAL.
+
+✅ Endpoint adresses / tailles fixes dans usbd_midi.h
+
+Les adresses et tailles sont hardcodées dans le header MIDI : MIDI_EPIN_ADDR, MIDI_EPOUT_ADDR, etc.
+2) Ce qu’il faut retirer / modifier dans la classe MIDI pour la rendre composite-compatible
+
+L’objectif est de supprimer toute génération de descripteurs dans la classe et de ne garder que la logique (Init/DeInit/Setup/DataIn/DataOut…).
+✅ À supprimer / vider / rendre inactif (dans usbd_midi.c)
+
+À retirer quand USE_USBD_COMPOSITE est actif :
+
+    USBD_MIDI_CfgDesc (tout le tableau de descripteurs config/interface/endpoints).
+
+    USBD_MIDI_GetCfgDesc() (retourne le buffer USBD_MIDI_CfgDesc).
+
+    USBD_MIDI_DeviceQualifierDesc + USBD_MIDI_GetDeviceQualifierDesc() + USBD_MIDI_DeviceQualifierDescriptor() (retourne un device qualifier local).
+
+À isoler via #ifndef USE_USBD_COMPOSITE, comme dans les classes ST officielles (exemple HID) :
+
+    Dans USBD_ClassTypeDef : en composite, les callbacks GetCfgDesc / GetDeviceQualifierDesc doivent être NULL. (Modèle dans usbd_hid.c).
+
+    Encapsuler toutes les définitions de descripteurs MIDI sous #ifndef USE_USBD_COMPOSITE, comme le fait HID.
+
+✅ À modifier (logiciel USB MIDI)
+
+Dans USBD_MIDI_Init/DeInit/DataIn/DataOut/SendPackets, la classe utilise des endpoints fixes (MIDI_EPIN_ADDR, MIDI_EPOUT_ADDR). Cela doit être remplacé par les endpoints assignés par le Composite Builder, exactement comme le fait HID avec USBD_CoreGetEPAdd.
+✅ À ajuster dans USBD_MIDI_Setup
+
+La gestion de USB_REQ_GET_DESCRIPTOR utilise le buffer USBD_MIDI_CfgDesc + USB_MIDI_CLASS_DESC_SHIFT, donc dépend de la génération locale des descripteurs.
+
+Dans une architecture composite propre, ce buffer doit être référencé depuis le descripteur composite (ou désactivé si non requis par l’hôte).
+👉 C’est un point clé à migrer vers le Composite Builder.
+3) Analyse Composite Builder : où ajouter MIDI ?
+
+Le Composite Builder a déjà un case MIDI, mais il appelle une fonction non existante (USBD_MIDI_Desc).
+✅ Ce qui existe déjà (mais incomplet)
+
+Dans usbd_composite_builder.c :
+
+    Allocation interface (1 interface MIDI).
+
+    Allocation endpoints (Bulk IN + Bulk OUT).
+
+    Appel à USBD_MIDI_Desc(...) (à créer).
+
+Le header composite inclut déjà usbd_midi.h conditionnellement, avec l’activation USBD_CMPSIT_ACTIVATE_MIDI.
+✅ Où et comment ajouter les descripteurs MIDI
+
+Vous devez créer une fonction de génération MIDI dans usbd_composite_builder.c, comme :
+
+    USBD_CMPSIT_HIDMouseDesc(...) pour HID.
+
+    USBD_CMPSIT_MSCDesc(...) pour MSC.
+    (Mêmes patterns : __USBD_CMPSIT_SET_IF + __USBD_CMPSIT_SET_EP).
+
+👉 Vous devez créer l’équivalent :
+static void USBD_CMPSIT_MIDIDesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __IO uint32_t *Sze, uint8_t speed)
+(et remplacer l’appel USBD_MIDI_Desc par USBD_CMPSIT_MIDIDesc ou implémenter USBD_MIDI_Desc à côté).
+4) Plan d’action détaillé (4 étapes)
+✅ Étape 1 — Nettoyage de la classe MIDI (standalone → composite)
+
+    Isoler tout le bloc USBD_MIDI_CfgDesc et ses fonctions associées (GetCfgDesc, GetDeviceQualifierDesc) sous #ifndef USE_USBD_COMPOSITE.
+    (Modèle direct : usbd_hid.c).
+
+    Dans USBD_ClassTypeDef, sous USE_USBD_COMPOSITE, mettre les descripteurs à NULL (comme HID).
+
+✅ Étape 2 — Adapter la logique MIDI pour endpoints/interfaces dynamiques
+
+    Remplacer MIDI_EPIN_ADDR/MIDI_EPOUT_ADDR par USBD_CoreGetEPAdd(...) dans Init, DeInit, DataIn, DataOut, SendPackets (modèle HID).
+
+    Adapter la gestion du GET_DESCRIPTOR (type MIDI) pour pointer vers les descripteurs composites (ex: offset dans pConf du Composite Builder).
+
+✅ Étape 3 — Extension du Composite Builder (descripteurs MIDI)
+
+    Ajouter une fonction USBD_CMPSIT_MIDIDesc dans usbd_composite_builder.c, sur le modèle USBD_CMPSIT_HIDMouseDesc.
+
+    Déplacer le contenu descriptif de USBD_MIDI_CfgDesc vers cette fonction (interface + class-specific MS + endpoints).
+
+    Remplacer USBD_MIDI_Desc(...) par USBD_CMPSIT_MIDIDesc(...) (ou implémenter USBD_MIDI_Desc).
+
+✅ Étape 4 — Intégration dans Composite_Audio_HID
+
+    Activer USBD_CMPSIT_ACTIVATE_MIDI dans la config. (macro déjà prévue).
+
+    Vérifier le bNumInterfaces, la table tclasslist, et l’ordre d’assemblage dans le composite.
+
+5) Structure cible propre (proposition)
+✅ Descripteurs
+
+Tous les descripteurs MIDI doivent vivre dans :
+Class/CompositeBuilder/Src/usbd_composite_builder.c
+
+    MIDI interface + jacks + endpoints générés dans USBD_CMPSIT_MIDIDesc.
+
+    Le buffer composite devient l’unique source pour la configuration.
+
+✅ Logique MIDI
+
+La logique USB reste dans :
+Class/MIDI/Src/usbd_midi.c
+
+    Init/DeInit/DataIn/DataOut/Setup uniquement.
+
+    Les endpoints sont dynamiques (assignés par composite).
+
+✅ Communication
+
+    Le Composite Builder alloue interfaces & endpoints → pdev->tclasslist[].
+
+    La classe MIDI lit ses endpoints via USBD_CoreGetEPAdd(...) (modèle HID).
+
+✅ Résumé rapide (concret & actionnable)
+
+Fichiers clés à modifier
+
+    Class/MIDI/Src/usbd_midi.c
+
+        Supprimer tout ce qui génère des descripteurs.
+
+        Passer en endpoints dynamiques.
+
+    Class/MIDI/Inc/usbd_midi.h
+
+        Garder tailles, retirer adresses fixes ou conditionner par #ifndef USE_USBD_COMPOSITE.
+
+    Class/CompositeBuilder/Src/usbd_composite_builder.c
+
+        Ajouter USBD_CMPSIT_MIDIDesc et générer les descripteurs MIDI.
+
+Testing
+
+    Non exécuté (analyse uniquement).
+
+Si vous voulez, je peux maintenant :
+✅ proposer un patch exact fichier par fichier,
+✅ intégrer le descripteur MIDI dans le Composite Builder,
+✅ adapter la classe MIDI en mode composite,
+✅ et livrer un diff complet prêt à compiler
