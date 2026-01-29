@@ -25,3 +25,24 @@
 
 ### Prochaine étape prévue
 - Passe 2 : enregistrer la classe composite BRICK6 en remplacement de la classe MIDI, en forwardant uniquement le MIDI (audio toujours inactif).
+
+## Passe 2 — Classe composite minimale
+
+### Ce que j'ai fait
+- Remplacé l'enregistrement direct de la classe MIDI par la classe composite BRICK6.
+- Implémenté la classe composite comme un simple wrapper qui délègue Init/DeInit/Setup/DataIn/DataOut/GetCfgDesc (et le qualifier) à la classe MIDI existante.
+
+### Fichiers modifiés
+- Modification : `App/usb_stack/usbd_brick6_composite.c`
+- Modification : `App/usb_stack/usb_device.c`
+- Modification : `update_usb_audio.md`
+
+### Ce qui marche
+- La classe composite expose exactement le même périphérique MIDI que précédemment via les descripteurs MIDI existants.
+- Les callbacks MIDI sont utilisés sans changement de comportement.
+
+### Ce qui est encore stub
+- La partie USB audio reste inactive (aucun endpoint ni descripteur audio, aucune logique audio).
+
+### Prochaine étape prévue
+- Passe 3 : ajouter les descripteurs audio dans la classe composite (sans activer la logique audio).
