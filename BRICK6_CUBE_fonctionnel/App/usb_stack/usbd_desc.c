@@ -175,7 +175,7 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   USB_DESC_TYPE_CONFIGURATION,    /* bDescriptorType: Configuration */
   LOBYTE(BRICK6_COMPOSITE_CONFIG_DESC_SIZE),
   HIBYTE(BRICK6_COMPOSITE_CONFIG_DESC_SIZE),
-  0x03,                           /* bNumInterfaces */
+  0x04,                           /* bNumInterfaces */
   0x01,                           /* bConfigurationValue */
   0x00,                           /* iConfiguration */
   0x80,                           /* bmAttributes: Bus Powered */
@@ -185,7 +185,7 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   0x08,                           /* bLength */
   0x0B,                           /* bDescriptorType: IAD */
   BRICK6_AUDIO_CONTROL_IF,        /* bFirstInterface */
-  0x02,                           /* bInterfaceCount */
+  0x03,                           /* bInterfaceCount */
   0x01,                           /* bFunctionClass: AUDIO */
   0x00,                           /* bFunctionSubClass */
   0x00,                           /* bFunctionProtocol */
@@ -207,16 +207,17 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   0x24,                           /* bDescriptorType: CS_INTERFACE */
   0x01,                           /* bDescriptorSubtype: HEADER */
   0x00, 0x01,                     /* bcdADC: 1.00 */
-  0x1E, 0x00,                     /* wTotalLength */
-  0x01,                           /* bInCollection */
-  BRICK6_AUDIO_STREAMING_IF,      /* baInterfaceNr(1) */
+  0x33, 0x00,                     /* wTotalLength */
+  0x02,                           /* bInCollection */
+  BRICK6_AUDIO_STREAMING_OUT_IF,  /* baInterfaceNr(1) */
+  BRICK6_AUDIO_STREAMING_IN_IF,   /* baInterfaceNr(2) */
 
   /* Input Terminal Descriptor */
   0x0C,                           /* bLength */
   0x24,                           /* bDescriptorType: CS_INTERFACE */
   0x02,                           /* bDescriptorSubtype: INPUT_TERMINAL */
   0x01,                           /* bTerminalID */
-  0x01, 0x02,                     /* wTerminalType: Microphone */
+  0x03, 0x06,                     /* wTerminalType: Line In */
   0x00,                           /* bAssocTerminal */
   0x02,                           /* bNrChannels */
   0x03, 0x00,                     /* wChannelConfig */
@@ -233,10 +234,32 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   0x01,                           /* bSourceID */
   0x00,                           /* iTerminal */
 
-  /* Audio Streaming Interface Alt 0 */
+  /* Input Terminal Descriptor */
+  0x0C,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x02,                           /* bDescriptorSubtype: INPUT_TERMINAL */
+  0x03,                           /* bTerminalID */
+  0x01, 0x01,                     /* wTerminalType: USB Streaming */
+  0x00,                           /* bAssocTerminal */
+  0x02,                           /* bNrChannels */
+  0x03, 0x00,                     /* wChannelConfig */
+  0x00,                           /* iChannelNames */
+  0x00,                           /* iTerminal */
+
+  /* Output Terminal Descriptor */
+  0x09,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x03,                           /* bDescriptorSubtype: OUTPUT_TERMINAL */
+  0x04,                           /* bTerminalID */
+  0x04, 0x06,                     /* wTerminalType: Line Out */
+  0x00,                           /* bAssocTerminal */
+  0x03,                           /* bSourceID */
+  0x00,                           /* iTerminal */
+
+  /* Audio Streaming OUT Interface Alt 0 */
   0x09,                           /* bLength */
   USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
-  BRICK6_AUDIO_STREAMING_IF,      /* bInterfaceNumber */
+  BRICK6_AUDIO_STREAMING_OUT_IF,  /* bInterfaceNumber */
   0x00,                           /* bAlternateSetting */
   0x00,                           /* bNumEndpoints */
   0x01,                           /* bInterfaceClass: AUDIO */
@@ -244,10 +267,70 @@ __ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC
   0x00,                           /* bInterfaceProtocol */
   0x00,                           /* iInterface */
 
-  /* Audio Streaming Interface Alt 1 */
+  /* Audio Streaming OUT Interface Alt 1 */
   0x09,                           /* bLength */
   USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
-  BRICK6_AUDIO_STREAMING_IF,      /* bInterfaceNumber */
+  BRICK6_AUDIO_STREAMING_OUT_IF,  /* bInterfaceNumber */
+  0x01,                           /* bAlternateSetting */
+  0x01,                           /* bNumEndpoints */
+  0x01,                           /* bInterfaceClass: AUDIO */
+  0x02,                           /* bInterfaceSubClass: AUDIOSTREAMING */
+  0x00,                           /* bInterfaceProtocol */
+  0x00,                           /* iInterface */
+
+  /* Class-specific AS General Descriptor */
+  0x07,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x01,                           /* bDescriptorSubtype: AS_GENERAL */
+  0x03,                           /* bTerminalLink */
+  0x01,                           /* bDelay */
+  0x01, 0x00,                     /* wFormatTag: PCM */
+
+  /* Format Type Descriptor */
+  0x0B,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x02,                           /* bDescriptorSubtype: FORMAT_TYPE */
+  0x01,                           /* bFormatType: FORMAT_TYPE_I */
+  0x02,                           /* bNrChannels */
+  0x04,                           /* bSubFrameSize */
+  0x18,                           /* bBitResolution */
+  0x01,                           /* bSamFreqType */
+  0x80, 0xBB, 0x00,               /* tSamFreq: 48 kHz */
+
+  /* Audio Streaming Endpoint Descriptor */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_ENDPOINT,         /* bDescriptorType */
+  BRICK6_AUDIO_EP_OUT_ADDR,        /* bEndpointAddress */
+  0x01,                           /* bmAttributes: Isochronous */
+  LOBYTE(BRICK6_AUDIO_EP_OUT_SIZE),
+  HIBYTE(BRICK6_AUDIO_EP_OUT_SIZE),
+  0x01,                           /* bInterval */
+  0x00,                           /* bRefresh */
+  0x00,                           /* bSynchAddress */
+
+  /* Class-specific Audio Endpoint Descriptor */
+  0x07,                           /* bLength */
+  0x25,                           /* bDescriptorType: CS_ENDPOINT */
+  0x01,                           /* bDescriptorSubtype: EP_GENERAL */
+  0x00,                           /* bmAttributes */
+  0x00,                           /* bLockDelayUnits */
+  0x00, 0x00,                     /* wLockDelay */
+
+  /* Audio Streaming IN Interface Alt 0 */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
+  BRICK6_AUDIO_STREAMING_IN_IF,   /* bInterfaceNumber */
+  0x00,                           /* bAlternateSetting */
+  0x00,                           /* bNumEndpoints */
+  0x01,                           /* bInterfaceClass: AUDIO */
+  0x02,                           /* bInterfaceSubClass: AUDIOSTREAMING */
+  0x00,                           /* bInterfaceProtocol */
+  0x00,                           /* iInterface */
+
+  /* Audio Streaming IN Interface Alt 1 */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
+  BRICK6_AUDIO_STREAMING_IN_IF,   /* bInterfaceNumber */
   0x01,                           /* bAlternateSetting */
   0x01,                           /* bNumEndpoints */
   0x01,                           /* bInterfaceClass: AUDIO */

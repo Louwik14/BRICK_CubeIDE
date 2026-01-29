@@ -21,9 +21,12 @@ static void BRICK6_Audio_QueuePacket(USBD_HandleTypeDef *pdev);
 
 __ALIGN_BEGIN static uint8_t usb_rx_buffer[MIDI_EPOUT_SIZE] __ALIGN_END;
 __ALIGN_BEGIN static int32_t audio_tx_frames[BRICK6_AUDIO_SAMPLES_PER_PACKET] __ALIGN_END;
+__ALIGN_BEGIN static int32_t audio_rx_frames[BRICK6_AUDIO_SAMPLES_PER_PACKET] __ALIGN_END;
 
-static uint8_t brick6_audio_alt_setting = 0U;
-static uint8_t brick6_audio_ep_opened = 0U;
+static uint8_t brick6_audio_in_alt_setting = 0U;
+static uint8_t brick6_audio_out_alt_setting = 0U;
+static uint8_t brick6_audio_in_ep_opened = 0U;
+static uint8_t brick6_audio_out_ep_opened = 0U;
 
 USBD_ClassTypeDef USBD_BRICK6_COMPOSITE =
 {
@@ -80,8 +83,10 @@ static uint8_t USBD_BRICK6_COMPOSITE_Init(USBD_HandleTypeDef *pdev, uint8_t cfgi
     hmidi->AltSetting = 0U;
   }
 
-  brick6_audio_alt_setting = 0U;
-  brick6_audio_ep_opened = 0U;
+  brick6_audio_in_alt_setting = 0U;
+  brick6_audio_out_alt_setting = 0U;
+  brick6_audio_in_ep_opened = 0U;
+  brick6_audio_out_ep_opened = 0U;
   usb_audio_backend_init();
 
   return ret;
@@ -94,10 +99,16 @@ static uint8_t USBD_BRICK6_COMPOSITE_DeInit(USBD_HandleTypeDef *pdev, uint8_t cf
   USBD_LL_CloseEP(pdev, MIDI_EPIN_ADDR);
   USBD_LL_CloseEP(pdev, MIDI_EPOUT_ADDR);
 
-  if (brick6_audio_ep_opened != 0U)
+  if (brick6_audio_in_ep_opened != 0U)
   {
     USBD_LL_CloseEP(pdev, BRICK6_AUDIO_EP_IN_ADDR);
-    brick6_audio_ep_opened = 0U;
+    brick6_audio_in_ep_opened = 0U;
+  }
+
+  if (brick6_audio_out_ep_opened != 0U)
+  {
+    USBD_LL_CloseEP(pdev, BRICK6_AUDIO_EP_OUT_ADDR);
+    brick6_audio_out_ep_opened = 0U;
   }
 
   if (pdev->pClassData != NULL)
@@ -151,9 +162,13 @@ static uint8_t USBD_BRICK6_COMPOSITE_Setup(USBD_HandleTypeDef *pdev, USBD_SetupR
           break;
 
         case USB_REQ_GET_INTERFACE:
-          if (req->wIndex == BRICK6_AUDIO_STREAMING_IF)
+          if (req->wIndex == BRICK6_AUDIO_STREAMING_OUT_IF)
           {
-            USBD_CtlSendData(pdev, &brick6_audio_alt_setting, 1U);
+            USBD_CtlSendData(pdev, &brick6_audio_out_alt_setting, 1U);
+          }
+          else if (req->wIndex == BRICK6_AUDIO_STREAMING_IN_IF)
+          {
+            USBD_CtlSendData(pdev, &brick6_audio_in_alt_setting, 1U);
           }
           else if (req->wIndex == BRICK6_MIDI_STREAMING_IF)
           {
@@ -161,24 +176,40 @@ static uint8_t USBD_BRICK6_COMPOSITE_Setup(USBD_HandleTypeDef *pdev, USBD_SetupR
           }
           else
           {
-            USBD_CtlSendData(pdev, &brick6_audio_alt_setting, 1U);
+            USBD_CtlSendData(pdev, &brick6_audio_in_alt_setting, 1U);
           }
           break;
 
         case USB_REQ_SET_INTERFACE:
-          if (req->wIndex == BRICK6_AUDIO_STREAMING_IF)
+          if (req->wIndex == BRICK6_AUDIO_STREAMING_OUT_IF)
           {
-            brick6_audio_alt_setting = (uint8_t)(req->wValue);
-            if ((brick6_audio_alt_setting == 1U) && (brick6_audio_ep_opened == 0U))
+            brick6_audio_out_alt_setting = (uint8_t)(req->wValue);
+            if ((brick6_audio_out_alt_setting == 1U) && (brick6_audio_out_ep_opened == 0U))
+            {
+              USBD_LL_OpenEP(pdev, BRICK6_AUDIO_EP_OUT_ADDR, USBD_EP_TYPE_ISOC, BRICK6_AUDIO_EP_OUT_SIZE);
+              brick6_audio_out_ep_opened = 1U;
+              USBD_LL_PrepareReceive(pdev, BRICK6_AUDIO_EP_OUT_ADDR,
+                                     (uint8_t *)audio_rx_frames, BRICK6_AUDIO_EP_OUT_SIZE);
+            }
+            else if ((brick6_audio_out_alt_setting == 0U) && (brick6_audio_out_ep_opened != 0U))
+            {
+              USBD_LL_CloseEP(pdev, BRICK6_AUDIO_EP_OUT_ADDR);
+              brick6_audio_out_ep_opened = 0U;
+            }
+          }
+          else if (req->wIndex == BRICK6_AUDIO_STREAMING_IN_IF)
+          {
+            brick6_audio_in_alt_setting = (uint8_t)(req->wValue);
+            if ((brick6_audio_in_alt_setting == 1U) && (brick6_audio_in_ep_opened == 0U))
             {
               USBD_LL_OpenEP(pdev, BRICK6_AUDIO_EP_IN_ADDR, USBD_EP_TYPE_ISOC, BRICK6_AUDIO_EP_IN_SIZE);
-              brick6_audio_ep_opened = 1U;
+              brick6_audio_in_ep_opened = 1U;
               BRICK6_Audio_QueuePacket(pdev);
             }
-            else if ((brick6_audio_alt_setting == 0U) && (brick6_audio_ep_opened != 0U))
+            else if ((brick6_audio_in_alt_setting == 0U) && (brick6_audio_in_ep_opened != 0U))
             {
               USBD_LL_CloseEP(pdev, BRICK6_AUDIO_EP_IN_ADDR);
-              brick6_audio_ep_opened = 0U;
+              brick6_audio_in_ep_opened = 0U;
             }
           }
           else if (req->wIndex == BRICK6_MIDI_STREAMING_IF)
@@ -222,7 +253,7 @@ static uint8_t USBD_BRICK6_COMPOSITE_DataIn(USBD_HandleTypeDef *pdev, uint8_t ep
 
   if (epnum == (BRICK6_AUDIO_EP_IN_ADDR & 0x0FU))
   {
-    if (brick6_audio_ep_opened != 0U)
+    if (brick6_audio_in_ep_opened != 0U)
     {
       BRICK6_Audio_QueuePacket(pdev);
     }
@@ -234,18 +265,34 @@ static uint8_t USBD_BRICK6_COMPOSITE_DataIn(USBD_HandleTypeDef *pdev, uint8_t ep
 
 static uint8_t USBD_BRICK6_COMPOSITE_DataOut(USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
-  uint8_t len;
+  uint32_t len;
 
-  if (epnum != (MIDI_EPOUT_ADDR & 0x0FU))
+  if (epnum == (MIDI_EPOUT_ADDR & 0x0FU))
   {
-    return USBD_FAIL;
+    len = (uint32_t)HAL_PCD_EP_GetRxCount((PCD_HandleTypeDef *)pdev->pData, epnum);
+    USBD_MIDI_OnPacketsReceived(usb_rx_buffer, (uint8_t)len);
+    USBD_LL_PrepareReceive(pdev, MIDI_EPOUT_ADDR, usb_rx_buffer, MIDI_EPOUT_SIZE);
+    return USBD_OK;
   }
 
-  len = (uint8_t)HAL_PCD_EP_GetRxCount((PCD_HandleTypeDef *)pdev->pData, epnum);
-  USBD_MIDI_OnPacketsReceived(usb_rx_buffer, len);
-  USBD_LL_PrepareReceive(pdev, MIDI_EPOUT_ADDR, usb_rx_buffer, MIDI_EPOUT_SIZE);
+  if (epnum == (BRICK6_AUDIO_EP_OUT_ADDR & 0x0FU))
+  {
+    uint32_t frames;
+    len = (uint32_t)HAL_PCD_EP_GetRxCount((PCD_HandleTypeDef *)pdev->pData, epnum);
+    frames = ((uint32_t)len) / (BRICK6_AUDIO_CHANNELS * sizeof(int32_t));
+    if (frames > 0U)
+    {
+      usb_audio_backend_push_frames(audio_rx_frames, frames);
+    }
+    if (brick6_audio_out_ep_opened != 0U)
+    {
+      USBD_LL_PrepareReceive(pdev, BRICK6_AUDIO_EP_OUT_ADDR,
+                             (uint8_t *)audio_rx_frames, BRICK6_AUDIO_EP_OUT_SIZE);
+    }
+    return USBD_OK;
+  }
 
-  return USBD_OK;
+  return USBD_FAIL;
 }
 
 static void BRICK6_Audio_QueuePacket(USBD_HandleTypeDef *pdev)
