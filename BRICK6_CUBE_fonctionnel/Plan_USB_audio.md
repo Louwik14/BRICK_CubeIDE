@@ -1,4 +1,4 @@
-# 🧱 Plan d’intégration USB Audio — BRICK6 (version consolidée)
+# 🧱 Plan d’intégration USB Audio — BRICK6 (REBOOT depuis exemple ST)
 
 ## 1) Rappel du contexte
 
@@ -13,61 +13,166 @@
 
 ---
 
-## 2) Décision d’architecture
+## 2) Nouvelle stratégie (basée sur ST)
 
-### ✅ 2.1 Classe USB : stratégie A
+### ✅ 2.1 Base de départ
 
-➡️ On implémente **UNE SEULE classe USB composite maison** :
+➡️ On part de l’exemple ST :
 
-```
-USBD_BRICK6_COMPOSITE
- ├── MIDI
- └── AUDIO
-```
+> **Composite_Audio_HID** (ou Audio seul si plus simple au début)
 
-* Elle expose :
+Ce projet fournit déjà :
 
-  * 1 config descriptor unique
-  * Interfaces MIDI existantes
-  * Interfaces Audio Control + Audio Streaming
-* Elle dispatch :
-
-  * les callbacks vers le code MIDI existant
-  * et vers le nouveau backend USB Audio
-
-👉 On **n’essaie pas** de faire cohabiter deux classes ST séparées.
+* ✅ infrastructure composite ST
+* ✅ classe USB Audio officielle ST
+* ✅ endpoints isochrones
+* ✅ callbacks propres
+* ❌ BSP codec (qu’on va jeter)
 
 ---
 
-### ✅ 2.2 Audio : backend supplémentaire
+### ✅ 2.2 Architecture cible
+
+On aura :
+
+```
+USBD Composite (ST)
+ ├── Audio Class (ST)
+ │     └── branché sur moteur BRICK6
+ └── MIDI Class (ton existant)
+```
+
+👉 On **n’écrit PAS** de classe composite à la main.
+👉 On **utilise le mécanisme composite ST**.
+
+---
+
+## 3) Stratégie d’intégration
+
+### Phase A — Audio seul (sans MIDI)
+
+Objectif :
+
+> Avoir un **USB Audio OUT + IN reconnu par Windows/macOS** et stable.
+
+* Partir de l’exemple Audio ST
+* Supprimer :
+
+  * BSP codec
+  * I2C, WM8994, etc
+* Remplacer dans :
+
+```
+usbd_audio_if.c
+```
+
+Les callbacks :
+
+```c
+AUDIO_Play()
+AUDIO_Record()
+```
+
+par :
+
+```
+→ push / pop vers TON moteur audio
+```
+
+Au début :
+
+* TX = silence
+* RX = ignoré
+
+---
+
+### Phase B — Greffe du MIDI
+
+Quand Audio seul fonctionne :
+
+* Ajouter la classe MIDI dans le composite ST
+* Réutiliser :
+
+  * ton `usbd_midi.c`
+  * ses descripteurs
+* On obtient :
+
+```
+Audio + MIDI composite ST officiel
+```
+
+---
+
+## 4) Architecture audio interne (inchangée)
 
 ```
 Audio Engine
  ├── Backend SAI (maître d’horloge)
- └── Backend USB Audio (consommateur)
+ └── Backend USB Audio (consommateur/producteur)
 ```
 
-* Le moteur produit au rythme SAI
-* Le backend USB :
-
-  * consomme ce qu’il peut
-  * si underflow → envoie silence
-  * si overflow → drop
-* **USB ne cadence jamais le moteur**
+* Le moteur reste maître
+* L’USB est un backend comme un autre
 
 ---
 
-## 3) Hypothèses simplificatrices (phase 1)
+## 5) Backend USB Audio BRICK6
 
-* Pas de feedback endpoint
-* Pas d’asservissement de cadence
-* Pas d’entrée audio USB au début (optionnel)
-* Pas de cache / MPU (désactivés dans CubeMX)
-* Mode **adaptive / synchronous**
+**Fichiers :**
+
+```
+usb_audio_backend.c / .h
+```
+
+**Rôle :**
+
+* FIFO circulaire TX/RX
+* Format interne : `int32_t`
+* API :
+
+```c
+void usb_audio_backend_init(void);
+uint32_t usb_audio_backend_pop_frames(int32_t *dst, uint32_t max_frames);
+void usb_audio_backend_push_frames(const int32_t *src, uint32_t frames);
+```
+
+* Aucune dépendance USB directe
 
 ---
 
-## 4) Format et débit
+## 6) Raccordement avec la classe Audio ST
+
+Dans :
+
+```
+usbd_audio_if.c
+```
+
+On remplace :
+
+```c
+BSP_AUDIO_OUT_Play(...)
+BSP_AUDIO_IN_Record(...)
+```
+
+par :
+
+```c
+usb_audio_backend_push_frames(...)
+usb_audio_backend_pop_frames(...)
+```
+
+Les callbacks USB :
+
+* ne font que :
+
+  * copier
+  * adapter format si besoin
+  * compléter avec silence si underflow
+
+---
+
+## 7) Format et débit USB
 
 * USB Audio Class 1.0
 * 48 kHz
@@ -78,226 +183,86 @@ Audio Engine
 USB FS = 1 ms frame :
 
 ```
-48 frames * 8 bytes = 384 bytes par paquet isochrone
+48 frames * 8 bytes = 384 bytes par paquet
 ```
 
 ---
 
-## 5) Organisation des modules
+## 8) Descripteurs USB
 
-### 5.1 Nouveau backend audio
+➡️ On part **des descripteurs ST Audio existants** :
 
-**Fichier :**
+* Ils sont déjà valides
+* Déjà reconnus par Windows / macOS
+* On modifie seulement :
 
-```
-usb_audio_backend.c / .h
-```
-
-**Responsabilités :**
-
-* FIFO circulaire TX (et plus tard RX)
-* Stockage en `int32_t` natif (copie brute)
-* API simple :
-
-```c
-void usb_audio_backend_init(void);
-uint32_t usb_audio_backend_pop_frames(int32_t *dst, uint32_t max_frames);
-void usb_audio_backend_push_frames(const int32_t *src, uint32_t frames);
-```
-
-* Aucune IRQ
-* Aucune dépendance USB directe
+  * le format (24 bits)
+  * le nombre de canaux si besoin
 
 ---
 
-### 5.2 Intégration moteur
+## 9) Politique temporelle
 
-Dans le moteur audio :
-
-* Après rendu d’un bloc :
-
-  * push dans le backend USB Audio
-* Le moteur **ne sait pas** si quelqu’un consomme ou non.
+* SAI = horloge maître
+* USB = backend adaptatif
+* Pas d’asservissement dans la phase 1
+* Pas de feedback endpoint au début
 
 ---
 
-### 5.3 Classe USB composite
+## 10) Mémoire
 
-**Nouveaux fichiers (dans usb_stack ou middlewares) :**
-
-```
-usbd_brick6_composite.c / .h
-```
-
-Rôle :
-
-* Fournir :
-
-  * Init / DeInit
-  * Setup
-  * DataIn / DataOut
-  * GetCfgDesc
-* Router :
-
-  * les endpoints MIDI → code MIDI existant
-  * les endpoints Audio → usb_audio_backend + glue
-
----
-
-### 5.4 Interface Audio ST
-
-On peut :
-
-* soit partir de `usbd_audio.c` ST simplifié
-* soit intégrer directement la logique dans la classe composite
-
-Dans tous les cas :
-
-* Les callbacks Audio :
-
-  * ne font que :
-
-    * demander N frames au backend
-    * copier dans le buffer USB
-    * relancer un transfert
-
----
-
-## 6) Descripteurs USB
-
-Dans :
-
-```
-App/usb_stack/usbd_desc.c
-```
-
-* Un seul device descriptor
-* Un seul config descriptor
-* Contient :
-
-  * Interfaces MIDI existantes
-  * * Audio Control interface
-  * * Audio Streaming interface IN
-
-Audio Streaming :
-
-* Isochronous IN
-* MaxPacketSize = 384
-* Format Type I
-* 2 canaux
-* Subframe size = 4
-* Bit resolution = 24
-
----
-
-## 7) Flux de données
-
-### 7.1 TX (moteur → PC)
-
-```
-Engine render block
-  → usb_audio_backend_push_frames()
-
-USB IN callback
-  → usb_audio_backend_pop_frames()
-  → copie vers buffer USB
-  → si pas assez : compléter avec silence
-```
-
----
-
-### 7.2 RX (plus tard)
-
-Même principe, en sens inverse, mais ignoré au début.
-
----
-
-## 8) Politique temporelle
-
-* SAI = horloge maîtresse
-* USB = consommateur opportuniste
-* Pas de blocage
-* Pas de rétroaction dans la phase 1
-
----
-
-## 9) Mémoire
-
-* Pas de cache → pas de nettoyage / invalidation
+* Pas de cache / ou géré plus tard
 * Buffers USB :
 
   * statiques
   * alignés 32 bits
 * FIFO USB :
 
-  * ~4 à 8 ms de profondeur
-  * donc ~2 à 4 KB
-
----
-
-## 10) Fichiers modifiés / ajoutés
-
-### Modifiés
-
-* `App/usb_stack/usbd_desc.c` → descripteur composite
-* `App/usb_stack/usb_device.c` → enregistrer la classe composite
-* `App/usb_stack/usbd_conf.c` → taille static malloc si besoin
-
-### Ajoutés
-
-* `usbd_brick6_composite.c/.h`
-* `usb_audio_backend.c/.h`
-* éventuellement `usbd_audio_minimal.c/.h` ou équivalent
+  * ~4 à 8 ms de profondeur (~2–4 KB)
 
 ---
 
 ## 11) Plan d’intégration par étapes
 
-### Étape 1 — Enumération
 
-* Classe composite
-* Descripteurs OK
-* Le PC voit :
 
-  * MIDI
-  * Audio
+### Étape 1 — Débrancher le codec ST
+
+* Supprimer BSP audio
+* Mettre :
+
+  * TX = silence
+  * RX = jeté
 
 ---
 
-### Étape 2 — Silence TX
+### Étape 2 — Brancher le backend BRICK6
 
-* Endpoint Audio IN actif
-* Envoi de zéros
+* Implémenter `usb_audio_backend`
+* Relier à `usbd_audio_if.c`
+* Le PC reçoit le son du moteur
+
+---
+
+### Étape 3 — Ajouter le MIDI
+
+* Ajouter la classe MIDI dans le composite ST
 * Vérifier :
 
-  * stabilité
-  * pas de glitch
-  * bon débit
+  * MIDI fonctionne toujours
+  * Audio toujours OK
 
 ---
 
-### Étape 3 — RX jeté (optionnel)
+### Étape 4 — Raffinements
 
-* Si endpoint OUT activé :
+* Format exact
+* Latence
+* Plus tard :
 
-  * on reçoit
-  * on ignore
-
----
-
-### Étape 4 — Connexion au moteur
-
-* Le moteur push dans le backend USB
-* L’USB consomme
-* Le PC entend le vrai son
-
----
-
-### Étape 5 — Plus tard
-
-* Feedback endpoint
-* Asservissement fin
-* Entrée audio USB
+  * feedback endpoint
+  * asservissement fin
 
 ---
 
@@ -306,9 +271,10 @@ Même principe, en sens inverse, mais ignoré au début.
 * ❌ Pas de logique audio dans les callbacks USB
 * ❌ Pas de blocage
 * ❌ Pas de malloc
-* ❌ Pas de dépendance circulaire
+* ❌ Pas de classe composite maison
+* ✅ On s’appuie sur ST
 * ✅ USB = backend passif
-* ✅ Architecture inchangée
+* ✅ Architecture BRICK6 inchangée
 
 ---
 
@@ -316,10 +282,9 @@ Même principe, en sens inverse, mais ignoré au début.
 
 Cette approche :
 
-* respecte totalement BRICK6
-* minimise les risques
-* permet un bring-up progressif
-* prépare proprement l’async plus tard
-* ne sacrifie ni la qualité ni la maintenabilité
-
+* ✅ s’appuie sur du code **déjà validé par ST**
+* ✅ évite 100% des pièges de descripteurs
+* ✅ garantit la compatibilité Windows / macOS
+* ✅ te fait gagner des **semaines**
+* ✅ isole proprement USB du moteur audio
 
