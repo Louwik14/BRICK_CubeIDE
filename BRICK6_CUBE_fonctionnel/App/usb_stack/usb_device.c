@@ -23,6 +23,8 @@
 #include "usb_device.h"
 #include "usbd_core.h"
 #include "usbd_desc.h"
+#include "usbd_audio.h"
+#include "usbd_audio_if.h"
 #include "usbd_midi.h"
 
 /* USER CODE BEGIN Includes */
@@ -41,6 +43,10 @@
 
 /* USB Device Core handle declaration. */
 USBD_HandleTypeDef hUsbDeviceFS;
+#ifdef USE_USBD_COMPOSITE
+static uint8_t USBD_AUDIO_EpAddr[] = {AUDIO_OUT_EP};
+static uint8_t USBD_MIDI_EpAddr[] = {MIDI_EPIN_ADDR, MIDI_EPOUT_ADDR};
+#endif /* USE_USBD_COMPOSITE */
 
 /*
  * -- Insert your variables declaration here --
@@ -71,10 +77,33 @@ void MX_USB_DEVICE_Init(void)
   {
     Error_Handler();
   }
+#ifdef USE_USBD_COMPOSITE
+  if (USBD_RegisterClassComposite(&hUsbDeviceFS, &USBD_AUDIO, CLASS_TYPE_AUDIO, USBD_AUDIO_EpAddr) != USBD_OK)
+  {
+    Error_Handler();
+  }
+  if (USBD_AUDIO_RegisterInterface(&hUsbDeviceFS, &USBD_AUDIO_fops_FS) != USBD_OK)
+  {
+    Error_Handler();
+  }
+  if (USBD_RegisterClassComposite(&hUsbDeviceFS, &USBD_MIDI, CLASS_TYPE_MIDI, USBD_MIDI_EpAddr) != USBD_OK)
+  {
+    Error_Handler();
+  }
+#else
+  if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_AUDIO) != USBD_OK)
+  {
+    Error_Handler();
+  }
+  if (USBD_AUDIO_RegisterInterface(&hUsbDeviceFS, &USBD_AUDIO_fops_FS) != USBD_OK)
+  {
+    Error_Handler();
+  }
   if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_MIDI) != USBD_OK)
   {
     Error_Handler();
   }
+#endif /* USE_USBD_COMPOSITE */
   if (USBD_Start(&hUsbDeviceFS) != USBD_OK)
   {
     Error_Handler();
