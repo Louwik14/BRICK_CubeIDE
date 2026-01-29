@@ -1,3 +1,31 @@
+/**
+ * @file sd_audio_block_ring.c
+ * @brief Ring buffer de blocs audio entre SD et sortie audio.
+ *
+ * Ce module fournit une file circulaire statique pour transporter des blocs
+ * audio du streaming SD vers le rendu audio, sans allocation dynamique.
+ *
+ * Rôle dans le système:
+ * - Tampon d'élasticité entre SD (producteur) et audio_out (consommateur).
+ * - Permet d'absorber la latence SD sans impacter l'IRQ audio.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: oui (consommé par audio_out).
+ * - IRQ: non (utilisé en tasklet).
+ * - Tasklet: oui (sd_tasklet_poll / audio_tasklet_poll).
+ * - Borné: oui (taille fixe AUDIO_BLOCK_COUNT).
+ *
+ * Architecture:
+ * - Appelé par: sd_stream (produce), audio_out (consume).
+ * - Appelle: aucun module externe.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage.
+ *
+ * @note L’API publique est déclarée dans sd_audio_block_ring.h.
+ */
+
 #include "sd_audio_block_ring.h"
 #include <stddef.h>
 

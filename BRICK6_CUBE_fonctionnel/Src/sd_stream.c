@@ -1,3 +1,32 @@
+/**
+ * @file sd_stream.c
+ * @brief Streaming SD non bloquant (DMA + FSM) pour BRICK6.
+ *
+ * Ce module encapsule l'accès SD en lecture/écriture par chunks DMA,
+ * expose des buffers double pour les diagnostics et alimente le ring
+ * buffer audio lors du streaming.
+ *
+ * Rôle dans le système:
+ * - Fournit un backend SD asynchrone pour l'audio et les tests.
+ * - Découple les callbacks IRQ de la logique de transfert.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non (mais alimente la chaîne audio).
+ * - IRQ: callbacks SD posent des flags/compteurs uniquement.
+ * - Tasklet: oui (sd_tasklet_poll / bounded).
+ * - Borné: oui avec budgets (STEP 6) en boucle principale.
+ *
+ * Architecture:
+ * - Appelé par: brick6_app_init (init), diagnostics_tasklet, main loop.
+ * - Appelle: HAL SD, sd_audio_block_ring, diagnostics logging.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans sd_stream.h.
+ */
+
 #include "sd_stream.h"
 #include "brick6_refactor.h"
 #if BRICK6_REFACTOR_STEP_5

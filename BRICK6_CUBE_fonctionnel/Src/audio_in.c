@@ -1,3 +1,32 @@
+/**
+ * @file audio_in.c
+ * @brief Acquisition audio TDM8 via SAI/DMA (ADC du CS42448).
+ *
+ * Ce module maintient un buffer circulaire DMA d'entrée et expose
+ * le dernier demi-buffer complet pour consommation par le moteur/audio_out.
+ *
+ * Rôle dans le système:
+ * - Point d'entrée audio du codec vers le reste du firmware.
+ * - Fournit un bloc cohérent pour le monitoring/loopback.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: oui (chemin DMA d'entrée).
+ * - IRQ: callbacks SAI mettent à jour les indices/flags uniquement.
+ * - Tasklet: non (traitement principal en IRQ minimal).
+ * - Borné: oui (constante par demi-buffer).
+ *
+ * Architecture:
+ * - Appelé par: brick6_app_init (init), HAL SAI IRQ.
+ * - Appelle: HAL SAI / UART (debug dump hors temps réel).
+ * - Consommé par: audio_out, diagnostics_tasklet.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ (les dumps UART sont à faire hors IRQ).
+ *
+ * @note L’API publique est déclarée dans audio_in.h.
+ */
+
 #include "audio_in.h"
 #include "brick6_refactor.h"
 #include "sai.h"

@@ -1,3 +1,31 @@
+/**
+ * @file sdram_alloc.c
+ * @brief Allocateur linéaire simple pour tests SDRAM.
+ *
+ * Ce module fournit un bump allocator sans libération, destiné aux
+ * diagnostics SDRAM et à l'initialisation des buffers statiques.
+ *
+ * Rôle dans le système:
+ * - Allocation contrôlée dans la SDRAM externe.
+ * - Support aux tests et aux buffers applicatifs.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - Tasklet: non (utilisé dans diagnostics).
+ * - IRQ: non.
+ * - Borné: oui (arithmétique simple, O(1)).
+ *
+ * Architecture:
+ * - Appelé par: diagnostics_tasklet, init SDRAM.
+ * - Appelle: aucun module externe.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage.
+ *
+ * @note L’API publique est déclarée dans sdram_alloc.h.
+ */
+
 #include "sdram_alloc.h"
 #include "sdram.h"
 

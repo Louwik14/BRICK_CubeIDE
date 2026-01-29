@@ -1,3 +1,31 @@
+/**
+ * @file engine_tasklet.c
+ * @brief Cadence moteur basée sur les frames audio (tick 1 kHz).
+ *
+ * Ce module accumule les frames audio et déclenche un tick logique à cadence
+ * régulière pour l'engine (séquenceur/synth à venir), hors IRQ.
+ *
+ * Rôle dans le système:
+ * - Découple la cadence de l'engine du DMA audio.
+ * - Fournit un tick stable pour la logique temps réel non audio.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: indirect (cadencé par l'audio mais hors IRQ).
+ * - Tasklet: oui (appelé dans la boucle principale).
+ * - IRQ: non.
+ * - Borné: oui (boucle bornée par l'accumulateur).
+ *
+ * Architecture:
+ * - Appelé par: audio_out (notify frames), main loop (engine_tasklet_poll).
+ * - Appelle: aucun module externe.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Ne pas bloquer la boucle principale.
+ *
+ * @note L’API publique est déclarée dans engine_tasklet.h.
+ */
+
 #include "engine_tasklet.h"
 
 #if BRICK6_REFACTOR_STEP_3

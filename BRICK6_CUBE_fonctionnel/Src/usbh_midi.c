@@ -1,4 +1,32 @@
 /**
+ * @file usbh_midi.c
+ * @brief Driver de classe USB Host MIDI (extension BRICK6).
+ *
+ * Ce module implémente la classe USB Host MIDI pour la pile USBH,
+ * avec gestion des endpoints et des buffers RX/TX.
+ *
+ * Rôle dans le système:
+ * - Fournit le backend USB Host pour midi_host.c.
+ * - Encapsule la logique de transfert MIDI côté host.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - Tasklet: oui (traitement par USBH_Process).
+ * - IRQ: callbacks USB SOF possibles, traitement léger.
+ * - Borné: oui (états de FSM USBH).
+ *
+ * Architecture:
+ * - Appelé par: pile USB Host (usb_host.c / USBH core).
+ * - Appelle: USBH core, HAL low-level USB.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage dans les callbacks USB.
+ *
+ * @note L’API publique est déclarée dans usbh_midi.h.
+ */
+
+/**
   ******************************************************************************
   * @file    usbh_midi.c
   * @brief   USB Host MIDI class driver (STM32Cube HAL)
