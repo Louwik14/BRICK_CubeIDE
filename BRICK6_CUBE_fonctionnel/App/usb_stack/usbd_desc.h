@@ -27,6 +27,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_def.h"
+#include "usbd_midi.h"
 
 /* USER CODE BEGIN INCLUDE */
 
@@ -52,6 +53,12 @@
 #define  USB_SIZ_STRING_SERIAL       0x1A
 
 /* USER CODE BEGIN EXPORTED_CONSTANTS */
+#define BRICK6_AUDIO_AC_DESC_SIZE        39U
+#define BRICK6_AUDIO_AS_DESC_SIZE        52U
+#define BRICK6_AUDIO_TOTAL_DESC_SIZE     (BRICK6_AUDIO_AC_DESC_SIZE + BRICK6_AUDIO_AS_DESC_SIZE)
+#define BRICK6_MIDI_TOTAL_DESC_SIZE      (USB_MIDI_INTERFACE_DESC_SIZE + 27U)
+#define BRICK6_COMPOSITE_CONFIG_DESC_SIZE (9U + BRICK6_AUDIO_TOTAL_DESC_SIZE + BRICK6_MIDI_TOTAL_DESC_SIZE)
+#define BRICK6_MIDI_CLASS_DESC_OFFSET    (9U + BRICK6_AUDIO_TOTAL_DESC_SIZE + 9U)
 
 /* USER CODE END EXPORTED_CONSTANTS */
 
@@ -107,6 +114,7 @@
 extern USBD_DescriptorsTypeDef FS_Desc;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
+extern uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC_SIZE];
 
 /* USER CODE END EXPORTED_VARIABLES */
 
@@ -140,4 +148,3 @@ extern USBD_DescriptorsTypeDef FS_Desc;
 #endif
 
 #endif /* __USBD_DESC__C__ */
-
