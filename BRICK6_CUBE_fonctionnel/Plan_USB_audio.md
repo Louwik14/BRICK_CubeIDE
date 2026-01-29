@@ -1,6 +1,6 @@
 # 🧱 Plan d’intégration USB Audio — BRICK6 (version consolidée)
 
-## 1) Rappel du contexte
+## 1) Contexte
 
 * STM32H743, USB Full Speed
 * Pas de RTOS, pas de malloc
@@ -8,14 +8,14 @@
 * Audio interne en **24 bits stockés en 32 bits**
 * Audio cadencé par **SAI + DMA**
 * USB Device déjà présent pour **MIDI**
-* On veut ajouter **USB Audio Device class compliant**
-* Sans casser l’existant
+* Objectif : ajouter **USB Audio Device class compliant**
+* Sans casser l’architecture audio
 
 ---
 
 ## 2) Décision d’architecture
 
-### ✅ 2.1 Classe USB : stratégie A
+### 2.1 Classe USB
 
 ➡️ On implémente **UNE SEULE classe USB composite maison** :
 
@@ -25,21 +25,18 @@ USBD_BRICK6_COMPOSITE
  └── AUDIO
 ```
 
-* Elle expose :
+* Une seule config descriptor
+* Contient :
 
-  * 1 config descriptor unique
-  * Interfaces MIDI existantes
+  * Interfaces MIDI
   * Interfaces Audio Control + Audio Streaming
-* Elle dispatch :
+* Le core USB ST ne gère **qu’une seule classe** → on ne peut pas empiler.
 
-  * les callbacks vers le code MIDI existant
-  * et vers le nouveau backend USB Audio
-
-👉 On **n’essaie pas** de faire cohabiter deux classes ST séparées.
+👉 L’ancienne classe MIDI device sera **absorbée** dans cette classe composite.
 
 ---
 
-### ✅ 2.2 Audio : backend supplémentaire
+### 2.2 Rôle de l’audio USB
 
 ```
 Audio Engine
@@ -48,7 +45,7 @@ Audio Engine
 ```
 
 * Le moteur produit au rythme SAI
-* Le backend USB :
+* L’USB Audio :
 
   * consomme ce qu’il peut
   * si underflow → envoie silence
@@ -57,13 +54,13 @@ Audio Engine
 
 ---
 
-## 3) Hypothèses simplificatrices (phase 1)
+## 3) Hypothèses phase 1
 
 * Pas de feedback endpoint
-* Pas d’asservissement de cadence
-* Pas d’entrée audio USB au début (optionnel)
-* Pas de cache / MPU (désactivés dans CubeMX)
-* Mode **adaptive / synchronous**
+* Pas d’asservissement
+* Pas d’entrée audio USB au début
+* Pas de cache / MPU (désactivés)
+* Mode **synchronous / adaptive**
 
 ---
 
@@ -78,26 +75,26 @@ Audio Engine
 USB FS = 1 ms frame :
 
 ```
-48 frames * 8 bytes = 384 bytes par paquet isochrone
+48 frames × 8 bytes = 384 bytes / paquet isochrone
 ```
 
 ---
 
-## 5) Organisation des modules
+## 5) Architecture logicielle
 
-### 5.1 Nouveau backend audio
+### 5.1 Backend audio USB
 
 **Fichier :**
 
 ```
-usb_audio_backend.c / .h
+App/audio/usb_audio_backend.c / .h
 ```
 
-**Responsabilités :**
+**Rôle :**
 
 * FIFO circulaire TX (et plus tard RX)
-* Stockage en `int32_t` natif (copie brute)
-* API simple :
+* Stockage en `int32_t`
+* API :
 
 ```c
 void usb_audio_backend_init(void);
@@ -105,61 +102,45 @@ uint32_t usb_audio_backend_pop_frames(int32_t *dst, uint32_t max_frames);
 void usb_audio_backend_push_frames(const int32_t *src, uint32_t frames);
 ```
 
-* Aucune IRQ
-* Aucune dépendance USB directe
+* Pas de dépendance USB
+* Pas d’IRQ
 
 ---
 
 ### 5.2 Intégration moteur
 
-Dans le moteur audio :
+* Après rendu d’un bloc audio :
 
-* Après rendu d’un bloc :
-
-  * push dans le backend USB Audio
-* Le moteur **ne sait pas** si quelqu’un consomme ou non.
+  * push vers `usb_audio_backend`
+* Le moteur **ne sait pas** qui consomme.
 
 ---
 
 ### 5.3 Classe USB composite
 
-**Nouveaux fichiers (dans usb_stack ou middlewares) :**
+**Nouveaux fichiers :**
 
 ```
-usbd_brick6_composite.c / .h
+App/usb_stack/usbd_brick6_composite.c / .h
 ```
 
-Rôle :
+**Rôle :**
 
-* Fournir :
+* Implémente :
 
   * Init / DeInit
   * Setup
   * DataIn / DataOut
+  * SOF (optionnel)
   * GetCfgDesc
-* Router :
+* Gère :
 
-  * les endpoints MIDI → code MIDI existant
-  * les endpoints Audio → usb_audio_backend + glue
+  * endpoints MIDI
+  * endpoint Audio IN
+* Contient :
 
----
-
-### 5.4 Interface Audio ST
-
-On peut :
-
-* soit partir de `usbd_audio.c` ST simplifié
-* soit intégrer directement la logique dans la classe composite
-
-Dans tous les cas :
-
-* Les callbacks Audio :
-
-  * ne font que :
-
-    * demander N frames au backend
-    * copier dans le buffer USB
-    * relancer un transfert
+  * le code MIDI device (repris / intégré)
+  * le glue audio USB
 
 ---
 
@@ -175,14 +156,14 @@ App/usb_stack/usbd_desc.c
 * Un seul config descriptor
 * Contient :
 
-  * Interfaces MIDI existantes
-  * * Audio Control interface
-  * * Audio Streaming interface IN
+  * Interfaces Audio Control
+  * Interface Audio Streaming IN
+  * Interfaces MIDI
 
 Audio Streaming :
 
 * Isochronous IN
-* MaxPacketSize = 384
+* wMaxPacketSize = 384
 * Format Type I
 * 2 canaux
 * Subframe size = 4
@@ -192,123 +173,112 @@ Audio Streaming :
 
 ## 7) Flux de données
 
-### 7.1 TX (moteur → PC)
+### 7.1 TX (BRICK6 → PC)
 
 ```
-Engine render block
-  → usb_audio_backend_push_frames()
+Engine render
+   → usb_audio_backend_push_frames()
 
 USB IN callback
-  → usb_audio_backend_pop_frames()
-  → copie vers buffer USB
-  → si pas assez : compléter avec silence
+   → usb_audio_backend_pop_frames()
+   → compléter avec 0 si underflow
+   → envoyer paquet USB
 ```
-
----
-
-### 7.2 RX (plus tard)
-
-Même principe, en sens inverse, mais ignoré au début.
 
 ---
 
 ## 8) Politique temporelle
 
 * SAI = horloge maîtresse
-* USB = consommateur opportuniste
+* USB = consommateur passif
 * Pas de blocage
-* Pas de rétroaction dans la phase 1
+* Pas de dépendance cyclique
 
 ---
 
 ## 9) Mémoire
 
-* Pas de cache → pas de nettoyage / invalidation
-* Buffers USB :
-
-  * statiques
-  * alignés 32 bits
-* FIFO USB :
-
-  * ~4 à 8 ms de profondeur
-  * donc ~2 à 4 KB
+* Buffers USB statiques
+* Alignés 32 bits
+* FIFO ~ 4–8 ms ≈ 2–4 KB
 
 ---
 
-## 10) Fichiers modifiés / ajoutés
+## 10) Fichiers impactés
 
-### Modifiés
+### 10.1 Fichiers existants à modifier
 
-* `App/usb_stack/usbd_desc.c` → descripteur composite
-* `App/usb_stack/usb_device.c` → enregistrer la classe composite
-* `App/usb_stack/usbd_conf.c` → taille static malloc si besoin
+* `App/usb_stack/usbd_desc.c`
+  → devient descripteur composite
 
-### Ajoutés
+* `App/usb_stack/usb_device.c`
+  → enregistre `USBD_BRICK6_COMPOSITE`
 
-* `usbd_brick6_composite.c/.h`
-* `usb_audio_backend.c/.h`
-* éventuellement `usbd_audio_minimal.c/.h` ou équivalent
-
----
-
-## 11) Plan d’intégration par étapes
-
-### Étape 1 — Enumération
-
-* Classe composite
-* Descripteurs OK
-* Le PC voit :
-
-  * MIDI
-  * Audio
+* `App/usb_stack/usbd_conf.c`
+  → ajustement buffers si nécessaire
 
 ---
 
-### Étape 2 — Silence TX
+### 10.2 Nouveaux fichiers
 
-* Endpoint Audio IN actif
-* Envoi de zéros
-* Vérifier :
-
-  * stabilité
-  * pas de glitch
-  * bon débit
+* `App/usb_stack/usbd_brick6_composite.c / .h`
+* `App/audio/usb_audio_backend.c / .h`
 
 ---
 
-### Étape 3 — RX jeté (optionnel)
+## 11) Plan d’exécution
 
-* Si endpoint OUT activé :
+### Étape 1 — Bring-up USB composite
 
-  * on reçoit
-  * on ignore
+* Écrire :
+
+  * classe composite
+  * descripteur composite
+* Objectif :
+
+  * le PC voit :
+
+    * MIDI
+    * Audio device
 
 ---
 
-### Étape 4 — Connexion au moteur
+### Étape 2 — Audio USB muet
 
-* Le moteur push dans le backend USB
+* Endpoint audio IN actif
+* Envoie **silence stable**
+* Test :
+
+  * Ableton / Windows / Linux
+  * Pas de glitch, pas de reset USB
+
+---
+
+### Étape 3 — Connexion moteur
+
+* Le moteur push vers backend USB
 * L’USB consomme
 * Le PC entend le vrai son
 
 ---
 
-### Étape 5 — Plus tard
+## 12) Règles absolues
 
-* Feedback endpoint
-* Asservissement fin
-* Entrée audio USB
+* ❌ Pas de logique lourde en callbacks USB
+* ❌ Pas de malloc
+* ❌ Pas de blocage
+* ❌ Pas d’USB qui pilote l’audio
+* ✅ USB = backend passif
+* ✅ Architecture audio intacte
 
 ---
 
-## 12) Règles d’or
+## 13) Ce qu’on ne fait PAS (pour l’instant)
 
-* ❌ Pas de logique audio dans les callbacks USB
-* ❌ Pas de blocage
-* ❌ Pas de malloc
-* ❌ Pas de dépendance circulaire
-* ✅ USB = backend passif
-* ✅ Architecture inchangée
+* Pas de feedback endpoint
+* Pas d’entrée audio USB
+* Pas de resampling
+* Pas d’asservissement fin
 
 ---
 
@@ -317,9 +287,9 @@ Même principe, en sens inverse, mais ignoré au début.
 Cette approche :
 
 * respecte totalement BRICK6
-* minimise les risques
-* permet un bring-up progressif
-* prépare proprement l’async plus tard
-* ne sacrifie ni la qualité ni la maintenabilité
+* ne pollue pas l’engine
+* permet un bring-up rapide
+* prépare l’async plus tard
+* reste maintenable et maîtrisée
 
 
