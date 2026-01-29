@@ -1159,6 +1159,9 @@ static void  USBD_CMPSIT_AUDIODesc(USBD_HandleTypeDef *pdev, uint32_t pConf, __I
   static USBD_IfDescTypeDef *pIfDesc;
   static USBD_IadDescTypeDef *pIadDesc;
   UNUSED(speed);
+#if USBD_COMPOSITE_USE_IAD != 1
+  UNUSED(pIadDesc);
+#endif /* USBD_COMPOSITE_USE_IAD != 1 */
 
   /* Append AUDIO Interface descriptor to Configuration descriptor */
   USBD_SpeakerIfDescTypeDef            *pSpIfDesc;
@@ -1902,5 +1905,4 @@ uint8_t USBD_CMPST_ClearConfDesc(USBD_HandleTypeDef *pdev)
 /**
   * @}
   */
-
 

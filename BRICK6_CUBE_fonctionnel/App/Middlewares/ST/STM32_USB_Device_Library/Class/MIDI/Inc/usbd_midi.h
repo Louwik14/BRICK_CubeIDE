@@ -160,6 +160,9 @@ USBD_MIDI_HandleTypeDef;
 extern USBD_ClassTypeDef  USBD_MIDI;
 extern void USBD_MIDI_OnPacketsReceived(uint8_t *data, uint8_t len);
 extern void USBD_MIDI_OnPacketsSent(void);
+#ifdef USE_USBD_COMPOSITE
+void USBD_MIDI_Desc(USBD_HandleTypeDef *pdev, uint32_t pConf, __IO uint32_t *Sze);
+#endif /* USE_USBD_COMPOSITE */
 
 /**
   * @}

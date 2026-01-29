@@ -63,7 +63,7 @@
   */
 
 /*---------- -----------*/
-#define USBD_MAX_NUM_INTERFACES     1U
+#define USBD_MAX_NUM_INTERFACES     3U
 /*---------- -----------*/
 #define USBD_MAX_NUM_CONFIGURATION     1U
 /*---------- -----------*/
@@ -76,6 +76,9 @@
 #define USBD_SELF_POWERED     1U
 /*---------- -----------*/
 #define HID_FS_BINTERVAL     0xAU
+#define USE_USBD_COMPOSITE   1U
+#define USBD_CMPSIT_ACTIVATE_MIDI 1U
+#define USBD_CMPSIT_ACTIVATE_AUDIO 1U
 
 /****************************************/
 /* #define for FS and HS identification */
@@ -172,4 +175,3 @@ void USBD_static_free(void *p);
 #endif
 
 #endif /* __USBD_CONF__H__ */
-
