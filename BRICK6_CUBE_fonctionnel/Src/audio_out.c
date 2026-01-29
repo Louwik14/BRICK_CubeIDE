@@ -1,3 +1,33 @@
+/**
+ * @file audio_out.c
+ * @brief Sortie audio TDM8 via SAI/DMA pour le codec CS42448.
+ *
+ * Ce module gère le buffer DMA de sortie, le remplissage des blocs et
+ * l'orchestration des callbacks SAI associés. Il peut générer un signal
+ * de test ou relayer des blocs audio fournis par le ring buffer SD.
+ *
+ * Rôle dans le système:
+ * - Dernière étape de la chaîne audio avant le codec.
+ * - Cadence l'engine via la notification des frames audio.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: oui (chemin DMA de sortie).
+ * - IRQ: callbacks SAI minimaux (flags + compteurs).
+ * - Tasklet: audio_tasklet_poll() remplit les buffers hors IRQ.
+ * - Borné: oui (travail limité à un demi-buffer DMA).
+ *
+ * Architecture:
+ * - Appelé par: brick6_app_init (init), HAL SAI IRQ, main loop (audio_tasklet_poll).
+ * - Appelle: AudioIn_GetLatestBlock, engine_tasklet_notify_frames,
+ *            audio_block_ring_* / HAL SAI.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage ni de log en IRQ.
+ *
+ * @note L’API publique est déclarée dans audio_out.h.
+ */
+
 #include "audio_out.h"
 #include "audio_in.h"
 #include "engine_tasklet.h"

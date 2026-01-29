@@ -1,3 +1,31 @@
+/**
+ * @file cs42448.c
+ * @brief Initialisation du codec audio CS42448 via I2C.
+ *
+ * Ce module configure les registres du CS42448 (format TDM,
+ * volumes, alimentation) lors du démarrage du système.
+ *
+ * Rôle dans le système:
+ * - Configuration du codec audio avant le démarrage DMA SAI.
+ * - Assure un état connu des ADC/DAC.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non (initialisation seulement).
+ * - Tasklet: non.
+ * - IRQ: non.
+ * - Borné: non critique (I2C bloquant possible).
+ *
+ * Architecture:
+ * - Appelé par: séquence d'initialisation applicative.
+ * - Appelle: HAL I2C (mem write).
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Ne pas appeler en IRQ.
+ *
+ * @note L’API publique est déclarée dans cs42448.h.
+ */
+
 #include "cs42448.h"
 #include "i2c.h"
 #include <stdbool.h>

@@ -5,12 +5,25 @@
  * Ce module fournit une API MIDI haut niveau, indépendante du transport,
  * et un backend USB Device basé sur la classe usbd_midi.
  *
- * Contraintes:
- * - Pas de RTOS / threads / malloc.
- * - Pas d'émission USB dans les callbacks d'interruption.
- * - Réception USB via USBD_MIDI_OnPacketsReceived (ISR) -> file RX -> midi_poll().
+ * Rôle dans le système:
+ * - Centralise la gestion MIDI (RX/TX) pour les tasklets.
+ * - Découple le moteur et l'UI des transports (USB Device/Host).
  *
- * @note L'API publique est déclarée dans midi.h.
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - IRQ: RX USB en ISR -> file RX -> traitement en midi_poll().
+ * - Tasklet: oui (midi_poll dans la boucle principale).
+ * - Borné: oui (traitement par paquets/itérations).
+ *
+ * Architecture:
+ * - Appelé par: main loop (midi_poll), callbacks USB Device.
+ * - Appelle: usbd_midi, midi_host (backend host), diagnostics/logs.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas d'émission USB en IRQ.
+ *
+ * @note L’API publique est déclarée dans midi.h.
  */
 
 #include "midi.h"

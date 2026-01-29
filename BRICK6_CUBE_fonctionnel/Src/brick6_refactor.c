@@ -1,3 +1,31 @@
+/**
+ * @file brick6_refactor.c
+ * @brief Compteurs et instrumentation pour le plan de refactor BRICK6.
+ *
+ * Ce module centralise les compteurs globaux utilisés pour mesurer
+ * l'activité IRQ/tasklets durant les étapes de refactor.
+ *
+ * Rôle dans le système:
+ * - Stockage des compteurs d'instrumentation accessibles partout.
+ * - Support aux diagnostics et au suivi des budgets CPU.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non (données simples, accès atomiques).
+ * - IRQ: oui (incrément depuis callbacks).
+ * - Tasklet: oui (lecture depuis diagnostics).
+ * - Borné: oui (incréments simples).
+ *
+ * Architecture:
+ * - Appelé par: callbacks IRQ audio/SD/USB et main loop.
+ * - Appelle: aucun module.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de logique lourde.
+ *
+ * @note L’API publique est déclarée dans brick6_refactor.h.
+ */
+
 #include "brick6_refactor.h"
 
 #if BRICK6_REFACTOR_STEP_1

@@ -1,6 +1,29 @@
 /**
  * @file midi_host.c
- * @brief USB MIDI Host bridge (USB Host -> moteur interne)
+ * @brief Pont MIDI USB Host vers l'API MIDI interne.
+ *
+ * Ce module lit/écrit des paquets MIDI via la pile USB Host et les
+ * convertit en messages MIDI internes pour le moteur et l'UI.
+ *
+ * Rôle dans le système:
+ * - Bridge entre USB Host et l'API midi.c.
+ * - Applique un budget pour ne pas monopoliser la boucle principale.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - Tasklet: oui (poll en boucle principale).
+ * - IRQ: non (pas d'accès en ISR).
+ * - Borné: oui (midi_host_poll_bounded).
+ *
+ * Architecture:
+ * - Appelé par: main loop (midi_host_poll[_bounded]).
+ * - Appelle: USBH_MIDI_ReadPacket/Transmit, midi_internal_receive, midi_send_raw.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Ne pas bloquer la boucle principale.
+ *
+ * @note L’API publique est déclarée dans midi_host.h.
  */
 
 #include "midi_host.h"

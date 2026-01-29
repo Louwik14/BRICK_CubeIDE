@@ -1,3 +1,31 @@
+/**
+ * @file diagnostics_tasklet.c
+ * @brief Tasklet de diagnostics (logs 1 Hz, tests SDRAM/SD, stats).
+ *
+ * Ce module centralise les logs périodiques, l'affichage des compteurs
+ * d'instrumentation et les tests SD/SDRAM hors IRQ.
+ *
+ * Rôle dans le système:
+ * - Observabilité: logs de charge, erreurs et stats.
+ * - Tests intégrés (SD, SDRAM alloc) pour validation système.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - Tasklet: oui (appelé dans la boucle principale).
+ * - IRQ: non.
+ * - Borné: partiellement (cadence 1 Hz, tests séquencés).
+ *
+ * Architecture:
+ * - Appelé par: main loop (diagnostics_tasklet_poll), brick6_app_init (init SD).
+ * - Appelle: sd_stream, audio_in/out stats, sdram_alloc, UART logs.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Ne pas appeler depuis une IRQ.
+ *
+ * @note L’API publique est déclarée dans diagnostics_tasklet.h.
+ */
+
 #include "diagnostics_tasklet.h"
 
 #include "audio_in.h"

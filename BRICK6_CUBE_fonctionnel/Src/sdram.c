@@ -1,3 +1,31 @@
+/**
+ * @file sdram.c
+ * @brief Initialisation et test de la SDRAM externe via FMC.
+ *
+ * Ce module configure la SDRAM W9825G6KH via le contrôleur FMC et
+ * fournit un test simple de lecture/écriture pour validation.
+ *
+ * Rôle dans le système:
+ * - Mise en service de la mémoire externe avant usage applicatif.
+ * - Vérification de base de l'intégrité SDRAM.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non (exécuté à l'init ou en diagnostics).
+ * - Tasklet: non.
+ * - IRQ: non.
+ * - Borné: non critique (HAL bloquant possible).
+ *
+ * Architecture:
+ * - Appelé par: brick6_app_init, diagnostics_tasklet.
+ * - Appelle: HAL SDRAM/FMC, UART pour logs.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Ne pas appeler en IRQ.
+ *
+ * @note L’API publique est déclarée dans sdram.h.
+ */
+
 #include "sdram.h"
 #include "fmc.h"
 #include "usart.h"

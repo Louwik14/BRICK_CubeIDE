@@ -238,3 +238,20 @@
 
 ### Rollback
 - Revenir au commit précédent ou replacer le contenu de `brick6_app_init()` dans `main.c` (USER CODE BEGIN 2).
+
+## Step 9 — Documentation des modules
+
+### Changements effectués
+- Ajout d’en-têtes de documentation homogènes sur tous les modules utilisateurs (.c) non CubeMX.
+- Description du rôle architectural, du contexte temps réel (IRQ/tasklet), de la criticité audio et des règles d’usage.
+- Harmonisation du format des en-têtes pour permettre une lecture rapide de l’architecture.
+
+### Fichiers documentés
+- Modules audio, SD, MIDI, diagnostics, init applicative, drivers applicatifs (codec/SDRAM/USBH MIDI).
+
+### Ce qui ne change pas
+- Aucun changement de logique, d’API, d’includes ou de comportement.
+- Aucun impact sur la compilation ou le firmware.
+
+### Rollback
+- Aucun impact fonctionnel : rollback non requis.
