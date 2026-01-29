@@ -43,8 +43,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#if BRICK6_REFACTOR_STEP_7
-
 typedef enum
 {
   SD_TEST_STATE_IDLE = 0,
@@ -279,9 +277,7 @@ void diagnostics_tasklet_poll(void)
     uint32_t rx_half = AudioIn_GetHalfEvents();
     uint32_t rx_full = AudioIn_GetFullEvents();
 
-#if BRICK6_REFACTOR_STEP_1
-#if BRICK6_REFACTOR_STEP_6
-#if BRICK6_REFACTOR_STEP_3
+#if BRICK6_ENABLE_DIAGNOSTICS
     LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
          "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu "
          "engine_ticks=%lu usb_budget=%lu midi_budget=%lu sd_budget=%lu\r\n",
@@ -300,57 +296,6 @@ void diagnostics_tasklet_poll(void)
          (unsigned long)usb_budget_hit_count,
          (unsigned long)midi_budget_hit_count,
          (unsigned long)sd_budget_hit_count);
-#else
-    LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
-         "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu "
-         "usb_budget=%lu midi_budget=%lu sd_budget=%lu\r\n",
-         (unsigned long)brick6_audio_tx_half_count,
-         (unsigned long)brick6_audio_tx_full_count,
-         (unsigned long)brick6_audio_rx_half_count,
-         (unsigned long)brick6_audio_rx_full_count,
-         (unsigned long)brick6_sd_rx_cplt_count,
-         (unsigned long)brick6_sd_tx_cplt_count,
-         (unsigned long)brick6_sd_buf0_cplt_count,
-         (unsigned long)brick6_sd_buf1_cplt_count,
-         (unsigned long)brick6_sd_err_count,
-         (unsigned long)brick6_usb_host_poll_count,
-         (unsigned long)brick6_midi_host_poll_count,
-         (unsigned long)usb_budget_hit_count,
-         (unsigned long)midi_budget_hit_count,
-         (unsigned long)sd_budget_hit_count);
-#endif
-#else
-#if BRICK6_REFACTOR_STEP_3
-    LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
-         "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu engine_ticks=%lu\r\n",
-         (unsigned long)brick6_audio_tx_half_count,
-         (unsigned long)brick6_audio_tx_full_count,
-         (unsigned long)brick6_audio_rx_half_count,
-         (unsigned long)brick6_audio_rx_full_count,
-         (unsigned long)brick6_sd_rx_cplt_count,
-         (unsigned long)brick6_sd_tx_cplt_count,
-         (unsigned long)brick6_sd_buf0_cplt_count,
-         (unsigned long)brick6_sd_buf1_cplt_count,
-         (unsigned long)brick6_sd_err_count,
-         (unsigned long)brick6_usb_host_poll_count,
-         (unsigned long)brick6_midi_host_poll_count,
-         (unsigned long)engine_tick_count);
-#else
-    LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
-         "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu\r\n",
-         (unsigned long)brick6_audio_tx_half_count,
-         (unsigned long)brick6_audio_tx_full_count,
-         (unsigned long)brick6_audio_rx_half_count,
-         (unsigned long)brick6_audio_rx_full_count,
-         (unsigned long)brick6_sd_rx_cplt_count,
-         (unsigned long)brick6_sd_tx_cplt_count,
-         (unsigned long)brick6_sd_buf0_cplt_count,
-         (unsigned long)brick6_sd_buf1_cplt_count,
-         (unsigned long)brick6_sd_err_count,
-         (unsigned long)brick6_usb_host_poll_count,
-         (unsigned long)brick6_midi_host_poll_count);
-#endif
-#endif
 #endif
 
     if (error != 0U && error != last_error)
@@ -520,30 +465,3 @@ void diagnostics_tasklet_poll(void)
     }
   }
 }
-
-#else
-
-void diagnostics_tasklet_poll(void)
-{
-}
-
-void diagnostics_sdram_alloc_test(void)
-{
-}
-
-void diagnostics_on_sd_stream_init(HAL_StatusTypeDef status)
-{
-  (void)status;
-}
-
-void diagnostics_log(const char *message)
-{
-  (void)message;
-}
-
-void diagnostics_logf(const char *fmt, ...)
-{
-  (void)fmt;
-}
-
-#endif

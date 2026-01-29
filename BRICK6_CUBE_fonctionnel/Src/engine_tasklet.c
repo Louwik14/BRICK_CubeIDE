@@ -28,8 +28,6 @@
 
 #include "engine_tasklet.h"
 
-#if BRICK6_REFACTOR_STEP_3
-
 volatile uint32_t engine_tick_count = 0U;
 static uint32_t engine_frames_accum = 0U;
 static uint32_t engine_frames_per_tick = 0U;
@@ -64,5 +62,3 @@ void engine_tasklet_poll(void)
     engine_tick();
   }
 }
-
-#endif

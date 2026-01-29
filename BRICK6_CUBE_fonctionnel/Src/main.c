@@ -126,36 +126,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-#if BRICK6_REFACTOR_STEP_2
-    audio_tasklet_poll(); // PRIORITÉ ABSOLUE
-#endif
-#if BRICK6_REFACTOR_STEP_3
+    audio_tasklet_poll();        // priorité absolue
     engine_tasklet_poll();
-#endif
-#if BRICK6_REFACTOR_STEP_4
-#if BRICK6_REFACTOR_STEP_6
     sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
-#else
-    sd_tasklet_poll();
-#endif
-#endif
-#if BRICK6_REFACTOR_STEP_6
     usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
-#else
-    MX_USB_HOST_Process();
-#endif
-#if BRICK6_REFACTOR_STEP_1
-    brick6_usb_host_poll_count++;
-#endif
-#if BRICK6_REFACTOR_STEP_6
     midi_host_poll_bounded(MIDI_BUDGET_MSGS);
-#else
-    midi_host_poll();
-#endif
-#if BRICK6_REFACTOR_STEP_1
-    brick6_midi_host_poll_count++;
-#endif
-
     ui_tasklet_poll();
     diagnostics_tasklet_poll();
   }

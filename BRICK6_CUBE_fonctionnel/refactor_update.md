@@ -218,6 +218,19 @@
 ### Rollback
 - Revenir au commit précédent pour restaurer les callbacks SAI dans `main.c`.
 
+## Step 9 — Nettoyage final : suppression des STEP
+
+- Suppression de toutes les macros BRICK6_REFACTOR_STEP_*
+- Suppression de tous les #if conditionnels liés aux anciennes étapes
+- Le code est maintenant figé dans l’architecture finale
+- Le scheduler principal est maintenant fixe et lisible
+- Les seuls flags restants sont :
+  - BRICK6_ENABLE_DIAGNOSTICS
+  - BRICK6_ENABLE_BUDGETS
+- Aucun changement fonctionnel
+
+Rollback : utiliser Git.
+
 ## Step 8 — PASS 3 : Extraction de l’initialisation applicative (CubeMX-safe)
 
 ### Changements effectués

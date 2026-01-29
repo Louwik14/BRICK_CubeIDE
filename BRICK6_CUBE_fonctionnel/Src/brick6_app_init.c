@@ -61,9 +61,7 @@ void brick6_app_init(void)
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
 
-#if BRICK6_REFACTOR_STEP_3
   engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
-#endif
 
   AudioOut_Start();
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
