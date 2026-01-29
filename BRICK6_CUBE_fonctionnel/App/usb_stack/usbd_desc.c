@@ -22,6 +22,7 @@
 #include "usbd_core.h"
 #include "usbd_desc.h"
 #include "usbd_conf.h"
+#include "usbd_brick6_composite.h"
 
 /* USER CODE BEGIN INCLUDE */
 
@@ -66,9 +67,9 @@
 #define USBD_LANGID_STRING     1033
 #define USBD_MANUFACTURER_STRING     "STMicroelectronics"
 #define USBD_PID_FS     22315
-#define USBD_PRODUCT_STRING_FS     "STM32 USB MIDI"
-#define USBD_CONFIGURATION_STRING_FS     "MIDI Config"
-#define USBD_INTERFACE_STRING_FS     "MIDI Interface"
+#define USBD_PRODUCT_STRING_FS     "STM32 USB MIDI+Audio"
+#define USBD_CONFIGURATION_STRING_FS     "MIDI+Audio Config"
+#define USBD_INTERFACE_STRING_FS     "Composite Interface"
 
 #define USB_SIZ_BOS_DESC            0x0C
 
@@ -166,6 +167,555 @@ __ALIGN_BEGIN uint8_t USBD_FS_DeviceDesc[USB_LEN_DEV_DESC] __ALIGN_END =
   USBD_IDX_PRODUCT_STR,       /*Index of product string*/
   USBD_IDX_SERIAL_STR,        /*Index of serial number string*/
   USBD_MAX_NUM_CONFIGURATION  /*bNumConfigurations*/
+};
+
+__ALIGN_BEGIN uint8_t USBD_Brick6_Composite_CfgDesc[BRICK6_COMPOSITE_CONFIG_DESC_SIZE] __ALIGN_END =
+{
+  0x09,                           /* bLength: Configuration Descriptor size */
+  USB_DESC_TYPE_CONFIGURATION,    /* bDescriptorType: Configuration */
+  LOBYTE(BRICK6_COMPOSITE_CONFIG_DESC_SIZE),
+  HIBYTE(BRICK6_COMPOSITE_CONFIG_DESC_SIZE),
+  0x03,                           /* bNumInterfaces */
+  0x01,                           /* bConfigurationValue */
+  0x00,                           /* iConfiguration */
+  0x80,                           /* bmAttributes: Bus Powered */
+  0xFA,                           /* MaxPower 500 mA */
+
+  /* Audio Control Interface */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
+  BRICK6_AUDIO_CONTROL_IF,        /* bInterfaceNumber */
+  0x00,                           /* bAlternateSetting */
+  0x00,                           /* bNumEndpoints */
+  0x01,                           /* bInterfaceClass: AUDIO */
+  0x01,                           /* bInterfaceSubClass: AUDIOCONTROL */
+  0x00,                           /* bInterfaceProtocol */
+  0x00,                           /* iInterface */
+
+  /* Class-specific AC Header */
+  0x09,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x01,                           /* bDescriptorSubtype: HEADER */
+  0x00, 0x01,                     /* bcdADC: 1.00 */
+  0x1E, 0x00,                     /* wTotalLength */
+  0x01,                           /* bInCollection */
+  BRICK6_AUDIO_STREAMING_IF,      /* baInterfaceNr(1) */
+
+  /* Input Terminal Descriptor */
+  0x0C,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x02,                           /* bDescriptorSubtype: INPUT_TERMINAL */
+  0x01,                           /* bTerminalID */
+  0x01, 0x02,                     /* wTerminalType: Microphone */
+  0x00,                           /* bAssocTerminal */
+  0x02,                           /* bNrChannels */
+  0x03, 0x00,                     /* wChannelConfig */
+  0x00,                           /* iChannelNames */
+  0x00,                           /* iTerminal */
+
+  /* Output Terminal Descriptor */
+  0x09,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x03,                           /* bDescriptorSubtype: OUTPUT_TERMINAL */
+  0x02,                           /* bTerminalID */
+  0x01, 0x01,                     /* wTerminalType: USB Streaming */
+  0x00,                           /* bAssocTerminal */
+  0x01,                           /* bSourceID */
+  0x00,                           /* iTerminal */
+
+  /* Audio Streaming Interface Alt 0 */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
+  BRICK6_AUDIO_STREAMING_IF,      /* bInterfaceNumber */
+  0x00,                           /* bAlternateSetting */
+  0x00,                           /* bNumEndpoints */
+  0x01,                           /* bInterfaceClass: AUDIO */
+  0x02,                           /* bInterfaceSubClass: AUDIOSTREAMING */
+  0x00,                           /* bInterfaceProtocol */
+  0x00,                           /* iInterface */
+
+  /* Audio Streaming Interface Alt 1 */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_INTERFACE,        /* bDescriptorType */
+  BRICK6_AUDIO_STREAMING_IF,      /* bInterfaceNumber */
+  0x01,                           /* bAlternateSetting */
+  0x01,                           /* bNumEndpoints */
+  0x01,                           /* bInterfaceClass: AUDIO */
+  0x02,                           /* bInterfaceSubClass: AUDIOSTREAMING */
+  0x00,                           /* bInterfaceProtocol */
+  0x00,                           /* iInterface */
+
+  /* Class-specific AS General Descriptor */
+  0x07,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x01,                           /* bDescriptorSubtype: AS_GENERAL */
+  0x02,                           /* bTerminalLink */
+  0x01,                           /* bDelay */
+  0x01, 0x00,                     /* wFormatTag: PCM */
+
+  /* Format Type Descriptor */
+  0x0B,                           /* bLength */
+  0x24,                           /* bDescriptorType: CS_INTERFACE */
+  0x02,                           /* bDescriptorSubtype: FORMAT_TYPE */
+  0x01,                           /* bFormatType: FORMAT_TYPE_I */
+  0x02,                           /* bNrChannels */
+  0x04,                           /* bSubFrameSize */
+  0x18,                           /* bBitResolution */
+  0x01,                           /* bSamFreqType */
+  0x80, 0xBB, 0x00,               /* tSamFreq: 48 kHz */
+
+  /* Audio Streaming Endpoint Descriptor */
+  0x09,                           /* bLength */
+  USB_DESC_TYPE_ENDPOINT,         /* bDescriptorType */
+  BRICK6_AUDIO_EP_IN_ADDR,         /* bEndpointAddress */
+  0x01,                           /* bmAttributes: Isochronous */
+  LOBYTE(BRICK6_AUDIO_EP_IN_SIZE),
+  HIBYTE(BRICK6_AUDIO_EP_IN_SIZE),
+  0x01,                           /* bInterval */
+  0x00,                           /* bRefresh */
+  0x00,                           /* bSynchAddress */
+
+  /* Class-specific Audio Endpoint Descriptor */
+  0x07,                           /* bLength */
+  0x25,                           /* bDescriptorType: CS_ENDPOINT */
+  0x01,                           /* bDescriptorSubtype: EP_GENERAL */
+  0x00,                           /* bmAttributes */
+  0x00,                           /* bLockDelayUnits */
+  0x00, 0x00,                     /* wLockDelay */
+
+  /************** MIDI Adapter Standard MS Interface Descriptor ****************/
+  0x09,                           /* bLength: Interface Descriptor size */
+  USB_DESC_TYPE_INTERFACE,        /* bDescriptorType: Interface descriptor type */
+  BRICK6_MIDI_STREAMING_IF,        /* bInterfaceNumber: Index of this interface. */
+  0x00,                           /* bAlternateSetting: Alternate setting */
+  0x02,                           /* bNumEndpoints */
+  0x01,                           /* bInterfaceClass: AUDIO */
+  0x03,                           /* bInterfaceSubClass: MIDISTREAMING */
+  0x00,                           /* bInterfaceProtocol: Unused */
+  0x00,                           /* iInterface: Unused */
+
+  /******************** MIDI Adapter Class-specific MS Interface Descriptor ********************/
+  0x07,                           /* bLength: Descriptor size */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x01,                           /* bDescriptorSubtype: MS_HEADER subtype */
+  0x00,
+  0x01,                           /* BcdADC: Revision of this class specification */
+  USB_MIDI_INTERFACE_DESC_SIZE,
+  0x00,                           /* wTotalLength: Total size of class-specific descriptors */
+
+#if MIDI_IN_PORTS_NUM >= 1
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_1,                    /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_2,                    /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_1,                    /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 2
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_3,                    /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_4,                    /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_3,                    /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 3
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_5,                    /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_6,                    /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_5,                    /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 4
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_7,                    /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_8,                    /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_7,                    /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 5
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_9,                    /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_10,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_9,                    /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 6
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_11,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_12,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_11,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 7
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_13,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_14,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_13,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_IN_PORTS_NUM >= 8
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (External) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_15,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (Embedded) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_16,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_15,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 1
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_17,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_18,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_17,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 2
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_19,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_20,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_19,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 3
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_21,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_22,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_21,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 4
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_23,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_24,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_23,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 5
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_25,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_26,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_25,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 6
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_27,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_28,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_27,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 7
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_29,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_30,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_29,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+#if MIDI_OUT_PORTS_NUM >= 8
+  /******************** MIDI Adapter MIDI IN Jack Descriptor (Embedded) ********************/
+  0x06,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x02,                           /* bDescriptorSubtype: MIDI_IN_JACK subtype */
+  0x01,                           /* bJackType: EMBEDDED */
+  MIDI_JACK_31,                   /* bJackID: ID of this Jack */
+  0x00,                           /* iJack: Unused */
+
+  /******************** MIDI Adapter MIDI OUT Jack Descriptor (External) ********************/
+  0x09,                           /* bLength: Size of this descriptor, in bytes */
+  0x24,                           /* bDescriptorType: CS_INTERFACE descriptor */
+  0x03,                           /* bDescriptorSubtype: MIDI_OUT_JACK subtype */
+  0x02,                           /* bJackType: EXTERNAL */
+  MIDI_JACK_32,                   /* bJackID: ID of this Jack */
+  0x01,                           /* bNrInputPins: Number of Input Pins of this Jack */
+  MIDI_JACK_31,                   /* BaSourceID(1): ID of the Entity to which this Pin is connected */
+  0x01,                           /* BaSourcePin(1): Output Pin number of the Entity to which this Input Pin is connected */
+  0x00,                           /* iJack: Unused */
+#endif
+
+  /******************** MIDI Adapter Standard Bulk OUT Endpoint Descriptor ********************/
+  0x09,                           /* bLength: Endpoint Descriptor size */
+  USB_DESC_TYPE_ENDPOINT,         /* bDescriptorType: Endpoint */
+  MIDI_EPOUT_ADDR,                /* bEndpointAddress: OUT Endpoint */
+  0x02,                           /* bmAttributes: Bulk */
+  MIDI_EPOUT_SIZE,
+  0x00,
+  0x00,                           /* bInterval */
+
+  /******************** MIDI Adapter Class-specific Bulk OUT Endpoint Descriptor ********************/
+  (4 + MIDI_OUT_PORTS_NUM),       /* bLength: Size of this descriptor, in bytes */
+  0x25,                           /* bDescriptorType: CS_ENDPOINT descriptor */
+  0x01,                           /* bDescriptorSubtype: MS_GENERAL */
+  MIDI_OUT_PORTS_NUM,             /* bNumEmbMIDIJack: Number of embedded MIDI IN Jacks */
+#if MIDI_OUT_PORTS_NUM >= 1
+  MIDI_JACK_17,                   /* BaAssocJackID(1): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 2
+  MIDI_JACK_19,                   /* BaAssocJackID(2): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 3
+  MIDI_JACK_21,                   /* BaAssocJackID(3): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 4
+  MIDI_JACK_23,                   /* BaAssocJackID(4): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 5
+  MIDI_JACK_25,                   /* BaAssocJackID(5): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 6
+  MIDI_JACK_27,                   /* BaAssocJackID(6): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 7
+  MIDI_JACK_29,                   /* BaAssocJackID(7): ID of the Embedded MIDI IN Jack */
+#endif
+#if MIDI_OUT_PORTS_NUM >= 8
+  MIDI_JACK_31,                   /* BaAssocJackID(8): ID of the Embedded MIDI IN Jack */
+#endif
+
+  /******************** MIDI Adapter Standard Bulk IN Endpoint Descriptor ********************/
+  0x09,                           /* bLength: Endpoint Descriptor size */
+  USB_DESC_TYPE_ENDPOINT,         /* bDescriptorType: Endpoint */
+  MIDI_EPIN_ADDR,                 /* bEndpointAddress: IN Endpoint */
+  0x02,                           /* bmAttributes: Bulk */
+  MIDI_EPIN_SIZE,
+  0x00,
+  0x00,                           /* bInterval */
+
+  /******************** MIDI Adapter Class-specific Bulk IN Endpoint Descriptor ********************/
+  (4 + MIDI_IN_PORTS_NUM),        /* bLength: Size of this descriptor, in bytes */
+  0x25,                           /* bDescriptorType: CS_ENDPOINT descriptor */
+  0x01,                           /* bDescriptorSubtype: MS_GENERAL */
+  MIDI_IN_PORTS_NUM,              /* bNumEmbMIDIJack: Number of embedded MIDI OUT Jacks */
+#if MIDI_IN_PORTS_NUM >= 1
+  MIDI_JACK_2,                    /* BaAssocJackID(1): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 2
+  MIDI_JACK_4,                    /* BaAssocJackID(2): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 3
+  MIDI_JACK_6,                    /* BaAssocJackID(3): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 4
+  MIDI_JACK_8,                    /* BaAssocJackID(4): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 5
+  MIDI_JACK_10,                   /* BaAssocJackID(5): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 6
+  MIDI_JACK_12,                   /* BaAssocJackID(6): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 7
+  MIDI_JACK_14,                   /* BaAssocJackID(7): ID of the Embedded MIDI OUT Jack */
+#endif
+#if MIDI_IN_PORTS_NUM >= 8
+  MIDI_JACK_16,                   /* BaAssocJackID(8): ID of the Embedded MIDI OUT Jack */
+#endif
 };
 
 /* USB_DeviceDescriptor */
