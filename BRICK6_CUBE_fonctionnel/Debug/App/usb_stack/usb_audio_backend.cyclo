@@ -1,3 +1,0 @@
-../App/usb_stack/usb_audio_backend.c:3:6:usb_audio_backend_init	1
-../App/usb_stack/usb_audio_backend.c:7:10:usb_audio_backend_pop_frames	1
-../App/usb_stack/usb_audio_backend.c:14:6:usb_audio_backend_push_frames	1

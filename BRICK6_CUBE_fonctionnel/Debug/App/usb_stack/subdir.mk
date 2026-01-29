@@ -7,6 +7,7 @@
 C_SRCS += \
 ../App/usb_stack/usb_device.c \
 ../App/usb_stack/usb_host.c \
+../App/usb_stack/usbd_brick6_composite.c \
 ../App/usb_stack/usbd_conf.c \
 ../App/usb_stack/usbd_desc.c \
 ../App/usb_stack/usbh_conf.c 
@@ -14,6 +15,7 @@ C_SRCS += \
 OBJS += \
 ./App/usb_stack/usb_device.o \
 ./App/usb_stack/usb_host.o \
+./App/usb_stack/usbd_brick6_composite.o \
 ./App/usb_stack/usbd_conf.o \
 ./App/usb_stack/usbd_desc.o \
 ./App/usb_stack/usbh_conf.o 
@@ -21,6 +23,7 @@ OBJS += \
 C_DEPS += \
 ./App/usb_stack/usb_device.d \
 ./App/usb_stack/usb_host.d \
+./App/usb_stack/usbd_brick6_composite.d \
 ./App/usb_stack/usbd_conf.d \
 ./App/usb_stack/usbd_desc.d \
 ./App/usb_stack/usbh_conf.d 
@@ -33,7 +36,7 @@ App/usb_stack/%.o App/usb_stack/%.su App/usb_stack/%.cyclo: ../App/usb_stack/%.c
 clean: clean-App-2f-usb_stack
 
 clean-App-2f-usb_stack:
-	-$(RM) ./App/usb_stack/usb_device.cyclo ./App/usb_stack/usb_device.d ./App/usb_stack/usb_device.o ./App/usb_stack/usb_device.su ./App/usb_stack/usb_host.cyclo ./App/usb_stack/usb_host.d ./App/usb_stack/usb_host.o ./App/usb_stack/usb_host.su ./App/usb_stack/usbd_conf.cyclo ./App/usb_stack/usbd_conf.d ./App/usb_stack/usbd_conf.o ./App/usb_stack/usbd_conf.su ./App/usb_stack/usbd_desc.cyclo ./App/usb_stack/usbd_desc.d ./App/usb_stack/usbd_desc.o ./App/usb_stack/usbd_desc.su ./App/usb_stack/usbh_conf.cyclo ./App/usb_stack/usbh_conf.d ./App/usb_stack/usbh_conf.o ./App/usb_stack/usbh_conf.su
+	-$(RM) ./App/usb_stack/usb_device.cyclo ./App/usb_stack/usb_device.d ./App/usb_stack/usb_device.o ./App/usb_stack/usb_device.su ./App/usb_stack/usb_host.cyclo ./App/usb_stack/usb_host.d ./App/usb_stack/usb_host.o ./App/usb_stack/usb_host.su ./App/usb_stack/usbd_brick6_composite.cyclo ./App/usb_stack/usbd_brick6_composite.d ./App/usb_stack/usbd_brick6_composite.o ./App/usb_stack/usbd_brick6_composite.su ./App/usb_stack/usbd_conf.cyclo ./App/usb_stack/usbd_conf.d ./App/usb_stack/usbd_conf.o ./App/usb_stack/usbd_conf.su ./App/usb_stack/usbd_desc.cyclo ./App/usb_stack/usbd_desc.d ./App/usb_stack/usbd_desc.o ./App/usb_stack/usbd_desc.su ./App/usb_stack/usbh_conf.cyclo ./App/usb_stack/usbh_conf.d ./App/usb_stack/usbh_conf.o ./App/usb_stack/usbh_conf.su
 
 .PHONY: clean-App-2f-usb_stack
 

@@ -4,7 +4,7 @@
 #include "usbd_desc.h"
 #include "usbd_midi.h"
 #include "usbd_conf.h"
-#include "usb_audio_backend.h"
+#include "audio/usb_audio_backend.h"
 
 #define BRICK6_AUDIO_CHANNELS           2U
 #define BRICK6_AUDIO_SAMPLES_PER_PACKET (BRICK6_AUDIO_FRAMES_PER_PACKET * BRICK6_AUDIO_CHANNELS)

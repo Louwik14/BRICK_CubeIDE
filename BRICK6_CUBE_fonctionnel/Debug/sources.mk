@@ -25,6 +25,7 @@ SUBDIRS := \
 App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src \
 App/Middlewares/ST/STM32_USB_Device_Library/Core/Src \
 App/Middlewares/ST/STM32_USB_Host_Library/Core/Src \
+App/audio \
 App/usb_stack \
 Drivers/STM32H7xx_HAL_Driver/Src \
 Src \

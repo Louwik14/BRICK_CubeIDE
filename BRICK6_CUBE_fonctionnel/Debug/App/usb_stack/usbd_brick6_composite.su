@@ -1,7 +1,8 @@
-../App/usb_stack/usbd_brick6_composite.c:30:16:USBD_BRICK6_COMPOSITE_Init	16	static
-../App/usb_stack/usbd_brick6_composite.c:39:16:USBD_BRICK6_COMPOSITE_DeInit	16	static
-../App/usb_stack/usbd_brick6_composite.c:48:16:USBD_BRICK6_COMPOSITE_Setup	16	static
-../App/usb_stack/usbd_brick6_composite.c:57:17:USBD_BRICK6_COMPOSITE_GetCfgDesc	16	static
-../App/usb_stack/usbd_brick6_composite.c:62:17:USBD_BRICK6_COMPOSITE_GetDeviceQualifierDesc	16	static
-../App/usb_stack/usbd_brick6_composite.c:71:16:USBD_BRICK6_COMPOSITE_DataIn	16	static
-../App/usb_stack/usbd_brick6_composite.c:80:16:USBD_BRICK6_COMPOSITE_DataOut	16	static
+../App/usb_stack/usbd_brick6_composite.c:60:16:USBD_BRICK6_COMPOSITE_Init	24	static
+../App/usb_stack/usbd_brick6_composite.c:90:16:USBD_BRICK6_COMPOSITE_DeInit	16	static
+../App/usb_stack/usbd_brick6_composite.c:112:16:USBD_BRICK6_COMPOSITE_Setup	32	static
+../App/usb_stack/usbd_brick6_composite.c:202:17:USBD_BRICK6_COMPOSITE_GetCfgDesc	16	static
+../App/usb_stack/usbd_brick6_composite.c:208:17:USBD_BRICK6_COMPOSITE_GetDeviceQualifierDesc	16	static
+../App/usb_stack/usbd_brick6_composite.c:214:16:USBD_BRICK6_COMPOSITE_DataIn	16	static
+../App/usb_stack/usbd_brick6_composite.c:235:16:USBD_BRICK6_COMPOSITE_DataOut	24	static
+../App/usb_stack/usbd_brick6_composite.c:251:13:BRICK6_Audio_QueuePacket	32	static
