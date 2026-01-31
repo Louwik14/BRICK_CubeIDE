@@ -29,6 +29,7 @@ void AudioOut_ProcessHalf(void);
 void AudioOut_ProcessFull(void);
 void audio_tasklet_poll(void);
 void AudioOut_DebugDump(void);
+int32_t *AudioOut_GetBuffer(void);
 uint32_t AudioOut_GetHalfEvents(void);
 uint32_t AudioOut_GetFullEvents(void);
 
