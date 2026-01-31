@@ -28,6 +28,7 @@
  */
 
 #include "audio_in.h"
+#include "audio_core.h"
 #include "brick6_refactor.h"
 #include "sai.h"
 #include "usart.h"
@@ -55,6 +56,7 @@ static volatile uint32_t audio_in_full_events = 0;
 static volatile uint32_t audio_in_latest_half = 0;
 static volatile bool audio_in_has_block = false;
 static SAI_HandleTypeDef *audio_in_sai = NULL;
+static uint32_t audio_in_last_copied_half = 2U;
 
 void AudioIn_Init(SAI_HandleTypeDef *hsai)
 {
@@ -156,6 +158,31 @@ uint32_t AudioIn_GetHalfEvents(void)
 uint32_t AudioIn_GetFullEvents(void)
 {
   return audio_in_full_events;
+}
+
+void AudioIn_TaskletPoll(void)
+{
+  if (!audio_in_has_block)
+  {
+    return;
+  }
+
+  uint32_t latest_half = audio_in_latest_half;
+
+  if (latest_half == audio_in_last_copied_half)
+  {
+    return;
+  }
+
+  const int32_t *block = AudioIn_GetLatestBlock();
+
+  if (block == NULL)
+  {
+    return;
+  }
+
+  audio_core_on_input_block(block, AUDIO_IN_FRAMES_PER_HALF);
+  audio_in_last_copied_half = latest_half;
 }
 
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)

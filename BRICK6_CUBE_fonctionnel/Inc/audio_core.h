@@ -13,5 +13,6 @@ typedef struct {
 
 void audio_core_init(void);
 void audio_core_process_block(void);
+void audio_core_on_input_block(const int32_t *data, uint32_t frames);
 
 #endif /* AUDIO_CORE_H */

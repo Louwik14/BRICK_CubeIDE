@@ -128,6 +128,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     audio_tasklet_poll();        // priorité absolue
+    AudioIn_TaskletPoll();
     tud_task();                  // TinyUSB Device (audio + MIDI)
     tinyusb_app_task();
     engine_tasklet_poll();
