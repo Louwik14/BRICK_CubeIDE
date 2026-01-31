@@ -25,3 +25,21 @@ void audio_buffer_reset(audio_buffer_t *buf) {
   buf->read_pos = 0U;
   buf->write_pos = 0U;
 }
+
+uint32_t audio_buffer_write(audio_buffer_t *buf, const int32_t *data, uint32_t count) {
+  if ((buf == NULL) || (data == NULL) || (buf->capacity == 0U)) {
+    return 0U;
+  }
+
+  uint32_t free_count = audio_buffer_free(buf);
+  if (count > free_count) {
+    count = free_count;
+  }
+
+  for (uint32_t i = 0; i < count; ++i) {
+    buf->data[buf->write_pos] = data[i];
+    buf->write_pos = (buf->write_pos + 1U) % buf->capacity;
+  }
+
+  return count;
+}
