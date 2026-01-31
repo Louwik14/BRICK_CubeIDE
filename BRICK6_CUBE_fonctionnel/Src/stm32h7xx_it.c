@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usart.h"
+#include "tusb.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -288,6 +289,7 @@ void OTG_HS_IRQHandler(void)
 
 void OTG_FS_IRQHandler(void)
 {
-  HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
+  tud_int_handler(0);
 }
+
 /* USER CODE END 1 */

@@ -28,10 +28,9 @@
 
 #include "midi.h"
 #include "main.h"
-#include "usbd_midi.h"
+#include "tusb.h"
 #include <string.h>
 
-extern USBD_HandleTypeDef hUsbDeviceFS;
 
 midi_tx_stats_t midi_tx_stats = {0};
 midi_rx_stats_t midi_rx_stats = {0};
@@ -100,15 +99,22 @@ static void backend_usb_host_send(const uint8_t *msg, size_t len) __attribute__(
 static void backend_din_send(const uint8_t *msg, size_t len);
 
 static bool usb_device_ready(void) {
-  return (USBD_MIDI_GetState(&hUsbDeviceFS) == MIDI_IDLE);
+  return (tud_midi_mounted());
 }
 
-static bool usb_device_send_packets(const uint8_t *buffer, uint16_t bytes_len) {
+static bool usb_device_send_packets(const uint8_t *buffer, uint16_t bytes_len)
+{
   if (!usb_device_ready()) {
     return false;
   }
 
-  USBD_MIDI_SendPackets(&hUsbDeviceFS, (uint8_t *)buffer, bytes_len);
+  // USB-MIDI = paquets de 4 octets
+  uint32_t len = (bytes_len / 4) * 4;
+  if (len == 0) {
+    return false;
+  }
+
+  tud_midi_stream_write(0, buffer, len);
   return true;
 }
 
@@ -718,11 +724,17 @@ void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
   }
 }
 
-void USBD_MIDI_OnPacketsReceived(uint8_t *data, uint8_t len) {
-  midi_usb_rx_submit_from_isr(data, len);
+void tud_midi_rx_cb(uint8_t itf)
+{
+  (void)itf;
+
+  uint8_t packet[4];
+
+  while (tud_midi_packet_read(packet))
+  {
+    midi_usb_rx_submit_from_isr(packet, 4);
+  }
 }
 
-void USBD_MIDI_OnPacketsSent(void) {
-  /* Interruption USB: ne pas émettre ici, seulement demander un flush. */
-  midi_usb_tx_kick = true;
-}
+
+

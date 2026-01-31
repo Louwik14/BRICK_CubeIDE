@@ -1,0 +1,15 @@
+../tinyusb/src/class/midi/midi_device.c:42:19:tud_midi_rx_cb	1
+../tinyusb/src/class/midi/midi_device.c:87:6:tud_midi_n_mounted	3
+../tinyusb/src/class/midi/midi_device.c:97:10:tud_midi_n_available	2
+../tinyusb/src/class/midi/midi_device.c:107:10:tud_midi_n_stream_read	16
+../tinyusb/src/class/midi/midi_device.c:171:6:tud_midi_n_packet_read	1
+../tinyusb/src/class/midi/midi_device.c:177:10:tud_midi_n_packet_read_n	1
+../tinyusb/src/class/midi/midi_device.c:187:10:tud_midi_n_stream_write	25
+../tinyusb/src/class/midi/midi_device.c:283:6:tud_midi_n_packet_write	4
+../tinyusb/src/class/midi/midi_device.c:295:10:tud_midi_n_packet_write_n	2
+../tinyusb/src/class/midi/midi_device.c:312:6:midid_init	2
+../tinyusb/src/class/midi/midi_device.c:334:6:midid_deinit	2
+../tinyusb/src/class/midi/midi_device.c:343:6:midid_reset	2
+../tinyusb/src/class/midi/midi_device.c:367:10:midid_open	27
+../tinyusb/src/class/midi/midi_device.c:433:6:midid_control_xfer_cb	1
+../tinyusb/src/class/midi/midi_device.c:438:6:midid_xfer_cb	12

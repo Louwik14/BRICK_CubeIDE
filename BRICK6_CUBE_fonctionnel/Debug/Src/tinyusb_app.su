@@ -1,0 +1,6 @@
+../Src/tinyusb_app.c:33:6:tinyusb_app_init	4	static
+../Src/tinyusb_app.c:44:13:audio_task	24	static
+../Src/tinyusb_app.c:60:6:tinyusb_app_task	8	static
+../Src/tinyusb_app.c:69:6:tud_audio_set_req_entity_cb	32	static
+../Src/tinyusb_app.c:101:6:tud_audio_get_req_entity_cb	24	static
+../Src/tinyusb_app.c:147:6:tud_audio_set_itf_close_ep_cb	16	static

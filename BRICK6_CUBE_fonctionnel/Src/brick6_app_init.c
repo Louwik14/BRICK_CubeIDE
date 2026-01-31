@@ -34,13 +34,14 @@
 #include "brick6_refactor.h"
 #include "diagnostics_tasklet.h"
 #include "engine_tasklet.h"
-#include "midi.h"
+//#include "midi.h"
 #include "sai.h"
 #include "sd_stream.h"
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
-#include "usb_device.h"
+#include "tusb.h"
+#include "tinyusb_app.h"
 #include "usb_host.h"
 
 void brick6_app_init(void)
@@ -54,8 +55,8 @@ void brick6_app_init(void)
   diagnostics_sdram_alloc_test();
 
   diagnostics_on_sd_stream_init(sd_stream_init(&hsd1));
-
-  MX_USB_DEVICE_Init();
+  tusb_init();
+  tinyusb_app_init();
   MX_USB_HOST_Init();
   /* Init audio */
   AudioOut_Init(&hsai_BlockA1);
@@ -71,5 +72,5 @@ void brick6_app_init(void)
   HAL_Delay(200);
 
   /* Init MIDI */
-  midi_init();
+  //midi_init();
 }

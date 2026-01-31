@@ -23,14 +23,15 @@
 #include "sai.h"
 #include "sdmmc.h"
 #include "usart.h"
+#include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "brick6_refactor.h"
-
-#include "usb_device.h"
+#include "tusb.h"
+#include "tinyusb_app.h"
 #include "usb_host.h"
 #include "cs42448.h"
 #include "audio_in.h"
@@ -69,7 +70,6 @@ void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 void MX_USB_HOST_Process(void);
 void MX_USB_HOST_Init(void);
-void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -112,6 +112,7 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
+  MX_USB_OTG_FS_PCD_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
@@ -127,10 +128,12 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     audio_tasklet_poll();        // priorité absolue
+    tud_task();                  // TinyUSB Device (audio + MIDI)
+    tinyusb_app_task();
     engine_tasklet_poll();
     sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
     usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
-    midi_host_poll_bounded(MIDI_BUDGET_MSGS);
+    //midi_host_poll_bounded(MIDI_BUDGET_MSGS);
     ui_tasklet_poll();
     diagnostics_tasklet_poll();
   }
