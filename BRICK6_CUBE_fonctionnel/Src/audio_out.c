@@ -31,6 +31,7 @@
 #include "audio_out.h"
 #include "audio_in.h"
 #include "audio_core.h"
+#include "audio_test_pcm5100a.h"
 #include "engine_tasklet.h"
 #include "sai.h"
 #include "usart.h"
@@ -253,6 +254,8 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 #endif
     AudioOut_ProcessHalf();
   }
+
+  audio_test_pcm5100a_on_tx_half(hsai);
 }
 
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
@@ -264,6 +267,8 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 #endif
     AudioOut_ProcessFull();
   }
+
+  audio_test_pcm5100a_on_tx_full(hsai);
 }
 
 void audio_tasklet_poll(void)
@@ -284,6 +289,8 @@ void audio_tasklet_poll(void)
                              AUDIO_OUT_FRAMES_PER_HALF);
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
   }
+
+  audio_test_pcm5100a_tasklet_poll();
 }
 
 uint32_t AudioOut_GetHalfEvents(void)

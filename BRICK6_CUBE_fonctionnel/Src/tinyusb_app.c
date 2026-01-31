@@ -219,7 +219,8 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   (void) ep_out;
   (void) cur_alt_setting;
 
-  static int32_t rx_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int32_t)];
+  static int16_t rx_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
+  static int32_t rx_converted[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
   uint16_t remaining = n_bytes_received;
 
   while (remaining)
@@ -230,10 +231,14 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
     {
       break;
     }
-    uint32_t sample_count = (uint32_t)read_count / sizeof(int32_t);
+    uint32_t sample_count = (uint32_t)read_count / sizeof(int16_t);
     if (sample_count > 0U)
     {
-      audio_io_usb_on_rx_samples(rx_buffer, sample_count);
+      for (uint32_t idx = 0U; idx < sample_count; ++idx)
+      {
+        rx_converted[idx] = ((int32_t)rx_buffer[idx]) << 8;
+      }
+      audio_io_usb_on_rx_samples(rx_converted, sample_count);
     }
     remaining = (uint16_t)(remaining - read_count);
   }
