@@ -1,0 +1,3 @@
+../Src/audio_io_sd.c:7:6:audio_io_sd_init	1
+../Src/audio_io_sd.c:11:6:audio_io_sd_has_block	1
+../Src/audio_io_sd.c:16:10:audio_io_sd_read_block	6

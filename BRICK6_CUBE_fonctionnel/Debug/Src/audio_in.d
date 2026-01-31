@@ -1,4 +1,4 @@
-Src/audio_in.o: ../Src/audio_in.c ../Inc/audio_in.h \
+Src/audio_in.o: ../Src/audio_in.c ../Inc/audio_in.h ../Inc/audio_core.h \
  ../Inc/brick6_refactor.h ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
@@ -43,6 +43,7 @@ Src/audio_in.o: ../Src/audio_in.c ../Inc/audio_in.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/usart.h
 ../Inc/audio_in.h:
+../Inc/audio_core.h:
 ../Inc/brick6_refactor.h:
 ../Inc/sai.h:
 ../Inc/main.h:
