@@ -30,6 +30,7 @@
 
 #include "audio_in.h"
 #include "audio_out.h"
+#include "audio_test_pcm5100a.h"
 #include "brick6_refactor.h"
 #include "engine_tasklet.h"
 #include "main.h"
@@ -278,11 +279,14 @@ void diagnostics_tasklet_poll(void)
     uint32_t rx_full = AudioIn_GetFullEvents();
 
 #if BRICK6_ENABLE_DIAGNOSTICS
-    LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
+    LOGF("REF1 audio tx_half=%lu tx_full=%lu | SAI2 tx_half=%lu tx_full=%lu "
+         "rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
          "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu "
          "engine_ticks=%lu usb_budget=%lu midi_budget=%lu sd_budget=%lu\r\n",
          (unsigned long)brick6_audio_tx_half_count,
          (unsigned long)brick6_audio_tx_full_count,
+         (unsigned long)AudioTest_PCM5100A_GetTxHalfCount(),
+         (unsigned long)AudioTest_PCM5100A_GetTxFullCount(),
          (unsigned long)brick6_audio_rx_half_count,
          (unsigned long)brick6_audio_rx_full_count,
          (unsigned long)brick6_sd_rx_cplt_count,

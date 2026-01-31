@@ -21,6 +21,8 @@ static int32_t pcm5100a_tx_buffer[AUDIO_TEST_PCM5100A_BUFFER_SAMPLES];
 static int32_t pcm5100a_core_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
 static volatile uint8_t pcm5100a_half_ready = 0U;
 static volatile uint8_t pcm5100a_full_ready = 0U;
+static volatile uint32_t pcm5100a_tx_half_count = 0U;
+static volatile uint32_t pcm5100a_tx_full_count = 0U;
 static SAI_HandleTypeDef *pcm5100a_sai = NULL;
 
 static void pcm5100a_fill_half(uint32_t frame_offset)
@@ -42,6 +44,8 @@ void audio_test_pcm5100a_init(SAI_HandleTypeDef *hsai)
   pcm5100a_sai = hsai;
   pcm5100a_half_ready = 0U;
   pcm5100a_full_ready = 0U;
+  pcm5100a_tx_half_count = 0U;
+  pcm5100a_tx_full_count = 0U;
   memset(pcm5100a_tx_buffer, 0, sizeof(pcm5100a_tx_buffer));
 }
 
@@ -61,6 +65,7 @@ void audio_test_pcm5100a_on_tx_half(SAI_HandleTypeDef *hsai)
 {
   if ((hsai != NULL) && (hsai->Instance == SAI2_Block_A))
   {
+    pcm5100a_tx_half_count++;
     pcm5100a_half_ready = 1U;
   }
 }
@@ -69,6 +74,7 @@ void audio_test_pcm5100a_on_tx_full(SAI_HandleTypeDef *hsai)
 {
   if ((hsai != NULL) && (hsai->Instance == SAI2_Block_A))
   {
+    pcm5100a_tx_full_count++;
     pcm5100a_full_ready = 1U;
   }
 }
@@ -86,6 +92,16 @@ void audio_test_pcm5100a_tasklet_poll(void)
     pcm5100a_full_ready = 0U;
     pcm5100a_fill_half(AUDIO_TEST_PCM5100A_FRAMES_PER_HALF);
   }
+}
+
+uint32_t AudioTest_PCM5100A_GetTxHalfCount(void)
+{
+  return pcm5100a_tx_half_count;
+}
+
+uint32_t AudioTest_PCM5100A_GetTxFullCount(void)
+{
+  return pcm5100a_tx_full_count;
 }
 
 #endif /* AUDIO_TEST_PCM5100A */
