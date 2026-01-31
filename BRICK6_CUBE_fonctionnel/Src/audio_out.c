@@ -30,6 +30,7 @@
 
 #include "audio_out.h"
 #include "audio_in.h"
+#include "audio_core.h"
 #include "engine_tasklet.h"
 #include "sai.h"
 #include "usart.h"
@@ -266,7 +267,7 @@ void audio_tasklet_poll(void)
   {
     audio_dma_half_ready = 0U;
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-    audio_out_copy_ring_block(0U);
+    audio_core_process_block(audio_out_buffer, AUDIO_OUT_FRAMES_PER_HALF);
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
   }
 
@@ -274,7 +275,8 @@ void audio_tasklet_poll(void)
   {
     audio_dma_full_ready = 0U;
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-    audio_out_copy_ring_block(AUDIO_OUT_FRAMES_PER_HALF);
+    audio_core_process_block(&audio_out_buffer[AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME],
+                             AUDIO_OUT_FRAMES_PER_HALF);
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
   }
 }
