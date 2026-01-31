@@ -238,47 +238,6 @@ void AudioOut_ProcessFull(void)
   audio_out_full_events++;
 }
 
-void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_A)
-  {
-#if BRICK6_ENABLE_DIAGNOSTICS
-    brick6_audio_tx_half_count++;
-#endif
-    AudioOut_ProcessHalf();
-  }
-}
-
-void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_A)
-  {
-#if BRICK6_ENABLE_DIAGNOSTICS
-    brick6_audio_tx_full_count++;
-#endif
-    AudioOut_ProcessFull();
-  }
-}
-
-void audio_tasklet_poll(void)
-{
-  if (audio_dma_half_ready != 0U)
-  {
-    audio_dma_half_ready = 0U;
-    /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-    audio_out_copy_ring_block(0U);
-    engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
-  }
-
-  if (audio_dma_full_ready != 0U)
-  {
-    audio_dma_full_ready = 0U;
-    /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-    audio_out_copy_ring_block(AUDIO_OUT_FRAMES_PER_HALF);
-    engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
-  }
-}
-
 uint32_t AudioOut_GetHalfEvents(void)
 {
   return audio_out_half_events;
