@@ -28,8 +28,7 @@
 
 #include "diagnostics_tasklet.h"
 
-#include "audio_in.h"
-#include "audio_out.h"
+#include "audio_io_sai.h"
 #include "brick6_refactor.h"
 #include "engine_tasklet.h"
 #include "main.h"
@@ -272,10 +271,10 @@ void diagnostics_tasklet_poll(void)
   if ((now - last_log_tick) >= 1000U)
   {
     uint32_t error = HAL_SAI_GetError(&hsai_BlockA1);
-    uint32_t half = AudioOut_GetHalfEvents();
-    uint32_t full = AudioOut_GetFullEvents();
-    uint32_t rx_half = AudioIn_GetHalfEvents();
-    uint32_t rx_full = AudioIn_GetFullEvents();
+    uint32_t half = audio_io_sai_get_tx_half_events();
+    uint32_t full = audio_io_sai_get_tx_full_events();
+    uint32_t rx_half = audio_io_sai_get_rx_half_events();
+    uint32_t rx_full = audio_io_sai_get_rx_full_events();
 
 #if BRICK6_ENABLE_DIAGNOSTICS
     LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
