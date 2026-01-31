@@ -1,3 +1,0 @@
-../Src/audio_core.c:14:6:audio_core_init	4	static
-../Src/audio_core.c:17:6:audio_core_process_block	40	static
-../Src/audio_core.c:97:6:audio_core_on_input_block	24	static

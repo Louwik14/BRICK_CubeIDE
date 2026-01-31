@@ -48,6 +48,7 @@
 "./Src/audio_io_sd.o"
 "./Src/audio_io_usb.o"
 "./Src/audio_out.o"
+"./Src/audio_test_pcm5100a.o"
 "./Src/brick6_app_init.o"
 "./Src/brick6_refactor.o"
 "./Src/cs42448.o"

@@ -1,4 +1,0 @@
-../Src/audio_io_usb.c:13:6:audio_io_usb_init	8	static
-../Src/audio_io_usb.c:19:17:audio_io_usb_get_rx_buffer	4	static
-../Src/audio_io_usb.c:24:6:audio_io_usb_on_rx_samples	16	static
-../Src/audio_io_usb.c:29:10:audio_io_usb_prepare_tx	16	static

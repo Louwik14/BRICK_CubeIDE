@@ -1,3 +1,0 @@
-../Src/audio_io_sai.c:6:16:audio_io_sai_get_rx_block	8	static
-../Src/audio_io_sai.c:11:10:audio_io_sai_get_tx_block	8	static
-../Src/audio_io_sai.c:16:10:audio_io_sai_get_frames	4	static
