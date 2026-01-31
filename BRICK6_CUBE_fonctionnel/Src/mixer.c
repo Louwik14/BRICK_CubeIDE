@@ -1,3 +1,30 @@
+/**
+ * @file mixer.c
+ * @brief Mixeur int32 minimal 2→1 avec saturation.
+ *
+ * Additionne deux flux int32 et applique un clamp simple sur 32 bits.
+ *
+ * Rôle dans le système:
+ * - Mélange basique de deux sources audio.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: oui.
+ * - IRQ: non.
+ * - Tasklet: oui (appelé hors IRQ).
+ * - Borné: oui (boucle sur taille fixe).
+ *
+ * Architecture:
+ * - Appelé par: audio_core.
+ * - Appelle: aucun module externe.
+ * - Consommé par: moteur audio.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans mixer.h.
+ */
+
 #include "mixer.h"
 
 #include <limits.h>

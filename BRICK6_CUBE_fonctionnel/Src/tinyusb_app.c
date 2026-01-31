@@ -1,3 +1,31 @@
+/**
+ * @file tinyusb_app.c
+ * @brief Intégration TinyUSB audio/MIDI device (UAC1) et tasklets associés.
+ *
+ * Gère les callbacks USB audio, le buffer RX, et l’envoi d’un flux TX 1 ms
+ * sans modifier les descripteurs USB ni la cadence USB.
+ *
+ * Rôle dans le système:
+ * - Backend USB audio device (RX/TX) piloté par TinyUSB.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non (USB en tasklet).
+ * - IRQ: oui (callbacks USB).
+ * - Tasklet: oui (tinyusb_app_task).
+ * - Borné: oui (trames 1 ms).
+ *
+ * Architecture:
+ * - Appelé par: main loop (tinyusb_app_task), TinyUSB callbacks.
+ * - Appelle: audio_io_usb, TinyUSB API.
+ * - Consommé par: host USB audio.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans tinyusb_app.h.
+ */
+
 #include <string.h>
 #include "audio_io_usb.h"
 #include "tusb.h"

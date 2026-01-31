@@ -1,3 +1,31 @@
+/**
+ * @file audio_io_sd.c
+ * @brief Wrapper SD pour lire le ring audio existant.
+ *
+ * Expose une interface simple pour consommer les blocs audio fournis par
+ * le streaming SD sans modifier le DMA ni la logique de production.
+ *
+ * Rôle dans le système:
+ * - Source audio optionnelle alimentée par le ring SD existant.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - IRQ: non.
+ * - Tasklet: oui (lecture hors IRQ).
+ * - Borné: oui (taille de bloc fixe).
+ *
+ * Architecture:
+ * - Appelé par: audio_core.
+ * - Appelle: sd_audio_block_ring.
+ * - Consommé par: moteur audio.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans audio_io_sd.h.
+ */
+
 #include "audio_io_sd.h"
 
 #include "sd_audio_block_ring.h"

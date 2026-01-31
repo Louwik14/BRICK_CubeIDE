@@ -1,3 +1,31 @@
+/**
+ * @file audio_buffer.c
+ * @brief Ring buffer audio générique en int32 pour buffers non bloquants.
+ *
+ * Implémente une file circulaire statique simple pour stocker des échantillons
+ * audio sans allocation dynamique ni dépendance HAL.
+ *
+ * Rôle dans le système:
+ * - Fournit une abstraction de ring buffer pour USB/streaming.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - IRQ: non.
+ * - Tasklet: oui (appelé hors IRQ).
+ * - Borné: oui (capacité fixe).
+ *
+ * Architecture:
+ * - Appelé par: audio_io_usb, audio_core.
+ * - Appelle: aucun module externe.
+ * - Consommé par: backends audio.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans audio_buffer.h.
+ */
+
 #include "audio_buffer.h"
 
 #include <stddef.h>

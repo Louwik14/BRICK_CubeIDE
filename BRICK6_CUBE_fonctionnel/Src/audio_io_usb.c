@@ -1,3 +1,31 @@
+/**
+ * @file audio_io_usb.c
+ * @brief Wrapper USB audio RX/TX basé sur audio_buffer.
+ *
+ * Encapsule le ring USB RX/TX avec une API simple utilisée par le moteur
+ * audio et par TinyUSB, sans allocation ni dépendance HAL directe.
+ *
+ * Rôle dans le système:
+ * - Source USB RX et tampon TX pour la classe audio.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non (buffering).
+ * - IRQ: non.
+ * - Tasklet: oui (appelé hors IRQ).
+ * - Borné: oui (taille fixe).
+ *
+ * Architecture:
+ * - Appelé par: tinyusb_app, audio_core.
+ * - Appelle: audio_buffer.
+ * - Consommé par: moteur audio / USB audio.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans audio_io_usb.h.
+ */
+
 #include "audio_io_usb.h"
 
 #include "tusb.h"

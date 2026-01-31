@@ -1,3 +1,31 @@
+/**
+ * @file audio_core.c
+ * @brief Orchestrateur audio minimal (sélection de source + mix simple).
+ *
+ * Ce module sélectionne la source audio selon le routing compile-time,
+ * applique un mix 2→1 si demandé, et assure un fallback SAI pass-through.
+ *
+ * Rôle dans le système:
+ * - Point central de traitement par blocs (256 frames, 8 canaux).
+ *
+ * Contraintes temps réel:
+ * - Critique audio: oui.
+ * - IRQ: non (traitement hors IRQ).
+ * - Tasklet: oui (appelé depuis audio_out).
+ * - Borné: oui (taille de bloc fixe).
+ *
+ * Architecture:
+ * - Appelé par: audio_out (tasklet).
+ * - Appelle: audio_io_usb, audio_io_sd, mixer.
+ * - Consommé par: sortie SAI (via audio_out).
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans audio_core.h.
+ */
+
 #include "audio_core.h"
 
 #include "audio_io_sd.h"
