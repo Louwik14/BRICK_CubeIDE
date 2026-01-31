@@ -25,5 +25,6 @@ const int32_t *AudioIn_GetLatestBlock(void);
 uint32_t AudioIn_GetBufferSamples(void);
 uint32_t AudioIn_GetHalfEvents(void);
 uint32_t AudioIn_GetFullEvents(void);
+void AudioIn_TaskletPoll(void);
 
 #endif /* AUDIO_IN_H */
