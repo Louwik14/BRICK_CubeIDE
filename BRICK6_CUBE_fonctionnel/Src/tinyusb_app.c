@@ -1,5 +1,6 @@
 #include <string.h>
 #include "audio_buffer.h"
+#include "audio_core.h"
 #include "tusb.h"
 #include "tinyusb_app.h"
 #include "usb_descriptors.h"
@@ -46,6 +47,7 @@ void tinyusb_app_init(void)
   sampleFreqRng.subrange[0].bRes = 0;
 
   audio_buffer_init(&usb_rx_buffer, usb_rx_mem, USB_RX_CAPACITY);
+  audio_core_set_usb_buffer(&usb_rx_buffer);
 }
 
 static void audio_task(void)

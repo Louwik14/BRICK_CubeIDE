@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "audio_buffer.h"
+
 #define AUDIO_CORE_SAMPLE_RATE 48000U
 #define AUDIO_CORE_FRAMES_PER_BLOCK 256U
 #define AUDIO_CORE_CHANNELS 8U
@@ -14,5 +16,6 @@ typedef struct {
 void audio_core_init(void);
 void audio_core_process_block(int32_t *out, uint32_t frames);
 void audio_core_on_input_block(const int32_t *data, uint32_t frames);
+void audio_core_set_usb_buffer(audio_buffer_t *buf);
 
 #endif /* AUDIO_CORE_H */
