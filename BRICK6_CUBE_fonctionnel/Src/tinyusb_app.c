@@ -1,4 +1,6 @@
 #include <string.h>
+#include "audio_buffer.h"
+#include "audio_core.h"
 #include "tusb.h"
 #include "tinyusb_app.h"
 #include "usb_descriptors.h"
@@ -16,7 +18,7 @@ uint8_t clkValid;
 audio20_control_range_2_n_t(1) volumeRng[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
 audio20_control_range_4_n_t(1) sampleFreqRng;
 
-#define SPEAKER_RING_BUFFER_SIZE (4 * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX)
+#define USB_RX_CAPACITY ((4U * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX) / sizeof(int32_t))
 
 // 1 ms audio frame buffer
 uint16_t test_buffer_audio[
@@ -25,9 +27,8 @@ uint16_t test_buffer_audio[
   CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX / 2
 ];
 
-static uint8_t speaker_ring[SPEAKER_RING_BUFFER_SIZE];
-static volatile uint32_t speaker_ring_head;
-static volatile uint32_t speaker_ring_tail;
+static audio_buffer_t usb_rx_buffer;
+static int32_t usb_rx_mem[USB_RX_CAPACITY];
 
 static uint16_t startVal = 0;
 
@@ -44,6 +45,9 @@ void tinyusb_app_init(void)
   sampleFreqRng.subrange[0].bMin = sampFreq;
   sampleFreqRng.subrange[0].bMax = sampFreq;
   sampleFreqRng.subrange[0].bRes = 0;
+
+  audio_buffer_init(&usb_rx_buffer, usb_rx_mem, USB_RX_CAPACITY);
+  audio_core_set_usb_buffer(&usb_rx_buffer);
 }
 
 static void audio_task(void)
@@ -165,37 +169,6 @@ bool tud_audio_set_itf_close_ep_cb(uint8_t rhport,
 // USB AUDIO RX (SPEAKER OUT)
 //--------------------------------------------------------------------+
 
-static uint32_t speaker_ring_available(void)
-{
-  uint32_t head = speaker_ring_head;
-  uint32_t tail = speaker_ring_tail;
-  if (head >= tail)
-  {
-    return head - tail;
-  }
-  return SPEAKER_RING_BUFFER_SIZE - (tail - head);
-}
-
-static uint32_t speaker_ring_free(void)
-{
-  return (SPEAKER_RING_BUFFER_SIZE - 1) - speaker_ring_available();
-}
-
-static void speaker_ring_write(const uint8_t *data, uint32_t len)
-{
-  uint32_t free_bytes = speaker_ring_free();
-  if (len > free_bytes)
-  {
-    len = free_bytes;
-  }
-
-  while (len--)
-  {
-    speaker_ring[speaker_ring_head] = *data++;
-    speaker_ring_head = (speaker_ring_head + 1) % SPEAKER_RING_BUFFER_SIZE;
-  }
-}
-
 bool tud_audio_rx_done_isr(uint8_t rhport,
                            uint16_t n_bytes_received,
                            uint8_t func_id,
@@ -207,18 +180,22 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   (void) ep_out;
   (void) cur_alt_setting;
 
-  static uint8_t rx_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX];
+  static int32_t rx_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int32_t)];
   uint16_t remaining = n_bytes_received;
 
   while (remaining)
   {
     uint16_t chunk = tu_min16(remaining, sizeof(rx_buffer));
-    uint16_t read_count = tud_audio_read(rx_buffer, chunk);
+    uint16_t read_count = tud_audio_read((uint8_t *)rx_buffer, chunk);
     if (read_count == 0)
     {
       break;
     }
-    speaker_ring_write(rx_buffer, read_count);
+    uint32_t sample_count = (uint32_t)read_count / sizeof(int32_t);
+    if (sample_count > 0U)
+    {
+      audio_buffer_write(&usb_rx_buffer, rx_buffer, sample_count);
+    }
     remaining = (uint16_t)(remaining - read_count);
   }
 
