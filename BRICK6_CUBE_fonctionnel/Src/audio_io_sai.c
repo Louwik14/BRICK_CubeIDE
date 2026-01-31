@@ -6,7 +6,6 @@
 #include "audio_io_sai.h"
 #include "brick6_refactor.h"
 #include "sai.h"
-#include "stm32h7xx_hal.h"
 #include <string.h>
 
 static int32_t audio_sai_tx_buffer[AUDIO_SAI_BUFFER_SAMPLES]
@@ -27,18 +26,6 @@ static volatile uint32_t audio_sai_rx_full_events = 0U;
 static SAI_HandleTypeDef *audio_sai_tx = NULL;
 static SAI_HandleTypeDef *audio_sai_rx = NULL;
 
-static void audio_sai_clean_dcache(void *addr, uint32_t size_bytes)
-{
-  uint32_t aligned_size = (size_bytes + 31U) & ~31U;
-  SCB_CleanDCache_by_Addr((uint32_t *)addr, aligned_size);
-}
-
-static void audio_sai_invalidate_dcache(void *addr, uint32_t size_bytes)
-{
-  uint32_t aligned_size = (size_bytes + 31U) & ~31U;
-  SCB_InvalidateDCache_by_Addr((uint32_t *)addr, aligned_size);
-}
-
 void audio_io_sai_init(SAI_HandleTypeDef *tx_sai, SAI_HandleTypeDef *rx_sai)
 {
   audio_sai_tx = tx_sai;
@@ -56,7 +43,6 @@ void audio_io_sai_init(SAI_HandleTypeDef *tx_sai, SAI_HandleTypeDef *rx_sai)
 
   memset(audio_sai_tx_buffer, 0, sizeof(audio_sai_tx_buffer));
   memset(audio_sai_rx_buffer, 0, sizeof(audio_sai_rx_buffer));
-  audio_sai_clean_dcache(audio_sai_tx_buffer, sizeof(audio_sai_tx_buffer));
 }
 
 void audio_io_sai_start(void)
@@ -138,7 +124,6 @@ void audio_io_sai_copy_rx_half(uint32_t half_index, int32_t *dest, uint32_t fram
 
   uint32_t offset = half_index * AUDIO_SAI_SAMPLES_PER_HALF;
   uint32_t samples = frames * AUDIO_SAI_SAMPLES_PER_FRAME;
-  audio_sai_invalidate_dcache(&audio_sai_rx_buffer[offset], samples * sizeof(int32_t));
   memcpy(dest, &audio_sai_rx_buffer[offset], samples * sizeof(int32_t));
 }
 
@@ -157,7 +142,6 @@ void audio_io_sai_copy_tx_half(uint32_t half_index, const int32_t *src, uint32_t
   uint32_t offset = half_index * AUDIO_SAI_SAMPLES_PER_HALF;
   uint32_t samples = frames * AUDIO_SAI_SAMPLES_PER_FRAME;
   memcpy(&audio_sai_tx_buffer[offset], src, samples * sizeof(int32_t));
-  audio_sai_clean_dcache(&audio_sai_tx_buffer[offset], samples * sizeof(int32_t));
 }
 
 uint32_t audio_io_sai_get_tx_half_events(void)
