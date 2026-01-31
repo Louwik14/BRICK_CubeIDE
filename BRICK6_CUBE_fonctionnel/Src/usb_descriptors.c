@@ -1,3 +1,30 @@
+/**
+ * @file usb_descriptors.c
+ * @brief Descripteurs USB (UAC1 + MIDI) pour TinyUSB device.
+ *
+ * Définit les descripteurs USB audio/MIDI utilisés par la pile TinyUSB.
+ *
+ * Rôle dans le système:
+ * - Description statique des interfaces USB exposées au host.
+ *
+ * Contraintes temps réel:
+ * - Critique audio: non.
+ * - IRQ: non.
+ * - Tasklet: non.
+ * - Borné: oui.
+ *
+ * Architecture:
+ * - Appelé par: TinyUSB (enumeration).
+ * - Appelle: aucun module externe.
+ * - Consommé par: host USB.
+ *
+ * Règles:
+ * - Pas de malloc.
+ * - Pas de blocage en IRQ.
+ *
+ * @note L’API publique est déclarée dans usb_descriptors.h.
+ */
+
 #include "tusb.h"
 #include "usb_descriptors.h"
 
