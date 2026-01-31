@@ -1,6 +1,5 @@
 #include <string.h>
-#include "audio_buffer.h"
-#include "audio_core.h"
+#include "audio_io_usb.h"
 #include "tusb.h"
 #include "tinyusb_app.h"
 #include "usb_descriptors.h"
@@ -18,8 +17,6 @@ uint8_t clkValid;
 audio20_control_range_2_n_t(1) volumeRng[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
 audio20_control_range_4_n_t(1) sampleFreqRng;
 
-#define USB_RX_CAPACITY ((4U * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX) / sizeof(int32_t))
-
 // 1 ms audio frame buffer
 uint16_t test_buffer_audio[
   CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000 *
@@ -27,8 +24,10 @@ uint16_t test_buffer_audio[
   CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX / 2
 ];
 
-static audio_buffer_t usb_rx_buffer;
-static int32_t usb_rx_mem[USB_RX_CAPACITY];
+static int32_t usb_tx_buffer[
+  CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000 *
+  CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX
+];
 
 static uint16_t startVal = 0;
 
@@ -46,8 +45,7 @@ void tinyusb_app_init(void)
   sampleFreqRng.subrange[0].bMax = sampFreq;
   sampleFreqRng.subrange[0].bRes = 0;
 
-  audio_buffer_init(&usb_rx_buffer, usb_rx_mem, USB_RX_CAPACITY);
-  audio_core_set_usb_buffer(&usb_rx_buffer);
+  audio_io_usb_init();
 }
 
 static void audio_task(void)
@@ -58,11 +56,24 @@ static void audio_task(void)
   last_ms = now;
 
   uint32_t frames = CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000;
-  for (uint32_t i = 0; i < frames; i++)
+  uint32_t samples = frames * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX;
+  uint32_t usb_samples = audio_io_usb_prepare_tx(usb_tx_buffer, samples);
+
+  if (usb_samples == samples)
   {
-    uint16_t val = startVal++;
-    test_buffer_audio[2 * i] = val;
-    test_buffer_audio[2 * i + 1] = val;
+    for (uint32_t i = 0; i < samples; ++i)
+    {
+      test_buffer_audio[i] = (uint16_t)usb_tx_buffer[i];
+    }
+  }
+  else
+  {
+    for (uint32_t i = 0; i < frames; i++)
+    {
+      uint16_t val = startVal++;
+      test_buffer_audio[2 * i] = val;
+      test_buffer_audio[2 * i + 1] = val;
+    }
   }
 
   tud_audio_write((uint8_t*)test_buffer_audio,
@@ -194,7 +205,7 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
     uint32_t sample_count = (uint32_t)read_count / sizeof(int32_t);
     if (sample_count > 0U)
     {
-      audio_buffer_write(&usb_rx_buffer, rx_buffer, sample_count);
+      audio_io_usb_on_rx_samples(rx_buffer, sample_count);
     }
     remaining = (uint16_t)(remaining - read_count);
   }
