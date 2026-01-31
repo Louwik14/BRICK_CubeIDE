@@ -16,6 +16,8 @@ uint8_t clkValid;
 audio20_control_range_2_n_t(1) volumeRng[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
 audio20_control_range_4_n_t(1) sampleFreqRng;
 
+#define SPEAKER_RING_BUFFER_SIZE (4 * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX)
+
 // 1 ms audio frame buffer
 uint16_t test_buffer_audio[
   CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000 *
@@ -23,6 +25,9 @@ uint16_t test_buffer_audio[
   CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX / 2
 ];
 
+static uint8_t speaker_ring[SPEAKER_RING_BUFFER_SIZE];
+static volatile uint32_t speaker_ring_head;
+static volatile uint32_t speaker_ring_tail;
 
 static uint16_t startVal = 0;
 
@@ -78,7 +83,7 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport,
 
   TU_VERIFY(p_request->bRequest == AUDIO20_CS_REQ_CUR);
 
-  if (entityID == 2) // Feature Unit
+  if (entityID == 2 || entityID == 5) // Feature Units
   {
     switch (ctrlSel)
     {
@@ -107,7 +112,7 @@ bool tud_audio_get_req_entity_cb(uint8_t rhport,
   uint8_t ctrlSel    = TU_U16_HIGH(p_request->wValue);
   uint8_t entityID   = TU_U16_HIGH(p_request->wIndex);
 
-  if (entityID == 2) // Feature Unit
+  if (entityID == 2 || entityID == 5) // Feature Units
   {
     switch (ctrlSel)
     {
@@ -150,5 +155,69 @@ bool tud_audio_set_itf_close_ep_cb(uint8_t rhport,
   (void) rhport;
   (void) p_request;
   startVal = 0;
+  return true;
+}
+
+//--------------------------------------------------------------------+
+// USB AUDIO RX (SPEAKER OUT)
+//--------------------------------------------------------------------+
+
+static uint32_t speaker_ring_available(void)
+{
+  uint32_t head = speaker_ring_head;
+  uint32_t tail = speaker_ring_tail;
+  if (head >= tail)
+  {
+    return head - tail;
+  }
+  return SPEAKER_RING_BUFFER_SIZE - (tail - head);
+}
+
+static uint32_t speaker_ring_free(void)
+{
+  return (SPEAKER_RING_BUFFER_SIZE - 1) - speaker_ring_available();
+}
+
+static void speaker_ring_write(const uint8_t *data, uint32_t len)
+{
+  uint32_t free_bytes = speaker_ring_free();
+  if (len > free_bytes)
+  {
+    len = free_bytes;
+  }
+
+  while (len--)
+  {
+    speaker_ring[speaker_ring_head] = *data++;
+    speaker_ring_head = (speaker_ring_head + 1) % SPEAKER_RING_BUFFER_SIZE;
+  }
+}
+
+bool tud_audio_rx_done_isr(uint8_t rhport,
+                           uint16_t n_bytes_received,
+                           uint8_t func_id,
+                           uint8_t ep_out,
+                           uint8_t cur_alt_setting)
+{
+  (void) rhport;
+  (void) func_id;
+  (void) ep_out;
+  (void) cur_alt_setting;
+
+  static uint8_t rx_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX];
+  uint16_t remaining = n_bytes_received;
+
+  while (remaining)
+  {
+    uint16_t chunk = tu_min16(remaining, sizeof(rx_buffer));
+    uint16_t read_count = tud_audio_read(rx_buffer, chunk);
+    if (read_count == 0)
+    {
+      break;
+    }
+    speaker_ring_write(rx_buffer, read_count);
+    remaining = (uint16_t)(remaining - read_count);
+  }
+
   return true;
 }
