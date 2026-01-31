@@ -201,6 +201,11 @@ void AudioOut_DebugDump(void)
   }
 }
 
+int32_t *AudioOut_GetBuffer(void)
+{
+  return audio_out_buffer;
+}
+
 void AudioOut_Init(SAI_HandleTypeDef *hsai)
 {
   audio_out_sai = hsai;
