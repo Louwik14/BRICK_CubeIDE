@@ -1,0 +1,213 @@
+1. État actuel du projet (inventaire + fonctionnement)
+Organisation des dossiers (audio/USB)
+
+    Le code applicatif principal est dans Src/ et les en-têtes dans Inc/ (ex. audio_in.c/.h, audio_out.c/.h, engine_tasklet.c, sd_stream.c).
+
+    La pile USB Device TinyUSB est utilisée (descripteurs USB dans usb_descriptors.c, logique audio device dans tinyusb_app.c).
+
+    La pile USB Host (MIDI) est dans App/usb_stack/ avec usb_host.c et classe usbh_midi.h/.c.
+
+USB Audio (device)
+
+    Les descripteurs UAC1 (speaker OUT + mic IN, 2 canaux) sont définis dans usb_descriptors.c.
+
+    tinyusb_app.c génère un buffer audio de test 1 ms et l’envoie vers l’host via tud_audio_write() (pas encore branché sur SAI).
+
+    Le RX USB audio (speaker OUT) alimente un ring buffer speaker_ring, mais ce ring n’est pas relié au pipeline SAI/audio_out dans ce fichier (aucune consommation visible ici).
+
+USB MIDI
+
+    En mode USB Host, usb_host.c initie la classe MIDI host et exécute USBH_Process() en tasklet.
+
+    Le pont MIDI host -> API interne est géré dans midi_host.c (lecture via USBH_MIDI_ReadPacket).
+
+    En USB Device, midi.c gère TX/RX via TinyUSB (queues internes + tud_midi_stream_write).
+
+SAI / DMA
+
+    SAI1 Block A en TX master, SAI1 Block B en RX slave, 48 kHz, 24-bit, 8 slots TDM, DMA circulaire (DMA1 Stream0/1).
+
+    IRQ SAI1 activée via NVIC (priorité 5).
+
+Buffers existants
+
+    Audio IN: buffer DMA circulaire audio_in_buffer (int32), 256 frames/half, 8 slots, 2 halves. API AudioIn_GetLatestBlock().
+
+    Audio OUT: buffer DMA audio_out_buffer (int32), 256 frames/half, 8 slots, 2 halves. Rempli en tasklet (audio_tasklet_poll) avec un sine ou loopback ou SD ring.
+
+    Ring SD: sd_audio_block_ring (4 blocs × 4096 bytes).
+
+    Ring USB Audio RX (speaker): speaker_ring dans tinyusb_app.c.
+
+Drivers codec
+
+    Le codec CS42448 est initialisé via I2C (cs42448.c) en mode TDM 24-bit, slave auto, 256Fs.
+
+    L’init globale ne montre que cs42448.h côté main (pas de driver PCM5100A visible dans l’init courant).
+
+Où vit l’audio aujourd’hui ?
+
+    Acquisition et sortie SAI vivent dans audio_in.c / audio_out.c.
+
+    L’init globale (AudioOut + AudioIn DMA start) est dans brick6_app_init.c.
+
+    La cadence “moteur” est dérivée de l’audio OUT (notify frames → engine_tasklet).
+
+Qui déclenche les IRQ ?
+
+    HAL_SAI_RxHalfCpltCallback / HAL_SAI_RxCpltCallback dans audio_in.c (SAI1 Block B).
+
+    HAL_SAI_TxHalfCpltCallback / HAL_SAI_TxCpltCallback dans audio_out.c (SAI1 Block A).
+
+Comment circulent les buffers
+
+    SAI RX → audio_in_buffer DMA → AudioIn_GetLatestBlock() (exposé au loopback).
+
+    SD stream → sd_audio_block_ring (producer) → audio_out_copy_ring_block() (consumer) → audio_out_buffer DMA TX.
+
+    USB audio device → speaker_ring (RX) ou test buffer TX via tud_audio_write() (pas relié au SAI).
+
+Duplications / couplages / risques / manques
+
+    Duplications de buffers: ring SD (sd_audio_block_ring) et ring USB audio (speaker_ring) gérés séparément sans abstraction commune.
+
+    Couplage direct: audio_out.c consomme AudioIn_GetLatestBlock() et appelle engine_tasklet_notify_frames(); la sortie audio pilote l’engine et dépend de l’entrée audio.
+
+    Zone à risque STM32H7: TODO explicite sur la cohérence DCache/MPU pour le buffer DMA de sortie.
+
+    Manque structurel: l’audio USB device est isolé (génération test + ring RX) et ne s’insère pas encore dans la chaîne SAI / audio_out.
+
+2. Schéma de flux audio (texte)
+
+[USB Audio RX] -> speaker_ring (TinyUSB) --(pas encore branché)-->
+[Audio Core] --(mix/routing)-> [Audio OUT DMA] -> SAI1 Block A -> Codec DAC
+
+[SAI1 Block B DMA RX] -> audio_in_buffer -> [Audio Core]
+[SD DMA -> sd_audio_block_ring] -> [Audio OUT DMA] -> SAI1 Block A
+
+Références actuelles des flux: SAI RX/TX (audio_in/out), ring SD, ring USB audio.
+3. Proposition d’architecture cible (modules)
+
+    Objectif: moteur audio modulaire, déterministe, compile-time.
+
+Modules proposés
+
+    audio_core/
+
+        Orchestrateur central: tick audio, planification buffers, synchronisation DMA.
+
+    audio_io/
+
+        Backends d’entrées/sorties:
+
+            audio_io_usb.c (TinyUSB RX/TX)
+
+            audio_io_sai.c (SAI DMA TDM)
+
+            audio_io_sd.c (SD stream)
+
+    audio_buffer/
+
+        Buffers communs + ring buffers audio (int32).
+
+    mixer/
+
+        Mixeur N entrées → M sorties (int32).
+
+    fx_chain/
+
+        Chaîne d’effets (optionnelle, compile-time).
+
+    routing/
+
+        Matrice de routage (mapping de canaux).
+
+    drivers/
+
+        Codecs (CS42448, PCM5100A, futurs) strictement séparés de audio_core.
+
+4. Où doivent vivre les buffers audio
+
+    RAM D1/AXI pour DMA (alignés, cache maintenance).
+
+    audio_io_sai possède les buffers DMA physiques (entrée/sortie).
+
+    audio_core possède les buffers “traitement” (int32) et expose des vues aux modules.
+
+Référence actuelle des buffers DMA et ring: audio_in/out + sd_audio_block_ring + speaker_ring.
+5. Combien de buffers et tailles (recommandation)
+
+    DMA SAI: 2 demi-buffers (double buffer) de 256 frames × 8 slots × 32 bits (déjà en place).
+
+    Buffer traitement: 1 buffer int32 par “bloc audio” (par demi-buffer, 256 frames) pour chaque bus (IN/OUT).
+
+    Ring USB: 2–4 ms (2–4 buffers) pour absorber jitter USB.
+
+    Ring SD: conserver 4 blocs de 4096 bytes (actuel) ou augmenter si latence SD.
+
+6. Modèle DMA / IRQ (qui déclenche quoi)
+
+    IRQ DMA SAI (Half/Full) → set flags seulement.
+
+    audio_tasklet_poll() (main loop) → consomme flags + remplit DMA OUT, notifie audio_core.
+
+    audio_core traite le bloc complet (256 frames).
+
+Références actuelles: callbacks IRQ et tasklet audio.
+7. Abstraction claire des entrées / sorties
+
+    Interface audio_source_t (pull) et audio_sink_t (push).
+
+    Core “pull” les sources (USB RX, SAI RX, SD) puis “push” vers sinks (USB TX, SAI TX).
+
+    Chaque backend expose:
+
+        prepare_block() (remplit buffer de travail)
+
+        commit_block() (pousse en DMA/USB)
+
+8. Intégrer de futurs codecs sans refactor massif
+
+    driver codec isolé (I2C + register map)
+
+    audio_io_sai reste constant (TDM/I2S).
+
+    Changer codec = changer drivers/codec_x.c + config SAI.
+
+    Existant: cs42448.c montre déjà cette séparation.
+
+9. Ordre d’implémentation recommandé
+
+    Créer audio_core + audio_buffer (définir int32 buffers + format 48 kHz).
+
+    Brancher audio_out → audio_core (remplacer test sine/loopback direct).
+
+    Brancher audio_in → audio_core (copie DMA → buffer core).
+
+    Brancher USB audio RX/TX (remplacer speaker_ring par ring audio_core).
+
+    Brancher SD stream (alimentation d’une source audio).
+
+    Ajouter mixer/routing (multi-canaux).
+
+    Ajouter FX chain (optionnel).
+
+10. Risques / pièges spécifiques STM32H7 + HAL
+
+    DCache / MPU: besoin de SCB_CleanDCache_by_Addr / SCB_InvalidateDCache_by_Addr sur buffers DMA (TODO déjà noté).
+
+    DMA circular: attention au travail en IRQ (doit rester minimal). Actuel OK, à conserver.
+
+    SAI1 shared IRQ: SAI1_IRQn pour les deux blocs, bien gérer les callbacks.
+
+    Jitter USB: prévoir ring buffers suffisamment profonds (actuellement speaker_ring + ring SD séparés).
+
+11. Architecture simple et déterministe (récap)
+
+    Un audio_core central gère les buffers et le timing.
+
+    IRQs minimalistes → flags uniquement.
+
+    Traitement audio en tasklet (main loop) sur blocs fixes.
+
+    Backends découplés (USB, SAI, SD, codec drivers)
