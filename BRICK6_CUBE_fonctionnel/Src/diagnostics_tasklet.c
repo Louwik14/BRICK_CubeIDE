@@ -28,8 +28,7 @@
 
 #include "diagnostics_tasklet.h"
 
-#include "audio_in.h"
-#include "audio_out.h"
+#include "audio_io_sai.h"
 #include "brick6_refactor.h"
 #include "engine_tasklet.h"
 #include "main.h"
@@ -105,10 +104,6 @@ static void SDRAM_Alloc_Test_Stop(uint32_t index, uint32_t got, uint32_t expecte
        (unsigned long)index,
        (unsigned long)got,
        (unsigned long)expected);
-  while (1)
-  {
-    HAL_Delay(100);
-  }
 }
 
 void diagnostics_sdram_alloc_test(void)
@@ -127,10 +122,7 @@ void diagnostics_sdram_alloc_test(void)
   if ((block16 == NULL) || (block32 == NULL))
   {
     LOG("SDRAM alloc test FAILED: out of memory\r\n");
-    while (1)
-    {
-      HAL_Delay(100);
-    }
+    return;
   }
 
   /* 16-bit pattern test (safe on x16 bus). */
@@ -146,6 +138,7 @@ void diagnostics_sdram_alloc_test(void)
     if (block16[i] != expected)
     {
       SDRAM_Alloc_Test_Stop(i, block16[i], expected);
+      return;
     }
   }
 
@@ -166,6 +159,7 @@ void diagnostics_sdram_alloc_test(void)
     if (read_value != expected)
     {
       SDRAM_Alloc_Test_Stop(i, read_value, expected);
+      return;
     }
   }
 
@@ -272,10 +266,10 @@ void diagnostics_tasklet_poll(void)
   if ((now - last_log_tick) >= 1000U)
   {
     uint32_t error = HAL_SAI_GetError(&hsai_BlockA1);
-    uint32_t half = AudioOut_GetHalfEvents();
-    uint32_t full = AudioOut_GetFullEvents();
-    uint32_t rx_half = AudioIn_GetHalfEvents();
-    uint32_t rx_full = AudioIn_GetFullEvents();
+    uint32_t half = audio_io_sai_get_tx_half_events();
+    uint32_t full = audio_io_sai_get_tx_full_events();
+    uint32_t rx_half = audio_io_sai_get_rx_half_events();
+    uint32_t rx_full = audio_io_sai_get_rx_full_events();
 
 #if BRICK6_ENABLE_DIAGNOSTICS
     LOGF("REF1 audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "

@@ -34,8 +34,8 @@
 #include "tinyusb_app.h"
 #include "usb_host.h"
 #include "cs42448.h"
-#include "audio_in.h"
-#include "audio_out.h"
+#include "audio_core.h"
+#include "audio_io_sd.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
@@ -132,6 +132,7 @@ int main(void)
     tinyusb_app_task();
     engine_tasklet_poll();
     sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
+    audio_io_sd_task();
     usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
     //midi_host_poll_bounded(MIDI_BUDGET_MSGS);
     ui_tasklet_poll();

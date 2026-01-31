@@ -29,8 +29,7 @@
 
 #include "brick6_app_init.h"
 
-#include "audio_in.h"
-#include "audio_out.h"
+#include "audio_core.h"
 #include "brick6_refactor.h"
 #include "diagnostics_tasklet.h"
 #include "engine_tasklet.h"
@@ -59,15 +58,11 @@ void brick6_app_init(void)
   tinyusb_app_init();
   MX_USB_HOST_Init();
   /* Init audio */
-  AudioOut_Init(&hsai_BlockA1);
-  AudioIn_Init(&hsai_BlockB1);
+  audio_core_init(&hsai_BlockA1, &hsai_BlockB1);
 
-  engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
+  engine_tasklet_init(AUDIO_CORE_SAMPLE_RATE);
 
-  AudioOut_Start();
-  (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
-                            (uint8_t *)AudioIn_GetBuffer(),
-                            AudioIn_GetBufferSamples());
+  audio_core_start();
 
   HAL_Delay(200);
 
