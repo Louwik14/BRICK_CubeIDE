@@ -1,5 +1,6 @@
 #include "audio_core.h"
 
+#include "audio_io_sd.h"
 #include "audio_io_usb.h"
 
 #include <string.h>
@@ -24,6 +25,13 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
     uint32_t available = audio_buffer_available(usb_buf);
     if (available >= sample_count) {
       (void)audio_buffer_read(usb_buf, out, (uint32_t)sample_count);
+      return;
+    }
+  }
+
+  if (audio_io_sd_has_block()) {
+    uint32_t read_count = audio_io_sd_read_block(out, (uint32_t)sample_count);
+    if (read_count == sample_count) {
       return;
     }
   }
