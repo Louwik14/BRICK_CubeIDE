@@ -80,21 +80,15 @@ extern "C" {
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT  1
 
 // Channels
-#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX 1
-#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX 1
+#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX 2
+#define CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX 2
 
 // UAC1 Endpoint size calculation
 #define CFG_TUD_AUDIO10_FUNC_1_FORMAT_1_EP_SZ_IN \
-  TUD_AUDIO_EP_SIZE(false, \
-                    CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE, \
-                    CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_TX, \
-                    CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX)
+  TUD_AUDIO_EP_SIZE(false, 48000, 2, 2)
 
 #define CFG_TUD_AUDIO10_FUNC_1_FORMAT_1_EP_SZ_OUT \
-  TUD_AUDIO_EP_SIZE(true, \
-                    CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE, \
-                    CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_RX, \
-                    CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
+  TUD_AUDIO_EP_SIZE(true, 48000, 2, 2)
 
 // IN sizes
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX \

@@ -53,9 +53,12 @@ static void audio_task(void)
   if (now == last_ms) return;
   last_ms = now;
 
-  for (uint32_t i = 0; i < TU_ARRAY_SIZE(test_buffer_audio); i++)
+  uint32_t frames = CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000;
+  for (uint32_t i = 0; i < frames; i++)
   {
-    test_buffer_audio[i] = startVal++;
+    uint16_t val = startVal++;
+    test_buffer_audio[2 * i] = val;
+    test_buffer_audio[2 * i + 1] = val;
   }
 
   tud_audio_write((uint8_t*)test_buffer_audio,

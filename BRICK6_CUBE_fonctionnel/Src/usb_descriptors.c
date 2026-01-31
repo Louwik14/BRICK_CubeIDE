@@ -67,10 +67,10 @@ enum
   + TUD_AUDIO10_DESC_CS_AC_LEN(2)\
   + TUD_AUDIO10_DESC_INPUT_TERM_LEN\
   + TUD_AUDIO10_DESC_OUTPUT_TERM_LEN\
-  + TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(1)\
+  + TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2)\
   + TUD_AUDIO10_DESC_INPUT_TERM_LEN\
   + TUD_AUDIO10_DESC_OUTPUT_TERM_LEN\
-  + TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(1)\
+  + TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2)\
   + TUD_AUDIO10_DESC_STD_AS_LEN\
   + TUD_AUDIO10_DESC_STD_AS_LEN\
   + TUD_AUDIO10_DESC_CS_AS_INT_LEN\
@@ -103,17 +103,17 @@ uint8_t const desc_configuration[] =
   TUD_AUDIO10_DESC_CS_AC(/*_bcdADC*/ 0x0100,
                          /*_totallen*/ (TUD_AUDIO10_DESC_INPUT_TERM_LEN +
                                         TUD_AUDIO10_DESC_OUTPUT_TERM_LEN +
-                                        TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(1) +
+                                        TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2) +
                                         TUD_AUDIO10_DESC_INPUT_TERM_LEN +
                                         TUD_AUDIO10_DESC_OUTPUT_TERM_LEN +
-                                        TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(1)),
+                                        TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2)),
                          /*_itf*/ ITF_NUM_AUDIO_STREAMING_OUT,
                          /*_itf*/ ITF_NUM_AUDIO_STREAMING_IN),
   // Speaker path (USB OUT -> Speaker)
   TUD_AUDIO10_DESC_INPUT_TERM(/*_termid*/ AUDIO_ENTITY_SPK_INPUT_TERMINAL,
                               /*_termtype*/ AUDIO_TERM_TYPE_USB_STREAMING,
                               /*_assocTerm*/ AUDIO_ENTITY_SPK_OUTPUT_TERMINAL,
-                              /*_nchannels*/ 0x01,
+                              /*_nchannels*/ 0x02,
                               /*_channelcfg*/ AUDIO10_CHANNEL_CONFIG_NON_PREDEFINED,
                               /*_idxchannelnames*/ 0x00,
                               /*_stridx*/ 0x00),
@@ -128,12 +128,14 @@ uint8_t const desc_configuration[] =
                                 /*_ctrlmaster*/ (AUDIO10_FU_CONTROL_BM_MUTE |
                                                   AUDIO10_FU_CONTROL_BM_VOLUME),
                                 /*_ctrlch1*/ (AUDIO10_FU_CONTROL_BM_MUTE |
+                                              AUDIO10_FU_CONTROL_BM_VOLUME),
+                                /*_ctrlch2*/ (AUDIO10_FU_CONTROL_BM_MUTE |
                                               AUDIO10_FU_CONTROL_BM_VOLUME)),
   // Microphone path (Mic -> USB IN)
   TUD_AUDIO10_DESC_INPUT_TERM(/*_termid*/ AUDIO_ENTITY_MIC_INPUT_TERMINAL,
                               /*_termtype*/ AUDIO_TERM_TYPE_IN_GENERIC_MIC,
                               /*_assocTerm*/ AUDIO_ENTITY_MIC_OUTPUT_TERMINAL,
-                              /*_nchannels*/ 0x01,
+                              /*_nchannels*/ 0x02,
                               /*_channelcfg*/ AUDIO10_CHANNEL_CONFIG_NON_PREDEFINED,
                               /*_idxchannelnames*/ 0x00,
                               /*_stridx*/ 0x00),
@@ -148,6 +150,8 @@ uint8_t const desc_configuration[] =
                                 /*_ctrlmaster*/ (AUDIO10_FU_CONTROL_BM_MUTE |
                                                   AUDIO10_FU_CONTROL_BM_VOLUME),
                                 /*_ctrlch1*/ (AUDIO10_FU_CONTROL_BM_MUTE |
+                                              AUDIO10_FU_CONTROL_BM_VOLUME),
+                                /*_ctrlch2*/ (AUDIO10_FU_CONTROL_BM_MUTE |
                                               AUDIO10_FU_CONTROL_BM_VOLUME)),
   // Speaker Streaming Interface (OUT)
   TUD_AUDIO10_DESC_STD_AS_INT(/*_itfnum*/ ITF_NUM_AUDIO_STREAMING_OUT,
@@ -161,7 +165,7 @@ uint8_t const desc_configuration[] =
   TUD_AUDIO10_DESC_CS_AS_INT(/*_termid*/ AUDIO_ENTITY_SPK_INPUT_TERMINAL,
                              /*_delay*/ 0x01,
                              /*_formattype*/ AUDIO10_DATA_FORMAT_TYPE_I_PCM),
-  TUD_AUDIO10_DESC_TYPE_I_FORMAT(/*_nrchannels*/ 0x01,
+  TUD_AUDIO10_DESC_TYPE_I_FORMAT(/*_nrchannels*/ 0x02,
                                  /*_subframesize*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_RX,
                                  /*_bitresolution*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_RESOLUTION_RX,
                                  /*_freq*/ CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE),
@@ -186,7 +190,7 @@ uint8_t const desc_configuration[] =
   TUD_AUDIO10_DESC_CS_AS_INT(/*_termid*/ AUDIO_ENTITY_MIC_OUTPUT_TERMINAL,
                              /*_delay*/ 0x01,
                              /*_formattype*/ AUDIO10_DATA_FORMAT_TYPE_I_PCM),
-  TUD_AUDIO10_DESC_TYPE_I_FORMAT(/*_nrchannels*/ 0x01,
+  TUD_AUDIO10_DESC_TYPE_I_FORMAT(/*_nrchannels*/ 0x02,
                                  /*_subframesize*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_TX,
                                  /*_bitresolution*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_RESOLUTION_TX,
                                  /*_freq*/ CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE),
