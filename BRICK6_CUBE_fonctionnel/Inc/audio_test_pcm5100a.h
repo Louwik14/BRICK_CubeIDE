@@ -1,6 +1,8 @@
 #ifndef AUDIO_TEST_PCM5100A_H
 #define AUDIO_TEST_PCM5100A_H
 
+#include "brick6_refactor.h"
+
 #include <stdint.h>
 
 typedef struct __SAI_HandleTypeDef SAI_HandleTypeDef;
