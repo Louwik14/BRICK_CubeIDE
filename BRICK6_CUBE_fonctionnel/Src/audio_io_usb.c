@@ -28,10 +28,11 @@
 
 #include "audio_io_usb.h"
 
+#include "audio_core.h"
 #include "tusb.h"
 
-#define USB_RX_CAPACITY ((4U * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX) / sizeof(int32_t))
-#define USB_TX_CAPACITY ((4U * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX) / sizeof(int32_t))
+#define USB_RX_CAPACITY (AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS * 4U)
+#define USB_TX_CAPACITY (AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS * 4U)
 
 static audio_buffer_t usb_rx_buf;
 static int32_t usb_rx_mem[USB_RX_CAPACITY];
