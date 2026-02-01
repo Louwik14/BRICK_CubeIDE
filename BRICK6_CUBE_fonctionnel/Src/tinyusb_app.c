@@ -58,6 +58,10 @@ static int32_t usb_tx_buffer[
 ];
 
 static uint16_t startVal = 0;
+static volatile uint32_t usb_rx_done_count = 0U;
+static volatile uint32_t usb_rx_bytes_total = 0U;
+static volatile uint32_t usb_rx_samples_total = 0U;
+static volatile uint32_t usb_rx_zero_reads = 0U;
 
 //--------------------------------------------------------------------+
 // INIT / TASK
@@ -223,17 +227,22 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   static int32_t rx_converted[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
   uint16_t remaining = n_bytes_received;
 
+  usb_rx_done_count++;
+  usb_rx_bytes_total += n_bytes_received;
+
   while (remaining)
   {
     uint16_t chunk = tu_min16(remaining, sizeof(rx_buffer));
     uint16_t read_count = tud_audio_read((uint8_t *)rx_buffer, chunk);
     if (read_count == 0)
     {
+      usb_rx_zero_reads++;
       break;
     }
     uint32_t sample_count = (uint32_t)read_count / sizeof(int16_t);
     if (sample_count > 0U)
     {
+      usb_rx_samples_total += sample_count;
       for (uint32_t idx = 0U; idx < sample_count; ++idx)
       {
         rx_converted[idx] = ((int32_t)rx_buffer[idx]) << 8;
@@ -244,4 +253,24 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   }
 
   return true;
+}
+
+uint32_t tinyusb_app_get_rx_done_count(void)
+{
+  return usb_rx_done_count;
+}
+
+uint32_t tinyusb_app_get_rx_bytes_total(void)
+{
+  return usb_rx_bytes_total;
+}
+
+uint32_t tinyusb_app_get_rx_samples_total(void)
+{
+  return usb_rx_samples_total;
+}
+
+uint32_t tinyusb_app_get_rx_zero_reads(void)
+{
+  return usb_rx_zero_reads;
 }
