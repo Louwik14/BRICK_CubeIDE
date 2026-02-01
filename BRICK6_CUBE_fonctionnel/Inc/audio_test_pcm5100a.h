@@ -7,8 +7,17 @@
 
 typedef struct __SAI_HandleTypeDef SAI_HandleTypeDef;
 
+/*
+ * Local PCM5100A test mode:
+ * - Define PCM5100A_LOCAL_TEST_SINE to generate a standalone sine on SAI2.
+ * - Undefine to return to the audio_core-driven path.
+ */
+#define PCM5100A_LOCAL_TEST_SINE
+#define PCM5100A_LOCAL_TEST_FREQ_HZ 440U
+
 enum
 {
+  AUDIO_TEST_PCM5100A_SAMPLE_RATE = 48000U,
   AUDIO_TEST_PCM5100A_CHANNELS = 2U,
   AUDIO_TEST_PCM5100A_FRAMES_PER_HALF = 256U,
   AUDIO_TEST_PCM5100A_BUFFER_FRAMES = (AUDIO_TEST_PCM5100A_FRAMES_PER_HALF * 2U),
