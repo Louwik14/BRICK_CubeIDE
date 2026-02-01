@@ -7,6 +7,14 @@
 
 typedef struct __SAI_HandleTypeDef SAI_HandleTypeDef;
 
+/*
+ * Local PCM4104 test mode:
+ * - Define PCM4104_LOCAL_TEST_SINE to generate a standalone sine on SAI2.
+ * - Undefine to return to the audio_core-driven path.
+ */
+#define PCM4104_LOCAL_TEST_SINE
+#define PCM4104_LOCAL_TEST_FREQ_HZ 440U
+
 enum
 {
   AUDIO_TEST_PCM4104_SAMPLE_RATE = 48000U,
