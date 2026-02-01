@@ -1,6 +1,0 @@
-../Src/audio_buffer.c:33:6:audio_buffer_init	24	static
-../Src/audio_buffer.c:40:10:audio_buffer_available	16	static
-../Src/audio_buffer.c:47:10:audio_buffer_free	24	static
-../Src/audio_buffer.c:54:6:audio_buffer_reset	16	static
-../Src/audio_buffer.c:59:10:audio_buffer_write	32	static
-../Src/audio_buffer.c:77:10:audio_buffer_read	32	static

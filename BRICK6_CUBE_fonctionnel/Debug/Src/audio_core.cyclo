@@ -1,3 +1,0 @@
-../Src/audio_core.c:42:6:audio_core_init	1
-../Src/audio_core.c:45:6:audio_core_process_block	20
-../Src/audio_core.c:125:6:audio_core_on_input_block	3

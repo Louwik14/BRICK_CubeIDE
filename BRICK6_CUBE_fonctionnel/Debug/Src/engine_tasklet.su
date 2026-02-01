@@ -1,4 +1,0 @@
-../Src/engine_tasklet.c:35:13:engine_tick	4	static
-../Src/engine_tasklet.c:40:6:engine_tasklet_init	16	static
-../Src/engine_tasklet.c:52:6:engine_tasklet_notify_frames	16	static
-../Src/engine_tasklet.c:57:6:engine_tasklet_poll	8	static
