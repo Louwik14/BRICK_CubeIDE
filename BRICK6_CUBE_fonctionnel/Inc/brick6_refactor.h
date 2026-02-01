@@ -10,6 +10,12 @@
 #define MIDI_BUDGET_MSGS     8U
 #define SD_BUDGET_STEPS      2U
 
+#define AUDIO_TEST_PCM5100A  1
+
+#ifdef AUDIO_TEST_PCM5100A
+#pragma message("AUDIO_TEST_PCM5100A ENABLED")
+#endif
+
 #if BRICK6_ENABLE_DIAGNOSTICS
 extern volatile uint32_t brick6_audio_tx_half_count;
 extern volatile uint32_t brick6_audio_tx_full_count;
