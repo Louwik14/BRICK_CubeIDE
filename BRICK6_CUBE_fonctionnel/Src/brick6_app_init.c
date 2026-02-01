@@ -31,7 +31,7 @@
 
 #include "audio_in.h"
 #include "audio_out.h"
-#include "audio_test_pcm5100a.h"
+#include "audio_test_pcm4104.h"
 #include "brick6_refactor.h"
 #include "diagnostics_tasklet.h"
 #include "engine_tasklet.h"
@@ -63,15 +63,15 @@ void brick6_app_init(void)
   /* Init audio */
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
-#ifdef AUDIO_TEST_PCM5100A
-  audio_test_pcm5100a_init(&hsai_BlockA2);
+#ifdef AUDIO_TEST_PCM4104
+  audio_test_pcm4104_init(&hsai_BlockA2);
 #endif
 
   engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
 
   AudioOut_Start();
-#ifdef AUDIO_TEST_PCM5100A
-  audio_test_pcm5100a_start();
+#ifdef AUDIO_TEST_PCM4104
+  audio_test_pcm4104_start();
 #endif
   (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
                             (uint8_t *)AudioIn_GetBuffer(),

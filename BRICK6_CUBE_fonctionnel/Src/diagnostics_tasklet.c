@@ -30,7 +30,7 @@
 
 #include "audio_in.h"
 #include "audio_out.h"
-#include "audio_test_pcm5100a.h"
+#include "audio_test_pcm4104.h"
 #include "brick6_refactor.h"
 #include "engine_tasklet.h"
 #include "main.h"
@@ -285,8 +285,8 @@ void diagnostics_tasklet_poll(void)
          "engine_ticks=%lu usb_budget=%lu midi_budget=%lu sd_budget=%lu\r\n",
          (unsigned long)brick6_audio_tx_half_count,
          (unsigned long)brick6_audio_tx_full_count,
-         (unsigned long)AudioTest_PCM5100A_GetTxHalfCount(),
-         (unsigned long)AudioTest_PCM5100A_GetTxFullCount(),
+         (unsigned long)AudioTest_PCM4104_GetTxHalfCount(),
+         (unsigned long)AudioTest_PCM4104_GetTxFullCount(),
          (unsigned long)brick6_audio_rx_half_count,
          (unsigned long)brick6_audio_rx_full_count,
          (unsigned long)brick6_sd_rx_cplt_count,
