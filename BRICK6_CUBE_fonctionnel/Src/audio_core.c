@@ -38,6 +38,14 @@
 static int32_t core_input_copy[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
 static int32_t core_usb_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
 static int32_t core_sd_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
+static volatile uint32_t audio_core_process_count = 0U;
+static volatile uint32_t audio_core_usb_block_used = 0U;
+static volatile uint32_t audio_core_usb_block_missed = 0U;
+static volatile uint32_t audio_core_fallback_count = 0U;
+static volatile uint32_t audio_core_last_usb_available = 0U;
+static volatile uint32_t audio_core_last_usb_samples = 0U;
+static volatile uint32_t audio_core_last_frames = 0U;
+static volatile uint8_t audio_core_last_source = 0U;
 
 void audio_core_init(void) {
 }
@@ -56,6 +64,11 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
   uint32_t sd_samples = 0U;
 
   route_source_t source = routing_get_source();
+  audio_core_process_count++;
+  audio_core_last_frames = frames;
+  audio_core_last_source = (uint8_t)source;
+  audio_core_last_usb_available = 0U;
+  audio_core_last_usb_samples = 0U;
 
   if ((source == ROUTE_SRC_USB) || (source == ROUTE_SRC_MIX))
   {
@@ -63,9 +76,11 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
     if (usb_buf != NULL)
     {
       uint32_t available = audio_buffer_available(usb_buf);
+      audio_core_last_usb_available = available;
       if (available >= sample_count)
       {
         usb_samples = audio_buffer_read(usb_buf, core_usb_block, (uint32_t)sample_count);
+        audio_core_last_usb_samples = usb_samples;
       }
     }
   }
@@ -84,8 +99,10 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
       if (usb_samples == sample_count)
       {
         memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
+        audio_core_usb_block_used++;
         return;
       }
+      audio_core_usb_block_missed++;
       break;
 
     case ROUTE_SRC_SD:
@@ -100,11 +117,13 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
       if ((usb_samples == sample_count) && (sd_samples == sample_count))
       {
         mixer_mix_2_to_1(core_usb_block, core_sd_block, out, (uint32_t)sample_count);
+        audio_core_usb_block_used++;
         return;
       }
       if (usb_samples == sample_count)
       {
         memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
+        audio_core_usb_block_used++;
         return;
       }
       if (sd_samples == sample_count)
@@ -112,6 +131,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
         memcpy(out, core_sd_block, sample_count * sizeof(int32_t));
         return;
       }
+      audio_core_usb_block_missed++;
       break;
 
     case ROUTE_SRC_SAI:
@@ -119,6 +139,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
       break;
   }
 
+  audio_core_fallback_count++;
   memcpy(out, core_input_copy, sample_count * sizeof(int32_t));
 }
 
@@ -133,4 +154,44 @@ void audio_core_on_input_block(const int32_t *data, uint32_t frames) {
 
   size_t sample_count = (size_t)frames * AUDIO_CORE_CHANNELS;
   memcpy(core_input_copy, data, sample_count * sizeof(int32_t));
+}
+
+uint32_t audio_core_get_process_count(void)
+{
+  return audio_core_process_count;
+}
+
+uint32_t audio_core_get_usb_block_used_count(void)
+{
+  return audio_core_usb_block_used;
+}
+
+uint32_t audio_core_get_usb_block_missed_count(void)
+{
+  return audio_core_usb_block_missed;
+}
+
+uint32_t audio_core_get_fallback_count(void)
+{
+  return audio_core_fallback_count;
+}
+
+uint32_t audio_core_get_last_usb_available(void)
+{
+  return audio_core_last_usb_available;
+}
+
+uint32_t audio_core_get_last_usb_samples(void)
+{
+  return audio_core_last_usb_samples;
+}
+
+uint32_t audio_core_get_last_frames(void)
+{
+  return audio_core_last_frames;
+}
+
+uint8_t audio_core_get_last_source(void)
+{
+  return audio_core_last_source;
 }

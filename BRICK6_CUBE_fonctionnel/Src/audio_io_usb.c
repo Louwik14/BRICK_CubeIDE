@@ -28,15 +28,18 @@
 
 #include "audio_io_usb.h"
 
+#include "audio_core.h"
 #include "tusb.h"
 
-#define USB_RX_CAPACITY ((4U * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX) / sizeof(int32_t))
-#define USB_TX_CAPACITY ((4U * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX) / sizeof(int32_t))
+#define USB_RX_CAPACITY (AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS * 4U)
+#define USB_TX_CAPACITY (AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS * 4U)
 
 static audio_buffer_t usb_rx_buf;
 static int32_t usb_rx_mem[USB_RX_CAPACITY];
 static audio_buffer_t usb_tx_buf;
 static int32_t usb_tx_mem[USB_TX_CAPACITY];
+static volatile uint32_t usb_rx_written_total = 0U;
+static volatile uint32_t usb_rx_dropped_total = 0U;
 
 void audio_io_usb_init(void)
 {
@@ -51,10 +54,37 @@ audio_buffer_t *audio_io_usb_get_rx_buffer(void)
 
 void audio_io_usb_on_rx_samples(const int32_t *samples, uint32_t count)
 {
-  (void)audio_buffer_write(&usb_rx_buf, samples, count);
+  uint32_t written = audio_buffer_write(&usb_rx_buf, samples, count);
+  usb_rx_written_total += written;
+  usb_rx_dropped_total += (count - written);
 }
 
 uint32_t audio_io_usb_prepare_tx(int32_t *dst, uint32_t max_samples)
 {
   return audio_buffer_read(&usb_tx_buf, dst, max_samples);
+}
+
+uint32_t audio_io_usb_get_rx_available(void)
+{
+  return audio_buffer_available(&usb_rx_buf);
+}
+
+uint32_t audio_io_usb_get_rx_free(void)
+{
+  return audio_buffer_free(&usb_rx_buf);
+}
+
+uint32_t audio_io_usb_get_rx_capacity(void)
+{
+  return USB_RX_CAPACITY;
+}
+
+uint32_t audio_io_usb_get_rx_written_total(void)
+{
+  return usb_rx_written_total;
+}
+
+uint32_t audio_io_usb_get_rx_dropped_total(void)
+{
+  return usb_rx_dropped_total;
 }

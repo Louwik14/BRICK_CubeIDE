@@ -27,7 +27,7 @@
 
 #include "routing.h"
 
-#define ROUTE_DEFAULT ROUTE_SRC_SAI
+#define ROUTE_DEFAULT ROUTE_SRC_USB
 
 route_source_t routing_get_source(void)
 {
