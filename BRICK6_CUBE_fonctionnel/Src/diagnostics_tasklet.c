@@ -28,6 +28,7 @@
 
 #include "diagnostics_tasklet.h"
 
+#include "audio_core.h"
 #include "audio_in.h"
 #include "audio_io_usb.h"
 #include "audio_out.h"
