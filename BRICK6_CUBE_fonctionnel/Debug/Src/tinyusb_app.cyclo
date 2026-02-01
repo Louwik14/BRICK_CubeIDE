@@ -1,0 +1,7 @@
+../Src/tinyusb_app.c:66:6:tinyusb_app_init	1
+../Src/tinyusb_app.c:79:13:audio_task	5
+../Src/tinyusb_app.c:111:6:tinyusb_app_task	1
+../Src/tinyusb_app.c:120:6:tud_audio_set_req_entity_cb	6
+../Src/tinyusb_app.c:152:6:tud_audio_get_req_entity_cb	8
+../Src/tinyusb_app.c:198:6:tud_audio_set_itf_close_ep_cb	1
+../Src/tinyusb_app.c:211:6:tud_audio_rx_done_isr	5
