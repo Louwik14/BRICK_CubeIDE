@@ -28,7 +28,9 @@
 
 #include "diagnostics_tasklet.h"
 
+#include "audio_core.h"
 #include "audio_in.h"
+#include "audio_io_usb.h"
 #include "audio_out.h"
 #include "audio_test_pcm4104.h"
 #include "brick6_refactor.h"
@@ -38,6 +40,7 @@
 #include "sd_stream.h"
 #include "sdram.h"
 #include "sdram_alloc.h"
+#include "tinyusb_app.h"
 #include "usart.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -300,6 +303,28 @@ void diagnostics_tasklet_poll(void)
          (unsigned long)usb_budget_hit_count,
          (unsigned long)midi_budget_hit_count,
          (unsigned long)sd_budget_hit_count);
+
+    LOGF("USB RX done=%lu bytes=%lu samples=%lu zero_reads=%lu "
+         "buf_avail=%lu buf_free=%lu buf_cap=%lu written=%lu dropped=%lu "
+         "core_calls=%lu core_src=%u core_usb_used=%lu core_usb_missed=%lu "
+         "core_fallback=%lu last_frames=%lu last_avail=%lu last_samples=%lu\r\n",
+         (unsigned long)tinyusb_app_get_rx_done_count(),
+         (unsigned long)tinyusb_app_get_rx_bytes_total(),
+         (unsigned long)tinyusb_app_get_rx_samples_total(),
+         (unsigned long)tinyusb_app_get_rx_zero_reads(),
+         (unsigned long)audio_io_usb_get_rx_available(),
+         (unsigned long)audio_io_usb_get_rx_free(),
+         (unsigned long)audio_io_usb_get_rx_capacity(),
+         (unsigned long)audio_io_usb_get_rx_written_total(),
+         (unsigned long)audio_io_usb_get_rx_dropped_total(),
+         (unsigned long)audio_core_get_process_count(),
+         (unsigned int)audio_core_get_last_source(),
+         (unsigned long)audio_core_get_usb_block_used_count(),
+         (unsigned long)audio_core_get_usb_block_missed_count(),
+         (unsigned long)audio_core_get_fallback_count(),
+         (unsigned long)audio_core_get_last_frames(),
+         (unsigned long)audio_core_get_last_usb_available(),
+         (unsigned long)audio_core_get_last_usb_samples());
 #endif
 
     if (error != 0U && error != last_error)
