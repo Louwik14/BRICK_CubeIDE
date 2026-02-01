@@ -128,11 +128,14 @@ void MX_SAI2_Init(void)
   /* USER CODE END SAI2_Init 1 */
 
   hsai_BlockA2.Instance = SAI2_Block_A;
-  hsai_BlockA2.Init.AudioMode = SAI_MODESLAVE_TX;
-  hsai_BlockA2.Init.Synchro = SAI_SYNCHRONOUS_EXT_SAI1;
+  hsai_BlockA2.Init.AudioMode = SAI_MODEMASTER_TX;
+  hsai_BlockA2.Init.Synchro = SAI_ASYNCHRONOUS;
   hsai_BlockA2.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
+  hsai_BlockA2.Init.NoDivider = SAI_MCK_OVERSAMPLING_DISABLE;
   hsai_BlockA2.Init.MckOverSampling = SAI_MCK_OVERSAMPLING_ENABLE;
-  hsai_BlockA2.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_1QF;
+  hsai_BlockA2.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
+  hsai_BlockA2.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
+  hsai_BlockA2.Init.SynchroExt = SAI_SYNCEXT_DISABLE;
   hsai_BlockA2.Init.MonoStereoMode = SAI_STEREOMODE;
   hsai_BlockA2.Init.CompandingMode = SAI_NOCOMPANDING;
   hsai_BlockA2.Init.TriState = SAI_OUTPUT_NOTRELEASED;
@@ -259,18 +262,32 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
     if (SAI2_client == 0)
     {
        __HAL_RCC_SAI2_CLK_ENABLE();
+
+    /* Peripheral interrupt init*/
+    HAL_NVIC_SetPriority(SAI2_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(SAI2_IRQn);
     }
     SAI2_client ++;
 
     /**SAI2_A_Block_A GPIO Configuration
     PD11     ------> SAI2_SD_A
+    PD12     ------> SAI2_FS_A
+    PD13     ------> SAI2_SCK_A
+    PI4     ------> SAI2_MCLK_A
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_11;
+    GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF10_SAI2;
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_4;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF10_SAI2;
+    HAL_GPIO_Init(GPIOI, &GPIO_InitStruct);
 
     /* Peripheral DMA init*/
 
@@ -284,7 +301,7 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
     hdma_sai2_a.Init.Mode = DMA_CIRCULAR;
     hdma_sai2_a.Init.Priority = DMA_PRIORITY_HIGH;
     hdma_sai2_a.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    hdma_sai2_a.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_1QUARTERFULL;
+    hdma_sai2_a.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
     hdma_sai2_a.Init.MemBurst = DMA_MBURST_SINGLE;
     hdma_sai2_a.Init.PeriphBurst = DMA_PBURST_SINGLE;
     if (HAL_DMA_Init(&hdma_sai2_a) != HAL_OK)
@@ -350,12 +367,18 @@ void HAL_SAI_MspDeInit(SAI_HandleTypeDef* saiHandle)
       {
       /* Peripheral clock disable */
        __HAL_RCC_SAI2_CLK_DISABLE();
+      HAL_NVIC_DisableIRQ(SAI2_IRQn);
       }
 
     /**SAI2_A_Block_A GPIO Configuration
     PD11     ------> SAI2_SD_A
+    PD12     ------> SAI2_FS_A
+    PD13     ------> SAI2_SCK_A
+    PI4     ------> SAI2_MCLK_A
     */
-    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_11);
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13);
+
+    HAL_GPIO_DeInit(GPIOI, GPIO_PIN_4);
 
     HAL_DMA_DeInit(saiHandle->hdmarx);
     HAL_DMA_DeInit(saiHandle->hdmatx);

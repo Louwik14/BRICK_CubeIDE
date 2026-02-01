@@ -75,6 +75,7 @@ extern DMA_HandleTypeDef hdma_sai1_b;
 extern DMA_HandleTypeDef hdma_sai2_a;
 extern SAI_HandleTypeDef hsai_BlockA1;
 extern SAI_HandleTypeDef hsai_BlockB1;
+extern SAI_HandleTypeDef hsai_BlockA2;
 extern SD_HandleTypeDef hsd1;
 /* USER CODE BEGIN EV */
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
@@ -294,6 +295,20 @@ void SAI1_IRQHandler(void)
   /* USER CODE BEGIN SAI1_IRQn 1 */
 
   /* USER CODE END SAI1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles SAI2 global interrupt.
+  */
+void SAI2_IRQHandler(void)
+{
+  /* USER CODE BEGIN SAI2_IRQn 0 */
+
+  /* USER CODE END SAI2_IRQn 0 */
+  HAL_SAI_IRQHandler(&hsai_BlockA2);
+  /* USER CODE BEGIN SAI2_IRQn 1 */
+
+  /* USER CODE END SAI2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

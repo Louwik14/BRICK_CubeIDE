@@ -1,0 +1,8 @@
+../Src/audio_test_pcm5100a.c:28:13:pcm5100a_fill_half	32	static
+../Src/audio_test_pcm5100a.c:42:6:audio_test_pcm5100a_init	16	static
+../Src/audio_test_pcm5100a.c:52:6:audio_test_pcm5100a_start	8	static
+../Src/audio_test_pcm5100a.c:64:6:audio_test_pcm5100a_on_tx_half	16	static
+../Src/audio_test_pcm5100a.c:73:6:audio_test_pcm5100a_on_tx_full	16	static
+../Src/audio_test_pcm5100a.c:82:6:audio_test_pcm5100a_tasklet_poll	8	static
+../Src/audio_test_pcm5100a.c:97:10:AudioTest_PCM5100A_GetTxHalfCount	4	static
+../Src/audio_test_pcm5100a.c:102:10:AudioTest_PCM5100A_GetTxFullCount	4	static
