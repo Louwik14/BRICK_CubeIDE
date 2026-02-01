@@ -12,21 +12,67 @@
 
 #ifdef AUDIO_TEST_PCM5100A
 
-#include "audio_core.h"
 #include "sai.h"
 
 #include <string.h>
 
 static int32_t pcm5100a_tx_buffer[AUDIO_TEST_PCM5100A_BUFFER_SAMPLES];
-static int32_t pcm5100a_core_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
-static volatile uint8_t pcm5100a_half_ready = 0U;
-static volatile uint8_t pcm5100a_full_ready = 0U;
 static volatile uint32_t pcm5100a_tx_half_count = 0U;
 static volatile uint32_t pcm5100a_tx_full_count = 0U;
 static SAI_HandleTypeDef *pcm5100a_sai = NULL;
+#if defined(PCM5100A_LOCAL_TEST_SINE)
+static uint32_t pcm5100a_phase = 0U;
+static uint32_t pcm5100a_phase_inc = 0U;
+static const int16_t pcm5100a_sine_table[256] = {
+  0, 804, 1608, 2410, 3212, 4011, 4808, 5602, 6393, 7179, 7962, 8739, 9512,
+  10278, 11039, 11793, 12539, 13279, 14010, 14732, 15446, 16151, 16846, 17530,
+  18204, 18868, 19519, 20159, 20787, 21403, 22005, 22594, 23170, 23731,
+  24279, 24811, 25329, 25832, 26319, 26790, 27245, 27683, 28105, 28510,
+  28898, 29268, 29621, 29956, 30273, 30571, 30852, 31113, 31356, 31580,
+  31785, 31971, 32137, 32285, 32412, 32521, 32609, 32678, 32728, 32757,
+  32767, 32757, 32728, 32678, 32609, 32521, 32412, 32285, 32137, 31971,
+  31785, 31580, 31356, 31113, 30852, 30571, 30273, 29956, 29621, 29268,
+  28898, 28510, 28105, 27683, 27245, 26790, 26319, 25832, 25329, 24811,
+  24279, 23731, 23170, 22594, 22005, 21403, 20787, 20159, 19519, 18868,
+  18204, 17530, 16846, 16151, 15446, 14732, 14010, 13279, 12539, 11793,
+  11039, 10278, 9512, 8739, 7962, 7179, 6393, 5602, 4808, 4011, 3212, 2410,
+  1608, 804, 0, -804, -1608, -2410, -3212, -4011, -4808, -5602, -6393, -7179,
+  -7962, -8739, -9512, -10278, -11039, -11793, -12539, -13279, -14010,
+  -14732, -15446, -16151, -16846, -17530, -18204, -18868, -19519, -20159,
+  -20787, -21403, -22005, -22594, -23170, -23731, -24279, -24811, -25329,
+  -25832, -26319, -26790, -27245, -27683, -28105, -28510, -28898, -29268,
+  -29621, -29956, -30273, -30571, -30852, -31113, -31356, -31580, -31785,
+  -31971, -32137, -32285, -32412, -32521, -32609, -32678, -32728, -32757,
+  -32767, -32757, -32728, -32678, -32609, -32521, -32412, -32285, -32137,
+  -31971, -31785, -31580, -31356, -31113, -30852, -30571, -30273, -29956,
+  -29621, -29268, -28898, -28510, -28105, -27683, -27245, -26790, -26319,
+  -25832, -25329, -24811, -24279, -23731, -23170, -22594, -22005, -21403,
+  -20787, -20159, -19519, -18868, -18204, -17530, -16846, -16151, -15446,
+  -14732, -14010, -13279, -12539, -11793, -11039, -10278, -9512, -8739,
+  -7962, -7179, -6393, -5602, -4808, -4011, -3212, -2410, -1608, -804
+};
+#else
+#include "audio_core.h"
+static volatile uint8_t pcm5100a_half_ready = 0U;
+static volatile uint8_t pcm5100a_full_ready = 0U;
+static int32_t pcm5100a_core_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
+#endif
 
 static void pcm5100a_fill_half(uint32_t frame_offset)
 {
+#if defined(PCM5100A_LOCAL_TEST_SINE)
+  for (uint32_t frame = 0U; frame < AUDIO_TEST_PCM5100A_FRAMES_PER_HALF; ++frame)
+  {
+    uint32_t table_index = (pcm5100a_phase >> 16) & 0xFFU;
+    int32_t sample24 = ((int32_t)pcm5100a_sine_table[table_index]) << 8;
+    uint32_t tx_index = (frame_offset + frame) * AUDIO_TEST_PCM5100A_CHANNELS;
+
+    pcm5100a_tx_buffer[tx_index] = sample24;
+    pcm5100a_tx_buffer[tx_index + 1U] = sample24;
+
+    pcm5100a_phase += pcm5100a_phase_inc;
+  }
+#else
   audio_core_process_block(pcm5100a_core_block, AUDIO_TEST_PCM5100A_FRAMES_PER_HALF);
 
   for (uint32_t frame = 0U; frame < AUDIO_TEST_PCM5100A_FRAMES_PER_HALF; ++frame)
@@ -37,16 +83,25 @@ static void pcm5100a_fill_half(uint32_t frame_offset)
     pcm5100a_tx_buffer[tx_index] = pcm5100a_core_block[core_index];
     pcm5100a_tx_buffer[tx_index + 1U] = pcm5100a_core_block[core_index + 1U];
   }
+#endif
 }
 
 void audio_test_pcm5100a_init(SAI_HandleTypeDef *hsai)
 {
   pcm5100a_sai = hsai;
-  pcm5100a_half_ready = 0U;
-  pcm5100a_full_ready = 0U;
   pcm5100a_tx_half_count = 0U;
   pcm5100a_tx_full_count = 0U;
   memset(pcm5100a_tx_buffer, 0, sizeof(pcm5100a_tx_buffer));
+#if defined(PCM5100A_LOCAL_TEST_SINE)
+  pcm5100a_phase = 0U;
+  pcm5100a_phase_inc =
+      (PCM5100A_LOCAL_TEST_FREQ_HZ * 256U * 65536U) / AUDIO_TEST_PCM5100A_SAMPLE_RATE;
+  pcm5100a_fill_half(0U);
+  pcm5100a_fill_half(AUDIO_TEST_PCM5100A_FRAMES_PER_HALF);
+#else
+  pcm5100a_half_ready = 0U;
+  pcm5100a_full_ready = 0U;
+#endif
 }
 
 void audio_test_pcm5100a_start(void)
@@ -66,7 +121,11 @@ void audio_test_pcm5100a_on_tx_half(SAI_HandleTypeDef *hsai)
   if ((hsai != NULL) && (hsai->Instance == SAI2_Block_A))
   {
     pcm5100a_tx_half_count++;
+#if defined(PCM5100A_LOCAL_TEST_SINE)
+    pcm5100a_fill_half(0U);
+#else
     pcm5100a_half_ready = 1U;
+#endif
   }
 }
 
@@ -75,12 +134,19 @@ void audio_test_pcm5100a_on_tx_full(SAI_HandleTypeDef *hsai)
   if ((hsai != NULL) && (hsai->Instance == SAI2_Block_A))
   {
     pcm5100a_tx_full_count++;
+#if defined(PCM5100A_LOCAL_TEST_SINE)
+    pcm5100a_fill_half(AUDIO_TEST_PCM5100A_FRAMES_PER_HALF);
+#else
     pcm5100a_full_ready = 1U;
+#endif
   }
 }
 
 void audio_test_pcm5100a_tasklet_poll(void)
 {
+#if defined(PCM5100A_LOCAL_TEST_SINE)
+  return;
+#else
   if (pcm5100a_half_ready != 0U)
   {
     pcm5100a_half_ready = 0U;
@@ -92,6 +158,7 @@ void audio_test_pcm5100a_tasklet_poll(void)
     pcm5100a_full_ready = 0U;
     pcm5100a_fill_half(AUDIO_TEST_PCM5100A_FRAMES_PER_HALF);
   }
+#endif
 }
 
 uint32_t AudioTest_PCM5100A_GetTxHalfCount(void)
