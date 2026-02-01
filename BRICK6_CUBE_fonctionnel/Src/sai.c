@@ -146,14 +146,14 @@ void MX_SAI2_Init(void)
   hsai_BlockA2.Init.PdmInit.Activation = DISABLE;
   hsai_BlockA2.Init.PdmInit.MicPairsNbr = 1;
   hsai_BlockA2.Init.PdmInit.ClockEnable = SAI_PDM_CLOCK1_ENABLE;
-  hsai_BlockA2.FrameInit.FrameLength = 128;
+  hsai_BlockA2.FrameInit.FrameLength = 256;
   hsai_BlockA2.FrameInit.ActiveFrameLength = 1;
   hsai_BlockA2.FrameInit.FSDefinition = SAI_FS_STARTFRAME;
   hsai_BlockA2.FrameInit.FSPolarity = SAI_FS_ACTIVE_LOW;
   hsai_BlockA2.FrameInit.FSOffset = SAI_FS_FIRSTBIT;
   hsai_BlockA2.SlotInit.FirstBitOffset = 0;
   hsai_BlockA2.SlotInit.SlotSize = SAI_SLOTSIZE_32B;
-  hsai_BlockA2.SlotInit.SlotNumber = 4;
+  hsai_BlockA2.SlotInit.SlotNumber = 8;
   hsai_BlockA2.SlotInit.SlotActive = 0x0000000F;
   if (HAL_SAI_Init(&hsai_BlockA2) != HAL_OK)
   {
