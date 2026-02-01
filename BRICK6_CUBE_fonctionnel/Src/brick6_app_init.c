@@ -45,6 +45,7 @@
 #include "tinyusb_app.h"
 #include "usb_host.h"
 
+
 void brick6_app_init(void)
 {
   diagnostics_log("FMC init OK\r\n");
