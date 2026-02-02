@@ -325,6 +325,38 @@ void diagnostics_tasklet_poll(void)
          (unsigned long)audio_core_get_last_frames(),
          (unsigned long)audio_core_get_last_usb_available(),
          (unsigned long)audio_core_get_last_usb_samples());
+
+    LOGF("USB irq=%lu smp=%lu B=%lu zero=%lu\r\n",
+         (unsigned long)tinyusb_app_get_rx_done_count(),
+         (unsigned long)tinyusb_app_get_rx_samples_total(),
+         (unsigned long)tinyusb_app_get_rx_bytes_total(),
+         (unsigned long)tinyusb_app_get_rx_zero_reads());
+
+    LOGF("RB wr=%lu rd=%lu drop=%lu av_min=%lu av_max=%lu free_min=%lu free_max=%lu\r\n",
+         (unsigned long)audio_io_usb_get_rx_written_total(),
+         (unsigned long)audio_io_usb_get_rx_read_total(),
+         (unsigned long)audio_io_usb_get_rx_dropped_total(),
+         (unsigned long)audio_io_usb_get_rx_avail_min(),
+         (unsigned long)audio_io_usb_get_rx_avail_max(),
+         (unsigned long)audio_io_usb_get_rx_free_min(),
+         (unsigned long)audio_io_usb_get_rx_free_max());
+
+    LOGF("CORE calls=%lu src=%u usb_used=%lu usb_miss=%lu fb=%lu req=%lu prov=%lu usb_av=%lu usb_need=%lu\r\n",
+         (unsigned long)audio_core_get_process_count(),
+         (unsigned int)audio_core_get_last_source(),
+         (unsigned long)audio_core_get_usb_block_used_count(),
+         (unsigned long)audio_core_get_usb_block_missed_count(),
+         (unsigned long)audio_core_get_fallback_count(),
+         (unsigned long)audio_core_get_frames_requested_total(),
+         (unsigned long)audio_core_get_frames_provided_total(),
+         (unsigned long)audio_core_get_last_usb_available_frames(),
+         (unsigned long)audio_core_get_last_usb_need_frames());
+
+    LOGF("OUT irq_h=%lu irq_f=%lu filled=%lu same=%lu\r\n",
+         (unsigned long)AudioOut_GetDmaHalfIrqCount(),
+         (unsigned long)AudioOut_GetDmaFullIrqCount(),
+         (unsigned long)AudioOut_GetBlocksFilledCount(),
+         (unsigned long)AudioOut_GetBlocksUnchangedCount());
 #endif
 
     if (error != 0U && error != last_error)
