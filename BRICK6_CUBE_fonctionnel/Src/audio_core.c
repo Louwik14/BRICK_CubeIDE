@@ -42,9 +42,13 @@ static volatile uint32_t audio_core_process_count = 0U;
 static volatile uint32_t audio_core_usb_block_used = 0U;
 static volatile uint32_t audio_core_usb_block_missed = 0U;
 static volatile uint32_t audio_core_fallback_count = 0U;
+static volatile uint32_t audio_core_frames_requested_total = 0U;
+static volatile uint32_t audio_core_frames_provided_total = 0U;
 static volatile uint32_t audio_core_last_usb_available = 0U;
 static volatile uint32_t audio_core_last_usb_samples = 0U;
 static volatile uint32_t audio_core_last_frames = 0U;
+static volatile uint32_t audio_core_last_usb_available_frames = 0U;
+static volatile uint32_t audio_core_last_usb_need_frames = 0U;
 static volatile uint8_t audio_core_last_source = 0U;
 
 void audio_core_init(void) {
@@ -65,21 +69,25 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
 
   route_source_t source = ROUTE_SRC_USB;
   audio_core_process_count++;
+  audio_core_frames_requested_total += frames;
   audio_core_last_frames = frames;
   audio_core_last_source = (uint8_t)source;
   audio_core_last_usb_available = 0U;
   audio_core_last_usb_samples = 0U;
+  audio_core_last_usb_available_frames = 0U;
+  audio_core_last_usb_need_frames = frames;
 
   if ((source == ROUTE_SRC_USB) || (source == ROUTE_SRC_MIX))
   {
     audio_buffer_t *usb_buf = audio_io_usb_get_rx_buffer();
     if (usb_buf != NULL)
     {
-      uint32_t available = audio_buffer_available(usb_buf);
+      uint32_t available = audio_io_usb_get_rx_available();
       audio_core_last_usb_available = available;
+      audio_core_last_usb_available_frames = available / AUDIO_CORE_CHANNELS;
       if (available >= sample_count)
       {
-        usb_samples = audio_buffer_read(usb_buf, core_usb_block, (uint32_t)sample_count);
+        usb_samples = audio_io_usb_read_rx_samples(core_usb_block, (uint32_t)sample_count);
         audio_core_last_usb_samples = usb_samples;
       }
     }
@@ -103,6 +111,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
 
         memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
         audio_core_usb_block_used++;
+        audio_core_frames_provided_total += frames;
         return;
       }
       audio_core_usb_block_missed++;
@@ -112,6 +121,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
       if (sd_samples == sample_count)
       {
         memcpy(out, core_sd_block, sample_count * sizeof(int32_t));
+        audio_core_frames_provided_total += frames;
         return;
       }
       break;
@@ -121,17 +131,20 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
       {
         mixer_mix_2_to_1(core_usb_block, core_sd_block, out, (uint32_t)sample_count);
         audio_core_usb_block_used++;
+        audio_core_frames_provided_total += frames;
         return;
       }
       if (usb_samples == sample_count)
       {
         memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
         audio_core_usb_block_used++;
+        audio_core_frames_provided_total += frames;
         return;
       }
       if (sd_samples == sample_count)
       {
         memcpy(out, core_sd_block, sample_count * sizeof(int32_t));
+        audio_core_frames_provided_total += frames;
         return;
       }
       audio_core_usb_block_missed++;
@@ -144,6 +157,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
 
   audio_core_fallback_count++;
   memcpy(out, core_input_copy, sample_count * sizeof(int32_t));
+  audio_core_frames_provided_total += frames;
 }
 
 void audio_core_on_input_block(const int32_t *data, uint32_t frames) {
@@ -179,6 +193,16 @@ uint32_t audio_core_get_fallback_count(void)
   return audio_core_fallback_count;
 }
 
+uint32_t audio_core_get_frames_requested_total(void)
+{
+  return audio_core_frames_requested_total;
+}
+
+uint32_t audio_core_get_frames_provided_total(void)
+{
+  return audio_core_frames_provided_total;
+}
+
 uint32_t audio_core_get_last_usb_available(void)
 {
   return audio_core_last_usb_available;
@@ -192,6 +216,16 @@ uint32_t audio_core_get_last_usb_samples(void)
 uint32_t audio_core_get_last_frames(void)
 {
   return audio_core_last_frames;
+}
+
+uint32_t audio_core_get_last_usb_available_frames(void)
+{
+  return audio_core_last_usb_available_frames;
+}
+
+uint32_t audio_core_get_last_usb_need_frames(void)
+{
+  return audio_core_last_usb_need_frames;
 }
 
 uint8_t audio_core_get_last_source(void)

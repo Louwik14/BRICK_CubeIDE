@@ -134,7 +134,10 @@ int main(void)
     tinyusb_app_task();
     engine_tasklet_poll();
     sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
-    usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
+    if (BRICK6_ENABLE_USB_HOST != 0)
+    {
+      usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
+    }
     //midi_host_poll_bounded(MIDI_BUDGET_MSGS);
     ui_tasklet_poll();
     diagnostics_tasklet_poll();

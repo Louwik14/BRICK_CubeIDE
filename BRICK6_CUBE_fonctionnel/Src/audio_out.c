@@ -54,9 +54,17 @@ enum
 static int32_t audio_out_buffer[AUDIO_OUT_BUFFER_SAMPLES];
 static volatile uint32_t audio_out_half_events = 0;
 static volatile uint32_t audio_out_full_events = 0;
+static volatile uint32_t audio_out_dma_half_irq = 0U;
+static volatile uint32_t audio_out_dma_full_irq = 0U;
+static volatile uint32_t audio_out_blocks_filled = 0U;
+static volatile uint32_t audio_out_blocks_unchanged = 0U;
 static uint32_t audio_out_phase = 0;
 static uint32_t audio_out_phase_inc = 0;
 static SAI_HandleTypeDef *audio_out_sai = NULL;
+static uint32_t audio_out_half_signature = 0U;
+static uint32_t audio_out_full_signature = 0U;
+static uint8_t audio_out_half_signature_valid = 0U;
+static uint8_t audio_out_full_signature_valid = 0U;
 
 bool audio_test_sine_enable = true;
 bool audio_test_loopback_enable = false;
@@ -141,6 +149,17 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
   }
 }
 
+static uint32_t audio_out_signature(const int32_t *data, uint32_t sample_count)
+{
+  uint32_t signature = 0U;
+  for (uint32_t i = 0U; i < sample_count; ++i)
+  {
+    signature ^= (uint32_t)data[i];
+    signature = (signature << 1U) | (signature >> 31U);
+  }
+  return signature;
+}
+
 static void audio_out_copy_ring_block(uint32_t frame_offset)
 {
   uint32_t sample_offset = frame_offset * AUDIO_OUT_WORDS_PER_FRAME;
@@ -214,6 +233,14 @@ void AudioOut_Init(SAI_HandleTypeDef *hsai)
   audio_out_phase_inc = (AUDIO_OUT_TONE_HZ * AUDIO_OUT_TABLE_SIZE * 65536U) / AUDIO_OUT_SAMPLE_RATE;
   audio_out_half_events = 0;
   audio_out_full_events = 0;
+  audio_out_dma_half_irq = 0U;
+  audio_out_dma_full_irq = 0U;
+  audio_out_blocks_filled = 0U;
+  audio_out_blocks_unchanged = 0U;
+  audio_out_half_signature = 0U;
+  audio_out_full_signature = 0U;
+  audio_out_half_signature_valid = 0U;
+  audio_out_full_signature_valid = 0U;
   audio_dma_half_ready = 0U;
   audio_dma_full_ready = 0U;
 #if BRICK6_ENABLE_DIAGNOSTICS
@@ -252,6 +279,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 #if BRICK6_ENABLE_DIAGNOSTICS
     brick6_audio_tx_half_count++;
 #endif
+    audio_out_dma_half_irq++;
     AudioOut_ProcessHalf();
   }
 
@@ -265,6 +293,7 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 #if BRICK6_ENABLE_DIAGNOSTICS
     brick6_audio_tx_full_count++;
 #endif
+    audio_out_dma_full_irq++;
     AudioOut_ProcessFull();
   }
 
@@ -279,6 +308,15 @@ void audio_tasklet_poll(void)
     /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
     audio_core_process_block(audio_out_buffer, AUDIO_OUT_FRAMES_PER_HALF);
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
+    audio_out_blocks_filled++;
+    uint32_t sample_count = AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME;
+    uint32_t signature = audio_out_signature(audio_out_buffer, sample_count);
+    if (audio_out_half_signature_valid != 0U && signature == audio_out_half_signature)
+    {
+      audio_out_blocks_unchanged++;
+    }
+    audio_out_half_signature = signature;
+    audio_out_half_signature_valid = 1U;
   }
 
   if (audio_dma_full_ready != 0U)
@@ -288,6 +326,16 @@ void audio_tasklet_poll(void)
     audio_core_process_block(&audio_out_buffer[AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME],
                              AUDIO_OUT_FRAMES_PER_HALF);
     engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
+    audio_out_blocks_filled++;
+    uint32_t sample_offset = AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME;
+    uint32_t sample_count = AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME;
+    uint32_t signature = audio_out_signature(&audio_out_buffer[sample_offset], sample_count);
+    if (audio_out_full_signature_valid != 0U && signature == audio_out_full_signature)
+    {
+      audio_out_blocks_unchanged++;
+    }
+    audio_out_full_signature = signature;
+    audio_out_full_signature_valid = 1U;
   }
 
   audio_test_pcm4104_tasklet_poll();
@@ -301,4 +349,24 @@ uint32_t AudioOut_GetHalfEvents(void)
 uint32_t AudioOut_GetFullEvents(void)
 {
   return audio_out_full_events;
+}
+
+uint32_t AudioOut_GetDmaHalfIrqCount(void)
+{
+  return audio_out_dma_half_irq;
+}
+
+uint32_t AudioOut_GetDmaFullIrqCount(void)
+{
+  return audio_out_dma_full_irq;
+}
+
+uint32_t AudioOut_GetBlocksFilledCount(void)
+{
+  return audio_out_blocks_filled;
+}
+
+uint32_t AudioOut_GetBlocksUnchangedCount(void)
+{
+  return audio_out_blocks_unchanged;
 }

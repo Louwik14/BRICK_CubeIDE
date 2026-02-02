@@ -51,6 +51,15 @@ uint32_t audio_buffer_free(const audio_buffer_t *buf) {
   return (buf->capacity - 1U) - audio_buffer_available(buf);
 }
 
+void audio_buffer_get_levels(const audio_buffer_t *buf, uint32_t *available, uint32_t *free) {
+  if (available != NULL) {
+    *available = audio_buffer_available(buf);
+  }
+  if (free != NULL) {
+    *free = audio_buffer_free(buf);
+  }
+}
+
 void audio_buffer_reset(audio_buffer_t *buf) {
   buf->read_pos = 0U;
   buf->write_pos = 0U;
