@@ -59,7 +59,10 @@ void brick6_app_init(void)
   diagnostics_on_sd_stream_init(sd_stream_init(&hsd1));
   tusb_init();
   tinyusb_app_init();
-  MX_USB_HOST_Init();
+  if (BRICK6_ENABLE_USB_HOST != 0)
+  {
+    MX_USB_HOST_Init();
+  }
   /* Init audio */
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
