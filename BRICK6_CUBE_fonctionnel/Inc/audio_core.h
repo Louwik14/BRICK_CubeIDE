@@ -19,9 +19,13 @@ uint32_t audio_core_get_process_count(void);
 uint32_t audio_core_get_usb_block_used_count(void);
 uint32_t audio_core_get_usb_block_missed_count(void);
 uint32_t audio_core_get_fallback_count(void);
+uint32_t audio_core_get_frames_requested_total(void);
+uint32_t audio_core_get_frames_provided_total(void);
 uint32_t audio_core_get_last_usb_available(void);
 uint32_t audio_core_get_last_usb_samples(void);
 uint32_t audio_core_get_last_frames(void);
+uint32_t audio_core_get_last_usb_available_frames(void);
+uint32_t audio_core_get_last_usb_need_frames(void);
 uint8_t audio_core_get_last_source(void);
 
 #endif /* AUDIO_CORE_H */

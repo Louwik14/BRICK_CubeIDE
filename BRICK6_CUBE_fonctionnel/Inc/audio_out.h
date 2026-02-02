@@ -32,5 +32,9 @@ void AudioOut_DebugDump(void);
 int32_t *AudioOut_GetBuffer(void);
 uint32_t AudioOut_GetHalfEvents(void);
 uint32_t AudioOut_GetFullEvents(void);
+uint32_t AudioOut_GetDmaHalfIrqCount(void);
+uint32_t AudioOut_GetDmaFullIrqCount(void);
+uint32_t AudioOut_GetBlocksFilledCount(void);
+uint32_t AudioOut_GetBlocksUnchangedCount(void);
 
 #endif /* AUDIO_OUT_H */
