@@ -1,5 +1,5 @@
 Src/audio_io_usb.o: ../Src/audio_io_usb.c ../Inc/audio_io_usb.h \
- ../Inc/audio_buffer.h \
+ ../Inc/audio_buffer.h ../Inc/audio_core.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/tusb.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/common/tusb_common.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/tusb_option.h \
@@ -23,6 +23,7 @@ Src/audio_io_usb.o: ../Src/audio_io_usb.c ../Inc/audio_io_usb.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/class/midi/midi.h
 ../Inc/audio_io_usb.h:
 ../Inc/audio_buffer.h:
+../Inc/audio_core.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/tusb.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/common/tusb_common.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/tusb_option.h:

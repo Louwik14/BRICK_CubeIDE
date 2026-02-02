@@ -63,7 +63,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
   uint32_t usb_samples = 0U;
   uint32_t sd_samples = 0U;
 
-  route_source_t source = routing_get_source();
+  route_source_t source = ROUTE_SRC_USB;
   audio_core_process_count++;
   audio_core_last_frames = frames;
   audio_core_last_source = (uint8_t)source;
@@ -98,6 +98,9 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
     case ROUTE_SRC_USB:
       if (usb_samples == sample_count)
       {
+    	  core_usb_block[0] = 0x7FFFFFFF;
+    	  core_usb_block[1] = 0x7FFFFFFF;
+
         memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
         audio_core_usb_block_used++;
         return;

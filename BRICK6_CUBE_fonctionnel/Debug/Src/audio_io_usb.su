@@ -1,4 +1,9 @@
-../Src/audio_io_usb.c:41:6:audio_io_usb_init	8	static
-../Src/audio_io_usb.c:47:17:audio_io_usb_get_rx_buffer	4	static
-../Src/audio_io_usb.c:52:6:audio_io_usb_on_rx_samples	16	static
-../Src/audio_io_usb.c:57:10:audio_io_usb_prepare_tx	16	static
+../Src/audio_io_usb.c:44:6:audio_io_usb_init	8	static
+../Src/audio_io_usb.c:50:17:audio_io_usb_get_rx_buffer	4	static
+../Src/audio_io_usb.c:55:6:audio_io_usb_on_rx_samples	24	static
+../Src/audio_io_usb.c:62:10:audio_io_usb_prepare_tx	16	static
+../Src/audio_io_usb.c:67:10:audio_io_usb_get_rx_available	8	static
+../Src/audio_io_usb.c:72:10:audio_io_usb_get_rx_free	8	static
+../Src/audio_io_usb.c:77:10:audio_io_usb_get_rx_capacity	4	static
+../Src/audio_io_usb.c:82:10:audio_io_usb_get_rx_written_total	4	static
+../Src/audio_io_usb.c:87:10:audio_io_usb_get_rx_dropped_total	4	static

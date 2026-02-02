@@ -42,10 +42,12 @@ Src/diagnostics_tasklet.o: ../Src/diagnostics_tasklet.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/audio_in.h ../Inc/audio_out.h ../Inc/brick6_refactor.h \
+ ../Inc/audio_core.h ../Inc/audio_in.h ../Inc/audio_io_usb.h \
+ ../Inc/audio_buffer.h ../Inc/audio_out.h ../Inc/brick6_refactor.h \
  ../Inc/audio_test_pcm4104.h ../Inc/brick6_refactor.h \
  ../Inc/engine_tasklet.h ../Inc/main.h ../Inc/sai.h ../Inc/main.h \
- ../Inc/sd_stream.h ../Inc/sdram.h ../Inc/sdram_alloc.h ../Inc/usart.h
+ ../Inc/sd_stream.h ../Inc/sdram.h ../Inc/sdram_alloc.h \
+ ../Inc/tinyusb_app.h ../Inc/usart.h
 ../Inc/diagnostics_tasklet.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -89,7 +91,10 @@ Src/diagnostics_tasklet.o: ../Src/diagnostics_tasklet.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
+../Inc/audio_core.h:
 ../Inc/audio_in.h:
+../Inc/audio_io_usb.h:
+../Inc/audio_buffer.h:
 ../Inc/audio_out.h:
 ../Inc/brick6_refactor.h:
 ../Inc/audio_test_pcm4104.h:
@@ -101,4 +106,5 @@ Src/diagnostics_tasklet.o: ../Src/diagnostics_tasklet.c \
 ../Inc/sd_stream.h:
 ../Inc/sdram.h:
 ../Inc/sdram_alloc.h:
+../Inc/tinyusb_app.h:
 ../Inc/usart.h:

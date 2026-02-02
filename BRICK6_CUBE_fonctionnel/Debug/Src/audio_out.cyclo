@@ -8,6 +8,6 @@
 ../Src/audio_out.c:242:6:AudioOut_ProcessFull	1
 ../Src/audio_out.c:248:6:HAL_SAI_TxHalfCpltCallback	2
 ../Src/audio_out.c:261:6:HAL_SAI_TxCpltCallback	2
-../Src/audio_out.c:274:6:audio_tasklet_poll	3
-../Src/audio_out.c:296:10:AudioOut_GetHalfEvents	1
-../Src/audio_out.c:301:10:AudioOut_GetFullEvents	1
+../Src/audio_out.c:274:6:audio_tasklet_poll	5
+../Src/audio_out.c:309:10:AudioOut_GetHalfEvents	1
+../Src/audio_out.c:314:10:AudioOut_GetFullEvents	1
