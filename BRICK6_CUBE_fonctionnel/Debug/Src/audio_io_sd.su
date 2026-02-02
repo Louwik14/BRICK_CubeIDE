@@ -1,3 +1,0 @@
-../Src/audio_io_sd.c:35:6:audio_io_sd_init	4	static
-../Src/audio_io_sd.c:39:6:audio_io_sd_has_block	8	static
-../Src/audio_io_sd.c:44:10:audio_io_sd_read_block	48	static
