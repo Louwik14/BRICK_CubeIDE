@@ -1,0 +1,7 @@
+../Src/audio_buffer.c:33:6:audio_buffer_init	1
+../Src/audio_buffer.c:40:10:audio_buffer_available	2
+../Src/audio_buffer.c:47:10:audio_buffer_free	2
+../Src/audio_buffer.c:54:6:audio_buffer_get_levels	3
+../Src/audio_buffer.c:63:6:audio_buffer_reset	1
+../Src/audio_buffer.c:68:10:audio_buffer_write	6
+../Src/audio_buffer.c:86:10:audio_buffer_read	6

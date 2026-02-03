@@ -35,6 +35,8 @@
 
 #include <string.h>
 
+#define USB_CHANNELS 2
+
 static int32_t core_input_copy[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
 static int32_t core_usb_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
 static int32_t core_sd_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
@@ -63,7 +65,9 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
     frames = AUDIO_CORE_FRAMES_PER_BLOCK;
   }
 
-  size_t sample_count = (size_t)frames * AUDIO_CORE_CHANNELS;
+  size_t out_sample_count = (size_t)frames * AUDIO_CORE_CHANNELS;
+  size_t usb_sample_count = (size_t)frames * USB_CHANNELS;
+
   uint32_t usb_samples = 0U;
   uint32_t sd_samples = 0U;
 
@@ -82,14 +86,16 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
     audio_buffer_t *usb_buf = audio_io_usb_get_rx_buffer();
     if (usb_buf != NULL)
     {
-      uint32_t available = audio_io_usb_get_rx_available();
-      audio_core_last_usb_available = available;
-      audio_core_last_usb_available_frames = available / AUDIO_CORE_CHANNELS;
-      if (available >= sample_count)
-      {
-        usb_samples = audio_io_usb_read_rx_samples(core_usb_block, (uint32_t)sample_count);
-        audio_core_last_usb_samples = usb_samples;
-      }
+    	uint32_t available = audio_io_usb_get_rx_available();
+    	audio_core_last_usb_available = available;
+    	audio_core_last_usb_available_frames = available / USB_CHANNELS;
+
+    	if (available >= usb_sample_count)
+    	{
+    	  usb_samples = audio_io_usb_read_rx_samples(core_usb_block, (uint32_t)usb_sample_count);
+    	  audio_core_last_usb_samples = usb_samples;
+    	}
+
     }
   }
 
@@ -97,53 +103,62 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
   {
     if (audio_io_sd_has_block())
     {
-      sd_samples = audio_io_sd_read_block(core_sd_block, (uint32_t)sample_count);
+    	sd_samples = audio_io_sd_read_block(core_sd_block, (uint32_t)out_sample_count);
     }
   }
 
   switch (source)
   {
-    case ROUTE_SRC_USB:
-      if (usb_samples == sample_count)
-      {
-    	  core_usb_block[0] = 0x7FFFFFFF;
-    	  core_usb_block[1] = 0x7FFFFFFF;
+  case ROUTE_SRC_USB:
+    if (usb_samples == usb_sample_count)
+    {
+      // Clear output
+      memset(out, 0, out_sample_count * sizeof(int32_t));
 
-        memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
-        audio_core_usb_block_used++;
-        audio_core_frames_provided_total += frames;
-        return;
+      // Map USB 2ch -> slots 0/1
+      for (uint32_t f = 0; f < frames; ++f)
+      {
+        out[f * AUDIO_CORE_CHANNELS + 0] = core_usb_block[f * USB_CHANNELS + 0];
+        out[f * AUDIO_CORE_CHANNELS + 1] = core_usb_block[f * USB_CHANNELS + 1];
       }
-      audio_core_usb_block_missed++;
-      break;
+
+      audio_core_usb_block_used++;
+      audio_core_frames_provided_total += frames;
+      return;
+    }
+
+    audio_core_usb_block_missed++;
+    break;
+
 
     case ROUTE_SRC_SD:
-      if (sd_samples == sample_count)
-      {
-        memcpy(out, core_sd_block, sample_count * sizeof(int32_t));
-        audio_core_frames_provided_total += frames;
-        return;
-      }
+    	if (sd_samples == out_sample_count)
+    	{
+    	  memcpy(out, core_sd_block, out_sample_count * sizeof(int32_t));
+    	  audio_core_frames_provided_total += frames;
+    	  return;
+    	}
+
       break;
 
     case ROUTE_SRC_MIX:
-      if ((usb_samples == sample_count) && (sd_samples == sample_count))
+    	if ((usb_samples == usb_sample_count) && (sd_samples == out_sample_count))
       {
-        mixer_mix_2_to_1(core_usb_block, core_sd_block, out, (uint32_t)sample_count);
+    		mixer_mix_2_to_1(core_usb_block, core_sd_block, out, (uint32_t)out_sample_count);
         audio_core_usb_block_used++;
         audio_core_frames_provided_total += frames;
         return;
       }
-      if (usb_samples == sample_count)
+    	if (usb_samples == usb_sample_count)
       {
-        memcpy(out, core_usb_block, sample_count * sizeof(int32_t));
+    		memcpy(out, core_usb_block, out_sample_count * sizeof(int32_t));
         audio_core_usb_block_used++;
         audio_core_frames_provided_total += frames;
         return;
       }
-      if (sd_samples == sample_count)
+    	if (sd_samples == out_sample_count)
       {
-        memcpy(out, core_sd_block, sample_count * sizeof(int32_t));
+    		memcpy(out, core_sd_block, out_sample_count * sizeof(int32_t));
         audio_core_frames_provided_total += frames;
         return;
       }
@@ -156,7 +171,7 @@ void audio_core_process_block(int32_t *out, uint32_t frames) {
   }
 
   audio_core_fallback_count++;
-  memcpy(out, core_input_copy, sample_count * sizeof(int32_t));
+  memcpy(out, core_input_copy, out_sample_count * sizeof(int32_t));
   audio_core_frames_provided_total += frames;
 }
 

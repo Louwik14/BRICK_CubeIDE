@@ -1,0 +1,15 @@
+../Src/audio_core.c:56:6:audio_core_init	1
+../Src/audio_core.c:59:6:audio_core_process_block	21
+../Src/audio_core.c:178:6:audio_core_on_input_block	3
+../Src/audio_core.c:191:10:audio_core_get_process_count	1
+../Src/audio_core.c:196:10:audio_core_get_usb_block_used_count	1
+../Src/audio_core.c:201:10:audio_core_get_usb_block_missed_count	1
+../Src/audio_core.c:206:10:audio_core_get_fallback_count	1
+../Src/audio_core.c:211:10:audio_core_get_frames_requested_total	1
+../Src/audio_core.c:216:10:audio_core_get_frames_provided_total	1
+../Src/audio_core.c:221:10:audio_core_get_last_usb_available	1
+../Src/audio_core.c:226:10:audio_core_get_last_usb_samples	1
+../Src/audio_core.c:231:10:audio_core_get_last_frames	1
+../Src/audio_core.c:236:10:audio_core_get_last_usb_available_frames	1
+../Src/audio_core.c:241:10:audio_core_get_last_usb_need_frames	1
+../Src/audio_core.c:246:9:audio_core_get_last_source	1

@@ -1,0 +1,16 @@
+../Src/audio_io_usb.c:51:13:audio_io_usb_update_minmax	16	static
+../Src/audio_io_usb.c:72:6:audio_io_usb_init	8	static
+../Src/audio_io_usb.c:86:17:audio_io_usb_get_rx_buffer	4	static
+../Src/audio_io_usb.c:91:6:audio_io_usb_on_rx_samples	24	static
+../Src/audio_io_usb.c:99:10:audio_io_usb_read_rx_samples	24	static
+../Src/audio_io_usb.c:107:10:audio_io_usb_prepare_tx	16	static
+../Src/audio_io_usb.c:112:10:audio_io_usb_get_rx_available	16	static
+../Src/audio_io_usb.c:124:10:audio_io_usb_get_rx_free	16	static
+../Src/audio_io_usb.c:136:10:audio_io_usb_get_rx_capacity	4	static
+../Src/audio_io_usb.c:141:10:audio_io_usb_get_rx_written_total	4	static
+../Src/audio_io_usb.c:146:10:audio_io_usb_get_rx_read_total	4	static
+../Src/audio_io_usb.c:151:10:audio_io_usb_get_rx_dropped_total	4	static
+../Src/audio_io_usb.c:156:10:audio_io_usb_get_rx_avail_min	4	static
+../Src/audio_io_usb.c:161:10:audio_io_usb_get_rx_avail_max	4	static
+../Src/audio_io_usb.c:166:10:audio_io_usb_get_rx_free_min	4	static
+../Src/audio_io_usb.c:171:10:audio_io_usb_get_rx_free_max	4	static

@@ -1,0 +1,8 @@
+../Src/audio_test_pcm4104.c:62:13:pcm4104_fill_half	4
+../Src/audio_test_pcm4104.c:106:6:audio_test_pcm4104_init	1
+../Src/audio_test_pcm4104.c:126:6:audio_test_pcm4104_start	2
+../Src/audio_test_pcm4104.c:138:6:audio_test_pcm4104_on_tx_half	3
+../Src/audio_test_pcm4104.c:151:6:audio_test_pcm4104_on_tx_full	3
+../Src/audio_test_pcm4104.c:164:6:audio_test_pcm4104_tasklet_poll	3
+../Src/audio_test_pcm4104.c:183:10:AudioTest_PCM4104_GetTxHalfCount	1
+../Src/audio_test_pcm4104.c:188:10:AudioTest_PCM4104_GetTxFullCount	1

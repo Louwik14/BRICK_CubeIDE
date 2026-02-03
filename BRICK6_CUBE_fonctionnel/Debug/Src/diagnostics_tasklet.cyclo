@@ -1,0 +1,13 @@
+../Inc/sdram.h:46:24:sdram_swap16	1
+../Inc/sdram.h:51:20:sdram_write32	1
+../Inc/sdram.h:57:24:sdram_read32	1
+../Src/diagnostics_tasklet.c:81:13:uart_log	1
+../Src/diagnostics_tasklet.c:86:6:diagnostics_log	1
+../Src/diagnostics_tasklet.c:91:6:diagnostics_logf	1
+../Src/diagnostics_tasklet.c:106:13:SDRAM_Alloc_Test_Stop	1
+../Src/diagnostics_tasklet.c:118:6:diagnostics_sdram_alloc_test	9
+../Src/diagnostics_tasklet.c:179:20:SD_MemoryRegion	11
+../Src/diagnostics_tasklet.c:205:13:SD_LogHex	4
+../Src/diagnostics_tasklet.c:223:17:SD_CRC32	3
+../Src/diagnostics_tasklet.c:238:6:diagnostics_on_sd_stream_init	2
+../Src/diagnostics_tasklet.c:261:6:diagnostics_tasklet_poll	32
