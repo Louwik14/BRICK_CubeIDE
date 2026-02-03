@@ -113,10 +113,17 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_USB_OTG_FS_PCD_Init();
+
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   MX_SAI2_Init();
   /* USER CODE BEGIN 2 */
+  tusb_rhport_init_t dev_init = {
+    .role  = TUSB_ROLE_DEVICE,
+    .speed = TUSB_SPEED_AUTO
+  };
+  tusb_init(BOARD_TUD_RHPORT, &dev_init);
+
   brick6_app_init();
 
   /* USER CODE END 2 */
@@ -126,12 +133,11 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+	    tud_task();                  // TinyUSB Device (audio + MIDI)
     /* USER CODE BEGIN 3 */
     audio_tasklet_poll();        // priorité absolue
     AudioIn_TaskletPoll();
-    tud_task();                  // TinyUSB Device (audio + MIDI)
-    tinyusb_app_task();
+
     engine_tasklet_poll();
     sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
     if (BRICK6_ENABLE_USB_HOST != 0)

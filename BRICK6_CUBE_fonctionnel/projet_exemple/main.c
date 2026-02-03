@@ -1,387 +1,670 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
-#include "main.h"
-#include "dma.h"
-#include "i2c.h"
-#include "sai.h"
-#include "usart.h"
-#include "gpio.h"
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2020 Jerzy Kasenberg
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
-#include "adau1979.h"
-#include "audio_in.h"
-#include "audio_out.h"
-/* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
+#include "bsp/board_api.h"
+#include "common_types.h"
+#include "tusb.h"
+#include "usb_descriptors.h"
 
-/* USER CODE END PTD */
+//--------------------------------------------------------------------+
+// MACRO CONSTANT TYPEDEF PROTOTYPES
+//--------------------------------------------------------------------+
 
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
+/* Blink pattern
+ * - 25 ms   : streaming data
+ * - 250 ms  : device not mounted
+ * - 1000 ms : device mounted
+ * - 2500 ms : device is suspended
+ */
+enum {
+  BLINK_STREAMING = 25,
+  BLINK_NOT_MOUNTED = 250,
+  BLINK_MOUNTED = 1000,
+  BLINK_SUSPENDED = 2500,
+};
 
-/* USER CODE END PD */
+enum {
+  VOLUME_CTRL_0_DB = 0,
+  VOLUME_CTRL_10_DB = 2560,
+  VOLUME_CTRL_20_DB = 5120,
+  VOLUME_CTRL_30_DB = 7680,
+  VOLUME_CTRL_40_DB = 10240,
+  VOLUME_CTRL_50_DB = 12800,
+  VOLUME_CTRL_60_DB = 15360,
+  VOLUME_CTRL_70_DB = 17920,
+  VOLUME_CTRL_80_DB = 20480,
+  VOLUME_CTRL_90_DB = 23040,
+  VOLUME_CTRL_100_DB = 25600,
+  VOLUME_CTRL_SILENCE = 0x8000,
+};
 
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
+static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 
-/* USER CODE END PM */
+// Audio controls
+// Current states
+uint8_t mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1];   // +1 for master channel 0
+int16_t volume[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1];// +1 for master channel 0
+uint32_t current_sample_rate = 44100;
 
-/* Private variables ---------------------------------------------------------*/
+// Buffer for speaker data
+uint16_t i2s_dummy_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ / 2];
 
-/* USER CODE BEGIN PV */
+void led_blinking_task(void);
+void audio_task(void);
 
-/* USER CODE END PV */
+#if CFG_AUDIO_DEBUG
+void audio_debug_task(void);
+uint8_t current_alt_settings;
+volatile uint16_t fifo_count;
+volatile uint32_t fifo_count_avg;
+#endif
 
-/* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-void PeriphCommonClock_Config(void);
-static void MPU_Config(void);
-/* USER CODE BEGIN PFP */
+/*------------- MAIN -------------*/
+int main(void) {
+  board_init();
 
-/* USER CODE END PFP */
+  // init device stack on configured roothub port
+  tusb_rhport_init_t dev_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUSB_SPEED_AUTO};
+  tusb_init(BOARD_TUD_RHPORT, &dev_init);
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+  board_init_after_tusb();
 
-static void uart_log(const char *message)
-{
-  (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
+  TU_LOG1("Speaker running\r\n");
+
+  while (1) {
+    tud_task();// TinyUSB device task
+    led_blinking_task();
+#if CFG_AUDIO_DEBUG
+    audio_debug_task();
+#endif
+    audio_task();
+  }
 }
 
-/* USER CODE END 0 */
+//--------------------------------------------------------------------+
+// Device callbacks
+//--------------------------------------------------------------------+
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+// Invoked when device is mounted
+void tud_mount_cb(void) {
+  blink_interval_ms = BLINK_MOUNTED;
+}
 
-  /* USER CODE BEGIN 1 */
+// Invoked when device is unmounted
+void tud_umount_cb(void) {
+  blink_interval_ms = BLINK_NOT_MOUNTED;
+}
 
-  /* USER CODE END 1 */
+// Invoked when usb bus is suspended
+// remote_wakeup_en : if host allow us  to perform remote wakeup
+// Within 7ms, device must draw an average of current less than 2.5 mA from bus
+void tud_suspend_cb(bool remote_wakeup_en) {
+  (void) remote_wakeup_en;
+  blink_interval_ms = BLINK_SUSPENDED;
+}
 
-  /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
+// Invoked when usb bus is resumed
+void tud_resume_cb(void) {
+  blink_interval_ms = tud_mounted() ? BLINK_MOUNTED : BLINK_NOT_MOUNTED;
+}
 
-  /* MCU Configuration--------------------------------------------------------*/
+//--------------------------------------------------------------------+
+// Application Callback API Implementations
+//--------------------------------------------------------------------+
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+//--------------------------------------------------------------------+
+// UAC1 Helper Functions
+//--------------------------------------------------------------------+
 
-  /* USER CODE BEGIN Init */
+static bool audio10_set_req_ep(tusb_control_request_t const *p_request, uint8_t *pBuff) {
+  uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
 
-  /* USER CODE END Init */
+  switch (ctrlSel) {
+    case AUDIO10_EP_CTRL_SAMPLING_FREQ:
+      if (p_request->bRequest == AUDIO10_CS_REQ_SET_CUR) {
+        // Request uses 3 bytes
+        TU_VERIFY(p_request->wLength == 3);
 
-  /* Configure the system clock */
-  SystemClock_Config();
+        current_sample_rate = tu_unaligned_read32(pBuff) & 0x00FFFFFF;
 
-  /* Configure the peripherals common clocks */
-  PeriphCommonClock_Config();
+        TU_LOG2("EP set current freq: %" PRIu32 "\r\n", current_sample_rate);
 
-  /* USER CODE BEGIN SysInit */
+        return true;
+      }
+      break;
 
-  /* USER CODE END SysInit */
+    // Unknown/Unsupported control
+    default:
+      TU_BREAKPOINT();
+      return false;
+  }
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_SAI1_Init();
-  MX_USART1_UART_Init();
-  MX_I2C1_Init();
-  /* USER CODE BEGIN 2 */
-  char log_buffer[128];
-  AudioOut_Init(&hsai_BlockA1);
-  AudioIn_Init(&hsai_BlockB1);
-  adau1979_init_all();
-  adau1979_set_all_inputs_gain_db(ADAU1979_ADDR_0, 20.0f);
-  adau1979_set_all_inputs_gain_db(ADAU1979_ADDR_1, 20.0f);
-  ADAU1979_DumpGains(ADAU1979_ADDR_0);
-  ADAU1979_DumpGains(ADAU1979_ADDR_1);
+  return false;
+}
 
-  uint8_t g1,g2,g3,g4;
+static bool audio10_get_req_ep(uint8_t rhport, tusb_control_request_t const *p_request) {
+  uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
 
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0A, &g1);
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0B, &g2);
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0C, &g3);
-  adau1979_debug_read_reg(ADAU1979_ADDR_0, 0x0D, &g4);
+  switch (ctrlSel) {
+    case AUDIO10_EP_CTRL_SAMPLING_FREQ:
+      if (p_request->bRequest == AUDIO10_CS_REQ_GET_CUR) {
+        TU_LOG2("EP get current freq\r\n");
 
-  printf("ADC0 GAINS = %02X %02X %02X %02X\r\n", g1,g2,g3,g4);
+        uint8_t freq[3];
+        freq[0] = (uint8_t) (current_sample_rate & 0xFF);
+        freq[1] = (uint8_t) ((current_sample_rate >> 8) & 0xFF);
+        freq[2] = (uint8_t) ((current_sample_rate >> 16) & 0xFF);
+        return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, freq, sizeof(freq));
+      }
+      break;
 
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0A, &g1);
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0B, &g2);
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0C, &g3);
-  adau1979_debug_read_reg(ADAU1979_ADDR_1, 0x0D, &g4);
+    // Unknown/Unsupported control
+    default:
+      TU_BREAKPOINT();
+      return false;
+  }
 
-  printf("ADC1 GAINS = %02X %02X %02X %02X\r\n", g1,g2,g3,g4);
+  return false;
+}
 
-  uart_log("SAI1 PCM4104 audio start\r\n");
-  AudioOut_Start();
-  (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
-                            (uint8_t *)AudioIn_GetBuffer(),
-                            AudioIn_GetBufferSamples());
-  uart_log("SAI1 DMA started\r\n");
+static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint8_t *pBuff) {
+  uint8_t channelNum = TU_U16_LOW(p_request->wValue);
+  uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
+  uint8_t entityID = TU_U16_HIGH(p_request->wIndex);
 
-  HAL_Delay(200);        // on laisse le DMA démarrer
-  AudioOut_DebugDump();
-  AudioIn_DebugDump();
+  // If request is for our feature unit
+  if (entityID == UAC1_ENTITY_FEATURE_UNIT) {
+    switch (ctrlSel) {
+      case AUDIO10_FU_CTRL_MUTE:
+        switch (p_request->bRequest) {
+          case AUDIO10_CS_REQ_SET_CUR:
+            // Only 1st form is supported
+            TU_VERIFY(p_request->wLength == 1);
 
+            mute[channelNum] = pBuff[0];
 
-  /* USER CODE END 2 */
+            TU_LOG2("    Set Mute: %d of channel: %u\r\n", mute[channelNum], channelNum);
+            return true;
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+          default:
+            return false; // not supported
+        }
 
-    /* USER CODE BEGIN 3 */
-    static uint32_t last_led_tick = 0;
-    static uint32_t last_log_tick = 0;
-    static uint32_t last_error = 0;
-    uint32_t now = HAL_GetTick();
+      case AUDIO10_FU_CTRL_VOLUME:
+        switch (p_request->bRequest) {
+          case AUDIO10_CS_REQ_SET_CUR:
+            // Only 1st form is supported
+            TU_VERIFY(p_request->wLength == 2);
 
-    if ((now - last_led_tick) >= 500U)
-    {
-      HAL_GPIO_TogglePin(LED_DEBUG_GPIO_Port, LED_DEBUG_Pin);
-      last_led_tick = now;
+            volume[channelNum] = (int16_t)tu_unaligned_read16(pBuff) / 256;
+
+            TU_LOG2("    Set Volume: %d dB of channel: %u\r\n", volume[channelNum], channelNum);
+            return true;
+
+          default:
+            return false; // not supported
+        }
+
+        // Unknown/Unsupported control
+      default:
+        TU_BREAKPOINT();
+        return false;
     }
+  }
 
-    if ((now - last_log_tick) >= 1000U)
-    {
-      uint32_t error = HAL_SAI_GetError(&hsai_BlockA1);
-      uint32_t half = AudioOut_GetHalfEvents();
-      uint32_t full = AudioOut_GetFullEvents();
-      uint32_t rx_half = AudioIn_GetHalfEvents();
-      uint32_t rx_full = AudioIn_GetFullEvents();
+  return false;
+}
 
-      uint32_t frames_per_sec = full * 512;  // 512 = AUDIO_BUFFER_FRAMES
+static bool audio10_get_req_entity(uint8_t rhport, tusb_control_request_t const *p_request) {
+  uint8_t channelNum = TU_U16_LOW(p_request->wValue);
+  uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
+  uint8_t entityID = TU_U16_HIGH(p_request->wIndex);
 
-      snprintf(log_buffer, sizeof(log_buffer),
-               "SAI TX state=%lu err=0x%08lX tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu frames/s=%lu\r\n",
-               (unsigned long)hsai_BlockA1.State,
-               (unsigned long)error,
-               (unsigned long)half,
-               (unsigned long)full,
-               (unsigned long)rx_half,
-               (unsigned long)rx_full,
-               (unsigned long)frames_per_sec);
+  // If request is for our feature unit
+  if (entityID == UAC1_ENTITY_FEATURE_UNIT) {
+    switch (ctrlSel) {
+      case AUDIO10_FU_CTRL_MUTE:
+        // Audio control mute cur parameter block consists of only one byte - we thus can send it right away
+        // There does not exist a range parameter block for mute
+        TU_LOG2("    Get Mute of channel: %u\r\n", channelNum);
+        return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &mute[channelNum], 1);
 
-      uart_log(log_buffer);
+      case AUDIO10_FU_CTRL_VOLUME:
+        switch (p_request->bRequest) {
+          case AUDIO10_CS_REQ_GET_CUR:
+            TU_LOG2("    Get Volume of channel: %u\r\n", channelNum);
+            {
+              int16_t vol = (int16_t) volume[channelNum];
+              vol = vol * 256; // convert to 1/256 dB units
+              return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &vol, sizeof(vol));
+            }
 
-      uart_log(log_buffer);
+          case AUDIO10_CS_REQ_GET_MIN:
+            TU_LOG2("    Get Volume min of channel: %u\r\n", channelNum);
+            {
+              int16_t min = -90; // -90 dB
+              min = min * 256; // convert to 1/256 dB units
+              return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &min, sizeof(min));
+            }
 
-      if (error != 0U && error != last_error)
-      {
-        snprintf(log_buffer, sizeof(log_buffer),
-                 "SAI error detected: 0x%08lX\r\n", (unsigned long)error);
-        uart_log(log_buffer);
-        last_error = error;
+          case AUDIO10_CS_REQ_GET_MAX:
+            TU_LOG2("    Get Volume max of channel: %u\r\n", channelNum);
+            {
+              int16_t max = 30; // +30 dB
+              max = max * 256; // convert to 1/256 dB units
+              return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &max, sizeof(max));
+            }
+
+          case AUDIO10_CS_REQ_GET_RES:
+            TU_LOG2("    Get Volume res of channel: %u\r\n", channelNum);
+            {
+              int16_t res = 128; // 0.5 dB
+              return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &res, sizeof(res));
+            }
+            // Unknown/Unsupported control
+          default:
+            TU_BREAKPOINT();
+            return false;
+        }
+        break;
+
+        // Unknown/Unsupported control
+      default:
+        TU_BREAKPOINT();
+        return false;
+    }
+  }
+
+  return false;
+}
+
+//--------------------------------------------------------------------+
+// UAC2 Helper Functions
+//--------------------------------------------------------------------+
+
+#if TUD_OPT_HIGH_SPEED
+// List of supported sample rates for UAC2
+const uint32_t sample_rates[] = {44100, 48000, 88200, 96000};
+
+#define N_SAMPLE_RATES TU_ARRAY_SIZE(sample_rates)
+
+static bool audio20_clock_get_request(uint8_t rhport, audio20_control_request_t const *request) {
+  TU_ASSERT(request->bEntityID == UAC2_ENTITY_CLOCK);
+
+  if (request->bControlSelector == AUDIO20_CS_CTRL_SAM_FREQ) {
+    if (request->bRequest == AUDIO20_CS_REQ_CUR) {
+      TU_LOG1("Clock get current freq %" PRIu32 "\r\n", current_sample_rate);
+
+      audio20_control_cur_4_t curf = {(int32_t) tu_htole32(current_sample_rate)};
+      return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &curf, sizeof(curf));
+    } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
+      audio20_control_range_4_n_t(N_SAMPLE_RATES) rangef =
+          {
+              .wNumSubRanges = tu_htole16(N_SAMPLE_RATES)};
+      TU_LOG1("Clock get %d freq ranges\r\n", N_SAMPLE_RATES);
+      for (uint8_t i = 0; i < N_SAMPLE_RATES; i++) {
+        rangef.subrange[i].bMin = (int32_t) sample_rates[i];
+        rangef.subrange[i].bMax = (int32_t) sample_rates[i];
+        rangef.subrange[i].bRes = 0;
+        TU_LOG1("Range %d (%d, %d, %d)\r\n", i, (int) rangef.subrange[i].bMin, (int) rangef.subrange[i].bMax, (int) rangef.subrange[i].bRes);
       }
 
-      last_log_tick = now;
+      return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &rangef, sizeof(rangef));
+    }
+  } else if (request->bControlSelector == AUDIO20_CS_CTRL_CLK_VALID &&
+             request->bRequest == AUDIO20_CS_REQ_CUR) {
+    audio20_control_cur_1_t cur_valid = {.bCur = 1};
+    TU_LOG1("Clock get is valid %u\r\n", cur_valid.bCur);
+    return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &cur_valid, sizeof(cur_valid));
+  }
+  TU_LOG1("Clock get request not supported, entity = %u, selector = %u, request = %u\r\n",
+          request->bEntityID, request->bControlSelector, request->bRequest);
+  return false;
+}
+
+static bool audio20_clock_set_request(audio20_control_request_t const *request, uint8_t const *buf) {
+  TU_ASSERT(request->bEntityID == UAC2_ENTITY_CLOCK);
+  TU_VERIFY(request->bRequest == AUDIO20_CS_REQ_CUR);
+
+  if (request->bControlSelector == AUDIO20_CS_CTRL_SAM_FREQ) {
+    TU_VERIFY(request->wLength == sizeof(audio20_control_cur_4_t));
+
+    current_sample_rate = (uint32_t) ((audio20_control_cur_4_t const *) buf)->bCur;
+
+    TU_LOG1("Clock set current freq: %" PRIu32 "\r\n", current_sample_rate);
+
+    return true;
+  } else {
+    TU_LOG1("Clock set request not supported, entity = %u, selector = %u, request = %u\r\n",
+            request->bEntityID, request->bControlSelector, request->bRequest);
+    return false;
+  }
+}
+
+static bool audio20_feature_unit_get_request(uint8_t rhport, audio20_control_request_t const *request) {
+  TU_ASSERT(request->bEntityID == UAC2_ENTITY_FEATURE_UNIT);
+
+  if (request->bControlSelector == AUDIO20_FU_CTRL_MUTE && request->bRequest == AUDIO20_CS_REQ_CUR) {
+    audio20_control_cur_1_t mute1 = {.bCur = mute[request->bChannelNumber]};
+    TU_LOG1("Get channel %u mute %d\r\n", request->bChannelNumber, mute1.bCur);
+    return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &mute1, sizeof(mute1));
+  } else if (request->bControlSelector == AUDIO20_FU_CTRL_VOLUME) {
+    if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
+      audio20_control_range_2_n_t(1) range_vol = {
+          .wNumSubRanges = tu_htole16(1),
+          .subrange[0] = {.bMin = tu_htole16(-VOLUME_CTRL_50_DB), tu_htole16(VOLUME_CTRL_0_DB), tu_htole16(256)}};
+      TU_LOG1("Get channel %u volume range (%d, %d, %u) dB\r\n", request->bChannelNumber,
+              range_vol.subrange[0].bMin / 256, range_vol.subrange[0].bMax / 256, range_vol.subrange[0].bRes / 256);
+      return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &range_vol, sizeof(range_vol));
+    } else if (request->bRequest == AUDIO20_CS_REQ_CUR) {
+      audio20_control_cur_2_t cur_vol = {.bCur = tu_htole16(volume[request->bChannelNumber])};
+      TU_LOG1("Get channel %u volume %d dB\r\n", request->bChannelNumber, cur_vol.bCur / 256);
+      return tud_audio_buffer_and_schedule_control_xfer(rhport, (tusb_control_request_t const *) request, &cur_vol, sizeof(cur_vol));
     }
   }
-  /* USER CODE END 3 */
+  TU_LOG1("Feature unit get request not supported, entity = %u, selector = %u, request = %u\r\n",
+          request->bEntityID, request->bControlSelector, request->bRequest);
+
+  return false;
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+static bool audio20_feature_unit_set_request(audio20_control_request_t const *request, uint8_t const *buf) {
+  TU_ASSERT(request->bEntityID == UAC2_ENTITY_FEATURE_UNIT);
+  TU_VERIFY(request->bRequest == AUDIO20_CS_REQ_CUR);
 
-  /** Supply configuration update enable
-  */
-  HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
+  if (request->bControlSelector == AUDIO20_FU_CTRL_MUTE) {
+    TU_VERIFY(request->wLength == sizeof(audio20_control_cur_1_t));
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+    mute[request->bChannelNumber] = ((audio20_control_cur_1_t const *) buf)->bCur;
 
-  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+    TU_LOG1("Set channel %d Mute: %d\r\n", request->bChannelNumber, mute[request->bChannelNumber]);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 5;
-  RCC_OscInitStruct.PLL.PLLN = 160;
-  RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
-  RCC_OscInitStruct.PLL.PLLR = 2;
-  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
-  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
-  RCC_OscInitStruct.PLL.PLLFRACN = 0;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    return true;
+  } else if (request->bControlSelector == AUDIO20_FU_CTRL_VOLUME) {
+    TU_VERIFY(request->wLength == sizeof(audio20_control_cur_2_t));
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
-                              |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
+    volume[request->bChannelNumber] = ((audio20_control_cur_2_t const *) buf)->bCur;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
+    TU_LOG1("Set channel %d volume: %d dB\r\n", request->bChannelNumber, volume[request->bChannelNumber] / 256);
+
+    return true;
+  } else {
+    TU_LOG1("Feature unit set request not supported, entity = %u, selector = %u, request = %u\r\n",
+            request->bEntityID, request->bControlSelector, request->bRequest);
+    return false;
   }
 }
 
-/**
-  * @brief Peripherals Common Clock Configuration
-  * @retval None
-  */
-void PeriphCommonClock_Config(void)
-{
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+static bool audio20_get_req_entity(uint8_t rhport, tusb_control_request_t const *p_request) {
+  audio20_control_request_t const *request = (audio20_control_request_t const *) p_request;
 
-  /** Initializes the peripherals clock
-  */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SAI1;
-  PeriphClkInitStruct.PLL3.PLL3M = 25;
-  PeriphClkInitStruct.PLL3.PLL3N = 491;
-  PeriphClkInitStruct.PLL3.PLL3P = 40;
-  PeriphClkInitStruct.PLL3.PLL3Q = 2;
-  PeriphClkInitStruct.PLL3.PLL3R = 2;
-  PeriphClkInitStruct.PLL3.PLL3RGE = RCC_PLL3VCIRANGE_0;
-  PeriphClkInitStruct.PLL3.PLL3VCOSEL = RCC_PLL3VCOWIDE;
-  PeriphClkInitStruct.PLL3.PLL3FRACN = 4260;
-  PeriphClkInitStruct.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PLL3;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-  {
-    Error_Handler();
+  if (request->bEntityID == UAC2_ENTITY_CLOCK)
+    return audio20_clock_get_request(rhport, request);
+  if (request->bEntityID == UAC2_ENTITY_FEATURE_UNIT)
+    return audio20_feature_unit_get_request(rhport, request);
+  else {
+    TU_LOG1("Get request not handled, entity = %d, selector = %d, request = %d\r\n",
+            request->bEntityID, request->bControlSelector, request->bRequest);
   }
+  return false;
 }
 
-/* USER CODE BEGIN 4 */
-void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_A)
-  {
-    AudioOut_ProcessHalf();
+static bool audio20_set_req_entity(tusb_control_request_t const *p_request, uint8_t *buf) {
+  audio20_control_request_t const *request = (audio20_control_request_t const *) p_request;
+
+  if (request->bEntityID == UAC2_ENTITY_FEATURE_UNIT)
+    return audio20_feature_unit_set_request(request, buf);
+  if (request->bEntityID == UAC2_ENTITY_CLOCK)
+    return audio20_clock_set_request(request, buf);
+  TU_LOG1("Set request not handled, entity = %d, selector = %d, request = %d\r\n",
+          request->bEntityID, request->bControlSelector, request->bRequest);
+
+  return false;
+}
+
+#endif // TUD_OPT_HIGH_SPEED
+
+//--------------------------------------------------------------------+
+// Main Callback Functions
+//--------------------------------------------------------------------+
+
+bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
+  (void) rhport;
+  uint8_t const itf = tu_u16_low(tu_le16toh(p_request->wIndex));
+  uint8_t const alt = tu_u16_low(tu_le16toh(p_request->wValue));
+
+  TU_LOG2("Set interface %d alt %d\r\n", itf, alt);
+  if (ITF_NUM_AUDIO_STREAMING == itf && alt != 0)
+    blink_interval_ms = BLINK_STREAMING;
+
+#if CFG_AUDIO_DEBUG
+  current_alt_settings = alt;
+#endif
+
+  return true;
+}
+
+// Invoked when audio class specific set request received for an EP
+bool tud_audio_set_req_ep_cb(uint8_t rhport, tusb_control_request_t const *p_request, uint8_t *pBuff) {
+  (void) rhport;
+  (void) pBuff;
+
+  if (tud_audio_version() == 1) {
+    return audio10_set_req_ep(p_request, pBuff);
+  } else if (tud_audio_version() == 2) {
+    // We do not support any requests here
   }
+
+  return false;// Yet not implemented
 }
 
-void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_A)
-  {
-    AudioOut_ProcessFull();
+// Invoked when audio class specific get request received for an EP
+bool tud_audio_get_req_ep_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
+  (void) rhport;
+
+  if (tud_audio_version() == 1) {
+    return audio10_get_req_ep(rhport, p_request);
+  } else if (tud_audio_version() == 2) {
+    // We do not support any requests here
   }
+
+  return false;// Yet not implemented
 }
 
-void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_B)
-  {
-    AudioIn_ProcessHalf();
+// Invoked when audio class specific set request received for an entity
+bool tud_audio_set_req_entity_cb(uint8_t rhport, tusb_control_request_t const *p_request, uint8_t *buf) {
+  (void) rhport;
+
+  if (tud_audio_version() == 1) {
+    return audio10_set_req_entity(p_request, buf);
+#if TUD_OPT_HIGH_SPEED
+  } else if (tud_audio_version() == 2) {
+    return audio20_set_req_entity(p_request, buf);
+#endif
   }
+
+  return false;
 }
 
-void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
-{
-  if (hsai->Instance == SAI1_Block_B)
-  {
-    AudioIn_ProcessFull();
+// Invoked when audio class specific get request received for an entity
+bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
+  (void) rhport;
+
+  if (tud_audio_version() == 1) {
+    return audio10_get_req_entity(rhport, p_request);
+#if TUD_OPT_HIGH_SPEED
+  } else if (tud_audio_version() == 2) {
+    return audio20_get_req_entity(rhport, p_request);
+#endif
   }
+
+  return false;
 }
 
-/* USER CODE END 4 */
+bool tud_audio_set_itf_close_ep_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
+  (void) rhport;
 
- /* MPU Configuration */
+  uint8_t const itf = tu_u16_low(tu_le16toh(p_request->wIndex));
+  uint8_t const alt = tu_u16_low(tu_le16toh(p_request->wValue));
 
-void MPU_Config(void)
-{
-  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+  if (ITF_NUM_AUDIO_STREAMING == itf && alt == 0)
+    blink_interval_ms = BLINK_MOUNTED;
 
-  /* Disables the MPU */
-  HAL_MPU_Disable();
-
-  /** Initializes and configures the Region and the memory to be protected
-  */
-  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
-  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
-  MPU_InitStruct.BaseAddress = 0x0;
-  MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;
-  MPU_InitStruct.SubRegionDisable = 0x87;
-  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
-  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
-  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
-  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
-  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
-  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
-
-  HAL_MPU_ConfigRegion(&MPU_InitStruct);
-  /* Enables the MPU */
-  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
-
+  return true;
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
+void tud_audio_feedback_params_cb(uint8_t func_id, uint8_t alt_itf, audio_feedback_params_t *feedback_param) {
+  (void) func_id;
+  (void) alt_itf;
+  // Set feedback method to fifo counting
+  feedback_param->method = AUDIO_FEEDBACK_METHOD_FIFO_COUNT;
+  feedback_param->sample_freq = current_sample_rate;
+
+  // About FIFO threshold:
+  //
+  // By default the threshold is set to half FIFO size, which works well in most cases,
+  // you can reduce the threshold to have less latency.
+  //
+  // For example, here we could set the threshold to 2 ms of audio data, as audio_task() read audio data every 1 ms,
+  // having 2 ms threshold allows some margin and a quick response:
+  //
+  // feedback_param->fifo_count.fifo_threshold =
+  //    current_sample_rate * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX * CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX / 1000 * 2;
+}
+
+#if CFG_AUDIO_DEBUG
+bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out, uint8_t cur_alt_setting) {
+  (void) rhport;
+  (void) n_bytes_received;
+  (void) func_id;
+  (void) ep_out;
+  (void) cur_alt_setting;
+
+  fifo_count = tud_audio_available();
+  // Same averaging method used in UAC2 class
+  fifo_count_avg = (uint32_t) (((uint64_t) fifo_count_avg * 63 + ((uint32_t) fifo_count << 16)) >> 6);
+
+  return true;
+}
+#endif
+
+//--------------------------------------------------------------------+
+// AUDIO Task
+//--------------------------------------------------------------------+
+
+// This task simulates an audio transmit callback, one frame is sent every 1ms.
+// In a real application, this would be replaced with actual I2S transmit callback.
+void audio_task(void) {
+  static uint32_t start_ms = 0;
+  uint32_t curr_ms = board_millis();
+  if (start_ms == curr_ms) return;// not enough time
+  start_ms = curr_ms;
+
+  uint16_t length = (uint16_t) (current_sample_rate / 1000 * CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX);
+
+  if (current_sample_rate == 44100 && (curr_ms % 10 == 0)) {
+    // Take one more sample every 10 cycles, to have a average reading speed of 44.1
+    // This correction is not needed in real world cases
+    length += CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX;
+  } else if (current_sample_rate == 88200 && (curr_ms % 5 == 0)) {
+    // Take one more sample every 5 cycles, to have a average reading speed of 88.2
+    // This correction is not needed in real world cases
+    length += CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX;
   }
-  /* USER CODE END Error_Handler_Debug */
+
+  tud_audio_read(i2s_dummy_buffer, length);
 }
-#ifdef USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+
+//--------------------------------------------------------------------+
+// BLINKING TASK
+//--------------------------------------------------------------------+
+void led_blinking_task(void) {
+  static uint32_t start_ms = 0;
+  static bool led_state = false;
+
+  // Blink every interval ms
+  if (board_millis() - start_ms < blink_interval_ms) return;
+  start_ms += blink_interval_ms;
+
+  board_led_write(led_state);
+  led_state = 1 - led_state;
 }
-#endif /* USE_FULL_ASSERT */
+
+#if CFG_AUDIO_DEBUG
+//--------------------------------------------------------------------+
+// HID interface for audio debug
+//--------------------------------------------------------------------+
+// Every 1ms, we will sent 1 debug information report
+void audio_debug_task(void) {
+  static uint32_t start_ms = 0;
+  uint32_t curr_ms = board_millis();
+  if (start_ms == curr_ms) return;// not enough time
+  start_ms = curr_ms;
+
+  audio_debug_info_t debug_info;
+  debug_info.sample_rate = current_sample_rate;
+  debug_info.alt_settings = current_alt_settings;
+  debug_info.fifo_size = CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ;
+  debug_info.fifo_count = fifo_count;
+  debug_info.fifo_count_avg = (uint16_t) (fifo_count_avg >> 16);
+  for (int i = 0; i < CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1; i++) {
+    debug_info.mute[i] = mute[i];
+    debug_info.volume[i] = volume[i];
+  }
+
+  if (tud_hid_ready())
+    tud_hid_report(0, &debug_info, sizeof(debug_info));
+}
+
+// Invoked when received GET_REPORT control request
+// Unused here
+uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t *buffer, uint16_t reqlen) {
+  // TODO not Implemented
+  (void) itf;
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) reqlen;
+
+  return 0;
+}
+
+// Invoked when received SET_REPORT control request or
+// Unused here
+void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer, uint16_t bufsize) {
+  // This example doesn't use multiple report and report ID
+  (void) itf;
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) bufsize;
+}
+
+#endif

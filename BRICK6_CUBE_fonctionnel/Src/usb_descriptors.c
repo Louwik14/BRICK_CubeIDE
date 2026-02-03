@@ -1,47 +1,181 @@
-/**
- * @file usb_descriptors.c
- * @brief Descripteurs USB (UAC1 + MIDI) pour TinyUSB device.
+/*
+ * The MIT License (MIT)
  *
- * Définit les descripteurs USB audio/MIDI utilisés par la pile TinyUSB.
+ * Copyright (c) 2023 HiFiPhile
  *
- * Rôle dans le système:
- * - Description statique des interfaces USB exposées au host.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Contraintes temps réel:
- * - Critique audio: non.
- * - IRQ: non.
- * - Tasklet: non.
- * - Borné: oui.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * Architecture:
- * - Appelé par: TinyUSB (enumeration).
- * - Appelle: aucun module externe.
- * - Consommé par: host USB.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  *
- * Règles:
- * - Pas de malloc.
- * - Pas de blocage en IRQ.
- *
- * @note L’API publique est déclarée dans usb_descriptors.h.
  */
 
+#include "board_api.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
+#include "common_types.h"
 
-//--------------------------------------------------------------------+
-// PID auto
-//--------------------------------------------------------------------+
+/* A combination of interfaces must have a unique product id, since PC will save device driver after the first plug.
+ * Same VID/PID with different interface e.g MSC (first), then CDC (later) will possibly cause system error on PC.
+ *
+ * Auto ProductID layout's Bitmap:
+ *   [MSB]     AUDIO | MIDI | HID | MSC | CDC          [LSB]
+ */
 #define PID_MAP(itf, n)  ((CFG_TUD_##itf) ? (1 << (n)) : 0)
-#define USB_PID (0x4000 | PID_MAP(CDC,0) | PID_MAP(MSC,1) | PID_MAP(HID,2) | \
-                 PID_MAP(MIDI,3) | PID_MAP(AUDIO,4) | PID_MAP(VENDOR,5))
+#define USB_PID           (0x4000 | PID_MAP(CDC, 0) | PID_MAP(MSC, 1) | PID_MAP(HID, 2) | \
+    PID_MAP(MIDI, 3) | PID_MAP(AUDIO, 4) | PID_MAP(VENDOR, 5) )
 
 //--------------------------------------------------------------------+
-// Device Descriptor
+// Device Descriptors
 //--------------------------------------------------------------------+
 static tusb_desc_device_t const desc_device =
 {
-  .bLength            = sizeof(tusb_desc_device_t),
-  .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+
+    // Use Interface Association Descriptor (IAD) for Audio
+    // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
+    .bDeviceClass       = TUSB_CLASS_MISC,
+    .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+
+    .idVendor           = 0xCafe,
+    .idProduct          = USB_PID,
+    .bcdDevice          = 0x0100,
+
+    .iManufacturer      = 0x01,
+    .iProduct           = 0x02,
+    .iSerialNumber      = 0x03,
+
+    .bNumConfigurations = 0x01
+};
+
+// Invoked when received GET DEVICE DESCRIPTOR
+// Application return pointer to descriptor
+uint8_t const * tud_descriptor_device_cb(void) {
+  return (uint8_t const *) &desc_device;
+}
+
+#if CFG_AUDIO_DEBUG
+//--------------------------------------------------------------------+
+// HID Report Descriptor
+//--------------------------------------------------------------------+
+
+uint8_t const desc_hid_report[] = {
+  HID_USAGE_PAGE_N ( HID_USAGE_PAGE_VENDOR, 2   ),\
+  HID_USAGE        ( 0x01                       ),\
+  HID_COLLECTION   ( HID_COLLECTION_APPLICATION ),\
+  HID_USAGE       ( 0x02                                   ),\
+  HID_LOGICAL_MIN ( 0x00                                   ),\
+  HID_LOGICAL_MAX_N ( 0xff, 2                              ),\
+  HID_REPORT_SIZE ( 8                                      ),\
+  HID_REPORT_COUNT( sizeof(audio_debug_info_t)             ),\
+  HID_INPUT       ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ),\
+  HID_COLLECTION_END
+};
+
+// Invoked when received GET HID REPORT DESCRIPTOR
+// Application return pointer to descriptor
+// Descriptor contents must exist long enough for transfer to complete
+uint8_t const * tud_hid_descriptor_report_cb(uint8_t itf) {
+  (void) itf;
+  return desc_hid_report;
+}
+#endif
+
+//--------------------------------------------------------------------+
+// Configuration Descriptor
+//--------------------------------------------------------------------+
+
+#if CFG_TUSB_MCU == OPT_MCU_LPC175X_6X || CFG_TUSB_MCU == OPT_MCU_LPC177X_8X || CFG_TUSB_MCU == OPT_MCU_LPC40XX
+  // LPC 17xx and 40xx endpoint type (bulk/interrupt/iso) are fixed by its number
+  // 0 control, 1 In, 2 Bulk, 3 Iso, 4 In etc ...
+  #define EPNUM_AUDIO       0x03
+  #define EPNUM_AUDIO_FB    0x03
+  #define EPNUM_DEBUG       0x04
+
+#elif TU_CHECK_MCU(OPT_MCU_NRF5X)
+  // nRF5x ISO can only be endpoint 8
+  #define EPNUM_AUDIO       0x08
+  #define EPNUM_AUDIO_FB    0x08
+  #define EPNUM_DEBUG       0x01
+
+#elif defined(TUD_ENDPOINT_ONE_DIRECTION_ONLY)
+  // MCUs that don't support a same endpoint number with different direction IN and OUT defined in tusb_mcu.h
+  //    e.g EP1 OUT & EP1 IN cannot exist together
+  #define EPNUM_AUDIO       0x02
+  #define EPNUM_AUDIO_FB    0x01
+  #define EPNUM_DEBUG       0x03
+
+#else
+  #define EPNUM_AUDIO       0x01
+  #define EPNUM_AUDIO_FB    0x01
+  #define EPNUM_DEBUG       0x02
+#endif
+
+#if CFG_AUDIO_DEBUG
+  #define CONFIG_UAC1_TOTAL_LEN    	(TUD_CONFIG_DESC_LEN + TUD_AUDIO10_SPEAKER_STEREO_FB_DESC_LEN(2) + TUD_HID_DESC_LEN)
+#else
+  #define CONFIG_UAC1_TOTAL_LEN    	(TUD_CONFIG_DESC_LEN + TUD_AUDIO10_SPEAKER_STEREO_FB_DESC_LEN(2))
+#endif
+
+uint8_t const desc_uac1_configuration[] = {
+  // Config number, interface count, string index, total length, attribute, power in mA
+  TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_UAC1_TOTAL_LEN, 0x00, 100),
+
+  // Interface number, string index, byte per sample, bit per sample, EP Out, EP size, EP feedback, sample rates (44.1kHz, 48kHz)
+  TUD_AUDIO10_SPEAKER_STEREO_FB_DESCRIPTOR(ITF_NUM_AUDIO_CONTROL, 5, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX, EPNUM_AUDIO, CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_FS, EPNUM_AUDIO_FB | 0x80, 44100, 48000),
+
+#if CFG_AUDIO_DEBUG
+  // Interface number, string index, protocol, report descriptor len, EP In address, size & polling interval
+  TUD_HID_DESCRIPTOR(ITF_NUM_DEBUG, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_DEBUG | 0x80, CFG_TUD_HID_EP_BUFSIZE, 7)
+#endif
+};
+
+TU_VERIFY_STATIC(sizeof(desc_uac1_configuration) == CONFIG_UAC1_TOTAL_LEN, "Incorrect size");
+
+#if TUD_OPT_HIGH_SPEED
+
+#if CFG_AUDIO_DEBUG
+  #define CONFIG_UAC2_TOTAL_LEN    	(TUD_CONFIG_DESC_LEN + TUD_AUDIO20_SPEAKER_STEREO_FB_DESC_LEN + TUD_HID_DESC_LEN)
+#else
+  #define CONFIG_UAC2_TOTAL_LEN    	(TUD_CONFIG_DESC_LEN + TUD_AUDIO20_SPEAKER_STEREO_FB_DESC_LEN)
+#endif
+
+uint8_t const desc_uac2_configuration[] = {
+  // Config number, interface count, string index, total length, attribute, power in mA
+  TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_UAC2_TOTAL_LEN, 0x00, 100),
+
+  // Interface number, string index, byte per sample, bit per sample, EP Out, EP size, EP feedback, feedback EP size,
+  TUD_AUDIO20_SPEAKER_STEREO_FB_DESCRIPTOR(ITF_NUM_AUDIO_CONTROL, 4, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_RESOLUTION_RX, EPNUM_AUDIO, CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_HS, EPNUM_AUDIO_FB | 0x80, 4),
+
+#if CFG_AUDIO_DEBUG
+  // Interface number, string index, protocol, report descriptor len, EP In address, size & polling interval
+  TUD_HID_DESCRIPTOR(ITF_NUM_DEBUG, 0, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_DEBUG | 0x80, CFG_TUD_HID_EP_BUFSIZE, 7)
+#endif
+};
+
+TU_VERIFY_STATIC(sizeof(desc_uac2_configuration) == CONFIG_UAC2_TOTAL_LEN, "Incorrect size");
+
+// device qualifier is mostly similar to device descriptor since we don't change configuration based on speed
+tusb_desc_device_qualifier_t const desc_device_qualifier = {
+  .bLength            = sizeof(tusb_desc_device_qualifier_t),
+  .bDescriptorType    = TUSB_DESC_DEVICE_QUALIFIER,
   .bcdUSB             = 0x0200,
 
   .bDeviceClass       = TUSB_CLASS_MISC,
@@ -49,245 +183,110 @@ static tusb_desc_device_t const desc_device =
   .bDeviceProtocol    = MISC_PROTOCOL_IAD,
 
   .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
-  .idVendor           = 0xCafe,
-  .idProduct          = USB_PID,
-  .bcdDevice          = 0x0100,
-
-  .iManufacturer      = 0x01,
-  .iProduct           = 0x02,
-  .iSerialNumber      = 0x03,
-  .bNumConfigurations = 0x01
+  .bNumConfigurations = 0x01,
+  .bReserved          = 0x00
 };
 
-uint8_t const * tud_descriptor_device_cb(void)
-{
-  return (uint8_t const *) &desc_device;
+// Invoked when received GET DEVICE QUALIFIER DESCRIPTOR request
+// Application return pointer to descriptor, whose contents must exist long enough for transfer to complete.
+// device_qualifier descriptor describes information about a high-speed capable device that would
+// change if the device were operating at the other speed. If not highspeed capable stall this request.
+uint8_t const *tud_descriptor_device_qualifier_cb(void) {
+  return (uint8_t const *) &desc_device_qualifier;
+}
+
+// Invoked when received GET OTHER SEED CONFIGURATION DESCRIPTOR request
+// Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
+// Configuration descriptor in the other speed e.g if high speed then this is for full speed and vice versa
+uint8_t const *tud_descriptor_other_speed_configuration_cb(uint8_t index) {
+  (void) index;// for multiple configurations
+
+  // if link speed is high return fullspeed config, and vice versa
+  return (tud_speed_get() == TUSB_SPEED_HIGH) ? desc_uac1_configuration : desc_uac2_configuration;
+}
+
+#endif // highspeed
+
+// Invoked when received GET CONFIGURATION DESCRIPTOR
+// Application return pointer to descriptor
+// Descriptor contents must exist long enough for transfer to complete
+uint8_t const * tud_descriptor_configuration_cb(uint8_t index) {
+  (void) index; // for multiple configurations
+#if TUD_OPT_HIGH_SPEED
+  // Although we are highspeed, host may be fullspeed.
+  if(tud_speed_get() == TUSB_SPEED_FULL) {
+    return desc_uac1_configuration;
+  } else {
+    return desc_uac2_configuration;
+  }
+#else
+    return desc_uac1_configuration;
+#endif
 }
 
 //--------------------------------------------------------------------+
-// Interfaces
+// String Descriptors
 //--------------------------------------------------------------------+
-enum
-{
-  ITF_NUM_AUDIO_CONTROL = 0,
-  ITF_NUM_AUDIO_STREAMING_OUT,
-  ITF_NUM_AUDIO_STREAMING_IN,
-  ITF_NUM_MIDI,
-  ITF_NUM_MIDI_STREAMING,
-  ITF_NUM_TOTAL
-};
 
-#define EPNUM_AUDIO_OUT 0x01
-#define EPNUM_AUDIO_IN  0x81
-#define EPNUM_MIDI_OUT 0x02
-#define EPNUM_MIDI_IN  0x82
-
-#define AUDIO_ENTITY_SPK_INPUT_TERMINAL  0x01
-#define AUDIO_ENTITY_SPK_FEATURE_UNIT    0x02
-#define AUDIO_ENTITY_SPK_OUTPUT_TERMINAL 0x03
-#define AUDIO_ENTITY_MIC_INPUT_TERMINAL  0x04
-#define AUDIO_ENTITY_MIC_FEATURE_UNIT    0x05
-#define AUDIO_ENTITY_MIC_OUTPUT_TERMINAL 0x06
-
-#define TUD_AUDIO10_SPK_MIC_DESC_LEN(_nfreqs) (\
-  + TUD_AUDIO10_DESC_STD_AC_LEN\
-  + TUD_AUDIO10_DESC_CS_AC_LEN(2)\
-  + TUD_AUDIO10_DESC_INPUT_TERM_LEN\
-  + TUD_AUDIO10_DESC_OUTPUT_TERM_LEN\
-  + TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2)\
-  + TUD_AUDIO10_DESC_INPUT_TERM_LEN\
-  + TUD_AUDIO10_DESC_OUTPUT_TERM_LEN\
-  + TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2)\
-  + TUD_AUDIO10_DESC_STD_AS_LEN\
-  + TUD_AUDIO10_DESC_STD_AS_LEN\
-  + TUD_AUDIO10_DESC_CS_AS_INT_LEN\
-  + TUD_AUDIO10_DESC_TYPE_I_FORMAT_LEN(_nfreqs)\
-  + TUD_AUDIO10_DESC_STD_AS_ISO_EP_LEN\
-  + TUD_AUDIO10_DESC_CS_AS_ISO_EP_LEN\
-  + TUD_AUDIO10_DESC_STD_AS_LEN\
-  + TUD_AUDIO10_DESC_STD_AS_LEN\
-  + TUD_AUDIO10_DESC_CS_AS_INT_LEN\
-  + TUD_AUDIO10_DESC_TYPE_I_FORMAT_LEN(_nfreqs)\
-  + TUD_AUDIO10_DESC_STD_AS_ISO_EP_LEN\
-  + TUD_AUDIO10_DESC_CS_AS_ISO_EP_LEN)
-
-#define CONFIG_TOTAL_LEN \
-  (TUD_CONFIG_DESC_LEN + \
-   TUD_AUDIO10_SPK_MIC_DESC_LEN(1) + \
-   TUD_MIDI_DESC_LEN)
-
-//--------------------------------------------------------------------+
-// Configuration Descriptor
-//--------------------------------------------------------------------+
-uint8_t const desc_configuration[] =
-{
-  TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
-
-  // AUDIO (UAC1 SPEAKER OUT + MIC IN)
-  TUD_AUDIO10_DESC_STD_AC(/*_itfnum*/ ITF_NUM_AUDIO_CONTROL,
-                          /*_nEPs*/ 0x00,
-                          /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_CS_AC(/*_bcdADC*/ 0x0100,
-                         /*_totallen*/ (TUD_AUDIO10_DESC_INPUT_TERM_LEN +
-                                        TUD_AUDIO10_DESC_OUTPUT_TERM_LEN +
-                                        TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2) +
-                                        TUD_AUDIO10_DESC_INPUT_TERM_LEN +
-                                        TUD_AUDIO10_DESC_OUTPUT_TERM_LEN +
-                                        TUD_AUDIO10_DESC_FEATURE_UNIT_LEN(2)),
-                         /*_itf*/ ITF_NUM_AUDIO_STREAMING_OUT,
-                         /*_itf*/ ITF_NUM_AUDIO_STREAMING_IN),
-  // Speaker path (USB OUT -> Speaker)
-  TUD_AUDIO10_DESC_INPUT_TERM(/*_termid*/ AUDIO_ENTITY_SPK_INPUT_TERMINAL,
-                              /*_termtype*/ AUDIO_TERM_TYPE_USB_STREAMING,
-                              /*_assocTerm*/ AUDIO_ENTITY_SPK_OUTPUT_TERMINAL,
-                              /*_nchannels*/ 0x02,
-                              /*_channelcfg*/ AUDIO10_CHANNEL_CONFIG_NON_PREDEFINED,
-                              /*_idxchannelnames*/ 0x00,
-                              /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_OUTPUT_TERM(/*_termid*/ AUDIO_ENTITY_SPK_OUTPUT_TERMINAL,
-                               /*_termtype*/ AUDIO_TERM_TYPE_OUT_GENERIC_SPEAKER,
-                               /*_assocTerm*/ AUDIO_ENTITY_SPK_INPUT_TERMINAL,
-                               /*_srcid*/ AUDIO_ENTITY_SPK_FEATURE_UNIT,
-                               /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_FEATURE_UNIT(/*_unitid*/ AUDIO_ENTITY_SPK_FEATURE_UNIT,
-                                /*_srcid*/ AUDIO_ENTITY_SPK_INPUT_TERMINAL,
-                                /*_stridx*/ 0x00,
-                                /*_ctrlmaster*/ (AUDIO10_FU_CONTROL_BM_MUTE |
-                                                  AUDIO10_FU_CONTROL_BM_VOLUME),
-                                /*_ctrlch1*/ (AUDIO10_FU_CONTROL_BM_MUTE |
-                                              AUDIO10_FU_CONTROL_BM_VOLUME),
-                                /*_ctrlch2*/ (AUDIO10_FU_CONTROL_BM_MUTE |
-                                              AUDIO10_FU_CONTROL_BM_VOLUME)),
-  // Microphone path (Mic -> USB IN)
-  TUD_AUDIO10_DESC_INPUT_TERM(/*_termid*/ AUDIO_ENTITY_MIC_INPUT_TERMINAL,
-                              /*_termtype*/ AUDIO_TERM_TYPE_IN_GENERIC_MIC,
-                              /*_assocTerm*/ AUDIO_ENTITY_MIC_OUTPUT_TERMINAL,
-                              /*_nchannels*/ 0x02,
-                              /*_channelcfg*/ AUDIO10_CHANNEL_CONFIG_NON_PREDEFINED,
-                              /*_idxchannelnames*/ 0x00,
-                              /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_OUTPUT_TERM(/*_termid*/ AUDIO_ENTITY_MIC_OUTPUT_TERMINAL,
-                               /*_termtype*/ AUDIO_TERM_TYPE_USB_STREAMING,
-                               /*_assocTerm*/ AUDIO_ENTITY_MIC_INPUT_TERMINAL,
-                               /*_srcid*/ AUDIO_ENTITY_MIC_FEATURE_UNIT,
-                               /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_FEATURE_UNIT(/*_unitid*/ AUDIO_ENTITY_MIC_FEATURE_UNIT,
-                                /*_srcid*/ AUDIO_ENTITY_MIC_INPUT_TERMINAL,
-                                /*_stridx*/ 0x00,
-                                /*_ctrlmaster*/ (AUDIO10_FU_CONTROL_BM_MUTE |
-                                                  AUDIO10_FU_CONTROL_BM_VOLUME),
-                                /*_ctrlch1*/ (AUDIO10_FU_CONTROL_BM_MUTE |
-                                              AUDIO10_FU_CONTROL_BM_VOLUME),
-                                /*_ctrlch2*/ (AUDIO10_FU_CONTROL_BM_MUTE |
-                                              AUDIO10_FU_CONTROL_BM_VOLUME)),
-  // Speaker Streaming Interface (OUT)
-  TUD_AUDIO10_DESC_STD_AS_INT(/*_itfnum*/ ITF_NUM_AUDIO_STREAMING_OUT,
-                              /*_altset*/ 0x00,
-                              /*_nEPs*/ 0x00,
-                              /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_STD_AS_INT(/*_itfnum*/ ITF_NUM_AUDIO_STREAMING_OUT,
-                              /*_altset*/ 0x01,
-                              /*_nEPs*/ 0x01,
-                              /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_CS_AS_INT(/*_termid*/ AUDIO_ENTITY_SPK_INPUT_TERMINAL,
-                             /*_delay*/ 0x01,
-                             /*_formattype*/ AUDIO10_DATA_FORMAT_TYPE_I_PCM),
-  TUD_AUDIO10_DESC_TYPE_I_FORMAT(/*_nrchannels*/ 0x02,
-                                 /*_subframesize*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_RX,
-                                 /*_bitresolution*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_RESOLUTION_RX,
-                                 /*_freq*/ CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE),
-  TUD_AUDIO10_DESC_STD_AS_ISO_EP(/*_ep*/ EPNUM_AUDIO_OUT,
-                                 /*_attr*/ (uint8_t) ((uint8_t)TUSB_XFER_ISOCHRONOUS |
-                                                     (uint8_t)TUSB_ISO_EP_ATT_ADAPTIVE),
-                                 /*_maxEPsize*/ CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX,
-                                 /*_interval*/ 0x01,
-                                 /*_sync_ep*/ 0x00),
-  TUD_AUDIO10_DESC_CS_AS_ISO_EP(/*_attr*/ AUDIO10_CS_AS_ISO_DATA_EP_ATT_SAMPLING_FRQ,
-                                /*_lockdelayunits*/ AUDIO10_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_MILLISEC,
-                                /*_lockdelay*/ 0x0001),
-  // Microphone Streaming Interface (IN)
-  TUD_AUDIO10_DESC_STD_AS_INT(/*_itfnum*/ ITF_NUM_AUDIO_STREAMING_IN,
-                              /*_altset*/ 0x00,
-                              /*_nEPs*/ 0x00,
-                              /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_STD_AS_INT(/*_itfnum*/ ITF_NUM_AUDIO_STREAMING_IN,
-                              /*_altset*/ 0x01,
-                              /*_nEPs*/ 0x01,
-                              /*_stridx*/ 0x00),
-  TUD_AUDIO10_DESC_CS_AS_INT(/*_termid*/ AUDIO_ENTITY_MIC_OUTPUT_TERMINAL,
-                             /*_delay*/ 0x01,
-                             /*_formattype*/ AUDIO10_DATA_FORMAT_TYPE_I_PCM),
-  TUD_AUDIO10_DESC_TYPE_I_FORMAT(/*_nrchannels*/ 0x02,
-                                 /*_subframesize*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_TX,
-                                 /*_bitresolution*/ CFG_TUD_AUDIO_FUNC_1_FORMAT_1_RESOLUTION_TX,
-                                 /*_freq*/ CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE),
-  TUD_AUDIO10_DESC_STD_AS_ISO_EP(/*_ep*/ EPNUM_AUDIO_IN,
-                                 /*_attr*/ (uint8_t) ((uint8_t)TUSB_XFER_ISOCHRONOUS |
-                                                     (uint8_t)TUSB_ISO_EP_ATT_ASYNCHRONOUS),
-                                 /*_maxEPsize*/ CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX,
-                                 /*_interval*/ 0x01,
-                                 /*_sync_ep*/ 0x00),
-  TUD_AUDIO10_DESC_CS_AS_ISO_EP(/*_attr*/ AUDIO10_CS_AS_ISO_DATA_EP_ATT_SAMPLING_FRQ,
-                                /*_lockdelayunits*/ AUDIO10_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_MILLISEC,
-                                /*_lockdelay*/ 0x0001),
-
-  // MIDI
-  TUD_MIDI_DESCRIPTOR(
-      ITF_NUM_MIDI,
-      0,
-      EPNUM_MIDI_OUT,
-      EPNUM_MIDI_IN,
-      64)
-};
-
-TU_VERIFY_STATIC(sizeof(desc_configuration) == CONFIG_TOTAL_LEN,
-                 "Config size mismatch");
-
-uint8_t const * tud_descriptor_configuration_cb(uint8_t index)
-{
-  (void) index;
-  return desc_configuration;
-}
-
-//--------------------------------------------------------------------+
-// Strings
-//--------------------------------------------------------------------+
-enum
-{
+// String Descriptor Index
+enum {
   STRID_LANGID = 0,
   STRID_MANUFACTURER,
   STRID_PRODUCT,
   STRID_SERIAL,
 };
 
-char const* string_desc_arr[] =
+// array of pointer to string descriptors
+static char const *string_desc_arr[] =
 {
-  (const char[]){0x09,0x04},
-  "PaniRCorp",
-  "MicNode",
-  "0001"
+  (const char[]) { 0x09, 0x04 },  // 0: is supported language is English (0x0409)
+  "TinyUSB",                      // 1: Manufacturer
+  "TinyUSB Speaker",              // 2: Product
+  NULL,                           // 3: Serials will use unique ID if possible
+  "UAC2 Speaker",                 // 4: Audio Interface
+  "UAC1 Speaker",                 // 5: UAC1 Audio Interface
 };
 
-static uint16_t _desc_str[32];
+static uint16_t _desc_str[32 + 1];
 
-uint16_t const * tud_descriptor_string_cb(uint8_t index, uint16_t langid)
-{
+// Invoked when received GET STRING DESCRIPTOR request
+// Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
+uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
   (void) langid;
-  uint8_t chr_count;
+  size_t chr_count;
 
-  if (index == 0)
-  {
-    memcpy(&_desc_str[1], string_desc_arr[0], 2);
-    chr_count = 1;
-  }
-  else
-  {
-    const char* str = string_desc_arr[index];
-    chr_count = strlen(str);
-    for(uint8_t i=0;i<chr_count;i++)
-      _desc_str[1+i] = str[i];
+  switch ( index ) {
+    case STRID_LANGID:
+      memcpy(&_desc_str[1], string_desc_arr[0], 2);
+      chr_count = 1;
+      break;
+
+    case STRID_SERIAL:
+      chr_count = board_usb_get_serial(_desc_str + 1, 32);
+      break;
+
+    default:
+      // Note: the 0xEE index string is a Microsoft OS 1.0 Descriptors.
+      // https://docs.microsoft.com/en-us/windows-hardware/drivers/usbcon/microsoft-defined-usb-descriptors
+
+      if ( !(index < sizeof(string_desc_arr) / sizeof(string_desc_arr[0])) ) return NULL;
+
+      const char *str = string_desc_arr[index];
+
+      // Cap at max char
+      chr_count = strlen(str);
+      size_t const max_count = sizeof(_desc_str) / sizeof(_desc_str[0]) - 1; // -1 for string type
+      if ( chr_count > max_count ) chr_count = max_count;
+
+      // Convert ASCII string into UTF-16
+      for ( size_t i = 0; i < chr_count; i++ ) {
+        _desc_str[1 + i] = str[i];
+      }
+      break;
   }
 
-  _desc_str[0] = (TUSB_DESC_STRING << 8 ) | (2*chr_count + 2);
+  // first byte is length (including header), second byte is string type
+  _desc_str[0] = (uint16_t) ((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
+
   return _desc_str;
 }

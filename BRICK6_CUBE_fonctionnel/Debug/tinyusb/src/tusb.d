@@ -9,11 +9,9 @@ tinyusb/src/tusb.o: ../tinyusb/src/tusb.c ../tinyusb/src/tusb_option.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/common/tusb_fifo.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/osal/osal.h \
  ../tinyusb/src/common/tusb_fifo.h ../tinyusb/src/device/usbd.h \
+ ../tinyusb/src/class/hid/hid_device.h ../tinyusb/src/class/hid/hid.h \
  ../tinyusb/src/class/audio/audio_device.h \
- ../tinyusb/src/class/audio/audio.h \
- ../tinyusb/src/class/midi/midi_device.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/class/audio/audio.h \
- ../tinyusb/src/class/midi/midi.h ../tinyusb/src/common/tusb_private.h \
+ ../tinyusb/src/class/audio/audio.h ../tinyusb/src/common/tusb_private.h \
  ../tinyusb/src/device/usbd_pvt.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/common/tusb_private.h
 ../tinyusb/src/tusb_option.h:
@@ -33,11 +31,10 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/s
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/osal/osal.h:
 ../tinyusb/src/common/tusb_fifo.h:
 ../tinyusb/src/device/usbd.h:
+../tinyusb/src/class/hid/hid_device.h:
+../tinyusb/src/class/hid/hid.h:
 ../tinyusb/src/class/audio/audio_device.h:
 ../tinyusb/src/class/audio/audio.h:
-../tinyusb/src/class/midi/midi_device.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/class/audio/audio.h:
-../tinyusb/src/class/midi/midi.h:
 ../tinyusb/src/common/tusb_private.h:
 ../tinyusb/src/device/usbd_pvt.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/tinyusb/src/common/tusb_private.h:

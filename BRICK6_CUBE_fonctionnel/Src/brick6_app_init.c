@@ -57,7 +57,6 @@ void brick6_app_init(void)
   diagnostics_sdram_alloc_test();
 
   diagnostics_on_sd_stream_init(sd_stream_init(&hsd1));
-  tusb_init();
   tinyusb_app_init();
   if (BRICK6_ENABLE_USB_HOST != 0)
   {

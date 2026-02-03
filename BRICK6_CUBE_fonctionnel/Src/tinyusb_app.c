@@ -1,67 +1,41 @@
 /**
  * @file tinyusb_app.c
- * @brief Intégration TinyUSB audio/MIDI device (UAC1) et tasklets associés.
- *
- * Gère les callbacks USB audio, le buffer RX, et l’envoi d’un flux TX 1 ms
- * sans modifier les descripteurs USB ni la cadence USB.
- *
- * Rôle dans le système:
- * - Backend USB audio device (RX/TX) piloté par TinyUSB.
- *
- * Contraintes temps réel:
- * - Critique audio: non (USB en tasklet).
- * - IRQ: oui (callbacks USB).
- * - Tasklet: oui (tinyusb_app_task).
- * - Borné: oui (trames 1 ms).
- *
- * Architecture:
- * - Appelé par: main loop (tinyusb_app_task), TinyUSB callbacks.
- * - Appelle: audio_io_usb, TinyUSB API.
- * - Consommé par: host USB audio.
- *
- * Règles:
- * - Pas de malloc.
- * - Pas de blocage en IRQ.
- *
- * @note L’API publique est déclarée dans tinyusb_app.h.
+ * @brief TinyUSB UAC1 Speaker backend (RX only) + FIFO feedback + HID debug
  */
-
+#include <stdio.h>
 #include <string.h>
 #include "audio_io_usb.h"
 #include "tusb.h"
 #include "tinyusb_app.h"
 #include "usb_descriptors.h"
 #include "stm32h7xx_hal.h"
+#include "common_types.h"
+#include "diagnostics_tasklet.h"
 
 //--------------------------------------------------------------------+
-// AUDIO STATE
+// AUDIO STATE (UAC1 RX)
 //--------------------------------------------------------------------+
 
-bool mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
-uint16_t volume[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
-uint32_t sampFreq;
-uint8_t clkValid;
+uint8_t  mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1];
+int16_t  volume[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1];
+uint32_t sampFreq = CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE_FS;
 
-audio20_control_range_2_n_t(1) volumeRng[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
-audio20_control_range_4_n_t(1) sampleFreqRng;
+//--------------------------------------------------------------------+
+// RX DIAGNOSTICS
+//--------------------------------------------------------------------+
 
-// 1 ms audio frame buffer
-uint16_t test_buffer_audio[
-  CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000 *
-  CFG_TUD_AUDIO_FUNC_1_FORMAT_1_N_BYTES_PER_SAMPLE_TX *
-  CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX / 2
-];
+static volatile uint32_t usb_rx_done_count     = 0;
+static volatile uint32_t usb_rx_bytes_total   = 0;
+static volatile uint32_t usb_rx_samples_total = 0;
+static volatile uint32_t usb_rx_zero_reads    = 0;
 
-static int32_t usb_tx_buffer[
-  CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000 *
-  CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX
-];
+//--------------------------------------------------------------------+
+// FIFO DEBUG / FEEDBACK
+//--------------------------------------------------------------------+
 
-static uint16_t startVal = 0;
-static volatile uint32_t usb_rx_done_count = 0U;
-static volatile uint32_t usb_rx_bytes_total = 0U;
-static volatile uint32_t usb_rx_samples_total = 0U;
-static volatile uint32_t usb_rx_zero_reads = 0U;
+static volatile uint16_t fifo_count     = 0;
+static volatile uint32_t fifo_count_avg = 0;
+static uint8_t current_alt_settings     = 0;
 
 //--------------------------------------------------------------------+
 // INIT / TASK
@@ -69,56 +43,24 @@ static volatile uint32_t usb_rx_zero_reads = 0U;
 
 void tinyusb_app_init(void)
 {
-  sampFreq = CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE;
-  clkValid = 1;
-
-  sampleFreqRng.wNumSubRanges = 1;
-  sampleFreqRng.subrange[0].bMin = sampFreq;
-  sampleFreqRng.subrange[0].bMax = sampFreq;
-  sampleFreqRng.subrange[0].bRes = 0;
-
-  audio_io_usb_init();
-}
-
-static void audio_task(void)
-{
-  static uint32_t last_ms = 0;
-  uint32_t now = HAL_GetTick();
-  if (now == last_ms) return;
-  last_ms = now;
-
-  uint32_t frames = CFG_TUD_AUDIO_FUNC_1_MAX_SAMPLE_RATE / 1000;
-  uint32_t samples = frames * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX;
-  uint32_t usb_samples = audio_io_usb_prepare_tx(usb_tx_buffer, samples);
-
-  if (usb_samples == samples)
-  {
-    for (uint32_t i = 0; i < samples; ++i)
-    {
-      test_buffer_audio[i] = (uint16_t)usb_tx_buffer[i];
-    }
-  }
-  else
-  {
-    for (uint32_t i = 0; i < frames; i++)
-    {
-      uint16_t val = startVal++;
-      test_buffer_audio[2 * i] = val;
-      test_buffer_audio[2 * i + 1] = val;
-    }
-  }
-
-  tud_audio_write((uint8_t*)test_buffer_audio,
-                  sizeof(test_buffer_audio));
+	  diagnostics_log("tinyusb_app_init() called\r\n");
+	  audio_io_usb_init();
 }
 
 void tinyusb_app_task(void)
 {
-  audio_task();
+  // ARMEMENT OBLIGATOIRE DE L'EP OUT AUDIO
+  uint8_t tmp[64];
+
+  while (tud_audio_available())
+  {
+    tud_audio_read(tmp, sizeof(tmp));
+  }
 }
 
+
 //--------------------------------------------------------------------+
-// USB AUDIO CALLBACKS (UAC1 SAFE)
+// UAC1 FEATURE UNIT CALLBACKS
 //--------------------------------------------------------------------+
 
 bool tud_audio_set_req_entity_cb(uint8_t rhport,
@@ -127,89 +69,78 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport,
 {
   (void) rhport;
 
-  uint8_t channelNum = TU_U16_LOW(p_request->wValue);
+  uint8_t channelNum = TU_U16_LOW (p_request->wValue);
   uint8_t ctrlSel    = TU_U16_HIGH(p_request->wValue);
   uint8_t entityID   = TU_U16_HIGH(p_request->wIndex);
 
-  TU_VERIFY(p_request->bRequest == AUDIO20_CS_REQ_CUR);
+  if (entityID != UAC1_ENTITY_FEATURE_UNIT)
+    return false;
 
-  if (entityID == 2 || entityID == 5) // Feature Units
+  switch (ctrlSel)
   {
-    switch (ctrlSel)
-    {
-      case AUDIO20_FU_CTRL_MUTE:
-        mute[channelNum] = ((audio20_control_cur_1_t*)pBuff)->bCur;
-        return true;
+    case AUDIO10_FU_CTRL_MUTE:
+      mute[channelNum] = pBuff[0];
+      return true;
 
-      case AUDIO20_FU_CTRL_VOLUME:
-        volume[channelNum] =
-          (uint16_t)((audio20_control_cur_2_t*)pBuff)->bCur;
-        return true;
+    case AUDIO10_FU_CTRL_VOLUME:
+      volume[channelNum] =
+        (int16_t)(tu_unaligned_read16(pBuff) / 256);
+      return true;
 
-      default:
-        return false;
-    }
+    default:
+      return false;
   }
-  return false;
 }
 
 bool tud_audio_get_req_entity_cb(uint8_t rhport,
                                  tusb_control_request_t const *p_request)
 {
-  (void) rhport;
-
-  uint8_t channelNum = TU_U16_LOW(p_request->wValue);
+  uint8_t channelNum = TU_U16_LOW (p_request->wValue);
   uint8_t ctrlSel    = TU_U16_HIGH(p_request->wValue);
   uint8_t entityID   = TU_U16_HIGH(p_request->wIndex);
 
-  if (entityID == 2 || entityID == 5) // Feature Units
+  if (entityID != UAC1_ENTITY_FEATURE_UNIT)
+    return false;
+
+  switch (ctrlSel)
   {
-    switch (ctrlSel)
+    case AUDIO10_FU_CTRL_MUTE:
+      return tud_audio_buffer_and_schedule_control_xfer(
+        rhport, p_request, &mute[channelNum], 1);
+
+    case AUDIO10_FU_CTRL_VOLUME:
     {
-      case AUDIO20_FU_CTRL_MUTE:
-        return tud_audio_buffer_and_schedule_control_xfer(
-          rhport, p_request, &mute[channelNum], 1);
-
-      case AUDIO20_FU_CTRL_VOLUME:
-        return tud_audio_buffer_and_schedule_control_xfer(
-          rhport, p_request, &volume[channelNum], sizeof(uint16_t));
-
-      default:
-        return false;
+      int16_t vol = volume[channelNum] * 256;
+      return tud_audio_buffer_and_schedule_control_xfer(
+        rhport, p_request, &vol, sizeof(vol));
     }
+
+    default:
+      return false;
   }
-
-  if (entityID == 4) // Clock Source
-  {
-    switch (ctrlSel)
-    {
-      case AUDIO20_CS_CTRL_SAM_FREQ:
-        return tud_audio_buffer_and_schedule_control_xfer(
-          rhport, p_request, &sampFreq, sizeof(sampFreq));
-
-      case AUDIO20_CS_CTRL_CLK_VALID:
-        return tud_audio_buffer_and_schedule_control_xfer(
-          rhport, p_request, &clkValid, sizeof(clkValid));
-
-      default:
-        return false;
-    }
-  }
-
-  return false;
-}
-
-bool tud_audio_set_itf_close_ep_cb(uint8_t rhport,
-                                  tusb_control_request_t const *p_request)
-{
-  (void) rhport;
-  (void) p_request;
-  startVal = 0;
-  return true;
 }
 
 //--------------------------------------------------------------------+
-// USB AUDIO RX (SPEAKER OUT)
+// INTERFACE CALLBACK
+//--------------------------------------------------------------------+
+
+bool tud_audio_set_itf_cb(uint8_t rhport,
+                          tusb_control_request_t const *p_request)
+{
+  (void) rhport;
+
+  uint8_t itf = tu_u16_low(tu_le16toh(p_request->wIndex));
+  uint8_t alt = tu_u16_low(tu_le16toh(p_request->wValue));
+
+  diagnostics_logf("SET_INTERFACE itf=%u alt=%u\r\n", itf, alt);
+  current_alt_settings = alt; // sans condition
+
+  return true;
+}
+
+
+//--------------------------------------------------------------------+
+// USB AUDIO RX (REAL DATA PATH)
 //--------------------------------------------------------------------+
 
 bool tud_audio_rx_done_isr(uint8_t rhport,
@@ -223,8 +154,11 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   (void) ep_out;
   (void) cur_alt_setting;
 
-  static int16_t rx_buffer[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
-  static int32_t rx_converted[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
+  static int16_t rx_buffer[
+    CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
+  static int32_t rx_converted[
+    CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
+
   uint16_t remaining = n_bytes_received;
 
   usb_rx_done_count++;
@@ -233,44 +167,106 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   while (remaining)
   {
     uint16_t chunk = tu_min16(remaining, sizeof(rx_buffer));
-    uint16_t read_count = tud_audio_read((uint8_t *)rx_buffer, chunk);
-    if (read_count == 0)
+    uint16_t read  = tud_audio_read((uint8_t*)rx_buffer, chunk);
+
+    if (read == 0)
     {
       usb_rx_zero_reads++;
       break;
     }
-    uint32_t sample_count = (uint32_t)read_count / sizeof(int16_t);
-    if (sample_count > 0U)
+
+    uint32_t samples = read / sizeof(int16_t);
+    usb_rx_samples_total += samples;
+
+    for (uint32_t i = 0; i < samples; i++)
     {
-      usb_rx_samples_total += sample_count;
-      for (uint32_t idx = 0U; idx < sample_count; ++idx)
-      {
-        rx_converted[idx] = ((int32_t)rx_buffer[idx]) << 8;
-      }
-      audio_io_usb_on_rx_samples(rx_converted, sample_count);
+      rx_converted[i] = ((int32_t)rx_buffer[i]) << 8;
     }
-    remaining = (uint16_t)(remaining - read_count);
+
+    audio_io_usb_on_rx_samples(rx_converted, samples);
+    remaining -= read;
   }
+
+  fifo_count = tud_audio_available();
+  fifo_count_avg =
+    (uint32_t)(((uint64_t)fifo_count_avg * 63 +
+               ((uint32_t)fifo_count << 16)) >> 6);
 
   return true;
 }
 
-uint32_t tinyusb_app_get_rx_done_count(void)
+//--------------------------------------------------------------------+
+// FIFO FEEDBACK (AUTO)
+//--------------------------------------------------------------------+
+
+void tud_audio_feedback_params_cb(uint8_t func_id,
+                                  uint8_t alt_itf,
+                                  audio_feedback_params_t *feedback_param)
 {
-  return usb_rx_done_count;
+  (void) func_id;
+  (void) alt_itf;
+
+  feedback_param->method      = AUDIO_FEEDBACK_METHOD_FIFO_COUNT;
+  feedback_param->sample_freq = sampFreq;
 }
 
-uint32_t tinyusb_app_get_rx_bytes_total(void)
+//--------------------------------------------------------------------+
+// HID AUDIO DEBUG
+//--------------------------------------------------------------------+
+
+void tinyusb_app_audio_debug_task(void)
 {
-  return usb_rx_bytes_total;
+  audio_debug_info_t info;
+
+  info.sample_rate    = sampFreq;
+  info.alt_settings   = current_alt_settings;
+  info.fifo_size      = CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ;
+  info.fifo_count     = fifo_count;
+  info.fifo_count_avg = (uint16_t)(fifo_count_avg >> 16);
+
+  for (int i = 0; i < CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1; i++)
+  {
+    info.mute[i]   = mute[i];
+    info.volume[i] = volume[i];
+  }
+
+  if (tud_hid_ready())
+    tud_hid_report(0, &info, sizeof(info));
 }
 
-uint32_t tinyusb_app_get_rx_samples_total(void)
+uint16_t tud_hid_get_report_cb(uint8_t itf,
+                               uint8_t report_id,
+                               hid_report_type_t report_type,
+                               uint8_t *buffer,
+                               uint16_t reqlen)
 {
-  return usb_rx_samples_total;
+  (void) itf;
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) reqlen;
+  return 0;
 }
 
-uint32_t tinyusb_app_get_rx_zero_reads(void)
+void tud_hid_set_report_cb(uint8_t itf,
+                           uint8_t report_id,
+                           hid_report_type_t report_type,
+                           uint8_t const *buffer,
+                           uint16_t bufsize)
 {
-  return usb_rx_zero_reads;
+  (void) itf;
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) bufsize;
 }
+
+
+//--------------------------------------------------------------------+
+// DIAGNOSTICS GETTERS
+//--------------------------------------------------------------------+
+
+uint32_t tinyusb_app_get_rx_done_count(void)     { return usb_rx_done_count; }
+uint32_t tinyusb_app_get_rx_bytes_total(void)   { return usb_rx_bytes_total; }
+uint32_t tinyusb_app_get_rx_samples_total(void) { return usb_rx_samples_total; }
+uint32_t tinyusb_app_get_rx_zero_reads(void)    { return usb_rx_zero_reads; }

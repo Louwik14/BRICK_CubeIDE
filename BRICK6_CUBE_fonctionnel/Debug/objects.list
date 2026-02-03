@@ -50,6 +50,7 @@
 "./Src/audio_out.o"
 "./Src/audio_test_pcm4104.o"
 "./Src/audio_test_pcm5100a.o"
+"./Src/board_api.o"
 "./Src/brick6_app_init.o"
 "./Src/brick6_refactor.o"
 "./Src/cs42448.o"
