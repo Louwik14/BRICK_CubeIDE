@@ -13,15 +13,18 @@
 
 #ifdef AUDIO_TEST_PCM4104
 
-#include "audio_core.h"
+#include "audio_io_usb.h"
 #include "sai.h"
+#include "tusb_config.h"
 
 #include <string.h>
+#include <stdbool.h>
 
 static int32_t pcm4104_tx_buffer[AUDIO_TEST_PCM4104_BUFFER_SAMPLES];
 static volatile uint32_t pcm4104_tx_half_count = 0U;
 static volatile uint32_t pcm4104_tx_full_count = 0U;
 static SAI_HandleTypeDef *pcm4104_sai = NULL;
+static bool pcm4104_running = false;
 #if defined(PCM4104_LOCAL_TEST_SINE)
 static uint32_t pcm4104_phase = 0U;
 static uint32_t pcm4104_phase_inc = 0U;
@@ -56,7 +59,6 @@ static const int16_t pcm4104_sine_table[256] = {
 #else
 static volatile uint8_t pcm4104_half_ready = 0U;
 static volatile uint8_t pcm4104_full_ready = 0U;
-static int32_t pcm4104_core_block[AUDIO_CORE_FRAMES_PER_BLOCK * AUDIO_CORE_CHANNELS];
 #endif
 
 static void pcm4104_fill_half(uint32_t frame_offset)
@@ -82,16 +84,32 @@ static void pcm4104_fill_half(uint32_t frame_offset)
     pcm4104_phase += pcm4104_phase_inc;
   }
 #else
-  audio_core_process_block(pcm4104_core_block, AUDIO_TEST_PCM4104_FRAMES_PER_HALF);
+  const uint32_t frames = AUDIO_TEST_PCM4104_FRAMES_PER_HALF;
+  const uint32_t channels = CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX;
+  const uint32_t samples_needed = frames * channels;
+  int32_t usb_samples[AUDIO_TEST_PCM4104_FRAMES_PER_HALF * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX];
 
-  for (uint32_t frame = 0U; frame < AUDIO_TEST_PCM4104_FRAMES_PER_HALF; ++frame)
+  uint32_t samples_read = audio_io_usb_read_rx_samples(usb_samples, samples_needed);
+  if (samples_read < samples_needed)
   {
-    uint32_t core_index = frame * AUDIO_CORE_CHANNELS;
+    memset(&usb_samples[samples_read], 0, (samples_needed - samples_read) * sizeof(int32_t));
+  }
+
+  for (uint32_t frame = 0U; frame < frames; ++frame)
+  {
+    uint32_t usb_index = frame * channels;
     uint32_t tx_index = (frame_offset + frame) * AUDIO_TEST_PCM4104_TDM_SLOTS;
 
     for (uint32_t slot = 0U; slot < AUDIO_TEST_PCM4104_DAC_SLOTS; ++slot)
     {
-      pcm4104_tx_buffer[tx_index + slot] = pcm4104_core_block[core_index + slot];
+      if (slot < channels)
+      {
+        pcm4104_tx_buffer[tx_index + slot] = usb_samples[usb_index + slot];
+      }
+      else
+      {
+        pcm4104_tx_buffer[tx_index + slot] = 0;
+      }
     }
 
     for (uint32_t slot = AUDIO_TEST_PCM4104_DAC_SLOTS; slot < AUDIO_TEST_PCM4104_TDM_SLOTS;
@@ -108,6 +126,7 @@ void audio_test_pcm4104_init(SAI_HandleTypeDef *hsai)
   pcm4104_sai = hsai;
   pcm4104_tx_half_count = 0U;
   pcm4104_tx_full_count = 0U;
+  pcm4104_running = false;
   memset(pcm4104_tx_buffer, 0, sizeof(pcm4104_tx_buffer));
 #if defined(PCM4104_LOCAL_TEST_SINE)
   pcm4104_phase = 0U;
@@ -130,9 +149,36 @@ void audio_test_pcm4104_start(void)
     return;
   }
 
-  (void)HAL_SAI_Transmit_DMA(pcm4104_sai,
-                             (uint8_t *)pcm4104_tx_buffer,
-                             AUDIO_TEST_PCM4104_BUFFER_SAMPLES);
+  if (pcm4104_running)
+  {
+    return;
+  }
+
+  pcm4104_fill_half(0U);
+  pcm4104_fill_half(AUDIO_TEST_PCM4104_FRAMES_PER_HALF);
+
+  if (HAL_SAI_Transmit_DMA(pcm4104_sai,
+                           (uint8_t *)pcm4104_tx_buffer,
+                           AUDIO_TEST_PCM4104_BUFFER_SAMPLES) == HAL_OK)
+  {
+    pcm4104_running = true;
+  }
+}
+
+void audio_test_pcm4104_stop(void)
+{
+  if (pcm4104_sai == NULL)
+  {
+    return;
+  }
+
+  if (!pcm4104_running)
+  {
+    return;
+  }
+
+  (void)HAL_SAI_DMAStop(pcm4104_sai);
+  pcm4104_running = false;
 }
 
 void audio_test_pcm4104_on_tx_half(SAI_HandleTypeDef *hsai)
