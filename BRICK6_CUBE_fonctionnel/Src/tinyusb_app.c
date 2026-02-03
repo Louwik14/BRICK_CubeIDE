@@ -50,13 +50,58 @@ void tinyusb_app_init(void)
 
 void tinyusb_app_task(void)
 {
-  // ARMEMENT OBLIGATOIRE DE L'EP OUT AUDIO
-  uint8_t tmp[64];
-
-  while (tud_audio_available())
+  static uint32_t start_ms = 0U;
+  uint32_t curr_ms = HAL_GetTick();
+  if (start_ms == curr_ms)
   {
-    tud_audio_read(tmp, sizeof(tmp));
+    return;
   }
+  start_ms = curr_ms;
+
+  uint16_t length = (uint16_t)(sampFreq / 1000U
+                               * CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX
+                               * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX);
+
+  if ((sampFreq == 44100U) && ((curr_ms % 10U) == 0U))
+  {
+    length += (uint16_t)(CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX
+                         * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX);
+  }
+  else if ((sampFreq == 88200U) && ((curr_ms % 5U) == 0U))
+  {
+    length += (uint16_t)(CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX
+                         * CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX);
+  }
+
+  static int16_t rx_buffer[
+    CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
+  static int32_t rx_converted[
+    CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
+
+  if (length > sizeof(rx_buffer))
+  {
+    length = (uint16_t)sizeof(rx_buffer);
+  }
+
+  uint16_t read = tud_audio_read(rx_buffer, length);
+  if (read == 0U)
+  {
+    usb_rx_zero_reads++;
+    return;
+  }
+
+  usb_rx_done_count++;
+  usb_rx_bytes_total += read;
+
+  uint32_t samples = read / sizeof(int16_t);
+  usb_rx_samples_total += samples;
+
+  for (uint32_t i = 0U; i < samples; i++)
+  {
+    rx_converted[i] = ((int32_t)rx_buffer[i]) << 8;
+  }
+
+  audio_io_usb_on_rx_samples(rx_converted, samples);
 }
 
 
@@ -174,38 +219,7 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
   (void) ep_out;
   (void) cur_alt_setting;
 
-  static int16_t rx_buffer[
-    CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
-  static int32_t rx_converted[
-    CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX / sizeof(int16_t)];
-
-  uint16_t remaining = n_bytes_received;
-
-  usb_rx_done_count++;
-  usb_rx_bytes_total += n_bytes_received;
-
-  while (remaining)
-  {
-    uint16_t chunk = tu_min16(remaining, sizeof(rx_buffer));
-    uint16_t read  = tud_audio_read((uint8_t*)rx_buffer, chunk);
-
-    if (read == 0)
-    {
-      usb_rx_zero_reads++;
-      break;
-    }
-
-    uint32_t samples = read / sizeof(int16_t);
-    usb_rx_samples_total += samples;
-
-    for (uint32_t i = 0; i < samples; i++)
-    {
-      rx_converted[i] = ((int32_t)rx_buffer[i]) << 8;
-    }
-
-    audio_io_usb_on_rx_samples(rx_converted, samples);
-    remaining -= read;
-  }
+  (void) n_bytes_received;
 
   fifo_count = tud_audio_available();
   fifo_count_avg =

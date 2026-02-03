@@ -131,6 +131,7 @@ int main(void)
 	  tud_task();
     /* USER CODE BEGIN 3 */
     audio_tasklet_poll();        // priorité absolue
+    tinyusb_app_task();
     AudioIn_TaskletPoll();
 
     engine_tasklet_poll();
