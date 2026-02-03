@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "audio_io_usb.h"
+#include "audio_test_pcm4104.h"
 #include "tusb.h"
 #include "tinyusb_app.h"
 #include "usb_descriptors.h"
@@ -134,6 +135,15 @@ bool tud_audio_set_itf_cb(uint8_t rhport,
 
   diagnostics_logf("SET_INTERFACE itf=%u alt=%u\r\n", itf, alt);
   current_alt_settings = alt; // sans condition
+
+  if (alt == 0U)
+  {
+    audio_test_pcm4104_stop();
+  }
+  else
+  {
+    audio_test_pcm4104_start();
+  }
 
   return true;
 }

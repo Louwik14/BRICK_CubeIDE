@@ -71,13 +71,7 @@ void brick6_app_init(void)
 
   engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
 
-  AudioOut_Start();
-#ifdef AUDIO_TEST_PCM4104
-  audio_test_pcm4104_start();
-#endif
-  (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
-                            (uint8_t *)AudioIn_GetBuffer(),
-                            AudioIn_GetBufferSamples());
+  /* Audio DMA start is now driven by USB alt-setting (see tud_audio_set_itf_cb). */
 
   HAL_Delay(200);
 
