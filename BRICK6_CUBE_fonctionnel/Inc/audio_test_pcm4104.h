@@ -29,6 +29,7 @@ enum
 #ifdef AUDIO_TEST_PCM4104
 void audio_test_pcm4104_init(SAI_HandleTypeDef *hsai);
 void audio_test_pcm4104_start(void);
+void audio_test_pcm4104_stop(void);
 void audio_test_pcm4104_on_tx_half(SAI_HandleTypeDef *hsai);
 void audio_test_pcm4104_on_tx_full(SAI_HandleTypeDef *hsai);
 void audio_test_pcm4104_tasklet_poll(void);
@@ -41,6 +42,10 @@ static inline void audio_test_pcm4104_init(SAI_HandleTypeDef *hsai)
 }
 
 static inline void audio_test_pcm4104_start(void)
+{
+}
+
+static inline void audio_test_pcm4104_stop(void)
 {
 }
 
