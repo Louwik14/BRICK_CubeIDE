@@ -130,36 +130,33 @@ bool tud_audio_set_itf_cb(uint8_t rhport,
 {
   (void) rhport;
 
-  uint8_t itf = tu_u16_low(tu_le16toh(p_request->wIndex));
-  uint8_t alt = tu_u16_low(tu_le16toh(p_request->wValue));
+  uint8_t const itf = tu_u16_low(tu_le16toh(p_request->wIndex));
+  uint8_t const alt = tu_u16_low(tu_le16toh(p_request->wValue));
 
+  // Log dynamique comme l’exemple
   diagnostics_logf("SET_INTERFACE itf=%u alt=%u\r\n", itf, alt);
 
   if (itf == ITF_NUM_AUDIO_STREAMING)
   {
+#if CFG_AUDIO_DEBUG
     current_alt_settings = alt;
+#endif
 
-    if (alt == 0U)
+    if (alt == 1U)
     {
-      audio_test_pcm4104_stop();
+      diagnostics_log("AUDIO STREAM START\r\n");
+      audio_test_pcm4104_start();
     }
     else
     {
-      audio_test_pcm4104_start();
+      diagnostics_log("AUDIO STREAM STOP\r\n");
+      audio_test_pcm4104_stop();
     }
-  }
-
-  if (alt == 0U)
-  {
-    audio_test_pcm4104_stop();
-  }
-  else
-  {
-    audio_test_pcm4104_start();
   }
 
   return true;
 }
+
 
 
 //--------------------------------------------------------------------+

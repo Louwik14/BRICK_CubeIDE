@@ -1,6 +1,6 @@
 Src/audio_test_pcm4104.o: ../Src/audio_test_pcm4104.c \
- ../Inc/audio_test_pcm4104.h ../Inc/brick6_refactor.h ../Inc/audio_core.h \
- ../Inc/sai.h ../Inc/main.h \
+ ../Inc/audio_test_pcm4104.h ../Inc/brick6_refactor.h \
+ ../Inc/audio_io_usb.h ../Inc/audio_buffer.h ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -42,10 +42,12 @@ Src/audio_test_pcm4104.o: ../Src/audio_test_pcm4104.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
+ ../Inc/tusb_config.h ../Inc/usb_descriptors.h
 ../Inc/audio_test_pcm4104.h:
 ../Inc/brick6_refactor.h:
-../Inc/audio_core.h:
+../Inc/audio_io_usb.h:
+../Inc/audio_buffer.h:
 ../Inc/sai.h:
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
@@ -90,3 +92,5 @@ Src/audio_test_pcm4104.o: ../Src/audio_test_pcm4104.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
+../Inc/tusb_config.h:
+../Inc/usb_descriptors.h:

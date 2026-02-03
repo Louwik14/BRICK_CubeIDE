@@ -1,8 +1,9 @@
-../Src/audio_test_pcm4104.c:62:13:pcm4104_fill_half	40	static
-../Src/audio_test_pcm4104.c:106:6:audio_test_pcm4104_init	16	static
-../Src/audio_test_pcm4104.c:126:6:audio_test_pcm4104_start	8	static
-../Src/audio_test_pcm4104.c:138:6:audio_test_pcm4104_on_tx_half	16	static
-../Src/audio_test_pcm4104.c:151:6:audio_test_pcm4104_on_tx_full	16	static
-../Src/audio_test_pcm4104.c:164:6:audio_test_pcm4104_tasklet_poll	8	static
-../Src/audio_test_pcm4104.c:183:10:AudioTest_PCM4104_GetTxHalfCount	4	static
-../Src/audio_test_pcm4104.c:188:10:AudioTest_PCM4104_GetTxFullCount	4	static
+../Src/audio_test_pcm4104.c:64:13:pcm4104_fill_half	2104	static
+../Src/audio_test_pcm4104.c:124:6:audio_test_pcm4104_init	16	static
+../Src/audio_test_pcm4104.c:145:6:audio_test_pcm4104_start	8	static
+../Src/audio_test_pcm4104.c:168:6:audio_test_pcm4104_stop	8	static
+../Src/audio_test_pcm4104.c:184:6:audio_test_pcm4104_on_tx_half	16	static
+../Src/audio_test_pcm4104.c:197:6:audio_test_pcm4104_on_tx_full	16	static
+../Src/audio_test_pcm4104.c:210:6:audio_test_pcm4104_tasklet_poll	8	static
+../Src/audio_test_pcm4104.c:229:10:AudioTest_PCM4104_GetTxHalfCount	4	static
+../Src/audio_test_pcm4104.c:234:10:AudioTest_PCM4104_GetTxFullCount	4	static

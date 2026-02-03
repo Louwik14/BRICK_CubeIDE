@@ -9,4 +9,6 @@ void diagnostics_on_sd_stream_init(HAL_StatusTypeDef status);
 void diagnostics_log(const char *message);
 void diagnostics_logf(const char *fmt, ...);
 
+
+
 #endif /* DIAGNOSTICS_TASKLET_H */

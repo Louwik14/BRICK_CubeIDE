@@ -67,6 +67,8 @@ typedef enum
 #define SD_TEST_KNOWN_BLOCKS           SD_STREAM_BLOCKS_PER_BUFFER
 #define SD_TEST_KNOWN_CRC32            0x00000000U
 
+static uint8_t diagnostics_logs_enabled = 0U;
+
 static uint8_t sd_test_running = 0U;
 static uint8_t sd_test_done_logged = 0U;
 static sd_test_state_t sd_test_state = SD_TEST_STATE_IDLE;
@@ -77,6 +79,8 @@ static uint32_t sd_last_buf0_count = 0U;
 static uint32_t sd_last_buf1_count = 0U;
 static uint8_t sd_test_sector0_done = 0U;
 static uint8_t sd_test_known_done = 0U;
+
+
 
 static void uart_log(const char *message)
 {
@@ -282,6 +286,8 @@ void diagnostics_tasklet_poll(void)
     uint32_t rx_full = AudioIn_GetFullEvents();
 
 #if BRICK6_ENABLE_DIAGNOSTICS
+    if (diagnostics_logs_enabled)
+        {
     LOGF("REF1 audio tx_half=%lu tx_full=%lu | SAI2 tx_half=%lu tx_full=%lu "
          "rx_half=%lu rx_full=%lu sd_rx=%lu sd_tx=%lu "
          "sd_buf0=%lu sd_buf1=%lu sd_err=%lu usb_poll=%lu midi_poll=%lu "
@@ -357,7 +363,8 @@ void diagnostics_tasklet_poll(void)
          (unsigned long)AudioOut_GetDmaFullIrqCount(),
          (unsigned long)AudioOut_GetBlocksFilledCount(),
          (unsigned long)AudioOut_GetBlocksUnchangedCount());
-#endif
+        }
+  #endif
 
     if (error != 0U && error != last_error)
     {
