@@ -134,7 +134,20 @@ bool tud_audio_set_itf_cb(uint8_t rhport,
   uint8_t alt = tu_u16_low(tu_le16toh(p_request->wValue));
 
   diagnostics_logf("SET_INTERFACE itf=%u alt=%u\r\n", itf, alt);
-  current_alt_settings = alt; // sans condition
+
+  if (itf == ITF_NUM_AUDIO_STREAMING)
+  {
+    current_alt_settings = alt;
+
+    if (alt == 0U)
+    {
+      audio_test_pcm4104_stop();
+    }
+    else
+    {
+      audio_test_pcm4104_start();
+    }
+  }
 
   if (alt == 0U)
   {
