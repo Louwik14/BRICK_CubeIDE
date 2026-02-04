@@ -45611,7 +45611,7 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
  8011ecc:	0801e2bc 	.word	0x0801e2bc
  8011ed0:	24004988 	.word	0x24004988
  8011ed4:	24008994 	.word	0x24008994
- 8011ed8:	2400899c 	.word	0x2400899c
+ 8011ed8:	24000006 	.word	0x24000006
 
 08011edc <audio_out_copy_ring_block>:
 
@@ -45783,8 +45783,8 @@ void AudioOut_Init(SAI_HandleTypeDef *hsai)
  8011fd4:	24008994 	.word	0x24008994
  8011fd8:	24008988 	.word	0x24008988
  8011fdc:	2400898c 	.word	0x2400898c
- 8011fe0:	2400899d 	.word	0x2400899d
- 8011fe4:	2400899e 	.word	0x2400899e
+ 8011fe0:	2400899c 	.word	0x2400899c
+ 8011fe4:	2400899d 	.word	0x2400899d
  8011fe8:	240089d8 	.word	0x240089d8
 
 08011fec <AudioOut_Start>:
@@ -45840,7 +45840,7 @@ void AudioOut_ProcessHalf(void)
  8012030:	f85d 7b04 	ldr.w	r7, [sp], #4
  8012034:	4770      	bx	lr
  8012036:	bf00      	nop
- 8012038:	2400899d 	.word	0x2400899d
+ 8012038:	2400899c 	.word	0x2400899c
  801203c:	24008988 	.word	0x24008988
 
 08012040 <AudioOut_ProcessFull>:
@@ -45865,7 +45865,7 @@ void AudioOut_ProcessFull(void)
  8012058:	f85d 7b04 	ldr.w	r7, [sp], #4
  801205c:	4770      	bx	lr
  801205e:	bf00      	nop
- 8012060:	2400899e 	.word	0x2400899e
+ 8012060:	2400899d 	.word	0x2400899d
  8012064:	2400898c 	.word	0x2400898c
 
 08012068 <HAL_SAI_TxHalfCpltCallback>:
@@ -45985,8 +45985,8 @@ void audio_tasklet_poll(void)
  801210a:	bf00      	nop
  801210c:	bd80      	pop	{r7, pc}
  801210e:	bf00      	nop
- 8012110:	2400899d 	.word	0x2400899d
- 8012114:	2400899e 	.word	0x2400899e
+ 8012110:	2400899c 	.word	0x2400899c
+ 8012114:	2400899d 	.word	0x2400899d
 
 08012118 <AudioOut_GetHalfEvents>:
 

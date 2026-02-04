@@ -17193,7 +17193,10 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
  .data.audio_test_sine_enable
                 0x24000005        0x1 ./Src/audio_out.o
                 0x24000005                audio_test_sine_enable
- *fill*         0x24000006        0x2 
+ .data.audio_test_loopback_enable
+                0x24000006        0x1 ./Src/audio_out.o
+                0x24000006                audio_test_loopback_enable
+ *fill*         0x24000007        0x1 
  .data.sdram_alloc_base
                 0x24000008        0x4 ./Src/sdram_alloc.o
  .data.sdram_alloc_size
@@ -17276,16 +17279,13 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x24008994        0x4 ./Src/audio_out.o
  .bss.audio_out_sai
                 0x24008998        0x4 ./Src/audio_out.o
- .bss.audio_test_loopback_enable
-                0x2400899c        0x1 ./Src/audio_out.o
-                0x2400899c                audio_test_loopback_enable
  .bss.audio_dma_half_ready
-                0x2400899d        0x1 ./Src/audio_out.o
-                0x2400899d                audio_dma_half_ready
+                0x2400899c        0x1 ./Src/audio_out.o
+                0x2400899c                audio_dma_half_ready
  .bss.audio_dma_full_ready
-                0x2400899e        0x1 ./Src/audio_out.o
-                0x2400899e                audio_dma_full_ready
- *fill*         0x2400899f        0x1 
+                0x2400899d        0x1 ./Src/audio_out.o
+                0x2400899d                audio_dma_full_ready
+ *fill*         0x2400899e        0x2 
  .bss.brick6_audio_tx_half_count
                 0x240089a0        0x4 ./Src/brick6_refactor.o
                 0x240089a0                brick6_audio_tx_half_count
