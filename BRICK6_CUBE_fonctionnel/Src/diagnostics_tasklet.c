@@ -31,6 +31,7 @@
 #include "audio_in.h"
 #include "audio_out.h"
 #include "brick6_refactor.h"
+#include "cs42448.h"
 #include "engine_tasklet.h"
 #include "main.h"
 #include "sai.h"
@@ -63,6 +64,11 @@ typedef enum
 #define SD_TEST_KNOWN_BLOCKS           SD_STREAM_BLOCKS_PER_BUFFER
 #define SD_TEST_KNOWN_CRC32            0x00000000U
 
+#ifndef DIAGNOSTICS_CODEC_ENABLE
+#define DIAGNOSTICS_CODEC_ENABLE 0U
+#endif
+
+static uint8_t diagnostics_codec_dump_pending = 0U;
 static uint8_t sd_test_running = 0U;
 static uint8_t sd_test_done_logged = 0U;
 static sd_test_state_t sd_test_state = SD_TEST_STATE_IDLE;
@@ -98,6 +104,11 @@ void diagnostics_logf(const char *fmt, ...)
 
 #define LOG(msg) diagnostics_log(msg)
 #define LOGF(fmt, ...) diagnostics_logf(fmt, __VA_ARGS__)
+
+void diagnostics_request_codec_dump(void)
+{
+  diagnostics_codec_dump_pending = 1U;
+}
 
 static void SDRAM_Alloc_Test_Stop(uint32_t index, uint32_t got, uint32_t expected)
 {
@@ -312,6 +323,14 @@ void diagnostics_tasklet_poll(void)
     (void)rx_full;
     last_log_tick = now;
   }
+
+#if DIAGNOSTICS_CODEC_ENABLE
+  if (diagnostics_codec_dump_pending != 0U)
+  {
+    diagnostics_codec_dump_pending = 0U;
+    CS42448_DiagnosticsDump(CS42448_I2C_ADDR);
+  }
+#endif
 
   if ((sd_test_running != 0U) && (sd_test_state == SD_TEST_STATE_MEMCHECK))
   {
