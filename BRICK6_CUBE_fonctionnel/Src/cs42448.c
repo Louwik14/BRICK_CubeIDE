@@ -27,7 +27,9 @@
  */
 
 #include "cs42448.h"
+#include "diagnostics_tasklet.h"
 #include "i2c.h"
+#include <stddef.h>
 #include <stdbool.h>
 
 /* CS42448 register map (subset used). */
@@ -72,6 +74,17 @@ static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t va
                            &value,
                            1U,
                            100U);
+}
+
+static HAL_StatusTypeDef cs42448_read_reg(uint8_t addr, uint8_t reg, uint8_t *value)
+{
+  return HAL_I2C_Mem_Read(&hi2c1,
+                          (uint16_t)(addr << 1),
+                          reg,
+                          I2C_MEMADD_SIZE_8BIT,
+                          value,
+                          1U,
+                          100U);
 }
 
 static bool cs42448_is_present(uint8_t addr)
@@ -159,4 +172,65 @@ bool CS42448_Init(uint8_t addr)
 
   HAL_Delay(10U);
   return true;
+}
+
+void CS42448_DiagnosticsDump(uint8_t addr)
+{
+  struct
+  {
+    uint8_t reg;
+    const char *label;
+  } const core_regs[] = {
+    {CS42448_REG_CHIP_ID, "CHIP_ID"},
+    {CS42448_REG_POWER_CTRL, "POWER_CTRL"},
+    {CS42448_REG_FUNCTIONAL_MODE, "FUNCTIONAL_MODE"},
+    {CS42448_REG_INTERFACE_FORMAT, "INTERFACE_FORMAT"},
+    {CS42448_REG_ADC_CTRL, "ADC_CTRL"},
+    {CS42448_REG_DAC_MUTE, "DAC_MUTE"}};
+
+  uint8_t value = 0U;
+  HAL_StatusTypeDef status = HAL_OK;
+
+  for (size_t i = 0U; i < (sizeof(core_regs) / sizeof(core_regs[0])); ++i)
+  {
+    status = cs42448_read_reg(addr, core_regs[i].reg, &value);
+    if (status == HAL_OK)
+    {
+      diagnostics_logf("[CS42448] %-16s = 0x%02X\r\n", core_regs[i].label, value);
+    }
+    else
+    {
+      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n", core_regs[i].reg);
+    }
+  }
+
+  for (uint8_t reg = CS42448_REG_DAC_VOL_BASE; reg <= CS42448_REG_DAC_VOL_LAST; ++reg)
+  {
+    status = cs42448_read_reg(addr, reg, &value);
+    if (status == HAL_OK)
+    {
+      diagnostics_logf("[CS42448] DAC_VOL[%u]       = 0x%02X\r\n",
+                       (unsigned int)(reg - CS42448_REG_DAC_VOL_BASE + 1U),
+                       value);
+    }
+    else
+    {
+      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n", reg);
+    }
+  }
+
+  for (uint8_t reg = CS42448_REG_ADC_VOL_BASE; reg <= CS42448_REG_ADC_VOL_LAST; ++reg)
+  {
+    status = cs42448_read_reg(addr, reg, &value);
+    if (status == HAL_OK)
+    {
+      diagnostics_logf("[CS42448] ADC_VOL[%u]       = 0x%02X\r\n",
+                       (unsigned int)(reg - CS42448_REG_ADC_VOL_BASE + 1U),
+                       value);
+    }
+    else
+    {
+      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n", reg);
+    }
+  }
 }

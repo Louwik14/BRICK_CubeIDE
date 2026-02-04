@@ -8,5 +8,6 @@ void diagnostics_sdram_alloc_test(void);
 void diagnostics_on_sd_stream_init(HAL_StatusTypeDef status);
 void diagnostics_log(const char *message);
 void diagnostics_logf(const char *fmt, ...);
+void diagnostics_request_codec_dump(void);
 
 #endif /* DIAGNOSTICS_TASKLET_H */
