@@ -65,6 +65,17 @@ enum
   CS42448_INTERFACE_FREEZE = 0x80
 };
 
+enum
+{
+  CS42448_DAC_MUTE_ALL = 0xFF
+};
+
+enum
+{
+  CS42448_DELAY_INIT_LRCK_MS = 50U,
+  CS42448_DELAY_UNMUTE_MS = 2U
+};
+
 static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t value)
 {
   return HAL_I2C_Mem_Write(&hi2c1,
@@ -99,14 +110,14 @@ bool CS42448_Init(uint8_t addr)
     return false;
   }
 
-  /* Hold device in power-down while configuring control registers. */
+  /* Datasheet 4.9 step 3: set PDN=1 to hold the device in power-down. */
   if (cs42448_write_reg(addr, CS42448_REG_POWER_CTRL, CS42448_POWER_PDN) != HAL_OK)
   {
     return false;
   }
   HAL_Delay(2U);
 
-  /* TDM, slave, auto-detect sample rates, 256Fs clocking. */
+  /* Datasheet 6.4: slave auto mode, MFREQ=000 for 256Fs in TDM. */
   if (cs42448_write_reg(addr,
                         CS42448_REG_FUNCTIONAL_MODE,
                         (uint8_t)(CS42448_FUNCTIONAL_SLAVE_AUTO | CS42448_FUNCTIONAL_MCLK_256FS)) != HAL_OK)
@@ -114,7 +125,7 @@ bool CS42448_Init(uint8_t addr)
     return false;
   }
 
-  /* Freeze interface-related changes, set both ADC and DAC to TDM 24-bit. */
+  /* Datasheet 6.5: FREEZE=1, ADC/DAC DIF=110 (TDM 24-bit). */
   if (cs42448_write_reg(addr,
                         CS42448_REG_INTERFACE_FORMAT,
                         (uint8_t)(CS42448_INTERFACE_TDM_24BIT | CS42448_INTERFACE_FREEZE)) != HAL_OK)
@@ -122,25 +133,25 @@ bool CS42448_Init(uint8_t addr)
     return false;
   }
 
-  /* Default ADC control: normal inputs, no de-emphasis, HPF running. */
+  /* Datasheet 6.6: default ADC control (HPF enabled, differential inputs). */
   if (cs42448_write_reg(addr, CS42448_REG_ADC_CTRL, 0x00) != HAL_OK)
   {
     return false;
   }
 
-  /* Default transition control. */
+  /* Datasheet 6.7: transition control (no soft ramp/zero-cross, AMUTE disabled). */
   if (cs42448_write_reg(addr, CS42448_REG_TRANSITION_CTRL, 0x00) != HAL_OK)
   {
     return false;
   }
 
-  /* Unmute all DAC channels. */
-  if (cs42448_write_reg(addr, CS42448_REG_DAC_MUTE, 0x00) != HAL_OK)
+  /* Datasheet 4.9 step 5 + 6.8: mute all DAC channels during init. */
+  if (cs42448_write_reg(addr, CS42448_REG_DAC_MUTE, CS42448_DAC_MUTE_ALL) != HAL_OK)
   {
     return false;
   }
 
-  /* Set DAC volumes to 0 dB. */
+  /* Datasheet 6.9: DAC volume 0x00 = 0 dB. */
   for (uint8_t reg = CS42448_REG_DAC_VOL_BASE; reg <= CS42448_REG_DAC_VOL_LAST; ++reg)
   {
     if (cs42448_write_reg(addr, reg, 0x00) != HAL_OK)
@@ -149,7 +160,7 @@ bool CS42448_Init(uint8_t addr)
     }
   }
 
-  /* Set ADC volumes to 0 dB. */
+  /* Datasheet 6.11: ADC volume 0x00 = 0 dB. */
   for (uint8_t reg = CS42448_REG_ADC_VOL_BASE; reg <= CS42448_REG_ADC_VOL_LAST; ++reg)
   {
     if (cs42448_write_reg(addr, reg, 0x00) != HAL_OK)
@@ -158,19 +169,28 @@ bool CS42448_Init(uint8_t addr)
     }
   }
 
-  /* Release FREEZE while keeping TDM mode. */
+  /* Datasheet 6.5: release FREEZE while keeping TDM mode. */
   if (cs42448_write_reg(addr, CS42448_REG_INTERFACE_FORMAT, CS42448_INTERFACE_TDM_24BIT) != HAL_OK)
   {
     return false;
   }
 
-  /* Power up all ADC/DAC blocks. */
+  /* Datasheet 4.9 step 6: clear PDN to power up all ADC/DAC blocks. */
   if (cs42448_write_reg(addr, CS42448_REG_POWER_CTRL, 0x00) != HAL_OK)
   {
     return false;
   }
 
-  HAL_Delay(10U);
+  /* Datasheet 4.9 step 7: wait >=2000 LRCK cycles (~42 ms @48 kHz). */
+  HAL_Delay(CS42448_DELAY_INIT_LRCK_MS);
+
+  /* Datasheet 4.9 step 8: wait ~90 LRCK cycles then unmute DACs. */
+  HAL_Delay(CS42448_DELAY_UNMUTE_MS);
+  if (cs42448_write_reg(addr, CS42448_REG_DAC_MUTE, 0x00) != HAL_OK)
+  {
+    return false;
+  }
+
   return true;
 }
 
