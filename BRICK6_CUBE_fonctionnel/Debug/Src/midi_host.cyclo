@@ -1,5 +1,0 @@
-../Src/midi_host.c:39:16:midi_host_cin_to_length	1
-../Src/midi_host.c:63:6:midi_host_poll	1
-../Src/midi_host.c:92:6:midi_host_poll_bounded	7
-../Src/midi_host.c:129:13:midi_host_encode_packet	20
-../Src/midi_host.c:224:6:midi_host_send	3
