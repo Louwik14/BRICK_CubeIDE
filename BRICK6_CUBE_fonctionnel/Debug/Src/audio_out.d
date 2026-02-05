@@ -43,7 +43,7 @@ Src/audio_out.o: ../Src/audio_out.c ../Inc/audio_out.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/usart.h \
- ../Inc/brick6_refactor.h ../Inc/sd_audio_block_ring.h
+ ../Inc/brick6_refactor.h
 ../Inc/audio_out.h:
 ../Inc/brick6_refactor.h:
 ../Inc/audio_in.h:
@@ -94,4 +94,3 @@ Src/audio_out.o: ../Src/audio_out.c ../Inc/audio_out.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/usart.h:
 ../Inc/brick6_refactor.h:
-../Inc/sd_audio_block_ring.h:

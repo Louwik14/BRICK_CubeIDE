@@ -34,7 +34,6 @@
 #include "sai.h"
 #include "usart.h"
 #include "brick6_refactor.h"
-#include "sd_audio_block_ring.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -56,7 +55,7 @@ static uint32_t audio_out_phase = 0;
 static uint32_t audio_out_phase_inc = 0;
 static SAI_HandleTypeDef *audio_out_sai = NULL;
 
-bool audio_test_sine_enable = true;
+bool audio_test_sine_enable = false;
 bool audio_test_loopback_enable = true;
 volatile uint8_t audio_dma_half_ready = 0U;
 volatile uint8_t audio_dma_full_ready = 0U;
@@ -139,40 +138,6 @@ static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
   }
 }
 
-static void audio_out_copy_ring_block(uint32_t frame_offset)
-{
-  uint32_t sample_offset = frame_offset * AUDIO_OUT_WORDS_PER_FRAME;
-  uint32_t sample_count = AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME;
-  uint32_t total_bytes = sample_count * sizeof(int32_t);
-  uint32_t remaining = total_bytes;
-  uint8_t *dest = (uint8_t *)&audio_out_buffer[sample_offset];
-  uint8_t underflow = 0U;
-
-  while (remaining > 0U)
-  {
-    uint8_t *read_ptr = audio_block_ring_get_read_ptr(&sd_audio_block_ring);
-
-    if (read_ptr == NULL)
-    {
-      memset(dest, 0, remaining);
-      underflow = 1U;
-      break;
-    }
-
-    uint32_t copy_bytes = (remaining < AUDIO_BLOCK_SIZE) ? remaining : AUDIO_BLOCK_SIZE;
-    memcpy(dest, read_ptr, copy_bytes);
-    audio_block_ring_consume(&sd_audio_block_ring);
-    dest += copy_bytes;
-    remaining -= copy_bytes;
-  }
-
-  if (underflow != 0U)
-  {
-#if BRICK6_ENABLE_DIAGNOSTICS
-    audio_underflow_count++;
-#endif
-  }
-}
 
 void AudioOut_DebugDump(void)
 {
@@ -265,17 +230,18 @@ void audio_tasklet_poll(void)
   if (audio_dma_half_ready != 0U)
   {
     audio_dma_half_ready = 0U;
-    /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-    audio_out_copy_ring_block(0U);
-    engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
+
+    /* Refill first half */
+    audio_out_fill_samples(0U, AUDIO_OUT_FRAMES_PER_HALF);
   }
 
   if (audio_dma_full_ready != 0U)
   {
     audio_dma_full_ready = 0U;
-    /* TODO: STM32H7 DCache/MPU enabled -> add cache maintenance for audio_out_buffer. */
-    audio_out_copy_ring_block(AUDIO_OUT_FRAMES_PER_HALF);
-    engine_tasklet_notify_frames(AUDIO_OUT_FRAMES_PER_HALF);
+
+    /* Refill second half */
+    audio_out_fill_samples(AUDIO_OUT_FRAMES_PER_HALF,
+                           AUDIO_OUT_FRAMES_PER_HALF);
   }
 }
 

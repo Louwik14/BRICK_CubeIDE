@@ -1,5 +1,6 @@
-Src/cs42448.o: ../Src/cs42448.c ../Inc/cs42448.h ../Inc/i2c.h \
- ../Inc/main.h ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
+Src/cs42448.o: ../Src/cs42448.c ../Inc/cs42448.h \
+ ../Inc/diagnostics_tasklet.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_def.h \
@@ -40,10 +41,10 @@ Src/cs42448.o: ../Src/cs42448.c ../Inc/cs42448.h ../Inc/i2c.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/i2c.h \
+ ../Inc/main.h
 ../Inc/cs42448.h:
-../Inc/i2c.h:
-../Inc/main.h:
+../Inc/diagnostics_tasklet.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:
@@ -86,3 +87,5 @@ Src/cs42448.o: ../Src/cs42448.c ../Inc/cs42448.h ../Inc/i2c.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
+../Inc/i2c.h:
+../Inc/main.h:
