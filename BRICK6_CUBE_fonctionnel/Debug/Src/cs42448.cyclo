@@ -1,5 +1,0 @@
-../Src/cs42448.c:79:26:cs42448_write_reg	1
-../Src/cs42448.c:90:26:cs42448_read_reg	1
-../Src/cs42448.c:101:13:cs42448_is_present	1
-../Src/cs42448.c:106:6:CS42448_Init	15
-../Src/cs42448.c:197:6:CS42448_DiagnosticsDump	7
