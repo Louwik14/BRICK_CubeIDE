@@ -1,6 +1,7 @@
 #ifndef AUDIO_OUT_H
 #define AUDIO_OUT_H
 
+#include "audio_format.h"
 #include "brick6_refactor.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -9,7 +10,7 @@ typedef struct __SAI_HandleTypeDef SAI_HandleTypeDef;
 
 enum
 {
-  AUDIO_OUT_SAMPLE_RATE = 48000U,
+  AUDIO_OUT_SAMPLE_RATE = 44100U,
   AUDIO_OUT_TDM_SLOTS = 8U,
   AUDIO_OUT_ACTIVE_SLOTS = 8U,
   AUDIO_OUT_WORDS_PER_FRAME = AUDIO_OUT_TDM_SLOTS,

@@ -41,15 +41,15 @@ enum
 };
 
 /*
- * TDM8 receive layout (256-bit frame, 8 slots x 32-bit words):
+ * TDM8 receive layout:
  *   Slots 0..5 -> CS42448 ADC channels 1..6 (3 stereo pairs)
  *   Slots 6..7 -> unused (drive zeros on the codec side)
- * Data is 24-bit left aligned in 32-bit words.
+ * Data is left-aligned inside each slot (AUDIO_BITS_PER_SAMPLE into AUDIO_TDM_SLOT_BITS).
  *
  * The DMA runs in circular mode. We treat the buffer as two halves and expose
  * only the most recent completed half to avoid racing the DMA write pointer.
  */
-static int32_t audio_in_buffer[AUDIO_IN_BUFFER_SAMPLES];
+static audio_word_t audio_in_buffer[AUDIO_IN_BUFFER_SAMPLES];
 static volatile uint32_t audio_in_half_events = 0;
 static volatile uint32_t audio_in_full_events = 0;
 static volatile uint32_t audio_in_latest_half = 0;
@@ -100,7 +100,7 @@ void AudioIn_DebugDump(void)
 
   HAL_UART_Transmit(&huart1, (uint8_t *)header, (uint16_t)strlen(header), 100);
 
-  const int32_t *block = AudioIn_GetLatestBlock();
+  const audio_word_t *block = AudioIn_GetLatestBlock();
 
   if (block == NULL)
   {
@@ -127,12 +127,12 @@ void AudioIn_DebugDump(void)
   }
 }
 
-int32_t *AudioIn_GetBuffer(void)
+audio_word_t *AudioIn_GetBuffer(void)
 {
   return audio_in_buffer;
 }
 
-const int32_t *AudioIn_GetLatestBlock(void)
+const audio_word_t *AudioIn_GetLatestBlock(void)
 {
   if (!audio_in_has_block)
   {

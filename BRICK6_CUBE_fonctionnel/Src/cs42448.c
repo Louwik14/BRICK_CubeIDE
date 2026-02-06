@@ -50,23 +50,15 @@ enum
 
 enum
 {
-  CS42448_POWER_PDN = 0x01
+  CS42448_POWER_PDN_ALL = 0xFF
 };
 
 enum
 {
-  CS42448_FUNCTIONAL_SLAVE_AUTO = 0xF0,
-  CS42448_FUNCTIONAL_MCLK_256FS = 0x00
-};
-
-enum
-{
-  CS42448_INTERFACE_TDM_24BIT = 0x36,
-  CS42448_INTERFACE_FREEZE = 0x80
-};
-
-enum
-{
+  CS42448_TDM_FUNCTIONAL_MODE = 0xF4,
+  CS42448_TDM_INTERFACE_FORMAT = 0x76,
+  CS42448_ADC_CONTROL_SINGLE_ENDED = 0x1C,
+  CS42448_TRANSITION_SOFT_VOL = 0x63,
   CS42448_DAC_MUTE_ALL = 0xFF
 };
 
@@ -84,6 +76,17 @@ static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t va
                            I2C_MEMADD_SIZE_8BIT,
                            &value,
                            1U,
+                           100U);
+}
+
+static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uint8_t *values, uint16_t len)
+{
+  return HAL_I2C_Mem_Write(&hi2c1,
+                           (uint16_t)(addr << 1),
+                           (uint16_t)(reg | 0x80U),
+                           I2C_MEMADD_SIZE_8BIT,
+                           (uint8_t *)values,
+                           len,
                            100U);
 }
 
@@ -105,72 +108,31 @@ static bool cs42448_is_present(uint8_t addr)
 
 bool CS42448_Init(uint8_t addr)
 {
+  static const uint8_t cs42448_default_config[] = {
+    CS42448_TDM_FUNCTIONAL_MODE,
+    CS42448_TDM_INTERFACE_FORMAT,
+    CS42448_ADC_CONTROL_SINGLE_ENDED,
+    CS42448_TRANSITION_SOFT_VOL,
+    CS42448_DAC_MUTE_ALL
+  };
+
   if (!cs42448_is_present(addr))
   {
     return false;
   }
 
   /* Datasheet 4.9 step 3: set PDN=1 to hold the device in power-down. */
-  if (cs42448_write_reg(addr, CS42448_REG_POWER_CTRL, CS42448_POWER_PDN) != HAL_OK)
+  if (cs42448_write_reg(addr, CS42448_REG_POWER_CTRL, CS42448_POWER_PDN_ALL) != HAL_OK)
   {
     return false;
   }
   HAL_Delay(2U);
 
-  /* Datasheet 6.4: slave auto mode, MFREQ=000 for 256Fs in TDM. */
-  if (cs42448_write_reg(addr,
-                        CS42448_REG_FUNCTIONAL_MODE,
-                        (uint8_t)(CS42448_FUNCTIONAL_SLAVE_AUTO | CS42448_FUNCTIONAL_MCLK_256FS)) != HAL_OK)
-  {
-    return false;
-  }
-
-  /* Datasheet 6.5: FREEZE=1, ADC/DAC DIF=110 (TDM 24-bit). */
-  if (cs42448_write_reg(addr,
-                        CS42448_REG_INTERFACE_FORMAT,
-                        (uint8_t)(CS42448_INTERFACE_TDM_24BIT | CS42448_INTERFACE_FREEZE)) != HAL_OK)
-  {
-    return false;
-  }
-
-  /* Datasheet 6.6: default ADC control (HPF enabled, differential inputs). */
-  if (cs42448_write_reg(addr, CS42448_REG_ADC_CTRL, 0x00) != HAL_OK)
-  {
-    return false;
-  }
-
-  /* Datasheet 6.7: transition control (no soft ramp/zero-cross, AMUTE disabled). */
-  if (cs42448_write_reg(addr, CS42448_REG_TRANSITION_CTRL, 0x00) != HAL_OK)
-  {
-    return false;
-  }
-
-  /* Datasheet 4.9 step 5 + 6.8: mute all DAC channels during init. */
-  if (cs42448_write_reg(addr, CS42448_REG_DAC_MUTE, CS42448_DAC_MUTE_ALL) != HAL_OK)
-  {
-    return false;
-  }
-
-  /* Datasheet 6.9: DAC volume 0x00 = 0 dB. */
-  for (uint8_t reg = CS42448_REG_DAC_VOL_BASE; reg <= CS42448_REG_DAC_VOL_LAST; ++reg)
-  {
-    if (cs42448_write_reg(addr, reg, 0x00) != HAL_OK)
-    {
-      return false;
-    }
-  }
-
-  /* Datasheet 6.11: ADC volume 0x00 = 0 dB. */
-  for (uint8_t reg = CS42448_REG_ADC_VOL_BASE; reg <= CS42448_REG_ADC_VOL_LAST; ++reg)
-  {
-    if (cs42448_write_reg(addr, reg, 0x00) != HAL_OK)
-    {
-      return false;
-    }
-  }
-
-  /* Datasheet 6.5: release FREEZE while keeping TDM mode. */
-  if (cs42448_write_reg(addr, CS42448_REG_INTERFACE_FORMAT, CS42448_INTERFACE_TDM_24BIT) != HAL_OK)
+  /* Apply Teensy CS42448 config (TDM 24-bit, single-ended ADC, soft volume, mute all). */
+  if (cs42448_write_regs(addr,
+                         CS42448_REG_FUNCTIONAL_MODE,
+                         cs42448_default_config,
+                         (uint16_t)sizeof(cs42448_default_config)) != HAL_OK)
   {
     return false;
   }

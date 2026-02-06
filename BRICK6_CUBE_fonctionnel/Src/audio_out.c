@@ -45,10 +45,11 @@ enum
 };
 
 /*
- * TDM8 frame layout (256-bit frame, 8 slots x 32-bit words):
- *   Slot 0..7 -> CS42448 DAC channels 1..8 (24-bit left aligned)
+ * TDM8 frame layout:
+ *   Slot 0..7 -> CS42448 DAC channels 1..8
+ *   Samples are left-aligned inside each slot (AUDIO_BITS_PER_SAMPLE into AUDIO_TDM_SLOT_BITS).
  */
-static int32_t audio_out_buffer[AUDIO_OUT_BUFFER_SAMPLES];
+static audio_word_t audio_out_buffer[AUDIO_OUT_BUFFER_SAMPLES];
 static volatile uint32_t audio_out_half_events = 0;
 static volatile uint32_t audio_out_full_events = 0;
 static uint32_t audio_out_phase = 0;
@@ -91,18 +92,18 @@ static const int16_t audio_out_sine_table[AUDIO_OUT_TABLE_SIZE] = {
 static void audio_out_fill_samples(uint32_t frame_offset, uint32_t frame_count)
 {
   uint32_t index = frame_offset * AUDIO_OUT_WORDS_PER_FRAME;
-  const int32_t *audio_in_block = AudioIn_GetLatestBlock();
+  const audio_word_t *audio_in_block = AudioIn_GetLatestBlock();
 
   for (uint32_t frame = 0; frame < frame_count; ++frame)
   {
     if (audio_test_sine_enable)
     {
       uint32_t table_index = (audio_out_phase >> 16) & (AUDIO_OUT_TABLE_SIZE - 1U);
-      int32_t sample24 = ((int32_t)audio_out_sine_table[table_index]) << 8;
+      int32_t sample_word = ((int32_t)audio_out_sine_table[table_index]) << AUDIO_SAMPLE_SHIFT;
 
       for (uint32_t slot = 0; slot < AUDIO_OUT_DAC_CHANNELS; ++slot)
       {
-        audio_out_buffer[index + slot] = sample24;
+        audio_out_buffer[index + slot] = (audio_word_t)sample_word;
       }
 
       audio_out_phase += audio_out_phase_inc;
