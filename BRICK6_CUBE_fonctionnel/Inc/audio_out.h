@@ -33,6 +33,10 @@ void AudioOut_Start(void);
 void AudioOut_ProcessHalf(void);
 void AudioOut_ProcessFull(void);
 
+int32_t *AudioOut_GetHalfBlock(uint32_t half);
+bool AudioOut_IsHalfFree(uint32_t half);
+void AudioOut_ClearHalfFree(uint32_t half);
+
 /* Legacy API */
 uint32_t AudioOut_GetHalfEvents(void);
 uint32_t AudioOut_GetFullEvents(void);
