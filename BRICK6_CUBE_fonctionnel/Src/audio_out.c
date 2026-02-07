@@ -113,7 +113,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    AudioOut_ProcessHalf();
+    loopback_copy_half(0);
   }
 }
 
@@ -121,6 +121,6 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    AudioOut_ProcessFull();
+    loopback_copy_half(1);
   }
 }

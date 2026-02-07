@@ -66,7 +66,7 @@ void MX_SAI1_Init(void)
   hsai_BlockA1.Init.PdmInit.MicPairsNbr = 1;
   hsai_BlockA1.Init.PdmInit.ClockEnable = SAI_PDM_CLOCK1_ENABLE;
   hsai_BlockA1.FrameInit.FrameLength = 256;
-  hsai_BlockA1.FrameInit.ActiveFrameLength = 16;
+  hsai_BlockA1.FrameInit.ActiveFrameLength = 32;
   hsai_BlockA1.FrameInit.FSDefinition = SAI_FS_STARTFRAME;
   hsai_BlockA1.FrameInit.FSPolarity = SAI_FS_ACTIVE_LOW;
   hsai_BlockA1.FrameInit.FSOffset = SAI_FS_FIRSTBIT;
@@ -96,7 +96,7 @@ void MX_SAI1_Init(void)
   hsai_BlockB1.Init.PdmInit.MicPairsNbr = 1;
   hsai_BlockB1.Init.PdmInit.ClockEnable = SAI_PDM_CLOCK1_ENABLE;
   hsai_BlockB1.FrameInit.FrameLength = 256;
-  hsai_BlockB1.FrameInit.ActiveFrameLength = 16;
+  hsai_BlockB1.FrameInit.ActiveFrameLength = 32;
   hsai_BlockB1.FrameInit.FSDefinition = SAI_FS_STARTFRAME;
   hsai_BlockB1.FrameInit.FSPolarity = SAI_FS_ACTIVE_LOW;
   hsai_BlockB1.FrameInit.FSOffset = SAI_FS_FIRSTBIT;
@@ -157,10 +157,7 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
     hdma_sai1_a.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_sai1_a.Init.Mode = DMA_CIRCULAR;
     hdma_sai1_a.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-    hdma_sai1_a.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    hdma_sai1_a.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_HALFFULL;
-    hdma_sai1_a.Init.MemBurst = DMA_MBURST_SINGLE;
-    hdma_sai1_a.Init.PeriphBurst = DMA_PBURST_SINGLE;
+    hdma_sai1_a.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_sai1_a) != HAL_OK)
     {
       Error_Handler();
@@ -205,10 +202,7 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
     hdma_sai1_b.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_sai1_b.Init.Mode = DMA_CIRCULAR;
     hdma_sai1_b.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-    hdma_sai1_b.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    hdma_sai1_b.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_HALFFULL;
-    hdma_sai1_b.Init.MemBurst = DMA_MBURST_SINGLE;
-    hdma_sai1_b.Init.PeriphBurst = DMA_PBURST_SINGLE;
+    hdma_sai1_b.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_sai1_b) != HAL_OK)
     {
       Error_Handler();
