@@ -1,0 +1,11 @@
+../Src/audio_in.c:12:6:AudioIn_Init	16	static
+../Src/audio_in.c:21:6:AudioIn_Start	8	static
+../Src/audio_in.c:33:16:AudioIn_GetHalfBlock	24	static
+../Src/audio_in.c:43:10:AudioIn_GetBuffer	4	static
+../Src/audio_in.c:48:10:AudioIn_GetBufferSamples	4	static
+../Src/audio_in.c:53:10:AudioIn_GetHalfEvents	4	static
+../Src/audio_in.c:58:10:AudioIn_GetFullEvents	4	static
+../Src/audio_in.c:65:6:AudioIn_ProcessHalf	4	static
+../Src/audio_in.c:70:6:AudioIn_ProcessFull	4	static
+../Src/audio_in.c:75:6:HAL_SAI_RxHalfCpltCallback	16	static
+../Src/audio_in.c:83:6:HAL_SAI_RxCpltCallback	16	static

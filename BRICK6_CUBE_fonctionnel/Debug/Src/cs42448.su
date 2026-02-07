@@ -1,0 +1,6 @@
+../Src/cs42448.c:71:26:cs42448_write_reg	32	static
+../Src/cs42448.c:82:26:cs42448_write_regs	32	static
+../Src/cs42448.c:93:26:cs42448_read_reg	32	static
+../Src/cs42448.c:104:13:cs42448_is_present	16	static
+../Src/cs42448.c:109:6:CS42448_Init	16	static
+../Src/cs42448.c:159:6:CS42448_DiagnosticsDump	88	static

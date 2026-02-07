@@ -44,33 +44,28 @@
 #include "tinyusb_app.h"
 #include "usb_host.h"
 
+#include "cs42448.h"
+
 void brick6_app_init(void)
 {
-  diagnostics_log("FMC init OK\r\n");
-  diagnostics_log("Starting SDRAM init...\r\n");
   SDRAM_Init();
-  diagnostics_log("SDRAM init done\r\n");
-  diagnostics_log("Starting SDRAM test...\r\n");
   SDRAM_Test();
-  diagnostics_sdram_alloc_test();
 
-  diagnostics_on_sd_stream_init(sd_stream_init(&hsd1));
-  tusb_init();
-  tinyusb_app_init();
   MX_USB_HOST_Init();
-  /* Init audio */
+
+  CS42448_Init(0x48);
+  CS42448_DiagnosticsDump(0x48);
+
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
 
   engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
 
   AudioOut_Start();
-  (void)HAL_SAI_Receive_DMA(&hsai_BlockB1,
-                            (uint8_t *)AudioIn_GetBuffer(),
-                            AudioIn_GetBufferSamples());
+
+  HAL_SAI_Receive_DMA(&hsai_BlockB1,
+                      (uint8_t *)AudioIn_GetBuffer(),
+                      AudioIn_GetBufferSamples());
 
   HAL_Delay(200);
-
-  /* Init MIDI */
-  //midi_init();
 }
