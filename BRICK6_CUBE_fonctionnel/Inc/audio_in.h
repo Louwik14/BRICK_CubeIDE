@@ -29,6 +29,7 @@ void AudioIn_Start(void);
 const int32_t *AudioIn_GetHalfBlock(uint32_t half);
 bool AudioIn_IsHalfReady(uint32_t half);
 void AudioIn_ClearHalfReady(uint32_t half);
+const int32_t *AudioIn_GetLatestBlock(void);
 
 /* Legacy API compatibility */
 int32_t *AudioIn_GetBuffer(void);

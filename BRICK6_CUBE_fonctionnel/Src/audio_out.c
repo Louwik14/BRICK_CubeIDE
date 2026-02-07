@@ -7,22 +7,28 @@ static int32_t audio_out_buffer[AUDIO_OUT_BUFFER_SAMPLES];
 
 static volatile uint32_t audio_out_half_events = 0;
 static volatile uint32_t audio_out_full_events = 0;
+static volatile uint8_t tx_half_free[2] = {0U, 0U};
+static volatile uint32_t audio_tx_underrun_fill_zeros = 0;
 
 static SAI_HandleTypeDef *audio_out_sai = NULL;
 
 bool audio_test_loopback_enable = true;
 
-/* Copy one half RX -> TX */
-void loopback_copy_half(uint32_t half)
+static void AudioOut_FillHalf(uint32_t half)
 {
   uint32_t offset =
       half * (AUDIO_OUT_FRAMES_PER_HALF * AUDIO_OUT_WORDS_PER_FRAME);
 
   int32_t *tx = &audio_out_buffer[offset];
-  const int32_t *rx = AudioIn_GetHalfBlock(half);
+  const int32_t *rx = AudioIn_GetLatestBlock();
 
-  if (!audio_test_loopback_enable)
+  if (!audio_test_loopback_enable || rx == NULL)
   {
+    if (rx == NULL)
+    {
+      audio_tx_underrun_fill_zeros++;
+    }
+
     memset(tx, 0,
            AUDIO_OUT_FRAMES_PER_HALF *
                AUDIO_OUT_WORDS_PER_FRAME *
@@ -46,9 +52,20 @@ void loopback_copy_half(uint32_t half)
   }
 }
 
+/* Copy one half RX -> TX (legacy compatibility wrapper) */
+void loopback_copy_half(uint32_t half)
+{
+  AudioOut_FillHalf(half);
+}
+
 void AudioOut_Init(SAI_HandleTypeDef *hsai)
 {
   audio_out_sai = hsai;
+  audio_out_half_events = 0;
+  audio_out_full_events = 0;
+  tx_half_free[0] = 0U;
+  tx_half_free[1] = 0U;
+  audio_tx_underrun_fill_zeros = 0;
   memset(audio_out_buffer, 0, sizeof(audio_out_buffer));
 }
 
@@ -56,6 +73,9 @@ void AudioOut_Start(void)
 {
   if (!audio_out_sai)
     return;
+
+  AudioOut_FillHalf(0U);
+  AudioOut_FillHalf(1U);
 
   /* DMA stability: circular mode, very high priority; FIFO disabled or
      full with single-burst (no large bursts) to reduce audio jitter. */
@@ -67,11 +87,13 @@ void AudioOut_Start(void)
 void AudioOut_ProcessHalf(void)
 {
   audio_out_half_events++;
+  tx_half_free[0] = 1U;
 }
 
 void AudioOut_ProcessFull(void)
 {
   audio_out_full_events++;
+  tx_half_free[1] = 1U;
 }
 
 uint32_t AudioOut_GetHalfEvents(void)
@@ -84,20 +106,44 @@ uint32_t AudioOut_GetFullEvents(void)
   return audio_out_full_events;
 }
 
+uint32_t AudioOut_GetUnderrunFillZeros(void)
+{
+  return audio_tx_underrun_fill_zeros;
+}
+
+bool AudioOut_IsHalfFree(uint32_t half)
+{
+  if (half > 1U)
+  {
+    return false;
+  }
+
+  return tx_half_free[half] != 0U;
+}
+
+void AudioOut_ClearHalfFree(uint32_t half)
+{
+  if (half > 1U)
+  {
+    return;
+  }
+
+  tx_half_free[half] = 0U;
+}
+
 /* Dummy legacy poll */
 void audio_tasklet_poll(void)
 {
-  /* Copy outside IRQ to avoid jitter/glitches from long ISR processing. */
-  if (AudioIn_IsHalfReady(0U))
+  if (AudioOut_IsHalfFree(0U))
   {
-    loopback_copy_half(0U);
-    AudioIn_ClearHalfReady(0U);
+    AudioOut_FillHalf(0U);
+    AudioOut_ClearHalfFree(0U);
   }
 
-  if (AudioIn_IsHalfReady(1U))
+  if (AudioOut_IsHalfFree(1U))
   {
-    loopback_copy_half(1U);
-    AudioIn_ClearHalfReady(1U);
+    AudioOut_FillHalf(1U);
+    AudioOut_ClearHalfFree(1U);
   }
 }
 
@@ -113,7 +159,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    loopback_copy_half(0);
+    AudioOut_ProcessHalf();
   }
 }
 
@@ -121,6 +167,6 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A)
   {
-    loopback_copy_half(1);
+    AudioOut_ProcessFull();
   }
 }

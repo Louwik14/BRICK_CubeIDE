@@ -30,12 +30,15 @@ void AudioOut_Start(void);
 void AudioOut_ProcessHalf(void);
 void AudioOut_ProcessFull(void);
 
+bool AudioOut_IsHalfFree(uint32_t half);
+void AudioOut_ClearHalfFree(uint32_t half);
 int32_t *AudioOut_GetHalfBlock(uint32_t half);
 void loopback_copy_half(uint32_t half);
 
 /* Legacy API */
 uint32_t AudioOut_GetHalfEvents(void);
 uint32_t AudioOut_GetFullEvents(void);
+uint32_t AudioOut_GetUnderrunFillZeros(void);
 
 /* Keep poll symbol for linker */
 void audio_tasklet_poll(void);
