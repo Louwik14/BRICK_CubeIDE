@@ -62,10 +62,7 @@ void brick6_app_init(void)
   engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
 
   AudioOut_Start();
-
-  HAL_SAI_Receive_DMA(&hsai_BlockB1,
-                      (uint8_t *)AudioIn_GetBuffer(),
-                      AudioIn_GetBufferSamples());
+  AudioIn_Start();
 
   HAL_Delay(200);
 }

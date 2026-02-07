@@ -26,6 +26,8 @@ void AudioIn_Start(void)
   if (!audio_in_sai)
     return;
 
+  /* DMA stability: circular mode, very high priority; FIFO disabled or
+     full with single-burst (no large bursts) to reduce audio jitter. */
   HAL_SAI_Receive_DMA(audio_in_sai,
                       (uint8_t *)audio_in_buffer,
                       AUDIO_IN_BUFFER_SAMPLES);
@@ -101,6 +103,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_B)
   {
+    /* IRQ must stay minimal: flag only, no copies here. */
     AudioIn_ProcessHalf();
   }
 }
@@ -109,6 +112,7 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_B)
   {
+    /* IRQ must stay minimal: flag only, no copies here. */
     AudioIn_ProcessFull();
   }
 }
