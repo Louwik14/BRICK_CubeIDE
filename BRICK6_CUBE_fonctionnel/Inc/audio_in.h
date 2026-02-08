@@ -8,7 +8,7 @@ typedef struct __SAI_HandleTypeDef SAI_HandleTypeDef;
 
 enum
 {
-  AUDIO_IN_SAMPLE_RATE = 44100U,
+  AUDIO_IN_SAMPLE_RATE = 48000U,
 
   AUDIO_IN_TDM_SLOTS = 8U,
   AUDIO_IN_ACTIVE_SLOTS = 6U,

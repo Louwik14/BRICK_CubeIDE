@@ -59,7 +59,7 @@ void brick6_app_init(void)
   AudioOut_Init(&hsai_BlockA1);
   AudioIn_Init(&hsai_BlockB1);
 
-  engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
+  //engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
 
   AudioOut_Start();
   AudioIn_Start();
