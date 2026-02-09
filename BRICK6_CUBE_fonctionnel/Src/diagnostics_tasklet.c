@@ -28,8 +28,7 @@
 
 #include "diagnostics_tasklet.h"
 
-#include "audio_in.h"
-#include "audio_out.h"
+#include "audio.h"
 #include "brick6_refactor.h"
 #include "cs42448.h"
 #include "engine_tasklet.h"

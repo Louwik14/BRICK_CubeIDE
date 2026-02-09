@@ -53,11 +53,11 @@ void MX_SAI1_Init(void)
   hsai_BlockA1.Init.FirstBit = SAI_FIRSTBIT_MSB;
   hsai_BlockA1.Init.ClockStrobing = SAI_CLOCKSTROBING_RISINGEDGE;
   hsai_BlockA1.Init.Synchro = SAI_ASYNCHRONOUS;
-  hsai_BlockA1.Init.OutputDrive = SAI_OUTPUTDRIVE_ENABLE;
-  hsai_BlockA1.Init.NoDivider = SAI_MCK_OVERSAMPLING_ENABLE;
-  hsai_BlockA1.Init.MckOverSampling = SAI_MCK_OVERSAMPLING_DISABLE;
-  hsai_BlockA1.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_HF;
-  hsai_BlockA1.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_44K;
+  hsai_BlockA1.Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLE;
+  hsai_BlockA1.Init.NoDivider = SAI_MCK_OVERSAMPLING_DISABLE;
+  hsai_BlockA1.Init.MckOverSampling = SAI_MCK_OVERSAMPLING_ENABLE;
+  hsai_BlockA1.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
+  hsai_BlockA1.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_48K;
   hsai_BlockA1.Init.SynchroExt = SAI_SYNCEXT_OUTBLOCKA_ENABLE;
   hsai_BlockA1.Init.MonoStereoMode = SAI_STEREOMODE;
   hsai_BlockA1.Init.CompandingMode = SAI_NOCOMPANDING;
@@ -86,8 +86,8 @@ void MX_SAI1_Init(void)
   hsai_BlockB1.Init.ClockStrobing = SAI_CLOCKSTROBING_RISINGEDGE;
   hsai_BlockB1.Init.Synchro = SAI_SYNCHRONOUS;
   hsai_BlockB1.Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLE;
-  hsai_BlockB1.Init.MckOverSampling = SAI_MCK_OVERSAMPLING_DISABLE;
-  hsai_BlockB1.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_HF;
+  hsai_BlockB1.Init.MckOverSampling = SAI_MCK_OVERSAMPLING_ENABLE;
+  hsai_BlockB1.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_FULL;
   hsai_BlockB1.Init.SynchroExt = SAI_SYNCEXT_OUTBLOCKA_ENABLE;
   hsai_BlockB1.Init.MonoStereoMode = SAI_STEREOMODE;
   hsai_BlockB1.Init.CompandingMode = SAI_NOCOMPANDING;
@@ -96,14 +96,14 @@ void MX_SAI1_Init(void)
   hsai_BlockB1.Init.PdmInit.MicPairsNbr = 1;
   hsai_BlockB1.Init.PdmInit.ClockEnable = SAI_PDM_CLOCK1_ENABLE;
   hsai_BlockB1.FrameInit.FrameLength = 256;
-  hsai_BlockB1.FrameInit.ActiveFrameLength = 32;
+  hsai_BlockB1.FrameInit.ActiveFrameLength = 1;
   hsai_BlockB1.FrameInit.FSDefinition = SAI_FS_STARTFRAME;
   hsai_BlockB1.FrameInit.FSPolarity = SAI_FS_ACTIVE_LOW;
   hsai_BlockB1.FrameInit.FSOffset = SAI_FS_FIRSTBIT;
   hsai_BlockB1.SlotInit.FirstBitOffset = 0;
   hsai_BlockB1.SlotInit.SlotSize = SAI_SLOTSIZE_32B;
   hsai_BlockB1.SlotInit.SlotNumber = 8;
-  hsai_BlockB1.SlotInit.SlotActive = 0x0000003F;
+  hsai_BlockB1.SlotInit.SlotActive = 0x000000FF;
   if (HAL_SAI_Init(&hsai_BlockB1) != HAL_OK)
   {
     Error_Handler();
@@ -157,7 +157,10 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
     hdma_sai1_a.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_sai1_a.Init.Mode = DMA_CIRCULAR;
     hdma_sai1_a.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-    hdma_sai1_a.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    hdma_sai1_a.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+    hdma_sai1_a.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+    hdma_sai1_a.Init.MemBurst = DMA_MBURST_SINGLE;
+    hdma_sai1_a.Init.PeriphBurst = DMA_PBURST_SINGLE;
     if (HAL_DMA_Init(&hdma_sai1_a) != HAL_OK)
     {
       Error_Handler();
@@ -202,7 +205,10 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
     hdma_sai1_b.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_sai1_b.Init.Mode = DMA_CIRCULAR;
     hdma_sai1_b.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-    hdma_sai1_b.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    hdma_sai1_b.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+    hdma_sai1_b.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+    hdma_sai1_b.Init.MemBurst = DMA_MBURST_SINGLE;
+    hdma_sai1_b.Init.PeriphBurst = DMA_PBURST_SINGLE;
     if (HAL_DMA_Init(&hdma_sai1_b) != HAL_OK)
     {
       Error_Handler();

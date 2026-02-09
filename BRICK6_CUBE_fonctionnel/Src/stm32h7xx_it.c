@@ -23,7 +23,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usart.h"
-#include "tusb.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -281,28 +280,15 @@ void SAI1_IRQHandler(void)
   /* USER CODE END SAI1_IRQn 1 */
 }
 
-/**
-  * @brief This function handles DMAMUX1 overrun interrupt.
-  */
-void DMAMUX1_OVR_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMAMUX1_OVR_IRQn 0 */
-
-  /* USER CODE END DMAMUX1_OVR_IRQn 0 */
-  /* USER CODE BEGIN DMAMUX1_OVR_IRQn 1 */
-
-  /* USER CODE END DMAMUX1_OVR_IRQn 1 */
-}
-
 /* USER CODE BEGIN 1 */
 void OTG_HS_IRQHandler(void)
 {
   HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
 }
 
-void OTG_FS_IRQHandler(void)
+/*void OTG_FS_IRQHandler(void)
 {
-  tud_int_handler(0);
+	  HAL_HCD_IRQHandler(&hhcd_USB_OTG_FS);
 }
-
+*/
 /* USER CODE END 1 */

@@ -29,8 +29,6 @@
 
 #include "brick6_app_init.h"
 
-#include "audio_in.h"
-#include "audio_out.h"
 #include "brick6_refactor.h"
 #include "diagnostics_tasklet.h"
 #include "engine_tasklet.h"
@@ -40,29 +38,22 @@
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
-#include "tusb.h"
-#include "tinyusb_app.h"
 #include "usb_host.h"
-
+#include "audio.h"
 #include "cs42448.h"
 
 void brick6_app_init(void)
 {
-  SDRAM_Init();
-  SDRAM_Test();
+  //SDRAM_Init();
+  //SDRAM_Test();
 
-  MX_USB_HOST_Init();
+  //MX_USB_HOST_Init();
 
   CS42448_Init(0x48);
   CS42448_DiagnosticsDump(0x48);
 
-  AudioOut_Init(&hsai_BlockA1);
-  AudioIn_Init(&hsai_BlockB1);
-
-  //engine_tasklet_init(AUDIO_OUT_SAMPLE_RATE);
-
-  AudioOut_Start();
-  AudioIn_Start();
+  audio_init(&hsai_BlockA1, &hsai_BlockB1);
+  audio_start();
 
   HAL_Delay(200);
 }

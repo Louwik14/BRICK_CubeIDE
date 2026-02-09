@@ -1,0 +1,8 @@
+../Src/audio.c:42:13:copy_half	1
+../Src/audio.c:53:6:audio_init	1
+../Src/audio.c:68:6:audio_start	3
+../Src/audio.c:84:6:audio_poll	3
+../Src/audio.c:101:6:HAL_SAI_RxHalfCpltCallback	2
+../Src/audio.c:110:6:HAL_SAI_RxCpltCallback	2
+../Src/audio.c:121:10:audio_get_half_events	1
+../Src/audio.c:126:10:audio_get_full_events	1

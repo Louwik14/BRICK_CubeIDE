@@ -1,4 +1,4 @@
-Src/main.o: ../Src/main.c ../Inc/main.h \
+Src/audio.o: ../Src/audio.c ../Inc/audio.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -40,15 +40,8 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/dma.h \
- ../Inc/main.h ../Inc/i2c.h ../Inc/sai.h ../Inc/sdmmc.h ../Inc/usart.h \
- ../Inc/usb_otg.h ../Inc/gpio.h ../Inc/fmc.h ../Inc/brick6_refactor.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h \
- ../Inc/cs42448.h ../Inc/midi.h ../Inc/midi_host.h \
- ../Inc/brick6_refactor.h ../Inc/sdram.h ../Inc/sd_stream.h \
- ../Inc/engine_tasklet.h ../Inc/diagnostics_tasklet.h ../Inc/ui_tasklet.h \
- ../Inc/brick6_app_init.h ../Inc/audio.h
-../Inc/main.h:
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h
+../Inc/audio.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:
@@ -91,25 +84,3 @@ Src/main.o: ../Src/main.c ../Inc/main.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
-../Inc/dma.h:
-../Inc/main.h:
-../Inc/i2c.h:
-../Inc/sai.h:
-../Inc/sdmmc.h:
-../Inc/usart.h:
-../Inc/usb_otg.h:
-../Inc/gpio.h:
-../Inc/fmc.h:
-../Inc/brick6_refactor.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h:
-../Inc/cs42448.h:
-../Inc/midi.h:
-../Inc/midi_host.h:
-../Inc/brick6_refactor.h:
-../Inc/sdram.h:
-../Inc/sd_stream.h:
-../Inc/engine_tasklet.h:
-../Inc/diagnostics_tasklet.h:
-../Inc/ui_tasklet.h:
-../Inc/brick6_app_init.h:
-../Inc/audio.h:
