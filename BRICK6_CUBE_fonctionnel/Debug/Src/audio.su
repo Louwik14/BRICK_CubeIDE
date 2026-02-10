@@ -1,8 +1,5 @@
-../Src/audio.c:42:13:copy_half	24	static
-../Src/audio.c:53:6:audio_init	16	static
-../Src/audio.c:68:6:audio_start	8	static
-../Src/audio.c:84:6:audio_poll	8	static
-../Src/audio.c:101:6:HAL_SAI_RxHalfCpltCallback	16	static
-../Src/audio.c:110:6:HAL_SAI_RxCpltCallback	16	static
-../Src/audio.c:121:10:audio_get_half_events	4	static
-../Src/audio.c:126:10:audio_get_full_events	4	static
+../Src/audio.c:47:13:process_half	32	static
+../Src/audio.c:63:6:audio_init	16	static
+../Src/audio.c:73:6:audio_start	8	static
+../Src/audio.c:93:6:HAL_SAI_RxHalfCpltCallback	16	static
+../Src/audio.c:101:6:HAL_SAI_RxCpltCallback	16	static

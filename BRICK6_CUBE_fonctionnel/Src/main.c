@@ -124,7 +124,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  audio_poll();
 	 // engine_tasklet_poll();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
     //usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);

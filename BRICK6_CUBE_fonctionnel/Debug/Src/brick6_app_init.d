@@ -45,7 +45,7 @@ Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
  ../Inc/engine_tasklet.h ../Inc/brick6_refactor.h ../Inc/sai.h \
  ../Inc/main.h ../Inc/sd_stream.h ../Inc/sdmmc.h ../Inc/sdram.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h \
- ../Inc/audio.h ../Inc/cs42448.h
+ ../Inc/audio.h ../Inc/audio_float.h ../Inc/cs42448.h ../Inc/mixer.h
 ../Inc/brick6_app_init.h:
 ../Inc/brick6_refactor.h:
 ../Inc/diagnostics_tasklet.h:
@@ -100,4 +100,6 @@ Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
 ../Inc/sdram.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack/usb_host.h:
 ../Inc/audio.h:
+../Inc/audio_float.h:
 ../Inc/cs42448.h:
+../Inc/mixer.h:

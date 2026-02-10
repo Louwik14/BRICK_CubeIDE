@@ -1,54 +1,64 @@
 #include "audio.h"
-#include <string.h>
+#include "audio_float.h"   /* <-- NEW : float engine boundary */
 
-/* ===== CONFIG ===== */
+#include <string.h>
+#include <stdint.h>
+
+/* ============================================================
+   CONFIG AUDIO : STM32H743 + CS42448 TDM8
+   ============================================================ */
 
 /* TDM8 = 8 slots x 32-bit */
 #define AUDIO_TDM_SLOTS          8
-#define AUDIO_WORD_SIZE_BYTES    4
 
-/* Nombre de frames par demi-buffer */
-#define AUDIO_FRAMES_PER_HALF    64
+/* Block size : frames per half-buffer
+   (Must match AUDIO_BLOCK_SIZE in audio_float.c)
+*/
+#define AUDIO_FRAMES_PER_HALF    32
 
-/* Total frames dans buffer DMA = 2 halves */
+/* Double buffer DMA */
 #define AUDIO_FRAMES_TOTAL       (AUDIO_FRAMES_PER_HALF * 2)
 
-/* Un frame = 8 slots */
+/* One frame = 8 slots */
 #define AUDIO_WORDS_PER_FRAME    AUDIO_TDM_SLOTS
 
-/* Taille totale du buffer en int32 */
+/* Total DMA buffer size (int32 words) */
 #define AUDIO_BUFFER_WORDS       (AUDIO_FRAMES_TOTAL * AUDIO_WORDS_PER_FRAME)
 
-/* ===== BUFFERS DMA ===== */
+/* ============================================================
+   DMA BUFFERS
+   ============================================================ */
 
 static int32_t rx_buffer[AUDIO_BUFFER_WORDS];
 static int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
-/* ===== HANDLES ===== */
+/* ============================================================
+   SAI HANDLES
+   ============================================================ */
 
 static SAI_HandleTypeDef *sai_tx = NULL;
 static SAI_HandleTypeDef *sai_rx = NULL;
 
-/* ===== FLAGS ===== */
+/* ============================================================
+   INTERNAL PROCESSING
+   Hardware layer only: calls float engine
+   ============================================================ */
 
-static volatile uint8_t half_ready = 0;
-static volatile uint8_t full_ready = 0;
-
-static volatile uint32_t half_events = 0;
-static volatile uint32_t full_events = 0;
-
-/* ===== INTERNAL ===== */
-
-static void copy_half(uint32_t half_index)
+static void process_half(uint32_t half_index)
 {
-    uint32_t offset = half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
-    uint32_t count  = AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
+    uint32_t offset =
+        half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
 
-    /* Loopback brut : RX -> TX */
-    memcpy(&tx_buffer[offset], &rx_buffer[offset], count * sizeof(int32_t));
+    int32_t *rx = &rx_buffer[offset];
+    int32_t *tx = &tx_buffer[offset];
+
+    /* Always run float engine boundary */
+    audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);
 }
 
-/* ===== API ===== */
+/* ============================================================
+   API
+   ============================================================ */
 
 void audio_init(SAI_HandleTypeDef *hsai_tx,
                 SAI_HandleTypeDef *hsai_rx)
@@ -58,11 +68,6 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
-
-    half_ready = 0;
-    full_ready = 0;
-    half_events = 0;
-    full_events = 0;
 }
 
 void audio_start(void)
@@ -75,35 +80,21 @@ void audio_start(void)
                        (uint8_t *)rx_buffer,
                        AUDIO_BUFFER_WORDS);
 
-    /* Start TX */
+    /* Then start TX */
     HAL_SAI_Transmit_DMA(sai_tx,
                         (uint8_t *)tx_buffer,
                         AUDIO_BUFFER_WORDS);
 }
 
-void audio_poll(void)
-{
-    if (half_ready)
-    {
-        half_ready = 0;
-        copy_half(0);
-    }
-
-    if (full_ready)
-    {
-        full_ready = 0;
-        copy_half(1);
-    }
-}
-
-/* ===== CALLBACKS IRQ ===== */
+/* ============================================================
+   DMA IRQ CALLBACKS : AUDIO RUNS HERE
+   ============================================================ */
 
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if (hsai == sai_rx)
     {
-        half_ready = 1;
-        half_events++;
+        process_half(0);
     }
 }
 
@@ -111,19 +102,6 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if (hsai == sai_rx)
     {
-        full_ready = 1;
-        full_events++;
+        process_half(1);
     }
-}
-
-/* ===== DEBUG ===== */
-
-uint32_t audio_get_half_events(void)
-{
-    return half_events;
-}
-
-uint32_t audio_get_full_events(void)
-{
-    return full_events;
 }
