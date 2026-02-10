@@ -41,7 +41,7 @@ Src/diagnostics_tasklet.o: ../Src/diagnostics_tasklet.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/audio.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
  ../Inc/brick6_refactor.h ../Inc/cs42448.h ../Inc/engine_tasklet.h \
  ../Inc/brick6_refactor.h ../Inc/main.h ../Inc/sai.h ../Inc/main.h \
  ../Inc/sd_stream.h ../Inc/sdram.h ../Inc/sdram_alloc.h ../Inc/usart.h
@@ -88,7 +88,6 @@ Src/diagnostics_tasklet.o: ../Src/diagnostics_tasklet.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
-../Inc/audio.h:
 ../Inc/brick6_refactor.h:
 ../Inc/cs42448.h:
 ../Inc/engine_tasklet.h:

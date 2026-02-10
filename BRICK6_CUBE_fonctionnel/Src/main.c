@@ -129,7 +129,7 @@ int main(void)
     //usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
     //midi_host_poll_bounded(MIDI_BUDGET_MSGS);
     ui_tasklet_poll();
-    //diagnostics_tasklet_poll();
+    diagnostics_tasklet_poll();
   }
 
   /* USER CODE END 3 */

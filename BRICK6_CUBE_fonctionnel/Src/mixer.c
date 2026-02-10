@@ -39,8 +39,8 @@ void mixer_process(float **in,
     {
         /* TEST: route ADC2/ADC3 -> DAC1/DAC2 */
 
-        out[4][n] = in[2][n] * master_gain;  // DAC1 = ADC2
-        out[5][n] = in[3][n] * master_gain;  // DAC2 = ADC3
+        out[0][n] = in[0][n] * master_gain;  // DAC1 = ADC2
+        out[1][n] = in[1][n] * master_gain;  // DAC2 = ADC3
 
         /* Silence everything else */
         for(int ch = 2; ch < 8; ch++)
