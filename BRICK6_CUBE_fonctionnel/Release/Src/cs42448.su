@@ -1,2 +1,2 @@
-../Src/cs42448.c:109:6:CS42448_Init	48	static
-../Src/cs42448.c:159:6:CS42448_DiagnosticsDump	120	static
+../Src/cs42448.c:100:6:CS42448_Init	48	static
+../Src/cs42448.c:149:6:CS42448_DiagnosticsDump	120	static

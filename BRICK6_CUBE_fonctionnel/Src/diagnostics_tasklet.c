@@ -201,7 +201,7 @@ void diagnostics_tasklet_poll(void)
 
   if ((now - last_led_tick) >= 500U)
   {
-    HAL_GPIO_TogglePin(LED_DEBUG_GPIO_Port, LED_DEBUG_Pin);
+    //HAL_GPIO_TogglePin(LED_DEBUG_GPIO_Port, LED_DEBUG_Pin);
     last_led_tick = now;
   }
 

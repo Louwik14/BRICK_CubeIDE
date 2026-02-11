@@ -2,28 +2,7 @@
  * @file cs42448.c
  * @brief Initialisation du codec audio CS42448 via I2C.
  *
- * Ce module configure les registres du CS42448 (format TDM,
- * volumes, alimentation) lors du démarrage du système.
- *
- * Rôle dans le système:
- * - Configuration du codec audio avant le démarrage DMA SAI.
- * - Assure un état connu des ADC/DAC.
- *
- * Contraintes temps réel:
- * - Critique audio: non (initialisation seulement).
- * - Tasklet: non.
- * - IRQ: non.
- * - Borné: non critique (I2C bloquant possible).
- *
- * Architecture:
- * - Appelé par: séquence d'initialisation applicative.
- * - Appelle: HAL I2C (mem write).
- *
- * Règles:
- * - Pas de malloc.
- * - Ne pas appeler en IRQ.
- *
- * @note L’API publique est déclarée dans cs42448.h.
+ * ...
  */
 
 #include "cs42448.h"
@@ -68,9 +47,13 @@ enum
   CS42448_DELAY_UNMUTE_MS = 2U
 };
 
+/* ============================================================
+   I2C ACCESS (PATCHED: hi2c3 instead of hi2c1)
+   ============================================================ */
+
 static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t value)
 {
-  return HAL_I2C_Mem_Write(&hi2c1,
+  return HAL_I2C_Mem_Write(&hi2c3,
                            (uint16_t)(addr << 1),
                            reg,
                            I2C_MEMADD_SIZE_8BIT,
@@ -79,9 +62,10 @@ static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t va
                            100U);
 }
 
-static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uint8_t *values, uint16_t len)
+static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg,
+                                           const uint8_t *values, uint16_t len)
 {
-  return HAL_I2C_Mem_Write(&hi2c1,
+  return HAL_I2C_Mem_Write(&hi2c3,
                            (uint16_t)(addr << 1),
                            (uint16_t)(reg | 0x80U),
                            I2C_MEMADD_SIZE_8BIT,
@@ -92,7 +76,7 @@ static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uin
 
 static HAL_StatusTypeDef cs42448_read_reg(uint8_t addr, uint8_t reg, uint8_t *value)
 {
-  return HAL_I2C_Mem_Read(&hi2c1,
+  return HAL_I2C_Mem_Read(&hi2c3,
                           (uint16_t)(addr << 1),
                           reg,
                           I2C_MEMADD_SIZE_8BIT,
@@ -103,8 +87,15 @@ static HAL_StatusTypeDef cs42448_read_reg(uint8_t addr, uint8_t reg, uint8_t *va
 
 static bool cs42448_is_present(uint8_t addr)
 {
-  return HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 3U, 100U) == HAL_OK;
+  return HAL_I2C_IsDeviceReady(&hi2c3,
+                              (uint16_t)(addr << 1),
+                              3U,
+                              100U) == HAL_OK;
 }
+
+/* ============================================================
+   PUBLIC API
+   ============================================================ */
 
 bool CS42448_Init(uint8_t addr)
 {
@@ -128,7 +119,7 @@ bool CS42448_Init(uint8_t addr)
   }
   HAL_Delay(2U);
 
-  /* Apply Teensy CS42448 config (TDM 24-bit, single-ended ADC, soft volume, mute all). */
+  /* Apply config */
   if (cs42448_write_regs(addr,
                          CS42448_REG_FUNCTIONAL_MODE,
                          cs42448_default_config,
@@ -137,16 +128,15 @@ bool CS42448_Init(uint8_t addr)
     return false;
   }
 
-  /* Datasheet 4.9 step 6: clear PDN to power up all ADC/DAC blocks. */
+  /* Power up all ADC/DAC blocks. */
   if (cs42448_write_reg(addr, CS42448_REG_POWER_CTRL, 0x00) != HAL_OK)
   {
     return false;
   }
 
-  /* Datasheet 4.9 step 7: wait >=2000 LRCK cycles (~42 ms @48 kHz). */
   HAL_Delay(CS42448_DELAY_INIT_LRCK_MS);
 
-  /* Datasheet 4.9 step 8: wait ~90 LRCK cycles then unmute DACs. */
+  /* Unmute DACs */
   HAL_Delay(CS42448_DELAY_UNMUTE_MS);
   if (cs42448_write_reg(addr, CS42448_REG_DAC_MUTE, 0x00) != HAL_OK)
   {
@@ -163,9 +153,6 @@ void CS42448_DiagnosticsDump(uint8_t addr)
 
   diagnostics_logf("\r\n==== CS42448 DIAGNOSTICS DUMP ====\r\n");
 
-  /* ------------------------------------------------------------
-     Core registers
-     ------------------------------------------------------------ */
   struct
   {
     uint8_t reg;
@@ -193,58 +180,6 @@ void CS42448_DiagnosticsDump(uint8_t addr)
     {
       diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n",
                        core_regs[i].reg);
-    }
-  }
-
-  /* ------------------------------------------------------------
-     DAC volumes
-     ------------------------------------------------------------ */
-  diagnostics_logf("\r\n-- DAC VOLUMES --\r\n");
-
-  for (uint8_t reg = 0x08; reg <= 0x0F; reg++)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("[CS42448] DAC_VOL[%u] (0x%02X) = 0x%02X\r\n",
-                       (unsigned int)(reg - 0x08 + 1U),
-                       reg,
-                       value);
-    }
-  }
-
-  /* ------------------------------------------------------------
-     ADC volumes
-     ------------------------------------------------------------ */
-  diagnostics_logf("\r\n-- ADC VOLUMES --\r\n");
-
-  for (uint8_t reg = 0x11; reg <= 0x16; reg++)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("[CS42448] ADC_VOL[%u] (0x%02X) = 0x%02X\r\n",
-                       (unsigned int)(reg - 0x11 + 1U),
-                       reg,
-                       value);
-    }
-  }
-
-  /* ------------------------------------------------------------
-     FULL RAW REGISTER DUMP (most important for DAC3–8 debug)
-     ------------------------------------------------------------ */
-  diagnostics_logf("\r\n-- RAW REGISTER DUMP 0x00–0x30 --\r\n");
-
-  for (uint8_t reg = 0x00; reg <= 0x30; reg++)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("REG[0x%02X] = 0x%02X\r\n", reg, value);
-    }
-    else
-    {
-      diagnostics_logf("REG[0x%02X] = ERROR\r\n", reg);
     }
   }
 
