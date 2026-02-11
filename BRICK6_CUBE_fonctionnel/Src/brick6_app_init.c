@@ -39,7 +39,7 @@
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
-#include "usb_host.h"
+//#include "usb_host.h"
 #include "audio.h"
 #include "audio_float.h"
 #include "cs42448.h"

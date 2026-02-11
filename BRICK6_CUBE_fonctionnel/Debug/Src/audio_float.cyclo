@@ -1,6 +1,4 @@
 ../Src/audio_float.c:31:6:audio_float_set_postgain	2
 ../Src/audio_float.c:42:6:audio_float_set_output_compensation	1
 ../Src/audio_float.c:64:6:audio_set_float_callback	1
-../Src/audio_float.c:114:21:s242f	2
-../Src/audio_float.c:135:23:f2s24	3
-../Src/audio_float.c:152:6:audio_process_block_int32	12
+../Src/audio_float.c:152:6:audio_process_block_int32	15

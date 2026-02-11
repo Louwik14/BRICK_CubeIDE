@@ -1,10 +1,7 @@
-../Inc/sdram.h:46:24:sdram_swap16	1
-../Inc/sdram.h:51:20:sdram_write32	1
-../Inc/sdram.h:57:24:sdram_read32	1
 ../Src/diagnostics_tasklet.c:77:13:uart_log	1
 ../Src/diagnostics_tasklet.c:85:6:diagnostics_log	1
 ../Src/diagnostics_tasklet.c:90:6:diagnostics_logf	1
-../Src/diagnostics_tasklet.c:109:6:diagnostics_request_codec_dump	1
 ../Src/diagnostics_tasklet.c:118:13:SDRAM_Alloc_Test_Stop	1
-../Src/diagnostics_tasklet.c:133:6:diagnostics_sdram_alloc_test	9
+../Src/diagnostics_tasklet.c:109:6:diagnostics_request_codec_dump	1
+../Src/diagnostics_tasklet.c:133:6:diagnostics_sdram_alloc_test	6
 ../Src/diagnostics_tasklet.c:194:6:diagnostics_tasklet_poll	6

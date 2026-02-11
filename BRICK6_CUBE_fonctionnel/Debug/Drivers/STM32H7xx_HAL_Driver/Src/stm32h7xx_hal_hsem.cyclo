@@ -7,5 +7,5 @@
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c:302:10:HAL_HSEM_GetClearKey	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c:329:6:HAL_HSEM_ActivateNotification	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c:353:6:HAL_HSEM_DeactivateNotification	1
-../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c:376:6:HAL_HSEM_IRQHandler	1
 ../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c:422:13:HAL_HSEM_FreeCallback	1
+../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c:376:6:HAL_HSEM_IRQHandler	1

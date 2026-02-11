@@ -1,0 +1,108 @@
+################################################################################
+# Automatically-generated file. Do not edit!
+# Toolchain: GNU Tools for STM32 (13.3.rel1)
+################################################################################
+
+# Add inputs and outputs from these tool invocations to the build variables 
+C_SRCS += \
+../Src/audio.c \
+../Src/audio_float.c \
+../Src/brick6_app_init.c \
+../Src/brick6_refactor.c \
+../Src/cs42448.c \
+../Src/diagnostics_tasklet.c \
+../Src/dma.c \
+../Src/engine_tasklet.c \
+../Src/fmc.c \
+../Src/gpio.c \
+../Src/i2c.c \
+../Src/main.c \
+../Src/mixer.c \
+../Src/sai.c \
+../Src/sd_audio_block_ring.c \
+../Src/sd_stream.c \
+../Src/sdmmc.c \
+../Src/sdram.c \
+../Src/sdram_alloc.c \
+../Src/stm32h7xx_hal_msp.c \
+../Src/stm32h7xx_it.c \
+../Src/syscalls.c \
+../Src/sysmem.c \
+../Src/system_stm32h7xx.c \
+../Src/ui_tasklet.c \
+../Src/usart.c \
+../Src/usbh_midi.c \
+../Src/w9825g6kh.c 
+
+OBJS += \
+./Src/audio.o \
+./Src/audio_float.o \
+./Src/brick6_app_init.o \
+./Src/brick6_refactor.o \
+./Src/cs42448.o \
+./Src/diagnostics_tasklet.o \
+./Src/dma.o \
+./Src/engine_tasklet.o \
+./Src/fmc.o \
+./Src/gpio.o \
+./Src/i2c.o \
+./Src/main.o \
+./Src/mixer.o \
+./Src/sai.o \
+./Src/sd_audio_block_ring.o \
+./Src/sd_stream.o \
+./Src/sdmmc.o \
+./Src/sdram.o \
+./Src/sdram_alloc.o \
+./Src/stm32h7xx_hal_msp.o \
+./Src/stm32h7xx_it.o \
+./Src/syscalls.o \
+./Src/sysmem.o \
+./Src/system_stm32h7xx.o \
+./Src/ui_tasklet.o \
+./Src/usart.o \
+./Src/usbh_midi.o \
+./Src/w9825g6kh.o 
+
+C_DEPS += \
+./Src/audio.d \
+./Src/audio_float.d \
+./Src/brick6_app_init.d \
+./Src/brick6_refactor.d \
+./Src/cs42448.d \
+./Src/diagnostics_tasklet.d \
+./Src/dma.d \
+./Src/engine_tasklet.d \
+./Src/fmc.d \
+./Src/gpio.d \
+./Src/i2c.d \
+./Src/main.d \
+./Src/mixer.d \
+./Src/sai.d \
+./Src/sd_audio_block_ring.d \
+./Src/sd_stream.d \
+./Src/sdmmc.d \
+./Src/sdram.d \
+./Src/sdram_alloc.d \
+./Src/stm32h7xx_hal_msp.d \
+./Src/stm32h7xx_it.d \
+./Src/syscalls.d \
+./Src/sysmem.d \
+./Src/system_stm32h7xx.d \
+./Src/ui_tasklet.d \
+./Src/usart.d \
+./Src/usbh_midi.d \
+./Src/w9825g6kh.d 
+
+
+# Each subdirectory must supply rules for building sources it contributes
+Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m7 -std=gnu11 -DDEBUG -DUSE_PWR_LDO_SUPPLY -DUSE_HAL_DRIVER -DSTM32H743xx -c -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc" -I../Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32H7xx/Include -I../Drivers/CMSIS/Include -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App" -O3 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@"
+
+clean: clean-Src
+
+clean-Src:
+	-$(RM) ./Src/audio.cyclo ./Src/audio.d ./Src/audio.o ./Src/audio.su ./Src/audio_float.cyclo ./Src/audio_float.d ./Src/audio_float.o ./Src/audio_float.su ./Src/brick6_app_init.cyclo ./Src/brick6_app_init.d ./Src/brick6_app_init.o ./Src/brick6_app_init.su ./Src/brick6_refactor.cyclo ./Src/brick6_refactor.d ./Src/brick6_refactor.o ./Src/brick6_refactor.su ./Src/cs42448.cyclo ./Src/cs42448.d ./Src/cs42448.o ./Src/cs42448.su ./Src/diagnostics_tasklet.cyclo ./Src/diagnostics_tasklet.d ./Src/diagnostics_tasklet.o ./Src/diagnostics_tasklet.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/engine_tasklet.cyclo ./Src/engine_tasklet.d ./Src/engine_tasklet.o ./Src/engine_tasklet.su ./Src/fmc.cyclo ./Src/fmc.d ./Src/fmc.o ./Src/fmc.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/mixer.cyclo ./Src/mixer.d ./Src/mixer.o ./Src/mixer.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/sd_audio_block_ring.cyclo ./Src/sd_audio_block_ring.d ./Src/sd_audio_block_ring.o ./Src/sd_audio_block_ring.su ./Src/sd_stream.cyclo ./Src/sd_stream.d ./Src/sd_stream.o ./Src/sd_stream.su ./Src/sdmmc.cyclo ./Src/sdmmc.d ./Src/sdmmc.o ./Src/sdmmc.su ./Src/sdram.cyclo ./Src/sdram.d ./Src/sdram.o ./Src/sdram.su ./Src/sdram_alloc.cyclo ./Src/sdram_alloc.d ./Src/sdram_alloc.o ./Src/sdram_alloc.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/ui_tasklet.cyclo ./Src/ui_tasklet.d ./Src/ui_tasklet.o ./Src/ui_tasklet.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su ./Src/usbh_midi.cyclo ./Src/usbh_midi.d ./Src/usbh_midi.o ./Src/usbh_midi.su ./Src/w9825g6kh.cyclo ./Src/w9825g6kh.d ./Src/w9825g6kh.o ./Src/w9825g6kh.su
+
+.PHONY: clean-Src
+

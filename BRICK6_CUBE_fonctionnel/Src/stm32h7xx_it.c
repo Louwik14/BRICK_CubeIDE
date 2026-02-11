@@ -281,10 +281,10 @@ void SAI1_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-void OTG_HS_IRQHandler(void)
+/*void OTG_HS_IRQHandler(void)
 {
   HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
-}
+}/*
 
 /*void OTG_FS_IRQHandler(void)
 {

@@ -1,0 +1,5 @@
+../Src/diagnostics_tasklet.c:85:6:diagnostics_log	8	static
+../Src/diagnostics_tasklet.c:90:6:diagnostics_logf	272	static
+../Src/diagnostics_tasklet.c:109:6:diagnostics_request_codec_dump	0	static
+../Src/diagnostics_tasklet.c:133:6:diagnostics_sdram_alloc_test	16	static
+../Src/diagnostics_tasklet.c:194:6:diagnostics_tasklet_poll	104	static

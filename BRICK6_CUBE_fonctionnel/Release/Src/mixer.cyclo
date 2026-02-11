@@ -1,0 +1,4 @@
+../Src/mixer.c:7:6:mixer_init	1
+../Src/mixer.c:15:6:mixer_set_master	2
+../Src/mixer.c:23:6:mixer_set_output_gain	1
+../Src/mixer.c:34:6:mixer_process	3
