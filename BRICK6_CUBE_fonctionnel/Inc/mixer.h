@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-#define MIXER_INPUTS   8
+#define MIXER_INPUTS   6
 #define MIXER_OUTPUTS  8
 
 void mixer_init(void);

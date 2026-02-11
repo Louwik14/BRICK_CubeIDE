@@ -158,61 +158,95 @@ bool CS42448_Init(uint8_t addr)
 
 void CS42448_DiagnosticsDump(uint8_t addr)
 {
+  uint8_t value = 0U;
+  HAL_StatusTypeDef status = HAL_OK;
+
+  diagnostics_logf("\r\n==== CS42448 DIAGNOSTICS DUMP ====\r\n");
+
+  /* ------------------------------------------------------------
+     Core registers
+     ------------------------------------------------------------ */
   struct
   {
     uint8_t reg;
     const char *label;
   } const core_regs[] = {
-    {CS42448_REG_CHIP_ID, "CHIP_ID"},
-    {CS42448_REG_POWER_CTRL, "POWER_CTRL"},
-    {CS42448_REG_FUNCTIONAL_MODE, "FUNCTIONAL_MODE"},
-    {CS42448_REG_INTERFACE_FORMAT, "INTERFACE_FORMAT"},
-    {CS42448_REG_ADC_CTRL, "ADC_CTRL"},
-    {CS42448_REG_DAC_MUTE, "DAC_MUTE"}};
+      {0x01, "CHIP_ID"},
+      {0x02, "POWER_CTRL"},
+      {0x03, "FUNCTIONAL_MODE"},
+      {0x04, "INTERFACE_FORMAT"},
+      {0x05, "ADC_CTRL"},
+      {0x06, "TRANSITION_CTRL"},
+      {0x07, "DAC_MUTE"}};
 
-  uint8_t value = 0U;
-  HAL_StatusTypeDef status = HAL_OK;
-
-  for (size_t i = 0U; i < (sizeof(core_regs) / sizeof(core_regs[0])); ++i)
+  for (size_t i = 0; i < (sizeof(core_regs) / sizeof(core_regs[0])); i++)
   {
     status = cs42448_read_reg(addr, core_regs[i].reg, &value);
     if (status == HAL_OK)
     {
-      diagnostics_logf("[CS42448] %-16s = 0x%02X\r\n", core_regs[i].label, value);
-    }
-    else
-    {
-      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n", core_regs[i].reg);
-    }
-  }
-
-  for (uint8_t reg = CS42448_REG_DAC_VOL_BASE; reg <= CS42448_REG_DAC_VOL_LAST; ++reg)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("[CS42448] DAC_VOL[%u]       = 0x%02X\r\n",
-                       (unsigned int)(reg - CS42448_REG_DAC_VOL_BASE + 1U),
+      diagnostics_logf("[CS42448] %-18s (0x%02X) = 0x%02X\r\n",
+                       core_regs[i].label,
+                       core_regs[i].reg,
                        value);
     }
     else
     {
-      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n", reg);
+      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n",
+                       core_regs[i].reg);
     }
   }
 
-  for (uint8_t reg = CS42448_REG_ADC_VOL_BASE; reg <= CS42448_REG_ADC_VOL_LAST; ++reg)
+  /* ------------------------------------------------------------
+     DAC volumes
+     ------------------------------------------------------------ */
+  diagnostics_logf("\r\n-- DAC VOLUMES --\r\n");
+
+  for (uint8_t reg = 0x08; reg <= 0x0F; reg++)
   {
     status = cs42448_read_reg(addr, reg, &value);
     if (status == HAL_OK)
     {
-      diagnostics_logf("[CS42448] ADC_VOL[%u]       = 0x%02X\r\n",
-                       (unsigned int)(reg - CS42448_REG_ADC_VOL_BASE + 1U),
+      diagnostics_logf("[CS42448] DAC_VOL[%u] (0x%02X) = 0x%02X\r\n",
+                       (unsigned int)(reg - 0x08 + 1U),
+                       reg,
                        value);
+    }
+  }
+
+  /* ------------------------------------------------------------
+     ADC volumes
+     ------------------------------------------------------------ */
+  diagnostics_logf("\r\n-- ADC VOLUMES --\r\n");
+
+  for (uint8_t reg = 0x11; reg <= 0x16; reg++)
+  {
+    status = cs42448_read_reg(addr, reg, &value);
+    if (status == HAL_OK)
+    {
+      diagnostics_logf("[CS42448] ADC_VOL[%u] (0x%02X) = 0x%02X\r\n",
+                       (unsigned int)(reg - 0x11 + 1U),
+                       reg,
+                       value);
+    }
+  }
+
+  /* ------------------------------------------------------------
+     FULL RAW REGISTER DUMP (most important for DAC3–8 debug)
+     ------------------------------------------------------------ */
+  diagnostics_logf("\r\n-- RAW REGISTER DUMP 0x00–0x30 --\r\n");
+
+  for (uint8_t reg = 0x00; reg <= 0x30; reg++)
+  {
+    status = cs42448_read_reg(addr, reg, &value);
+    if (status == HAL_OK)
+    {
+      diagnostics_logf("REG[0x%02X] = 0x%02X\r\n", reg, value);
     }
     else
     {
-      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n", reg);
+      diagnostics_logf("REG[0x%02X] = ERROR\r\n", reg);
     }
   }
+
+  diagnostics_logf("==== END CS42448 DUMP ====\r\n\r\n");
 }

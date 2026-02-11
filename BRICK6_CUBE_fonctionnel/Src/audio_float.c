@@ -13,7 +13,7 @@
    ============================================================ */
 
 #define AUDIO_TDM_SLOTS          8
-#define AUDIO_ADC_CHANNELS       8
+#define AUDIO_ADC_CHANNELS       6
 #define AUDIO_DAC_CHANNELS       8
 
 /* Must match AUDIO_FRAMES_PER_HALF in audio.c */
@@ -218,12 +218,18 @@ void audio_process_block_int32(int32_t *rx,
        6. Pack float outputs -> TX (with output adjust)
        ------------------------------------------------------------ */
 
+    /* ------------------------------------------------------------
+       6. Pack float outputs -> TX (with output adjust)
+       ------------------------------------------------------------ */
+
+
+
     for(uint32_t n = 0; n < frames; n++)
     {
         for(uint32_t slot = 0; slot < AUDIO_TDM_SLOTS; slot++)
         {
-        	tx[n * AUDIO_TDM_SLOTS + slot]
-        	    = f2s24(out_buf[slot][n]);
+            tx[n * AUDIO_TDM_SLOTS + slot] =
+                f2s24(out_buf[slot][n]);
         }
     }
 }

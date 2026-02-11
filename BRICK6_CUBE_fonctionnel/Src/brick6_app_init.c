@@ -92,7 +92,7 @@ void brick6_app_init(void)
   audio_float_set_output_compensation(1.0f);
 
   /* Example: set master volume (-6 dB approx) */
-  mixer_set_master(1.5f);
+  mixer_set_master(1.0f);
 
   /* Example: output gains (DAC1–6 unity) */
   for (int ch = 0; ch < 6; ch++)

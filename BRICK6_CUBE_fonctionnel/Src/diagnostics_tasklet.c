@@ -209,16 +209,7 @@ void diagnostics_tasklet_poll(void)
   {
     uint32_t error = HAL_SAI_GetError(&hsai_BlockA1);
 
-#if BRICK6_ENABLE_DIAGNOSTICS
-    LOGF("audio tx_half=%lu tx_full=%lu rx_half=%lu rx_full=%lu "
-         "sd_err=%lu engine_ticks=%lu\r\n",
-         (unsigned long)brick6_audio_tx_half_count,
-         (unsigned long)brick6_audio_tx_full_count,
-         (unsigned long)brick6_audio_rx_half_count,
-         (unsigned long)brick6_audio_rx_full_count,
-         (unsigned long)brick6_sd_err_count,
-         (unsigned long)engine_tick_count);
-#endif
+
 
     if (error != 0U && error != last_error)
     {
