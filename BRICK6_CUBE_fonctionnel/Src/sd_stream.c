@@ -28,7 +28,6 @@
  */
 
 #include "sd_stream.h"
-#include "brick6_refactor.h"
 #include "sd_audio_block_ring.h"
 
 #include <stdio.h>

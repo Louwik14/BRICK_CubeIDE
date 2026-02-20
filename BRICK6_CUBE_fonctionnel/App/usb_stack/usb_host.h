@@ -31,7 +31,6 @@
 #include "stm32h7xx_hal.h"
 
 /* USER CODE BEGIN INCLUDE */
-#include "brick6_refactor.h"
 /* USER CODE END INCLUDE */
 
 /** @addtogroup USBH_OTG_DRIVER

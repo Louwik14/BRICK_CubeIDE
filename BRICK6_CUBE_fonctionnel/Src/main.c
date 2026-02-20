@@ -22,6 +22,7 @@
 #include "i2c.h"
 #include "sai.h"
 #include "sdmmc.h"
+#include "spi.h"
 #include "usart.h"
 #include "usb_otg.h"
 #include "gpio.h"
@@ -29,7 +30,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "brick6_refactor.h"
 #include "usb_host.h"
 #include "cs42448.h"
 #include "midi.h"
@@ -37,7 +37,6 @@
 #include "sdram.h"
 #include "sd_stream.h"
 #include "engine_tasklet.h"
-#include "diagnostics_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
 #include "audio.h"
@@ -109,9 +108,9 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
-  //MX_USB_OTG_FS_PCD_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
+  MX_SPI5_Init();
   /* USER CODE BEGIN 2 */
   brick6_app_init();
 
@@ -119,17 +118,21 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t last = 0;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	 // engine_tasklet_poll();
+	  engine_tasklet_poll();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
     //usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
     //midi_host_poll_bounded(MIDI_BUDGET_MSGS);
-    ui_tasklet_poll();
-    diagnostics_tasklet_poll();
+	  if(engine_tick_count != last)
+	      {
+	          last = engine_tick_count;
+	          ui_tasklet_poll();
+	      }
   }
 
   /* USER CODE END 3 */

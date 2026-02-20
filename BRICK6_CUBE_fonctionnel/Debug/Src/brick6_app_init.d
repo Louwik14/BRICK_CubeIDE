@@ -1,5 +1,5 @@
 Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
- ../Inc/brick6_refactor.h ../Inc/diagnostics_tasklet.h \
+ ../Inc/engine_tasklet.h ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -36,18 +36,20 @@ Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sdram.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_fmc.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/engine_tasklet.h ../Inc/brick6_refactor.h ../Inc/sai.h \
- ../Inc/main.h ../Inc/sd_stream.h ../Inc/sdmmc.h ../Inc/sdram.h \
- ../Inc/audio.h ../Inc/audio_float.h ../Inc/cs42448.h ../Inc/mixer.h
+ ../Inc/sd_stream.h ../Inc/sdmmc.h ../Inc/sdram.h ../Inc/audio.h \
+ ../Inc/audio_float.h ../Inc/cs42448.h ../Inc/mixer.h
 ../Inc/brick6_app_init.h:
-../Inc/brick6_refactor.h:
-../Inc/diagnostics_tasklet.h:
+../Inc/engine_tasklet.h:
+../Inc/sai.h:
+../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:
@@ -84,16 +86,14 @@ Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_sdram.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_fmc.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
-../Inc/engine_tasklet.h:
-../Inc/brick6_refactor.h:
-../Inc/sai.h:
-../Inc/main.h:
 ../Inc/sd_stream.h:
 ../Inc/sdmmc.h:
 ../Inc/sdram.h:

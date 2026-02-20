@@ -59,8 +59,30 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define OLED_RES_Pin GPIO_PIN_6
+#define OLED_RES_GPIO_Port GPIOF
+#define ENC1_A_Pin GPIO_PIN_0
+#define ENC1_A_GPIO_Port GPIOA
+#define ENC1_B_Pin GPIO_PIN_2
+#define ENC1_B_GPIO_Port GPIOA
+#define ENC2_A_Pin GPIO_PIN_5
+#define ENC2_A_GPIO_Port GPIOA
+#define ENC2_B_Pin GPIO_PIN_6
+#define ENC2_B_GPIO_Port GPIOA
+#define ENC3_A_Pin GPIO_PIN_4
+#define ENC3_A_GPIO_Port GPIOC
+#define ENC3_B_Pin GPIO_PIN_5
+#define ENC3_B_GPIO_Port GPIOC
+#define ENC4_A_Pin GPIO_PIN_1
+#define ENC4_A_GPIO_Port GPIOB
+#define OLED_CS_Pin GPIO_PIN_2
+#define OLED_CS_GPIO_Port GPIOB
 #define LED_DEBUG_Pin GPIO_PIN_7
 #define LED_DEBUG_GPIO_Port GPIOH
+#define OLED_DC_Pin GPIO_PIN_11
+#define OLED_DC_GPIO_Port GPIOD
+#define ENC4_B_Pin GPIO_PIN_6
+#define ENC4_B_GPIO_Port GPIOI
 
 /* USER CODE BEGIN Private defines */
 

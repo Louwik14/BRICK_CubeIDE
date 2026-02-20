@@ -10,7 +10,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "brick6_refactor.h"
 
 void midi_host_poll(void);
 void midi_host_poll_bounded(uint32_t max_msgs);

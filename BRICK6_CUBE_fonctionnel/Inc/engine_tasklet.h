@@ -2,7 +2,6 @@
 #define ENGINE_TASKLET_H
 
 #include <stdint.h>
-#include "brick6_refactor.h"
 
 extern volatile uint32_t engine_tick_count;
 

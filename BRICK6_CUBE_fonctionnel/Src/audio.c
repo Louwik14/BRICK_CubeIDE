@@ -1,5 +1,6 @@
 #include "audio.h"
-#include "audio_float.h"   /* <-- NEW : float engine boundary */
+#include "audio_float.h"
+#include "engine_tasklet.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -95,6 +96,9 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if (hsai == sai_rx)
     {
         process_half(0);
+
+        /* tick scheduler */
+        engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
     }
 }
 
@@ -103,5 +107,8 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if (hsai == sai_rx)
     {
         process_half(1);
+
+        /* tick scheduler */
+        engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
     }
 }

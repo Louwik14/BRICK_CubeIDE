@@ -27,7 +27,6 @@
  */
 
 #include "cs42448.h"
-#include "diagnostics_tasklet.h"
 #include "i2c.h"
 #include <stddef.h>
 #include <stdbool.h>
@@ -90,16 +89,6 @@ static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uin
                            100U);
 }
 
-static HAL_StatusTypeDef cs42448_read_reg(uint8_t addr, uint8_t reg, uint8_t *value)
-{
-  return HAL_I2C_Mem_Read(&hi2c1,
-                          (uint16_t)(addr << 1),
-                          reg,
-                          I2C_MEMADD_SIZE_8BIT,
-                          value,
-                          1U,
-                          100U);
-}
 
 static bool cs42448_is_present(uint8_t addr)
 {
@@ -156,97 +145,3 @@ bool CS42448_Init(uint8_t addr)
   return true;
 }
 
-void CS42448_DiagnosticsDump(uint8_t addr)
-{
-  uint8_t value = 0U;
-  HAL_StatusTypeDef status = HAL_OK;
-
-  diagnostics_logf("\r\n==== CS42448 DIAGNOSTICS DUMP ====\r\n");
-
-  /* ------------------------------------------------------------
-     Core registers
-     ------------------------------------------------------------ */
-  struct
-  {
-    uint8_t reg;
-    const char *label;
-  } const core_regs[] = {
-      {0x01, "CHIP_ID"},
-      {0x02, "POWER_CTRL"},
-      {0x03, "FUNCTIONAL_MODE"},
-      {0x04, "INTERFACE_FORMAT"},
-      {0x05, "ADC_CTRL"},
-      {0x06, "TRANSITION_CTRL"},
-      {0x07, "DAC_MUTE"}};
-
-  for (size_t i = 0; i < (sizeof(core_regs) / sizeof(core_regs[0])); i++)
-  {
-    status = cs42448_read_reg(addr, core_regs[i].reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("[CS42448] %-18s (0x%02X) = 0x%02X\r\n",
-                       core_regs[i].label,
-                       core_regs[i].reg,
-                       value);
-    }
-    else
-    {
-      diagnostics_logf("[CS42448] ERROR reading reg 0x%02X\r\n",
-                       core_regs[i].reg);
-    }
-  }
-
-  /* ------------------------------------------------------------
-     DAC volumes
-     ------------------------------------------------------------ */
-  diagnostics_logf("\r\n-- DAC VOLUMES --\r\n");
-
-  for (uint8_t reg = 0x08; reg <= 0x0F; reg++)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("[CS42448] DAC_VOL[%u] (0x%02X) = 0x%02X\r\n",
-                       (unsigned int)(reg - 0x08 + 1U),
-                       reg,
-                       value);
-    }
-  }
-
-  /* ------------------------------------------------------------
-     ADC volumes
-     ------------------------------------------------------------ */
-  diagnostics_logf("\r\n-- ADC VOLUMES --\r\n");
-
-  for (uint8_t reg = 0x11; reg <= 0x16; reg++)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("[CS42448] ADC_VOL[%u] (0x%02X) = 0x%02X\r\n",
-                       (unsigned int)(reg - 0x11 + 1U),
-                       reg,
-                       value);
-    }
-  }
-
-  /* ------------------------------------------------------------
-     FULL RAW REGISTER DUMP (most important for DAC3–8 debug)
-     ------------------------------------------------------------ */
-  diagnostics_logf("\r\n-- RAW REGISTER DUMP 0x00–0x30 --\r\n");
-
-  for (uint8_t reg = 0x00; reg <= 0x30; reg++)
-  {
-    status = cs42448_read_reg(addr, reg, &value);
-    if (status == HAL_OK)
-    {
-      diagnostics_logf("REG[0x%02X] = 0x%02X\r\n", reg, value);
-    }
-    else
-    {
-      diagnostics_logf("REG[0x%02X] = ERROR\r\n", reg);
-    }
-  }
-
-  diagnostics_logf("==== END CS42448 DUMP ====\r\n\r\n");
-}

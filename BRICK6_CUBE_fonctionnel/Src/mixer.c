@@ -20,6 +20,12 @@ void mixer_set_master(float gain)
     master_gain = gain;
 }
 
+/* >>> AJOUT <<< */
+float mixer_get_master(void)
+{
+    return master_gain;
+}
+
 void mixer_set_output_gain(uint32_t ch, float gain)
 {
     if(ch >= MIXER_OUTPUTS)

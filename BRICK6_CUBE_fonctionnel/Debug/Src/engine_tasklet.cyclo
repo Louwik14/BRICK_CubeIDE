@@ -1,4 +1,4 @@
-../Src/engine_tasklet.c:35:13:engine_tick	1
-../Src/engine_tasklet.c:40:6:engine_tasklet_init	2
-../Src/engine_tasklet.c:52:6:engine_tasklet_notify_frames	1
-../Src/engine_tasklet.c:57:6:engine_tasklet_poll	2
+../Src/engine_tasklet.c:47:13:engine_tick	1
+../Src/engine_tasklet.c:56:6:engine_tasklet_init	1
+../Src/engine_tasklet.c:72:6:engine_tasklet_notify_frames	1
+../Src/engine_tasklet.c:81:6:engine_tasklet_poll	2

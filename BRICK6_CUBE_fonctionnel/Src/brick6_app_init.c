@@ -30,8 +30,6 @@
 #include <string.h>
 #include "brick6_app_init.h"
 
-#include "brick6_refactor.h"
-#include "diagnostics_tasklet.h"
 #include "engine_tasklet.h"
 //#include "midi.h"
 #include "sai.h"
@@ -82,7 +80,6 @@ void brick6_app_init(void)
 
   /* --- Codec init --- */
   CS42448_Init(0x48);
-  CS42448_DiagnosticsDump(0x48);
 
   /* --- Mixer init (first engine module) --- */
   mixer_init();
@@ -92,7 +89,7 @@ void brick6_app_init(void)
   audio_float_set_output_compensation(1.0f);
 
   /* Example: set master volume (-6 dB approx) */
-  mixer_set_master(1.0f);
+  mixer_set_master(2.0f);
 
   /* Example: output gains (DAC1–6 unity) */
   for (int ch = 0; ch < 6; ch++)
@@ -106,9 +103,9 @@ void brick6_app_init(void)
   /* Float DSP entry point */
   audio_set_float_callback(my_dsp);
 
+  engine_tasklet_init(48000);
   /* --- Start DMA audio --- */
   audio_start();
-
 
   HAL_Delay(200);
 }

@@ -27,9 +27,28 @@
  */
 
 #include "ui_tasklet.h"
-#include "brick6_refactor.h"
+#include "drv_display.h"
+#include "app_controls.h"
 
 void ui_tasklet_poll(void)
 {
-  (void)0;
+    static uint8_t init = 0;
+    static uint32_t div = 0;
+
+    if (!init)
+    {
+        init = 1;
+
+        drv_display_init();
+        app_controls_init();
+    }
+
+    app_controls_process();
+
+    div++;
+    if (div >= 25)
+    {
+        div = 0;
+        app_controls_render();
+    }
 }

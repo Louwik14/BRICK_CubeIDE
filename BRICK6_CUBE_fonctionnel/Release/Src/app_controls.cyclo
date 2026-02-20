@@ -1,0 +1,3 @@
+../Src/app_controls.c:10:6:app_controls_init	1
+../Src/app_controls.c:20:6:app_controls_process	2
+../Src/app_controls.c:49:6:app_controls_render	1
