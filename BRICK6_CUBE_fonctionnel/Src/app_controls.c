@@ -3,6 +3,7 @@
 #include "drv_display.h"
 #include "mixer.h"
 #include "cpu_load.h"
+#include "audio_float.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -20,9 +21,9 @@ void app_controls_init(void)
     drv_encoders_init();
 
     mixer_set_master(param_to_gain(params[0]));
-    mixer_set_track_gain(0U, param_to_gain(params[1]));
-    mixer_set_track_gain(1U, param_to_gain(params[2]));
-    mixer_set_track_gain(2U, param_to_gain(params[3]));
+    audio_float_set_track_insert_level(0U, (float)params[1] / 127.0f);
+    audio_float_set_track_insert_level(1U, (float)params[2] / 127.0f);
+    audio_float_set_track_insert_level(2U, (float)params[3] / 127.0f);
 }
 
 void app_controls_process(void)
@@ -47,9 +48,9 @@ void app_controls_process(void)
     }
 
     mixer_set_master(param_to_gain(params[0]));
-    mixer_set_track_gain(0U, param_to_gain(params[1]));
-    mixer_set_track_gain(1U, param_to_gain(params[2]));
-    mixer_set_track_gain(2U, param_to_gain(params[3]));
+    audio_float_set_track_insert_level(0U, (float)params[1] / 127.0f);
+    audio_float_set_track_insert_level(1U, (float)params[2] / 127.0f);
+    audio_float_set_track_insert_level(2U, (float)params[3] / 127.0f);
 }
 
 void app_controls_render(void)
