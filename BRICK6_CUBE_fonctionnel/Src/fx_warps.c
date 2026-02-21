@@ -6,6 +6,10 @@ static warps_params_t g_params;
 static int g_fx_enabled = 1;
 static float g_dry_wet = 0.0f;
 
+#define FX_WARPS_BLOCK_SIZE 32
+static float g_wet_l[FX_WARPS_BLOCK_SIZE];
+static float g_wet_r[FX_WARPS_BLOCK_SIZE];
+
 static float clamp01(float x)
 {
     if(x < 0.0f) return 0.0f;
@@ -51,22 +55,19 @@ void fx_warps_process(float* inL, float* inR, float* outL, float* outR, int size
         return;
     }
 
-    for(int offset = 0; offset < size; offset += 32)
+    for(int offset = 0; offset < size; offset += FX_WARPS_BLOCK_SIZE)
     {
         int chunk = size - offset;
-        if(chunk > 32) chunk = 32;
+        if(chunk > FX_WARPS_BLOCK_SIZE) chunk = FX_WARPS_BLOCK_SIZE;
 
-        float wetL[32];
-        float wetR[32];
-
-        warps_fx_engine_process(inL + offset, inR + offset, wetL, wetR, chunk);
+        warps_fx_engine_process(inL + offset, inR + offset, g_wet_l, g_wet_r, chunk);
 
         for(int i = 0; i < chunk; ++i)
         {
             float dryL = inL[offset + i];
             float dryR = inR[offset + i];
-            outL[offset + i] = dryL + (wetL[i] - dryL) * g_dry_wet;
-            outR[offset + i] = dryR + (wetR[i] - dryR) * g_dry_wet;
+            outL[offset + i] = dryL + (g_wet_l[i] - dryL) * g_dry_wet;
+            outR[offset + i] = dryR + (g_wet_r[i] - dryR) * g_dry_wet;
         }
     }
 }

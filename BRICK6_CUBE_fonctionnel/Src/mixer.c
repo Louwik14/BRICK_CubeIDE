@@ -54,12 +54,13 @@ void mixer_process(float **in,
         for(int ch = 0; ch < 8; ch++)
             out[ch][n] = 0.0f;
 
-        /* Copy input to local temp buffers before FX */
-        tmpL[n] = in[2][n];
-        tmpR[n] = in[3][n];
+        /* Copy input to outputs before FX */
+        out[2][n] = in[2][n];
+        out[3][n] = in[3][n];
     }
 
-    fx_warps_process(tmpL, tmpR, out[2], out[3], (int)frames);
+    /* In-place FX processing: out[2]/out[3] are dry input and output target */
+    fx_warps_process(out[2], out[3], out[2], out[3], (int)frames);
 
     for(uint32_t n = 0; n < frames; n++)
     {
