@@ -17,6 +17,7 @@ void fx_warps_process(float* inL, float* inR, float* outL, float* outR, int size
 void fx_warps_set_algorithm(float v);
 void fx_warps_set_parameter(float v);
 void fx_warps_set_drive(float d1, float d2);
+void fx_warps_set_drywet(float v);
 
 void fx_warps_enable(int enabled);
 

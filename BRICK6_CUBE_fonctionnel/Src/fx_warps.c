@@ -4,6 +4,7 @@
 
 static warps_params_t g_params;
 static int g_fx_enabled = 1;
+static float g_dry_wet = 0.0f;
 
 static float clamp01(float x)
 {
@@ -26,6 +27,7 @@ void fx_warps_init(float sample_rate)
     warps_fx_engine_set_drive(g_params.drive1, g_params.drive2);
 
     g_fx_enabled = 1;
+    g_dry_wet = 0.0f;
 }
 
 void fx_warps_process(float* inL, float* inR, float* outL, float* outR, int size)
@@ -33,7 +35,7 @@ void fx_warps_process(float* inL, float* inR, float* outL, float* outR, int size
     if(size <= 0)
         return;
 
-    if(!g_fx_enabled)
+    if(!g_fx_enabled || g_dry_wet <= 0.0f)
     {
         for(int i = 0; i < size; ++i)
         {
@@ -43,7 +45,30 @@ void fx_warps_process(float* inL, float* inR, float* outL, float* outR, int size
         return;
     }
 
-    warps_fx_engine_process(inL, inR, outL, outR, size);
+    if(g_dry_wet >= 1.0f)
+    {
+        warps_fx_engine_process(inL, inR, outL, outR, size);
+        return;
+    }
+
+    for(int offset = 0; offset < size; offset += 32)
+    {
+        int chunk = size - offset;
+        if(chunk > 32) chunk = 32;
+
+        float wetL[32];
+        float wetR[32];
+
+        warps_fx_engine_process(inL + offset, inR + offset, wetL, wetR, chunk);
+
+        for(int i = 0; i < chunk; ++i)
+        {
+            float dryL = inL[offset + i];
+            float dryR = inR[offset + i];
+            outL[offset + i] = dryL + (wetL[i] - dryL) * g_dry_wet;
+            outR[offset + i] = dryR + (wetR[i] - dryR) * g_dry_wet;
+        }
+    }
 }
 
 void fx_warps_set_algorithm(float v)
@@ -68,4 +93,9 @@ void fx_warps_set_drive(float d1, float d2)
 void fx_warps_enable(int enabled)
 {
     g_fx_enabled = enabled ? 1 : 0;
+}
+
+void fx_warps_set_drywet(float v)
+{
+    g_dry_wet = clamp01(v);
 }
