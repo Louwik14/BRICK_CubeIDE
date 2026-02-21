@@ -1,4 +1,5 @@
 #include "mixer.h"
+#include "fx_warps.h"
 
 /* Mixer state */
 static float master_gain = 1.0f;
@@ -10,6 +11,9 @@ void mixer_init(void)
 
     for(int i = 0; i < MIXER_OUTPUTS; i++)
         out_gain[i] = 1.0f;
+
+    fx_warps_init(48000.0f);
+    fx_warps_enable(1);
 }
 
 void mixer_set_master(float gain)
@@ -47,8 +51,18 @@ void mixer_process(float **in,
         for(int ch = 0; ch < 8; ch++)
             out[ch][n] = 0.0f;
 
-        /* Route ADC2/ADC3 -> DAC3/DAC4 */
-        out[2][n] = in[2][n] * master_gain;
-        out[3][n] = in[3][n] * master_gain;
+        /* Copy input to outputs before FX */
+        out[2][n] = in[2][n];
+        out[3][n] = in[3][n];
+    }
+
+    /* In-place FX processing: out[2]/out[3] are dry input and output target */
+    fx_warps_process(out[2], out[3], out[2], out[3], (int)frames);
+
+    for(uint32_t n = 0; n < frames; n++)
+    {
+        /* Apply master gain after FX */
+        out[2][n] *= master_gain;
+        out[3][n] *= master_gain;
     }
 }

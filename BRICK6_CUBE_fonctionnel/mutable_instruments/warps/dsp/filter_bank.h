@@ -104,7 +104,8 @@ class FilterBank {
   
   float tmp_[2][kMaxFilterBankBlockSize];
   float samples_[kSampleMemorySize];
-  float *delay_buffer_;
+  float delay_buffer_storage_[kDelayLineSize];
+  float* delay_buffer_;
   
   Band band_[kNumBands + 1];
   
