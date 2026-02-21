@@ -37,6 +37,7 @@
    ============================================================ */
 
 #define AUDIO_TDM_SLOTS 8U
+#define AUDIO_IN_QUEUE_DEPTH 3U
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -79,20 +80,20 @@ void audio_float_set_output_compensation(float comp)
 /* État persistant des tracks (plan de contrôle: enabled uniquement). */
 static StereoTrack tracks[MAX_TRACKS];
 
-/* Ping-pong entrée DSP (IRQ écrit, main lit). */
-static StereoTrack in_buf[2][MAX_TRACKS];
+/* File d'entrée DSP (IRQ pousse, main consomme). */
+static StereoTrack in_queue[AUDIO_IN_QUEUE_DEPTH][MAX_TRACKS];
 
-/* Ping-pong sortie DSP master (main écrit, IRQ lit). */
+/* Double-buffer sortie master (main écrit, IRQ lit). */
 static float outL[2][AUDIO_BLOCK_SIZE];
 static float outR[2][AUDIO_BLOCK_SIZE];
 
-static volatile uint8_t in_write_idx = 0U;
-static volatile uint8_t in_read_idx = 1U;
-static volatile uint8_t in_ready = 0U;
+static volatile uint8_t in_write_pos = 0U;
+static volatile uint8_t in_read_pos = 0U;
+static volatile uint8_t in_count = 0U;
 
 static volatile uint8_t out_write_idx = 0U;
-static volatile uint8_t out_read_idx = 1U;
-static volatile uint8_t out_ready = 0U;
+static volatile uint8_t out_read_idx = 0U;
+static volatile uint8_t out_has_valid = 0U;
 
 /* Compteurs debug IRQ<->main (pertes / silences). */
 static volatile uint32_t in_overrun_count = 0U;
@@ -126,12 +127,12 @@ void audio_tracks_init(void)
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
 
-        in_buf[0][t].enabled = 0U;
-        in_buf[1][t].enabled = 0U;
-        memset(in_buf[0][t].L, 0, sizeof(in_buf[0][t].L));
-        memset(in_buf[0][t].R, 0, sizeof(in_buf[0][t].R));
-        memset(in_buf[1][t].L, 0, sizeof(in_buf[1][t].L));
-        memset(in_buf[1][t].R, 0, sizeof(in_buf[1][t].R));
+        for(uint32_t q = 0; q < AUDIO_IN_QUEUE_DEPTH; q++)
+        {
+            in_queue[q][t].enabled = 0U;
+            memset(in_queue[q][t].L, 0, sizeof(in_queue[q][t].L));
+            memset(in_queue[q][t].R, 0, sizeof(in_queue[q][t].R));
+        }
     }
 
     memset(outL[0], 0, sizeof(outL[0]));
@@ -139,13 +140,13 @@ void audio_tracks_init(void)
     memset(outR[0], 0, sizeof(outR[0]));
     memset(outR[1], 0, sizeof(outR[1]));
 
-    in_write_idx = 0U;
-    in_read_idx = 1U;
-    in_ready = 0U;
+    in_write_pos = 0U;
+    in_read_pos = 0U;
+    in_count = 0U;
 
     out_write_idx = 0U;
-    out_read_idx = 1U;
-    out_ready = 0U;
+    out_read_idx = 0U;
+    out_has_valid = 0U;
 
     in_overrun_count = 0U;
     out_underflow_count = 0U;
@@ -353,8 +354,8 @@ static void audio_io_pack(int32_t *tx,
 
    Pipeline IRQ:
    1) audio_io_unpack()
-   2) publication vers buffer DSP partagé
-   3) audio_io_pack() depuis la dernière sortie DSP disponible
+   2) push vers file d'entrée DSP (profondeur courte)
+   3) audio_io_pack() depuis la dernière sortie DSP valide (hold-last)
    ============================================================ */
 
 /** Voir audio_float.h */
@@ -366,24 +367,22 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    uint8_t write_idx;
-    uint8_t can_publish;
+    uint8_t write_pos;
+    uint8_t can_push;
     uint8_t pack_idx;
-    uint8_t has_output;
+    uint8_t has_valid_output;
 
     __disable_irq();
-    write_idx = in_write_idx;
-    can_publish = (in_ready == 0U) ? 1U : 0U;
+    write_pos = in_write_pos;
+    can_push = (in_count < AUDIO_IN_QUEUE_DEPTH) ? 1U : 0U;
 
     pack_idx = out_read_idx;
-    has_output = out_ready;
-    if(has_output)
-        out_ready = 0U;
+    has_valid_output = out_has_valid;
     __enable_irq();
 
-    if(can_publish)
+    if(can_push)
     {
-        StereoTrack *write_buf = in_buf[write_idx];
+        StereoTrack *write_buf = in_queue[write_pos];
 
         for(uint32_t t = 0; t < MAX_TRACKS; t++)
             write_buf[t].enabled = tracks[t].enabled;
@@ -391,9 +390,8 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
         audio_io_unpack(rx, write_buf, frames);
 
         __disable_irq();
-        in_read_idx = write_idx;
-        in_write_idx = (uint8_t)(write_idx ^ 1U);
-        in_ready = 1U;
+        in_write_pos = (uint8_t)((in_write_pos + 1U) % AUDIO_IN_QUEUE_DEPTH);
+        in_count++;
         __enable_irq();
     }
     else
@@ -401,7 +399,7 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
         in_overrun_count++;
     }
 
-    if(has_output)
+    if(has_valid_output)
     {
         audio_io_pack(tx, outL[pack_idx], outR[pack_idx], frames);
     }
@@ -420,22 +418,24 @@ uint32_t audio_dsp_main_process(uint32_t frames)
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    uint8_t read_idx;
+    uint8_t read_pos;
     uint8_t write_idx;
 
     __disable_irq();
-    if(!in_ready)
+    if(in_count == 0U)
     {
         __enable_irq();
         return 0U;
     }
 
-    read_idx = in_read_idx;
+    read_pos = in_read_pos;
+    in_read_pos = (uint8_t)((in_read_pos + 1U) % AUDIO_IN_QUEUE_DEPTH);
+    in_count--;
+
     write_idx = out_write_idx;
-    in_ready = 0U;
     __enable_irq();
 
-    audio_dsp_process(in_buf[read_idx], local_master_l, local_master_r, frames);
+    audio_dsp_process(in_queue[read_pos], local_master_l, local_master_r, frames);
 
     memcpy(outL[write_idx], local_master_l, frames * sizeof(float));
     memcpy(outR[write_idx], local_master_r, frames * sizeof(float));
@@ -443,7 +443,7 @@ uint32_t audio_dsp_main_process(uint32_t frames)
     __disable_irq();
     out_read_idx = write_idx;
     out_write_idx = (uint8_t)(write_idx ^ 1U);
-    out_ready = 1U;
+    out_has_valid = 1U;
     __enable_irq();
 
     return 1U;

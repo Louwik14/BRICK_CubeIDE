@@ -165,8 +165,8 @@ void audio_float_set_output_compensation(float comp);
  *
  * Pipeline IRQ:
  * 1) Unpack TDM -> tracks actives.
- * 2) Publication vers buffer DSP partagé.
- * 3) Pack master/cue à partir de la dernière sortie DSP prête.
+ * 2) Publication vers une petite file d'entrée DSP partagée.
+ * 3) Pack master/cue depuis la dernière sortie DSP valide (hold-last).
  */
 void audio_process_block_int32(int32_t *rx,
                                int32_t *tx,
