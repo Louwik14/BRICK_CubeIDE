@@ -57,8 +57,8 @@ static float output_comp = 1.0f;
 static fx_onepole_t filtL[MAX_TRACKS];
 static fx_onepole_t filtR[MAX_TRACKS];
 static float cutoff_norm[MAX_TRACKS] = {0.25f, 0.25f, 0.25f};
-static float insert_level_target[MAX_TRACKS] = {0.0f, 0.0f, 0.0f};
-static float insert_level_smooth[MAX_TRACKS] = {0.0f, 0.0f, 0.0f};
+static float insert_level_target[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
+static float insert_level_smooth[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
 
 /** Voir audio_float.h */
 void audio_float_set_postgain(float gain)
@@ -149,8 +149,8 @@ void audio_tracks_init(void)
         tracks[t].enabled = 0U;
         track_gain[t] = 1.0f;
         cutoff_norm[t] = 0.25f;
-        insert_level_target[t] = 0.0f;
-        insert_level_smooth[t] = 0.0f;
+        insert_level_target[t] = 1.0f;
+        insert_level_smooth[t] = 1.0f;
 
         fx_onepole_init(&filtL[t]);
         fx_onepole_init(&filtR[t]);

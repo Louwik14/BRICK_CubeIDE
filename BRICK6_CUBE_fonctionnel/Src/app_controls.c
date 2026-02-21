@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 /* Paramètres test encodeurs (0–127):
- * P0=master, P1=track0, P2=track1, P3=track2 */
+ * P0=master, P1=cutoff track0, P2=cutoff track1, P3=cutoff track2 */
 static int16_t params[4] = {127, 127, 127, 127};
 
 static float param_to_gain(int16_t p)
@@ -16,14 +16,20 @@ static float param_to_gain(int16_t p)
     return ((float)p / 127.0f) * 2.0f;
 }
 
+static float param_to_cutoff(int16_t p)
+{
+    const float norm = (float)p / 127.0f;
+    return 0.001f + norm * 0.496f;
+}
+
 void app_controls_init(void)
 {
     drv_encoders_init();
 
     mixer_set_master(param_to_gain(params[0]));
-    audio_float_set_track_insert_level(0U, (float)params[1] / 127.0f);
-    audio_float_set_track_insert_level(1U, (float)params[2] / 127.0f);
-    audio_float_set_track_insert_level(2U, (float)params[3] / 127.0f);
+    audio_float_set_track_filter_cutoff(0U, param_to_cutoff(params[1]));
+    audio_float_set_track_filter_cutoff(1U, param_to_cutoff(params[2]));
+    audio_float_set_track_filter_cutoff(2U, param_to_cutoff(params[3]));
 }
 
 void app_controls_process(void)
@@ -48,9 +54,9 @@ void app_controls_process(void)
     }
 
     mixer_set_master(param_to_gain(params[0]));
-    audio_float_set_track_insert_level(0U, (float)params[1] / 127.0f);
-    audio_float_set_track_insert_level(1U, (float)params[2] / 127.0f);
-    audio_float_set_track_insert_level(2U, (float)params[3] / 127.0f);
+    audio_float_set_track_filter_cutoff(0U, param_to_cutoff(params[1]));
+    audio_float_set_track_filter_cutoff(1U, param_to_cutoff(params[2]));
+    audio_float_set_track_filter_cutoff(2U, param_to_cutoff(params[3]));
 }
 
 void app_controls_render(void)
