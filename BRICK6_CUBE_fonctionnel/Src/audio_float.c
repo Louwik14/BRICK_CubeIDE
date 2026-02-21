@@ -5,7 +5,7 @@
  * Rôle du module:
  * - Convertir le flux DMA TDM8 (int24 right-aligned) en buffers float par track.
  * - Exécuter le callback DSP utilisateur sur les tracks.
- * - Réaliser la somme/mix master et le remappage de sortie TDM.
+ * - Réaliser le mix vers buses internes (MAIN/CUE/SEND) et le remappage de sortie TDM.
  *
  * Architecture (appelant -> appelé):
  * - audio.c (IRQ DMA RX) -> audio_process_block_int32().
@@ -19,7 +19,7 @@
  *
  * Mapping sortie TDM:
  * - MAIN L/R -> slots 0/1.
- * - CUE L/R (copie master) -> slots 2/3.
+ * - CUE L/R (copie MAIN par défaut) -> slots 2/3.
  * - slots 4..7 forcés à 0.
  *
  * Contraintes temps réel:
@@ -195,10 +195,12 @@ static inline int32_t f2s24(float x)
 
    audio_dsp_process():
    - Appelle le callback DSP utilisateur
-   - Réalise la somme tracks -> master avec track_gain/master_gain
+   - Réalise la somme tracks -> bus_main
+   - Copie bus_main -> bus_cue (par défaut)
+   - Initialise send0/send1 (et retours) à zéro
 
    audio_io_pack():
-   - Convertit master float -> TDM int24 right-aligned
+   - Convertit bus MAIN/CUE float -> TDM int24 right-aligned
    - Écrit MAIN/CUE + slots inutilisés à 0
    ============================================================ */
 
@@ -238,8 +240,14 @@ static inline void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
 }
 
 static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
-                                     float *AUDIO_RESTRICT master_l,
-                                     float *AUDIO_RESTRICT master_r,
+                                     float *AUDIO_RESTRICT bus_main_l,
+                                     float *AUDIO_RESTRICT bus_main_r,
+                                     float *AUDIO_RESTRICT bus_cue_l,
+                                     float *AUDIO_RESTRICT bus_cue_r,
+                                     float *AUDIO_RESTRICT send0_l,
+                                     float *AUDIO_RESTRICT send0_r,
+                                     float *AUDIO_RESTRICT send1_l,
+                                     float *AUDIO_RESTRICT send1_r,
                                      uint32_t frames)
 {
     if(float_cb)
@@ -262,8 +270,14 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
 
     if(active_count == 0U)
     {
-        memset(master_l, 0, frames * sizeof(float));
-        memset(master_r, 0, frames * sizeof(float));
+        memset(bus_main_l, 0, frames * sizeof(float));
+        memset(bus_main_r, 0, frames * sizeof(float));
+        memset(bus_cue_l, 0, frames * sizeof(float));
+        memset(bus_cue_r, 0, frames * sizeof(float));
+        memset(send0_l, 0, frames * sizeof(float));
+        memset(send0_r, 0, frames * sizeof(float));
+        memset(send1_l, 0, frames * sizeof(float));
+        memset(send1_r, 0, frames * sizeof(float));
         return;
     }
 
@@ -280,14 +294,27 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
             sum_r += track_buf[t].R[n] * g;
         }
 
-        master_l[n] = sum_l * mg;
-        master_r[n] = sum_r * mg;
+        const float main_l = sum_l * mg;
+        const float main_r = sum_r * mg;
+
+        bus_main_l[n] = main_l;
+        bus_main_r[n] = main_r;
+        bus_cue_l[n] = main_l; /* défaut: CUE = copie MAIN */
+        bus_cue_r[n] = main_r;
+
+        /* Préparation sends/returns (FX non branchés pour l'instant). */
+        send0_l[n] = 0.0f;
+        send0_r[n] = 0.0f;
+        send1_l[n] = 0.0f;
+        send1_r[n] = 0.0f;
     }
 }
 
 static inline void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
-                                 const float *AUDIO_RESTRICT master_l,
-                                 const float *AUDIO_RESTRICT master_r,
+                                 const float *AUDIO_RESTRICT bus_main_l,
+                                 const float *AUDIO_RESTRICT bus_main_r,
+                                 const float *AUDIO_RESTRICT bus_cue_l,
+                                 const float *AUDIO_RESTRICT bus_cue_r,
                                  uint32_t frames)
 {
     const float out_gain = output_adjust;
@@ -295,13 +322,15 @@ static inline void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
 
     for(uint32_t n = 0; n < frames; n++)
     {
-        const float out_l = master_l[n] * out_gain;
-        const float out_r = master_r[n] * out_gain;
+        const float main_l = bus_main_l[n] * out_gain;
+        const float main_r = bus_main_r[n] * out_gain;
+        const float cue_l = bus_cue_l[n] * out_gain;
+        const float cue_r = bus_cue_r[n] * out_gain;
 
-        ptx[0] = f2s24(out_l); /* MAIN L */
-        ptx[1] = f2s24(out_r); /* MAIN R */
-        ptx[2] = f2s24(out_l); /* CUE L  */
-        ptx[3] = f2s24(out_r); /* CUE R  */
+        ptx[0] = f2s24(main_l); /* MAIN L */
+        ptx[1] = f2s24(main_r); /* MAIN R */
+        ptx[2] = f2s24(cue_l);  /* CUE L  */
+        ptx[3] = f2s24(cue_r);  /* CUE R  */
         ptx[4] = 0;
         ptx[5] = 0;
         ptx[6] = 0;
@@ -324,13 +353,28 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames)
 {
-    static float master_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float master_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float bus_main_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float bus_main_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float bus_cue_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float bus_cue_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float send0_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float send0_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float send1_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float send1_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
     audio_io_unpack(rx, tracks, frames);
-    audio_dsp_process(tracks, master_l, master_r, frames);
-    audio_io_pack(tx, master_l, master_r, frames);
+    audio_dsp_process(tracks,
+                      bus_main_l,
+                      bus_main_r,
+                      bus_cue_l,
+                      bus_cue_r,
+                      send0_l,
+                      send0_r,
+                      send1_l,
+                      send1_r,
+                      frames);
+    audio_io_pack(tx, bus_main_l, bus_main_r, bus_cue_l, bus_cue_r, frames);
 }
