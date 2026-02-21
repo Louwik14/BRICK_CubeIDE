@@ -31,6 +31,7 @@
 #include "audio_float.h"
 #include <stdint.h>
 #include <string.h>
+#include "fx_onepole.h"
 
 /* ============================================================
    CONFIG
@@ -53,6 +54,11 @@ static float output_adjust = 1.0f;
 static float postgain = 1.0f;
 static float output_comp = 1.0f;
 
+static fx_onepole_t filtL[MAX_TRACKS];
+static fx_onepole_t filtR[MAX_TRACKS];
+static float cutoff_norm[MAX_TRACKS] = {0.25f, 0.25f, 0.25f};
+static float insert_level[MAX_TRACKS] = {0.0f, 0.0f, 0.0f};
+
 /** Voir audio_float.h */
 void audio_float_set_postgain(float gain)
 {
@@ -70,6 +76,43 @@ void audio_float_set_output_compensation(float comp)
 {
     output_comp = comp;
     output_adjust = postgain * output_comp;
+}
+
+void audio_float_set_track_filter_cutoff(uint32_t track_id, float cutoff)
+{
+    if(track_id >= MAX_TRACKS)
+        return;
+
+    if(cutoff < 0.0f)
+        cutoff = 0.0f;
+    if(cutoff > 0.497f)
+        cutoff = 0.497f;
+
+    cutoff_norm[track_id] = cutoff;
+    fx_onepole_set_freq(&filtL[track_id], cutoff);
+    fx_onepole_set_freq(&filtR[track_id], cutoff);
+}
+
+void audio_float_set_track_filter_mode(uint32_t track_id, uint32_t mode)
+{
+    if(track_id >= MAX_TRACKS)
+        return;
+
+    fx_onepole_set_mode(&filtL[track_id], (mode == 0U) ? 0U : 1U);
+    fx_onepole_set_mode(&filtR[track_id], (mode == 0U) ? 0U : 1U);
+}
+
+void audio_float_set_track_insert_level(uint32_t track_id, float level)
+{
+    if(track_id >= MAX_TRACKS)
+        return;
+
+    if(level < 0.0f)
+        level = 0.0f;
+    if(level > 1.0f)
+        level = 1.0f;
+
+    insert_level[track_id] = level;
 }
 
 /* ============================================================
@@ -104,6 +147,16 @@ void audio_tracks_init(void)
     {
         tracks[t].enabled = 0U;
         track_gain[t] = 1.0f;
+        cutoff_norm[t] = 0.25f;
+        insert_level[t] = 0.0f;
+
+        fx_onepole_init(&filtL[t]);
+        fx_onepole_init(&filtR[t]);
+        fx_onepole_set_mode(&filtL[t], 0U);
+        fx_onepole_set_mode(&filtR[t], 0U);
+        fx_onepole_set_freq(&filtL[t], cutoff_norm[t]);
+        fx_onepole_set_freq(&filtR[t], cutoff_norm[t]);
+
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
     }
@@ -279,6 +332,30 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         memset(send1_l, 0, frames * sizeof(float));
         memset(send1_r, 0, frames * sizeof(float));
         return;
+    }
+
+    /* Insert filtre par track (stéréo, en place), après float_cb(). */
+    for(uint32_t i = 0; i < active_count; i++)
+    {
+        const uint32_t t = active_ids[i];
+        const float lvl = insert_level[t];
+
+        if(lvl <= 0.0f)
+            continue;
+
+        float *AUDIO_RESTRICT tr_l = track_buf[t].L;
+        float *AUDIO_RESTRICT tr_r = track_buf[t].R;
+
+        for(uint32_t n = 0; n < frames; n++)
+        {
+            const float dry_l = tr_l[n];
+            const float dry_r = tr_r[n];
+            const float wet_l = fx_onepole_process(&filtL[t], dry_l);
+            const float wet_r = fx_onepole_process(&filtR[t], dry_r);
+
+            tr_l[n] = dry_l + lvl * (wet_l - dry_l);
+            tr_r[n] = dry_r + lvl * (wet_r - dry_r);
+        }
     }
 
     /* Préparation sends/returns (FX non branchés pour l'instant). */
