@@ -16,6 +16,8 @@ C_SRCS += \
 ../Src/drv_encoders.c \
 ../Src/engine_tasklet.c \
 ../Src/fmc.c \
+../Src/fx_biquad.c \
+../Src/fx_dj_eq3.c \
 ../Src/font.c \
 ../Src/font4x6.c \
 ../Src/font5x7.c \
@@ -54,6 +56,8 @@ OBJS += \
 ./Src/drv_encoders.o \
 ./Src/engine_tasklet.o \
 ./Src/fmc.o \
+./Src/fx_biquad.o \
+./Src/fx_dj_eq3.o \
 ./Src/font.o \
 ./Src/font4x6.o \
 ./Src/font5x7.o \
@@ -92,6 +96,8 @@ C_DEPS += \
 ./Src/drv_encoders.d \
 ./Src/engine_tasklet.d \
 ./Src/fmc.d \
+./Src/fx_biquad.d \
+./Src/fx_dj_eq3.d \
 ./Src/font.d \
 ./Src/font4x6.d \
 ./Src/font5x7.d \
