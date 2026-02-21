@@ -88,9 +88,13 @@ static void process_half(uint32_t half_index)
     int32_t *tx = &tx_buffer[offset];
 
     /* Frontière moteur float (un bloc fixe par IRQ). */
+#if (CPU_LOAD_MODE == CPU_LOAD_MODE_DSP_ONLY)
     cpu_load_block_start_irq();
+#endif
     audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);
+#if (CPU_LOAD_MODE == CPU_LOAD_MODE_DSP_ONLY)
     cpu_load_block_end_irq();
+#endif
 }
 
 /* ============================================================
@@ -147,10 +151,16 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
     {
+#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
+        cpu_load_block_start_irq();
+#endif
         process_half(0);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
+#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
+        cpu_load_block_end_irq();
+#endif
     }
 }
 
@@ -170,9 +180,15 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
     {
+#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
+        cpu_load_block_start_irq();
+#endif
         process_half(1);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
+#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
+        cpu_load_block_end_irq();
+#endif
     }
 }
