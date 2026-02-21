@@ -60,7 +60,7 @@ typedef struct
  * @param track_count Nombre de tracks valides (MAX_TRACKS).
  * @param frames Taille de bloc en frames (samples par canal).
  */
-typedef void (*audio_dsp_cb)(StereoTrack *tracks,
+typedef void (*audio_dsp_cb)(StereoTrack *AUDIO_RESTRICT tracks,
                              uint32_t track_count,
                              uint32_t frames);
 
