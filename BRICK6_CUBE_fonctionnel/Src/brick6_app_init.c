@@ -88,6 +88,9 @@ void brick6_app_init(void)
   audio_float_set_postgain(1.0f);
   audio_float_set_output_compensation(1.0f);
 
+  /* Track state init: disable all + clear buffers/gains */
+  audio_tracks_init();
+
   /* Example: set master volume (-6 dB approx) */
   mixer_set_master(2.0f);
 
