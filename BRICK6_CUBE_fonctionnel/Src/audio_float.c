@@ -31,6 +31,7 @@
 #include "audio_float.h"
 #include <stdint.h>
 #include <string.h>
+#include "stm32h7xx_hal.h"
 
 /* ============================================================
    CONFIG
