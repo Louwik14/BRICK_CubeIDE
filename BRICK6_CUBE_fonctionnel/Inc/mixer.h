@@ -38,6 +38,23 @@ void mixer_set_master(float gain);
  */
 float mixer_get_master(void);
 
+
+/**
+ * @brief Configure le gain d'une track (gain linéaire).
+ *
+ * @param track_id Index track [0..MAX_TRACKS-1].
+ * @param gain Gain linéaire (clamp effectué côté audio_float).
+ */
+void mixer_set_track_gain(uint32_t track_id, float gain);
+
+/**
+ * @brief Lit le gain d'une track.
+ *
+ * @param track_id Index track [0..MAX_TRACKS-1].
+ * @return Gain track linéaire (0.0 si index invalide).
+ */
+float mixer_get_track_gain(uint32_t track_id);
+
 /**
  * @brief Étape de mix/routage sur les tracks du bloc courant.
  *

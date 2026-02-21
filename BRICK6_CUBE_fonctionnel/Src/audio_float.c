@@ -281,6 +281,12 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         return;
     }
 
+    /* Préparation sends/returns (FX non branchés pour l'instant). */
+    memset(send0_l, 0, frames * sizeof(float));
+    memset(send0_r, 0, frames * sizeof(float));
+    memset(send1_l, 0, frames * sizeof(float));
+    memset(send1_r, 0, frames * sizeof(float));
+
     for(uint32_t n = 0; n < frames; n++)
     {
         float sum_l = 0.0f;
@@ -301,12 +307,6 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         bus_main_r[n] = main_r;
         bus_cue_l[n] = main_l; /* défaut: CUE = copie MAIN */
         bus_cue_r[n] = main_r;
-
-        /* Préparation sends/returns (FX non branchés pour l'instant). */
-        send0_l[n] = 0.0f;
-        send0_r[n] = 0.0f;
-        send1_l[n] = 0.0f;
-        send1_r[n] = 0.0f;
     }
 }
 
