@@ -3,6 +3,7 @@
 #include "drv_display.h"
 #include "mixer.h"
 #include "cpu_load.h"
+#include "audio_float.h"
 #include <stdio.h>
 
 /* Paramètre unique pour l’instant (0–127) */
@@ -53,6 +54,8 @@ void app_controls_render(void)
     const uint32_t cpu_pm = cpu_load_get_permille();
     const uint32_t max_pm = cpu_load_get_max_permille();
     const uint32_t ovr = cpu_load_get_overruns();
+    const uint32_t audio_ovr = audio_float_get_in_overrun_count();
+    const uint32_t audio_und = audio_float_get_out_underflow_count();
 
     drv_display_clear();
 
@@ -71,6 +74,11 @@ void app_controls_render(void)
 
     snprintf(buf, sizeof(buf), "OVR: %lu", (unsigned long)ovr);
     drv_display_draw_text(0, 30, buf);
+
+    snprintf(buf, sizeof(buf), "A O:%lu U:%lu",
+             (unsigned long)audio_ovr,
+             (unsigned long)audio_und);
+    drv_display_draw_text(0, 40, buf);
 
     drv_display_update();
 }
