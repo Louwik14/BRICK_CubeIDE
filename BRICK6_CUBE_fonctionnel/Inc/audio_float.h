@@ -19,7 +19,8 @@ extern "C" {
  * - Appelle: callback DSP utilisateur (audio_dsp_cb).
  *
  * Contraintes temps réel:
- * - audio_process_block_int32() est exécutée en IRQ audio.
+ * - audio_process_block_int32() est exécutée en IRQ audio (I/O uniquement).
+ * - audio_dsp_main_process() s'exécute en main loop (DSP).
  * - Aucun blocage, aucune allocation dynamique.
  */
 
@@ -162,15 +163,39 @@ void audio_float_set_output_compensation(float comp);
  * Contexte d'appel:
  * - IRQ audio (DMA RX half/full callback).
  *
- * Pipeline:
+ * Pipeline IRQ:
  * 1) Unpack TDM -> tracks actives.
- * 2) Callback DSP utilisateur.
- * 3) Somme tracks actives + gains.
- * 4) Pack master/cue vers slots TDM de sortie.
+ * 2) Publication vers buffer DSP partagé.
+ * 3) Pack master/cue à partir de la dernière sortie DSP prête.
  */
 void audio_process_block_int32(int32_t *rx,
                                int32_t *tx,
                                uint32_t frames);
+
+/**
+ * @brief Exécute le traitement DSP hors IRQ sur le buffer partagé.
+ *
+ * @param frames Nombre de frames à traiter (<= AUDIO_BLOCK_SIZE).
+ *
+ * Contexte d'appel:
+ * - Main loop uniquement.
+ */
+void audio_dsp_main_process(uint32_t frames);
+
+/**
+ * @brief Lit le nombre de blocs d'entrée DSP perdus (main loop en retard).
+ */
+uint32_t audio_float_get_in_overrun_count(void);
+
+/**
+ * @brief Lit le nombre de blocs sortis en silence faute de résultat DSP prêt.
+ */
+uint32_t audio_float_get_out_underflow_count(void);
+
+/**
+ * @brief Remet à zéro les compteurs overrun/underflow IRQ<->main.
+ */
+void audio_float_reset_xrun_counters(void);
 
 #ifdef __cplusplus
 }

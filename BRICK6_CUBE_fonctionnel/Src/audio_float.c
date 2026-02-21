@@ -9,7 +9,7 @@
  *
  * Architecture (appelant -> appelé):
  * - audio.c (IRQ DMA RX) -> audio_process_block_int32().
- * - audio_process_block_int32() -> float_cb(tracks, MAX_TRACKS, frames).
+ * - main loop -> audio_dsp_main_process() -> float_cb(...).
  *
  * Modèle audio track-based:
  * - Track 0 lit slots TDM 0/1 (L/R).
@@ -76,14 +76,27 @@ void audio_float_set_output_compensation(float comp)
    TRACK + MIX STATE
    ============================================================ */
 
-/* État persistant des tracks (buffers bloc + enabled). */
+/* État persistant des tracks (plan de contrôle: enabled uniquement). */
 static StereoTrack tracks[MAX_TRACKS];
 
-/* Ping-pong buffers internes (séparation I/O <-> DSP, toujours en IRQ). */
-static StereoTrack track_buf_a[MAX_TRACKS];
-static StereoTrack track_buf_b[MAX_TRACKS];
-static StereoTrack *buf_write = track_buf_a;
-static StereoTrack *buf_read = track_buf_b;
+/* Ping-pong entrée DSP (IRQ écrit, main lit). */
+static StereoTrack in_buf[2][MAX_TRACKS];
+
+/* Ping-pong sortie DSP master (main écrit, IRQ lit). */
+static float outL[2][AUDIO_BLOCK_SIZE];
+static float outR[2][AUDIO_BLOCK_SIZE];
+
+static volatile uint8_t in_write_idx = 0U;
+static volatile uint8_t in_read_idx = 1U;
+static volatile uint8_t in_ready = 0U;
+
+static volatile uint8_t out_write_idx = 0U;
+static volatile uint8_t out_read_idx = 1U;
+static volatile uint8_t out_ready = 0U;
+
+/* Compteurs debug IRQ<->main (pertes / silences). */
+static volatile uint32_t in_overrun_count = 0U;
+static volatile uint32_t out_underflow_count = 0U;
 
 /* Gains track individuels (appliqués au moment de la somme). */
 static float track_gain[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
@@ -113,16 +126,30 @@ void audio_tracks_init(void)
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
 
-        track_buf_a[t].enabled = 0U;
-        track_buf_b[t].enabled = 0U;
-        memset(track_buf_a[t].L, 0, sizeof(track_buf_a[t].L));
-        memset(track_buf_a[t].R, 0, sizeof(track_buf_a[t].R));
-        memset(track_buf_b[t].L, 0, sizeof(track_buf_b[t].L));
-        memset(track_buf_b[t].R, 0, sizeof(track_buf_b[t].R));
+        in_buf[0][t].enabled = 0U;
+        in_buf[1][t].enabled = 0U;
+        memset(in_buf[0][t].L, 0, sizeof(in_buf[0][t].L));
+        memset(in_buf[0][t].R, 0, sizeof(in_buf[0][t].R));
+        memset(in_buf[1][t].L, 0, sizeof(in_buf[1][t].L));
+        memset(in_buf[1][t].R, 0, sizeof(in_buf[1][t].R));
     }
 
-    buf_write = track_buf_a;
-    buf_read = track_buf_b;
+    memset(outL[0], 0, sizeof(outL[0]));
+    memset(outL[1], 0, sizeof(outL[1]));
+    memset(outR[0], 0, sizeof(outR[0]));
+    memset(outR[1], 0, sizeof(outR[1]));
+
+    in_write_idx = 0U;
+    in_read_idx = 1U;
+    in_ready = 0U;
+
+    out_write_idx = 0U;
+    out_read_idx = 1U;
+    out_ready = 0U;
+
+    in_overrun_count = 0U;
+    out_underflow_count = 0U;
+
     master_gain = 1.0f;
 }
 
@@ -171,6 +198,36 @@ void audio_float_set_master_gain(float gain)
 float audio_float_get_master_gain(void)
 {
     return master_gain;
+}
+
+uint32_t audio_float_get_in_overrun_count(void)
+{
+    uint32_t value;
+
+    __disable_irq();
+    value = in_overrun_count;
+    __enable_irq();
+
+    return value;
+}
+
+uint32_t audio_float_get_out_underflow_count(void)
+{
+    uint32_t value;
+
+    __disable_irq();
+    value = out_underflow_count;
+    __enable_irq();
+
+    return value;
+}
+
+void audio_float_reset_xrun_counters(void)
+{
+    __disable_irq();
+    in_overrun_count = 0U;
+    out_underflow_count = 0U;
+    __enable_irq();
 }
 
 /* ============================================================
@@ -294,29 +351,98 @@ static void audio_io_pack(int32_t *tx,
 /* ============================================================
    MAIN DSP BLOCK PROCESSOR
 
-   Pipeline temps réel (IRQ):
+   Pipeline IRQ:
    1) audio_io_unpack()
-   2) audio_dsp_process()
-   3) audio_io_pack()
+   2) publication vers buffer DSP partagé
+   3) audio_io_pack() depuis la dernière sortie DSP disponible
    ============================================================ */
 
 /** Voir audio_float.h */
 void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
 {
-    static float master_l[AUDIO_BLOCK_SIZE];
-    static float master_r[AUDIO_BLOCK_SIZE];
+    static float silent_l[AUDIO_BLOCK_SIZE] = {0};
+    static float silent_r[AUDIO_BLOCK_SIZE] = {0};
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    for(uint32_t t = 0; t < MAX_TRACKS; t++)
-        buf_write[t].enabled = tracks[t].enabled;
+    uint8_t write_idx;
+    uint8_t can_publish;
+    uint8_t pack_idx;
+    uint8_t has_output;
 
-    audio_io_unpack(rx, buf_write, frames);
-    audio_dsp_process(buf_write, master_l, master_r, frames);
-    audio_io_pack(tx, master_l, master_r, frames);
+    __disable_irq();
+    write_idx = in_write_idx;
+    can_publish = (in_ready == 0U) ? 1U : 0U;
 
-    StereoTrack *tmp = buf_write;
-    buf_write = buf_read;
-    buf_read = tmp;
+    pack_idx = out_read_idx;
+    has_output = out_ready;
+    if(has_output)
+        out_ready = 0U;
+    __enable_irq();
+
+    if(can_publish)
+    {
+        StereoTrack *write_buf = in_buf[write_idx];
+
+        for(uint32_t t = 0; t < MAX_TRACKS; t++)
+            write_buf[t].enabled = tracks[t].enabled;
+
+        audio_io_unpack(rx, write_buf, frames);
+
+        __disable_irq();
+        in_read_idx = write_idx;
+        in_write_idx = (uint8_t)(write_idx ^ 1U);
+        in_ready = 1U;
+        __enable_irq();
+    }
+    else
+    {
+        in_overrun_count++;
+    }
+
+    if(has_output)
+    {
+        audio_io_pack(tx, outL[pack_idx], outR[pack_idx], frames);
+    }
+    else
+    {
+        out_underflow_count++;
+        audio_io_pack(tx, silent_l, silent_r, frames);
+    }
+}
+
+void audio_dsp_main_process(uint32_t frames)
+{
+    static float local_master_l[AUDIO_BLOCK_SIZE];
+    static float local_master_r[AUDIO_BLOCK_SIZE];
+
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+
+    uint8_t read_idx;
+    uint8_t write_idx;
+
+    __disable_irq();
+    if(!in_ready)
+    {
+        __enable_irq();
+        return;
+    }
+
+    read_idx = in_read_idx;
+    write_idx = out_write_idx;
+    in_ready = 0U;
+    __enable_irq();
+
+    audio_dsp_process(in_buf[read_idx], local_master_l, local_master_r, frames);
+
+    memcpy(outL[write_idx], local_master_l, frames * sizeof(float));
+    memcpy(outR[write_idx], local_master_r, frames * sizeof(float));
+
+    __disable_irq();
+    out_read_idx = write_idx;
+    out_write_idx = (uint8_t)(write_idx ^ 1U);
+    out_ready = 1U;
+    __enable_irq();
 }
