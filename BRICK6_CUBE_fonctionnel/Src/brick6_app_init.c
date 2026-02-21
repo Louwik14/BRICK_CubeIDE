@@ -48,15 +48,15 @@
    Audio callback (DSP engine entry point)
    ============================================================ */
 
-static void my_dsp(float **in,
-                   float **out,
+static void my_dsp(StereoTrack *tracks,
+                   uint32_t track_count,
                    uint32_t frames)
 {
     /* ============================================================
        First real engine stage : mixer core
        ============================================================ */
 
-    mixer_process(in, out, frames);
+    mixer_process(tracks, track_count, frames);
 
     /* Later here:
        - track engine
@@ -91,11 +91,14 @@ void brick6_app_init(void)
   /* Example: set master volume (-6 dB approx) */
   mixer_set_master(2.0f);
 
-  /* Example: output gains (DAC1–6 unity) */
-  for (int ch = 0; ch < 6; ch++)
-  {
-      mixer_set_output_gain(ch, 1.0f);
-  }
+  /* Enable stereo tracks: 0->slots0/1, 1->slots2/3, 2->slots4/5 */
+  track_enable(0, 1U);
+  track_enable(1, 1U);
+  track_enable(2, 1U);
+
+  track_set_gain(0, 1.0f);
+  track_set_gain(1, 1.0f);
+  track_set_gain(2, 1.0f);
 
   /* --- Audio init --- */
   audio_init(&hsai_BlockA1, &hsai_BlockB1);
