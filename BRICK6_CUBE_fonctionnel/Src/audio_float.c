@@ -77,10 +77,10 @@ void audio_float_set_output_compensation(float comp)
    ============================================================ */
 
 /* État persistant des tracks (buffers bloc + enabled). */
-static StereoTrack tracks[MAX_TRACKS];
+static StereoTrack tracks[MAX_TRACKS] __attribute__((aligned(32)));
 
 /* Gains track individuels (appliqués au moment de la somme). */
-static float track_gain[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
+static float track_gain[MAX_TRACKS] __attribute__((aligned(32))) = {1.0f, 1.0f, 1.0f};
 
 /* Gain master global (après somme des tracks). */
 static float master_gain = 1.0f;
@@ -202,77 +202,111 @@ static inline int32_t f2s24(float x)
    - Écrit MAIN/CUE + slots inutilisés à 0
    ============================================================ */
 
-static void audio_io_unpack(int32_t *rx, StereoTrack *track_buf, uint32_t frames)
+static inline void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
+                                   StereoTrack *AUDIO_RESTRICT track_buf,
+                                   uint32_t frames)
 {
+    const float in_gain = postgain_recip;
+
     for(uint32_t t = 0; t < MAX_TRACKS; t++)
     {
+        float *AUDIO_RESTRICT tr_l = track_buf[t].L;
+        float *AUDIO_RESTRICT tr_r = track_buf[t].R;
+
         if(track_buf[t].enabled)
         {
             const uint32_t slot_l = t * 2U;
             const uint32_t slot_r = slot_l + 1U;
+            const int32_t *AUDIO_RESTRICT prx_l = rx + slot_l;
+            const int32_t *AUDIO_RESTRICT prx_r = rx + slot_r;
 
             for(uint32_t n = 0; n < frames; n++)
             {
-                const uint32_t base = n * AUDIO_TDM_SLOTS;
-                track_buf[t].L[n] = s242f(rx[base + slot_l]) * postgain_recip;
-                track_buf[t].R[n] = s242f(rx[base + slot_r]) * postgain_recip;
+                tr_l[n] = s242f(*prx_l) * in_gain;
+                tr_r[n] = s242f(*prx_r) * in_gain;
+                prx_l += AUDIO_TDM_SLOTS;
+                prx_r += AUDIO_TDM_SLOTS;
             }
         }
         else
         {
-            /* Anti-stale audio: clear uniquement la portion du bloc courant. */
-            memset(track_buf[t].L, 0, frames * sizeof(float));
-            memset(track_buf[t].R, 0, frames * sizeof(float));
+            /* Contrat callback: tracks inactives remises à zéro pour le bloc courant. */
+            memset(tr_l, 0, frames * sizeof(float));
+            memset(tr_r, 0, frames * sizeof(float));
         }
     }
 }
 
-static void audio_dsp_process(StereoTrack *track_buf,
-                              float *master_l,
-                              float *master_r,
-                              uint32_t frames)
+static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
+                                     float *AUDIO_RESTRICT master_l,
+                                     float *AUDIO_RESTRICT master_r,
+                                     uint32_t frames)
 {
     if(float_cb)
         float_cb(track_buf, MAX_TRACKS, frames);
+
+    const float mg = master_gain;
+    uint32_t active_ids[MAX_TRACKS];
+    float active_gains[MAX_TRACKS];
+    uint32_t active_count = 0U;
+
+    for(uint32_t t = 0; t < MAX_TRACKS; t++)
+    {
+        if(track_buf[t].enabled)
+        {
+            active_ids[active_count] = t;
+            active_gains[active_count] = track_gain[t];
+            active_count++;
+        }
+    }
+
+    if(active_count == 0U)
+    {
+        memset(master_l, 0, frames * sizeof(float));
+        memset(master_r, 0, frames * sizeof(float));
+        return;
+    }
 
     for(uint32_t n = 0; n < frames; n++)
     {
         float sum_l = 0.0f;
         float sum_r = 0.0f;
 
-        for(uint32_t t = 0; t < MAX_TRACKS; t++)
+        for(uint32_t i = 0; i < active_count; i++)
         {
-            if(track_buf[t].enabled)
-            {
-                sum_l += track_buf[t].L[n] * track_gain[t];
-                sum_r += track_buf[t].R[n] * track_gain[t];
-            }
+            const uint32_t t = active_ids[i];
+            const float g = active_gains[i];
+            sum_l += track_buf[t].L[n] * g;
+            sum_r += track_buf[t].R[n] * g;
         }
 
-        master_l[n] = sum_l * master_gain;
-        master_r[n] = sum_r * master_gain;
+        master_l[n] = sum_l * mg;
+        master_r[n] = sum_r * mg;
     }
 }
 
-static void audio_io_pack(int32_t *tx,
-                          const float *master_l,
-                          const float *master_r,
-                          uint32_t frames)
+static inline void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
+                                 const float *AUDIO_RESTRICT master_l,
+                                 const float *AUDIO_RESTRICT master_r,
+                                 uint32_t frames)
 {
+    const float out_gain = output_adjust;
+    int32_t *AUDIO_RESTRICT ptx = tx;
+
     for(uint32_t n = 0; n < frames; n++)
     {
-        const float out_l = master_l[n] * output_adjust;
-        const float out_r = master_r[n] * output_adjust;
-        const uint32_t base = n * AUDIO_TDM_SLOTS;
+        const float out_l = master_l[n] * out_gain;
+        const float out_r = master_r[n] * out_gain;
 
-        tx[base + 0U] = f2s24(out_l); /* MAIN L */
-        tx[base + 1U] = f2s24(out_r); /* MAIN R */
-        tx[base + 2U] = f2s24(out_l); /* CUE L  */
-        tx[base + 3U] = f2s24(out_r); /* CUE R  */
-        tx[base + 4U] = 0;
-        tx[base + 5U] = 0;
-        tx[base + 6U] = 0;
-        tx[base + 7U] = 0;
+        ptx[0] = f2s24(out_l); /* MAIN L */
+        ptx[1] = f2s24(out_r); /* MAIN R */
+        ptx[2] = f2s24(out_l); /* CUE L  */
+        ptx[3] = f2s24(out_r); /* CUE R  */
+        ptx[4] = 0;
+        ptx[5] = 0;
+        ptx[6] = 0;
+        ptx[7] = 0;
+        ptx += AUDIO_TDM_SLOTS;
     }
 }
 
@@ -286,10 +320,12 @@ static void audio_io_pack(int32_t *tx,
    ============================================================ */
 
 /** Voir audio_float.h */
-void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
+void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
+                               int32_t *AUDIO_RESTRICT tx,
+                               uint32_t frames)
 {
-    static float master_l[AUDIO_BLOCK_SIZE];
-    static float master_r[AUDIO_BLOCK_SIZE];
+    static float master_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static float master_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
