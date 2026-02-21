@@ -2,6 +2,7 @@
 #include "drv_encoders.h"
 #include "drv_display.h"
 #include "mixer.h"
+#include "cpu_load.h"
 #include <stdio.h>
 
 /* Paramètre unique pour l’instant (0–127) */
@@ -49,11 +50,27 @@ void app_controls_process(void)
 void app_controls_render(void)
 {
     char buf[32];
+    const uint32_t cpu_pm = cpu_load_get_permille();
+    const uint32_t max_pm = cpu_load_get_max_permille();
+    const uint32_t ovr = cpu_load_get_overruns();
 
     drv_display_clear();
 
     snprintf(buf, sizeof(buf), "P0: %3d", (int)param_val);
     drv_display_draw_text(0, 0, buf);
+
+    snprintf(buf, sizeof(buf), "CPU: %2lu.%1lu%%",
+             (unsigned long)(cpu_pm / 10U),
+             (unsigned long)(cpu_pm % 10U));
+    drv_display_draw_text(0, 10, buf);
+
+    snprintf(buf, sizeof(buf), "MAX: %2lu.%1lu%%",
+             (unsigned long)(max_pm / 10U),
+             (unsigned long)(max_pm % 10U));
+    drv_display_draw_text(0, 20, buf);
+
+    snprintf(buf, sizeof(buf), "OVR: %lu", (unsigned long)ovr);
+    drv_display_draw_text(0, 30, buf);
 
     drv_display_update();
 }
