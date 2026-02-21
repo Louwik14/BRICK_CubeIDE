@@ -5,6 +5,12 @@
 extern "C" {
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define AUDIO_RESTRICT __restrict
+#else
+#define AUDIO_RESTRICT
+#endif
+
 /**
  * @file audio_float.h
  * @brief Frontière DSP float track-based (stéréo) pour moteur audio TDM8.
@@ -168,8 +174,8 @@ void audio_float_set_output_compensation(float comp);
  * 3) Somme tracks actives + gains.
  * 4) Pack master/cue vers slots TDM de sortie.
  */
-void audio_process_block_int32(int32_t *rx,
-                               int32_t *tx,
+void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
+                               int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames);
 
 #ifdef __cplusplus
