@@ -7,19 +7,29 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Paramètres test encodeurs (0–127):
- * P0=master, P1=cutoff track0, P2=cutoff track1, P3=cutoff track2 */
-static int16_t params[4] = {127, 127, 127, 127};
+/* Paramètres encodeurs (0–127):
+ * P0=master, P1=LOW EQ, P2=MID EQ, P3=HIGH EQ */
+static int16_t params[4] = {127, 64, 64, 64};
 
 static float param_to_gain(int16_t p)
 {
     return ((float)p / 127.0f) * 2.0f;
 }
 
-static float param_to_cutoff(int16_t p)
+static float param_to_eq_db(int16_t p)
 {
-    const float norm = (float)p / 127.0f;
-    return 0.001f + norm * 0.496f;
+    const float range_db = 12.0f;
+    float db = ((float)p - 64.0f) * (range_db / 63.0f);
+
+    if(p <= 2)
+        db = -60.0f;
+
+    if(db < -60.0f)
+        db = -60.0f;
+    if(db > 12.0f)
+        db = 12.0f;
+
+    return db;
 }
 
 void app_controls_init(void)
@@ -27,9 +37,9 @@ void app_controls_init(void)
     drv_encoders_init();
 
     mixer_set_master(param_to_gain(params[0]));
-    audio_float_set_track_filter_cutoff(0U, param_to_cutoff(params[1]));
-    audio_float_set_track_filter_cutoff(1U, param_to_cutoff(params[2]));
-    audio_float_set_track_filter_cutoff(2U, param_to_cutoff(params[3]));
+    audio_float_set_dj_eq_low_db(param_to_eq_db(params[1]));
+    audio_float_set_dj_eq_mid_db(param_to_eq_db(params[2]));
+    audio_float_set_dj_eq_high_db(param_to_eq_db(params[3]));
 }
 
 void app_controls_process(void)
@@ -54,9 +64,9 @@ void app_controls_process(void)
     }
 
     mixer_set_master(param_to_gain(params[0]));
-    audio_float_set_track_filter_cutoff(0U, param_to_cutoff(params[1]));
-    audio_float_set_track_filter_cutoff(1U, param_to_cutoff(params[2]));
-    audio_float_set_track_filter_cutoff(2U, param_to_cutoff(params[3]));
+    audio_float_set_dj_eq_low_db(param_to_eq_db(params[1]));
+    audio_float_set_dj_eq_mid_db(param_to_eq_db(params[2]));
+    audio_float_set_dj_eq_high_db(param_to_eq_db(params[3]));
 }
 
 void app_controls_render(void)

@@ -31,7 +31,7 @@
 #include "audio_float.h"
 #include <stdint.h>
 #include <string.h>
-#include "fx_onepole.h"
+#include "fx_dj_eq3.h"
 
 /* ============================================================
    CONFIG
@@ -54,11 +54,7 @@ static float output_adjust = 1.0f;
 static float postgain = 1.0f;
 static float output_comp = 1.0f;
 
-static fx_onepole_t filtL[MAX_TRACKS];
-static fx_onepole_t filtR[MAX_TRACKS];
-static float cutoff_norm[MAX_TRACKS] = {0.25f, 0.25f, 0.25f};
-static float insert_level_target[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
-static float insert_level_smooth[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
+static fx_dj_eq3_t track0_eq;
 
 /** Voir audio_float.h */
 void audio_float_set_postgain(float gain)
@@ -79,41 +75,19 @@ void audio_float_set_output_compensation(float comp)
     output_adjust = postgain * output_comp;
 }
 
-void audio_float_set_track_filter_cutoff(uint32_t track_id, float cutoff)
+void audio_float_set_dj_eq_low_db(float db)
 {
-    if(track_id >= MAX_TRACKS)
-        return;
-
-    if(cutoff < 0.0f)
-        cutoff = 0.0f;
-    if(cutoff > 0.497f)
-        cutoff = 0.497f;
-
-    cutoff_norm[track_id] = cutoff;
-    fx_onepole_set_freq(&filtL[track_id], cutoff);
-    fx_onepole_set_freq(&filtR[track_id], cutoff);
+    fx_dj_eq3_set_low_db(&track0_eq, db);
 }
 
-void audio_float_set_track_filter_mode(uint32_t track_id, uint32_t mode)
+void audio_float_set_dj_eq_mid_db(float db)
 {
-    if(track_id >= MAX_TRACKS)
-        return;
-
-    fx_onepole_set_mode(&filtL[track_id], (mode == 0U) ? 0U : 1U);
-    fx_onepole_set_mode(&filtR[track_id], (mode == 0U) ? 0U : 1U);
+    fx_dj_eq3_set_mid_db(&track0_eq, db);
 }
 
-void audio_float_set_track_insert_level(uint32_t track_id, float level)
+void audio_float_set_dj_eq_high_db(float db)
 {
-    if(track_id >= MAX_TRACKS)
-        return;
-
-    if(level < 0.0f)
-        level = 0.0f;
-    if(level > 1.0f)
-        level = 1.0f;
-
-    insert_level_target[track_id] = level;
+    fx_dj_eq3_set_high_db(&track0_eq, db);
 }
 
 /* ============================================================
@@ -148,22 +122,11 @@ void audio_tracks_init(void)
     {
         tracks[t].enabled = 0U;
         track_gain[t] = 1.0f;
-        cutoff_norm[t] = 0.25f;
-        insert_level_target[t] = 1.0f;
-        insert_level_smooth[t] = 1.0f;
-
-        fx_onepole_init(&filtL[t]);
-        fx_onepole_init(&filtR[t]);
-        fx_onepole_reset(&filtL[t]);
-        fx_onepole_reset(&filtR[t]);
-        fx_onepole_set_mode(&filtL[t], 0U);
-        fx_onepole_set_mode(&filtR[t], 0U);
-        fx_onepole_set_freq(&filtL[t], cutoff_norm[t]);
-        fx_onepole_set_freq(&filtR[t], cutoff_norm[t]);
-
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
     }
+
+    fx_dj_eq3_init(&track0_eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
 
     master_gain = 1.0f;
 }
@@ -179,10 +142,9 @@ void track_enable(uint32_t track_id, uint8_t enabled)
 
     tracks[track_id].enabled = next;
 
-    if((prev == 0U) && (next != 0U))
+    if((prev == 0U) && (next != 0U) && (track_id == 0U))
     {
-        fx_onepole_reset(&filtL[track_id]);
-        fx_onepole_reset(&filtR[track_id]);
+        fx_dj_eq3_reset(&track0_eq);
     }
 }
 
@@ -347,32 +309,15 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         return;
     }
 
-    /* Insert filtre par track (stéréo, en place), après float_cb(). */
-    for(uint32_t i = 0; i < active_count; i++)
+    /* EQ DJ 3 bandes uniquement sur track 0 (stéréo, en place), après float_cb(). */
+    if(track_buf[0].enabled)
     {
-        const uint32_t t = active_ids[i];
-        const float target = insert_level_target[t];
-        float lvl = insert_level_smooth[t];
-        const float alpha = 0.05f;
-
-        lvl += alpha * (target - lvl);
-        insert_level_smooth[t] = lvl;
-
-        if(lvl <= 0.0001f)
-            continue;
-
-        float *AUDIO_RESTRICT tr_l = track_buf[t].L;
-        float *AUDIO_RESTRICT tr_r = track_buf[t].R;
+        float *AUDIO_RESTRICT tr_l = track_buf[0].L;
+        float *AUDIO_RESTRICT tr_r = track_buf[0].R;
 
         for(uint32_t n = 0; n < frames; n++)
         {
-            const float dry_l = tr_l[n];
-            const float dry_r = tr_r[n];
-            const float wet_l = fx_onepole_process(&filtL[t], dry_l);
-            const float wet_r = fx_onepole_process(&filtR[t], dry_r);
-
-            tr_l[n] = dry_l + lvl * (wet_l - dry_l);
-            tr_r[n] = dry_r + lvl * (wet_r - dry_r);
+            fx_dj_eq3_process_stereo_sample(&track0_eq, &tr_l[n], &tr_r[n]);
         }
     }
 
