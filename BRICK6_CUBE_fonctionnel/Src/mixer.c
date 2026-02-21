@@ -45,6 +45,9 @@ void mixer_process(float **in,
                    float **out,
                    uint32_t frames)
 {
+    float tmpL[32];
+    float tmpR[32];
+
     for(uint32_t n = 0; n < frames; n++)
     {
         /* Clear ALL outputs first */
