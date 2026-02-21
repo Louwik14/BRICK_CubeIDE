@@ -19,6 +19,18 @@ extern "C" {
  * - Variables 32-bit volatiles (accès atomiques simples sur Cortex-M7).
  */
 
+#define CPU_LOAD_MODE_DSP_ONLY  0U
+#define CPU_LOAD_MODE_IRQ_TOTAL 1U
+
+#ifndef CPU_LOAD_MODE
+#define CPU_LOAD_MODE CPU_LOAD_MODE_DSP_ONLY
+#endif
+
+#if (CPU_LOAD_MODE != CPU_LOAD_MODE_DSP_ONLY) && \
+    (CPU_LOAD_MODE != CPU_LOAD_MODE_IRQ_TOTAL)
+#error "CPU_LOAD_MODE invalide"
+#endif
+
 /**
  * @brief Initialise le compteur DWT et le budget cycles par bloc.
  *
