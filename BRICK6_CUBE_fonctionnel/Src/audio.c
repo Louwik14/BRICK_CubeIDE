@@ -35,7 +35,7 @@
 
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */
-#define AUDIO_FRAMES_PER_HALF    32
+#define AUDIO_FRAMES_PER_HALF    64
 #define AUDIO_SAMPLE_RATE_HZ     48000U
 
 /* Double buffer DMA: [half0 | half1] */

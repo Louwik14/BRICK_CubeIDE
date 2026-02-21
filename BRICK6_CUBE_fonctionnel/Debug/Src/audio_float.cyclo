@@ -1,4 +1,13 @@
-../Src/audio_float.c:31:6:audio_float_set_postgain	2
-../Src/audio_float.c:42:6:audio_float_set_output_compensation	1
-../Src/audio_float.c:64:6:audio_set_float_callback	1
-../Src/audio_float.c:152:6:audio_process_block_int32	15
+../Src/audio_float.c:230:13:audio_dsp_process	5
+../Src/audio_float.c:257:13:audio_io_pack	10
+../Src/audio_float.c:205:13:audio_io_unpack	6
+../Src/audio_float.c:57:6:audio_float_set_postgain	2
+../Src/audio_float.c:69:6:audio_float_set_output_compensation	1
+../Src/audio_float.c:95:6:audio_set_float_callback	1
+../Src/audio_float.c:101:6:audio_tracks_init	2
+../Src/audio_float.c:115:6:track_enable	3
+../Src/audio_float.c:124:10:track_is_enabled	2
+../Src/audio_float.c:133:6:track_set_gain	3
+../Src/audio_float.c:145:6:audio_float_set_master_gain	3
+../Src/audio_float.c:156:7:audio_float_get_master_gain	1
+../Src/audio_float.c:289:6:audio_process_block_int32	2

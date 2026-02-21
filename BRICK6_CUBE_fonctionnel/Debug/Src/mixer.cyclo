@@ -1,5 +1,4 @@
-../Src/mixer.c:7:6:mixer_init	2
-../Src/mixer.c:15:6:mixer_set_master	3
-../Src/mixer.c:24:7:mixer_get_master	1
-../Src/mixer.c:29:6:mixer_set_output_gain	4
-../Src/mixer.c:40:6:mixer_process	3
+../Src/mixer.c:21:6:mixer_init	1
+../Src/mixer.c:26:6:mixer_set_master	1
+../Src/mixer.c:32:7:mixer_get_master	1
+../Src/mixer.c:38:6:mixer_process	1

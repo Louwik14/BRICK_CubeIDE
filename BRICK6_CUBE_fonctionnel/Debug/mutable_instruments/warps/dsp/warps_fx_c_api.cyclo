@@ -1,0 +1,47 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:175:3:stmlib::Svf::Svf()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:176:3:stmlib::Svf::~Svf()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:653:3:stmlib::CrossoverSvf::CrossoverSvf()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:654:3:stmlib::CrossoverSvf::~CrossoverSvf()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.h:45:3:warps::Oscillator::Oscillator()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.h:46:3:warps::Oscillator::~Oscillator()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/quadrature_oscillator.h:43:3:warps::QuadratureOscillator::QuadratureOscillator()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/quadrature_oscillator.h:44:3:warps::QuadratureOscillator::~QuadratureOscillator()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/quadrature_transform.h:43:3:warps::QuadratureTransform::QuadratureTransform()	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/quadrature_transform.h:44:3:warps::QuadratureTransform::~QuadratureTransform()	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/quadrature_transform.h:72:5:warps::QuadratureTransform::AllPassFilter::AllPassFilter()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/quadrature_transform.h:73:5:warps::QuadratureTransform::AllPassFilter::~AllPassFilter()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/filter_bank.h:51:3:warps::PooledDelayLine::PooledDelayLine()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/filter_bank.h:52:3:warps::PooledDelayLine::~PooledDelayLine()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/filter_bank.h:77:8:warps::Band::Band()	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/filter_bank.h:77:8:warps::Band::~Band()	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/filter_bank.h:90:3:warps::FilterBank::FilterBank()	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/filter_bank.h:91:3:warps::FilterBank::~FilterBank()	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/limiter.h:43:3:warps::Limiter::Limiter()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/limiter.h:44:3:warps::Limiter::~Limiter()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/vocoder.h:43:3:warps::EnvelopeFollower::EnvelopeFollower()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/vocoder.h:44:3:warps::EnvelopeFollower::~EnvelopeFollower()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/vocoder.h:102:3:warps::Vocoder::Vocoder()	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/vocoder.h:103:3:warps::Vocoder::~Vocoder()	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/modulator.h:55:3:warps::SaturatingAmplifier::SaturatingAmplifier()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/modulator.h:56:3:warps::SaturatingAmplifier::~SaturatingAmplifier()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/modulator.h:140:3:warps::Modulator::Modulator()	4
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/modulator.h:141:3:warps::Modulator::~Modulator()	7
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx.h:7:7:WarpsFX::WarpsFX()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:11:6:void warps_fx_engine_init(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:15:6:void warps_fx_engine_process(float*, float*, float*, float*, int)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:24:6:void warps_fx_engine_set_algorithm(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:28:6:void warps_fx_engine_set_parameter(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:32:6:void warps_fx_engine_set_drive(float, float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:208:3:warps::SampleRateConverter<warps::SRC_DOWN, ratio, filter_size>::SampleRateConverter() [with long int ratio = 4; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:209:3:warps::SampleRateConverter<warps::SRC_DOWN, ratio, filter_size>::~SampleRateConverter() [with long int ratio = 4; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:172:3:warps::SampleRateConverter<warps::SRC_UP, ratio, filter_size>::SampleRateConverter() [with long int ratio = 4; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:173:3:warps::SampleRateConverter<warps::SRC_UP, ratio, filter_size>::~SampleRateConverter() [with long int ratio = 4; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:172:3:warps::SampleRateConverter<warps::SRC_UP, ratio, filter_size>::SampleRateConverter() [with long int ratio = 6; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:173:3:warps::SampleRateConverter<warps::SRC_UP, ratio, filter_size>::~SampleRateConverter() [with long int ratio = 6; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:208:3:warps::SampleRateConverter<warps::SRC_DOWN, ratio, filter_size>::SampleRateConverter() [with long int ratio = 6; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/sample_rate_converter.h:209:3:warps::SampleRateConverter<warps::SRC_DOWN, ratio, filter_size>::~SampleRateConverter() [with long int ratio = 6; long int filter_size = 48]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:36:1:void __static_initialization_and_destruction_0()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx.h:7:7:WarpsFX::~WarpsFX()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:36:1:void __static_initialization_and_destruction_1()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:36:1:cpp)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/warps_fx_c_api.cpp:36:1:cpp)	1

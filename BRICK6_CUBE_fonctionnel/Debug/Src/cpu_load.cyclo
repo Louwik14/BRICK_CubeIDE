@@ -1,0 +1,7 @@
+../Src/cpu_load.c:35:6:cpu_load_init	4
+../Src/cpu_load.c:63:6:cpu_load_block_start_irq	1
+../Src/cpu_load.c:68:6:cpu_load_block_end_irq	3
+../Src/cpu_load.c:86:10:cpu_load_get_permille	1
+../Src/cpu_load.c:91:10:cpu_load_get_max_permille	1
+../Src/cpu_load.c:96:10:cpu_load_get_overruns	1
+../Src/cpu_load.c:101:6:cpu_load_reset_max	1

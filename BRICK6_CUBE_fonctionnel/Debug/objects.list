@@ -47,6 +47,7 @@
 "./Src/audio.o"
 "./Src/audio_float.o"
 "./Src/brick6_app_init.o"
+"./Src/cpu_load.o"
 "./Src/cs42448.o"
 "./Src/dma.o"
 "./Src/drv_display.o"

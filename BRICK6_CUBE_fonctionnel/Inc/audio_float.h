@@ -27,7 +27,7 @@ extern "C" {
    Track-based stereo DSP model
    ============================================================ */
 
-#define AUDIO_BLOCK_SIZE 32U
+#define AUDIO_BLOCK_SIZE 64U
 #define MAX_TRACKS       3U
 
 /**

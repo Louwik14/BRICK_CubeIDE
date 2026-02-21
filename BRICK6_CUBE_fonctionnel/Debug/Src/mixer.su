@@ -1,5 +1,4 @@
-../Src/mixer.c:7:6:mixer_init	0	static
-../Src/mixer.c:15:6:mixer_set_master	0	static
-../Src/mixer.c:24:7:mixer_get_master	0	static
-../Src/mixer.c:29:6:mixer_set_output_gain	0	static
-../Src/mixer.c:40:6:mixer_process	12	static
+../Src/mixer.c:21:6:mixer_init	0	static
+../Src/mixer.c:26:6:mixer_set_master	8	static
+../Src/mixer.c:32:7:mixer_get_master	8	static
+../Src/mixer.c:38:6:mixer_process	0	static
