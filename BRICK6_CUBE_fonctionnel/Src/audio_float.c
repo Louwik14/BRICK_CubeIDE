@@ -217,13 +217,15 @@ static inline void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
         {
             const uint32_t slot_l = t * 2U;
             const uint32_t slot_r = slot_l + 1U;
-            const int32_t *AUDIO_RESTRICT prx = rx + slot_l;
+            const int32_t *AUDIO_RESTRICT prx_l = rx + slot_l;
+            const int32_t *AUDIO_RESTRICT prx_r = rx + slot_r;
 
             for(uint32_t n = 0; n < frames; n++)
             {
-                tr_l[n] = s242f(prx[0]) * in_gain;
-                tr_r[n] = s242f(prx[1]) * in_gain;
-                prx += AUDIO_TDM_SLOTS;
+                tr_l[n] = s242f(*prx_l) * in_gain;
+                tr_r[n] = s242f(*prx_r) * in_gain;
+                prx_l += AUDIO_TDM_SLOTS;
+                prx_r += AUDIO_TDM_SLOTS;
             }
         }
         else
