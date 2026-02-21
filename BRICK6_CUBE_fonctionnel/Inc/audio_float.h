@@ -179,8 +179,10 @@ void audio_process_block_int32(int32_t *rx,
  *
  * Contexte d'appel:
  * - Main loop uniquement.
+ *
+ * @return 1 si un bloc DSP a été traité, 0 sinon.
  */
-void audio_dsp_main_process(uint32_t frames);
+uint32_t audio_dsp_main_process(uint32_t frames);
 
 /**
  * @brief Lit le nombre de blocs d'entrée DSP perdus (main loop en retard).

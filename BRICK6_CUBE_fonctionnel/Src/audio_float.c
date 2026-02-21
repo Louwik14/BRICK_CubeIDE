@@ -412,7 +412,7 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
     }
 }
 
-void audio_dsp_main_process(uint32_t frames)
+uint32_t audio_dsp_main_process(uint32_t frames)
 {
     static float local_master_l[AUDIO_BLOCK_SIZE];
     static float local_master_r[AUDIO_BLOCK_SIZE];
@@ -427,7 +427,7 @@ void audio_dsp_main_process(uint32_t frames)
     if(!in_ready)
     {
         __enable_irq();
-        return;
+        return 0U;
     }
 
     read_idx = in_read_idx;
@@ -445,4 +445,6 @@ void audio_dsp_main_process(uint32_t frames)
     out_write_idx = (uint8_t)(write_idx ^ 1U);
     out_ready = 1U;
     __enable_irq();
+
+    return 1U;
 }

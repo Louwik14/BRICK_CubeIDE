@@ -125,7 +125,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-      audio_dsp_main_process(AUDIO_BLOCK_SIZE);
+      for(uint32_t i = 0U; i < 4U; i++)
+      {
+          if(!audio_dsp_main_process(AUDIO_BLOCK_SIZE))
+              break;
+      }
 	  engine_tasklet_poll();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
     //usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
