@@ -2,29 +2,23 @@
  * @file brick6_app_init.c
  * @brief Initialisation applicative BRICK6 (hors CubeMX).
  *
- * Ce module regroupe l'initialisation des sous-systèmes applicatifs
- * (SDRAM, SD, USB, audio) afin de garder main.c minimal.
- *
- * Rôle dans le système:
- * - Point d'entrée applicatif après l'init CubeMX.
- * - Séquenceur d'initialisation des modules utilisateurs.
- *
- * Contraintes temps réel:
- * - Critique audio: non (exécuté une seule fois au démarrage).
- * - Tasklet: non.
- * - IRQ: non.
- * - Borné: non critique (peut appeler HAL bloquant).
+ * Rôle du module:
+ * - Centraliser l'ordre d'init des briques applicatives (codec, audio, engine).
+ * - Garder main.c minimal et lisible.
  *
  * Architecture:
  * - Appelé par: main.c (USER CODE BEGIN 2).
- * - Appelle: SDRAM_Init/Test, sd_stream_init, MX_USB_*,
- *            AudioIn/Out_Init/Start, engine_tasklet_init.
+ * - Appelle: CS42448_Init, mixer_init, audio_*(), engine_tasklet_init.
  *
- * Règles:
- * - Pas de logique temps réel.
- * - Autorisé à utiliser des appels HAL bloquants d'init.
+ * Contraintes temps réel:
+ * - Exécuté une seule fois au démarrage (hors IRQ audio).
+ * - Appels HAL bloquants autorisés ici (jamais dans le chemin IRQ audio).
  *
- * @note L’API publique est déclarée dans brick6_app_init.h.
+ * Pourquoi l'ordre d'init est important:
+ * 1) Init codec d'abord (interface audio prête côté conversion).
+ * 2) Init états audio_float/tracks/gains avant démarrage DMA.
+ * 3) Enregistrer le callback DSP avant audio_start().
+ * 4) Démarrer le DMA en dernier pour éviter tout traitement sans état valide.
  */
 
 #include <string.h>
@@ -43,22 +37,31 @@
 #include "cs42448.h"
 #include "mixer.h"
 
-
 /* ============================================================
    Audio callback (DSP engine entry point)
    ============================================================ */
 
-static void my_dsp(float **in,
-                   float **out,
+/**
+ * @brief Entrée DSP principale par bloc audio.
+ *
+ * @param tracks Tableau de tracks stéréo.
+ * @param track_count Nombre de tracks valides.
+ * @param frames Taille bloc en frames.
+ *
+ * Contexte d'appel:
+ * - IRQ audio (via audio_process_block_int32).
+ *
+ * Effets de bord:
+ * - Appelle le module mixer (actuellement routage-only).
+ */
+static void my_dsp(StereoTrack *tracks,
+                   uint32_t track_count,
                    uint32_t frames)
 {
-    /* ============================================================
-       First real engine stage : mixer core
-       ============================================================ */
+    /* Première étape moteur: mixer/routage. */
+    mixer_process(tracks, track_count, frames);
 
-    mixer_process(in, out, frames);
-
-    /* Later here:
+    /* Extensions prévues:
        - track engine
        - routing matrix
        - Mutable FX
@@ -66,46 +69,62 @@ static void my_dsp(float **in,
     */
 }
 
-
 /* ============================================================
    Application Init
    ============================================================ */
 
+/**
+ * @brief Initialise la pile applicative BRICK6 dans l'ordre sûr.
+ *
+ * Séquence actuelle:
+ * - Init codec CS42448.
+ * - Init mixer + gain staging audio_float.
+ * - Init état tracks (disable + clear + gains par défaut).
+ * - Paramétrage tracks/gains initiaux.
+ * - Init interface audio SAI/DMA.
+ * - Enregistrement callback DSP.
+ * - Init scheduler tasklet.
+ * - Start DMA audio.
+ *
+ * Contexte d'appel:
+ * - Main loop, phase boot.
+ */
 void brick6_app_init(void)
 {
-  //SDRAM_Init();
-  //SDRAM_Test();
+    //SDRAM_Init();
+    //SDRAM_Test();
 
-  //MX_USB_HOST_Init();
+    //MX_USB_HOST_Init();
 
-  /* --- Codec init --- */
-  CS42448_Init(0x48);
+    /* 1) Codec audio externe. */
+    CS42448_Init(0x48);
 
-  /* --- Mixer init (first engine module) --- */
-  mixer_init();
+    /* 2) Init mixer (routing) + gains frontière float. */
+    mixer_init();
+    audio_float_set_postgain(1.0f);
+    audio_float_set_output_compensation(1.0f);
 
-  /* --- Daisy-style gain staging (audio_float boundary) --- */
-  audio_float_set_postgain(1.0f);
-  audio_float_set_output_compensation(1.0f);
+    /* 3) État tracks déterministe avant démarrage audio. */
+    audio_tracks_init();
 
-  /* Example: set master volume (-6 dB approx) */
-  mixer_set_master(2.0f);
+    /* 4) Configuration initiale de gains et activation tracks. */
+    mixer_set_master(2.0f);
 
-  /* Example: output gains (DAC1–6 unity) */
-  for (int ch = 0; ch < 6; ch++)
-  {
-      mixer_set_output_gain(ch, 1.0f);
-  }
+    /* Mapping tracks: T0=0/1, T1=2/3, T2=4/5. */
+    track_enable(0, 1U);
+    track_enable(1, 1U);
+    track_enable(2, 1U);
 
-  /* --- Audio init --- */
-  audio_init(&hsai_BlockA1, &hsai_BlockB1);
+    track_set_gain(0, 1.0f);
+    track_set_gain(1, 1.0f);
+    track_set_gain(2, 1.0f);
 
-  /* Float DSP entry point */
-  audio_set_float_callback(my_dsp);
+    /* 5) Init périphériques audio, puis callback DSP, puis start DMA. */
+    audio_init(&hsai_BlockA1, &hsai_BlockB1);
+    audio_set_float_callback(my_dsp);
 
-  engine_tasklet_init(48000);
-  /* --- Start DMA audio --- */
-  audio_start();
+    engine_tasklet_init(48000);
+    audio_start();
 
-  HAL_Delay(200);
+    HAL_Delay(200);
 }
