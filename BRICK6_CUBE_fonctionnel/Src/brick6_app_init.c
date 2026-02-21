@@ -48,15 +48,15 @@
    Audio callback (DSP engine entry point)
    ============================================================ */
 
-static void my_dsp(float **in,
-                   float **out,
+static void my_dsp(StereoTrack *tracks,
+                   uint32_t track_count,
                    uint32_t frames)
 {
     /* ============================================================
        First real engine stage : mixer core
        ============================================================ */
 
-    mixer_process(in, out, frames);
+    mixer_process(tracks, track_count, frames);
 
     /* Later here:
        - track engine
@@ -101,7 +101,7 @@ void brick6_app_init(void)
   audio_init(&hsai_BlockA1, &hsai_BlockB1);
 
   /* Float DSP entry point */
-  audio_set_float_callback(my_dsp);
+  audio_set_dsp_callback(my_dsp);
 
   engine_tasklet_init(48000);
   /* --- Start DMA audio --- */
