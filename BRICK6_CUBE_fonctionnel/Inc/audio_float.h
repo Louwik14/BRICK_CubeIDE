@@ -5,6 +5,12 @@
 extern "C" {
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define AUDIO_RESTRICT __restrict
+#else
+#define AUDIO_RESTRICT
+#endif
+
 /**
  * @file audio_float.h
  * @brief Frontière DSP float track-based (stéréo) pour moteur audio TDM8.
@@ -148,6 +154,30 @@ void audio_float_set_postgain(float gain);
  */
 void audio_float_set_output_compensation(float comp);
 
+/**
+ * @brief Configure la fréquence de coupure normalisée du filtre insert d'une track.
+ *
+ * @param track_id Index track [0..MAX_TRACKS-1].
+ * @param cutoff_norm Fréquence normalisée [0.0 .. 0.497].
+ */
+void audio_float_set_track_filter_cutoff(uint32_t track_id, float cutoff_norm);
+
+/**
+ * @brief Configure le mode du filtre insert d'une track.
+ *
+ * @param track_id Index track [0..MAX_TRACKS-1].
+ * @param mode 0 = LP, 1 = HP.
+ */
+void audio_float_set_track_filter_mode(uint32_t track_id, uint32_t mode);
+
+/**
+ * @brief Configure le niveau d'insert filtre d'une track.
+ *
+ * @param track_id Index track [0..MAX_TRACKS-1].
+ * @param level Niveau dry/wet [0.0 .. 1.0].
+ */
+void audio_float_set_track_insert_level(uint32_t track_id, float level);
+
 /* ============================================================
    Engine entry point called by audio.c
    ============================================================ */
@@ -168,8 +198,8 @@ void audio_float_set_output_compensation(float comp);
  * 3) Somme tracks actives + gains.
  * 4) Pack master/cue vers slots TDM de sortie.
  */
-void audio_process_block_int32(int32_t *rx,
-                               int32_t *tx,
+void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
+                               int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames);
 
 #ifdef __cplusplus
