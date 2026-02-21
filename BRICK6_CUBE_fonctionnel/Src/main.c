@@ -40,6 +40,7 @@
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
 #include "audio.h"
+#include "audio_float.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -124,6 +125,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+      audio_dsp_main_process(AUDIO_BLOCK_SIZE);
 	  engine_tasklet_poll();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
     //usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
