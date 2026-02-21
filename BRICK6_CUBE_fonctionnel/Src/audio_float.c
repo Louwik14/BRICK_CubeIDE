@@ -79,6 +79,12 @@ void audio_float_set_output_compensation(float comp)
 /* État persistant des tracks (buffers bloc + enabled). */
 static StereoTrack tracks[MAX_TRACKS];
 
+/* Ping-pong buffers internes (séparation I/O <-> DSP, toujours en IRQ). */
+static StereoTrack track_buf_a[MAX_TRACKS];
+static StereoTrack track_buf_b[MAX_TRACKS];
+static StereoTrack *buf_write = track_buf_a;
+static StereoTrack *buf_read = track_buf_b;
+
 /* Gains track individuels (appliqués au moment de la somme). */
 static float track_gain[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
 
@@ -106,8 +112,17 @@ void audio_tracks_init(void)
         track_gain[t] = 1.0f;
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
+
+        track_buf_a[t].enabled = 0U;
+        track_buf_b[t].enabled = 0U;
+        memset(track_buf_a[t].L, 0, sizeof(track_buf_a[t].L));
+        memset(track_buf_a[t].R, 0, sizeof(track_buf_a[t].R));
+        memset(track_buf_b[t].L, 0, sizeof(track_buf_b[t].L));
+        memset(track_buf_b[t].R, 0, sizeof(track_buf_b[t].R));
     }
 
+    buf_write = track_buf_a;
+    buf_read = track_buf_b;
     master_gain = 1.0f;
 }
 
@@ -294,7 +309,14 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    audio_io_unpack(rx, tracks, frames);
-    audio_dsp_process(tracks, master_l, master_r, frames);
+    for(uint32_t t = 0; t < MAX_TRACKS; t++)
+        buf_write[t].enabled = tracks[t].enabled;
+
+    audio_io_unpack(rx, buf_write, frames);
+    audio_dsp_process(buf_write, master_l, master_r, frames);
     audio_io_pack(tx, master_l, master_r, frames);
+
+    StereoTrack *tmp = buf_write;
+    buf_write = buf_read;
+    buf_read = tmp;
 }
