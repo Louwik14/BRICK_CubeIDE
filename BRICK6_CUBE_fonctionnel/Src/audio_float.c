@@ -57,7 +57,8 @@ static float output_comp = 1.0f;
 static fx_onepole_t filtL[MAX_TRACKS];
 static fx_onepole_t filtR[MAX_TRACKS];
 static float cutoff_norm[MAX_TRACKS] = {0.25f, 0.25f, 0.25f};
-static float insert_level[MAX_TRACKS] = {0.0f, 0.0f, 0.0f};
+static float insert_level_target[MAX_TRACKS] = {0.0f, 0.0f, 0.0f};
+static float insert_level_smooth[MAX_TRACKS] = {0.0f, 0.0f, 0.0f};
 
 /** Voir audio_float.h */
 void audio_float_set_postgain(float gain)
@@ -112,7 +113,7 @@ void audio_float_set_track_insert_level(uint32_t track_id, float level)
     if(level > 1.0f)
         level = 1.0f;
 
-    insert_level[track_id] = level;
+    insert_level_target[track_id] = level;
 }
 
 /* ============================================================
@@ -148,10 +149,13 @@ void audio_tracks_init(void)
         tracks[t].enabled = 0U;
         track_gain[t] = 1.0f;
         cutoff_norm[t] = 0.25f;
-        insert_level[t] = 0.0f;
+        insert_level_target[t] = 0.0f;
+        insert_level_smooth[t] = 0.0f;
 
         fx_onepole_init(&filtL[t]);
         fx_onepole_init(&filtR[t]);
+        fx_onepole_reset(&filtL[t]);
+        fx_onepole_reset(&filtR[t]);
         fx_onepole_set_mode(&filtL[t], 0U);
         fx_onepole_set_mode(&filtR[t], 0U);
         fx_onepole_set_freq(&filtL[t], cutoff_norm[t]);
@@ -170,7 +174,16 @@ void track_enable(uint32_t track_id, uint8_t enabled)
     if(track_id >= MAX_TRACKS)
         return;
 
-    tracks[track_id].enabled = enabled ? 1U : 0U;
+    const uint8_t prev = tracks[track_id].enabled;
+    const uint8_t next = enabled ? 1U : 0U;
+
+    tracks[track_id].enabled = next;
+
+    if((prev == 0U) && (next != 0U))
+    {
+        fx_onepole_reset(&filtL[track_id]);
+        fx_onepole_reset(&filtR[track_id]);
+    }
 }
 
 /** Voir audio_float.h */
@@ -338,9 +351,14 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     for(uint32_t i = 0; i < active_count; i++)
     {
         const uint32_t t = active_ids[i];
-        const float lvl = insert_level[t];
+        const float target = insert_level_target[t];
+        float lvl = insert_level_smooth[t];
+        const float alpha = 0.05f;
 
-        if(lvl <= 0.0f)
+        lvl += alpha * (target - lvl);
+        insert_level_smooth[t] = lvl;
+
+        if(lvl <= 0.0001f)
             continue;
 
         float *AUDIO_RESTRICT tr_l = track_buf[t].L;
