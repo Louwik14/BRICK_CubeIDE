@@ -9,7 +9,7 @@
  *
  * Architecture (appelant -> appelé):
  * - audio.c (IRQ DMA RX) -> audio_process_block_int32().
- * - audio_process_block_int32() -> float_cb(tracks, MAX_TRACKS, frames).
+ * - main loop -> audio_dsp_main_process() -> float_cb(...).
  *
  * Modèle audio track-based:
  * - Track 0 lit slots TDM 0/1 (L/R).
@@ -37,6 +37,7 @@
    ============================================================ */
 
 #define AUDIO_TDM_SLOTS 8U
+#define AUDIO_IN_QUEUE_DEPTH 3U
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -76,8 +77,27 @@ void audio_float_set_output_compensation(float comp)
    TRACK + MIX STATE
    ============================================================ */
 
-/* État persistant des tracks (buffers bloc + enabled). */
+/* État persistant des tracks (plan de contrôle: enabled uniquement). */
 static StereoTrack tracks[MAX_TRACKS];
+
+/* File d'entrée DSP (IRQ pousse, main consomme). */
+static StereoTrack in_queue[AUDIO_IN_QUEUE_DEPTH][MAX_TRACKS];
+
+/* Double-buffer sortie master (main écrit, IRQ lit). */
+static float outL[2][AUDIO_BLOCK_SIZE];
+static float outR[2][AUDIO_BLOCK_SIZE];
+
+static volatile uint8_t in_write_pos = 0U;
+static volatile uint8_t in_read_pos = 0U;
+static volatile uint8_t in_count = 0U;
+
+static volatile uint8_t out_write_idx = 0U;
+static volatile uint8_t out_read_idx = 0U;
+static volatile uint8_t out_has_valid = 0U;
+
+/* Compteurs debug IRQ<->main (pertes / silences). */
+static volatile uint32_t in_overrun_count = 0U;
+static volatile uint32_t out_underflow_count = 0U;
 
 /* Gains track individuels (appliqués au moment de la somme). */
 static float track_gain[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
@@ -106,7 +126,30 @@ void audio_tracks_init(void)
         track_gain[t] = 1.0f;
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
+
+        for(uint32_t q = 0; q < AUDIO_IN_QUEUE_DEPTH; q++)
+        {
+            in_queue[q][t].enabled = 0U;
+            memset(in_queue[q][t].L, 0, sizeof(in_queue[q][t].L));
+            memset(in_queue[q][t].R, 0, sizeof(in_queue[q][t].R));
+        }
     }
+
+    memset(outL[0], 0, sizeof(outL[0]));
+    memset(outL[1], 0, sizeof(outL[1]));
+    memset(outR[0], 0, sizeof(outR[0]));
+    memset(outR[1], 0, sizeof(outR[1]));
+
+    in_write_pos = 0U;
+    in_read_pos = 0U;
+    in_count = 0U;
+
+    out_write_idx = 0U;
+    out_read_idx = 0U;
+    out_has_valid = 0U;
+
+    in_overrun_count = 0U;
+    out_underflow_count = 0U;
 
     master_gain = 1.0f;
 }
@@ -158,6 +201,36 @@ float audio_float_get_master_gain(void)
     return master_gain;
 }
 
+uint32_t audio_float_get_in_overrun_count(void)
+{
+    uint32_t value;
+
+    __disable_irq();
+    value = in_overrun_count;
+    __enable_irq();
+
+    return value;
+}
+
+uint32_t audio_float_get_out_underflow_count(void)
+{
+    uint32_t value;
+
+    __disable_irq();
+    value = out_underflow_count;
+    __enable_irq();
+
+    return value;
+}
+
+void audio_float_reset_xrun_counters(void)
+{
+    __disable_irq();
+    in_overrun_count = 0U;
+    out_underflow_count = 0U;
+    __enable_irq();
+}
+
 /* ============================================================
    CONVERSION HELPERS : CS42448 + STM32H7 SAI (TDM8, 24-bit)
 
@@ -186,30 +259,27 @@ static inline int32_t f2s24(float x)
 }
 
 /* ============================================================
-   MAIN DSP BLOCK PROCESSOR
+   INTERNAL AUDIO PIPELINE HELPERS
 
-   Pipeline temps réel (IRQ):
-   1) Unpack des tracks actives depuis le bus TDM.
-      - Les tracks inactives sont explicitement mises à zéro sur la portion
-        du bloc utile (anti-stale, évite la réutilisation d'anciens samples).
-   2) Appel du callback DSP utilisateur.
-   3) Somme de toutes les tracks actives avec track_gain[] + master_gain.
-   4) Pack vers TDM sortie (MAIN/CUE/0).
+   audio_io_unpack():
+   - Lit le TDM int24 right-aligned depuis rx
+   - Convertit en float dans tracks[]
+   - Gère uniquement la logique enabled/clear des tracks
+
+   audio_dsp_process():
+   - Appelle le callback DSP utilisateur
+   - Réalise la somme tracks -> master avec track_gain/master_gain
+
+   audio_io_pack():
+   - Convertit master float -> TDM int24 right-aligned
+   - Écrit MAIN/CUE + slots inutilisés à 0
    ============================================================ */
 
-/** Voir audio_float.h */
-void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
+static void audio_io_unpack(int32_t *rx, StereoTrack *track_buf, uint32_t frames)
 {
-    static float master_l[AUDIO_BLOCK_SIZE];
-    static float master_r[AUDIO_BLOCK_SIZE];
-
-    if(frames > AUDIO_BLOCK_SIZE)
-        frames = AUDIO_BLOCK_SIZE;
-
-    /* 1) UNPACK: ne lit que les tracks actives. */
     for(uint32_t t = 0; t < MAX_TRACKS; t++)
     {
-        if(tracks[t].enabled)
+        if(track_buf[t].enabled)
         {
             const uint32_t slot_l = t * 2U;
             const uint32_t slot_r = slot_l + 1U;
@@ -217,23 +287,27 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
             for(uint32_t n = 0; n < frames; n++)
             {
                 const uint32_t base = n * AUDIO_TDM_SLOTS;
-                tracks[t].L[n] = s242f(rx[base + slot_l]) * postgain_recip;
-                tracks[t].R[n] = s242f(rx[base + slot_r]) * postgain_recip;
+                track_buf[t].L[n] = s242f(rx[base + slot_l]) * postgain_recip;
+                track_buf[t].R[n] = s242f(rx[base + slot_r]) * postgain_recip;
             }
         }
         else
         {
             /* Anti-stale audio: clear uniquement la portion du bloc courant. */
-            memset(tracks[t].L, 0, frames * sizeof(float));
-            memset(tracks[t].R, 0, frames * sizeof(float));
+            memset(track_buf[t].L, 0, frames * sizeof(float));
+            memset(track_buf[t].R, 0, frames * sizeof(float));
         }
     }
+}
 
-    /* 2) DSP callback utilisateur (doit ignorer tracks désactivées). */
+static void audio_dsp_process(StereoTrack *track_buf,
+                              float *master_l,
+                              float *master_r,
+                              uint32_t frames)
+{
     if(float_cb)
-        float_cb(tracks, MAX_TRACKS, frames);
+        float_cb(track_buf, MAX_TRACKS, frames);
 
-    /* 3) SOMME vers bus master stéréo. */
     for(uint32_t n = 0; n < frames; n++)
     {
         float sum_l = 0.0f;
@@ -241,18 +315,23 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
 
         for(uint32_t t = 0; t < MAX_TRACKS; t++)
         {
-            if(tracks[t].enabled)
+            if(track_buf[t].enabled)
             {
-                sum_l += tracks[t].L[n] * track_gain[t];
-                sum_r += tracks[t].R[n] * track_gain[t];
+                sum_l += track_buf[t].L[n] * track_gain[t];
+                sum_r += track_buf[t].R[n] * track_gain[t];
             }
         }
 
         master_l[n] = sum_l * master_gain;
         master_r[n] = sum_r * master_gain;
     }
+}
 
-    /* 4) PACK vers TDM sortie. */
+static void audio_io_pack(int32_t *tx,
+                          const float *master_l,
+                          const float *master_r,
+                          uint32_t frames)
+{
     for(uint32_t n = 0; n < frames; n++)
     {
         const float out_l = master_l[n] * output_adjust;
@@ -268,4 +347,104 @@ void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
         tx[base + 6U] = 0;
         tx[base + 7U] = 0;
     }
+}
+
+/* ============================================================
+   MAIN DSP BLOCK PROCESSOR
+
+   Pipeline IRQ:
+   1) audio_io_unpack()
+   2) push vers file d'entrée DSP (profondeur courte)
+   3) audio_io_pack() depuis la dernière sortie DSP valide (hold-last)
+   ============================================================ */
+
+/** Voir audio_float.h */
+void audio_process_block_int32(int32_t *rx, int32_t *tx, uint32_t frames)
+{
+    static float silent_l[AUDIO_BLOCK_SIZE] = {0};
+    static float silent_r[AUDIO_BLOCK_SIZE] = {0};
+
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+
+    uint8_t write_pos;
+    uint8_t can_push;
+    uint8_t pack_idx;
+    uint8_t has_valid_output;
+
+    __disable_irq();
+    write_pos = in_write_pos;
+    can_push = (in_count < AUDIO_IN_QUEUE_DEPTH) ? 1U : 0U;
+
+    pack_idx = out_read_idx;
+    has_valid_output = out_has_valid;
+    __enable_irq();
+
+    if(can_push)
+    {
+        StereoTrack *write_buf = in_queue[write_pos];
+
+        for(uint32_t t = 0; t < MAX_TRACKS; t++)
+            write_buf[t].enabled = tracks[t].enabled;
+
+        audio_io_unpack(rx, write_buf, frames);
+
+        __disable_irq();
+        in_write_pos = (uint8_t)((in_write_pos + 1U) % AUDIO_IN_QUEUE_DEPTH);
+        in_count++;
+        __enable_irq();
+    }
+    else
+    {
+        in_overrun_count++;
+    }
+
+    if(has_valid_output)
+    {
+        audio_io_pack(tx, outL[pack_idx], outR[pack_idx], frames);
+    }
+    else
+    {
+        out_underflow_count++;
+        audio_io_pack(tx, silent_l, silent_r, frames);
+    }
+}
+
+uint32_t audio_dsp_main_process(uint32_t frames)
+{
+    static float local_master_l[AUDIO_BLOCK_SIZE];
+    static float local_master_r[AUDIO_BLOCK_SIZE];
+
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+
+    uint8_t read_pos;
+    uint8_t write_idx;
+
+    __disable_irq();
+    if(in_count == 0U)
+    {
+        __enable_irq();
+        return 0U;
+    }
+
+    read_pos = in_read_pos;
+    in_read_pos = (uint8_t)((in_read_pos + 1U) % AUDIO_IN_QUEUE_DEPTH);
+    in_count--;
+
+    write_idx = out_write_idx;
+    __enable_irq();
+
+    audio_dsp_process(in_queue[read_pos], local_master_l, local_master_r, frames);
+
+    memcpy(outL[write_idx], local_master_l, frames * sizeof(float));
+    memcpy(outR[write_idx], local_master_r, frames * sizeof(float));
+
+    __disable_irq();
+    out_read_idx = write_idx;
+    out_write_idx = (uint8_t)(write_idx ^ 1U);
+    out_has_valid = 1U;
+    __enable_irq();
+
+    return 1U;
 }
