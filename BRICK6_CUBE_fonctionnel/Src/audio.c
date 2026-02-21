@@ -21,6 +21,7 @@
 #include "audio.h"
 #include "audio_float.h"
 #include "engine_tasklet.h"
+#include "cpu_load.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -35,6 +36,7 @@
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */
 #define AUDIO_FRAMES_PER_HALF    32
+#define AUDIO_SAMPLE_RATE_HZ     48000U
 
 /* Double buffer DMA: [half0 | half1] */
 #define AUDIO_FRAMES_TOTAL       (AUDIO_FRAMES_PER_HALF * 2)
@@ -86,7 +88,9 @@ static void process_half(uint32_t half_index)
     int32_t *tx = &tx_buffer[offset];
 
     /* Frontière moteur float (un bloc fixe par IRQ). */
+    cpu_load_block_start_irq();
     audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);
+    cpu_load_block_end_irq();
 }
 
 /* ============================================================
@@ -102,6 +106,9 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
+
+    /* Init mesure charge CPU audio (utilisée ensuite en IRQ). */
+    cpu_load_init(AUDIO_SAMPLE_RATE_HZ, AUDIO_FRAMES_PER_HALF);
 }
 
 /** Voir audio.h */
