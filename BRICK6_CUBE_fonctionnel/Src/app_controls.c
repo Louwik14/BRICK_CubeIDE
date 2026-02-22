@@ -12,6 +12,13 @@
  * P0=master, P1=LOW EQ, P2=MID EQ, P3=HIGH EQ */
 static int16_t params[4] = {127, 64, 64, 64};
 
+static inline uint8_t eq_is_neutral(void)
+{
+    return (params[1] == 64 &&
+            params[2] == 64 &&
+            params[3] == 64);
+}
+
 /* Cache des dernières valeurs EQ (évite recalculs coûteux) */
 static float last_low_db  = 0.0f;
 static float last_mid_db  = 0.0f;
@@ -84,33 +91,36 @@ void app_controls_process(void)
     if(changed_master)
         mixer_set_master(param_to_gain(params[0]));
 
-    if(changed_low)
+    if(!eq_is_neutral())
     {
-        float db = param_to_eq_db(params[1]);
-        if(fabsf(db - last_low_db) > 0.1f)
+        if(changed_low)
         {
-            last_low_db = db;
-            audio_float_set_dj_eq_low_db(db);
+            float db = param_to_eq_db(params[1]);
+            if(fabsf(db - last_low_db) > 0.1f)
+            {
+                last_low_db = db;
+                audio_float_set_dj_eq_low_db(db);
+            }
         }
-    }
 
-    if(changed_mid)
-    {
-        float db = param_to_eq_db(params[2]);
-        if(fabsf(db - last_mid_db) > 0.1f)
+        if(changed_mid)
         {
-            last_mid_db = db;
-            audio_float_set_dj_eq_mid_db(db);
+            float db = param_to_eq_db(params[2]);
+            if(fabsf(db - last_mid_db) > 0.1f)
+            {
+                last_mid_db = db;
+                audio_float_set_dj_eq_mid_db(db);
+            }
         }
-    }
 
-    if(changed_high)
-    {
-        float db = param_to_eq_db(params[3]);
-        if(fabsf(db - last_high_db) > 0.1f)
+        if(changed_high)
         {
-            last_high_db = db;
-            audio_float_set_dj_eq_high_db(db);
+            float db = param_to_eq_db(params[3]);
+            if(fabsf(db - last_high_db) > 0.1f)
+            {
+                last_high_db = db;
+                audio_float_set_dj_eq_high_db(db);
+            }
         }
     }
 }
