@@ -43,7 +43,7 @@ Src/stm32h7xx_it.o: ../Src/stm32h7xx_it.c ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/stm32h7xx_it.h ../Inc/usart.h ../Inc/main.h
+ ../Inc/cpu_load.h ../Inc/stm32h7xx_it.h ../Inc/usart.h ../Inc/main.h
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -89,6 +89,7 @@ Src/stm32h7xx_it.o: ../Src/stm32h7xx_it.c ../Inc/main.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
+../Inc/cpu_load.h:
 ../Inc/stm32h7xx_it.h:
 ../Inc/usart.h:
 ../Inc/main.h:

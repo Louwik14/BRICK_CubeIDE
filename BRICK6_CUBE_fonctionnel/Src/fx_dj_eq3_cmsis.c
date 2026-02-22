@@ -285,6 +285,12 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
         return;
     }
 
+    /* 🔥 BYPASS TOTAL → zéro CPU */
+    if(eq->bypass)
+    {
+        return;
+    }
+
     if(eq->coeffs_pending_update != 0U)
     {
         memcpy(eq->coeffs, eq->coeffs_pending, sizeof(eq->coeffs));
@@ -295,6 +301,7 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
     arm_biquad_cascade_df1_f32(&eq->inst_l, inout_l, inout_l, block_size);
     arm_biquad_cascade_df1_f32(&eq->inst_r, inout_r, inout_r, block_size);
 
+    /* optionnel (debug only) */
     for(uint32_t n = 0U; n < block_size; n++)
     {
         inout_l[n] = fx_sanitize_sample(inout_l[n]);

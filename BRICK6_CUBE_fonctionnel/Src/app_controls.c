@@ -6,10 +6,16 @@
 #include "audio_float.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <math.h>
 
 /* Paramètres encodeurs (0–127):
  * P0=master, P1=LOW EQ, P2=MID EQ, P3=HIGH EQ */
 static int16_t params[4] = {127, 64, 64, 64};
+
+/* Cache des dernières valeurs EQ (évite recalculs coûteux) */
+static float last_low_db  = 0.0f;
+static float last_mid_db  = 0.0f;
+static float last_high_db = 0.0f;
 
 static float param_to_gain(int16_t p)
 {
@@ -18,18 +24,14 @@ static float param_to_gain(int16_t p)
 
 static float param_to_eq_db(int16_t p)
 {
-    const float range_db = 12.0f;
-    float db = ((float)p - 64.0f) * (range_db / 63.0f);
+    float x = ((float)p - 64.0f) / 63.0f;
 
-    if(p <= 2)
-        db = -60.0f;
+    float sign = (x >= 0.0f) ? 1.0f : -1.0f;
+    float mag = fabsf(x);
 
-    if(db < -60.0f)
-        db = -60.0f;
-    if(db > 12.0f)
-        db = 12.0f;
+    float shaped = mag * mag;  // cheap non-linear
 
-    return db;
+    return sign * shaped * 48.0f;  // range fort
 }
 
 void app_controls_init(void)
@@ -37,9 +39,14 @@ void app_controls_init(void)
     drv_encoders_init();
 
     mixer_set_master(param_to_gain(params[0]));
-    audio_float_set_dj_eq_low_db(param_to_eq_db(params[1]));
-    audio_float_set_dj_eq_mid_db(param_to_eq_db(params[2]));
-    audio_float_set_dj_eq_high_db(param_to_eq_db(params[3]));
+
+    last_low_db  = param_to_eq_db(params[1]);
+    last_mid_db  = param_to_eq_db(params[2]);
+    last_high_db = param_to_eq_db(params[3]);
+
+    audio_float_set_dj_eq_low_db(last_low_db);
+    audio_float_set_dj_eq_mid_db(last_mid_db);
+    audio_float_set_dj_eq_high_db(last_high_db);
 }
 
 void app_controls_process(void)
@@ -75,14 +82,36 @@ void app_controls_process(void)
         mixer_set_master(param_to_gain(params[0]));
 
     if(changed_low)
-        audio_float_set_dj_eq_low_db(param_to_eq_db(params[1]));
+    {
+        float db = param_to_eq_db(params[1]);
+        if(fabsf(db - last_low_db) > 0.1f)
+        {
+            last_low_db = db;
+            audio_float_set_dj_eq_low_db(db);
+        }
+    }
 
     if(changed_mid)
-        audio_float_set_dj_eq_mid_db(param_to_eq_db(params[2]));
+    {
+        float db = param_to_eq_db(params[2]);
+        if(fabsf(db - last_mid_db) > 0.1f)
+        {
+            last_mid_db = db;
+            audio_float_set_dj_eq_mid_db(db);
+        }
+    }
 
     if(changed_high)
-        audio_float_set_dj_eq_high_db(param_to_eq_db(params[3]));
+    {
+        float db = param_to_eq_db(params[3]);
+        if(fabsf(db - last_high_db) > 0.1f)
+        {
+            last_high_db = db;
+            audio_float_set_dj_eq_high_db(db);
+        }
+    }
 }
+
 void app_controls_render(void)
 {
     char buf[32];

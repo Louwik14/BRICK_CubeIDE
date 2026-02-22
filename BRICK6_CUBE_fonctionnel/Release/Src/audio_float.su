@@ -10,4 +10,4 @@
 ../Src/audio_float.c:164:6:track_set_gain	0	static
 ../Src/audio_float.c:176:6:audio_float_set_master_gain	0	static
 ../Src/audio_float.c:187:7:audio_float_get_master_gain	0	static
-../Src/audio_float.c:440:6:audio_process_block_int32	80	static
+../Src/audio_float.c:437:6:audio_process_block_int32	80	static
