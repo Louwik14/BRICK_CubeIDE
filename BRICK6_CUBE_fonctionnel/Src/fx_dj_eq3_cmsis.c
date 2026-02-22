@@ -38,6 +38,22 @@ static inline float fx_clamp_freq(float f, float sample_rate)
     return fx_clamp(f, FX_DJ_EQ3_MIN_FREQ, nyquist_margin);
 }
 
+
+static inline float fx_sanitize_sample(float x)
+{
+    if(!isfinite(x))
+    {
+        return 0.0f;
+    }
+
+    if(fabsf(x) < 1.0e-20f)
+    {
+        return 0.0f;
+    }
+
+    return x;
+}
+
 static void rbj_low_shelf(float fs, float f0, float gain_db, float s, float *c)
 {
     const float a = powf(10.0f, gain_db * 0.025f);
@@ -63,8 +79,8 @@ static void rbj_low_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[0] = fx_safe(b0 * inv_a0);
     c[1] = fx_safe(b1 * inv_a0);
     c[2] = fx_safe(b2 * inv_a0);
-    c[3] = fx_safe(a1 * inv_a0);
-    c[4] = fx_safe(a2 * inv_a0);
+    c[3] = fx_safe((-a1) * inv_a0);
+    c[4] = fx_safe((-a2) * inv_a0);
 }
 
 static void rbj_peaking(float fs, float f0, float q, float gain_db, float *c)
@@ -85,8 +101,8 @@ static void rbj_peaking(float fs, float f0, float q, float gain_db, float *c)
     c[0] = fx_safe(b0 * inv_a0);
     c[1] = fx_safe(b1 * inv_a0);
     c[2] = fx_safe(b2 * inv_a0);
-    c[3] = fx_safe(a1 * inv_a0);
-    c[4] = fx_safe(a2 * inv_a0);
+    c[3] = fx_safe((-a1) * inv_a0);
+    c[4] = fx_safe((-a2) * inv_a0);
 }
 
 static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
@@ -114,8 +130,8 @@ static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[0] = fx_safe(b0 * inv_a0);
     c[1] = fx_safe(b1 * inv_a0);
     c[2] = fx_safe(b2 * inv_a0);
-    c[3] = fx_safe(a1 * inv_a0);
-    c[4] = fx_safe(a2 * inv_a0);
+    c[3] = fx_safe((-a1) * inv_a0);
+    c[4] = fx_safe((-a2) * inv_a0);
 }
 
 
@@ -278,4 +294,10 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
 
     arm_biquad_cascade_df1_f32(&eq->inst_l, inout_l, inout_l, block_size);
     arm_biquad_cascade_df1_f32(&eq->inst_r, inout_r, inout_r, block_size);
+
+    for(uint32_t n = 0U; n < block_size; n++)
+    {
+        inout_l[n] = fx_sanitize_sample(inout_l[n]);
+        inout_r[n] = fx_sanitize_sample(inout_r[n]);
+    }
 }
