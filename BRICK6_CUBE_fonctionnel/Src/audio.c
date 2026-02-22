@@ -36,7 +36,6 @@
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */
 #define AUDIO_FRAMES_PER_HALF    64
-#define AUDIO_SAMPLE_RATE_HZ     48000U
 
 /* Double buffer DMA: [half0 | half1] */
 #define AUDIO_FRAMES_TOTAL       (AUDIO_FRAMES_PER_HALF * 2)
@@ -88,13 +87,7 @@ static void process_half(uint32_t half_index)
     int32_t *tx = &tx_buffer[offset];
 
     /* Frontière moteur float (un bloc fixe par IRQ). */
-#if (CPU_LOAD_MODE == CPU_LOAD_MODE_DSP_ONLY)
-    cpu_load_block_start_irq();
-#endif
     audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);
-#if (CPU_LOAD_MODE == CPU_LOAD_MODE_DSP_ONLY)
-    cpu_load_block_end_irq();
-#endif
 }
 
 /* ============================================================
@@ -112,7 +105,7 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
     memset(tx_buffer, 0, sizeof(tx_buffer));
 
     /* Init mesure charge CPU audio (utilisée ensuite en IRQ). */
-    cpu_load_init(AUDIO_SAMPLE_RATE_HZ, AUDIO_FRAMES_PER_HALF);
+    cpu_load_init();
 }
 
 /** Voir audio.h */
@@ -151,16 +144,10 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
     {
-#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
-        cpu_load_block_start_irq();
-#endif
         process_half(0);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
-#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
-        cpu_load_block_end_irq();
-#endif
     }
 }
 
@@ -180,15 +167,9 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
     {
-#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
-        cpu_load_block_start_irq();
-#endif
         process_half(1);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
-#if (CPU_LOAD_MODE == CPU_LOAD_MODE_IRQ_TOTAL)
-        cpu_load_block_end_irq();
-#endif
     }
 }
