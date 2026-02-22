@@ -32,7 +32,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <arm_acle.h>
-#include "fx_dj_eq3.h"
+#include "fx_dj_eq3_cmsis.h"
 #include "stm32h743xx.h"
 #include "arm_math.h"
 
@@ -351,16 +351,13 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     }
 
     /* EQ DJ 3 bandes uniquement sur track 0 (stéréo, en place), après float_cb(). */
-    /*if(track_buf[0].enabled)
+    if(track_buf[0].enabled && !track0_eq.bypass)
     {
-        float *AUDIO_RESTRICT tr_l = track_buf[0].L;
-        float *AUDIO_RESTRICT tr_r = track_buf[0].R;
-
-        for(uint32_t n = 0; n < frames; n++)
-        {
-            fx_dj_eq3_process_stereo_sample(&track0_eq, &tr_l[n], &tr_r[n]);
-        }
-    }*
+        fx_dj_eq3_process_block(&track0_eq,
+                                track_buf[0].L,
+                                track_buf[0].R,
+                                frames);
+    }
 
     /* Préparation sends/returns (FX non branchés pour l'instant). */
     memset(send0_l, 0, frames * sizeof(float));
