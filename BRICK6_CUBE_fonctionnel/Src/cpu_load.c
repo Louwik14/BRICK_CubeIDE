@@ -1,104 +1,105 @@
-/**
- * @file cpu_load.c
- * @brief Mesure temps CPU du bloc audio via DWT CYCCNT (Cortex-M7).
- *
- * Principe:
- * - On lit DWT->CYCCNT au début et à la fin du traitement DSP d'un bloc.
- * - Delta cycles = cycles réellement consommés par le traitement audio.
- * - Charge permille = delta_cycles / budget_cycles * 1000.
- *
- * Pourquoi DWT->CYCCNT:
- * - Lecture très rapide (quelques instructions), adaptée au contexte IRQ.
- * - Résolution au cycle CPU, plus précise que des tick timers lents.
- *
- * Contexte IRQ vs main:
- * - Les écritures (last/max/overruns) sont faites en IRQ audio.
- * - Les lectures (UI) sont faites en main loop via getters.
- */
-
 #include "cpu_load.h"
 #include "stm32h7xx.h"
 
-/* Budget cycles pour un bloc audio:
- * budget = SystemCoreClock * frames_per_block / sample_rate_hz
- */
-static uint32_t budget_cycles = 1U;
+#define CPU_LOAD_MAX_PERMILLE 2000U
 
-/* Timestamp début bloc (IRQ). */
-static uint32_t block_start_cycles = 0U;
+static uint32_t irq_start_cycles = 0U;
+static uint32_t last_irq_entry_cycles = 0U;
+static uint32_t current_period_cycles = 0U;
 
-/* Métriques partagées IRQ -> main loop. */
-static volatile uint32_t last_permille = 0U;
-static volatile uint32_t max_permille = 0U;
-static volatile uint32_t overruns_count = 0U;
+static volatile uint32_t cpu_permille = 0U;
+static volatile uint32_t cpu_max_permille = 0U;
+static volatile uint32_t cpu_counter_valid = 0U;
 
-void cpu_load_init(uint32_t sample_rate_hz, uint32_t frames_per_block)
+void cpu_load_init(void)
 {
-    uint64_t budget64;
+    uint32_t t0;
+    uint32_t t1;
 
-    if(sample_rate_hz == 0U)
-        sample_rate_hz = 1U;
-    if(frames_per_block == 0U)
-        frames_per_block = 1U;
+    irq_start_cycles = 0U;
+    last_irq_entry_cycles = 0U;
+    current_period_cycles = 0U;
+    cpu_permille = 0U;
+    cpu_max_permille = 0U;
+    cpu_counter_valid = 0U;
 
-    budget64 = ((uint64_t)SystemCoreClock * (uint64_t)frames_per_block) /
-               (uint64_t)sample_rate_hz;
-
-    if(budget64 == 0U)
-        budget64 = 1U;
-
-    budget_cycles = (uint32_t)budget64;
-
-    last_permille = 0U;
-    max_permille = 0U;
-    overruns_count = 0U;
-    block_start_cycles = 0U;
-
-    /* Active les blocs trace DWT puis le compteur cycle. */
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+
+#if defined(DWT_LAR)
+    DWT->LAR = 0xC5ACCE55UL;
+#endif
+
+    __DSB();
+    __ISB();
+
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    __DSB();
+    __ISB();
+
+    t0 = DWT->CYCCNT;
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    t1 = DWT->CYCCNT;
+
+    if(t1 != t0)
+        cpu_counter_valid = 1U;
 }
 
-void cpu_load_block_start_irq(void)
+void cpu_load_irq_begin(void)
 {
-    block_start_cycles = DWT->CYCCNT;
+    uint32_t now;
+
+    if(cpu_counter_valid == 0U)
+        return;
+
+    now = DWT->CYCCNT;
+    current_period_cycles = now - last_irq_entry_cycles;
+    last_irq_entry_cycles = now;
+    irq_start_cycles = now;
 }
 
-void cpu_load_block_end_irq(void)
+void cpu_load_irq_end(void)
 {
-    const uint32_t end_cycles = DWT->CYCCNT;
-    const uint32_t elapsed_cycles = end_cycles - block_start_cycles;
-    uint32_t permille;
+    uint32_t end;
+    uint32_t elapsed;
+    uint32_t pm;
 
-    permille = (uint32_t)(((uint64_t)elapsed_cycles * 1000ULL) /
-                          (uint64_t)budget_cycles);
+    if(cpu_counter_valid == 0U)
+        return;
 
-    last_permille = permille;
+    end = DWT->CYCCNT;
+    elapsed = end - irq_start_cycles;
 
-    if(permille > max_permille)
-        max_permille = permille;
+    if(current_period_cycles == 0U)
+        return;
 
-    if(permille > 1000U)
-        overruns_count++;
+    pm = (uint32_t)(((uint64_t)elapsed * 1000ULL) /
+                    (uint64_t)current_period_cycles);
+
+    if(pm > CPU_LOAD_MAX_PERMILLE)
+        pm = CPU_LOAD_MAX_PERMILLE;
+
+    cpu_permille = pm;
+
+    if(pm > cpu_max_permille)
+        cpu_max_permille = pm;
 }
 
 uint32_t cpu_load_get_permille(void)
 {
-    return last_permille;
+    return cpu_permille;
 }
 
-uint32_t cpu_load_get_max_permille(void)
+uint32_t cpu_load_get_max(void)
 {
-    return max_permille;
+    return cpu_max_permille;
 }
 
-uint32_t cpu_load_get_overruns(void)
+uint32_t cpu_load_is_valid(void)
 {
-    return overruns_count;
-}
-
-void cpu_load_reset_max(void)
-{
-    max_permille = last_permille;
+    return cpu_counter_valid;
 }

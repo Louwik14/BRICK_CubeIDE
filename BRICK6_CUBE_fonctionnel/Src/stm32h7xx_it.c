@@ -19,6 +19,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cpu_load.h"
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -243,11 +244,11 @@ void DMA1_Stream0_IRQHandler(void)
 void DMA1_Stream1_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
-
+  cpu_load_irq_begin();
   /* USER CODE END DMA1_Stream1_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_sai1_b);
   /* USER CODE BEGIN DMA1_Stream1_IRQn 1 */
-
+  cpu_load_irq_end();
   /* USER CODE END DMA1_Stream1_IRQn 1 */
 }
 
