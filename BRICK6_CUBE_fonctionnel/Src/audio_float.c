@@ -59,6 +59,15 @@ static float output_comp = 1.0f;
 
 static fx_dj_eq3_t track0_eq;
 
+static volatile uint8_t track0_eq_ui_low = 64U;
+static volatile uint8_t track0_eq_ui_mid = 64U;
+static volatile uint8_t track0_eq_ui_high = 64U;
+
+static inline uint8_t eq_is_neutral(void)
+{
+    return (track0_eq_ui_low == 64U) && (track0_eq_ui_mid == 64U) && (track0_eq_ui_high == 64U);
+}
+
 /** Voir audio_float.h */
 void audio_float_set_postgain(float gain)
 {
@@ -91,6 +100,18 @@ void audio_float_set_dj_eq_mid_db(float db)
 void audio_float_set_dj_eq_high_db(float db)
 {
     fx_dj_eq3_set_high_db(&track0_eq, db);
+}
+
+void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
+{
+    track0_eq_ui_low = low;
+    track0_eq_ui_mid = mid;
+    track0_eq_ui_high = high;
+}
+
+uint8_t audio_float_is_dj_eq_ui_neutral(void)
+{
+    return eq_is_neutral() ? 1U : 0U;
 }
 
 /* ============================================================
@@ -351,7 +372,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     }
 
     /* EQ DJ 3 bandes uniquement sur track 0 (stéréo, en place), après float_cb(). */
-    if(track_buf[0].enabled && !track0_eq.bypass)
+    if(track_buf[0].enabled && !eq_is_neutral())
     {
         fx_dj_eq3_process_block(&track0_eq,
                                 track_buf[0].L,

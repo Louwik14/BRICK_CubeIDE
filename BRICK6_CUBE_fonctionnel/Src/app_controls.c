@@ -44,6 +44,7 @@ void app_controls_init(void)
     last_mid_db  = param_to_eq_db(params[2]);
     last_high_db = param_to_eq_db(params[3]);
 
+    audio_float_set_dj_eq_ui_params((uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3]);
     audio_float_set_dj_eq_low_db(last_low_db);
     audio_float_set_dj_eq_mid_db(last_mid_db);
     audio_float_set_dj_eq_high_db(last_high_db);
@@ -77,6 +78,8 @@ void app_controls_process(void)
             if(i == 3) changed_high = 1U;
         }
     }
+
+    audio_float_set_dj_eq_ui_params((uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3]);
 
     if(changed_master)
         mixer_set_master(param_to_gain(params[0]));

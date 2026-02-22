@@ -8,7 +8,6 @@
 #define FX_DJ_EQ3_MAX_DB    (12.0f)
 #define FX_DJ_EQ3_SHELF_S   (1.0f)
 #define FX_DJ_EQ3_MIN_FREQ  (10.0f)
-#define FX_DJ_EQ3_BYPASS_DB_EPS (0.25f)
 #define FX_DJ_EQ3_PARAM_DB_EPS  (0.10f)
 #define FX_DJ_EQ3_SANITIZE_OUTPUT 0
 
@@ -42,12 +41,6 @@ static inline float fx_clamp_freq(float f, float sample_rate)
 }
 
 
-static inline uint8_t fx_eq_is_near_flat(const fx_dj_eq3_t *eq)
-{
-    return ((fabsf(eq->low_db) <= FX_DJ_EQ3_BYPASS_DB_EPS) &&
-            (fabsf(eq->mid_db) <= FX_DJ_EQ3_BYPASS_DB_EPS) &&
-            (fabsf(eq->high_db) <= FX_DJ_EQ3_BYPASS_DB_EPS)) ? 1U : 0U;
-}
 
 #if (FX_DJ_EQ3_SANITIZE_OUTPUT != 0)
 static inline float fx_sanitize_sample(float x)
@@ -200,7 +193,9 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
     __DMB();
     eq->coeffs_pending_update = 1U;
 
+    eq->bypass = ((eq->low_db == 0.0f) && (eq->mid_db == 0.0f) && (eq->high_db == 0.0f)) ? 1U : 0U;
 }
+
 
 void fx_dj_eq3_set_low_db(fx_dj_eq3_t *eq, float gain_db)
 {
@@ -295,12 +290,6 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
                              uint32_t block_size)
 {
     if((eq == NULL) || (inout_l == NULL) || (inout_r == NULL) || (block_size == 0U))
-    {
-        return;
-    }
-
-    /* 🔥 BYPASS TOTAL → zéro CPU */
-    if(eq->bypass)
     {
         return;
     }
