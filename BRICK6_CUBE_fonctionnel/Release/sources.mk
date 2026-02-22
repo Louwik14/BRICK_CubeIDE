@@ -22,6 +22,14 @@ C_DEPS :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
+Drivers/CMSIS_DSP/Source/BasicMathFunctions \
+Drivers/CMSIS_DSP/Source/CommonTables \
+Drivers/CMSIS_DSP/Source/ComplexMathFunctions \
+Drivers/CMSIS_DSP/Source/ControllerFunctions \
+Drivers/CMSIS_DSP/Source/FastMathFunctions \
+Drivers/CMSIS_DSP/Source/FilteringFunctions \
+Drivers/CMSIS_DSP/Source/QuaternionMathFunctions \
+Drivers/CMSIS_DSP/Source/TransformFunctions \
 Drivers/STM32H7xx_HAL_Driver/Src \
 Src \
 Startup \

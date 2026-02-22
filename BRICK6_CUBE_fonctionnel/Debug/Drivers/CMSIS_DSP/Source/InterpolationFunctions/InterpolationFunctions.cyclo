@@ -1,0 +1,10 @@
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_bilinear_interp_f32.c:104:13:arm_bilinear_interp_f32	5
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_bilinear_interp_q15.c:50:9:arm_bilinear_interp_q15	5
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_bilinear_interp_q31.c:51:9:arm_bilinear_interp_q31	5
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_bilinear_interp_q7.c:51:8:arm_bilinear_interp_q7	5
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_linear_interp_f32.c:82:13:arm_linear_interp_f32	3
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_linear_interp_q15.c:56:9:arm_linear_interp_q15	3
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_linear_interp_q31.c:57:9:arm_linear_interp_q31	3
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_linear_interp_q7.c:56:8:arm_linear_interp_q7	3
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_spline_interp_f32.c:149:24:arm_spline_f32	5
+../Drivers/CMSIS_DSP/Source/InterpolationFunctions/arm_spline_interp_init_f32.c:68:24:arm_spline_init_f32	7
