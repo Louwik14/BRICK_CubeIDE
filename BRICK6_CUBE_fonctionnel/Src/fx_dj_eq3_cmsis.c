@@ -176,6 +176,13 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
     eq->high_freq = high_f;
     eq->mid_q = q;
 
+    eq->bypass = fx_eq_is_near_flat(eq);
+    if(eq->bypass != 0U)
+    {
+        eq->coeffs_pending_update = 0U;
+        return;
+    }
+
     rbj_low_shelf(fs, low_f, eq->low_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[0]);
     rbj_peaking(fs, mid_f, q, eq->mid_db, &coeffs_tmp[5]);
     rbj_high_shelf(fs, high_f, eq->high_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[10]);
