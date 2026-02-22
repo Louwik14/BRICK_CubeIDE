@@ -351,7 +351,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     }
 
     /* EQ DJ 3 bandes uniquement sur track 0 (stéréo, en place), après float_cb(). */
-    if(track_buf[0].enabled)
+    if(track_buf[0].enabled && !track0_eq.bypass)
     {
         fx_dj_eq3_process_block(&track0_eq,
                                 track_buf[0].L,

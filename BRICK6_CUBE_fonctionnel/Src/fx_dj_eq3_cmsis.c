@@ -8,7 +8,6 @@
 #define FX_DJ_EQ3_MAX_DB    (12.0f)
 #define FX_DJ_EQ3_SHELF_S   (1.0f)
 #define FX_DJ_EQ3_MIN_FREQ  (10.0f)
-#define FX_DSP_EPS           (1.0e-20f)
 
 static inline float fx_clamp(float x, float lo, float hi)
 {
@@ -119,26 +118,6 @@ static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[4] = fx_safe(a2 * inv_a0);
 }
 
-
-static inline void fx_denormal_guard(float *buf, uint32_t n)
-{
-    for(uint32_t i = 0; i < n; i++)
-    {
-        buf[i] += FX_DSP_EPS;
-        buf[i] -= FX_DSP_EPS;
-    }
-}
-
-static inline void fx_sanitize_buffer(float *buf, uint32_t n)
-{
-    for(uint32_t i = 0; i < n; i++)
-    {
-        if(!isfinite(buf[i]))
-        {
-            buf[i] = 0.0f;
-        }
-    }
-}
 
 void fx_dj_eq3_reset(fx_dj_eq3_t *eq)
 {
@@ -297,19 +276,6 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
         eq->coeffs_pending_update = 0U;
     }
 
-    if((eq->bypass != 0U) ||
-       ((eq->low_db == 0.0f) && (eq->mid_db == 0.0f) && (eq->high_db == 0.0f)))
-    {
-        fx_dj_eq3_reset(eq);
-        return;
-    }
-
-    fx_denormal_guard(inout_l, block_size);
-    fx_denormal_guard(inout_r, block_size);
-
     arm_biquad_cascade_df1_f32(&eq->inst_l, inout_l, inout_l, block_size);
     arm_biquad_cascade_df1_f32(&eq->inst_r, inout_r, inout_r, block_size);
-
-    fx_sanitize_buffer(inout_l, block_size);
-    fx_sanitize_buffer(inout_r, block_size);
 }

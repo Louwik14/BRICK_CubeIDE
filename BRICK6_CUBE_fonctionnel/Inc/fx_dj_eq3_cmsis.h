@@ -11,10 +11,10 @@ typedef struct {
     arm_biquad_casd_df1_inst_f32 inst_l;
     arm_biquad_casd_df1_inst_f32 inst_r;
 
-    float coeffs[3U * 5U];
+    __attribute__((aligned(32))) float coeffs[3U * 5U];
     float coeffs_pending[3U * 5U];
-    float state_l[3U * 4U] __attribute__((aligned(16)));
-    float state_r[3U * 4U] __attribute__((aligned(16)));
+    __attribute__((aligned(32))) float state_l[3U * 4U];
+    __attribute__((aligned(32))) float state_r[3U * 4U];
 
     float sample_rate;
     float low_freq;
