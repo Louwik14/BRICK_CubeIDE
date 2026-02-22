@@ -262,8 +262,8 @@ void fx_dj_eq3_init(fx_dj_eq3_t *eq,
     eq->high_freq = high_freq;
     eq->mid_q = mid_q;
 
-    arm_biquad_cascade_df1_init_f32(&eq->inst_l, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_l);
-    arm_biquad_cascade_df1_init_f32(&eq->inst_r, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_r);
+    arm_biquad_cascade_df2T_init_f32(&eq->inst_l, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_l);
+    arm_biquad_cascade_df2T_init_f32(&eq->inst_r, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_r);
 
     fx_dj_eq3_update_coeffs(eq);
     if(eq->coeffs_pending_update != 0U)
@@ -291,8 +291,8 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
         eq->coeffs_pending_update = 0U;
     }
 
-    arm_biquad_cascade_df1_f32(&eq->inst_l, inout_l, inout_l, block_size);
-    arm_biquad_cascade_df1_f32(&eq->inst_r, inout_r, inout_r, block_size);
+    arm_biquad_cascade_df2T_f32(&eq->inst_l, inout_l, inout_l, block_size);
+    arm_biquad_cascade_df2T_f32(&eq->inst_r, inout_r, inout_r, block_size);
 
 #if (FX_DJ_EQ3_SANITIZE_OUTPUT != 0)
     for(uint32_t n = 0U; n < block_size; n++)
