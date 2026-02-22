@@ -8,6 +8,7 @@
 #define FX_DJ_EQ3_MAX_DB    (12.0f)
 #define FX_DJ_EQ3_SHELF_S   (1.0f)
 #define FX_DJ_EQ3_MIN_FREQ  (10.0f)
+#define FX_DSP_EPS           (1.0e-20f)
 
 static inline float fx_clamp(float x, float lo, float hi)
 {
@@ -63,8 +64,8 @@ static void rbj_low_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[0] = fx_safe(b0 * inv_a0);
     c[1] = fx_safe(b1 * inv_a0);
     c[2] = fx_safe(b2 * inv_a0);
-    c[3] = fx_safe(-a1 * inv_a0);
-    c[4] = fx_safe(-a2 * inv_a0);
+    c[3] = fx_safe(a1 * inv_a0);
+    c[4] = fx_safe(a2 * inv_a0);
 }
 
 static void rbj_peaking(float fs, float f0, float q, float gain_db, float *c)
@@ -85,8 +86,8 @@ static void rbj_peaking(float fs, float f0, float q, float gain_db, float *c)
     c[0] = fx_safe(b0 * inv_a0);
     c[1] = fx_safe(b1 * inv_a0);
     c[2] = fx_safe(b2 * inv_a0);
-    c[3] = fx_safe(-a1 * inv_a0);
-    c[4] = fx_safe(-a2 * inv_a0);
+    c[3] = fx_safe(a1 * inv_a0);
+    c[4] = fx_safe(a2 * inv_a0);
 }
 
 static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
@@ -114,8 +115,29 @@ static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[0] = fx_safe(b0 * inv_a0);
     c[1] = fx_safe(b1 * inv_a0);
     c[2] = fx_safe(b2 * inv_a0);
-    c[3] = fx_safe(-a1 * inv_a0);
-    c[4] = fx_safe(-a2 * inv_a0);
+    c[3] = fx_safe(a1 * inv_a0);
+    c[4] = fx_safe(a2 * inv_a0);
+}
+
+
+static inline void fx_denormal_guard(float *buf, uint32_t n)
+{
+    for(uint32_t i = 0; i < n; i++)
+    {
+        buf[i] += FX_DSP_EPS;
+        buf[i] -= FX_DSP_EPS;
+    }
+}
+
+static inline void fx_sanitize_buffer(float *buf, uint32_t n)
+{
+    for(uint32_t i = 0; i < n; i++)
+    {
+        if(!isfinite(buf[i]))
+        {
+            buf[i] = 0.0f;
+        }
+    }
 }
 
 void fx_dj_eq3_reset(fx_dj_eq3_t *eq)
@@ -136,6 +158,8 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
         return;
     }
 
+    float coeffs_tmp[3U * 5U];
+
     eq->low_db = fx_clamp_db(eq->low_db);
     eq->mid_db = fx_clamp_db(eq->mid_db);
     eq->high_db = fx_clamp_db(eq->high_db);
@@ -152,9 +176,15 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
     eq->high_freq = high_f;
     eq->mid_q = q;
 
-    rbj_low_shelf(fs, low_f, eq->low_db, FX_DJ_EQ3_SHELF_S, &eq->coeffs[0]);
-    rbj_peaking(fs, mid_f, q, eq->mid_db, &eq->coeffs[5]);
-    rbj_high_shelf(fs, high_f, eq->high_db, FX_DJ_EQ3_SHELF_S, &eq->coeffs[10]);
+    rbj_low_shelf(fs, low_f, eq->low_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[0]);
+    rbj_peaking(fs, mid_f, q, eq->mid_db, &coeffs_tmp[5]);
+    rbj_high_shelf(fs, high_f, eq->high_db, FX_DJ_EQ3_SHELF_S, &coeffs_tmp[10]);
+
+    eq->coeffs_pending_update = 0U;
+    __DMB();
+    memcpy(eq->coeffs_pending, coeffs_tmp, sizeof(coeffs_tmp));
+    __DMB();
+    eq->coeffs_pending_update = 1U;
 
     eq->bypass = ((fabsf(eq->low_db) < 1.0e-6f) &&
                   (fabsf(eq->mid_db) < 1.0e-6f) &&
@@ -242,6 +272,11 @@ void fx_dj_eq3_init(fx_dj_eq3_t *eq,
     arm_biquad_cascade_df1_init_f32(&eq->inst_r, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_r);
 
     fx_dj_eq3_update_coeffs(eq);
+    if(eq->coeffs_pending_update != 0U)
+    {
+        memcpy(eq->coeffs, eq->coeffs_pending, sizeof(eq->coeffs));
+        eq->coeffs_pending_update = 0U;
+    }
     fx_dj_eq3_reset(eq);
 }
 
@@ -250,11 +285,31 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
                              float *inout_r,
                              uint32_t block_size)
 {
-    if((eq == NULL) || (inout_l == NULL) || (inout_r == NULL) || (block_size == 0U) || (eq->bypass != 0U))
+    if((eq == NULL) || (inout_l == NULL) || (inout_r == NULL) || (block_size == 0U))
     {
         return;
     }
 
+    if(eq->coeffs_pending_update != 0U)
+    {
+        memcpy(eq->coeffs, eq->coeffs_pending, sizeof(eq->coeffs));
+        __DMB();
+        eq->coeffs_pending_update = 0U;
+    }
+
+    if((eq->bypass != 0U) ||
+       ((eq->low_db == 0.0f) && (eq->mid_db == 0.0f) && (eq->high_db == 0.0f)))
+    {
+        fx_dj_eq3_reset(eq);
+        return;
+    }
+
+    fx_denormal_guard(inout_l, block_size);
+    fx_denormal_guard(inout_r, block_size);
+
     arm_biquad_cascade_df1_f32(&eq->inst_l, inout_l, inout_l, block_size);
     arm_biquad_cascade_df1_f32(&eq->inst_r, inout_r, inout_r, block_size);
+
+    fx_sanitize_buffer(inout_l, block_size);
+    fx_sanitize_buffer(inout_r, block_size);
 }

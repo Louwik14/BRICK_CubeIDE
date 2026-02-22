@@ -12,6 +12,7 @@ typedef struct {
     arm_biquad_casd_df1_inst_f32 inst_r;
 
     float coeffs[3U * 5U];
+    float coeffs_pending[3U * 5U];
     float state_l[3U * 4U] __attribute__((aligned(16)));
     float state_r[3U * 4U] __attribute__((aligned(16)));
 
@@ -26,6 +27,7 @@ typedef struct {
     float high_db;
 
     uint8_t bypass;
+    volatile uint8_t coeffs_pending_update;
 } fx_dj_eq3_t;
 
 void fx_dj_eq3_init(fx_dj_eq3_t *eq,
