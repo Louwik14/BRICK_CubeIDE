@@ -31,6 +31,7 @@
 #include "audio_float.h"
 #include <stdint.h>
 #include <string.h>
+#include <arm_acle.h>
 #include "fx_dj_eq3.h"
 
 /* ============================================================
@@ -193,24 +194,32 @@ float audio_float_get_master_gain(void)
    - int24 signé right-aligned dans int32 (bits [23:0]).
    ============================================================ */
 
-/* int24 signé right-aligned -> float [-1..1] */
-static inline float s242f(int32_t x)
+/* int24 signé right-aligned -> int32 signé (branchless). */
+static inline int32_t s24_sign_extend(int32_t x)
 {
-    if(x & 0x00800000)
-        x |= 0xFF000000;
-
-    return (float)x * (1.0f / 8388608.0f); /* 2^23 */
+    return (x << 8) >> 8;
 }
 
-/* float [-1..1] -> int24 signé right-aligned */
-static inline int32_t f2s24(float x)
+/* int24 signé right-aligned -> float [-1..1). */
+static inline float s242f_fast(int32_t x, float gain)
 {
-    if(x > 0.999999f)
-        x = 0.999999f;
-    if(x < -1.0f)
-        x = -1.0f;
+    return (float)s24_sign_extend(x) * gain;
+}
 
-    return ((int32_t)(x * 8388607.0f)) & 0x00FFFFFF;
+/* float -> int24 signé right-aligned (branchless clamp + quantif). */
+static inline int32_t f2s24_fast(float x)
+{
+    const float clamped = __builtin_fmaxf(-1.0f, __builtin_fminf(x, 0.9999998807907104f)); /* (2^23-1)/2^23 */
+    const int32_t q = (int32_t)(clamped * 8388607.0f);
+    return q & 0x00FFFFFF;
+}
+
+/* Variante optionnelle DSP/ACLE: saturation via SSAT sur 24 bits. */
+static inline int32_t f2s24_fast_ssat(float x)
+{
+    const int32_t q = (int32_t)(x * 8388608.0f);
+    const int32_t sat = __SSAT(q, 24);
+    return sat & 0x00FFFFFF;
 }
 
 /* ============================================================
@@ -236,34 +245,64 @@ static inline void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                                    StereoTrack *AUDIO_RESTRICT track_buf,
                                    uint32_t frames)
 {
-    const float in_gain = postgain_recip;
+    const float in_scale = postgain_recip * (1.0f / 8388608.0f);
 
-    for(uint32_t t = 0; t < MAX_TRACKS; t++)
+    const uint32_t tr0_on = (uint32_t)track_buf[0].enabled;
+    const uint32_t tr1_on = (uint32_t)track_buf[1].enabled;
+    const uint32_t tr2_on = (uint32_t)track_buf[2].enabled;
+
+    float *AUDIO_RESTRICT tr0_l = track_buf[0].L;
+    float *AUDIO_RESTRICT tr0_r = track_buf[0].R;
+    float *AUDIO_RESTRICT tr1_l = track_buf[1].L;
+    float *AUDIO_RESTRICT tr1_r = track_buf[1].R;
+    float *AUDIO_RESTRICT tr2_l = track_buf[2].L;
+    float *AUDIO_RESTRICT tr2_r = track_buf[2].R;
+
+    if(tr0_on == 0U)
     {
-        float *AUDIO_RESTRICT tr_l = track_buf[t].L;
-        float *AUDIO_RESTRICT tr_r = track_buf[t].R;
+        memset(tr0_l, 0, frames * sizeof(float));
+        memset(tr0_r, 0, frames * sizeof(float));
+    }
+    if(tr1_on == 0U)
+    {
+        memset(tr1_l, 0, frames * sizeof(float));
+        memset(tr1_r, 0, frames * sizeof(float));
+    }
+    if(tr2_on == 0U)
+    {
+        memset(tr2_l, 0, frames * sizeof(float));
+        memset(tr2_r, 0, frames * sizeof(float));
+    }
 
-        if(track_buf[t].enabled)
-        {
-            const uint32_t slot_l = t * 2U;
-            const uint32_t slot_r = slot_l + 1U;
-            const int32_t *AUDIO_RESTRICT prx_l = rx + slot_l;
-            const int32_t *AUDIO_RESTRICT prx_r = rx + slot_r;
+    const int32_t *AUDIO_RESTRICT prx = rx;
 
-            for(uint32_t n = 0; n < frames; n++)
-            {
-                tr_l[n] = s242f(*prx_l) * in_gain;
-                tr_r[n] = s242f(*prx_r) * in_gain;
-                prx_l += AUDIO_TDM_SLOTS;
-                prx_r += AUDIO_TDM_SLOTS;
-            }
-        }
-        else
+    for(uint32_t n = 0; n < frames; n++)
+    {
+        /* Lecture contiguë de la frame TDM (slots 0..5 utilisés). */
+        const int32_t s0 = prx[0];
+        const int32_t s1 = prx[1];
+        const int32_t s2 = prx[2];
+        const int32_t s3 = prx[3];
+        const int32_t s4 = prx[4];
+        const int32_t s5 = prx[5];
+
+        if(tr0_on)
         {
-            /* Contrat callback: tracks inactives remises à zéro pour le bloc courant. */
-            memset(tr_l, 0, frames * sizeof(float));
-            memset(tr_r, 0, frames * sizeof(float));
+            tr0_l[n] = s242f_fast(s0, in_scale);
+            tr0_r[n] = s242f_fast(s1, in_scale);
         }
+        if(tr1_on)
+        {
+            tr1_l[n] = s242f_fast(s2, in_scale);
+            tr1_r[n] = s242f_fast(s3, in_scale);
+        }
+        if(tr2_on)
+        {
+            tr2_l[n] = s242f_fast(s4, in_scale);
+            tr2_r[n] = s242f_fast(s5, in_scale);
+        }
+
+        prx += AUDIO_TDM_SLOTS;
     }
 }
 
@@ -367,10 +406,17 @@ static inline void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
         const float cue_l = bus_cue_l[n] * out_gain;
         const float cue_r = bus_cue_r[n] * out_gain;
 
-        ptx[0] = f2s24(main_l); /* MAIN L */
-        ptx[1] = f2s24(main_r); /* MAIN R */
-        ptx[2] = f2s24(cue_l);  /* CUE L  */
-        ptx[3] = f2s24(cue_r);  /* CUE R  */
+#if defined(USE_F2S24_SSAT)
+        ptx[0] = f2s24_fast_ssat(main_l); /* MAIN L */
+        ptx[1] = f2s24_fast_ssat(main_r); /* MAIN R */
+        ptx[2] = f2s24_fast_ssat(cue_l);  /* CUE L  */
+        ptx[3] = f2s24_fast_ssat(cue_r);  /* CUE R  */
+#else
+        ptx[0] = f2s24_fast(main_l); /* MAIN L */
+        ptx[1] = f2s24_fast(main_r); /* MAIN R */
+        ptx[2] = f2s24_fast(cue_l);  /* CUE L  */
+        ptx[3] = f2s24_fast(cue_r);  /* CUE R  */
+#endif
         ptx[4] = 0;
         ptx[5] = 0;
         ptx[6] = 0;
