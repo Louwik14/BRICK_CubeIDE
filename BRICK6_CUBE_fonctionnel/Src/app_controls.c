@@ -46,29 +46,43 @@ void app_controls_process(void)
 {
     drv_encoders_poll();
 
+    uint8_t changed_master = 0U;
+    uint8_t changed_low = 0U;
+    uint8_t changed_mid = 0U;
+    uint8_t changed_high = 0U;
+
     for(uint32_t i = 0; i < 4U; i++)
     {
         int16_t d = drv_encoder_get_delta(i);
+        if(d == 0)
+            continue;
 
-        if(d != 0)
+        int16_t newv = params[i] + d;
+        if(newv < 0)   newv = 0;
+        if(newv > 127) newv = 127;
+
+        if(newv != params[i])
         {
-            int16_t newv = params[i] + d;
-
-            if(newv < 0)
-                newv = 0;
-            if(newv > 127)
-                newv = 127;
-
             params[i] = newv;
+            if(i == 0) changed_master = 1U;
+            if(i == 1) changed_low = 1U;
+            if(i == 2) changed_mid = 1U;
+            if(i == 3) changed_high = 1U;
         }
     }
 
-    mixer_set_master(param_to_gain(params[0]));
-    audio_float_set_dj_eq_low_db(param_to_eq_db(params[1]));
-    audio_float_set_dj_eq_mid_db(param_to_eq_db(params[2]));
-    audio_float_set_dj_eq_high_db(param_to_eq_db(params[3]));
-}
+    if(changed_master)
+        mixer_set_master(param_to_gain(params[0]));
 
+    if(changed_low)
+        audio_float_set_dj_eq_low_db(param_to_eq_db(params[1]));
+
+    if(changed_mid)
+        audio_float_set_dj_eq_mid_db(param_to_eq_db(params[2]));
+
+    if(changed_high)
+        audio_float_set_dj_eq_high_db(param_to_eq_db(params[3]));
+}
 void app_controls_render(void)
 {
     char buf[32];

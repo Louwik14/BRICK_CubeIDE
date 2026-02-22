@@ -9,18 +9,20 @@ C_SRCS += \
 ../Src/audio.c \
 ../Src/audio_float.c \
 ../Src/brick6_app_init.c \
+../Src/cpu_load.c \
 ../Src/cs42448.c \
 ../Src/dma.c \
 ../Src/drv_display.c \
 ../Src/drv_encoders.c \
 ../Src/engine_tasklet.c \
 ../Src/fmc.c \
-../Src/fx_biquad.c \
-../Src/fx_dj_eq3.c \
 ../Src/font.c \
 ../Src/font4x6.c \
 ../Src/font5x7.c \
 ../Src/font5x8_elektron.c \
+../Src/fx_biquad.c \
+../Src/fx_dj_eq3.c \
+../Src/fx_onepole.c \
 ../Src/gpio.c \
 ../Src/i2c.c \
 ../Src/main.c \
@@ -47,18 +49,20 @@ OBJS += \
 ./Src/audio.o \
 ./Src/audio_float.o \
 ./Src/brick6_app_init.o \
+./Src/cpu_load.o \
 ./Src/cs42448.o \
 ./Src/dma.o \
 ./Src/drv_display.o \
 ./Src/drv_encoders.o \
 ./Src/engine_tasklet.o \
 ./Src/fmc.o \
-./Src/fx_biquad.o \
-./Src/fx_dj_eq3.o \
 ./Src/font.o \
 ./Src/font4x6.o \
 ./Src/font5x7.o \
 ./Src/font5x8_elektron.o \
+./Src/fx_biquad.o \
+./Src/fx_dj_eq3.o \
+./Src/fx_onepole.o \
 ./Src/gpio.o \
 ./Src/i2c.o \
 ./Src/main.o \
@@ -85,18 +89,20 @@ C_DEPS += \
 ./Src/audio.d \
 ./Src/audio_float.d \
 ./Src/brick6_app_init.d \
+./Src/cpu_load.d \
 ./Src/cs42448.d \
 ./Src/dma.d \
 ./Src/drv_display.d \
 ./Src/drv_encoders.d \
 ./Src/engine_tasklet.d \
 ./Src/fmc.d \
-./Src/fx_biquad.d \
-./Src/fx_dj_eq3.d \
 ./Src/font.d \
 ./Src/font4x6.d \
 ./Src/font5x7.d \
 ./Src/font5x8_elektron.d \
+./Src/fx_biquad.d \
+./Src/fx_dj_eq3.d \
+./Src/fx_onepole.d \
 ./Src/gpio.d \
 ./Src/i2c.d \
 ./Src/main.d \
@@ -126,7 +132,7 @@ Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
 clean: clean-Src
 
 clean-Src:
-	-$(RM) ./Src/app_controls.cyclo ./Src/app_controls.d ./Src/app_controls.o ./Src/app_controls.su ./Src/audio.cyclo ./Src/audio.d ./Src/audio.o ./Src/audio.su ./Src/audio_float.cyclo ./Src/audio_float.d ./Src/audio_float.o ./Src/audio_float.su ./Src/brick6_app_init.cyclo ./Src/brick6_app_init.d ./Src/brick6_app_init.o ./Src/brick6_app_init.su ./Src/cs42448.cyclo ./Src/cs42448.d ./Src/cs42448.o ./Src/cs42448.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/drv_display.cyclo ./Src/drv_display.d ./Src/drv_display.o ./Src/drv_display.su ./Src/drv_encoders.cyclo ./Src/drv_encoders.d ./Src/drv_encoders.o ./Src/drv_encoders.su ./Src/engine_tasklet.cyclo ./Src/engine_tasklet.d ./Src/engine_tasklet.o ./Src/engine_tasklet.su ./Src/fmc.cyclo ./Src/fmc.d ./Src/fmc.o ./Src/fmc.su ./Src/font.cyclo ./Src/font.d ./Src/font.o ./Src/font.su ./Src/font4x6.cyclo ./Src/font4x6.d ./Src/font4x6.o ./Src/font4x6.su ./Src/font5x7.cyclo ./Src/font5x7.d ./Src/font5x7.o ./Src/font5x7.su ./Src/font5x8_elektron.cyclo ./Src/font5x8_elektron.d ./Src/font5x8_elektron.o ./Src/font5x8_elektron.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/mixer.cyclo ./Src/mixer.d ./Src/mixer.o ./Src/mixer.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/sd_audio_block_ring.cyclo ./Src/sd_audio_block_ring.d ./Src/sd_audio_block_ring.o ./Src/sd_audio_block_ring.su ./Src/sd_stream.cyclo ./Src/sd_stream.d ./Src/sd_stream.o ./Src/sd_stream.su ./Src/sdmmc.cyclo ./Src/sdmmc.d ./Src/sdmmc.o ./Src/sdmmc.su ./Src/sdram.cyclo ./Src/sdram.d ./Src/sdram.o ./Src/sdram.su ./Src/sdram_alloc.cyclo ./Src/sdram_alloc.d ./Src/sdram_alloc.o ./Src/sdram_alloc.su ./Src/spi.cyclo ./Src/spi.d ./Src/spi.o ./Src/spi.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/ui_tasklet.cyclo ./Src/ui_tasklet.d ./Src/ui_tasklet.o ./Src/ui_tasklet.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su ./Src/usbh_midi.cyclo ./Src/usbh_midi.d ./Src/usbh_midi.o ./Src/usbh_midi.su ./Src/w9825g6kh.cyclo ./Src/w9825g6kh.d ./Src/w9825g6kh.o ./Src/w9825g6kh.su
+	-$(RM) ./Src/app_controls.cyclo ./Src/app_controls.d ./Src/app_controls.o ./Src/app_controls.su ./Src/audio.cyclo ./Src/audio.d ./Src/audio.o ./Src/audio.su ./Src/audio_float.cyclo ./Src/audio_float.d ./Src/audio_float.o ./Src/audio_float.su ./Src/brick6_app_init.cyclo ./Src/brick6_app_init.d ./Src/brick6_app_init.o ./Src/brick6_app_init.su ./Src/cpu_load.cyclo ./Src/cpu_load.d ./Src/cpu_load.o ./Src/cpu_load.su ./Src/cs42448.cyclo ./Src/cs42448.d ./Src/cs42448.o ./Src/cs42448.su ./Src/dma.cyclo ./Src/dma.d ./Src/dma.o ./Src/dma.su ./Src/drv_display.cyclo ./Src/drv_display.d ./Src/drv_display.o ./Src/drv_display.su ./Src/drv_encoders.cyclo ./Src/drv_encoders.d ./Src/drv_encoders.o ./Src/drv_encoders.su ./Src/engine_tasklet.cyclo ./Src/engine_tasklet.d ./Src/engine_tasklet.o ./Src/engine_tasklet.su ./Src/fmc.cyclo ./Src/fmc.d ./Src/fmc.o ./Src/fmc.su ./Src/font.cyclo ./Src/font.d ./Src/font.o ./Src/font.su ./Src/font4x6.cyclo ./Src/font4x6.d ./Src/font4x6.o ./Src/font4x6.su ./Src/font5x7.cyclo ./Src/font5x7.d ./Src/font5x7.o ./Src/font5x7.su ./Src/font5x8_elektron.cyclo ./Src/font5x8_elektron.d ./Src/font5x8_elektron.o ./Src/font5x8_elektron.su ./Src/fx_biquad.cyclo ./Src/fx_biquad.d ./Src/fx_biquad.o ./Src/fx_biquad.su ./Src/fx_dj_eq3.cyclo ./Src/fx_dj_eq3.d ./Src/fx_dj_eq3.o ./Src/fx_dj_eq3.su ./Src/fx_onepole.cyclo ./Src/fx_onepole.d ./Src/fx_onepole.o ./Src/fx_onepole.su ./Src/gpio.cyclo ./Src/gpio.d ./Src/gpio.o ./Src/gpio.su ./Src/i2c.cyclo ./Src/i2c.d ./Src/i2c.o ./Src/i2c.su ./Src/main.cyclo ./Src/main.d ./Src/main.o ./Src/main.su ./Src/mixer.cyclo ./Src/mixer.d ./Src/mixer.o ./Src/mixer.su ./Src/sai.cyclo ./Src/sai.d ./Src/sai.o ./Src/sai.su ./Src/sd_audio_block_ring.cyclo ./Src/sd_audio_block_ring.d ./Src/sd_audio_block_ring.o ./Src/sd_audio_block_ring.su ./Src/sd_stream.cyclo ./Src/sd_stream.d ./Src/sd_stream.o ./Src/sd_stream.su ./Src/sdmmc.cyclo ./Src/sdmmc.d ./Src/sdmmc.o ./Src/sdmmc.su ./Src/sdram.cyclo ./Src/sdram.d ./Src/sdram.o ./Src/sdram.su ./Src/sdram_alloc.cyclo ./Src/sdram_alloc.d ./Src/sdram_alloc.o ./Src/sdram_alloc.su ./Src/spi.cyclo ./Src/spi.d ./Src/spi.o ./Src/spi.su ./Src/stm32h7xx_hal_msp.cyclo ./Src/stm32h7xx_hal_msp.d ./Src/stm32h7xx_hal_msp.o ./Src/stm32h7xx_hal_msp.su ./Src/stm32h7xx_it.cyclo ./Src/stm32h7xx_it.d ./Src/stm32h7xx_it.o ./Src/stm32h7xx_it.su ./Src/syscalls.cyclo ./Src/syscalls.d ./Src/syscalls.o ./Src/syscalls.su ./Src/sysmem.cyclo ./Src/sysmem.d ./Src/sysmem.o ./Src/sysmem.su ./Src/system_stm32h7xx.cyclo ./Src/system_stm32h7xx.d ./Src/system_stm32h7xx.o ./Src/system_stm32h7xx.su ./Src/ui_tasklet.cyclo ./Src/ui_tasklet.d ./Src/ui_tasklet.o ./Src/ui_tasklet.su ./Src/usart.cyclo ./Src/usart.d ./Src/usart.o ./Src/usart.su ./Src/usbh_midi.cyclo ./Src/usbh_midi.d ./Src/usbh_midi.o ./Src/usbh_midi.su ./Src/w9825g6kh.cyclo ./Src/w9825g6kh.d ./Src/w9825g6kh.o ./Src/w9825g6kh.su
 
 .PHONY: clean-Src
 

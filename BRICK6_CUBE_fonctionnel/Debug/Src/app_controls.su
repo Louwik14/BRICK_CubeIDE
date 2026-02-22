@@ -1,3 +1,5 @@
-../Src/app_controls.c:11:6:app_controls_init	8	static
-../Src/app_controls.c:21:6:app_controls_process	8	static
-../Src/app_controls.c:50:6:app_controls_render	64	static
+../Src/app_controls.c:14:14:param_to_gain	0	static
+../Src/app_controls.c:19:14:param_to_eq_db	0	static
+../Src/app_controls.c:35:6:app_controls_init	8	static
+../Src/app_controls.c:45:6:app_controls_process	24	static
+../Src/app_controls.c:86:6:app_controls_render	56	static

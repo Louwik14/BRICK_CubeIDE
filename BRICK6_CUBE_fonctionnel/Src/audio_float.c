@@ -310,7 +310,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     }
 
     /* EQ DJ 3 bandes uniquement sur track 0 (stéréo, en place), après float_cb(). */
-    if(track_buf[0].enabled)
+    /*if(track_buf[0].enabled)
     {
         float *AUDIO_RESTRICT tr_l = track_buf[0].L;
         float *AUDIO_RESTRICT tr_r = track_buf[0].R;
@@ -319,7 +319,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         {
             fx_dj_eq3_process_stereo_sample(&track0_eq, &tr_l[n], &tr_r[n]);
         }
-    }
+    }*
 
     /* Préparation sends/returns (FX non branchés pour l'instant). */
     memset(send0_l, 0, frames * sizeof(float));

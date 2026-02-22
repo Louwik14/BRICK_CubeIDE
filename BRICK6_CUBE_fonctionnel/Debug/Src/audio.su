@@ -1,5 +1,5 @@
 ../Src/audio.c:82:13:process_half	16	static
-../Src/audio.c:101:6:audio_init	8	static
-../Src/audio.c:115:6:audio_start	8	static
-../Src/audio.c:146:6:HAL_SAI_RxHalfCpltCallback	8	static
-../Src/audio.c:169:6:HAL_SAI_RxCpltCallback	8	static
+../Src/audio.c:105:6:audio_init	8	static
+../Src/audio.c:119:6:audio_start	8	static
+../Src/audio.c:150:6:HAL_SAI_RxHalfCpltCallback	8	static
+../Src/audio.c:179:6:HAL_SAI_RxCpltCallback	8	static
