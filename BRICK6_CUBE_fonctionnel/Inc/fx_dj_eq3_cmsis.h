@@ -8,13 +8,13 @@ extern "C" {
 #endif
 
 typedef struct {
-    arm_biquad_casd_df1_inst_f32 inst_l;
-    arm_biquad_casd_df1_inst_f32 inst_r;
+    arm_biquad_cascade_df2T_instance_f32 inst_l;
+    arm_biquad_cascade_df2T_instance_f32 inst_r;
 
     __attribute__((aligned(32))) float coeffs[3U * 5U];
     float coeffs_pending[3U * 5U];
-    __attribute__((aligned(32))) float state_l[3U * 4U];
-    __attribute__((aligned(32))) float state_r[3U * 4U];
+    __attribute__((aligned(32))) float state_l[3U * 2U];
+    __attribute__((aligned(32))) float state_r[3U * 2U];
 
     float sample_rate;
     float low_freq;
