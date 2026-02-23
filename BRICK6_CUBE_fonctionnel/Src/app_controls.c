@@ -16,6 +16,14 @@ typedef enum
     CLOUDS_PAGE_COUNT
 } clouds_page_t;
 
+
+static inline int clamp_int(int x, int min, int max)
+{
+    if(x < min) return min;
+    if(x > max) return max;
+    return x;
+}
+
 clouds_page_t current_page = CLOUDS_PAGE_POSITION_SIZE_PITCH;
 
 static uint8_t encoder_values[4] = {0U, 64U, 64U, 64U};
@@ -133,35 +141,141 @@ void app_controls_process(void)
         if(d == 0)
             continue;
 
-        int16_t newv = (int16_t)encoder_values[i] + d;
-        if(newv < 0)   newv = 0;
-        if(newv > 127) newv = 127;
+        changed = 1U;
 
-        if(newv != encoder_values[i])
+        switch(i)
         {
-            encoder_values[i] = (uint8_t)newv;
-            changed = 1U;
+        case 0: // navigation pages
+        {
+            while(d > 0)
+            {
+                current_page = (clouds_page_t)((current_page + 1U) % CLOUDS_PAGE_COUNT);
+                d--;
+            }
+            while(d < 0)
+            {
+                current_page = (clouds_page_t)((current_page + CLOUDS_PAGE_COUNT - 1U) % CLOUDS_PAGE_COUNT);
+                d++;
+            }
+        }
+        break;
+
+        case 1:
+            switch(current_page)
+            {
+            case CLOUDS_PAGE_POSITION_SIZE_PITCH:
+                cloud_position = (uint8_t)clamp_int((int)cloud_position + d, 0, 127);
+                break;
+            case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
+                cloud_density = (uint8_t)clamp_int((int)cloud_density + d, 0, 127);
+                break;
+            case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
+                cloud_feedback = (uint8_t)clamp_int((int)cloud_feedback + d, 0, 127);
+                break;
+            default:
+                break;
+            }
+            break;
+
+        case 2:
+            switch(current_page)
+            {
+            case CLOUDS_PAGE_POSITION_SIZE_PITCH:
+                cloud_size = (uint8_t)clamp_int((int)cloud_size + d, 0, 127);
+                break;
+            case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
+                cloud_texture = (uint8_t)clamp_int((int)cloud_texture + d, 0, 127);
+                break;
+            case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
+                cloud_stereo_spread = (uint8_t)clamp_int((int)cloud_stereo_spread + d, 0, 127);
+                break;
+            default:
+                break;
+            }
+            break;
+
+        case 3:
+            switch(current_page)
+            {
+            case CLOUDS_PAGE_POSITION_SIZE_PITCH:
+                cloud_pitch = (uint8_t)clamp_int((int)cloud_pitch + d, 0, 127);
+                break;
+            case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
+                cloud_dry_wet = (uint8_t)clamp_int((int)cloud_dry_wet + d, 0, 127);
+                break;
+            case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
+                cloud_freeze = (uint8_t)clamp_int((int)cloud_freeze + d, 0, 127);
+                break;
+            default:
+                break;
+            }
+            break;
+
+        default:
+            break;
         }
     }
 
     if(changed)
     {
-        clouds_control_update(encoder_values[0], encoder_values[1], encoder_values[2], encoder_values[3]);
+        fx_clouds_set_position(ui_0_127_to_unit_float(cloud_position));
+        fx_clouds_set_size(ui_0_127_to_unit_float(cloud_size));
+        fx_clouds_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
+        fx_clouds_set_density(ui_0_127_to_unit_float(cloud_density));
+        fx_clouds_set_texture(ui_0_127_to_unit_float(cloud_texture));
+        fx_clouds_set_dry_wet(ui_0_127_to_unit_float(cloud_dry_wet));
+        fx_clouds_set_feedback(ui_0_127_to_unit_float(cloud_feedback));
+        fx_clouds_set_stereo_spread(ui_0_127_to_unit_float(cloud_stereo_spread));
+        fx_clouds_set_freeze(cloud_freeze >= 64U);
     }
-}
-
-void app_controls_render(void)
+}void app_controls_render(void)
 {
     char buf[32];
     const uint32_t cpu_pm = cpu_load_get_permille();
 
     drv_display_clear();
 
-    snprintf(buf, sizeof(buf), "PG:%1d POS:%3d SZ:%3d", (int)current_page, (int)cloud_position, (int)cloud_size);
-    drv_display_draw_text(0, 0, buf);
+    switch (current_page)
+    {
+    case CLOUDS_PAGE_POSITION_SIZE_PITCH:
+        snprintf(buf, sizeof(buf), "PG:%1d POS:%3d SZ:%3d",
+                 (int)current_page,
+                 (int)cloud_position,
+                 (int)cloud_size);
+        drv_display_draw_text(0, 0, buf);
 
-    snprintf(buf, sizeof(buf), "PIT:%3d DEN:%3d", (int)cloud_pitch, (int)cloud_density);
-    drv_display_draw_text(0, 10, buf);
+        snprintf(buf, sizeof(buf), "PIT:%3d",
+                 (int)cloud_pitch);
+        drv_display_draw_text(0, 10, buf);
+        break;
+
+    case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
+        snprintf(buf, sizeof(buf), "PG:%1d DEN:%3d TEX:%3d",
+                 (int)current_page,
+                 (int)cloud_density,
+                 (int)cloud_texture);
+        drv_display_draw_text(0, 0, buf);
+
+        snprintf(buf, sizeof(buf), "MIX:%3d",
+                 (int)cloud_dry_wet);
+        drv_display_draw_text(0, 10, buf);
+        break;
+
+    case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
+        snprintf(buf, sizeof(buf), "PG:%1d FBK:%3d SPR:%3d",
+                 (int)current_page,
+                 (int)cloud_feedback,
+                 (int)cloud_stereo_spread);
+        drv_display_draw_text(0, 0, buf);
+
+        snprintf(buf, sizeof(buf), "FRZ:%3d",
+                 (int)cloud_freeze);
+        drv_display_draw_text(0, 10, buf);
+        break;
+
+    default:
+        break;
+    }
 
     snprintf(buf, sizeof(buf), "CPU:%2lu.%1lu%%",
              (unsigned long)(cpu_pm / 10U),

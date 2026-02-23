@@ -1,0 +1,12 @@
+../Src/fx_clouds.cpp:48:17:void fx_clouds_set_position(float)	0	static
+../Src/fx_clouds.cpp:52:17:void fx_clouds_set_size(float)	0	static
+../Src/fx_clouds.cpp:56:17:void fx_clouds_set_pitch(float)	0	static
+../Src/fx_clouds.cpp:60:17:void fx_clouds_set_density(float)	0	static
+../Src/fx_clouds.cpp:64:17:void fx_clouds_set_texture(float)	0	static
+../Src/fx_clouds.cpp:68:17:void fx_clouds_set_dry_wet(float)	0	static
+../Src/fx_clouds.cpp:72:17:void fx_clouds_set_feedback(float)	0	static
+../Src/fx_clouds.cpp:76:17:void fx_clouds_set_stereo_spread(float)	0	static
+../Src/fx_clouds.cpp:80:17:void fx_clouds_set_freeze(uint8_t)	0	static
+../Src/fx_clouds.cpp:84:17:void fx_clouds_init(float)	16	static
+../Src/fx_clouds.cpp:97:17:void fx_clouds_process_block(float*, float*, float*, float*, uint32_t)	56	static
+../Src/fx_clouds.cpp:137:1:cpp)	0	static

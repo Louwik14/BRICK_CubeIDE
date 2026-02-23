@@ -1,0 +1,4 @@
+../Src/app_controls.c:50:6:clouds_control_update	48	static
+../Src/app_controls.c:123:6:app_controls_init	8	static
+../Src/app_controls.c:131:6:app_controls_process	24	static
+../Src/app_controls.c:231:7:app_controls_render	56	static
