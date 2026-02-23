@@ -366,6 +366,7 @@
 "./Src/font5x8_elektron.o"
 "./Src/fx_dj_eq3_cmsis.o"
 "./Src/fx_onepole.o"
+"./Src/fx_reverb.o"
 "./Src/gpio.o"
 "./Src/i2c.o"
 "./Src/main.o"

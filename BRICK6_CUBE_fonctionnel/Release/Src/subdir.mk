@@ -46,6 +46,45 @@ C_SRCS += \
 ../Src/usbh_midi.c \
 ../Src/w9825g6kh.c 
 
+C_DEPS += \
+./Src/app_controls.d \
+./Src/audio.d \
+./Src/audio_float.d \
+./Src/brick6_app_init.d \
+./Src/cpu_load.d \
+./Src/cs42448.d \
+./Src/dma.d \
+./Src/drv_display.d \
+./Src/drv_encoders.d \
+./Src/engine_tasklet.d \
+./Src/fmc.d \
+./Src/font.d \
+./Src/font4x6.d \
+./Src/font5x7.d \
+./Src/font5x8_elektron.d \
+./Src/fx_dj_eq3_cmsis.d \
+./Src/fx_onepole.d \
+./Src/gpio.d \
+./Src/i2c.d \
+./Src/main.d \
+./Src/mixer.d \
+./Src/sai.d \
+./Src/sd_audio_block_ring.d \
+./Src/sd_stream.d \
+./Src/sdmmc.d \
+./Src/sdram.d \
+./Src/sdram_alloc.d \
+./Src/spi.d \
+./Src/stm32h7xx_hal_msp.d \
+./Src/stm32h7xx_it.d \
+./Src/syscalls.d \
+./Src/sysmem.d \
+./Src/system_stm32h7xx.d \
+./Src/ui_tasklet.d \
+./Src/usart.d \
+./Src/usbh_midi.d \
+./Src/w9825g6kh.d 
+
 OBJS += \
 ./Src/app_controls.o \
 ./Src/audio.o \
@@ -86,54 +125,15 @@ OBJS += \
 ./Src/usbh_midi.o \
 ./Src/w9825g6kh.o 
 
-C_DEPS += \
-./Src/app_controls.d \
-./Src/audio.d \
-./Src/audio_float.d \
-./Src/brick6_app_init.d \
-./Src/cpu_load.d \
-./Src/cs42448.d \
-./Src/dma.d \
-./Src/drv_display.d \
-./Src/drv_encoders.d \
-./Src/engine_tasklet.d \
-./Src/fmc.d \
-./Src/font.d \
-./Src/font4x6.d \
-./Src/font5x7.d \
-./Src/font5x8_elektron.d \
-./Src/fx_dj_eq3_cmsis.d \
-./Src/fx_onepole.d \
-./Src/fx_reverb.d \
-./Src/gpio.d \
-./Src/i2c.d \
-./Src/main.d \
-./Src/mixer.d \
-./Src/sai.d \
-./Src/sd_audio_block_ring.d \
-./Src/sd_stream.d \
-./Src/sdmmc.d \
-./Src/sdram.d \
-./Src/sdram_alloc.d \
-./Src/spi.d \
-./Src/stm32h7xx_hal_msp.d \
-./Src/stm32h7xx_it.d \
-./Src/syscalls.d \
-./Src/sysmem.d \
-./Src/system_stm32h7xx.d \
-./Src/ui_tasklet.d \
-./Src/usart.d \
-./Src/usbh_midi.d \
-./Src/w9825g6kh.d 
+CPP_DEPS += \
+./Src/fx_reverb.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
 Src/%.o Src/%.su Src/%.cyclo: ../Src/%.c Src/subdir.mk
 	arm-none-eabi-gcc "$<" -mcpu=cortex-m7 -std=gnu11 -DDEBUG -DUSE_PWR_LDO_SUPPLY -DUSE_HAL_DRIVER -DSTM32H743xx -c -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/PrivateInclude" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc" -I../Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32H7xx/Include -I../Drivers/CMSIS/Include -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App" -O3 -ffunction-sections -fdata-sections -Wall -fno-math-errno -fsingle-precision-constant -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@"
-
-
-Src/fx_reverb.o Src/fx_reverb.su Src/fx_reverb.cyclo: ../Src/fx_reverb.cpp Src/subdir.mk
-	arm-none-eabi-g++ "$<" -mcpu=cortex-m7 -std=gnu++17 -fno-exceptions -fno-rtti -DDEBUG -DUSE_PWR_LDO_SUPPLY -DUSE_HAL_DRIVER -DSTM32H743xx -c -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc" -I../Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32H7xx/Include -I../Drivers/CMSIS/Include -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/PrivateInclude" -O3 -ffunction-sections -fdata-sections -Wall -fno-math-errno -fsingle-precision-constant -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@"
+Src/%.o Src/%.su Src/%.cyclo: ../Src/%.cpp Src/subdir.mk
+	arm-none-eabi-g++ "$<" -mcpu=cortex-m7 -std=gnu++14 -DDEBUG -DUSE_PWR_LDO_SUPPLY -DUSE_HAL_DRIVER -DSTM32H743xx -c -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/usb_stack" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/PrivateInclude" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc" -I../Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc -I../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32H7xx/Include -I../Drivers/CMSIS/Include -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App" -I"C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/freeverb-main/Components" -Os -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti -fno-use-cxa-atexit -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -o "$@"
 
 clean: clean-Src
 

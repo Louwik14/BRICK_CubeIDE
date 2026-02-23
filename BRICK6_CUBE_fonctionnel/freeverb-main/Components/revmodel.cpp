@@ -56,89 +56,90 @@ revmodel::revmodel()
 
 void revmodel::mute()
 {
-	if (getmode() >= freezemode)
-		return;
+    if (getmode() >= freezemode)
+        return;
 
-	for (int i=0;i<numcombs;i++)
-	{
-		combL[i].mute();
-		combR[i].mute();
-	}
-	for (i=0;i<numallpasses;i++)
-	{
-		allpassL[i].mute();
-		allpassR[i].mute();
-	}
+    int i;
+
+    for (i = 0; i < numcombs; i++)
+    {
+        combL[i].mute();
+        combR[i].mute();
+    }
+    for (i = 0; i < numallpasses; i++)
+    {
+        allpassL[i].mute();
+        allpassR[i].mute();
+    }
 }
 
 void revmodel::processreplace(float *inputL, float *inputR, float *outputL, float *outputR, long numsamples, int skip)
 {
-	float outL,outR,input;
+    float outL, outR, input;
+    int i;
 
-	while(numsamples-- > 0)
-	{
-		outL = outR = 0;
-		input = (*inputL + *inputR) * gain;
+    while(numsamples-- > 0)
+    {
+        outL = outR = 0;
+        input = (*inputL + *inputR) * gain;
 
-		// Accumulate comb filters in parallel
-		for(int i=0; i<numcombs; i++)
-		{
-			outL += combL[i].process(input);
-			outR += combR[i].process(input);
-		}
+        // Accumulate comb filters in parallel
+        for(i = 0; i < numcombs; i++)
+        {
+            outL += combL[i].process(input);
+            outR += combR[i].process(input);
+        }
 
-		// Feed through allpasses in series
-		for(i=0; i<numallpasses; i++)
-		{
-			outL = allpassL[i].process(outL);
-			outR = allpassR[i].process(outR);
-		}
+        // Feed through allpasses in series
+        for(i = 0; i < numallpasses; i++)
+        {
+            outL = allpassL[i].process(outL);
+            outR = allpassR[i].process(outR);
+        }
 
-		// Calculate output REPLACING anything already there
-		*outputL = outL*wet1 + outR*wet2 + *inputL*dry;
-		*outputR = outR*wet1 + outL*wet2 + *inputR*dry;
+        *outputL = outL*wet1 + outR*wet2 + *inputL*dry;
+        *outputR = outR*wet1 + outL*wet2 + *inputR*dry;
 
-		// Increment sample pointers, allowing for interleave (if any)
-		inputL += skip;
-		inputR += skip;
-		outputL += skip;
-		outputR += skip;
-	}
+        inputL += skip;
+        inputR += skip;
+        outputL += skip;
+        outputR += skip;
+    }
 }
+
 
 void revmodel::processmix(float *inputL, float *inputR, float *outputL, float *outputR, long numsamples, int skip)
 {
-	float outL,outR,input;
+    float outL, outR, input;
+    int i;
 
-	while(numsamples-- > 0)
-	{
-		outL = outR = 0;
-		input = (*inputL + *inputR) * gain;
+    while(numsamples-- > 0)
+    {
+        outL = outR = 0;
+        input = (*inputL + *inputR) * gain;
 
-		// Accumulate comb filters in parallel
-		for(int i=0; i<numcombs; i++)
-		{
-			outL += combL[i].process(input);
-			outR += combR[i].process(input);
-		}
+        // Accumulate comb filters in parallel
+        for(i = 0; i < numcombs; i++)
+        {
+            outL += combL[i].process(input);
+            outR += combR[i].process(input);
+        }
 
-		// Feed through allpasses in series
-		for(i=0; i<numallpasses; i++)
-		{
-			outL = allpassL[i].process(outL);
-			outR = allpassR[i].process(outR);
-		}
+        // Feed through allpasses in series
+        for(i = 0; i < numallpasses; i++)
+        {
+            outL = allpassL[i].process(outL);
+            outR = allpassR[i].process(outR);
+        }
 
-		// Calculate output MIXING with anything already there
-		*outputL += outL*wet1 + outR*wet2 + *inputL*dry;
-		*outputR += outR*wet1 + outL*wet2 + *inputR*dry;
+        *outputL += outL*wet1 + outR*wet2 + *inputL*dry;
+        *outputR += outR*wet1 + outL*wet2 + *inputR*dry;
 
-		// Increment sample pointers, allowing for interleave (if any)
-		inputL += skip;
-		inputR += skip;
-		outputL += skip;
-		outputR += skip;
-	}
+        inputL += skip;
+        inputR += skip;
+        outputL += skip;
+        outputR += skip;
+    }
 }
 
 void revmodel::update()

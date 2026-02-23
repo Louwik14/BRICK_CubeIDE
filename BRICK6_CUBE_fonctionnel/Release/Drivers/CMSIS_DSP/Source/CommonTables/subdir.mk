@@ -12,14 +12,6 @@ C_SRCS += \
 ../Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables.c \
 ../Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables_f16.c 
 
-OBJS += \
-./Drivers/CMSIS_DSP/Source/CommonTables/arm_common_tables.o \
-./Drivers/CMSIS_DSP/Source/CommonTables/arm_common_tables_f16.o \
-./Drivers/CMSIS_DSP/Source/CommonTables/arm_const_structs.o \
-./Drivers/CMSIS_DSP/Source/CommonTables/arm_const_structs_f16.o \
-./Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables.o \
-./Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables_f16.o 
-
 C_DEPS += \
 ./Drivers/CMSIS_DSP/Source/CommonTables/arm_common_tables.d \
 ./Drivers/CMSIS_DSP/Source/CommonTables/arm_common_tables_f16.d \
@@ -27,6 +19,14 @@ C_DEPS += \
 ./Drivers/CMSIS_DSP/Source/CommonTables/arm_const_structs_f16.d \
 ./Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables.d \
 ./Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables_f16.d 
+
+OBJS += \
+./Drivers/CMSIS_DSP/Source/CommonTables/arm_common_tables.o \
+./Drivers/CMSIS_DSP/Source/CommonTables/arm_common_tables_f16.o \
+./Drivers/CMSIS_DSP/Source/CommonTables/arm_const_structs.o \
+./Drivers/CMSIS_DSP/Source/CommonTables/arm_const_structs_f16.o \
+./Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables.o \
+./Drivers/CMSIS_DSP/Source/CommonTables/arm_mve_tables_f16.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes

@@ -14,16 +14,6 @@ C_SRCS += \
 ../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_f32.c \
 ../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_q31.c 
 
-OBJS += \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_f32.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q15.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q31.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_f32.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q15.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q31.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_f32.o \
-./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_q31.o 
-
 C_DEPS += \
 ./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_f32.d \
 ./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q15.d \
@@ -33,6 +23,16 @@ C_DEPS += \
 ./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q31.d \
 ./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_f32.d \
 ./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_q31.d 
+
+OBJS += \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_f32.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q15.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q31.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_f32.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q15.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q31.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_f32.o \
+./Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_q31.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes

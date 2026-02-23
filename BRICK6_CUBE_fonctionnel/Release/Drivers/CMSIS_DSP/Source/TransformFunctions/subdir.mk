@@ -4,6 +4,9 @@
 ################################################################################
 
 # Add inputs and outputs from these tool invocations to the build variables 
+S_UPPER_SRCS += \
+../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal2.S 
+
 C_SRCS += \
 ../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal.c \
 ../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal2.c \
@@ -63,8 +66,64 @@ C_SRCS += \
 ../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.c \
 ../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q31.c 
 
-S_UPPER_SRCS += \
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal2.S 
+C_DEPS += \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal2.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f64.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_f64.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix8_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix8_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_init_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_init_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_f64.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_init_f16.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_init_f64.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_f32.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_q31.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.d \
+./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q31.d 
 
 OBJS += \
 ./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal.o \
@@ -127,65 +186,6 @@ OBJS += \
 
 S_UPPER_DEPS += \
 ./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal2.d 
-
-C_DEPS += \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal2.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_bitreversal_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f64.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_f64.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_init_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_init_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix2_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_init_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix4_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix8_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_radix8_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_init_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_init_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_dct4_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_init_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_mfcc_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_f64.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_init_f16.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_fast_init_f64.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_f32.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_q31.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.d \
-./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q31.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
