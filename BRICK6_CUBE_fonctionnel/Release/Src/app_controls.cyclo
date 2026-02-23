@@ -1,3 +1,4 @@
-../Src/app_controls.c:44:6:app_controls_init	1
-../Src/app_controls.c:60:6:app_controls_process	21
-../Src/app_controls.c:128:6:app_controls_render	1
+../Src/app_controls.c:23:13:update_reverb_params	3
+../Src/app_controls.c:52:6:app_controls_init	2
+../Src/app_controls.c:63:6:app_controls_process	6
+../Src/app_controls.c:91:6:app_controls_render	1

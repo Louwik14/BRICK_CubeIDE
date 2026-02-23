@@ -1,4 +1,5 @@
 #include "app_controls.h"
+#include "app_controls_eq.h"
 #include "drv_encoders.h"
 #include "drv_display.h"
 #include "cpu_load.h"
@@ -41,11 +42,18 @@ static void update_reverb_params(uint8_t smooth)
     fx_reverb_set_room_size(reverb, room_smoothed);
     fx_reverb_set_damping(reverb, damp_smoothed);
     fx_reverb_set_wet(reverb, wet_smoothed);
+
+    if(params[2] == 0)
+        fx_reverb_set_bypass(reverb, 1U);
+    else
+        fx_reverb_set_bypass(reverb, 0U);
 }
 
 void app_controls_init(void)
 {
     drv_encoders_init();
+    app_controls_eq_init();
+
     reverb = fx_reverb_get_instance();
 
     if(reverb)
@@ -55,12 +63,13 @@ void app_controls_init(void)
 void app_controls_process(void)
 {
     drv_encoders_poll();
+    app_controls_eq_process();
 
     uint8_t changed = 0U;
 
     for(uint32_t i = 0; i < 3U; i++)
     {
-        int16_t d = drv_encoder_get_delta(i);
+        int16_t d = drv_encoder_get_delta((uint8_t)i);
         if(d == 0)
             continue;
 
@@ -92,7 +101,7 @@ void app_controls_render(void)
     snprintf(buf, sizeof(buf), "WET:%3d", (int)params[2]);
     drv_display_draw_text(0, 10, buf);
 
-    snprintf(buf, sizeof(buf), "CPU:%2lu.%1lu%%", 
+    snprintf(buf, sizeof(buf), "CPU:%2lu.%1lu%%",
              (unsigned long)(cpu_pm / 10U),
              (unsigned long)(cpu_pm % 10U));
     drv_display_draw_text(0, 20, buf);

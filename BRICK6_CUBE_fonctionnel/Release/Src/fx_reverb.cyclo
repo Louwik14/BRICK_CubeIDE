@@ -30,9 +30,10 @@
 ../Src/../freeverb-main/Components/revmodel.cpp:239:6:void revmodel::setmode(float)	1
 ../Src/../freeverb-main/Components/revmodel.cpp:245:7:float revmodel::getmode()	1
 ../Src/fx_reverb.cpp:16:6:void fx_reverb_init(fx_reverb_t*, float)	2
-../Src/fx_reverb.cpp:30:6:void fx_reverb_process_block(fx_reverb_t*, float*, float*, float*, float*, uint32_t)	8
-../Src/fx_reverb.cpp:55:6:void fx_reverb_set_wet(fx_reverb_t*, float)	3
-../Src/fx_reverb.cpp:63:6:void fx_reverb_set_room_size(fx_reverb_t*, float)	3
-../Src/fx_reverb.cpp:71:6:void fx_reverb_set_damping(fx_reverb_t*, float)	3
-../Src/fx_reverb.cpp:79:6:void fx_reverb_set_bypass(fx_reverb_t*, uint8_t)	2
-../Src/fx_reverb.cpp:87:14:fx_reverb_t* fx_reverb_get_instance()	3
+../Src/fx_reverb.cpp:30:6:void fx_reverb_process_block(fx_reverb_t*, float*, float*, float*, float*, uint32_t)	9
+../Src/fx_reverb.cpp:62:6:void fx_reverb_set_wet_ui(fx_reverb_t*, uint8_t)	3
+../Src/fx_reverb.cpp:77:6:void fx_reverb_set_wet(fx_reverb_t*, float)	2
+../Src/fx_reverb.cpp:87:6:void fx_reverb_set_room_size(fx_reverb_t*, float)	2
+../Src/fx_reverb.cpp:95:6:void fx_reverb_set_damping(fx_reverb_t*, float)	2
+../Src/fx_reverb.cpp:103:6:void fx_reverb_set_bypass(fx_reverb_t*, uint8_t)	2
+../Src/fx_reverb.cpp:111:14:fx_reverb_t* fx_reverb_get_instance()	3

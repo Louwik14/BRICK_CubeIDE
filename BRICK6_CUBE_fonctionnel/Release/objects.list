@@ -350,6 +350,7 @@
 "./Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_sdmmc.o"
 "./Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_usb.o"
 "./Src/app_controls.o"
+"./Src/app_controls_eq.o"
 "./Src/audio.o"
 "./Src/audio_float.o"
 "./Src/brick6_app_init.o"

@@ -1,3 +1,4 @@
-../Src/app_controls.c:44:6:app_controls_init	16	static
-../Src/app_controls.c:60:6:app_controls_process	32	static
-../Src/app_controls.c:128:6:app_controls_render	56	static
+../Src/app_controls.c:23:13:update_reverb_params	24	static
+../Src/app_controls.c:52:6:app_controls_init	8	static
+../Src/app_controls.c:63:6:app_controls_process	16	static
+../Src/app_controls.c:91:6:app_controls_render	56	static

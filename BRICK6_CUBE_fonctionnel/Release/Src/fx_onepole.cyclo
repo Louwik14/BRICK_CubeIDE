@@ -1,4 +1,4 @@
 ../Src/fx_onepole.c:6:6:fx_onepole_init	2
 ../Src/fx_onepole.c:17:6:fx_onepole_reset	2
-../Src/fx_onepole.c:25:6:fx_onepole_set_freq	4
+../Src/fx_onepole.c:25:6:fx_onepole_set_freq	2
 ../Src/fx_onepole.c:40:6:fx_onepole_set_mode	2

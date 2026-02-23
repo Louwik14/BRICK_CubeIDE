@@ -38,7 +38,14 @@ void fx_reverb_process_block(fx_reverb_t *rev,
         return;
 
     if(rev->bypass)
+    {
+        for(uint32_t i = 0; i < frames; i++)
+        {
+            out_l[i] = 0.0f;
+            out_r[i] = 0.0f;
+        }
         return;
+    }
 
     for(uint32_t n = 0; n < frames; n++)
     {
@@ -52,12 +59,29 @@ void fx_reverb_process_block(fx_reverb_t *rev,
     }
 }
 
+void fx_reverb_set_wet_ui(fx_reverb_t *rev, uint8_t wet_ui)
+{
+    if(rev == 0)
+        return;
+
+    if(wet_ui == 0U)
+    {
+        rev->bypass = 1U;
+        return;
+    }
+
+    rev->bypass = 0U;
+    rev->model.setwet((float)wet_ui * (1.0f / 127.0f));
+}
+
 void fx_reverb_set_wet(fx_reverb_t *rev, float wet)
 {
     if(rev == 0)
         return;
 
-    rev->model.setwet(fx_reverb_clamp01(wet));
+    float wet_clamped = fx_reverb_clamp01(wet);
+    uint8_t wet_ui = (uint8_t)(wet_clamped * 127.0f + 0.5f);
+    fx_reverb_set_wet_ui(rev, wet_ui);
 }
 
 void fx_reverb_set_room_size(fx_reverb_t *rev, float room)

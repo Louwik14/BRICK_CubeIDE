@@ -9,7 +9,7 @@
 ../Src/audio_float.c:145:6:audio_tracks_init	2
 ../Src/audio_float.c:164:6:track_enable	5
 ../Src/audio_float.c:181:10:track_is_enabled	2
-../Src/audio_float.c:190:6:track_set_gain	3
-../Src/audio_float.c:202:6:audio_float_set_master_gain	2
+../Src/audio_float.c:190:6:track_set_gain	2
+../Src/audio_float.c:202:6:audio_float_set_master_gain	1
 ../Src/audio_float.c:213:7:audio_float_get_master_gain	1
 ../Src/audio_float.c:480:6:audio_process_block_int32	42
