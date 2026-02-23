@@ -36,6 +36,7 @@
 #include "stm32h743xx.h"
 #include "arm_math.h"
 #include "fx_reverb.h"
+#include "fx_saturation.h"
 
 /* ============================================================
    CONFIG
@@ -60,6 +61,7 @@ static float output_comp = 1.0f;
 
 static fx_dj_eq3_t track0_eq;
 static fx_reverb_t *reverb = 0;
+static fx_saturation_t saturation;
 
 static volatile uint8_t track0_eq_ui_low = 64U;
 static volatile uint8_t track0_eq_ui_mid = 64U;
@@ -116,6 +118,16 @@ uint8_t audio_float_is_dj_eq_ui_neutral(void)
     return eq_is_neutral() ? 1U : 0U;
 }
 
+void audio_float_set_saturation_drive_ui(uint8_t drive_0_127)
+{
+    fx_saturation_set_drive_ui(&saturation, drive_0_127);
+}
+
+void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
+{
+    fx_saturation_set_mix_ui(&saturation, mix_0_127);
+}
+
 /* ============================================================
    TRACK + MIX STATE
    ============================================================ */
@@ -156,6 +168,8 @@ void audio_tracks_init(void)
 
     reverb = fx_reverb_get_instance();
     fx_reverb_init(reverb, 48000.0f);
+
+    fx_saturation_init(&saturation);
 
     master_gain = 1.0f;
 }
@@ -383,6 +397,15 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
                                 track_buf[0].L,
                                 track_buf[0].R,
                                 frames);
+    }
+
+    /* Saturation après EQ et avant reverb send. */
+    if(track_buf[0].enabled)
+    {
+        fx_saturation_process_block(&saturation,
+                                    track_buf[0].L,
+                                    track_buf[0].R,
+                                    frames);
     }
 
     /* Préparation sends/returns. */

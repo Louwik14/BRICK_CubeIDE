@@ -25,6 +25,7 @@ C_SRCS += \
 ../Src/font5x8_elektron.c \
 ../Src/fx_dj_eq3_cmsis.c \
 ../Src/fx_onepole.c \
+../Src/fx_saturation.c \
 ../Src/gpio.c \
 ../Src/i2c.c \
 ../Src/main.c \
@@ -65,6 +66,7 @@ OBJS += \
 ./Src/font5x8_elektron.o \
 ./Src/fx_dj_eq3_cmsis.o \
 ./Src/fx_onepole.o \
+./Src/fx_saturation.o \
 ./Src/fx_reverb.o \
 ./Src/gpio.o \
 ./Src/i2c.o \
@@ -106,6 +108,7 @@ C_DEPS += \
 ./Src/font5x8_elektron.d \
 ./Src/fx_dj_eq3_cmsis.d \
 ./Src/fx_onepole.d \
+./Src/fx_saturation.d \
 ./Src/fx_reverb.d \
 ./Src/gpio.d \
 ./Src/i2c.d \
