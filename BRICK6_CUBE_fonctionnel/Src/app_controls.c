@@ -1,72 +1,64 @@
 #include "app_controls.h"
 #include "drv_encoders.h"
 #include "drv_display.h"
-#include "mixer.h"
 #include "cpu_load.h"
-#include "audio_float.h"
+#include "fx_reverb.h"
 #include <stdint.h>
 #include <stdio.h>
-#include <math.h>
 
-/* Paramètres encodeurs (0–127):
- * P0=master, P1=LOW EQ, P2=MID EQ, P3=HIGH EQ */
-static int16_t params[4] = {127, 64, 64, 64};
+/* Paramètres reverb (0–127):
+ * P0=room size, P1=damping, P2=wet */
+static int16_t params[3] = {64, 64, 64};
+static float room_smoothed = 0.5f;
+static float damp_smoothed = 0.5f;
+static float wet_smoothed  = 0.5f;
+static fx_reverb_t *reverb = 0;
 
-static inline uint8_t eq_is_neutral(void)
+static float param_to_norm(int16_t p)
 {
-    return (params[1] == 64 &&
-            params[2] == 64 &&
-            params[3] == 64);
+    return (float)p * (1.0f / 127.0f);
 }
 
-/* Cache des dernières valeurs EQ (évite recalculs coûteux) */
-static float last_low_db  = 0.0f;
-static float last_mid_db  = 0.0f;
-static float last_high_db = 0.0f;
-
-static float param_to_gain(int16_t p)
+static void update_reverb_params(uint8_t smooth)
 {
-    return ((float)p / 127.0f) * 2.0f;
-}
+    float room_target = param_to_norm(params[0]);
+    float damp_target = param_to_norm(params[1]);
+    float wet_target  = param_to_norm(params[2]);
 
-static float param_to_eq_db(int16_t p)
-{
-    float x = ((float)p - 64.0f) / 63.0f;
+    if(smooth)
+    {
+        room_smoothed += 0.05f * (room_target - room_smoothed);
+        damp_smoothed += 0.05f * (damp_target - damp_smoothed);
+        wet_smoothed  += 0.05f * (wet_target - wet_smoothed);
+    }
+    else
+    {
+        room_smoothed = room_target;
+        damp_smoothed = damp_target;
+        wet_smoothed  = wet_target;
+    }
 
-    float sign = (x >= 0.0f) ? 1.0f : -1.0f;
-    float mag = fabsf(x);
-
-    float shaped = mag * mag;  // cheap non-linear
-
-    return sign * shaped * 48.0f;  // range fort
+    fx_reverb_set_room_size(reverb, room_smoothed);
+    fx_reverb_set_damping(reverb, damp_smoothed);
+    fx_reverb_set_wet(reverb, wet_smoothed);
 }
 
 void app_controls_init(void)
 {
     drv_encoders_init();
+    reverb = fx_reverb_get_instance();
 
-    mixer_set_master(param_to_gain(params[0]));
-
-    last_low_db  = param_to_eq_db(params[1]);
-    last_mid_db  = param_to_eq_db(params[2]);
-    last_high_db = param_to_eq_db(params[3]);
-
-    audio_float_set_dj_eq_ui_params((uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3]);
-    audio_float_set_dj_eq_low_db(last_low_db);
-    audio_float_set_dj_eq_mid_db(last_mid_db);
-    audio_float_set_dj_eq_high_db(last_high_db);
+    if(reverb)
+        update_reverb_params(0U);
 }
 
 void app_controls_process(void)
 {
     drv_encoders_poll();
 
-    uint8_t changed_master = 0U;
-    uint8_t changed_low = 0U;
-    uint8_t changed_mid = 0U;
-    uint8_t changed_high = 0U;
+    uint8_t changed = 0U;
 
-    for(uint32_t i = 0; i < 4U; i++)
+    for(uint32_t i = 0; i < 3U; i++)
     {
         int16_t d = drv_encoder_get_delta(i);
         if(d == 0)
@@ -79,50 +71,12 @@ void app_controls_process(void)
         if(newv != params[i])
         {
             params[i] = newv;
-            if(i == 0) changed_master = 1U;
-            if(i == 1) changed_low = 1U;
-            if(i == 2) changed_mid = 1U;
-            if(i == 3) changed_high = 1U;
+            changed = 1U;
         }
     }
 
-    audio_float_set_dj_eq_ui_params((uint8_t)params[1], (uint8_t)params[2], (uint8_t)params[3]);
-
-    if(changed_master)
-        mixer_set_master(param_to_gain(params[0]));
-
-    if(!eq_is_neutral())
-    {
-        if(changed_low)
-        {
-            float db = param_to_eq_db(params[1]);
-            if(fabsf(db - last_low_db) > 0.1f)
-            {
-                last_low_db = db;
-                audio_float_set_dj_eq_low_db(db);
-            }
-        }
-
-        if(changed_mid)
-        {
-            float db = param_to_eq_db(params[2]);
-            if(fabsf(db - last_mid_db) > 0.1f)
-            {
-                last_mid_db = db;
-                audio_float_set_dj_eq_mid_db(db);
-            }
-        }
-
-        if(changed_high)
-        {
-            float db = param_to_eq_db(params[3]);
-            if(fabsf(db - last_high_db) > 0.1f)
-            {
-                last_high_db = db;
-                audio_float_set_dj_eq_high_db(db);
-            }
-        }
-    }
+    if(reverb && changed)
+        update_reverb_params(1U);
 }
 
 void app_controls_render(void)
@@ -132,10 +86,10 @@ void app_controls_render(void)
 
     drv_display_clear();
 
-    snprintf(buf, sizeof(buf), "P0:%3d P1:%3d", (int)params[0], (int)params[1]);
+    snprintf(buf, sizeof(buf), "ROOM:%3d DAMP:%3d", (int)params[0], (int)params[1]);
     drv_display_draw_text(0, 0, buf);
 
-    snprintf(buf, sizeof(buf), "P2:%3d P3:%3d", (int)params[2], (int)params[3]);
+    snprintf(buf, sizeof(buf), "WET:%3d", (int)params[2]);
     drv_display_draw_text(0, 10, buf);
 
     snprintf(buf, sizeof(buf), "CPU:%2lu.%1lu%%", 
