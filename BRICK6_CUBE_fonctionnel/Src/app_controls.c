@@ -4,11 +4,12 @@
 #include "drv_display.h"
 #include "cpu_load.h"
 #include "audio_float.h"
+#include "fx_clouds.h"
 #include <stdint.h>
 #include <stdio.h>
 
-/* Paramètres encodeurs saturation (0–127):
- * P0=tone, P1=bias, P2=drive, P3=mix */
+/* Paramètres encodeurs Clouds (0–127):
+ * P0=position, P1=size, P2=pitch, P3=density */
 static int16_t params[4] = {0, 64, 0, 127};
 
 void app_controls_init(void)
@@ -16,10 +17,10 @@ void app_controls_init(void)
     drv_encoders_init();
     app_controls_eq_init();
 
-    audio_float_set_saturation_tone_ui((uint8_t)params[0]);
-    audio_float_set_saturation_bias_ui((uint8_t)params[1]);
-    audio_float_set_saturation_drive_ui((uint8_t)params[2]);
-    audio_float_set_saturation_mix_ui((uint8_t)params[3]);
+    fx_clouds_set_position((float)params[0] / 127.0f);
+    fx_clouds_set_size((float)params[1] / 127.0f);
+    fx_clouds_set_pitch((float)params[2]);
+    fx_clouds_set_density((float)params[3] / 127.0f);
 }
 
 void app_controls_process(void)
@@ -48,10 +49,10 @@ void app_controls_process(void)
 
     if(changed)
     {
-        audio_float_set_saturation_tone_ui((uint8_t)params[0]);
-        audio_float_set_saturation_bias_ui((uint8_t)params[1]);
-        audio_float_set_saturation_drive_ui((uint8_t)params[2]);
-        audio_float_set_saturation_mix_ui((uint8_t)params[3]);
+        fx_clouds_set_position((float)params[0] / 127.0f);
+        fx_clouds_set_size((float)params[1] / 127.0f);
+        fx_clouds_set_pitch((float)params[2]);
+        fx_clouds_set_density((float)params[3] / 127.0f);
     }
 }
 
@@ -62,10 +63,10 @@ void app_controls_render(void)
 
     drv_display_clear();
 
-    snprintf(buf, sizeof(buf), "TONE:%3d BIAS:%3d", (int)params[0], (int)params[1]);
+    snprintf(buf, sizeof(buf), "POS:%3d SIZE:%3d", (int)params[0], (int)params[1]);
     drv_display_draw_text(0, 0, buf);
 
-    snprintf(buf, sizeof(buf), "DRV:%3d MIX:%3d", (int)params[2], (int)params[3]);
+    snprintf(buf, sizeof(buf), "PIT:%3d DEN:%3d", (int)params[2], (int)params[3]);
     drv_display_draw_text(0, 10, buf);
 
     snprintf(buf, sizeof(buf), "CPU:%2lu.%1lu%%",
