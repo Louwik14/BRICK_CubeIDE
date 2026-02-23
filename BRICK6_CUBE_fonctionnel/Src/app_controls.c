@@ -5,6 +5,7 @@
 #include "cpu_load.h"
 #include "audio_float.h"
 #include "fx_clouds.h"
+#include "fx_granular.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -111,13 +112,13 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
 
     fx_clouds_set_position(ui_0_127_to_unit_float(cloud_position));
     fx_clouds_set_size(ui_0_127_to_unit_float(cloud_size));
-    fx_clouds_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
-    fx_clouds_set_density(ui_0_127_to_unit_float(cloud_density));
+    fx_granular_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
+    fx_granular_set_density(ui_0_127_to_unit_float(cloud_density));
     fx_clouds_set_texture(ui_0_127_to_unit_float(cloud_texture));
-    fx_clouds_set_dry_wet(ui_0_127_to_unit_float(cloud_dry_wet));
+    fx_granular_set_mix(ui_0_127_to_unit_float(cloud_dry_wet));
     fx_clouds_set_feedback(ui_0_127_to_unit_float(cloud_feedback));
     fx_clouds_set_stereo_spread(ui_0_127_to_unit_float(cloud_stereo_spread));
-    fx_clouds_set_freeze(cloud_freeze >= 64U);
+    fx_granular_set_freeze(cloud_freeze >= 64U);
 }
 
 void app_controls_init(void)
@@ -220,13 +221,13 @@ void app_controls_process(void)
     {
         fx_clouds_set_position(ui_0_127_to_unit_float(cloud_position));
         fx_clouds_set_size(ui_0_127_to_unit_float(cloud_size));
-        fx_clouds_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
-        fx_clouds_set_density(ui_0_127_to_unit_float(cloud_density));
+        fx_granular_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
+        fx_granular_set_density(ui_0_127_to_unit_float(cloud_density));
         fx_clouds_set_texture(ui_0_127_to_unit_float(cloud_texture));
-        fx_clouds_set_dry_wet(ui_0_127_to_unit_float(cloud_dry_wet));
+        fx_granular_set_mix(ui_0_127_to_unit_float(cloud_dry_wet));
         fx_clouds_set_feedback(ui_0_127_to_unit_float(cloud_feedback));
         fx_clouds_set_stereo_spread(ui_0_127_to_unit_float(cloud_stereo_spread));
-        fx_clouds_set_freeze(cloud_freeze >= 64U);
+        fx_granular_set_freeze(cloud_freeze >= 64U);
     }
 }void app_controls_render(void)
 {
