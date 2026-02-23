@@ -35,6 +35,7 @@
 #include "fx_dj_eq3_cmsis.h"
 #include "stm32h743xx.h"
 #include "arm_math.h"
+#include "fx_reverb.h"
 
 /* ============================================================
    CONFIG
@@ -58,6 +59,7 @@ static float postgain = 1.0f;
 static float output_comp = 1.0f;
 
 static fx_dj_eq3_t track0_eq;
+static fx_reverb_t *reverb = 0;
 
 static volatile uint8_t track0_eq_ui_low = 64U;
 static volatile uint8_t track0_eq_ui_mid = 64U;
@@ -151,6 +153,9 @@ void audio_tracks_init(void)
     }
 
     fx_dj_eq3_init(&track0_eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
+
+    reverb = fx_reverb_get_instance();
+    fx_reverb_init(reverb, 48000.0f);
 
     master_gain = 1.0f;
 }
@@ -380,9 +385,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
                                 frames);
     }
 
-    /* Préparation sends/returns (FX non branchés pour l'instant). */
-    memset(send0_l, 0, frames * sizeof(float));
-    memset(send0_r, 0, frames * sizeof(float));
+    /* Préparation sends/returns. */
     memset(send1_l, 0, frames * sizeof(float));
     memset(send1_r, 0, frames * sizeof(float));
 
@@ -406,6 +409,25 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         bus_main_r[n] = main_r;
         bus_cue_l[n] = main_l; /* défaut: CUE = copie MAIN */
         bus_cue_r[n] = main_r;
+
+        send0_l[n] = main_l;
+        send0_r[n] = main_r;
+    }
+
+    if(reverb)
+    {
+        fx_reverb_process_block(reverb,
+                                send0_l,
+                                send0_r,
+                                send0_l,
+                                send0_r,
+                                frames);
+    }
+
+    for(uint32_t n = 0; n < frames; n++)
+    {
+        bus_main_l[n] += send0_l[n];
+        bus_main_r[n] += send0_r[n];
     }
 }
 
