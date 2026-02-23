@@ -8,8 +8,11 @@ extern "C" {
 
 typedef struct
 {
-    float drive_gain;
+    float k;
+    float asym;
+    float output_gain;
     float mix;
+    float dry;
     uint8_t bypass;
 } fx_saturation_t;
 
