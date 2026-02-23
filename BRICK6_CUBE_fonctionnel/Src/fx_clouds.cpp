@@ -23,6 +23,11 @@ float g_position = 0.5f;
 float g_size = 0.5f;
 float g_pitch = 0.0f;
 float g_density = 0.5f;
+float g_texture = 0.5f;
+float g_dry_wet = 1.0f;
+float g_feedback = 0.3f;
+float g_stereo_spread = 1.0f;
+bool g_freeze = false;
 
 bool g_clouds_ready = false;
 
@@ -56,6 +61,26 @@ extern "C" void fx_clouds_set_density(float density_0_1) {
   g_density = clamp01(density_0_1);
 }
 
+extern "C" void fx_clouds_set_texture(float texture_0_1) {
+  g_texture = clamp01(texture_0_1);
+}
+
+extern "C" void fx_clouds_set_dry_wet(float dry_wet_0_1) {
+  g_dry_wet = clamp01(dry_wet_0_1);
+}
+
+extern "C" void fx_clouds_set_feedback(float feedback_0_1) {
+  g_feedback = clamp01(feedback_0_1);
+}
+
+extern "C" void fx_clouds_set_stereo_spread(float stereo_spread_0_1) {
+  g_stereo_spread = clamp01(stereo_spread_0_1);
+}
+
+extern "C" void fx_clouds_set_freeze(uint8_t freeze) {
+  g_freeze = (freeze != 0u);
+}
+
 extern "C" void fx_clouds_init(float sample_rate) {
   (void)sample_rate;
 
@@ -81,12 +106,11 @@ extern "C" void fx_clouds_process_block(float *in_l, float *in_r,
   p->size = g_size;
   p->pitch = g_pitch;
   p->density = g_density;
-
-  p->dry_wet = 1.0f;
-  p->texture = 0.5f;
-  p->feedback = 0.3f;
-  p->stereo_spread = 1.0f;
-  p->freeze = false;
+  p->texture = g_texture;
+  p->dry_wet = g_dry_wet;
+  p->feedback = g_feedback;
+  p->stereo_spread = g_stereo_spread;
+  p->freeze = g_freeze;
   p->trigger = false;
 
   uint32_t offset = 0;
