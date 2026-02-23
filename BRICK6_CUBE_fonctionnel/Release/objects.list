@@ -368,6 +368,7 @@
 "./Src/fx_dj_eq3_cmsis.o"
 "./Src/fx_onepole.o"
 "./Src/fx_reverb.o"
+"./Src/fx_saturation.o"
 "./Src/gpio.o"
 "./Src/i2c.o"
 "./Src/main.o"

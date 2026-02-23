@@ -1,4 +1,4 @@
-// Copyright 2015 Emilie Gillet.
+// Copyright 2014 Emilie Gillet.
 //
 // Author: Emilie Gillet (emilie.o.gillet@gmail.com)
 //
@@ -24,47 +24,21 @@
 //
 // -----------------------------------------------------------------------------
 //
-// Limiter.
+// Audio processing frames.
 
-#ifndef WARPS_DSP_LIMITER_H_
-#define WARPS_DSP_LIMITER_H_
+#ifndef CLOUDS_DSP_FRAME_H_
+#define CLOUDS_DSP_FRAME_H_
 
 #include "stmlib/stmlib.h"
 
-#include <algorithm>
+namespace clouds {
 
-#include "stmlib/dsp/dsp.h"
-#include "stmlib/dsp/filter.h"
+const int32_t kMaxNumChannels = 2;
+const size_t kMaxBlockSize = 32;
 
-namespace warps {
+typedef struct { short l; short r; } ShortFrame;
+typedef struct { float l; float r; } FloatFrame;
 
-class Limiter {
- public:
-  Limiter() { }
-  ~Limiter() { }
+}  // namespace clouds
 
-  void Init() {
-    peak_ = 0.5f;
-  }
-
-  void Process(
-      float* in_out,
-      float pre_gain,
-      size_t size) {
-    while (size--) {
-      float s = *in_out * pre_gain;
-      SLOPE(peak_, fabs(s), 0.05f, 0.00002f);
-      float gain = (peak_ <= 1.0f ? 1.0f : 1.0f / peak_);
-      *in_out++ = stmlib::SoftLimit(s * gain * 0.8f);
-    }
-  }
-
- private:
-  float peak_;
-
-  DISALLOW_COPY_AND_ASSIGN(Limiter);
-};
-
-}  // namespace warps
-
-#endif  // WARPS_DSP_LIMITER_H_
+#endif  // CLOUDS_DSP_FRAME_H_

@@ -1,55 +1,75 @@
 #include "fx_saturation.h"
 
 #define FX_SAT_MIN_K 1.0f
-#define FX_SAT_K_RANGE 25.0f
+#define FX_SAT_K_MAX 25.0f
+
+static inline float fx_softclip(float x)
+{
+    const float ax = __builtin_fabsf(x);
+    return x / (1.0f + ax);
+}
 
 void fx_saturation_init(fx_saturation_t *fx)
 {
     if(fx == 0)
-    {
         return;
-    }
 
     fx->k = FX_SAT_MIN_K;
     fx->tone = 0.0f;
     fx->asym = 0.75f;
-    fx->makeup = 1.0f;
+
+    fx->pre_gain = 1.0f;
+    fx->post_gain = 1.0f;
+
     fx->mix = 1.0f;
     fx->dry = 0.0f;
+
     fx->prev_l = 0.0f;
     fx->prev_r = 0.0f;
+
     fx->bypass = 1U;
 }
 
 void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
 {
     if(fx == 0)
-    {
         return;
-    }
 
     if(drive_0_127 == 0U)
     {
-        fx->k = FX_SAT_MIN_K;
-        fx->makeup = 1.0f;
         fx->bypass = 1U;
+        fx->pre_gain = 1.0f;
+        fx->post_gain = 1.0f;
         return;
     }
 
-    const float norm = (float)drive_0_127 * (1.0f / 127.0f);
-    const float shaped = norm * norm;
+    const float d = (float)drive_0_127 * (1.0f / 128.0f);
 
-    fx->k = FX_SAT_MIN_K + (FX_SAT_K_RANGE * shaped);
-    fx->makeup = 1.0f + 0.5f * (fx->k - 1.0f);
+    // 🔥 mapping Daisy (musical + progressif)
+    const float d2 = d * d;
+    const float drive = 2.0f * d;
+
+    const float pre_a = drive * 0.5f;
+    const float pre_b = drive * drive * drive * drive * drive * 24.0f;
+
+    fx->pre_gain = pre_a + (pre_b - pre_a) * d2;
+
+    // 🔥 normalisation auto (évite perte de volume)
+    const float drive_squashed = drive * (2.0f - drive);
+    const float ref = 0.33f + drive_squashed * (fx->pre_gain - 0.33f);
+
+    fx->post_gain = 1.0f / fx_softclip(ref);
+
+    // k utilisé pour shaping (ton algo)
+    fx->k = FX_SAT_MIN_K + (FX_SAT_K_MAX * d2);
+
     fx->bypass = 0U;
 }
 
 void fx_saturation_set_mix_ui(fx_saturation_t *fx, uint8_t mix_0_127)
 {
     if(fx == 0)
-    {
         return;
-    }
 
     fx->mix = (float)mix_0_127 * (1.0f / 127.0f);
     fx->dry = 1.0f - fx->mix;
@@ -58,9 +78,7 @@ void fx_saturation_set_mix_ui(fx_saturation_t *fx, uint8_t mix_0_127)
 void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127)
 {
     if(fx == 0)
-    {
         return;
-    }
 
     fx->tone = (float)tone_0_127 * (1.0f / 127.0f);
 }
@@ -68,9 +86,7 @@ void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127)
 void fx_saturation_set_bias_ui(fx_saturation_t *fx, uint8_t bias_0_127)
 {
     if(fx == 0)
-    {
         return;
-    }
 
     fx->asym = 0.5f + ((float)bias_0_127 * (1.0f / 127.0f)) * 0.5f;
 }
@@ -81,14 +97,13 @@ void fx_saturation_process_block(fx_saturation_t *fx,
                                  uint32_t frames)
 {
     if((fx == 0) || (inout_l == 0) || (inout_r == 0) || (frames == 0U) || (fx->bypass != 0U))
-    {
         return;
-    }
 
     const float k = fx->k;
     const float tone = fx->tone;
     const float asym = fx->asym;
-    const float makeup = fx->makeup;
+    const float pre = fx->pre_gain;
+    const float post = fx->post_gain;
     const float wet = fx->mix;
     const float dry = fx->dry;
 
@@ -106,37 +121,45 @@ void fx_saturation_process_block(fx_saturation_t *fx,
         float xl = in_l;
         float xr = in_r;
 
+        // 🔥 tone (pré-emphasis)
         const float dxl = xl - prev_l;
         const float dxr = xr - prev_r;
         prev_l = xl;
         prev_r = xr;
 
-        xl = xl + tone * dxl;
-        xr = xr + tone * dxr;
+        xl += tone * dxl;
+        xr += tone * dxr;
 
-        if(xl < 0.0f)
-        {
-            xl *= asym;
-        }
-        if(xr < 0.0f)
-        {
-            xr *= asym;
-        }
+        // 🔥 drive (pre gain)
+        xl *= pre;
+        xr *= pre;
 
+        // 🔥 asymétrie (analog vibe)
+        if(xl < 0.0f) xl *= asym;
+        if(xr < 0.0f) xr *= asym;
+
+        // 🔥 waveshaper (ton algo)
         const float xl2 = xl * xl;
         const float xr2 = xr * xr;
+
         const float axl = __builtin_fabsf(xl);
         const float axr = __builtin_fabsf(xr);
 
         float yl = xl * (1.0f + k * axl) / (1.0f + k * xl2);
         float yr = xr * (1.0f + k * axr) / (1.0f + k * xr2);
 
-        yl *= makeup;
-        yr *= makeup;
+        // 🔥 post gain (comme Daisy)
+        // 🔥 NORMALISATION SIMPLE (évite explosion volume)
+        const float out_gain = 1.0f / (1.0f + 0.5f * (k - 1.0f));
 
+        yl *= post * out_gain;
+        yr *= post * out_gain;
+
+        // mix ensuite
         yl = in_l * dry + yl * wet;
         yr = in_r * dry + yr * wet;
 
+        // clamp
         yl = __builtin_fmaxf(-1.0f, __builtin_fminf(yl, 1.0f));
         yr = __builtin_fmaxf(-1.0f, __builtin_fminf(yr, 1.0f));
 

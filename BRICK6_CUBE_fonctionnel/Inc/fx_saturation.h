@@ -11,12 +11,18 @@ typedef struct
     float k;
     float tone;
     float asym;
-    float makeup;
+
+    float pre_gain;   // 🔥 ajouté
+    float post_gain;  // 🔥 ajouté
+
     float mix;
     float dry;
+
     float prev_l;
     float prev_r;
+
     uint8_t bypass;
+
 } fx_saturation_t;
 
 void fx_saturation_init(fx_saturation_t *fx);

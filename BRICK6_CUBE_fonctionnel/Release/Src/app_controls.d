@@ -44,7 +44,7 @@ Src/app_controls.o: ../Src/app_controls.c ../Inc/app_controls.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/font.h \
- ../Inc/cpu_load.h ../Inc/fx_reverb.h
+ ../Inc/cpu_load.h ../Inc/audio_float.h
 ../Inc/app_controls.h:
 ../Inc/app_controls_eq.h:
 ../Inc/drv_encoders.h:
@@ -95,4 +95,4 @@ Src/app_controls.o: ../Src/app_controls.c ../Inc/app_controls.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/font.h:
 ../Inc/cpu_load.h:
-../Inc/fx_reverb.h:
+../Inc/audio_float.h:
