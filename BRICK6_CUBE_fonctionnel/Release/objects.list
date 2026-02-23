@@ -367,6 +367,7 @@
 "./Src/font5x8_elektron.o"
 "./Src/fx_clouds.o"
 "./Src/fx_dj_eq3_cmsis.o"
+"./Src/fx_granular.o"
 "./Src/fx_onepole.o"
 "./Src/fx_reverb.o"
 "./Src/fx_saturation.o"

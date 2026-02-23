@@ -31,6 +31,8 @@ static uint8_t granular_density = 64U;
 static uint8_t granular_pitch = 64U;
 static uint8_t granular_mix = 127U;
 static uint8_t granular_freeze = 0U;
+static uint8_t granular_stereo = 64U; // ✅ NEW
+static uint8_t granular_spread = 64U;
 
 static float ui_0_127_to_unit_float(uint8_t value)
 {
@@ -90,6 +92,8 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
 
     case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
         granular_freeze = enc1;
+        granular_spread = enc2; // ✅ SPREAD ajouté
+        granular_stereo = enc3; // ✅ ENC3
         break;
 
     case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
@@ -101,6 +105,8 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
     fx_granular_set_pitch(ui_0_127_to_pitch_semitones(granular_pitch));
     fx_granular_set_mix(ui_0_127_to_unit_float(granular_mix));
     fx_granular_set_freeze(granular_freeze >= 64U);
+    fx_granular_set_spread(ui_0_127_to_unit_float(granular_spread));
+    fx_granular_set_stereo_offset(ui_0_127_to_unit_float(granular_stereo)); // ✅ AJOUT
 }
 
 
@@ -168,7 +174,7 @@ void app_controls_process(void)
                 granular_pitch = (uint8_t)clamp_int((int)granular_pitch + d, 0, 127);
                 break;
             case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-                /* unused */
+                granular_spread = (uint8_t)clamp_int((int)granular_spread + d, 0, 127);
                 break;
             case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
                 /* unused page */
@@ -185,7 +191,7 @@ void app_controls_process(void)
                 granular_mix = (uint8_t)clamp_int((int)granular_mix + d, 0, 127);
                 break;
             case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-                /* unused */
+                granular_stereo = (uint8_t)clamp_int((int)granular_stereo + d, 0, 127); // ✅
                 break;
             case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
                 /* unused page */
@@ -206,6 +212,8 @@ void app_controls_process(void)
         fx_granular_set_pitch(ui_0_127_to_pitch_semitones(granular_pitch));
         fx_granular_set_mix(ui_0_127_to_unit_float(granular_mix));
         fx_granular_set_freeze(granular_freeze >= 64U);
+        fx_granular_set_spread(ui_0_127_to_unit_float(granular_spread));
+        fx_granular_set_stereo_offset(ui_0_127_to_unit_float(granular_stereo)); // ✅ AJOUT
     }
 }
 
@@ -231,13 +239,19 @@ void app_controls_render(void)
         break;
 
     case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
+        // Ligne 1 : page + freeze
         snprintf(buf, sizeof(buf), "PG:%1d FRZ:%1d",
                  (int)current_page,
                  (granular_freeze >= 64U) ? 1 : 0);
         drv_display_draw_text(0, 0, buf);
 
-        break;
+        // Ligne 2 : spread + stereo
+        snprintf(buf, sizeof(buf), "SPR:%3d STR:%3d",
+                 (int)granular_spread,
+                 (int)granular_stereo);
+        drv_display_draw_text(0, 10, buf);
 
+        break;
     case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
         snprintf(buf, sizeof(buf), "PG:%1d ---",
                  (int)current_page);

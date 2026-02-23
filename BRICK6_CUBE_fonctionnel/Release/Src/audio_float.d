@@ -37,7 +37,7 @@ Src/audio_float.o: ../Src/audio_float.c ../Inc/audio_float.h \
  ../Drivers/CMSIS/Include/cmsis_compiler.h \
  ../Drivers/CMSIS/Include/mpu_armv7.h \
  ../Drivers/CMSIS/Device/ST/STM32H7xx/Include/system_stm32h7xx.h \
- ../Inc/fx_saturation.h ../Inc/fx_clouds.h
+ ../Inc/fx_saturation.h ../Inc/fx_granular.h
 ../Inc/audio_float.h:
 ../Inc/fx_dj_eq3_cmsis.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include/arm_math.h:
@@ -78,4 +78,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/C
 ../Drivers/CMSIS/Include/mpu_armv7.h:
 ../Drivers/CMSIS/Device/ST/STM32H7xx/Include/system_stm32h7xx.h:
 ../Inc/fx_saturation.h:
-../Inc/fx_clouds.h:
+../Inc/fx_granular.h:

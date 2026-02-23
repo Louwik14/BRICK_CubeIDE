@@ -16,7 +16,8 @@ void fx_granular_set_density(float density_0_1);
 void fx_granular_set_pitch(float semitones_m48_p48);
 void fx_granular_set_freeze(bool freeze);
 void fx_granular_set_mix(float mix_0_1);
-
+void fx_granular_set_spread(float spread_0_1);
+void fx_granular_set_stereo_offset(float amount_0_1);
 #ifdef __cplusplus
 }
 #endif

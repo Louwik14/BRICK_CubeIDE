@@ -3,20 +3,23 @@
 namespace {
 
 constexpr uint32_t kBufferSize = 48000u;
-constexpr uint32_t kMaxGrains = 20u;
-constexpr uint32_t kMinDurationSamples = 480u;    // 10 ms @ 48k
-constexpr uint32_t kMaxDurationSamples = 5760u;   // 120 ms @ 48k
-constexpr float kBaseSpawnScale = 0.22f;
+constexpr uint32_t kMaxGrains = 10u;
+constexpr uint32_t kMinDurationSamples = 480u;
+constexpr uint32_t kMaxDurationSamples = 5760u;
 
 struct Grain {
-  float pos;
-  float increment;
+  uint32_t pos;
+  uint32_t increment;
   float gain_l;
   float gain_r;
   float env;
   float env_inc;
   uint32_t remaining;
   bool active;
+
+  uint8_t interp_toggle;
+  float lastL;
+  float lastR;
 };
 
 struct GranularState {
@@ -26,7 +29,8 @@ struct GranularState {
   float pitch_increment;
   float mix;
   bool freeze;
-
+  float spread; // ✅ NEW
+  float stereo_offset;
   float buffer_l[kBufferSize];
   float buffer_r[kBufferSize];
   uint32_t write_pos;
@@ -34,15 +38,21 @@ struct GranularState {
   Grain grains[kMaxGrains];
 
   uint32_t rng;
-  float spawn_probability;
+
+  uint32_t spawn_counter;
+  uint32_t spawn_interval;
+
+  uint32_t free_index[kMaxGrains];
+  uint32_t free_count;
 };
 
 GranularState g_state;
 
-constexpr float kInvNorm[kMaxGrains + 1u] = {
+constexpr float kInvNorm[] = {
     1.0000f, 1.0000f, 0.9000f, 0.8300f, 0.7700f, 0.7100f, 0.6700f,
     0.6300f, 0.6000f, 0.5700f, 0.5500f, 0.5300f, 0.5100f, 0.4950f,
-    0.4800f, 0.4650f, 0.4500f, 0.4350f, 0.4200f, 0.4100f, 0.4000f};
+    0.4800f, 0.4650f, 0.4500f, 0.4350f, 0.4200f, 0.4100f, 0.4000f
+};
 
 inline float clamp(float x, float lo, float hi) {
   if (x < lo) return lo;
@@ -51,7 +61,6 @@ inline float clamp(float x, float lo, float hi) {
 }
 
 inline uint32_t next_rand() {
-  // xorshift32
   uint32_t x = g_state.rng;
   x ^= x << 13;
   x ^= x >> 17;
@@ -61,11 +70,10 @@ inline uint32_t next_rand() {
 }
 
 inline float rand_0_1() {
-  return static_cast<float>(next_rand() & 0x00FFFFFFu) * (1.0f / 16777216.0f);
+  return (next_rand() & 0x00FFFFFFu) * (1.0f / 16777216.0f);
 }
 
 inline float fast_exp2_approx(float x) {
-  // Cubic fit on [-4, 4], sufficient for musical pitch control.
   const float x2 = x * x;
   const float x3 = x2 * x;
   return 1.0f + (0.69314718f * x) + (0.24022651f * x2) + (0.05550411f * x3);
@@ -73,70 +81,75 @@ inline float fast_exp2_approx(float x) {
 
 inline void update_pitch_increment() {
   const float semitones = clamp(g_state.pitch_semitones, -48.0f, 48.0f);
-  const float octaves = semitones / 12.0f;
+  const float octaves = semitones * (1.0f / 12.0f);
   float ratio = fast_exp2_approx(octaves);
   if (ratio < 0.0625f) ratio = 0.0625f;
   if (ratio > 16.0f) ratio = 16.0f;
-  g_state.pitch_increment = ratio;
+  g_state.pitch_increment = ratio * 65536.0f;
 }
 
 inline void update_spawn_probability() {
-  g_state.spawn_probability = clamp(g_state.density, 0.0f, 1.0f) * kBaseSpawnScale;
+  float d = clamp(g_state.density, 0.0f, 1.0f);
+  float grains_per_sec = 5.0f + d * 120.0f;
+
+  g_state.spawn_interval = (uint32_t)(g_state.sample_rate / grains_per_sec);
+  if (g_state.spawn_interval < 1) g_state.spawn_interval = 1;
 }
 
-inline float read_interp(const float* buf, float pos) {
-  int32_t i0 = static_cast<int32_t>(pos);
-  if (i0 < 0) i0 += static_cast<int32_t>(kBufferSize);
-  if (i0 >= static_cast<int32_t>(kBufferSize)) i0 -= static_cast<int32_t>(kBufferSize);
+inline float read_interp_fixed(const float* buf, uint32_t pos) {
+  uint32_t i0 = pos >> 16;
+  uint32_t i1 = i0 + 1;
+  if (i1 >= kBufferSize) i1 = 0;
 
-  int32_t i1 = i0 + 1;
-  if (i1 >= static_cast<int32_t>(kBufferSize)) i1 = 0;
+  float frac = (pos & 0xFFFF) * (1.0f / 65536.0f);
 
-  const float frac = pos - static_cast<float>(i0);
-  const float a = buf[i0];
-  const float b = buf[i1];
-  return a + (b - a) * frac;
+  float a = buf[i0];
+  return a + (buf[i1] - a) * frac;
 }
 
 inline void spawn_grain() {
-  for (uint32_t i = 0; i < kMaxGrains; ++i) {
-    Grain& g = g_state.grains[i];
-    if (g.active) {
-      continue;
-    }
+  if (g_state.free_count == 0) return;
 
-    const uint32_t rand_span = static_cast<uint32_t>(rand_0_1() * 24000.0f) + 32u;
-    uint32_t start = g_state.write_pos;
-    if (start >= rand_span) {
-      start -= rand_span;
-    } else {
-      start += (kBufferSize - rand_span);
-    }
+  uint32_t idx = g_state.free_index[--g_state.free_count];
+  Grain& g = g_state.grains[idx];
 
-    const float pan = rand_0_1();
-    const uint32_t duration = kMinDurationSamples +
-                              static_cast<uint32_t>(rand_0_1() * static_cast<float>(kMaxDurationSamples - kMinDurationSamples));
+  // ✅ SPREAD CONTROL
+  uint32_t max_span = (uint32_t)(g_state.spread * (float)kBufferSize);
+  if (max_span < 32u) max_span = 32u;
+  float r = rand_0_1();
+  r = r * r; // bias vers centre
+  uint32_t rand_span = (uint32_t)(r * max_span);
+  uint32_t start = g_state.write_pos;
+  start = (start >= rand_span) ? (start - rand_span)
+                              : (start + kBufferSize - rand_span);
 
-    g.pos = static_cast<float>(start);
-    g.increment = g_state.pitch_increment;
-    g.gain_l = 1.0f - pan;
-    g.gain_r = pan;
-    g.env = 0.0f;
-    g.remaining = duration;
+  float pan = rand_0_1();
 
-    const uint32_t half_duration = duration >> 1;
-    if (half_duration > 0u) {
-      g.env_inc = 1.0f / static_cast<float>(half_duration);
-    } else {
-      g.env_inc = 1.0f;
-    }
+  uint32_t duration = kMinDurationSamples +
+    (next_rand() % (kMaxDurationSamples - kMinDurationSamples));
 
-    g.active = true;
-    return;
-  }
+  g.pos = start << 16;
+  g.increment = (uint32_t)g_state.pitch_increment;
+  g.gain_l = 1.0f - pan;
+  g.gain_r = pan;
+  g.env = 0.0f;
+  g.remaining = duration;
+
+  uint32_t half = duration >> 1;
+  g.env_inc = (half > 0u) ? (1.0f / (float)half) : 1.0f;
+
+  // 🎲 léger jitter d'enveloppe
+  float jitter = (rand_0_1() - 0.5f) * 0.08f;
+  g.env_inc *= (1.0f + jitter);
+
+  g.interp_toggle = 0;
+  g.lastL = 0.0f;
+  g.lastR = 0.0f;
+
+  g.active = true;
 }
 
-}  // namespace
+} // namespace
 
 extern "C" void fx_granular_set_density(float density_0_1) {
   g_state.density = clamp(density_0_1, 0.0f, 1.0f);
@@ -156,22 +169,33 @@ extern "C" void fx_granular_set_mix(float mix_0_1) {
   g_state.mix = clamp(mix_0_1, 0.0f, 1.0f);
 }
 
+// ✅ NEW
+extern "C" void fx_granular_set_spread(float spread_0_1) {
+  g_state.spread = clamp(spread_0_1, 0.0f, 1.0f);
+}
+
 extern "C" void fx_granular_init(float sample_rate) {
   g_state.sample_rate = sample_rate;
   g_state.density = 0.5f;
   g_state.pitch_semitones = 0.0f;
   g_state.mix = 1.0f;
   g_state.freeze = false;
+  g_state.spread = 0.5f; // ✅ NEW
+  g_state.stereo_offset = 0.5f;
   g_state.write_pos = 0u;
   g_state.rng = 0x12345678u;
+
+  g_state.spawn_counter = 0;
+
+  g_state.free_count = kMaxGrains;
+  for (uint32_t i = 0; i < kMaxGrains; ++i) {
+    g_state.grains[i].active = false;
+    g_state.free_index[i] = i;
+  }
 
   for (uint32_t i = 0; i < kBufferSize; ++i) {
     g_state.buffer_l[i] = 0.0f;
     g_state.buffer_r[i] = 0.0f;
-  }
-
-  for (uint32_t i = 0; i < kMaxGrains; ++i) {
-    g_state.grains[i].active = false;
   }
 
   update_pitch_increment();
@@ -179,32 +203,32 @@ extern "C" void fx_granular_init(float sample_rate) {
 }
 
 extern "C" void fx_granular_process_block(float* in_l, float* in_r,
-                                           float* out_l, float* out_r,
-                                           uint32_t frames) {
-  if (!in_l || !in_r || !out_l || !out_r) {
-    return;
-  }
+                                          float* out_l, float* out_r,
+                                          uint32_t frames) {
+  if (!in_l || !in_r || !out_l || !out_r) return;
 
-  const float dry_mix = 1.0f - g_state.mix;
-  const float wet_mix = g_state.mix;
+  float wet_mix = g_state.mix;
+  float dry_mix = 1.0f - wet_mix;
+  float* bufL = g_state.buffer_l;
+  float* bufR = g_state.buffer_r;
+
+  const uint32_t limit = kBufferSize << 16;
 
   for (uint32_t n = 0; n < frames; ++n) {
-    const float inL = in_l[n];
-    const float inR = in_r[n];
+
+    float inL = in_l[n];
+    float inR = in_r[n];
 
     if (!g_state.freeze) {
-      g_state.buffer_l[g_state.write_pos] = inL;
-      g_state.buffer_r[g_state.write_pos] = inR;
-      ++g_state.write_pos;
-      if (g_state.write_pos >= kBufferSize) {
+      bufL[g_state.write_pos] = inL;
+      bufR[g_state.write_pos] = inR;
+
+      if (++g_state.write_pos >= kBufferSize)
         g_state.write_pos = 0u;
-      }
     }
 
-    if (rand_0_1() < g_state.spawn_probability) {
-      spawn_grain();
-    }
-    if (rand_0_1() < (g_state.spawn_probability * 0.35f)) {
+    if (++g_state.spawn_counter >= g_state.spawn_interval) {
+      g_state.spawn_counter = 0;
       spawn_grain();
     }
 
@@ -214,37 +238,51 @@ extern "C" void fx_granular_process_block(float* in_l, float* in_r,
 
     for (uint32_t i = 0; i < kMaxGrains; ++i) {
       Grain& g = g_state.grains[i];
-      if (!g.active) {
-        continue;
-      }
+      if (!g.active) continue;
 
-      const float sL = read_interp(g_state.buffer_l, g.pos);
-      const float sR = read_interp(g_state.buffer_r, g.pos);
-      const float env = (g.env <= 1.0f) ? g.env : (2.0f - g.env);
+      if (g.interp_toggle == 0) {
+        g.lastL = read_interp_fixed(g_state.buffer_l, g.pos);
+        g.lastR = read_interp_fixed(g_state.buffer_r, g.pos);
+      }
+      g.interp_toggle ^= 1;
+
+      float sL = g.lastL;
+
+      // 🎛️ stereo offset contrôlable
+      uint32_t offset = (uint32_t)(g_state.stereo_offset * 512.0f);
+
+      uint32_t posR = g.pos + (offset << 16);
+      if (posR >= limit) posR -= limit;
+
+      float sR = read_interp_fixed(g_state.buffer_r, posR);
+
+      float x = g.env;
+      float env = x * (2.0f - x); // parabole smooth
 
       wetL += sL * env * g.gain_l;
       wetR += sR * env * g.gain_r;
       ++active_count;
 
       g.pos += g.increment;
-      if (g.pos >= static_cast<float>(kBufferSize)) {
-        g.pos -= static_cast<float>(kBufferSize);
-      }
+      if (g.pos >= limit)
+        g.pos -= limit;
 
       g.env += g.env_inc;
-      if (g.remaining > 0u) {
-        --g.remaining;
-      }
 
-      if (g.remaining == 0u || g.env >= 2.0f) {
+      if (--g.remaining == 0u || g.env >= 2.0f) {
         g.active = false;
+        g_state.free_index[g_state.free_count++] = i;
       }
     }
 
-    wetL *= kInvNorm[active_count];
-    wetR *= kInvNorm[active_count];
+    float norm = kInvNorm[active_count];
+    wetL *= norm;
+    wetR *= norm;
 
     out_l[n] = inL * dry_mix + wetL * wet_mix;
     out_r[n] = inR * dry_mix + wetR * wet_mix;
   }
+}
+extern "C" void fx_granular_set_stereo_offset(float amount_0_1) {
+  g_state.stereo_offset = clamp(amount_0_1, 0.0f, 1.0f);
 }
