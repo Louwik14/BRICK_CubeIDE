@@ -4,7 +4,6 @@
 #include "drv_display.h"
 #include "cpu_load.h"
 #include "audio_float.h"
-#include "fx_clouds.h"
 #include "fx_granular.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -28,15 +27,10 @@ static inline int clamp_int(int x, int min, int max)
 clouds_page_t current_page = CLOUDS_PAGE_POSITION_SIZE_PITCH;
 
 static uint8_t encoder_values[4] = {0U, 64U, 64U, 64U};
-static uint8_t cloud_position = 64U;
-static uint8_t cloud_size = 64U;
-static uint8_t cloud_pitch = 64U;
-static uint8_t cloud_density = 64U;
-static uint8_t cloud_texture = 64U;
-static uint8_t cloud_dry_wet = 127U;
-static uint8_t cloud_feedback = 38U;
-static uint8_t cloud_stereo_spread = 127U;
-static uint8_t cloud_freeze = 0U;
+static uint8_t granular_density = 64U;
+static uint8_t granular_pitch = 64U;
+static uint8_t granular_mix = 127U;
+static uint8_t granular_freeze = 0U;
 
 static float ui_0_127_to_unit_float(uint8_t value)
 {
@@ -53,7 +47,7 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
     static uint8_t prev_enc0 = 0U;
     static uint8_t enc0_initialized = 0U;
 
-    if (!enc0_initialized)
+    if(!enc0_initialized)
     {
         prev_enc0 = enc0;
         enc0_initialized = 1U;
@@ -62,22 +56,22 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
     {
         int16_t delta = (int16_t)enc0 - (int16_t)prev_enc0;
 
-        if (delta > 64)
+        if(delta > 64)
         {
             delta -= 128;
         }
-        else if (delta < -64)
+        else if(delta < -64)
         {
             delta += 128;
         }
 
-        while (delta > 0)
+        while(delta > 0)
         {
             current_page = (clouds_page_t)((current_page + 1U) % CLOUDS_PAGE_COUNT);
             delta--;
         }
 
-        while (delta < 0)
+        while(delta < 0)
         {
             current_page = (clouds_page_t)((current_page + CLOUDS_PAGE_COUNT - 1U) % CLOUDS_PAGE_COUNT);
             delta++;
@@ -86,40 +80,29 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
         prev_enc0 = enc0;
     }
 
-    switch (current_page)
+    switch(current_page)
     {
     case CLOUDS_PAGE_POSITION_SIZE_PITCH:
-        cloud_position = enc1;
-        cloud_size = enc2;
-        cloud_pitch = enc3;
+        granular_density = enc1;
+        granular_pitch = enc2;
+        granular_mix = enc3;
         break;
 
     case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-        cloud_density = enc1;
-        cloud_texture = enc2;
-        cloud_dry_wet = enc3;
+        granular_freeze = enc1;
         break;
 
     case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
-        cloud_feedback = enc1;
-        cloud_stereo_spread = enc2;
-        cloud_freeze = enc3;
-        break;
-
     default:
         break;
     }
 
-    fx_clouds_set_position(ui_0_127_to_unit_float(cloud_position));
-    fx_clouds_set_size(ui_0_127_to_unit_float(cloud_size));
-    fx_granular_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
-    fx_granular_set_density(ui_0_127_to_unit_float(cloud_density));
-    fx_clouds_set_texture(ui_0_127_to_unit_float(cloud_texture));
-    fx_granular_set_mix(ui_0_127_to_unit_float(cloud_dry_wet));
-    fx_clouds_set_feedback(ui_0_127_to_unit_float(cloud_feedback));
-    fx_clouds_set_stereo_spread(ui_0_127_to_unit_float(cloud_stereo_spread));
-    fx_granular_set_freeze(cloud_freeze >= 64U);
+    fx_granular_set_density(ui_0_127_to_unit_float(granular_density));
+    fx_granular_set_pitch(ui_0_127_to_pitch_semitones(granular_pitch));
+    fx_granular_set_mix(ui_0_127_to_unit_float(granular_mix));
+    fx_granular_set_freeze(granular_freeze >= 64U);
 }
+
 
 void app_controls_init(void)
 {
@@ -165,13 +148,13 @@ void app_controls_process(void)
             switch(current_page)
             {
             case CLOUDS_PAGE_POSITION_SIZE_PITCH:
-                cloud_position = (uint8_t)clamp_int((int)cloud_position + d, 0, 127);
+                granular_density = (uint8_t)clamp_int((int)granular_density + d, 0, 127);
                 break;
             case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-                cloud_density = (uint8_t)clamp_int((int)cloud_density + d, 0, 127);
+                granular_freeze = (uint8_t)clamp_int((int)granular_freeze + d, 0, 127);
                 break;
             case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
-                cloud_feedback = (uint8_t)clamp_int((int)cloud_feedback + d, 0, 127);
+                /* unused page */
                 break;
             default:
                 break;
@@ -182,13 +165,13 @@ void app_controls_process(void)
             switch(current_page)
             {
             case CLOUDS_PAGE_POSITION_SIZE_PITCH:
-                cloud_size = (uint8_t)clamp_int((int)cloud_size + d, 0, 127);
+                granular_pitch = (uint8_t)clamp_int((int)granular_pitch + d, 0, 127);
                 break;
             case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-                cloud_texture = (uint8_t)clamp_int((int)cloud_texture + d, 0, 127);
+                /* unused */
                 break;
             case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
-                cloud_stereo_spread = (uint8_t)clamp_int((int)cloud_stereo_spread + d, 0, 127);
+                /* unused page */
                 break;
             default:
                 break;
@@ -199,13 +182,13 @@ void app_controls_process(void)
             switch(current_page)
             {
             case CLOUDS_PAGE_POSITION_SIZE_PITCH:
-                cloud_pitch = (uint8_t)clamp_int((int)cloud_pitch + d, 0, 127);
+                granular_mix = (uint8_t)clamp_int((int)granular_mix + d, 0, 127);
                 break;
             case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-                cloud_dry_wet = (uint8_t)clamp_int((int)cloud_dry_wet + d, 0, 127);
+                /* unused */
                 break;
             case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
-                cloud_freeze = (uint8_t)clamp_int((int)cloud_freeze + d, 0, 127);
+                /* unused page */
                 break;
             default:
                 break;
@@ -219,17 +202,14 @@ void app_controls_process(void)
 
     if(changed)
     {
-        fx_clouds_set_position(ui_0_127_to_unit_float(cloud_position));
-        fx_clouds_set_size(ui_0_127_to_unit_float(cloud_size));
-        fx_granular_set_pitch(ui_0_127_to_pitch_semitones(cloud_pitch));
-        fx_granular_set_density(ui_0_127_to_unit_float(cloud_density));
-        fx_clouds_set_texture(ui_0_127_to_unit_float(cloud_texture));
-        fx_granular_set_mix(ui_0_127_to_unit_float(cloud_dry_wet));
-        fx_clouds_set_feedback(ui_0_127_to_unit_float(cloud_feedback));
-        fx_clouds_set_stereo_spread(ui_0_127_to_unit_float(cloud_stereo_spread));
-        fx_granular_set_freeze(cloud_freeze >= 64U);
+        fx_granular_set_density(ui_0_127_to_unit_float(granular_density));
+        fx_granular_set_pitch(ui_0_127_to_pitch_semitones(granular_pitch));
+        fx_granular_set_mix(ui_0_127_to_unit_float(granular_mix));
+        fx_granular_set_freeze(granular_freeze >= 64U);
     }
-}void app_controls_render(void)
+}
+
+void app_controls_render(void)
 {
     char buf[32];
     const uint32_t cpu_pm = cpu_load_get_permille();
@@ -239,39 +219,30 @@ void app_controls_process(void)
     switch (current_page)
     {
     case CLOUDS_PAGE_POSITION_SIZE_PITCH:
-        snprintf(buf, sizeof(buf), "PG:%1d POS:%3d SZ:%3d",
+        snprintf(buf, sizeof(buf), "PG:%1d DEN:%3d PIT:%3d",
                  (int)current_page,
-                 (int)cloud_position,
-                 (int)cloud_size);
+                 (int)granular_density,
+                 (int)granular_pitch);
         drv_display_draw_text(0, 0, buf);
 
-        snprintf(buf, sizeof(buf), "PIT:%3d",
-                 (int)cloud_pitch);
+        snprintf(buf, sizeof(buf), "MIX:%3d",
+                 (int)granular_mix);
         drv_display_draw_text(0, 10, buf);
         break;
 
     case CLOUDS_PAGE_DENSITY_TEXTURE_DRYWET:
-        snprintf(buf, sizeof(buf), "PG:%1d DEN:%3d TEX:%3d",
+        snprintf(buf, sizeof(buf), "PG:%1d FRZ:%1d",
                  (int)current_page,
-                 (int)cloud_density,
-                 (int)cloud_texture);
+                 (granular_freeze >= 64U) ? 1 : 0);
         drv_display_draw_text(0, 0, buf);
 
-        snprintf(buf, sizeof(buf), "MIX:%3d",
-                 (int)cloud_dry_wet);
-        drv_display_draw_text(0, 10, buf);
         break;
 
     case CLOUDS_PAGE_FEEDBACK_SPREAD_FREEZE:
-        snprintf(buf, sizeof(buf), "PG:%1d FBK:%3d SPR:%3d",
-                 (int)current_page,
-                 (int)cloud_feedback,
-                 (int)cloud_stereo_spread);
+        snprintf(buf, sizeof(buf), "PG:%1d ---",
+                 (int)current_page);
         drv_display_draw_text(0, 0, buf);
 
-        snprintf(buf, sizeof(buf), "FRZ:%3d",
-                 (int)cloud_freeze);
-        drv_display_draw_text(0, 10, buf);
         break;
 
     default:

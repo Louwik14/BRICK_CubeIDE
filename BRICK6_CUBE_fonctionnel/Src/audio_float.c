@@ -36,7 +36,6 @@
 #include "stm32h743xx.h"
 #include "arm_math.h"
 #include "fx_saturation.h"
-#include "fx_clouds.h"
 #include "fx_granular.h"
 
 /* ============================================================
@@ -177,7 +176,6 @@ void audio_tracks_init(void)
     fx_dj_eq3_init(&track0_eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
 
     fx_saturation_init(&saturation);
-    fx_clouds_init(48000.0f);
     fx_granular_init(48000.0f);
 
     master_gain = 1.0f;
@@ -408,7 +406,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
                                     frames);
     }
 
-    /* Clouds après saturation (avant mix bus). */
+    /* Granular après saturation (avant mix bus). */
     if(track_buf[0].enabled)
     {
         fx_granular_process_block(track_buf[0].L,
