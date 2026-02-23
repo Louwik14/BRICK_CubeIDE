@@ -176,6 +176,8 @@ void audio_tracks_init(void)
 
     fx_saturation_init(&saturation);
 
+    fx_saturation_init(&saturation);
+
     master_gain = 1.0f;
 }
 
