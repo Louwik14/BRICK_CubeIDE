@@ -15,14 +15,16 @@
   *
   ******************************************************************************
   */
+
+
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cpu_load.h"
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "cpu_load.h"
 #include "usart.h"
 #include <stdio.h>
 #include <string.h>
