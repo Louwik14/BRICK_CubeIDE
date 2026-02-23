@@ -49,4 +49,9 @@ Drivers/CMSIS_DSP/Source/TransformFunctions \
 Drivers/STM32H7xx_HAL_Driver/Src \
 Src \
 Startup \
+mutable_instruments/clouds \
+mutable_instruments/clouds/dsp \
+mutable_instruments/clouds/dsp/pvoc \
+mutable_instruments/stmlib/dsp \
+mutable_instruments/stmlib/utils \
 

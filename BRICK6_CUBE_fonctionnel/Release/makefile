@@ -9,6 +9,11 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include mutable_instruments/stmlib/utils/subdir.mk
+-include mutable_instruments/stmlib/dsp/subdir.mk
+-include mutable_instruments/clouds/dsp/pvoc/subdir.mk
+-include mutable_instruments/clouds/dsp/subdir.mk
+-include mutable_instruments/clouds/subdir.mk
 -include Startup/subdir.mk
 -include Src/subdir.mk
 -include Drivers/STM32H7xx_HAL_Driver/Src/subdir.mk

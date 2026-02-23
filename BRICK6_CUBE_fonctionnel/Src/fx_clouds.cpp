@@ -5,16 +5,7 @@
 
 #include "clouds/dsp/granular_processor.h"
 
-// Clouds/stmlib translation units required by GranularProcessor links.
-#include "../mutable_instruments/clouds/clouds_resources.cpp"
-#include "../mutable_instruments/clouds/dsp/correlator.cpp"
-#include "../mutable_instruments/clouds/dsp/granular_processor.cpp"
-#include "../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp"
-#include "../mutable_instruments/clouds/dsp/pvoc/phase_vocoder.cpp"
-#include "../mutable_instruments/clouds/dsp/pvoc/stft.cpp"
-#include "../mutable_instruments/stmlib/dsp/atan.cpp"
-#include "../mutable_instruments/stmlib/dsp/units.cpp"
-#include "../mutable_instruments/stmlib/utils/random.cpp"
+
 
 namespace {
 
@@ -90,6 +81,13 @@ extern "C" void fx_clouds_process_block(float *in_l, float *in_r,
   p->size = g_size;
   p->pitch = g_pitch;
   p->density = g_density;
+
+  p->dry_wet = 1.0f;
+  p->texture = 0.5f;
+  p->feedback = 0.3f;
+  p->stereo_spread = 1.0f;
+  p->freeze = false;
+  p->trigger = false;
 
   uint32_t offset = 0;
   while (offset < frames) {

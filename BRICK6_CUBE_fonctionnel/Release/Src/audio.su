@@ -1,4 +1,0 @@
-../Src/audio.c:98:6:audio_init	16	static
-../Src/audio.c:112:6:audio_start	8	static
-../Src/audio.c:143:6:HAL_SAI_RxHalfCpltCallback	8	static
-../Src/audio.c:166:6:HAL_SAI_RxCpltCallback	8	static
