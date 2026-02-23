@@ -35,7 +35,7 @@
 #include "fx_dj_eq3_cmsis.h"
 #include "stm32h743xx.h"
 #include "arm_math.h"
-#include "fx_reverb.h"
+#include "fx_saturation.h"
 
 /* ============================================================
    CONFIG
@@ -59,7 +59,7 @@ static float postgain = 1.0f;
 static float output_comp = 1.0f;
 
 static fx_dj_eq3_t track0_eq;
-static fx_reverb_t *reverb = 0;
+static fx_saturation_t saturation;
 
 static volatile uint8_t track0_eq_ui_low = 64U;
 static volatile uint8_t track0_eq_ui_mid = 64U;
@@ -116,6 +116,26 @@ uint8_t audio_float_is_dj_eq_ui_neutral(void)
     return eq_is_neutral() ? 1U : 0U;
 }
 
+void audio_float_set_saturation_tone_ui(uint8_t tone_0_127)
+{
+    fx_saturation_set_tone_ui(&saturation, tone_0_127);
+}
+
+void audio_float_set_saturation_bias_ui(uint8_t bias_0_127)
+{
+    fx_saturation_set_bias_ui(&saturation, bias_0_127);
+}
+
+void audio_float_set_saturation_drive_ui(uint8_t drive_0_127)
+{
+    fx_saturation_set_drive_ui(&saturation, drive_0_127);
+}
+
+void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
+{
+    fx_saturation_set_mix_ui(&saturation, mix_0_127);
+}
+
 /* ============================================================
    TRACK + MIX STATE
    ============================================================ */
@@ -154,8 +174,7 @@ void audio_tracks_init(void)
 
     fx_dj_eq3_init(&track0_eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
 
-    reverb = fx_reverb_get_instance();
-    fx_reverb_init(reverb, 48000.0f);
+    fx_saturation_init(&saturation);
 
     master_gain = 1.0f;
 }
@@ -262,7 +281,6 @@ static inline int32_t f2s24_fast_ssat(float x)
    - Appelle le callback DSP utilisateur
    - Réalise la somme tracks -> bus_main
    - Copie bus_main -> bus_cue (par défaut)
-   - Initialise send0/send1 (et retours) à zéro
 
    audio_io_pack():
    - Convertit bus MAIN/CUE float -> TDM int24 right-aligned
@@ -339,10 +357,6 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
                                      float *AUDIO_RESTRICT bus_main_r,
                                      float *AUDIO_RESTRICT bus_cue_l,
                                      float *AUDIO_RESTRICT bus_cue_r,
-                                     float *AUDIO_RESTRICT send0_l,
-                                     float *AUDIO_RESTRICT send0_r,
-                                     float *AUDIO_RESTRICT send1_l,
-                                     float *AUDIO_RESTRICT send1_r,
                                      uint32_t frames)
 {
     if(float_cb)
@@ -369,10 +383,6 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         memset(bus_main_r, 0, frames * sizeof(float));
         memset(bus_cue_l, 0, frames * sizeof(float));
         memset(bus_cue_r, 0, frames * sizeof(float));
-        memset(send0_l, 0, frames * sizeof(float));
-        memset(send0_r, 0, frames * sizeof(float));
-        memset(send1_l, 0, frames * sizeof(float));
-        memset(send1_r, 0, frames * sizeof(float));
         return;
     }
 
@@ -385,9 +395,14 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
                                 frames);
     }
 
-    /* Préparation sends/returns. */
-    memset(send1_l, 0, frames * sizeof(float));
-    memset(send1_r, 0, frames * sizeof(float));
+    /* Saturation après EQ (avant mix bus). */
+    if(track_buf[0].enabled)
+    {
+        fx_saturation_process_block(&saturation,
+                                    track_buf[0].L,
+                                    track_buf[0].R,
+                                    frames);
+    }
 
     for(uint32_t n = 0; n < frames; n++)
     {
@@ -410,25 +425,8 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         bus_cue_l[n] = main_l; /* défaut: CUE = copie MAIN */
         bus_cue_r[n] = main_r;
 
-        send0_l[n] = main_l;
-        send0_r[n] = main_r;
     }
 
-    if(reverb)
-    {
-        fx_reverb_process_block(reverb,
-                                send0_l,
-                                send0_r,
-                                send0_l,
-                                send0_r,
-                                frames);
-    }
-
-    for(uint32_t n = 0; n < frames; n++)
-    {
-        bus_main_l[n] += send0_l[n];
-        bus_main_r[n] += send0_r[n];
-    }
 }
 
 static inline void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
@@ -485,11 +483,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     static float bus_main_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
     static float bus_cue_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
     static float bus_cue_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float send0_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float send0_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float send1_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float send1_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
@@ -499,10 +492,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                       bus_main_r,
                       bus_cue_l,
                       bus_cue_r,
-                      send0_l,
-                      send0_r,
-                      send1_l,
-                      send1_r,
                       frames);
     audio_io_pack(tx, bus_main_l, bus_main_r, bus_cue_l, bus_cue_r, frames);
 }
