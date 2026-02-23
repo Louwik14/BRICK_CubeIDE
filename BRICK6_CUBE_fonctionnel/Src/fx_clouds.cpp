@@ -1,3 +1,5 @@
+#if 0
+
 #include "fx_clouds.h"
 
 #include <stddef.h>
@@ -135,3 +137,5 @@ extern "C" void fx_clouds_process_block(float *in_l, float *in_r,
     offset += chunk;
   }
 }
+
+#endif
