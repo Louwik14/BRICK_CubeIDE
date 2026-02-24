@@ -188,6 +188,8 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames);
 
+extern volatile uint32_t g_audio_block_counter;
+
 #ifdef __cplusplus
 }
 #endif
