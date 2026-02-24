@@ -3,6 +3,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/**
+ * @file control_events.h
+ * @brief File d'événements de contrôle lock-free simple.
+ *
+ * Rôle du module:
+ * - Exposer les types d'événements échangés entre tasklets et DSP.
+ * - Fournir l'API push/pop de la queue événements.
+ */
+
 typedef enum {
     CONTROL_EVT_NONE = 0,
     CONTROL_EVT_FX_RESET,

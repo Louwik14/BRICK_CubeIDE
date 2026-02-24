@@ -95,7 +95,15 @@ static void process_half(uint32_t half_index)
    API
    ============================================================ */
 
-/** Voir audio.h */
+/**
+ * @brief Initialise la couche audio matérielle et les buffers DMA.
+ *
+ * @param hsai_tx Handle SAI TX.
+ * @param hsai_rx Handle SAI RX.
+ *
+ * Contexte d'appel:
+ * - Main loop (boot).
+ */
 void audio_init(SAI_HandleTypeDef *hsai_tx,
                 SAI_HandleTypeDef *hsai_rx)
 {
@@ -109,7 +117,12 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
     cpu_load_init();
 }
 
-/** Voir audio.h */
+/**
+ * @brief Démarre les flux audio SAI RX/TX en DMA circulaire.
+ *
+ * Contexte d'appel:
+ * - Main loop (après audio_init et callback DSP installé).
+ */
 void audio_start(void)
 {
     if(!sai_tx || !sai_rx)

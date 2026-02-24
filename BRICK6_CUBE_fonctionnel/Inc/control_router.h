@@ -1,6 +1,19 @@
 #pragma once
 #include <stdint.h>
 
+/**
+ * @file control_router.h
+ * @brief Routage des paramètres de contrôle vers le moteur audio.
+ *
+ * Rôle du module:
+ * - Définir les identifiants de paramètres pilotables.
+ * - Exposer l'API d'écriture paramètre unifiée.
+ *
+ * Architecture:
+ * - Appelé par: UI/tasklets/contrôleurs externes.
+ * - Appelle: param_store + mixer (implémentation).
+ */
+
 typedef enum {
     CTRL_PARAM_GRAN_DENSITY = 0,
     CTRL_PARAM_GRAN_PITCH,
@@ -8,6 +21,41 @@ typedef enum {
     CTRL_PARAM_GRAN_FREEZE,
     CTRL_PARAM_GRAN_SPREAD,
     CTRL_PARAM_GRAN_STEREO,
+
+    CTRL_PARAM_MIX_TRACK0_GAIN,
+    CTRL_PARAM_MIX_TRACK1_GAIN,
+    CTRL_PARAM_MIX_TRACK2_GAIN,
+    CTRL_PARAM_MIX_TRACK3_GAIN,
+    CTRL_PARAM_MIX_TRACK0_PAN,
+    CTRL_PARAM_MIX_TRACK1_PAN,
+    CTRL_PARAM_MIX_TRACK2_PAN,
+    CTRL_PARAM_MIX_TRACK3_PAN,
+    CTRL_PARAM_MIX_TRACK0_MUTE,
+    CTRL_PARAM_MIX_TRACK1_MUTE,
+    CTRL_PARAM_MIX_TRACK2_MUTE,
+    CTRL_PARAM_MIX_TRACK3_MUTE,
+    CTRL_PARAM_MIX_TRACK0_ROUTE,
+    CTRL_PARAM_MIX_TRACK1_ROUTE,
+    CTRL_PARAM_MIX_TRACK2_ROUTE,
+    CTRL_PARAM_MIX_TRACK3_ROUTE,
+    CTRL_PARAM_MIX_TRACK0_INSERT0,
+    CTRL_PARAM_MIX_TRACK0_INSERT1,
+    CTRL_PARAM_MIX_TRACK1_INSERT0,
+    CTRL_PARAM_MIX_TRACK1_INSERT1,
+    CTRL_PARAM_MIX_TRACK2_INSERT0,
+    CTRL_PARAM_MIX_TRACK2_INSERT1,
+    CTRL_PARAM_MIX_TRACK3_INSERT0,
+    CTRL_PARAM_MIX_TRACK3_INSERT1,
+    CTRL_PARAM_MIX_TRACK0_SEND0,
+    CTRL_PARAM_MIX_TRACK0_SEND1,
+    CTRL_PARAM_MIX_TRACK1_SEND0,
+    CTRL_PARAM_MIX_TRACK1_SEND1,
+    CTRL_PARAM_MIX_TRACK2_SEND0,
+    CTRL_PARAM_MIX_TRACK2_SEND1,
+    CTRL_PARAM_MIX_TRACK3_SEND0,
+    CTRL_PARAM_MIX_TRACK3_SEND1,
+    CTRL_PARAM_MIX_SEND0_FX,
+    CTRL_PARAM_MIX_SEND1_FX,
 } control_param_id_t;
 
 void control_router_set_param(control_param_id_t id, float v);

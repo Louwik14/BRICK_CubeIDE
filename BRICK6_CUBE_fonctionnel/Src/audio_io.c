@@ -1,3 +1,25 @@
+/**
+ * @file audio_io.c
+ * @brief Conversion rapide TDM int24 <-> buffers float tracks stéréo.
+ *
+ * Rôle du module:
+ * - Dépaqueter les slots TDM RX en buffers float par track active.
+ * - Repaqueter les bus MAIN/CUE float vers TX TDM int24.
+ *
+ * Architecture:
+ * - Appelé par: audio_float.c.
+ * - Appelle: aucun module applicatif.
+ *
+ * Contraintes temps réel:
+ * - IRQ: oui (appelé dans audio_process_block_int32).
+ * - Hard realtime: oui.
+ * - malloc: interdit.
+ *
+ * Notes:
+ * - Mapping entrée: tracks 0..2 sur slots (0/1, 2/3, 4/5).
+ * - Mapping sortie: MAIN->0/1, CUE->2/3, slots 4..7 à 0.
+ */
+
 #include "audio_io.h"
 
 #include <string.h>
@@ -6,16 +28,35 @@
 
 #define AUDIO_TDM_SLOTS 8U
 
+/**
+ * @brief Étend le signe d'un int24 stocké dans un int32.
+ *
+ * @param x Mot 24-bit right-aligned.
+ * @return Valeur signée étendue en 32 bits.
+ */
 static inline int32_t s24_sign_extend(int32_t x)
 {
     return (x << 8) >> 8;
 }
 
+/**
+ * @brief Convertit un échantillon int24 en float avec gain.
+ *
+ * @param x Échantillon int24 packed.
+ * @param gain Facteur de mise à l'échelle.
+ * @return Échantillon float.
+ */
 static inline float s242f_fast(int32_t x, float gain)
 {
     return (float)s24_sign_extend(x) * gain;
 }
 
+/**
+ * @brief Convertit un float en int24 saturé logiciel.
+ *
+ * @param x Échantillon float.
+ * @return Échantillon int24 packed.
+ */
 static inline int32_t f2s24_fast(float x)
 {
     const float clamped = __builtin_fmaxf(-1.0f, __builtin_fminf(x, 0.9999998807907104f));
@@ -23,6 +64,12 @@ static inline int32_t f2s24_fast(float x)
     return q & 0x00FFFFFF;
 }
 
+/**
+ * @brief Convertit un float en int24 avec saturation matérielle (__SSAT).
+ *
+ * @param x Échantillon float.
+ * @return Échantillon int24 packed.
+ */
 static inline int32_t f2s24_fast_ssat(float x)
 {
     const int32_t q = (int32_t)(x * 8388608.0f);
@@ -30,6 +77,17 @@ static inline int32_t f2s24_fast_ssat(float x)
     return sat & 0x00FFFFFF;
 }
 
+/**
+ * @brief Dépaquette un bloc RX TDM en tracks float actives.
+ *
+ * @param rx Buffer RX TDM int32.
+ * @param track_buf Tableau des tracks float.
+ * @param frames Nombre de frames à traiter.
+ * @param in_scale Facteur d'échelle d'entrée.
+ *
+ * Contexte d'appel:
+ * - IRQ audio.
+ */
 void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                      StereoTrack *AUDIO_RESTRICT track_buf,
                      uint32_t frames,
@@ -93,6 +151,20 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
     }
 }
 
+/**
+ * @brief Repaquette les bus float MAIN/CUE vers le buffer TX TDM.
+ *
+ * @param tx Buffer TX TDM int32.
+ * @param bus_main_l Bus MAIN gauche.
+ * @param bus_main_r Bus MAIN droit.
+ * @param bus_cue_l Bus CUE gauche.
+ * @param bus_cue_r Bus CUE droit.
+ * @param frames Nombre de frames.
+ * @param out_gain Gain sortie global.
+ *
+ * Contexte d'appel:
+ * - IRQ audio.
+ */
 void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
                    const float *AUDIO_RESTRICT bus_main_l,
                    const float *AUDIO_RESTRICT bus_main_r,

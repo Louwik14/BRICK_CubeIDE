@@ -3,6 +3,15 @@
 
 #include <stdint.h>
 
+/**
+ * @file engine_tasklet.h
+ * @brief Interface du scheduler tasklet synchronisé sur le flux audio.
+ *
+ * Rôle du module:
+ * - Accumuler des frames notifiées depuis l'IRQ audio.
+ * - Produire des ticks engine dans la main loop.
+ */
+
 extern volatile uint32_t engine_tick_count;
 
 void engine_tasklet_init(uint32_t sample_rate);
