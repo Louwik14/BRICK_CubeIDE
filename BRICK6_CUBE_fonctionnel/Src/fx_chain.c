@@ -78,7 +78,10 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
  */
 void fx_chain_process_track0(float* L, float* R, uint32_t frames)
 {
-    for (uint32_t i = 0; i < 3; i++)
+    if (!s || !s->active)
+        return;
+
+    switch (s->type)
     {
         fx_chain_process_fx_slot(fx_pool_get_slot(i), L, R, frames);
     }
