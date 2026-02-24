@@ -164,6 +164,39 @@ SECTIONS
     . = ALIGN(32);
   } >RAM_D1
 
+  /* USER MEMORY SECTIONS BEGIN */
+  .dtcm_audio (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.dtcm_audio)
+    *(.dtcm_audio*)
+    . = ALIGN(32);
+  } >DTCMRAM
+
+  .ram_d1_audio (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d1_audio)
+    *(.ram_d1_audio*)
+    . = ALIGN(32);
+  } >RAM_D1
+
+  .ram_d2_dma (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d2_dma)
+    *(.ram_d2_dma*)
+    . = ALIGN(32);
+  } >RAM_D2
+
+  .ram_d3_ctrl (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d3_ctrl)
+    *(.ram_d3_ctrl*)
+    . = ALIGN(32);
+  } >RAM_D3
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);
@@ -171,6 +204,23 @@ SECTIONS
     *(.sdram*)
     . = ALIGN(32);
   } >SDRAM
+
+  .sdram_ui (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_ui)
+    *(.sdram_ui*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_audio_cold (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_audio_cold)
+    *(.sdram_audio_cold*)
+    . = ALIGN(32);
+  } >SDRAM
+  /* USER MEMORY SECTIONS END */
 
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
