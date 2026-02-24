@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <arm_acle.h>
+#include "stm32h743xx.h"
 
 #define AUDIO_TDM_SLOTS 8U
 

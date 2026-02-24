@@ -328,7 +328,7 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
 
 }
 
-/\* ============================================================
+/* ============================================================
    MAIN DSP BLOCK PROCESSOR
 
    Pipeline temps réel (IRQ):
