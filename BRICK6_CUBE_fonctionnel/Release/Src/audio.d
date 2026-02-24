@@ -43,7 +43,8 @@ Src/audio.o: ../Src/audio.c ../Inc/audio.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/audio_float.h ../Inc/engine_tasklet.h ../Inc/cpu_load.h
+ ../Inc/audio_float.h ../Inc/engine_tasklet.h ../Inc/cpu_load.h \
+ ../Inc/memory_layout.h
 ../Inc/audio.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -92,3 +93,4 @@ Src/audio.o: ../Src/audio.c ../Inc/audio.h \
 ../Inc/audio_float.h:
 ../Inc/engine_tasklet.h:
 ../Inc/cpu_load.h:
+../Inc/memory_layout.h:
