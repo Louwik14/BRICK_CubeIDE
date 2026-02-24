@@ -43,7 +43,7 @@ Src/drv_display.o: ../Src/drv_display.c ../Inc/drv_display.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/font.h \
- ../Inc/spi.h ../Inc/main.h ../Inc/gpio.h
+ ../Inc/spi.h ../Inc/main.h ../Inc/gpio.h ../Inc/sdram.h
 ../Inc/drv_display.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -93,3 +93,4 @@ Src/drv_display.o: ../Src/drv_display.c ../Inc/drv_display.h \
 ../Inc/spi.h:
 ../Inc/main.h:
 ../Inc/gpio.h:
+../Inc/sdram.h:

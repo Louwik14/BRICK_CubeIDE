@@ -91,7 +91,7 @@ static void my_dsp(StereoTrack *tracks,
  */
 void brick6_app_init(void)
 {
-    //SDRAM_Init();
+    SDRAM_Init();
     //SDRAM_Test();
 
     //MX_USB_HOST_Init();
