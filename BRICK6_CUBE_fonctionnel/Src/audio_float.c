@@ -148,6 +148,8 @@ static StereoTrack tracks[MAX_TRACKS] __attribute__((aligned(32)));
 /* Gains track individuels (appliqués au moment de la somme). */
 static AUDIO_HOT float track_gain[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
 
+volatile uint32_t g_audio_block_counter = 0U;
+
 /* Gain master global (après somme des tracks). */
 static AUDIO_HOT float master_gain = 1.0f;
 
@@ -492,6 +494,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames)
 {
+    g_audio_block_counter++;
     static AUDIO_HOT float bus_main_l[AUDIO_BLOCK_SIZE];
     static AUDIO_HOT float bus_main_r[AUDIO_BLOCK_SIZE];
     static AUDIO_HOT float bus_cue_l[AUDIO_BLOCK_SIZE];
