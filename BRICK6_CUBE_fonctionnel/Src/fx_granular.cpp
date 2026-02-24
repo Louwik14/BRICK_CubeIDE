@@ -1,4 +1,5 @@
 #include "fx_granular.h"
+#include "sdram.h"
 
 namespace {
 
@@ -31,8 +32,8 @@ struct GranularState {
   bool freeze;
   float spread; // ✅ NEW
   float stereo_offset;
-  float buffer_l[kBufferSize];
-  float buffer_r[kBufferSize];
+  float* buffer_l;
+  float* buffer_r;
   uint32_t write_pos;
 
   Grain grains[kMaxGrains];
@@ -45,6 +46,9 @@ struct GranularState {
   uint32_t free_index[kMaxGrains];
   uint32_t free_count;
 };
+
+alignas(4) SDRAM_BSS float g_granular_buffer_l[kBufferSize];
+alignas(4) SDRAM_BSS float g_granular_buffer_r[kBufferSize];
 
 GranularState g_state;
 
@@ -182,6 +186,8 @@ extern "C" void fx_granular_init(float sample_rate) {
   g_state.freeze = false;
   g_state.spread = 0.5f; // ✅ NEW
   g_state.stereo_offset = 0.5f;
+  g_state.buffer_l = g_granular_buffer_l;
+  g_state.buffer_r = g_granular_buffer_r;
   g_state.write_pos = 0u;
   g_state.rng = 0x12345678u;
 
