@@ -1,8 +1,8 @@
-../Src/fx_granular.cpp:154:17:void fx_granular_set_density(float)	1
-../Src/fx_granular.cpp:159:17:void fx_granular_set_pitch(float)	3
-../Src/fx_granular.cpp:164:17:void fx_granular_set_freeze(bool)	1
-../Src/fx_granular.cpp:168:17:void fx_granular_set_mix(float)	1
-../Src/fx_granular.cpp:173:17:void fx_granular_set_spread(float)	1
-../Src/fx_granular.cpp:177:17:void fx_granular_init(float)	1
-../Src/fx_granular.cpp:205:17:void fx_granular_process_block(float*, float*, float*, float*, uint32_t)	19
-../Src/fx_granular.cpp:286:17:void fx_granular_set_stereo_offset(float)	1
+../Src/fx_granular.cpp:162:17:void fx_granular_set_density(float)	1
+../Src/fx_granular.cpp:167:17:void fx_granular_set_pitch(float)	3
+../Src/fx_granular.cpp:172:17:void fx_granular_set_freeze(bool)	1
+../Src/fx_granular.cpp:176:17:void fx_granular_set_mix(float)	1
+../Src/fx_granular.cpp:181:17:void fx_granular_set_spread(float)	1
+../Src/fx_granular.cpp:185:17:void fx_granular_init(float)	2
+../Src/fx_granular.cpp:213:17:void fx_granular_process_block(float*, float*, float*, float*, uint32_t)	20
+../Src/fx_granular.cpp:302:17:void fx_granular_set_stereo_offset(float)	1
