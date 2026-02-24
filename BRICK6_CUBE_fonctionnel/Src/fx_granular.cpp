@@ -3,7 +3,7 @@
 
 namespace {
 
-constexpr uint32_t kBufferSize = 48000u;
+constexpr uint32_t kBufferSize = 16000u;
 constexpr uint32_t kMaxGrains = 10u;
 constexpr uint32_t kMinDurationSamples = 480u;
 constexpr uint32_t kMaxDurationSamples = 5760u;
@@ -119,6 +119,7 @@ inline void spawn_grain() {
 
   // ✅ SPREAD CONTROL
   uint32_t max_span = (uint32_t)(g_state.spread * (float)kBufferSize);
+  if (max_span > 4096u) max_span = 4096u;
   if (max_span < 32u) max_span = 32u;
   float r = rand_0_1();
   r = r * r; // bias vers centre
