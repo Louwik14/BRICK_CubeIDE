@@ -42,6 +42,7 @@
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "fx_chain.h"
+#include "param_store.h"
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -299,6 +300,20 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     }
     if(track_buf[0].enabled)
     {
+        float density = param_store_get_active(PARAM_GRAN_DENSITY);
+        float pitch   = param_store_get_active(PARAM_GRAN_PITCH);
+        float mix     = param_store_get_active(PARAM_GRAN_MIX);
+        float freeze  = param_store_get_active(PARAM_GRAN_FREEZE);
+        float spread  = param_store_get_active(PARAM_GRAN_SPREAD);
+        float stereo  = param_store_get_active(PARAM_GRAN_STEREO);
+
+        fx_granular_set_density(density);
+        fx_granular_set_pitch(pitch);
+        fx_granular_set_mix(mix);
+        fx_granular_set_freeze(freeze > 0.5f);
+        fx_granular_set_spread(spread);
+        fx_granular_set_stereo_offset(stereo);
+
         fx_slot_t *eq_slot = fx_pool_get_slot(0U);
         if(eq_slot)
             eq_slot->active = eq_is_neutral() ? 0U : 1U;
