@@ -36,6 +36,8 @@
 #include "audio_float.h"
 #include "cs42448.h"
 #include "mixer.h"
+#include "fx_pool.h"
+#include "param_store.h"
 
 /* ============================================================
    Audio callback (DSP engine entry point)
@@ -101,6 +103,7 @@ void brick6_app_init(void)
 
     /* 2) Init mixer (routing) + gains frontière float. */
     mixer_init();
+    fx_pool_init();
     audio_float_set_postgain(1.0f);
     audio_float_set_output_compensation(1.0f);
 
@@ -124,6 +127,7 @@ void brick6_app_init(void)
     audio_set_float_callback(my_dsp);
 
     engine_tasklet_init(48000);
+    param_store_init();
     audio_start();
 
     HAL_Delay(200);
