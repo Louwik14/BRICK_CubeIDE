@@ -5,6 +5,7 @@
 #include "cpu_load.h"
 #include "audio_float.h"
 #include "fx_granular.h"
+#include "param_store.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -107,6 +108,14 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
     fx_granular_set_freeze(granular_freeze >= 64U);
     fx_granular_set_spread(ui_0_127_to_unit_float(granular_spread));
     fx_granular_set_stereo_offset(ui_0_127_to_unit_float(granular_stereo)); // ✅ AJOUT
+    param_store_set_staging(PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
+    param_store_set_staging(PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
+    param_store_set_staging(PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
+    param_store_set_staging(PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
+    param_store_set_staging(PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
+    param_store_set_staging(PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
+
+    (void)param_store_commit_if_block_advanced();
 }
 
 
@@ -214,6 +223,14 @@ void app_controls_process(void)
         fx_granular_set_freeze(granular_freeze >= 64U);
         fx_granular_set_spread(ui_0_127_to_unit_float(granular_spread));
         fx_granular_set_stereo_offset(ui_0_127_to_unit_float(granular_stereo)); // ✅ AJOUT
+        param_store_set_staging(PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
+        param_store_set_staging(PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
+        param_store_set_staging(PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
+        param_store_set_staging(PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
+        param_store_set_staging(PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
+        param_store_set_staging(PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
+
+        (void)param_store_commit_if_block_advanced();
     }
 }
 
