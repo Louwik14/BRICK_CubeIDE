@@ -40,6 +40,8 @@
 #include "memory_layout.h"
 #include "audio_io.h"
 #include "dsp_engine.h"
+#include "fx_pool.h"
+#include "fx_chain.h"
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -56,9 +58,6 @@ static AUDIO_HOT float output_adjust = 1.0f;
 static float postgain = 1.0f;
 static float output_comp = 1.0f;
 
-static fx_dj_eq3_t track0_eq;
-static fx_saturation_t saturation;
-
 static volatile uint8_t track0_eq_ui_low = 64U;
 static volatile uint8_t track0_eq_ui_mid = 64U;
 static volatile uint8_t track0_eq_ui_high = 64U;
@@ -66,6 +65,19 @@ static volatile uint8_t track0_eq_ui_high = 64U;
 static inline uint8_t eq_is_neutral(void)
 {
     return (track0_eq_ui_low == 64U) && (track0_eq_ui_mid == 64U) && (track0_eq_ui_high == 64U);
+}
+
+
+static inline fx_dj_eq3_t *fx_pool_eq_state(void)
+{
+    fx_slot_t *s = fx_pool_get_slot(0U);
+    return (s != 0) ? (fx_dj_eq3_t *)s->state : 0;
+}
+
+static inline fx_saturation_t *fx_pool_sat_state(void)
+{
+    fx_slot_t *s = fx_pool_get_slot(1U);
+    return (s != 0) ? (fx_saturation_t *)s->state : 0;
 }
 
 /** Voir audio_float.h */
@@ -89,17 +101,20 @@ void audio_float_set_output_compensation(float comp)
 
 void audio_float_set_dj_eq_low_db(float db)
 {
-    fx_dj_eq3_set_low_db(&track0_eq, db);
+    fx_dj_eq3_t *eq = fx_pool_eq_state();
+    if(eq) fx_dj_eq3_set_low_db(eq, db);
 }
 
 void audio_float_set_dj_eq_mid_db(float db)
 {
-    fx_dj_eq3_set_mid_db(&track0_eq, db);
+    fx_dj_eq3_t *eq = fx_pool_eq_state();
+    if(eq) fx_dj_eq3_set_mid_db(eq, db);
 }
 
 void audio_float_set_dj_eq_high_db(float db)
 {
-    fx_dj_eq3_set_high_db(&track0_eq, db);
+    fx_dj_eq3_t *eq = fx_pool_eq_state();
+    if(eq) fx_dj_eq3_set_high_db(eq, db);
 }
 
 void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
@@ -116,22 +131,26 @@ uint8_t audio_float_is_dj_eq_ui_neutral(void)
 
 void audio_float_set_saturation_tone_ui(uint8_t tone_0_127)
 {
-    fx_saturation_set_tone_ui(&saturation, tone_0_127);
+    fx_saturation_t *sat = fx_pool_sat_state();
+    if(sat) fx_saturation_set_tone_ui(sat, tone_0_127);
 }
 
 void audio_float_set_saturation_bias_ui(uint8_t bias_0_127)
 {
-    fx_saturation_set_bias_ui(&saturation, bias_0_127);
+    fx_saturation_t *sat = fx_pool_sat_state();
+    if(sat) fx_saturation_set_bias_ui(sat, bias_0_127);
 }
 
 void audio_float_set_saturation_drive_ui(uint8_t drive_0_127)
 {
-    fx_saturation_set_drive_ui(&saturation, drive_0_127);
+    fx_saturation_t *sat = fx_pool_sat_state();
+    if(sat) fx_saturation_set_drive_ui(sat, drive_0_127);
 }
 
 void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
 {
-    fx_saturation_set_mix_ui(&saturation, mix_0_127);
+    fx_saturation_t *sat = fx_pool_sat_state();
+    if(sat) fx_saturation_set_mix_ui(sat, mix_0_127);
 }
 
 /* ============================================================
@@ -170,9 +189,12 @@ void audio_tracks_init(void)
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
     }
 
-    fx_dj_eq3_init(&track0_eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
+    fx_dj_eq3_t *eq = fx_pool_eq_state();
+    fx_saturation_t *sat = fx_pool_sat_state();
 
-    fx_saturation_init(&saturation);
+    if(eq) fx_dj_eq3_init(eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
+
+    if(sat) fx_saturation_init(sat);
     fx_granular_init(48000.0f);
 
     master_gain = 1.0f;
@@ -191,7 +213,8 @@ void track_enable(uint32_t track_id, uint8_t enabled)
 
     if((prev == 0U) && (next != 0U) && (track_id == 0U))
     {
-        fx_dj_eq3_reset(&track0_eq);
+        fx_dj_eq3_t *eq = fx_pool_eq_state();
+        if(eq) fx_dj_eq3_reset(eq);
     }
 }
 
@@ -274,33 +297,15 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
         memset(bus_cue_r, 0, frames * sizeof(float));
         return;
     }
-
-    /* EQ DJ 3 bandes uniquement sur track 0 (stéréo, en place), après float_cb(). */
-    if(track_buf[0].enabled && !eq_is_neutral())
+    if(track_buf[0].enabled)
     {
-        fx_dj_eq3_process_block(&track0_eq,
-                                track_buf[0].L,
+        fx_slot_t *eq_slot = fx_pool_get_slot(0U);
+        if(eq_slot)
+            eq_slot->active = eq_is_neutral() ? 0U : 1U;
+
+        fx_chain_process_track0(track_buf[0].L,
                                 track_buf[0].R,
                                 frames);
-    }
-
-    /* Saturation après EQ (avant mix bus). */
-    if(track_buf[0].enabled)
-    {
-        fx_saturation_process_block(&saturation,
-                                    track_buf[0].L,
-                                    track_buf[0].R,
-                                    frames);
-    }
-
-    /* Granular après saturation (avant mix bus). */
-    if(track_buf[0].enabled)
-    {
-        fx_granular_process_block(track_buf[0].L,
-                                  track_buf[0].R,
-                                  track_buf[0].L,
-                                  track_buf[0].R,
-                                  frames);
     }
 
     for(uint32_t n = 0; n < frames; n++)

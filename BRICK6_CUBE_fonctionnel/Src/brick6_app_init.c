@@ -36,6 +36,7 @@
 #include "audio_float.h"
 #include "cs42448.h"
 #include "mixer.h"
+#include "fx_pool.h"
 #include "param_store.h"
 
 /* ============================================================
@@ -102,6 +103,7 @@ void brick6_app_init(void)
 
     /* 2) Init mixer (routing) + gains frontière float. */
     mixer_init();
+    fx_pool_init();
     audio_float_set_postgain(1.0f);
     audio_float_set_output_compensation(1.0f);
 
