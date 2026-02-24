@@ -41,8 +41,6 @@
 #include "audio_io.h"
 #include "dsp_engine.h"
 #include "fx_pool.h"
-#include "fx_chain.h"
-#include "param_store.h"
 #include "control_events.h"
 
 /* ============================================================
@@ -51,7 +49,6 @@
    postgain_recip : facteur appliqué à l'entrée ADC (1/postgain).
    output_adjust  : correction de sortie commune (postgain * output_comp).
    master_gain    : gain master appliqué après somme des tracks.
-   track_gain[t]  : gain individuel de chaque track lors de la somme.
    ============================================================ */
 
 static AUDIO_HOT float postgain_recip = 1.0f;
@@ -162,9 +159,6 @@ void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
 /* État persistant des tracks (buffers bloc + enabled). */
 static StereoTrack tracks[MAX_TRACKS] __attribute__((aligned(32)));
 
-/* Gains track individuels (appliqués au moment de la somme). */
-static AUDIO_HOT float track_gain[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
-
 volatile uint32_t g_audio_block_counter = 0U;
 
 /* Gain master global (après somme des tracks). */
@@ -186,7 +180,6 @@ void audio_tracks_init(void)
     for(uint32_t t = 0; t < MAX_TRACKS; t++)
     {
         tracks[t].enabled = 0U;
-        track_gain[t] = 1.0f;
         memset(tracks[t].L, 0, sizeof(tracks[t].L));
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
     }
@@ -232,13 +225,8 @@ uint32_t track_is_enabled(uint32_t track_id)
 /** Voir audio_float.h */
 void track_set_gain(uint32_t track_id, float gain)
 {
-    if(track_id >= MAX_TRACKS)
-        return;
-
-    if(gain < 0.0f)
-        gain = 0.0f;
-
-    track_gain[track_id] = gain;
+    (void)track_id;
+    (void)gain;
 }
 
 /** Voir audio_float.h */
@@ -277,76 +265,34 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     dsp_engine_process_block(track_buf, MAX_TRACKS, frames);
 
     const float mg = master_gain;
-    uint32_t active_ids[MAX_TRACKS];
-    float active_gains[MAX_TRACKS];
-    uint32_t active_count = 0U;
 
-    for(uint32_t t = 0; t < MAX_TRACKS; t++)
+    if(track_buf[0].enabled)
     {
-        if(track_buf[t].enabled)
+        for(uint32_t n = 0; n < frames; n++)
         {
-            active_ids[active_count] = t;
-            active_gains[active_count] = track_gain[t];
-            active_count++;
+            bus_main_l[n] = track_buf[0].L[n] * mg;
+            bus_main_r[n] = track_buf[0].R[n] * mg;
         }
     }
-
-    if(active_count == 0U)
+    else
     {
         memset(bus_main_l, 0, frames * sizeof(float));
         memset(bus_main_r, 0, frames * sizeof(float));
+    }
+
+    if(track_buf[1].enabled)
+    {
+        for(uint32_t n = 0; n < frames; n++)
+        {
+            bus_cue_l[n] = track_buf[1].L[n] * mg;
+            bus_cue_r[n] = track_buf[1].R[n] * mg;
+        }
+    }
+    else
+    {
         memset(bus_cue_l, 0, frames * sizeof(float));
         memset(bus_cue_r, 0, frames * sizeof(float));
-        return;
     }
-    if(track_buf[0].enabled)
-    {
-        float density = param_store_get_active(PARAM_GRAN_DENSITY);
-        float pitch   = param_store_get_active(PARAM_GRAN_PITCH);
-        float mix     = param_store_get_active(PARAM_GRAN_MIX);
-        float freeze  = param_store_get_active(PARAM_GRAN_FREEZE);
-        float spread  = param_store_get_active(PARAM_GRAN_SPREAD);
-        float stereo  = param_store_get_active(PARAM_GRAN_STEREO);
-
-        fx_granular_set_density(density);
-        fx_granular_set_pitch(pitch);
-        fx_granular_set_mix(mix);
-        fx_granular_set_freeze(freeze > 0.5f);
-        fx_granular_set_spread(spread);
-        fx_granular_set_stereo_offset(stereo);
-
-        fx_slot_t *eq_slot = fx_pool_get_slot(0U);
-        if(eq_slot)
-            eq_slot->active = eq_is_neutral() ? 0U : 1U;
-
-        fx_chain_process_track0(track_buf[0].L,
-                                track_buf[0].R,
-                                frames);
-    }
-
-    for(uint32_t n = 0; n < frames; n++)
-    {
-        float sum_l = 0.0f;
-        float sum_r = 0.0f;
-
-        for(uint32_t i = 0; i < active_count; i++)
-        {
-            const uint32_t t = active_ids[i];
-            const float g = active_gains[i];
-            sum_l += track_buf[t].L[n] * g;
-            sum_r += track_buf[t].R[n] * g;
-        }
-
-        const float main_l = sum_l * mg;
-        const float main_r = sum_r * mg;
-
-        bus_main_l[n] = main_l;
-        bus_main_r[n] = main_r;
-        bus_cue_l[n] = main_l; /* défaut: CUE = copie MAIN */
-        bus_cue_r[n] = main_r;
-
-    }
-
 }
 
 /* ============================================================

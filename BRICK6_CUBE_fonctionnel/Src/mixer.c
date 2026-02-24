@@ -1,78 +1,237 @@
-/**
- * @file mixer.c
- * @brief Module mixer (routage uniquement, sans traitement d'amplitude).
- *
- * Rôle du module:
- * - Point d'extension pour futur routage matriciel / inserts / sends.
- * - API de compatibilité pour le contrôle du master depuis l'application.
- *
- * Architecture:
- * - Appelé par my_dsp() dans brick6_app_init.c.
- * - Délègue le gain master à audio_float.c (source unique de vérité).
- *
- * Contraintes temps réel:
- * - mixer_process() peut être appelé en IRQ audio.
- * - Implémentation actuelle neutre: aucune opération sample-par-sample.
- */
-
 #include "mixer.h"
 
-static float track_gain_mirror[MAX_TRACKS] = {1.0f, 1.0f, 1.0f};
+#include <string.h>
 
-/** Voir mixer.h */
-void mixer_init(void)
+#include "fx_chain.h"
+
+typedef struct {
+    float gain;
+    float pan;
+    uint8_t mute;
+
+    uint8_t route_master;
+    uint8_t route_cue;
+
+    int8_t insert_slot[MIXER_INSERTS_PER_TRACK];
+    float send_level[MIXER_NUM_SENDS];
+} mixer_track_t;
+
+static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
+static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
+
+static float clamp01(float v)
 {
-    for(uint32_t t = 0; t < MAX_TRACKS; t++)
-    {
-        track_gain_mirror[t] = 1.0f;
-        track_set_gain(t, 1.0f);
-    }
+    if(v < 0.0f) return 0.0f;
+    if(v > 1.0f) return 1.0f;
+    return v;
 }
 
-/** Voir mixer.h */
+static float clamp_pan(float pan)
+{
+    if(pan < -1.0f) return -1.0f;
+    if(pan > 1.0f) return 1.0f;
+    return pan;
+}
+
+void mixer_init(void)
+{
+    for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
+    {
+        g_tracks[t].gain = 1.0f;
+        g_tracks[t].pan = 0.0f;
+        g_tracks[t].mute = 0U;
+
+        g_tracks[t].route_master = 1U;
+        g_tracks[t].route_cue = 0U;
+
+        for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
+            g_tracks[t].insert_slot[i] = -1;
+
+        for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+            g_tracks[t].send_level[s] = 0.0f;
+
+        if(t < MAX_TRACKS)
+            track_set_gain(t, 1.0f);
+    }
+
+    for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+        g_send_fx_slot[s] = -1;
+}
+
 void mixer_set_master(float gain)
 {
     audio_float_set_master_gain(gain);
 }
 
-/** Voir mixer.h */
 float mixer_get_master(void)
 {
     return audio_float_get_master_gain();
 }
 
-
-/** Voir mixer.h */
 void mixer_set_track_gain(uint32_t track_id, float gain)
 {
-    if(track_id >= MAX_TRACKS)
+    if(track_id >= MIXER_MAX_TRACKS)
         return;
 
     if(gain < 0.0f)
         gain = 0.0f;
 
-    track_set_gain(track_id, gain);
-    track_gain_mirror[track_id] = gain;
+    g_tracks[track_id].gain = gain;
+    if(track_id < MAX_TRACKS)
+        track_set_gain(track_id, gain);
 }
 
-/** Voir mixer.h */
 float mixer_get_track_gain(uint32_t track_id)
 {
-    if(track_id >= MAX_TRACKS)
+    if(track_id >= MIXER_MAX_TRACKS)
         return 0.0f;
 
-    return track_gain_mirror[track_id];
+    return g_tracks[track_id].gain;
 }
 
-/** Voir mixer.h */
+void mixer_set_track_pan(uint32_t track_id, float pan)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_tracks[track_id].pan = clamp_pan(pan);
+}
+
+void mixer_set_track_mute(uint32_t track_id, uint8_t mute)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_tracks[track_id].mute = mute ? 1U : 0U;
+}
+
+void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_tracks[track_id].route_master = ((route & MIXER_ROUTE_MASTER) != 0U) ? 1U : 0U;
+    g_tracks[track_id].route_cue = ((route & MIXER_ROUTE_CUE) != 0U) ? 1U : 0U;
+}
+
+void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t slot)
+{
+    if(track_id >= MIXER_MAX_TRACKS || insert_idx >= MIXER_INSERTS_PER_TRACK)
+        return;
+
+    g_tracks[track_id].insert_slot[insert_idx] = slot;
+}
+
+void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float level)
+{
+    if(track_id >= MIXER_MAX_TRACKS || send_idx >= MIXER_NUM_SENDS)
+        return;
+
+    g_tracks[track_id].send_level[send_idx] = clamp01(level);
+}
+
+void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
+{
+    if(send_idx >= MIXER_NUM_SENDS)
+        return;
+
+    g_send_fx_slot[send_idx] = slot;
+}
+
 void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
-    (void)tracks;
-    (void)track_count;
-    (void)frames;
+    static float bus_main_l[AUDIO_BLOCK_SIZE];
+    static float bus_main_r[AUDIO_BLOCK_SIZE];
+    static float bus_cue_l[AUDIO_BLOCK_SIZE];
+    static float bus_cue_r[AUDIO_BLOCK_SIZE];
+    static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
+    static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
 
-    /* Routing-only stage:
-       - ne modifie pas les samples,
-       - pas de gain ici,
-       - réservé à l'intégration de routages futurs. */
+    if(frames > AUDIO_BLOCK_SIZE)
+        frames = AUDIO_BLOCK_SIZE;
+
+    memset(bus_main_l, 0, sizeof(bus_main_l));
+    memset(bus_main_r, 0, sizeof(bus_main_r));
+    memset(bus_cue_l, 0, sizeof(bus_cue_l));
+    memset(bus_cue_r, 0, sizeof(bus_cue_r));
+    memset(send_l, 0, sizeof(send_l));
+    memset(send_r, 0, sizeof(send_r));
+
+    const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
+
+    for(uint32_t t = 0; t < ntracks; t++)
+    {
+        mixer_track_t *mt = &g_tracks[t];
+        StereoTrack *tr = &tracks[t];
+
+        if((tr->enabled == 0U) || mt->mute)
+            continue;
+
+        float *L = tr->L;
+        float *R = tr->R;
+
+        for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
+        {
+            const int8_t slot = mt->insert_slot[i];
+            if(slot >= 0)
+                fx_chain_process_slot((uint32_t)slot, L, R, frames);
+        }
+
+        const float pan_l = (mt->pan <= 0.0f) ? 1.0f : (1.0f - mt->pan);
+        const float pan_r = (mt->pan >= 0.0f) ? 1.0f : (1.0f + mt->pan);
+        const float g = mt->gain;
+
+        for(uint32_t i = 0; i < frames; i++)
+        {
+            const float l = L[i] * g * pan_l;
+            const float r = R[i] * g * pan_r;
+
+            if(mt->route_master)
+            {
+                bus_main_l[i] += l;
+                bus_main_r[i] += r;
+            }
+            if(mt->route_cue)
+            {
+                bus_cue_l[i] += l;
+                bus_cue_r[i] += r;
+            }
+
+            for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+            {
+                if(g_send_fx_slot[s] >= 0)
+                {
+                    const float send_g = mt->send_level[s];
+                    send_l[s][i] += l * send_g;
+                    send_r[s][i] += r * send_g;
+                }
+            }
+        }
+    }
+
+    for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+    {
+        const int8_t slot = g_send_fx_slot[s];
+        if(slot >= 0)
+        {
+            fx_chain_process_slot((uint32_t)slot, send_l[s], send_r[s], frames);
+            for(uint32_t i = 0; i < frames; i++)
+            {
+                bus_main_l[i] += send_l[s][i];
+                bus_main_r[i] += send_r[s][i];
+            }
+        }
+    }
+
+    if(track_count > 0U)
+    {
+        memcpy(tracks[0].L, bus_main_l, sizeof(float) * frames);
+        memcpy(tracks[0].R, bus_main_r, sizeof(float) * frames);
+    }
+
+    if(track_count > 1U)
+    {
+        memcpy(tracks[1].L, bus_cue_l, sizeof(float) * frames);
+        memcpy(tracks[1].R, bus_cue_r, sizeof(float) * frames);
+    }
 }
