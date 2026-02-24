@@ -34,6 +34,7 @@
 #include <string.h>
 
 #include "sdmmc.h"
+#include "memory_layout.h"
 
 #define SD_STREAM_DATA_PATTERN_STEP 0x00010000U
 #define SD_STREAM_READY_TIMEOUT_MS  1000U
@@ -86,10 +87,8 @@ static uint32_t sd_prefill_target = 0U;
 static uint32_t sd_prefill_count = 0U;
 static __IO uint8_t sd_prefill_done = 0U;
 
-static uint32_t Buffer0[SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t)]
-  __attribute__((section(".ram_d1"), aligned(32)));
-static uint32_t Buffer1[SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t)]
-  __attribute__((section(".ram_d1"), aligned(32)));
+static DMA_BUFFER uint32_t Buffer0[SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t)];
+static DMA_BUFFER uint32_t Buffer1[SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t)];
 
 static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offset)
 {
