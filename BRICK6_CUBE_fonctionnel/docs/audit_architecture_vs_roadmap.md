@@ -1,216 +1,280 @@
-# AUDIT + REFINEMENT ARCHI (LEVEL 2)
+# LEVEL 3 — Validation finale + pré-implémentation (STEP NEXT safe)
 
-Références analysées: `roadmap.md` + code actuel (`audio.c`, `audio_float.c`, `app_controls.c`, `engine_tasklet.c`, `mixer.c`, `sd_stream.c`, `midi*.c`).
+## 1) VALIDATION CRITIQUE
+
+## A. `g_audio_block_counter`
+
+### Vérification code réel
+- `audio_process_block_int32()` est appelé dans `process_half()` uniquement. (`Src/audio.c`)
+- `process_half()` est appelé uniquement depuis:
+  - `HAL_SAI_RxHalfCpltCallback()`
+  - `HAL_SAI_RxCpltCallback()`
+  avec garde `if (hsai == sai_rx)`. (`Src/audio.c`)
+
+### Conclusion
+- Incrémenter le compteur **dans `audio_process_block_int32()`** donne exactement **1 incrément par bloc traité** (bloc = appel DSP sur half-buffer).
+- Pas de double incrément parasite tant que l’incrément n’est fait qu’à cet endroit.
+
+### Design retenu (safe)
+- `g_audio_block_counter++` au tout début de `audio_process_block_int32()`.
+- **Ne pas** incrémenter dans callbacks HAL ni ailleurs.
 
 ---
 
-## 1) Re-audit ciblé (points critiques)
+## B. Atomicité du commit
 
-## 1.1 Synchronisation commit paramètres
-
-### État réel actuel
-- Aucun `param_store`, aucun `control_router`, aucun mécanisme de commit par bloc.
-- Les contrôles UI appellent directement `fx_granular_set_*()` hors IRQ.
-- Le DSP lit/écrit ses états dans `audio_float.c` directement pendant IRQ.
-
-### Verdict
-- **Absent**: pas de garantie "1 commit max / bloc audio".
-
-### Correction proposée (concrète)
-Ajouter un compteur de blocs audio et un commit borné:
-
+### Problème à couvrir
+Code naïf:
 ```c
-// audio domain (IRQ)
-volatile uint32_t g_audio_block_counter;
-
-void audio_process_block_int32(...) {
-  g_audio_block_counter++;
-  dsp_engine_process_block(...);
-}
-
-// control domain
-static uint32_t g_last_commit_block;
-
-bool param_store_commit_if_block_advanced(void) {
-  uint32_t b = g_audio_block_counter;
-  if (b == g_last_commit_block) return false;
-  // flip staging->active atomique (section critique courte)
-  g_last_commit_block = b;
-  return true;
-}
+uint32_t b = g_audio_block_counter;
+if (b == g_last_commit_block) return false;
 ```
 
-- Résultat: maximum un commit publié entre deux blocs IRQ.
+### Validation Cortex-M7
+- Lecture/écriture 32-bit alignées sont atomiques.
+- `volatile` garantit l’accès mémoire, pas l’exclusion.
 
-## 1.2 Cohérence atomique params + FX routing
+### Version strictement safe retenue
+- Pas de section critique longue.
+- Séquence:
+  1. lire `b = g_audio_block_counter`,
+  2. si `b == last` → no-op,
+  3. copier staging -> active,
+  4. barrière mémoire (`__DMB()`),
+  5. écrire `g_last_commit_block = b`.
 
-### État réel actuel
-- Aucun snapshot de routing FX.
-- Routing/ordre FX est codé en dur dans `audio_float.c` (EQ→SAT→GRANULAR sur track 0).
+Pourquoi safe pour STEP 1:
+- DSP actuel **ne lit pas encore** `param_store`; donc pas de risque audio.
+- Si IRQ avance pendant copie, commit reste valide; au pire un commit supplémentaire sera autorisé au bloc suivant (comportement attendu).
 
-### Verdict
-- **Absent**: pas de cohérence atomique params+routing.
+---
 
-### Correction proposée (concrète)
-Double-buffer **synchronisé** params+routing, avec flip unique:
+## C. Coût CPU
+
+### Risque
+- `param_store_commit_if_block_advanced()` appelée trop souvent en main loop.
+
+### Mitigation minimale (obligatoire)
+1. `dirty_flag` global: pas de copy si aucun param modifié.
+2. Appel commit uniquement quand `changed` UI est vrai (déjà disponible dans `app_controls_process`).
+3. Coût constant borné: copie `PARAM_COUNT` floats max par commit.
+
+---
+
+## D. Impact sur DSP actuel
+
+### Risque
+- incohérence si on mélange nouveau `param_store` avec anciens `fx_granular_set_*`.
+
+### Garde-fou (obligatoire)
+- STEP 1 = **shadow store only**:
+  - on continue d’appeler `fx_granular_set_*` exactement comme aujourd’hui,
+  - `param_store` stocke les valeurs pour validation/migration,
+  - aucun read DSP depuis `param_store` dans cette étape.
+
+=> Aucun impact audible attendu.
+
+---
+
+## 2) DESIGN FINAL `param_store` (minimal propre)
+
+## A. Structure mémoire exacte
 
 ```c
+#define PARAM_COUNT 32U
+
+typedef uint16_t param_id_t;
+
 typedef struct {
-  param_bank_t params;
-  fx_routing_t routing;
-  uint32_t revision;
-} control_snapshot_t;
-
-static control_snapshot_t g_snap[2];
-static volatile uint32_t g_active_snap;
+    float staging[PARAM_COUNT];
+    float active[PARAM_COUNT];
+    volatile uint32_t last_commit_block;
+    volatile uint32_t commit_count;
+    volatile uint8_t dirty;
+} param_store_t;
 ```
 
-- `commit()` publie **ensemble** params + routing.
-- IRQ acquiert une seule fois `active_snap` en début de bloc.
+- `PARAM_COUNT=32` pour STEP 1 (granular + réserve).
+- `active/staging` séparés pour migration future vers double-buffer global.
 
-## 1.3 Event queue realtime safety
-
-### État réel actuel
-- Pas de queue de contrôle dédiée DSP (seulement des queues MIDI USB internes transport).
-- Pas de budget d’événements par bloc audio.
-
-### Verdict
-- **Absent**: risque d’implémentation future non bornée côté IRQ.
-
-### Correction proposée (concrète)
-Queue SPSC lock-free + budget fixe dans DSP:
+## B. API exacte
 
 ```c
-#define CONTROL_EVT_Q_LEN 64U
-#define CONTROL_EVT_BUDGET_PER_BLOCK 8U
+void  param_store_init(void);
+void  param_store_set_staging(param_id_t id, float v);
+bool  param_store_commit_if_block_advanced(void);
+float param_store_get_active(param_id_t id);
+uint32_t param_store_get_commit_count(void);
+uint32_t param_store_get_last_commit_block(void);
+```
 
-for (uint32_t i = 0; i < CONTROL_EVT_BUDGET_PER_BLOCK; ++i) {
-  if (!control_evt_pop(&evt)) break;
-  dsp_apply_event(&evt);
+## C. Garanties
+- Atomicité: écritures 32-bit `last_commit_block` / `commit_count` atomiques.
+- Pas de tearing côté audio: DSP non branché sur `param_store` à cette étape.
+- Coût constant: O(PARAM_COUNT) seulement quand `dirty=1` et bloc avancé.
+
+---
+
+## 3) PATCH PRÉCIS (étape suivante uniquement)
+
+## Fichiers à créer
+
+### `Inc/param_store.h` (contenu complet)
+```c
+#pragma once
+#include <stdint.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef uint16_t param_id_t;
+
+enum {
+    PARAM_GRAN_DENSITY = 0,
+    PARAM_GRAN_PITCH,
+    PARAM_GRAN_MIX,
+    PARAM_GRAN_FREEZE,
+    PARAM_GRAN_SPREAD,
+    PARAM_GRAN_STEREO,
+    PARAM_COUNT = 32
+};
+
+void param_store_init(void);
+void param_store_set_staging(param_id_t id, float v);
+bool param_store_commit_if_block_advanced(void);
+float param_store_get_active(param_id_t id);
+
+uint32_t param_store_get_commit_count(void);
+uint32_t param_store_get_last_commit_block(void);
+
+#ifdef __cplusplus
+}
+#endif
+```
+
+### `Src/param_store.c` (contenu complet)
+```c
+#include "param_store.h"
+#include "audio_float.h"   // g_audio_block_counter
+#include "stm32h7xx_hal.h" // __DMB
+#include <string.h>
+
+typedef struct {
+    float staging[PARAM_COUNT];
+    float active[PARAM_COUNT];
+    volatile uint32_t last_commit_block;
+    volatile uint32_t commit_count;
+    volatile uint8_t dirty;
+} param_store_t;
+
+static param_store_t g_ps;
+
+void param_store_init(void)
+{
+    memset(&g_ps, 0, sizeof(g_ps));
+    g_ps.last_commit_block = g_audio_block_counter;
+}
+
+void param_store_set_staging(param_id_t id, float v)
+{
+    if (id >= PARAM_COUNT) return;
+    g_ps.staging[id] = v;
+    g_ps.dirty = 1U;
+}
+
+bool param_store_commit_if_block_advanced(void)
+{
+    if (g_ps.dirty == 0U) return false;
+
+    uint32_t b = g_audio_block_counter;
+    if (b == g_ps.last_commit_block) return false;
+
+    for (uint32_t i = 0; i < PARAM_COUNT; i++) {
+        g_ps.active[i] = g_ps.staging[i];
+    }
+
+    __DMB();
+    g_ps.last_commit_block = b;
+    g_ps.commit_count++;
+    g_ps.dirty = 0U;
+    return true;
+}
+
+float param_store_get_active(param_id_t id)
+{
+    if (id >= PARAM_COUNT) return 0.0f;
+    return g_ps.active[id];
+}
+
+uint32_t param_store_get_commit_count(void)
+{
+    return g_ps.commit_count;
+}
+
+uint32_t param_store_get_last_commit_block(void)
+{
+    return g_ps.last_commit_block;
 }
 ```
 
-- Le surplus reste en queue pour bloc suivant.
-- Coût IRQ strictement borné.
+## Fichiers à modifier (diff minimal)
 
-## 1.4 Param smoothing robustesse
+### `Inc/audio_float.h`
+Ajouter:
+```c
+extern volatile uint32_t g_audio_block_counter;
+```
 
-### État réel actuel
-- Pas de module `param_smoother` central.
-- Pas de protocole global de reset des smoothers sur load project / pattern switch / reset FX.
+### `Src/audio_float.c`
+Ajouter global + incrément unique:
+```c
+volatile uint32_t g_audio_block_counter = 0U;
+```
 
-### Verdict
-- **Absent**.
+Dans `audio_process_block_int32(...)`, première ligne:
+```c
+g_audio_block_counter++;
+```
 
-### Correction proposée (concrète)
-Event dédié au DSP: `EVT_SMOOTHER_RESET(mask)`.
+### `Src/brick6_app_init.c`
+Ajouter init avant `audio_start()`:
+```c
+#include "param_store.h"
+...
+param_store_init();
+```
 
-Cas déclencheurs:
-1. `storage_load_project()` terminé,
-2. changement de pattern majeur,
-3. reset FX instance.
-
-Traitement:
-- L’event est consommé au début de bloc IRQ,
-- les smoothers ciblés sont recopiés instantanément sur la valeur courante snapshot (pas de rampe résiduelle).
-
----
-
-## 2) Vérification architecture réelle vs cible
-
-## A) Déjà conforme roadmap
-
-1. **Audio IRQ hard realtime structuré**
-- `audio.c` traite dans callbacks DMA RX half/full.
-- Buffers DMA statiques, pas d’allocation dynamique dans chemin IRQ.
-
-2. **Clock audio-driven disponible**
-- `engine_tasklet_notify_frames()` en IRQ + `engine_tasklet_poll()` en main loop.
-- Bonne base pour séquenceur temps audio.
-
-3. **Découplage grossier IRQ vs main loop**
-- UI/affichage/encodeurs hors IRQ (`ui_tasklet`, `app_controls`).
-
-## B) À modifier
-
-1. `Src/app_controls.c`
-- Remplacer appels directs `fx_granular_set_*` par `control_router_set_param`.
-
-2. `Src/audio_float.c`
-- Retirer la responsabilité de gouvernance param/routing.
-- Conserver traitement audio, mais brancher lecture snapshot immutable.
-
-3. `Src/brick6_app_init.c`
-- Initialiser `param_store/control_router` avant `audio_start()`.
-
-4. `Src/mixer.c`
-- Clarifier ownership des gains (éviter double source mirror vs moteur audio).
-
-## C) Manque totalement
-
-- `param_ids.h`, `param_store.*`, `control_router.*`.
-- `control_event_queue` dédiée DSP.
-- `dsp_engine.c` (entrée unique indépendante de `audio_float` monolithique).
-- `fx_pool.*`, `fx_chain.*`.
-- `storage_manager.*`, `project_format.h`.
-- `seq_model/seq_engine/seq_param_bridge`.
+### `Src/app_controls.c`
+Ajouts minimaux (sans retirer setters FX actuels):
+- inclure `param_store.h`
+- dans les deux chemins de mise à jour granular:
+```c
+param_store_set_staging(PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
+param_store_set_staging(PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
+param_store_set_staging(PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
+param_store_set_staging(PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
+param_store_set_staging(PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
+param_store_set_staging(PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
+(void)param_store_commit_if_block_advanced();
+```
 
 ---
 
-## 3) STEP NEXT — Param Commit Guard (safe)
+## 4) CHECKLIST AVANT MERGE
 
-### Objectif
-Introduire la sécurité minimale avant toute refonte: **publication paramétrique bornée à 1 commit max par bloc audio**, sans changer la chaîne DSP actuelle.
-
-### Fichiers à créer
-- `Inc/param_store.h`
-- `Src/param_store.c`
-
-### Fichiers à modifier
-- `Src/audio_float.c` (exposer/incrémenter `audio_block_counter` en fin de bloc)
-- `Inc/audio_float.h` (déclaration compteur en lecture)
-- `Src/app_controls.c` (optionnel minimal: passer par `param_store_set_staging()` puis `param_store_commit_if_block_advanced()`; **sans** changer encore les setters FX)
-
-### Diff minimal attendu
-1. Ajouter:
-   - `volatile uint32_t g_audio_block_counter` (increment 1x par appel `audio_process_block_int32`).
-2. Ajouter API `param_store` minimale:
-   - `param_store_set_staging(id, float)`
-   - `param_store_commit_if_block_advanced(void)`
-   - `param_store_get_active(id)`
-3. Dans UI tasklet:
-   - écrire staging,
-   - tenter commit (au plus un par bloc).
-
-### Risques
-- **Très faible**: pas de changement du chemin DMA ni de l’ordre DSP.
-- Risque principal: overhead mineur en main loop (négligeable).
-
-### Méthode de validation
-1. Instrumentation debug:
-   - compteur `commit_count`, `last_commit_block`.
-2. Vérifier propriété:
-   - `commit_count` n’augmente jamais de plus de 1 pour une valeur donnée de `g_audio_block_counter`.
-3. Vérifier audio:
-   - aucune régression de callback DMA,
-   - charge CPU audio inchangée (marge ±1%).
+- [ ] audio toujours stable (DMA RX half/full OK)
+- [ ] aucun warning build ajouté
+- [ ] aucun `malloc` ajouté
+- [ ] aucun appel HAL ajouté en IRQ
+- [ ] commit <= 1 par bloc validé (`commit_count` vs `g_audio_block_counter`)
+- [ ] aucun changement audible (chaîne DSP inchangée)
 
 ---
 
-## 4) Contraintes hard realtime retenues
+## 5) Notes de sécurité immédiates
 
-- Aucun `malloc` en IRQ/audio.
-- Aucun lock bloquant dans audio.
-- Coût IRQ borné (events budgetés).
-- Commits/flip snapshots réalisés hors IRQ, avec section critique ultra courte seulement pour index actif.
-
----
-
-## 5) Bonus — risques de layering / mémoire
-
-1. **Violation layering actuelle**: UI dépend directement de FX (`app_controls.c` -> `fx_granular_*`).
-2. **Couplage futur dangereux** si storage écrit directement UI au lieu de `param_store`.
-3. **Cache/DMA futur**: si D-Cache activé, maintenir buffers DMA en régions non-cacheables ou opérations clean/invalidate strictes (sinon artefacts audio).
-4. **Potentiel dépendance circulaire** à éviter:
-   - `dsp_engine` ne doit pas dépendre de `ui`/`storage`.
-   - `control_router` ne doit pas dépendre de `audio.c`.
+- Ne pas brancher `param_store_get_active()` dans DSP durant STEP 1.
+- Ne pas modifier `audio.c` callbacks.
+- Ne pas déplacer l’ordre actuel EQ→SAT→GRANULAR dans cette étape.
