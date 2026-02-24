@@ -4,8 +4,7 @@
 #include "drv_display.h"
 #include "cpu_load.h"
 #include "audio_float.h"
-#include "fx_granular.h"
-#include "param_store.h"
+#include "control_router.h"
 #include <stdint.h>
 #include <stdio.h>
 
@@ -102,20 +101,12 @@ void clouds_control_update(uint8_t enc0, uint8_t enc1, uint8_t enc2, uint8_t enc
         break;
     }
 
-    fx_granular_set_density(ui_0_127_to_unit_float(granular_density));
-    fx_granular_set_pitch(ui_0_127_to_pitch_semitones(granular_pitch));
-    fx_granular_set_mix(ui_0_127_to_unit_float(granular_mix));
-    fx_granular_set_freeze(granular_freeze >= 64U);
-    fx_granular_set_spread(ui_0_127_to_unit_float(granular_spread));
-    fx_granular_set_stereo_offset(ui_0_127_to_unit_float(granular_stereo)); // ✅ AJOUT
-    param_store_set_staging(PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
-    param_store_set_staging(PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
-    param_store_set_staging(PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
-    param_store_set_staging(PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
-    param_store_set_staging(PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
-    param_store_set_staging(PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
-
-    (void)param_store_commit_if_block_advanced();
+    control_router_set_param(CTRL_PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
+    control_router_set_param(CTRL_PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
+    control_router_set_param(CTRL_PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
+    control_router_set_param(CTRL_PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
+    control_router_set_param(CTRL_PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
+    control_router_set_param(CTRL_PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
 }
 
 
@@ -217,20 +208,12 @@ void app_controls_process(void)
 
     if(changed)
     {
-        fx_granular_set_density(ui_0_127_to_unit_float(granular_density));
-        fx_granular_set_pitch(ui_0_127_to_pitch_semitones(granular_pitch));
-        fx_granular_set_mix(ui_0_127_to_unit_float(granular_mix));
-        fx_granular_set_freeze(granular_freeze >= 64U);
-        fx_granular_set_spread(ui_0_127_to_unit_float(granular_spread));
-        fx_granular_set_stereo_offset(ui_0_127_to_unit_float(granular_stereo)); // ✅ AJOUT
-        param_store_set_staging(PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
-        param_store_set_staging(PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
-        param_store_set_staging(PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
-        param_store_set_staging(PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
-        param_store_set_staging(PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
-        param_store_set_staging(PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
-
-        (void)param_store_commit_if_block_advanced();
+        control_router_set_param(CTRL_PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
+        control_router_set_param(CTRL_PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
+        control_router_set_param(CTRL_PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
+        control_router_set_param(CTRL_PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
+        control_router_set_param(CTRL_PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
+        control_router_set_param(CTRL_PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
     }
 }
 
