@@ -22,6 +22,7 @@
 #include "audio_float.h"
 #include "engine_tasklet.h"
 #include "cpu_load.h"
+#include "memory_layout.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -51,8 +52,8 @@
    ============================================================ */
 
 /* Buffers statiques ping-pong RX/TX (aucune allocation dynamique). */
-static int32_t rx_buffer[AUDIO_BUFFER_WORDS];
-static int32_t tx_buffer[AUDIO_BUFFER_WORDS];
+static DMA_BUFFER int32_t rx_buffer[AUDIO_BUFFER_WORDS];
+static DMA_BUFFER int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 /* ============================================================
    SAI HANDLES
