@@ -6,6 +6,9 @@
 /* Base address of SDRAM */
 #define SDRAM_BANK_ADDR   ((uint32_t)0xC0000000)
 
+/* Place uninitialized, non real-time buffers in SDRAM */
+#define SDRAM_BSS __attribute__((section(".sdram")))
+
 /* Timeouts and test sizes */
 #define SDRAM_TIMEOUT     ((uint32_t)0xFFFF)
 #define SDRAM_BUFFER_SIZE ((uint32_t)0x1000)

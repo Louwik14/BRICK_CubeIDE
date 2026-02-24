@@ -2,6 +2,7 @@
 
 #include "spi.h"
 #include "gpio.h"
+#include "sdram.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -13,7 +14,7 @@ extern SPI_HandleTypeDef hspi5;
 /*                             VARIABLES INTERNES                         */
 /* ====================================================================== */
 
-static uint8_t buffer[OLED_WIDTH * OLED_HEIGHT / 8];
+static uint8_t buffer[OLED_WIDTH * OLED_HEIGHT / 8] SDRAM_BSS;
 static const font_t *current_font = NULL;
 
 /* Dirty tracking */

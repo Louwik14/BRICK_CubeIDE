@@ -21,6 +21,7 @@
 #include "font5x7.h"
 #include "font4x6.h"
 #include "font5x8_elektron.h"
+#include "sdram.h"
 #include <stdbool.h>
 
 /* =======================================================================
@@ -49,7 +50,7 @@ static uint8_t get_col_5x7(char c, uint8_t col) {
    ----------------------------------------------------------------------- */
 
 /** @internal Table décompressée : 95 glyphes (32..126), 4 colonnes chacune. */
-static uint8_t font4x6_expanded[95][4];
+static uint8_t font4x6_expanded[95][4] SDRAM_BSS;
 static bool font4x6_ready = false;
 /* Colonne Elektron: on expose 5 colonnes "dessin" (0..4) ; la 6e est l'espace (gérée via spacing) */
 static uint8_t get_col_5x8_elektron(char c, uint8_t col) {
