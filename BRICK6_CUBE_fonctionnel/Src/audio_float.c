@@ -492,10 +492,10 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames)
 {
-    static float bus_main_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float bus_main_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float bus_cue_l[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
-    static float bus_cue_r[AUDIO_BLOCK_SIZE] __attribute__((aligned(32)));
+    static AUDIO_HOT float bus_main_l[AUDIO_BLOCK_SIZE];
+    static AUDIO_HOT float bus_main_r[AUDIO_BLOCK_SIZE];
+    static AUDIO_HOT float bus_cue_l[AUDIO_BLOCK_SIZE];
+    static AUDIO_HOT float bus_cue_r[AUDIO_BLOCK_SIZE];
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
