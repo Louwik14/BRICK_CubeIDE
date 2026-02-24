@@ -1,8 +1,11 @@
 #include "fx_granular.h"
+#include "sdram.h"
+
+#include <cstring>
 
 namespace {
 
-constexpr uint32_t kBufferSize = 48000u;
+constexpr uint32_t kBufferSize = 16000u;
 constexpr uint32_t kMaxGrains = 10u;
 constexpr uint32_t kMinDurationSamples = 480u;
 constexpr uint32_t kMaxDurationSamples = 5760u;
@@ -31,8 +34,8 @@ struct GranularState {
   bool freeze;
   float spread; // ✅ NEW
   float stereo_offset;
-  float buffer_l[kBufferSize];
-  float buffer_r[kBufferSize];
+  float* buffer_l;
+  float* buffer_r;
   uint32_t write_pos;
 
   Grain grains[kMaxGrains];
@@ -45,6 +48,14 @@ struct GranularState {
   uint32_t free_index[kMaxGrains];
   uint32_t free_count;
 };
+
+alignas(4) SDRAM_BSS float g_granular_buffer_l[kBufferSize];
+alignas(4) SDRAM_BSS float g_granular_buffer_r[kBufferSize];
+
+constexpr uint32_t kCacheSize = 2048u;
+float cache_l[kCacheSize];
+float cache_r[kCacheSize];
+uint32_t cache_start = 0u;
 
 GranularState g_state;
 
@@ -107,6 +118,39 @@ inline float read_interp_fixed(const float* buf, uint32_t pos) {
   return a + (buf[i1] - a) * frac;
 }
 
+inline void refill_cache(uint32_t start) {
+  cache_start = (start < kBufferSize) ? start : (start % kBufferSize);
+
+  const uint32_t first = kBufferSize - cache_start;
+  const uint32_t count0 = (first < kCacheSize) ? first : kCacheSize;
+  const uint32_t count1 = kCacheSize - count0;
+
+  std::memcpy(cache_l, &g_state.buffer_l[cache_start], count0 * sizeof(float));
+  std::memcpy(cache_r, &g_state.buffer_r[cache_start], count0 * sizeof(float));
+
+  if (count1 > 0u) {
+    std::memcpy(&cache_l[count0], g_state.buffer_l, count1 * sizeof(float));
+    std::memcpy(&cache_r[count0], g_state.buffer_r, count1 * sizeof(float));
+  }
+}
+
+inline float read_interp_cached_fixed(const float* sdram_buf, const float* cache_buf,
+                                      uint32_t pos) {
+  uint32_t i0 = pos >> 16;
+  uint32_t i1 = i0 + 1;
+  if (i1 >= kBufferSize) i1 = 0;
+
+  const uint32_t rel0 = (i0 + kBufferSize - cache_start) % kBufferSize;
+  const uint32_t rel1 = (i1 + kBufferSize - cache_start) % kBufferSize;
+
+  const bool in_cache = (rel0 < kCacheSize) && (rel1 < kCacheSize);
+  if (!in_cache) return read_interp_fixed(sdram_buf, pos);
+
+  float frac = (pos & 0xFFFF) * (1.0f / 65536.0f);
+  float a = cache_buf[rel0];
+  return a + (cache_buf[rel1] - a) * frac;
+}
+
 inline void spawn_grain() {
   if (g_state.free_count == 0) return;
 
@@ -115,6 +159,7 @@ inline void spawn_grain() {
 
   // ✅ SPREAD CONTROL
   uint32_t max_span = (uint32_t)(g_state.spread * (float)kBufferSize);
+  if (max_span > 4096u) max_span = 4096u;
   if (max_span < 32u) max_span = 32u;
   float r = rand_0_1();
   r = r * r; // bias vers centre
@@ -182,6 +227,8 @@ extern "C" void fx_granular_init(float sample_rate) {
   g_state.freeze = false;
   g_state.spread = 0.5f; // ✅ NEW
   g_state.stereo_offset = 0.5f;
+  g_state.buffer_l = g_granular_buffer_l;
+  g_state.buffer_r = g_granular_buffer_r;
   g_state.write_pos = 0u;
   g_state.rng = 0x12345678u;
 
@@ -197,6 +244,8 @@ extern "C" void fx_granular_init(float sample_rate) {
     g_state.buffer_l[i] = 0.0f;
     g_state.buffer_r[i] = 0.0f;
   }
+
+  refill_cache(0u);
 
   update_pitch_increment();
   update_spawn_probability();
@@ -225,6 +274,14 @@ extern "C" void fx_granular_process_block(float* in_l, float* in_r,
 
       if (++g_state.write_pos >= kBufferSize)
         g_state.write_pos = 0u;
+
+      const uint32_t cache_progress = (g_state.write_pos + kBufferSize - cache_start) % kBufferSize;
+      if (cache_progress >= (kCacheSize >> 1)) {
+        uint32_t new_start = (g_state.write_pos >= (kCacheSize >> 1))
+                               ? (g_state.write_pos - (kCacheSize >> 1))
+                               : (g_state.write_pos + kBufferSize - (kCacheSize >> 1));
+        refill_cache(new_start);
+      }
     }
 
     if (++g_state.spawn_counter >= g_state.spawn_interval) {
@@ -241,8 +298,8 @@ extern "C" void fx_granular_process_block(float* in_l, float* in_r,
       if (!g.active) continue;
 
       if (g.interp_toggle == 0) {
-        g.lastL = read_interp_fixed(g_state.buffer_l, g.pos);
-        g.lastR = read_interp_fixed(g_state.buffer_r, g.pos);
+        g.lastL = read_interp_cached_fixed(g_state.buffer_l, cache_l, g.pos);
+        g.lastR = read_interp_cached_fixed(g_state.buffer_r, cache_r, g.pos);
       }
       g.interp_toggle ^= 1;
 
@@ -254,7 +311,7 @@ extern "C" void fx_granular_process_block(float* in_l, float* in_r,
       uint32_t posR = g.pos + (offset << 16);
       if (posR >= limit) posR -= limit;
 
-      float sR = read_interp_fixed(g_state.buffer_r, posR);
+      float sR = read_interp_cached_fixed(g_state.buffer_r, cache_r, posR);
 
       float x = g.env;
       float env = x * (2.0f - x); // parabole smooth
