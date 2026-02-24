@@ -3,6 +3,23 @@
 #include <stdint.h>
 #include "audio_float.h"
 
+/**
+ * @file mixer.h
+ * @brief Interface du moteur de mixage final (tracks/inserts/sends/routing).
+ *
+ * Rôle du module:
+ * - Exposer la configuration runtime du mixer.
+ * - Exécuter le mix final MAIN/CUE par bloc audio.
+ *
+ * Architecture:
+ * - Appelé par: brick6_app_init.c, control_router.c, callback DSP principal.
+ * - Appelle: fx_chain/fx_pool via implémentation mixer.c.
+ *
+ * Contraintes temps réel:
+ * - mixer_process(): IRQ audio, hard realtime.
+ * - malloc: interdit.
+ */
+
 #define MIXER_MAX_TRACKS 4U
 #define MIXER_NUM_SENDS 2U
 #define MIXER_INSERTS_PER_TRACK 2U

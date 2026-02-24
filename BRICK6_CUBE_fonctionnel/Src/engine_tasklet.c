@@ -44,6 +44,12 @@ static uint32_t engine_frames_per_tick = 32U;
    Internal tick
    ============================================================ */
 
+/**
+ * @brief Incrémente le compteur logique de ticks engine.
+ *
+ * Contexte d'appel:
+ * - Main loop via engine_tasklet_poll.
+ */
 static void engine_tick(void)
 {
   engine_tick_count++;
@@ -53,6 +59,11 @@ static void engine_tick(void)
    Init
    ============================================================ */
 
+/**
+ * @brief Initialise l'ordonnanceur de tasklet calé sur l'audio.
+ *
+ * @param sample_rate Fréquence audio (conservée pour API, non utilisée ici).
+ */
 void engine_tasklet_init(uint32_t sample_rate)
 {
   (void)sample_rate;
@@ -69,6 +80,14 @@ void engine_tasklet_init(uint32_t sample_rate)
    Called from audio IRQ (cheap)
    ============================================================ */
 
+/**
+ * @brief Notifie le tasklet du nombre de frames audio traitées.
+ *
+ * @param frames Frames traitées par l'IRQ audio.
+ *
+ * Contexte d'appel:
+ * - IRQ audio uniquement, chemin ultra court.
+ */
 void engine_tasklet_notify_frames(uint32_t frames)
 {
   engine_frames_accum += frames;
@@ -78,6 +97,12 @@ void engine_tasklet_notify_frames(uint32_t frames)
    Called from main loop (non-IRQ)
    ============================================================ */
 
+/**
+ * @brief Consomme les frames accumulées et déclenche les ticks engine.
+ *
+ * Contexte d'appel:
+ * - Main loop (non IRQ).
+ */
 void engine_tasklet_poll(void)
 {
   while (1)

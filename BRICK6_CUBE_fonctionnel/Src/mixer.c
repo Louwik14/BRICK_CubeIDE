@@ -1,3 +1,24 @@
+/**
+ * @file mixer.c
+ * @brief Moteur de mixage final track-based (gain/pan/mute/routing/inserts/sends).
+ *
+ * Rôle du module:
+ * - Maintenir l'état runtime des tracks du mixer.
+ * - Effectuer le mix final MAIN/CUE avec inserts et send FX.
+ *
+ * Architecture:
+ * - Appelé par: my_dsp() (brick6_app_init.c via dsp_engine).
+ * - Appelle: fx_chain_process_slot(), audio_float_set_master_gain().
+ *
+ * Contraintes temps réel:
+ * - IRQ: oui (mixer_process est dans le chemin DSP audio).
+ * - Hard realtime: oui.
+ * - malloc: interdit.
+ *
+ * Notes:
+ * - Slots insert/send à -1 => FX inactif (coût CPU nul sur le slot).
+ */
+
 #include "mixer.h"
 
 #include <string.h>
@@ -33,6 +54,12 @@ static float clamp_pan(float pan)
     return pan;
 }
 
+/**
+ * @brief Initialise l'état interne du mixer.
+ *
+ * Contexte d'appel:
+ * - Init application, hors IRQ.
+ */
 void mixer_init(void)
 {
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
@@ -58,11 +85,21 @@ void mixer_init(void)
         g_send_fx_slot[s] = -1;
 }
 
+/**
+ * @brief Définit le gain master global.
+ *
+ * @param gain Gain linéaire master.
+ */
 void mixer_set_master(float gain)
 {
     audio_float_set_master_gain(gain);
 }
 
+/**
+ * @brief Lit le gain master courant.
+ *
+ * @return Gain master linéaire.
+ */
 float mixer_get_master(void)
 {
     return audio_float_get_master_gain();
@@ -138,6 +175,16 @@ void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
     g_send_fx_slot[send_idx] = slot;
 }
 
+/**
+ * @brief Traite un bloc de mixage final MAIN/CUE.
+ *
+ * @param tracks Tableau de tracks stéréo.
+ * @param track_count Nombre de tracks valides.
+ * @param frames Taille bloc en frames.
+ *
+ * Contexte d'appel:
+ * - IRQ audio (hard realtime).
+ */
 void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
     static float bus_main_l[AUDIO_BLOCK_SIZE];

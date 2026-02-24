@@ -1,6 +1,19 @@
 #pragma once
 #include <stdint.h>
 
+/**
+ * @file control_router.h
+ * @brief Routage des paramètres de contrôle vers le moteur audio.
+ *
+ * Rôle du module:
+ * - Définir les identifiants de paramètres pilotables.
+ * - Exposer l'API d'écriture paramètre unifiée.
+ *
+ * Architecture:
+ * - Appelé par: UI/tasklets/contrôleurs externes.
+ * - Appelle: param_store + mixer (implémentation).
+ */
+
 typedef enum {
     CTRL_PARAM_GRAN_DENSITY = 0,
     CTRL_PARAM_GRAN_PITCH,

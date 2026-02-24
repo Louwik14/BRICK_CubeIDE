@@ -1,8 +1,36 @@
+/**
+ * @file control_router.c
+ * @brief Routage des paramètres de contrôle vers param_store et mixer runtime.
+ *
+ * Rôle du module:
+ * - Normaliser les commandes de contrôle entrantes.
+ * - Écrire les valeurs dans param_store puis appliquer les mappings mixer.
+ *
+ * Architecture:
+ * - Appelé par: UI/tasklets/contrôleurs.
+ * - Appelle: param_store, mixer.
+ *
+ * Contraintes temps réel:
+ * - IRQ: non requis (usage principal hors IRQ).
+ * - Hard realtime: non.
+ * - malloc: interdit.
+ *
+ * Notes:
+ * - Le binding direct mixer est transitoire en attendant un binding 100% param_store.
+ */
+
 #include "control_router.h"
 
 #include "mixer.h"
 #include "param_store.h"
 
+/**
+ * @brief Convertit une valeur float de contrôle en index de slot FX.
+ *
+ * @param v Valeur de contrôle.
+ *
+ * @return -1 si non assigné, sinon index tronqué.
+ */
 static int8_t control_float_to_slot(float v)
 {
     if(v < 0.0f)
@@ -10,6 +38,19 @@ static int8_t control_float_to_slot(float v)
     return (int8_t)v;
 }
 
+/**
+ * @brief Route un paramètre de contrôle vers le store et le mixer.
+ *
+ * @param id Identifiant du paramètre contrôlé.
+ * @param v Valeur du paramètre.
+ *
+ * Rôle:
+ * - Publier la valeur dans param_store (staging + tentative commit).
+ * - Mettre à jour immédiatement l'état runtime du mixer concerné.
+ *
+ * Contexte d'appel:
+ * - Tasklet/UI/main loop.
+ */
 void control_router_set_param(control_param_id_t id, float v)
 {
     param_store_set_staging((param_id_t)id, v);
