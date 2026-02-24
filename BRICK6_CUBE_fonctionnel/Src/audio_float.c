@@ -43,6 +43,7 @@
 #include "fx_pool.h"
 #include "fx_chain.h"
 #include "param_store.h"
+#include "control_events.h"
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -363,6 +364,14 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                uint32_t frames)
 {
     g_audio_block_counter++;
+
+#define CONTROL_EVT_BUDGET 8U
+    control_event_t evt;
+    for(uint32_t i = 0U; i < CONTROL_EVT_BUDGET; i++)
+    {
+        if(!control_event_pop(&evt))
+            break;
+    }
     static AUDIO_HOT float bus_main_l[AUDIO_BLOCK_SIZE];
     static AUDIO_HOT float bus_main_r[AUDIO_BLOCK_SIZE];
     static AUDIO_HOT float bus_cue_l[AUDIO_BLOCK_SIZE];

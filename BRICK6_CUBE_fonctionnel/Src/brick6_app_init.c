@@ -38,6 +38,7 @@
 #include "mixer.h"
 #include "fx_pool.h"
 #include "param_store.h"
+#include "control_events.h"
 
 /* ============================================================
    Audio callback (DSP engine entry point)
@@ -128,6 +129,7 @@ void brick6_app_init(void)
 
     engine_tasklet_init(48000);
     param_store_init();
+    control_event_init();
     audio_start();
 
     HAL_Delay(200);
