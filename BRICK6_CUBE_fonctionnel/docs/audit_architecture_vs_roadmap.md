@@ -1,125 +1,97 @@
-# LEVEL 3 — Validation finale + pré-implémentation (STEP NEXT safe)
+# LEVEL 4 — Sanity + Hardening avant merge (STEP 1)
 
-## 1) VALIDATION CRITIQUE
+## 1) Vérifications critiques
 
-## A. `g_audio_block_counter`
+## A. Ordre exact `g_audio_block_counter++`
 
-### Vérification code réel
-- `audio_process_block_int32()` est appelé dans `process_half()` uniquement. (`Src/audio.c`)
-- `process_half()` est appelé uniquement depuis:
-  - `HAL_SAI_RxHalfCpltCallback()`
-  - `HAL_SAI_RxCpltCallback()`
-  avec garde `if (hsai == sai_rx)`. (`Src/audio.c`)
+Décision finale:
+- `g_audio_block_counter++` doit être **première instruction** de `audio_process_block_int32()`.
+- Aucun incrément dans `audio.c` callbacks DMA.
 
-### Conclusion
-- Incrémenter le compteur **dans `audio_process_block_int32()`** donne exactement **1 incrément par bloc traité** (bloc = appel DSP sur half-buffer).
-- Pas de double incrément parasite tant que l’incrément n’est fait qu’à cet endroit.
+Patch minimal attendu:
+```c
+// Src/audio_float.c
+volatile uint32_t g_audio_block_counter = 0U;
 
-### Design retenu (safe)
-- `g_audio_block_counter++` au tout début de `audio_process_block_int32()`.
-- **Ne pas** incrémenter dans callbacks HAL ni ailleurs.
+void audio_process_block_int32(...)
+{
+    g_audio_block_counter++;   // tout en haut (avant unpack / DSP / pack)
+    ...
+}
+```
 
----
+## B. Race condition subtile commit
 
-## B. Atomicité du commit
+Cas N -> N+1 pendant commit: **acceptable pour STEP 1** (shadow store non lu par DSP).
 
-### Problème à couvrir
-Code naïf:
+Hardening retenu (overflow-safe):
 ```c
 uint32_t b = g_audio_block_counter;
-if (b == g_last_commit_block) return false;
+if ((uint32_t)(b - g_ps.last_commit_block) == 0U) return false;
 ```
 
-### Validation Cortex-M7
-- Lecture/écriture 32-bit alignées sont atomiques.
-- `volatile` garantit l’accès mémoire, pas l’exclusion.
+- Gère overflow `uint32_t` naturellement.
+- Évite faux négatifs liés à comparaison naïve future.
 
-### Version strictement safe retenue
-- Pas de section critique longue.
-- Séquence:
-  1. lire `b = g_audio_block_counter`,
-  2. si `b == last` → no-op,
-  3. copier staging -> active,
-  4. barrière mémoire (`__DMB()`),
-  5. écrire `g_last_commit_block = b`.
+## C. Dirty flag robustesse
 
-Pourquoi safe pour STEP 1:
-- DSP actuel **ne lit pas encore** `param_store`; donc pas de risque audio.
-- Si IRQ avance pendant copie, commit reste valide; au pire un commit supplémentaire sera autorisé au bloc suivant (comportement attendu).
+Règle stricte:
+- `dirty = 1` sur tout set staging.
+- `dirty = 0` **uniquement après commit réussi**.
+- Si commit refusé (même bloc), `dirty` reste à 1.
 
----
+## D. Taille `PARAM_COUNT`
 
-## C. Coût CPU
+Décision:
+- passer à `PARAM_COUNT = 64U` (au lieu de 32) pour marge STEP suivant.
+- granular courant = 6 params, marge suffisante sans impact notable mémoire.
 
-### Risque
-- `param_store_commit_if_block_advanced()` appelée trop souvent en main loop.
+## E. `__DMB()`
 
-### Mitigation minimale (obligatoire)
-1. `dirty_flag` global: pas de copy si aucun param modifié.
-2. Appel commit uniquement quand `changed` UI est vrai (déjà disponible dans `app_controls_process`).
-3. Coût constant borné: copie `PARAM_COUNT` floats max par commit.
+Décision:
+- conserver `__DMB()` après copie staging->active.
+- ajouter commentaire: barrière conservatrice pour ordre mémoire Cortex-M7 (migration future DSP-reader).
 
 ---
 
-## D. Impact sur DSP actuel
+## 2) Micro-optimisations safe
 
-### Risque
-- incohérence si on mélange nouveau `param_store` avec anciens `fx_granular_set_*`.
+## A. Copy loop
 
-### Garde-fou (obligatoire)
-- STEP 1 = **shadow store only**:
-  - on continue d’appeler `fx_granular_set_*` exactement comme aujourd’hui,
-  - `param_store` stocke les valeurs pour validation/migration,
-  - aucun read DSP depuis `param_store` dans cette étape.
-
-=> Aucun impact audible attendu.
-
----
-
-## 2) DESIGN FINAL `param_store` (minimal propre)
-
-## A. Structure mémoire exacte
-
+Remplacer boucle par:
 ```c
-#define PARAM_COUNT 32U
-
-typedef uint16_t param_id_t;
-
-typedef struct {
-    float staging[PARAM_COUNT];
-    float active[PARAM_COUNT];
-    volatile uint32_t last_commit_block;
-    volatile uint32_t commit_count;
-    volatile uint8_t dirty;
-} param_store_t;
+memcpy(g_ps.active, g_ps.staging, sizeof(g_ps.active));
 ```
 
-- `PARAM_COUNT=32` pour STEP 1 (granular + réserve).
-- `active/staging` séparés pour migration future vers double-buffer global.
+## B. Commit fast-exit
 
-## B. API exacte
-
+Conserver en première ligne:
 ```c
-void  param_store_init(void);
-void  param_store_set_staging(param_id_t id, float v);
-bool  param_store_commit_if_block_advanced(void);
-float param_store_get_active(param_id_t id);
-uint32_t param_store_get_commit_count(void);
-uint32_t param_store_get_last_commit_block(void);
+if (g_ps.dirty == 0U) return false;
 ```
-
-## C. Garanties
-- Atomicité: écritures 32-bit `last_commit_block` / `commit_count` atomiques.
-- Pas de tearing côté audio: DSP non branché sur `param_store` à cette étape.
-- Coût constant: O(PARAM_COUNT) seulement quand `dirty=1` et bloc avancé.
 
 ---
 
-## 3) PATCH PRÉCIS (étape suivante uniquement)
+## 3) Debug log (optionnel, non-IRQ)
 
-## Fichiers à créer
+Ajouter guard:
+```c
+#ifdef PARAM_STORE_DEBUG
+#include <stdio.h>
+printf("param_commit count=%lu block=%lu\n",
+       (unsigned long)g_ps.commit_count,
+       (unsigned long)g_ps.last_commit_block);
+#endif
+```
 
-### `Inc/param_store.h` (contenu complet)
+- autorisé uniquement en main loop (`param_store_commit_if_block_advanced`).
+- interdit en IRQ.
+
+---
+
+## 4) Design final `param_store` (STEP 1 only)
+
+## A. `Inc/param_store.h` (contenu final)
 ```c
 #pragma once
 #include <stdint.h>
@@ -138,7 +110,7 @@ enum {
     PARAM_GRAN_FREEZE,
     PARAM_GRAN_SPREAD,
     PARAM_GRAN_STEREO,
-    PARAM_COUNT = 32
+    PARAM_COUNT = 64
 };
 
 void param_store_init(void);
@@ -154,12 +126,15 @@ uint32_t param_store_get_last_commit_block(void);
 #endif
 ```
 
-### `Src/param_store.c` (contenu complet)
+## B. `Src/param_store.c` (contenu final)
 ```c
 #include "param_store.h"
 #include "audio_float.h"   // g_audio_block_counter
 #include "stm32h7xx_hal.h" // __DMB
 #include <string.h>
+#ifdef PARAM_STORE_DEBUG
+#include <stdio.h>
+#endif
 
 typedef struct {
     float staging[PARAM_COUNT];
@@ -189,16 +164,20 @@ bool param_store_commit_if_block_advanced(void)
     if (g_ps.dirty == 0U) return false;
 
     uint32_t b = g_audio_block_counter;
-    if (b == g_ps.last_commit_block) return false;
+    if ((uint32_t)(b - g_ps.last_commit_block) == 0U) return false;
 
-    for (uint32_t i = 0; i < PARAM_COUNT; i++) {
-        g_ps.active[i] = g_ps.staging[i];
-    }
+    memcpy(g_ps.active, g_ps.staging, sizeof(g_ps.active));
 
-    __DMB();
+    __DMB(); // barrière conservatrice: ordre mémoire avant publication last_commit_block
     g_ps.last_commit_block = b;
     g_ps.commit_count++;
     g_ps.dirty = 0U;
+
+#ifdef PARAM_STORE_DEBUG
+    printf("param_commit count=%lu block=%lu\n",
+           (unsigned long)g_ps.commit_count,
+           (unsigned long)g_ps.last_commit_block);
+#endif
     return true;
 }
 
@@ -219,7 +198,15 @@ uint32_t param_store_get_last_commit_block(void)
 }
 ```
 
-## Fichiers à modifier (diff minimal)
+---
+
+## 5) Diff exact par fichier (minimal)
+
+## Créer
+- `Inc/param_store.h` (exact ci-dessus)
+- `Src/param_store.c` (exact ci-dessus)
+
+## Modifier
 
 ### `Inc/audio_float.h`
 Ajouter:
@@ -228,53 +215,40 @@ extern volatile uint32_t g_audio_block_counter;
 ```
 
 ### `Src/audio_float.c`
-Ajouter global + incrément unique:
+- Ajouter global:
 ```c
 volatile uint32_t g_audio_block_counter = 0U;
 ```
-
-Dans `audio_process_block_int32(...)`, première ligne:
+- Ajouter en première ligne de `audio_process_block_int32()`:
 ```c
 g_audio_block_counter++;
 ```
 
 ### `Src/brick6_app_init.c`
-Ajouter init avant `audio_start()`:
-```c
-#include "param_store.h"
-...
-param_store_init();
-```
+- inclure `param_store.h`
+- appeler `param_store_init();` avant `audio_start();`
 
 ### `Src/app_controls.c`
-Ajouts minimaux (sans retirer setters FX actuels):
 - inclure `param_store.h`
-- dans les deux chemins de mise à jour granular:
-```c
-param_store_set_staging(PARAM_GRAN_DENSITY, ui_0_127_to_unit_float(granular_density));
-param_store_set_staging(PARAM_GRAN_PITCH, ui_0_127_to_pitch_semitones(granular_pitch));
-param_store_set_staging(PARAM_GRAN_MIX, ui_0_127_to_unit_float(granular_mix));
-param_store_set_staging(PARAM_GRAN_FREEZE, (granular_freeze >= 64U) ? 1.0f : 0.0f);
-param_store_set_staging(PARAM_GRAN_SPREAD, ui_0_127_to_unit_float(granular_spread));
-param_store_set_staging(PARAM_GRAN_STEREO, ui_0_127_to_unit_float(granular_stereo));
-(void)param_store_commit_if_block_advanced();
-```
+- conserver setters `fx_granular_set_*` actuels
+- ajouter staging + tentative commit uniquement quand valeurs changent
 
 ---
 
-## 4) CHECKLIST AVANT MERGE
+## 6) Validation finale avant merge
 
-- [ ] audio toujours stable (DMA RX half/full OK)
-- [ ] aucun warning build ajouté
-- [ ] aucun `malloc` ajouté
-- [ ] aucun appel HAL ajouté en IRQ
-- [ ] commit <= 1 par bloc validé (`commit_count` vs `g_audio_block_counter`)
-- [ ] aucun changement audible (chaîne DSP inchangée)
+- [ ] aucun changement `audio.c` / callbacks DMA
+- [ ] aucun HAL ajouté en IRQ
+- [ ] aucun `malloc`
+- [ ] build sans warning
+- [ ] `commit_count` n’avance jamais > 1 pour un même `g_audio_block_counter`
+- [ ] aucun crash si spam encodeurs
+- [ ] aucun changement audible (DSP inchangé)
 
 ---
 
-## 5) Notes de sécurité immédiates
+## 7) Garde-fous stricts STEP 1
 
-- Ne pas brancher `param_store_get_active()` dans DSP durant STEP 1.
-- Ne pas modifier `audio.c` callbacks.
-- Ne pas déplacer l’ordre actuel EQ→SAT→GRANULAR dans cette étape.
+- `param_store` reste shadow-only.
+- Aucun read DSP depuis `param_store` dans ce merge.
+- Aucun refactor de chaîne EQ→SAT→GRANULAR dans ce merge.
