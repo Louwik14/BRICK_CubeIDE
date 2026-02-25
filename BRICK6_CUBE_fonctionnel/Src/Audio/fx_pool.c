@@ -1,81 +1,99 @@
-/**
- * @file fx_pool.c
- * @brief Pool statique de slots FX partagés par le mixer et les chaînes d'effets.
- *
- * Rôle du module:
- * - Déclarer les instances d'état FX (EQ, saturation, granular).
- * - Exposer un accès indexé à des slots FX persistants.
- *
- * Architecture:
- * - Appelé par: brick6_app_init.c, mixer.c, fx_chain.c.
- * - Appelle: aucun module externe (hors types FX).
- *
- * Contraintes temps réel:
- * - IRQ: oui (lecture de slots depuis le DSP).
- * - Hard realtime: oui.
- * - malloc: interdit (pool 100% statique).
- *
- * Notes:
- * - La taille du pool est fixe (FX_POOL_SIZE).
- */
-
 #include "fx_pool.h"
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
 #include "fx_granular.h"
+#include "sdram_alloc.h"
 
-#define FX_POOL_SIZE 3
+#define FX_POOL_SIZE 3U
 
-/** Table des slots FX exposée au moteur. */
 static fx_slot_t g_slots[FX_POOL_SIZE];
 
-/** États DSP persistants associés aux slots. */
+/* États légers statiques */
 static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
-static uint8_t g_gran;
 
-/**
- * @brief Initialise le pool de slots FX avec le mapping par défaut.
- *
- * Rôle:
- * - Associe chaque slot à un type FX et à son état mémoire persistant.
- *
- * Contexte d'appel:
- * - Init application (main loop), avant démarrage audio.
- *
- * Contraintes:
- * - Pas d'allocation, pas de blocage.
- */
-void fx_pool_init(void)
+/* Allocation heavy-state hors IRQ (SDRAM allocator dédié) */
+void* fx_alloc(size_t size)
 {
-    g_slots[0].active = 1;
-    g_slots[0].type = FX_EQ3;
-    g_slots[0].state = &g_eq;
-
-    g_slots[1].active = 1;
-    g_slots[1].type = FX_SAT;
-    g_slots[1].state = &g_sat;
-
-    g_slots[2].active = 1;
-    g_slots[2].type = FX_GRANULAR;
-    g_slots[2].state = &g_gran;
+    return SDRAM_Alloc((uint32_t)size, 32U);
 }
 
-/**
- * @brief Retourne un pointeur sur un slot FX du pool.
- *
- * @param index Index de slot demandé.
- *
- * @return Pointeur sur le slot si valide, sinon NULL.
- *
- * Rôle:
- * - Fournir un accès sûr aux slots pour le routing mixer/fx_chain.
- *
- * Contexte d'appel:
- * - Init, tasklet ou IRQ audio (lecture).
- */
+void fx_free(void* ptr)
+{
+    (void)ptr;
+    /* Bump allocator: free individuel non supporté pour l'instant. */
+}
+
+void fx_pool_init(void)
+{
+    for(uint32_t i = 0U; i < FX_POOL_SIZE; i++)
+    {
+        g_slots[i].active = 0U;
+        g_slots[i].type = FX_NONE;
+        g_slots[i].state = 0;
+    }
+}
+
 fx_slot_t* fx_pool_get_slot(uint32_t index)
 {
-    if (index >= FX_POOL_SIZE) return 0;
+    if(index >= FX_POOL_SIZE)
+        return 0;
     return &g_slots[index];
+}
+
+void fx_pool_activate_slot(uint32_t slot, fx_type_t type)
+{
+    if(slot >= FX_POOL_SIZE)
+        return;
+
+    fx_pool_deactivate_slot(slot);
+
+    switch(type)
+    {
+        case FX_EQ3:
+            fx_dj_eq3_init(&g_eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
+            g_slots[slot].state = &g_eq;
+            g_slots[slot].type = FX_EQ3;
+            g_slots[slot].active = 1U;
+            break;
+
+        case FX_SAT:
+            fx_saturation_init(&g_sat);
+            g_slots[slot].state = &g_sat;
+            g_slots[slot].type = FX_SAT;
+            g_slots[slot].active = 1U;
+            break;
+
+        case FX_GRANULAR:
+        {
+            void *mem = fx_alloc(fx_granular_state_size());
+            if(mem == 0)
+                return;
+
+            fx_granular_init_state(mem, 48000.0f);
+            g_slots[slot].state = mem;
+            g_slots[slot].type = FX_GRANULAR;
+            g_slots[slot].active = 1U;
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+void fx_pool_deactivate_slot(uint32_t slot)
+{
+    if(slot >= FX_POOL_SIZE)
+        return;
+
+    fx_slot_t *s = &g_slots[slot];
+
+    s->active = 0U;
+
+    if(s->type == FX_GRANULAR && s->state != 0)
+        fx_free(s->state);
+
+    s->state = 0;
+    s->type = FX_NONE;
 }

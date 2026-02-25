@@ -44,7 +44,7 @@
  */
 static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t frames)
 {
-    if (!s || !s->active)
+    if (!s || !s->active || !s->state)
         return;
 
     switch (s->type)
@@ -58,7 +58,7 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
             break;
 
         case FX_GRANULAR:
-            fx_granular_process_block(L, R, L, R, frames);
+            fx_granular_process_state(s->state, L, R, frames);
             break;
 
         default:
