@@ -190,7 +190,6 @@ void audio_tracks_init(void)
     if(eq) fx_dj_eq3_init(eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
 
     if(sat) fx_saturation_init(sat);
-    fx_granular_init(48000.0f);
 
     master_gain = 1.0f;
 }

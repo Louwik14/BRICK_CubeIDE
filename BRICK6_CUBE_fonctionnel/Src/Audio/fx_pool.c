@@ -1,81 +1,133 @@
-/**
- * @file fx_pool.c
- * @brief Pool statique de slots FX partagés par le mixer et les chaînes d'effets.
- *
- * Rôle du module:
- * - Déclarer les instances d'état FX (EQ, saturation, granular).
- * - Exposer un accès indexé à des slots FX persistants.
- *
- * Architecture:
- * - Appelé par: brick6_app_init.c, mixer.c, fx_chain.c.
- * - Appelle: aucun module externe (hors types FX).
- *
- * Contraintes temps réel:
- * - IRQ: oui (lecture de slots depuis le DSP).
- * - Hard realtime: oui.
- * - malloc: interdit (pool 100% statique).
- *
- * Notes:
- * - La taille du pool est fixe (FX_POOL_SIZE).
- */
-
 #include "fx_pool.h"
+
+#include <string.h>
+
+#include "Storage/memory_layout.h"
 #include "fx_dj_eq3_cmsis.h"
-#include "fx_saturation.h"
 #include "fx_granular.h"
+#include "fx_saturation.h"
 
-#define FX_POOL_SIZE 3
+#define FX_POOL_SIZE 3u
+#define FX_FAST_POOL_SIZE (448u * 1024u)
+#define FX_SLOW_POOL_SIZE (1024u * 1024u)
+#define FX_ALLOC_ALIGN 32u
 
-/** Table des slots FX exposée au moteur. */
 static fx_slot_t g_slots[FX_POOL_SIZE];
 
-/** États DSP persistants associés aux slots. */
 static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
-static uint8_t g_gran;
 
-/**
- * @brief Initialise le pool de slots FX avec le mapping par défaut.
- *
- * Rôle:
- * - Associe chaque slot à un type FX et à son état mémoire persistant.
- *
- * Contexte d'appel:
- * - Init application (main loop), avant démarrage audio.
- *
- * Contraintes:
- * - Pas d'allocation, pas de blocage.
- */
-void fx_pool_init(void)
+AUDIO_WARM static uint8_t g_fast_pool[FX_FAST_POOL_SIZE] __attribute__((aligned(FX_ALLOC_ALIGN)));
+AUDIO_COLD_SDRAM static uint8_t g_slow_pool[FX_SLOW_POOL_SIZE] __attribute__((aligned(FX_ALLOC_ALIGN)));
+
+static size_t g_fast_offset = 0u;
+static size_t g_slow_offset = 0u;
+
+static size_t fx_align_up(size_t value, size_t align)
 {
-    g_slots[0].active = 1;
-    g_slots[0].type = FX_EQ3;
-    g_slots[0].state = &g_eq;
-
-    g_slots[1].active = 1;
-    g_slots[1].type = FX_SAT;
-    g_slots[1].state = &g_sat;
-
-    g_slots[2].active = 1;
-    g_slots[2].type = FX_GRANULAR;
-    g_slots[2].state = &g_gran;
+    return (value + (align - 1u)) & ~(align - 1u);
 }
 
-/**
- * @brief Retourne un pointeur sur un slot FX du pool.
- *
- * @param index Index de slot demandé.
- *
- * @return Pointeur sur le slot si valide, sinon NULL.
- *
- * Rôle:
- * - Fournir un accès sûr aux slots pour le routing mixer/fx_chain.
- *
- * Contexte d'appel:
- * - Init, tasklet ou IRQ audio (lecture).
- */
+static void fx_pool_reset_allocators(void)
+{
+    g_fast_offset = 0u;
+    g_slow_offset = 0u;
+    (void)memset(g_fast_pool, 0, sizeof(g_fast_pool));
+    (void)memset(g_slow_pool, 0, sizeof(g_slow_pool));
+}
+
+void* fx_alloc_fast(size_t size)
+{
+    const size_t aligned = fx_align_up(size, FX_ALLOC_ALIGN);
+    const size_t offset = fx_align_up(g_fast_offset, FX_ALLOC_ALIGN);
+
+    if ((offset + aligned) > sizeof(g_fast_pool))
+        return NULL;
+
+    g_fast_offset = offset + aligned;
+    return &g_fast_pool[offset];
+}
+
+void* fx_alloc_slow(size_t size)
+{
+    const size_t aligned = fx_align_up(size, FX_ALLOC_ALIGN);
+    const size_t offset = fx_align_up(g_slow_offset, FX_ALLOC_ALIGN);
+
+    if ((offset + aligned) > sizeof(g_slow_pool))
+        return NULL;
+
+    g_slow_offset = offset + aligned;
+    return &g_slow_pool[offset];
+}
+
+void fx_pool_init(void)
+{
+    fx_pool_reset_allocators();
+
+    for (uint32_t i = 0u; i < FX_POOL_SIZE; ++i)
+    {
+        g_slots[i].active = 0u;
+        g_slots[i].type = FX_NONE;
+        g_slots[i].state = NULL;
+    }
+}
+
+int fx_pool_activate_slot(uint32_t index, fx_type_t type)
+{
+    void* mem = NULL;
+
+    if (index >= FX_POOL_SIZE)
+        return 0;
+
+    switch (type)
+    {
+        case FX_EQ3:
+            mem = &g_eq;
+            break;
+
+        case FX_SAT:
+            mem = &g_sat;
+            break;
+
+        case FX_GRANULAR:
+        {
+            fx_granular_state_t* state = (fx_granular_state_t*)fx_alloc_fast(fx_granular_state_size());
+            float* buffer_l = (float*)fx_alloc_fast(fx_granular_buffer_size());
+            float* buffer_r = (float*)fx_alloc_fast(fx_granular_buffer_size());
+
+            if (!state || !buffer_l || !buffer_r)
+                return 0;
+
+            fx_granular_init(state, 48000.0f, buffer_l, buffer_r,
+                             (uint32_t)(fx_granular_buffer_size() / sizeof(float)));
+            mem = state;
+            break;
+        }
+
+        default:
+            return 0;
+    }
+
+    g_slots[index].active = 1u;
+    g_slots[index].type = (uint8_t)type;
+    g_slots[index].state = mem;
+    return 1;
+}
+
+void fx_pool_deactivate_slot(uint32_t index)
+{
+    if (index >= FX_POOL_SIZE)
+        return;
+
+    g_slots[index].active = 0u;
+    g_slots[index].type = FX_NONE;
+    g_slots[index].state = NULL;
+}
+
 fx_slot_t* fx_pool_get_slot(uint32_t index)
 {
-    if (index >= FX_POOL_SIZE) return 0;
+    if (index >= FX_POOL_SIZE)
+        return 0;
+
     return &g_slots[index];
 }
