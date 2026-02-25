@@ -1,10 +1,10 @@
 #include "fx_pool.h"
 
-#include <stdlib.h>
-
+#include "audio_mem_pool.h"
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_granular.h"
 #include "fx_saturation.h"
+#include "stm32h7xx.h"
 
 #define FX_POOL_SIZE 3u
 
@@ -16,17 +16,6 @@ static fx_saturation_t g_sat;
 static float* g_granular_buffer_l[FX_POOL_SIZE];
 static float* g_granular_buffer_r[FX_POOL_SIZE];
 
-void* fx_alloc(size_t size)
-{
-    return malloc(size);
-}
-
-void fx_free(void* ptr)
-{
-    if (ptr)
-        free(ptr);
-}
-
 void fx_pool_init(void)
 {
     for (uint32_t i = 0u; i < FX_POOL_SIZE; ++i)
@@ -37,6 +26,8 @@ void fx_pool_init(void)
         g_granular_buffer_l[i] = NULL;
         g_granular_buffer_r[i] = NULL;
     }
+
+    audio_mem_init();
 }
 
 int fx_pool_activate_slot(uint32_t index, fx_type_t type)
@@ -61,16 +52,18 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
 
         case FX_GRANULAR:
         {
+            const size_t state_size = fx_granular_state_size();
             const size_t buffer_size = fx_granular_buffer_size();
-            fx_granular_state_t* state = (fx_granular_state_t*)fx_alloc(fx_granular_state_size());
-            float* buffer_l = (float*)fx_alloc(buffer_size);
-            float* buffer_r = (float*)fx_alloc(buffer_size);
+            fx_granular_state_t* state =
+                (fx_granular_state_t*)audio_mem_alloc_fast(state_size, 32u);
+            float* buffer_l = (float*)audio_mem_alloc_fast(buffer_size, 32u);
+            float* buffer_r = (float*)audio_mem_alloc_fast(buffer_size, 32u);
 
             if (!state || !buffer_l || !buffer_r)
             {
-                fx_free(buffer_l);
-                fx_free(buffer_r);
-                fx_free(state);
+                audio_mem_free_fast(buffer_l);
+                audio_mem_free_fast(buffer_r);
+                audio_mem_free_fast(state);
                 return 0;
             }
 
@@ -80,9 +73,9 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
                              buffer_r,
                              (uint32_t)(buffer_size / sizeof(float)));
 
-            slot->state = state;
             g_granular_buffer_l[index] = buffer_l;
             g_granular_buffer_r[index] = buffer_r;
+            slot->state = state;
             break;
         }
 
@@ -91,7 +84,9 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
     }
 
     slot->type = (uint8_t)type;
+    __DMB();
     slot->active = 1u;
+    __DSB();
     return 1;
 }
 
@@ -104,23 +99,37 @@ void fx_pool_deactivate_slot(uint32_t index)
 
     slot = &g_slots[index];
 
+    slot->active = 0u;
+    __DMB();
+
     switch ((fx_type_t)slot->type)
     {
         case FX_GRANULAR:
-            fx_free(g_granular_buffer_l[index]);
-            fx_free(g_granular_buffer_r[index]);
-            fx_free(slot->state);
+        {
+            float* buffer_l = g_granular_buffer_l[index];
+            float* buffer_r = g_granular_buffer_r[index];
+            void* state = slot->state;
+
             g_granular_buffer_l[index] = NULL;
             g_granular_buffer_r[index] = NULL;
+            slot->state = NULL;
+            slot->type = FX_NONE;
+
+            __DMB();
+
+            audio_mem_free_fast(buffer_l);
+            audio_mem_free_fast(buffer_r);
+            audio_mem_free_fast(state);
             break;
+        }
 
         default:
+            slot->state = NULL;
+            slot->type = FX_NONE;
             break;
     }
 
-    slot->state = NULL;
-    slot->type = FX_NONE;
-    slot->active = 0u;
+    __DSB();
 }
 
 fx_slot_t* fx_pool_get_slot(uint32_t index)
