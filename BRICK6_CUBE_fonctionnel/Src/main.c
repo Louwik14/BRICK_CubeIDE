@@ -66,6 +66,7 @@ void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 void MX_USB_HOST_Process(void);
 void MX_USB_HOST_Init(void);
+void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -131,8 +132,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  engine_tasklet_poll();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
-    //usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
-    //midi_host_poll_bounded(MIDI_BUDGET_MSGS);
+    usb_host_tasklet_poll_bounded(4);
+    midi_host_poll_bounded(8);
 	  if(engine_tick_count != last)
 	      {
 	          last = engine_tick_count;

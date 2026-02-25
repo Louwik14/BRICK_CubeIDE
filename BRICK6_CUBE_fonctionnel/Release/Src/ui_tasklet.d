@@ -42,8 +42,7 @@ Src/ui_tasklet.o: ../Src/ui_tasklet.c ../Inc/ui_tasklet.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
- ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/font.h \
- ../Inc/app_controls.h
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/font.h
 ../Inc/ui_tasklet.h:
 ../Inc/drv_display.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
@@ -91,4 +90,3 @@ Src/ui_tasklet.o: ../Src/ui_tasklet.c ../Inc/ui_tasklet.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/font.h:
-../Inc/app_controls.h:

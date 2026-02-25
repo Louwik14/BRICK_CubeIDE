@@ -13,3 +13,5 @@
 ../Src/stm32h7xx_it.c:246:6:DMA1_Stream1_IRQHandler	8	static
 ../Src/stm32h7xx_it.c:260:6:SDMMC1_IRQHandler	0	static
 ../Src/stm32h7xx_it.c:274:6:SAI1_IRQHandler	8	static
+../Src/stm32h7xx_it.c:287:6:OTG_HS_IRQHandler	0	static
+../Src/stm32h7xx_it.c:292:6:OTG_FS_IRQHandler	0	static

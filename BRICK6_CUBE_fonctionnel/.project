@@ -31,6 +31,11 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>Drv_app</name>
+			<type>2</type>
+			<location>C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app</location>
+		</link>
+		<link>
 			<name>Source</name>
 			<type>2</type>
 			<location>C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Source</location>

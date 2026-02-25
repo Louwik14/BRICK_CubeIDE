@@ -38,6 +38,16 @@ CPP_DEPS :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
+App/Middlewares/ST/STM32_USB_Device_Library/Class/HID/Src \
+App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src \
+App/Middlewares/ST/STM32_USB_Device_Library/Core/Src \
+App/Middlewares/ST/STM32_USB_Host_Library/Class/AUDIO/Src \
+App/Middlewares/ST/STM32_USB_Host_Library/Class/CDC/Src \
+App/Middlewares/ST/STM32_USB_Host_Library/Class/HID/Src \
+App/Middlewares/ST/STM32_USB_Host_Library/Class/MSC/Src \
+App/Middlewares/ST/STM32_USB_Host_Library/Class/MTP/Src \
+App/Middlewares/ST/STM32_USB_Host_Library/Core/Src \
+App/usb_stack \
 Drivers/CMSIS_DSP/Source/BasicMathFunctions \
 Drivers/CMSIS_DSP/Source/CommonTables \
 Drivers/CMSIS_DSP/Source/ComplexMathFunctions \
@@ -46,7 +56,14 @@ Drivers/CMSIS_DSP/Source/FastMathFunctions \
 Drivers/CMSIS_DSP/Source/FilteringFunctions \
 Drivers/CMSIS_DSP/Source/QuaternionMathFunctions \
 Drivers/CMSIS_DSP/Source/TransformFunctions \
+Drivers/Drv_app/Src \
 Drivers/STM32H7xx_HAL_Driver/Src \
+Src/Audio \
+Src/Core \
+Src/MIDI \
+Src/Param \
+Src/Storage \
+Src/UI \
 Src \
 Startup \
 mutable_instruments/clouds \

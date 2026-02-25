@@ -45,7 +45,8 @@ Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
  ../Inc/sd_stream.h ../Inc/sdmmc.h ../Inc/sdram.h ../Inc/audio.h \
- ../Inc/audio_float.h ../Inc/cs42448.h ../Inc/mixer.h
+ ../Inc/audio_float.h ../Inc/cs42448.h ../Inc/mixer.h ../Inc/fx_pool.h \
+ ../Inc/param_store.h ../Inc/control_events.h
 ../Inc/brick6_app_init.h:
 ../Inc/engine_tasklet.h:
 ../Inc/sai.h:
@@ -101,3 +102,6 @@ Src/brick6_app_init.o: ../Src/brick6_app_init.c ../Inc/brick6_app_init.h \
 ../Inc/audio_float.h:
 ../Inc/cs42448.h:
 ../Inc/mixer.h:
+../Inc/fx_pool.h:
+../Inc/param_store.h:
+../Inc/control_events.h:
