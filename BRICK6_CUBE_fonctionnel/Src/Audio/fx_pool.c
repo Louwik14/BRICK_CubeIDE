@@ -1,106 +1,88 @@
 #include "fx_pool.h"
 
-#include <string.h>
+#include <stdlib.h>
 
-#include "Storage/memory_layout.h"
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_granular.h"
 #include "fx_saturation.h"
 
 #define FX_POOL_SIZE 3u
-#define FX_FAST_POOL_SIZE (448u * 1024u)
-#define FX_SLOW_POOL_SIZE (1024u * 1024u)
-#define FX_ALLOC_ALIGN 32u
 
 static fx_slot_t g_slots[FX_POOL_SIZE];
 
 static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
 
-AUDIO_WARM static uint8_t g_fast_pool[FX_FAST_POOL_SIZE] __attribute__((aligned(FX_ALLOC_ALIGN)));
-AUDIO_COLD_SDRAM static uint8_t g_slow_pool[FX_SLOW_POOL_SIZE] __attribute__((aligned(FX_ALLOC_ALIGN)));
+static float* g_granular_buffer_l[FX_POOL_SIZE];
+static float* g_granular_buffer_r[FX_POOL_SIZE];
 
-static size_t g_fast_offset = 0u;
-static size_t g_slow_offset = 0u;
-
-static size_t fx_align_up(size_t value, size_t align)
+void* fx_alloc(size_t size)
 {
-    return (value + (align - 1u)) & ~(align - 1u);
+    return malloc(size);
 }
 
-static void fx_pool_reset_allocators(void)
+void fx_free(void* ptr)
 {
-    g_fast_offset = 0u;
-    g_slow_offset = 0u;
-    (void)memset(g_fast_pool, 0, sizeof(g_fast_pool));
-    (void)memset(g_slow_pool, 0, sizeof(g_slow_pool));
-}
-
-void* fx_alloc_fast(size_t size)
-{
-    const size_t aligned = fx_align_up(size, FX_ALLOC_ALIGN);
-    const size_t offset = fx_align_up(g_fast_offset, FX_ALLOC_ALIGN);
-
-    if ((offset + aligned) > sizeof(g_fast_pool))
-        return NULL;
-
-    g_fast_offset = offset + aligned;
-    return &g_fast_pool[offset];
-}
-
-void* fx_alloc_slow(size_t size)
-{
-    const size_t aligned = fx_align_up(size, FX_ALLOC_ALIGN);
-    const size_t offset = fx_align_up(g_slow_offset, FX_ALLOC_ALIGN);
-
-    if ((offset + aligned) > sizeof(g_slow_pool))
-        return NULL;
-
-    g_slow_offset = offset + aligned;
-    return &g_slow_pool[offset];
+    if (ptr)
+        free(ptr);
 }
 
 void fx_pool_init(void)
 {
-    fx_pool_reset_allocators();
-
     for (uint32_t i = 0u; i < FX_POOL_SIZE; ++i)
     {
         g_slots[i].active = 0u;
         g_slots[i].type = FX_NONE;
         g_slots[i].state = NULL;
+        g_granular_buffer_l[i] = NULL;
+        g_granular_buffer_r[i] = NULL;
     }
 }
 
 int fx_pool_activate_slot(uint32_t index, fx_type_t type)
 {
-    void* mem = NULL;
+    fx_slot_t* slot = NULL;
 
     if (index >= FX_POOL_SIZE)
         return 0;
 
+    slot = &g_slots[index];
+    fx_pool_deactivate_slot(index);
+
     switch (type)
     {
         case FX_EQ3:
-            mem = &g_eq;
+            slot->state = &g_eq;
             break;
 
         case FX_SAT:
-            mem = &g_sat;
+            slot->state = &g_sat;
             break;
 
         case FX_GRANULAR:
         {
-            fx_granular_state_t* state = (fx_granular_state_t*)fx_alloc_fast(fx_granular_state_size());
-            float* buffer_l = (float*)fx_alloc_fast(fx_granular_buffer_size());
-            float* buffer_r = (float*)fx_alloc_fast(fx_granular_buffer_size());
+            const size_t buffer_size = fx_granular_buffer_size();
+            fx_granular_state_t* state = (fx_granular_state_t*)fx_alloc(fx_granular_state_size());
+            float* buffer_l = (float*)fx_alloc(buffer_size);
+            float* buffer_r = (float*)fx_alloc(buffer_size);
 
             if (!state || !buffer_l || !buffer_r)
+            {
+                fx_free(buffer_l);
+                fx_free(buffer_r);
+                fx_free(state);
                 return 0;
+            }
 
-            fx_granular_init(state, 48000.0f, buffer_l, buffer_r,
-                             (uint32_t)(fx_granular_buffer_size() / sizeof(float)));
-            mem = state;
+            fx_granular_init(state,
+                             48000.0f,
+                             buffer_l,
+                             buffer_r,
+                             (uint32_t)(buffer_size / sizeof(float)));
+
+            slot->state = state;
+            g_granular_buffer_l[index] = buffer_l;
+            g_granular_buffer_r[index] = buffer_r;
             break;
         }
 
@@ -108,20 +90,37 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
             return 0;
     }
 
-    g_slots[index].active = 1u;
-    g_slots[index].type = (uint8_t)type;
-    g_slots[index].state = mem;
+    slot->type = (uint8_t)type;
+    slot->active = 1u;
     return 1;
 }
 
 void fx_pool_deactivate_slot(uint32_t index)
 {
+    fx_slot_t* slot = NULL;
+
     if (index >= FX_POOL_SIZE)
         return;
 
-    g_slots[index].active = 0u;
-    g_slots[index].type = FX_NONE;
-    g_slots[index].state = NULL;
+    slot = &g_slots[index];
+
+    switch ((fx_type_t)slot->type)
+    {
+        case FX_GRANULAR:
+            fx_free(g_granular_buffer_l[index]);
+            fx_free(g_granular_buffer_r[index]);
+            fx_free(slot->state);
+            g_granular_buffer_l[index] = NULL;
+            g_granular_buffer_r[index] = NULL;
+            break;
+
+        default:
+            break;
+    }
+
+    slot->state = NULL;
+    slot->type = FX_NONE;
+    slot->active = 0u;
 }
 
 fx_slot_t* fx_pool_get_slot(uint32_t index)
