@@ -27,9 +27,9 @@
 #include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usb_device.h"
 #include "usb_host.h"
 #include "cs42448.h"
 #include "midi.h"
@@ -117,6 +117,7 @@ int main(void)
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   MX_SPI5_Init();
+
   /* USER CODE BEGIN 2 */
   brick6_app_init();
 
@@ -132,6 +133,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  engine_tasklet_poll();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
+	MX_USB_HOST_Process();
     usb_host_tasklet_poll_bounded(4);
     midi_host_poll_bounded(8);
 	  if(engine_tick_count != last)

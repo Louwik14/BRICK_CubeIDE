@@ -25,13 +25,14 @@
 #include "brick6_app_init.h"
 
 #include "engine_tasklet.h"
-//#include "midi.h"
+#include "midi.h"
 #include "sai.h"
 #include "sd_stream.h"
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
-//#include "usb_host.h"
+#include "usb_host.h"
+#include "usb_device.h"
 #include "audio.h"
 #include "audio_float.h"
 #include "cs42448.h"
@@ -96,8 +97,8 @@ void brick6_app_init(void)
 {
     SDRAM_Init();
     //SDRAM_Test();
-
-    //MX_USB_HOST_Init();
+    MX_USB_DEVICE_Init();
+    MX_USB_HOST_Init();
 
     /* 1) Codec audio externe. */
     CS42448_Init(0x48);
@@ -133,4 +134,7 @@ void brick6_app_init(void)
     audio_start();
 
     HAL_Delay(200);
+
+    /* Init MIDI */
+    midi_init();
 }
