@@ -256,43 +256,10 @@ float audio_float_get_master_gain(void)
    ============================================================ */
 
 static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
-                                     float *AUDIO_RESTRICT bus_main_l,
-                                     float *AUDIO_RESTRICT bus_main_r,
-                                     float *AUDIO_RESTRICT bus_cue_l,
-                                     float *AUDIO_RESTRICT bus_cue_r,
                                      uint32_t frames)
 {
+    (void)frames;
     dsp_engine_process_block(track_buf, MAX_TRACKS, frames);
-
-    const float mg = master_gain;
-
-    if(track_buf[0].enabled)
-    {
-        for(uint32_t n = 0; n < frames; n++)
-        {
-            bus_main_l[n] = track_buf[0].L[n] * mg;
-            bus_main_r[n] = track_buf[0].R[n] * mg;
-        }
-    }
-    else
-    {
-        memset(bus_main_l, 0, frames * sizeof(float));
-        memset(bus_main_r, 0, frames * sizeof(float));
-    }
-
-    if(track_buf[1].enabled)
-    {
-        for(uint32_t n = 0; n < frames; n++)
-        {
-            bus_cue_l[n] = track_buf[1].L[n] * mg;
-            bus_cue_r[n] = track_buf[1].R[n] * mg;
-        }
-    }
-    else
-    {
-        memset(bus_cue_l, 0, frames * sizeof(float));
-        memset(bus_cue_r, 0, frames * sizeof(float));
-    }
 }
 
 /* ============================================================
@@ -318,19 +285,16 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
         if(!control_event_pop(&evt))
             break;
     }
-    static AUDIO_HOT float bus_main_l[AUDIO_BLOCK_SIZE];
-    static AUDIO_HOT float bus_main_r[AUDIO_BLOCK_SIZE];
-    static AUDIO_HOT float bus_cue_l[AUDIO_BLOCK_SIZE];
-    static AUDIO_HOT float bus_cue_r[AUDIO_BLOCK_SIZE];
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
-    audio_dsp_process(tracks,
-                      bus_main_l,
-                      bus_main_r,
-                      bus_cue_l,
-                      bus_cue_r,
-                      frames);
-    audio_io_pack(tx, bus_main_l, bus_main_r, bus_cue_l, bus_cue_r, frames, output_adjust);
+    audio_dsp_process(tracks, frames);
+    audio_io_pack(tx,
+                  tracks[0].L,
+                  tracks[0].R,
+                  tracks[1].L,
+                  tracks[1].R,
+                  frames,
+                  output_adjust * master_gain);
 }
