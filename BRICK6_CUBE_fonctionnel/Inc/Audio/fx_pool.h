@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 
 /**
@@ -33,3 +34,9 @@ typedef struct {
 
 void fx_pool_init(void);
 fx_slot_t* fx_pool_get_slot(uint32_t index);
+
+void* fx_alloc_fast(size_t size);
+void* fx_alloc_slow(size_t size);
+
+int fx_pool_activate_slot(uint32_t index, fx_type_t type);
+void fx_pool_deactivate_slot(uint32_t index);
