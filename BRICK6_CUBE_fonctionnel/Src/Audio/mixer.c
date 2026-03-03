@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include "fx_chain.h"
+#include "fx_bus_compressor.h"
 
 typedef struct {
     float gain;
@@ -274,6 +275,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         memcpy(tracks[0].L, bus_main_l, sizeof(float) * frames);
         memcpy(tracks[0].R, bus_main_r, sizeof(float) * frames);
+
+        fx_bus_compressor_process_stereo(
+            tracks[0].L,
+            tracks[0].R,
+            frames
+        );
     }
 
     if(track_count > 1U)

@@ -38,6 +38,7 @@
 #include "cs42448.h"
 #include "mixer.h"
 #include "fx_pool.h"
+#include "fx_bus_compressor.h"
 #include "param_store.h"
 #include "control_events.h"
 
@@ -106,10 +107,9 @@ void brick6_app_init(void)
     /* 2) Init mixer (routing) + gains frontière float. */
     mixer_init();
     fx_pool_init();
+    fx_bus_compressor_init(48000.0f, AUDIO_BLOCK_SIZE);
     (void)fx_pool_activate_slot(0U, FX_EQ3);
     (void)fx_pool_activate_slot(1U, FX_SAT);
-    (void)fx_pool_activate_slot(2U, FX_DAISY_COMP);
-    mixer_set_track_insert_slot(0U, 0U, 2);
     audio_float_set_postgain(1.0f);
     audio_float_set_output_compensation(1.0f);
 
