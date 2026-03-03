@@ -6,5 +6,5 @@
 ../Src/Audio/fx_bus_compressor.cpp:57:6:void fx_bus_compressor_set_makeup(float)	0	static
 ../Src/Audio/fx_bus_compressor.cpp:62:6:void fx_bus_compressor_set_mix(float)	0	static
 ../Src/Audio/fx_bus_compressor.cpp:67:6:void fx_bus_compressor_set_hpf(float)	0	static
-../Src/Audio/fx_bus_compressor.cpp:72:6:void fx_bus_compressor_process_stereo(float*, float*, uint32_t)	64	static
-../Src/Audio/fx_bus_compressor.cpp:108:1:cpp)	0	static
+../Src/Audio/fx_bus_compressor.cpp:72:6:void fx_bus_compressor_process_stereo(float*, float*, uint32_t)	88	static
+../Src/Audio/fx_bus_compressor.cpp:127:1:cpp)	0	static

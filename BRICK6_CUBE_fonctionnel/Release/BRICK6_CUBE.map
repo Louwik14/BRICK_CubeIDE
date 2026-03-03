@@ -4712,7 +4712,7 @@ Discarded input sections
  .text.fx_bus_compressor_set_hpf
                 0x00000000       0x20 ./Src/Audio/fx_bus_compressor.o
  .text.fx_bus_compressor_process_stereo
-                0x00000000       0xe0 ./Src/Audio/fx_bus_compressor.o
+                0x00000000      0x120 ./Src/Audio/fx_bus_compressor.o
  .data._ZN12_GLOBAL__N_18g_hpf_hzE
                 0x00000000        0x4 ./Src/Audio/fx_bus_compressor.o
  .data._ZN12_GLOBAL__N_15g_mixE
