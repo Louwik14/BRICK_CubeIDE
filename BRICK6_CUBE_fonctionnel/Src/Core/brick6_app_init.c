@@ -28,19 +28,11 @@
 #include "control_events.h"
 #include "sampler.h"
 #include "sampler_stream.h"
-
-#if defined(__has_include)
-#  if __has_include("ff.h")
-#    include "ff.h"
-#    define BRICK6_HAS_FATFS 1
-#  endif
-#endif
-#ifndef BRICK6_HAS_FATFS
-#define BRICK6_HAS_FATFS 0
-#endif
+#include "wav_loader.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
+#define SD_BLOCK_SIZE 512U
 
 static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
@@ -280,18 +272,36 @@ void brick6_app_init(void)
 
     if(sd_stream_init(&hsd1) == HAL_OK)
     {
+        wav_info_t wav_info;
+        char wav_path[64];
+
         DBG("[SD] init ok\r\n");
 
+        if(!wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
         {
-            uint32_t start_block = 0U;
-            uint32_t total_blocks = 2048U;
+            DBG("[STREAM] WAV not found\r\n");
+        }
+        else if(!wav_loader_load_to_sdram(wav_path, &wav_info))
+        {
+            DBG("[STREAM] WAV header load failed\r\n");
+        }
+        else
+        {
+            uint32_t start_block = (wav_info.data_offset / SD_BLOCK_SIZE);
+            uint32_t total_blocks = (wav_info.data_size / SD_BLOCK_SIZE);
+
+            total_blocks -= (total_blocks % SD_STREAM_BLOCKS_PER_BUFFER);
 
             DBG("[STREAM] start wav streaming\r\n");
 
-            if(sd_stream_start_read(start_block, total_blocks) == HAL_OK)
-                DBG("[STREAM] reading blocks...\r\n");
+            if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
+            {
+                DBG("[STREAM] reading audio data blocks...\r\n");
+            }
             else
+            {
                 DBG("[STREAM] start wav streaming error\r\n");
+            }
         }
     }
     else
