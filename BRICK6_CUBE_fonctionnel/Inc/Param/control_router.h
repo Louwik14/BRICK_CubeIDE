@@ -56,6 +56,11 @@ typedef enum {
     CTRL_PARAM_MIX_TRACK3_SEND1,
     CTRL_PARAM_MIX_SEND0_FX,
     CTRL_PARAM_MIX_SEND1_FX,
+
+    CTRL_PARAM_BUS_COMP_THRESHOLD_DB,
+    CTRL_PARAM_BUS_COMP_RATIO,
+    CTRL_PARAM_BUS_COMP_ATTACK_INDEX,
+    CTRL_PARAM_BUS_COMP_RELEASE_INDEX,
 } control_param_id_t;
 
 void control_router_set_param(control_param_id_t id, float v);

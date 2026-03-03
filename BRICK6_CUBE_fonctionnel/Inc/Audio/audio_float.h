@@ -164,6 +164,11 @@ void audio_float_set_saturation_bias_ui(uint8_t bias_0_127);
 void audio_float_set_saturation_drive_ui(uint8_t drive_0_127);
 void audio_float_set_saturation_mix_ui(uint8_t mix_0_127);
 
+void audio_float_set_bus_comp_threshold_db(float threshold_db);
+void audio_float_set_bus_comp_ratio(float ratio);
+void audio_float_set_bus_comp_attack_index(uint8_t attack_index);
+void audio_float_set_bus_comp_release_index(uint8_t release_index);
+
 /* ============================================================
    Engine entry point called by audio.c
    ============================================================ */
