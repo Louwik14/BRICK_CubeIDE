@@ -168,6 +168,8 @@ void audio_float_set_bus_comp_threshold_db(float threshold_db);
 void audio_float_set_bus_comp_ratio(float ratio);
 void audio_float_set_bus_comp_attack_index(uint8_t attack_index);
 void audio_float_set_bus_comp_release_index(uint8_t release_index);
+void audio_float_set_bus_comp_makeup_db(float makeup_db);
+void audio_float_set_bus_comp_auto_makeup(uint8_t enabled);
 
 /* ============================================================
    Engine entry point called by audio.c
