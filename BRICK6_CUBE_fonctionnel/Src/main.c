@@ -64,6 +64,7 @@
 static uint32_t sd_prev_buf0 = 0U;
 static uint32_t sd_prev_buf1 = 0U;
 static uint8_t sd_dump_done = 0U;
+static uint32_t stream_prev_progress = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,6 +82,13 @@ static void sd_debug_poll(void)
 {
   uint32_t c0 = sd_stream_get_read_buf0_count();
   uint32_t c1 = sd_stream_get_read_buf1_count();
+  uint32_t progress = (c0 + c1) * SD_STREAM_BLOCKS_PER_BUFFER;
+
+  if (progress != stream_prev_progress)
+  {
+    stream_prev_progress = progress;
+    printf("[STREAM] progress %lu\r\n", (unsigned long)progress);
+  }
 
   if (c0 != sd_prev_buf0)
   {
