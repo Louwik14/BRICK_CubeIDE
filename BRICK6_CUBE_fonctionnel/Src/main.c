@@ -139,8 +139,8 @@ int main(void)
 	  if(engine_tick_count != last)
 	      {
 	          last = engine_tick_count;
-	          ui_tasklet_poll();
 	      }
+	  ui_tasklet_poll();
   }
 
   /* USER CODE END 3 */
