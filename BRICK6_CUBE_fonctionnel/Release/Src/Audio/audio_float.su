@@ -11,9 +11,9 @@
 ../Src/Audio/audio_float.c:149:6:audio_float_set_saturation_mix_ui	8	static
 ../Src/Audio/audio_float.c:172:6:audio_set_float_callback	0	static
 ../Src/Audio/audio_float.c:178:6:audio_tracks_init	16	static
-../Src/Audio/audio_float.c:199:6:track_enable	8	static
-../Src/Audio/audio_float.c:217:10:track_is_enabled	0	static
-../Src/Audio/audio_float.c:226:6:track_set_gain	0	static
-../Src/Audio/audio_float.c:233:6:audio_float_set_master_gain	0	static
-../Src/Audio/audio_float.c:244:7:audio_float_get_master_gain	0	static
-../Src/Audio/audio_float.c:308:6:audio_process_block_int32	56	static
+../Src/Audio/audio_float.c:198:6:track_enable	8	static
+../Src/Audio/audio_float.c:216:10:track_is_enabled	0	static
+../Src/Audio/audio_float.c:225:6:track_set_gain	0	static
+../Src/Audio/audio_float.c:232:6:audio_float_set_master_gain	0	static
+../Src/Audio/audio_float.c:243:7:audio_float_get_master_gain	0	static
+../Src/Audio/audio_float.c:274:6:audio_process_block_int32	40	static
