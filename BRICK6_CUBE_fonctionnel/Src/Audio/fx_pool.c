@@ -73,7 +73,7 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
         }
 
         case FX_DAISY_COMP:
-            slot->state = &g_daisy_comp;
+            slot->state = fx_daisy_comp_get_instance();
             break;
 
         default:

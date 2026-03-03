@@ -18,6 +18,7 @@ extern "C" {
 typedef struct fx_daisy_comp_t fx_daisy_comp_t;
 #endif
 
+fx_daisy_comp_t *fx_daisy_comp_get_instance(void);
 void fx_daisy_comp_init(fx_daisy_comp_t *comp, float sample_rate);
 void fx_daisy_comp_set_threshold_db(fx_daisy_comp_t *comp, float threshold_db);
 void fx_daisy_comp_set_ratio(fx_daisy_comp_t *comp, float ratio);

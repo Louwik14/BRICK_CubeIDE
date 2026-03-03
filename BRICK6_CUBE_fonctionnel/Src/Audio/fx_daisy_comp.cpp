@@ -11,6 +11,12 @@ static float clampf(float v, float lo, float hi)
 
 extern "C" {
 
+fx_daisy_comp_t *fx_daisy_comp_get_instance(void)
+{
+    static fx_daisy_comp_t s_comp;
+    return &s_comp;
+}
+
 void fx_daisy_comp_init(fx_daisy_comp_t *comp, float sample_rate)
 {
     if((comp == nullptr) || (sample_rate <= 0.0f))
