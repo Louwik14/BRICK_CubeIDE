@@ -24,6 +24,7 @@
 #include "mixer.h"
 #include "param_store.h"
 #include "audio_float.h"
+#include "fx_daisy_comp.h"
 
 /**
  * @brief Convertit une valeur float de contrôle en index de slot FX.
@@ -107,6 +108,42 @@ void control_router_set_param(control_param_id_t id, float v)
         case CTRL_PARAM_BUS_COMP_MAKEUP_DB: audio_float_set_bus_comp_makeup_db(v); break;
         case CTRL_PARAM_BUS_COMP_MIX: audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); break;
         case CTRL_PARAM_BUS_COMP_HPF_HZ: break;
+
+        case CTRL_PARAM_DAISY_COMP_THRESHOLD_DB: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_threshold_db(comp, v);
+            break;
+        }
+        case CTRL_PARAM_DAISY_COMP_RATIO: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_ratio(comp, v);
+            break;
+        }
+        case CTRL_PARAM_DAISY_COMP_ATTACK_S: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_attack_s(comp, v);
+            break;
+        }
+        case CTRL_PARAM_DAISY_COMP_RELEASE_S: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_release_s(comp, v);
+            break;
+        }
+        case CTRL_PARAM_DAISY_COMP_MAKEUP_DB: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_makeup_db(comp, v);
+            break;
+        }
+        case CTRL_PARAM_DAISY_COMP_AUTO_MAKEUP: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_auto_makeup(comp, (v >= 0.5f) ? 1U : 0U);
+            break;
+        }
+        case CTRL_PARAM_DAISY_COMP_MIX: {
+            fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+            if(comp) fx_daisy_comp_set_mix(comp, v);
+            break;
+        }
 
         default:
             break;
