@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "fatfs.h"
 #include "i2c.h"
 #include "sai.h"
 #include "sdmmc.h"
@@ -27,6 +28,7 @@
 #include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usb_device.h"
@@ -114,10 +116,11 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
+  MX_USB_OTG_FS_PCD_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   MX_SPI5_Init();
-
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   brick6_app_init();
 

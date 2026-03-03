@@ -5,13 +5,16 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Src/Storage/sd_stream.c 
+../Src/Storage/sd_stream.c \
+../Src/Storage/wav_loader.c 
 
 C_DEPS += \
-./Src/Storage/sd_stream.d 
+./Src/Storage/sd_stream.d \
+./Src/Storage/wav_loader.d 
 
 OBJS += \
-./Src/Storage/sd_stream.o 
+./Src/Storage/sd_stream.o \
+./Src/Storage/wav_loader.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -21,7 +24,7 @@ Src/Storage/%.o Src/Storage/%.su Src/Storage/%.cyclo: ../Src/Storage/%.c Src/Sto
 clean: clean-Src-2f-Storage
 
 clean-Src-2f-Storage:
-	-$(RM) ./Src/Storage/sd_stream.cyclo ./Src/Storage/sd_stream.d ./Src/Storage/sd_stream.o ./Src/Storage/sd_stream.su
+	-$(RM) ./Src/Storage/sd_stream.cyclo ./Src/Storage/sd_stream.d ./Src/Storage/sd_stream.o ./Src/Storage/sd_stream.su ./Src/Storage/wav_loader.cyclo ./Src/Storage/wav_loader.d ./Src/Storage/wav_loader.o ./Src/Storage/wav_loader.su
 
 .PHONY: clean-Src-2f-Storage
 

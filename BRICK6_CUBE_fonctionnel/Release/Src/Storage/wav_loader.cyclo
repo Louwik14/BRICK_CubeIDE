@@ -1,0 +1,3 @@
+../Src/Storage/wav_loader.c:40:14:wav_loader_get_interleaved_buffer	1
+../Src/Storage/wav_loader.c:45:10:wav_loader_get_capacity_frames	1
+../Src/Storage/wav_loader.c:157:6:wav_loader_load_to_sdram	2
