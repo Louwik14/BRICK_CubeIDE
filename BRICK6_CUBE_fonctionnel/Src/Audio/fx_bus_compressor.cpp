@@ -76,32 +76,42 @@ void fx_bus_compressor_process_stereo(float *left,
     if((left == nullptr) || (right == nullptr))
         return;
 
+    const float threshold_db = g_threshold_db;
+    const float ratio = g_ratio;
+    const int attack_index = (int)g_attack_index;
+    const int release_index = (int)g_release_index;
+    const float makeup_db = g_makeup_db;
+    const float mix = g_mix;
+    const float hpf_hz = g_hpf_hz;
+
     for(uint32_t n = 0U; n < frames; ++n)
     {
-        left[n] = g_bus_compressor.process(left[n],
-                                           0,
-                                           g_threshold_db,
-                                           g_ratio,
-                                           (int)g_attack_index,
-                                           (int)g_release_index,
-                                           g_makeup_db,
-                                           g_mix,
-                                           g_hpf_hz,
-                                           false,
-                                           0.0f,
-                                           false);
-        right[n] = g_bus_compressor.process(right[n],
-                                            1,
-                                            g_threshold_db,
-                                            g_ratio,
-                                            (int)g_attack_index,
-                                            (int)g_release_index,
-                                            g_makeup_db,
-                                            g_mix,
-                                            g_hpf_hz,
-                                            false,
-                                            0.0f,
-                                            false);
+        const float l = left[n];
+        const float r = right[n];
+        const float sc = 0.5f * (fabsf(l) + fabsf(r));
+
+        const float comp_out = g_bus_compressor.process(sc,
+                                                        0,
+                                                        threshold_db,
+                                                        ratio,
+                                                        attack_index,
+                                                        release_index,
+                                                        makeup_db,
+                                                        1.0f,
+                                                        hpf_hz,
+                                                        false,
+                                                        0.0f,
+                                                        false);
+
+        float gain = 1.0f;
+        if(sc > 1e-6f)
+            gain = comp_out / sc;
+
+        const float wet_l = l * gain;
+        const float wet_r = r * gain;
+
+        left[n] = l + (wet_l - l) * mix;
+        right[n] = r + (wet_r - r) * mix;
     }
 }
 
