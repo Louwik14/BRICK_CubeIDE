@@ -134,19 +134,30 @@ void brick6_app_init(void)
 
     {
         wav_info_t wav_info;
-        const char *wav_path = "0:/sample.wav";
-        if(wav_loader_load_to_sdram(wav_path, &wav_info))
+        char wav_path[64];
+
+        if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
         {
-            g_sampler_voice.loop_end = wav_info.frames_loaded;
-            sample_voice_trigger(&g_sampler_voice,
-                                 wav_loader_get_interleaved_buffer(),
-                                 wav_info.frames_loaded);
-            printf("[SAMPLER] trigger SD WAV %s frames=%lu\r\n",
-                   wav_path,
-                   (unsigned long)wav_info.frames_loaded);
+            printf("[WAV] found: %s\r\n", wav_path);
+
+            if(wav_loader_load_to_sdram(wav_path, &wav_info))
+            {
+                g_sampler_voice.loop_end = wav_info.frames_loaded;
+                sample_voice_trigger(&g_sampler_voice,
+                                     wav_loader_get_interleaved_buffer(),
+                                     wav_info.frames_loaded);
+                printf("[SAMPLER] trigger SD WAV %s frames=%lu\r\n",
+                       wav_path,
+                       (unsigned long)wav_info.frames_loaded);
+            }
+            else
+            {
+                printf("[SAMPLER] WAV load failed, sampler not triggered\r\n");
+            }
         }
         else
         {
+            printf("[WAV] no WAV found\r\n");
             printf("[SAMPLER] WAV load failed, sampler not triggered\r\n");
         }
     }

@@ -14,5 +14,6 @@ typedef struct
 } wav_info_t;
 
 bool wav_loader_load_to_sdram(const char *path, wav_info_t *info);
+bool wav_loader_find_first_wav(char *out_path, uint32_t max_len);
 const float *wav_loader_get_interleaved_buffer(void);
 uint32_t wav_loader_get_capacity_frames(void);
