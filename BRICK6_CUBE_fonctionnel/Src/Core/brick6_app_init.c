@@ -1,28 +1,11 @@
+
 /**
  * @file brick6_app_init.c
- * @brief Initialisation applicative BRICK6 (hors CubeMX).
- *
- * Rôle du module:
- * - Centraliser l'ordre d'init des briques applicatives (codec, audio, engine).
- * - Garder main.c minimal et lisible.
- *
- * Architecture:
- * - Appelé par: main.c (USER CODE BEGIN 2).
- * - Appelle: CS42448_Init, mixer_init, audio_*(), engine_tasklet_init.
- *
- * Contraintes temps réel:
- * - Exécuté une seule fois au démarrage (hors IRQ audio).
- * - Appels HAL bloquants autorisés ici (jamais dans le chemin IRQ audio).
- *
- * Pourquoi l'ordre d'init est important:
- * 1) Init codec d'abord (interface audio prête côté conversion).
- * 2) Init états audio_float/tracks/gains avant démarrage DMA.
- * 3) Enregistrer le callback DSP avant audio_start().
- * 4) Démarrer le DMA en dernier pour éviter tout traitement sans état valide.
  */
 
 #include <string.h>
 #include <stdio.h>
+
 #include "brick6_app_init.h"
 
 #include "engine_tasklet.h"
@@ -32,6 +15,7 @@
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
+#include "stm32h7xx_hal_uart.h"
 #include "usb_host.h"
 #include "usb_device.h"
 #include "audio.h"
@@ -48,24 +32,50 @@
 #define FORCE_TONE_TEST 0
 
 static sample_voice_t g_sampler_voice;
+static UART_HandleTypeDef huart1;
 
 /* ============================================================
-   Audio callback (DSP engine entry point)
+   UART DEBUG (hardcoded)
    ============================================================ */
 
-/**
- * @brief Entrée DSP principale par bloc audio.
- *
- * @param tracks Tableau de tracks stéréo.
- * @param track_count Nombre de tracks valides.
- * @param frames Taille bloc en frames.
- *
- * Contexte d'appel:
- * - IRQ audio (via audio_process_block_int32).
- *
- * Effets de bord:
- * - Appelle le module mixer (actuellement routage-only).
- */
+static void debug_uart_init(void)
+{
+    __HAL_RCC_USART1_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    // PA9 = USART1_TX
+    GPIO_InitStruct.Pin = GPIO_PIN_9;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    huart1.Instance = USART1;
+    huart1.Init.BaudRate = 115200;
+    huart1.Init.WordLength = UART_WORDLENGTH_8B;
+    huart1.Init.StopBits = UART_STOPBITS_1;
+    huart1.Init.Parity = UART_PARITY_NONE;
+    huart1.Init.Mode = UART_MODE_TX;
+    huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+    huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+
+    HAL_UART_Init(&huart1);
+}
+
+/* printf → UART */
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+
+/* ============================================================
+   DSP CALLBACK
+   ============================================================ */
+
 static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
@@ -91,48 +101,24 @@ static void my_dsp(StereoTrack *tracks,
         sample_voice_process(&g_sampler_voice, tracks[0].L, tracks[0].R, frames);
     }
 
-    /* Première étape moteur: mixer/routage. */
     mixer_process(tracks, track_count, frames);
-
-    /* Extensions prévues:
-       - track engine
-       - routing matrix
-       - Mutable FX
-       - sampler playback
-    */
 }
 
 /* ============================================================
-   Application Init
+   INIT APP
    ============================================================ */
 
-/**
- * @brief Initialise la pile applicative BRICK6 dans l'ordre sûr.
- *
- * Séquence actuelle:
- * - Init codec CS42448.
- * - Init mixer + gain staging audio_float.
- * - Init état tracks (disable + clear + gains par défaut).
- * - Paramétrage tracks/gains initiaux.
- * - Init interface audio SAI/DMA.
- * - Enregistrement callback DSP.
- * - Init scheduler tasklet.
- * - Start DMA audio.
- *
- * Contexte d'appel:
- * - Main loop, phase boot.
- */
 void brick6_app_init(void)
 {
+    debug_uart_init();
+    printf("\r\n[BOOT] UART OK\r\n");
+
     SDRAM_Init();
-    //SDRAM_Test();
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
-    /* 1) Codec audio externe. */
     CS42448_Init(0x48);
 
-    /* 2) Init mixer (routing) + gains frontière float. */
     mixer_init();
     fx_pool_init();
     (void)fx_pool_activate_slot(0U, FX_EQ3);
@@ -142,7 +128,6 @@ void brick6_app_init(void)
     audio_float_set_postgain(1.0f);
     audio_float_set_output_compensation(1.0f);
 
-    /* 3) État tracks déterministe avant démarrage audio. */
     audio_tracks_init();
 
     sample_voice_init(&g_sampler_voice);
@@ -167,29 +152,28 @@ void brick6_app_init(void)
                 DBG("[STEP3] DATA L=%f R=%f\r\n", buffer[0], buffer[1]);
 
                 g_sampler_voice.loop_end = wav_info.frames_loaded;
+
                 sample_voice_trigger(&g_sampler_voice,
                                      buffer,
                                      wav_info.frames_loaded);
+
                 DBG("[STEP4] TRIGGER active=%d len=%lu\r\n",
                     g_sampler_voice.active,
                     (unsigned long)g_sampler_voice.length);
             }
             else
             {
-                printf("[SAMPLER] WAV load failed, sampler not triggered\r\n");
+                DBG("[ERROR] WAV load failed\r\n");
             }
         }
         else
         {
-            printf("[WAV] no WAV found\r\n");
-            printf("[SAMPLER] WAV load failed, sampler not triggered\r\n");
+            DBG("[ERROR] No WAV found\r\n");
         }
     }
 
-    /* 4) Configuration initiale de gains et activation tracks. */
     mixer_set_master(2.0f);
 
-    /* Mapping tracks: T0=0/1, T1=2/3, T2=4/5. */
     track_enable(0, 1U);
     track_enable(1, 1U);
     track_enable(2, 1U);
@@ -198,17 +182,16 @@ void brick6_app_init(void)
     track_set_gain(1, 1.0f);
     track_set_gain(2, 1.0f);
 
-    /* 5) Init périphériques audio, puis callback DSP, puis start DMA. */
     audio_init(&hsai_BlockA1, &hsai_BlockB1);
     audio_set_float_callback(my_dsp);
 
     engine_tasklet_init(48000);
     param_store_init();
     control_event_init();
+
     audio_start();
 
     HAL_Delay(200);
 
-    /* Init MIDI */
     midi_init();
 }
