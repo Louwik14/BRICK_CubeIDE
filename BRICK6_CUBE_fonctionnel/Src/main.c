@@ -42,6 +42,7 @@
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
 #include "audio.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,6 +61,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static uint32_t sd_prev_buf0 = 0U;
+static uint32_t sd_prev_buf1 = 0U;
+static uint8_t sd_dump_done = 0U;
+static uint32_t stream_prev_progress = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,6 +78,46 @@ void MX_USB_DEVICE_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void sd_debug_poll(void)
+{
+  uint32_t c0 = sd_stream_get_read_buf0_count();
+  uint32_t c1 = sd_stream_get_read_buf1_count();
+  uint32_t progress = (c0 + c1) * SD_STREAM_BLOCKS_PER_BUFFER;
+
+  if (progress != stream_prev_progress)
+  {
+    stream_prev_progress = progress;
+    printf("[STREAM] progress %lu\r\n", (unsigned long)progress);
+  }
+
+  if (c0 != sd_prev_buf0)
+  {
+    sd_prev_buf0 = c0;
+    printf("[SD] buf0 ready count=%lu\r\n", (unsigned long)c0);
+  }
+
+  if (c1 != sd_prev_buf1)
+  {
+    sd_prev_buf1 = c1;
+    printf("[SD] buf1 ready count=%lu\r\n", (unsigned long)c1);
+  }
+
+  if ((sd_dump_done == 0U) && ((c0 > 0U) || (c1 > 0U)))
+  {
+    const uint32_t *b0 = sd_stream_get_buffer0();
+    const uint32_t *b1 = sd_stream_get_buffer1();
+
+    if ((b0 != NULL) && (b1 != NULL))
+    {
+      printf("[SD] dump b0=%08lX %08lX b1=%08lX %08lX\r\n",
+             (unsigned long)b0[0],
+             (unsigned long)b0[1],
+             (unsigned long)b1[0],
+             (unsigned long)b1[1]);
+      sd_dump_done = 1U;
+    }
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -134,9 +179,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  engine_tasklet_poll();
-    //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
-	MX_USB_HOST_Process();
+    engine_tasklet_poll();
+    sd_tasklet_poll();
+    sd_debug_poll();
+    MX_USB_HOST_Process();
     usb_host_tasklet_poll_bounded(4);
     midi_host_poll_bounded(8);
 	  if(engine_tick_count != last)
