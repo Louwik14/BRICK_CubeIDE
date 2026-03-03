@@ -25,8 +25,7 @@ void ui_tasklet_poll(void)
     static uint8_t attack_index = 2U;
     static uint8_t release_index = 2U;
     static float makeup_db = 0.0f;
-    static float mix = 1.0f;
-    static float hpf_hz = 60.0f;
+    static float auto_makeup = 1.0f;
 
     if(!init)
     {
@@ -39,8 +38,7 @@ void ui_tasklet_poll(void)
         control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
         control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, (float)release_index);
         control_router_set_param(CTRL_PARAM_BUS_COMP_MAKEUP_DB, makeup_db);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_HPF_HZ, hpf_hz);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, auto_makeup);
     }
 
     // -------- ENCODERS --------
@@ -104,8 +102,8 @@ void ui_tasklet_poll(void)
 
         if(d3 != 0)
         {
-            hpf_hz = clampf(hpf_hz + ((float)d3 * 2.0f), 20.0f, 200.0f);
-            control_router_set_param(CTRL_PARAM_BUS_COMP_HPF_HZ, hpf_hz);
+            auto_makeup = (d3 > 0) ? 1.0f : 0.0f;
+            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, auto_makeup);
         }
     }
     // -------- PAGE 2 --------
@@ -113,8 +111,8 @@ void ui_tasklet_poll(void)
     {
         if(d1 != 0)
         {
-            mix = clampf(mix + ((float)d1 * 0.02f), 0.0f, 1.0f);
-            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
+            auto_makeup = (d1 >= 0) ? 1.0f : 0.0f;
+            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, auto_makeup);
         }
     }
 
@@ -134,7 +132,7 @@ void ui_tasklet_poll(void)
     const uint32_t cpu_pm = cpu_load_get_permille();
     const uint32_t cpu_int = cpu_pm / 10U;
 
-    snprintf(line0, sizeof(line0), "BUS COMP CPU:%lu%% P:%u",
+    snprintf(line0, sizeof(line0), "DAISY COMP CPU:%lu%% P:%u",
              (unsigned long)cpu_int,
              (unsigned int)page);
 
@@ -164,14 +162,12 @@ void ui_tasklet_poll(void)
 
         snprintf(line1, sizeof(line1), "Release   %s ms", rel_str[release_index]);
         snprintf(line2, sizeof(line2), "Makeup    %d.%d dB", mkp_i, mkp_d);
-        snprintf(line3, sizeof(line3), "Side HPF  %u Hz", (unsigned int)hpf_hz);
+        snprintf(line3, sizeof(line3), "Auto Mkup %s", auto_makeup >= 0.5f ? "ON" : "OFF");
     }
     else
     {
-        int mix_pct = (int)(mix * 100.0f);
-
-        snprintf(line1, sizeof(line1), "Mix       %d%%", mix_pct);
-        snprintf(line2, sizeof(line2), "Parallel Comp");
+        snprintf(line1, sizeof(line1), "Auto Mkup %s", auto_makeup >= 0.5f ? "ON" : "OFF");
+        snprintf(line2, sizeof(line2), "Daisy Insert");
         snprintf(line3, sizeof(line3), " ");
     }
 

@@ -3,6 +3,7 @@
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_granular.h"
 #include "fx_saturation.h"
+#include "fx_daisy_comp.h"
 #include "memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -12,6 +13,7 @@ static fx_slot_t g_slots[FX_POOL_SIZE];
 
 static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
+static fx_daisy_comp_t g_daisy_comp;
 
 AUDIO_WARM ALIGN32 static float grain_buffer_l[48000];
 AUDIO_WARM ALIGN32 static float grain_buffer_r[48000];
@@ -69,6 +71,10 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
             slot->state = state;
             break;
         }
+
+        case FX_DAISY_COMP:
+            slot->state = &g_daisy_comp;
+            break;
 
         default:
             return 0;

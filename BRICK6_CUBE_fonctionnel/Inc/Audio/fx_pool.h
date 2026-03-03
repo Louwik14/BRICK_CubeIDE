@@ -6,7 +6,8 @@ typedef enum {
     FX_NONE = 0,
     FX_EQ3,
     FX_SAT,
-    FX_GRANULAR
+    FX_GRANULAR,
+    FX_DAISY_COMP
 } fx_type_t;
 
 typedef struct {
