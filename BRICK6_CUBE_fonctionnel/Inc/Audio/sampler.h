@@ -23,3 +23,4 @@ typedef struct
 void sample_voice_init(sample_voice_t *v);
 void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length);
 void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t nframes);
+void sampler_stop(sample_voice_t *v);
