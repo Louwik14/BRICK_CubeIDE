@@ -9,6 +9,13 @@ static inline float fx_softclip(float x)
     return x / (1.0f + ax);
 }
 
+// 🔥 TON waveshaper isolé (important pour normalisation cohérente)
+static inline float fx_shape(float x, float k)
+{
+    const float ax = __builtin_fabsf(x);
+    return x * (1.0f + k * ax) / (1.0f + k * x * x);
+}
+
 void fx_saturation_init(fx_saturation_t *fx)
 {
     if(fx == 0)
@@ -54,14 +61,24 @@ void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
 
     fx->pre_gain = pre_a + (pre_b - pre_a) * d2;
 
-    // 🔥 normalisation auto (évite perte de volume)
+    // 🔥 k pour ton waveshaper
+    fx->k = FX_SAT_MIN_K + (FX_SAT_K_MAX * d2);
+
+    // 🔥 normalisation TYPE DAISY mais avec TON shaping
     const float drive_squashed = drive * (2.0f - drive);
+
+    // point de référence (comme Daisy)
     const float ref = 0.33f + drive_squashed * (fx->pre_gain - 0.33f);
 
-    fx->post_gain = 1.0f / fx_softclip(ref);
+    // passage dans TON waveshaper
+    float shaped_ref = fx_shape(ref, fx->k);
 
-    // k utilisé pour shaping (ton algo)
-    fx->k = FX_SAT_MIN_K + (FX_SAT_K_MAX * d2);
+    // sécurité (évite division explosive)
+    const float eps = 1e-6f;
+    if(__builtin_fabsf(shaped_ref) < eps)
+        shaped_ref = eps;
+
+    fx->post_gain = 1.0f / shaped_ref;
 
     fx->bypass = 0U;
 }
@@ -130,15 +147,15 @@ void fx_saturation_process_block(fx_saturation_t *fx,
         xl += tone * dxl;
         xr += tone * dxr;
 
-        // 🔥 drive (pre gain)
+        // 🔥 drive
         xl *= pre;
         xr *= pre;
 
-        // 🔥 asymétrie (analog vibe)
+        // 🔥 asymétrie
         if(xl < 0.0f) xl *= asym;
         if(xr < 0.0f) xr *= asym;
 
-        // 🔥 waveshaper (ton algo)
+        // 🔥 waveshaper
         const float xl2 = xl * xl;
         const float xr2 = xr * xr;
 
@@ -148,20 +165,17 @@ void fx_saturation_process_block(fx_saturation_t *fx,
         float yl = xl * (1.0f + k * axl) / (1.0f + k * xl2);
         float yr = xr * (1.0f + k * axr) / (1.0f + k * xr2);
 
-        // 🔥 post gain (comme Daisy)
-        // 🔥 NORMALISATION SIMPLE (évite explosion volume)
-        const float out_gain = 1.0f / (1.0f + 0.5f * (k - 1.0f));
+        // 🔥 post gain (corrigé)
+        yl *= post;
+        yr *= post;
 
-        yl *= post * out_gain;
-        yr *= post * out_gain;
-
-        // mix ensuite
+        // mix
         yl = in_l * dry + yl * wet;
         yr = in_r * dry + yr * wet;
 
-        // clamp
-        yl = __builtin_fmaxf(-1.0f, __builtin_fminf(yl, 1.0f));
-        yr = __builtin_fmaxf(-1.0f, __builtin_fminf(yr, 1.0f));
+        // soft clamp léger (optionnel mais mieux que hard clamp)
+        yl = fx_softclip(yl);
+        yr = fx_softclip(yr);
 
         l[n] = yl;
         r[n] = yr;

@@ -128,10 +128,8 @@ void fx_daisy_comp_process_block(fx_daisy_comp_t *comp,
         float wetL = comp->core.Apply(inL);
         float wetR = comp->core.Apply(inR);
 
-        float gain_comp = 1.0f / (1.0f + mix);
-
-        left[n]  = (inL * imix + wetL * mix) * gain_comp;
-        right[n] = (inR * imix + wetR * mix) * gain_comp;
+        left[n]  = inL * imix + wetL * mix;
+        right[n] = inR * imix + wetR * mix;
     }
 }
 

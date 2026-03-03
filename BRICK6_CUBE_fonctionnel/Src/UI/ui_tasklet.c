@@ -124,11 +124,7 @@ void ui_tasklet_poll(void)
             control_router_set_param(CTRL_PARAM_DAISY_COMP_MIX, mix);
         }
 
-        if(d2 != 0)
-        {
-            auto_makeup = (d2 >= 0) ? 1.0f : 0.0f;
-            control_router_set_param(CTRL_PARAM_DAISY_COMP_AUTO_MAKEUP, auto_makeup);
-        }
+
     }
 
     // -------- UI REFRESH --------
@@ -183,10 +179,9 @@ void ui_tasklet_poll(void)
         int mix_pct = (int)(mix * 100.0f);
 
         snprintf(line1, sizeof(line1), "Mix       %d%%", mix_pct);
-        snprintf(line2, sizeof(line2), "Auto Mkup %s", auto_makeup >= 0.5f ? "ON" : "OFF");
+        snprintf(line2, sizeof(line2), " ");
         snprintf(line3, sizeof(line3), "Daisy Insert");
     }
-
     drv_display_clear_rect(0, 0, 96, 32);
     drv_display_draw_text(0, 0, line0);
     drv_display_draw_text(0, 8, line1);
