@@ -1,4 +1,7 @@
 #include "sampler.h"
+#include <stdio.h>
+
+#define DBG(...) printf(__VA_ARGS__)
 
 void sample_voice_init(sample_voice_t *v)
 {
@@ -45,6 +48,13 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
 
 void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t nframes)
 {
+    static uint32_t dbg_cnt2 = 0U;
+
+    if((dbg_cnt2++ % 2000U) == 0U)
+    {
+        DBG("[STEP6] SAMPLE PROCESS pos=%lu\r\n", (unsigned long)((v != 0) ? v->pos : 0U));
+    }
+
     if((v == 0) || (outL == 0) || (outR == 0) || (nframes == 0U))
         return;
 

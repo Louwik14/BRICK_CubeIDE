@@ -44,6 +44,9 @@
 #include "sampler.h"
 #include "wav_loader.h"
 
+#define DBG(...) printf(__VA_ARGS__)
+#define FORCE_TONE_TEST 0
+
 static sample_voice_t g_sampler_voice;
 
 /* ============================================================
@@ -67,6 +70,22 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
+    static uint32_t dbg_cnt = 0U;
+
+    if((dbg_cnt++ % 2000U) == 0U)
+    {
+        DBG("[STEP5] DSP RUNNING\r\n");
+    }
+
+#if FORCE_TONE_TEST
+    for(uint32_t i = 0U; i < frames; i++)
+    {
+        tracks[0].L[i] = 0.2f;
+        tracks[0].R[i] = 0.2f;
+    }
+    return;
+#endif
+
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
         sample_voice_process(&g_sampler_voice, tracks[0].L, tracks[0].R, frames);
@@ -138,17 +157,22 @@ void brick6_app_init(void)
 
         if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
         {
-            printf("[WAV] found: %s\r\n", wav_path);
+            DBG("[STEP1] WAV FOUND: %s\r\n", wav_path);
 
             if(wav_loader_load_to_sdram(wav_path, &wav_info))
             {
+                const float *buffer = wav_loader_get_interleaved_buffer();
+
+                DBG("[STEP2] LOAD OK frames=%lu\r\n", (unsigned long)wav_info.frames_loaded);
+                DBG("[STEP3] DATA L=%f R=%f\r\n", buffer[0], buffer[1]);
+
                 g_sampler_voice.loop_end = wav_info.frames_loaded;
                 sample_voice_trigger(&g_sampler_voice,
-                                     wav_loader_get_interleaved_buffer(),
+                                     buffer,
                                      wav_info.frames_loaded);
-                printf("[SAMPLER] trigger SD WAV %s frames=%lu\r\n",
-                       wav_path,
-                       (unsigned long)wav_info.frames_loaded);
+                DBG("[STEP4] TRIGGER active=%d len=%lu\r\n",
+                    g_sampler_voice.active,
+                    (unsigned long)g_sampler_voice.length);
             }
             else
             {
