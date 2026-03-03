@@ -290,10 +290,9 @@ void BusCompressorCore::prepare(double sr, int ch, int)
 
 float BusCompressorCore::process(float input, int channel, float threshold, float ratio,
                                  int attackIndex, int releaseIndex, float makeupGain,
-                                 float mixAmount, bool oversample, float sidechainSignal,
+                                 float mixAmount, float sidechainHpfHz, bool oversample, float sidechainSignal,
                                  bool useExternalSidechain)
 {
-    (void)mixAmount;
     (void)oversample;
 
     if (channel >= numChannels || channel < 0)
@@ -311,7 +310,8 @@ float BusCompressorCore::process(float input, int channel, float threshold, floa
     }
     else
     {
-        float hpCutoff = 60.0f / (float)sampleRate;
+        float hpfHz = clampFloat(sidechainHpfHz, 20.0f, 200.0f);
+        float hpCutoff = hpfHz / (float)sampleRate;
         float hpAlpha = hpCutoff < 1.0f ? hpCutoff : 1.0f;
         detector.hpState = transformedInput - detector.prevInput + detector.hpState * (1.0f - hpAlpha);
         detector.prevInput = transformedInput;
@@ -380,7 +380,11 @@ float BusCompressorCore::process(float input, int channel, float threshold, floa
     float x3 = x2 * processed;
     processed = processed + k2 * x2 + k3 * x3;
 
-    float output = processed * decibelsToGain(makeupGain);
+    float dry = input;
+    float wet = processed;
+    float mixed = dry + (wet - dry) * clampFloat(mixAmount, 0.0f, 1.0f);
+
+    float output = mixed * decibelsToGain(makeupGain);
     if (output < -OUTPUT_HARD_LIMIT)
         output = -OUTPUT_HARD_LIMIT;
     if (output > OUTPUT_HARD_LIMIT)

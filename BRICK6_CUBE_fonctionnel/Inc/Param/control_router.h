@@ -61,6 +61,9 @@ typedef enum {
     CTRL_PARAM_BUS_COMP_RATIO,
     CTRL_PARAM_BUS_COMP_ATTACK_INDEX,
     CTRL_PARAM_BUS_COMP_RELEASE_INDEX,
+    CTRL_PARAM_BUS_COMP_MAKEUP_DB,
+    CTRL_PARAM_BUS_COMP_MIX,
+    CTRL_PARAM_BUS_COMP_HPF_HZ,
 } control_param_id_t;
 
 void control_router_set_param(control_param_id_t id, float v);
