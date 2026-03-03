@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "memory_layout.h"
+#include "sd_owner.h"
 
 #define WAV_BUFFER_FRAMES (48000U)
 #define WAV_BUFFER_SAMPLES (WAV_BUFFER_FRAMES * 2U)
@@ -254,6 +255,12 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 
     if(info != 0)
         memset(info, 0, sizeof(*info));
+
+    if(sd_get_owner() != SD_OWNER_FATFS)
+    {
+        printf("[ERROR] FatFs access while STREAM active\r\n");
+        return false;
+    }
 
 #if WAV_LOADER_HAS_FATFS
     FIL fp;

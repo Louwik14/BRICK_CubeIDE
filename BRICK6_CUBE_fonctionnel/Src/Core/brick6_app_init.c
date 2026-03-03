@@ -13,6 +13,7 @@
 #include "midi.h"
 #include "sai.h"
 #include "sd_stream.h"
+#include "sd_owner.h"
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
@@ -277,12 +278,16 @@ void brick6_app_init(void)
 
         DBG("[SD] init ok\r\n");
 
+        sd_set_owner(SD_OWNER_FATFS);
+
         if(!wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
         {
+            sd_set_owner(SD_OWNER_NONE);
             DBG("[STREAM] WAV not found\r\n");
         }
         else if(!wav_loader_load_to_sdram(wav_path, &wav_info))
         {
+            sd_set_owner(SD_OWNER_NONE);
             DBG("[STREAM] WAV header load failed\r\n");
         }
         else
@@ -292,6 +297,7 @@ void brick6_app_init(void)
 
             total_blocks -= (total_blocks % SD_STREAM_BLOCKS_PER_BUFFER);
 
+            sd_set_owner(SD_OWNER_STREAM);
             DBG("[STREAM] start wav streaming\r\n");
 
             if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
@@ -300,12 +306,14 @@ void brick6_app_init(void)
             }
             else
             {
+                sd_set_owner(SD_OWNER_NONE);
                 DBG("[STREAM] start wav streaming error\r\n");
             }
         }
     }
     else
     {
+        sd_set_owner(SD_OWNER_NONE);
         DBG("[SD] init error\r\n");
     }
 
