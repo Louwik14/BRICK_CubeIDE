@@ -119,6 +119,145 @@ static void my_dsp(StereoTrack *tracks,
     mixer_process(tracks, track_count, frames);
 }
 
+static uint16_t wav_le16(const uint8_t *p)
+{
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t wav_le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] |
+           ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+static bool stream_wav_start_from_sd(void)
+{
+#if BRICK6_HAS_FATFS
+    char wav_path[64];
+    FIL fp;
+    UINT br = 0U;
+    uint8_t riff[12];
+    uint32_t data_offset = 0U;
+    uint32_t data_size = 0U;
+
+    if(!wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
+        return false;
+
+    if(f_open(&fp, wav_path, FA_READ) != FR_OK)
+        return false;
+
+    if((f_read(&fp, riff, sizeof(riff), &br) != FR_OK) || (br != sizeof(riff)))
+    {
+        (void)f_close(&fp);
+        return false;
+    }
+
+    if((memcmp(&riff[0], "RIFF", 4) != 0) || (memcmp(&riff[8], "WAVE", 4) != 0))
+    {
+        (void)f_close(&fp);
+        return false;
+    }
+
+    while(f_tell(&fp) + 8U <= f_size(&fp))
+    {
+        uint8_t chunk_header[8];
+        uint32_t chunk_size;
+
+        if((f_read(&fp, chunk_header, sizeof(chunk_header), &br) != FR_OK) || (br != sizeof(chunk_header)))
+        {
+            (void)f_close(&fp);
+            return false;
+        }
+
+        chunk_size = wav_le32(&chunk_header[4]);
+
+        if(memcmp(&chunk_header[0], "fmt ", 4) == 0)
+        {
+            uint8_t fmt[16];
+            uint16_t format;
+            uint16_t channels;
+            uint32_t sample_rate;
+
+            if(chunk_size < 16U)
+            {
+                (void)f_close(&fp);
+                return false;
+            }
+
+            if((f_read(&fp, fmt, sizeof(fmt), &br) != FR_OK) || (br != sizeof(fmt)))
+            {
+                (void)f_close(&fp);
+                return false;
+            }
+
+            format = wav_le16(&fmt[0]);
+            channels = wav_le16(&fmt[2]);
+            sample_rate = wav_le32(&fmt[4]);
+
+            if((format != 1U) || (channels != 2U) || (sample_rate != 48000U))
+            {
+                (void)f_close(&fp);
+                return false;
+            }
+
+            if(chunk_size > sizeof(fmt))
+            {
+                if(f_lseek(&fp, f_tell(&fp) + (chunk_size - sizeof(fmt))) != FR_OK)
+                {
+                    (void)f_close(&fp);
+                    return false;
+                }
+            }
+        }
+        else if(memcmp(&chunk_header[0], "data", 4) == 0)
+        {
+            data_offset = f_tell(&fp);
+            data_size = chunk_size;
+            break;
+        }
+        else
+        {
+            if(f_lseek(&fp, f_tell(&fp) + chunk_size) != FR_OK)
+            {
+                (void)f_close(&fp);
+                return false;
+            }
+        }
+
+        if((chunk_size & 1U) != 0U)
+        {
+            if(f_lseek(&fp, f_tell(&fp) + 1U) != FR_OK)
+            {
+                (void)f_close(&fp);
+                return false;
+            }
+        }
+    }
+
+    (void)f_close(&fp);
+
+    if(data_size == 0U)
+        return false;
+
+    {
+        uint32_t start_block = data_offset / SD_STREAM_BLOCK_SIZE_BYTES;
+        uint32_t intra = data_offset % SD_STREAM_BLOCK_SIZE_BYTES;
+        uint32_t total_blocks = (intra + data_size + (SD_STREAM_BLOCK_SIZE_BYTES - 1U)) / SD_STREAM_BLOCK_SIZE_BYTES;
+
+        DBG("[STREAM] start wav streaming\r\n");
+        if(sd_stream_start_read(start_block, total_blocks) != HAL_OK)
+            return false;
+
+        DBG("[STREAM] reading blocks...\r\n");
+        return true;
+    }
+#else
+    return false;
+#endif
+}
+
 /* ============================================================
    INIT APP
    ============================================================ */
