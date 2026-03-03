@@ -129,6 +129,20 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
+    if(sd_stream_init(&hsd1) == HAL_OK)
+    {
+        DBG("[SD] init ok\r\n");
+
+        if(sd_stream_start_read(0U, 256U) == HAL_OK)
+            DBG("[SD] start read ok\r\n");
+        else
+            DBG("[SD] start read error\r\n");
+    }
+    else
+    {
+        DBG("[SD] init error\r\n");
+    }
+
     CS42448_Init(0x48);
 
     mixer_init();
