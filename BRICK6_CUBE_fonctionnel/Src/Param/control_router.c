@@ -23,6 +23,7 @@
 
 #include "mixer.h"
 #include "param_store.h"
+#include "audio_float.h"
 
 /**
  * @brief Convertit une valeur float de contrôle en index de slot FX.
@@ -98,6 +99,11 @@ void control_router_set_param(control_param_id_t id, float v)
 
         case CTRL_PARAM_MIX_SEND0_FX: mixer_set_send_fx_slot(0U, control_float_to_slot(v)); break;
         case CTRL_PARAM_MIX_SEND1_FX: mixer_set_send_fx_slot(1U, control_float_to_slot(v)); break;
+
+        case CTRL_PARAM_BUS_COMP_THRESHOLD_DB: audio_float_set_bus_comp_threshold_db(v); break;
+        case CTRL_PARAM_BUS_COMP_RATIO: audio_float_set_bus_comp_ratio(v); break;
+        case CTRL_PARAM_BUS_COMP_ATTACK_INDEX: audio_float_set_bus_comp_attack_index((uint8_t)v); break;
+        case CTRL_PARAM_BUS_COMP_RELEASE_INDEX: audio_float_set_bus_comp_release_index((uint8_t)v); break;
 
         default:
             break;

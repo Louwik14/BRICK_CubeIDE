@@ -42,6 +42,7 @@
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "control_events.h"
+#include "fx_bus_compressor.h"
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -152,6 +153,27 @@ void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
     if(sat) fx_saturation_set_mix_ui(sat, mix_0_127);
 }
 
+
+void audio_float_set_bus_comp_threshold_db(float threshold_db)
+{
+    fx_bus_compressor_set_threshold_db(threshold_db);
+}
+
+void audio_float_set_bus_comp_ratio(float ratio)
+{
+    fx_bus_compressor_set_ratio(ratio);
+}
+
+void audio_float_set_bus_comp_attack_index(uint8_t attack_index)
+{
+    fx_bus_compressor_set_attack_index(attack_index);
+}
+
+void audio_float_set_bus_comp_release_index(uint8_t release_index)
+{
+    fx_bus_compressor_set_release_index(release_index);
+}
+
 /* ============================================================
    TRACK + MIX STATE
    ============================================================ */
@@ -192,6 +214,8 @@ void audio_tracks_init(void)
     if(sat) fx_saturation_init(sat);
 
     master_gain = 1.0f;
+
+    fx_bus_compressor_init(48000.0f, AUDIO_BLOCK_SIZE);
 }
 
 /** Voir audio_float.h */
@@ -289,6 +313,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
+    fx_bus_compressor_process_stereo(tracks[0].L, tracks[0].R, frames);
     audio_io_pack(tx,
                   tracks[0].L,
                   tracks[0].R,
