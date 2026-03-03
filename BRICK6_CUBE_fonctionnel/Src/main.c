@@ -38,6 +38,7 @@
 #include "midi_host.h"
 #include "sdram.h"
 #include "sd_stream.h"
+#include "sd_callbacks.h"
 #include "engine_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
@@ -182,6 +183,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
     engine_tasklet_poll();
     sd_tasklet_poll();
+    sd_callbacks_tasklet_poll();
     sampler_stream_update();
     sd_debug_poll();
     MX_USB_HOST_Process();
