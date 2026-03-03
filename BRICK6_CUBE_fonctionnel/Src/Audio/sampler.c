@@ -34,6 +34,7 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
         return;
     }
 
+    /* Clamp loop end to valid sample length. */
     if(v->loop_end == 0U || v->loop_end > length)
         v->loop_end = length;
 
@@ -46,15 +47,17 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
     v->active = true;
 }
 
+void sampler_stop(sample_voice_t *v)
+{
+    if(v == 0)
+        return;
+
+    v->active = false;
+    v->pos = 0U;
+}
+
 void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t nframes)
 {
-    static uint32_t dbg_cnt2 = 0U;
-
-    if((dbg_cnt2++ % 2000U) == 0U)
-    {
-        DBG("[STEP6] SAMPLE PROCESS pos=%lu\r\n", (unsigned long)((v != 0) ? v->pos : 0U));
-    }
-
     if((v == 0) || (outL == 0) || (outR == 0) || (nframes == 0U))
         return;
 
@@ -83,6 +86,8 @@ void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t 
         v->pos++;
 
         if(v->loop && (v->pos >= v->loop_end))
-            v->pos = v->loop_start;
+        {
+            v->pos = (v->loop_start < v->loop_end) ? v->loop_start : 0U;
+        }
     }
 }
