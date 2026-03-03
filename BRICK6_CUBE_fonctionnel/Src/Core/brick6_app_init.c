@@ -22,6 +22,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include "brick6_app_init.h"
 
 #include "engine_tasklet.h"
@@ -40,6 +41,10 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
+#include "sampler.h"
+#include "wav_loader.h"
+
+static sample_voice_t g_sampler_voice;
 
 /* ============================================================
    Audio callback (DSP engine entry point)
@@ -62,6 +67,11 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
+    if((track_count > 0U) && (tracks[0].enabled != 0U))
+    {
+        sample_voice_process(&g_sampler_voice, tracks[0].L, tracks[0].R, frames);
+    }
+
     /* Première étape moteur: mixer/routage. */
     mixer_process(tracks, track_count, frames);
 
@@ -115,6 +125,36 @@ void brick6_app_init(void)
 
     /* 3) État tracks déterministe avant démarrage audio. */
     audio_tracks_init();
+
+    sample_voice_init(&g_sampler_voice);
+    g_sampler_voice.gainL = 0.35f;
+    g_sampler_voice.gainR = 0.35f;
+    g_sampler_voice.loop = true;
+    g_sampler_voice.loop_start = 0U;
+
+    {
+        wav_info_t wav_info;
+        sample_buffer_t sbuf;
+        const char *wav_path = "0:/sample.wav";
+
+        if(wav_loader_load_to_sdram(wav_path, &wav_info) &&
+           wav_loader_is_ready() &&
+           wav_loader_get_sample_buffer(&sbuf) &&
+           (sbuf.data != 0) &&
+           (sbuf.length > 0U))
+        {
+            g_sampler_voice.loop_end = sbuf.length;
+            sample_voice_trigger(&g_sampler_voice, sbuf.data, sbuf.length);
+            printf("[SAMPLER] trigger SD WAV %s frames=%lu\r\n",
+                   wav_path,
+                   (unsigned long)wav_info.frames_loaded);
+        }
+        else
+        {
+            g_sampler_voice.active = false;
+            printf("[SAMPLER] WAV not ready, sampler disabled\r\n");
+        }
+    }
 
     /* 4) Configuration initiale de gains et activation tracks. */
     mixer_set_master(2.0f);
