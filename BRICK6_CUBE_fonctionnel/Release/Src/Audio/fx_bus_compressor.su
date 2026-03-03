@@ -1,0 +1,7 @@
+../Src/Audio/fx_bus_compressor.cpp:26:6:void fx_bus_compressor_init(float, uint32_t)	0	static
+../Src/Audio/fx_bus_compressor.cpp:34:6:void fx_bus_compressor_set_threshold_db(float)	0	static
+../Src/Audio/fx_bus_compressor.cpp:39:6:void fx_bus_compressor_set_ratio(float)	0	static
+../Src/Audio/fx_bus_compressor.cpp:44:6:void fx_bus_compressor_set_attack_index(uint8_t)	0	static
+../Src/Audio/fx_bus_compressor.cpp:49:6:void fx_bus_compressor_set_release_index(uint8_t)	0	static
+../Src/Audio/fx_bus_compressor.cpp:54:6:void fx_bus_compressor_process_stereo(float*, float*, uint32_t)	64	static
+../Src/Audio/fx_bus_compressor.cpp:88:1:cpp)	0	static

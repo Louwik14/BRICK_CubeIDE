@@ -372,6 +372,8 @@
 "./Src/Audio/audio_float.o"
 "./Src/Audio/audio_io.o"
 "./Src/Audio/dsp_engine.o"
+"./Src/Audio/fx_BusCompressorCore.o"
+"./Src/Audio/fx_bus_compressor.o"
 "./Src/Audio/fx_chain.o"
 "./Src/Audio/fx_clouds.o"
 "./Src/Audio/fx_dj_eq3_cmsis.o"
