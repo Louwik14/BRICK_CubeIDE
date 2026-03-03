@@ -604,7 +604,7 @@ void sd_tasklet_poll_bounded(uint32_t max_steps)
   }
 }
 
-void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
+void sd_stream_rx_callback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
   {
@@ -615,7 +615,7 @@ void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
   }
 }
 
-void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
+void sd_stream_tx_callback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
   {
@@ -626,7 +626,7 @@ void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
   }
 }
 
-void HAL_SD_ErrorCallback(SD_HandleTypeDef *hsd)
+void sd_stream_error_callback(SD_HandleTypeDef *hsd)
 {
   if (hsd == sd_handle)
   {
