@@ -22,6 +22,8 @@ RM := rm -rf
 -include Src/Core/subdir.mk
 -include Src/Audio/subdir.mk
 -include Src/subdir.mk
+-include Middlewares/Third_Party/FatFs/src/option/subdir.mk
+-include Middlewares/Third_Party/FatFs/src/subdir.mk
 -include Drivers/STM32H7xx_HAL_Driver/Src/subdir.mk
 -include Drivers/Drv_app/Src/subdir.mk
 -include Drivers/CMSIS_DSP/Source/TransformFunctions/subdir.mk
