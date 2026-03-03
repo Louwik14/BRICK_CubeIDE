@@ -24,6 +24,7 @@
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
 #include "fx_granular.h"
+#include "fx_daisy_comp.h"
 
 /**
  * @brief Traite un bloc stéréo avec un slot FX donné.
@@ -59,6 +60,10 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
 
         case FX_GRANULAR:
             fx_granular_process_block((fx_granular_state_t*)s->state, L, R, L, R, frames);
+            break;
+
+        case FX_DAISY_COMP:
+            fx_daisy_comp_process_block((fx_daisy_comp_t*)s->state, L, R, frames);
             break;
 
         default:

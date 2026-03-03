@@ -3,6 +3,7 @@
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_granular.h"
 #include "fx_saturation.h"
+#include "fx_daisy_comp.h"
 #include "memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -69,6 +70,10 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
             slot->state = state;
             break;
         }
+
+        case FX_DAISY_COMP:
+            slot->state = fx_daisy_comp_get_instance();
+            break;
 
         default:
             return 0;
