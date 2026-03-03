@@ -252,16 +252,16 @@ float BusCompressorCore::absFloat(float x)
     return x < 0.0f ? -x : x;
 }
 
-float BusCompressorCore::decibelsToGain(float dB)
+inline float fastDbToGain(float dB)
 {
-    return powf(10.0f, dB / 20.0f);
+    return expf(dB * 0.115129f); // ln(10)/20
 }
 
-float BusCompressorCore::gainToDecibels(float g)
+inline float fastGainToDb(float g)
 {
     if (g <= 0.0f)
         return -1000.0f;
-    return 20.0f * log10f(g);
+    return 8.6858896f * logf(g); // 20/ln(10)
 }
 
 void BusCompressorCore::prepare(double sr, int ch, int)
@@ -303,36 +303,39 @@ float BusCompressorCore::process(float input, int channel, float threshold, floa
     Detector& detector = detectors[channel];
     float transformedInput = inputTransformer.processSample(input, channel);
 
-    float detectionLevel;
-    if (useExternalSidechain)
-    {
-        detectionLevel = absFloat(sidechainSignal);
-    }
-    else
-    {
-        float hpfHz = clampFloat(sidechainHpfHz, 20.0f, 200.0f);
-        float hpCutoff = hpfHz / (float)sampleRate;
-        float hpAlpha = hpCutoff < 1.0f ? hpCutoff : 1.0f;
-        detector.hpState = transformedInput - detector.prevInput + detector.hpState * (1.0f - hpAlpha);
-        detector.prevInput = transformedInput;
-        detectionLevel = absFloat(detector.hpState);
-    }
+    float inputAbs = useExternalSidechain ? absFloat(sidechainSignal)
+                                          : absFloat(transformedInput);
 
-    float thresholdLin = decibelsToGain(threshold);
-    float reduction = 0.0f;
-    if (detectionLevel > thresholdLin)
-    {
-        float overThreshDb = gainToDecibels(detectionLevel / thresholdLin);
-        reduction = overThreshDb * (1.0f - 1.0f / ratio);
-        if (reduction > BUS_MAX_REDUCTION_DB)
-            reduction = BUS_MAX_REDUCTION_DB;
-    }
-
+    // attack/release times (déjà définis plus bas → on les recalcule ici aussi)
     const float attackTimes[6] = {0.1f, 0.3f, 1.0f, 3.0f, 10.0f, 30.0f};
     const float releaseTimes[5] = {100.0f, 300.0f, 600.0f, 1200.0f, -1.0f};
 
     float attackTime = attackTimes[clampInt(attackIndex, 0, 5)] * 0.001f;
     float releaseTime = releaseTimes[clampInt(releaseIndex, 0, 4)] * 0.001f;
+
+    // coeffs
+    float attackCoeff  = 1.0f - 1.0f / (attackTime * sampleRate);
+    float releaseCoeff = 1.0f - 1.0f / (releaseTime * sampleRate);
+
+    attackCoeff  = clampFloat(attackCoeff,  0.0f, 0.9999f);
+    releaseCoeff = clampFloat(releaseCoeff, 0.0f, 0.9999f);
+
+    // envelope follower
+    float coeff = (inputAbs > detector.rms) ? attackCoeff : releaseCoeff;
+    detector.rms = detector.rms * coeff + (1.0f - coeff) * inputAbs;
+
+    float detectionLevel = detector.rms;
+
+    float thresholdLin = fastDbToGain(threshold);
+    float reduction = 0.0f;
+    if (detectionLevel > thresholdLin)
+    {
+        float overThreshDb = fastGainToDb(detectionLevel / thresholdLin);
+        reduction = overThreshDb * (1.0f - 1.0f / ratio);
+        if (reduction > BUS_MAX_REDUCTION_DB)
+            reduction = BUS_MAX_REDUCTION_DB;
+    }
+
 
     if (releaseTime < 0.0f)
     {
@@ -344,7 +347,7 @@ float BusCompressorCore::process(float input, int channel, float threshold, floa
         releaseTime = 0.15f + sustainedFactor * (0.45f - 0.15f);
     }
 
-    float targetGain = decibelsToGain(-reduction);
+    float targetGain = fastDbToGain(-reduction);
     if (targetGain < detector.envelope)
     {
         float divisor = attackTime * (float)sampleRate;
@@ -380,11 +383,12 @@ float BusCompressorCore::process(float input, int channel, float threshold, floa
     float x3 = x2 * processed;
     processed = processed + k2 * x2 + k3 * x3;
 
-    float dry = input;
-    float wet = processed;
-    float mixed = dry + (wet - dry) * clampFloat(mixAmount, 0.0f, 1.0f);
+    float makeup = fastDbToGain(makeupGain);
 
-    float output = mixed * decibelsToGain(makeupGain);
+    float wet = processed * makeup;
+    float dry = input;
+
+    float output = dry + (wet - dry) * clampFloat(mixAmount, 0.0f, 1.0f);
     if (output < -OUTPUT_HARD_LIMIT)
         output = -OUTPUT_HARD_LIMIT;
     if (output > OUTPUT_HARD_LIMIT)
@@ -396,7 +400,7 @@ float BusCompressorCore::getGainReduction(int channel) const
 {
     if (channel < 0 || channel >= numChannels)
         return 0.0f;
-    return gainToDecibels(detectors[channel].envelope);
+    return fastGainToDb(detectors[channel].envelope);
 }
 
 } // namespace EmbeddedPort

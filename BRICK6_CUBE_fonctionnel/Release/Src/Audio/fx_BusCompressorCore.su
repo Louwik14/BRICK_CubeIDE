@@ -23,8 +23,6 @@
 ../Src/Audio/fx_BusCompressorCore.cpp:240:7:static float EmbeddedPort::BusCompressorCore::clampFloat(float, float, float)	0	static
 ../Src/Audio/fx_BusCompressorCore.cpp:245:5:static int EmbeddedPort::BusCompressorCore::clampInt(int, int, int)	0	static
 ../Src/Audio/fx_BusCompressorCore.cpp:250:7:static float EmbeddedPort::BusCompressorCore::absFloat(float)	0	static
-../Src/Audio/fx_BusCompressorCore.cpp:255:7:static float EmbeddedPort::BusCompressorCore::decibelsToGain(float)	0	static
-../Src/Audio/fx_BusCompressorCore.cpp:260:7:static float EmbeddedPort::BusCompressorCore::gainToDecibels(float)	8	static
 ../Src/Audio/fx_BusCompressorCore.cpp:267:6:void EmbeddedPort::BusCompressorCore::prepare(double, int, int)	4	static
-../Src/Audio/fx_BusCompressorCore.cpp:291:7:float EmbeddedPort::BusCompressorCore::process(float, int, float, float, int, int, float, float, bool, float, bool)	112	static
-../Src/Audio/fx_BusCompressorCore.cpp:391:7:float EmbeddedPort::BusCompressorCore::getGainReduction(int) const	8	static
+../Src/Audio/fx_BusCompressorCore.cpp:291:7:float EmbeddedPort::BusCompressorCore::process(float, int, float, float, int, int, float, float, float, bool, float, bool)	128	static
+../Src/Audio/fx_BusCompressorCore.cpp:399:7:float EmbeddedPort::BusCompressorCore::getGainReduction(int) const	8	static

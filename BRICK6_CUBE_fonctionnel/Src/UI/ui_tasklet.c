@@ -43,6 +43,7 @@ void ui_tasklet_poll(void)
         control_router_set_param(CTRL_PARAM_BUS_COMP_HPF_HZ, hpf_hz);
     }
 
+    // -------- ENCODERS --------
     drv_encoders_poll();
 
     const int16_t d0 = drv_encoder_get_delta(0U);
@@ -50,6 +51,7 @@ void ui_tasklet_poll(void)
     const int16_t d2 = drv_encoder_get_delta(2U);
     const int16_t d3 = drv_encoder_get_delta(3U);
 
+    // Page select
     if(d0 != 0)
     {
         int32_t p = (int32_t)page + (int32_t)d0;
@@ -58,6 +60,7 @@ void ui_tasklet_poll(void)
         page = (uint8_t)p;
     }
 
+    // -------- PAGE 0 --------
     if(page == 0U)
     {
         if(d1 != 0)
@@ -81,6 +84,7 @@ void ui_tasklet_poll(void)
             control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
         }
     }
+    // -------- PAGE 1 --------
     else if(page == 1U)
     {
         if(d1 != 0)
@@ -104,6 +108,7 @@ void ui_tasklet_poll(void)
             control_router_set_param(CTRL_PARAM_BUS_COMP_HPF_HZ, hpf_hz);
         }
     }
+    // -------- PAGE 2 --------
     else
     {
         if(d1 != 0)
@@ -113,59 +118,61 @@ void ui_tasklet_poll(void)
         }
     }
 
+    // -------- UI REFRESH --------
     ui_tick++;
     if(ui_tick < 20U)
         return;
 
     ui_tick = 0U;
 
-    char line0[24];
-    char line1[24];
-    char line2[24];
-    char line3[24];
+    char line0[32];
+    char line1[32];
+    char line2[32];
+    char line3[32];
 
+    // CPU
     const uint32_t cpu_pm = cpu_load_get_permille();
     const uint32_t cpu_int = cpu_pm / 10U;
-    const uint32_t cpu_dec = cpu_pm % 10U;
 
-    snprintf(line0, sizeof(line0), "CPU: %lu.%lu%% P:%u",
+    snprintf(line0, sizeof(line0), "BUS COMP CPU:%lu%% P:%u",
              (unsigned long)cpu_int,
-             (unsigned long)cpu_dec,
              (unsigned int)page);
 
     if(page == 0U)
     {
         int thr_i = (int)threshold_db;
-        int thr_d = (int)((threshold_db - (float)thr_i) * 10.0f);
+        int thr_d = (int)((threshold_db - thr_i) * 10.0f);
         if(thr_d < 0) thr_d = -thr_d;
 
         int rat_i = (int)ratio;
-        int rat_d = (int)((ratio - (float)rat_i) * 10.0f);
+        int rat_d = (int)((ratio - rat_i) * 10.0f);
         if(rat_d < 0) rat_d = -rat_d;
 
-        snprintf(line1, sizeof(line1), "THR: %d.%d dB", thr_i, thr_d);
-        snprintf(line2, sizeof(line2), "RAT: %d.%d", rat_i, rat_d);
-        snprintf(line3, sizeof(line3), "ATK: %u", (unsigned int)attack_index);
+        static const char* atk_str[6] = {"0.1","0.3","1","3","10","30"};
+
+        snprintf(line1, sizeof(line1), "Threshold %d.%d dB", thr_i, thr_d);
+        snprintf(line2, sizeof(line2), "Ratio     %d.%d:1", rat_i, rat_d);
+        snprintf(line3, sizeof(line3), "Attack    %s ms", atk_str[attack_index]);
     }
     else if(page == 1U)
     {
         int mkp_i = (int)makeup_db;
-        int mkp_d = (int)((makeup_db - (float)mkp_i) * 10.0f);
+        int mkp_d = (int)((makeup_db - mkp_i) * 10.0f);
         if(mkp_d < 0) mkp_d = -mkp_d;
 
-        snprintf(line1, sizeof(line1), "REL: %u", (unsigned int)release_index);
-        snprintf(line2, sizeof(line2), "MKP: %d.%d dB", mkp_i, mkp_d);
-        snprintf(line3, sizeof(line3), "HPF: %u Hz", (unsigned int)hpf_hz);
+        static const char* rel_str[5] = {"100","300","600","1200","AUTO"};
+
+        snprintf(line1, sizeof(line1), "Release   %s ms", rel_str[release_index]);
+        snprintf(line2, sizeof(line2), "Makeup    %d.%d dB", mkp_i, mkp_d);
+        snprintf(line3, sizeof(line3), "Side HPF  %u Hz", (unsigned int)hpf_hz);
     }
     else
     {
-        int mix_i = (int)mix;
-        int mix_d = (int)((mix - (float)mix_i) * 100.0f);
-        if(mix_d < 0) mix_d = -mix_d;
+        int mix_pct = (int)(mix * 100.0f);
 
-        snprintf(line1, sizeof(line1), "MIX: %d.%02d", mix_i, mix_d);
-        snprintf(line2, sizeof(line2), "ENC2: --");
-        snprintf(line3, sizeof(line3), "ENC3: --");
+        snprintf(line1, sizeof(line1), "Mix       %d%%", mix_pct);
+        snprintf(line2, sizeof(line2), "Parallel Comp");
+        snprintf(line3, sizeof(line3), " ");
     }
 
     drv_display_clear_rect(0, 0, 96, 32);
