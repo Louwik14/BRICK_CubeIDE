@@ -41,13 +41,13 @@ void ui_tasklet_poll(void)
         drv_display_init();
         drv_encoders_init();
 
-        control_router_set_param(CTRL_PARAM_BUS_COMP_THRESHOLD_DB, threshold_db);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_RATIO, ratio);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, attack_values[attack_index]);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, release_values[release_index]);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_MAKEUP_DB, makeup_db);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_AUTO_MAKEUP, auto_makeup);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_THRESHOLD_DB, threshold_db);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_RATIO, ratio);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_ATTACK_S, attack_values[attack_index]);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_RELEASE_S, release_values[release_index]);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_MAKEUP_DB, makeup_db);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_AUTO_MAKEUP, auto_makeup);
+        control_router_set_param(CTRL_PARAM_DAISY_COMP_MIX, mix);
     }
 
     // -------- ENCODERS --------
@@ -73,13 +73,13 @@ void ui_tasklet_poll(void)
         if(d1 != 0)
         {
             threshold_db = clampf(threshold_db + ((float)d1 * 0.5f), -40.0f, 0.0f);
-            control_router_set_param(CTRL_PARAM_BUS_COMP_THRESHOLD_DB, threshold_db);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_THRESHOLD_DB, threshold_db);
         }
 
         if(d2 != 0)
         {
             ratio = clampf(ratio + ((float)d2 * 0.1f), 1.0f, 10.0f);
-            control_router_set_param(CTRL_PARAM_BUS_COMP_RATIO, ratio);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_RATIO, ratio);
         }
 
         if(d3 != 0)
@@ -88,7 +88,7 @@ void ui_tasklet_poll(void)
             if(idx < 0) idx = 0;
             if(idx > 5) idx = 5;
             attack_index = (uint8_t)idx;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, attack_values[attack_index]);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_ATTACK_S, attack_values[attack_index]);
         }
     }
     // -------- PAGE 1 --------
@@ -100,19 +100,19 @@ void ui_tasklet_poll(void)
             if(idx < 0) idx = 0;
             if(idx > 4) idx = 4;
             release_index = (uint8_t)idx;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, release_values[release_index]);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_RELEASE_S, release_values[release_index]);
         }
 
         if(d2 != 0)
         {
             makeup_db = clampf(makeup_db + ((float)d2 * 0.5f), 0.0f, 24.0f);
-            control_router_set_param(CTRL_PARAM_BUS_COMP_MAKEUP_DB, makeup_db);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_MAKEUP_DB, makeup_db);
         }
 
         if(d3 != 0)
         {
             auto_makeup = (d3 > 0) ? 1.0f : 0.0f;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_AUTO_MAKEUP, auto_makeup);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_AUTO_MAKEUP, auto_makeup);
         }
     }
     // -------- PAGE 2 --------
@@ -121,13 +121,13 @@ void ui_tasklet_poll(void)
         if(d1 != 0)
         {
             mix = clampf(mix + ((float)d1 * 0.05f), 0.0f, 1.0f);
-            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_MIX, mix);
         }
 
         if(d2 != 0)
         {
             auto_makeup = (d2 >= 0) ? 1.0f : 0.0f;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_AUTO_MAKEUP, auto_makeup);
+            control_router_set_param(CTRL_PARAM_DAISY_COMP_AUTO_MAKEUP, auto_makeup);
         }
     }
 
