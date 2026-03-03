@@ -13,7 +13,6 @@ static fx_slot_t g_slots[FX_POOL_SIZE];
 
 static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
-static fx_daisy_comp_t g_daisy_comp;
 
 AUDIO_WARM ALIGN32 static float grain_buffer_l[48000];
 AUDIO_WARM ALIGN32 static float grain_buffer_r[48000];

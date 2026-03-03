@@ -11,6 +11,7 @@ struct fx_daisy_comp_t {
     float release_s;
     uint8_t auto_makeup;
     float manual_makeup_db;
+    float mix; // NEW
 };
 
 extern "C" {
@@ -26,6 +27,8 @@ void fx_daisy_comp_set_attack_s(fx_daisy_comp_t *comp, float attack_s);
 void fx_daisy_comp_set_release_s(fx_daisy_comp_t *comp, float release_s);
 void fx_daisy_comp_set_makeup_db(fx_daisy_comp_t *comp, float makeup_db);
 void fx_daisy_comp_set_auto_makeup(fx_daisy_comp_t *comp, uint8_t enabled);
+void fx_daisy_comp_set_mix(fx_daisy_comp_t *comp, float mix); // NEW
+
 void fx_daisy_comp_process_block(fx_daisy_comp_t *comp,
                                  float *left,
                                  float *right,
@@ -34,4 +37,3 @@ void fx_daisy_comp_process_block(fx_daisy_comp_t *comp,
 #ifdef __cplusplus
 }
 #endif
-

@@ -22,10 +22,18 @@ void ui_tasklet_poll(void)
 
     static float threshold_db = -18.0f;
     static float ratio = 2.0f;
+
+    // Daisy attend des secondes
+    static const float attack_values[6]  = {0.0001f, 0.0003f, 0.001f, 0.003f, 0.01f, 0.03f};
+    static const float release_values[5] = {0.1f, 0.3f, 0.6f, 1.2f, 2.5f};
+
     static uint8_t attack_index = 2U;
     static uint8_t release_index = 2U;
+
     static float makeup_db = 0.0f;
     static float auto_makeup = 1.0f;
+
+    static float mix = 1.0f; // NEW dry/wet
 
     if(!init)
     {
@@ -35,10 +43,11 @@ void ui_tasklet_poll(void)
 
         control_router_set_param(CTRL_PARAM_BUS_COMP_THRESHOLD_DB, threshold_db);
         control_router_set_param(CTRL_PARAM_BUS_COMP_RATIO, ratio);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, (float)release_index);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, attack_values[attack_index]);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, release_values[release_index]);
         control_router_set_param(CTRL_PARAM_BUS_COMP_MAKEUP_DB, makeup_db);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, auto_makeup);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_AUTO_MAKEUP, auto_makeup);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
     }
 
     // -------- ENCODERS --------
@@ -79,7 +88,7 @@ void ui_tasklet_poll(void)
             if(idx < 0) idx = 0;
             if(idx > 5) idx = 5;
             attack_index = (uint8_t)idx;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, attack_values[attack_index]);
         }
     }
     // -------- PAGE 1 --------
@@ -91,7 +100,7 @@ void ui_tasklet_poll(void)
             if(idx < 0) idx = 0;
             if(idx > 4) idx = 4;
             release_index = (uint8_t)idx;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, (float)release_index);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, release_values[release_index]);
         }
 
         if(d2 != 0)
@@ -103,7 +112,7 @@ void ui_tasklet_poll(void)
         if(d3 != 0)
         {
             auto_makeup = (d3 > 0) ? 1.0f : 0.0f;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, auto_makeup);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_AUTO_MAKEUP, auto_makeup);
         }
     }
     // -------- PAGE 2 --------
@@ -111,8 +120,14 @@ void ui_tasklet_poll(void)
     {
         if(d1 != 0)
         {
-            auto_makeup = (d1 >= 0) ? 1.0f : 0.0f;
-            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, auto_makeup);
+            mix = clampf(mix + ((float)d1 * 0.05f), 0.0f, 1.0f);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
+        }
+
+        if(d2 != 0)
+        {
+            auto_makeup = (d2 >= 0) ? 1.0f : 0.0f;
+            control_router_set_param(CTRL_PARAM_BUS_COMP_AUTO_MAKEUP, auto_makeup);
         }
     }
 
@@ -128,7 +143,6 @@ void ui_tasklet_poll(void)
     char line2[32];
     char line3[32];
 
-    // CPU
     const uint32_t cpu_pm = cpu_load_get_permille();
     const uint32_t cpu_int = cpu_pm / 10U;
 
@@ -158,7 +172,7 @@ void ui_tasklet_poll(void)
         int mkp_d = (int)((makeup_db - mkp_i) * 10.0f);
         if(mkp_d < 0) mkp_d = -mkp_d;
 
-        static const char* rel_str[5] = {"100","300","600","1200","AUTO"};
+        static const char* rel_str[5] = {"100","300","600","1200","2500"};
 
         snprintf(line1, sizeof(line1), "Release   %s ms", rel_str[release_index]);
         snprintf(line2, sizeof(line2), "Makeup    %d.%d dB", mkp_i, mkp_d);
@@ -166,9 +180,11 @@ void ui_tasklet_poll(void)
     }
     else
     {
-        snprintf(line1, sizeof(line1), "Auto Mkup %s", auto_makeup >= 0.5f ? "ON" : "OFF");
-        snprintf(line2, sizeof(line2), "Daisy Insert");
-        snprintf(line3, sizeof(line3), " ");
+        int mix_pct = (int)(mix * 100.0f);
+
+        snprintf(line1, sizeof(line1), "Mix       %d%%", mix_pct);
+        snprintf(line2, sizeof(line2), "Auto Mkup %s", auto_makeup >= 0.5f ? "ON" : "OFF");
+        snprintf(line3, sizeof(line3), "Daisy Insert");
     }
 
     drv_display_clear_rect(0, 0, 96, 32);

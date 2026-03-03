@@ -1,4 +1,5 @@
 #include "fx_daisy_comp.h"
+#include <math.h>
 
 namespace {
 
@@ -23,10 +24,16 @@ void fx_daisy_comp_init(fx_daisy_comp_t *comp, float sample_rate)
         return;
 
     comp->core.Init(sample_rate);
-    comp->attack_s = 0.1f;
-    comp->release_s = 0.1f;
-    comp->auto_makeup = 1U;
+
+    comp->attack_s         = 0.1f;
+    comp->release_s        = 0.1f;
+    comp->auto_makeup      = 1U;
     comp->manual_makeup_db = 0.0f;
+    comp->mix              = 1.0f; // NEW
+
+    comp->core.SetAttack(comp->attack_s);
+    comp->core.SetRelease(comp->release_s);
+    comp->core.AutoMakeup(true);
 }
 
 void fx_daisy_comp_set_threshold_db(fx_daisy_comp_t *comp, float threshold_db)
@@ -71,6 +78,7 @@ void fx_daisy_comp_set_makeup_db(fx_daisy_comp_t *comp, float makeup_db)
         return;
 
     comp->manual_makeup_db = clampf(makeup_db, 0.0f, 24.0f);
+
     if(comp->auto_makeup == 0U)
         comp->core.SetMakeup(comp->manual_makeup_db);
 }
@@ -81,9 +89,20 @@ void fx_daisy_comp_set_auto_makeup(fx_daisy_comp_t *comp, uint8_t enabled)
         return;
 
     comp->auto_makeup = enabled ? 1U : 0U;
+
     comp->core.AutoMakeup(comp->auto_makeup != 0U);
+
     if(comp->auto_makeup == 0U)
         comp->core.SetMakeup(comp->manual_makeup_db);
+}
+
+// NEW
+void fx_daisy_comp_set_mix(fx_daisy_comp_t *comp, float mix)
+{
+    if(comp == nullptr)
+        return;
+
+    comp->mix = clampf(mix, 0.0f, 1.0f);
 }
 
 void fx_daisy_comp_process_block(fx_daisy_comp_t *comp,
@@ -94,10 +113,25 @@ void fx_daisy_comp_process_block(fx_daisy_comp_t *comp,
     if((comp == nullptr) || (left == nullptr) || (right == nullptr))
         return;
 
+    const float mix  = comp->mix;
+    const float imix = 1.0f - mix;
+
     for(uint32_t n = 0U; n < frames; ++n)
     {
-        left[n] = comp->core.Process(left[n]);
-        right[n] = comp->core.Process(right[n]);
+        float inL = left[n];
+        float inR = right[n];
+
+        float key = fmaxf(fabsf(inL), fabsf(inR)) + 1e-20f;
+
+        comp->core.Process(key);
+
+        float wetL = comp->core.Apply(inL);
+        float wetR = comp->core.Apply(inR);
+
+        float gain_comp = 1.0f / (1.0f + mix);
+
+        left[n]  = (inL * imix + wetL * mix) * gain_comp;
+        right[n] = (inR * imix + wetR * mix) * gain_comp;
     }
 }
 

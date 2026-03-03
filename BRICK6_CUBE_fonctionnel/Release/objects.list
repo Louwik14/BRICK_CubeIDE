@@ -377,6 +377,7 @@
 "./Src/Audio/fx_bus_compressor.o"
 "./Src/Audio/fx_chain.o"
 "./Src/Audio/fx_clouds.o"
+"./Src/Audio/fx_daisy_comp.o"
 "./Src/Audio/fx_dj_eq3_cmsis.o"
 "./Src/Audio/fx_granular.o"
 "./Src/Audio/fx_onepole.o"
