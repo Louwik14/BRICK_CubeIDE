@@ -1,4 +1,5 @@
 #include "sampler.h"
+#include "sampler_stream.h"
 #include <stdio.h>
 
 #define DBG(...) printf(__VA_ARGS__)
@@ -34,6 +35,7 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
         return;
     }
 
+    /* Clamp loop end to valid sample length. */
     if(v->loop_end == 0U || v->loop_end > length)
         v->loop_end = length;
 
@@ -46,43 +48,38 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
     v->active = true;
 }
 
+void sampler_stop(sample_voice_t *v)
+{
+    if(v == 0)
+        return;
+
+    v->active = false;
+    v->pos = 0U;
+}
+
 void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t nframes)
 {
-    static uint32_t dbg_cnt2 = 0U;
-
-    if((dbg_cnt2++ % 2000U) == 0U)
-    {
-        DBG("[STEP6] SAMPLE PROCESS pos=%lu\r\n", (unsigned long)((v != 0) ? v->pos : 0U));
-    }
-
     if((v == 0) || (outL == 0) || (outR == 0) || (nframes == 0U))
         return;
 
-    if(!v->active || (v->data == 0) || (v->length == 0U))
+    if(!v->active)
         return;
 
     for(uint32_t i = 0U; i < nframes; i++)
     {
-        if(v->pos >= v->length)
+        uint32_t rp = g_stream_read_pos;
+
+        if(rp == g_stream_write_pos)
         {
-            if(v->loop)
-            {
-                v->pos = (v->loop_start < v->length) ? v->loop_start : 0U;
-            }
-            else
-            {
-                v->active = false;
-                break;
-            }
+            g_stream_underrun_count++;
+            break;
         }
 
-        const uint32_t idx = v->pos * 2U;
-        outL[i] += v->data[idx] * v->gainL;
-        outR[i] += v->data[idx + 1U] * v->gainR;
+        outL[i] += stream_buffer[rp] * v->gainL;
+        rp = (rp + 1U) % (STREAM_BUFFER_FRAMES * 2U);
+        outR[i] += stream_buffer[rp] * v->gainR;
+        rp = (rp + 1U) % (STREAM_BUFFER_FRAMES * 2U);
 
-        v->pos++;
-
-        if(v->loop && (v->pos >= v->loop_end))
-            v->pos = v->loop_start;
+        g_stream_read_pos = rp;
     }
 }
