@@ -4,9 +4,9 @@
 #include <stdio.h>
 
 #include "control_router.h"
-#include "cpu_load.h"
 #include "drv_display.h"
 #include "drv_encoders.h"
+#include "main.h"
 
 static float clampf(float v, float lo, float hi)
 {
@@ -16,7 +16,7 @@ static float clampf(float v, float lo, float hi)
 void ui_tasklet_poll(void)
 {
     static uint8_t init = 0U;
-    static uint32_t ui_tick = 0U;
+    static uint32_t last_ui_ms = 0U;
     static float threshold_db = -18.0f;
     static float ratio = 2.0f;
     static uint8_t attack_index = 2U;
@@ -77,22 +77,28 @@ void ui_tasklet_poll(void)
         }
     }
 
-    ui_tick++;
-    if(ui_tick >= 20U)
     {
-        ui_tick = 0U;
+        const uint32_t now = HAL_GetTick();
+        if((now - last_ui_ms) < 50U)
+            return;
 
-        char cpu_txt[24];
-        const uint32_t cpu_pm = cpu_load_get_permille();
-        const uint32_t cpu_int = cpu_pm / 10U;
-        const uint32_t cpu_dec = cpu_pm % 10U;
+        last_ui_ms = now;
 
-        snprintf(cpu_txt, sizeof(cpu_txt), "CPU: %lu.%lu%%",
-                 (unsigned long)cpu_int,
-                 (unsigned long)cpu_dec);
+        char thr_txt[24];
+        char rat_txt[24];
+        char atk_txt[24];
+        char rel_txt[24];
 
-        drv_display_clear_rect(0, 0, 80, 8);
-        drv_display_draw_text(0, 0, cpu_txt);
+        snprintf(thr_txt, sizeof(thr_txt), "THR: %.1f dB", (double)threshold_db);
+        snprintf(rat_txt, sizeof(rat_txt), "RAT: %.1f", (double)ratio);
+        snprintf(atk_txt, sizeof(atk_txt), "ATK: %u", (unsigned int)attack_index);
+        snprintf(rel_txt, sizeof(rel_txt), "REL: %u", (unsigned int)release_index);
+
+        drv_display_clear_rect(0, 0, 80, 32);
+        drv_display_draw_text(0, 0, thr_txt);
+        drv_display_draw_text(0, 8, rat_txt);
+        drv_display_draw_text(0, 16, atk_txt);
+        drv_display_draw_text(0, 24, rel_txt);
         drv_display_update();
     }
 }
