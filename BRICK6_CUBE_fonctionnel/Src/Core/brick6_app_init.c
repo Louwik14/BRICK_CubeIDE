@@ -27,7 +27,7 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "sampler.h"
-#include "wav_loader.h"
+#include "sampler_stream.h"
 
 #if defined(__has_include)
 #  if __has_include("ff.h")
@@ -282,8 +282,17 @@ void brick6_app_init(void)
     {
         DBG("[SD] init ok\r\n");
 
-        if(!stream_wav_start_from_sd())
-            DBG("[STREAM] start wav streaming error\r\n");
+        {
+            uint32_t start_block = 0U;
+            uint32_t total_blocks = 2048U;
+
+            DBG("[STREAM] start wav streaming\r\n");
+
+            if(sd_stream_start_read(start_block, total_blocks) == HAL_OK)
+                DBG("[STREAM] reading blocks...\r\n");
+            else
+                DBG("[STREAM] start wav streaming error\r\n");
+        }
     }
     else
     {
@@ -304,47 +313,13 @@ void brick6_app_init(void)
     audio_tracks_init();
 
     sample_voice_init(&g_sampler_voice);
+    sampler_stream_init();
     DBG("[SAMPLER] init\r\n");
     g_sampler_voice.gainL = 0.35f;
     g_sampler_voice.gainR = 0.35f;
     g_sampler_voice.loop = true;
     g_sampler_voice.loop_start = 0U;
-
-    {
-        wav_info_t wav_info;
-        char wav_path[64];
-
-        if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
-        {
-            DBG("[WAV] found: %s\r\n", wav_path);
-
-            if(wav_loader_load_to_sdram(wav_path, &wav_info))
-            {
-                const float *buffer = wav_loader_get_interleaved_buffer();
-
-                DBG("[WAV] load ok frames=%lu\r\n", (unsigned long)wav_info.frames_loaded);
-                DBG("[WAV] first L=%f R=%f\r\n", buffer[0], buffer[1]);
-
-                g_sampler_voice.loop_end = wav_info.frames_loaded;
-
-                sample_voice_trigger(&g_sampler_voice,
-                                     buffer,
-                                     wav_info.frames_loaded);
-
-                DBG("[SAMPLER] trigger active=%d len=%lu\r\n",
-                    g_sampler_voice.active,
-                    (unsigned long)g_sampler_voice.length);
-            }
-            else
-            {
-                DBG("[WAV] load failed\r\n");
-            }
-        }
-        else
-        {
-            DBG("[WAV] no WAV found\r\n");
-        }
-    }
+    g_sampler_voice.active = true;
 
     mixer_set_master(2.0f);
 

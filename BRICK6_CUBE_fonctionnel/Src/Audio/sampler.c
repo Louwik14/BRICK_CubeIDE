@@ -1,4 +1,5 @@
 #include "sampler.h"
+#include "sampler_stream.h"
 #include <stdio.h>
 
 #define DBG(...) printf(__VA_ARGS__)
@@ -61,33 +62,24 @@ void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t 
     if((v == 0) || (outL == 0) || (outR == 0) || (nframes == 0U))
         return;
 
-    if(!v->active || (v->data == 0) || (v->length == 0U))
+    if(!v->active)
         return;
 
     for(uint32_t i = 0U; i < nframes; i++)
     {
-        if(v->pos >= v->length)
+        uint32_t rp = g_stream_read_pos;
+
+        if(rp == g_stream_write_pos)
         {
-            if(v->loop)
-            {
-                v->pos = (v->loop_start < v->length) ? v->loop_start : 0U;
-            }
-            else
-            {
-                v->active = false;
-                break;
-            }
+            g_stream_underrun_count++;
+            break;
         }
 
-        const uint32_t idx = v->pos * 2U;
-        outL[i] += v->data[idx] * v->gainL;
-        outR[i] += v->data[idx + 1U] * v->gainR;
+        outL[i] += stream_buffer[rp] * v->gainL;
+        rp = (rp + 1U) % (STREAM_BUFFER_FRAMES * 2U);
+        outR[i] += stream_buffer[rp] * v->gainR;
+        rp = (rp + 1U) % (STREAM_BUFFER_FRAMES * 2U);
 
-        v->pos++;
-
-        if(v->loop && (v->pos >= v->loop_end))
-        {
-            v->pos = (v->loop_start < v->loop_end) ? v->loop_start : 0U;
-        }
+        g_stream_read_pos = rp;
     }
 }
