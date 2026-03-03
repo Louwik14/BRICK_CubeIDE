@@ -310,11 +310,31 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
            (unsigned long)data_size,
            (unsigned long)data_offset);
 
-    if((audio_format != 1U) || (sample_rate != 48000U) || (channels != 2U) ||
-       !((bits_per_sample == 24U) || (bits_per_sample == 32U)))
+    if(audio_format != 1U)
     {
         (void)f_close(&fp);
-        printf("[WAV] unsupported format (PCM 48k stereo 24/32 required)\r\n");
+        printf("[WAV ERROR] format unsupported\r\n");
+        return false;
+    }
+
+    if(sample_rate != 48000U)
+    {
+        (void)f_close(&fp);
+        printf("[WAV ERROR] bad sample rate\r\n");
+        return false;
+    }
+
+    if(channels != 2U)
+    {
+        (void)f_close(&fp);
+        printf("[WAV ERROR] not stereo\r\n");
+        return false;
+    }
+
+    if(!((bits_per_sample == 24U) || (bits_per_sample == 32U)))
+    {
+        (void)f_close(&fp);
+        printf("[WAV ERROR] format unsupported\r\n");
         return false;
     }
 

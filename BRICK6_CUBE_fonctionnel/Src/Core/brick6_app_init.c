@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "brick6_app_init.h"
 
@@ -26,13 +27,14 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "sampler.h"
-#include "wav_loader.h"
+#include "sampler_stream.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
 
 static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
+static float g_master_gain = 1.0f;
 
 /* ============================================================
    UART DEBUG (hardcoded)
@@ -80,12 +82,6 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
-    static uint32_t dbg_cnt = 0U;
-
-    if((dbg_cnt++ % 2000U) == 0U)
-    {
-        DBG("[STEP5] DSP RUNNING\r\n");
-    }
 
 #if FORCE_TONE_TEST
     for(uint32_t i = 0U; i < frames; i++)
@@ -99,6 +95,22 @@ static void my_dsp(StereoTrack *tracks,
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
         sample_voice_process(&g_sampler_voice, tracks[0].L, tracks[0].R, frames);
+
+        for(uint32_t i = 0U; i < frames; i++)
+        {
+            float l = tracks[0].L[i] * g_master_gain;
+            float r = tracks[0].R[i] * g_master_gain;
+
+            /* Safety mute on invalid floating-point samples. */
+            if(!isfinite(l) || !isfinite(r))
+            {
+                l = 0.0f;
+                r = 0.0f;
+            }
+
+            tracks[0].L[i] = l;
+            tracks[0].R[i] = r;
+        }
     }
 
     mixer_process(tracks, track_count, frames);
@@ -117,6 +129,27 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
+    if(sd_stream_init(&hsd1) == HAL_OK)
+    {
+        DBG("[SD] init ok\r\n");
+
+        {
+            uint32_t start_block = 0U;
+            uint32_t total_blocks = 2048U;
+
+            DBG("[STREAM] start wav streaming\r\n");
+
+            if(sd_stream_start_read(start_block, total_blocks) == HAL_OK)
+                DBG("[STREAM] reading blocks...\r\n");
+            else
+                DBG("[STREAM] start wav streaming error\r\n");
+        }
+    }
+    else
+    {
+        DBG("[SD] init error\r\n");
+    }
+
     CS42448_Init(0x48);
 
     mixer_init();
@@ -131,46 +164,13 @@ void brick6_app_init(void)
     audio_tracks_init();
 
     sample_voice_init(&g_sampler_voice);
+    sampler_stream_init();
+    DBG("[SAMPLER] init\r\n");
     g_sampler_voice.gainL = 0.35f;
     g_sampler_voice.gainR = 0.35f;
     g_sampler_voice.loop = true;
     g_sampler_voice.loop_start = 0U;
-
-    {
-        wav_info_t wav_info;
-        char wav_path[64];
-
-        if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
-        {
-            DBG("[STEP1] WAV FOUND: %s\r\n", wav_path);
-
-            if(wav_loader_load_to_sdram(wav_path, &wav_info))
-            {
-                const float *buffer = wav_loader_get_interleaved_buffer();
-
-                DBG("[STEP2] LOAD OK frames=%lu\r\n", (unsigned long)wav_info.frames_loaded);
-                DBG("[STEP3] DATA L=%f R=%f\r\n", buffer[0], buffer[1]);
-
-                g_sampler_voice.loop_end = wav_info.frames_loaded;
-
-                sample_voice_trigger(&g_sampler_voice,
-                                     buffer,
-                                     wav_info.frames_loaded);
-
-                DBG("[STEP4] TRIGGER active=%d len=%lu\r\n",
-                    g_sampler_voice.active,
-                    (unsigned long)g_sampler_voice.length);
-            }
-            else
-            {
-                DBG("[ERROR] WAV load failed\r\n");
-            }
-        }
-        else
-        {
-            DBG("[ERROR] No WAV found\r\n");
-        }
-    }
+    g_sampler_voice.active = true;
 
     mixer_set_master(2.0f);
 
