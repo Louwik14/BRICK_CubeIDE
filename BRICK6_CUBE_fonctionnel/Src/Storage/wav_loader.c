@@ -62,6 +62,23 @@ uint32_t wav_loader_get_capacity_frames(void)
 static FATFS g_wav_fs;
 static uint8_t g_wav_fs_mounted;
 
+static int wav_ext_is_wav(const char *name)
+{
+    size_t len;
+
+    if(name == 0)
+        return 0;
+
+    len = strlen(name);
+    if(len < 4U)
+        return 0;
+
+    return (name[len - 4U] == '.') &&
+           ((name[len - 3U] == 'w') || (name[len - 3U] == 'W')) &&
+           ((name[len - 2U] == 'a') || (name[len - 2U] == 'A')) &&
+           ((name[len - 1U] == 'v') || (name[len - 1U] == 'V'));
+}
+
 static bool wav_find_chunks(FIL *fp,
                             wav_info_t *info,
                             uint16_t *audio_format,
@@ -153,6 +170,80 @@ static bool wav_find_chunks(FIL *fp,
     return (*audio_format != 0U) && (*data_size != 0U);
 }
 #endif
+
+bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
+{
+#if WAV_LOADER_HAS_FATFS
+    DIR dir;
+    FILINFO fno;
+    FRESULT fr;
+
+    if((out_path == 0) || (max_len < 8U))
+    {
+        printf("[WAV] invalid output buffer\r\n");
+        return false;
+    }
+
+    if(g_wav_fs_mounted == 0U)
+    {
+        fr = f_mount(&g_wav_fs, "0:", 1U);
+        if(fr != FR_OK)
+        {
+            printf("[WAV] f_mount failed: %d\r\n", (int)fr);
+            return false;
+        }
+        g_wav_fs_mounted = 1U;
+    }
+
+    fr = f_opendir(&dir, "0:/");
+    if(fr != FR_OK)
+    {
+        printf("[WAV] f_opendir failed: %d\r\n", (int)fr);
+        return false;
+    }
+
+    while(1)
+    {
+        fr = f_readdir(&dir, &fno);
+        if(fr != FR_OK)
+        {
+            printf("[WAV] f_readdir failed: %d\r\n", (int)fr);
+            (void)f_closedir(&dir);
+            return false;
+        }
+
+        if(fno.fname[0] == '\0')
+            break;
+
+        if((fno.fattrib & AM_DIR) != 0U)
+            continue;
+
+        if(!wav_ext_is_wav(fno.fname))
+            continue;
+
+        if((snprintf(out_path, max_len, "0:/%s", fno.fname) < 0) ||
+           (strlen(out_path) >= max_len))
+        {
+            printf("[WAV] path too long: %s\r\n", fno.fname);
+            (void)f_closedir(&dir);
+            return false;
+        }
+
+        printf("[WAV] found file: %s\r\n", out_path);
+        (void)f_closedir(&dir);
+        return true;
+    }
+
+    (void)f_closedir(&dir);
+    printf("[WAV] no WAV file in root\r\n");
+    return false;
+#else
+    (void)out_path;
+    (void)max_len;
+    printf("[WAV] FatFs unavailable in this build\r\n");
+    return false;
+#endif
+}
 
 bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 {
