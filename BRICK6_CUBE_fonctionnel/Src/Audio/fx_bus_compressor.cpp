@@ -9,6 +9,9 @@ float g_threshold_db = -18.0f;
 float g_ratio = 2.0f;
 uint8_t g_attack_index = 2U;
 uint8_t g_release_index = 2U;
+float g_makeup_db = 0.0f;
+float g_mix = 1.0f;
+float g_hpf_hz = 60.0f;
 
 static float clampf(float v, float lo, float hi)
 {
@@ -51,6 +54,21 @@ void fx_bus_compressor_set_release_index(uint8_t release_index)
     g_release_index = clampu8(release_index, 0U, 4U);
 }
 
+void fx_bus_compressor_set_makeup(float db)
+{
+    g_makeup_db = clampf(db, 0.0f, 24.0f);
+}
+
+void fx_bus_compressor_set_mix(float mix)
+{
+    g_mix = clampf(mix, 0.0f, 1.0f);
+}
+
+void fx_bus_compressor_set_hpf(float hz)
+{
+    g_hpf_hz = clampf(hz, 20.0f, 200.0f);
+}
+
 void fx_bus_compressor_process_stereo(float *left,
                                       float *right,
                                       uint32_t frames)
@@ -66,8 +84,9 @@ void fx_bus_compressor_process_stereo(float *left,
                                            g_ratio,
                                            (int)g_attack_index,
                                            (int)g_release_index,
-                                           0.0f,
-                                           1.0f,
+                                           g_makeup_db,
+                                           g_mix,
+                                           g_hpf_hz,
                                            false,
                                            0.0f,
                                            false);
@@ -77,8 +96,9 @@ void fx_bus_compressor_process_stereo(float *left,
                                             g_ratio,
                                             (int)g_attack_index,
                                             (int)g_release_index,
-                                            0.0f,
-                                            1.0f,
+                                            g_makeup_db,
+                                            g_mix,
+                                            g_hpf_hz,
                                             false,
                                             0.0f,
                                             false);

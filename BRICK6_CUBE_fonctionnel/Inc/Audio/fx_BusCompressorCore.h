@@ -102,7 +102,7 @@ public:
     void prepare(double sampleRate, int numChannels, int blockSize);
     float process(float input, int channel, float threshold, float ratio,
                   int attackIndex, int releaseIndex, float makeupGain,
-                  float mixAmount, bool oversample, float sidechainSignal,
+                  float mixAmount, float sidechainHpfHz, bool oversample, float sidechainSignal,
                   bool useExternalSidechain);
 
     float getGainReduction(int channel) const;

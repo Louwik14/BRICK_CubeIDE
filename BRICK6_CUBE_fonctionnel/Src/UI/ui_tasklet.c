@@ -18,10 +18,15 @@ void ui_tasklet_poll(void)
     static uint8_t init = 0U;
     static uint32_t ui_tick = 0U;
 
+    static uint8_t page = 0U;
+
     static float threshold_db = -18.0f;
     static float ratio = 2.0f;
     static uint8_t attack_index = 2U;
     static uint8_t release_index = 2U;
+    static float makeup_db = 0.0f;
+    static float mix = 1.0f;
+    static float hpf_hz = 60.0f;
 
     if(!init)
     {
@@ -33,9 +38,11 @@ void ui_tasklet_poll(void)
         control_router_set_param(CTRL_PARAM_BUS_COMP_RATIO, ratio);
         control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
         control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, (float)release_index);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_MAKEUP_DB, makeup_db);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
+        control_router_set_param(CTRL_PARAM_BUS_COMP_HPF_HZ, hpf_hz);
     }
 
-    // ---- Encodeurs ----
     drv_encoders_poll();
 
     const int16_t d0 = drv_encoder_get_delta(0U);
@@ -45,82 +52,126 @@ void ui_tasklet_poll(void)
 
     if(d0 != 0)
     {
-        threshold_db = clampf(threshold_db + ((float)d0 * 0.5f), -40.0f, 0.0f);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_THRESHOLD_DB, threshold_db);
+        int32_t p = (int32_t)page + (int32_t)d0;
+        if(p < 0) p = 0;
+        if(p > 2) p = 2;
+        page = (uint8_t)p;
     }
 
-    if(d1 != 0)
+    if(page == 0U)
     {
-        ratio = clampf(ratio + ((float)d1 * 0.1f), 1.0f, 10.0f);
-        control_router_set_param(CTRL_PARAM_BUS_COMP_RATIO, ratio);
-    }
+        if(d1 != 0)
+        {
+            threshold_db = clampf(threshold_db + ((float)d1 * 0.5f), -40.0f, 0.0f);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_THRESHOLD_DB, threshold_db);
+        }
 
-    if(d2 != 0)
+        if(d2 != 0)
+        {
+            ratio = clampf(ratio + ((float)d2 * 0.1f), 1.0f, 10.0f);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_RATIO, ratio);
+        }
+
+        if(d3 != 0)
+        {
+            int32_t idx = (int32_t)attack_index + (int32_t)d3;
+            if(idx < 0) idx = 0;
+            if(idx > 5) idx = 5;
+            attack_index = (uint8_t)idx;
+            control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
+        }
+    }
+    else if(page == 1U)
     {
-        int32_t idx = (int32_t)attack_index + (int32_t)d2;
-        if(idx < 0) idx = 0;
-        if(idx > 5) idx = 5;
-        attack_index = (uint8_t)idx;
-        control_router_set_param(CTRL_PARAM_BUS_COMP_ATTACK_INDEX, (float)attack_index);
-    }
+        if(d1 != 0)
+        {
+            int32_t idx = (int32_t)release_index + (int32_t)d1;
+            if(idx < 0) idx = 0;
+            if(idx > 4) idx = 4;
+            release_index = (uint8_t)idx;
+            control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, (float)release_index);
+        }
 
-    if(d3 != 0)
+        if(d2 != 0)
+        {
+            makeup_db = clampf(makeup_db + ((float)d2 * 0.5f), 0.0f, 24.0f);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_MAKEUP_DB, makeup_db);
+        }
+
+        if(d3 != 0)
+        {
+            hpf_hz = clampf(hpf_hz + ((float)d3 * 2.0f), 20.0f, 200.0f);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_HPF_HZ, hpf_hz);
+        }
+    }
+    else
     {
-        int32_t idx = (int32_t)release_index + (int32_t)d3;
-        if(idx < 0) idx = 0;
-        if(idx > 4) idx = 4;
-        release_index = (uint8_t)idx;
-        control_router_set_param(CTRL_PARAM_BUS_COMP_RELEASE_INDEX, (float)release_index);
+        if(d1 != 0)
+        {
+            mix = clampf(mix + ((float)d1 * 0.02f), 0.0f, 1.0f);
+            control_router_set_param(CTRL_PARAM_BUS_COMP_MIX, mix);
+        }
     }
 
-    // ---- UI refresh ----
     ui_tick++;
     if(ui_tick < 20U)
         return;
 
     ui_tick = 0U;
 
-    char cpu_txt[24];
-    char thr_txt[24];
-    char rat_txt[24];
-    char atk_txt[24];
-    char rel_txt[24];
+    char line0[24];
+    char line1[24];
+    char line2[24];
+    char line3[24];
 
-    // ---- CPU ----
     const uint32_t cpu_pm = cpu_load_get_permille();
     const uint32_t cpu_int = cpu_pm / 10U;
     const uint32_t cpu_dec = cpu_pm % 10U;
 
-    snprintf(cpu_txt, sizeof(cpu_txt), "CPU: %lu.%lu%%",
+    snprintf(line0, sizeof(line0), "CPU: %lu.%lu%% P:%u",
              (unsigned long)cpu_int,
-             (unsigned long)cpu_dec);
+             (unsigned long)cpu_dec,
+             (unsigned int)page);
 
-    // ---- THRESHOLD (sans float printf) ----
-    int thr_i = (int)threshold_db;
-    int thr_d = (int)((threshold_db - thr_i) * 10.0f);
-    if(thr_d < 0) thr_d = -thr_d;
+    if(page == 0U)
+    {
+        int thr_i = (int)threshold_db;
+        int thr_d = (int)((threshold_db - (float)thr_i) * 10.0f);
+        if(thr_d < 0) thr_d = -thr_d;
 
-    snprintf(thr_txt, sizeof(thr_txt), "THR: %d.%d dB", thr_i, thr_d);
+        int rat_i = (int)ratio;
+        int rat_d = (int)((ratio - (float)rat_i) * 10.0f);
+        if(rat_d < 0) rat_d = -rat_d;
 
-    // ---- RATIO ----
-    int rat_i = (int)ratio;
-    int rat_d = (int)((ratio - rat_i) * 10.0f);
-    if(rat_d < 0) rat_d = -rat_d;
+        snprintf(line1, sizeof(line1), "THR: %d.%d dB", thr_i, thr_d);
+        snprintf(line2, sizeof(line2), "RAT: %d.%d", rat_i, rat_d);
+        snprintf(line3, sizeof(line3), "ATK: %u", (unsigned int)attack_index);
+    }
+    else if(page == 1U)
+    {
+        int mkp_i = (int)makeup_db;
+        int mkp_d = (int)((makeup_db - (float)mkp_i) * 10.0f);
+        if(mkp_d < 0) mkp_d = -mkp_d;
 
-    snprintf(rat_txt, sizeof(rat_txt), "RAT: %d.%d", rat_i, rat_d);
+        snprintf(line1, sizeof(line1), "REL: %u", (unsigned int)release_index);
+        snprintf(line2, sizeof(line2), "MKP: %d.%d dB", mkp_i, mkp_d);
+        snprintf(line3, sizeof(line3), "HPF: %u Hz", (unsigned int)hpf_hz);
+    }
+    else
+    {
+        int mix_i = (int)mix;
+        int mix_d = (int)((mix - (float)mix_i) * 100.0f);
+        if(mix_d < 0) mix_d = -mix_d;
 
-    // ---- ATTACK / RELEASE ----
-    snprintf(atk_txt, sizeof(atk_txt), "ATK: %u", (unsigned int)attack_index);
-    snprintf(rel_txt, sizeof(rel_txt), "REL: %u", (unsigned int)release_index);
+        snprintf(line1, sizeof(line1), "MIX: %d.%02d", mix_i, mix_d);
+        snprintf(line2, sizeof(line2), "ENC2: --");
+        snprintf(line3, sizeof(line3), "ENC3: --");
+    }
 
-    // ---- Display ----
-    drv_display_clear_rect(0, 0, 80, 40);
-
-    drv_display_draw_text(0, 0,  cpu_txt);
-    drv_display_draw_text(0, 8,  thr_txt);
-    drv_display_draw_text(0, 16, rat_txt);
-    drv_display_draw_text(0, 24, atk_txt);
-    drv_display_draw_text(0, 32, rel_txt);
-
+    drv_display_clear_rect(0, 0, 96, 32);
+    drv_display_draw_text(0, 0, line0);
+    drv_display_draw_text(0, 8, line1);
+    drv_display_draw_text(0, 16, line2);
+    drv_display_draw_text(0, 24, line3);
     drv_display_update();
 }
