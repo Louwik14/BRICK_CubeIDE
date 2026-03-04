@@ -22,6 +22,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32h7xx_it.h"
+#include "Storage/sd_stream.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "cpu_load.h"
@@ -264,7 +265,7 @@ void SDMMC1_IRQHandler(void)
   /* USER CODE END SDMMC1_IRQn 0 */
   HAL_SD_IRQHandler(&hsd1);
   /* USER CODE BEGIN SDMMC1_IRQn 1 */
-
+  sd_stream_irq_snapshot(HAL_SD_GetCardState(&hsd1), HAL_SD_GetError(&hsd1));
   /* USER CODE END SDMMC1_IRQn 1 */
 }
 

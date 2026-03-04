@@ -44,6 +44,7 @@ void sd_tasklet_poll_bounded(uint32_t max_steps);
 void sd_stream_rx_callback(SD_HandleTypeDef *hsd);
 void sd_stream_tx_callback(SD_HandleTypeDef *hsd);
 void sd_stream_error_callback(SD_HandleTypeDef *hsd);
+void sd_stream_irq_snapshot(uint32_t card_state, uint32_t error);
 
 
 #ifdef __cplusplus
