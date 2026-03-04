@@ -42,6 +42,7 @@
 #include "engine_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
+#include "brick6_debug_uart.h"
 #include "audio.h"
 #include "sampler_stream.h"
 #include <stdio.h>
@@ -185,6 +186,7 @@ int main(void)
     sd_tasklet_poll();
     sd_callbacks_tasklet_poll();
     sampler_stream_update();
+    brick6_debug_poll();
     sd_debug_poll();
     MX_USB_HOST_Process();
     usb_host_tasklet_poll_bounded(4);

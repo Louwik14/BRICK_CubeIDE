@@ -4,6 +4,8 @@
 
 #define DBG(...) printf(__VA_ARGS__)
 
+volatile uint32_t audio_underrun_count = 0U;
+
 void sample_voice_init(sample_voice_t *v)
 {
     if(v == 0)
@@ -72,6 +74,7 @@ void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t 
         if(rp == g_stream_write_pos)
         {
             g_stream_underrun_count++;
+            audio_underrun_count++;
             break;
         }
 
