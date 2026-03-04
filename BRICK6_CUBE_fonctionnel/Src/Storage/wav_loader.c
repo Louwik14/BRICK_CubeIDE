@@ -246,6 +246,84 @@ bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 #endif
 }
 
+
+
+bool wav_get_physical_location(const char *path, uint32_t *first_block, uint32_t *block_count)
+{
+#if WAV_LOADER_HAS_FATFS
+    FATFS *fs = 0;
+    FIL fp;
+    FRESULT fr;
+    uint32_t cluster;
+    uint32_t file_size;
+    uint32_t first_sector;
+
+    if((path == 0) || (first_block == 0) || (block_count == 0))
+    {
+        printf("[WAV] wav_get_physical_location invalid args\r\n");
+        return false;
+    }
+
+    *first_block = 0U;
+    *block_count = 0U;
+
+    fr = f_mount(&g_wav_fs, "0:", 1U);
+    if(fr != FR_OK)
+    {
+        printf("[WAV] f_mount failed: %d\r\n", (int)fr);
+        return false;
+    }
+    g_wav_fs_mounted = 1U;
+
+    fr = f_open(&fp, path, FA_READ);
+    if(fr != FR_OK)
+    {
+        printf("[WAV] f_open failed: %s (%d)\r\n", path, (int)fr);
+        return false;
+    }
+
+    cluster = fp.obj.sclust;
+    file_size = f_size(&fp);
+    fs = fp.obj.fs;
+
+    if((cluster < 2U) || (fs == 0))
+    {
+        (void)f_close(&fp);
+        printf("[WAV] invalid file cluster/fs\r\n");
+        return false;
+    }
+
+    /*
+     * FAT data region addressing:
+     * - clusters are numbered from 2 in FAT.
+     * - fs->csize is the number of 512-byte sectors per cluster.
+     * - fs->database is the first sector (LBA) of the data area.
+     *
+     * First sector of the file's first cluster:
+     *   first_sector = ((cluster - 2) * fs->csize) + fs->database
+     */
+    first_sector = ((cluster - 2U) * (uint32_t)fs->csize) + (uint32_t)fs->database;
+
+    *first_block = first_sector;
+    *block_count = (file_size + 511U) / 512U;
+
+    printf("[WAV] cluster=%lu first_sector=%lu file_size=%lu block_count=%lu\r\n",
+           (unsigned long)cluster,
+           (unsigned long)first_sector,
+           (unsigned long)file_size,
+           (unsigned long)*block_count);
+
+    (void)f_close(&fp);
+    return true;
+#else
+    (void)path;
+    (void)first_block;
+    (void)block_count;
+    printf("[WAV] FatFs unavailable in this build\r\n");
+    return false;
+#endif
+}
+
 bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 {
     uint32_t i;

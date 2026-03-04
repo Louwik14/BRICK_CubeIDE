@@ -30,13 +30,11 @@
 #include "sampler.h"
 #include "sampler_stream.h"
 #include "wav_loader.h"
-#include "ff.h"
 #include "brick6_debug_uart.h"
 #include "sd_audio_block_ring.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
-#define SD_BLOCK_SIZE 512U
 
 static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
@@ -178,7 +176,6 @@ void brick6_app_init(void)
     MX_USB_HOST_Init();
 
     {
-        wav_info_t wav_info;
         char wav_path[64];
 
         DBG("[SD] init ok\r\n");
@@ -190,43 +187,43 @@ void brick6_app_init(void)
             sd_set_owner(SD_OWNER_NONE);
             DBG("[STREAM] WAV not found\r\n");
         }
-        else if(!wav_loader_load_to_sdram(wav_path, &wav_info))
-        {
-            sd_set_owner(SD_OWNER_NONE);
-            DBG("[STREAM] WAV header load failed\r\n");
-        }
         else
         {
-            uint32_t start_block = (wav_info.data_offset / SD_BLOCK_SIZE);
-            uint32_t total_blocks = (wav_info.data_size / SD_BLOCK_SIZE);
+            uint32_t start_block = 0U;
+            uint32_t total_blocks = 0U;
 
-            total_blocks -= (total_blocks % SD_STREAM_BLOCKS_PER_BUFFER);
-
-            /* FatFs doit libérer complètement la SD avant le DMA streaming */
-            (void)f_mount(NULL, "", 0);
-
-            while(HAL_SD_GetCardState(&hsd1) != HAL_SD_CARD_TRANSFER)
-            {
-            }
-
-            if(sd_stream_init(&hsd1) != HAL_OK)
+            if(!wav_get_physical_location(wav_path, &start_block, &total_blocks))
             {
                 sd_set_owner(SD_OWNER_NONE);
-                DBG("[SD] stream init error\r\n");
+                DBG("[STREAM] WAV location lookup failed\r\n");
             }
             else
             {
-                sd_set_owner(SD_OWNER_STREAM);
-                DBG("[STREAM] start wav streaming\r\n");
+                total_blocks -= (total_blocks % SD_STREAM_BLOCKS_PER_BUFFER);
 
-                if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
+                while(HAL_SD_GetCardState(&hsd1) != HAL_SD_CARD_TRANSFER)
                 {
-                    DBG("[STREAM] reading audio data blocks...\r\n");
+                }
+
+                if(sd_stream_init(&hsd1) != HAL_OK)
+                {
+                    sd_set_owner(SD_OWNER_NONE);
+                    DBG("[SD] stream init error\r\n");
                 }
                 else
                 {
-                    sd_set_owner(SD_OWNER_NONE);
-                    DBG("[STREAM] start wav streaming error\r\n");
+                    sd_set_owner(SD_OWNER_STREAM);
+                    DBG("[STREAM] start wav streaming\r\n");
+
+                    if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
+                    {
+                        DBG("[STREAM] reading audio data blocks...\r\n");
+                    }
+                    else
+                    {
+                        sd_set_owner(SD_OWNER_NONE);
+                        DBG("[STREAM] start wav streaming error\r\n");
+                    }
                 }
             }
         }
