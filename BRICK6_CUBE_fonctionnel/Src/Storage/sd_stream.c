@@ -101,25 +101,15 @@ static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offs
   }
 }
 
-static const char *sd_state_name(sd_fsm_state_t state)
-{
-  switch (state)
-  {
-    case SD_FSM_IDLE: return "IDLE";
-    case SD_FSM_START_CHUNK: return "START_CHUNK";
-    case SD_FSM_WAIT_TRANSFER: return "WAIT_TRANSFER";
-    case SD_FSM_DONE: return "DONE";
-    case SD_FSM_ERROR: return "ERROR";
-    default: return "?";
-  }
-}
-
 static void sd_stream_set_state(sd_fsm_state_t next)
 {
 #if BRICK6_STREAM_DEBUG
   if (sd_fsm_state != next)
   {
-    STREAM_LOG("SD FSM %s -> %s\r\n", sd_state_name(sd_fsm_state), sd_state_name(next));
+    STREAM_LOG("SD FSM %d -> %d block=%lu remaining=%lu\r\n",
+               (int)sd_fsm_state, (int)next,
+               (unsigned long)sd_current_block,
+               (unsigned long)sd_remaining_blocks);
   }
 #endif
   sd_fsm_state = next;
@@ -186,6 +176,11 @@ static void sd_stream_note_prefill(void)
   }
 }
 
+static bool sd_stream_should_log_counter(uint32_t count)
+{
+  return (count < 4U) || ((count & 0x3FU) == 0U);
+}
+
 static bool sd_stream_try_produce_block(const uint8_t *source, uint32_t *offset)
 {
     if ((source == NULL) || (offset == NULL))
@@ -237,6 +232,15 @@ static void sd_stream_process_ready_buffers(void)
       sd_buf0_offset = 0U;
       sd_buf0_ready = 0U;
       sd_stream_note_prefill();
+#if BRICK6_STREAM_DEBUG
+      static uint32_t produce_buf0_count = 0U;
+      produce_buf0_count++;
+      if (sd_stream_should_log_counter(produce_buf0_count))
+      {
+        STREAM_LOG("produce buf0 ring_fill=%lu\r\n",
+                   (unsigned long)audio_block_ring_fill_level(&sd_audio_block_ring));
+      }
+#endif
     }
   }
 
@@ -247,6 +251,15 @@ static void sd_stream_process_ready_buffers(void)
       sd_buf1_offset = 0U;
       sd_buf1_ready = 0U;
       sd_stream_note_prefill();
+#if BRICK6_STREAM_DEBUG
+      static uint32_t produce_buf1_count = 0U;
+      produce_buf1_count++;
+      if (sd_stream_should_log_counter(produce_buf1_count))
+      {
+        STREAM_LOG("produce buf1 ring_fill=%lu\r\n",
+                   (unsigned long)audio_block_ring_fill_level(&sd_audio_block_ring));
+      }
+#endif
     }
   }
 }
@@ -296,6 +309,12 @@ static HAL_StatusTypeDef sd_stream_start_chunk(sd_stream_operation_t operation)
   }
 
   sd_active_chunk_blocks = chunk_blocks;
+
+#if BRICK6_STREAM_DEBUG
+  STREAM_LOG("SD DMA start block=%lu blocks=%lu\r\n",
+             (unsigned long)sd_current_block,
+             (unsigned long)chunk_blocks);
+#endif
 
   if (operation == SD_STREAM_OP_READ)
   {
@@ -710,10 +729,9 @@ void HAL_SDEx_Read_DMADoubleBuffer0CpltCallback(SD_HandleTypeDef *hsd)
   {
     sd_buf0_ready = 1U;
 #if BRICK6_STREAM_DEBUG
-    if ((read_buf0_count & 0x3FU) == 0U)
+    if (sd_stream_should_log_counter(read_buf0_count))
     {
-      STREAM_LOG("BUF0 ready\r\n");
-      brick6_debug_hex(Buffer0, 16U);
+      STREAM_LOG("BUF0 ready count=%lu\r\n", (unsigned long)read_buf0_count);
     }
 #endif
   }
@@ -736,10 +754,9 @@ void HAL_SDEx_Read_DMADoubleBuffer1CpltCallback(SD_HandleTypeDef *hsd)
   {
     sd_buf1_ready = 1U;
 #if BRICK6_STREAM_DEBUG
-    if ((read_buf1_count & 0x3FU) == 0U)
+    if (sd_stream_should_log_counter(read_buf1_count))
     {
-      STREAM_LOG("BUF1 ready\r\n");
-      brick6_debug_hex(Buffer1, 16U);
+      STREAM_LOG("BUF1 ready count=%lu\r\n", (unsigned long)read_buf1_count);
     }
 #endif
   }

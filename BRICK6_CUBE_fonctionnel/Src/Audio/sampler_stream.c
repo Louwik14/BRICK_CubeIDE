@@ -67,6 +67,9 @@ uint32_t sampler_stream_fill_samples(void)
 void sampler_stream_update(void)
 {
     static uint32_t last_fill = 0U;
+#if BRICK6_STREAM_DEBUG
+    static uint32_t sampler_consume_log_counter = 0U;
+#endif
     uint8_t *block;
 
     if(g_stream.current_block == 0)
@@ -78,10 +81,11 @@ void sampler_stream_update(void)
         g_stream.current_block = block;
         g_stream.read_index = 0U;
 #if BRICK6_STREAM_DEBUG
+        sampler_consume_log_counter++;
+        if ((sampler_consume_log_counter < 4U) || ((sampler_consume_log_counter & 0x3FU) == 0U))
         {
-            static uint32_t pcm_block_log_throttle = 0U;
-            if ((pcm_block_log_throttle++ & 0x3FU) == 0U)
-                brick6_debug_hex(g_stream.current_block, 12U);
+            STREAM_LOG("sampler consume ring_fill=%lu\r\n",
+                       (unsigned long)audio_block_ring_fill_level(&sd_audio_block_ring));
         }
 #endif
     }
