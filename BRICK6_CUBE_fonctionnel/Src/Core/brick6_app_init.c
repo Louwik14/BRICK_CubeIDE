@@ -132,8 +132,14 @@ static void my_dsp(StereoTrack *tracks,
         }
         if (audio_underrun_count != last_underrun)
         {
+            uint32_t delta = audio_underrun_count - last_underrun;
             last_underrun = audio_underrun_count;
-            STREAM_LOG("DSP underrun=%lu\r\n", (unsigned long)audio_underrun_count);
+            if ((audio_underrun_count < 8U) || ((audio_underrun_count & 0x0FU) == 0U))
+            {
+                STREAM_LOG("DSP underrun=%lu (+%lu)\r\n",
+                           (unsigned long)audio_underrun_count,
+                           (unsigned long)delta);
+            }
         }
     }
 #endif

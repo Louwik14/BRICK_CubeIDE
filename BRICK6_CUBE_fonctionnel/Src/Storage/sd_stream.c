@@ -89,6 +89,9 @@ static uint32_t sd_buf1_offset = 0U;
 static uint32_t sd_prefill_target = 0U;
 static uint32_t sd_prefill_count = 0U;
 static __IO uint8_t sd_prefill_done = 0U;
+static __IO uint32_t sd_irq_card_state = 0U;
+static __IO uint32_t sd_irq_error = 0U;
+static __IO uint32_t sd_irq_event_count = 0U;
 
 static DMA_BUFFER uint32_t Buffer0[SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t)];
 static DMA_BUFFER uint32_t Buffer1[SD_STREAM_BUFFER_SIZE_BYTES / sizeof(uint32_t)];
@@ -367,6 +370,9 @@ HAL_StatusTypeDef sd_stream_init(SD_HandleTypeDef *hsd)
   sd_buf0_offset = 0U;
   sd_buf1_offset = 0U;
   sd_stream_reset_prefill(0U);
+  sd_irq_card_state = 0U;
+  sd_irq_error = 0U;
+  sd_irq_event_count = 0U;
   audio_block_ring_init(&sd_audio_block_ring);
 
   return HAL_SDEx_ConfigDMAMultiBuffer(sd_handle, Buffer0, Buffer1,
@@ -553,6 +559,13 @@ const uint32_t *sd_stream_get_buffer1(void)
   return Buffer1;
 }
 
+void sd_stream_irq_snapshot(uint32_t card_state, uint32_t error)
+{
+  sd_irq_card_state = card_state;
+  sd_irq_error = error;
+  sd_irq_event_count++;
+}
+
 static bool sd_tasklet_is_active(void)
 {
   return (sd_fsm_state != SD_FSM_IDLE) &&
@@ -563,6 +576,26 @@ static bool sd_tasklet_is_active(void)
 static void sd_tasklet_step(void)
 {
   sd_stream_process_ready_buffers();
+
+#if BRICK6_STREAM_DEBUG
+  {
+    static uint32_t sd_irq_logged_count = 0U;
+    if (sd_irq_event_count != sd_irq_logged_count)
+    {
+      uint32_t pending = sd_irq_event_count;
+      uint32_t delta = pending - sd_irq_logged_count;
+      sd_irq_logged_count = pending;
+      if ((pending < 4U) || ((pending & 0x3FU) == 0U) || (sd_irq_error != 0U))
+      {
+        STREAM_LOG("SD IRQ state=%lu err=%lu count=%lu (+%lu)\r\n",
+                   (unsigned long)sd_irq_card_state,
+                   (unsigned long)sd_irq_error,
+                   (unsigned long)pending,
+                   (unsigned long)delta);
+      }
+    }
+  }
+#endif
 
   switch (sd_fsm_state)
   {
@@ -575,9 +608,23 @@ static void sd_tasklet_step(void)
         sd_stream_set_state(SD_FSM_IDLE);
         break;
       }
-      if (HAL_SD_GetCardState(sd_handle) != HAL_SD_CARD_TRANSFER)
       {
-        break;
+        uint32_t card_state = HAL_SD_GetCardState(sd_handle);
+        if ((card_state != HAL_SD_CARD_TRANSFER) && (card_state != HAL_SD_CARD_READY))
+        {
+#if BRICK6_STREAM_DEBUG
+          static uint32_t sd_wait_state_log = 0U;
+          sd_wait_state_log++;
+          if ((sd_wait_state_log < 4U) || ((sd_wait_state_log & 0x3FU) == 0U))
+          {
+            STREAM_LOG("SD wait card_state=%lu block=%lu remaining=%lu\r\n",
+                       (unsigned long)card_state,
+                       (unsigned long)sd_current_block,
+                       (unsigned long)sd_remaining_blocks);
+          }
+#endif
+          break;
+        }
       }
       sd_rx_done_flag = 0U;
       sd_tx_done_flag = 0U;
