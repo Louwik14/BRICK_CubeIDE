@@ -1,0 +1,11 @@
+../Src/Audio/fx_dj_eq3_cmsis.c:91:13:rbj_peaking	32	static
+../Src/Audio/fx_dj_eq3_cmsis.c:62:13:rbj_low_shelf	32	static
+../Src/Audio/fx_dj_eq3_cmsis.c:113:13:rbj_high_shelf	32	static
+../Src/Audio/fx_dj_eq3_cmsis.c:143:6:fx_dj_eq3_reset	16	static
+../Src/Audio/fx_dj_eq3_cmsis.c:154:6:fx_dj_eq3_update_coeffs	96	static,ignoring_inline_asm
+../Src/Audio/fx_dj_eq3_cmsis.c:190:6:fx_dj_eq3_set_low_db	8	static
+../Src/Audio/fx_dj_eq3_cmsis.c:205:6:fx_dj_eq3_set_mid_db	8	static
+../Src/Audio/fx_dj_eq3_cmsis.c:220:6:fx_dj_eq3_set_high_db	8	static
+../Src/Audio/fx_dj_eq3_cmsis.c:235:6:fx_dj_eq3_set_bypass	0	static
+../Src/Audio/fx_dj_eq3_cmsis.c:245:6:fx_dj_eq3_init	32	static
+../Src/Audio/fx_dj_eq3_cmsis.c:278:6:fx_dj_eq3_process_block	24	static,ignoring_inline_asm

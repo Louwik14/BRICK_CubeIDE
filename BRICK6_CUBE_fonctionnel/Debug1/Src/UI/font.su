@@ -1,0 +1,4 @@
+../Src/UI/font.c:38:16:get_col_5x7	0	static
+../Src/UI/font.c:56:16:get_col_5x8_elektron	0	static
+../Src/UI/font.c:67:13:expand_font4x6	12	static
+../Src/UI/font.c:93:16:get_col_4x6	16	static

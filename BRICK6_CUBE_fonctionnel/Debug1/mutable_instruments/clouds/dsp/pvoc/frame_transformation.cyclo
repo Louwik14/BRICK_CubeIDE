@@ -1,0 +1,19 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/dsp.h:43:14:float stmlib::Interpolate(const float*, float, float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	1
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:63:6:void clouds::FrameTransformation::Reset()	3
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:45:6:void clouds::FrameTransformation::Init(float*, int32_t, int32_t)	2
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:119:6:void clouds::FrameTransformation::SetPhases(float*, float, float)	5
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:140:6:void clouds::FrameTransformation::PolarToRectangular(float*)	3
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:153:6:void clouds::FrameTransformation::AddGlitch(float*)	17
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:209:6:void clouds::FrameTransformation::QuantizeMagnitudes(float*, float)	8
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:240:6:void clouds::FrameTransformation::WarpMagnitudes(float*, float*, float)	3
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:298:6:void clouds::FrameTransformation::StoreMagnitudes(float*, float, float)	7
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:350:6:void clouds::FrameTransformation::ReplayMagnitudes(float*, float)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/rsqrt.h:45:4:To stmlib::unsafe_bit_cast(From) [with To = long unsigned int; From = float]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/rsqrt.h:45:4:To stmlib::unsafe_bit_cast(From) [with To = float; From = long unsigned int]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/rsqrt.h:52:21:float stmlib::fast_rsqrt_carmack(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/atan.h:55:24:uint16_t stmlib::fast_atan2r(float, float, float*)	4
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:108:6:void clouds::FrameTransformation::RectangularToPolar(float*)	2
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\stl_algobase.h:433:2:static _Up* std::__copy_move<_IsMove, true, std::random_access_iterator_tag>::__copy_m(_Tp*, _Tp*, _Up*) [with _Tp = float; _Up = float; bool _IsMove = false]	3
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:269:6:void clouds::FrameTransformation::ShiftMagnitudes(float*, float*, float)	6
+../mutable_instruments/clouds/dsp/pvoc/frame_transformation.cpp:69:6:void clouds::FrameTransformation::Process(const clouds::Parameters&, float*, float*)	4

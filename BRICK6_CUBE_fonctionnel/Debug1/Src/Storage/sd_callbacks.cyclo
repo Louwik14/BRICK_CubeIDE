@@ -1,0 +1,4 @@
+../Src/Storage/sd_callbacks.c:16:6:HAL_SD_RxCpltCallback	2
+../Src/Storage/sd_callbacks.c:31:6:HAL_SD_TxCpltCallback	2
+../Src/Storage/sd_callbacks.c:44:6:HAL_SD_ErrorCallback	2
+../Src/Storage/sd_callbacks.c:55:6:sd_callbacks_tasklet_poll	4

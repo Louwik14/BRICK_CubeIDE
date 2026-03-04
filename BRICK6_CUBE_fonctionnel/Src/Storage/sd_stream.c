@@ -159,18 +159,21 @@ static void sd_stream_note_prefill(void)
   }
 }
 
-static void sd_stream_try_produce_block(const uint8_t *source)
+static void sd_stream_try_produce_blocks(const uint8_t *source)
 {
-  uint8_t *write_ptr = audio_block_ring_get_write_ptr(&sd_audio_block_ring);
+    uint32_t offset = 0;
 
-  if (write_ptr == NULL)
-  {
-    return;
-  }
+    while(offset + AUDIO_BLOCK_SIZE <= SD_STREAM_BUFFER_SIZE_BYTES)
+    {
+        uint8_t *write_ptr = audio_block_ring_get_write_ptr(&sd_audio_block_ring);
+        if(write_ptr == NULL)
+            return;
 
-  memcpy(write_ptr, source, AUDIO_BLOCK_SIZE);
-  audio_block_ring_produce(&sd_audio_block_ring);
-  sd_stream_note_prefill();
+        memcpy(write_ptr, source + offset, AUDIO_BLOCK_SIZE);
+        audio_block_ring_produce(&sd_audio_block_ring);
+
+        offset += AUDIO_BLOCK_SIZE;
+    }
 }
 
 static void sd_stream_process_ready_buffers(void)
@@ -183,7 +186,7 @@ static void sd_stream_process_ready_buffers(void)
   if (sd_buf0_ready != 0U)
   {
     uint32_t before = audio_block_ring_fill_level(&sd_audio_block_ring);
-    sd_stream_try_produce_block((const uint8_t *)Buffer0);
+    sd_stream_try_produce_blocks((const uint8_t *)Buffer0);
     if (audio_block_ring_fill_level(&sd_audio_block_ring) != before)
     {
       sd_buf0_ready = 0U;
@@ -193,7 +196,7 @@ static void sd_stream_process_ready_buffers(void)
   if (sd_buf1_ready != 0U)
   {
     uint32_t before = audio_block_ring_fill_level(&sd_audio_block_ring);
-    sd_stream_try_produce_block((const uint8_t *)Buffer1);
+    sd_stream_try_produce_blocks((const uint8_t *)Buffer1);
     if (audio_block_ring_fill_level(&sd_audio_block_ring) != before)
     {
       sd_buf1_ready = 0U;
