@@ -1,0 +1,11 @@
+../Src/brick6_debug_uart.c:30:13:brick6_debug_kick_tx.part.0	24	static,ignoring_inline_asm
+../Src/brick6_debug_uart.c:94:13:brick6_debug_enqueue_bytes	16	static,ignoring_inline_asm
+../Src/brick6_debug_uart.c:94:13:brick6_debug_enqueue_bytes.constprop	12	static,ignoring_inline_asm
+../Src/brick6_debug_uart.c:123:6:brick6_debug_init	8	static
+../Src/brick6_debug_uart.c:135:6:brick6_debug_poll	0	static
+../Src/brick6_debug_uart.c:150:6:brick6_debug_log	208	static
+../Src/brick6_debug_uart.c:173:6:brick6_debug_rate_limited_log	224	static
+../Src/brick6_debug_uart.c:220:6:brick6_debug_hex	40	static,ignoring_inline_asm
+../Src/brick6_debug_uart.c:240:6:brick6_debug_dump_audio	24	static
+../Src/brick6_debug_uart.c:254:6:brick6_debug_uart_tx_complete	4	static,ignoring_inline_asm
+../Src/brick6_debug_uart.c:268:6:HAL_UART_TxCpltCallback	4	static,ignoring_inline_asm
