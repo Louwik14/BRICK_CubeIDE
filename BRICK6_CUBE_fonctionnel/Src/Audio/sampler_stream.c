@@ -4,6 +4,7 @@
 
 #include "memory_layout.h"
 #include "sd_audio_block_ring.h"
+#include "brick6_debug_uart.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 
@@ -16,9 +17,12 @@ typedef struct
 {
     const uint8_t *current_block;
     uint32_t read_index;
+    uint8_t pending_frame[6];
+    uint32_t pending_size;
 } stream_reader_t;
 
 static stream_reader_t g_stream;
+static uint32_t g_pcm_debug_frame_counter = 0U;
 
 static float pcm24_to_float(const uint8_t *p)
 {
@@ -43,6 +47,7 @@ void sampler_stream_init(void)
 
     g_stream.current_block = 0;
     g_stream.read_index = 0U;
+    g_stream.pending_size = 0U;
     g_stream_write_pos = 0U;
     g_stream_read_pos = 0U;
     g_stream_underrun_count = 0U;
@@ -62,35 +67,74 @@ uint32_t sampler_stream_fill_samples(void)
 void sampler_stream_update(void)
 {
     static uint32_t last_fill = 0U;
-    uint8_t *block = audio_block_ring_get_read_ptr(&sd_audio_block_ring);
+    uint8_t *block;
 
-    if(block == 0)
-        return;
+    if(g_stream.current_block == 0)
+    {
+        block = audio_block_ring_get_read_ptr(&sd_audio_block_ring);
+        if(block == 0)
+            return;
 
-    g_stream.current_block = block;
-    g_stream.read_index = 0U;
+        g_stream.current_block = block;
+        g_stream.read_index = 0U;
+#if BRICK6_STREAM_DEBUG
+        {
+            static uint32_t pcm_block_log_throttle = 0U;
+            if ((pcm_block_log_throttle++ & 0x3FU) == 0U)
+                brick6_debug_hex(g_stream.current_block, 12U);
+        }
+#endif
+    }
 
-    for(uint32_t i = 0U; i < AUDIO_BLOCK_SIZE; i += 6U)
+    while(g_stream.current_block != 0)
     {
         uint32_t wp = g_stream_write_pos;
         uint32_t next_wp = stream_next_index(stream_next_index(wp));
 
         if(next_wp == g_stream_read_pos)
-            break;
+            return;
 
-        float l = pcm24_to_float(&g_stream.current_block[g_stream.read_index]);
-        float r = pcm24_to_float(&g_stream.current_block[g_stream.read_index + 3U]);
+        while(g_stream.read_index < AUDIO_BLOCK_SIZE)
+        {
+            wp = g_stream_write_pos;
+            next_wp = stream_next_index(stream_next_index(wp));
 
-        stream_buffer[wp] = l;
-        wp = stream_next_index(wp);
-        stream_buffer[wp] = r;
-        wp = stream_next_index(wp);
+            if(next_wp == g_stream_read_pos)
+                return;
 
-        g_stream_write_pos = wp;
-        g_stream.read_index += 6U;
+            g_stream.pending_frame[g_stream.pending_size++] =
+                g_stream.current_block[g_stream.read_index++];
+
+            if(g_stream.pending_size < 6U)
+                continue;
+
+            float l = pcm24_to_float(&g_stream.pending_frame[0]);
+            float r = pcm24_to_float(&g_stream.pending_frame[3]);
+
+#if BRICK6_STREAM_DEBUG
+            if ((g_pcm_debug_frame_counter++ & 0xFFU) == 0U)
+            {
+                STREAM_LOG("PCM %02X %02X %02X %02X %02X %02X\r\n",
+                           g_stream.pending_frame[0], g_stream.pending_frame[1], g_stream.pending_frame[2],
+                           g_stream.pending_frame[3], g_stream.pending_frame[4], g_stream.pending_frame[5]);
+                STREAM_LOG("FLOAT %.5f %.5f pending=%lu\r\n", (double)l, (double)r,
+                           (unsigned long)g_stream.pending_size);
+            }
+#endif
+
+            stream_buffer[wp] = l;
+            wp = stream_next_index(wp);
+            stream_buffer[wp] = r;
+            wp = stream_next_index(wp);
+
+            g_stream_write_pos = wp;
+            g_stream.pending_size = 0U;
+        }
+
+        audio_block_ring_consume(&sd_audio_block_ring);
+        g_stream.current_block = 0;
+        g_stream.read_index = 0U;
     }
-
-    audio_block_ring_consume(&sd_audio_block_ring);
 
     {
         uint32_t fill = sampler_stream_fill_samples();
@@ -101,4 +145,3 @@ void sampler_stream_update(void)
         }
     }
 }
-
