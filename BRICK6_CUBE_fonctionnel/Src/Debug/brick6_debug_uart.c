@@ -19,6 +19,7 @@ static volatile uint32_t g_inflight_len = 0U;
 
 static uint8_t g_ring[DBG_UART_BUFFER_SIZE];
 static uint8_t g_dma_chunk[256];
+static uint8_t g_use_dma_tx = 0U;
 
 static inline uint8_t brick6_debug_in_isr(void)
 {
@@ -56,13 +57,36 @@ static void brick6_debug_kick_tx(void)
 
     if(!irq_state) __enable_irq();
 
-    if(HAL_UART_Transmit_DMA(g_debug_uart, g_dma_chunk, available) != HAL_OK)
+    if(g_use_dma_tx != 0U)
     {
-        irq_state = __get_PRIMASK();
-        __disable_irq();
-        g_tx_busy = 0U;
-        g_inflight_len = 0U;
-        if(!irq_state) __enable_irq();
+        if(HAL_UART_Transmit_DMA(g_debug_uart, g_dma_chunk, available) != HAL_OK)
+        {
+            irq_state = __get_PRIMASK();
+            __disable_irq();
+            g_tx_busy = 0U;
+            g_inflight_len = 0U;
+            if(!irq_state) __enable_irq();
+        }
+    }
+    else
+    {
+        if(HAL_UART_Transmit(g_debug_uart, g_dma_chunk, available, 1U) == HAL_OK)
+        {
+            irq_state = __get_PRIMASK();
+            __disable_irq();
+            g_tail = (g_tail + g_inflight_len) % DBG_UART_BUFFER_SIZE;
+            g_inflight_len = 0U;
+            g_tx_busy = 0U;
+            if(!irq_state) __enable_irq();
+        }
+        else
+        {
+            irq_state = __get_PRIMASK();
+            __disable_irq();
+            g_tx_busy = 0U;
+            g_inflight_len = 0U;
+            if(!irq_state) __enable_irq();
+        }
     }
 }
 
@@ -98,11 +122,17 @@ static void brick6_debug_enqueue_bytes(const uint8_t *data, uint32_t len)
 void brick6_debug_init(UART_HandleTypeDef *huart)
 {
     g_debug_uart = huart;
+    g_use_dma_tx = ((huart != NULL) && (huart->hdmatx != NULL)) ? 1U : 0U;
     g_tx_busy = 0U;
     g_tx_kick_pending = 0U;
     g_head = 0U;
     g_tail = 0U;
     g_inflight_len = 0U;
+
+    if(g_use_dma_tx != 0U)
+        brick6_debug_log("DEBUG UART mode=DMA\r\n");
+    else
+        brick6_debug_log("DEBUG UART mode=polling\r\n");
 }
 
 void brick6_debug_poll(void)
