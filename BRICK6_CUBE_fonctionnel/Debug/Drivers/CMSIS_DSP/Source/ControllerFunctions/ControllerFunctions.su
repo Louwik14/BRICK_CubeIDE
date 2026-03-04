@@ -1,8 +1,0 @@
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_f32.c:53:24:arm_pid_init_f32	0	static
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q15.c:53:24:arm_pid_init_q15	0	static,ignoring_inline_asm
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_init_q31.c:53:24:arm_pid_init_q31	4	static,ignoring_inline_asm
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_f32.c:47:24:arm_pid_reset_f32	0	static
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q15.c:47:24:arm_pid_reset_q15	0	static
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_pid_reset_q31.c:47:24:arm_pid_reset_q31	0	static
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_f32.c:47:24:arm_sin_cos_f32	4	static
-../Drivers/CMSIS_DSP/Source/ControllerFunctions/arm_sin_cos_q31.c:53:24:arm_sin_cos_q31	64	static

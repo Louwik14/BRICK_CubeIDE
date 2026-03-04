@@ -1,3 +1,0 @@
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.c:270:24:arm_split_rfft_q15	2
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.c:489:24:arm_split_rifft_q15	2
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.c:151:24:arm_rfft_q15	2

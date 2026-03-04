@@ -1,8 +1,0 @@
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_linear_init_f32.c:74:24:arm_svm_linear_init_f32	0	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_linear_predict_f32.c:437:24:arm_svm_linear_predict_f32	12	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_polynomial_init_f32.c:72:24:arm_svm_polynomial_init_f32	0	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_polynomial_predict_f32.c:464:24:arm_svm_polynomial_predict_f32	12	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_rbf_init_f32.c:70:24:arm_svm_rbf_init_f32	0	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_rbf_predict_f32.c:497:24:arm_svm_rbf_predict_f32	32	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_sigmoid_init_f32.c:70:24:arm_svm_sigmoid_init_f32	0	static
-../Drivers/CMSIS_DSP/Source/SVMFunctions/arm_svm_sigmoid_predict_f32.c:462:24:arm_svm_sigmoid_predict_f32	32	static

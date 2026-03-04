@@ -1,3 +1,0 @@
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f32.c:849:13:arm_cfft_radix8by2_f32	96	static
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f32.c:963:13:arm_cfft_radix8by4_f32	136	static
-../Drivers/CMSIS_DSP/Source/TransformFunctions/arm_cfft_f32.c:1246:24:arm_cfft_f32	24	static

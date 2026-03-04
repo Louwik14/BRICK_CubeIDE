@@ -1,0 +1,3 @@
+../Src/Audio/sampler_stream.c:39:6:sampler_stream_init	1
+../Src/Audio/sampler_stream.c:51:10:sampler_stream_fill_samples	2
+../Src/Audio/sampler_stream.c:62:6:sampler_stream_update	11
