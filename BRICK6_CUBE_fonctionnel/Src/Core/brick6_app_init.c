@@ -148,7 +148,6 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
-    if(sd_stream_init(&hsd1) == HAL_OK)
     {
         wav_info_t wav_info;
         char wav_path[64];
@@ -175,27 +174,33 @@ void brick6_app_init(void)
             total_blocks -= (total_blocks % SD_STREAM_BLOCKS_PER_BUFFER);
 
             /* FatFs doit libérer complètement la SD avant le DMA streaming */
-            f_mount(NULL, "", 0);
+            (void)f_mount(NULL, "", 0);
 
-            sd_set_owner(SD_OWNER_STREAM);
-            DBG("[STREAM] start wav streaming\r\n");
-
-            if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
+            while(HAL_SD_GetCardState(&hsd1) != HAL_SD_CARD_TRANSFER)
             {
-                DBG("[STREAM] reading audio data blocks...\r\n");
             }
 
-            else
+            if(sd_stream_init(&hsd1) != HAL_OK)
             {
                 sd_set_owner(SD_OWNER_NONE);
-                DBG("[STREAM] start wav streaming error\r\n");
+                DBG("[SD] stream init error\r\n");
+            }
+            else
+            {
+                sd_set_owner(SD_OWNER_STREAM);
+                DBG("[STREAM] start wav streaming\r\n");
+
+                if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
+                {
+                    DBG("[STREAM] reading audio data blocks...\r\n");
+                }
+                else
+                {
+                    sd_set_owner(SD_OWNER_NONE);
+                    DBG("[STREAM] start wav streaming error\r\n");
+                }
             }
         }
-    }
-    else
-    {
-        sd_set_owner(SD_OWNER_NONE);
-        DBG("[SD] init error\r\n");
     }
 
     CS42448_Init(0x48);
