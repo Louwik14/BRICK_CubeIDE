@@ -37,14 +37,12 @@
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
-#include "sd_stream.h"
-#include "sd_callbacks.h"
 #include "engine_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
 #include "brick6_debug_uart.h"
 #include "audio.h"
-#include "sampler_stream.h"
+#include "audio_streamer.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -64,10 +62,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static uint32_t sd_prev_buf0 = 0U;
-static uint32_t sd_prev_buf1 = 0U;
-static uint8_t sd_dump_done = 0U;
-static uint32_t stream_prev_progress = 0U;
+static uint32_t prev_underrun = 0U;
+static uint32_t prev_max_read_time = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,44 +77,25 @@ void MX_USB_DEVICE_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void sd_debug_poll(void)
+static void streamer_debug_poll(void)
 {
-  uint32_t c0 = sd_stream_get_read_buf0_count();
-  uint32_t c1 = sd_stream_get_read_buf1_count();
-  uint32_t progress = (c0 + c1) * SD_STREAM_BLOCKS_PER_BUFFER;
+  const audio_streamer_stats_t *st = audio_streamer_get_stats();
 
-  if (progress != stream_prev_progress)
+  if (st == NULL)
   {
-    stream_prev_progress = progress;
-    printf("[STREAM] progress %lu\r\n", (unsigned long)progress);
+    return;
   }
 
-  if (c0 != sd_prev_buf0)
+  if ((st->underrun_count != prev_underrun) || (st->max_sd_read_time != prev_max_read_time))
   {
-    sd_prev_buf0 = c0;
-    printf("[SD] buf0 ready count=%lu\r\n", (unsigned long)c0);
-  }
+    prev_underrun = st->underrun_count;
+    prev_max_read_time = st->max_sd_read_time;
 
-  if (c1 != sd_prev_buf1)
-  {
-    sd_prev_buf1 = c1;
-    printf("[SD] buf1 ready count=%lu\r\n", (unsigned long)c1);
-  }
-
-  if ((sd_dump_done == 0U) && ((c0 > 0U) || (c1 > 0U)))
-  {
-    const uint32_t *b0 = sd_stream_get_buffer0();
-    const uint32_t *b1 = sd_stream_get_buffer1();
-
-    if ((b0 != NULL) && (b1 != NULL))
-    {
-      printf("[SD] dump b0=%08lX %08lX b1=%08lX %08lX\r\n",
-             (unsigned long)b0[0],
-             (unsigned long)b0[1],
-             (unsigned long)b1[0],
-             (unsigned long)b1[1]);
-      sd_dump_done = 1U;
-    }
+    printf("[STREAM] underrun=%lu A=%u B=%u max_read_ms=%lu\r\n",
+           (unsigned long)st->underrun_count,
+           (unsigned)st->buffer_A_full,
+           (unsigned)st->buffer_B_full,
+           (unsigned long)st->max_sd_read_time);
   }
 }
 /* USER CODE END 0 */
@@ -183,11 +160,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     engine_tasklet_poll();
-    sd_tasklet_poll();
-    sd_callbacks_tasklet_poll();
-    sampler_stream_update();
+    audio_streamer_task();
     brick6_debug_poll();
-    sd_debug_poll();
+    streamer_debug_poll();
     MX_USB_HOST_Process();
     usb_host_tasklet_poll_bounded(4);
     midi_host_poll_bounded(8);
