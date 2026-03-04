@@ -31,6 +31,8 @@
 #include "sampler_stream.h"
 #include "wav_loader.h"
 #include "ff.h"
+#include "brick6_debug_uart.h"
+#include "sd_audio_block_ring.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -39,6 +41,7 @@
 static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
+extern volatile uint32_t audio_underrun_count;
 
 /* ============================================================
    UART DEBUG (hardcoded)
@@ -117,6 +120,24 @@ static void my_dsp(StereoTrack *tracks,
         }
     }
 
+#if BRICK6_STREAM_DEBUG
+    {
+        static uint32_t dbg_dsp_throttle = 0U;
+        static uint32_t last_underrun = 0U;
+        if ((dbg_dsp_throttle++ & 0xFFU) == 0U)
+        {
+            STREAM_LOG("DSP ring_fill=%lu first=%.5f\r\n",
+                       (unsigned long)audio_block_ring_fill_level(&sd_audio_block_ring),
+                       (double)tracks[0].L[0]);
+        }
+        if (audio_underrun_count != last_underrun)
+        {
+            last_underrun = audio_underrun_count;
+            STREAM_LOG("DSP underrun=%lu\r\n", (unsigned long)audio_underrun_count);
+        }
+    }
+#endif
+
     mixer_process(tracks, track_count, frames);
 }
 
@@ -143,6 +164,8 @@ void brick6_app_init(void)
 {
     debug_uart_init();
     printf("\r\n[BOOT] UART OK\r\n");
+    brick6_debug_init(&huart1);
+    STREAM_LOG("DEBUG UART ready\r\n");
 
     SDRAM_Init();
     MX_USB_DEVICE_Init();
