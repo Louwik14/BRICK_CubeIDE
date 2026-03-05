@@ -10,9 +10,9 @@
 #define STREAM_RING_FRAMES (16384U)
 #define STREAM_RING_SAMPLES (STREAM_RING_FRAMES * 2U)
 
-#define STREAM_REFILL_THRESHOLD_FRAMES (2048U)
-#define STREAM_PREFILL_TARGET_FRAMES   (4096U)
-#define STREAM_IO_FRAMES (1024U)
+#define STREAM_REFILL_THRESHOLD_FRAMES (6144U)
+#define STREAM_PREFILL_TARGET_FRAMES   (8192U)
+#define STREAM_IO_FRAMES (4096U)
 
 #define STREAM_DEBUG 1
 
@@ -243,17 +243,16 @@ void audio_streamer_get_frame(float *L, float *R)
 
     if((s->running != 0U) && (s->error == 0U))
     {
-        if(s->read_pos != s->write_pos)
+    	if(streamer_ring_used_frames(s) >= 2U)
         {
-            uint32_t idx = s->read_pos * 2U;
+        	uint32_t idx = s->read_pos * 2U;
 
-            outL = stream_ring[idx];
-            outR = stream_ring[idx + 1U];
-            stream_frames_out++;   // <-- ajoute cette ligne
-            g_last_out_l = outL;
-            g_last_out_r = outR;
+        	outL = stream_ring[idx];
+        	outR = stream_ring[idx + 1U];
 
-            s->read_pos = (s->read_pos + 1U) % STREAM_RING_FRAMES;
+        	/* advance 2 frames because DSP runs at half rate */
+        	s->read_pos = (s->read_pos + 2U) % STREAM_RING_FRAMES;
+
         }
         else
         {

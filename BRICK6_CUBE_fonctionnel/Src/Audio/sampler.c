@@ -83,7 +83,7 @@ void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t 
         outL[i] += v->data[idx] * v->gainL;
         outR[i] += v->data[idx + 1U] * v->gainR;
 
-        v->pos++;
+        v->pos += 2;
 
         if(v->loop && (v->pos >= v->loop_end))
         {

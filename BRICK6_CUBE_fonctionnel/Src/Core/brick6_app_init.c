@@ -34,6 +34,8 @@
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
 
+static float g_stream_gain = 0.1f;   // volume du sample
+
 /* ============================================================
    UART DEBUG (hardcoded)
    ============================================================ */
@@ -98,8 +100,8 @@ static void my_dsp(StereoTrack *tracks,
             float sr;
             stream_manager_get_frame(&sl, &sr);
 
-            tracks[0].L[i] += sl;
-            tracks[0].R[i] += sr;
+            tracks[0].L[i] += sl * g_stream_gain;
+            tracks[0].R[i] += sr * g_stream_gain;
 
             float l = tracks[0].L[i] * g_master_gain;
             float r = tracks[0].R[i] * g_master_gain;
