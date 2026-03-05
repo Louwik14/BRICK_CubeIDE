@@ -1,0 +1,5 @@
+../Src/Storage/wav_parser.c:6:17:le16	1
+../Src/Storage/wav_parser.c:11:17:le32	1
+../Src/Storage/wav_parser.c:19:13:wav_ext_is_wav	7
+../Src/Storage/wav_parser.c:40:6:wav_parser_find_first_wav	9
+../Src/Storage/wav_parser.c:96:6:wav_parser_read_header	27

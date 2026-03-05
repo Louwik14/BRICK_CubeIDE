@@ -1,4 +1,4 @@
-../Src/Audio/sampler.c:9:6:sample_voice_init	2
-../Src/Audio/sampler.c:25:6:sample_voice_trigger	6
-../Src/Audio/sampler.c:53:6:sampler_stop	2
-../Src/Audio/sampler.c:62:6:sample_voice_process	8
+../Src/Audio/sampler.c:6:6:sample_voice_init	2
+../Src/Audio/sampler.c:22:6:sample_voice_trigger	6
+../Src/Audio/sampler.c:49:6:sampler_stop	2
+../Src/Audio/sampler.c:58:6:sample_voice_process	9

@@ -1,4 +1,0 @@
-../Drivers/Drv_app/Src/sdram.c:174:13:Fill_Buffer	4	static
-../Drivers/Drv_app/Src/sdram.c:125:13:SDRAM_Initialization_Sequence	32	static
-../Drivers/Drv_app/Src/sdram.c:55:6:SDRAM_Init	8	static
-../Drivers/Drv_app/Src/sdram.c:66:6:SDRAM_Test	144	static

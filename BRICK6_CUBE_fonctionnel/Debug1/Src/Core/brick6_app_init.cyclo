@@ -1,4 +1,0 @@
-../Src/Core/brick6_app_init.c:85:13:my_dsp	6
-../Src/Core/brick6_app_init.c:47:13:debug_uart_init	1
-../Src/Core/brick6_app_init.c:75:5:_write	1
-../Src/Core/brick6_app_init.c:142:6:brick6_app_init	7

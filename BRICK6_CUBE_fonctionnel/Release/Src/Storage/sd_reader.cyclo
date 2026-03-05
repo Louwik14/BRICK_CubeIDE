@@ -1,0 +1,3 @@
+../Src/Storage/sd_reader.c:11:6:sd_reader_open	6
+../Src/Storage/sd_reader.c:39:6:sd_reader_close	2
+../Src/Storage/sd_reader.c:52:6:sd_reader_read_looping	11

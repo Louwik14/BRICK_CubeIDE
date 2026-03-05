@@ -1,0 +1,5 @@
+../Src/Storage/wav_parser.c:6:17:le16	0	static
+../Src/Storage/wav_parser.c:11:17:le32	0	static
+../Src/Storage/wav_parser.c:19:13:wav_ext_is_wav	8	static
+../Src/Storage/wav_parser.c:40:6:wav_parser_find_first_wav	392	static
+../Src/Storage/wav_parser.c:96:6:wav_parser_read_header	96	static

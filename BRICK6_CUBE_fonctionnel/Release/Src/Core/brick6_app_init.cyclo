@@ -1,3 +1,3 @@
-../Src/Core/brick6_app_init.c:88:13:my_dsp	5
-../Src/Core/brick6_app_init.c:78:5:_write	1
-../Src/Core/brick6_app_init.c:163:6:brick6_app_init	7
+../Src/Core/brick6_app_init.c:136:13:my_dsp	3
+../Src/Core/brick6_app_init.c:126:5:_write	1
+../Src/Core/brick6_app_init.c:181:6:brick6_app_init	6

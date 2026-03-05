@@ -1,0 +1,7 @@
+../Src/Audio/audio_streamer.c:34:14:pcm24_to_float	0	static
+../Src/Audio/audio_streamer.c:44:13:refill_buffer	24	static
+../Src/Audio/audio_streamer.c:138:6:audio_streamer_stop	8	static
+../Src/Audio/audio_streamer.c:78:6:audio_streamer_start_first_wav	184	static
+../Src/Audio/audio_streamer.c:147:6:audio_streamer_task	8	static
+../Src/Audio/audio_streamer.c:165:6:audio_streamer_get_frame	24	static
+../Src/Audio/audio_streamer.c:226:31:audio_streamer_get_stats	0	static

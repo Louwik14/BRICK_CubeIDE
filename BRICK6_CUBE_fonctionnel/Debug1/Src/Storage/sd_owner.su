@@ -1,2 +1,0 @@
-../Src/Storage/sd_owner.c:5:6:sd_set_owner	0	static
-../Src/Storage/sd_owner.c:10:12:sd_get_owner	0	static

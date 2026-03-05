@@ -1,5 +1,0 @@
-../Src/Audio/sampler_stream.c:23:14:pcm24_to_float	0	static
-../Src/Audio/sampler_stream.c:31:17:stream_next_index	0	static
-../Src/Audio/sampler_stream.c:39:6:sampler_stream_init	0	static
-../Src/Audio/sampler_stream.c:51:10:sampler_stream_fill_samples	0	static
-../Src/Audio/sampler_stream.c:62:6:sampler_stream_update	40	static
