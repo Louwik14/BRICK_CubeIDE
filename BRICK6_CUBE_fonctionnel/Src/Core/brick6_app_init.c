@@ -145,7 +145,7 @@ void brick6_app_init(void)
 
     audio_tracks_init();
 
-    DBG("[SAMPLER] stream source init\r\n");
+    DBG("[STREAM] init\r\n");
 
     {
         char wav_path[64];

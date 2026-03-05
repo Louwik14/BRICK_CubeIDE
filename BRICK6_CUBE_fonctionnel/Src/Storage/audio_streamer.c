@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "memory_layout.h"
-#include "wav_loader.h"
 #include "stm32h7xx_hal.h"
+#include "wav_loader.h"
 
 #if defined(__has_include)
 #  if __has_include("ff.h")
@@ -56,6 +56,9 @@ static volatile uint32_t g_buffer_switch_count;
 static FATFS g_stream_fs;
 static uint8_t g_stream_fs_mounted;
 static FIL g_fp;
+static uint8_t g_file_open;
+static uint8_t g_start_pending;
+static char g_pending_path[128];
 #endif
 
 static float pcm24_to_float(const uint8_t *p)
@@ -166,6 +169,88 @@ static uint32_t streamer_fill_buffer(uint8_t buffer_index)
     g_buffers[buffer_index].ready = (frames_written > 0U) ? 1U : 0U;
     return frames_written;
 }
+
+static bool streamer_prepare_start(void)
+{
+    wav_info_t info;
+    FIL fp_meta;
+    FRESULT fr;
+
+    if(g_stream_fs_mounted == 0U)
+    {
+        fr = f_mount(&g_stream_fs, "0:", 1U);
+        if(fr != FR_OK)
+        {
+            printf("[STREAM] f_mount failed: %d\r\n", (int)fr);
+            return false;
+        }
+        g_stream_fs_mounted = 1U;
+    }
+
+    fr = f_open(&fp_meta, g_pending_path, FA_READ);
+    if(fr != FR_OK)
+    {
+        printf("[STREAM] f_open(meta) failed: %d\r\n", (int)fr);
+        return false;
+    }
+
+    if(!wav_loader_parse_info(&fp_meta, &info))
+    {
+        (void)f_close(&fp_meta);
+        printf("[STREAM] invalid WAV header\r\n");
+        return false;
+    }
+    (void)f_close(&fp_meta);
+
+    if((info.sample_rate != 48000U) || (info.channels != 2U))
+    {
+        printf("[STREAM] unsupported sr/ch\r\n");
+        return false;
+    }
+
+    if(!((info.bits_per_sample == 24U) || (info.bits_per_sample == 32U)))
+    {
+        printf("[STREAM] unsupported bit depth\r\n");
+        return false;
+    }
+
+    g_bits_per_sample = info.bits_per_sample;
+    g_bytes_per_frame = 2U * (uint32_t)(g_bits_per_sample / 8U);
+    g_data_offset = info.data_offset;
+    g_data_size = info.data_size;
+
+    fr = f_open(&g_fp, g_pending_path, FA_READ);
+    if(fr != FR_OK)
+    {
+        printf("[STREAM] f_open(stream) failed: %d\r\n", (int)fr);
+        return false;
+    }
+    g_file_open = 1U;
+
+    if(!streamer_seek_to_data_start())
+        return false;
+
+    if(streamer_fill_buffer(0U) == 0U)
+    {
+        printf("[STREAM] initial fill A failed\r\n");
+        return false;
+    }
+
+    if(streamer_fill_buffer(1U) == 0U)
+    {
+        printf("[STREAM] initial fill B failed\r\n");
+        return false;
+    }
+
+    g_running = 1U;
+    g_start_pending = 0U;
+
+    printf("[STREAM] started: %s bits=%u data=%lu\r\n",
+           g_pending_path,
+           (unsigned)g_bits_per_sample,
+           (unsigned long)g_data_size);
+    return true;
+}
 #endif
 
 bool audio_streamer_start(const char *path)
@@ -194,84 +279,23 @@ bool audio_streamer_start(const char *path)
     g_buffers[1].ready = 0U;
 
 #if AUDIO_STREAMER_HAS_FATFS
-    wav_info_t info;
-    FIL fp_meta;
-    FRESULT fr;
-
     if(path == 0)
         return false;
 
-    if(g_stream_fs_mounted == 0U)
+    if(g_file_open != 0U)
     {
-        fr = f_mount(&g_stream_fs, "0:", 1U);
-        if(fr != FR_OK)
-        {
-            printf("[STREAM] f_mount failed: %d\r\n", (int)fr);
-            return false;
-        }
-        g_stream_fs_mounted = 1U;
+        (void)f_close(&g_fp);
+        g_file_open = 0U;
     }
 
-    fr = f_open(&fp_meta, path, FA_READ);
-    if(fr != FR_OK)
+    if((snprintf(g_pending_path, sizeof(g_pending_path), "%s", path) <= 0) ||
+       (strlen(g_pending_path) >= sizeof(g_pending_path)))
     {
-        printf("[STREAM] f_open(meta) failed: %d\r\n", (int)fr);
+        printf("[STREAM] bad path\r\n");
         return false;
     }
 
-    if(!wav_loader_parse_info(&fp_meta, &info))
-    {
-        (void)f_close(&fp_meta);
-        printf("[STREAM] invalid WAV header\r\n");
-        return false;
-    }
-
-    (void)f_close(&fp_meta);
-
-    if((info.sample_rate != 48000U) || (info.channels != 2U))
-    {
-        printf("[STREAM] unsupported sr/ch\r\n");
-        return false;
-    }
-
-    if(!((info.bits_per_sample == 24U) || (info.bits_per_sample == 32U)))
-    {
-        printf("[STREAM] unsupported bit depth\r\n");
-        return false;
-    }
-
-    g_bits_per_sample = info.bits_per_sample;
-    g_bytes_per_frame = 2U * (uint32_t)(g_bits_per_sample / 8U);
-    g_data_offset = info.data_offset;
-    g_data_size = info.data_size;
-
-    fr = f_open(&g_fp, path, FA_READ);
-    if(fr != FR_OK)
-    {
-        printf("[STREAM] f_open(stream) failed: %d\r\n", (int)fr);
-        return false;
-    }
-
-    if(!streamer_seek_to_data_start())
-        return false;
-
-    if(streamer_fill_buffer(0U) == 0U)
-    {
-        printf("[STREAM] initial fill A failed\r\n");
-        return false;
-    }
-
-    if(streamer_fill_buffer(1U) == 0U)
-    {
-        printf("[STREAM] initial fill B failed\r\n");
-        return false;
-    }
-
-    g_running = 1U;
-    printf("[STREAM] started: %s bits=%u data=%lu\r\n",
-           path,
-           (unsigned)g_bits_per_sample,
-           (unsigned long)g_data_size);
+    g_start_pending = 1U;
     return true;
 #else
     (void)path;
@@ -284,6 +308,16 @@ void audio_streamer_process(void)
 {
 #if AUDIO_STREAMER_HAS_FATFS
     static uint32_t last_log_tick = 0U;
+
+    if(g_start_pending != 0U)
+    {
+        if(!streamer_prepare_start())
+        {
+            g_error = 1U;
+            g_start_pending = 0U;
+            g_running = 0U;
+        }
+    }
 
     if((g_running == 0U) || (g_error != 0U))
         return;
