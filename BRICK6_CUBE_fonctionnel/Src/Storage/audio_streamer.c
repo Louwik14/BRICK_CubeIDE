@@ -153,6 +153,14 @@ while(frames_written < max_frames)
     {
         if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
         {
+            STREAM_LOG(
+            "[STREAM LOOP] pos=%lu size=%lu left=%lu\n",
+            (unsigned long)s->file_data_pos,
+            (unsigned long)s->data_size,
+            (unsigned long)(s->data_size - s->file_data_pos)
+            );
+            STREAM_LOG("[STREAM LOOP] bytes_per_frame=%lu\n", (unsigned long)bytes_per_frame);
+
             if(!streamer_seek_to_data_start(s))
                 return frames_written;
             continue;
@@ -168,6 +176,16 @@ while(frames_written < max_frames)
 
         if(read_bytes == 0U)
         {
+            STREAM_LOG(
+            "[STREAM LOOP] pos=%lu size=%lu left=%lu\n",
+            (unsigned long)s->file_data_pos,
+            (unsigned long)s->data_size,
+            (unsigned long)(s->data_size - s->file_data_pos)
+            );
+            STREAM_LOG("[STREAM LOOP] bytes_per_frame=%lu read_bytes=%lu\n",
+                       (unsigned long)bytes_per_frame,
+                       (unsigned long)read_bytes);
+
             if(!streamer_seek_to_data_start(s))
                 return frames_written;
             continue;
@@ -176,6 +194,16 @@ while(frames_written < max_frames)
         uint32_t bytes_read = 0U;
         if(!streamer_read_bytes(s, &io_buf[filled], read_bytes, &bytes_read))
             return frames_written;
+
+        STREAM_LOG(
+        "[STREAM READ] req=%lu br=%lu pos=%lu\n",
+        (unsigned long)read_bytes,
+        (unsigned long)bytes_read,
+        (unsigned long)s->file_data_pos
+        );
+        STREAM_LOG("[STREAM READ] left=%lu bpf=%lu\n",
+                   (unsigned long)(s->data_size - s->file_data_pos),
+                   (unsigned long)bytes_per_frame);
 
         if((bytes_read == 0U) || ((bytes_read % bytes_per_frame) != 0U))
         {
@@ -213,6 +241,12 @@ while(frames_written < max_frames)
         stream_ring[idx + 1U] = r;
         s->write_pos = (s->write_pos + 1U) % STREAM_RING_FRAMES;
     }
+
+    STREAM_LOG(
+    "[STREAM WRITE] frames=%lu write_pos=%lu\n",
+    (unsigned long)ready_frames,
+    (unsigned long)s->write_pos
+    );
 
     frames_written += ready_frames;
 }
