@@ -137,14 +137,21 @@ static uint8_t io_buf[STREAM_IO_FRAMES * 8U];
 
 uint32_t frames_written = 0U;
 uint32_t bytes_per_frame = s->bytes_per_frame;
-uint32_t io_bytes = STREAM_IO_FRAMES * bytes_per_frame;
 
 while(frames_written < max_frames)
 {
     uint32_t space_frames = streamer_ring_space_frames(s);
     uint32_t frames_left = max_frames - frames_written;
 
-    if((space_frames < STREAM_IO_FRAMES) || (frames_left < STREAM_IO_FRAMES))
+    uint32_t chunk_frames = STREAM_IO_FRAMES;
+
+    if(chunk_frames > space_frames)
+        chunk_frames = space_frames;
+
+    if(chunk_frames > frames_left)
+        chunk_frames = frames_left;
+
+    if(chunk_frames == 0U)
         break;
 
     if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
@@ -163,7 +170,7 @@ while(frames_written < max_frames)
     }
 
     uint32_t bytes_left = s->data_size - s->file_data_pos;
-    uint32_t read_bytes = io_bytes;
+    uint32_t read_bytes = chunk_frames * bytes_per_frame;
 
     if(read_bytes > bytes_left)
         read_bytes = bytes_left;
