@@ -1,8 +1,5 @@
 #include "sampler.h"
-#include "sampler_stream.h"
-#include <stdio.h>
-
-#define DBG(...) printf(__VA_ARGS__)
+#include "audio_streamer.h"
 
 volatile uint32_t audio_underrun_count = 0U;
 
@@ -37,7 +34,6 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
         return;
     }
 
-    /* Clamp loop end to valid sample length. */
     if(v->loop_end == 0U || v->loop_end > length)
         v->loop_end = length;
 
@@ -69,20 +65,18 @@ void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t 
 
     for(uint32_t i = 0U; i < nframes; i++)
     {
-        uint32_t rp = g_stream_read_pos;
+        float l = 0.0f;
+        float r = 0.0f;
+        uint32_t prev_underrun = audio_streamer_get_stats()->underrun_count;
 
-        if(rp == g_stream_write_pos)
+        audio_streamer_get_frame(&l, &r);
+
+        outL[i] += l * v->gainL;
+        outR[i] += r * v->gainR;
+
+        if(audio_streamer_get_stats()->underrun_count != prev_underrun)
         {
-            g_stream_underrun_count++;
             audio_underrun_count++;
-            break;
         }
-
-        outL[i] += stream_buffer[rp] * v->gainL;
-        rp = (rp + 1U) % (STREAM_BUFFER_FRAMES * 2U);
-        outR[i] += stream_buffer[rp] * v->gainR;
-        rp = (rp + 1U) % (STREAM_BUFFER_FRAMES * 2U);
-
-        g_stream_read_pos = rp;
     }
 }

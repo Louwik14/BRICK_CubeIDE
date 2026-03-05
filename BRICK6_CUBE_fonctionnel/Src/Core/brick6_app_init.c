@@ -12,9 +12,7 @@
 #include "engine_tasklet.h"
 #include "midi.h"
 #include "sai.h"
-#include "sd_stream.h"
-#include "sd_owner.h"
-#include "sdmmc.h"
+#include "audio_streamer.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_uart.h"
@@ -28,10 +26,8 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "sampler.h"
-#include "sampler_stream.h"
-#include "wav_loader.h"
 #include "brick6_debug_uart.h"
-#include "sd_audio_block_ring.h"
+#include "ff.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -39,6 +35,7 @@
 static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
+static FATFS g_app_fatfs;
 extern volatile uint32_t audio_underrun_count;
 
 /* ============================================================
@@ -118,44 +115,8 @@ static void my_dsp(StereoTrack *tracks,
         }
     }
 
-#if BRICK6_STREAM_DEBUG
-    {
-        static uint32_t dbg_dsp_throttle = 0U;
-        static uint32_t last_underrun = 0U;
-        if ((dbg_dsp_throttle++ & 0xFFU) == 0U)
-        {
-            STREAM_LOG("DSP ring_fill=%lu first=%.5f\r\n",
-                       (unsigned long)audio_block_ring_fill_level(&sd_audio_block_ring),
-                       (double)tracks[0].L[0]);
-        }
-        if (audio_underrun_count != last_underrun)
-        {
-            uint32_t delta = audio_underrun_count - last_underrun;
-            last_underrun = audio_underrun_count;
-            if ((audio_underrun_count < 8U) || ((audio_underrun_count & 0x0FU) == 0U))
-            {
-                STREAM_LOG("DSP underrun=%lu (+%lu)\r\n",
-                           (unsigned long)audio_underrun_count,
-                           (unsigned long)delta);
-            }
-        }
-    }
-#endif
 
     mixer_process(tracks, track_count, frames);
-}
-
-static uint16_t wav_le16(const uint8_t *p)
-{
-    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
-}
-
-static uint32_t wav_le32(const uint8_t *p)
-{
-    return (uint32_t)p[0] |
-           ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) |
-           ((uint32_t)p[3] << 24);
 }
 
 
@@ -175,58 +136,13 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
+    if(f_mount(&g_app_fatfs, "0:", 1U) != FR_OK)
     {
-        char wav_path[64];
-
-        DBG("[SD] init ok\r\n");
-
-        sd_set_owner(SD_OWNER_FATFS);
-
-        if(!wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
-        {
-            sd_set_owner(SD_OWNER_NONE);
-            DBG("[STREAM] WAV not found\r\n");
-        }
-        else
-        {
-            uint32_t start_block = 0U;
-            uint32_t total_blocks = 0U;
-
-            if(!wav_get_physical_location(wav_path, &start_block, &total_blocks))
-            {
-                sd_set_owner(SD_OWNER_NONE);
-                DBG("[STREAM] WAV location lookup failed\r\n");
-            }
-            else
-            {
-                total_blocks -= (total_blocks % SD_STREAM_BLOCKS_PER_BUFFER);
-
-                while(HAL_SD_GetCardState(&hsd1) != HAL_SD_CARD_TRANSFER)
-                {
-                }
-
-                if(sd_stream_init(&hsd1) != HAL_OK)
-                {
-                    sd_set_owner(SD_OWNER_NONE);
-                    DBG("[SD] stream init error\r\n");
-                }
-                else
-                {
-                    sd_set_owner(SD_OWNER_STREAM);
-                    DBG("[STREAM] start wav streaming\r\n");
-
-                    if((total_blocks > 0U) && (sd_stream_start_read(start_block, total_blocks) == HAL_OK))
-                    {
-                        DBG("[STREAM] reading audio data blocks...\r\n");
-                    }
-                    else
-                    {
-                        sd_set_owner(SD_OWNER_NONE);
-                        DBG("[STREAM] start wav streaming error\r\n");
-                    }
-                }
-            }
-        }
+        DBG("[FS] mount failed\r\n");
+    }
+    else if(!audio_streamer_start_first_wav())
+    {
+        DBG("[STREAM] start failed\r\n");
     }
 
     CS42448_Init(0x48);
@@ -243,7 +159,6 @@ void brick6_app_init(void)
     audio_tracks_init();
 
     sample_voice_init(&g_sampler_voice);
-    sampler_stream_init();
     DBG("[SAMPLER] init\r\n");
     g_sampler_voice.gainL = 0.35f;
     g_sampler_voice.gainR = 0.35f;
