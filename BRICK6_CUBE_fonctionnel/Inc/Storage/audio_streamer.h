@@ -31,19 +31,9 @@ typedef struct
     uint32_t data_size;
     uint32_t file_data_pos;
 
-    /* ping pong buffers */
-    float *bufferA;
-    float *bufferB;
-
-    volatile uint32_t frames_valid_A;
-    volatile uint32_t frames_valid_B;
-
-    volatile uint8_t ready_A;
-    volatile uint8_t ready_B;
-
     /* playback state */
-    volatile uint8_t active_buffer;
     volatile uint32_t read_pos;
+    volatile uint32_t write_pos;
     volatile uint8_t running;
     volatile uint8_t error;
 
