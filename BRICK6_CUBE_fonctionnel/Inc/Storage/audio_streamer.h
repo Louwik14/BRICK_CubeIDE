@@ -31,19 +31,9 @@ typedef struct
     uint32_t data_size;
     uint32_t file_data_pos;
 
-    /* ping pong buffers */
-    float *bufferA;
-    float *bufferB;
-
-    volatile uint32_t frames_valid_A;
-    volatile uint32_t frames_valid_B;
-
-    volatile uint8_t ready_A;
-    volatile uint8_t ready_B;
-
     /* playback state */
-    volatile uint8_t active_buffer;
     volatile uint32_t read_pos;
+    volatile uint32_t write_pos;
     volatile uint8_t running;
     volatile uint8_t error;
 
@@ -54,7 +44,6 @@ typedef struct
     /* statistics */
     volatile uint32_t underrun_count;
     volatile uint32_t sd_read_time_max;
-    volatile uint32_t buffer_switch_count;
 
 } audio_streamer_t;
 
@@ -62,7 +51,6 @@ typedef struct
 {
     uint32_t underrun_count;
     uint32_t sd_read_time_max;
-    uint32_t buffer_switch_count;
 } audio_streamer_stats_t;
 
 bool audio_streamer_start(const char *path);
