@@ -10,7 +10,7 @@
 #define STREAM_RING_FRAMES (16384U)
 #define STREAM_RING_SAMPLES (STREAM_RING_FRAMES * 2U)
 #define STREAM_REFILL_THRESHOLD_FRAMES (512U)
-#define STREAM_PREFILL_TARGET_FRAMES (2048U)
+#define STREAM_PREFILL_TARGET_FRAMES (4096U)
 #define STREAM_IO_BYTES (4096U)
 
 static AUDIO_COLD_SDRAM float stream_ring[STREAM_RING_SAMPLES];
@@ -121,8 +121,13 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
             break;
 
         chunk_frames = chunk_bytes / s->bytes_per_frame;
+        uint32_t chunk_written = 0U;
+
         for(uint32_t i = 0U; i < chunk_frames; i++)
         {
+            if(streamer_ring_space_frames(s) == 0U)
+                break;
+
             const uint8_t *frame = &io_buf[i * s->bytes_per_frame];
             float l;
             float r;
@@ -142,11 +147,12 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
             stream_ring[idx + 0U] = l;
             stream_ring[idx + 1U] = r;
             s->write_pos = (s->write_pos + 1U) % STREAM_RING_FRAMES;
+            chunk_written++;
         }
 
-        frames_written += chunk_frames;
+        frames_written += chunk_written;
 
-        if(chunk_frames == 0U)
+        if(chunk_written < chunk_frames)
             break;
     }
 
@@ -250,7 +256,6 @@ bool audio_streamer_start(const char *path)
     s->file_data_pos = 0U;
     s->underrun_count = 0U;
     s->sd_read_time_max = 0U;
-    s->buffer_switch_count = 0U;
 
 #if AUDIO_STREAMER_HAS_FATFS
     if(path == 0)
@@ -348,5 +353,4 @@ void audio_streamer_get_stats(audio_streamer_stats_t *out_stats)
 
     out_stats->underrun_count = s->underrun_count;
     out_stats->sd_read_time_max = s->sd_read_time_max;
-    out_stats->buffer_switch_count = 0U;
 }
