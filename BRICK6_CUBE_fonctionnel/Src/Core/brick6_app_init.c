@@ -25,7 +25,7 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
-#include "audio_streamer.h"
+#include "Streaming/stream_manager.h"
 #include "App/app_sample_boot.h"
 
 #define DBG(...) printf(__VA_ARGS__)
@@ -96,7 +96,7 @@ static void my_dsp(StereoTrack *tracks,
         {
             float sl;
             float sr;
-            audio_streamer_get_frame(&sl, &sr);
+            stream_manager_get_frame(&sl, &sr);
 
             tracks[0].L[i] += sl;
             tracks[0].R[i] += sr;
@@ -175,5 +175,5 @@ void brick6_app_init(void)
 
 void brick6_app_process(void)
 {
-    audio_streamer_process();
+    stream_manager_process();
 }

@@ -2,7 +2,7 @@
 
 #include "App/app_sample_boot.h"
 #include "Storage/wav_loader.h"
-#include "Storage/audio_streamer.h"
+#include "Streaming/stream_manager.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 
@@ -14,7 +14,7 @@ void app_sample_boot_init(void)
     {
         DBG("[WAV] found: %s\r\n", wav_path);
 
-        if(!audio_streamer_start(wav_path))
+        if(!stream_manager_start(wav_path))
             DBG("[STREAM] start failed\r\n");
     }
     else
