@@ -24,6 +24,8 @@
 static AUDIO_COLD_SDRAM float stream_ring[STREAM_RING_SAMPLES];
 
 static audio_streamer_t g_streamer;
+static float g_last_out_l = 0.0f;
+static float g_last_out_r = 0.0f;
 
 static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
@@ -218,6 +220,12 @@ while(frames_written < max_frames)
     }
 
     uint32_t ready_frames = bytes_read / bytes_per_frame;
+    uint32_t space_now = streamer_ring_space_frames(s);
+
+    if(ready_frames > space_now)
+        ready_frames = space_now;
+
+    uint32_t wp = s->write_pos;
 
     for(uint32_t i = 0U; i < ready_frames; i++)
     {
@@ -236,11 +244,14 @@ while(frames_written < max_frames)
             r = pcm32_to_float(&frame[4]);
         }
 
-        uint32_t idx = s->write_pos * 2U;
+        uint32_t idx = wp * 2U;
         stream_ring[idx] = l;
         stream_ring[idx + 1U] = r;
-        s->write_pos = (s->write_pos + 1U) % STREAM_RING_FRAMES;
+        wp = (wp + 1U) % STREAM_RING_FRAMES;
     }
+
+    __DMB();
+    s->write_pos = wp;
 
     STREAM_LOG(
     "[STREAM WRITE] frames=%lu write_pos=%lu\n",
@@ -262,8 +273,8 @@ void audio_streamer_get_frame(float *L, float *R)
 audio_streamer_t *s = &g_streamer;
 
 
-float outL = 0.0f;
-float outR = 0.0f;
+float outL = g_last_out_l;
+float outR = g_last_out_r;
 
 if((s->running != 0U) && (s->error == 0U))
 {
@@ -274,6 +285,10 @@ if((s->running != 0U) && (s->error == 0U))
         outL = stream_ring[idx];
         outR = stream_ring[idx + 1U];
 
+        g_last_out_l = outL;
+        g_last_out_r = outR;
+
+        __DMB();
         s->read_pos = (s->read_pos + 1U) % STREAM_RING_FRAMES;
     }
     else
@@ -414,6 +429,8 @@ bool audio_streamer_start(const char *path)
     s->file_data_pos = 0U;
     s->underrun_count = 0U;
     s->sd_read_time_max = 0U;
+    g_last_out_l = 0.0f;
+    g_last_out_r = 0.0f;
 
 #if AUDIO_STREAMER_HAS_FATFS
 
@@ -466,11 +483,13 @@ void audio_streamer_process(void)
         return;
 
     if(streamer_ring_space_frames(s) > STREAM_REFILL_THRESHOLD_FRAMES)
-    	while(streamer_ring_space_frames(s) > STREAM_IO_FRAMES)
-    	{
-    	    if(streamer_fill_ring(s, STREAM_IO_FRAMES) == 0)
-    	        break;
-    	}
+    {
+        while(streamer_ring_space_frames(s) >= STREAM_IO_FRAMES)
+        {
+            if(streamer_fill_ring(s, STREAM_IO_FRAMES) == 0)
+                break;
+        }
+    }
 
     if((HAL_GetTick() - last_log_tick) >= 1000U)
     {
