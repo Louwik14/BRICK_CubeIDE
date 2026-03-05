@@ -5,6 +5,15 @@
 #include "memory_layout.h"
 #include "stm32h7xx_hal.h"
 #include "wav_parser.h"
+#include "engine_tasklet.h"
+
+#ifndef STREAM_LOOP_DEBUG
+#define STREAM_LOOP_DEBUG 1
+#endif
+
+#if STREAM_LOOP_DEBUG
+#include <stdio.h>
+#endif
 
 /*
  * Streaming architecture (single streamer instance, scalable pattern):
@@ -51,6 +60,74 @@ static audio_streamer_t g_streamer;
 static float g_last_out_l = 0.0f;
 static float g_last_out_r = 0.0f;
 
+#if STREAM_LOOP_DEBUG
+typedef struct
+{
+    uint32_t loop_count;
+    uint32_t last_frame_file_pos;
+    uint32_t ring_fill_at_eof;
+    uint32_t ring_fill_after_seek;
+    uint32_t underruns_during_loop;
+    uint32_t tick_eof_detected;
+    uint32_t tick_seek_done;
+    uint32_t tick_first_frame_written;
+    uint32_t tick_first_frame_consumed;
+} streamer_loop_debug_t;
+
+typedef struct
+{
+    streamer_loop_debug_t stats;
+    uint32_t seek_tick_start;
+    uint32_t seek_latency_ms;
+    uint32_t write_pos_first_frame_written;
+    volatile uint32_t read_pos_first_frame_consumed;
+    uint32_t ring_fill_last_frame;
+    uint32_t ring_fill_first_frame_written;
+    uint32_t ring_fill_first_frame_consumed;
+    uint32_t frames_written_after_seek;
+    uint32_t underrun_at_eof;
+    volatile uint8_t waiting_first_write;
+    volatile uint8_t waiting_first_consume;
+    uint8_t eof_seen;
+    uint8_t summary_printed;
+} streamer_loop_debug_runtime_t;
+
+static streamer_loop_debug_runtime_t g_loop_dbg;
+
+static void loop_debug_print_summary_if_ready(void)
+{
+    streamer_loop_debug_runtime_t *d = &g_loop_dbg;
+
+    if((d->eof_seen == 0U) || (d->summary_printed != 0U))
+        return;
+
+    if(d->stats.tick_first_frame_consumed == 0U)
+        return;
+
+    d->summary_printed = 1U;
+
+    printf("[STREAM LOOP]\r\n");
+    printf("loop=%lu\r\n", (unsigned long)d->stats.loop_count);
+    printf("last_frame_file_pos=%lu\r\n", (unsigned long)d->stats.last_frame_file_pos);
+    printf("ring_at_last_frame=%lu\r\n", (unsigned long)d->ring_fill_last_frame);
+    printf("ring_at_eof=%lu\r\n", (unsigned long)d->stats.ring_fill_at_eof);
+    printf("ring_after_seek=%lu\r\n", (unsigned long)d->stats.ring_fill_after_seek);
+    printf("seek_latency=%lu ms\r\n", (unsigned long)d->seek_latency_ms);
+    printf("frames_written_after_seek=%lu\r\n", (unsigned long)d->frames_written_after_seek);
+    printf("first_frame_written_tick=%lu\r\n", (unsigned long)d->stats.tick_first_frame_written);
+    printf("first_frame_consumed_tick=%lu\r\n", (unsigned long)d->stats.tick_first_frame_consumed);
+    printf("write_pos_first_frame_written=%lu\r\n", (unsigned long)d->write_pos_first_frame_written);
+    printf("read_pos_first_frame_consumed=%lu\r\n", (unsigned long)d->read_pos_first_frame_consumed);
+    printf("ring_at_first_frame_written=%lu\r\n", (unsigned long)d->ring_fill_first_frame_written);
+    printf("ring_at_first_frame_consumed=%lu\r\n", (unsigned long)d->ring_fill_first_frame_consumed);
+    printf("tick_eof_detected=%lu\r\n", (unsigned long)d->stats.tick_eof_detected);
+    printf("tick_seek_done=%lu\r\n", (unsigned long)d->stats.tick_seek_done);
+    printf("underruns_during_loop=%lu\r\n", (unsigned long)d->stats.underruns_during_loop);
+
+    d->eof_seen = 0U;
+}
+#endif
+
 static inline uint32_t ring_used_frames(uint32_t r, uint32_t w)
 {
     if(w >= r)
@@ -88,6 +165,10 @@ static inline float pcm32_to_float(const uint8_t *p)
 
 static bool seek_to_data_start(audio_streamer_t *s)
 {
+#if STREAM_LOOP_DEBUG
+    streamer_loop_debug_runtime_t *d = &g_loop_dbg;
+    d->seek_tick_start = HAL_GetTick();
+#endif
     uint32_t t0 = HAL_GetTick();
     FRESULT fr = f_lseek(&s->fp, s->data_offset);
     uint32_t dt = HAL_GetTick() - t0;
@@ -102,6 +183,18 @@ static bool seek_to_data_start(audio_streamer_t *s)
     }
 
     s->file_data_pos = 0U;
+
+#if STREAM_LOOP_DEBUG
+    if(d->eof_seen != 0U)
+    {
+        d->seek_latency_ms = HAL_GetTick() - d->seek_tick_start;
+        d->stats.tick_seek_done = engine_tick_count;
+        d->stats.ring_fill_after_seek = ring_used_frames(s->read_pos, s->write_pos);
+        d->waiting_first_write = 1U;
+        d->frames_written_after_seek = 0U;
+    }
+#endif
+
     return true;
 }
 
@@ -142,6 +235,9 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
 
     const uint32_t bpf = s->bytes_per_frame;
     uint32_t written = 0U;
+#if STREAM_LOOP_DEBUG
+    streamer_loop_debug_runtime_t *d = &g_loop_dbg;
+#endif
     uint32_t wp = s->write_pos;
 
     while((written < want_frames) && (s->error == 0U))
@@ -149,8 +245,40 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
         uint32_t bytes_left = s->data_size - s->file_data_pos;
         uint32_t file_frames_left = (bpf != 0U) ? (bytes_left / bpf) : 0U;
 
+#if STREAM_LOOP_DEBUG
+        if((bytes_left == bpf) && (d->eof_seen == 0U))
+        {
+            d->stats.last_frame_file_pos = s->file_data_pos + bpf;
+            d->ring_fill_last_frame = ring_used_frames(s->read_pos, s->write_pos);
+        }
+#endif
+
         if(file_frames_left == 0U)
         {
+#if STREAM_LOOP_DEBUG
+            if(d->eof_seen == 0U)
+            {
+                d->stats.loop_count++;
+                d->stats.tick_eof_detected = engine_tick_count;
+                d->stats.ring_fill_at_eof = ring_used_frames(s->read_pos, s->write_pos);
+                d->underrun_at_eof = s->underrun_count;
+                d->stats.underruns_during_loop = 0U;
+                d->stats.tick_first_frame_written = 0U;
+                d->stats.tick_first_frame_consumed = 0U;
+                d->write_pos_first_frame_written = 0U;
+                d->read_pos_first_frame_consumed = 0U;
+                d->ring_fill_first_frame_written = 0U;
+                d->ring_fill_first_frame_consumed = 0U;
+                d->seek_latency_ms = 0U;
+                d->stats.tick_seek_done = 0U;
+                d->stats.ring_fill_after_seek = 0U;
+                d->frames_written_after_seek = 0U;
+                d->waiting_first_write = 0U;
+                d->waiting_first_consume = 0U;
+                d->summary_printed = 0U;
+                d->eof_seen = 1U;
+            }
+#endif
             if(!seek_to_data_start(s))
                 break;
             continue;
@@ -209,6 +337,20 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
         /* Publish this decoded chunk immediately for IRQ visibility. */
         __DMB();
         s->write_pos = wp;
+
+#if STREAM_LOOP_DEBUG
+        if(d->waiting_first_write != 0U)
+        {
+            d->stats.tick_first_frame_written = engine_tick_count;
+            d->write_pos_first_frame_written = s->write_pos;
+            d->ring_fill_first_frame_written = ring_used_frames(s->read_pos, s->write_pos);
+            d->waiting_first_write = 0U;
+            d->waiting_first_consume = 1U;
+        }
+
+        if(d->eof_seen != 0U)
+            d->frames_written_after_seek += got_frames;
+#endif
 
         written += got_frames;
 
@@ -315,6 +457,9 @@ bool audio_streamer_start(const char *path)
 
     memset(stream_ring, 0, sizeof(stream_ring));
     memset(s, 0, sizeof(*s));
+#if STREAM_LOOP_DEBUG
+    memset(&g_loop_dbg, 0, sizeof(g_loop_dbg));
+#endif
 
 #if AUDIO_STREAMER_HAS_FATFS
     if(path == NULL)
@@ -348,6 +493,10 @@ void audio_streamer_process(void)
 
     if((s->running == 0U) || (s->error != 0U))
         return;
+
+#if STREAM_LOOP_DEBUG
+    loop_debug_print_summary_if_ready();
+#endif
 
     /*
      * Refill policy:
@@ -430,6 +579,25 @@ void audio_streamer_get_frame(float *L, float *R)
         {
             s->underrun_count++;
         }
+
+#if STREAM_LOOP_DEBUG
+        {
+            streamer_loop_debug_runtime_t *d = &g_loop_dbg;
+            if((d->eof_seen != 0U) && (d->summary_printed == 0U))
+            {
+                d->stats.underruns_during_loop = s->underrun_count - d->underrun_at_eof;
+            }
+
+            if((d->waiting_first_consume != 0U) && (rp != wp) &&
+               (d->stats.tick_first_frame_consumed == 0U))
+            {
+                d->stats.tick_first_frame_consumed = engine_tick_count;
+                d->read_pos_first_frame_consumed = s->read_pos;
+                d->ring_fill_first_frame_consumed = ring_used_frames(s->read_pos, s->write_pos);
+                d->waiting_first_consume = 0U;
+            }
+        }
+#endif
     }
 
     if(L) *L = outL;
