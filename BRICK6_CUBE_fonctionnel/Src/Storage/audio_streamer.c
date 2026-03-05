@@ -19,18 +19,24 @@ static audio_streamer_t g_streamer;
 
 static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
-    if(s->write_pos >= s->read_pos)
-        return s->write_pos - s->read_pos;
+    uint32_t read_pos = s->read_pos;
+    uint32_t write_pos = s->write_pos;
 
-    return STREAM_RING_FRAMES - (s->read_pos - s->write_pos);
+    if(write_pos >= read_pos)
+        return write_pos - read_pos;
+
+    return STREAM_RING_FRAMES - (read_pos - write_pos);
 }
 
 static uint32_t streamer_ring_space_frames(const audio_streamer_t *s)
 {
-    if(s->write_pos >= s->read_pos)
-        return STREAM_RING_FRAMES - (s->write_pos - s->read_pos) - 1U;
+    uint32_t read_pos = s->read_pos;
+    uint32_t write_pos = s->write_pos;
 
-    return s->read_pos - s->write_pos - 1U;
+    if(write_pos >= read_pos)
+        return STREAM_RING_FRAMES - (write_pos - read_pos) - 1U;
+
+    return read_pos - write_pos - 1U;
 }
 
 static float pcm24_to_float(const uint8_t *p)
