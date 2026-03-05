@@ -13,214 +13,300 @@
 #define STREAM_PREFILL_TARGET_FRAMES (4096U)
 #define STREAM_IO_BYTES (4096U)
 
+#define STREAM_DEBUG 1
+
+#if STREAM_DEBUG
+#define STREAM_LOG(...) printf(__VA_ARGS__)
+#else
+#define STREAM_LOG(...)
+#endif
+
 static AUDIO_COLD_SDRAM float stream_ring[STREAM_RING_SAMPLES];
 
 static audio_streamer_t g_streamer;
 
 static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
-    uint32_t read_pos = s->read_pos;
-    uint32_t write_pos = s->write_pos;
+uint32_t read_pos = s->read_pos;
+uint32_t write_pos = s->write_pos;
 
-    if(write_pos >= read_pos)
-        return write_pos - read_pos;
 
-    return STREAM_RING_FRAMES - (read_pos - write_pos);
+if(write_pos >= read_pos)
+    return write_pos - read_pos;
+
+return STREAM_RING_FRAMES - (read_pos - write_pos);
+
+
 }
 
 static uint32_t streamer_ring_space_frames(const audio_streamer_t *s)
 {
-    uint32_t read_pos = s->read_pos;
-    uint32_t write_pos = s->write_pos;
+uint32_t read_pos = s->read_pos;
+uint32_t write_pos = s->write_pos;
 
-    if(write_pos >= read_pos)
-        return STREAM_RING_FRAMES - (write_pos - read_pos) - 1U;
 
-    return read_pos - write_pos - 1U;
+if(write_pos >= read_pos)
+    return STREAM_RING_FRAMES - (write_pos - read_pos) - 1U;
+
+return read_pos - write_pos - 1U;
+
+
 }
 
 static float pcm24_to_float(const uint8_t *p)
 {
-    int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
-    if((v & 0x00800000L) != 0)
-        v |= (int32_t)0xFF000000L;
-    return (float)v * (1.0f / 8388608.0f);
+int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
+if((v & 0x00800000L) != 0)
+v |= (int32_t)0xFF000000L;
+return (float)v * (1.0f / 8388608.0f);
 }
 
 static float pcm32_to_float(const uint8_t *p)
 {
-    int32_t v = (int32_t)((uint32_t)p[0] |
-                          ((uint32_t)p[1] << 8) |
-                          ((uint32_t)p[2] << 16) |
-                          ((uint32_t)p[3] << 24));
-    return (float)v * (1.0f / 2147483648.0f);
+int32_t v = (int32_t)((uint32_t)p[0] |
+((uint32_t)p[1] << 8) |
+((uint32_t)p[2] << 16) |
+((uint32_t)p[3] << 24));
+return (float)v * (1.0f / 2147483648.0f);
 }
 
 #if AUDIO_STREAMER_HAS_FATFS
+
 static bool streamer_read_bytes(audio_streamer_t *s, uint8_t *dst, uint32_t bytes, uint32_t *out_bytes_read)
 {
-    UINT br = 0U;
-    uint32_t t0 = HAL_GetTick();
-    FRESULT fr = f_read(&s->fp, dst, bytes, &br);
-    uint32_t dt = HAL_GetTick() - t0;
+UINT br = 0U;
 
-    if(dt > s->sd_read_time_max)
-        s->sd_read_time_max = dt;
 
-    if(fr != FR_OK)
-    {
-        printf("[STREAM] SD read fail fr=%d br=%u req=%lu\r\n", (int)fr, (unsigned)br, (unsigned long)bytes);
-        s->error = 1U;
-        return false;
-    }
+uint32_t t0 = HAL_GetTick();
+FRESULT fr = f_read(&s->fp, dst, bytes, &br);
+uint32_t dt = HAL_GetTick() - t0;
 
-    s->file_data_pos += (uint32_t)br;
+if(dt > s->sd_read_time_max)
+    s->sd_read_time_max = dt;
 
-    if(out_bytes_read != 0)
-        *out_bytes_read = (uint32_t)br;
+if(fr != FR_OK)
+{
+    STREAM_LOG("[STREAM] SD read error fr=%d req=%lu br=%u\r\n",
+               (int)fr, (unsigned long)bytes, (unsigned)br);
+    s->error = 1U;
+    return false;
+}
 
-    return true;
+s->file_data_pos += (uint32_t)br;
+
+
+s->file_data_pos += (uint32_t)br;
+
+#if STREAM_DEBUG
+if(br != bytes)
+{
+    STREAM_LOG("[STREAM] partial read req=%lu br=%u pos=%lu\r\n",
+               (unsigned long)bytes,
+               (unsigned)br,
+               (unsigned long)s->file_data_pos);
+}
+#endif
+
+if(out_bytes_read != 0)
+    *out_bytes_read = (uint32_t)br;
+
+return true;
+
+
 }
 
 static bool streamer_seek_to_data_start(audio_streamer_t *s)
 {
-    if(f_lseek(&s->fp, s->data_offset) != FR_OK)
-    {
-        printf("[STREAM] seek data start failed\r\n");
-        s->error = 1U;
-        return false;
-    }
+STREAM_LOG("[STREAM] loop restart\r\n");
 
-    s->file_data_pos = 0U;
-    s->pending_bytes_count = 0U;
-    return true;
+
+if(f_lseek(&s->fp, s->data_offset) != FR_OK)
+{
+    STREAM_LOG("[STREAM] seek data start failed\r\n");
+    s->error = 1U;
+    return false;
 }
 
-static bool streamer_handle_loop_restart(audio_streamer_t *s)
-{
-    if(s->pending_bytes_count != 0U)
-    {
-        /* Should not happen with aligned data_size, keep state consistent. */
-        printf("[STREAM] EOF residual: drop %u bytes\r\n", (unsigned)s->pending_bytes_count);
-        s->pending_bytes_count = 0U;
-    }
+s->file_data_pos = 0U;
+s->pending_bytes_count = 0U;
 
-    return streamer_seek_to_data_start(s);
+return true;
+
+
 }
 
 static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 {
-    static uint8_t io_buf[STREAM_IO_BYTES];
-    uint32_t frames_written = 0U;
+static uint8_t io_buf[STREAM_IO_BYTES + 8];
 
-    while(frames_written < max_frames)
+
+uint32_t frames_written = 0U;
+
+while(frames_written < max_frames)
+{
+    uint32_t space_frames = streamer_ring_space_frames(s);
+    uint32_t frames_left = max_frames - frames_written;
+    uint32_t chunk_frames = (frames_left > 512U) ? 512U : frames_left;
+
+    if(space_frames == 0U)
     {
-        uint32_t space_frames = streamer_ring_space_frames(s);
-        uint32_t frames_left = max_frames - frames_written;
-        uint32_t chunk_frames = (frames_left > 512U) ? 512U : frames_left;
-
-        if(space_frames == 0U)
-            break;
-
-        if(chunk_frames > space_frames)
-            chunk_frames = space_frames;
-
-        if(chunk_frames == 0U)
-            break;
-
-        uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
-        uint32_t read_target_bytes = chunk_bytes;
-
-        if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
-        {
-            if(!streamer_handle_loop_restart(s))
-                break;
-            continue;
-        }
-
-        if(read_target_bytes > (STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count))
-            read_target_bytes = STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count;
-
-        if(s->data_size > s->file_data_pos)
-        {
-            uint32_t remaining_bytes = s->data_size - s->file_data_pos;
-
-            if(remaining_bytes < read_target_bytes)
-                read_target_bytes = remaining_bytes;
-        }
-
-        if(read_target_bytes == 0U)
-        {
-            if(!streamer_handle_loop_restart(s))
-                break;
-
-            continue;
-        }
-
-        uint8_t *read_dst = &io_buf[s->pending_bytes_count];
-        uint32_t bytes_read = 0U;
-
-        if(!streamer_read_bytes(s, read_dst, read_target_bytes, &bytes_read))
-            break;
-
-        bool reached_eof = ((bytes_read < read_target_bytes) ||
-                            ((s->data_size != 0U) && (s->file_data_pos >= s->data_size)));
-        uint32_t available_bytes = (uint32_t)s->pending_bytes_count + bytes_read;
-        uint32_t ready_frames = available_bytes / s->bytes_per_frame;
-
-        if(ready_frames > chunk_frames)
-            ready_frames = chunk_frames;
-
-        uint32_t chunk_written = 0U;
-
-        for(uint32_t i = 0U; i < ready_frames; i++)
-        {
-            if(streamer_ring_space_frames(s) == 0U)
-                break;
-
-            const uint8_t *frame = &io_buf[i * s->bytes_per_frame];
-            float l;
-            float r;
-
-            if(s->bits_per_sample == 24U)
-            {
-                l = pcm24_to_float(&frame[0]);
-                r = pcm24_to_float(&frame[3]);
-            }
-            else
-            {
-                l = pcm32_to_float(&frame[0]);
-                r = pcm32_to_float(&frame[4]);
-            }
-
-            uint32_t idx = s->write_pos * 2U;
-            stream_ring[idx + 0U] = l;
-            stream_ring[idx + 1U] = r;
-            s->write_pos = (s->write_pos + 1U) % STREAM_RING_FRAMES;
-            chunk_written++;
-        }
-
-        frames_written += chunk_written;
-
-        uint32_t consumed_bytes = chunk_written * s->bytes_per_frame;
-        uint32_t remaining_unconsumed = available_bytes - consumed_bytes;
-
-        if(remaining_unconsumed > 0U)
-            memmove(io_buf, &io_buf[consumed_bytes], remaining_unconsumed);
-
-        s->pending_bytes_count = (uint8_t)remaining_unconsumed;
-
-        if(reached_eof)
-        {
-            if(!streamer_handle_loop_restart(s))
-                break;
-        }
-
-        if(chunk_written < ready_frames)
-            break;
+        STREAM_LOG("[STREAM] ring full\r\n");
+        break;
     }
 
-    return frames_written;
+    if(chunk_frames > space_frames)
+        chunk_frames = space_frames;
+
+    uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
+    uint32_t read_target_bytes = chunk_bytes;
+
+    if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
+    {
+        STREAM_LOG("[STREAM] EOF reached pos=%lu size=%lu\r\n",
+                   (unsigned long)s->file_data_pos,
+                   (unsigned long)s->data_size);
+
+        if(!streamer_seek_to_data_start(s))
+            break;
+
+        continue;
+    }
+
+    if(read_target_bytes > (STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count))
+        read_target_bytes = STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count;
+
+    uint8_t *read_dst = &io_buf[s->pending_bytes_count];
+
+    uint32_t bytes_read = 0U;
+
+    if(!streamer_read_bytes(s, read_dst, read_target_bytes, &bytes_read))
+        break;
+
+    uint32_t available_bytes = (uint32_t)s->pending_bytes_count + bytes_read;
+
+
+#if STREAM_DEBUG
+if((available_bytes % s->bytes_per_frame) != 0)
+{
+STREAM_LOG("[STREAM WARN] misaligned buffer avail=%lu frame=%lu pending=%u\r\n",
+(unsigned long)available_bytes,
+(unsigned long)s->bytes_per_frame,
+s->pending_bytes_count);
+}
+#endif
+
+
+    uint32_t ready_frames = available_bytes / s->bytes_per_frame;
+
+    if(ready_frames > chunk_frames)
+        ready_frames = chunk_frames;
+
+    uint32_t chunk_written = 0U;
+
+    for(uint32_t i = 0; i < ready_frames; i++)
+    {
+        if(streamer_ring_space_frames(s) == 0U)
+        {
+            STREAM_LOG("[STREAM] ring overflow prevented\r\n");
+            break;
+        }
+
+        const uint8_t *frame = &io_buf[i * s->bytes_per_frame];
+
+        float l;
+        float r;
+
+        if(s->bits_per_sample == 24U)
+        {
+            l = pcm24_to_float(&frame[0]);
+            r = pcm24_to_float(&frame[3]);
+        }
+        else
+        {
+            l = pcm32_to_float(&frame[0]);
+            r = pcm32_to_float(&frame[4]);
+        }
+
+        uint32_t idx = s->write_pos * 2U;
+
+        stream_ring[idx] = l;
+        stream_ring[idx + 1U] = r;
+
+        s->write_pos = (s->write_pos + 1U) % STREAM_RING_FRAMES;
+
+        chunk_written++;
+    }
+
+    frames_written += chunk_written;
+
+    uint32_t consumed_bytes = chunk_written * s->bytes_per_frame;
+    uint32_t remaining_unconsumed = available_bytes - consumed_bytes;
+
+    remaining_unconsumed %= s->bytes_per_frame;
+
+    if(remaining_unconsumed > 0)
+        memmove(io_buf, &io_buf[consumed_bytes], remaining_unconsumed);
+
+    s->pending_bytes_count = (uint8_t)remaining_unconsumed;
+
+
+#if STREAM_DEBUG
+if(s->pending_bytes_count >= s->bytes_per_frame)
+{
+STREAM_LOG("[STREAM BUG] pending >= frame (%u >= %lu)\r\n",
+s->pending_bytes_count,
+(unsigned long)s->bytes_per_frame);
+}
+#endif
+
+
+    if(chunk_written < ready_frames)
+        break;
+}
+
+return frames_written;
+
+
+}
+#endif
+
+void audio_streamer_get_frame(float *L, float *R)
+{
+audio_streamer_t *s = &g_streamer;
+
+
+float outL = 0.0f;
+float outR = 0.0f;
+
+if((s->running != 0U) && (s->error == 0U))
+{
+    if(s->read_pos != s->write_pos)
+    {
+        uint32_t idx = s->read_pos * 2U;
+
+        outL = stream_ring[idx];
+        outR = stream_ring[idx + 1U];
+
+        s->read_pos = (s->read_pos + 1U) % STREAM_RING_FRAMES;
+    }
+    else
+    {
+        s->underrun_count++;
+
+
+#if STREAM_DEBUG
+STREAM_LOG("[STREAM] underrun detected read=%lu write=%lu\r\n",
+(unsigned long)s->read_pos,
+(unsigned long)s->write_pos);
+#endif
+}
+}
+
+
+if(L) *L = outL;
+if(R) *R = outR;
+
+
 }
 
 static bool streamer_prepare_start(audio_streamer_t *s)
@@ -282,15 +368,12 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     }
 
     uint32_t max_data_from_file = file_size - s->data_offset;
+
     if(s->data_size > max_data_from_file)
-    {
-        printf("[STREAM] clamp data size %lu -> %lu\r\n",
-               (unsigned long)s->data_size,
-               (unsigned long)max_data_from_file);
         s->data_size = max_data_from_file;
-    }
 
     s->data_size -= (s->data_size % s->bytes_per_frame);
+
     if(s->data_size == 0U)
     {
         printf("[STREAM] no complete audio frame\r\n");
@@ -303,6 +386,7 @@ static bool streamer_prepare_start(audio_streamer_t *s)
         printf("[STREAM] f_open(stream) failed: %d\r\n", (int)fr);
         return false;
     }
+
     s->file_open = 1U;
 
     if(!streamer_seek_to_data_start(s))
@@ -321,18 +405,16 @@ static bool streamer_prepare_start(audio_streamer_t *s)
            s->pending_path,
            (unsigned)s->bits_per_sample,
            (unsigned long)s->data_size);
+
     return true;
 }
-#endif
 
 bool audio_streamer_start(const char *path)
 {
     audio_streamer_t *s = &g_streamer;
 
     for(uint32_t i = 0U; i < STREAM_RING_SAMPLES; i++)
-    {
         stream_ring[i] = 0.0f;
-    }
 
     s->read_pos = 0U;
     s->write_pos = 0U;
@@ -348,6 +430,7 @@ bool audio_streamer_start(const char *path)
     s->sd_read_time_max = 0U;
 
 #if AUDIO_STREAMER_HAS_FATFS
+
     if(path == 0)
         return false;
 
@@ -366,16 +449,20 @@ bool audio_streamer_start(const char *path)
 
     s->start_pending = 1U;
     return true;
+
 #else
+
     (void)path;
     printf("[STREAM] FatFs unavailable in this build\r\n");
     return false;
+
 #endif
 }
 
 void audio_streamer_process(void)
 {
 #if AUDIO_STREAMER_HAS_FATFS
+
     static uint32_t last_log_tick = 0U;
     audio_streamer_t *s = &g_streamer;
 
@@ -398,40 +485,15 @@ void audio_streamer_process(void)
     if((HAL_GetTick() - last_log_tick) >= 1000U)
     {
         last_log_tick = HAL_GetTick();
+
         printf("[STREAM] fill=%lu/%u und=%lu sdmax=%lu ms\r\n",
                (unsigned long)streamer_ring_used_frames(s),
                STREAM_RING_FRAMES,
                (unsigned long)s->underrun_count,
                (unsigned long)s->sd_read_time_max);
     }
+
 #endif
-}
-
-void audio_streamer_get_frame(float *L, float *R)
-{
-    audio_streamer_t *s = &g_streamer;
-    float outL = 0.0f;
-    float outR = 0.0f;
-
-    if((s->running != 0U) && (s->error == 0U))
-    {
-        if(s->read_pos != s->write_pos)
-        {
-            uint32_t idx = s->read_pos * 2U;
-            outL = stream_ring[idx + 0U];
-            outR = stream_ring[idx + 1U];
-            s->read_pos = (s->read_pos + 1U) % STREAM_RING_FRAMES;
-        }
-        else
-        {
-            s->underrun_count++;
-        }
-    }
-
-    if(L != 0)
-        *L = outL;
-    if(R != 0)
-        *R = outR;
 }
 
 void audio_streamer_get_stats(audio_streamer_stats_t *out_stats)

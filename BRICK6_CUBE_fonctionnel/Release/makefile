@@ -16,11 +16,13 @@ RM := rm -rf
 -include mutable_instruments/clouds/subdir.mk
 -include Startup/subdir.mk
 -include Src/UI/subdir.mk
+-include Src/Streaming/subdir.mk
 -include Src/Storage/subdir.mk
 -include Src/Param/subdir.mk
 -include Src/MIDI/subdir.mk
 -include Src/Core/subdir.mk
 -include Src/Audio/subdir.mk
+-include Src/App/subdir.mk
 -include Src/subdir.mk
 -include Middlewares/Third_Party/FatFs/src/option/subdir.mk
 -include Middlewares/Third_Party/FatFs/src/subdir.mk

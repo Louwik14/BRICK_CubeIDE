@@ -1,0 +1,3 @@
+../Src/Streaming/stream_manager.c:4:6:stream_manager_start	1
+../Src/Streaming/stream_manager.c:9:6:stream_manager_process	1
+../Src/Streaming/stream_manager.c:14:6:stream_manager_get_frame	1
