@@ -30,6 +30,7 @@ typedef struct
     uint32_t data_offset;
     uint32_t data_size;
     uint32_t file_data_pos;
+    uint8_t pending_bytes_count;
 
     /* playback state */
     volatile uint32_t read_pos;
