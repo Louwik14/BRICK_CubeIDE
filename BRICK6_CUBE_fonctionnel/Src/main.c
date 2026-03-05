@@ -134,6 +134,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  engine_tasklet_poll();
+	  brick6_app_process();
     //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
 	MX_USB_HOST_Process();
     usb_host_tasklet_poll_bounded(4);
