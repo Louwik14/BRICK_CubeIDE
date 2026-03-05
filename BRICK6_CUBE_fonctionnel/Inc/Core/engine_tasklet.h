@@ -17,5 +17,6 @@ extern volatile uint32_t engine_tick_count;
 void engine_tasklet_init(uint32_t sample_rate);
 void engine_tasklet_notify_frames(uint32_t frames);
 void engine_tasklet_poll(void);
+uint8_t engine_tasklet_consume_stream_refill_request(void);
 
 #endif /* ENGINE_TASKLET_H */

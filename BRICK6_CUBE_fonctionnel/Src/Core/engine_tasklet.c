@@ -39,6 +39,7 @@ static volatile uint32_t engine_frames_accum = 0U;
 
 /* Tick fixed = 32 frames */
 static uint32_t engine_frames_per_tick = 32U;
+static volatile uint8_t stream_refill_request = 0U;
 
 /* ============================================================
    Internal tick
@@ -53,6 +54,7 @@ static uint32_t engine_frames_per_tick = 32U;
 static void engine_tick(void)
 {
   engine_tick_count++;
+  stream_refill_request = 1U;
 }
 
 /* ============================================================
@@ -74,6 +76,7 @@ void engine_tasklet_init(uint32_t sample_rate)
   /* Tick aligned with AUDIO_FRAMES_PER_HALF = 32
      => 48kHz / 32 = 1500 Hz stable */
   engine_frames_per_tick = 32U;
+  stream_refill_request = 1U;
 }
 
 /* ============================================================
@@ -125,4 +128,11 @@ void engine_tasklet_poll(void)
 
     engine_tick();
   }
+}
+
+uint8_t engine_tasklet_consume_stream_refill_request(void)
+{
+  uint8_t pending = stream_refill_request;
+  stream_refill_request = 0U;
+  return pending;
 }

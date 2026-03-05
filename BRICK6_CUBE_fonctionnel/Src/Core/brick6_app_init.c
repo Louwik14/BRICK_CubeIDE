@@ -175,5 +175,5 @@ void brick6_app_init(void)
 
 void brick6_app_process(void)
 {
-    stream_manager_process();
+    /* Stream refill is scheduled from engine_tasklet cadence in main loop. */
 }

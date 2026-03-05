@@ -7,31 +7,43 @@
 #include "wav_parser.h"
 
 /*
- * New approach: "high-watermark ring"
+ * Streaming architecture (single streamer instance, scalable pattern):
  *
- * - Keep the ring buffer almost full at all times.
- * - Never "wait until low" to refill.
- * - When reaching EOF, immediately wrap (seek) and continue reading in the same refill loop
- *   so we always produce frames and the ring never drains around the loop point.
+ *   IRQ consumer (hard real-time):
+ *     audio_streamer_get_frame()
+ *        - reads exactly one frame from an SPSC ring
+ *        - never blocks
  *
- * This is the simplest structure that scales later to multi-voice:
- * a stream_manager can call N instances' process() and each one tries to stay near-full.
+ *   Producer (non-IRQ context):
+ *     audio_streamer_process()
+ *        - runs refill work with bounded budget
+ *        - performs blocking FatFs reads/seeks
+ *        - writes decoded frames into the ring
+ *        - publishes write_pos after each produced chunk so IRQ can consume
+ *          new data immediately (not only at end of long refill calls)
+ *
+ * EOF loop handling:
+ *   - producer wraps in-place (seek to data start, continue write)
+ *   - tail and head are produced in the same refill pass whenever budget allows
+ *   - visible publication per chunk prevents artificial starvation around wrap
+ *
+ * This SPSC contract is the building block for future multi-voice:
+ * each voice owns a private ring + file state; a higher-level stream scheduler
+ * services voices in round-robin / deadline order.
  */
 
 #define STREAM_RING_FRAMES   (16384U)
 #define STREAM_RING_SAMPLES  (STREAM_RING_FRAMES * 2U)
 
-/* Keep this many frames of free space reserved (producer never tries to fill 100%) */
-#define STREAM_SLACK_FRAMES          (2048U)
-/* Target occupancy (frames) we try to maintain */
-#define STREAM_TARGET_FILL_FRAMES    (STREAM_RING_FRAMES - STREAM_SLACK_FRAMES)
+/* Keep refill comfortably ahead of worst observed SD/FAT latency. */
+#define STREAM_TARGET_FILL_FRAMES    (14336U) /* ~299 ms at 48 kHz */
 
-/* Max frames we attempt to write per process() call (bounded work) */
+/* Work budget per process() call. */
 #define STREAM_PROCESS_BUDGET_FRAMES (4096U)
 
-/* Read granularity (frames). Must fit in io buffer and be friendly for SD */
+/* SD read granularity */
 #define STREAM_IO_FRAMES             (512U)
-#define STREAM_IO_BYTES_MAX          (STREAM_IO_FRAMES * 8U) /* stereo 32-bit = 8 bytes/frame */
+#define STREAM_IO_BYTES_MAX          (STREAM_IO_FRAMES * 8U) /* stereo 32-bit */
 
 static AUDIO_COLD_SDRAM float stream_ring[STREAM_RING_SAMPLES];
 static audio_streamer_t g_streamer;
@@ -76,16 +88,23 @@ static inline float pcm32_to_float(const uint8_t *p)
 
 static bool seek_to_data_start(audio_streamer_t *s)
 {
-    if(f_lseek(&s->fp, s->data_offset) != FR_OK)
+    uint32_t t0 = HAL_GetTick();
+    FRESULT fr = f_lseek(&s->fp, s->data_offset);
+    uint32_t dt = HAL_GetTick() - t0;
+
+    if(dt > s->sd_read_time_max)
+        s->sd_read_time_max = dt;
+
+    if(fr != FR_OK)
     {
         s->error = 1U;
         return false;
     }
+
     s->file_data_pos = 0U;
     return true;
 }
 
-/* Read up to `bytes` from file; br may be < bytes at EOF (FR_OK). */
 static bool read_bytes(audio_streamer_t *s, uint8_t *dst, uint32_t bytes, uint32_t *out_br)
 {
     UINT br = 0U;
@@ -111,11 +130,11 @@ static bool read_bytes(audio_streamer_t *s, uint8_t *dst, uint32_t bytes, uint32
 }
 
 /*
- * Decode and write up to `want_frames` frames into the ring.
- * Returns the number of frames actually written.
+ * Produce and publish up to want_frames into the ring.
  *
- * This function is "loop-tight": it will wrap and continue as needed without
- * returning early just because EOF was hit mid-chunk.
+ * Publication policy:
+ * - write_pos is published after each decoded chunk (not only once at function exit)
+ *   so IRQ can consume newly produced audio immediately.
  */
 static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames)
 {
@@ -123,12 +142,10 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
 
     const uint32_t bpf = s->bytes_per_frame;
     uint32_t written = 0U;
-
     uint32_t wp = s->write_pos;
 
-    while(written < want_frames)
+    while((written < want_frames) && (s->error == 0U))
     {
-        /* How many frames remain in file data chunk? */
         uint32_t bytes_left = s->data_size - s->file_data_pos;
         uint32_t file_frames_left = (bpf != 0U) ? (bytes_left / bpf) : 0U;
 
@@ -146,12 +163,7 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
             chunk = file_frames_left;
 
         if(chunk == 0U)
-        {
-            /* Should not happen, but avoid infinite loops. */
-            if(!seek_to_data_start(s))
-                break;
-            continue;
-        }
+            break;
 
         uint32_t req_bytes = chunk * bpf;
         uint32_t br = 0U;
@@ -159,12 +171,10 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
         if(!read_bytes(s, io_buf, req_bytes, &br))
             break;
 
-        /* Convert only whole frames. */
         uint32_t got_frames = (bpf != 0U) ? (br / bpf) : 0U;
 
         if(got_frames == 0U)
         {
-            /* Treat as EOF or short-read; try wrapping once. */
             if(!seek_to_data_start(s))
                 break;
             continue;
@@ -173,8 +183,9 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
         for(uint32_t i = 0U; i < got_frames; i++)
         {
             const uint8_t *frame = &io_buf[i * bpf];
+            float l;
+            float r;
 
-            float l, r;
             if(s->bits_per_sample == 24U)
             {
                 l = pcm24_to_float(&frame[0]);
@@ -195,19 +206,18 @@ static uint32_t write_frames_from_file(audio_streamer_t *s, uint32_t want_frames
                 wp = 0U;
         }
 
+        /* Publish this decoded chunk immediately for IRQ visibility. */
+        __DMB();
+        s->write_pos = wp;
+
         written += got_frames;
 
-        /* If we got fewer than requested, wrap and keep going (gapless). */
         if(got_frames < chunk)
         {
             if(!seek_to_data_start(s))
                 break;
         }
     }
-
-    /* Publish write pointer after data writes are visible */
-    __DMB();
-    s->write_pos = wp;
 
     return written;
 }
@@ -247,7 +257,6 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     if(file_size <= s->data_offset)
         return false;
 
-    /* Clamp data chunk to file size and align to whole frames */
     {
         uint32_t max_data = file_size - s->data_offset;
         if(s->data_size > max_data)
@@ -263,23 +272,23 @@ static bool streamer_prepare_start(audio_streamer_t *s)
 
     s->file_open = 1U;
 
+    s->read_pos = 0U;
+    s->write_pos = 0U;
+
     if(!seek_to_data_start(s))
         return false;
 
-    /* Prefill ring up to target fill before RUN */
+    /* Prime ring before RUN state. */
     {
-        /* Ensure write_pos starts at 0 and fill ring */
-        s->read_pos = 0U;
-        s->write_pos = 0U;
-
-        uint32_t target = STREAM_TARGET_FILL_FRAMES;
-        uint32_t wrote = 0U;
-
-        while(wrote < target)
+        uint32_t primed = 0U;
+        while(primed < STREAM_TARGET_FILL_FRAMES)
         {
-            uint32_t space = ring_space_frames(s->read_pos, s->write_pos);
-            uint32_t need = target - wrote;
+            uint32_t rp = s->read_pos;
+            uint32_t wp = s->write_pos;
+            uint32_t space = ring_space_frames(rp, wp);
+            uint32_t need = STREAM_TARGET_FILL_FRAMES - primed;
             uint32_t to_write = (need > STREAM_IO_FRAMES) ? STREAM_IO_FRAMES : need;
+
             if(to_write > space)
                 to_write = space;
             if(to_write == 0U)
@@ -288,7 +297,8 @@ static bool streamer_prepare_start(audio_streamer_t *s)
             uint32_t w = write_frames_from_file(s, to_write);
             if(w == 0U)
                 break;
-            wrote += w;
+
+            primed += w;
         }
     }
 
@@ -339,25 +349,36 @@ void audio_streamer_process(void)
     if((s->running == 0U) || (s->error != 0U))
         return;
 
-    /* Bounded refill: keep ring near target fill */
+    /*
+     * Refill policy:
+     * - Refill toward target occupancy using bounded SD work chunks.
+     * - Work remains budget-bounded so main loop is still responsive.
+     */
+    uint32_t rp = s->read_pos;
+    uint32_t wp = s->write_pos;
+    uint32_t used = ring_used_frames(rp, wp);
+
+    if(used >= STREAM_TARGET_FILL_FRAMES)
+        return;
+
+    uint32_t desired = STREAM_TARGET_FILL_FRAMES;
     uint32_t budget = STREAM_PROCESS_BUDGET_FRAMES;
 
-    while(budget > 0U)
+    while((budget > 0U) && (s->error == 0U))
     {
-        /* Snapshot positions for a consistent decision */
-        uint32_t rp = s->read_pos;
-        uint32_t wp = s->write_pos;
+        rp = s->read_pos;
+        wp = s->write_pos;
+        used = ring_used_frames(rp, wp);
 
-        uint32_t used = ring_used_frames(rp, wp);
-        if(used >= STREAM_TARGET_FILL_FRAMES)
+        if(used >= desired)
             break;
 
+        uint32_t need = desired - used;
         uint32_t space = ring_space_frames(rp, wp);
-        if(space == 0U)
-            break;
+        uint32_t to_write = need;
 
-        uint32_t need = STREAM_TARGET_FILL_FRAMES - used;
-        uint32_t to_write = (need > STREAM_IO_FRAMES) ? STREAM_IO_FRAMES : need;
+        if(to_write > STREAM_IO_FRAMES)
+            to_write = STREAM_IO_FRAMES;
         if(to_write > space)
             to_write = space;
         if(to_write > budget)
@@ -375,7 +396,6 @@ void audio_streamer_process(void)
         else
             budget -= wrote;
     }
-
 #endif
 }
 
@@ -388,7 +408,6 @@ void audio_streamer_get_frame(float *L, float *R)
 
     if((s->running != 0U) && (s->error == 0U))
     {
-        /* Snapshot write pointer for consistent empty check */
         uint32_t rp = s->read_pos;
         uint32_t wp = s->write_pos;
 
