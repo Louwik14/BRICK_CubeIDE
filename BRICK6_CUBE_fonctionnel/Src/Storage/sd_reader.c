@@ -2,9 +2,6 @@
 
 #include "ff.h"
 
-static FATFS g_fs;
-static uint8_t g_fs_mounted = 0U;
-
 static FIL g_file;
 static uint8_t g_opened = 0U;
 static uint32_t g_data_offset = 0U;
@@ -13,8 +10,6 @@ static uint32_t g_data_pos = 0U;
 
 bool sd_reader_open(const char *path, uint32_t data_offset, uint32_t data_size)
 {
-    FRESULT fr;
-
     if((path == NULL) || (data_size == 0U))
     {
         return false;
@@ -22,18 +17,7 @@ bool sd_reader_open(const char *path, uint32_t data_offset, uint32_t data_size)
 
     sd_reader_close();
 
-    if(g_fs_mounted == 0U)
-    {
-        fr = f_mount(&g_fs, "0:", 1U);
-        if(fr != FR_OK)
-        {
-            return false;
-        }
-        g_fs_mounted = 1U;
-    }
-
-    fr = f_open(&g_file, path, FA_READ);
-    if(fr != FR_OK)
+    if(f_open(&g_file, path, FA_READ) != FR_OK)
     {
         return false;
     }

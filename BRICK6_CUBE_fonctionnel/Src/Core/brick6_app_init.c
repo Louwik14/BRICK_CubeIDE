@@ -27,6 +27,7 @@
 #include "control_events.h"
 #include "sampler.h"
 #include "brick6_debug_uart.h"
+#include "ff.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -34,6 +35,7 @@
 static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
+static FATFS g_app_fatfs;
 extern volatile uint32_t audio_underrun_count;
 
 /* ============================================================
@@ -134,7 +136,11 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
-    if(!audio_streamer_start_first_wav())
+    if(f_mount(&g_app_fatfs, "0:", 1U) != FR_OK)
+    {
+        DBG("[FS] mount failed\r\n");
+    }
+    else if(!audio_streamer_start_first_wav())
     {
         DBG("[STREAM] start failed\r\n");
     }
