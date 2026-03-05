@@ -10,5 +10,6 @@
  */
 
 void brick6_app_init(void);
+void brick6_app_process(void);
 
 #endif /* BRICK6_APP_INIT_H */

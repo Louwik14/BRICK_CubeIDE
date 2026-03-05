@@ -47,16 +47,6 @@ uint32_t wav_loader_get_capacity_frames(void)
     return WAV_BUFFER_FRAMES;
 }
 
-#if defined(__has_include)
-#  if __has_include("ff.h")
-#    include "ff.h"
-#    define WAV_LOADER_HAS_FATFS 1
-#  endif
-#endif
-
-#ifndef WAV_LOADER_HAS_FATFS
-#define WAV_LOADER_HAS_FATFS 0
-#endif
 
 #if WAV_LOADER_HAS_FATFS
 static FATFS g_wav_fs;
@@ -168,6 +158,28 @@ static bool wav_find_chunks(FIL *fp,
     }
 
     return (*audio_format != 0U) && (*data_size != 0U);
+}
+
+bool wav_loader_parse_info(FIL *fp, wav_info_t *info)
+{
+    uint16_t audio_format;
+    uint16_t channels;
+    uint32_t sample_rate;
+    uint16_t bits_per_sample;
+    uint32_t data_offset;
+    uint32_t data_size;
+
+    if(fp == 0)
+        return false;
+
+    if(f_lseek(fp, 0U) != FR_OK)
+        return false;
+
+    if(!wav_find_chunks(fp, info, &audio_format, &channels, &sample_rate,
+                        &bits_per_sample, &data_offset, &data_size))
+        return false;
+
+    return (audio_format == 1U);
 }
 #endif
 
@@ -294,13 +306,19 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
         return false;
     }
 
-    if(!wav_find_chunks(&fp, info, &audio_format, &channels, &sample_rate,
-                        &bits_per_sample, &data_offset, &data_size))
+    if(!wav_loader_parse_info(&fp, info))
     {
         (void)f_close(&fp);
         printf("[WAV] invalid RIFF/WAVE or missing chunks\r\n");
         return false;
     }
+
+    audio_format = 1U;
+    channels = info->channels;
+    sample_rate = info->sample_rate;
+    bits_per_sample = info->bits_per_sample;
+    data_offset = info->data_offset;
+    data_size = info->data_size;
 
     printf("[WAV] fmt=%u ch=%u sr=%lu bits=%u data=%lu bytes off=%lu\r\n",
            (unsigned)audio_format,
