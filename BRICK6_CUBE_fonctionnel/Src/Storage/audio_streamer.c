@@ -221,6 +221,20 @@ bool audio_streamer_start(const char *path)
     strncpy(s->pending_path, path, sizeof(s->pending_path) - 1U);
     s->pending_path[sizeof(s->pending_path) - 1U] = '\0';
     s->start_pending = 1U;
+
+    /*
+     * Boot-time robustness:
+     * prepare synchronously so playback never starts from an empty ring when
+     * audio IRQ is already running.
+     */
+    if(!prepare_start(s))
+    {
+        s->error = 1U;
+        s->start_pending = 0U;
+        s->running = 0U;
+        return false;
+    }
+
     return true;
 #else
     (void)path;
