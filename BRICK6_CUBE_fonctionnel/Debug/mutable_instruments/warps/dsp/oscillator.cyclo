@@ -1,0 +1,25 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/dsp.h:131:18:int32_t stmlib::Clip16(int32_t)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:178:8:void stmlib::Svf::Init()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:183:8:void stmlib::Svf::Reset()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.h:57:16:float warps::Oscillator::midi_to_increment(float) const	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.h:80:23:static float warps::Oscillator::ThisBlepSample(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.h:83:23:static float warps::Oscillator::NextBlepSample(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:39:3:stmlib::ParameterInterpolator::ParameterInterpolator(float*, float, size_t)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:43:3:stmlib::ParameterInterpolator::~ParameterInterpolator()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:47:15:void stmlib::ParameterInterpolator::Init(float*, float, size_t)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:53:16:float stmlib::ParameterInterpolator::Next()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/utils/random.h:38:26:static uint32_t stmlib::Random::state()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/utils/random.h:44:26:static uint32_t stmlib::Random::GetWord()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:42:6:void warps::Oscillator::Init(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:58:7:float warps::Oscillator::Render(warps::OscillatorShape, float, float*, float*, size_t)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:67:7:float warps::Oscillator::RenderSine(float, float*, float*, size_t)	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:175:7:float warps::Oscillator::Duck(const float*, const float*, float*, size_t)	4
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:193:7:float warps::Oscillator::RenderNoise(float, float*, float*, size_t)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:219:15:void stmlib::Svf::set_f_q(float, float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_DIRTY]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:219:15:void stmlib::Svf::set_f_q(float, float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_ACCURATE]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:276:15:void stmlib::Svf::Process(const float*, float*, size_t) [with stmlib::FilterMode mode = stmlib::FILTER_MODE_LOW_PASS]	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:95:7:float warps::Oscillator::RenderPolyblep(float, float*, float*, size_t) [with warps::OscillatorShape shape = warps::OSCILLATOR_SHAPE_TRIANGLE]	7
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:95:7:float warps::Oscillator::RenderPolyblep(float, float*, float*, size_t) [with warps::OscillatorShape shape = warps::OSCILLATOR_SHAPE_SAW]	4
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/warps/dsp/oscillator.cpp:95:7:float warps::Oscillator::RenderPolyblep(float, float*, float*, size_t) [with warps::OscillatorShape shape = warps::OSCILLATOR_SHAPE_PULSE]	4
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:111:23:static float stmlib::OnePole::tan(float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_DIRTY]	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/filter.h:111:23:static float stmlib::OnePole::tan(float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_ACCURATE]	1

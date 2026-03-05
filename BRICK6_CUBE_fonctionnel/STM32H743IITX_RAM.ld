@@ -47,6 +47,7 @@ MEMORY
   DTCMRAM (xrw)   : ORIGIN = 0x20000000, LENGTH = 128K
   RAM_D2 (xrw)    : ORIGIN = 0x30000000, LENGTH = 288K
   RAM_D3 (xrw)    : ORIGIN = 0x38000000, LENGTH = 64K
+  SDRAM (xrw)     : ORIGIN = 0xC0000000, LENGTH = 32M
   ITCMRAM (xrw)   : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
@@ -161,6 +162,64 @@ SECTIONS
     *(.ram_d1*)
     . = ALIGN(32);
   } >RAM_EXEC
+
+  /* USER MEMORY SECTIONS BEGIN */
+  .dtcm_audio (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.dtcm_audio)
+    *(.dtcm_audio*)
+    . = ALIGN(32);
+  } >DTCMRAM
+
+  .ram_d1_audio (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d1_audio)
+    *(.ram_d1_audio*)
+    . = ALIGN(32);
+  } >RAM_EXEC
+
+  .ram_d2_dma (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d2_dma)
+    *(.ram_d2_dma*)
+    . = ALIGN(32);
+  } >RAM_D2
+
+  .ram_d3_ctrl (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d3_ctrl)
+    *(.ram_d3_ctrl*)
+    . = ALIGN(32);
+  } >RAM_D3
+
+  .sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram)
+    *(.sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_ui (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_ui)
+    *(.sdram_ui*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_audio_cold (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_audio_cold)
+    *(.sdram_audio_cold*)
+    . = ALIGN(32);
+  } >SDRAM
+  /* USER MEMORY SECTIONS END */
 
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :

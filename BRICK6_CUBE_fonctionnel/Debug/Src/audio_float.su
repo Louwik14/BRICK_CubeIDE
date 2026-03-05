@@ -1,0 +1,17 @@
+../Src/audio_float.c:246:20:audio_io_unpack	72	static
+../Src/audio_float.c:311:20:audio_dsp_process	72	static
+../Src/audio_float.c:212:23:f2s24_fast	0	static
+../Src/audio_float.c:394:20:audio_io_pack	48	static
+../Src/audio_float.c:63:6:audio_float_set_postgain	0	static
+../Src/audio_float.c:75:6:audio_float_set_output_compensation	0	static
+../Src/audio_float.c:81:6:audio_float_set_dj_eq_low_db	8	static
+../Src/audio_float.c:86:6:audio_float_set_dj_eq_mid_db	8	static
+../Src/audio_float.c:91:6:audio_float_set_dj_eq_high_db	8	static
+../Src/audio_float.c:116:6:audio_set_float_callback	0	static
+../Src/audio_float.c:122:6:audio_tracks_init	24	static
+../Src/audio_float.c:138:6:track_enable	8	static
+../Src/audio_float.c:155:10:track_is_enabled	0	static
+../Src/audio_float.c:164:6:track_set_gain	0	static
+../Src/audio_float.c:176:6:audio_float_set_master_gain	0	static
+../Src/audio_float.c:187:7:audio_float_get_master_gain	0	static
+../Src/audio_float.c:440:6:audio_process_block_int32	56	static

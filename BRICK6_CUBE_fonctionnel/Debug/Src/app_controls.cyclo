@@ -1,0 +1,5 @@
+../Src/app_controls.c:14:14:param_to_gain	1
+../Src/app_controls.c:19:14:param_to_eq_db	4
+../Src/app_controls.c:35:6:app_controls_init	1
+../Src/app_controls.c:45:6:app_controls_process	14
+../Src/app_controls.c:86:6:app_controls_render	1

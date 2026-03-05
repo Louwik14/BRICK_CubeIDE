@@ -1,0 +1,5 @@
+../Src/fx_dj_eq3.c:16:6:fx_dj_eq3_reset	8	static
+../Src/fx_dj_eq3.c:29:6:fx_dj_eq3_set_low_db	8	static
+../Src/fx_dj_eq3.c:47:6:fx_dj_eq3_set_mid_db	8	static
+../Src/fx_dj_eq3.c:57:6:fx_dj_eq3_set_high_db	8	static
+../Src/fx_dj_eq3.c:75:6:fx_dj_eq3_init	40	static

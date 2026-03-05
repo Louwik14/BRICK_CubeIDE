@@ -1,0 +1,4 @@
+../Src/Core/brick6_app_init.c:81:13:my_dsp	5
+../Src/Core/brick6_app_init.c:71:5:_write	1
+../Src/Core/brick6_app_init.c:128:6:brick6_app_init	1
+../Src/Core/brick6_app_init.c:178:6:brick6_app_process	1

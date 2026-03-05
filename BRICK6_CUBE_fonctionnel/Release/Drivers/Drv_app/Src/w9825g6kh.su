@@ -1,0 +1,10 @@
+../Drivers/Drv_app/Src/w9825g6kh.c:64:9:W9825G6KH_Init	24	static
+../Drivers/Drv_app/Src/w9825g6kh.c:102:9:W9825G6KH_ClockEnable	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:126:9:W9825G6KH_Precharge	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:150:9:W9825G6KH_ModeRegConfig	16	static
+../Drivers/Drv_app/Src/w9825g6kh.c:183:9:W9825G6KH_TimingConfig	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:204:9:W9825G6KH_RefreshMode	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:228:9:W9825G6KH_RefreshRate	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:247:9:W9825G6KH_EnterPowerMode	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:271:9:W9825G6KH_ExitPowerMode	8	static
+../Drivers/Drv_app/Src/w9825g6kh.c:295:9:W9825G6KH_Sendcmd	8	static

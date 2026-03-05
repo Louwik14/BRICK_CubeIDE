@@ -1,0 +1,6 @@
+../Src/mixer.c:23:6:mixer_init	8	static
+../Src/mixer.c:33:6:mixer_set_master	8	static
+../Src/mixer.c:39:7:mixer_get_master	8	static
+../Src/mixer.c:46:6:mixer_set_track_gain	16	static
+../Src/mixer.c:59:7:mixer_get_track_gain	0	static
+../Src/mixer.c:68:6:mixer_process	0	static

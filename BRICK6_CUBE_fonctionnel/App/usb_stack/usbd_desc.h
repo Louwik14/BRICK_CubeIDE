@@ -140,4 +140,3 @@ extern USBD_DescriptorsTypeDef FS_Desc;
 #endif
 
 #endif /* __USBD_DESC__C__ */
-

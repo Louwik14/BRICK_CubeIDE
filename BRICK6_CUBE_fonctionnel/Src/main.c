@@ -19,36 +19,34 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "fatfs.h"
 #include "i2c.h"
 #include "sai.h"
 #include "sdmmc.h"
+#include "spi.h"
 #include "usart.h"
+#include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "brick6_refactor.h"
-
 #include "usb_device.h"
 #include "usb_host.h"
 #include "cs42448.h"
-#include "audio_in.h"
-#include "audio_out.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
-#include "sd_stream.h"
 #include "engine_tasklet.h"
-#include "diagnostics_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"
+#include "audio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 /* USER CODE END PTD */
-
+extern volatile uint32_t stream_frames_out;
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* USER CODE END PD */
@@ -87,6 +85,11 @@ int main(void)
 
   /* USER CODE END 1 */
 
+  /* Enable the CPU Cache */
+
+  /* Enable I-Cache---------------------------------------------------------*/
+  SCB_EnableICache();
+
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -112,8 +115,11 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
+  //MX_USB_OTG_FS_PCD_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
+  MX_SPI5_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   brick6_app_init();
 
@@ -121,18 +127,32 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint32_t last_tick = 0;
+
+  static uint32_t last_frames = 0;
+  static uint32_t last_time = 0;
+
   while (1)
   {
-    /* USER CODE END WHILE */
+      engine_tasklet_poll();
+      brick6_app_process();
 
-    /* USER CODE BEGIN 3 */
-    audio_tasklet_poll();        // priorité absolue
-    engine_tasklet_poll();
-    sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
-    usb_host_tasklet_poll_bounded(USB_BUDGET_PACKETS);
-    midi_host_poll_bounded(MIDI_BUDGET_MSGS);
-    ui_tasklet_poll();
-    diagnostics_tasklet_poll();
+      MX_USB_HOST_Process();
+      usb_host_tasklet_poll_bounded(4);
+      midi_host_poll_bounded(8);
+
+      if(engine_tick_count != last_tick)
+      {
+          last_tick = engine_tick_count;
+          ui_tasklet_poll();
+      }
+
+      if(HAL_GetTick() - last_time > 1000)
+      {
+          printf("frames/s = %lu\n", stream_frames_out - last_frames);
+          last_frames = stream_frames_out;
+          last_time = HAL_GetTick();
+      }
   }
 
   /* USER CODE END 3 */

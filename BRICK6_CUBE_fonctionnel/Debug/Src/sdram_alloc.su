@@ -1,0 +1,4 @@
+../Src/sdram_alloc.c:50:17:Align_Up	0	static
+../Src/sdram_alloc.c:38:6:SDRAM_Alloc_Init	0	static
+../Src/sdram_alloc.c:45:6:SDRAM_Alloc_Reset	0	static
+../Src/sdram_alloc.c:61:7:SDRAM_Alloc	8	static

@@ -1,0 +1,5 @@
+../Src/Storage/audio_streamer.c:135:17:streamer_fill_ring.constprop.isra	72	static,ignoring_inline_asm
+../Src/Storage/audio_streamer.c:236:6:audio_streamer_get_frame	16	static
+../Src/Storage/audio_streamer.c:382:6:audio_streamer_start	16	static
+../Src/Storage/audio_streamer.c:409:6:audio_streamer_process	136	static
+../Src/Storage/audio_streamer.c:456:6:audio_streamer_get_stats	0	static

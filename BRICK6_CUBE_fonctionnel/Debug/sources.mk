@@ -22,10 +22,24 @@ C_DEPS :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
-App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src \
-App/Middlewares/ST/STM32_USB_Device_Library/Core/Src \
 App/Middlewares/ST/STM32_USB_Host_Library/Core/Src \
 App/usb_stack \
+Drivers/CMSIS_DSP/Source/BasicMathFunctions \
+Drivers/CMSIS_DSP/Source/BayesFunctions \
+Drivers/CMSIS_DSP/Source/CommonTables \
+Drivers/CMSIS_DSP/Source/ComplexMathFunctions \
+Drivers/CMSIS_DSP/Source/ControllerFunctions \
+Drivers/CMSIS_DSP/Source/DistanceFunctions \
+Drivers/CMSIS_DSP/Source/FastMathFunctions \
+Drivers/CMSIS_DSP/Source/FilteringFunctions \
+Drivers/CMSIS_DSP/Source/InterpolationFunctions \
+Drivers/CMSIS_DSP/Source/MatrixFunctions \
+Drivers/CMSIS_DSP/Source/QuaternionMathFunctions \
+Drivers/CMSIS_DSP/Source/SVMFunctions \
+Drivers/CMSIS_DSP/Source/StatisticsFunctions \
+Drivers/CMSIS_DSP/Source/SupportFunctions \
+Drivers/CMSIS_DSP/Source/TransformFunctions \
+Drivers/CMSIS_DSP/Source/WindowFunctions \
 Drivers/STM32H7xx_HAL_Driver/Src \
 Src \
 Startup \
