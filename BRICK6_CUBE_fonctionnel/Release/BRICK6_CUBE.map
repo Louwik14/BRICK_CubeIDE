@@ -8470,7 +8470,7 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
  .igot.plt      0x240001a0        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
                 0x240001a0                        . = ALIGN (0x4)
 
-.bss            0x240001a0     0x8c28 load address 0x0801bf08
+.bss            0x240001a0     0x9c28 load address 0x0801bf08
                 0x240001a0                        _sbss = .
                 0x240001a0                        __bss_start__ = _sbss
  *(.bss)
@@ -8622,106 +8622,106 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x24006de4        0x4 ./Src/Param/control_events.o
  .bss.g_evt_q   0x24006de8      0x200 ./Src/Param/control_events.o
  .bss.g_ps      0x24006fe8      0x20c ./Src/Param/param_store.o
- .bss.io_buf.0  0x240071f4     0x1000 ./Src/Storage/audio_streamer.o
+ .bss.io_buf.0  0x240071f4     0x2000 ./Src/Storage/audio_streamer.o
  .bss.last_log_tick.1
-                0x240081f4        0x4 ./Src/Storage/audio_streamer.o
+                0x240091f4        0x4 ./Src/Storage/audio_streamer.o
  .bss.g_last_out_r
-                0x240081f8        0x4 ./Src/Storage/audio_streamer.o
+                0x240091f8        0x4 ./Src/Storage/audio_streamer.o
  .bss.g_last_out_l
-                0x240081fc        0x4 ./Src/Storage/audio_streamer.o
+                0x240091fc        0x4 ./Src/Storage/audio_streamer.o
  .bss.g_streamer
-                0x24008200      0x338 ./Src/Storage/audio_streamer.o
+                0x24009200      0x338 ./Src/Storage/audio_streamer.o
  .bss.g_wav_fs_mounted
-                0x24008538        0x1 ./Src/Storage/wav_loader.o
- *fill*         0x24008539        0x3 
- .bss.g_wav_fs  0x2400853c      0x238 ./Src/Storage/wav_loader.o
+                0x24009538        0x1 ./Src/Storage/wav_loader.o
+ *fill*         0x24009539        0x3 
+ .bss.g_wav_fs  0x2400953c      0x238 ./Src/Storage/wav_loader.o
  .bss.ui_tick.2
-                0x24008774        0x4 ./Src/UI/ui_tasklet.o
- .bss.page.3    0x24008778        0x1 ./Src/UI/ui_tasklet.o
- *fill*         0x24008779        0x3 
+                0x24009774        0x4 ./Src/UI/ui_tasklet.o
+ .bss.page.3    0x24009778        0x1 ./Src/UI/ui_tasklet.o
+ *fill*         0x24009779        0x3 
  .bss.makeup_db.6
-                0x2400877c        0x4 ./Src/UI/ui_tasklet.o
- .bss.init.13   0x24008780        0x1 ./Src/UI/ui_tasklet.o
- *fill*         0x24008781        0x3 
- .bss.SDPath    0x24008784        0x4 ./Src/fatfs.o
-                0x24008784                SDPath
- .bss.retSD     0x24008788        0x1 ./Src/fatfs.o
-                0x24008788                retSD
- *fill*         0x24008789        0x3 
+                0x2400977c        0x4 ./Src/UI/ui_tasklet.o
+ .bss.init.13   0x24009780        0x1 ./Src/UI/ui_tasklet.o
+ *fill*         0x24009781        0x3 
+ .bss.SDPath    0x24009784        0x4 ./Src/fatfs.o
+                0x24009784                SDPath
+ .bss.retSD     0x24009788        0x1 ./Src/fatfs.o
+                0x24009788                retSD
+ *fill*         0x24009789        0x3 
  .bss.FMC_Initialized
-                0x2400878c        0x4 ./Src/fmc.o
- .bss.hsdram1   0x24008790       0x34 ./Src/fmc.o
-                0x24008790                hsdram1
- *fill*         0x240087c4        0x4 
- .bss.hi2c1     0x240087c8       0x54 ./Src/i2c.o
-                0x240087c8                hi2c1
+                0x2400978c        0x4 ./Src/fmc.o
+ .bss.hsdram1   0x24009790       0x34 ./Src/fmc.o
+                0x24009790                hsdram1
+ *fill*         0x240097c4        0x4 
+ .bss.hi2c1     0x240097c8       0x54 ./Src/i2c.o
+                0x240097c8                hi2c1
  .bss.SAI1_client
-                0x2400881c        0x4 ./Src/sai.o
+                0x2400981c        0x4 ./Src/sai.o
  .bss.hdma_sai1_b
-                0x24008820       0x78 ./Src/sai.o
-                0x24008820                hdma_sai1_b
+                0x24009820       0x78 ./Src/sai.o
+                0x24009820                hdma_sai1_b
  .bss.hdma_sai1_a
-                0x24008898       0x78 ./Src/sai.o
-                0x24008898                hdma_sai1_a
+                0x24009898       0x78 ./Src/sai.o
+                0x24009898                hdma_sai1_a
  .bss.hsai_BlockB1
-                0x24008910       0x98 ./Src/sai.o
-                0x24008910                hsai_BlockB1
+                0x24009910       0x98 ./Src/sai.o
+                0x24009910                hsai_BlockB1
  .bss.hsai_BlockA1
-                0x240089a8       0x98 ./Src/sai.o
-                0x240089a8                hsai_BlockA1
+                0x240099a8       0x98 ./Src/sai.o
+                0x240099a8                hsai_BlockA1
  .bss.ReadStatus
-                0x24008a40        0x4 ./Src/sd_diskio.o
+                0x24009a40        0x4 ./Src/sd_diskio.o
  .bss.WriteStatus
-                0x24008a44        0x4 ./Src/sd_diskio.o
- .bss.hsd1      0x24008a48       0x7c ./Src/sdmmc.o
-                0x24008a48                hsd1
- *fill*         0x24008ac4        0x4 
- .bss.hspi5     0x24008ac8       0x88 ./Src/spi.o
-                0x24008ac8                hspi5
+                0x24009a44        0x4 ./Src/sd_diskio.o
+ .bss.hsd1      0x24009a48       0x7c ./Src/sdmmc.o
+                0x24009a48                hsd1
+ *fill*         0x24009ac4        0x4 
+ .bss.hspi5     0x24009ac8       0x88 ./Src/spi.o
+                0x24009ac8                hspi5
  .bss.__sbrk_heap_end
-                0x24008b50        0x4 ./Src/sysmem.o
- *fill*         0x24008b54        0x4 
- .bss.huart1    0x24008b58       0x94 ./Src/usart.o
-                0x24008b58                huart1
- .bss.__sf      0x24008bec      0x138 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-findfp.o)
-                0x24008bec                __sf
+                0x24009b50        0x4 ./Src/sysmem.o
+ *fill*         0x24009b54        0x4 
+ .bss.huart1    0x24009b58       0x94 ./Src/usart.o
+                0x24009b58                huart1
+ .bss.__sf      0x24009bec      0x138 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-findfp.o)
+                0x24009bec                __sf
  .bss.__stdio_exit_handler
-                0x24008d24        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-findfp.o)
-                0x24008d24                __stdio_exit_handler
- .bss.errno     0x24008d28        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-reent.o)
-                0x24008d28                errno
+                0x24009d24        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-findfp.o)
+                0x24009d24                __stdio_exit_handler
+ .bss.errno     0x24009d28        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-reent.o)
+                0x24009d28                errno
  .bss.__lock___malloc_recursive_mutex
-                0x24008d2c        0x1 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-lock.o)
-                0x24008d2c                __lock___malloc_recursive_mutex
+                0x24009d2c        0x1 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-lock.o)
+                0x24009d2c                __lock___malloc_recursive_mutex
  .bss.__lock___atexit_recursive_mutex
-                0x24008d2d        0x1 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-lock.o)
-                0x24008d2d                __lock___atexit_recursive_mutex
+                0x24009d2d        0x1 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-lock.o)
+                0x24009d2d                __lock___atexit_recursive_mutex
  .bss.__lock___sfp_recursive_mutex
-                0x24008d2e        0x1 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-lock.o)
-                0x24008d2e                __lock___sfp_recursive_mutex
- *fill*         0x24008d2f        0x1 
+                0x24009d2e        0x1 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-lock.o)
+                0x24009d2e                __lock___sfp_recursive_mutex
+ *fill*         0x24009d2f        0x1 
  .bss.__atexit0
-                0x24008d30       0x8c C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-__atexit.o)
-                0x24008d30                __atexit0
- .bss.__atexit  0x24008dbc        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-__call_atexit.o)
-                0x24008dbc                __atexit
+                0x24009d30       0x8c C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-__atexit.o)
+                0x24009d30                __atexit0
+ .bss.__atexit  0x24009dbc        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-__call_atexit.o)
+                0x24009dbc                __atexit
  .bss.__malloc_sbrk_start
-                0x24008dc0        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mallocr.o)
-                0x24008dc0                __malloc_sbrk_start
+                0x24009dc0        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mallocr.o)
+                0x24009dc0                __malloc_sbrk_start
  .bss.__malloc_free_list
-                0x24008dc4        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mallocr.o)
-                0x24008dc4                __malloc_free_list
+                0x24009dc4        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-mallocr.o)
+                0x24009dc4                __malloc_free_list
  *(COMMON)
-                0x24008dc8                        . = ALIGN (0x4)
-                0x24008dc8                        _ebss = .
-                0x24008dc8                        __bss_end__ = _ebss
+                0x24009dc8                        . = ALIGN (0x4)
+                0x24009dc8                        _ebss = .
+                0x24009dc8                        __bss_end__ = _ebss
 
-.ram_d1         0x24008de0    0x5e400 load address 0x0801bf08
-                0x24008de0                        . = ALIGN (0x20)
+.ram_d1         0x24009de0    0x5e400 load address 0x0801bf08
+                0x24009de0                        . = ALIGN (0x20)
  *(.ram_d1)
  *(.ram_d1*)
- .ram_d1_audio  0x24008de0    0x5e400 ./Src/Audio/fx_pool.o
-                0x240671e0                        . = ALIGN (0x20)
+ .ram_d1_audio  0x24009de0    0x5e400 ./Src/Audio/fx_pool.o
+                0x240681e0                        . = ALIGN (0x20)
 
 .dtcm_audio     0x20000000       0x20
                 0x20000000                        . = ALIGN (0x20)
@@ -8731,11 +8731,11 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x20000020                        . = ALIGN (0x20)
  *fill*         0x2000000c       0x14 
 
-.ram_d1_audio   0x240671e0        0x0
-                0x240671e0                        . = ALIGN (0x20)
+.ram_d1_audio   0x240681e0        0x0
+                0x240681e0                        . = ALIGN (0x20)
  *(.ram_d1_audio)
  *(.ram_d1_audio*)
-                0x240671e0                        . = ALIGN (0x20)
+                0x240681e0                        . = ALIGN (0x20)
 
 .ram_d2_dma     0x30000000     0x2000
                 0x30000000                        . = ALIGN (0x20)
@@ -8773,15 +8773,15 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0xc0020400                        . = ALIGN (0x20)
 
 ._user_heap_stack
-                0x240671e0      0x600
-                0x240671e0                        . = ALIGN (0x8)
+                0x240681e0      0x600
+                0x240681e0                        . = ALIGN (0x8)
                 [!provide]                        PROVIDE (end = .)
-                0x240671e0                        PROVIDE (_end = .)
-                0x240673e0                        . = (. + _Min_Heap_Size)
- *fill*         0x240671e0      0x200 
-                0x240677e0                        . = (. + _Min_Stack_Size)
- *fill*         0x240673e0      0x400 
-                0x240677e0                        . = ALIGN (0x8)
+                0x240681e0                        PROVIDE (_end = .)
+                0x240683e0                        . = (. + _Min_Heap_Size)
+ *fill*         0x240681e0      0x200 
+                0x240687e0                        . = (. + _Min_Stack_Size)
+ *fill*         0x240683e0      0x400 
+                0x240687e0                        . = ALIGN (0x8)
 
 /DISCARD/
  libc.a(*)

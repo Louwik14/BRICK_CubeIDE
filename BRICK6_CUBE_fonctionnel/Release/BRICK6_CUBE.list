@@ -17,13 +17,13 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
   6 .data         000001a0  24000000  0801bd68  0001d000  2**2
                   CONTENTS, ALLOC, LOAD, DATA
-  7 .bss          00008c28  240001a0  0801bf08  0001d1a0  2**5
+  7 .bss          00009c28  240001a0  0801bf08  0001d1a0  2**5
                   ALLOC
-  8 .ram_d1       0005e400  24008de0  0801bf08  0001dde0  2**5
+  8 .ram_d1       0005e400  24009de0  0801bf08  0001dde0  2**5
                   ALLOC
   9 .dtcm_audio   00000020  20000000  20000000  0001e000  2**2
                   ALLOC
- 10 .ram_d1_audio 00000000  240671e0  240671e0  0001d1a0  2**0
+ 10 .ram_d1_audio 00000000  240681e0  240681e0  0001d1a0  2**0
                   CONTENTS
  11 .ram_d2_dma   00002000  30000000  30000000  0001e000  2**5
                   ALLOC
@@ -35,7 +35,7 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS
  15 .sdram_audio_cold 00000000  c0020400  c0020400  0001d1a0  2**0
                   CONTENTS
- 16 ._user_heap_stack 00000600  240671e0  240671e0  0001d1e0  2**0
+ 16 ._user_heap_stack 00000600  240681e0  240681e0  0001d1e0  2**0
                   ALLOC
  17 .ARM.attributes 0000002e  00000000  00000000  0001d1a0  2**0
                   CONTENTS, READONLY
@@ -4296,7 +4296,7 @@ Disassembly of section .text:
  8002bee:	f009 bd03 	b.w	800c5f8 <HAL_UART_Transmit>
  8002bf2:	bf00      	nop
  8002bf4:	0801abf8 	.word	0x0801abf8
- 8002bf8:	24008b58 	.word	0x24008b58
+ 8002bf8:	24009b58 	.word	0x24009b58
  8002bfc:	240004dc 	.word	0x240004dc
  8002c00:	0801ab68 	.word	0x0801ab68
  8002c04:	0801aba8 	.word	0x0801aba8
@@ -4398,7 +4398,7 @@ Disassembly of section .text:
  8002cf4:	e7d2      	b.n	8002c9c <MX_USB_HOST_Init+0x84>
  8002cf6:	bf00      	nop
  8002cf8:	0801ac34 	.word	0x0801ac34
- 8002cfc:	24008b58 	.word	0x24008b58
+ 8002cfc:	24009b58 	.word	0x24009b58
  8002d00:	0801ac54 	.word	0x0801ac54
  8002d04:	08002b6d 	.word	0x08002b6d
  8002d08:	240004e0 	.word	0x240004e0
@@ -5338,7 +5338,7 @@ Disassembly of section .text:
  80035ee:	0940      	lsrs	r0, r0, #5
  80035f0:	e7b4      	b.n	800355c <CS42448_Init+0x18>
  80035f2:	bf00      	nop
- 80035f4:	240087c8 	.word	0x240087c8
+ 80035f4:	240097c8 	.word	0x240097c8
  80035f8:	0801b1e0 	.word	0x0801b1e0
 
 080035fc <drv_display_update.part.0>:
@@ -5443,7 +5443,7 @@ Disassembly of section .text:
  8003708:	58020400 	.word	0x58020400
  800370c:	24001469 	.word	0x24001469
  8003710:	24001468 	.word	0x24001468
- 8003714:	24008ac8 	.word	0x24008ac8
+ 8003714:	24009ac8 	.word	0x24009ac8
 
 08003718 <drv_display_clear_rect>:
  8003718:	e92d 4ff0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
@@ -5961,7 +5961,7 @@ Disassembly of section .text:
  8003c6c:	58021400 	.word	0x58021400
  8003c70:	58020c00 	.word	0x58020c00
  8003c74:	58020400 	.word	0x58020400
- 8003c78:	24008ac8 	.word	0x24008ac8
+ 8003c78:	24009ac8 	.word	0x24009ac8
  8003c7c:	c0000000 	.word	0xc0000000
  8003c80:	24001469 	.word	0x24001469
  8003c84:	24001468 	.word	0x24001468
@@ -6192,10 +6192,10 @@ Disassembly of section .text:
  8003eb8:	e8bd 43f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, lr}
  8003ebc:	f008 bb9c 	b.w	800c5f8 <HAL_UART_Transmit>
  8003ec0:	24001480 	.word	0x24001480
- 8003ec4:	24008790 	.word	0x24008790
+ 8003ec4:	24009790 	.word	0x24009790
  8003ec8:	0801ad68 	.word	0x0801ad68
  8003ecc:	0801ad84 	.word	0x0801ad84
- 8003ed0:	24008b58 	.word	0x24008b58
+ 8003ed0:	24009b58 	.word	0x24009b58
 
 08003ed4 <HAL_InitTick>:
  8003ed4:	4b0f      	ldr	r3, [pc, #60]	@ (8003f14 <HAL_InitTick+0x40>)
@@ -31992,10 +31992,10 @@ Disassembly of section .text:
  8014ea4:	24005c00 	.word	0x24005c00
  8014ea8:	24005c04 	.word	0x24005c04
  8014eac:	24005c40 	.word	0x24005c40
- 8014eb0:	24008de0 	.word	0x24008de0
+ 8014eb0:	24009de0 	.word	0x24009de0
  8014eb4:	473b8000 	.word	0x473b8000
- 8014eb8:	240095e0 	.word	0x240095e0
- 8014ebc:	240383e0 	.word	0x240383e0
+ 8014eb8:	2400a5e0 	.word	0x2400a5e0
+ 8014ebc:	240393e0 	.word	0x240393e0
 
 08014ec0 <fx_pool_get_slot>:
  8014ec0:	2802      	cmp	r0, #2
@@ -32739,8 +32739,8 @@ Disassembly of section .text:
  801574c:	40011000 	.word	0x40011000
  8015750:	0801adec 	.word	0x0801adec
  8015754:	0801ae00 	.word	0x0801ae00
- 8015758:	24008910 	.word	0x24008910
- 801575c:	240089a8 	.word	0x240089a8
+ 8015758:	24009910 	.word	0x24009910
+ 801575c:	240099a8 	.word	0x240099a8
  8015760:	0801558d 	.word	0x0801558d
 
 08015764 <brick6_app_process>:
@@ -34658,9 +34658,9 @@ Disassembly of section .text:
  8016b84:	3a01      	subs	r2, #1
  8016b86:	1ad2      	subs	r2, r2, r3
  8016b88:	eba8 0309 	sub.w	r3, r8, r9
- 8016b8c:	f5b3 7f00 	cmp.w	r3, #512	@ 0x200
+ 8016b8c:	f5b3 6f80 	cmp.w	r3, #1024	@ 0x400
  8016b90:	bf28      	it	cs
- 8016b92:	f44f 7300 	movcs.w	r3, #512	@ 0x200
+ 8016b92:	f44f 6380 	movcs.w	r3, #1024	@ 0x400
  8016b96:	4293      	cmp	r3, r2
  8016b98:	bf28      	it	cs
  8016b9a:	4613      	movcs	r3, r2
@@ -34898,7 +34898,7 @@ Disassembly of section .text:
  8016e72:	bf00      	nop
  8016e74:	0801ae18 	.word	0x0801ae18
  8016e78:	0801ae30 	.word	0x0801ae30
- 8016e7c:	24008438 	.word	0x24008438
+ 8016e7c:	24009438 	.word	0x24009438
  8016e80:	240071f4 	.word	0x240071f4
  8016e84:	0801aec4 	.word	0x0801aec4
  8016e88:	c0000400 	.word	0xc0000400
@@ -34908,7 +34908,7 @@ Disassembly of section .text:
  8016e98:	0801ae84 	.word	0x0801ae84
  8016e9c:	34000000 	.word	0x34000000
  8016ea0:	0801ae9c 	.word	0x0801ae9c
- 8016ea4:	24008200 	.word	0x24008200
+ 8016ea4:	24009200 	.word	0x24009200
  8016ea8:	30000000 	.word	0x30000000
  8016eac:	ed5f 6a02 	vldr	s13, [pc, #-8]	@ 8016ea8 <streamer_fill_ring.constprop.0.isra.0+0x374>
  8016eb0:	2400      	movs	r4, #0
@@ -35029,9 +35029,9 @@ Disassembly of section .text:
  8016ffe:	f8d3 22a8 	ldr.w	r2, [r3, #680]	@ 0x2a8
  8017002:	f002 fc7d 	bl	8019900 <iprintf>
  8017006:	e7d2      	b.n	8016fae <audio_streamer_get_frame+0x1e>
- 8017008:	24008200 	.word	0x24008200
- 801700c:	240081f8 	.word	0x240081f8
- 8017010:	240081fc 	.word	0x240081fc
+ 8017008:	24009200 	.word	0x24009200
+ 801700c:	240091f8 	.word	0x240091f8
+ 8017010:	240091fc 	.word	0x240091fc
  8017014:	c0000400 	.word	0xc0000400
  8017018:	0801aef0 	.word	0x0801aef0
 
@@ -35059,7 +35059,7 @@ Disassembly of section .text:
  8017052:	4620      	mov	r0, r4
  8017054:	bd38      	pop	{r3, r4, r5, pc}
  8017056:	bf00      	nop
- 8017058:	24008200 	.word	0x24008200
+ 8017058:	24009200 	.word	0x24009200
  801705c:	c0000400 	.word	0xc0000400
 
 08017060 <audio_streamer_process>:
@@ -35192,7 +35192,7 @@ Disassembly of section .text:
  80171cc:	f884 22ad 	strb.w	r2, [r4, #685]	@ 0x2ad
  80171d0:	f884 32ac 	strb.w	r3, [r4, #684]	@ 0x2ac
  80171d4:	e74a      	b.n	801706c <audio_streamer_process+0xc>
- 80171d6:	f44f 7000 	mov.w	r0, #512	@ 0x200
+ 80171d6:	f44f 6080 	mov.w	r0, #1024	@ 0x400
  80171da:	f7ff fcab 	bl	8016b34 <streamer_fill_ring.constprop.0.isra.0>
  80171de:	e758      	b.n	8017092 <audio_streamer_process+0x32>
  80171e0:	a804      	add	r0, sp, #16
@@ -35213,13 +35213,13 @@ Disassembly of section .text:
  8017208:	f884 62ad 	strb.w	r6, [r4, #685]	@ 0x2ad
  801720c:	e7da      	b.n	80171c4 <audio_streamer_process+0x164>
  801720e:	bf00      	nop
- 8017210:	24008200 	.word	0x24008200
- 8017214:	240081f4 	.word	0x240081f4
+ 8017210:	24009200 	.word	0x24009200
+ 8017214:	240091f4 	.word	0x240091f4
  8017218:	0801af08 	.word	0x0801af08
- 801721c:	240084ae 	.word	0x240084ae
+ 801721c:	240094ae 	.word	0x240094ae
  8017220:	0801ae18 	.word	0x0801ae18
  8017224:	0801ae30 	.word	0x0801ae30
- 8017228:	24008438 	.word	0x24008438
+ 8017228:	24009438 	.word	0x24009438
  801722c:	0801af78 	.word	0x0801af78
  8017230:	0801af90 	.word	0x0801af90
  8017234:	0801afa0 	.word	0x0801afa0
@@ -35345,12 +35345,12 @@ Disassembly of section .text:
  8017368:	f7fb ffd4 	bl	8013314 <f_closedir>
  801736c:	e7e0      	b.n	8017330 <wav_loader_find_first_wav+0xdc>
  801736e:	bf00      	nop
- 8017370:	24008538 	.word	0x24008538
+ 8017370:	24009538 	.word	0x24009538
  8017374:	0801b00c 	.word	0x0801b00c
  8017378:	0801b050 	.word	0x0801b050
  801737c:	0801b074 	.word	0x0801b074
  8017380:	0801af08 	.word	0x0801af08
- 8017384:	2400853c 	.word	0x2400853c
+ 8017384:	2400953c 	.word	0x2400953c
  8017388:	0801b010 	.word	0x0801b010
  801738c:	0801afd0 	.word	0x0801afd0
  8017390:	0801aff0 	.word	0x0801aff0
@@ -35799,9 +35799,9 @@ Disassembly of section .text:
  801782a:	ed93 0a00 	vldr	s0, [r3]
  801782e:	f7fe feeb 	bl	8016608 <control_router_set_param>
  8017832:	e7da      	b.n	80177ea <ui_tasklet_poll+0x26a>
- 8017834:	24008780 	.word	0x24008780
- 8017838:	24008778 	.word	0x24008778
- 801783c:	24008774 	.word	0x24008774
+ 8017834:	24009780 	.word	0x24009780
+ 8017838:	24009778 	.word	0x24009778
+ 801783c:	24009774 	.word	0x24009774
  8017840:	24000120 	.word	0x24000120
  8017844:	3d4ccccd 	.word	0x3d4ccccd
  8017848:	00000000 	.word	0x00000000
@@ -35816,7 +35816,7 @@ Disassembly of section .text:
  801786c:	0801b924 	.word	0x0801b924
  8017870:	24000128 	.word	0x24000128
  8017874:	0801b910 	.word	0x0801b910
- 8017878:	2400877c 	.word	0x2400877c
+ 8017878:	2400977c 	.word	0x2400977c
  801787c:	24000124 	.word	0x24000124
  8017880:	3dcccccd 	.word	0x3dcccccd
  8017884:	c2200000 	.word	0xc2200000
@@ -35933,7 +35933,7 @@ Disassembly of section .text:
  80179d0:	0801b8f8 	.word	0x0801b8f8
  80179d4:	0801b10c 	.word	0x0801b10c
  80179d8:	24000128 	.word	0x24000128
- 80179dc:	2400877c 	.word	0x2400877c
+ 80179dc:	2400977c 	.word	0x2400977c
  80179e0:	0801b8e4 	.word	0x0801b8e4
  80179e4:	0801b11c 	.word	0x0801b11c
  80179e8:	0801b12c 	.word	0x0801b12c
@@ -35955,7 +35955,7 @@ Disassembly of section .text:
  8017a12:	bf18      	it	ne
  8017a14:	2001      	movne	r0, #1
  8017a16:	bd08      	pop	{r3, pc}
- 8017a18:	24008a48 	.word	0x24008a48
+ 8017a18:	24009a48 	.word	0x24009a48
 
 08017a1c <BSP_SD_WriteBlocks_DMA>:
  8017a1c:	4684      	mov	ip, r0
@@ -35969,7 +35969,7 @@ Disassembly of section .text:
  8017a2e:	bf18      	it	ne
  8017a30:	2001      	movne	r0, #1
  8017a32:	bd08      	pop	{r3, pc}
- 8017a34:	24008a48 	.word	0x24008a48
+ 8017a34:	24009a48 	.word	0x24009a48
 
 08017a38 <BSP_SD_GetCardState>:
  8017a38:	b508      	push	{r3, lr}
@@ -35979,13 +35979,13 @@ Disassembly of section .text:
  8017a42:	bf18      	it	ne
  8017a44:	2001      	movne	r0, #1
  8017a46:	bd08      	pop	{r3, pc}
- 8017a48:	24008a48 	.word	0x24008a48
+ 8017a48:	24009a48 	.word	0x24009a48
 
 08017a4c <BSP_SD_GetCardInfo>:
  8017a4c:	4601      	mov	r1, r0
  8017a4e:	4801      	ldr	r0, [pc, #4]	@ (8017a54 <BSP_SD_GetCardInfo+0x8>)
  8017a50:	f7f4 b874 	b.w	800bb3c <HAL_SD_GetCardInfo>
- 8017a54:	24008a48 	.word	0x24008a48
+ 8017a54:	24009a48 	.word	0x24009a48
 
 08017a58 <HAL_SD_TxCpltCallback>:
  8017a58:	b508      	push	{r3, lr}
@@ -36024,7 +36024,7 @@ Disassembly of section .text:
  8017a9e:	2001      	movne	r0, #1
  8017aa0:	bd08      	pop	{r3, pc}
  8017aa2:	bf00      	nop
- 8017aa4:	24008a48 	.word	0x24008a48
+ 8017aa4:	24009a48 	.word	0x24009a48
 
 08017aa8 <MX_DMA_Init>:
  8017aa8:	4b10      	ldr	r3, [pc, #64]	@ (8017aec <MX_DMA_Init+0x44>)
@@ -36061,9 +36061,9 @@ Disassembly of section .text:
  8017afa:	4b03      	ldr	r3, [pc, #12]	@ (8017b08 <MX_FATFS_Init+0x18>)
  8017afc:	7018      	strb	r0, [r3, #0]
  8017afe:	bd08      	pop	{r3, pc}
- 8017b00:	24008784 	.word	0x24008784
+ 8017b00:	24009784 	.word	0x24009784
  8017b04:	0801b93c 	.word	0x0801b93c
- 8017b08:	24008788 	.word	0x24008788
+ 8017b08:	24009788 	.word	0x24009788
 
 08017b0c <get_fattime>:
  8017b0c:	2000      	movs	r0, #0
@@ -36111,7 +36111,7 @@ Disassembly of section .text:
  8017b6c:	f000 fa06 	bl	8017f7c <Error_Handler>
  8017b70:	b009      	add	sp, #36	@ 0x24
  8017b72:	bd30      	pop	{r4, r5, pc}
- 8017b74:	24008790 	.word	0x24008790
+ 8017b74:	24009790 	.word	0x24009790
  8017b78:	52004140 	.word	0x52004140
 
 08017b7c <HAL_SDRAM_MspInit>:
@@ -36203,7 +36203,7 @@ Disassembly of section .text:
  8017c68:	bdd0      	pop	{r4, r6, r7, pc}
  8017c6a:	f000 f987 	bl	8017f7c <Error_Handler>
  8017c6e:	e7af      	b.n	8017bd0 <HAL_SDRAM_MspInit+0x54>
- 8017c70:	2400878c 	.word	0x2400878c
+ 8017c70:	2400978c 	.word	0x2400978c
  8017c74:	58024400 	.word	0x58024400
  8017c78:	58021400 	.word	0x58021400
  8017c7c:	58021c00 	.word	0x58021c00
@@ -36410,7 +36410,7 @@ Disassembly of section .text:
  8017ebe:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
  8017ec2:	f000 b85b 	b.w	8017f7c <Error_Handler>
  8017ec6:	bf00      	nop
- 8017ec8:	240087c8 	.word	0x240087c8
+ 8017ec8:	240097c8 	.word	0x240097c8
  8017ecc:	40005400 	.word	0x40005400
  8017ed0:	10c0ecff 	.word	0x10c0ecff
  8017ed4:	00000000 	.word	0x00000000
@@ -36718,9 +36718,9 @@ Disassembly of section .text:
  8018206:	e7cb      	b.n	80181a0 <MX_SAI1_Init+0x68>
  8018208:	e8bd 4038 	ldmia.w	sp!, {r3, r4, r5, lr}
  801820c:	f7ff beb6 	b.w	8017f7c <Error_Handler>
- 8018210:	240089a8 	.word	0x240089a8
+ 8018210:	240099a8 	.word	0x240099a8
  8018214:	40015804 	.word	0x40015804
- 8018218:	24008910 	.word	0x24008910
+ 8018218:	24009910 	.word	0x24009910
  801821c:	40015824 	.word	0x40015824
 
 08018220 <HAL_SAI_MspInit>:
@@ -36860,11 +36860,11 @@ Disassembly of section .text:
  8018382:	e78e      	b.n	80182a2 <HAL_SAI_MspInit+0x82>
  8018384:	40015804 	.word	0x40015804
  8018388:	40015824 	.word	0x40015824
- 801838c:	2400881c 	.word	0x2400881c
+ 801838c:	2400981c 	.word	0x2400981c
  8018390:	58021000 	.word	0x58021000
- 8018394:	24008898 	.word	0x24008898
+ 8018394:	24009898 	.word	0x24009898
  8018398:	40020010 	.word	0x40020010
- 801839c:	24008820 	.word	0x24008820
+ 801839c:	24009820 	.word	0x24009820
  80183a0:	40020028 	.word	0x40020028
  80183a4:	58024400 	.word	0x58024400
 
@@ -37001,7 +37001,7 @@ Disassembly of section .text:
  80184d6:	42a8      	cmp	r0, r5
  80184d8:	d9f6      	bls.n	80184c8 <SD_read+0x70>
  80184da:	e7d0      	b.n	801847e <SD_read+0x26>
- 80184dc:	24008a40 	.word	0x24008a40
+ 80184dc:	24009a40 	.word	0x24009a40
 
 080184e0 <SD_write>:
  80184e0:	e92d 43f8 	stmdb	sp!, {r3, r4, r5, r6, r7, r8, r9, lr}
@@ -37058,21 +37058,21 @@ Disassembly of section .text:
  8018562:	d9f6      	bls.n	8018552 <SD_write+0x72>
  8018564:	e7d2      	b.n	801850c <SD_write+0x2c>
  8018566:	bf00      	nop
- 8018568:	24008a44 	.word	0x24008a44
+ 8018568:	24009a44 	.word	0x24009a44
 
 0801856c <BSP_SD_WriteCpltCallback>:
  801856c:	4b01      	ldr	r3, [pc, #4]	@ (8018574 <BSP_SD_WriteCpltCallback+0x8>)
  801856e:	2201      	movs	r2, #1
  8018570:	601a      	str	r2, [r3, #0]
  8018572:	4770      	bx	lr
- 8018574:	24008a44 	.word	0x24008a44
+ 8018574:	24009a44 	.word	0x24009a44
 
 08018578 <BSP_SD_ReadCpltCallback>:
  8018578:	4b01      	ldr	r3, [pc, #4]	@ (8018580 <BSP_SD_ReadCpltCallback+0x8>)
  801857a:	2201      	movs	r2, #1
  801857c:	601a      	str	r2, [r3, #0]
  801857e:	4770      	bx	lr
- 8018580:	24008a40 	.word	0x24008a40
+ 8018580:	24009a40 	.word	0x24009a40
 
 08018584 <MX_SDMMC1_SD_Init>:
  8018584:	480c      	ldr	r0, [pc, #48]	@ (80185b8 <MX_SDMMC1_SD_Init+0x34>)
@@ -37092,7 +37092,7 @@ Disassembly of section .text:
  80185ae:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
  80185b2:	f7ff bce3 	b.w	8017f7c <Error_Handler>
  80185b6:	bf00      	nop
- 80185b8:	24008a48 	.word	0x24008a48
+ 80185b8:	24009a48 	.word	0x24009a48
  80185bc:	52007000 	.word	0x52007000
 
 080185c0 <HAL_SD_MspInit>:
@@ -37224,7 +37224,7 @@ Disassembly of section .text:
  8018732:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
  8018736:	f7ff bc21 	b.w	8017f7c <Error_Handler>
  801873a:	bf00      	nop
- 801873c:	24008ac8 	.word	0x24008ac8
+ 801873c:	24009ac8 	.word	0x24009ac8
  8018740:	40015000 	.word	0x40015000
  8018744:	00000000 	.word	0x00000000
 
@@ -37312,7 +37312,7 @@ Disassembly of section .text:
  801882a:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
  801882e:	f7f3 bee3 	b.w	800c5f8 <HAL_UART_Transmit>
  8018832:	bf00      	nop
- 8018834:	24008b58 	.word	0x24008b58
+ 8018834:	24009b58 	.word	0x24009b58
 
 08018838 <uart_log_hex>:
  8018838:	b510      	push	{r4, lr}
@@ -37393,7 +37393,7 @@ Disassembly of section .text:
  80188c4:	4801      	ldr	r0, [pc, #4]	@ (80188cc <DMA1_Stream0_IRQHandler+0x8>)
  80188c6:	f7ec bd25 	b.w	8005314 <HAL_DMA_IRQHandler>
  80188ca:	bf00      	nop
- 80188cc:	24008898 	.word	0x24008898
+ 80188cc:	24009898 	.word	0x24009898
 
 080188d0 <DMA1_Stream1_IRQHandler>:
  80188d0:	b508      	push	{r3, lr}
@@ -37402,13 +37402,13 @@ Disassembly of section .text:
  80188d8:	f7ec fd1c 	bl	8005314 <HAL_DMA_IRQHandler>
  80188dc:	e8bd 4008 	ldmia.w	sp!, {r3, lr}
  80188e0:	f7fc bf9e 	b.w	8015820 <cpu_load_irq_end>
- 80188e4:	24008820 	.word	0x24008820
+ 80188e4:	24009820 	.word	0x24009820
 
 080188e8 <SDMMC1_IRQHandler>:
  80188e8:	4801      	ldr	r0, [pc, #4]	@ (80188f0 <SDMMC1_IRQHandler+0x8>)
  80188ea:	f7f3 ba85 	b.w	800bdf8 <HAL_SD_IRQHandler>
  80188ee:	bf00      	nop
- 80188f0:	24008a48 	.word	0x24008a48
+ 80188f0:	24009a48 	.word	0x24009a48
 
 080188f4 <SAI1_IRQHandler>:
  80188f4:	4804      	ldr	r0, [pc, #16]	@ (8018908 <SAI1_IRQHandler+0x14>)
@@ -37418,8 +37418,8 @@ Disassembly of section .text:
  80188fe:	e8bd 4008 	ldmia.w	sp!, {r3, lr}
  8018902:	f7f2 bc29 	b.w	800b158 <HAL_SAI_IRQHandler>
  8018906:	bf00      	nop
- 8018908:	240089a8 	.word	0x240089a8
- 801890c:	24008910 	.word	0x24008910
+ 8018908:	240099a8 	.word	0x240099a8
+ 801890c:	24009910 	.word	0x24009910
 
 08018910 <OTG_HS_IRQHandler>:
  8018910:	4801      	ldr	r0, [pc, #4]	@ (8018918 <OTG_HS_IRQHandler+0x8>)
@@ -37494,10 +37494,10 @@ Disassembly of section .text:
  8018992:	601a      	str	r2, [r3, #0]
  8018994:	bd10      	pop	{r4, pc}
  8018996:	bf00      	nop
- 8018998:	24008b50 	.word	0x24008b50
+ 8018998:	24009b50 	.word	0x24009b50
  801899c:	24080000 	.word	0x24080000
  80189a0:	00000400 	.word	0x00000400
- 80189a4:	240671e0 	.word	0x240671e0
+ 80189a4:	240681e0 	.word	0x240681e0
 
 080189a8 <SystemInit>:
  80189a8:	4930      	ldr	r1, [pc, #192]	@ (8018a6c <SystemInit+0xc4>)
@@ -37646,7 +37646,7 @@ Disassembly of section .text:
  8018b22:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
  8018b26:	f7ff ba29 	b.w	8017f7c <Error_Handler>
  8018b2a:	bf00      	nop
- 8018b2c:	24008b58 	.word	0x24008b58
+ 8018b2c:	24009b58 	.word	0x24009b58
  8018b30:	40011000 	.word	0x40011000
  8018b34:	00000000 	.word	0x00000000
 
@@ -37748,7 +37748,7 @@ Disassembly of section .text:
  8018c28:	240001a0 	.word	0x240001a0
  8018c2c:	0801bd68 	.word	0x0801bd68
  8018c30:	240001a0 	.word	0x240001a0
- 8018c34:	24008dc8 	.word	0x24008dc8
+ 8018c34:	24009dc8 	.word	0x24009dc8
 
 08018c38 <ADC3_IRQHandler>:
  8018c38:	e7fe      	b.n	8018c38 <ADC3_IRQHandler>
@@ -38713,7 +38713,7 @@ Disassembly of section .text:
  80197d8:	08019a6f 	.word	0x08019a6f
  80197dc:	08019aa7 	.word	0x08019aa7
  80197e0:	08019acb 	.word	0x08019acb
- 80197e4:	24008bec 	.word	0x24008bec
+ 80197e4:	24009bec 	.word	0x24009bec
 
 080197e8 <stdio_exit_handler>:
  80197e8:	4a02      	ldr	r2, [pc, #8]	@ (80197f4 <stdio_exit_handler+0xc>)
@@ -38748,9 +38748,9 @@ Disassembly of section .text:
  801982c:	f001 b89c 	b.w	801a968 <_fflush_r>
  8019830:	bd10      	pop	{r4, pc}
  8019832:	bf00      	nop
- 8019834:	24008bec 	.word	0x24008bec
- 8019838:	24008c54 	.word	0x24008c54
- 801983c:	24008cbc 	.word	0x24008cbc
+ 8019834:	24009bec 	.word	0x24009bec
+ 8019838:	24009c54 	.word	0x24009c54
+ 801983c:	24009cbc 	.word	0x24009cbc
 
 08019840 <global_stdio_init.part.0>:
  8019840:	b510      	push	{r4, lr}
@@ -38771,21 +38771,21 @@ Disassembly of section .text:
  8019866:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
  801986a:	2112      	movs	r1, #18
  801986c:	f7ff bf86 	b.w	801977c <std>
- 8019870:	24008d24 	.word	0x24008d24
- 8019874:	24008bec 	.word	0x24008bec
+ 8019870:	24009d24 	.word	0x24009d24
+ 8019874:	24009bec 	.word	0x24009bec
  8019878:	080197e9 	.word	0x080197e9
 
 0801987c <__sfp_lock_acquire>:
  801987c:	4801      	ldr	r0, [pc, #4]	@ (8019884 <__sfp_lock_acquire+0x8>)
  801987e:	f000 ba64 	b.w	8019d4a <__retarget_lock_acquire_recursive>
  8019882:	bf00      	nop
- 8019884:	24008d2e 	.word	0x24008d2e
+ 8019884:	24009d2e 	.word	0x24009d2e
 
 08019888 <__sfp_lock_release>:
  8019888:	4801      	ldr	r0, [pc, #4]	@ (8019890 <__sfp_lock_release+0x8>)
  801988a:	f000 ba5f 	b.w	8019d4c <__retarget_lock_release_recursive>
  801988e:	bf00      	nop
- 8019890:	24008d2e 	.word	0x24008d2e
+ 8019890:	24009d2e 	.word	0x24009d2e
 
 08019894 <__sinit>:
  8019894:	b510      	push	{r4, lr}
@@ -38805,7 +38805,7 @@ Disassembly of section .text:
  80198b8:	e7f2      	b.n	80198a0 <__sinit+0xc>
  80198ba:	bf00      	nop
  80198bc:	08019801 	.word	0x08019801
- 80198c0:	24008d24 	.word	0x24008d24
+ 80198c0:	24009d24 	.word	0x24009d24
 
 080198c4 <_fwalk_sglue>:
  80198c4:	e92d 43f8 	stmdb	sp!, {r3, r4, r5, r6, r7, r8, r9, lr}
@@ -39241,7 +39241,7 @@ Disassembly of section .text:
  8019c7e:	b103      	cbz	r3, 8019c82 <_close_r+0x1a>
  8019c80:	6023      	str	r3, [r4, #0]
  8019c82:	bd38      	pop	{r3, r4, r5, pc}
- 8019c84:	24008d28 	.word	0x24008d28
+ 8019c84:	24009d28 	.word	0x24009d28
 
 08019c88 <_lseek_r>:
  8019c88:	b538      	push	{r3, r4, r5, lr}
@@ -39259,7 +39259,7 @@ Disassembly of section .text:
  8019ca2:	b103      	cbz	r3, 8019ca6 <_lseek_r+0x1e>
  8019ca4:	6023      	str	r3, [r4, #0]
  8019ca6:	bd38      	pop	{r3, r4, r5, pc}
- 8019ca8:	24008d28 	.word	0x24008d28
+ 8019ca8:	24009d28 	.word	0x24009d28
 
 08019cac <_read_r>:
  8019cac:	b538      	push	{r3, r4, r5, lr}
@@ -39277,7 +39277,7 @@ Disassembly of section .text:
  8019cc6:	b103      	cbz	r3, 8019cca <_read_r+0x1e>
  8019cc8:	6023      	str	r3, [r4, #0]
  8019cca:	bd38      	pop	{r3, r4, r5, pc}
- 8019ccc:	24008d28 	.word	0x24008d28
+ 8019ccc:	24009d28 	.word	0x24009d28
 
 08019cd0 <_write_r>:
  8019cd0:	b538      	push	{r3, r4, r5, lr}
@@ -39295,7 +39295,7 @@ Disassembly of section .text:
  8019cea:	b103      	cbz	r3, 8019cee <_write_r+0x1e>
  8019cec:	6023      	str	r3, [r4, #0]
  8019cee:	bd38      	pop	{r3, r4, r5, pc}
- 8019cf0:	24008d28 	.word	0x24008d28
+ 8019cf0:	24009d28 	.word	0x24009d28
 
 08019cf4 <__errno>:
  8019cf4:	4b01      	ldr	r3, [pc, #4]	@ (8019cfc <__errno+0x8>)
@@ -39422,8 +39422,8 @@ Disassembly of section .text:
  8019e0c:	e7cb      	b.n	8019da6 <__register_exitproc+0x3a>
  8019e0e:	bf00      	nop
  8019e10:	2400019c 	.word	0x2400019c
- 8019e14:	24008dbc 	.word	0x24008dbc
- 8019e18:	24008d30 	.word	0x24008d30
+ 8019e14:	24009dbc 	.word	0x24009dbc
+ 8019e18:	24009d30 	.word	0x24009d30
 	...
 
 08019e24 <_free_r>:
@@ -39495,7 +39495,7 @@ Disassembly of section .text:
  8019eae:	e7ca      	b.n	8019e46 <_free_r+0x22>
  8019eb0:	bd38      	pop	{r3, r4, r5, pc}
  8019eb2:	bf00      	nop
- 8019eb4:	24008dc4 	.word	0x24008dc4
+ 8019eb4:	24009dc4 	.word	0x24009dc4
 
 08019eb8 <sbrk_aligned>:
  8019eb8:	b570      	push	{r4, r5, r6, lr}
@@ -39525,7 +39525,7 @@ Disassembly of section .text:
  8019ef2:	d1f2      	bne.n	8019eda <sbrk_aligned+0x22>
  8019ef4:	e7ef      	b.n	8019ed6 <sbrk_aligned+0x1e>
  8019ef6:	bf00      	nop
- 8019ef8:	24008dc0 	.word	0x24008dc0
+ 8019ef8:	24009dc0 	.word	0x24009dc0
 
 08019efc <_malloc_r>:
  8019efc:	e92d 43f8 	stmdb	sp!, {r3, r4, r5, r6, r7, r8, r9, lr}
@@ -39635,19 +39635,19 @@ Disassembly of section .text:
  8019ff2:	6005      	str	r5, [r0, #0]
  8019ff4:	e7d6      	b.n	8019fa4 <_malloc_r+0xa8>
  8019ff6:	bf00      	nop
- 8019ff8:	24008dc4 	.word	0x24008dc4
+ 8019ff8:	24009dc4 	.word	0x24009dc4
 
 08019ffc <__malloc_lock>:
  8019ffc:	4801      	ldr	r0, [pc, #4]	@ (801a004 <__malloc_lock+0x8>)
  8019ffe:	f7ff bea4 	b.w	8019d4a <__retarget_lock_acquire_recursive>
  801a002:	bf00      	nop
- 801a004:	24008d2c 	.word	0x24008d2c
+ 801a004:	24009d2c 	.word	0x24009d2c
 
 0801a008 <__malloc_unlock>:
  801a008:	4801      	ldr	r0, [pc, #4]	@ (801a010 <__malloc_unlock+0x8>)
  801a00a:	f7ff be9f 	b.w	8019d4c <__retarget_lock_release_recursive>
  801a00e:	bf00      	nop
- 801a010:	24008d2c 	.word	0x24008d2c
+ 801a010:	24009d2c 	.word	0x24009d2c
 
 0801a014 <__ssputs_r>:
  801a014:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
@@ -40785,7 +40785,7 @@ Disassembly of section .text:
  801aa96:	6023      	str	r3, [r4, #0]
  801aa98:	bd38      	pop	{r3, r4, r5, pc}
  801aa9a:	bf00      	nop
- 801aa9c:	24008d28 	.word	0x24008d28
+ 801aa9c:	24009d28 	.word	0x24009d28
 
 0801aaa0 <_isatty_r>:
  801aaa0:	b538      	push	{r3, r4, r5, lr}
@@ -40801,7 +40801,7 @@ Disassembly of section .text:
  801aab6:	b103      	cbz	r3, 801aaba <_isatty_r+0x1a>
  801aab8:	6023      	str	r3, [r4, #0]
  801aaba:	bd38      	pop	{r3, r4, r5, pc}
- 801aabc:	24008d28 	.word	0x24008d28
+ 801aabc:	24009d28 	.word	0x24009d28
 
 0801aac0 <_sbrk_r>:
  801aac0:	b538      	push	{r3, r4, r5, lr}
@@ -40817,7 +40817,7 @@ Disassembly of section .text:
  801aad6:	b103      	cbz	r3, 801aada <_sbrk_r+0x1a>
  801aad8:	6023      	str	r3, [r4, #0]
  801aada:	bd38      	pop	{r3, r4, r5, pc}
- 801aadc:	24008d28 	.word	0x24008d28
+ 801aadc:	24009d28 	.word	0x24009d28
 
 0801aae0 <_realloc_r>:
  801aae0:	e92d 41f0 	stmdb	sp!, {r4, r5, r6, r7, r8, lr}
