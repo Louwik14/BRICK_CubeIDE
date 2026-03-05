@@ -307,7 +307,31 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     f_close(&fp_meta);
 
     s->bits_per_sample = info.bits_per_sample;
-    s->bytes_per_frame = 2U * (info.bits_per_sample / 8U);
+    s->bytes_per_frame = info.block_align;
+
+    if((info.sample_rate != 48000U) || (info.channels != 2U))
+    {
+        STREAM_LOG("[STREAM] unsupported format ch=%u sr=%lu\n",
+                   (unsigned)info.channels,
+                   (unsigned long)info.sample_rate);
+        return false;
+    }
+
+    if((info.bits_per_sample != 24U) && (info.bits_per_sample != 32U))
+    {
+        STREAM_LOG("[STREAM] unsupported bits=%u\n",
+                   (unsigned)info.bits_per_sample);
+        return false;
+    }
+
+    if((s->bytes_per_frame == 0U) ||
+       (info.byte_rate != (info.sample_rate * s->bytes_per_frame)))
+    {
+        STREAM_LOG("[STREAM] invalid frame size align=%u byte_rate=%lu\n",
+                   (unsigned)info.block_align,
+                   (unsigned long)info.byte_rate);
+        return false;
+    }
 
     s->data_offset = info.data_offset;
     s->data_size   = info.data_size;

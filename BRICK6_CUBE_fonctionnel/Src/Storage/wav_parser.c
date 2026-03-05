@@ -21,6 +21,8 @@ static bool wav_find_chunks(FIL *fp,
                             uint16_t *channels,
                             uint32_t *sample_rate,
                             uint16_t *bits_per_sample,
+                            uint16_t *block_align,
+                            uint32_t *byte_rate,
                             uint32_t *data_offset,
                             uint32_t *data_size)
 {
@@ -37,6 +39,8 @@ static bool wav_find_chunks(FIL *fp,
     *channels = 0U;
     *sample_rate = 0U;
     *bits_per_sample = 0U;
+    *block_align = 0U;
+    *byte_rate = 0U;
     *data_offset = 0U;
     *data_size = 0U;
 
@@ -63,6 +67,8 @@ static bool wav_find_chunks(FIL *fp,
             *audio_format = le16(&fmt_buf[0]);
             *channels = le16(&fmt_buf[2]);
             *sample_rate = le32(&fmt_buf[4]);
+            *byte_rate = le32(&fmt_buf[8]);
+            *block_align = le16(&fmt_buf[12]);
             *bits_per_sample = le16(&fmt_buf[14]);
 
             if(chunk_size > to_read)
@@ -97,7 +103,9 @@ static bool wav_find_chunks(FIL *fp,
     if(info != 0)
     {
         info->sample_rate = *sample_rate;
+        info->byte_rate = *byte_rate;
         info->channels = *channels;
+        info->block_align = *block_align;
         info->bits_per_sample = *bits_per_sample;
         info->data_offset = *data_offset;
         info->data_size = *data_size;
@@ -112,6 +120,8 @@ bool wav_parser_parse_info(FIL *fp, wav_info_t *info)
     uint16_t channels;
     uint32_t sample_rate;
     uint16_t bits_per_sample;
+    uint16_t block_align;
+    uint32_t byte_rate;
     uint32_t data_offset;
     uint32_t data_size;
 
@@ -122,7 +132,7 @@ bool wav_parser_parse_info(FIL *fp, wav_info_t *info)
         return false;
 
     if(!wav_find_chunks(fp, info, &audio_format, &channels, &sample_rate,
-                        &bits_per_sample, &data_offset, &data_size))
+                        &bits_per_sample, &block_align, &byte_rate, &data_offset, &data_size))
         return false;
 
     return (audio_format == 1U);
