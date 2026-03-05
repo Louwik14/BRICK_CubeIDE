@@ -19,18 +19,24 @@ static audio_streamer_t g_streamer;
 
 static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
-    if(s->write_pos >= s->read_pos)
-        return s->write_pos - s->read_pos;
+    uint32_t read_pos = s->read_pos;
+    uint32_t write_pos = s->write_pos;
 
-    return STREAM_RING_FRAMES - (s->read_pos - s->write_pos);
+    if(write_pos >= read_pos)
+        return write_pos - read_pos;
+
+    return STREAM_RING_FRAMES - (read_pos - write_pos);
 }
 
 static uint32_t streamer_ring_space_frames(const audio_streamer_t *s)
 {
-    if(s->write_pos >= s->read_pos)
-        return STREAM_RING_FRAMES - (s->write_pos - s->read_pos) - 1U;
+    uint32_t read_pos = s->read_pos;
+    uint32_t write_pos = s->write_pos;
 
-    return s->read_pos - s->write_pos - 1U;
+    if(write_pos >= read_pos)
+        return STREAM_RING_FRAMES - (write_pos - read_pos) - 1U;
+
+    return read_pos - write_pos - 1U;
 }
 
 static float pcm24_to_float(const uint8_t *p)
@@ -86,6 +92,7 @@ static bool streamer_seek_to_data_start(audio_streamer_t *s)
     }
 
     s->file_data_pos = 0U;
+    s->pending_bytes_count = 0U;
     return true;
 }
 
@@ -109,34 +116,47 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
         if(chunk_frames == 0U)
             break;
 
+        uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
+        uint32_t read_target_bytes = chunk_bytes;
+
+        if(read_target_bytes > (STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count))
+            read_target_bytes = STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count;
+
         if(s->data_size > s->file_data_pos)
         {
             uint32_t remaining_bytes = s->data_size - s->file_data_pos;
-            uint32_t remaining_frames = remaining_bytes / s->bytes_per_frame;
 
-            if(remaining_frames < chunk_frames)
-                chunk_frames = remaining_frames;
+            if(remaining_bytes < read_target_bytes)
+                read_target_bytes = remaining_bytes;
         }
 
-        uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
-
-        if(chunk_bytes == 0U)
+        if(read_target_bytes == 0U)
         {
+            if(s->pending_bytes_count != 0U)
+                s->pending_bytes_count = 0U;
+
             if(!streamer_seek_to_data_start(s))
                 break;
+
             continue;
         }
 
+        uint8_t *read_dst = &io_buf[s->pending_bytes_count];
         uint32_t bytes_read = 0U;
 
-        if(!streamer_read_bytes(s, io_buf, chunk_bytes, &bytes_read))
+        if(!streamer_read_bytes(s, read_dst, read_target_bytes, &bytes_read))
             break;
 
-        chunk_frames = bytes_read / s->bytes_per_frame;
-        bool reached_eof = (bytes_read < chunk_bytes);
+        bool reached_eof = (bytes_read < read_target_bytes);
+        uint32_t available_bytes = (uint32_t)s->pending_bytes_count + bytes_read;
+        uint32_t ready_frames = available_bytes / s->bytes_per_frame;
+
+        if(ready_frames > chunk_frames)
+            ready_frames = chunk_frames;
+
         uint32_t chunk_written = 0U;
 
-        for(uint32_t i = 0U; i < chunk_frames; i++)
+        for(uint32_t i = 0U; i < ready_frames; i++)
         {
             if(streamer_ring_space_frames(s) == 0U)
                 break;
@@ -165,13 +185,27 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 
         frames_written += chunk_written;
 
+        uint32_t consumed_bytes = chunk_written * s->bytes_per_frame;
+        uint32_t remaining_unconsumed = available_bytes - consumed_bytes;
+
+        if(remaining_unconsumed > 0U)
+            memmove(io_buf, &io_buf[consumed_bytes], remaining_unconsumed);
+
+        s->pending_bytes_count = (uint8_t)remaining_unconsumed;
+
         if(reached_eof)
         {
+            if(s->pending_bytes_count != 0U)
+            {
+                printf("[STREAM] EOF misaligned: drop %u bytes\r\n", (unsigned)s->pending_bytes_count);
+                s->pending_bytes_count = 0U;
+            }
+
             if(!streamer_seek_to_data_start(s))
                 break;
         }
 
-        if(chunk_written < chunk_frames)
+        if(chunk_written < ready_frames)
             break;
     }
 
@@ -273,6 +307,7 @@ bool audio_streamer_start(const char *path)
     s->data_offset = 0U;
     s->data_size = 0U;
     s->file_data_pos = 0U;
+    s->pending_bytes_count = 0U;
     s->underrun_count = 0U;
     s->sd_read_time_max = 0U;
 
