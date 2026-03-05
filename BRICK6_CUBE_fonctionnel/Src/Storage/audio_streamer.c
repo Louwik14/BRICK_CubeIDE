@@ -96,6 +96,18 @@ static bool streamer_seek_to_data_start(audio_streamer_t *s)
     return true;
 }
 
+static bool streamer_handle_loop_restart(audio_streamer_t *s)
+{
+    if(s->pending_bytes_count != 0U)
+    {
+        /* Should not happen with aligned data_size, keep state consistent. */
+        printf("[STREAM] EOF residual: drop %u bytes\r\n", (unsigned)s->pending_bytes_count);
+        s->pending_bytes_count = 0U;
+    }
+
+    return streamer_seek_to_data_start(s);
+}
+
 static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 {
     static uint8_t io_buf[STREAM_IO_BYTES];
@@ -119,6 +131,13 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
         uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
         uint32_t read_target_bytes = chunk_bytes;
 
+        if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
+        {
+            if(!streamer_handle_loop_restart(s))
+                break;
+            continue;
+        }
+
         if(read_target_bytes > (STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count))
             read_target_bytes = STREAM_IO_BYTES - (uint32_t)s->pending_bytes_count;
 
@@ -132,10 +151,7 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 
         if(read_target_bytes == 0U)
         {
-            if(s->pending_bytes_count != 0U)
-                s->pending_bytes_count = 0U;
-
-            if(!streamer_seek_to_data_start(s))
+            if(!streamer_handle_loop_restart(s))
                 break;
 
             continue;
@@ -147,7 +163,8 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
         if(!streamer_read_bytes(s, read_dst, read_target_bytes, &bytes_read))
             break;
 
-        bool reached_eof = (bytes_read < read_target_bytes);
+        bool reached_eof = ((bytes_read < read_target_bytes) ||
+                            ((s->data_size != 0U) && (s->file_data_pos >= s->data_size)));
         uint32_t available_bytes = (uint32_t)s->pending_bytes_count + bytes_read;
         uint32_t ready_frames = available_bytes / s->bytes_per_frame;
 
@@ -195,13 +212,7 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 
         if(reached_eof)
         {
-            if(s->pending_bytes_count != 0U)
-            {
-                printf("[STREAM] EOF misaligned: drop %u bytes\r\n", (unsigned)s->pending_bytes_count);
-                s->pending_bytes_count = 0U;
-            }
-
-            if(!streamer_seek_to_data_start(s))
+            if(!streamer_handle_loop_restart(s))
                 break;
         }
 
@@ -242,6 +253,9 @@ static bool streamer_prepare_start(audio_streamer_t *s)
         printf("[STREAM] invalid WAV header\r\n");
         return false;
     }
+
+    uint32_t file_size = f_size(&fp_meta);
+
     (void)f_close(&fp_meta);
 
     if((info.sample_rate != 48000U) || (info.channels != 2U))
@@ -260,6 +274,28 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     s->bytes_per_frame = 2U * (uint32_t)(s->bits_per_sample / 8U);
     s->data_offset = info.data_offset;
     s->data_size = info.data_size;
+
+    if(s->data_offset >= file_size)
+    {
+        printf("[STREAM] invalid data offset\r\n");
+        return false;
+    }
+
+    uint32_t max_data_from_file = file_size - s->data_offset;
+    if(s->data_size > max_data_from_file)
+    {
+        printf("[STREAM] clamp data size %lu -> %lu\r\n",
+               (unsigned long)s->data_size,
+               (unsigned long)max_data_from_file);
+        s->data_size = max_data_from_file;
+    }
+
+    s->data_size -= (s->data_size % s->bytes_per_frame);
+    if(s->data_size == 0U)
+    {
+        printf("[STREAM] no complete audio frame\r\n");
+        return false;
+    }
 
     fr = f_open(&s->fp, s->pending_path, FA_READ);
     if(fr != FR_OK)
