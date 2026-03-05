@@ -9,7 +9,7 @@
 
 #define STREAM_RING_FRAMES (16384U)
 #define STREAM_RING_SAMPLES (STREAM_RING_FRAMES * 2U)
-#define STREAM_REFILL_THRESHOLD_FRAMES (512U)
+#define STREAM_REFILL_THRESHOLD_FRAMES (2048U)
 #define STREAM_PREFILL_TARGET_FRAMES (4096U)
 #define STREAM_IO_FRAMES (512U)
 
@@ -466,7 +466,11 @@ void audio_streamer_process(void)
         return;
 
     if(streamer_ring_space_frames(s) > STREAM_REFILL_THRESHOLD_FRAMES)
-        (void)streamer_fill_ring(s, STREAM_IO_FRAMES);
+    	while(streamer_ring_space_frames(s) > STREAM_IO_FRAMES)
+    	{
+    	    if(streamer_fill_ring(s, STREAM_IO_FRAMES) == 0)
+    	        break;
+    	}
 
     if((HAL_GetTick() - last_log_tick) >= 1000U)
     {
