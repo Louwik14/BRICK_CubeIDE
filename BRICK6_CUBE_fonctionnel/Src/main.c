@@ -37,7 +37,6 @@
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
-#include "sd_stream.h"
 #include "engine_tasklet.h"
 #include "ui_tasklet.h"
 #include "brick6_app_init.h"

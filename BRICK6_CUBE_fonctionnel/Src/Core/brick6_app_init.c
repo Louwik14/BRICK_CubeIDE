@@ -12,7 +12,6 @@
 #include "engine_tasklet.h"
 #include "midi.h"
 #include "sai.h"
-#include "sd_stream.h"
 #include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
