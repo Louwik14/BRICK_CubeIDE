@@ -1,5 +1,4 @@
-../Src/Storage/wav_loader.c:40:14:wav_loader_get_interleaved_buffer	1
-../Src/Storage/wav_loader.c:45:10:wav_loader_get_capacity_frames	1
-../Src/Storage/wav_loader.c:163:6:wav_loader_parse_info	27
-../Src/Storage/wav_loader.c:186:6:wav_loader_find_first_wav	16
-../Src/Storage/wav_loader.c:260:6:wav_loader_load_to_sdram	25
+../Src/Storage/wav_loader.c:31:14:wav_loader_get_interleaved_buffer	1
+../Src/Storage/wav_loader.c:36:10:wav_loader_get_capacity_frames	1
+../Src/Storage/wav_loader.c:65:6:wav_loader_find_first_wav	16
+../Src/Storage/wav_loader.c:139:6:wav_loader_load_to_sdram	25

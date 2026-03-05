@@ -60,6 +60,7 @@ static int wav_ext_is_wav(const char *name)
            ((name[len - 1U] == 'v') || (name[len - 1U] == 'V'));
 }
 
+#endif
 
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 {

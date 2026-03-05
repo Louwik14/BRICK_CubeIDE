@@ -1,5 +1,6 @@
 Src/Storage/wav_loader.o: ../Src/Storage/wav_loader.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/wav_loader.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/wav_parser.h \
  ../Middlewares/Third_Party/FatFs/src/ff.h \
  ../Middlewares/Third_Party/FatFs/src/integer.h ../Inc/ffconf.h \
  ../Inc/main.h ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
@@ -49,6 +50,7 @@ Src/Storage/wav_loader.o: ../Src/Storage/wav_loader.c \
  ../Inc/bsp_driver_sd.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/memory_layout.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/wav_loader.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/wav_parser.h:
 ../Middlewares/Third_Party/FatFs/src/ff.h:
 ../Middlewares/Third_Party/FatFs/src/integer.h:
 ../Inc/ffconf.h:

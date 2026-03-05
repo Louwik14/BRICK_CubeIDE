@@ -6,15 +6,18 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../Src/Storage/audio_streamer.c \
-../Src/Storage/wav_loader.c 
+../Src/Storage/wav_loader.c \
+../Src/Storage/wav_parser.c 
 
 C_DEPS += \
 ./Src/Storage/audio_streamer.d \
-./Src/Storage/wav_loader.d 
+./Src/Storage/wav_loader.d \
+./Src/Storage/wav_parser.d 
 
 OBJS += \
 ./Src/Storage/audio_streamer.o \
-./Src/Storage/wav_loader.o 
+./Src/Storage/wav_loader.o \
+./Src/Storage/wav_parser.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -24,7 +27,7 @@ Src/Storage/%.o Src/Storage/%.su Src/Storage/%.cyclo: ../Src/Storage/%.c Src/Sto
 clean: clean-Src-2f-Storage
 
 clean-Src-2f-Storage:
-	-$(RM) ./Src/Storage/audio_streamer.cyclo ./Src/Storage/audio_streamer.d ./Src/Storage/audio_streamer.o ./Src/Storage/audio_streamer.su ./Src/Storage/wav_loader.cyclo ./Src/Storage/wav_loader.d ./Src/Storage/wav_loader.o ./Src/Storage/wav_loader.su
+	-$(RM) ./Src/Storage/audio_streamer.cyclo ./Src/Storage/audio_streamer.d ./Src/Storage/audio_streamer.o ./Src/Storage/audio_streamer.su ./Src/Storage/wav_loader.cyclo ./Src/Storage/wav_loader.d ./Src/Storage/wav_loader.o ./Src/Storage/wav_loader.su ./Src/Storage/wav_parser.cyclo ./Src/Storage/wav_parser.d ./Src/Storage/wav_parser.o ./Src/Storage/wav_parser.su
 
 .PHONY: clean-Src-2f-Storage
 
