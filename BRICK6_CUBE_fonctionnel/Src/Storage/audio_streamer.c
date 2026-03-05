@@ -7,28 +7,30 @@
 #include "stm32h7xx_hal.h"
 #include "wav_parser.h"
 
-#define STREAM_BUFFER_FRAMES (4096U)
-#define STREAM_BUFFER_SAMPLES (STREAM_BUFFER_FRAMES * 2U)
+#define STREAM_RING_FRAMES (16384U)
+#define STREAM_RING_SAMPLES (STREAM_RING_FRAMES * 2U)
+#define STREAM_REFILL_THRESHOLD_FRAMES (512U)
+#define STREAM_PREFILL_TARGET_FRAMES (2048U)
 #define STREAM_IO_BYTES (4096U)
 
-static AUDIO_COLD_SDRAM float stream_buffer_A[STREAM_BUFFER_SAMPLES];
-static AUDIO_COLD_SDRAM float stream_buffer_B[STREAM_BUFFER_SAMPLES];
+static AUDIO_COLD_SDRAM float stream_ring[STREAM_RING_SAMPLES];
 
 static audio_streamer_t g_streamer;
 
-static volatile uint32_t *streamer_frames_valid_ptr(audio_streamer_t *s, uint8_t buffer_index)
+static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
-    return (buffer_index == 0U) ? &s->frames_valid_A : &s->frames_valid_B;
+    if(s->write_pos >= s->read_pos)
+        return s->write_pos - s->read_pos;
+
+    return STREAM_RING_FRAMES - (s->read_pos - s->write_pos);
 }
 
-static volatile uint8_t *streamer_ready_ptr(audio_streamer_t *s, uint8_t buffer_index)
+static uint32_t streamer_ring_space_frames(const audio_streamer_t *s)
 {
-    return (buffer_index == 0U) ? &s->ready_A : &s->ready_B;
-}
+    if(s->write_pos >= s->read_pos)
+        return STREAM_RING_FRAMES - (s->write_pos - s->read_pos) - 1U;
 
-static float *streamer_buffer_ptr(audio_streamer_t *s, uint8_t buffer_index)
-{
-    return (buffer_index == 0U) ? s->bufferA : s->bufferB;
+    return s->read_pos - s->write_pos - 1U;
 }
 
 static float pcm24_to_float(const uint8_t *p)
@@ -83,18 +85,26 @@ static bool streamer_seek_to_data_start(audio_streamer_t *s)
     return true;
 }
 
-static uint32_t streamer_fill_buffer(audio_streamer_t *s, uint8_t buffer_index)
+static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 {
     static uint8_t io_buf[STREAM_IO_BYTES];
     uint32_t frames_written = 0U;
-    volatile uint32_t *frames_valid = streamer_frames_valid_ptr(s, buffer_index);
-    volatile uint8_t *ready = streamer_ready_ptr(s, buffer_index);
-    float *buffer = streamer_buffer_ptr(s, buffer_index);
 
-    while(frames_written < STREAM_BUFFER_FRAMES)
+    while(frames_written < max_frames)
     {
-        uint32_t frames_left = STREAM_BUFFER_FRAMES - frames_written;
+        uint32_t space_frames = streamer_ring_space_frames(s);
+        uint32_t frames_left = max_frames - frames_written;
         uint32_t chunk_frames = (frames_left > 512U) ? 512U : frames_left;
+
+        if(space_frames == 0U)
+            break;
+
+        if(chunk_frames > space_frames)
+            chunk_frames = space_frames;
+
+        if(chunk_frames == 0U)
+            break;
+
         uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
 
         if((s->data_size > s->file_data_pos) && ((s->data_size - s->file_data_pos) < chunk_bytes))
@@ -128,8 +138,10 @@ static uint32_t streamer_fill_buffer(audio_streamer_t *s, uint8_t buffer_index)
                 r = pcm32_to_float(&frame[4]);
             }
 
-            buffer[(frames_written + i) * 2U + 0U] = l;
-            buffer[(frames_written + i) * 2U + 1U] = r;
+            uint32_t idx = s->write_pos * 2U;
+            stream_ring[idx + 0U] = l;
+            stream_ring[idx + 1U] = r;
+            s->write_pos = (s->write_pos + 1U) % STREAM_RING_FRAMES;
         }
 
         frames_written += chunk_frames;
@@ -138,8 +150,6 @@ static uint32_t streamer_fill_buffer(audio_streamer_t *s, uint8_t buffer_index)
             break;
     }
 
-    *frames_valid = frames_written;
-    *ready = (frames_written > 0U) ? 1U : 0U;
     return frames_written;
 }
 
@@ -203,15 +213,9 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     if(!streamer_seek_to_data_start(s))
         return false;
 
-    if(streamer_fill_buffer(s, 0U) == 0U)
+    if(streamer_fill_ring(s, STREAM_PREFILL_TARGET_FRAMES) == 0U)
     {
-        printf("[STREAM] initial fill A failed\r\n");
-        return false;
-    }
-
-    if(streamer_fill_buffer(s, 1U) == 0U)
-    {
-        printf("[STREAM] initial fill B failed\r\n");
+        printf("[STREAM] initial ring prefill failed\r\n");
         return false;
     }
 
@@ -230,17 +234,13 @@ bool audio_streamer_start(const char *path)
 {
     audio_streamer_t *s = &g_streamer;
 
-    s->bufferA = stream_buffer_A;
-    s->bufferB = stream_buffer_B;
-
-    for(uint32_t i = 0U; i < STREAM_BUFFER_SAMPLES; i++)
+    for(uint32_t i = 0U; i < STREAM_RING_SAMPLES; i++)
     {
-        stream_buffer_A[i] = 0.0f;
-        stream_buffer_B[i] = 0.0f;
+        stream_ring[i] = 0.0f;
     }
 
-    s->active_buffer = 0U;
     s->read_pos = 0U;
+    s->write_pos = 0U;
     s->running = 0U;
     s->error = 0U;
     s->bits_per_sample = 0U;
@@ -251,10 +251,6 @@ bool audio_streamer_start(const char *path)
     s->underrun_count = 0U;
     s->sd_read_time_max = 0U;
     s->buffer_switch_count = 0U;
-    s->frames_valid_A = 0U;
-    s->ready_A = 0U;
-    s->frames_valid_B = 0U;
-    s->ready_B = 0U;
 
 #if AUDIO_STREAMER_HAS_FATFS
     if(path == 0)
@@ -301,19 +297,15 @@ void audio_streamer_process(void)
     if((s->running == 0U) || (s->error != 0U))
         return;
 
-    {
-        uint8_t inactive = (uint8_t)(s->active_buffer ^ 1U);
-        volatile uint8_t *inactive_ready = streamer_ready_ptr(s, inactive);
-
-        if(*inactive_ready == 0U)
-            (void)streamer_fill_buffer(s, inactive);
-    }
+    if(streamer_ring_space_frames(s) > STREAM_REFILL_THRESHOLD_FRAMES)
+        (void)streamer_fill_ring(s, 512U);
 
     if((HAL_GetTick() - last_log_tick) >= 1000U)
     {
         last_log_tick = HAL_GetTick();
-        printf("[STREAM] sw=%lu und=%lu sdmax=%lu ms\r\n",
-               (unsigned long)s->buffer_switch_count,
+        printf("[STREAM] fill=%lu/%u und=%lu sdmax=%lu ms\r\n",
+               (unsigned long)streamer_ring_used_frames(s),
+               STREAM_RING_FRAMES,
                (unsigned long)s->underrun_count,
                (unsigned long)s->sd_read_time_max);
     }
@@ -328,45 +320,16 @@ void audio_streamer_get_frame(float *L, float *R)
 
     if((s->running != 0U) && (s->error == 0U))
     {
-        uint8_t curr = s->active_buffer;
-        volatile uint32_t *curr_frames_valid = streamer_frames_valid_ptr(s, curr);
-
-        if(s->read_pos >= *curr_frames_valid)
+        if(s->read_pos != s->write_pos)
         {
-            uint8_t next = (uint8_t)(curr ^ 1U);
-            volatile uint8_t *next_ready = streamer_ready_ptr(s, next);
-            volatile uint32_t *next_frames_valid = streamer_frames_valid_ptr(s, next);
-
-            if((*next_ready != 0U) && (*next_frames_valid > 0U))
-            {
-                volatile uint8_t *curr_ready = streamer_ready_ptr(s, curr);
-
-                *curr_ready = 0U;
-                *curr_frames_valid = 0U;
-                s->active_buffer = next;
-                s->read_pos = 0U;
-                curr = next;
-                curr_frames_valid = next_frames_valid;
-                s->buffer_switch_count++;
-            }
-            else
-            {
-                s->underrun_count++;
-                if(L != 0)
-                    *L = 0.0f;
-                if(R != 0)
-                    *R = 0.0f;
-                return;
-            }
-        }
-
-        if(s->read_pos < *curr_frames_valid)
-        {
-            float *buffer = streamer_buffer_ptr(s, curr);
             uint32_t idx = s->read_pos * 2U;
-            outL = buffer[idx + 0U];
-            outR = buffer[idx + 1U];
-            s->read_pos++;
+            outL = stream_ring[idx + 0U];
+            outR = stream_ring[idx + 1U];
+            s->read_pos = (s->read_pos + 1U) % STREAM_RING_FRAMES;
+        }
+        else
+        {
+            s->underrun_count++;
         }
     }
 
@@ -385,5 +348,5 @@ void audio_streamer_get_stats(audio_streamer_stats_t *out_stats)
 
     out_stats->underrun_count = s->underrun_count;
     out_stats->sd_read_time_max = s->sd_read_time_max;
-    out_stats->buffer_switch_count = s->buffer_switch_count;
+    out_stats->buffer_switch_count = 0U;
 }
