@@ -25,8 +25,8 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
-#include "wav_loader.h"
 #include "audio_streamer.h"
+#include "App/app_sample_boot.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -147,20 +147,7 @@ void brick6_app_init(void)
 
     DBG("[STREAM] init\r\n");
 
-    {
-        char wav_path[64];
-
-        if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
-        {
-            DBG("[WAV] found: %s\r\n", wav_path);
-            if(!audio_streamer_start(wav_path))
-                DBG("[STREAM] start failed\r\n");
-        }
-        else
-        {
-            DBG("[WAV] no WAV found\r\n");
-        }
-    }
+    app_sample_boot_init();
 
     mixer_set_master(2.0f);
 
