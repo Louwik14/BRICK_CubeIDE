@@ -134,7 +134,13 @@ static uint32_t produce_frames(audio_streamer_t *s)
     s->write_pos = wp;
 
     if((got < max_frames) && (s->error == 0U))
-        (void)seek_to_data(s);
+    {
+        if(!seek_to_data(s))
+            return got;
+
+        uint32_t more = produce_frames(s);
+        return got + more;
+    }
 
     return got;
 }

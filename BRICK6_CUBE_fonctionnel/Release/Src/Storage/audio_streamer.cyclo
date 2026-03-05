@@ -1,5 +1,4 @@
-../Src/Storage/audio_streamer.c:120:17:write_frames_from_file.constprop	28
-../Src/Storage/audio_streamer.c:302:6:audio_streamer_start	2
-../Src/Storage/audio_streamer.c:324:6:audio_streamer_process	22
-../Src/Storage/audio_streamer.c:382:6:audio_streamer_get_frame	6
-../Src/Storage/audio_streamer.c:420:6:audio_streamer_get_stats	2
+../Src/Storage/audio_streamer.c:204:6:audio_streamer_start	2
+../Src/Storage/audio_streamer.c:225:6:audio_streamer_process	84
+../Src/Storage/audio_streamer.c:248:6:audio_streamer_get_frame	6
+../Src/Storage/audio_streamer.c:282:6:audio_streamer_get_stats	2
