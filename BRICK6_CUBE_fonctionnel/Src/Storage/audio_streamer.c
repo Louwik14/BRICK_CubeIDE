@@ -51,7 +51,7 @@ static float pcm32_to_float(const uint8_t *p)
 }
 
 #if AUDIO_STREAMER_HAS_FATFS
-static bool streamer_read_bytes(audio_streamer_t *s, uint8_t *dst, uint32_t bytes)
+static bool streamer_read_bytes(audio_streamer_t *s, uint8_t *dst, uint32_t bytes, uint32_t *out_bytes_read)
 {
     UINT br = 0U;
     uint32_t t0 = HAL_GetTick();
@@ -61,14 +61,18 @@ static bool streamer_read_bytes(audio_streamer_t *s, uint8_t *dst, uint32_t byte
     if(dt > s->sd_read_time_max)
         s->sd_read_time_max = dt;
 
-    if((fr != FR_OK) || (br != bytes))
+    if(fr != FR_OK)
     {
         printf("[STREAM] SD read fail fr=%d br=%u req=%lu\r\n", (int)fr, (unsigned)br, (unsigned long)bytes);
         s->error = 1U;
         return false;
     }
 
-    s->file_data_pos += bytes;
+    s->file_data_pos += (uint32_t)br;
+
+    if(out_bytes_read != 0)
+        *out_bytes_read = (uint32_t)br;
+
     return true;
 }
 
@@ -105,10 +109,16 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
         if(chunk_frames == 0U)
             break;
 
-        uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
+        if(s->data_size > s->file_data_pos)
+        {
+            uint32_t remaining_bytes = s->data_size - s->file_data_pos;
+            uint32_t remaining_frames = remaining_bytes / s->bytes_per_frame;
 
-        if((s->data_size > s->file_data_pos) && ((s->data_size - s->file_data_pos) < chunk_bytes))
-            chunk_bytes = s->data_size - s->file_data_pos;
+            if(remaining_frames < chunk_frames)
+                chunk_frames = remaining_frames;
+        }
+
+        uint32_t chunk_bytes = chunk_frames * s->bytes_per_frame;
 
         if(chunk_bytes == 0U)
         {
@@ -117,10 +127,13 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
             continue;
         }
 
-        if(!streamer_read_bytes(s, io_buf, chunk_bytes))
+        uint32_t bytes_read = 0U;
+
+        if(!streamer_read_bytes(s, io_buf, chunk_bytes, &bytes_read))
             break;
 
-        chunk_frames = chunk_bytes / s->bytes_per_frame;
+        chunk_frames = bytes_read / s->bytes_per_frame;
+        bool reached_eof = (bytes_read < chunk_bytes);
         uint32_t chunk_written = 0U;
 
         for(uint32_t i = 0U; i < chunk_frames; i++)
@@ -151,6 +164,12 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
         }
 
         frames_written += chunk_written;
+
+        if(reached_eof)
+        {
+            if(!streamer_seek_to_data_start(s))
+                break;
+        }
 
         if(chunk_written < chunk_frames)
             break;
