@@ -25,13 +25,12 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
-#include "sampler.h"
 #include "wav_loader.h"
+#include "audio_streamer.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
 
-static sample_voice_t g_sampler_voice;
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
 
@@ -93,10 +92,15 @@ static void my_dsp(StereoTrack *tracks,
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
-        sample_voice_process(&g_sampler_voice, tracks[0].L, tracks[0].R, frames);
-
         for(uint32_t i = 0U; i < frames; i++)
         {
+            float sl;
+            float sr;
+            audio_streamer_get_frame(&sl, &sr);
+
+            tracks[0].L[i] += sl;
+            tracks[0].R[i] += sr;
+
             float l = tracks[0].L[i] * g_master_gain;
             float r = tracks[0].R[i] * g_master_gain;
 
@@ -141,42 +145,16 @@ void brick6_app_init(void)
 
     audio_tracks_init();
 
-    sample_voice_init(&g_sampler_voice);
-    DBG("[SAMPLER] init\r\n");
-    g_sampler_voice.gainL = 0.35f;
-    g_sampler_voice.gainR = 0.35f;
-    g_sampler_voice.loop = true;
-    g_sampler_voice.loop_start = 0U;
+    DBG("[STREAM] init\r\n");
 
     {
-        wav_info_t wav_info;
         char wav_path[64];
 
         if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
         {
             DBG("[WAV] found: %s\r\n", wav_path);
-
-            if(wav_loader_load_to_sdram(wav_path, &wav_info))
-            {
-                const float *buffer = wav_loader_get_interleaved_buffer();
-
-                DBG("[WAV] load ok frames=%lu\r\n", (unsigned long)wav_info.frames_loaded);
-                DBG("[WAV] first L=%f R=%f\r\n", buffer[0], buffer[1]);
-
-                g_sampler_voice.loop_end = wav_info.frames_loaded;
-
-                sample_voice_trigger(&g_sampler_voice,
-                                     buffer,
-                                     wav_info.frames_loaded);
-
-                DBG("[SAMPLER] trigger active=%d len=%lu\r\n",
-                    g_sampler_voice.active,
-                    (unsigned long)g_sampler_voice.length);
-            }
-            else
-            {
-                DBG("[WAV] load failed\r\n");
-            }
+            if(!audio_streamer_start(wav_path))
+                DBG("[STREAM] start failed\r\n");
         }
         else
         {
@@ -206,4 +184,9 @@ void brick6_app_init(void)
     HAL_Delay(200);
 
     midi_init();
+}
+
+void brick6_app_process(void)
+{
+    audio_streamer_process();
 }
