@@ -46,7 +46,7 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 /* USER CODE END PTD */
-
+extern volatile uint32_t stream_frames_out;
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* USER CODE END PD */
@@ -127,23 +127,32 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t last = 0;
+  uint32_t last_tick = 0;
+
+  static uint32_t last_frames = 0;
+  static uint32_t last_time = 0;
+
   while (1)
   {
-    /* USER CODE END WHILE */
+      engine_tasklet_poll();
+      brick6_app_process();
 
-    /* USER CODE BEGIN 3 */
-	  engine_tasklet_poll();
-	  brick6_app_process();
-    //sd_tasklet_poll_bounded(SD_BUDGET_STEPS);
-	MX_USB_HOST_Process();
-    usb_host_tasklet_poll_bounded(4);
-    midi_host_poll_bounded(8);
-	  if(engine_tick_count != last)
-	      {
-	          last = engine_tick_count;
-	          ui_tasklet_poll();
-	      }
+      MX_USB_HOST_Process();
+      usb_host_tasklet_poll_bounded(4);
+      midi_host_poll_bounded(8);
+
+      if(engine_tick_count != last_tick)
+      {
+          last_tick = engine_tick_count;
+          ui_tasklet_poll();
+      }
+
+      if(HAL_GetTick() - last_time > 1000)
+      {
+          printf("frames/s = %lu\n", stream_frames_out - last_frames);
+          last_frames = stream_frames_out;
+          last_time = HAL_GetTick();
+      }
   }
 
   /* USER CODE END 3 */

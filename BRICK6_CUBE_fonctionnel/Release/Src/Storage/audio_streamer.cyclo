@@ -1,5 +1,5 @@
-../Src/Storage/audio_streamer.c:134:17:streamer_fill_ring.constprop.isra	23
-../Src/Storage/audio_streamer.c:235:6:audio_streamer_get_frame	6
-../Src/Storage/audio_streamer.c:350:6:audio_streamer_start	2
-../Src/Storage/audio_streamer.c:377:6:audio_streamer_process	14
-../Src/Storage/audio_streamer.c:424:6:audio_streamer_get_stats	2
+../Src/Storage/audio_streamer.c:135:17:streamer_fill_ring.constprop.isra	23
+../Src/Storage/audio_streamer.c:236:6:audio_streamer_get_frame	6
+../Src/Storage/audio_streamer.c:383:6:audio_streamer_start	2
+../Src/Storage/audio_streamer.c:410:6:audio_streamer_process	21
+../Src/Storage/audio_streamer.c:457:6:audio_streamer_get_stats	2

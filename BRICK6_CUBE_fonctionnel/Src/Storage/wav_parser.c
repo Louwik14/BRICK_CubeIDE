@@ -1,6 +1,8 @@
 #include "wav_parser.h"
-
 #include <string.h>
+
+#define WAV_FMT_PCM        1
+#define WAV_FMT_EXTENSIBLE 65534
 
 static uint16_t le16(const uint8_t *p)
 {
@@ -27,49 +29,50 @@ static bool wav_find_chunks(FIL *fp,
                             uint32_t *data_size)
 {
     uint8_t riff[12];
-    UINT br = 0U;
+    UINT br;
 
-    if((f_read(fp, riff, sizeof(riff), &br) != FR_OK) || (br != sizeof(riff)))
+    if((f_read(fp, riff, 12, &br) != FR_OK) || br != 12)
         return false;
 
-    if((memcmp(&riff[0], "RIFF", 4) != 0) || (memcmp(&riff[8], "WAVE", 4) != 0))
+    if(memcmp(&riff[0], "RIFF", 4) != 0 || memcmp(&riff[8], "WAVE", 4) != 0)
         return false;
 
-    *audio_format = 0U;
-    *channels = 0U;
-    *sample_rate = 0U;
-    *bits_per_sample = 0U;
-    *block_align = 0U;
-    *byte_rate = 0U;
-    *data_offset = 0U;
-    *data_size = 0U;
+    *audio_format = 0;
+    *channels = 0;
+    *sample_rate = 0;
+    *bits_per_sample = 0;
+    *block_align = 0;
+    *byte_rate = 0;
+    *data_offset = 0;
+    *data_size = 0;
 
-    while(f_tell(fp) + 8U <= f_size(fp))
+    while(f_tell(fp) + 8 <= f_size(fp))
     {
-        uint8_t chunk_header[8];
-        uint8_t fmt_buf[40];
+        uint8_t hdr[8];
         uint32_t chunk_size;
 
-        if((f_read(fp, chunk_header, sizeof(chunk_header), &br) != FR_OK) || (br != sizeof(chunk_header)))
+        if((f_read(fp, hdr, 8, &br) != FR_OK) || br != 8)
             return false;
 
-        chunk_size = le32(&chunk_header[4]);
+        chunk_size = le32(&hdr[4]);
 
-        if(memcmp(&chunk_header[0], "fmt ", 4) == 0)
+        if(memcmp(&hdr[0], "fmt ", 4) == 0)
         {
-            uint32_t to_read = (chunk_size < sizeof(fmt_buf)) ? chunk_size : (uint32_t)sizeof(fmt_buf);
-            if((f_read(fp, fmt_buf, to_read, &br) != FR_OK) || (br != to_read))
+            uint8_t fmt[40];
+            uint32_t to_read = chunk_size > sizeof(fmt) ? sizeof(fmt) : chunk_size;
+
+            if((f_read(fp, fmt, to_read, &br) != FR_OK) || br != to_read)
                 return false;
 
-            if(to_read < 16U)
+            if(to_read < 16)
                 return false;
 
-            *audio_format = le16(&fmt_buf[0]);
-            *channels = le16(&fmt_buf[2]);
-            *sample_rate = le32(&fmt_buf[4]);
-            *byte_rate = le32(&fmt_buf[8]);
-            *block_align = le16(&fmt_buf[12]);
-            *bits_per_sample = le16(&fmt_buf[14]);
+            *audio_format   = le16(&fmt[0]);
+            *channels       = le16(&fmt[2]);
+            *sample_rate    = le32(&fmt[4]);
+            *byte_rate      = le32(&fmt[8]);
+            *block_align    = le16(&fmt[12]);
+            *bits_per_sample= le16(&fmt[14]);
 
             if(chunk_size > to_read)
             {
@@ -77,10 +80,11 @@ static bool wav_find_chunks(FIL *fp,
                     return false;
             }
         }
-        else if(memcmp(&chunk_header[0], "data", 4) == 0)
+        else if(memcmp(&hdr[0], "data", 4) == 0)
         {
             *data_offset = f_tell(fp);
-            *data_size = chunk_size;
+            *data_size   = chunk_size;
+
             if(f_lseek(fp, f_tell(fp) + chunk_size) != FR_OK)
                 return false;
         }
@@ -90,28 +94,29 @@ static bool wav_find_chunks(FIL *fp,
                 return false;
         }
 
-        if((chunk_size & 1U) != 0U)
+        if(chunk_size & 1)
         {
-            if(f_lseek(fp, f_tell(fp) + 1U) != FR_OK)
+            if(f_lseek(fp, f_tell(fp) + 1) != FR_OK)
                 return false;
         }
 
-        if((*audio_format != 0U) && (*data_size != 0U))
+        if(*audio_format && *data_size)
             break;
     }
 
-    if(info != 0)
+    if(info)
     {
-        info->sample_rate = *sample_rate;
-        info->byte_rate = *byte_rate;
-        info->channels = *channels;
-        info->block_align = *block_align;
+        info->sample_rate     = *sample_rate;
+        info->byte_rate       = *byte_rate;
+        info->channels        = *channels;
+        info->block_align     = *block_align;
         info->bits_per_sample = *bits_per_sample;
-        info->data_offset = *data_offset;
-        info->data_size = *data_size;
+        info->data_offset     = *data_offset;
+        info->data_size       = *data_size;
     }
 
-    return (*audio_format != 0U) && (*data_size != 0U);
+    return (*audio_format == WAV_FMT_PCM ||
+            *audio_format == WAV_FMT_EXTENSIBLE);
 }
 
 bool wav_parser_parse_info(FIL *fp, wav_info_t *info)
@@ -125,15 +130,20 @@ bool wav_parser_parse_info(FIL *fp, wav_info_t *info)
     uint32_t data_offset;
     uint32_t data_size;
 
-    if(fp == 0)
+    if(!fp)
         return false;
 
-    if(f_lseek(fp, 0U) != FR_OK)
+    if(f_lseek(fp, 0) != FR_OK)
         return false;
 
-    if(!wav_find_chunks(fp, info, &audio_format, &channels, &sample_rate,
-                        &bits_per_sample, &block_align, &byte_rate, &data_offset, &data_size))
-        return false;
-
-    return (audio_format == 1U);
+    return wav_find_chunks(fp,
+                           info,
+                           &audio_format,
+                           &channels,
+                           &sample_rate,
+                           &bits_per_sample,
+                           &block_align,
+                           &byte_rate,
+                           &data_offset,
+                           &data_size);
 }

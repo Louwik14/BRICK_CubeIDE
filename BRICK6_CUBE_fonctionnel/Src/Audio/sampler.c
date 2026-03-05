@@ -9,8 +9,8 @@ void sample_voice_init(sample_voice_t *v)
         return;
 
     v->active = false;
-    v->gainL = 0.5f;
-    v->gainR = 0.5f;
+    v->gainL = 1.0f;
+    v->gainR = 1.0f;
     v->pos = 0U;
     v->length = 0U;
     v->data = 0;

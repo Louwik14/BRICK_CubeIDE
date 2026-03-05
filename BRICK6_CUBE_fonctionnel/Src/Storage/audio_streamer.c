@@ -22,6 +22,7 @@
 #define STREAM_LOG(...)
 #endif
 
+volatile uint32_t stream_frames_out = 0;
 
 static AUDIO_COLD_SDRAM float stream_ring[STREAM_RING_SAMPLES];
 
@@ -234,6 +235,7 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 
 void audio_streamer_get_frame(float *L, float *R)
 {
+
     audio_streamer_t *s = &g_streamer;
 
     float outL = g_last_out_l;
@@ -247,7 +249,7 @@ void audio_streamer_get_frame(float *L, float *R)
 
             outL = stream_ring[idx];
             outR = stream_ring[idx + 1U];
-
+            stream_frames_out++;   // <-- ajoute cette ligne
             g_last_out_l = outL;
             g_last_out_r = outR;
 
@@ -255,7 +257,7 @@ void audio_streamer_get_frame(float *L, float *R)
         }
         else
         {
-            s->underrun_count++;
+            printf("EMPTY\n");
 
             STREAM_LOG("[UNDERRUN] r=%lu w=%lu\n",
                        (unsigned long)s->read_pos,
@@ -302,6 +304,13 @@ static bool streamer_prepare_start(audio_streamer_t *s)
         STREAM_LOG("[STREAM] invalid wav\n");
         return false;
     }
+
+    STREAM_LOG("WAV info: sr=%lu ch=%u bits=%u align=%u byte_rate=%lu\n",
+               (unsigned long)info.sample_rate,
+               (unsigned)info.channels,
+               (unsigned)info.bits_per_sample,
+               (unsigned)info.block_align,
+               (unsigned long)info.byte_rate);
 
     uint32_t file_size = f_size(&fp_meta);
     f_close(&fp_meta);
