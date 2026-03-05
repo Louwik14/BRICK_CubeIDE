@@ -147,77 +147,70 @@ while(frames_written < max_frames)
     if((space_frames < STREAM_IO_FRAMES) || (frames_left < STREAM_IO_FRAMES))
         break;
 
-    uint32_t filled = 0U;
-
-    while(filled < io_bytes)
+    if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
     {
-        if((s->data_size != 0U) && (s->file_data_pos >= s->data_size))
-        {
-            STREAM_LOG(
-            "[STREAM LOOP] pos=%lu size=%lu left=%lu\n",
-            (unsigned long)s->file_data_pos,
-            (unsigned long)s->data_size,
-            (unsigned long)(s->data_size - s->file_data_pos)
-            );
-            STREAM_LOG("[STREAM LOOP] bytes_per_frame=%lu\n", (unsigned long)bytes_per_frame);
-
-            if(!streamer_seek_to_data_start(s))
-                return frames_written;
-            continue;
-        }
-
-        uint32_t bytes_left_in_file = s->data_size - s->file_data_pos;
-        uint32_t read_bytes = io_bytes - filled;
-
-        if(read_bytes > bytes_left_in_file)
-            read_bytes = bytes_left_in_file;
-
-        read_bytes -= (read_bytes % bytes_per_frame);
-
-        if(read_bytes == 0U)
-        {
-            STREAM_LOG(
-            "[STREAM LOOP] pos=%lu size=%lu left=%lu\n",
-            (unsigned long)s->file_data_pos,
-            (unsigned long)s->data_size,
-            (unsigned long)(s->data_size - s->file_data_pos)
-            );
-            STREAM_LOG("[STREAM LOOP] bytes_per_frame=%lu read_bytes=%lu\n",
-                       (unsigned long)bytes_per_frame,
-                       (unsigned long)read_bytes);
-
-            if(!streamer_seek_to_data_start(s))
-                return frames_written;
-            continue;
-        }
-
-        uint32_t bytes_read = 0U;
-        if(!streamer_read_bytes(s, &io_buf[filled], read_bytes, &bytes_read))
-            return frames_written;
-
         STREAM_LOG(
-        "[STREAM READ] req=%lu br=%lu pos=%lu\n",
-        (unsigned long)read_bytes,
-        (unsigned long)bytes_read,
-        (unsigned long)s->file_data_pos
+        "[STREAM LOOP] pos=%lu size=%lu left=%lu\n",
+        (unsigned long)s->file_data_pos,
+        (unsigned long)s->data_size,
+        (unsigned long)(s->data_size - s->file_data_pos)
         );
-        STREAM_LOG("[STREAM READ] left=%lu bpf=%lu\n",
-                   (unsigned long)(s->data_size - s->file_data_pos),
-                   (unsigned long)bytes_per_frame);
+        STREAM_LOG("[STREAM LOOP] bytes_per_frame=%lu\n", (unsigned long)bytes_per_frame);
 
-        if((bytes_read == 0U) || ((bytes_read % bytes_per_frame) != 0U))
-        {
-            STREAM_LOG("[STREAM] misaligned read br=%lu frame=%lu\r\n",
-                       (unsigned long)bytes_read,
-                       (unsigned long)bytes_per_frame);
-            s->error = 1U;
+        if(!streamer_seek_to_data_start(s))
             return frames_written;
-        }
-
-        filled += bytes_read;
+        continue;
     }
 
-    uint32_t ready_frames = filled / bytes_per_frame;
+    uint32_t bytes_left = s->data_size - s->file_data_pos;
+    uint32_t read_bytes = io_bytes;
+
+    if(read_bytes > bytes_left)
+        read_bytes = bytes_left;
+
+    read_bytes -= (read_bytes % bytes_per_frame);
+
+    if(read_bytes == 0U)
+    {
+        STREAM_LOG(
+        "[STREAM LOOP] pos=%lu size=%lu left=%lu\n",
+        (unsigned long)s->file_data_pos,
+        (unsigned long)s->data_size,
+        (unsigned long)(s->data_size - s->file_data_pos)
+        );
+        STREAM_LOG("[STREAM LOOP] bytes_per_frame=%lu read_bytes=%lu\n",
+                   (unsigned long)bytes_per_frame,
+                   (unsigned long)read_bytes);
+
+        if(!streamer_seek_to_data_start(s))
+            return frames_written;
+        continue;
+    }
+
+    uint32_t bytes_read = 0U;
+    if(!streamer_read_bytes(s, io_buf, read_bytes, &bytes_read))
+        return frames_written;
+
+    STREAM_LOG(
+    "[STREAM READ] req=%lu br=%lu pos=%lu\n",
+    (unsigned long)read_bytes,
+    (unsigned long)bytes_read,
+    (unsigned long)s->file_data_pos
+    );
+    STREAM_LOG("[STREAM READ] left=%lu bpf=%lu\n",
+               (unsigned long)(s->data_size - s->file_data_pos),
+               (unsigned long)bytes_per_frame);
+
+    if((bytes_read == 0U) || ((bytes_read % bytes_per_frame) != 0U))
+    {
+        STREAM_LOG("[STREAM] misaligned read br=%lu frame=%lu\r\n",
+                   (unsigned long)bytes_read,
+                   (unsigned long)bytes_per_frame);
+        s->error = 1U;
+        return frames_written;
+    }
+
+    uint32_t ready_frames = bytes_read / bytes_per_frame;
 
     for(uint32_t i = 0U; i < ready_frames; i++)
     {
