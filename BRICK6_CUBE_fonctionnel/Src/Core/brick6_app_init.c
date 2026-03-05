@@ -28,6 +28,7 @@
 #include "sampler.h"
 #include "brick6_debug_uart.h"
 #include "ff.h"
+#include "bsp_driver_sd.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -37,6 +38,58 @@ static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
 static FATFS g_app_fatfs;
 extern volatile uint32_t audio_underrun_count;
+
+static const char* fatfs_result_to_str(FRESULT fr)
+{
+    switch(fr)
+    {
+        case FR_OK: return "FR_OK";
+        case FR_DISK_ERR: return "FR_DISK_ERR";
+        case FR_INT_ERR: return "FR_INT_ERR";
+        case FR_NOT_READY: return "FR_NOT_READY";
+        case FR_NO_FILE: return "FR_NO_FILE";
+        case FR_NO_PATH: return "FR_NO_PATH";
+        case FR_INVALID_NAME: return "FR_INVALID_NAME";
+        case FR_DENIED: return "FR_DENIED";
+        case FR_EXIST: return "FR_EXIST";
+        case FR_INVALID_OBJECT: return "FR_INVALID_OBJECT";
+        case FR_WRITE_PROTECTED: return "FR_WRITE_PROTECTED";
+        case FR_INVALID_DRIVE: return "FR_INVALID_DRIVE";
+        case FR_NOT_ENABLED: return "FR_NOT_ENABLED";
+        case FR_NO_FILESYSTEM: return "FR_NO_FILESYSTEM";
+        case FR_MKFS_ABORTED: return "FR_MKFS_ABORTED";
+        case FR_TIMEOUT: return "FR_TIMEOUT";
+        case FR_LOCKED: return "FR_LOCKED";
+        case FR_NOT_ENOUGH_CORE: return "FR_NOT_ENOUGH_CORE";
+        case FR_TOO_MANY_OPEN_FILES: return "FR_TOO_MANY_OPEN_FILES";
+        case FR_INVALID_PARAMETER: return "FR_INVALID_PARAMETER";
+        default: return "FR_UNKNOWN";
+    }
+}
+
+static FRESULT mount_sd_with_retry(FATFS *fs)
+{
+    FRESULT fr = FR_NOT_READY;
+
+    for(uint32_t attempt = 1U; attempt <= 3U; ++attempt)
+    {
+        /* Give the card some time after power-up/reset before probing it. */
+        HAL_Delay(20U);
+        fr = f_mount(fs, "0:", 1U);
+        if(fr == FR_OK)
+        {
+            return FR_OK;
+        }
+
+        DBG("[FS] f_mount attempt %lu failed: %s (%d), sd_state=0x%02X\r\n",
+            (unsigned long)attempt,
+            fatfs_result_to_str(fr),
+            (int)fr,
+            (unsigned)BSP_SD_GetCardState());
+    }
+
+    return fr;
+}
 
 /* ============================================================
    UART DEBUG (hardcoded)
@@ -136,7 +189,7 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
-    if(f_mount(&g_app_fatfs, "0:", 1U) != FR_OK)
+    if(mount_sd_with_retry(&g_app_fatfs) != FR_OK)
     {
         DBG("[FS] mount failed\r\n");
     }
