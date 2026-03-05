@@ -5,7 +5,7 @@
 
 #include "memory_layout.h"
 #include "stm32h7xx_hal.h"
-#include "wav_loader.h"
+#include "wav_parser.h"
 
 #define STREAM_BUFFER_FRAMES (4096U)
 #define STREAM_BUFFER_SAMPLES (STREAM_BUFFER_FRAMES * 2U)
@@ -167,7 +167,7 @@ static bool streamer_prepare_start(audio_streamer_t *s)
         return false;
     }
 
-    if(!wav_loader_parse_info(&fp_meta, &info))
+    if(!wav_parser_parse_info(&fp_meta, &info))
     {
         (void)f_close(&fp_meta);
         printf("[STREAM] invalid WAV header\r\n");
