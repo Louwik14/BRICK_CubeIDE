@@ -401,6 +401,7 @@
 "./Src/Param/control_events.o"
 "./Src/Param/control_router.o"
 "./Src/Param/param_store.o"
+"./Src/Storage/audio_streamer.o"
 "./Src/Storage/wav_loader.o"
 "./Src/UI/font.o"
 "./Src/UI/font4x6.o"

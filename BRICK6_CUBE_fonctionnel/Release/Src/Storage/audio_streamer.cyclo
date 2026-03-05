@@ -1,0 +1,5 @@
+../Src/Storage/audio_streamer.c:116:17:streamer_fill_buffer	20
+../Src/Storage/audio_streamer.c:256:6:audio_streamer_start	4
+../Src/Storage/audio_streamer.c:307:6:audio_streamer_process	18
+../Src/Storage/audio_streamer.c:342:6:audio_streamer_get_frame	13
+../Src/Storage/audio_streamer.c:389:6:audio_streamer_get_stats	2
