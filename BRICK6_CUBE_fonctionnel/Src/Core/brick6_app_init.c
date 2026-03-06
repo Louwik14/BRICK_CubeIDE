@@ -25,8 +25,7 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
-#include "Streaming/stream_manager.h"
-#include "App/app_sample_boot.h"
+#include "Sampler/voice_manager.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -34,7 +33,6 @@
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
 
-static float g_stream_gain = 0.1f;   // volume du sample
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 
 /* ============================================================
@@ -95,15 +93,10 @@ static void my_dsp(StereoTrack *tracks,
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
+        voice_manager_process(tracks[0].L, tracks[0].R, frames);
+
         for(uint32_t i = 0U; i < frames; i++)
         {
-            float sl;
-            float sr;
-            stream_manager_get_frame(&sl, &sr);
-
-            tracks[0].L[i] += sl * g_stream_gain;
-            tracks[0].R[i] += sr * g_stream_gain;
-
             float l = tracks[0].L[i] * g_master_gain;
             float r = tracks[0].R[i] * g_master_gain;
 
@@ -148,9 +141,13 @@ void brick6_app_init(void)
 
     audio_tracks_init();
 
-    DBG("[STREAM] init\r\n");
+    DBG("[VOICE] init\r\n");
+    voice_manager_init();
 
-    app_sample_boot_init();
+    /* Phase 3 smoke-test: retrigger same attack cache on several voices. */
+    voice_manager_trigger(0U, 0.20f, 0.20f);
+    voice_manager_trigger(0U, 0.15f, 0.15f);
+    voice_manager_trigger(0U, 0.10f, 0.10f);
 
     mixer_set_master(2.0f);
 
@@ -179,7 +176,6 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     g_brick6_app_process_call_count++;
-    stream_manager_process();
 }
 
 void brick6_app_get_stats(brick6_app_stats_t *out_stats)
