@@ -32,6 +32,7 @@ typedef struct
     uint32_t file_data_pos;
 
     /* playback state */
+    /* read_pos/write_pos are ring positions in STEREO FRAMES (not samples). */
     volatile uint32_t read_pos;
     volatile uint32_t write_pos;
     volatile uint8_t running;
@@ -43,14 +44,47 @@ typedef struct
 
     /* statistics */
     volatile uint32_t underrun_count;
-    volatile uint32_t sd_read_time_max;
+    volatile uint32_t ring_level_min_frames;
+    volatile uint32_t ring_level_max_frames;
+    volatile uint32_t total_frames_read_from_ring;
+    volatile uint32_t total_frames_filled_from_sd;
+    volatile uint32_t total_bytes_read_from_sd;
+    volatile uint32_t sd_read_time_max_ms;
+    volatile uint32_t refill_time_max_ms;
+    volatile uint32_t total_refills;
+    volatile uint32_t total_refill_time_ms;
+    volatile uint32_t file_restart_count;
+    volatile uint32_t partial_read_count;
+    volatile uint32_t ring_overflow_detect_count;
+    volatile uint32_t ring_underflow_logic_count;
+    volatile uint32_t ring_incoherence_count;
+    volatile uint32_t pos_oob_count;
+    volatile uint32_t last_refill_bytes;
+    volatile uint32_t last_refill_frames;
 
 } audio_streamer_t;
 
 typedef struct
 {
     uint32_t underrun_count;
-    uint32_t sd_read_time_max;
+    uint32_t ring_level_min_frames;
+    uint32_t ring_level_max_frames;
+    uint32_t ring_used_frames;
+    uint32_t total_frames_read_from_ring;
+    uint32_t total_frames_filled_from_sd;
+    uint32_t total_bytes_read_from_sd;
+    uint32_t sd_read_time_max_ms;
+    uint32_t refill_time_max_ms;
+    uint32_t total_refills;
+    uint32_t total_refill_time_ms;
+    uint32_t file_restart_count;
+    uint32_t partial_read_count;
+    uint32_t ring_overflow_detect_count;
+    uint32_t ring_underflow_logic_count;
+    uint32_t ring_incoherence_count;
+    uint32_t pos_oob_count;
+    uint32_t last_refill_bytes;
+    uint32_t last_refill_frames;
 } audio_streamer_stats_t;
 
 bool audio_streamer_start(const char *path);

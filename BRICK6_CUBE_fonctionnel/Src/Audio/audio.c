@@ -13,8 +13,8 @@
  *
  * Contraintes temps réel:
  * - Le traitement audio est exécuté dans les callbacks IRQ DMA RX.
- * - Taille bloc temps réel: AUDIO_FRAMES_PER_HALF frames (32 ici).
- * - À 48 kHz, budget par half-buffer ≈ 32 / 48000 s = 666.7 µs.
+ * - Taille bloc temps réel: AUDIO_FRAMES_PER_HALF frames (64 ici).
+ * - À 48 kHz, budget par half-buffer ≈ 64 / 48000 s = 1.33 ms.
  * - Aucun malloc/printf/HAL bloquant dans le chemin IRQ.
  */
 

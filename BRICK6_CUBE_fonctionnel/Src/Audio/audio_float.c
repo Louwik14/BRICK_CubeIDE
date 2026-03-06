@@ -220,6 +220,7 @@ void audio_float_set_bus_comp_auto_makeup(uint8_t enabled)
 static StereoTrack tracks[MAX_TRACKS] __attribute__((aligned(32)));
 
 volatile uint32_t g_audio_block_counter = 0U;
+volatile uint32_t g_audio_dsp_frames_counter = 0U;
 
 /* Gain master global (après somme des tracks). */
 static AUDIO_HOT float master_gain = 1.0f;
@@ -339,6 +340,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                uint32_t frames)
 {
     g_audio_block_counter++;
+    g_audio_dsp_frames_counter += frames;
 
 #define CONTROL_EVT_BUDGET 8U
     control_event_t evt;
@@ -359,4 +361,13 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                   tracks[1].R,
                   frames,
                   output_adjust * master_gain);
+}
+
+void audio_debug_get_stats(audio_debug_stats_t *out_stats)
+{
+    if(out_stats == NULL)
+        return;
+
+    out_stats->audio_block_counter = g_audio_block_counter;
+    out_stats->dsp_frames_counter = g_audio_dsp_frames_counter;
 }

@@ -15,6 +15,7 @@
 #define STREAM_IO_FRAMES (4096U)
 
 #define STREAM_DEBUG 1
+#define STREAM_ASSERT_DEBUG 1
 
 #if STREAM_DEBUG
 #define STREAM_LOG(...) printf(__VA_ARGS__)
@@ -30,7 +31,6 @@ static audio_streamer_t g_streamer;
 
 static float g_last_out_l = 0.0f;
 static float g_last_out_r = 0.0f;
-
 
 static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
@@ -54,6 +54,34 @@ static uint32_t streamer_ring_space_frames(const audio_streamer_t *s)
     return r - w - 1U;
 }
 
+static void streamer_debug_check_ring(audio_streamer_t *s)
+{
+#if STREAM_ASSERT_DEBUG
+    if((s->read_pos >= STREAM_RING_FRAMES) ||
+       (s->write_pos >= STREAM_RING_FRAMES))
+    {
+        s->pos_oob_count++;
+        s->read_pos %= STREAM_RING_FRAMES;
+        s->write_pos %= STREAM_RING_FRAMES;
+    }
+
+    const uint32_t used = streamer_ring_used_frames(s);
+    const uint32_t space = streamer_ring_space_frames(s);
+
+    if((used + space + 1U) != STREAM_RING_FRAMES)
+    {
+        s->ring_incoherence_count++;
+    }
+#endif
+
+    const uint32_t used_after = streamer_ring_used_frames(s);
+
+    if(used_after < s->ring_level_min_frames)
+        s->ring_level_min_frames = used_after;
+
+    if(used_after > s->ring_level_max_frames)
+        s->ring_level_max_frames = used_after;
+}
 
 static float pcm24_to_float(const uint8_t *p)
 {
@@ -67,7 +95,6 @@ static float pcm24_to_float(const uint8_t *p)
     return (float)v * (1.0f / 8388608.0f);
 }
 
-
 static float pcm32_to_float(const uint8_t *p)
 {
     int32_t v = (int32_t)((uint32_t)p[0] |
@@ -78,9 +105,7 @@ static float pcm32_to_float(const uint8_t *p)
     return (float)v * (1.0f / 2147483648.0f);
 }
 
-
 #if AUDIO_STREAMER_HAS_FATFS
-
 
 static bool streamer_read_bytes(audio_streamer_t *s,
                                 uint8_t *dst,
@@ -88,8 +113,13 @@ static bool streamer_read_bytes(audio_streamer_t *s,
                                 uint32_t *out_bytes_read)
 {
     UINT br = 0U;
+    const uint32_t t0 = HAL_GetTick();
 
     FRESULT fr = f_read(&s->fp, dst, bytes, &br);
+
+    const uint32_t dt = HAL_GetTick() - t0;
+    if(dt > s->sd_read_time_max_ms)
+        s->sd_read_time_max_ms = dt;
 
     if(fr != FR_OK)
     {
@@ -102,6 +132,9 @@ static bool streamer_read_bytes(audio_streamer_t *s,
         return false;
     }
 
+    if(((uint32_t)br) != bytes)
+        s->partial_read_count++;
+
     s->file_data_pos += (uint32_t)br;
 
     if(out_bytes_read)
@@ -109,7 +142,6 @@ static bool streamer_read_bytes(audio_streamer_t *s,
 
     return true;
 }
-
 
 static bool streamer_seek_to_data_start(audio_streamer_t *s)
 {
@@ -126,11 +158,10 @@ static bool streamer_seek_to_data_start(audio_streamer_t *s)
     }
 
     s->file_data_pos = 0U;
+    s->file_restart_count++;
 
     return true;
 }
-
-
 
 static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 {
@@ -138,9 +169,13 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
 
     uint32_t frames_written = 0U;
     uint32_t bytes_per_frame = s->bytes_per_frame;
+    const uint32_t refill_t0 = HAL_GetTick();
+    uint32_t refill_bytes = 0U;
 
     while(frames_written < max_frames)
     {
+        streamer_debug_check_ring(s);
+
         uint32_t space_frames = streamer_ring_space_frames(s);
         uint32_t frames_left  = max_frames - frames_written;
 
@@ -212,10 +247,10 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
                 r = pcm32_to_float(&frame[4]);
             }
 
-            uint32_t idx = wp * 2U;
+            const uint32_t idx = wp * 2U;
 
             stream_ring[idx]     = l;
-            stream_ring[idx + 1] = r;
+            stream_ring[idx + 1U] = r;
 
             wp = (wp + 1U) % STREAM_RING_FRAMES;
         }
@@ -224,18 +259,38 @@ static uint32_t streamer_fill_ring(audio_streamer_t *s, uint32_t max_frames)
         s->write_pos = wp;
 
         frames_written += ready_frames;
+        refill_bytes += bytes_read;
+
+        s->total_bytes_read_from_sd += bytes_read;
+        s->total_frames_filled_from_sd += ready_frames;
+
+#if STREAM_ASSERT_DEBUG
+        if(ready_frames > space_frames)
+            s->ring_overflow_detect_count++;
+#endif
     }
+
+    const uint32_t refill_dt = HAL_GetTick() - refill_t0;
+    s->last_refill_bytes = refill_bytes;
+    s->last_refill_frames = frames_written;
+
+    if((frames_written > 0U) || (refill_bytes > 0U))
+    {
+        s->total_refills++;
+        s->total_refill_time_ms += refill_dt;
+        if(refill_dt > s->refill_time_max_ms)
+            s->refill_time_max_ms = refill_dt;
+    }
+
+    streamer_debug_check_ring(s);
 
     return frames_written;
 }
 
 #endif
 
-
-
 void audio_streamer_get_frame(float *L, float *R)
 {
-
     audio_streamer_t *s = &g_streamer;
 
     float outL = g_last_out_l;
@@ -243,32 +298,40 @@ void audio_streamer_get_frame(float *L, float *R)
 
     if((s->running != 0U) && (s->error == 0U))
     {
-    	if(streamer_ring_used_frames(s) >= 2U)
+        const uint32_t used_before = streamer_ring_used_frames(s);
+
+        if(used_before >= 2U)
         {
-        	uint32_t idx = s->read_pos * 2U;
+            const uint32_t idx = s->read_pos * 2U;
 
-        	outL = stream_ring[idx];
-        	outR = stream_ring[idx + 1U];
+            outL = stream_ring[idx];
+            outR = stream_ring[idx + 1U];
 
-        	/* advance 2 frames because DSP runs at half rate */
-        	s->read_pos = (s->read_pos + 2U) % STREAM_RING_FRAMES;
-
+            /* Historical behavior kept intentionally:
+             * consumer advances by 2 stereo frames per DSP frame. */
+            s->read_pos = (s->read_pos + 2U) % STREAM_RING_FRAMES;
+            s->total_frames_read_from_ring += 2U;
+            stream_frames_out += 2U;
         }
         else
         {
-            printf("EMPTY\n");
+            s->underrun_count++;
+#if STREAM_ASSERT_DEBUG
+            if(used_before == 0U)
+                s->ring_underflow_logic_count++;
+#endif
 
-            STREAM_LOG("[UNDERRUN] r=%lu w=%lu\n",
-                       (unsigned long)s->read_pos,
-                       (unsigned long)s->write_pos);
         }
+
+        streamer_debug_check_ring(s);
     }
+
+    g_last_out_l = outL;
+    g_last_out_r = outR;
 
     if(L) *L = outL;
     if(R) *R = outR;
 }
-
-
 
 static bool streamer_prepare_start(audio_streamer_t *s)
 {
@@ -367,7 +430,7 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     if(!streamer_seek_to_data_start(s))
         return false;
 
-    streamer_fill_ring(s, STREAM_PREFILL_TARGET_FRAMES);
+    (void)streamer_fill_ring(s, STREAM_PREFILL_TARGET_FRAMES);
 
     s->running = 1U;
     s->start_pending = 0U;
@@ -377,14 +440,13 @@ static bool streamer_prepare_start(audio_streamer_t *s)
     return true;
 }
 
-
-
 bool audio_streamer_start(const char *path)
 {
     audio_streamer_t *s = &g_streamer;
 
     memset(stream_ring, 0, sizeof(stream_ring));
     memset(s, 0, sizeof(*s));
+    s->ring_level_min_frames = STREAM_RING_FRAMES;
 
 #if AUDIO_STREAMER_HAS_FATFS
 
@@ -404,14 +466,9 @@ bool audio_streamer_start(const char *path)
 #endif
 }
 
-
-
 void audio_streamer_process(void)
 {
 #if AUDIO_STREAMER_HAS_FATFS
-
-    static uint32_t last_log_tick = 0U;
-
     audio_streamer_t *s = &g_streamer;
 
     if(s->start_pending != 0U)
@@ -427,31 +484,12 @@ void audio_streamer_process(void)
     if((s->running == 0U) || (s->error != 0U))
         return;
 
+    streamer_debug_check_ring(s);
+
     if(streamer_ring_used_frames(s) < STREAM_REFILL_THRESHOLD_FRAMES)
-    {
-        streamer_fill_ring(s, STREAM_IO_FRAMES);
-    }
-
-    if((HAL_GetTick() - last_log_tick) >= 1000U)
-    {
-        last_log_tick = HAL_GetTick();
-
-        STREAM_LOG("[STREAM STATE]\n");
-        STREAM_LOG("ring=%lu/%u\n",
-                   streamer_ring_used_frames(s),
-                   STREAM_RING_FRAMES);
-
-        STREAM_LOG("file_pos=%lu\n",
-                   (unsigned long)s->file_data_pos);
-
-        STREAM_LOG("underruns=%lu\n\n",
-                   (unsigned long)s->underrun_count);
-    }
-
+        (void)streamer_fill_ring(s, STREAM_IO_FRAMES);
 #endif
 }
-
-
 
 void audio_streamer_get_stats(audio_streamer_stats_t *out_stats)
 {
@@ -459,5 +497,22 @@ void audio_streamer_get_stats(audio_streamer_stats_t *out_stats)
         return;
 
     out_stats->underrun_count = g_streamer.underrun_count;
-    out_stats->sd_read_time_max = g_streamer.sd_read_time_max;
+    out_stats->ring_level_min_frames = g_streamer.ring_level_min_frames;
+    out_stats->ring_level_max_frames = g_streamer.ring_level_max_frames;
+    out_stats->ring_used_frames = streamer_ring_used_frames(&g_streamer);
+    out_stats->total_frames_read_from_ring = g_streamer.total_frames_read_from_ring;
+    out_stats->total_frames_filled_from_sd = g_streamer.total_frames_filled_from_sd;
+    out_stats->total_bytes_read_from_sd = g_streamer.total_bytes_read_from_sd;
+    out_stats->sd_read_time_max_ms = g_streamer.sd_read_time_max_ms;
+    out_stats->refill_time_max_ms = g_streamer.refill_time_max_ms;
+    out_stats->total_refills = g_streamer.total_refills;
+    out_stats->total_refill_time_ms = g_streamer.total_refill_time_ms;
+    out_stats->file_restart_count = g_streamer.file_restart_count;
+    out_stats->partial_read_count = g_streamer.partial_read_count;
+    out_stats->ring_overflow_detect_count = g_streamer.ring_overflow_detect_count;
+    out_stats->ring_underflow_logic_count = g_streamer.ring_underflow_logic_count;
+    out_stats->ring_incoherence_count = g_streamer.ring_incoherence_count;
+    out_stats->pos_oob_count = g_streamer.pos_oob_count;
+    out_stats->last_refill_bytes = g_streamer.last_refill_bytes;
+    out_stats->last_refill_frames = g_streamer.last_refill_frames;
 }
