@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_pool.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,6 +17,7 @@ typedef enum
 typedef struct
 {
     uint16_t sample_id;
+    const sample_desc_t *sample;
 
     uint32_t position;
 
