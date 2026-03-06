@@ -11,6 +11,7 @@
 
 typedef struct
 {
+    uint16_t audio_format;
     uint32_t sample_rate;
     uint32_t byte_rate;
     uint16_t channels;

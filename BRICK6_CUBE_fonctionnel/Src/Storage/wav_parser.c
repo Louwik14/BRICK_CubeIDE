@@ -106,6 +106,7 @@ static bool wav_find_chunks(FIL *fp,
 
     if(info)
     {
+        info->audio_format   = *audio_format;
         info->sample_rate     = *sample_rate;
         info->byte_rate       = *byte_rate;
         info->channels        = *channels;

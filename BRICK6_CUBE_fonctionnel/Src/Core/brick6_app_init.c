@@ -35,6 +35,7 @@ static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
 
 static float g_stream_gain = 0.1f;   // volume du sample
+static volatile uint32_t g_brick6_app_process_call_count = 0U;
 
 /* ============================================================
    UART DEBUG (hardcoded)
@@ -177,5 +178,14 @@ void brick6_app_init(void)
 
 void brick6_app_process(void)
 {
+    g_brick6_app_process_call_count++;
     stream_manager_process();
+}
+
+void brick6_app_get_stats(brick6_app_stats_t *out_stats)
+{
+    if(out_stats == NULL)
+        return;
+
+    out_stats->app_process_call_count = g_brick6_app_process_call_count;
 }
