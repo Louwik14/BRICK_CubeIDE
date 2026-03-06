@@ -59,6 +59,7 @@ Src/Audio \
 Src/Core \
 Src/MIDI \
 Src/Param \
+Src/Sampler \
 Src/Storage \
 Src/Streaming \
 Src/UI \
