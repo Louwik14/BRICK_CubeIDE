@@ -95,8 +95,10 @@ typedef struct
 } audio_streamer_stats_t;
 
 bool audio_streamer_start(uint8_t streamer_id, const char *path, uint32_t start_frame);
+bool audio_streamer_seek_frame(uint8_t streamer_id, uint32_t frame);
 void audio_streamer_stop(uint8_t streamer_id);
 void audio_streamer_process(uint8_t streamer_id);
 void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R);
 void audio_streamer_get_stats(uint8_t streamer_id, audio_streamer_stats_t *out_stats);
 bool audio_streamer_is_healthy(uint8_t streamer_id);
+bool audio_streamer_is_running(uint8_t streamer_id);

@@ -441,6 +441,38 @@ static bool streamer_prepare_start(audio_streamer_t *s, uint8_t streamer_id)
 #endif
 }
 
+bool audio_streamer_seek_frame(uint8_t streamer_id, uint32_t frame)
+{
+    if(!streamer_id_valid(streamer_id))
+        return false;
+
+    audio_streamer_t *s = &g_streamers[streamer_id];
+
+#if AUDIO_STREAMER_HAS_FATFS
+    if((s->running == 0U) || (s->file_open == 0U) || (s->error != 0U))
+        return false;
+
+    if(s->bytes_per_frame == 0U)
+        return false;
+
+    const uint32_t total_frames = s->data_size / s->bytes_per_frame;
+    if(frame >= total_frames)
+        return false;
+
+    const uint32_t frame_offset_bytes = frame * s->bytes_per_frame;
+    const uint32_t seek_offset = s->data_offset + frame_offset_bytes;
+
+    if(f_lseek(&s->fp, seek_offset) != FR_OK)
+        return false;
+
+    s->file_data_pos = frame_offset_bytes;
+    return true;
+#else
+    (void)frame;
+    return false;
+#endif
+}
+
 bool audio_streamer_start(uint8_t streamer_id, const char *path, uint32_t start_frame)
 {
     if(!streamer_id_valid(streamer_id) || (path == NULL))

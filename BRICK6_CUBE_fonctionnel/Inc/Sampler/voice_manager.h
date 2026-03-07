@@ -32,7 +32,6 @@ typedef struct
     uint32_t loop_end_frame;
 
     uint8_t seek_pending;
-    uint8_t seek_restart_pending;
     uint32_t seek_target_frame;
 
     voice_state_t state;
