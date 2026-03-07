@@ -161,7 +161,7 @@ void brick6_app_init(void)
     DBG("[SAMPLE_POOL] init\r\n");
     sample_pool_init();
 
-    if(sample_pool_load(0, "0:/La ritournelle.wav"))
+    if(sample_pool_load(0, "0:/Drum.wav"))
         DBG("[SAMPLE_POOL] sample loaded\r\n");
     else
         DBG("[SAMPLE_POOL] load FAILED\r\n");

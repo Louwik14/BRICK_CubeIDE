@@ -21,7 +21,7 @@ Il fixe une architecture cible réaliste, robuste et exploitable sur **STM32H743
 Construire un sampler avec les caractéristiques suivantes :
 
 - jusqu’à **576 samples** dans un projet,
-- jusqu’à **24 voices simultanées**,
+- jusqu’à **16 voices simultanées**,
 - lecture **WAV stéréo 48 kHz**,
 - DSP **float**, traitement **block-based**,
 - streaming depuis **carte SD** via **FATFS**,
@@ -36,7 +36,7 @@ Construire un sampler avec les caractéristiques suivantes :
 - **Streaming uniquement dans la superloop**
 - **Producteur disque / consommateur DSP**
 - **Architecture déterministe**
-- **Compatibilité avec 24 voices sans tempête de lectures SD**
+- **Compatibilité avec 16 voices dans une architecture orientée pads**
 
 ---
 
@@ -138,8 +138,9 @@ C’est une très bonne base pour évoluer vers un sampler streaming.
 Il manque encore :
 
 - un **sample pool** de 576 entrées,
-- un **voice manager** 24 voices,
-- un **pool de streamers** (jusqu’à 24),
+- une **couche pads** (16 pads) portant les paramètres de lecture,
+- un **voice manager** 16 voices,
+- un **pool de streamers** (jusqu’à 16),
 - un **scheduler SD unique**,
 - une gestion explicite **ATTACK → STREAM**,
 - une discipline stricte sur les **unités des ring buffers**,
@@ -159,14 +160,22 @@ Sample pool (576)
     ├─ attack cache RAM (~20 ms)
     └─ infos de lecture
 
-Voices (24 max)
+Pads (16)
+    ├─ sample_id
+    ├─ launch_mode
+    ├─ loop_mode
+    ├─ loop_start / loop_end
+    ├─ gain / pan
+    └─ poly_mode
+
+Voices (16 max)
+    ├─ pad_id
     ├─ sample_id
     ├─ playback_position
-    ├─ gain
     ├─ state = ATTACK / STREAM
     └─ streamer_id
 
-Streamers (24 max)
+Streamers (16 max)
     ├─ ring buffer
     ├─ FIL
     ├─ read_pos / write_pos
@@ -189,8 +198,9 @@ DSP callback (IRQ audio)
 ## 4.2 Principe général
 
 - **Chaque sample du projet** possède une **attaque préchargée en RAM**.
-- **Chaque voice active** joue d’abord l’attaque RAM.
-- Ensuite la voice bascule sur un **streamer disque**.
+- **Chaque pad** référence un sample et porte les **paramètres de lecture** inspirés de la Blackbox : loop, launch, start/end de boucle, gain/pan, poly mode.
+- **Chaque trigger de pad** alloue une **voice** dans un pool global de 16 voices.
+- **Chaque voice active** joue d’abord l’attaque RAM, puis bascule sur un **streamer disque**.
 - Le streamer lit le WAV séquentiellement depuis la SD dans un **ring buffer**.
 - Le DSP ne lit **jamais** directement la SD.
 
@@ -198,7 +208,42 @@ DSP callback (IRQ audio)
 
 # 5. Décisions d’architecture finales
 
-## 5.1 Attack cache pour les 576 samples
+## 5.1 Architecture sample-centric → pad-centric
+
+Décision retenue :
+
+- le moteur ne sera plus pensé uniquement autour de `sample → voice`,
+- il adopte une couche **pads[16]** à la Blackbox pour tout ce qui concerne le comportement de lecture,
+- le **sample** reste une ressource technique,
+- la **voice** reste une instance runtime,
+- le **streamer** reste un backend disque.
+
+### Conséquence
+
+Hiérarchie cible :
+
+```text
+Preset
+ └─ Pads (16)
+     ├─ sample_id
+     ├─ playback parameters
+     └─ déclenchement de voices
+
+Sample pool (576)
+Voices (16 max)
+Streamers (16 max)
+```
+
+### Répartition des responsabilités
+
+- `sample_desc_t` = fichier WAV, metadata, cache d’attaque,
+- `pad_t` = configuration utilisateur de lecture,
+- `voice_t` = instance active déclenchée par un pad,
+- `streamer_t` = mécanique de streaming SD.
+
+---
+
+## 5.2 Attack cache pour les 576 samples
 
 Décision retenue :
 
@@ -226,22 +271,33 @@ Décision validée : **acceptable en SDRAM 32 MB**.
 
 ---
 
-## 5.2 24 voices actives max
+## 5.3 16 pads et 16 voices actives max
 
 Décision retenue :
 
-- **24 voices** maximum actives simultanément,
-- **24 streamers max**.
+- **16 pads** utilisateur, dans une logique Blackbox,
+- **16 voices** maximum actives simultanément,
+- **16 streamers max**.
 
 ### Important
 
-- `576 samples` = catalogue du projet
-- `24 voices` = polyphonie
-- `24 streamers` = maximum pratique de lectures simultanées logiques
+- `576 samples` = catalogue du projet,
+- `16 pads` = surface de jeu / configuration utilisateur,
+- `16 voices` = pool global de polyphonie,
+- `16 streamers` = maximum pratique de lectures simultanées logiques.
+
+### Pourquoi
+
+Cette décision rapproche le produit d’une architecture de sampler hardware pad-centric :
+
+- plus lisible pour l’utilisateur,
+- plus proche d’une logique de preset jouable,
+- plus simple à qualifier que 16 voices,
+- plus réaliste côté CPU, SDRAM et latence SD.
 
 ---
 
-## 5.3 Un streamer par voice active
+## 5.4 Un streamer par voice active
 
 Décision retenue :
 
@@ -285,7 +341,60 @@ sample_desc_t sample_pool[576];
 
 ---
 
-## 6.2 Voices
+## 6.2 Pads
+
+Structure conceptuelle cible :
+
+```c
+typedef enum
+{
+    PAD_LAUNCH_TRIGGER = 0,
+    PAD_LAUNCH_GATE,
+    PAD_LAUNCH_TOGGLE
+} pad_launch_mode_t;
+
+typedef enum
+{
+    PAD_LOOP_NONE = 0,
+    PAD_LOOP_FORWARD,
+    PAD_LOOP_BIDIR
+} pad_loop_mode_t;
+
+typedef struct
+{
+    uint16_t sample_id;
+
+    pad_launch_mode_t launch_mode;
+    pad_loop_mode_t   loop_mode;
+
+    uint32_t loop_start_frame;
+    uint32_t loop_end_frame;
+
+    float gain_l;
+    float gain_r;
+    float pan;
+
+    uint8_t poly_mode;
+    uint8_t valid;
+} pad_t;
+```
+
+Table :
+
+```c
+pad_t pads[16];
+```
+
+### Philosophie retenue
+
+Le **sample** reste une ressource neutre.
+Les comportements musicaux comme le **loop**, le **launch mode** et la **polyphonie**
+sont portés par le **pad**, conformément à l’orientation produit retenue.
+La **voice** ne fait qu’hériter de ces paramètres au moment du trigger.
+
+---
+
+## 6.3 Voices
 
 Structure conceptuelle cible :
 
@@ -299,12 +408,20 @@ typedef enum
 
 typedef struct
 {
+    uint16_t pad_id;
     uint16_t sample_id;
     uint16_t streamer_id;
 
     uint32_t playback_position;
+    uint32_t stream_position;
+
     float gain_l;
     float gain_r;
+
+    pad_launch_mode_t launch_mode;
+    pad_loop_mode_t   loop_mode;
+    uint32_t loop_start_frame;
+    uint32_t loop_end_frame;
 
     voice_state_t state;
     uint8_t active;
@@ -314,12 +431,12 @@ typedef struct
 Table :
 
 ```c
-voice_t voices[24];
+voice_t voices[16];
 ```
 
 ---
 
-## 6.3 Streamers
+## 6.4 Streamers
 
 Structure conceptuelle cible :
 
@@ -365,7 +482,7 @@ typedef struct
 Table :
 
 ```c
-streamer_t streamers[24];
+streamer_t streamers[16];
 ```
 
 ---
@@ -419,7 +536,7 @@ if(worst && worst->fill_frames < worst->low_wm)
 
 ## 7.3 Pourquoi ce choix
 
-Avec seulement **24 streamers maximum** :
+Avec seulement **16 streamers maximum** :
 
 - la complexité est négligeable,
 - le comportement est très lisible,
@@ -453,6 +570,9 @@ Deux stratégies étaient possibles :
 ## 8.2 Décision retenue
 
 Décision finale : **A — handles persistants par streamer actif**.
+
+Dans la logique pad-centric retenue, le handle persistant appartient toujours au **streamer runtime**,
+jamais au pad ni au sample descriptor.
 
 ## 8.3 Pourquoi
 
@@ -652,13 +772,13 @@ write_pos++;
 idx = read_pos * 2;
 ```
 
-Jamais :
+Le comportement historique actuel du projet pourra subsister tant qu’il reste volontaire et documenté,
+mais la norme d’architecture cible reste :
 
 ```c
-read_pos += 2;
+read_pos++;
+write_pos++;
 ```
-
-sauf si l’on saute volontairement des frames, ce qui n’est **pas** le design cible.
 
 ## 12.4 Action recommandée
 
@@ -678,12 +798,14 @@ La transition doit être **sample-accurate** et sans clic.
 
 Décision finale :
 
-Au trigger :
+Au trigger d’un **pad** :
 
-1. la voice démarre immédiatement en **ATTACK**,
-2. le streamer démarre sur :
+1. une **voice** est allouée dans le pool global,
+2. la voice hérite des paramètres du pad (`launch_mode`, `loop_mode`, `loop_start`, `loop_end`, gains),
+3. la voice démarre immédiatement en **ATTACK**,
+4. le streamer démarre sur :
    - `data_offset + attack_frames * bytes_per_frame`
-3. le scheduler remplit le ring pendant l’attaque.
+5. le scheduler remplit le ring pendant l’attaque.
 
 À la fin de l’attaque :
 
@@ -707,7 +829,8 @@ mais **jamais** de lecture disque dans l’IRQ.
 Le design principal doit viser :
 
 - **bascule directe sans fallback dans le cas normal**,
-- fallback seulement comme sécurité.
+- fallback seulement comme sécurité,
+- respect du comportement de boucle porté par le **pad**, puis copié dans la **voice** au déclenchement.
 
 ---
 
@@ -767,9 +890,9 @@ Pour une voice stéréo 48 kHz 24-bit :
 - `48000 * 6 bytes = 288000 bytes/s`
 - soit ≈ `281 KB/s`
 
-Pour 24 voices :
+Pour 16 voices :
 
-- `288000 * 24 = 6.9 MB/s`
+- `288000 * 16 = 4.6 MB/s`
 
 ## 15.2 Décision finale
 
@@ -794,7 +917,7 @@ Mesures de qualification :
 - débit utile moyen,
 - latence `f_read` max,
 - P95 / P99 latence,
-- underruns par minute à 24 voices.
+- underruns par minute à 16 voices.
 
 ---
 
@@ -811,11 +934,11 @@ Mesures de qualification :
 
 ## 16.2 Ring buffers
 
-Pour `24 streamers`, ring `4096 frames`, stéréo float :
+Pour `16 streamers`, ring `4096 frames`, stéréo float :
 
 - `4096 * 2 * 4 = 32768 bytes` par streamer
 - ≈ `32 KB`
-- × 24 = ≈ `768 KB`
+- × 16 = ≈ `512 KB`
 
 ## 16.3 Metadata
 
@@ -830,7 +953,7 @@ Pour `24 streamers`, ring `4096 frames`, stéréo float :
 
 Total ordre de grandeur :
 
-- ≈ `5.0 à 5.3 MB`
+- ≈ `4.8 à 5.1 MB`
 
 ## 16.6 Conclusion
 
@@ -838,15 +961,15 @@ Avec une **SDRAM 32 MB**, le design est **largement viable**.
 
 ---
 
-# 17. Coût CPU du mixer 24 voices
+# 17. Coût CPU du mixer 16 voices
 
 ## 17.1 Calcul simple
 
-- `24 voices`
+- `16 voices`
 - `64 frames`
 - `2 canaux`
 
-=> `24 * 64 * 2 = 3072 contributions` par bloc
+=> `16 * 64 * 2 = 2048 contributions` par bloc
 
 ## 17.2 Évaluation
 
@@ -866,11 +989,11 @@ Le vrai coût CPU viendra surtout de :
 
 ## 17.4 Décision finale
 
-Le mix 24 voices **n’est pas un problème structurel** pour H743.
+Le mix 16 voices **n’est pas un problème structurel** pour H743.
 
 Ordre de grandeur réaliste :
 
-- ~`5–12 % CPU` pour le mix voix seul selon implémentation mémoire.
+- ~`4–9 % CPU` pour le mix voix seul selon implémentation mémoire.
 
 ---
 
@@ -892,26 +1015,30 @@ Ordre de grandeur réaliste :
 - stockage SDRAM
 
 ## Phase 3 — voice manager
-- pool fixe 24 voices
+- créer `pads[16]`
+- associer un `sample_id` + paramètres de lecture par pad
+
+## Phase 4 — voice manager
+- pool fixe 16 voices
 - trigger immédiat en ATTACK
 
-## Phase 4 — multi-streamers
-- `streamers[24]`
+## Phase 5 — multi-streamers
+- `streamers[16]`
 - ring individuel
 - `FIL` persistant
 
-## Phase 5 — stream manager réel
+## Phase 6 — stream manager réel
 - scheduler min-fill
 - un refill à la fois
 - instrumentation
 
-## Phase 6 — intégration DSP
+## Phase 7 — intégration DSP
 - lecture ATTACK / STREAM
 - mix multi-voice
 - transition sample-accurate
 
-## Phase 7 — robustesse / qualification
-- tests 24 voices
+## Phase 8 — robustesse / qualification
+- tests 16 voices
 - cartes lentes
 - fragmentation
 - UI/USB/MIDI actifs
@@ -943,8 +1070,9 @@ Le design retenu est :
 
 - `sample_pool[576]`
 - attack cache RAM pour chaque sample
-- `voices[24]`
-- `streamers[24]`
+- `pads[16]`
+- `voices[16]`
+- `streamers[16]`
 - scheduler **min-fill** en superloop
 - **handles FATFS persistants**
 - chunk nominal **1024 frames**
@@ -970,14 +1098,15 @@ Cette architecture est :
 
 # 21. Fichiers clés à modifier en priorité
 
-1. `Src/Storage/audio_streamer.c`
-2. `Src/Streaming/stream_manager.c`
-3. `Src/Audio/sampler.c` ou futur voice manager
-4. `Src/Core/brick6_app_init.c`
-5. `Src/Storage/wav_parser.c`
-6. `Src/Storage/wav_loader.c`
-7. `Src/Audio/audio_float.c` uniquement pour intégration minimale côté DSP
-8. `Inc/.../memory_layout.h` selon placement SDRAM
+1. `Src/Sampler/pad_manager.c` ou futur module pads
+2. `Src/Storage/audio_streamer.c`
+3. `Src/Streaming/stream_manager.c`
+4. `Src/Audio/sampler.c` ou futur voice manager
+5. `Src/Core/brick6_app_init.c`
+6. `Src/Storage/wav_parser.c`
+7. `Src/Storage/wav_loader.c`
+8. `Src/Audio/audio_float.c` uniquement pour intégration minimale côté DSP
+9. `Inc/.../memory_layout.h` selon placement SDRAM
 
 ---
 
@@ -994,6 +1123,9 @@ Cette architecture est :
 ## 22.2 Ce qu’il faut faire
 
 - tout préallouer
+- introduire une couche `pad` claire et statique
+- porter le loop, le launch mode et la polyphonie au niveau du pad
+- copier les paramètres pad → voice au trigger
 - instrumenter très tôt
 - mesurer la SD réelle, pas seulement le débit théorique
 - garder le chemin temps réel simple

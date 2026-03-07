@@ -1,0 +1,5 @@
+../Drivers/Drv_app/Src/drv_encoders.c:43:16:read_state	0	static
+../Drivers/Drv_app/Src/drv_encoders.c:55:6:drv_encoders_init	8	static
+../Drivers/Drv_app/Src/drv_encoders.c:66:6:drv_encoders_poll	16	static
+../Drivers/Drv_app/Src/drv_encoders.c:94:9:drv_encoder_get_delta	0	static
+../Drivers/Drv_app/Src/drv_encoders.c:106:6:drv_encoder_reset	0	static

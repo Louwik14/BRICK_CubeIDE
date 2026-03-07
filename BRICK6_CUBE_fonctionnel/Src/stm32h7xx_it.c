@@ -106,21 +106,41 @@ void NMI_Handler(void)
   */
 void HardFault_Handler(void)
 {
-  /* USER CODE BEGIN HardFault_IRQn 0 */
+  __asm volatile
+  (
+    "TST lr, #4        \n"
+    "ITE EQ            \n"
+    "MRSEQ r0, MSP     \n"
+    "MRSNE r0, PSP     \n"
+    "B hardfault_c     \n"
+  );
+}
+
+void hardfault_c(uint32_t *sp)
+{
   __disable_irq();
+
+  uint32_t r0  = sp[0];
+  uint32_t r1  = sp[1];
+  uint32_t r2  = sp[2];
+  uint32_t r3  = sp[3];
+  uint32_t r12 = sp[4];
+  uint32_t lr  = sp[5];
+  uint32_t pc  = sp[6];
+  uint32_t psr = sp[7];
+
   uart_log("\r\nHardFault\r\n");
+
+  uart_log_hex("PC=", pc);
+  uart_log_hex("LR=", lr);
+
   uart_log_hex("CFSR=", SCB->CFSR);
   uart_log_hex("HFSR=", SCB->HFSR);
   uart_log_hex("MMFAR=", SCB->MMFAR);
   uart_log_hex("BFAR=", SCB->BFAR);
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
-  }
-}
 
+  while (1);
+}
 /**
   * @brief This function handles Memory management fault.
   */

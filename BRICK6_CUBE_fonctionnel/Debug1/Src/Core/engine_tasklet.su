@@ -1,0 +1,4 @@
+../Src/Core/engine_tasklet.c:53:13:engine_tick	0	static
+../Src/Core/engine_tasklet.c:67:6:engine_tasklet_init	0	static
+../Src/Core/engine_tasklet.c:91:6:engine_tasklet_notify_frames	0	static
+../Src/Core/engine_tasklet.c:106:6:engine_tasklet_poll	8	static,ignoring_inline_asm
