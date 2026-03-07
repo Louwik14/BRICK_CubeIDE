@@ -52,44 +52,42 @@ static uint32_t streamer_ring_snapshot_used_frames(const audio_streamer_t *s,
                                                    uint32_t *out_r,
                                                    uint32_t *out_w)
 {
-    uint32_t r;
+    uint32_t r0;
+    uint32_t r1;
     uint32_t w;
 
     do
     {
-        r = s->read_pos;
+        r0 = s->read_pos;
         __DMB();
         w = s->write_pos;
         __DMB();
-    } while(r != s->read_pos);
+        r1 = s->read_pos;
+    } while(r0 != r1);
 
     if(out_r != NULL)
-        *out_r = r;
+        *out_r = r0;
 
     if(out_w != NULL)
         *out_w = w;
 
-    if(w >= r)
-        return w - r;
+    if(w >= r0)
+        return w - r0;
 
-    return STREAM_RING_FRAMES - (r - w);
+    return STREAM_RING_FRAMES - (r0 - w);
 }
 
 static uint32_t streamer_ring_used_frames(const audio_streamer_t *s)
 {
-    uint32_t r = s->read_pos;
-    uint32_t w = s->write_pos;
-
-    if(w >= r)
-        return w - r;
-
-    return STREAM_RING_FRAMES - (r - w);
+    return streamer_ring_snapshot_used_frames(s, NULL, NULL);
 }
 
 static uint32_t streamer_ring_space_frames(const audio_streamer_t *s)
 {
-    uint32_t r = s->read_pos;
-    uint32_t w = s->write_pos;
+    uint32_t r = 0U;
+    uint32_t w = 0U;
+
+    (void)streamer_ring_snapshot_used_frames(s, &r, &w);
 
     if(w >= r)
         return STREAM_RING_FRAMES - (w - r) - 1U;
@@ -108,8 +106,12 @@ static void streamer_debug_check_ring(audio_streamer_t *s)
         s->write_pos %= STREAM_RING_FRAMES;
     }
 
-    const uint32_t used = streamer_ring_used_frames(s);
-    const uint32_t space = streamer_ring_space_frames(s);
+    uint32_t r = 0U;
+    uint32_t w = 0U;
+    const uint32_t used = streamer_ring_snapshot_used_frames(s, &r, &w);
+    const uint32_t space = (w >= r) ?
+                           (STREAM_RING_FRAMES - (w - r) - 1U) :
+                           (r - w - 1U);
 
     if((used + space + 1U) != STREAM_RING_FRAMES)
         s->ring_incoherence_count++;
@@ -505,7 +507,27 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
 
         if(used_before >= 2U)
         {
+            if(rd >= STREAM_RING_FRAMES)
+            {
+                s->pos_oob_count++;
+                rd %= STREAM_RING_FRAMES;
+                s->read_pos = rd;
+            }
+
             const uint32_t idx = rd * 2U;
+
+            /* Acquire producer stores to the ring payload before consuming samples. */
+            __DMB();
+
+#if STREAM_ASSERT_DEBUG
+            if((idx + 1U) >= STREAM_RING_SAMPLES)
+            {
+                s->pos_oob_count++;
+                s->error = 1U;
+                streamer_stop_internal(s);
+                goto audio_streamer_get_frame_exit;
+            }
+#endif
 
             outL = stream_rings[streamer_id][idx];
             outR = stream_rings[streamer_id][idx + 1U];
@@ -513,7 +535,6 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
             /* HISTORICAL BEHAVIOR — streamer advances 2 frames per DSP frame.
              * Do not change unless the half-rate DSP consumption root cause is identified. */
             rd = (rd + 2U) % STREAM_RING_FRAMES;
-            __DMB();
             s->read_pos = rd;
             s->total_frames_read_from_ring += 2U;
             stream_frames_out += 2U;
@@ -530,6 +551,7 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
         streamer_debug_check_ring(s);
     }
 
+audio_streamer_get_frame_exit:
     s->last_out_l = outL;
     s->last_out_r = outR;
 
