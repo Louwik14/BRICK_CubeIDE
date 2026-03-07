@@ -209,6 +209,7 @@ void brick6_app_process(void)
 
     g_brick6_app_process_call_count++;
 
+    voice_manager_service();
     stream_manager_process();
 
     /* retrigger périodique pour tester la polyphonie */
