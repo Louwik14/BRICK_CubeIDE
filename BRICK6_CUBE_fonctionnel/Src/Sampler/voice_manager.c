@@ -7,6 +7,7 @@
 #include "audio_debug_log.h"
 
 #include "Streaming/stream_manager.h"
+#include "stm32h7xx_hal.h"
 
 #define VOICE_MANAGER_MAX_VOICES (24U)
 #define VOICE_MANAGER_INVALID_STREAMER_ID (0xFFU)
@@ -37,6 +38,12 @@ static void voice_clear(uint32_t index)
     voices[index].streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
     voices[index].gain_l = 0.0f;
     voices[index].gain_r = 0.0f;
+    voices[index].loop_enabled = 0U;
+    voices[index].loop_start_frame = 0U;
+    voices[index].loop_end_frame = 0U;
+    voices[index].seek_pending = 0U;
+    voices[index].seek_restart_pending = 0U;
+    voices[index].seek_target_frame = 0U;
     voices[index].state = VOICE_OFF;
     voices[index].active = 0U;
     s_voice_generation[index] = 0U;
@@ -131,6 +138,12 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     voices[target_index].streamer_id = streamer_id;
     voices[target_index].gain_l = finite_or_zero(gain_l);
     voices[target_index].gain_r = finite_or_zero(gain_r);
+    voices[target_index].loop_enabled = 0U;
+    voices[target_index].loop_start_frame = sample_desc->attack_frames;
+    voices[target_index].loop_end_frame = sample_desc->length_frames;
+    voices[target_index].seek_pending = 0U;
+    voices[target_index].seek_restart_pending = 0U;
+    voices[target_index].seek_target_frame = sample_desc->attack_frames;
     voices[target_index].state = VOICE_ATTACK;
     voices[target_index].active = 1U;
     s_voice_generation[target_index] = s_generation_counter++;
@@ -143,6 +156,70 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 
     if(s_generation_counter == 0U)
         s_generation_counter = 1U;
+}
+
+void voice_manager_service(void)
+{
+    for(uint32_t voice_index = 0U; voice_index < VOICE_MANAGER_MAX_VOICES; voice_index++)
+    {
+        uint8_t do_stop = 0U;
+        uint8_t do_start = 0U;
+        uint8_t stop_streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
+        uint32_t seek_target = 0U;
+        const sample_desc_t *sample_desc = NULL;
+
+        __disable_irq();
+        voice_t *voice = &voices[voice_index];
+
+        if((voice->active != 0U) && (voice->sample != NULL) && (voice->seek_pending != 0U))
+        {
+            if(voice->seek_restart_pending == 0U)
+            {
+                do_stop = 1U;
+                stop_streamer_id = voice->streamer_id;
+                voice->streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
+                voice->seek_restart_pending = 1U;
+            }
+            else
+            {
+                do_start = 1U;
+                seek_target = voice->seek_target_frame;
+                sample_desc = voice->sample;
+            }
+        }
+
+        __enable_irq();
+
+        if(do_stop != 0U)
+        {
+            if(stop_streamer_id != VOICE_MANAGER_INVALID_STREAMER_ID)
+                stream_manager_stop_stream(stop_streamer_id);
+            continue;
+        }
+
+        if(do_start != 0U)
+        {
+            uint8_t new_streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
+            if(stream_manager_start_stream(sample_desc, seek_target, &new_streamer_id))
+            {
+                __disable_irq();
+                voice_t *voice_commit = &voices[voice_index];
+                if((voice_commit->active != 0U) && (voice_commit->sample == sample_desc) &&
+                   (voice_commit->seek_pending != 0U) && (voice_commit->seek_target_frame == seek_target))
+                {
+                    voice_commit->streamer_id = new_streamer_id;
+                    voice_commit->stream_pos_frames = seek_target;
+                    voice_commit->seek_pending = 0U;
+                    voice_commit->seek_restart_pending = 0U;
+                }
+                else
+                {
+                    stream_manager_stop_stream(new_streamer_id);
+                }
+                __enable_irq();
+            }
+        }
+    }
 }
 
 void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
@@ -199,22 +276,43 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 
             if(voice->state == VOICE_STREAM)
             {
-                if(stream_pos >= sample_desc->length_frames)
+                if(voice->loop_enabled != 0U)
+                {
+                    const uint32_t loop_start = voice->loop_start_frame;
+                    const uint32_t loop_end = voice->loop_end_frame;
+
+                    if((loop_start >= loop_end) || (loop_end > sample_desc->length_frames))
+                    {
+                        voice_clear(voice_index);
+                        break;
+                    }
+
+                    if(stream_pos >= loop_end)
+                    {
+                        stream_pos = loop_start;
+                        voice->seek_target_frame = loop_start;
+                        voice->seek_pending = 1U;
+                    }
+                }
+                else if(stream_pos >= sample_desc->length_frames)
                 {
                     voice_clear(voice_index);
                     break;
                 }
 
-                if(!stream_manager_get_stream_frame(voice->streamer_id, &sample_l, &sample_r))
+                if(voice->seek_pending == 0U)
                 {
-                    /* streamer pas encore prêt → silence temporaire */
-                    sample_l = 0.0f;
-                    sample_r = 0.0f;
-                }
+                    if(!stream_manager_get_stream_frame(voice->streamer_id, &sample_l, &sample_r))
+                    {
+                        /* streamer pas encore prêt → silence temporaire */
+                        sample_l = 0.0f;
+                        sample_r = 0.0f;
+                    }
 
-                sample_l = finite_or_zero(sample_l);
-                sample_r = finite_or_zero(sample_r);
-                stream_pos++;
+                    sample_l = finite_or_zero(sample_l);
+                    sample_r = finite_or_zero(sample_r);
+                    stream_pos++;
+                }
             }
 
             out_l[frame] = finite_or_zero(out_l[frame] + (sample_l * voice->gain_l));
@@ -226,7 +324,8 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
             voice->position = position;
             voice->stream_pos_frames = stream_pos;
 
-            if((voice->state == VOICE_STREAM) && (voice->stream_pos_frames >= sample_desc->length_frames))
+            if((voice->state == VOICE_STREAM) && (voice->loop_enabled == 0U) &&
+               (voice->stream_pos_frames >= sample_desc->length_frames))
                 voice_clear(voice_index);
         }
 
