@@ -42,7 +42,6 @@ static void voice_clear(uint32_t index)
     voices[index].loop_start_frame = 0U;
     voices[index].loop_end_frame = 0U;
     voices[index].seek_pending = 0U;
-    voices[index].seek_restart_pending = 0U;
     voices[index].seek_target_frame = 0U;
     voices[index].state = VOICE_OFF;
     voices[index].active = 0U;
@@ -142,7 +141,6 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     voices[target_index].loop_start_frame = sample_desc->attack_frames;
     voices[target_index].loop_end_frame = sample_desc->length_frames;
     voices[target_index].seek_pending = 0U;
-    voices[target_index].seek_restart_pending = 0U;
     voices[target_index].seek_target_frame = sample_desc->attack_frames;
     voices[target_index].state = VOICE_ATTACK;
     voices[target_index].active = 1U;
@@ -162,59 +160,34 @@ void voice_manager_service(void)
 {
     for(uint32_t voice_index = 0U; voice_index < VOICE_MANAGER_MAX_VOICES; voice_index++)
     {
-        uint8_t do_stop = 0U;
-        uint8_t do_start = 0U;
-        uint8_t stop_streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
+        uint8_t streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
         uint32_t seek_target = 0U;
-        const sample_desc_t *sample_desc = NULL;
+        uint8_t do_seek = 0U;
 
         __disable_irq();
         voice_t *voice = &voices[voice_index];
 
         if((voice->active != 0U) && (voice->sample != NULL) && (voice->seek_pending != 0U))
         {
-            if(voice->seek_restart_pending == 0U)
-            {
-                do_stop = 1U;
-                stop_streamer_id = voice->streamer_id;
-                voice->streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
-                voice->seek_restart_pending = 1U;
-            }
-            else
-            {
-                do_start = 1U;
-                seek_target = voice->seek_target_frame;
-                sample_desc = voice->sample;
-            }
+            streamer_id = voice->streamer_id;
+            seek_target = voice->seek_target_frame;
+            do_seek = 1U;
         }
 
         __enable_irq();
 
-        if(do_stop != 0U)
+        if((do_seek != 0U) && (streamer_id != VOICE_MANAGER_INVALID_STREAMER_ID))
         {
-            if(stop_streamer_id != VOICE_MANAGER_INVALID_STREAMER_ID)
-                stream_manager_stop_stream(stop_streamer_id);
-            continue;
-        }
-
-        if(do_start != 0U)
-        {
-            uint8_t new_streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
-            if(stream_manager_start_stream(sample_desc, seek_target, &new_streamer_id))
+            if(audio_streamer_seek_frame(streamer_id, seek_target))
             {
                 __disable_irq();
                 voice_t *voice_commit = &voices[voice_index];
-                if((voice_commit->active != 0U) && (voice_commit->sample == sample_desc) &&
-                   (voice_commit->seek_pending != 0U) && (voice_commit->seek_target_frame == seek_target))
+                if((voice_commit->active != 0U) && (voice_commit->seek_pending != 0U) &&
+                   (voice_commit->streamer_id == streamer_id) &&
+                   (voice_commit->seek_target_frame == seek_target))
                 {
-                    voice_commit->streamer_id = new_streamer_id;
                     voice_commit->stream_pos_frames = seek_target;
                     voice_commit->seek_pending = 0U;
-                    voice_commit->seek_restart_pending = 0U;
-                }
-                else
-                {
-                    stream_manager_stop_stream(new_streamer_id);
                 }
                 __enable_irq();
             }
