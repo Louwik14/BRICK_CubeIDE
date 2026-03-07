@@ -284,7 +284,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 
                     sample_l = finite_or_zero(sample_l);
                     sample_r = finite_or_zero(sample_r);
-                    stream_pos++;
+                    stream_pos += 2;
                 }
             }
 
