@@ -10,7 +10,8 @@
 
 typedef struct
 {
-    uint8_t active;
+    volatile uint8_t active;
+    volatile uint8_t stop_requested;
 } stream_slot_t;
 
 static stream_manager_stats_t g_stream_manager_stats;
@@ -23,6 +24,7 @@ static void stream_manager_reset_slots(void)
     for(uint32_t i = 0U; i < AUDIO_STREAMER_MAX_STREAMERS; i++)
     {
         g_stream_slots[i].active = 0U;
+        g_stream_slots[i].stop_requested = 0U;
         audio_streamer_stop((uint8_t)i);
     }
 }
@@ -38,6 +40,7 @@ bool stream_manager_start(const char *path)
         return false;
 
     g_stream_slots[0].active = 1U;
+    g_stream_slots[0].stop_requested = 0U;
     return audio_streamer_start(0U, path, 0U);
 }
 
@@ -65,13 +68,25 @@ void stream_manager_process(void)
 
     for(uint32_t i = 0U; i < AUDIO_STREAMER_MAX_STREAMERS; i++)
     {
+        if(g_stream_slots[i].stop_requested != 0U)
+        {
+            audio_streamer_stop((uint8_t)i);
+            __DMB();
+            g_stream_slots[i].stop_requested = 0U;
+            continue;
+        }
+
         if(g_stream_slots[i].active == 0U)
             continue;
 
         audio_streamer_process((uint8_t)i);
 
         if(!audio_streamer_is_healthy((uint8_t)i))
+        {
             g_stream_slots[i].active = 0U;
+            __DMB();
+            g_stream_slots[i].stop_requested = 1U;
+        }
     }
 }
 
@@ -108,6 +123,7 @@ bool stream_manager_start_stream(const sample_desc_t *sample_desc,
         return false;
 
     g_stream_slots[slot_id].active = 1U;
+    g_stream_slots[slot_id].stop_requested = 0U;
 
     if(out_streamer_id != NULL)
         *out_streamer_id = slot_id;
@@ -126,6 +142,8 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
     if(!audio_streamer_is_healthy(streamer_id))
     {
         g_stream_slots[streamer_id].active = 0U;
+        __DMB();
+        g_stream_slots[streamer_id].stop_requested = 1U;
         return false;
     }
 
@@ -141,6 +159,8 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
     if(!audio_streamer_is_healthy(streamer_id))
     {
         g_stream_slots[streamer_id].active = 0U;
+        __DMB();
+        g_stream_slots[streamer_id].stop_requested = 1U;
         return false;
     }
 
@@ -153,7 +173,8 @@ void stream_manager_stop_stream(uint8_t streamer_id)
         return;
 
     g_stream_slots[streamer_id].active = 0U;
-    audio_streamer_stop(streamer_id);
+    __DMB();
+    g_stream_slots[streamer_id].stop_requested = 1U;
 }
 
 void stream_manager_get_stats(stream_manager_stats_t *out_stats)
