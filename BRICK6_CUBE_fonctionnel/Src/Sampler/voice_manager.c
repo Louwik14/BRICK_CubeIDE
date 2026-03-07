@@ -3,7 +3,10 @@
 #include <math.h>
 #include <stddef.h>
 
+#include "Streaming/stream_manager.h"
+
 #define VOICE_MANAGER_MAX_VOICES (24U)
+#define VOICE_MANAGER_INVALID_STREAMER_ID (0xFFU)
 
 voice_t voices[VOICE_MANAGER_MAX_VOICES];
 
@@ -17,9 +20,17 @@ static float finite_or_zero(float v)
 
 static void voice_clear(uint32_t index)
 {
+    if((index < VOICE_MANAGER_MAX_VOICES) &&
+       (voices[index].streamer_id != VOICE_MANAGER_INVALID_STREAMER_ID))
+    {
+        stream_manager_stop_stream(voices[index].streamer_id);
+    }
+
     voices[index].sample_id = 0U;
     voices[index].sample = NULL;
     voices[index].position = 0U;
+    voices[index].stream_pos_frames = 0U;
+    voices[index].streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
     voices[index].gain_l = 0.0f;
     voices[index].gain_r = 0.0f;
     voices[index].state = VOICE_OFF;
@@ -39,7 +50,7 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 {
     const sample_desc_t *sample_desc = sample_pool_get(sample_id);
     if((sample_desc == NULL) || (sample_desc->valid == 0U) || (sample_desc->attack_cache == NULL) ||
-       (sample_desc->attack_frames == 0U))
+       (sample_desc->attack_frames == 0U) || (sample_desc->length_frames <= sample_desc->attack_frames))
         return;
 
     uint32_t target_index = VOICE_MANAGER_MAX_VOICES;
@@ -68,11 +79,18 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
         }
 
         target_index = oldest_index;
+        voice_clear(target_index);
     }
+
+    uint8_t streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
+    if(!stream_manager_start_stream(sample_desc, sample_desc->attack_frames, &streamer_id))
+        return;
 
     voices[target_index].sample_id = sample_id;
     voices[target_index].sample = sample_desc;
     voices[target_index].position = 0U;
+    voices[target_index].stream_pos_frames = sample_desc->attack_frames;
+    voices[target_index].streamer_id = streamer_id;
     voices[target_index].gain_l = finite_or_zero(gain_l);
     voices[target_index].gain_r = finite_or_zero(gain_r);
     voices[target_index].state = VOICE_ATTACK;
@@ -92,43 +110,67 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
     {
         voice_t *voice = &voices[voice_index];
 
-        if((voice->active == 0U) || (voice->state != VOICE_ATTACK) || (voice->sample == NULL))
+        if((voice->active == 0U) || (voice->sample == NULL))
             continue;
 
         const sample_desc_t *sample_desc = voice->sample;
-        if((sample_desc->valid == 0U) || (sample_desc->attack_cache == NULL) || (sample_desc->attack_frames == 0U) ||
-           (voice->position >= sample_desc->attack_frames))
+        if((sample_desc->valid == 0U) || (sample_desc->attack_cache == NULL) || (sample_desc->attack_frames == 0U))
         {
             voice_clear(voice_index);
             continue;
         }
 
-        const float *cache = sample_desc->attack_cache;
-        const uint32_t attack_frames = sample_desc->attack_frames;
         uint32_t position = voice->position;
+        uint32_t stream_pos = voice->stream_pos_frames;
 
         for(uint32_t frame = 0U; frame < frames; frame++)
         {
-            if(position >= attack_frames)
+            float sample_l = 0.0f;
+            float sample_r = 0.0f;
+
+            if(voice->state == VOICE_ATTACK)
             {
-                voice_clear(voice_index);
-                break;
+                if(position < sample_desc->attack_frames)
+                {
+                    const uint32_t sample_index = position * 2U;
+                    sample_l = finite_or_zero(sample_desc->attack_cache[sample_index]);
+                    sample_r = finite_or_zero(sample_desc->attack_cache[sample_index + 1U]);
+                    position++;
+                }
+
+                if(position >= sample_desc->attack_frames)
+                    voice->state = VOICE_STREAM;
             }
 
-            const uint32_t sample_index = position * 2U;
-            float sample_l = finite_or_zero(cache[sample_index]);
-            float sample_r = finite_or_zero(cache[sample_index + 1U]);
+            if(voice->state == VOICE_STREAM)
+            {
+                if(stream_pos >= sample_desc->length_frames)
+                {
+                    voice_clear(voice_index);
+                    break;
+                }
+
+                if(!stream_manager_get_stream_frame(voice->streamer_id, &sample_l, &sample_r))
+                {
+                    voice_clear(voice_index);
+                    break;
+                }
+
+                sample_l = finite_or_zero(sample_l);
+                sample_r = finite_or_zero(sample_r);
+                stream_pos++;
+            }
 
             out_l[frame] = finite_or_zero(out_l[frame] + (sample_l * voice->gain_l));
             out_r[frame] = finite_or_zero(out_r[frame] + (sample_r * voice->gain_r));
-
-            position++;
         }
 
         if(voice->active != 0U)
         {
             voice->position = position;
-            if(voice->position >= attack_frames)
+            voice->stream_pos_frames = stream_pos;
+
+            if((voice->state == VOICE_STREAM) && (voice->stream_pos_frames >= sample_desc->length_frames))
                 voice_clear(voice_index);
         }
     }

@@ -201,7 +201,7 @@ SECTIONS
   {
     . = ALIGN(32);
     *(.sdram)
-    *(.sdram*)
+    *(.sdram.*)
     . = ALIGN(32);
   } >SDRAM
 
@@ -209,7 +209,7 @@ SECTIONS
   {
     . = ALIGN(32);
     *(.sdram_ui)
-    *(.sdram_ui*)
+    *(.sdram_ui.*)
     . = ALIGN(32);
   } >SDRAM
 
@@ -217,7 +217,7 @@ SECTIONS
   {
     . = ALIGN(32);
     *(.sdram_audio_cold)
-    *(.sdram_audio_cold*)
+    *(.sdram_audio_cold.*)
     . = ALIGN(32);
   } >SDRAM
   /* USER MEMORY SECTIONS END */

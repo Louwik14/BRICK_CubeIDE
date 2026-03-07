@@ -11,7 +11,8 @@ extern "C" {
 typedef enum
 {
     VOICE_OFF = 0,
-    VOICE_ATTACK
+    VOICE_ATTACK,
+    VOICE_STREAM
 } voice_state_t;
 
 typedef struct
@@ -20,6 +21,8 @@ typedef struct
     const sample_desc_t *sample;
 
     uint32_t position;
+    uint32_t stream_pos_frames;
+    uint8_t streamer_id;
 
     float gain_l;
     float gain_r;

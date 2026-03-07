@@ -14,6 +14,8 @@
 #define AUDIO_STREAMER_HAS_FATFS 0
 #endif
 
+#define AUDIO_STREAMER_MAX_STREAMERS (24U)
+
 typedef struct
 {
     /* file system */
@@ -41,6 +43,11 @@ typedef struct
     /* startup control */
     char pending_path[128];
     uint8_t start_pending;
+    uint32_t start_frame;
+
+    /* per-stream continuity */
+    float last_out_l;
+    float last_out_r;
 
     /* statistics */
     volatile uint32_t underrun_count;
@@ -87,7 +94,8 @@ typedef struct
     uint32_t last_refill_frames;
 } audio_streamer_stats_t;
 
-bool audio_streamer_start(const char *path);
-void audio_streamer_process(void);
-void audio_streamer_get_frame(float *L, float *R);
-void audio_streamer_get_stats(audio_streamer_stats_t *out_stats);
+bool audio_streamer_start(uint8_t streamer_id, const char *path, uint32_t start_frame);
+void audio_streamer_stop(uint8_t streamer_id);
+void audio_streamer_process(uint8_t streamer_id);
+void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R);
+void audio_streamer_get_stats(uint8_t streamer_id, audio_streamer_stats_t *out_stats);
