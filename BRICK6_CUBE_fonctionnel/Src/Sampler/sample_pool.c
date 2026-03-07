@@ -1,6 +1,7 @@
 #include "Sampler/sample_pool.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 
 #include "Storage/wav_parser.h"
@@ -42,6 +43,32 @@ static void sample_pool_clear_entry(sample_desc_t *desc)
     desc->valid = 0U;
 }
 
+static size_t sample_pool_trim_path_copy(char *dst, size_t dst_size, const char *src)
+{
+    size_t start = 0U;
+    size_t end;
+
+    if((dst == NULL) || (dst_size == 0U) || (src == NULL))
+        return 0U;
+
+    end = strlen(src);
+
+    while((start < end) && (isspace((unsigned char)src[start]) != 0))
+        start++;
+
+    while((end > start) && (isspace((unsigned char)src[end - 1U]) != 0))
+        end--;
+
+    const size_t trimmed_len = end - start;
+    if(trimmed_len >= dst_size)
+        return 0U;
+
+    memcpy(dst, &src[start], trimmed_len);
+    dst[trimmed_len] = '\0';
+
+    return trimmed_len;
+}
+
 void sample_pool_init(void)
 {
     for(uint32_t i = 0U; i < SAMPLE_POOL_SIZE; i++)
@@ -69,17 +96,29 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    const size_t path_len = strlen(path);
-    if(path_len >= SAMPLE_POOL_PATH_MAX)
+    const size_t raw_path_len = strlen(path);
+    if(raw_path_len >= SAMPLE_POOL_PATH_MAX)
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u path too long (%lu >= %u)\n",
                         (unsigned)id,
-                        (unsigned long)path_len,
+                        (unsigned long)raw_path_len,
                         (unsigned)SAMPLE_POOL_PATH_MAX);
         return false;
     }
 
-    memcpy(desc->path, path, path_len + 1U);
+    const size_t path_len = sample_pool_trim_path_copy(desc->path,
+                                                       sizeof(desc->path),
+                                                       path);
+    if(path_len == 0U)
+    {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u path invalid/empty after trim\n",
+                        (unsigned)id);
+        return false;
+    }
+
+    SAMPLE_POOL_LOG("[SAMPLE_POOL] OPEN PATH='%s' len=%lu\n",
+                    desc->path,
+                    (unsigned long)path_len);
 
 #if SAMPLE_POOL_HAS_FATFS
     if(g_sample_pool_fs_mounted == 0U)
@@ -104,6 +143,17 @@ bool sample_pool_load(uint16_t id, const char *path)
                         (unsigned)id,
                         desc->path,
                         (int)open_fr);
+
+        DIR dir;
+        FILINFO fno;
+        if(f_opendir(&dir, "0:/") == FR_OK)
+        {
+            SAMPLE_POOL_LOG("[SAMPLE_POOL] root dir listing:\n");
+            while((f_readdir(&dir, &fno) == FR_OK) && (fno.fname[0] != '\0'))
+                SAMPLE_POOL_LOG("  - %s\n", fno.fname);
+            (void)f_closedir(&dir);
+        }
+
         return false;
     }
 
@@ -174,4 +224,3 @@ const sample_desc_t *sample_pool_get(uint16_t id)
 
     return &g_sample_pool[id];
 }
-
