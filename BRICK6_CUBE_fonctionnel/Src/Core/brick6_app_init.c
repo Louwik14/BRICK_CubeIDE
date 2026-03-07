@@ -31,6 +31,7 @@
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
+#define ENABLE_PERIODIC_RETRIGGER 0
 
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
@@ -199,7 +200,9 @@ void brick6_app_init(void)
 
 void brick6_app_process(void)
 {
+#if ENABLE_PERIODIC_RETRIGGER
     static uint32_t last_trigger = 0;
+#endif
     uint32_t now = HAL_GetTick();
 
     g_brick6_app_process_call_count++;
@@ -207,11 +210,15 @@ void brick6_app_process(void)
     stream_manager_process();
 
     /* retrigger périodique pour tester la polyphonie */
+#if ENABLE_PERIODIC_RETRIGGER
     if(now - last_trigger > 3000)
     {
         voice_manager_trigger(0, 0.25f, 0.25f);
         last_trigger = now;
     }
+#else
+    (void)now;
+#endif
 }
 
 /* ============================================================
