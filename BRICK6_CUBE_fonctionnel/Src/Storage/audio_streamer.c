@@ -273,10 +273,7 @@ static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uin
 
         if(frames_left_file == 0U)
         {
-            if(!streamer_seek_to_data_start(s))
-                return frames_written;
-
-            continue;
+            return frames_written;
         }
 
         if(chunk_frames > frames_left_file)

@@ -1,9 +1,9 @@
 ../Src/Storage/audio_streamer.c:100:13:streamer_debug_check_ring	0	static,ignoring_inline_asm
-../Src/Storage/audio_streamer.c:236:17:streamer_fill_ring.isra	104	static,ignoring_inline_asm
-../Src/Storage/audio_streamer.c:447:6:audio_streamer_start	40	static
-../Src/Storage/audio_streamer.c:471:6:audio_streamer_stop	16	static
-../Src/Storage/audio_streamer.c:480:6:audio_streamer_process	168	static,ignoring_inline_asm
-../Src/Storage/audio_streamer.c:515:6:audio_streamer_get_frame	24	static,ignoring_inline_asm
-../Src/Storage/audio_streamer.c:594:6:audio_streamer_get_stats	12	static,ignoring_inline_asm
-../Src/Storage/audio_streamer.c:623:6:audio_streamer_is_healthy	0	static
-../Src/Storage/audio_streamer.c:632:6:audio_streamer_is_running	0	static
+../Src/Storage/audio_streamer.c:236:17:streamer_fill_ring.isra	112	static,ignoring_inline_asm
+../Src/Storage/audio_streamer.c:444:6:audio_streamer_start	40	static
+../Src/Storage/audio_streamer.c:468:6:audio_streamer_stop	16	static
+../Src/Storage/audio_streamer.c:477:6:audio_streamer_process	168	static,ignoring_inline_asm
+../Src/Storage/audio_streamer.c:512:6:audio_streamer_get_frame	24	static,ignoring_inline_asm
+../Src/Storage/audio_streamer.c:591:6:audio_streamer_get_stats	12	static,ignoring_inline_asm
+../Src/Storage/audio_streamer.c:620:6:audio_streamer_is_healthy	0	static
+../Src/Storage/audio_streamer.c:629:6:audio_streamer_is_running	0	static

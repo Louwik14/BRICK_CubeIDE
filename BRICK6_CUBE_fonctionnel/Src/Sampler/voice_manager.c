@@ -138,7 +138,7 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     voices[target_index].streamer_id = streamer_id;
     voices[target_index].gain_l = finite_or_zero(gain_l);
     voices[target_index].gain_r = finite_or_zero(gain_r);
-    voices[target_index].loop_enabled = 0U;
+    voices[target_index].loop_enabled = 1U;
     voices[target_index].loop_start_frame = sample_desc->attack_frames;
     voices[target_index].loop_end_frame = sample_desc->length_frames;
     voices[target_index].seek_pending = 0U;

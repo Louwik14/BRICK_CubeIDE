@@ -1,3 +1,5 @@
-../Src/Sampler/voice_manager.c:45:6:voice_manager_init	3
-../Src/Sampler/voice_manager.c:54:6:voice_manager_trigger	14
-../Src/Sampler/voice_manager.c:148:6:voice_manager_process	22
+../Src/Sampler/voice_manager.c:26:13:voice_clear	3
+../Src/Sampler/voice_manager.c:52:6:voice_manager_init	3
+../Src/Sampler/voice_manager.c:61:6:voice_manager_trigger	11
+../Src/Sampler/voice_manager.c:161:6:voice_manager_service	12
+../Src/Sampler/voice_manager.c:225:6:voice_manager_process	25

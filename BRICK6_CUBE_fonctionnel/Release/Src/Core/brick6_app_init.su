@@ -2,4 +2,4 @@
 ../Src/Core/brick6_app_init.c:74:5:_write	8	static
 ../Src/Core/brick6_app_init.c:135:6:brick6_app_init	48	static
 ../Src/Core/brick6_app_init.c:203:6:brick6_app_process	8	static
-../Src/Core/brick6_app_init.c:230:6:brick6_app_get_stats	0	static
+../Src/Core/brick6_app_init.c:231:6:brick6_app_get_stats	0	static
