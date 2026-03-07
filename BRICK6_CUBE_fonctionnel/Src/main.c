@@ -1,3 +1,4 @@
+#include "audio_debug_log.h"
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -187,7 +188,7 @@ int main(void)
                                            ? (manager_stats.process_dt_acc_ms / manager_stats.process_dt_samples)
                                            : 0U;
 
-          printf("[P0] ring=%lu/%u min=%lu max=%lu underrun=%lu restart=%lu partial=%lu\n",
+          AUDIO_DEBUG_LOG("[P0] ring=%lu/%u min=%lu max=%lu underrun=%lu restart=%lu partial=%lu\n",
                  (unsigned long)streamer_stats.ring_used_frames,
                  16384U,
                  (unsigned long)streamer_stats.ring_level_min_frames,
@@ -196,7 +197,7 @@ int main(void)
                  (unsigned long)streamer_stats.file_restart_count,
                  (unsigned long)streamer_stats.partial_read_count);
 
-          printf("[P0] sd B/s=%lu frames/s=%lu refills/s=%lu chunk_last=%luB(%luf) read_max=%lums refill_max=%lums refill_avg=%lums\n",
+          AUDIO_DEBUG_LOG("[P0] sd B/s=%lu frames/s=%lu refills/s=%lu chunk_last=%luB(%luf) read_max=%lums refill_max=%lums refill_avg=%lums\n",
                  (unsigned long)bytes_per_s,
                  (unsigned long)frames_per_s,
                  (unsigned long)refills_per_s,
@@ -206,7 +207,7 @@ int main(void)
                  (unsigned long)streamer_stats.refill_time_max_ms,
                  (unsigned long)refill_avg_ms);
 
-          printf("[P0] loop stream_calls=%lu app_calls=%lu dt_stream max=%lums avg=%lums wd=%lu audio_blocks=%lu dsp_frames=%lu\n",
+          AUDIO_DEBUG_LOG("[P0] loop stream_calls=%lu app_calls=%lu dt_stream max=%lums avg=%lums wd=%lu audio_blocks=%lu dsp_frames=%lu\n",
                  (unsigned long)manager_stats.process_call_count,
                  (unsigned long)app_stats.app_process_call_count,
                  (unsigned long)manager_stats.process_dt_max_ms,
@@ -215,7 +216,7 @@ int main(void)
                  (unsigned long)audio_stats.audio_block_counter,
                  (unsigned long)audio_stats.dsp_frames_counter);
 
-          printf("[P0] ring_checks overflow=%lu underflow_logic=%lu incoherence=%lu pos_oob=%lu\n",
+          AUDIO_DEBUG_LOG("[P0] ring_checks overflow=%lu underflow_logic=%lu incoherence=%lu pos_oob=%lu\n",
                  (unsigned long)streamer_stats.ring_overflow_detect_count,
                  (unsigned long)streamer_stats.ring_underflow_logic_count,
                  (unsigned long)streamer_stats.ring_incoherence_count,
@@ -342,7 +343,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     ex: AUDIO_DEBUG_LOG("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

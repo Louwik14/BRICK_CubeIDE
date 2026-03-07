@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "audio_debug_log.h"
+
 #include "Streaming/stream_manager.h"
 
 #define VOICE_MANAGER_MAX_VOICES (24U)
@@ -51,36 +53,36 @@ void voice_manager_init(void)
 
 void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 {
-    printf("[VOICE] trigger sample=%u\r\n", (unsigned int)sample_id);
+    AUDIO_DEBUG_LOG("[VOICE] trigger sample=%u\r\n", (unsigned int)sample_id);
 
     const sample_desc_t *sample_desc = sample_pool_get(sample_id);
     if(sample_desc == NULL)
     {
-        printf("[VOICE] trigger rejected: sample_desc=NULL\r\n");
+        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: sample_desc=NULL\r\n");
         return;
     }
 
     if(sample_desc->valid == 0U)
     {
-        printf("[VOICE] trigger rejected: sample invalid\r\n");
+        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: sample invalid\r\n");
         return;
     }
 
     if(sample_desc->attack_cache == NULL)
     {
-        printf("[VOICE] trigger rejected: attack_cache=NULL\r\n");
+        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: attack_cache=NULL\r\n");
         return;
     }
 
     if(sample_desc->attack_frames == 0U)
     {
-        printf("[VOICE] trigger rejected: attack_frames=0\r\n");
+        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: attack_frames=0\r\n");
         return;
     }
 
     if(sample_desc->length_frames <= sample_desc->attack_frames)
     {
-        printf("[VOICE] trigger rejected: length=%lu attack=%lu\r\n",
+        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: length=%lu attack=%lu\r\n",
                (unsigned long)sample_desc->length_frames,
                (unsigned long)sample_desc->attack_frames);
         return;
@@ -118,7 +120,7 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     uint8_t streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
     if(!stream_manager_start_stream(sample_desc, sample_desc->attack_frames, &streamer_id))
     {
-        printf("[VOICE] trigger rejected: stream_manager_start_stream failed\r\n");
+        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: stream_manager_start_stream failed\r\n");
         return;
     }
 
@@ -133,7 +135,7 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     voices[target_index].active = 1U;
     s_voice_generation[target_index] = s_generation_counter++;
 
-    printf("[VOICE] created idx=%lu active=%u state=%u streamer=%u\r\n",
+    AUDIO_DEBUG_LOG("[VOICE] created idx=%lu active=%u state=%u streamer=%u\r\n",
            (unsigned long)target_index,
            (unsigned int)voices[target_index].active,
            (unsigned int)voices[target_index].state,
@@ -187,7 +189,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
                 {
                     voice->state = VOICE_STREAM;
 
-                    printf("[VOICE] attack->stream idx=%lu pos=%lu attack=%lu streamer=%u\r\n",
+                    AUDIO_DEBUG_LOG("[VOICE] attack->stream idx=%lu pos=%lu attack=%lu streamer=%u\r\n",
                            (unsigned long)voice_index,
                            (unsigned long)position,
                            (unsigned long)sample_desc->attack_frames,
@@ -231,7 +233,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
         if((s_process_call_count <= 8U) || ((s_process_call_count % 512U) == 0U) ||
            (initial_state != voice->state))
         {
-            printf("[VOICE] process idx=%lu active=%u state=%u pos=%lu stream_pos=%lu\r\n",
+            AUDIO_DEBUG_LOG("[VOICE] process idx=%lu active=%u state=%u pos=%lu stream_pos=%lu\r\n",
                    (unsigned long)voice_index,
                    (unsigned int)voice->active,
                    (unsigned int)voice->state,

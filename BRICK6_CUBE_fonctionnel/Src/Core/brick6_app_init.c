@@ -4,6 +4,8 @@
 
 #include <string.h>
 #include <stdio.h>
+
+#include "audio_debug_log.h"
 #include <math.h>
 
 #include "brick6_app_init.h"
@@ -29,7 +31,7 @@
 #include "Sampler/voice_manager.h"
 #include "Streaming/stream_manager.h"
 
-#define DBG(...) printf(__VA_ARGS__)
+#define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
 #define ENABLE_PERIODIC_RETRIGGER 0
 
@@ -87,7 +89,7 @@ static void my_dsp(StereoTrack *tracks,
 
     if((g_dsp_call_count <= 8U) || ((g_dsp_call_count % 512U) == 0U))
     {
-        printf("[DSP] call=%lu tracks=%lu frames=%lu tr0_en=%u\r\n",
+        AUDIO_DEBUG_LOG("[DSP] call=%lu tracks=%lu frames=%lu tr0_en=%u\r\n",
                (unsigned long)g_dsp_call_count,
                (unsigned long)track_count,
                (unsigned long)frames,
@@ -133,7 +135,7 @@ static void my_dsp(StereoTrack *tracks,
 void brick6_app_init(void)
 {
     debug_uart_init();
-    printf("\r\n[BOOT] UART OK\r\n");
+    AUDIO_DEBUG_LOG("\r\n[BOOT] UART OK\r\n");
 
     SDRAM_Init();
 

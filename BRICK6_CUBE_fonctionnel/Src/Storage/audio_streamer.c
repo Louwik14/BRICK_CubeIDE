@@ -1,6 +1,8 @@
 #include "audio_streamer.h"
 
 #include <stdio.h>
+
+#include "audio_debug_log.h"
 #include <string.h>
 
 #include "memory_layout.h"
@@ -14,13 +16,13 @@
 #define STREAM_PREFILL_TARGET_FRAMES   (8192U)
 #define STREAM_IO_FRAMES (4096U)
 
-#define STREAM_DEBUG 1
+#define STREAM_DEBUG 0
 #define STREAM_ASSERT_DEBUG 1
 
 #if STREAM_DEBUG
-#define STREAM_LOG(...) printf(__VA_ARGS__)
+#define STREAM_LOG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #else
-#define STREAM_LOG(...)
+#define STREAM_LOG(...) do {} while(0)
 #endif
 
 volatile uint32_t stream_frames_out = 0;
