@@ -99,3 +99,4 @@ void audio_streamer_stop(uint8_t streamer_id);
 void audio_streamer_process(uint8_t streamer_id);
 void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R);
 void audio_streamer_get_stats(uint8_t streamer_id, audio_streamer_stats_t *out_stats);
+bool audio_streamer_is_healthy(uint8_t streamer_id);
