@@ -21,6 +21,9 @@ static uint8_t g_process_tick_valid;
 static stream_slot_t g_stream_slots[AUDIO_STREAMER_MAX_STREAMERS];
 static uint32_t g_get_stream_frame_calls;
 
+#define STREAM_GET_FRAME_LOG_INITIAL_CALLS (8U)
+#define STREAM_GET_FRAME_LOG_PERIOD (32768U)
+
 static void stream_manager_reset_slots(void)
 {
     for(uint32_t i = 0U; i < AUDIO_STREAMER_MAX_STREAMERS; i++)
@@ -172,22 +175,20 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
         return false;
     }
 
-    audio_streamer_stats_t stats_before;
-    audio_streamer_stats_t stats_after;
-    memset(&stats_before, 0, sizeof(stats_before));
-    memset(&stats_after, 0, sizeof(stats_after));
-
-    audio_streamer_get_stats(streamer_id, &stats_before);
     audio_streamer_get_frame(streamer_id, L, R);
-    audio_streamer_get_stats(streamer_id, &stats_after);
     g_get_stream_frame_calls++;
 
-    if((g_get_stream_frame_calls <= 8U) || ((g_get_stream_frame_calls % 512U) == 0U))
+    if((g_get_stream_frame_calls <= STREAM_GET_FRAME_LOG_INITIAL_CALLS) ||
+       ((g_get_stream_frame_calls % STREAM_GET_FRAME_LOG_PERIOD) == 0U))
     {
-    	printf("[STREAM] get_frame id=%u calls=%lu ring=%lu\r\n",
-    	       (unsigned int)streamer_id,
-    	       (unsigned long)g_get_stream_frame_calls,
-    	       (unsigned long)stats_after.ring_used_frames);
+		audio_streamer_stats_t stats;
+		memset(&stats, 0, sizeof(stats));
+		audio_streamer_get_stats(streamer_id, &stats);
+
+     	printf("[STREAM] get_frame id=%u calls=%lu ring=%lu\r\n",
+     	       (unsigned int)streamer_id,
+     	       (unsigned long)g_get_stream_frame_calls,
+		       (unsigned long)stats.ring_used_frames);
     }
 
     if(!audio_streamer_is_healthy(streamer_id))
@@ -198,7 +199,7 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
         return false;
     }
 
-    return (stats_after.underrun_count == stats_before.underrun_count);
+    return true;
 }
 
 void stream_manager_stop_stream(uint8_t streamer_id)
@@ -218,4 +219,3 @@ void stream_manager_get_stats(stream_manager_stats_t *out_stats)
 
     *out_stats = g_stream_manager_stats;
 }
-
