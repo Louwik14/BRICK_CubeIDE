@@ -36,6 +36,7 @@ static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
 
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
+static uint32_t g_dsp_call_count = 0U;
 
 /* ============================================================
    UART DEBUG
@@ -81,6 +82,16 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
+    g_dsp_call_count++;
+
+    if((g_dsp_call_count <= 8U) || ((g_dsp_call_count % 512U) == 0U))
+    {
+        printf("[DSP] call=%lu tracks=%lu frames=%lu tr0_en=%u\r\n",
+               (unsigned long)g_dsp_call_count,
+               (unsigned long)track_count,
+               (unsigned long)frames,
+               (unsigned int)((track_count > 0U) ? tracks[0].enabled : 0U));
+    }
 
 #if FORCE_TONE_TEST
     for(uint32_t i = 0U; i < frames; i++)
