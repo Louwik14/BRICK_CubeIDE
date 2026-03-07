@@ -27,7 +27,7 @@ volatile uint32_t stream_frames_out = 0;
 
 static AUDIO_COLD_SDRAM float stream_rings[AUDIO_STREAMER_MAX_STREAMERS][STREAM_RING_SAMPLES];
 
-static audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
+static AUDIO_COLD_SDRAM audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
 
 static bool streamer_id_valid(uint8_t streamer_id)
 {
@@ -178,7 +178,7 @@ static bool streamer_seek_to_start_frame(audio_streamer_t *s, uint32_t start_fra
 
 static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uint32_t max_frames)
 {
-    static uint8_t io_buf[STREAM_IO_FRAMES * 8U];
+    static AUDIO_COLD_SDRAM uint8_t io_buf[STREAM_IO_FRAMES * 8U];
 
     uint32_t frames_written = 0U;
     uint32_t bytes_per_frame = s->bytes_per_frame;
@@ -460,16 +460,18 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
     {
         const uint32_t used_before = streamer_ring_used_frames(s);
 
-        if(used_before >= 1U)
+        if(used_before >= 2U)
         {
             const uint32_t idx = s->read_pos * 2U;
 
             outL = stream_rings[streamer_id][idx];
             outR = stream_rings[streamer_id][idx + 1U];
 
-            s->read_pos = (s->read_pos + 1U) % STREAM_RING_FRAMES;
-            s->total_frames_read_from_ring += 1U;
-            stream_frames_out += 1U;
+            /* HISTORICAL BEHAVIOR — streamer advances 2 frames per DSP frame.
+             * Do not change unless the half-rate DSP consumption root cause is identified. */
+            s->read_pos = (s->read_pos + 2U) % STREAM_RING_FRAMES;
+            s->total_frames_read_from_ring += 2U;
+            stream_frames_out += 2U;
         }
         else
         {
