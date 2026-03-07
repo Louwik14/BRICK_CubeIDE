@@ -27,7 +27,7 @@ volatile uint32_t stream_frames_out = 0;
 
 static AUDIO_COLD_SDRAM float stream_rings[AUDIO_STREAMER_MAX_STREAMERS][STREAM_RING_SAMPLES];
 
-static AUDIO_COLD_SDRAM audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
+static audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
 
 static bool streamer_id_valid(uint8_t streamer_id)
 {
