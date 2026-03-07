@@ -466,6 +466,13 @@ bool audio_streamer_seek_frame(uint8_t streamer_id, uint32_t frame)
         return false;
 
     s->file_data_pos = frame_offset_bytes;
+
+    __disable_irq();
+    s->read_pos = s->write_pos;
+    __enable_irq();
+
+    (void)streamer_fill_ring(streamer_id, s, STREAM_PREFILL_TARGET_FRAMES);
+
     return true;
 #else
     (void)frame;
