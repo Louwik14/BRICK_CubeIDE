@@ -205,8 +205,9 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 
                 if(!stream_manager_get_stream_frame(voice->streamer_id, &sample_l, &sample_r))
                 {
-                    voice_clear(voice_index);
-                    break;
+                    /* streamer pas encore prêt → silence temporaire */
+                    sample_l = 0.0f;
+                    sample_r = 0.0f;
                 }
 
                 sample_l = finite_or_zero(sample_l);

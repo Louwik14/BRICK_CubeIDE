@@ -1,7 +1,9 @@
-../Src/Storage/audio_streamer.c:59:13:streamer_debug_check_ring	9
-../Src/Storage/audio_streamer.c:179:17:streamer_fill_ring.isra	34
-../Src/Storage/audio_streamer.c:366:6:audio_streamer_start	4
-../Src/Storage/audio_streamer.c:396:6:audio_streamer_stop	3
-../Src/Storage/audio_streamer.c:415:6:audio_streamer_process	20
-../Src/Storage/audio_streamer.c:445:6:audio_streamer_get_frame	11
-../Src/Storage/audio_streamer.c:495:6:audio_streamer_get_stats	4
+../Src/Storage/audio_streamer.c:98:13:streamer_debug_check_ring	8
+../Src/Storage/audio_streamer.c:227:17:streamer_fill_ring.isra	37
+../Src/Storage/audio_streamer.c:423:6:audio_streamer_start	4
+../Src/Storage/audio_streamer.c:447:6:audio_streamer_stop	3
+../Src/Storage/audio_streamer.c:456:6:audio_streamer_process	26
+../Src/Storage/audio_streamer.c:491:6:audio_streamer_get_frame	13
+../Src/Storage/audio_streamer.c:570:6:audio_streamer_get_stats	5
+../Src/Storage/audio_streamer.c:599:6:audio_streamer_is_healthy	4
+../Src/Storage/audio_streamer.c:608:6:audio_streamer_is_running	2

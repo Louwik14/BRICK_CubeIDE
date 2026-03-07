@@ -1,3 +1,3 @@
-../Src/Sampler/voice_manager.c:41:6:voice_manager_init	32	static
-../Src/Sampler/voice_manager.c:49:6:voice_manager_trigger	48	static
-../Src/Sampler/voice_manager.c:104:6:voice_manager_process	72	static
+../Src/Sampler/voice_manager.c:43:6:voice_manager_init	32	static
+../Src/Sampler/voice_manager.c:52:6:voice_manager_trigger	56	static
+../Src/Sampler/voice_manager.c:146:6:voice_manager_process	88	static

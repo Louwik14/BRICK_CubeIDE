@@ -7,12 +7,8 @@
 #include "Storage/wav_parser.h"
 #include "Storage/memory_layout.h"
 
-#if defined(__has_include)
-#  if __has_include("ff.h")
-#    include "ff.h"
-#    define SAMPLE_POOL_HAS_FATFS 1
-#  endif
-#endif
+#include "ff.h"
+#define SAMPLE_POOL_HAS_FATFS 1
 
 #ifndef SAMPLE_POOL_HAS_FATFS
 #define SAMPLE_POOL_HAS_FATFS 0

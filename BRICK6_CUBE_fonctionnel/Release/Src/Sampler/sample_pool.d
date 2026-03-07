@@ -46,7 +46,7 @@ Src/Sampler/sample_pool.o: ../Src/Sampler/sample_pool.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/bsp_driver_sd.h
+ ../Inc/bsp_driver_sd.h ../Inc/Storage/memory_layout.h
 ../Inc/Sampler/sample_pool.h:
 ../Inc/Storage/wav_parser.h:
 ../Middlewares/Third_Party/FatFs/src/ff.h:
@@ -98,3 +98,4 @@ Src/Sampler/sample_pool.o: ../Src/Sampler/sample_pool.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/bsp_driver_sd.h:
+../Inc/Storage/memory_layout.h:

@@ -106,6 +106,8 @@ static void streamer_debug_check_ring(audio_streamer_t *s)
         s->write_pos %= STREAM_RING_FRAMES;
     }
 
+
+
     uint32_t r = 0U;
     uint32_t w = 0U;
     const uint32_t used = streamer_ring_snapshot_used_frames(s, &r, &w);
@@ -504,6 +506,12 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
     {
         uint32_t rd = 0U;
         const uint32_t used_before = streamer_ring_snapshot_used_frames(s, &rd, NULL);
+        if(used_before < 512U)
+        {
+            if(L) *L = 0.0f;
+            if(R) *R = 0.0f;
+            return;
+        }
 
         if(used_before >= 2U)
         {
@@ -594,5 +602,13 @@ bool audio_streamer_is_healthy(uint8_t streamer_id)
         return false;
 
     audio_streamer_t *s = &g_streamers[streamer_id];
-    return ((s->running != 0U) && (s->error == 0U));
+    return ((s->running != 0U) || (s->start_pending != 0U)) && (s->error == 0U);
+}
+
+bool audio_streamer_is_running(uint8_t streamer_id)
+{
+    if(streamer_id >= AUDIO_STREAMER_MAX_STREAMERS)
+        return false;
+
+    return g_streamers[streamer_id].running != 0U;
 }

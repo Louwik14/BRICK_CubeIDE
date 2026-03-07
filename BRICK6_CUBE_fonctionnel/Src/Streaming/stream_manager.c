@@ -84,7 +84,8 @@ void stream_manager_process(void)
 
         audio_streamer_process((uint8_t)i);
 
-        if(!audio_streamer_is_healthy((uint8_t)i))
+        if(audio_streamer_is_running((uint8_t)i) &&
+           !audio_streamer_is_healthy((uint8_t)i))
         {
             g_stream_slots[i].active = 0U;
             __DMB();
@@ -183,11 +184,10 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
 
     if((g_get_stream_frame_calls <= 8U) || ((g_get_stream_frame_calls % 512U) == 0U))
     {
-        printf("[STREAM] get_frame id=%u calls=%lu ring=%lu/%lu\r\n",
-               (unsigned int)streamer_id,
-               (unsigned long)g_get_stream_frame_calls,
-               (unsigned long)stats_after.ring_fill_samples,
-               (unsigned long)stats_after.ring_capacity_samples);
+    	printf("[STREAM] get_frame id=%u calls=%lu ring=%lu\r\n",
+    	       (unsigned int)streamer_id,
+    	       (unsigned long)g_get_stream_frame_calls,
+    	       (unsigned long)stats_after.ring_used_frames);
     }
 
     if(!audio_streamer_is_healthy(streamer_id))
@@ -218,3 +218,4 @@ void stream_manager_get_stats(stream_manager_stats_t *out_stats)
 
     *out_stats = g_stream_manager_stats;
 }
+
