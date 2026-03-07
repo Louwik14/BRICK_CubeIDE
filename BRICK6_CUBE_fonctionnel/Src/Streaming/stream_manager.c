@@ -65,8 +65,13 @@ void stream_manager_process(void)
 
     for(uint32_t i = 0U; i < AUDIO_STREAMER_MAX_STREAMERS; i++)
     {
-        if(g_stream_slots[i].active != 0U)
-            audio_streamer_process((uint8_t)i);
+        if(g_stream_slots[i].active == 0U)
+            continue;
+
+        audio_streamer_process((uint8_t)i);
+
+        if(!audio_streamer_is_healthy((uint8_t)i))
+            g_stream_slots[i].active = 0U;
     }
 }
 
@@ -118,6 +123,12 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
     if((streamer_id >= AUDIO_STREAMER_MAX_STREAMERS) || (g_stream_slots[streamer_id].active == 0U))
         return false;
 
+    if(!audio_streamer_is_healthy(streamer_id))
+    {
+        g_stream_slots[streamer_id].active = 0U;
+        return false;
+    }
+
     audio_streamer_stats_t stats_before;
     audio_streamer_stats_t stats_after;
     memset(&stats_before, 0, sizeof(stats_before));
@@ -126,6 +137,12 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
     audio_streamer_get_stats(streamer_id, &stats_before);
     audio_streamer_get_frame(streamer_id, L, R);
     audio_streamer_get_stats(streamer_id, &stats_after);
+
+    if(!audio_streamer_is_healthy(streamer_id))
+    {
+        g_stream_slots[streamer_id].active = 0U;
+        return false;
+    }
 
     return (stats_after.underrun_count == stats_before.underrun_count);
 }
