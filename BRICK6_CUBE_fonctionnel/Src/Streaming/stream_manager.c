@@ -1,5 +1,6 @@
 #include "Streaming/stream_manager.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "Storage/audio_streamer.h"
@@ -18,6 +19,7 @@ static stream_manager_stats_t g_stream_manager_stats;
 static uint32_t g_last_process_tick;
 static uint8_t g_process_tick_valid;
 static stream_slot_t g_stream_slots[AUDIO_STREAMER_MAX_STREAMERS];
+static uint32_t g_get_stream_frame_calls;
 
 static void stream_manager_reset_slots(void)
 {
@@ -34,6 +36,7 @@ bool stream_manager_start(const char *path)
     memset(&g_stream_manager_stats, 0, sizeof(g_stream_manager_stats));
     g_last_process_tick = 0U;
     g_process_tick_valid = 0U;
+    g_get_stream_frame_calls = 0U;
     stream_manager_reset_slots();
 
     if(path == NULL)
@@ -99,11 +102,21 @@ bool stream_manager_start_stream(const sample_desc_t *sample_desc,
                                  uint32_t start_frame,
                                  uint8_t *out_streamer_id)
 {
+    printf("[STREAM] start request frame=%lu\r\n", (unsigned long)start_frame);
+
     if((sample_desc == NULL) || (sample_desc->valid == 0U) || (sample_desc->path[0] == '\0'))
+    {
+        printf("[STREAM] start rejected: invalid sample descriptor\r\n");
         return false;
+    }
 
     if(start_frame >= sample_desc->length_frames)
+    {
+        printf("[STREAM] start rejected: start=%lu >= length=%lu\r\n",
+               (unsigned long)start_frame,
+               (unsigned long)sample_desc->length_frames);
         return false;
+    }
 
     uint8_t slot_id = STREAM_MANAGER_INVALID_STREAMER_ID;
 
@@ -117,16 +130,27 @@ bool stream_manager_start_stream(const sample_desc_t *sample_desc,
     }
 
     if(slot_id == STREAM_MANAGER_INVALID_STREAMER_ID)
+    {
+        printf("[STREAM] start rejected: no free slot\r\n");
         return false;
+    }
 
     if(!audio_streamer_start(slot_id, sample_desc->path, start_frame))
+    {
+        printf("[STREAM] start rejected: audio_streamer_start failed (slot=%u)\r\n", (unsigned int)slot_id);
         return false;
+    }
 
     g_stream_slots[slot_id].active = 1U;
     g_stream_slots[slot_id].stop_requested = 0U;
 
     if(out_streamer_id != NULL)
         *out_streamer_id = slot_id;
+
+    printf("[STREAM] start id=%u path=%s frame=%lu\r\n",
+           (unsigned int)slot_id,
+           sample_desc->path,
+           (unsigned long)start_frame);
 
     return true;
 }
@@ -155,6 +179,16 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
     audio_streamer_get_stats(streamer_id, &stats_before);
     audio_streamer_get_frame(streamer_id, L, R);
     audio_streamer_get_stats(streamer_id, &stats_after);
+    g_get_stream_frame_calls++;
+
+    if((g_get_stream_frame_calls <= 8U) || ((g_get_stream_frame_calls % 512U) == 0U))
+    {
+        printf("[STREAM] get_frame id=%u calls=%lu ring=%lu/%lu\r\n",
+               (unsigned int)streamer_id,
+               (unsigned long)g_get_stream_frame_calls,
+               (unsigned long)stats_after.ring_fill_samples,
+               (unsigned long)stats_after.ring_capacity_samples);
+    }
 
     if(!audio_streamer_is_healthy(streamer_id))
     {
