@@ -163,7 +163,7 @@ int main(void)
           audio_debug_stats_t audio_stats;
           brick6_app_stats_t app_stats;
 
-          audio_streamer_get_stats(&streamer_stats);
+          audio_streamer_get_stats(0U, &streamer_stats);
           stream_manager_get_stats(&manager_stats);
           audio_debug_get_stats(&audio_stats);
           brick6_app_get_stats(&app_stats);
