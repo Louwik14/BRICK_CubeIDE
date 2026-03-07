@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Storage/audio_streamer.h"
+#include "audio_debug_log.h"
 #include "stm32h7xx_hal.h"
 
 #define STREAM_MANAGER_WATCHDOG_DT_MS (20U)
@@ -106,19 +107,19 @@ bool stream_manager_start_stream(const sample_desc_t *sample_desc,
                                  uint32_t start_frame,
                                  uint8_t *out_streamer_id)
 {
-    printf("[STREAM] start request frame=%lu\r\n", (unsigned long)start_frame);
+    AUDIO_DEBUG_LOG("[STREAM] start request frame=%lu\r\n", (unsigned long)start_frame);
 
     if((sample_desc == NULL) || (sample_desc->valid == 0U) || (sample_desc->path[0] == '\0'))
     {
-        printf("[STREAM] start rejected: invalid sample descriptor\r\n");
+        AUDIO_DEBUG_LOG("[STREAM] start rejected: invalid sample descriptor\r\n");
         return false;
     }
 
     if(start_frame >= sample_desc->length_frames)
     {
-        printf("[STREAM] start rejected: start=%lu >= length=%lu\r\n",
-               (unsigned long)start_frame,
-               (unsigned long)sample_desc->length_frames);
+        AUDIO_DEBUG_LOG("[STREAM] start rejected: start=%lu >= length=%lu\r\n",
+                        (unsigned long)start_frame,
+                        (unsigned long)sample_desc->length_frames);
         return false;
     }
 
@@ -135,13 +136,13 @@ bool stream_manager_start_stream(const sample_desc_t *sample_desc,
 
     if(slot_id == STREAM_MANAGER_INVALID_STREAMER_ID)
     {
-        printf("[STREAM] start rejected: no free slot\r\n");
+        AUDIO_DEBUG_LOG("[STREAM] start rejected: no free slot\r\n");
         return false;
     }
 
     if(!audio_streamer_start(slot_id, sample_desc->path, start_frame))
     {
-        printf("[STREAM] start rejected: audio_streamer_start failed (slot=%u)\r\n", (unsigned int)slot_id);
+        AUDIO_DEBUG_LOG("[STREAM] start rejected: audio_streamer_start failed (slot=%u)\r\n", (unsigned int)slot_id);
         return false;
     }
 
@@ -151,10 +152,10 @@ bool stream_manager_start_stream(const sample_desc_t *sample_desc,
     if(out_streamer_id != NULL)
         *out_streamer_id = slot_id;
 
-    printf("[STREAM] start id=%u path=%s frame=%lu\r\n",
-           (unsigned int)slot_id,
-           sample_desc->path,
-           (unsigned long)start_frame);
+    AUDIO_DEBUG_LOG("[STREAM] start id=%u path=%s frame=%lu\r\n",
+                    (unsigned int)slot_id,
+                    sample_desc->path,
+                    (unsigned long)start_frame);
 
     return true;
 }
@@ -185,10 +186,10 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
 		memset(&stats, 0, sizeof(stats));
 		audio_streamer_get_stats(streamer_id, &stats);
 
-     	printf("[STREAM] get_frame id=%u calls=%lu ring=%lu\r\n",
-     	       (unsigned int)streamer_id,
-     	       (unsigned long)g_get_stream_frame_calls,
-		       (unsigned long)stats.ring_used_frames);
+    	AUDIO_DEBUG_LOG("[STREAM] get_frame id=%u calls=%lu ring=%lu\r\n",
+    	                (unsigned int)streamer_id,
+    	                (unsigned long)g_get_stream_frame_calls,
+		                (unsigned long)stats.ring_used_frames);
     }
 
     if(!audio_streamer_is_healthy(streamer_id))

@@ -1,10 +1,12 @@
 #include <stdio.h>
 
+#include "audio_debug_log.h"
+
 #include "App/app_sample_boot.h"
 #include "Storage/wav_loader.h"
 #include "Streaming/stream_manager.h"
 
-#define DBG(...) printf(__VA_ARGS__)
+#define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 
 void app_sample_boot_init(void)
 {
