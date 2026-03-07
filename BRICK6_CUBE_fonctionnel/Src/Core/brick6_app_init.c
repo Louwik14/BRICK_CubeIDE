@@ -26,6 +26,7 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "Sampler/voice_manager.h"
+#include "Streaming/stream_manager.h"
 
 #define DBG(...) printf(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -176,6 +177,7 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     g_brick6_app_process_call_count++;
+    stream_manager_process();
 }
 
 void brick6_app_get_stats(brick6_app_stats_t *out_stats)
