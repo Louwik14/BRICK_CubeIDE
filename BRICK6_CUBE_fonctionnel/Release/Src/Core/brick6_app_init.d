@@ -60,7 +60,11 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_pool.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h \
- ../Inc/Streaming/stream_manager.h ../Inc/App/app_sample_boot.h
+ ../Inc/Sampler/sample_pool.h ../Inc/Sampler/voice_manager.h \
+ ../Inc/Streaming/stream_manager.h ../Inc/Storage/audio_streamer.h \
+ ../Middlewares/Third_Party/FatFs/src/ff.h \
+ ../Middlewares/Third_Party/FatFs/src/integer.h ../Inc/ffconf.h \
+ ../Inc/bsp_driver_sd.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h:
@@ -124,5 +128,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_pool.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h:
+../Inc/Sampler/sample_pool.h:
+../Inc/Sampler/voice_manager.h:
 ../Inc/Streaming/stream_manager.h:
-../Inc/App/app_sample_boot.h:
+../Inc/Storage/audio_streamer.h:
+../Middlewares/Third_Party/FatFs/src/ff.h:
+../Middlewares/Third_Party/FatFs/src/integer.h:
+../Inc/ffconf.h:
+../Inc/bsp_driver_sd.h:

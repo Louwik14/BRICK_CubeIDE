@@ -18,8 +18,8 @@ RM := rm -rf
 -include Src/UI/subdir.mk
 -include Src/Streaming/subdir.mk
 -include Src/Storage/subdir.mk
--include Src/Param/subdir.mk
 -include Src/Sampler/subdir.mk
+-include Src/Param/subdir.mk
 -include Src/MIDI/subdir.mk
 -include Src/Core/subdir.mk
 -include Src/Audio/subdir.mk

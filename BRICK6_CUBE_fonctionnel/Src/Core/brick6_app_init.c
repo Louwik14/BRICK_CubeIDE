@@ -1,4 +1,3 @@
-
 /**
  * @file brick6_app_init.c
  */
@@ -25,6 +24,8 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
+
+#include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
 #include "Streaming/stream_manager.h"
 
@@ -37,7 +38,7 @@ static float g_master_gain = 1.0f;
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 
 /* ============================================================
-   UART DEBUG (hardcoded)
+   UART DEBUG
    ============================================================ */
 
 static void debug_uart_init(void)
@@ -47,7 +48,6 @@ static void debug_uart_init(void)
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-    // PA9 = USART1_TX
     GPIO_InitStruct.Pin = GPIO_PIN_9;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
@@ -67,7 +67,6 @@ static void debug_uart_init(void)
     HAL_UART_Init(&huart1);
 }
 
-/* printf → UART */
 int _write(int file, char *ptr, int len)
 {
     HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, HAL_MAX_DELAY);
@@ -101,7 +100,6 @@ static void my_dsp(StereoTrack *tracks,
             float l = tracks[0].L[i] * g_master_gain;
             float r = tracks[0].R[i] * g_master_gain;
 
-            /* Safety mute on invalid floating-point samples. */
             if(!isfinite(l) || !isfinite(r))
             {
                 l = 0.0f;
@@ -126,6 +124,7 @@ void brick6_app_init(void)
     printf("\r\n[BOOT] UART OK\r\n");
 
     SDRAM_Init();
+
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
@@ -133,22 +132,31 @@ void brick6_app_init(void)
 
     mixer_init();
     fx_pool_init();
+
     (void)fx_pool_activate_slot(0U, FX_EQ3);
     (void)fx_pool_activate_slot(1U, FX_SAT);
     (void)fx_pool_activate_slot(2U, FX_DAISY_COMP);
+
     mixer_set_track_insert_slot(0U, 0U, 2);
+
     audio_float_set_postgain(1.0f);
     audio_float_set_output_compensation(1.0f);
 
     audio_tracks_init();
 
+    DBG("[SAMPLE_POOL] init\r\n");
+    sample_pool_init();
+
+    if(sample_pool_load(0, "0:/La ritournelle.wav"))
+        DBG("[SAMPLE_POOL] sample loaded\r\n");
+    else
+        DBG("[SAMPLE_POOL] load FAILED\r\n");
+
     DBG("[VOICE] init\r\n");
     voice_manager_init();
 
-    /* Phase 3 smoke-test: retrigger same attack cache on several voices. */
-    voice_manager_trigger(0U, 0.20f, 0.20f);
-    voice_manager_trigger(0U, 0.15f, 0.15f);
-    voice_manager_trigger(0U, 0.10f, 0.10f);
+    /* Trigger immédiat pour tester le streaming */
+    voice_manager_trigger(0, 0.30f, 0.30f);
 
     mixer_set_master(2.0f);
 
@@ -174,11 +182,30 @@ void brick6_app_init(void)
     midi_init();
 }
 
+/* ============================================================
+   SUPERLOOP
+   ============================================================ */
+
 void brick6_app_process(void)
 {
+    static uint32_t last_trigger = 0;
+    uint32_t now = HAL_GetTick();
+
     g_brick6_app_process_call_count++;
+
     stream_manager_process();
+
+    /* retrigger périodique pour tester la polyphonie */
+    if(now - last_trigger > 3000)
+    {
+        voice_manager_trigger(0, 0.25f, 0.25f);
+        last_trigger = now;
+    }
 }
+
+/* ============================================================
+   STATS
+   ============================================================ */
 
 void brick6_app_get_stats(brick6_app_stats_t *out_stats)
 {

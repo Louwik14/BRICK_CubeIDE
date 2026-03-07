@@ -1,6 +1,6 @@
-Src/Streaming/stream_manager.o: ../Src/Streaming/stream_manager.c \
- ../Inc/Streaming/stream_manager.h ../Inc/Sampler/sample_pool.h \
- ../Inc/Storage/audio_streamer.h \
+Src/Sampler/voice_manager.o: ../Src/Sampler/voice_manager.c \
+ ../Inc/Sampler/voice_manager.h ../Inc/Sampler/sample_pool.h \
+ ../Inc/Streaming/stream_manager.h ../Inc/Storage/audio_streamer.h \
  ../Middlewares/Third_Party/FatFs/src/ff.h \
  ../Middlewares/Third_Party/FatFs/src/integer.h ../Inc/ffconf.h \
  ../Inc/main.h ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
@@ -48,8 +48,9 @@ Src/Streaming/stream_manager.o: ../Src/Streaming/stream_manager.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
  ../Inc/bsp_driver_sd.h
-../Inc/Streaming/stream_manager.h:
+../Inc/Sampler/voice_manager.h:
 ../Inc/Sampler/sample_pool.h:
+../Inc/Streaming/stream_manager.h:
 ../Inc/Storage/audio_streamer.h:
 ../Middlewares/Third_Party/FatFs/src/ff.h:
 ../Middlewares/Third_Party/FatFs/src/integer.h:

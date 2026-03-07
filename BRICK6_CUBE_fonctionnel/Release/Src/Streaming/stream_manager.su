@@ -1,3 +1,7 @@
-../Src/Streaming/stream_manager.c:4:6:stream_manager_start	0	static
-../Src/Streaming/stream_manager.c:9:6:stream_manager_process	0	static
-../Src/Streaming/stream_manager.c:14:6:stream_manager_get_frame	0	static
+../Src/Streaming/stream_manager.c:30:6:stream_manager_start	24	static
+../Src/Streaming/stream_manager.c:44:6:stream_manager_process	16	static
+../Src/Streaming/stream_manager.c:73:6:stream_manager_get_frame	0	static
+../Src/Streaming/stream_manager.c:78:6:stream_manager_start_stream	24	static
+../Src/Streaming/stream_manager.c:113:6:stream_manager_get_stream_frame	176	static
+../Src/Streaming/stream_manager.c:133:6:stream_manager_stop_stream	0	static
+../Src/Streaming/stream_manager.c:142:6:stream_manager_get_stats	4	static

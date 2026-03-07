@@ -1,0 +1,3 @@
+../Src/Sampler/sample_pool.c:72:6:sample_pool_init	8	static
+../Src/Sampler/sample_pool.c:82:6:sample_pool_load	512	static
+../Src/Sampler/sample_pool.c:220:22:sample_pool_get	0	static

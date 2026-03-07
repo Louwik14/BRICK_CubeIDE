@@ -46,7 +46,8 @@ Src/App/app_sample_boot.o: ../Src/App/app_sample_boot.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/bsp_driver_sd.h ../Inc/Streaming/stream_manager.h
+ ../Inc/bsp_driver_sd.h ../Inc/Streaming/stream_manager.h \
+ ../Inc/Sampler/sample_pool.h ../Inc/Storage/audio_streamer.h
 ../Inc/App/app_sample_boot.h:
 ../Inc/Storage/wav_loader.h:
 ../Inc/Storage/wav_parser.h:
@@ -100,3 +101,5 @@ Src/App/app_sample_boot.o: ../Src/App/app_sample_boot.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/bsp_driver_sd.h:
 ../Inc/Streaming/stream_manager.h:
+../Inc/Sampler/sample_pool.h:
+../Inc/Storage/audio_streamer.h:

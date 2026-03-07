@@ -402,6 +402,8 @@
 "./Src/Param/control_events.o"
 "./Src/Param/control_router.o"
 "./Src/Param/param_store.o"
+"./Src/Sampler/sample_pool.o"
+"./Src/Sampler/voice_manager.o"
 "./Src/Storage/audio_streamer.o"
 "./Src/Storage/wav_loader.o"
 "./Src/Storage/wav_parser.o"
