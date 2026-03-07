@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "Storage/wav_parser.h"
+#include "Storage/memory_layout.h"
 
 #if defined(__has_include)
 #  if __has_include("ff.h")
@@ -26,6 +27,87 @@
 #endif
 
 static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
+static AUDIO_COLD_SDRAM float g_sample_pool_attack_cache[SAMPLE_POOL_SIZE][960U * 2U];
+
+static float sample_pool_pcm24_to_float(const uint8_t *p)
+{
+    int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
+    if((v & 0x00800000L) != 0)
+        v |= (int32_t)0xFF000000L;
+    return (float)v * (1.0f / 8388608.0f);
+}
+
+static float sample_pool_pcm32_to_float(const uint8_t *p)
+{
+    int32_t v = (int32_t)((uint32_t)p[0] |
+                          ((uint32_t)p[1] << 8) |
+                          ((uint32_t)p[2] << 16) |
+                          ((uint32_t)p[3] << 24));
+    return (float)v * (1.0f / 2147483648.0f);
+}
+
+#if SAMPLE_POOL_HAS_FATFS
+static bool sample_pool_fill_attack_cache(FIL *fp,
+                                          uint16_t sample_id,
+                                          const wav_info_t *info,
+                                          uint32_t data_size_aligned,
+                                          sample_desc_t *desc)
+{
+    uint8_t io_buf[512U * 8U];
+    const uint32_t bytes_per_frame = info->block_align;
+    const uint32_t total_frames = data_size_aligned / bytes_per_frame;
+    const uint32_t attack_target_frames = (total_frames < 960U) ? total_frames : 960U;
+    uint32_t attack_loaded_frames = 0U;
+
+    if(attack_target_frames == 0U)
+        return false;
+
+    if(f_lseek(fp, info->data_offset) != FR_OK)
+        return false;
+
+    while(attack_loaded_frames < attack_target_frames)
+    {
+        const uint32_t frames_left = attack_target_frames - attack_loaded_frames;
+        const uint32_t chunk_frames = (frames_left > 512U) ? 512U : frames_left;
+        const uint32_t chunk_bytes = chunk_frames * bytes_per_frame;
+
+        UINT br = 0U;
+        if((f_read(fp, io_buf, chunk_bytes, &br) != FR_OK) || (br == 0U))
+            break;
+
+        const uint32_t ready_frames = br / bytes_per_frame;
+        for(uint32_t i = 0U; i < ready_frames; i++)
+        {
+            const uint8_t *frame = &io_buf[i * bytes_per_frame];
+            const uint32_t out = (attack_loaded_frames + i) * 2U;
+
+            if(info->bits_per_sample == 24U)
+            {
+                g_sample_pool_attack_cache[sample_id][out] = sample_pool_pcm24_to_float(&frame[0]);
+                g_sample_pool_attack_cache[sample_id][out + 1U] = sample_pool_pcm24_to_float(&frame[3]);
+            }
+            else
+            {
+                g_sample_pool_attack_cache[sample_id][out] = sample_pool_pcm32_to_float(&frame[0]);
+                g_sample_pool_attack_cache[sample_id][out + 1U] = sample_pool_pcm32_to_float(&frame[4]);
+            }
+        }
+
+        attack_loaded_frames += ready_frames;
+
+        if(ready_frames < chunk_frames)
+            break;
+    }
+
+    if(attack_loaded_frames == 0U)
+        return false;
+
+    desc->attack_cache = &g_sample_pool_attack_cache[sample_id][0];
+    desc->attack_frames = attack_loaded_frames;
+
+    return true;
+}
+#endif
 
 #if SAMPLE_POOL_HAS_FATFS
 static FATFS g_sample_pool_fs;
@@ -161,13 +243,13 @@ bool sample_pool_load(uint16_t id, const char *path)
     memset(&info, 0, sizeof(info));
 
     const bool parse_ok = wav_parser_parse_info(&fp, &info);
-    (void)f_close(&fp);
 
     if(!parse_ok)
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] parse fail id=%u path=%s\n",
                         (unsigned)id,
                         desc->path);
+        (void)f_close(&fp);
         return false;
     }
 
@@ -186,6 +268,7 @@ bool sample_pool_load(uint16_t id, const char *path)
                         (unsigned)info.bits_per_sample,
                         (unsigned)info.block_align,
                         (unsigned long)info.byte_rate);
+        (void)f_close(&fp);
         return false;
     }
 
@@ -198,16 +281,27 @@ bool sample_pool_load(uint16_t id, const char *path)
     desc->sample_rate = info.sample_rate;
     desc->channels = info.channels;
     desc->bits_per_sample = info.bits_per_sample;
-    desc->attack_cache = NULL;
-    desc->attack_frames = 0U;
+
+    if(!sample_pool_fill_attack_cache(&fp, id, &info, data_size_aligned, desc))
+    {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] attack preload fail id=%u path=%s\n",
+                        (unsigned)id,
+                        desc->path);
+        (void)f_close(&fp);
+        return false;
+    }
+
     desc->valid = 1U;
 
-    SAMPLE_POOL_LOG("[SAMPLE_POOL] loaded id=%u path=%s frames=%lu off=%lu bpf=%lu\n",
+    (void)f_close(&fp);
+
+    SAMPLE_POOL_LOG("[SAMPLE_POOL] loaded id=%u path=%s frames=%lu off=%lu bpf=%lu attack=%lu\n",
                     (unsigned)id,
                     desc->path,
                     (unsigned long)desc->length_frames,
                     (unsigned long)desc->data_offset,
-                    (unsigned long)desc->bytes_per_frame);
+                    (unsigned long)desc->bytes_per_frame,
+                    (unsigned long)desc->attack_frames);
 
     return true;
 #else
