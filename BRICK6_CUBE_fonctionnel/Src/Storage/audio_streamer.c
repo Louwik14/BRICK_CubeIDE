@@ -209,6 +209,13 @@ static bool streamer_seek_to_data_start(audio_streamer_t *s)
 
 static bool streamer_seek_to_start_frame(audio_streamer_t *s, uint32_t start_frame)
 {
+    if(s->bytes_per_frame == 0U)
+    {
+        s->error = 1U;
+        streamer_stop_internal(s);
+        return false;
+    }
+
     const uint32_t frame_offset_bytes = start_frame * s->bytes_per_frame;
 
     if(frame_offset_bytes >= s->data_size)
@@ -232,6 +239,14 @@ static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uin
 
     uint32_t frames_written = 0U;
     uint32_t bytes_per_frame = s->bytes_per_frame;
+
+    if(bytes_per_frame == 0U)
+    {
+        s->error = 1U;
+        streamer_stop_internal(s);
+        return 0U;
+    }
+
     const uint32_t refill_t0 = HAL_GetTick();
     uint32_t refill_bytes = 0U;
 
@@ -395,6 +410,13 @@ static bool streamer_prepare_start(audio_streamer_t *s, uint8_t streamer_id)
     uint32_t max_data = file_size - s->data_offset;
     if(s->data_size > max_data)
         s->data_size = max_data;
+
+    if(s->bytes_per_frame == 0U)
+    {
+        s->error = 1U;
+        streamer_stop_internal(s);
+        return false;
+    }
 
     s->data_size -= (s->data_size % s->bytes_per_frame);
 
