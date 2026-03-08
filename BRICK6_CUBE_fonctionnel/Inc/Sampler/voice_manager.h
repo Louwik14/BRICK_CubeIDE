@@ -38,7 +38,7 @@ typedef struct
     uint8_t active;
 } voice_t;
 
-extern voice_t voices[24];
+extern voice_t voices[2];
 
 void voice_manager_init(void);
 void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r);

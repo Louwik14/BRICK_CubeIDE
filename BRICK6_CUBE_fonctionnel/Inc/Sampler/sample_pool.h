@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define SAMPLE_POOL_SIZE (576U)
+#define SAMPLE_POOL_SIZE (1U)
 #define SAMPLE_POOL_PATH_MAX (64U)
 
 typedef struct

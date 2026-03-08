@@ -9,7 +9,7 @@
 #include "Streaming/stream_manager.h"
 #include "stm32h7xx_hal.h"
 
-#define VOICE_MANAGER_MAX_VOICES (24U)
+#define VOICE_MANAGER_MAX_VOICES (2U)
 #define VOICE_MANAGER_INVALID_STREAMER_ID (0xFFU)
 
 voice_t voices[VOICE_MANAGER_MAX_VOICES];
@@ -232,8 +232,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
                     const uint32_t sample_index = position * 2U;
                     sample_l = finite_or_zero(sample_desc->attack_cache[sample_index]);
                     sample_r = finite_or_zero(sample_desc->attack_cache[sample_index + 1U]);
-                    position++;
-                }
+                    position += 2;                }
 
                 if(position >= sample_desc->attack_frames)
                 {
