@@ -246,7 +246,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
                 }
             }
 
-            if(voice->state == VOICE_STREAM)
+            else if(voice->state == VOICE_STREAM)
             {
                 if(voice->loop_enabled != 0U)
                 {
