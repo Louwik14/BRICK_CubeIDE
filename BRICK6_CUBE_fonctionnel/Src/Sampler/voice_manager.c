@@ -227,14 +227,15 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 
             if(voice->state == VOICE_ATTACK)
             {
-                if(position < sample_desc->attack_frames)
+                if((position >> 1U) < sample_desc->attack_frames)
                 {
-                    const uint32_t sample_index = position * 2U;
+                    const uint32_t sample_index = position;
                     sample_l = finite_or_zero(sample_desc->attack_cache[sample_index]);
                     sample_r = finite_or_zero(sample_desc->attack_cache[sample_index + 1U]);
-                    position += 2;                }
+                    position += 2U;
+                }
 
-                if(position >= sample_desc->attack_frames)
+                if((position >> 1U) >= sample_desc->attack_frames)
                 {
                     voice->state = VOICE_STREAM;
 
