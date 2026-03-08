@@ -261,8 +261,16 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 
                     if(stream_pos >= loop_end)
                     {
-                        stream_pos = loop_start;
-                        voice->seek_target_frame = loop_start;
+                        uint32_t next_loop_start = loop_start;
+
+                        if(loop_start != 0U)
+                        {
+                            next_loop_start = 0U;
+                            voice->loop_start_frame = 0U;
+                        }
+
+                        stream_pos = next_loop_start;
+                        voice->seek_target_frame = next_loop_start;
                         voice->seek_pending = 1U;
                     }
                 }
