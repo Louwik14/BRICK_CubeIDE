@@ -31,6 +31,11 @@ static AUDIO_COLD_SDRAM float stream_rings[AUDIO_STREAMER_MAX_STREAMERS][STREAM_
 
 static audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
 
+#if AUDIO_STREAMER_HAS_FATFS
+static FATFS g_audio_streamer_fs;
+static uint8_t g_audio_streamer_fs_mounted;
+#endif
+
 static bool streamer_id_valid(uint8_t streamer_id)
 {
     return (streamer_id < AUDIO_STREAMER_MAX_STREAMERS);
@@ -356,9 +361,9 @@ static bool streamer_prepare_start(audio_streamer_t *s, uint8_t streamer_id)
     FIL fp_meta;
     FRESULT fr;
 
-    if(s->fs_mounted == 0U)
+    if(g_audio_streamer_fs_mounted == 0U)
     {
-        fr = f_mount(&s->fs, "0:", 1U);
+        fr = f_mount(&g_audio_streamer_fs, "0:", 1U);
 
         if(fr != FR_OK)
         {
@@ -366,7 +371,7 @@ static bool streamer_prepare_start(audio_streamer_t *s, uint8_t streamer_id)
             return false;
         }
 
-        s->fs_mounted = 1U;
+        g_audio_streamer_fs_mounted = 1U;
     }
 
     fr = f_open(&fp_meta, s->pending_path, FA_READ);
