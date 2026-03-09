@@ -28,6 +28,7 @@
 volatile uint32_t stream_frames_out = 0;
 
 static AUDIO_COLD_SDRAM float stream_rings[AUDIO_STREAMER_MAX_STREAMERS][STREAM_RING_SAMPLES];
+static AUDIO_COLD_SDRAM uint8_t stream_io_bufs[AUDIO_STREAMER_MAX_STREAMERS][STREAM_IO_FRAMES * 8U];
 
 static audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
 
@@ -240,7 +241,10 @@ static bool streamer_seek_to_start_frame(audio_streamer_t *s, uint32_t start_fra
 
 static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uint32_t max_frames)
 {
-    static AUDIO_COLD_SDRAM uint8_t io_buf[STREAM_IO_FRAMES * 8U];
+    if(!streamer_id_valid(streamer_id))
+        return 0U;
+
+    uint8_t *io_buf = stream_io_bufs[streamer_id];
 
     uint32_t frames_written = 0U;
     uint32_t bytes_per_frame = s->bytes_per_frame;
@@ -547,7 +551,15 @@ void audio_streamer_process(uint8_t streamer_id)
     streamer_debug_check_ring(s);
 
     if(streamer_ring_used_frames(s) < STREAM_REFILL_THRESHOLD_FRAMES)
-        (void)streamer_fill_ring(streamer_id, s, STREAM_IO_FRAMES);
+    {
+        const uint32_t filled = streamer_fill_ring(streamer_id, s, STREAM_IO_FRAMES);
+
+        AUDIO_DEBUG_LOG("[STREAM PROC] id=%u pos=%lu size=%lu fill=%lu\r\n",
+                        (unsigned int)streamer_id,
+                        (unsigned long)s->file_data_pos,
+                        (unsigned long)s->data_size,
+                        (unsigned long)filled);
+    }
 #else
     (void)streamer_id;
 #endif
