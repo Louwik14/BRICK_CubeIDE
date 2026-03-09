@@ -68,6 +68,7 @@ typedef struct
     volatile uint32_t pos_oob_count;
     volatile uint32_t last_refill_bytes;
     volatile uint32_t last_refill_frames;
+    volatile uint32_t refill_fail_count;
 
 } audio_streamer_t;
 
@@ -92,6 +93,7 @@ typedef struct
     uint32_t pos_oob_count;
     uint32_t last_refill_bytes;
     uint32_t last_refill_frames;
+    uint32_t refill_fail_count;
 } audio_streamer_stats_t;
 
 bool audio_streamer_start(uint8_t streamer_id, const char *path, uint32_t start_frame);
