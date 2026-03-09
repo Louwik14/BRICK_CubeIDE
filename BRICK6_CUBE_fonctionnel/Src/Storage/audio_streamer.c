@@ -617,12 +617,11 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
             outL = stream_rings[streamer_id][idx];
             outR = stream_rings[streamer_id][idx + 1U];
 
-            /* HISTORICAL BEHAVIOR — streamer advances 2 frames per DSP frame.
-             * Do not change unless the half-rate DSP consumption root cause is identified. */
-            rd = (rd + 2U) % STREAM_RING_FRAMES;
+            /* One DSP frame consumes one stereo frame from the streaming ring. */
+            rd = (rd + 1U) % STREAM_RING_FRAMES;
             s->read_pos = rd;
-            s->total_frames_read_from_ring += 2U;
-            stream_frames_out += 2U;
+            s->total_frames_read_from_ring += 1U;
+            stream_frames_out += 1U;
         }
         else
         {

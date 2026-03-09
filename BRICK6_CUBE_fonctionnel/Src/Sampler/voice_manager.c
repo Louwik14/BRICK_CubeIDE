@@ -293,23 +293,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
                     sample_l = finite_or_zero(sample_l);
                     sample_r = finite_or_zero(sample_r);
 
-                    stream_pos += 2;
-                    /* IMPORTANT — DO NOT CHANGE
-                     *
-                     * The streamer consumes 2 frames per call (rd += 2) in audio_streamer_get_frame().
-                     * voice_manager_process() must advance stream_pos_frames by the same amount.
-                     *
-                     * If this increment is changed to +1, the voice position and the streamer
-                     * file position desynchronize. This causes the streamer to reach EOF before
-                     * the loop condition triggers, resulting in several seconds of silence.
-                     *
-                     * This bug was diagnosed with GDB by comparing:
-                     *   voice->stream_pos_frames
-                     *   vs
-                     *   g_streamers[x].file_data_pos / bytes_per_frame
-                     *
-                     * Therefore stream_pos_frames MUST stay aligned with the streamer step.
-                     */
+                    stream_pos += 1U;
                 }
             }
 
