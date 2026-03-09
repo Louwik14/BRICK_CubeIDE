@@ -33,6 +33,7 @@ typedef struct
 
     uint8_t seek_pending;
     uint32_t seek_target_frame;
+    uint16_t seek_retry_count;
 
     voice_state_t state;
     uint8_t active;

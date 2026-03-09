@@ -43,6 +43,7 @@ static void voice_clear(uint32_t index)
     voices[index].loop_end_frame = 0U;
     voices[index].seek_pending = 0U;
     voices[index].seek_target_frame = 0U;
+    voices[index].seek_retry_count = 0U;
     voices[index].state = VOICE_OFF;
     voices[index].active = 0U;
     s_voice_generation[index] = 0U;
@@ -142,6 +143,7 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     voices[target_index].loop_end_frame = sample_desc->length_frames;
     voices[target_index].seek_pending = 0U;
     voices[target_index].seek_target_frame = sample_desc->attack_frames;
+    voices[target_index].seek_retry_count = 0U;
     voices[target_index].state = VOICE_ATTACK;
     voices[target_index].active = 1U;
     s_voice_generation[target_index] = s_generation_counter++;
@@ -188,6 +190,20 @@ void voice_manager_service(void)
                 {
                     voice_commit->stream_pos_frames = seek_target;
                     voice_commit->seek_pending = 0U;
+                    voice_commit->seek_retry_count = 0U;
+                }
+                __enable_irq();
+            }
+            else
+            {
+                __disable_irq();
+                voice_t *voice_commit = &voices[voice_index];
+                if((voice_commit->active != 0U) && (voice_commit->seek_pending != 0U) &&
+                   (voice_commit->streamer_id == streamer_id) &&
+                   (voice_commit->seek_target_frame == seek_target))
+                {
+                    if(voice_commit->seek_retry_count < 0xFFFFU)
+                        voice_commit->seek_retry_count++;
                 }
                 __enable_irq();
             }
@@ -262,13 +278,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 
                     if(stream_pos >= loop_end)
                     {
-                        uint32_t next_loop_start = loop_start;
-
-                        if(loop_start != 0U)
-                        {
-                            next_loop_start = 0U;
-                            voice->loop_start_frame = 0U;
-                        }
+                        const uint32_t next_loop_start = loop_start;
 
                         stream_pos = next_loop_start;
                         voice->seek_target_frame = next_loop_start;
