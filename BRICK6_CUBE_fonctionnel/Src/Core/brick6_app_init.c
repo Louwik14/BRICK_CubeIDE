@@ -33,7 +33,7 @@
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
-#define ENABLE_PERIODIC_RETRIGGER 0
+#define ENABLE_PERIODIC_RETRIGGER 1
 
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
@@ -162,15 +162,21 @@ void brick6_app_init(void)
     sample_pool_init();
 
     if(sample_pool_load(0, "0:/Drum.wav"))
-        DBG("[SAMPLE_POOL] sample loaded\r\n");
+        DBG("[SAMPLE_POOL] sample 0 loaded\r\n");
     else
-        DBG("[SAMPLE_POOL] load FAILED\r\n");
+        DBG("[SAMPLE_POOL] sample 0 load FAILED\r\n");
+
+    if(sample_pool_load(1, "0:/La ritournelle.wav"))
+        DBG("[SAMPLE_POOL] sample 1 loaded\r\n");
+    else
+        DBG("[SAMPLE_POOL] sample 1 load FAILED\r\n");
 
     DBG("[VOICE] init\r\n");
     voice_manager_init();
 
     /* Trigger immédiat pour tester le streaming */
     voice_manager_trigger(0, 0.30f, 0.30f);
+    voice_manager_trigger(1, 0.30f, 0.30f);
 
     mixer_set_master(2.0f);
 
@@ -214,9 +220,10 @@ void brick6_app_process(void)
 
     /* retrigger périodique pour tester la polyphonie */
 #if ENABLE_PERIODIC_RETRIGGER
-    if(now - last_trigger > 3000)
+    if(now - last_trigger > 4000)
     {
-        voice_manager_trigger(0, 0.25f, 0.25f);
+        voice_manager_trigger(0, 0.30f, 0.30f);
+        voice_manager_trigger(1, 0.30f, 0.30f);
         last_trigger = now;
     }
 #else
