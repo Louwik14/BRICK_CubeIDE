@@ -1,5 +1,5 @@
 ../Src/Core/brick6_app_init.c:84:13:my_dsp	24	static
 ../Src/Core/brick6_app_init.c:74:5:_write	8	static
 ../Src/Core/brick6_app_init.c:135:6:brick6_app_init	48	static
-../Src/Core/brick6_app_init.c:203:6:brick6_app_process	8	static
-../Src/Core/brick6_app_init.c:231:6:brick6_app_get_stats	0	static
+../Src/Core/brick6_app_init.c:209:6:brick6_app_process	8	static
+../Src/Core/brick6_app_init.c:238:6:brick6_app_get_stats	0	static

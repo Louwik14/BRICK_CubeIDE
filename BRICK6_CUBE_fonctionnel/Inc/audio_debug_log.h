@@ -6,7 +6,7 @@
  * Set AUDIO_DEBUG_LOG_ENABLED to 1 to re-enable logs.
  */
 #ifndef AUDIO_DEBUG_LOG_ENABLED
-#define AUDIO_DEBUG_LOG_ENABLED 0
+#define AUDIO_DEBUG_LOG_ENABLED 1
 #endif
 
 #if AUDIO_DEBUG_LOG_ENABLED

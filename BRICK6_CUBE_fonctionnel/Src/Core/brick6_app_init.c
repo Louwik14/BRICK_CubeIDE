@@ -33,7 +33,7 @@
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
-#define ENABLE_PERIODIC_RETRIGGER 1
+#define ENABLE_PERIODIC_RETRIGGER 0
 
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
