@@ -23,7 +23,7 @@
 #endif
 
 static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
-static AUDIO_COLD_SDRAM float g_sample_pool_attack_cache[SAMPLE_POOL_SIZE][96000U * 2U];
+static AUDIO_COLD_SDRAM float g_sample_pool_attack_cache[SAMPLE_POOL_SIZE][4096U * 2U];
 
 static float sample_pool_pcm24_to_float(const uint8_t *p)
 {
@@ -52,7 +52,7 @@ static bool sample_pool_fill_attack_cache(FIL *fp,
     uint8_t io_buf[512U * 8U];
     const uint32_t bytes_per_frame = info->block_align;
     const uint32_t total_frames = data_size_aligned / bytes_per_frame;
-    const uint32_t attack_target_frames = (total_frames < 96000U) ? total_frames : 96000U;
+    const uint32_t attack_target_frames = (total_frames < 4096U) ? total_frames : 4096U;
     uint32_t attack_loaded_frames = 0U;
 
     if(attack_target_frames == 0U)
