@@ -27,9 +27,20 @@
 
 volatile uint32_t stream_frames_out = 0;
 
+
+#define STREAM_UNDERRUN_LOG_PERIOD (1000U)
+#define STREAM_RING_LOW_LOG_PERIOD (256U)
+#define STREAM_PROCESS_LOG_PERIOD (256U)
+#define STREAM_REFILL_LOG_PERIOD (64U)
+
 static AUDIO_COLD_SDRAM float stream_rings[AUDIO_STREAMER_MAX_STREAMERS][STREAM_RING_SAMPLES];
 
 static audio_streamer_t g_streamers[AUDIO_STREAMER_MAX_STREAMERS];
+
+static uint32_t g_stream_process_log_counter[AUDIO_STREAMER_MAX_STREAMERS];
+static uint32_t g_stream_refill_log_counter[AUDIO_STREAMER_MAX_STREAMERS];
+static uint32_t g_stream_underrun_log_counter[AUDIO_STREAMER_MAX_STREAMERS];
+static uint32_t g_stream_ring_low_log_counter[AUDIO_STREAMER_MAX_STREAMERS];
 
 #if AUDIO_STREAMER_HAS_FATFS
 static FATFS g_audio_streamer_fs;
@@ -255,6 +266,20 @@ static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uin
     const uint32_t refill_t0 = HAL_GetTick();
     uint32_t refill_bytes = 0U;
 
+    const uint32_t refill_log_seq = ++g_stream_refill_log_counter[streamer_id];
+    const uint8_t refill_log_enabled = ((refill_log_seq <= 8U) ||
+                                        ((refill_log_seq % STREAM_REFILL_LOG_PERIOD) == 0U));
+    if(refill_log_enabled != 0U)
+    {
+        const uint32_t used_start = streamer_ring_used_frames(s);
+        const uint32_t space_start = streamer_ring_space_frames(s);
+        AUDIO_DEBUG_LOG("[STREAM REFILL START] id=%u used=%lu space=%lu file_pos=%lu\r\n",
+                        (unsigned int)streamer_id,
+                        (unsigned long)used_start,
+                        (unsigned long)space_start,
+                        (unsigned long)s->file_data_pos);
+    }
+
     while(frames_written < max_frames)
     {
         streamer_debug_check_ring(s);
@@ -278,6 +303,13 @@ static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uin
 
         if(frames_left_file == 0U)
         {
+            if(refill_log_enabled != 0U)
+            {
+                AUDIO_DEBUG_LOG("[STREAM EOF] id=%u pos=%lu size=%lu\r\n",
+                                (unsigned int)streamer_id,
+                                (unsigned long)s->file_data_pos,
+                                (unsigned long)s->data_size);
+            }
             return frames_written;
         }
 
@@ -287,9 +319,20 @@ static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uin
         uint32_t read_bytes = chunk_frames * bytes_per_frame;
 
         uint32_t bytes_read = 0U;
+        const uint32_t sd_read_t0 = HAL_GetTick();
 
         if(!streamer_read_bytes(s, io_buf, read_bytes, &bytes_read))
             return frames_written;
+
+        if(refill_log_enabled != 0U)
+        {
+            const uint32_t sd_read_dt = HAL_GetTick() - sd_read_t0;
+            AUDIO_DEBUG_LOG("[STREAM SD READ] id=%u req=%lu read=%lu dt=%lu\r\n",
+                            (unsigned int)streamer_id,
+                            (unsigned long)read_bytes,
+                            (unsigned long)bytes_read,
+                            (unsigned long)sd_read_dt);
+        }
 
         uint32_t ready_frames = bytes_read / bytes_per_frame;
 
@@ -348,6 +391,18 @@ static uint32_t streamer_fill_ring(uint8_t streamer_id, audio_streamer_t *s, uin
     }
 
     streamer_debug_check_ring(s);
+
+    if(frames_written == 0U)
+        s->refill_fail_count++;
+
+    if(refill_log_enabled != 0U)
+    {
+        const uint32_t new_used = streamer_ring_used_frames(s);
+        AUDIO_DEBUG_LOG("[STREAM REFILL END] id=%u wrote=%lu new_used=%lu\r\n",
+                        (unsigned int)streamer_id,
+                        (unsigned long)frames_written,
+                        (unsigned long)new_used);
+    }
 
     return frames_written;
 }
@@ -546,8 +601,26 @@ void audio_streamer_process(uint8_t streamer_id)
 
     streamer_debug_check_ring(s);
 
-    if(streamer_ring_used_frames(s) < STREAM_REFILL_THRESHOLD_FRAMES)
+    const uint32_t used = streamer_ring_used_frames(s);
+    const uint32_t process_log_seq = ++g_stream_process_log_counter[streamer_id];
+    if((process_log_seq <= 8U) || ((process_log_seq % STREAM_PROCESS_LOG_PERIOD) == 0U))
+    {
+        AUDIO_DEBUG_LOG("[STREAM PROCESS] id=%u used=%lu threshold=%u\r\n",
+                        (unsigned int)streamer_id,
+                        (unsigned long)used,
+                        (unsigned int)STREAM_REFILL_THRESHOLD_FRAMES);
+    }
+
+    if(used < STREAM_REFILL_THRESHOLD_FRAMES)
+    {
+        if((process_log_seq <= 8U) || ((process_log_seq % STREAM_PROCESS_LOG_PERIOD) == 0U))
+        {
+            AUDIO_DEBUG_LOG("[STREAM REFILL TRIGGER] id=%u used=%lu\r\n",
+                            (unsigned int)streamer_id,
+                            (unsigned long)used);
+        }
         (void)streamer_fill_ring(streamer_id, s, STREAM_IO_FRAMES);
+    }
 #else
     (void)streamer_id;
 #endif
@@ -570,9 +643,33 @@ void audio_streamer_get_frame(uint8_t streamer_id, float *L, float *R)
     if((s->running != 0U) && (s->error == 0U))
     {
         uint32_t rd = 0U;
-        const uint32_t used_before = streamer_ring_snapshot_used_frames(s, &rd, NULL);
+        uint32_t wr = 0U;
+        const uint32_t used_before = streamer_ring_snapshot_used_frames(s, &rd, &wr);
+
+        if(used_before < 1024U)
+        {
+            const uint32_t ring_low_seq = ++g_stream_ring_low_log_counter[streamer_id];
+            if((ring_low_seq <= 8U) || ((ring_low_seq % STREAM_RING_LOW_LOG_PERIOD) == 0U))
+            {
+                AUDIO_DEBUG_LOG("[STREAM RING LOW] id=%u used=%lu rd=%lu wr=%lu\r\n",
+                                (unsigned int)streamer_id,
+                                (unsigned long)used_before,
+                                (unsigned long)rd,
+                                (unsigned long)wr);
+            }
+        }
+
         if(used_before < 512U)
         {
+            const uint32_t underrun_seq = ++g_stream_underrun_log_counter[streamer_id];
+            if((underrun_seq % STREAM_UNDERRUN_LOG_PERIOD) == 0U)
+            {
+                AUDIO_DEBUG_LOG("[STREAM UNDERRUN] id=%u used=%lu rd=%lu wr=%lu\r\n",
+                                (unsigned int)streamer_id,
+                                (unsigned long)used_before,
+                                (unsigned long)rd,
+                                (unsigned long)wr);
+            }
             if(L) *L = 0.0f;
             if(R) *R = 0.0f;
             return;
@@ -658,6 +755,7 @@ void audio_streamer_get_stats(uint8_t streamer_id, audio_streamer_stats_t *out_s
     out_stats->pos_oob_count = s->pos_oob_count;
     out_stats->last_refill_bytes = s->last_refill_bytes;
     out_stats->last_refill_frames = s->last_refill_frames;
+    out_stats->refill_fail_count = s->refill_fail_count;
 }
 
 

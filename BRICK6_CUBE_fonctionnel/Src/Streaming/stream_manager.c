@@ -21,9 +21,13 @@ static uint32_t g_last_process_tick;
 static uint8_t g_process_tick_valid;
 static stream_slot_t g_stream_slots[AUDIO_STREAMER_MAX_STREAMERS];
 static uint32_t g_get_stream_frame_calls;
+static uint32_t g_process_delay_log_counter;
+static uint32_t g_manager_stop_log_counter[AUDIO_STREAMER_MAX_STREAMERS];
 
 #define STREAM_GET_FRAME_LOG_INITIAL_CALLS (8U)
 #define STREAM_GET_FRAME_LOG_PERIOD (32768U)
+#define STREAM_PROCESS_DELAY_LOG_PERIOD (32U)
+#define STREAM_MANAGER_STOP_LOG_PERIOD (64U)
 
 static void stream_manager_reset_slots(void)
 {
@@ -41,6 +45,8 @@ bool stream_manager_start(const char *path)
     g_last_process_tick = 0U;
     g_process_tick_valid = 0U;
     g_get_stream_frame_calls = 0U;
+    g_process_delay_log_counter = 0U;
+    memset(g_manager_stop_log_counter, 0, sizeof(g_manager_stop_log_counter));
     stream_manager_reset_slots();
 
     if(path == NULL)
@@ -68,6 +74,16 @@ void stream_manager_process(void)
 
         if(dt > STREAM_MANAGER_WATCHDOG_DT_MS)
             g_stream_manager_stats.process_watchdog_count++;
+
+        if(dt > 50U)
+        {
+            g_process_delay_log_counter++;
+            if((g_process_delay_log_counter <= 8U) ||
+               ((g_process_delay_log_counter % STREAM_PROCESS_DELAY_LOG_PERIOD) == 0U))
+            {
+                AUDIO_DEBUG_LOG("[STREAM PROCESS DELAY] dt=%lu\r\n", (unsigned long)dt);
+            }
+        }
     }
 
     g_last_process_tick = now;
@@ -91,6 +107,17 @@ void stream_manager_process(void)
         if(audio_streamer_is_running((uint8_t)i) &&
            !audio_streamer_is_healthy((uint8_t)i))
         {
+            const bool healthy = audio_streamer_is_healthy((uint8_t)i);
+            const bool running = audio_streamer_is_running((uint8_t)i);
+            const uint32_t stop_log_seq = ++g_manager_stop_log_counter[i];
+            if((stop_log_seq <= 8U) || ((stop_log_seq % STREAM_MANAGER_STOP_LOG_PERIOD) == 0U))
+            {
+                AUDIO_DEBUG_LOG("[STREAM MANAGER STOP] id=%u healthy=%u running=%u\r\n",
+                                (unsigned int)i,
+                                healthy ? 1U : 0U,
+                                running ? 1U : 0U);
+            }
+
             g_stream_slots[i].active = 0U;
             __DMB();
             g_stream_slots[i].stop_requested = 1U;
@@ -170,6 +197,17 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
 
     if(!audio_streamer_is_healthy(streamer_id))
     {
+        const bool healthy = audio_streamer_is_healthy(streamer_id);
+        const bool running = audio_streamer_is_running(streamer_id);
+        const uint32_t stop_log_seq = ++g_manager_stop_log_counter[streamer_id];
+        if((stop_log_seq <= 8U) || ((stop_log_seq % STREAM_MANAGER_STOP_LOG_PERIOD) == 0U))
+        {
+            AUDIO_DEBUG_LOG("[STREAM MANAGER STOP] id=%u healthy=%u running=%u\r\n",
+                            (unsigned int)streamer_id,
+                            healthy ? 1U : 0U,
+                            running ? 1U : 0U);
+        }
+
         g_stream_slots[streamer_id].active = 0U;
         __DMB();
         g_stream_slots[streamer_id].stop_requested = 1U;
@@ -194,6 +232,17 @@ bool stream_manager_get_stream_frame(uint8_t streamer_id, float *L, float *R)
 
     if(!audio_streamer_is_healthy(streamer_id))
     {
+        const bool healthy = audio_streamer_is_healthy(streamer_id);
+        const bool running = audio_streamer_is_running(streamer_id);
+        const uint32_t stop_log_seq = ++g_manager_stop_log_counter[streamer_id];
+        if((stop_log_seq <= 8U) || ((stop_log_seq % STREAM_MANAGER_STOP_LOG_PERIOD) == 0U))
+        {
+            AUDIO_DEBUG_LOG("[STREAM MANAGER STOP] id=%u healthy=%u running=%u\r\n",
+                            (unsigned int)streamer_id,
+                            healthy ? 1U : 0U,
+                            running ? 1U : 0U);
+        }
+
         g_stream_slots[streamer_id].active = 0U;
         __DMB();
         g_stream_slots[streamer_id].stop_requested = 1U;
