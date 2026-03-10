@@ -131,6 +131,11 @@ static void my_dsp(StereoTrack *tracks,
     }
 
     mixer_process(tracks, track_count, frames);
+
+    live_recorder_write(&g_live_recorder,
+                        tracks[0].L,
+                        tracks[0].R,
+                        frames);
 }
 
 /* ============================================================
@@ -182,6 +187,7 @@ void brick6_app_init(void)
                              LIVE_RECORDER_MAX_FRAMES);
     live_recorder_set_loop_length(&g_live_recorder,
                                   LIVE_RECORDER_MAX_FRAMES);
+    live_recorder_start_record(&g_live_recorder);
 
     DBG("[VOICE] init\r\n");
     voice_manager_init();

@@ -44,6 +44,12 @@ void live_recorder_stop_record(live_recorder_t *rec);
 void live_recorder_start_play(live_recorder_t *rec);
 void live_recorder_stop_play(live_recorder_t *rec);
 
+void live_recorder_write(live_recorder_t *rec,
+                         const float *L,
+                         const float *R,
+                         uint32_t frames);
+
+
 #ifdef __cplusplus
 }
 #endif
