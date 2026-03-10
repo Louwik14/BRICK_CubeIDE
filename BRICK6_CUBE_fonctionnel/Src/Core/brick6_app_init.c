@@ -131,9 +131,24 @@ static void my_dsp(StereoTrack *tracks,
             tracks[0].L[i] = l;
             tracks[0].R[i] = r;
         }
+
+        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_RAW,
+                                      0U,
+                                      tracks[0].L,
+                                      tracks[0].R,
+                                      frames);
     }
 
     mixer_process(tracks, track_count, frames);
+
+    if(track_count > 0U)
+    {
+        sd_recorder_capture_tap_block(SD_RECORDER_TAP_MASTER,
+                                      0U,
+                                      tracks[0].L,
+                                      tracks[0].R,
+                                      frames);
+    }
 
     live_recorder_write(&g_live_recorder,
                         tracks[0].L,

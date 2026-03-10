@@ -46,6 +46,9 @@ typedef struct
     uint32_t rejected_state_requests;
     uint32_t block_boundary_calls;
     uint32_t transition_count;
+    uint32_t stem_blocks_captured[SD_RECORDER_MAX_STEMS];
+    uint32_t stem_blocks_dropped_overflow[SD_RECORDER_MAX_STEMS];
+    uint32_t stem_ring_high_watermark[SD_RECORDER_MAX_STEMS];
 } sd_recorder_debug_t;
 
 void sd_recorder_init(void);
@@ -57,6 +60,11 @@ uint8_t sd_recorder_request_arm_stem(uint8_t stem_id,
 uint8_t sd_recorder_request_disarm_stem(uint8_t stem_id);
 
 void sd_recorder_audio_block_begin(uint32_t frames);
+void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
+                                   uint8_t bus_id,
+                                   const float *src_l,
+                                   const float *src_r,
+                                   uint32_t frames);
 
 sd_recorder_state_t sd_recorder_get_state(void);
 void sd_recorder_get_debug(sd_recorder_debug_t *out_debug);
