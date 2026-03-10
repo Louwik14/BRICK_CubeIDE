@@ -49,6 +49,11 @@ void live_recorder_write(live_recorder_t *rec,
                          const float *R,
                          uint32_t frames);
 
+void live_recorder_read(live_recorder_t *rec,
+                        float *outL,
+                        float *outR,
+                        uint32_t frames);
+
 
 #ifdef __cplusplus
 }

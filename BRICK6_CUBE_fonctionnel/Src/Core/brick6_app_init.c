@@ -136,6 +136,19 @@ static void my_dsp(StereoTrack *tracks,
                         tracks[0].L,
                         tracks[0].R,
                         frames);
+
+    static float recL[AUDIO_BLOCK_SIZE];
+    static float recR[AUDIO_BLOCK_SIZE];
+    const float xfade = 0.0f;
+    const float live_gain = 1.0f - xfade;
+
+    live_recorder_read(&g_live_recorder, recL, recR, frames);
+
+    for(uint32_t i = 0U; i < frames; i++)
+    {
+        tracks[0].L[i] = (tracks[0].L[i] * live_gain) + (recL[i] * xfade);
+        tracks[0].R[i] = (tracks[0].R[i] * live_gain) + (recR[i] * xfade);
+    }
 }
 
 /* ============================================================
@@ -188,6 +201,7 @@ void brick6_app_init(void)
     live_recorder_set_loop_length(&g_live_recorder,
                                   LIVE_RECORDER_MAX_FRAMES);
     live_recorder_start_record(&g_live_recorder);
+    live_recorder_start_play(&g_live_recorder);
 
     DBG("[VOICE] init\r\n");
     voice_manager_init();

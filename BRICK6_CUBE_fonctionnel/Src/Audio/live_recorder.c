@@ -1,6 +1,9 @@
 #include "Audio/live_recorder.h"
 
 #include <stddef.h>
+#include <string.h>
+
+#define LIVE_RECORDER_READ_SAFETY_MARGIN_FRAMES (256U)
 
 void live_recorder_init(live_recorder_t *rec)
 {
@@ -115,4 +118,53 @@ void live_recorder_write(live_recorder_t *rec,
     }
 
     rec->write_pos = write_pos;
+}
+
+
+void live_recorder_read(live_recorder_t *rec,
+                        float *outL,
+                        float *outR,
+                        uint32_t frames)
+{
+    if((outL == NULL) || (outR == NULL))
+        return;
+
+    if((rec == NULL) || (rec->playing == 0U) || (rec->buffer == NULL) || (rec->loop_frames == 0U))
+    {
+        memset(outL, 0, sizeof(float) * frames);
+        memset(outR, 0, sizeof(float) * frames);
+        return;
+    }
+
+    const float *buffer = rec->buffer;
+    const uint32_t loop_frames = rec->loop_frames;
+    const uint32_t write_pos = rec->write_pos;
+    uint32_t read_pos = rec->read_pos;
+
+    for(uint32_t i = 0U; i < frames; i++)
+    {
+        uint32_t distance;
+        if(write_pos >= read_pos)
+            distance = write_pos - read_pos;
+        else
+            distance = loop_frames - (read_pos - write_pos);
+
+        if(distance < LIVE_RECORDER_READ_SAFETY_MARGIN_FRAMES)
+        {
+            outL[i] = 0.0f;
+            outR[i] = 0.0f;
+        }
+        else
+        {
+            const uint32_t idx = read_pos * 2U;
+            outL[i] = buffer[idx];
+            outR[i] = buffer[idx + 1U];
+        }
+
+        read_pos++;
+        if(read_pos >= loop_frames)
+            read_pos = 0U;
+    }
+
+    rec->read_pos = read_pos;
 }

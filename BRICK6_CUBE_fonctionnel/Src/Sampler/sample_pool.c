@@ -25,8 +25,12 @@
 
 static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
 
+#define SAMPLE_POOL_RESIDENT_SLOTS (8U)
 #define SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE (32768U)
-static AUDIO_COLD_SDRAM float g_sample_pool_data[SAMPLE_POOL_SIZE][SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE * 2U];
+static AUDIO_COLD_SDRAM float g_sample_pool_data[SAMPLE_POOL_RESIDENT_SLOTS][SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE * 2U];
+
+static int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
+static uint8_t g_sample_slot_in_use[SAMPLE_POOL_RESIDENT_SLOTS];
 
 static float sample_pool_pcm24_to_float(const uint8_t *p)
 {
@@ -45,9 +49,35 @@ static float sample_pool_pcm32_to_float(const uint8_t *p)
     return (float)v * (1.0f / 2147483648.0f);
 }
 
+static void sample_pool_release_slot(uint16_t sample_id)
+{
+    if(sample_id >= SAMPLE_POOL_SIZE)
+        return;
+
+    const int16_t slot = g_sample_slot_by_sample[sample_id];
+    if((slot >= 0) && ((uint32_t)slot < SAMPLE_POOL_RESIDENT_SLOTS))
+        g_sample_slot_in_use[(uint32_t)slot] = 0U;
+
+    g_sample_slot_by_sample[sample_id] = -1;
+}
+
+static int16_t sample_pool_alloc_slot(void)
+{
+    for(uint32_t i = 0U; i < SAMPLE_POOL_RESIDENT_SLOTS; i++)
+    {
+        if(g_sample_slot_in_use[i] == 0U)
+        {
+            g_sample_slot_in_use[i] = 1U;
+            return (int16_t)i;
+        }
+    }
+
+    return -1;
+}
+
 #if SAMPLE_POOL_HAS_FATFS
 static bool sample_pool_load_full_data(FIL *fp,
-                                       uint16_t sample_id,
+                                       uint16_t slot,
                                        const wav_info_t *info,
                                        uint32_t data_size_aligned,
                                        sample_desc_t *desc)
@@ -59,11 +89,12 @@ static bool sample_pool_load_full_data(FIL *fp,
 
     if(total_frames == 0U)
         return false;
+    }
 
     if(total_frames > SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE)
     {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] sample too large id=%u frames=%lu max=%u\n",
-                        (unsigned)sample_id,
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] sample too large slot=%u frames=%lu max=%u\n",
+                        (unsigned)slot,
                         (unsigned long)total_frames,
                         (unsigned)SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE);
         return false;
@@ -90,13 +121,13 @@ static bool sample_pool_load_full_data(FIL *fp,
 
             if(info->bits_per_sample == 24U)
             {
-                g_sample_pool_data[sample_id][out] = sample_pool_pcm24_to_float(&frame[0]);
-                g_sample_pool_data[sample_id][out + 1U] = sample_pool_pcm24_to_float(&frame[3]);
+                g_sample_pool_data[slot][out] = sample_pool_pcm24_to_float(&frame[0]);
+                g_sample_pool_data[slot][out + 1U] = sample_pool_pcm24_to_float(&frame[3]);
             }
             else
             {
-                g_sample_pool_data[sample_id][out] = sample_pool_pcm32_to_float(&frame[0]);
-                g_sample_pool_data[sample_id][out + 1U] = sample_pool_pcm32_to_float(&frame[4]);
+                g_sample_pool_data[slot][out] = sample_pool_pcm32_to_float(&frame[0]);
+                g_sample_pool_data[slot][out + 1U] = sample_pool_pcm32_to_float(&frame[4]);
             }
         }
 
@@ -109,7 +140,7 @@ static bool sample_pool_load_full_data(FIL *fp,
     if(loaded_frames != total_frames)
         return false;
 
-    desc->data = &g_sample_pool_data[sample_id][0];
+    desc->data = &g_sample_pool_data[slot][0];
     return true;
 }
 #endif
@@ -158,7 +189,12 @@ static size_t sample_pool_trim_path_copy(char *dst, size_t dst_size, const char 
 void sample_pool_init(void)
 {
     for(uint32_t i = 0U; i < SAMPLE_POOL_SIZE; i++)
+    {
         sample_pool_clear_entry(&g_sample_pool[i]);
+        g_sample_slot_by_sample[i] = -1;
+    }
+
+    memset(g_sample_slot_in_use, 0, sizeof(g_sample_slot_in_use));
 
 #if SAMPLE_POOL_HAS_FATFS
     g_sample_pool_fs_mounted = 0U;
@@ -174,6 +210,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     }
 
     sample_desc_t *desc = &g_sample_pool[id];
+    sample_pool_release_slot(id);
     sample_pool_clear_entry(desc);
 
     if((path == NULL) || (path[0] == '\0'))
@@ -202,11 +239,20 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
+    const int16_t slot = sample_pool_alloc_slot();
+    if(slot < 0)
+    {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] no free resident slots for id=%u\n", (unsigned)id);
+        return false;
+    }
+
 #if SAMPLE_POOL_HAS_FATFS
     if(g_sample_pool_fs_mounted == 0U)
     {
         const FRESULT mount_fr = f_mount(&g_sample_pool_fs, "0:", 1U);
         if(mount_fr != FR_OK)
+        {
+            g_sample_slot_in_use[(uint32_t)slot] = 0U;
             return false;
 
         g_sample_pool_fs_mounted = 1U;
@@ -214,6 +260,8 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     FIL fp;
     if(f_open(&fp, desc->path, FA_READ) != FR_OK)
+    {
+        g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
 
     wav_info_t info;
@@ -222,6 +270,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     if(!wav_parser_parse_info(&fp, &info))
     {
         (void)f_close(&fp);
+        g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
 
@@ -233,6 +282,7 @@ bool sample_pool_load(uint16_t id, const char *path)
        (info.byte_rate != (info.sample_rate * info.block_align)))
     {
         (void)f_close(&fp);
+        g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
 
@@ -246,23 +296,27 @@ bool sample_pool_load(uint16_t id, const char *path)
     desc->channels = info.channels;
     desc->bits_per_sample = info.bits_per_sample;
 
-    if(!sample_pool_load_full_data(&fp, id, &info, data_size_aligned, desc))
+    if(!sample_pool_load_full_data(&fp, (uint16_t)slot, &info, data_size_aligned, desc))
     {
         (void)f_close(&fp);
+        g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
 
     desc->valid = 1U;
+    g_sample_slot_by_sample[id] = slot;
     (void)f_close(&fp);
 
-    SAMPLE_POOL_LOG("[SAMPLE_POOL] loaded id=%u path=%s frames=%lu\n",
+    SAMPLE_POOL_LOG("[SAMPLE_POOL] loaded id=%u slot=%d path=%s frames=%lu\n",
                     (unsigned)id,
+                    (int)slot,
                     desc->path,
                     (unsigned long)desc->length_frames);
 
     return true;
 #else
     (void)path;
+    g_sample_slot_in_use[(uint32_t)slot] = 0U;
     SAMPLE_POOL_LOG("[SAMPLE_POOL] FatFs unavailable in this build\n");
     return false;
 #endif
