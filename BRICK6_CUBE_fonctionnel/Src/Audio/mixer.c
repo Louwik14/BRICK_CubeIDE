@@ -25,6 +25,7 @@
 
 #include "fx_chain.h"
 #include "sd_multitrack_recorder.h"
+#include "memory_layout.h"
 
 typedef struct {
     float gain;
@@ -188,12 +189,12 @@ void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
  */
 void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
-    static float bus_main_l[AUDIO_BLOCK_SIZE];
-    static float bus_main_r[AUDIO_BLOCK_SIZE];
-    static float bus_cue_l[AUDIO_BLOCK_SIZE];
-    static float bus_cue_r[AUDIO_BLOCK_SIZE];
-    static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
-    static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_main_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_cue_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_cue_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;

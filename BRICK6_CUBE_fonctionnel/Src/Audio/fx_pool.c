@@ -11,12 +11,12 @@
 
 static fx_slot_t g_slots[FX_POOL_SIZE];
 
-static fx_dj_eq3_t g_eq;
+AUDIO_HOT static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
 
 AUDIO_WARM ALIGN32 static float grain_buffer_l[48000];
 AUDIO_WARM ALIGN32 static float grain_buffer_r[48000];
-AUDIO_WARM ALIGN32 static uint8_t g_granular_state_storage[2048];
+AUDIO_HOT ALIGN32 static uint8_t g_granular_state_storage[2048];
 
 static uint8_t g_granular_in_use;
 
