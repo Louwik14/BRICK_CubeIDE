@@ -61,7 +61,6 @@ Src/MIDI \
 Src/Param \
 Src/Sampler \
 Src/Storage \
-Src/Streaming \
 Src/UI \
 Src \
 Startup \

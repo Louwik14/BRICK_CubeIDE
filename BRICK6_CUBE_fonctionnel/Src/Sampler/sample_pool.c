@@ -89,7 +89,6 @@ static bool sample_pool_load_full_data(FIL *fp,
 
     if(total_frames == 0U)
         return false;
-    }
 
     if(total_frames > SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE)
     {
@@ -254,6 +253,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         {
             g_sample_slot_in_use[(uint32_t)slot] = 0U;
             return false;
+        }
 
         g_sample_pool_fs_mounted = 1U;
     }
@@ -263,6 +263,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     {
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
+    }
 
     wav_info_t info;
     memset(&info, 0, sizeof(info));
