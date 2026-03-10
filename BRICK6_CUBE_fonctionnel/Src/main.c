@@ -157,10 +157,11 @@ int main(void)
           audio_debug_get_stats(&audio_stats);
           brick6_app_get_stats(&app_stats);
           last_log_time = HAL_GetTick();
-          AUDIO_DEBUG_LOG("[P0] app_calls=%lu audio_blocks=%lu dsp_frames=%lu\n",
+          AUDIO_DEBUG_LOG("[P0] app_calls=%lu audio_blocks=%lu dsp_frames=%lu rec_state=%u\n",
                  (unsigned long)app_stats.app_process_call_count,
                  (unsigned long)audio_stats.audio_block_counter,
-                 (unsigned long)audio_stats.dsp_frames_counter);
+                 (unsigned long)audio_stats.dsp_frames_counter,
+                 (unsigned)app_stats.recorder_state);
       }
 #endif
   }

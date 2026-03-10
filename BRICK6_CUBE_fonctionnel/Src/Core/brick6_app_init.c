@@ -32,6 +32,7 @@
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
 #include "Audio/recorder_transport.h"
+#include "Audio/sd_multitrack_recorder.h"
 #include "Storage/memory_layout.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
@@ -216,6 +217,7 @@ void brick6_app_init(void)
     live_recorder_start_play(&g_live_recorder);
 
     recorder_transport_init();
+    sd_recorder_init();
 
     DBG("[VOICE] init\r\n");
     voice_manager_init();
@@ -272,10 +274,12 @@ void brick6_app_process(void)
         if((transport_recording != 0U) && (last_transport_recording == 0U))
         {
             live_recorder_start_record(&g_live_recorder);
+            (void)sd_recorder_request_start();
         }
         else if((transport_recording == 0U) && (last_transport_recording != 0U))
         {
             live_recorder_stop_record(&g_live_recorder);
+            (void)sd_recorder_request_stop();
         }
 
         last_transport_recording = transport_recording;
@@ -306,4 +310,5 @@ void brick6_app_get_stats(brick6_app_stats_t *out_stats)
         return;
 
     out_stats->app_process_call_count = g_brick6_app_process_call_count;
+    out_stats->recorder_state = sd_recorder_get_state();
 }

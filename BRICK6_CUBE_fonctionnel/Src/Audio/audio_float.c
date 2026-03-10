@@ -40,6 +40,7 @@
 #include "memory_layout.h"
 #include "audio_io.h"
 #include "dsp_engine.h"
+#include "sd_multitrack_recorder.h"
 #include "fx_pool.h"
 #include "control_events.h"
 #include "fx_daisy_comp.h"
@@ -351,6 +352,8 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     }
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
+
+    sd_recorder_audio_block_begin(frames);
 
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
