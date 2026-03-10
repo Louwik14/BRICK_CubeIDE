@@ -31,6 +31,7 @@
 #include "Sampler/voice_manager.h"
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
+#include "Audio/recorder_transport.h"
 #include "Storage/memory_layout.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
@@ -200,8 +201,9 @@ void brick6_app_init(void)
                              LIVE_RECORDER_MAX_FRAMES);
     live_recorder_set_loop_length(&g_live_recorder,
                                   LIVE_RECORDER_MAX_FRAMES);
-    live_recorder_start_record(&g_live_recorder);
     live_recorder_start_play(&g_live_recorder);
+
+    recorder_transport_init();
 
     DBG("[VOICE] init\r\n");
     voice_manager_init();
@@ -243,9 +245,29 @@ void brick6_app_process(void)
 #if ENABLE_PERIODIC_RETRIGGER
     static uint32_t last_trigger = 0;
 #endif
+    static uint8_t last_transport_recording = 0U;
+
     uint32_t now = HAL_GetTick();
 
     g_brick6_app_process_call_count++;
+
+    engine_tasklet_poll();
+    recorder_transport_process();
+
+    {
+        const uint8_t transport_recording = recorder_transport_is_recording();
+
+        if((transport_recording != 0U) && (last_transport_recording == 0U))
+        {
+            live_recorder_start_record(&g_live_recorder);
+        }
+        else if((transport_recording == 0U) && (last_transport_recording != 0U))
+        {
+            live_recorder_stop_record(&g_live_recorder);
+        }
+
+        last_transport_recording = transport_recording;
+    }
 
     voice_manager_service();
 
