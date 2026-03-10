@@ -8,6 +8,26 @@
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 
+#ifndef RECORDER_DEBUG_LOG
+#define RECORDER_DEBUG_LOG(...) do { } while(0)
+#endif
+
+#if (_USE_EXPAND != 1)
+#error "sd_multitrack_recorder requires FatFs _USE_EXPAND == 1"
+#endif
+
+#if (_FS_READONLY != 0)
+#error "sd_multitrack_recorder requires FatFs _FS_READONLY == 0"
+#endif
+
+#if (_FS_LOCK < SD_RECORDER_MAX_STEMS)
+#error "sd_multitrack_recorder requires FatFs _FS_LOCK >= SD_RECORDER_MAX_STEMS"
+#endif
+
+#if (_FS_TINY == 1)
+#warning "FatFs _FS_TINY is enabled; multitrack performance margin may be reduced"
+#endif
+
 typedef enum
 {
     CMD_NONE = 0,
@@ -48,6 +68,9 @@ typedef struct
     uint8_t file_open;
     uint32_t data_bytes;
     uint32_t wav_limit_bytes;
+    uint32_t bytes_since_last_sync;
+    uint32_t last_sync_tick_ms;
+    uint8_t io_failed;
 } recorder_stem_t;
 
 typedef struct
@@ -75,6 +98,9 @@ typedef struct
 #define REC_WAV_MAX_DATA_BYTES (0xFFFFFFFFUL - 44UL)
 #define REC_DEFAULT_WRITER_BUDGET_BYTES (32U * 1024U)
 #define REC_FILE_NAME_LEN 64U
+#define REC_RING_PRESSURE_PERCENT 75U
+#define REC_FS_SYNC_BYTES (1024U * 1024U)
+#define REC_FS_SYNC_PERIOD_MS 2000U
 
 typedef struct
 {
@@ -96,6 +122,10 @@ typedef struct
 
     uint32_t writer_calls;
     uint32_t writer_bytes_total;
+    uint32_t wav_limit_reached_count;
+    uint32_t ring_pressure_events[SD_RECORDER_MAX_STEMS];
+    uint32_t fs_sync_count;
+    uint32_t finalize_count;
 
     FATFS fs;
     uint8_t fs_mounted;
@@ -165,6 +195,13 @@ static uint8_t recorder_ring_push_block(recorder_stem_t *stem,
     if(fill > stem->ring_high_watermark)
     {
         stem->ring_high_watermark = fill;
+    }
+
+    if((fill * 100U) > (ring->slot_count * REC_RING_PRESSURE_PERCENT))
+    {
+        const uint32_t stem_id = (uint32_t)(stem - &g_rec.stems[0]);
+        if(stem_id < SD_RECORDER_MAX_STEMS)
+            g_rec.ring_pressure_events[stem_id]++;
     }
 
     stem->blocks_captured++;
@@ -366,6 +403,9 @@ static uint8_t recorder_prepare_files(void)
         stem->file_open = 0U;
         stem->data_bytes = 0U;
         stem->wav_limit_bytes = (uint32_t)per_stem_prealloc;
+        stem->bytes_since_last_sync = 0U;
+        stem->last_sync_tick_ms = HAL_GetTick();
+        stem->io_failed = 0U;
 
         if(stem->armed == 0U)
             continue;
@@ -476,7 +516,7 @@ static int32_t recorder_pick_most_filled_stem(void)
     for(uint32_t i = 0U; i < SD_RECORDER_MAX_STEMS; i++)
     {
         recorder_stem_t *stem = &g_rec.stems[i];
-        if((stem->armed == 0U) || (stem->file_open == 0U))
+        if((stem->armed == 0U) || (stem->file_open == 0U) || (stem->io_failed != 0U))
             continue;
 
         const uint32_t fill = recorder_ring_count(&stem->ring);
@@ -490,6 +530,43 @@ static int32_t recorder_pick_most_filled_stem(void)
     return best;
 }
 
+static void recorder_try_periodic_sync(recorder_stem_t *stem)
+{
+    if((stem == 0) || (stem->file_open == 0U) || (stem->io_failed != 0U))
+        return;
+
+    const uint32_t now = HAL_GetTick();
+    const uint32_t elapsed = now - stem->last_sync_tick_ms;
+
+    if((stem->bytes_since_last_sync < REC_FS_SYNC_BYTES) &&
+       (elapsed < REC_FS_SYNC_PERIOD_MS))
+    {
+        return;
+    }
+
+    if(f_sync(&stem->file) == FR_OK)
+    {
+        stem->bytes_since_last_sync = 0U;
+        stem->last_sync_tick_ms = now;
+        g_rec.fs_sync_count++;
+    }
+    else
+    {
+        stem->last_write_error = FR_DISK_ERR;
+        stem->io_failed = 1U;
+        recorder_set_state(SD_RECORDER_STATE_FINALIZING);
+    }
+}
+
+static uint8_t recorder_discard_one_block(recorder_stem_t *stem)
+{
+    if((stem == 0) || (recorder_ring_count(&stem->ring) == 0U))
+        return 0U;
+
+    stem->ring.read_idx = (stem->ring.read_idx + 1U) % stem->ring.slot_count;
+    return 1U;
+}
+
 static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budget)
 {
     if((stem == 0) || (io_budget == 0) || (*io_budget == 0U))
@@ -501,22 +578,27 @@ static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budg
     if(bytes > *io_budget)
         return 0U;
 
-    if(!recorder_ring_pop_block(stem, g_writer_float_block, REC_RING_MAX_SLOT_WORDS))
-        return 0U;
-
     if((stem->wav_limit_bytes > 0U) &&
        (stem->data_bytes >= stem->wav_limit_bytes ||
         (stem->wav_limit_bytes - stem->data_bytes) < bytes))
     {
+        g_rec.finalize_count++;
+        stem->io_failed = 1U;
         recorder_set_state(SD_RECORDER_STATE_FINALIZING);
         return 0U;
     }
 
     if(stem->data_bytes > (REC_WAV_MAX_DATA_BYTES - bytes))
     {
+        g_rec.wav_limit_reached_count++;
+        g_rec.finalize_count++;
+        stem->io_failed = 1U;
         recorder_set_state(SD_RECORDER_STATE_FINALIZING);
         return 0U;
     }
+
+    if(!recorder_ring_pop_block(stem, g_writer_float_block, REC_RING_MAX_SLOT_WORDS))
+        return 0U;
 
     recorder_pcm24_pack(g_writer_float_block, words, g_writer_pcm24_block);
 
@@ -526,8 +608,12 @@ static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budg
 
     if((fr != FR_OK) || (bw != bytes))
     {
-        stem->last_write_error = (uint32_t)((fr != FR_OK) ? fr : FR_DISK_ERR);
-        recorder_set_state((fr == FR_DISK_ERR || fr == FR_DENIED) ?
+        const uint32_t err = (uint32_t)((fr != FR_OK) ? fr : FR_DISK_ERR);
+        stem->last_write_error = err;
+        stem->io_failed = 1U;
+        if(fr == FR_DISK_ERR || fr == FR_DENIED || bw != bytes)
+            g_rec.finalize_count++;
+        recorder_set_state((fr == FR_DISK_ERR || fr == FR_DENIED || bw != bytes) ?
                            SD_RECORDER_STATE_FINALIZING :
                            SD_RECORDER_STATE_ERROR);
         return 0U;
@@ -535,7 +621,10 @@ static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budg
 
     stem->data_bytes += bytes;
     stem->bytes_written += bytes;
+    stem->bytes_since_last_sync += bytes;
     stem->last_write_error = FR_OK;
+
+    recorder_try_periodic_sync(stem);
 
     *io_budget -= bytes;
     g_rec.writer_bytes_total += bytes;
@@ -725,11 +814,13 @@ void sd_recorder_audio_block_begin(uint32_t frames)
                 g_rec.stems[stem_id].blocks_captured = 0U;
                 g_rec.stems[stem_id].blocks_dropped_overflow = 0U;
                 g_rec.stems[stem_id].ring_high_watermark = 0U;
+                g_rec.ring_pressure_events[stem_id] = 0U;
             }
         }
     }
     else if(g_rec.state == SD_RECORDER_STATE_STOP_PENDING)
     {
+        g_rec.finalize_count++;
         recorder_set_state(SD_RECORDER_STATE_FINALIZING);
     }
 }
@@ -793,8 +884,20 @@ void sd_recorder_writer_service(void)
 
     if(g_rec.state == SD_RECORDER_STATE_FINALIZING)
     {
-        uint8_t drained = 1U;
+        uint32_t discard_budget = 8U;
+        for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+        {
+            recorder_stem_t *stem = &g_rec.stems[stem_id];
+            if((stem->armed != 0U) && (stem->io_failed != 0U) && (discard_budget > 0U))
+            {
+                while((discard_budget > 0U) && recorder_discard_one_block(stem))
+                {
+                    discard_budget--;
+                }
+            }
+        }
 
+        uint8_t drained = 1U;
         for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
         {
             recorder_stem_t *stem = &g_rec.stems[stem_id];
@@ -814,7 +917,6 @@ void sd_recorder_writer_service(void)
             else
             {
                 recorder_set_state(SD_RECORDER_STATE_ERROR);
-                recorder_close_all_files();
             }
         }
     }
@@ -822,9 +924,38 @@ void sd_recorder_writer_service(void)
     if(g_rec.state == SD_RECORDER_STATE_ERROR)
     {
         recorder_close_all_files();
+        g_rec.files_prepared = 0U;
+        for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+        {
+            recorder_stem_t *stem = &g_rec.stems[stem_id];
+            stem->file_open = 0U;
+            stem->io_failed = 0U;
+            stem->bytes_since_last_sync = 0U;
+            recorder_ring_reset(&stem->ring, stem->cfg.channels == 1U ? 1U : 2U);
+        }
+        RECORDER_DEBUG_LOG("sd recorder recovered from ERROR to IDLE");
+        recorder_set_state(SD_RECORDER_STATE_IDLE);
     }
 }
 
+
+void sd_recorder_get_ring_fill(uint32_t stem_id,
+                               uint32_t *out_fill,
+                               uint32_t *out_capacity)
+{
+    if(out_fill != 0)
+        *out_fill = 0U;
+    if(out_capacity != 0)
+        *out_capacity = 0U;
+
+    if(stem_id >= SD_RECORDER_MAX_STEMS)
+        return;
+
+    if(out_fill != 0)
+        *out_fill = recorder_ring_count(&g_rec.stems[stem_id].ring);
+    if(out_capacity != 0)
+        *out_capacity = g_rec.stems[stem_id].ring.slot_count;
+}
 
 sd_recorder_state_t sd_recorder_get_state(void)
 {
@@ -845,6 +976,9 @@ void sd_recorder_get_debug(sd_recorder_debug_t *out_debug)
     out_debug->rejected_state_requests = g_rec.rejected_state_requests;
     out_debug->block_boundary_calls = g_rec.block_boundary_calls;
     out_debug->transition_count = g_rec.transition_count;
+    out_debug->wav_limit_reached_count = g_rec.wav_limit_reached_count;
+    out_debug->fs_sync_count = g_rec.fs_sync_count;
+    out_debug->finalize_count = g_rec.finalize_count;
     out_debug->writer_calls = g_rec.writer_calls;
     out_debug->writer_bytes_total = g_rec.writer_bytes_total;
 
@@ -856,5 +990,6 @@ void sd_recorder_get_debug(sd_recorder_debug_t *out_debug)
         out_debug->stem_bytes_written[stem_id] = g_rec.stems[stem_id].bytes_written;
         out_debug->stem_write_calls[stem_id] = g_rec.stems[stem_id].write_calls;
         out_debug->stem_last_write_error[stem_id] = g_rec.stems[stem_id].last_write_error;
+        out_debug->ring_pressure_events[stem_id] = g_rec.ring_pressure_events[stem_id];
     }
 }
