@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include "fx_chain.h"
+#include "sd_multitrack_recorder.h"
 
 typedef struct {
     float gain;
@@ -224,34 +225,72 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 fx_chain_process_slot((uint32_t)slot, L, R, frames);
         }
 
+        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
+                                      t,
+                                      L,
+                                      R,
+                                      frames);
+
         const float pan_l = (mt->pan <= 0.0f) ? 1.0f : (1.0f - mt->pan);
         const float pan_r = (mt->pan >= 0.0f) ? 1.0f : (1.0f + mt->pan);
-        const float g = mt->gain;
+        const float gain_l = mt->gain * pan_l;
+        const float gain_r = mt->gain * pan_r;
 
         for(uint32_t i = 0; i < frames; i++)
         {
-            const float l = L[i] * g * pan_l;
-            const float r = R[i] * g * pan_r;
+            L[i] *= gain_l;
+            R[i] *= gain_r;
+        }
 
-            if(mt->route_master)
-            {
-                bus_main_l[i] += l;
-                bus_main_r[i] += r;
-            }
-            if(mt->route_cue)
-            {
-                bus_cue_l[i] += l;
-                bus_cue_r[i] += r;
-            }
+        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_FADER,
+                                      t,
+                                      L,
+                                      R,
+                                      frames);
 
-            for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+        for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+        {
+            if(g_send_fx_slot[s] >= 0)
             {
-                if(g_send_fx_slot[s] >= 0)
+                const float send_g = mt->send_level[s];
+                for(uint32_t i = 0; i < frames; i++)
                 {
-                    const float send_g = mt->send_level[s];
-                    send_l[s][i] += l * send_g;
-                    send_r[s][i] += r * send_g;
+                    send_l[s][i] += L[i] * send_g;
+                    send_r[s][i] += R[i] * send_g;
                 }
+            }
+        }
+
+        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_SEND,
+                                      t,
+                                      L,
+                                      R,
+                                      frames);
+
+        if(mt->route_master && mt->route_cue)
+        {
+            for(uint32_t i = 0; i < frames; i++)
+            {
+                bus_main_l[i] += L[i];
+                bus_main_r[i] += R[i];
+                bus_cue_l[i] += L[i];
+                bus_cue_r[i] += R[i];
+            }
+        }
+        else if(mt->route_master)
+        {
+            for(uint32_t i = 0; i < frames; i++)
+            {
+                bus_main_l[i] += L[i];
+                bus_main_r[i] += R[i];
+            }
+        }
+        else if(mt->route_cue)
+        {
+            for(uint32_t i = 0; i < frames; i++)
+            {
+                bus_cue_l[i] += L[i];
+                bus_cue_r[i] += R[i];
             }
         }
     }
@@ -282,4 +321,3 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         memcpy(tracks[1].R, bus_cue_r, sizeof(float) * frames);
     }
 }
-
