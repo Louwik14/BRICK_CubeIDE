@@ -363,6 +363,11 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                   output_adjust * master_gain);
 }
 
+uint32_t audio_get_frame_counter(void)
+{
+    return g_audio_dsp_frames_counter;
+}
+
 void audio_debug_get_stats(audio_debug_stats_t *out_stats)
 {
     if(out_stats == NULL)

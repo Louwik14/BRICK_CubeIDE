@@ -2,15 +2,10 @@
 
 #include <math.h>
 #include <stddef.h>
-#include <stdio.h>
 
 #include "audio_debug_log.h"
 
-#include "Streaming/stream_manager.h"
-#include "stm32h7xx_hal.h"
-
 #define VOICE_MANAGER_MAX_VOICES (2U)
-#define VOICE_MANAGER_INVALID_STREAMER_ID (0xFFU)
 
 voice_t voices[VOICE_MANAGER_MAX_VOICES];
 
@@ -25,24 +20,14 @@ static float finite_or_zero(float v)
 
 static void voice_clear(uint32_t index)
 {
-    if((index < VOICE_MANAGER_MAX_VOICES) &&
-       (voices[index].streamer_id != VOICE_MANAGER_INVALID_STREAMER_ID))
-    {
-        stream_manager_stop_stream(voices[index].streamer_id);
-    }
-
     voices[index].sample_id = 0U;
     voices[index].sample = NULL;
     voices[index].position = 0U;
-    voices[index].stream_pos_frames = 0U;
-    voices[index].streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
     voices[index].gain_l = 0.0f;
     voices[index].gain_r = 0.0f;
     voices[index].loop_enabled = 0U;
     voices[index].loop_start_frame = 0U;
     voices[index].loop_end_frame = 0U;
-    voices[index].seek_pending = 0U;
-    voices[index].seek_target_frame = 0U;
     voices[index].state = VOICE_OFF;
     voices[index].active = 0U;
     s_voice_generation[index] = 0U;
@@ -59,40 +44,10 @@ void voice_manager_init(void)
 
 void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 {
-    AUDIO_DEBUG_LOG("[VOICE] trigger sample=%u\r\n", (unsigned int)sample_id);
-
     const sample_desc_t *sample_desc = sample_pool_get(sample_id);
-    if(sample_desc == NULL)
-    {
-        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: sample_desc=NULL\r\n");
+    if((sample_desc == NULL) || (sample_desc->valid == 0U) ||
+       (sample_desc->data == NULL) || (sample_desc->length_frames == 0U))
         return;
-    }
-
-    if(sample_desc->valid == 0U)
-    {
-        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: sample invalid\r\n");
-        return;
-    }
-
-    if(sample_desc->attack_cache == NULL)
-    {
-        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: attack_cache=NULL\r\n");
-        return;
-    }
-
-    if(sample_desc->attack_frames == 0U)
-    {
-        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: attack_frames=0\r\n");
-        return;
-    }
-
-    if(sample_desc->length_frames <= sample_desc->attack_frames)
-    {
-        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: length=%lu attack=%lu\r\n",
-               (unsigned long)sample_desc->length_frames,
-               (unsigned long)sample_desc->attack_frames);
-        return;
-    }
 
     uint32_t target_index = VOICE_MANAGER_MAX_VOICES;
 
@@ -123,34 +78,17 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
         voice_clear(target_index);
     }
 
-    uint8_t streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
-    if(!stream_manager_start_stream(sample_desc, sample_desc->attack_frames, &streamer_id))
-    {
-        AUDIO_DEBUG_LOG("[VOICE] trigger rejected: stream_manager_start_stream failed\r\n");
-        return;
-    }
-
     voices[target_index].sample_id = sample_id;
     voices[target_index].sample = sample_desc;
     voices[target_index].position = 0U;
-    voices[target_index].stream_pos_frames = sample_desc->attack_frames;
-    voices[target_index].streamer_id = streamer_id;
     voices[target_index].gain_l = finite_or_zero(gain_l);
     voices[target_index].gain_r = finite_or_zero(gain_r);
     voices[target_index].loop_enabled = 1U;
-    voices[target_index].loop_start_frame = sample_desc->attack_frames;
+    voices[target_index].loop_start_frame = 0U;
     voices[target_index].loop_end_frame = sample_desc->length_frames;
-    voices[target_index].seek_pending = 0U;
-    voices[target_index].seek_target_frame = sample_desc->attack_frames;
-    voices[target_index].state = VOICE_ATTACK;
+    voices[target_index].state = VOICE_ON;
     voices[target_index].active = 1U;
     s_voice_generation[target_index] = s_generation_counter++;
-
-    AUDIO_DEBUG_LOG("[VOICE] created idx=%lu active=%u state=%u streamer=%u\r\n",
-           (unsigned long)target_index,
-           (unsigned int)voices[target_index].active,
-           (unsigned int)voices[target_index].state,
-           (unsigned int)voices[target_index].streamer_id);
 
     if(s_generation_counter == 0U)
         s_generation_counter = 1U;
@@ -158,41 +96,6 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 
 void voice_manager_service(void)
 {
-    for(uint32_t voice_index = 0U; voice_index < VOICE_MANAGER_MAX_VOICES; voice_index++)
-    {
-        uint8_t streamer_id = VOICE_MANAGER_INVALID_STREAMER_ID;
-        uint32_t seek_target = 0U;
-        uint8_t do_seek = 0U;
-
-        __disable_irq();
-        voice_t *voice = &voices[voice_index];
-
-        if((voice->active != 0U) && (voice->sample != NULL) && (voice->seek_pending != 0U))
-        {
-            streamer_id = voice->streamer_id;
-            seek_target = voice->seek_target_frame;
-            do_seek = 1U;
-        }
-
-        __enable_irq();
-
-        if((do_seek != 0U) && (streamer_id != VOICE_MANAGER_INVALID_STREAMER_ID))
-        {
-            if(audio_streamer_seek_frame(streamer_id, seek_target))
-            {
-                __disable_irq();
-                voice_t *voice_commit = &voices[voice_index];
-                if((voice_commit->active != 0U) && (voice_commit->seek_pending != 0U) &&
-                   (voice_commit->streamer_id == streamer_id) &&
-                   (voice_commit->seek_target_frame == seek_target))
-                {
-                    voice_commit->stream_pos_frames = seek_target;
-                    voice_commit->seek_pending = 0U;
-                }
-                __enable_irq();
-            }
-        }
-    }
 }
 
 void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
@@ -210,132 +113,50 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
             continue;
 
         const sample_desc_t *sample_desc = voice->sample;
-        if((sample_desc->valid == 0U) || (sample_desc->attack_cache == NULL) || (sample_desc->attack_frames == 0U))
+        if((sample_desc->valid == 0U) || (sample_desc->data == NULL) || (sample_desc->length_frames == 0U))
         {
             voice_clear(voice_index);
             continue;
         }
 
         uint32_t position = voice->position;
-        uint32_t stream_pos = voice->stream_pos_frames;
-        voice_state_t initial_state = voice->state;
 
         for(uint32_t frame = 0U; frame < frames; frame++)
         {
-            float sample_l = 0.0f;
-            float sample_r = 0.0f;
-
-            if(voice->state == VOICE_ATTACK)
-            {
-                if((position >> 1U) < sample_desc->attack_frames)
-                {
-                    const uint32_t sample_index = position;
-                    sample_l = finite_or_zero(sample_desc->attack_cache[sample_index]);
-                    sample_r = finite_or_zero(sample_desc->attack_cache[sample_index + 1U]);
-                    position += 2U;
-                }
-
-                if((position >> 1U) >= sample_desc->attack_frames)
-                {
-                    voice->state = VOICE_STREAM;
-
-                    AUDIO_DEBUG_LOG("[VOICE] attack->stream idx=%lu pos=%lu attack=%lu streamer=%u\r\n",
-                           (unsigned long)voice_index,
-                           (unsigned long)position,
-                           (unsigned long)sample_desc->attack_frames,
-                           (unsigned int)voice->streamer_id);
-                }
-            }
-
-            else if(voice->state == VOICE_STREAM)
+            if(position >= sample_desc->length_frames)
             {
                 if(voice->loop_enabled != 0U)
-                {
-                    const uint32_t loop_start = voice->loop_start_frame;
-                    const uint32_t loop_end = voice->loop_end_frame;
-
-                    if((loop_start >= loop_end) || (loop_end > sample_desc->length_frames))
-                    {
-                        voice_clear(voice_index);
-                        break;
-                    }
-
-                    if(stream_pos >= loop_end)
-                    {
-                        uint32_t next_loop_start = loop_start;
-
-                        if(loop_start != 0U)
-                        {
-                            next_loop_start = 0U;
-                            voice->loop_start_frame = 0U;
-                        }
-
-                        stream_pos = next_loop_start;
-                        voice->seek_target_frame = next_loop_start;
-                        voice->seek_pending = 1U;
-                    }
-                }
-                else if(stream_pos >= sample_desc->length_frames)
+                    position = voice->loop_start_frame;
+                else
                 {
                     voice_clear(voice_index);
                     break;
                 }
-
-                if(voice->seek_pending == 0U)
-                {
-                    if(!stream_manager_get_stream_frame(voice->streamer_id, &sample_l, &sample_r))
-                    {
-                        /* streamer pas encore prêt → silence temporaire */
-                        sample_l = 0.0f;
-                        sample_r = 0.0f;
-                    }
-
-                    sample_l = finite_or_zero(sample_l);
-                    sample_r = finite_or_zero(sample_r);
-
-                    stream_pos += 2;
-                    /* IMPORTANT — DO NOT CHANGE
-                     *
-                     * The streamer consumes 2 frames per call (rd += 2) in audio_streamer_get_frame().
-                     * voice_manager_process() must advance stream_pos_frames by the same amount.
-                     *
-                     * If this increment is changed to +1, the voice position and the streamer
-                     * file position desynchronize. This causes the streamer to reach EOF before
-                     * the loop condition triggers, resulting in several seconds of silence.
-                     *
-                     * This bug was diagnosed with GDB by comparing:
-                     *   voice->stream_pos_frames
-                     *   vs
-                     *   g_streamers[x].file_data_pos / bytes_per_frame
-                     *
-                     * Therefore stream_pos_frames MUST stay aligned with the streamer step.
-                     */
-                }
             }
+
+            const uint32_t sample_index = position * 2U;
+            const float sample_l = finite_or_zero(sample_desc->data[sample_index]);
+            const float sample_r = finite_or_zero(sample_desc->data[sample_index + 1U]);
 
             out_l[frame] = finite_or_zero(out_l[frame] + (sample_l * voice->gain_l));
             out_r[frame] = finite_or_zero(out_r[frame] + (sample_r * voice->gain_r));
+
+            position++;
+
+            if((voice->loop_enabled != 0U) && (position >= voice->loop_end_frame))
+                position = voice->loop_start_frame;
         }
 
         if(voice->active != 0U)
-        {
             voice->position = position;
-            voice->stream_pos_frames = stream_pos;
 
-            if((voice->state == VOICE_STREAM) && (voice->loop_enabled == 0U) &&
-               (voice->stream_pos_frames >= sample_desc->length_frames))
-                voice_clear(voice_index);
-        }
-
-        if((s_process_call_count <= 8U) || ((s_process_call_count % 512U) == 0U) ||
-           (initial_state != voice->state))
+        if((s_process_call_count <= 8U) || ((s_process_call_count % 512U) == 0U))
         {
-            AUDIO_DEBUG_LOG("[VOICE] process idx=%lu active=%u state=%u pos=%lu stream_pos=%lu\r\n",
-                   (unsigned long)voice_index,
-                   (unsigned int)voice->active,
-                   (unsigned int)voice->state,
-                   (unsigned long)voice->position,
-                   (unsigned long)voice->stream_pos_frames);
+            AUDIO_DEBUG_LOG("[VOICE] process idx=%lu active=%u state=%u pos=%lu\r\n",
+                            (unsigned long)voice_index,
+                            (unsigned int)voice->active,
+                            (unsigned int)voice->state,
+                            (unsigned long)voice->position);
         }
     }
 }

@@ -29,7 +29,9 @@
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
-#include "Streaming/stream_manager.h"
+#include "Audio/live_recorder.h"
+#include "Audio/live_recorder_config.h"
+#include "Storage/memory_layout.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -40,6 +42,9 @@ static float g_master_gain = 1.0f;
 
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 static uint32_t g_dsp_call_count = 0U;
+
+static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
+static live_recorder_t g_live_recorder;
 
 /* ============================================================
    UART DEBUG
@@ -126,6 +131,11 @@ static void my_dsp(StereoTrack *tracks,
     }
 
     mixer_process(tracks, track_count, frames);
+
+    live_recorder_write(&g_live_recorder,
+                        tracks[0].L,
+                        tracks[0].R,
+                        frames);
 }
 
 /* ============================================================
@@ -171,10 +181,18 @@ void brick6_app_init(void)
     else
         DBG("[SAMPLE_POOL] sample 1 load FAILED\r\n");
 
+    live_recorder_init(&g_live_recorder);
+    live_recorder_set_buffer(&g_live_recorder,
+                             g_live_recorder_buffer,
+                             LIVE_RECORDER_MAX_FRAMES);
+    live_recorder_set_loop_length(&g_live_recorder,
+                                  LIVE_RECORDER_MAX_FRAMES);
+    live_recorder_start_record(&g_live_recorder);
+
     DBG("[VOICE] init\r\n");
     voice_manager_init();
 
-    /* Trigger immédiat pour tester le streaming */
+    /* Trigger immédiat pour tester la lecture RAM */
     voice_manager_trigger(0, 0.30f, 0.30f);
     voice_manager_trigger(1, 0.30f, 0.30f);
 
@@ -216,7 +234,6 @@ void brick6_app_process(void)
     g_brick6_app_process_call_count++;
 
     voice_manager_service();
-    stream_manager_process();
 
     /* retrigger périodique pour tester la polyphonie */
 #if ENABLE_PERIODIC_RETRIGGER
