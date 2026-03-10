@@ -18,8 +18,7 @@ typedef struct
     uint16_t channels;
     uint16_t bits_per_sample;
 
-    float *attack_cache;
-    uint32_t attack_frames;
+    float *data;
 
     uint8_t valid;
 } sample_desc_t;
@@ -30,11 +29,8 @@ typedef struct
  * - no audio/DSP coupling.
  * - no runtime allocation.
  *
- * Future phases:
- * - Phase 2 will provide attack_cache allocation/fill.
- * - Phase 4 will connect voices and multi-streamer scheduling.
+ * Samples are loaded fully in SDRAM and played directly from memory.
  */
 void sample_pool_init(void);
 bool sample_pool_load(uint16_t id, const char *path);
 const sample_desc_t *sample_pool_get(uint16_t id);
-
