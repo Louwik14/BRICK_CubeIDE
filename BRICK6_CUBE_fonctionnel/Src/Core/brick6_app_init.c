@@ -29,6 +29,9 @@
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
+#include "Audio/live_recorder.h"
+#include "Audio/live_recorder_config.h"
+#include "Storage/memory_layout.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -39,6 +42,9 @@ static float g_master_gain = 1.0f;
 
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 static uint32_t g_dsp_call_count = 0U;
+
+static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
+static live_recorder_t g_live_recorder;
 
 /* ============================================================
    UART DEBUG
@@ -169,6 +175,13 @@ void brick6_app_init(void)
         DBG("[SAMPLE_POOL] sample 1 loaded\r\n");
     else
         DBG("[SAMPLE_POOL] sample 1 load FAILED\r\n");
+
+    live_recorder_init(&g_live_recorder);
+    live_recorder_set_buffer(&g_live_recorder,
+                             g_live_recorder_buffer,
+                             LIVE_RECORDER_MAX_FRAMES);
+    live_recorder_set_loop_length(&g_live_recorder,
+                                  LIVE_RECORDER_MAX_FRAMES);
 
     DBG("[VOICE] init\r\n");
     voice_manager_init();
