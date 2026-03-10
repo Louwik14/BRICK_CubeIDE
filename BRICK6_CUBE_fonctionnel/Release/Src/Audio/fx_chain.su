@@ -1,2 +1,0 @@
-../Src/Audio/fx_chain.c:84:6:fx_chain_process_track0	32	static
-../Src/Audio/fx_chain.c:103:6:fx_chain_process_slot	24	static

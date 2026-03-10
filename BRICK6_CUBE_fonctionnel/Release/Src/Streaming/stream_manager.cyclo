@@ -1,7 +1,0 @@
-../Src/Streaming/stream_manager.c:38:6:stream_manager_start	3
-../Src/Streaming/stream_manager.c:54:6:stream_manager_process	9
-../Src/Streaming/stream_manager.c:101:6:stream_manager_get_frame	1
-../Src/Streaming/stream_manager.c:106:6:stream_manager_start_stream	9
-../Src/Streaming/stream_manager.c:163:6:stream_manager_get_stream_frame	8
-../Src/Streaming/stream_manager.c:206:6:stream_manager_stop_stream	2
-../Src/Streaming/stream_manager.c:216:6:stream_manager_get_stats	2
