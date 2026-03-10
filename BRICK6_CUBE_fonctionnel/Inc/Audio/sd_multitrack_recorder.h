@@ -52,6 +52,10 @@ typedef struct
     uint32_t stem_bytes_written[SD_RECORDER_MAX_STEMS];
     uint32_t stem_write_calls[SD_RECORDER_MAX_STEMS];
     uint32_t stem_last_write_error[SD_RECORDER_MAX_STEMS];
+    uint32_t wav_limit_reached_count;
+    uint32_t ring_pressure_events[SD_RECORDER_MAX_STEMS];
+    uint32_t fs_sync_count;
+    uint32_t finalize_count;
     uint32_t writer_calls;
     uint32_t writer_bytes_total;
 } sd_recorder_debug_t;
@@ -72,6 +76,9 @@ void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
                                    uint32_t frames);
 void sd_recorder_writer_service(void);
 void sd_recorder_set_writer_budget(uint32_t max_bytes_per_call);
+void sd_recorder_get_ring_fill(uint32_t stem_id,
+                               uint32_t *out_fill,
+                               uint32_t *out_capacity);
 
 sd_recorder_state_t sd_recorder_get_state(void);
 void sd_recorder_get_debug(sd_recorder_debug_t *out_debug);
