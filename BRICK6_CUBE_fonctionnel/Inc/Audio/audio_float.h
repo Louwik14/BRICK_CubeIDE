@@ -207,6 +207,8 @@ extern volatile uint32_t g_audio_dsp_frames_counter;
 
 void audio_debug_get_stats(audio_debug_stats_t *out_stats);
 
+uint32_t audio_get_frame_counter(void);
+
 #ifdef __cplusplus
 }
 #endif
