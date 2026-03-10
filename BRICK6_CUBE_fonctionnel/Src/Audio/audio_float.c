@@ -218,7 +218,7 @@ void audio_float_set_bus_comp_auto_makeup(uint8_t enabled)
    ============================================================ */
 
 /* État persistant des tracks (buffers bloc + enabled). */
-static StereoTrack tracks[MAX_TRACKS] __attribute__((aligned(32)));
+AUDIO_HOT ALIGN32 static StereoTrack tracks[MAX_TRACKS];
 
 volatile uint32_t g_audio_block_counter = 0U;
 volatile uint32_t g_audio_dsp_frames_counter = 0U;
