@@ -825,6 +825,29 @@ void sd_recorder_writer_service(void)
     }
 }
 
+void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
+                                   uint8_t bus_id,
+                                   const float *src_l,
+                                   const float *src_r,
+                                   uint32_t frames)
+{
+    if((src_l == 0) || (src_r == 0) || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE))
+        return;
+
+    if(g_rec.state != SD_RECORDER_STATE_RECORDING)
+        return;
+
+    for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+    {
+        recorder_stem_t *stem = &g_rec.stems[stem_id];
+
+        if((stem->armed == 0U) || (stem->cfg.tap != tap) || (stem->cfg.bus_id != bus_id))
+            continue;
+
+        (void)recorder_ring_push_block(stem, src_l, src_r, frames);
+    }
+}
+
 sd_recorder_state_t sd_recorder_get_state(void)
 {
     return g_rec.state;
