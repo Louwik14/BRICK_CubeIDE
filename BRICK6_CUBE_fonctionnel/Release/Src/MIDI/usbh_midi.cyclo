@@ -1,8 +1,0 @@
-../Src/MIDI/usbh_midi.c:285:27:USBH_MIDI_ClassRequest	1
-../Src/MIDI/usbh_midi.c:439:27:USBH_MIDI_Process	25
-../Src/MIDI/usbh_midi.c:249:27:USBH_MIDI_InterfaceDeInit	6
-../Src/MIDI/usbh_midi.c:129:27:USBH_MIDI_InterfaceInit	81
-../Src/MIDI/usbh_midi.c:100:27:USBH_MIDI_SOFProcess	1
-../Src/MIDI/usbh_midi.c:458:20:USBH_MIDI_ReadPacket	6
-../Src/MIDI/usbh_midi.c:483:20:USBH_MIDI_Transmit	6
-../Src/MIDI/usbh_midi.c:508:6:USBH_MIDI_IsReady	4

@@ -1,4 +1,0 @@
-../Src/Sampler/sample_pool.c:79:13:sample_pool_load_full_data	21
-../Src/Sampler/sample_pool.c:188:6:sample_pool_init	2
-../Src/Sampler/sample_pool.c:203:6:sample_pool_load	34
-../Src/Sampler/sample_pool.c:326:22:sample_pool_get	2
