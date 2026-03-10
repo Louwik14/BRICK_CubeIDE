@@ -22,6 +22,7 @@
 #include "mixer.h"
 
 #include <string.h>
+#include "arm_math.h"
 
 #include "fx_chain.h"
 #include "sd_multitrack_recorder.h"
@@ -195,16 +196,18 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float bus_cue_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float tmp_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float tmp_r[AUDIO_BLOCK_SIZE];
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    memset(bus_main_l, 0, sizeof(bus_main_l));
-    memset(bus_main_r, 0, sizeof(bus_main_r));
-    memset(bus_cue_l, 0, sizeof(bus_cue_l));
-    memset(bus_cue_r, 0, sizeof(bus_cue_r));
-    memset(send_l, 0, sizeof(send_l));
-    memset(send_r, 0, sizeof(send_r));
+    arm_fill_f32(0.0f, bus_main_l, AUDIO_BLOCK_SIZE);
+    arm_fill_f32(0.0f, bus_main_r, AUDIO_BLOCK_SIZE);
+    arm_fill_f32(0.0f, bus_cue_l, AUDIO_BLOCK_SIZE);
+    arm_fill_f32(0.0f, bus_cue_r, AUDIO_BLOCK_SIZE);
+    arm_fill_f32(0.0f, &send_l[0][0], MIXER_NUM_SENDS * AUDIO_BLOCK_SIZE);
+    arm_fill_f32(0.0f, &send_r[0][0], MIXER_NUM_SENDS * AUDIO_BLOCK_SIZE);
 
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
 
@@ -237,11 +240,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         const float gain_l = mt->gain * pan_l;
         const float gain_r = mt->gain * pan_r;
 
-        for(uint32_t i = 0; i < frames; i++)
-        {
-            L[i] *= gain_l;
-            R[i] *= gain_r;
-        }
+        arm_scale_f32(L, gain_l, L, frames);
+        arm_scale_f32(R, gain_r, R, frames);
 
         sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_FADER,
                                       t,
@@ -254,11 +254,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             if(g_send_fx_slot[s] >= 0)
             {
                 const float send_g = mt->send_level[s];
-                for(uint32_t i = 0; i < frames; i++)
-                {
-                    send_l[s][i] += L[i] * send_g;
-                    send_r[s][i] += R[i] * send_g;
-                }
+                arm_scale_f32(L, send_g, tmp_l, frames);
+                arm_add_f32(send_l[s], tmp_l, send_l[s], frames);
+                arm_scale_f32(R, send_g, tmp_r, frames);
+                arm_add_f32(send_r[s], tmp_r, send_r[s], frames);
             }
         }
 
@@ -270,29 +269,20 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         if(mt->route_master && mt->route_cue)
         {
-            for(uint32_t i = 0; i < frames; i++)
-            {
-                bus_main_l[i] += L[i];
-                bus_main_r[i] += R[i];
-                bus_cue_l[i] += L[i];
-                bus_cue_r[i] += R[i];
-            }
+            arm_add_f32(bus_main_l, L, bus_main_l, frames);
+            arm_add_f32(bus_main_r, R, bus_main_r, frames);
+            arm_add_f32(bus_cue_l, L, bus_cue_l, frames);
+            arm_add_f32(bus_cue_r, R, bus_cue_r, frames);
         }
         else if(mt->route_master)
         {
-            for(uint32_t i = 0; i < frames; i++)
-            {
-                bus_main_l[i] += L[i];
-                bus_main_r[i] += R[i];
-            }
+            arm_add_f32(bus_main_l, L, bus_main_l, frames);
+            arm_add_f32(bus_main_r, R, bus_main_r, frames);
         }
         else if(mt->route_cue)
         {
-            for(uint32_t i = 0; i < frames; i++)
-            {
-                bus_cue_l[i] += L[i];
-                bus_cue_r[i] += R[i];
-            }
+            arm_add_f32(bus_cue_l, L, bus_cue_l, frames);
+            arm_add_f32(bus_cue_r, R, bus_cue_r, frames);
         }
     }
 
@@ -302,11 +292,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         if(slot >= 0)
         {
             fx_chain_process_slot((uint32_t)slot, send_l[s], send_r[s], frames);
-            for(uint32_t i = 0; i < frames; i++)
-            {
-                bus_main_l[i] += send_l[s][i];
-                bus_main_r[i] += send_r[s][i];
-            }
+            arm_add_f32(bus_main_l, send_l[s], bus_main_l, frames);
+            arm_add_f32(bus_main_r, send_r[s], bus_main_r, frames);
         }
     }
 
