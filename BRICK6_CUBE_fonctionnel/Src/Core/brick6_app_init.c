@@ -37,6 +37,7 @@
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
 #define ENABLE_PERIODIC_RETRIGGER 0
+#define HALFPI_F 1.57079632679489661923f
 
 static UART_HandleTypeDef huart1;
 static float g_master_gain = 1.0f;
@@ -141,14 +142,25 @@ static void my_dsp(StereoTrack *tracks,
     static float recL[AUDIO_BLOCK_SIZE];
     static float recR[AUDIO_BLOCK_SIZE];
     const float xfade = 0.0f;
-    const float live_gain = 1.0f - xfade;
+
+    /*
+    Constant Power Crossfade
+
+    Linear crossfades produce a volume dip at the center (-6 dB).
+    Using sin/cos gains preserves constant perceived loudness.
+
+    Inspired by DaisySP CrossFade::CROSSFADE_CPOW,
+    but optimized to compute the curve once per audio block.
+    */
+    const float gain_rec = sinf(xfade * HALFPI_F);
+    const float gain_live = cosf(xfade * HALFPI_F);
 
     live_recorder_read(&g_live_recorder, recL, recR, frames);
 
     for(uint32_t i = 0U; i < frames; i++)
     {
-        tracks[0].L[i] = (tracks[0].L[i] * live_gain) + (recL[i] * xfade);
-        tracks[0].R[i] = (tracks[0].R[i] * live_gain) + (recR[i] * xfade);
+        tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
+        tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
     }
 }
 
