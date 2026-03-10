@@ -43,8 +43,6 @@
 #include "brick6_app_init.h"
 #include "audio.h"
 #include "audio_float.h"
-#include "Storage/audio_streamer.h"
-#include "Streaming/stream_manager.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -134,9 +132,7 @@ int main(void)
   uint32_t last_tick = 0;
 
   static uint32_t last_log_time = 0;
-  static uint32_t last_sd_bytes = 0;
-  static uint32_t last_sd_frames = 0;
-  static uint32_t last_refills = 0;
+
 
   while (1)
   {
@@ -156,71 +152,15 @@ int main(void)
 #if PHASE0_DEBUG_LOG
       if((HAL_GetTick() - last_log_time) >= 1000U)
       {
-          const uint32_t now = HAL_GetTick();
-          const uint32_t dt_ms = (last_log_time == 0U) ? 1000U : (now - last_log_time);
-
-          audio_streamer_stats_t streamer_stats;
-          stream_manager_stats_t manager_stats;
           audio_debug_stats_t audio_stats;
           brick6_app_stats_t app_stats;
-
-          audio_streamer_get_stats(0U, &streamer_stats);
-          stream_manager_get_stats(&manager_stats);
           audio_debug_get_stats(&audio_stats);
           brick6_app_get_stats(&app_stats);
-
-          const uint32_t sd_bytes_delta = streamer_stats.total_bytes_read_from_sd - last_sd_bytes;
-          const uint32_t sd_frames_delta = streamer_stats.total_frames_filled_from_sd - last_sd_frames;
-          const uint32_t refill_delta = streamer_stats.total_refills - last_refills;
-
-          last_sd_bytes = streamer_stats.total_bytes_read_from_sd;
-          last_sd_frames = streamer_stats.total_frames_filled_from_sd;
-          last_refills = streamer_stats.total_refills;
-          last_log_time = now;
-
-          const uint32_t bytes_per_s = (sd_bytes_delta * 1000U) / (dt_ms ? dt_ms : 1U);
-          const uint32_t frames_per_s = (sd_frames_delta * 1000U) / (dt_ms ? dt_ms : 1U);
-          const uint32_t refills_per_s = (refill_delta * 1000U) / (dt_ms ? dt_ms : 1U);
-          const uint32_t refill_avg_ms = (streamer_stats.total_refills > 0U)
-                                       ? (streamer_stats.total_refill_time_ms / streamer_stats.total_refills)
-                                       : 0U;
-          const uint32_t manager_dt_avg_ms = (manager_stats.process_dt_samples > 0U)
-                                           ? (manager_stats.process_dt_acc_ms / manager_stats.process_dt_samples)
-                                           : 0U;
-
-          AUDIO_DEBUG_LOG("[P0] ring=%lu/%u min=%lu max=%lu underrun=%lu restart=%lu partial=%lu\n",
-                 (unsigned long)streamer_stats.ring_used_frames,
-                 16384U,
-                 (unsigned long)streamer_stats.ring_level_min_frames,
-                 (unsigned long)streamer_stats.ring_level_max_frames,
-                 (unsigned long)streamer_stats.underrun_count,
-                 (unsigned long)streamer_stats.file_restart_count,
-                 (unsigned long)streamer_stats.partial_read_count);
-
-          AUDIO_DEBUG_LOG("[P0] sd B/s=%lu frames/s=%lu refills/s=%lu chunk_last=%luB(%luf) read_max=%lums refill_max=%lums refill_avg=%lums\n",
-                 (unsigned long)bytes_per_s,
-                 (unsigned long)frames_per_s,
-                 (unsigned long)refills_per_s,
-                 (unsigned long)streamer_stats.last_refill_bytes,
-                 (unsigned long)streamer_stats.last_refill_frames,
-                 (unsigned long)streamer_stats.sd_read_time_max_ms,
-                 (unsigned long)streamer_stats.refill_time_max_ms,
-                 (unsigned long)refill_avg_ms);
-
-          AUDIO_DEBUG_LOG("[P0] loop stream_calls=%lu app_calls=%lu dt_stream max=%lums avg=%lums wd=%lu audio_blocks=%lu dsp_frames=%lu\n",
-                 (unsigned long)manager_stats.process_call_count,
+          last_log_time = HAL_GetTick();
+          AUDIO_DEBUG_LOG("[P0] app_calls=%lu audio_blocks=%lu dsp_frames=%lu\n",
                  (unsigned long)app_stats.app_process_call_count,
-                 (unsigned long)manager_stats.process_dt_max_ms,
-                 (unsigned long)manager_dt_avg_ms,
-                 (unsigned long)manager_stats.process_watchdog_count,
                  (unsigned long)audio_stats.audio_block_counter,
                  (unsigned long)audio_stats.dsp_frames_counter);
-
-          AUDIO_DEBUG_LOG("[P0] ring_checks overflow=%lu underflow_logic=%lu incoherence=%lu pos_oob=%lu\n",
-                 (unsigned long)streamer_stats.ring_overflow_detect_count,
-                 (unsigned long)streamer_stats.ring_underflow_logic_count,
-                 (unsigned long)streamer_stats.ring_incoherence_count,
-                 (unsigned long)streamer_stats.pos_oob_count);
       }
 #endif
   }

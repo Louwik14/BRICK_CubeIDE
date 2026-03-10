@@ -29,7 +29,6 @@
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
-#include "Streaming/stream_manager.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -174,7 +173,7 @@ void brick6_app_init(void)
     DBG("[VOICE] init\r\n");
     voice_manager_init();
 
-    /* Trigger immédiat pour tester le streaming */
+    /* Trigger immédiat pour tester la lecture RAM */
     voice_manager_trigger(0, 0.30f, 0.30f);
     voice_manager_trigger(1, 0.30f, 0.30f);
 
@@ -216,7 +215,6 @@ void brick6_app_process(void)
     g_brick6_app_process_call_count++;
 
     voice_manager_service();
-    stream_manager_process();
 
     /* retrigger périodique pour tester la polyphonie */
 #if ENABLE_PERIODIC_RETRIGGER
