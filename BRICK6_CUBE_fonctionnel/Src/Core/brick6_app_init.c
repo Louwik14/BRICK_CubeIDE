@@ -302,6 +302,9 @@ void brick6_app_process(void)
 
     voice_manager_service();
 
+    /* Service writer SD hors IRQ, budgete par appel. */
+    sd_recorder_writer_service();
+
     /* retrigger périodique pour tester la polyphonie */
 #if ENABLE_PERIODIC_RETRIGGER
     if(now - last_trigger > 4000)
