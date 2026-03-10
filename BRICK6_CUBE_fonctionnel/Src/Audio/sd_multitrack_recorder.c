@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "audio_float.h"
+#include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 typedef enum
@@ -22,11 +24,26 @@ typedef struct
 
 typedef struct
 {
+    volatile uint32_t write_idx;
+    volatile uint32_t read_idx;
+    uint32_t slot_count;
+    uint32_t slot_words;
+    float *data;
+} recorder_ring_t;
+
+typedef struct
+{
     uint8_t armed;
     sd_recorder_stem_cfg_t cfg;
+    recorder_ring_t ring;
+    uint32_t blocks_captured;
+    uint32_t blocks_dropped_overflow;
+    uint32_t ring_high_watermark;
 } recorder_stem_t;
 
 #define REC_CMD_Q_LEN 16U
+#define REC_RING_SLOT_COUNT 128U
+#define REC_RING_MAX_SLOT_WORDS (AUDIO_BLOCK_SIZE * 2U)
 
 typedef struct
 {
@@ -48,6 +65,87 @@ typedef struct
 } recorder_ctx_t;
 
 static recorder_ctx_t g_rec;
+
+static AUDIO_COLD_SDRAM float g_rec_ring_storage[SD_RECORDER_MAX_STEMS][REC_RING_SLOT_COUNT][REC_RING_MAX_SLOT_WORDS];
+
+static uint32_t recorder_ring_count(const recorder_ring_t *ring)
+{
+    const uint32_t wr = ring->write_idx;
+    const uint32_t rd = ring->read_idx;
+    return (wr >= rd) ? (wr - rd) : (ring->slot_count - (rd - wr));
+}
+
+static void recorder_ring_reset(recorder_ring_t *ring, uint32_t channels)
+{
+    ring->write_idx = 0U;
+    ring->read_idx = 0U;
+    ring->slot_count = REC_RING_SLOT_COUNT;
+    ring->slot_words = AUDIO_BLOCK_SIZE * ((channels == 1U) ? 1U : 2U);
+}
+
+static uint8_t recorder_ring_push_block(recorder_stem_t *stem,
+                                        const float *src_l,
+                                        const float *src_r,
+                                        uint32_t frames)
+{
+    recorder_ring_t *ring = &stem->ring;
+    const uint32_t next = (ring->write_idx + 1U) % ring->slot_count;
+
+    if(next == ring->read_idx)
+    {
+        stem->blocks_dropped_overflow++;
+        return 0U;
+    }
+
+    float *dst = &ring->data[ring->write_idx * ring->slot_words];
+    const uint32_t channels = stem->cfg.channels;
+
+    if(channels == 1U)
+    {
+        memcpy(dst, src_l, sizeof(float) * frames);
+    }
+    else
+    {
+        for(uint32_t i = 0U; i < frames; i++)
+        {
+            const uint32_t o = i * 2U;
+            dst[o] = src_l[i];
+            dst[o + 1U] = src_r[i];
+        }
+    }
+
+    __DMB();
+    ring->write_idx = next;
+
+    const uint32_t fill = recorder_ring_count(ring);
+    if(fill > stem->ring_high_watermark)
+    {
+        stem->ring_high_watermark = fill;
+    }
+
+    stem->blocks_captured++;
+    return 1U;
+}
+
+static __attribute__((unused)) uint8_t recorder_ring_pop_block(recorder_stem_t *stem,
+                                       float *dst_interleaved,
+                                       uint32_t dst_words)
+{
+    recorder_ring_t *ring = &stem->ring;
+
+    if(ring->read_idx == ring->write_idx)
+        return 0U;
+
+    if((dst_interleaved == 0) || (dst_words < ring->slot_words))
+        return 0U;
+
+    const float *src = &ring->data[ring->read_idx * ring->slot_words];
+    memcpy(dst_interleaved, src, sizeof(float) * ring->slot_words);
+
+    __DMB();
+    ring->read_idx = (ring->read_idx + 1U) % ring->slot_count;
+    return 1U;
+}
 
 static uint8_t recorder_cmd_push(const recorder_cmd_t *cmd)
 {
@@ -97,6 +195,13 @@ static void recorder_set_state(sd_recorder_state_t next)
 void sd_recorder_init(void)
 {
     memset(&g_rec, 0, sizeof(g_rec));
+
+    for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+    {
+        g_rec.stems[stem_id].ring.data = &g_rec_ring_storage[stem_id][0U][0U];
+        recorder_ring_reset(&g_rec.stems[stem_id].ring, 2U);
+    }
+
     g_rec.state = SD_RECORDER_STATE_IDLE;
 }
 
@@ -131,7 +236,8 @@ uint8_t sd_recorder_request_stop(void)
 uint8_t sd_recorder_request_arm_stem(uint8_t stem_id,
                                      const sd_recorder_stem_cfg_t *cfg)
 {
-    if((cfg == 0) || (stem_id >= SD_RECORDER_MAX_STEMS))
+    if((cfg == 0) || (stem_id >= SD_RECORDER_MAX_STEMS) ||
+       ((cfg->channels != 1U) && (cfg->channels != 2U)))
         return 0U;
 
     if(g_rec.state != SD_RECORDER_STATE_IDLE)
@@ -215,6 +321,11 @@ void sd_recorder_audio_block_begin(uint32_t frames)
                 {
                     g_rec.stems[cmd.stem_id].cfg = cmd.cfg;
                     g_rec.stems[cmd.stem_id].armed = 1U;
+                    recorder_ring_reset(&g_rec.stems[cmd.stem_id].ring,
+                                        cmd.cfg.channels);
+                    g_rec.stems[cmd.stem_id].blocks_captured = 0U;
+                    g_rec.stems[cmd.stem_id].blocks_dropped_overflow = 0U;
+                    g_rec.stems[cmd.stem_id].ring_high_watermark = 0U;
                 }
                 else
                 {
@@ -227,6 +338,8 @@ void sd_recorder_audio_block_begin(uint32_t frames)
                    (cmd.stem_id < SD_RECORDER_MAX_STEMS))
                 {
                     memset(&g_rec.stems[cmd.stem_id], 0, sizeof(g_rec.stems[cmd.stem_id]));
+                    g_rec.stems[cmd.stem_id].ring.data = &g_rec_ring_storage[cmd.stem_id][0U][0U];
+                    recorder_ring_reset(&g_rec.stems[cmd.stem_id].ring, 2U);
                 }
                 else
                 {
@@ -243,6 +356,18 @@ void sd_recorder_audio_block_begin(uint32_t frames)
     if(g_rec.state == SD_RECORDER_STATE_START_PENDING)
     {
         recorder_set_state(SD_RECORDER_STATE_RECORDING);
+
+        for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+        {
+            if(g_rec.stems[stem_id].armed != 0U)
+            {
+                recorder_ring_reset(&g_rec.stems[stem_id].ring,
+                                    g_rec.stems[stem_id].cfg.channels);
+                g_rec.stems[stem_id].blocks_captured = 0U;
+                g_rec.stems[stem_id].blocks_dropped_overflow = 0U;
+                g_rec.stems[stem_id].ring_high_watermark = 0U;
+            }
+        }
     }
     else if(g_rec.state == SD_RECORDER_STATE_STOP_PENDING)
     {
@@ -251,6 +376,29 @@ void sd_recorder_audio_block_begin(uint32_t frames)
     else if(g_rec.state == SD_RECORDER_STATE_FINALIZING)
     {
         recorder_set_state(SD_RECORDER_STATE_IDLE);
+    }
+}
+
+void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
+                                   uint8_t bus_id,
+                                   const float *src_l,
+                                   const float *src_r,
+                                   uint32_t frames)
+{
+    if((src_l == 0) || (src_r == 0) || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE))
+        return;
+
+    if(g_rec.state != SD_RECORDER_STATE_RECORDING)
+        return;
+
+    for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+    {
+        recorder_stem_t *stem = &g_rec.stems[stem_id];
+
+        if((stem->armed == 0U) || (stem->cfg.tap != tap) || (stem->cfg.bus_id != bus_id))
+            continue;
+
+        (void)recorder_ring_push_block(stem, src_l, src_r, frames);
     }
 }
 
@@ -273,4 +421,11 @@ void sd_recorder_get_debug(sd_recorder_debug_t *out_debug)
     out_debug->rejected_state_requests = g_rec.rejected_state_requests;
     out_debug->block_boundary_calls = g_rec.block_boundary_calls;
     out_debug->transition_count = g_rec.transition_count;
+
+    for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
+    {
+        out_debug->stem_blocks_captured[stem_id] = g_rec.stems[stem_id].blocks_captured;
+        out_debug->stem_blocks_dropped_overflow[stem_id] = g_rec.stems[stem_id].blocks_dropped_overflow;
+        out_debug->stem_ring_high_watermark[stem_id] = g_rec.stems[stem_id].ring_high_watermark;
+    }
 }
