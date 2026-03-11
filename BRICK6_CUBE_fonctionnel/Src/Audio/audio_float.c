@@ -385,30 +385,33 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     (void)tinyusb_capture_write_stereo_s16(usb_capture_s16, frames);
 
-    const uint32_t expected_bytes = frames * 2U * sizeof(int16_t);
-    const uint32_t read_bytes = speaker_ring_read(usb_playback_bytes, expected_bytes);
+    const uint32_t bytes_per_frame = 2U * sizeof(int16_t);
+    const uint32_t expected_bytes = frames * bytes_per_frame;
+    const uint32_t available_bytes = speaker_ring_available_bytes();
+    const uint32_t request_bytes = (available_bytes < expected_bytes) ? available_bytes : expected_bytes;
+    const uint32_t read_bytes = speaker_ring_read(usb_playback_bytes, request_bytes);
+    const uint32_t read_frames = read_bytes / bytes_per_frame;
+
     if(read_bytes < expected_bytes)
     {
         tinyusb_app_note_playback_underrun(expected_bytes - read_bytes);
     }
 
-    for(uint32_t i = 0; i < frames; i++)
+    for(uint32_t i = 0; i < read_frames; i++)
     {
-        const uint32_t base = 2U * i * sizeof(int16_t);
-        if((base + 3U) < read_bytes)
-        {
-            int16_t left = (int16_t)((uint16_t)usb_playback_bytes[base] |
-                          ((uint16_t)usb_playback_bytes[base + 1U] << 8));
-            int16_t right = (int16_t)((uint16_t)usb_playback_bytes[base + 2U] |
-                           ((uint16_t)usb_playback_bytes[base + 3U] << 8));
-            usb_playback_l[i] = s16_to_float(left);
-            usb_playback_r[i] = s16_to_float(right);
-        }
-        else
-        {
-            usb_playback_l[i] = 0.0f;
-            usb_playback_r[i] = 0.0f;
-        }
+        const uint32_t base = i * bytes_per_frame;
+        int16_t left = (int16_t)((uint16_t)usb_playback_bytes[base] |
+                      ((uint16_t)usb_playback_bytes[base + 1U] << 8));
+        int16_t right = (int16_t)((uint16_t)usb_playback_bytes[base + 2U] |
+                       ((uint16_t)usb_playback_bytes[base + 3U] << 8));
+        usb_playback_l[i] = s16_to_float(left);
+        usb_playback_r[i] = s16_to_float(right);
+    }
+
+    for(uint32_t i = read_frames; i < frames; i++)
+    {
+        usb_playback_l[i] = 0.0f;
+        usb_playback_r[i] = 0.0f;
     }
 
     audio_io_pack(tx,

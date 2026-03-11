@@ -29,6 +29,8 @@ static volatile uint32_t capture_ring_tail;
 
 static volatile tinyusb_audio_debug_stats_t g_tinyusb_audio_stats;
 
+#define USB_AUDIO_STEREO_FRAME_BYTES (2U * sizeof(int16_t))
+
 //--------------------------------------------------------------------+
 // RING BUFFER HELPERS (SPSC LOCK-FREE)
 //--------------------------------------------------------------------+
@@ -84,6 +86,8 @@ static uint32_t speaker_ring_read_irq(uint8_t *data, uint32_t len)
   {
     rd = available;
   }
+
+  rd -= (rd % USB_AUDIO_STEREO_FRAME_BYTES);
 
   for (uint32_t i = 0; i < rd; i++)
   {
@@ -190,10 +194,10 @@ static void audio_task(void)
                                       cap_tail,
                                       CAPTURE_RING_BUFFER_SIZE);
 
-  while (available != 0U)
+  while (available >= USB_AUDIO_STEREO_FRAME_BYTES)
   {
     uint16_t write_available = tinyusb_audio_write_available();
-    if (write_available == 0U)
+    if (write_available < USB_AUDIO_STEREO_FRAME_BYTES)
     {
       break;
     }
@@ -206,6 +210,12 @@ static void audio_task(void)
     if (chunk > write_available)
     {
       chunk = write_available;
+    }
+
+    chunk -= (chunk % USB_AUDIO_STEREO_FRAME_BYTES);
+    if (chunk == 0U)
+    {
+      break;
     }
 
     uint32_t read_count = capture_ring_read_main(tx_chunk, chunk);
@@ -362,6 +372,16 @@ uint32_t speaker_ring_read(uint8_t *data, uint32_t len)
   return speaker_ring_read_irq(data, len);
 }
 
+uint32_t speaker_ring_available_bytes(void)
+{
+  uint32_t local_head = speaker_ring_head;
+  uint32_t local_tail = speaker_ring_tail;
+  __DMB();
+
+  uint32_t available = ring_available(local_head, local_tail, SPEAKER_RING_BUFFER_SIZE);
+  return available - (available % USB_AUDIO_STEREO_FRAME_BYTES);
+}
+
 bool tud_audio_rx_done_isr(uint8_t rhport,
                            uint16_t n_bytes_received,
                            uint8_t func_id,
@@ -384,8 +404,14 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
     {
       break;
     }
-    uint32_t written = speaker_ring_write_isr(rx_buffer, read_count);
-    g_tinyusb_audio_stats.speaker_overflow_bytes += (uint32_t)read_count - written;
+
+    uint16_t framed_count = (uint16_t)(read_count - (read_count % USB_AUDIO_STEREO_FRAME_BYTES));
+    if (framed_count != 0U)
+    {
+      uint32_t written = speaker_ring_write_isr(rx_buffer, framed_count);
+      g_tinyusb_audio_stats.speaker_overflow_bytes += (uint32_t)framed_count - written;
+    }
+
     remaining = (uint16_t)(remaining - read_count);
   }
 
