@@ -234,6 +234,7 @@ void brick6_app_init(void)
     recorder_transport_init();
     sd_recorder_init();
 
+
     DBG("[VOICE] init\r\n");
     voice_manager_init();
 
