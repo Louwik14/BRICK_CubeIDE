@@ -29,7 +29,8 @@ static volatile uint32_t capture_ring_tail;
 
 static volatile tinyusb_audio_debug_stats_t g_tinyusb_audio_stats;
 
-#define USB_AUDIO_STEREO_FRAME_BYTES (2U * sizeof(int16_t))
+#define USB_AUDIO_BYTES_PER_SAMPLE 3U
+#define USB_AUDIO_STEREO_FRAME_BYTES (2U * USB_AUDIO_BYTES_PER_SAMPLE)
 
 //--------------------------------------------------------------------+
 // RING BUFFER HELPERS (SPSC LOCK-FREE)
@@ -247,11 +248,49 @@ void tinyusb_app_task(void)
   audio_task();
 }
 
-uint32_t tinyusb_capture_write_stereo_s16(const int16_t *interleaved, uint32_t frames)
+uint32_t tinyusb_capture_write_stereo_i24(const int32_t *interleaved, uint32_t frames)
 {
-  uint32_t bytes = frames * sizeof(int16_t) * 2U;
-  uint32_t written = capture_ring_write_irq((const uint8_t *)interleaved, bytes);
-  g_tinyusb_audio_stats.capture_overflow_bytes += (bytes - written);
+  const uint32_t total_bytes = frames * USB_AUDIO_STEREO_FRAME_BYTES;
+  uint8_t packed[CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX];
+  uint32_t written = 0U;
+  uint32_t frame_index = 0U;
+
+  while (frame_index < frames)
+  {
+    uint32_t chunk_frames = frames - frame_index;
+    uint32_t max_chunk_frames = sizeof(packed) / USB_AUDIO_STEREO_FRAME_BYTES;
+    if (chunk_frames > max_chunk_frames)
+    {
+      chunk_frames = max_chunk_frames;
+    }
+
+    uint32_t chunk_bytes = chunk_frames * USB_AUDIO_STEREO_FRAME_BYTES;
+    for (uint32_t i = 0; i < chunk_frames; i++)
+    {
+      uint32_t src = (frame_index + i) * 2U;
+      int32_t left = interleaved[src];
+      int32_t right = interleaved[src + 1U];
+      uint32_t dst = i * USB_AUDIO_STEREO_FRAME_BYTES;
+
+      packed[dst] = (uint8_t)left;
+      packed[dst + 1U] = (uint8_t)(left >> 8);
+      packed[dst + 2U] = (uint8_t)(left >> 16);
+      packed[dst + 3U] = (uint8_t)right;
+      packed[dst + 4U] = (uint8_t)(right >> 8);
+      packed[dst + 5U] = (uint8_t)(right >> 16);
+    }
+
+    uint32_t chunk_written = capture_ring_write_irq(packed, chunk_bytes);
+    written += chunk_written;
+    if (chunk_written < chunk_bytes)
+    {
+      break;
+    }
+
+    frame_index += chunk_frames;
+  }
+
+  g_tinyusb_audio_stats.capture_overflow_bytes += (total_bytes - written);
   return written;
 }
 

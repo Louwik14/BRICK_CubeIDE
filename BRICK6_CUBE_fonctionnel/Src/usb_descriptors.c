@@ -216,6 +216,10 @@ uint8_t const desc_configuration[] =
 TU_VERIFY_STATIC(sizeof(desc_configuration) == CONFIG_TOTAL_LEN,
                  "Config size mismatch");
 
+TU_VERIFY_STATIC(CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX == 288, "UAC1 IN EP size must be 288 bytes @48kHz/2ch/24-bit");
+TU_VERIFY_STATIC(CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX == 288, "UAC1 OUT EP size must be 288 bytes @48kHz/2ch/24-bit");
+
+
 uint8_t const * tud_descriptor_configuration_cb(uint8_t index)
 {
   (void) index;

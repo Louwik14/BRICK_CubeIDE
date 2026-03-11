@@ -31,6 +31,7 @@
 #include "audio_float.h"
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 #include <arm_acle.h>
 #include "fx_dj_eq3_cmsis.h"
 #include "stm32h743xx.h"
@@ -328,15 +329,15 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
 }
 
 
-static inline int16_t float_to_s16(float x)
+static inline int32_t float_to_i24(float x)
 {
-    const float clamped = __builtin_fmaxf(-1.0f, __builtin_fminf(x, 0.999969482421875f));
-    return (int16_t)(clamped * 32768.0f);
+    float clamped = fmaxf(-1.0f, fminf(x, 0.999999f));
+    return (int32_t)(clamped * 8388608.0f);
 }
 
-static inline float s16_to_float(int16_t x)
+static inline float i24_to_float(int32_t x)
 {
-    return (float)x * (1.0f / 32768.0f);
+    return (float)x * (1.0f / 8388608.0f);
 }
 
 
@@ -372,20 +373,20 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
 
-    ALIGN32 static int16_t usb_capture_s16[AUDIO_BLOCK_SIZE * 2U];
-    ALIGN32 static uint8_t usb_playback_bytes[AUDIO_BLOCK_SIZE * 2U * sizeof(int16_t)];
+    ALIGN32 static int32_t usb_capture_i24[AUDIO_BLOCK_SIZE * 2U];
+    ALIGN32 static uint8_t usb_playback_bytes[AUDIO_BLOCK_SIZE * 2U * 3U];
     ALIGN32 static float usb_playback_l[AUDIO_BLOCK_SIZE];
     ALIGN32 static float usb_playback_r[AUDIO_BLOCK_SIZE];
 
     for(uint32_t i = 0; i < frames; i++)
     {
-        usb_capture_s16[2U * i] = float_to_s16(tracks[0].L[i]);
-        usb_capture_s16[2U * i + 1U] = float_to_s16(tracks[0].R[i]);
+        usb_capture_i24[2U * i] = float_to_i24(tracks[0].L[i]);
+        usb_capture_i24[2U * i + 1U] = float_to_i24(tracks[0].R[i]);
     }
 
-    (void)tinyusb_capture_write_stereo_s16(usb_capture_s16, frames);
+    (void)tinyusb_capture_write_stereo_i24(usb_capture_i24, frames);
 
-    const uint32_t bytes_per_frame = 2U * sizeof(int16_t);
+    const uint32_t bytes_per_frame = 2U * 3U;
     const uint32_t expected_bytes = frames * bytes_per_frame;
     const uint32_t available_bytes = speaker_ring_available_bytes();
     const uint32_t request_bytes = (available_bytes < expected_bytes) ? available_bytes : expected_bytes;
@@ -400,12 +401,20 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     for(uint32_t i = 0; i < read_frames; i++)
     {
         const uint32_t base = i * bytes_per_frame;
-        int16_t left = (int16_t)((uint16_t)usb_playback_bytes[base] |
-                      ((uint16_t)usb_playback_bytes[base + 1U] << 8));
-        int16_t right = (int16_t)((uint16_t)usb_playback_bytes[base + 2U] |
-                       ((uint16_t)usb_playback_bytes[base + 3U] << 8));
-        usb_playback_l[i] = s16_to_float(left);
-        usb_playback_r[i] = s16_to_float(right);
+        int32_t left = (int32_t)((uint32_t)usb_playback_bytes[base] |
+                                ((uint32_t)usb_playback_bytes[base + 1U] << 8) |
+                                ((uint32_t)usb_playback_bytes[base + 2U] << 16));
+        int32_t right = (int32_t)((uint32_t)usb_playback_bytes[base + 3U] |
+                                 ((uint32_t)usb_playback_bytes[base + 4U] << 8) |
+                                 ((uint32_t)usb_playback_bytes[base + 5U] << 16));
+
+        if ((left & 0x00800000) != 0)
+            left |= (int32_t)0xFF000000;
+        if ((right & 0x00800000) != 0)
+            right |= (int32_t)0xFF000000;
+
+        usb_playback_l[i] = i24_to_float(left);
+        usb_playback_r[i] = i24_to_float(right);
     }
 
     for(uint32_t i = read_frames; i < frames; i++)
