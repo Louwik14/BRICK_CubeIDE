@@ -1,6 +1,6 @@
 #include <string.h>
 #include "tusb.h"
-#include "tinyusb_app.h"
+#include "App/tinyusb_app.h"
 #include "usb_descriptors.h"
 #include "stm32h7xx_hal.h"
 

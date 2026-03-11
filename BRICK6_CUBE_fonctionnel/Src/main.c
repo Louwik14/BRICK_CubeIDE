@@ -43,7 +43,7 @@
 #include "audio.h"
 #include "audio_float.h"
 #include "tusb.h"
-#include "tinyusb_app.h"
+#include "App/tinyusb_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

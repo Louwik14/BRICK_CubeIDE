@@ -1,0 +1,2 @@
+../tinyusb/src/portable/synopsys/dwc2/dwc2_common.c:182:6:dwc2_core_is_highspeed	2
+../tinyusb/src/portable/synopsys/dwc2/dwc2_common.c:207:6:dwc2_core_init	45

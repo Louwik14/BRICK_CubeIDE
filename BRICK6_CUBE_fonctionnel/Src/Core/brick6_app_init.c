@@ -35,7 +35,7 @@
 #include "Storage/memory_layout.h"
 
 #include "tusb.h"
-#include "tinyusb_app.h"
+#include "App/tinyusb_app.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
