@@ -18,7 +18,6 @@
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_uart.h"
 #include "usb_host.h"
-#include "usb_device.h"
 #include "audio.h"
 #include "audio_float.h"
 #include "cs42448.h"
@@ -34,6 +33,9 @@
 #include "Audio/recorder_transport.h"
 #include "Audio/sd_multitrack_recorder.h"
 #include "Storage/memory_layout.h"
+
+#include "tusb.h"
+#include "tinyusb_app.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -191,10 +193,10 @@ void brick6_app_init(void)
 
     SDRAM_Init();
 
-    MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
     CS42448_Init(0x48);
+
 
     mixer_init();
     fx_pool_init();
@@ -261,9 +263,12 @@ void brick6_app_init(void)
 
     audio_start();
 
+    tusb_init();
+    tinyusb_app_init();
+
     HAL_Delay(200);
 
-    midi_init();
+    //midi_init();
 }
 
 /* ============================================================

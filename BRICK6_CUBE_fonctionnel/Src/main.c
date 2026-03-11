@@ -32,7 +32,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
 #include "usb_host.h"
 #include "cs42448.h"
 #include "midi.h"
@@ -43,6 +42,8 @@
 #include "brick6_app_init.h"
 #include "audio.h"
 #include "audio_float.h"
+#include "tusb.h"
+#include "tinyusb_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -69,7 +70,6 @@ void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 void MX_USB_HOST_Process(void);
 void MX_USB_HOST_Init(void);
-void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -117,7 +117,7 @@ int main(void)
   MX_SAI1_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
-  //MX_USB_OTG_FS_PCD_Init();
+  MX_USB_OTG_FS_PCD_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   MX_SPI5_Init();
@@ -138,7 +138,8 @@ int main(void)
   {
       engine_tasklet_poll();
       brick6_app_process();
-
+      tud_task();                  // TinyUSB Device (audio + MIDI)
+      tinyusb_app_task();
       MX_USB_HOST_Process();
       usb_host_tasklet_poll_bounded(4);
       midi_host_poll_bounded(8);

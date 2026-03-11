@@ -38,8 +38,6 @@ RM := rm -rf
 -include Drivers/CMSIS_DSP/Source/BasicMathFunctions/subdir.mk
 -include App/usb_stack/subdir.mk
 -include App/Middlewares/ST/STM32_USB_Host_Library/Core/Src/subdir.mk
--include App/Middlewares/ST/STM32_USB_Device_Library/Core/Src/subdir.mk
--include App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src/subdir.mk
 -include objects.mk
 
 ifneq ($(MAKECMDGOALS),clean)
