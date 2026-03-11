@@ -44,6 +44,7 @@
 #include "fx_pool.h"
 #include "control_events.h"
 #include "fx_daisy_comp.h"
+#include "App/tinyusb_app.h"
 
 /* ============================================================
    GAIN STAGING (style Daisy)
@@ -326,6 +327,19 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
     dsp_engine_process_block(track_buf, MAX_TRACKS, frames);
 }
 
+
+static inline int16_t float_to_s16(float x)
+{
+    const float clamped = __builtin_fmaxf(-1.0f, __builtin_fminf(x, 0.999969482421875f));
+    return (int16_t)(clamped * 32768.0f);
+}
+
+static inline float s16_to_float(int16_t x)
+{
+    return (float)x * (1.0f / 32768.0f);
+}
+
+
 /* ============================================================
    MAIN DSP BLOCK PROCESSOR
 
@@ -357,11 +371,47 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
+
+    ALIGN32 static int16_t usb_capture_s16[AUDIO_BLOCK_SIZE * 2U];
+    ALIGN32 static uint8_t usb_playback_bytes[AUDIO_BLOCK_SIZE * 2U * sizeof(int16_t)];
+    ALIGN32 static float usb_playback_l[AUDIO_BLOCK_SIZE];
+    ALIGN32 static float usb_playback_r[AUDIO_BLOCK_SIZE];
+
+    for(uint32_t i = 0; i < frames; i++)
+    {
+        usb_capture_s16[2U * i] = float_to_s16(tracks[0].L[i]);
+        usb_capture_s16[2U * i + 1U] = float_to_s16(tracks[0].R[i]);
+    }
+
+    (void)tinyusb_capture_write_stereo_s16(usb_capture_s16, frames);
+
+    const uint32_t expected_bytes = frames * 2U * sizeof(int16_t);
+    const uint32_t read_bytes = speaker_ring_read(usb_playback_bytes, expected_bytes);
+
+    for(uint32_t i = 0; i < frames; i++)
+    {
+        const uint32_t base = 2U * i * sizeof(int16_t);
+        if((base + 3U) < read_bytes)
+        {
+            int16_t left = (int16_t)((uint16_t)usb_playback_bytes[base] |
+                          ((uint16_t)usb_playback_bytes[base + 1U] << 8));
+            int16_t right = (int16_t)((uint16_t)usb_playback_bytes[base + 2U] |
+                           ((uint16_t)usb_playback_bytes[base + 3U] << 8));
+            usb_playback_l[i] = s16_to_float(left);
+            usb_playback_r[i] = s16_to_float(right);
+        }
+        else
+        {
+            usb_playback_l[i] = 0.0f;
+            usb_playback_r[i] = 0.0f;
+        }
+    }
+
     audio_io_pack(tx,
                   tracks[0].L,
                   tracks[0].R,
-                  tracks[1].L,
-                  tracks[1].R,
+                  usb_playback_l,
+                  usb_playback_r,
                   frames,
                   output_adjust * master_gain);
 }
