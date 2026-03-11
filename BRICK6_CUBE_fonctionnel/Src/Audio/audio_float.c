@@ -387,6 +387,10 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     const uint32_t expected_bytes = frames * 2U * sizeof(int16_t);
     const uint32_t read_bytes = speaker_ring_read(usb_playback_bytes, expected_bytes);
+    if(read_bytes < expected_bytes)
+    {
+        tinyusb_app_note_playback_underrun(expected_bytes - read_bytes);
+    }
 
     for(uint32_t i = 0; i < frames; i++)
     {

@@ -15,8 +15,8 @@ uint8_t clkValid;
 audio20_control_range_2_n_t(1) volumeRng[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
 audio20_control_range_4_n_t(1) sampleFreqRng;
 
-#define SPEAKER_RING_BUFFER_SIZE (4 * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX)
-#define CAPTURE_RING_BUFFER_SIZE (4 * CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX)
+#define SPEAKER_RING_BUFFER_SIZE (16 * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX)
+#define CAPTURE_RING_BUFFER_SIZE (16 * CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX)
 
 static uint8_t speaker_ring[SPEAKER_RING_BUFFER_SIZE];
 static volatile uint32_t speaker_ring_head;
@@ -25,6 +25,8 @@ static volatile uint32_t speaker_ring_tail;
 static uint8_t capture_ring[CAPTURE_RING_BUFFER_SIZE];
 static volatile uint32_t capture_ring_head;
 static volatile uint32_t capture_ring_tail;
+
+static volatile tinyusb_audio_debug_stats_t g_tinyusb_audio_stats;
 
 //--------------------------------------------------------------------+
 // RING BUFFER HELPERS
@@ -90,6 +92,17 @@ static uint32_t ring_read(uint8_t *ring,
   return rd;
 }
 
+static uint16_t tinyusb_audio_write_available(void)
+{
+  tu_fifo_t *ff = tud_audio_get_ep_in_ff();
+  if (ff == NULL)
+  {
+    return 0U;
+  }
+
+  return tu_fifo_remaining(ff);
+}
+
 //--------------------------------------------------------------------+
 // INIT / TASK
 //--------------------------------------------------------------------+
@@ -103,6 +116,12 @@ void tinyusb_app_init(void)
   sampleFreqRng.subrange[0].bMin = sampFreq;
   sampleFreqRng.subrange[0].bMax = sampFreq;
   sampleFreqRng.subrange[0].bRes = 0;
+
+  speaker_ring_head = 0U;
+  speaker_ring_tail = 0U;
+  capture_ring_head = 0U;
+  capture_ring_tail = 0U;
+  memset((void*)&g_tinyusb_audio_stats, 0, sizeof(g_tinyusb_audio_stats));
 }
 
 static void audio_task(void)
@@ -114,10 +133,20 @@ static void audio_task(void)
 
   while (available != 0U)
   {
+    uint16_t write_available = tinyusb_audio_write_available();
+    if (write_available == 0U)
+    {
+      break;
+    }
+
     uint32_t chunk = available;
     if (chunk > sizeof(tx_chunk))
     {
       chunk = sizeof(tx_chunk);
+    }
+    if (chunk > write_available)
+    {
+      chunk = write_available;
     }
 
     uint32_t read_count = ring_read(capture_ring,
@@ -135,12 +164,14 @@ static void audio_task(void)
     uint16_t write_count = tud_audio_write(tx_chunk, (uint16_t)read_count);
     if (write_count < read_count)
     {
-      ring_write(capture_ring,
-                 &capture_ring_head,
-                 &capture_ring_tail,
-                 CAPTURE_RING_BUFFER_SIZE,
-                 tx_chunk + write_count,
-                 (uint32_t)(read_count - write_count));
+      uint32_t pushback = (uint32_t)(read_count - write_count);
+      uint32_t rewrote = ring_write(capture_ring,
+                                    &capture_ring_head,
+                                    &capture_ring_tail,
+                                    CAPTURE_RING_BUFFER_SIZE,
+                                    tx_chunk + write_count,
+                                    pushback);
+      g_tinyusb_audio_stats.capture_drop_bytes += (pushback - rewrote);
       break;
     }
 
@@ -158,12 +189,32 @@ void tinyusb_app_task(void)
 uint32_t tinyusb_capture_write_stereo_s16(const int16_t *interleaved, uint32_t frames)
 {
   uint32_t bytes = frames * sizeof(int16_t) * 2U;
-  return ring_write(capture_ring,
-                    &capture_ring_head,
-                    &capture_ring_tail,
-                    CAPTURE_RING_BUFFER_SIZE,
-                    (const uint8_t *)interleaved,
-                    bytes);
+  uint32_t written = ring_write(capture_ring,
+                                &capture_ring_head,
+                                &capture_ring_tail,
+                                CAPTURE_RING_BUFFER_SIZE,
+                                (const uint8_t *)interleaved,
+                                bytes);
+  g_tinyusb_audio_stats.capture_overflow_bytes += (bytes - written);
+  return written;
+}
+
+void tinyusb_app_note_playback_underrun(uint32_t missing_bytes)
+{
+  g_tinyusb_audio_stats.playback_underrun_bytes += missing_bytes;
+}
+
+void tinyusb_app_get_debug_stats(tinyusb_audio_debug_stats_t *out_stats)
+{
+  if (out_stats == NULL)
+  {
+    return;
+  }
+
+  out_stats->speaker_overflow_bytes = g_tinyusb_audio_stats.speaker_overflow_bytes;
+  out_stats->capture_overflow_bytes = g_tinyusb_audio_stats.capture_overflow_bytes;
+  out_stats->capture_drop_bytes = g_tinyusb_audio_stats.capture_drop_bytes;
+  out_stats->playback_underrun_bytes = g_tinyusb_audio_stats.playback_underrun_bytes;
 }
 
 //--------------------------------------------------------------------+
@@ -292,12 +343,13 @@ bool tud_audio_rx_done_isr(uint8_t rhport,
     {
       break;
     }
-    ring_write(speaker_ring,
-               &speaker_ring_head,
-               &speaker_ring_tail,
-               SPEAKER_RING_BUFFER_SIZE,
-               rx_buffer,
-               read_count);
+    uint32_t written = ring_write(speaker_ring,
+                                 &speaker_ring_head,
+                                 &speaker_ring_tail,
+                                 SPEAKER_RING_BUFFER_SIZE,
+                                 rx_buffer,
+                                 read_count);
+    g_tinyusb_audio_stats.speaker_overflow_bytes += (uint32_t)read_count - written;
     remaining = (uint16_t)(remaining - read_count);
   }
 
