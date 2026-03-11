@@ -24,6 +24,7 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "tusb.h"
 #include "cpu_load.h"
 #include "usart.h"
 #include <stdio.h>
@@ -311,7 +312,7 @@ void OTG_HS_IRQHandler(void)
 
 void OTG_FS_IRQHandler(void)
 {
-	  HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
+	  tud_int_handler(0);
 }
 
 /* USER CODE END 1 */
