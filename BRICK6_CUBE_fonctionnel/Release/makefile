@@ -18,14 +18,13 @@ RM := rm -rf
 -include Src/UI/subdir.mk
 -include Src/Storage/subdir.mk
 -include Src/Sampler/subdir.mk
+-include Src/SD/subdir.mk
 -include Src/Param/subdir.mk
 -include Src/MIDI/subdir.mk
 -include Src/Core/subdir.mk
 -include Src/Audio/subdir.mk
 -include Src/App/subdir.mk
 -include Src/subdir.mk
--include Middlewares/Third_Party/FatFs/src/option/subdir.mk
--include Middlewares/Third_Party/FatFs/src/subdir.mk
 -include Drivers/STM32H7xx_HAL_Driver/Src/subdir.mk
 -include Drivers/Drv_app/Src/subdir.mk
 -include Drivers/CMSIS_DSP/Source/TransformFunctions/subdir.mk
@@ -37,6 +36,8 @@ RM := rm -rf
 -include Drivers/CMSIS_DSP/Source/CommonTables/subdir.mk
 -include Drivers/CMSIS_DSP/Source/BasicMathFunctions/subdir.mk
 -include App/usb_stack/subdir.mk
+-include App/Middlewares/Third_Party/FatFs/src/option/subdir.mk
+-include App/Middlewares/Third_Party/FatFs/src/subdir.mk
 -include App/Middlewares/ST/STM32_USB_Host_Library/Core/Src/subdir.mk
 -include App/Middlewares/ST/STM32_USB_Device_Library/Core/Src/subdir.mk
 -include App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src/subdir.mk

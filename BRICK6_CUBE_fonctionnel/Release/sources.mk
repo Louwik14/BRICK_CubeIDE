@@ -41,6 +41,8 @@ SUBDIRS := \
 App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src \
 App/Middlewares/ST/STM32_USB_Device_Library/Core/Src \
 App/Middlewares/ST/STM32_USB_Host_Library/Core/Src \
+App/Middlewares/Third_Party/FatFs/src \
+App/Middlewares/Third_Party/FatFs/src/option \
 App/usb_stack \
 Drivers/CMSIS_DSP/Source/BasicMathFunctions \
 Drivers/CMSIS_DSP/Source/CommonTables \
@@ -52,13 +54,12 @@ Drivers/CMSIS_DSP/Source/QuaternionMathFunctions \
 Drivers/CMSIS_DSP/Source/TransformFunctions \
 Drivers/Drv_app/Src \
 Drivers/STM32H7xx_HAL_Driver/Src \
-Middlewares/Third_Party/FatFs/src \
-Middlewares/Third_Party/FatFs/src/option \
 Src/App \
 Src/Audio \
 Src/Core \
 Src/MIDI \
 Src/Param \
+Src/SD \
 Src/Sampler \
 Src/Storage \
 Src/UI \
