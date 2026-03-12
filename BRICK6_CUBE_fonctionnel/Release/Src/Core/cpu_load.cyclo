@@ -1,6 +1,0 @@
-../Src/Core/cpu_load.c:14:6:cpu_load_init	2
-../Src/Core/cpu_load.c:52:6:cpu_load_irq_begin	2
-../Src/Core/cpu_load.c:65:6:cpu_load_irq_end	4
-../Src/Core/cpu_load.c:92:10:cpu_load_get_permille	1
-../Src/Core/cpu_load.c:97:10:cpu_load_get_max	1
-../Src/Core/cpu_load.c:102:10:cpu_load_is_valid	1

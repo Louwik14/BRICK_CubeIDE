@@ -1,4 +1,0 @@
-../Src/Sampler/voice_manager.c:36:6:voice_manager_init	4	static
-../Src/Sampler/voice_manager.c:45:6:voice_manager_trigger	40	static
-../Src/Sampler/voice_manager.c:97:6:voice_manager_service	0	static
-../Src/Sampler/voice_manager.c:101:6:voice_manager_process	32	static

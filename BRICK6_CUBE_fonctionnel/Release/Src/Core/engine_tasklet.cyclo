@@ -1,3 +1,0 @@
-../Src/Core/engine_tasklet.c:67:6:engine_tasklet_init	1
-../Src/Core/engine_tasklet.c:91:6:engine_tasklet_notify_frames	1
-../Src/Core/engine_tasklet.c:106:6:engine_tasklet_poll	3
