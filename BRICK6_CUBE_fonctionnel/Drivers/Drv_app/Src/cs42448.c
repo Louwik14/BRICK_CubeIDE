@@ -69,7 +69,7 @@ enum
 
 static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t value)
 {
-  return HAL_I2C_Mem_Write(&hi2c1,
+  return HAL_I2C_Mem_Write(&hi2c2,
                            (uint16_t)(addr << 1),
                            reg,
                            I2C_MEMADD_SIZE_8BIT,
@@ -80,7 +80,7 @@ static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t va
 
 static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uint8_t *values, uint16_t len)
 {
-  return HAL_I2C_Mem_Write(&hi2c1,
+  return HAL_I2C_Mem_Write(&hi2c2,
                            (uint16_t)(addr << 1),
                            (uint16_t)(reg | 0x80U),
                            I2C_MEMADD_SIZE_8BIT,
@@ -92,7 +92,7 @@ static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uin
 
 static bool cs42448_is_present(uint8_t addr)
 {
-  return HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 3U, 100U) == HAL_OK;
+  return HAL_I2C_IsDeviceReady(&hi2c2, (uint16_t)(addr << 1), 3U, 100U) == HAL_OK;
 }
 
 bool CS42448_Init(uint8_t addr)
