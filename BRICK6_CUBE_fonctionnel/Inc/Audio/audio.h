@@ -58,6 +58,16 @@ typedef void (*audio_process_fn)(int32_t *rx,
                                  int32_t *tx,
                                  uint32_t frames);
 
+typedef struct
+{
+    uint32_t sai1_irq_count;
+    uint32_t sai2_irq_count;
+    uint32_t dsp_blocks;
+    int32_t  last_sample_sai1;
+    int32_t  last_sample_sai2;
+    uint8_t  desync_flag;
+} audio_debug_diag_t;
+
 /**
  * @brief Enregistre un callback de traitement bas niveau (API conservée).
  *
@@ -67,3 +77,6 @@ typedef void (*audio_process_fn)(int32_t *rx,
  *       audio_process_block_int32() côté audio_float.c.
  */
 void audio_set_process_callback(audio_process_fn cb);
+
+void audio_debug_get_diag(audio_debug_diag_t *out_diag);
+void audio_debug_print_diag(void);

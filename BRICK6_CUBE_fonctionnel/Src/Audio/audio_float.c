@@ -358,6 +358,26 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx_sai1,
 
     audio_io_unpack(rx_sai1, rx_sai2, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
+
+    /*
+     * Diagnostic routing override (temporaire):
+     * somme des 4 entrées stéréo vers toutes les sorties stéréo.
+     */
+    for(uint32_t i = 0U; i < frames; i++)
+    {
+        const float mix_l = tracks[0].L[i] + tracks[1].L[i] + tracks[2].L[i] + tracks[3].L[i];
+        const float mix_r = tracks[0].R[i] + tracks[1].R[i] + tracks[2].R[i] + tracks[3].R[i];
+
+        tracks[0].L[i] = mix_l;
+        tracks[0].R[i] = mix_r;
+        tracks[1].L[i] = mix_l;
+        tracks[1].R[i] = mix_r;
+        tracks[2].L[i] = mix_l;
+        tracks[2].R[i] = mix_r;
+        tracks[3].L[i] = mix_l;
+        tracks[3].R[i] = mix_r;
+    }
+
     audio_io_pack(tx_sai1,
                   tx_sai2,
                   tracks,

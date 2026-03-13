@@ -23,6 +23,7 @@
 #include "engine_tasklet.h"
 #include "cpu_load.h"
 #include "memory_layout.h"
+#include "audio_debug_log.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -66,6 +67,11 @@ static SAI_HandleTypeDef *sai1_rx = NULL;
 static SAI_HandleTypeDef *sai2_tx = NULL;
 static SAI_HandleTypeDef *sai2_rx = NULL;
 
+#define AUDIO_DIAG_DESYNC_THRESHOLD 4U
+
+static volatile audio_debug_diag_t g_audio_diag = {0};
+
+
 /* ============================================================
    INTERNAL PROCESSING
    Hardware layer only: calls float engine
@@ -92,6 +98,10 @@ static void process_half(uint32_t half_index)
     int32_t *tx1 = &tx1_buffer[offset];
     int32_t *rx2 = &rx2_buffer[offset];
     int32_t *tx2 = &tx2_buffer[offset];
+
+    g_audio_diag.dsp_blocks++;
+    g_audio_diag.last_sample_sai1 = rx1[0];
+    g_audio_diag.last_sample_sai2 = rx2[0];
 
     /* Frontière moteur float (un bloc fixe par IRQ, déclenché une seule fois). */
     audio_process_block_int32(rx1, tx1, rx2, tx2, AUDIO_FRAMES_PER_HALF);
@@ -180,12 +190,30 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai1_rx)
     {
+        g_audio_diag.sai1_irq_count++;
+
+        if((g_audio_diag.sai1_irq_count > g_audio_diag.sai2_irq_count)
+           ? ((g_audio_diag.sai1_irq_count - g_audio_diag.sai2_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD)
+           : ((g_audio_diag.sai2_irq_count - g_audio_diag.sai1_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD))
+        {
+            g_audio_diag.desync_flag = 1U;
+        }
+
         /* SAI1 esclave: IRQ ignorée pour éviter un double traitement DSP. */
         return;
     }
 
     if(hsai == sai2_rx)
     {
+        g_audio_diag.sai2_irq_count++;
+
+        if((g_audio_diag.sai1_irq_count > g_audio_diag.sai2_irq_count)
+           ? ((g_audio_diag.sai1_irq_count - g_audio_diag.sai2_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD)
+           : ((g_audio_diag.sai2_irq_count - g_audio_diag.sai1_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD))
+        {
+            g_audio_diag.desync_flag = 1U;
+        }
+
         process_half(0);
 
         /* Tick scheduler en frames audio. */
@@ -209,15 +237,62 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai1_rx)
     {
+        g_audio_diag.sai1_irq_count++;
+
+        if((g_audio_diag.sai1_irq_count > g_audio_diag.sai2_irq_count)
+           ? ((g_audio_diag.sai1_irq_count - g_audio_diag.sai2_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD)
+           : ((g_audio_diag.sai2_irq_count - g_audio_diag.sai1_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD))
+        {
+            g_audio_diag.desync_flag = 1U;
+        }
+
         /* SAI1 esclave: IRQ ignorée pour éviter un double traitement DSP. */
         return;
     }
 
     if(hsai == sai2_rx)
     {
+        g_audio_diag.sai2_irq_count++;
+
+        if((g_audio_diag.sai1_irq_count > g_audio_diag.sai2_irq_count)
+           ? ((g_audio_diag.sai1_irq_count - g_audio_diag.sai2_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD)
+           : ((g_audio_diag.sai2_irq_count - g_audio_diag.sai1_irq_count) > AUDIO_DIAG_DESYNC_THRESHOLD))
+        {
+            g_audio_diag.desync_flag = 1U;
+        }
+
         process_half(1);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
     }
+}
+
+
+void audio_debug_get_diag(audio_debug_diag_t *out_diag)
+{
+    if(out_diag == NULL)
+        return;
+
+    out_diag->sai1_irq_count = g_audio_diag.sai1_irq_count;
+    out_diag->sai2_irq_count = g_audio_diag.sai2_irq_count;
+    out_diag->dsp_blocks = g_audio_diag.dsp_blocks;
+    out_diag->last_sample_sai1 = g_audio_diag.last_sample_sai1;
+    out_diag->last_sample_sai2 = g_audio_diag.last_sample_sai2;
+    out_diag->desync_flag = g_audio_diag.desync_flag;
+}
+
+void audio_debug_print_diag(void)
+{
+    audio_debug_diag_t d;
+
+    audio_debug_get_diag(&d);
+
+    AUDIO_DEBUG_LOG("[AUDIO_DIAG] s1_irq=%lu s2_irq=%lu dsp=%lu s1_first=%ld s2_first=%ld desync=%u\r\n",
+                    (unsigned long)d.sai1_irq_count,
+                    (unsigned long)d.sai2_irq_count,
+                    (unsigned long)d.dsp_blocks,
+                    (long)d.last_sample_sai1,
+                    (long)d.last_sample_sai2,
+                    (unsigned)d.desync_flag);
 }
