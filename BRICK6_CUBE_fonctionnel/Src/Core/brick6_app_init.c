@@ -49,6 +49,18 @@ static float g_master_gain = 1.0f;
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 static uint32_t g_dsp_call_count = 0U;
 
+static const char* hal_status_str(HAL_StatusTypeDef s)
+{
+    switch(s)
+    {
+        case HAL_OK: return "HAL_OK";
+        case HAL_ERROR: return "HAL_ERROR";
+        case HAL_BUSY: return "HAL_BUSY";
+        case HAL_TIMEOUT: return "HAL_TIMEOUT";
+        default: return "UNKNOWN";
+    }
+}
+
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
 
@@ -213,8 +225,29 @@ void brick6_app_init(void)
         .reset_pin = PDN2_Pin
     };
 
-    (void)AK4619_Init(&codec1);
-    (void)AK4619_Init(&codec2);
+    if(HAL_I2C_IsDeviceReady(&hi2c2, codec1.address << 1, 3, 10) == HAL_OK)
+        AUDIO_DEBUG_LOG("[CODEC] codec1 I2C detected\r\n");
+    else
+        AUDIO_DEBUG_LOG("[CODEC] codec1 NOT responding\r\n");
+
+    AUDIO_DEBUG_LOG("[CODEC] Initializing AK4619 codec1...\r\n");
+    HAL_StatusTypeDef st1 = AK4619_Init(&codec1);
+    AUDIO_DEBUG_LOG("[CODEC] codec1 addr=0x%02X reset_pin=%d status=%s\r\n",
+                    codec1.address,
+                    codec1.reset_pin,
+                    hal_status_str(st1));
+
+    if(HAL_I2C_IsDeviceReady(&hi2c2, codec2.address << 1, 3, 10) == HAL_OK)
+        AUDIO_DEBUG_LOG("[CODEC] codec2 I2C detected\r\n");
+    else
+        AUDIO_DEBUG_LOG("[CODEC] codec2 NOT responding\r\n");
+
+    AUDIO_DEBUG_LOG("[CODEC] Initializing AK4619 codec2...\r\n");
+    HAL_StatusTypeDef st2 = AK4619_Init(&codec2);
+    AUDIO_DEBUG_LOG("[CODEC] codec2 addr=0x%02X reset_pin=%d status=%s\r\n",
+                    codec2.address,
+                    codec2.reset_pin,
+                    hal_status_str(st2));
 
     mixer_init();
     fx_pool_init();

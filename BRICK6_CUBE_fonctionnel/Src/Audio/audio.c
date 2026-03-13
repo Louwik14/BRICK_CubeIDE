@@ -71,6 +71,18 @@ static SAI_HandleTypeDef *sai2_rx = NULL;
 
 static volatile audio_debug_diag_t g_audio_diag = {0};
 
+static const char* hal_status_str(HAL_StatusTypeDef s)
+{
+    switch(s)
+    {
+        case HAL_OK: return "HAL_OK";
+        case HAL_ERROR: return "HAL_ERROR";
+        case HAL_BUSY: return "HAL_BUSY";
+        case HAL_TIMEOUT: return "HAL_TIMEOUT";
+        default: return "UNKNOWN";
+    }
+}
+
 
 /* ============================================================
    INTERNAL PROCESSING
@@ -148,26 +160,44 @@ void audio_init(SAI_HandleTypeDef *hsai1_tx,
 void audio_start(void)
 {
     if(!sai1_tx || !sai1_rx || !sai2_tx || !sai2_rx)
+    {
+        AUDIO_DEBUG_LOG("[AUDIO_START] SAI handles not initialized\r\n");
         return;
+    }
+
+    AUDIO_DEBUG_LOG("[AUDIO_START] SAI1 state=%d\r\n", HAL_SAI_GetState(sai1_rx));
+    AUDIO_DEBUG_LOG("[AUDIO_START] SAI2 state=%d\r\n", HAL_SAI_GetState(sai2_rx));
+
+    HAL_StatusTypeDef r;
 
     /*
      * Démarrage recommandé avec SAI2 maître d'horloge :
      * - armer d'abord le lien esclave SAI1
      * - armer ensuite le lien maître SAI2
      */
-    HAL_SAI_Receive_DMA(sai1_rx,
-                        (uint8_t *)rx1_buffer,
-                        AUDIO_BUFFER_WORDS);
-    HAL_SAI_Transmit_DMA(sai1_tx,
-                         (uint8_t *)tx1_buffer,
-                         AUDIO_BUFFER_WORDS);
+    AUDIO_DEBUG_LOG("[AUDIO_START] Starting SAI1 RX DMA\r\n");
+    r = HAL_SAI_Receive_DMA(sai1_rx,
+                            (uint8_t *)rx1_buffer,
+                            AUDIO_BUFFER_WORDS);
+    AUDIO_DEBUG_LOG("[AUDIO_START] SAI1 RX = %s\r\n", hal_status_str(r));
 
-    HAL_SAI_Receive_DMA(sai2_rx,
-                        (uint8_t *)rx2_buffer,
-                        AUDIO_BUFFER_WORDS);
-    HAL_SAI_Transmit_DMA(sai2_tx,
-                         (uint8_t *)tx2_buffer,
-                         AUDIO_BUFFER_WORDS);
+    AUDIO_DEBUG_LOG("[AUDIO_START] Starting SAI1 TX DMA\r\n");
+    r = HAL_SAI_Transmit_DMA(sai1_tx,
+                             (uint8_t *)tx1_buffer,
+                             AUDIO_BUFFER_WORDS);
+    AUDIO_DEBUG_LOG("[AUDIO_START] SAI1 TX = %s\r\n", hal_status_str(r));
+
+    AUDIO_DEBUG_LOG("[AUDIO_START] Starting SAI2 RX DMA\r\n");
+    r = HAL_SAI_Receive_DMA(sai2_rx,
+                            (uint8_t *)rx2_buffer,
+                            AUDIO_BUFFER_WORDS);
+    AUDIO_DEBUG_LOG("[AUDIO_START] SAI2 RX = %s\r\n", hal_status_str(r));
+
+    AUDIO_DEBUG_LOG("[AUDIO_START] Starting SAI2 TX DMA\r\n");
+    r = HAL_SAI_Transmit_DMA(sai2_tx,
+                             (uint8_t *)tx2_buffer,
+                             AUDIO_BUFFER_WORDS);
+    AUDIO_DEBUG_LOG("[AUDIO_START] SAI2 TX = %s\r\n", hal_status_str(r));
 }
 
 /* ============================================================
