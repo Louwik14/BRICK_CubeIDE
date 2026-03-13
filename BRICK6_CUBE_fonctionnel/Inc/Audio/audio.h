@@ -22,10 +22,12 @@
  */
 
 /**
- * @brief Initialise la couche audio bas niveau.
+ * @brief Initialise la couche audio bas niveau pour deux liens SAI TDM4.
  *
- * @param hsai_tx Handle SAI de transmission (DAC/TX).
- * @param hsai_rx Handle SAI de réception (ADC/RX).
+ * @param hsai1_tx Handle SAI1 TX (tracks 1/2).
+ * @param hsai1_rx Handle SAI1 RX (tracks 1/2).
+ * @param hsai2_tx Handle SAI2 TX (tracks 3/4).
+ * @param hsai2_rx Handle SAI2 RX (tracks 3/4, master trigger DSP).
  *
  * Contexte d'appel:
  * - Main loop uniquement (phase d'init).
@@ -34,8 +36,10 @@
  * - Mémorise les handles SAI dans l'état statique du module.
  * - Remet à zéro les buffers DMA RX/TX internes.
  */
-void audio_init(SAI_HandleTypeDef *hsai_tx,
-                SAI_HandleTypeDef *hsai_rx);
+void audio_init(SAI_HandleTypeDef *hsai1_tx,
+                SAI_HandleTypeDef *hsai1_rx,
+                SAI_HandleTypeDef *hsai2_tx,
+                SAI_HandleTypeDef *hsai2_rx);
 
 /**
  * @brief Démarre les flux DMA audio RX puis TX.
@@ -54,6 +58,16 @@ typedef void (*audio_process_fn)(int32_t *rx,
                                  int32_t *tx,
                                  uint32_t frames);
 
+typedef struct
+{
+    uint32_t sai1_irq_count;
+    uint32_t sai2_irq_count;
+    uint32_t dsp_blocks;
+    int32_t  last_sample_sai1;
+    int32_t  last_sample_sai2;
+    uint8_t  desync_flag;
+} audio_debug_diag_t;
+
 /**
  * @brief Enregistre un callback de traitement bas niveau (API conservée).
  *
@@ -63,3 +77,6 @@ typedef void (*audio_process_fn)(int32_t *rx,
  *       audio_process_block_int32() côté audio_float.c.
  */
 void audio_set_process_callback(audio_process_fn cb);
+
+void audio_debug_get_diag(audio_debug_diag_t *out_diag);
+void audio_debug_print_diag(void);

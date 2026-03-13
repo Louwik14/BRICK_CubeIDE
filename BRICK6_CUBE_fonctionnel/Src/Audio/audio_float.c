@@ -3,7 +3,7 @@
  * @brief Moteur frontière int24 <-> float, architecture tracks stéréo actives.
  *
  * Rôle du module:
- * - Convertir le flux DMA TDM8 (int24 right-aligned) en buffers float par track.
+ * - Convertir les flux DMA 2xTDM4 (int24 right-aligned) en buffers float par track.
  * - Exécuter le callback DSP utilisateur sur les tracks.
  * - Réaliser le mix vers buses internes (MAIN/CUE/SEND) et le remappage de sortie TDM.
  *
@@ -14,13 +14,12 @@
  * Modèle audio track-based:
  * - Track 0 lit slots TDM 0/1 (L/R).
  * - Track 1 lit slots TDM 2/3 (L/R).
- * - Track 2 lit slots TDM 4/5 (L/R).
- * - Les slots 6/7 en entrée ne sont pas exploités.
+ * - Track 2 lit SAI2 slots 0/1 (L/R).
+ * - Track 3 lit SAI2 slots 2/3 (L/R).
  *
  * Mapping sortie TDM:
- * - MAIN L/R -> slots 0/1.
- * - CUE L/R (copie MAIN par défaut) -> slots 2/3.
- * - slots 4..7 forcés à 0.
+ * - SAI1 slots 0..3 -> tracks 0/1 (L/R).
+ * - SAI2 slots 0..3 -> tracks 2/3 (L/R).
  *
  * Contraintes temps réel:
  * - Fonction principale exécutée en IRQ audio.
@@ -336,8 +335,10 @@ static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
    ============================================================ */
 
 /** Voir audio_float.h */
-void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
-                               int32_t *AUDIO_RESTRICT tx,
+void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx_sai1,
+                               int32_t *AUDIO_RESTRICT tx_sai1,
+                               int32_t *AUDIO_RESTRICT rx_sai2,
+                               int32_t *AUDIO_RESTRICT tx_sai2,
                                uint32_t frames)
 {
     g_audio_block_counter++;
@@ -355,13 +356,31 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     sd_recorder_audio_block_begin(frames);
 
-    audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
+    audio_io_unpack(rx_sai1, rx_sai2, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
-    audio_io_pack(tx,
-                  tracks[0].L,
-                  tracks[0].R,
-                  tracks[1].L,
-                  tracks[1].R,
+
+    /*
+     * Diagnostic routing override (temporaire):
+     * somme des 4 entrées stéréo vers toutes les sorties stéréo.
+     */
+    for(uint32_t i = 0U; i < frames; i++)
+    {
+        const float mix_l = tracks[0].L[i] + tracks[1].L[i] + tracks[2].L[i] + tracks[3].L[i];
+        const float mix_r = tracks[0].R[i] + tracks[1].R[i] + tracks[2].R[i] + tracks[3].R[i];
+
+        tracks[0].L[i] = mix_l;
+        tracks[0].R[i] = mix_r;
+        tracks[1].L[i] = mix_l;
+        tracks[1].R[i] = mix_r;
+        tracks[2].L[i] = mix_l;
+        tracks[2].R[i] = mix_r;
+        tracks[3].L[i] = mix_l;
+        tracks[3].R[i] = mix_r;
+    }
+
+    audio_io_pack(tx_sai1,
+                  tx_sai2,
+                  tracks,
                   frames,
                   output_adjust * master_gain);
 }

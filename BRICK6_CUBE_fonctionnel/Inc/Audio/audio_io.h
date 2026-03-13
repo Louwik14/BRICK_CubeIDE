@@ -5,11 +5,11 @@
 
 /**
  * @file audio_io.h
- * @brief API de conversion audio TDM int24 <-> tracks float.
+ * @brief API de conversion audio 2xTDM4 int24 <-> tracks float.
  *
  * Rôle du module:
- * - Dépaqueter les slots TDM RX dans les tracks float.
- * - Repaqueter MAIN/CUE float vers TX TDM.
+ * - Dépaqueter les slots TDM4 RX SAI1/SAI2 dans les tracks float.
+ * - Repaqueter les 4 tracks vers TX TDM4 SAI1/SAI2.
  *
  * Architecture:
  * - Appelé par: audio_float.c.
@@ -21,33 +21,31 @@
  */
 
 /**
- * @brief Dépaquette RX TDM vers buffers de tracks stéréo.
+ * @brief Dépaquette RX TDM4 SAI1/SAI2 vers buffers de tracks stéréo.
  *
- * @param rx Buffer RX int32 (int24 packed).
+ * @param rx_sai1 Buffer RX SAI1 int32 (int24 packed).
+ * @param rx_sai2 Buffer RX SAI2 int32 (int24 packed).
  * @param track_buf Tableau des tracks destination.
  * @param frames Nombre de frames à traiter.
  * @param in_scale Gain d'échelle d'entrée.
  */
-void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
+void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx_sai1,
+                     const int32_t *AUDIO_RESTRICT rx_sai2,
                      StereoTrack *AUDIO_RESTRICT track_buf,
                      uint32_t frames,
                      float in_scale);
 
 /**
- * @brief Repaquette MAIN/CUE float vers buffer TX TDM.
+ * @brief Repaquette 4 tracks float vers buffers TX TDM4 SAI1/SAI2.
  *
- * @param tx Buffer TX int32 destination.
- * @param bus_main_l Bus MAIN gauche.
- * @param bus_main_r Bus MAIN droit.
- * @param bus_cue_l Bus CUE gauche.
- * @param bus_cue_r Bus CUE droit.
+ * @param tx_sai1 Buffer TX SAI1 int32 destination.
+ * @param tx_sai2 Buffer TX SAI2 int32 destination.
+ * @param tracks Tableau logique des 4 tracks stéréo.
  * @param frames Nombre de frames.
  * @param out_gain Gain global de sortie.
  */
-void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
-                   const float *AUDIO_RESTRICT bus_main_l,
-                   const float *AUDIO_RESTRICT bus_main_r,
-                   const float *AUDIO_RESTRICT bus_cue_l,
-                   const float *AUDIO_RESTRICT bus_cue_r,
+void audio_io_pack(int32_t *AUDIO_RESTRICT tx_sai1,
+                   int32_t *AUDIO_RESTRICT tx_sai2,
+                   const StereoTrack *AUDIO_RESTRICT tracks,
                    uint32_t frames,
                    float out_gain);

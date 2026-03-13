@@ -136,6 +136,7 @@ int main(void)
 
   uint32_t last_tick = 0;
     static uint32_t last_log_time = 0;
+    static uint32_t last_audio_diag_time = 0;
 
   /* USER CODE END 2 */
 
@@ -159,6 +160,13 @@ int main(void)
 	     {
 	         last_tick = engine_tick_count;
 	         ui_tasklet_poll();
+	     }
+
+
+	     if((HAL_GetTick() - last_audio_diag_time) >= 500U)
+	     {
+	         last_audio_diag_time = HAL_GetTick();
+	         audio_debug_print_diag();
 	     }
 	 #if PHASE0_DEBUG_LOG
 		   if((HAL_GetTick() - last_log_time) >= 1000U)
