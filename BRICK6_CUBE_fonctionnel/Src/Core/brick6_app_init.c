@@ -22,6 +22,9 @@
 #include "audio.h"
 #include "audio_float.h"
 #include "cs42448.h"
+#include "ak4619.h"
+#include "i2c.h"
+#include "main.h"
 #include "mixer.h"
 #include "fx_pool.h"
 #include "param_store.h"
@@ -194,7 +197,24 @@ void brick6_app_init(void)
     MX_USB_DEVICE_Init();
     MX_USB_HOST_Init();
 
-    CS42448_Init(0x48);
+    /* Legacy codec path kept in project but disabled for AK4619 dual-codec hardware. */
+    /* CS42448_Init(0x48); */
+
+    AK4619_Handle codec1 = {
+        .i2c = &hi2c2,
+        .address = 0x10U,
+        .reset_port = PDN1_GPIO_Port,
+        .reset_pin = PDN1_Pin
+    };
+    AK4619_Handle codec2 = {
+        .i2c = &hi2c2,
+        .address = 0x11U,
+        .reset_port = PDN2_GPIO_Port,
+        .reset_pin = PDN2_Pin
+    };
+
+    (void)AK4619_Init(&codec1);
+    (void)AK4619_Init(&codec2);
 
     mixer_init();
     fx_pool_init();
@@ -247,12 +267,15 @@ void brick6_app_init(void)
     track_enable(0, 1U);
     track_enable(1, 1U);
     track_enable(2, 1U);
+    track_enable(3, 1U);
 
     track_set_gain(0, 1.0f);
     track_set_gain(1, 1.0f);
     track_set_gain(2, 1.0f);
+    track_set_gain(3, 1.0f);
 
-    audio_init(&hsai_BlockA1, &hsai_BlockB1);
+    audio_init(&hsai_BlockA1, &hsai_BlockB1,
+               &hsai_BlockA2, &hsai_BlockB2);
     audio_set_float_callback(my_dsp);
 
     engine_tasklet_init(48000);
