@@ -13,7 +13,7 @@ extern "C" {
 
 /**
  * @file audio_float.h
- * @brief Frontière DSP float track-based (stéréo) pour moteur audio TDM8.
+ * @brief Frontière DSP float track-based (stéréo) pour moteur audio 2xTDM4.
  *
  * Rôle du module:
  * - Convertir le flux int24 (DMA/SAI) <-> float.
@@ -34,7 +34,7 @@ extern "C" {
    ============================================================ */
 
 #define AUDIO_BLOCK_SIZE 64U
-#define MAX_TRACKS       3U
+#define MAX_TRACKS       4U
 
 /**
  * @brief Structure de track stéréo (buffers bloc + état actif).
@@ -183,10 +183,12 @@ void audio_float_set_bus_comp_auto_makeup(uint8_t enabled);
    ============================================================ */
 
 /**
- * @brief Traite un bloc audio int32 (TDM8) en modèle track stéréo float.
+ * @brief Traite un bloc audio int32 (2xTDM4) en modèle track stéréo float.
  *
- * @param rx Buffer d'entrée DMA (int24 right-aligned dans int32).
- * @param tx Buffer de sortie DMA (int24 right-aligned dans int32).
+ * @param rx_sai1 Buffer RX DMA SAI1 (int24 right-aligned dans int32).
+ * @param tx_sai1 Buffer TX DMA SAI1 (int24 right-aligned dans int32).
+ * @param rx_sai2 Buffer RX DMA SAI2 (int24 right-aligned dans int32).
+ * @param tx_sai2 Buffer TX DMA SAI2 (int24 right-aligned dans int32).
  * @param frames Nombre de frames à traiter (<= AUDIO_BLOCK_SIZE).
  *
  * Contexte d'appel:
@@ -198,8 +200,10 @@ void audio_float_set_bus_comp_auto_makeup(uint8_t enabled);
  * 3) Somme tracks actives + gains.
  * 4) Pack master/cue vers slots TDM de sortie.
  */
-void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
-                               int32_t *AUDIO_RESTRICT tx,
+void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx_sai1,
+                               int32_t *AUDIO_RESTRICT tx_sai1,
+                               int32_t *AUDIO_RESTRICT rx_sai2,
+                               int32_t *AUDIO_RESTRICT tx_sai2,
                                uint32_t frames);
 
 extern volatile uint32_t g_audio_block_counter;

@@ -22,10 +22,12 @@
  */
 
 /**
- * @brief Initialise la couche audio bas niveau.
+ * @brief Initialise la couche audio bas niveau pour deux liens SAI TDM4.
  *
- * @param hsai_tx Handle SAI de transmission (DAC/TX).
- * @param hsai_rx Handle SAI de réception (ADC/RX).
+ * @param hsai1_tx Handle SAI1 TX (tracks 1/2).
+ * @param hsai1_rx Handle SAI1 RX (tracks 1/2).
+ * @param hsai2_tx Handle SAI2 TX (tracks 3/4).
+ * @param hsai2_rx Handle SAI2 RX (tracks 3/4, master trigger DSP).
  *
  * Contexte d'appel:
  * - Main loop uniquement (phase d'init).
@@ -34,8 +36,10 @@
  * - Mémorise les handles SAI dans l'état statique du module.
  * - Remet à zéro les buffers DMA RX/TX internes.
  */
-void audio_init(SAI_HandleTypeDef *hsai_tx,
-                SAI_HandleTypeDef *hsai_rx);
+void audio_init(SAI_HandleTypeDef *hsai1_tx,
+                SAI_HandleTypeDef *hsai1_rx,
+                SAI_HandleTypeDef *hsai2_tx,
+                SAI_HandleTypeDef *hsai2_rx);
 
 /**
  * @brief Démarre les flux DMA audio RX puis TX.
