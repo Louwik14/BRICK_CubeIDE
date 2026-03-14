@@ -165,7 +165,7 @@ void led_show(void)
      */
     __HAL_TIM_SET_COUNTER(&htim2, 0U);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, pwm_buffer[0]);
-    __HAL_TIM_GENERATE_EVENT(&htim2, TIM_EVENTSOURCE_UPDATE);
+    htim2.Instance->EGR = TIM_EGR_UG;
 
 #if (__DCACHE_PRESENT == 1U)
     if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U)

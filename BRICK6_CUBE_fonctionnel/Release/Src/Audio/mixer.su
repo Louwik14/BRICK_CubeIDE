@@ -1,0 +1,12 @@
+../Src/Audio/mixer.c:65:6:mixer_init	24	static
+../Src/Audio/mixer.c:95:6:mixer_set_master	0	static
+../Src/Audio/mixer.c:105:7:mixer_get_master	0	static
+../Src/Audio/mixer.c:110:6:mixer_set_track_gain	0	static
+../Src/Audio/mixer.c:123:7:mixer_get_track_gain	0	static
+../Src/Audio/mixer.c:131:6:mixer_set_track_pan	0	static
+../Src/Audio/mixer.c:139:6:mixer_set_track_mute	0	static
+../Src/Audio/mixer.c:147:6:mixer_set_track_route	0	static
+../Src/Audio/mixer.c:156:6:mixer_set_track_insert_slot	0	static
+../Src/Audio/mixer.c:164:6:mixer_set_track_send_level	0	static
+../Src/Audio/mixer.c:172:6:mixer_set_send_fx_slot	0	static
+../Src/Audio/mixer.c:190:6:mixer_process	72	static
