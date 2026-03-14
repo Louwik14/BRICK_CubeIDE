@@ -75,7 +75,6 @@ static void ui_page_param_test_render(void)
         drv_display_draw_text(0U, (uint8_t)(i * 16U), line_txt);
     }
 
-    drv_display_update();
 }
 
 const ui_page_t g_ui_page_param_test = {
