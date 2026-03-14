@@ -79,6 +79,17 @@ static SAI_HandleTypeDef *sai_rx = NULL;
  * - Lit rx_buffer[half], écrit tx_buffer[half].
  * - Appelle le moteur audio float avec AUDIO_FRAMES_PER_HALF frames.
  */
+/**
+ * @brief Point d'entrée process_half.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à process_half.
+ *
+ * @param half_index Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void process_half(uint32_t half_index)
 {
     uint32_t offset =
@@ -104,6 +115,18 @@ static void process_half(uint32_t half_index)
  * Contexte d'appel:
  * - Main loop (boot).
  */
+/**
+ * @brief Point d'entrée audio_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_init.
+ *
+ * @param hsai_tx Paramètre d'entrée de l'API.
+ * @param hsai_rx Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_init(SAI_HandleTypeDef *hsai_tx,
                 SAI_HandleTypeDef *hsai_rx)
 {
@@ -122,6 +145,16 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
  *
  * Contexte d'appel:
  * - Main loop (après audio_init et callback DSP installé).
+ */
+/**
+ * @brief Point d'entrée audio_start.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_start.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void audio_start(void)
 {
@@ -154,6 +187,17 @@ void audio_start(void)
  * - Traite la moitié 0 du buffer.
  * - Notifie le scheduler applicatif en nombre de frames traitées.
  */
+/**
+ * @brief Point d'entrée HAL_SAI_RxHalfCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à HAL_SAI_RxHalfCpltCallback.
+ *
+ * @param hsai Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
@@ -176,6 +220,17 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
  * Effets de bord:
  * - Traite la moitié 1 du buffer.
  * - Notifie le scheduler applicatif en nombre de frames traitées.
+ */
+/**
+ * @brief Point d'entrée HAL_SAI_RxCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à HAL_SAI_RxCpltCallback.
+ *
+ * @param hsai Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {

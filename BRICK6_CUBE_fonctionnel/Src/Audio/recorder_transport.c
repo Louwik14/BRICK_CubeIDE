@@ -22,6 +22,19 @@
 
 static recorder_transport_t g_transport;
 
+/**
+ * @brief Point d'entrée recorder_transport_is_supported_step_length.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_transport_is_supported_step_length.
+ *
+ * @param steps Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_transport_is_supported_step_length(uint32_t steps)
 {
     return (uint8_t)((steps == 16U) ||
@@ -30,6 +43,16 @@ static uint8_t recorder_transport_is_supported_step_length(uint32_t steps)
                      (steps == 64U));
 }
 
+/**
+ * @brief Point d'entrée recorder_transport_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_transport_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void recorder_transport_init(void)
 {
     g_transport.recording = 0U;
@@ -40,6 +63,17 @@ void recorder_transport_init(void)
     g_transport.last_tick_count = engine_tick_count;
 }
 
+/**
+ * @brief Point d'entrée recorder_transport_start_record.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_transport_start_record.
+ *
+ * @param steps Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void recorder_transport_start_record(uint32_t steps)
 {
     if(recorder_transport_is_supported_step_length(steps) == 0U)
@@ -54,6 +88,16 @@ void recorder_transport_start_record(uint32_t steps)
     g_transport.last_tick_count = engine_tick_count;
 }
 
+/**
+ * @brief Point d'entrée recorder_transport_process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_transport_process.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void recorder_transport_process(void)
 {
     const uint32_t current_tick = engine_tick_count;
@@ -87,6 +131,18 @@ void recorder_transport_process(void)
     }
 }
 
+/**
+ * @brief Point d'entrée recorder_transport_is_recording.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_transport_is_recording.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t recorder_transport_is_recording(void)
 {
     return g_transport.recording;

@@ -34,6 +34,19 @@
  * @param x Mot 24-bit right-aligned.
  * @return Valeur signée étendue en 32 bits.
  */
+/**
+ * @brief Point d'entrée s24_sign_extend.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à s24_sign_extend.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline int32_t s24_sign_extend(int32_t x)
 {
     return (x << 8) >> 8;
@@ -46,6 +59,20 @@ static inline int32_t s24_sign_extend(int32_t x)
  * @param gain Facteur de mise à l'échelle.
  * @return Échantillon float.
  */
+/**
+ * @brief Point d'entrée s242f_fast.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à s242f_fast.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ * @param gain Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline float s242f_fast(int32_t x, float gain)
 {
     return (float)s24_sign_extend(x) * gain;
@@ -56,6 +83,19 @@ static inline float s242f_fast(int32_t x, float gain)
  *
  * @param x Échantillon float.
  * @return Échantillon int24 packed.
+ */
+/**
+ * @brief Point d'entrée f2s24_fast.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à f2s24_fast.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 static inline int32_t f2s24_fast(float x)
 {
@@ -69,6 +109,19 @@ static inline int32_t f2s24_fast(float x)
  *
  * @param x Échantillon float.
  * @return Échantillon int24 packed.
+ */
+/**
+ * @brief Point d'entrée f2s24_fast_ssat.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à f2s24_fast_ssat.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 static inline int32_t f2s24_fast_ssat(float x)
 {
@@ -87,6 +140,20 @@ static inline int32_t f2s24_fast_ssat(float x)
  *
  * Contexte d'appel:
  * - IRQ audio.
+ */
+/**
+ * @brief Point d'entrée audio_io_unpack.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_io_unpack.
+ *
+ * @param rx Paramètre d'entrée de l'API.
+ * @param track_buf Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ * @param in_scale Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                      StereoTrack *AUDIO_RESTRICT track_buf,
@@ -164,6 +231,23 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
  *
  * Contexte d'appel:
  * - IRQ audio.
+ */
+/**
+ * @brief Point d'entrée audio_io_pack.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_io_pack.
+ *
+ * @param tx Paramètre d'entrée de l'API.
+ * @param bus_main_l Paramètre d'entrée de l'API.
+ * @param bus_main_r Paramètre d'entrée de l'API.
+ * @param bus_cue_l Paramètre d'entrée de l'API.
+ * @param bus_cue_r Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ * @param out_gain Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
                    const float *AUDIO_RESTRICT bus_main_l,

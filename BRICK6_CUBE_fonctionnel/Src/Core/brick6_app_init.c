@@ -53,6 +53,16 @@ static live_recorder_t g_live_recorder;
    UART DEBUG
    ============================================================ */
 
+/**
+ * @brief Point d'entrée debug_uart_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à debug_uart_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void debug_uart_init(void)
 {
     __HAL_RCC_USART1_CLK_ENABLE();
@@ -79,6 +89,21 @@ static void debug_uart_init(void)
     HAL_UART_Init(&huart1);
 }
 
+/**
+ * @brief Point d'entrée _write.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à _write.
+ *
+ * @param file Paramètre d'entrée de l'API.
+ * @param ptr Paramètre d'entrée de l'API.
+ * @param len Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int _write(int file, char *ptr, int len)
 {
     HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, HAL_MAX_DELAY);
@@ -89,6 +114,19 @@ int _write(int file, char *ptr, int len)
    DSP CALLBACK
    ============================================================ */
 
+/**
+ * @brief Point d'entrée my_dsp.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à my_dsp.
+ *
+ * @param tracks Paramètre d'entrée de l'API.
+ * @param track_count Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
@@ -184,6 +222,16 @@ static void my_dsp(StereoTrack *tracks,
    INIT APP
    ============================================================ */
 
+/**
+ * @brief Point d'entrée brick6_app_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à brick6_app_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void brick6_app_init(void)
 {
     debug_uart_init();
@@ -270,6 +318,16 @@ void brick6_app_init(void)
    SUPERLOOP
    ============================================================ */
 
+/**
+ * @brief Point d'entrée brick6_app_process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à brick6_app_process.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void brick6_app_process(void)
 {
 #if ENABLE_PERIODIC_RETRIGGER
@@ -323,6 +381,17 @@ void brick6_app_process(void)
    STATS
    ============================================================ */
 
+/**
+ * @brief Point d'entrée brick6_app_get_stats.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à brick6_app_get_stats.
+ *
+ * @param out_stats Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void brick6_app_get_stats(brick6_app_stats_t *out_stats)
 {
     if(out_stats == NULL)

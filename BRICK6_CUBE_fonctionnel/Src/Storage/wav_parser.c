@@ -1,14 +1,61 @@
+/**
+ * @file wav_parser.c
+ * @brief Module applicatif wav_parser.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à wav_parser.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "wav_parser.h"
 #include <string.h>
 
 #define WAV_FMT_PCM        1
 #define WAV_FMT_EXTENSIBLE 65534
 
+/**
+ * @brief Point d'entrée le16.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à le16.
+ *
+ * @param p Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint16_t le16(const uint8_t *p)
 {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
+/**
+ * @brief Point d'entrée le32.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à le32.
+ *
+ * @param p Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint32_t le32(const uint8_t *p)
 {
     return (uint32_t)p[0] |
@@ -120,6 +167,20 @@ static bool wav_find_chunks(FIL *fp,
             *audio_format == WAV_FMT_EXTENSIBLE);
 }
 
+/**
+ * @brief Point d'entrée wav_parser_parse_info.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à wav_parser_parse_info.
+ *
+ * @param fp Paramètre d'entrée de l'API.
+ * @param info Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool wav_parser_parse_info(FIL *fp, wav_info_t *info)
 {
     uint16_t audio_format;

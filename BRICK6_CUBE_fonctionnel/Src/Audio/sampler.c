@@ -1,8 +1,40 @@
+/**
+ * @file sampler.c
+ * @brief Module applicatif sampler.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à sampler.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "sampler.h"
 #include <stdio.h>
 
 #define DBG(...) printf(__VA_ARGS__)
 
+/**
+ * @brief Point d'entrée sample_voice_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_voice_init.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sample_voice_init(sample_voice_t *v)
 {
     if(v == 0)
@@ -19,6 +51,19 @@ void sample_voice_init(sample_voice_t *v)
     v->loop_end = 0U;
 }
 
+/**
+ * @brief Point d'entrée sample_voice_trigger.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_voice_trigger.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ * @param data Paramètre d'entrée de l'API.
+ * @param length Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
 {
     if(v == 0)
@@ -47,6 +92,17 @@ void sample_voice_trigger(sample_voice_t *v, const float *data, uint32_t length)
     v->active = true;
 }
 
+/**
+ * @brief Point d'entrée sampler_stop.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sampler_stop.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sampler_stop(sample_voice_t *v)
 {
     if(v == 0)
@@ -56,6 +112,20 @@ void sampler_stop(sample_voice_t *v)
     v->pos = 0U;
 }
 
+/**
+ * @brief Point d'entrée sample_voice_process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_voice_process.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ * @param outL Paramètre d'entrée de l'API.
+ * @param outR Paramètre d'entrée de l'API.
+ * @param nframes Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sample_voice_process(sample_voice_t *v, float *outL, float *outR, uint32_t nframes)
 {
     if((v == 0) || (outL == 0) || (outR == 0) || (nframes == 0U))

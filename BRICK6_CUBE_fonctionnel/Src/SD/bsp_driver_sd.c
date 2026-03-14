@@ -39,6 +39,18 @@ extern SD_HandleTypeDef hsd1;
   * @brief  Initializes the SD card device.
   * @retval SD status
   */
+/**
+ * @brief Point d'entrée BSP_SD_Init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_Init.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_Init(void)
 {
   uint8_t sd_state = MSD_OK;
@@ -70,6 +82,18 @@ __weak uint8_t BSP_SD_Init(void)
   * @brief  Configures Interrupt mode for SD detection pin.
   * @retval Returns 0
   */
+/**
+ * @brief Point d'entrée BSP_SD_ITConfig.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_ITConfig.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_ITConfig(void)
 {
   /* Code to be updated by the user or replaced by one from the FW pack (in a stmxxxx_sd.c file) */
@@ -90,6 +114,22 @@ __weak uint8_t BSP_SD_ITConfig(void)
   * @param  Timeout: Timeout for read operation
   * @retval SD status
   */
+/**
+ * @brief Point d'entrée BSP_SD_ReadBlocks.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_ReadBlocks.
+ *
+ * @param pData Paramètre d'entrée de l'API.
+ * @param ReadAddr Paramètre d'entrée de l'API.
+ * @param NumOfBlocks Paramètre d'entrée de l'API.
+ * @param Timeout Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_ReadBlocks(uint32_t *pData, uint32_t ReadAddr, uint32_t NumOfBlocks, uint32_t Timeout)
 {
   uint8_t sd_state = MSD_OK;
@@ -113,6 +153,22 @@ __weak uint8_t BSP_SD_ReadBlocks(uint32_t *pData, uint32_t ReadAddr, uint32_t Nu
   * @param  Timeout: Timeout for write operation
   * @retval SD status
   */
+/**
+ * @brief Point d'entrée BSP_SD_WriteBlocks.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_WriteBlocks.
+ *
+ * @param pData Paramètre d'entrée de l'API.
+ * @param WriteAddr Paramètre d'entrée de l'API.
+ * @param NumOfBlocks Paramètre d'entrée de l'API.
+ * @param Timeout Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_WriteBlocks(uint32_t *pData, uint32_t WriteAddr, uint32_t NumOfBlocks, uint32_t Timeout)
 {
   uint8_t sd_state = MSD_OK;
@@ -135,6 +191,21 @@ __weak uint8_t BSP_SD_WriteBlocks(uint32_t *pData, uint32_t WriteAddr, uint32_t 
   * @param  NumOfBlocks: Number of SD blocks to read
   * @retval SD status
   */
+/**
+ * @brief Point d'entrée BSP_SD_ReadBlocks_DMA.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_ReadBlocks_DMA.
+ *
+ * @param pData Paramètre d'entrée de l'API.
+ * @param ReadAddr Paramètre d'entrée de l'API.
+ * @param NumOfBlocks Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *pData, uint32_t ReadAddr, uint32_t NumOfBlocks)
 {
   uint8_t sd_state = MSD_OK;
@@ -158,6 +229,21 @@ __weak uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *pData, uint32_t ReadAddr, uint32_
   * @param  NumOfBlocks: Number of SD blocks to write
   * @retval SD status
   */
+/**
+ * @brief Point d'entrée BSP_SD_WriteBlocks_DMA.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_WriteBlocks_DMA.
+ *
+ * @param pData Paramètre d'entrée de l'API.
+ * @param WriteAddr Paramètre d'entrée de l'API.
+ * @param NumOfBlocks Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *pData, uint32_t WriteAddr, uint32_t NumOfBlocks)
 {
   uint8_t sd_state = MSD_OK;
@@ -180,6 +266,20 @@ __weak uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *pData, uint32_t WriteAddr, uint3
   * @param  EndAddr: End byte address
   * @retval SD status
   */
+/**
+ * @brief Point d'entrée BSP_SD_Erase.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_Erase.
+ *
+ * @param StartAddr Paramètre d'entrée de l'API.
+ * @param EndAddr Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_Erase(uint32_t StartAddr, uint32_t EndAddr)
 {
   uint8_t sd_state = MSD_OK;
@@ -204,6 +304,18 @@ __weak uint8_t BSP_SD_Erase(uint32_t StartAddr, uint32_t EndAddr)
   *            @arg  SD_TRANSFER_OK: No data transfer is acting
   *            @arg  SD_TRANSFER_BUSY: Data transfer is acting
   */
+/**
+ * @brief Point d'entrée BSP_SD_GetCardState.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_GetCardState.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak uint8_t BSP_SD_GetCardState(void)
 {
   return ((HAL_SD_GetCardState(&hsd1) == HAL_SD_CARD_TRANSFER ) ? SD_TRANSFER_OK : SD_TRANSFER_BUSY);
@@ -214,6 +326,17 @@ __weak uint8_t BSP_SD_GetCardState(void)
   * @param  CardInfo: Pointer to HAL_SD_CardInfoTypedef structure
   * @retval None
   */
+/**
+ * @brief Point d'entrée BSP_SD_GetCardInfo.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_GetCardInfo.
+ *
+ * @param CardInfo Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak void BSP_SD_GetCardInfo(HAL_SD_CardInfoTypeDef *CardInfo)
 {
   /* Get SD card Information */
@@ -228,6 +351,17 @@ __weak void BSP_SD_GetCardInfo(HAL_SD_CardInfoTypeDef *CardInfo)
   * @param hsd: SD handle
   * @retval None
   */
+/**
+ * @brief Point d'entrée HAL_SD_AbortCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à HAL_SD_AbortCallback.
+ *
+ * @param hsd Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void HAL_SD_AbortCallback(SD_HandleTypeDef *hsd)
 {
   BSP_SD_AbortCallback();
@@ -238,6 +372,17 @@ void HAL_SD_AbortCallback(SD_HandleTypeDef *hsd)
   * @param hsd: SD handle
   * @retval None
   */
+/**
+ * @brief Point d'entrée HAL_SD_TxCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à HAL_SD_TxCpltCallback.
+ *
+ * @param hsd Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
 {
   BSP_SD_WriteCpltCallback();
@@ -248,6 +393,17 @@ void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
   * @param hsd: SD handle
   * @retval None
   */
+/**
+ * @brief Point d'entrée HAL_SD_RxCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à HAL_SD_RxCpltCallback.
+ *
+ * @param hsd Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
 {
   BSP_SD_ReadCpltCallback();
@@ -259,6 +415,16 @@ void HAL_SD_RxCpltCallback(SD_HandleTypeDef *hsd)
   * @retval None
   * @note empty (up to the user to fill it in or to remove it if useless)
   */
+/**
+ * @brief Point d'entrée BSP_SD_AbortCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_AbortCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak void BSP_SD_AbortCallback(void)
 {
 
@@ -269,6 +435,16 @@ __weak void BSP_SD_AbortCallback(void)
   * @retval None
   * @note empty (up to the user to fill it in or to remove it if useless)
   */
+/**
+ * @brief Point d'entrée BSP_SD_WriteCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_WriteCpltCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak void BSP_SD_WriteCpltCallback(void)
 {
 
@@ -279,6 +455,16 @@ __weak void BSP_SD_WriteCpltCallback(void)
   * @retval None
   * @note empty (up to the user to fill it in or to remove it if useless)
   */
+/**
+ * @brief Point d'entrée BSP_SD_ReadCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_ReadCpltCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 __weak void BSP_SD_ReadCpltCallback(void)
 {
 
@@ -289,6 +475,18 @@ __weak void BSP_SD_ReadCpltCallback(void)
  * @brief  Detects if SD card is correctly plugged in the memory slot or not.
  * @param  None
  * @retval Returns if SD is detected or not
+ */
+/**
+ * @brief Point d'entrée BSP_SD_IsDetected.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_IsDetected.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 __weak uint8_t BSP_SD_IsDetected(void)
 {

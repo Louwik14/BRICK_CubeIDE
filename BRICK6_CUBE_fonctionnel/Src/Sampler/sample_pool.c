@@ -1,3 +1,24 @@
+/**
+ * @file sample_pool.c
+ * @brief Module applicatif sample_pool.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à sample_pool.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "Sampler/sample_pool.h"
 
 #include <ctype.h>
@@ -32,6 +53,19 @@ static AUDIO_COLD_SDRAM float g_sample_pool_data[SAMPLE_POOL_RESIDENT_SLOTS][SAM
 static int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
 static uint8_t g_sample_slot_in_use[SAMPLE_POOL_RESIDENT_SLOTS];
 
+/**
+ * @brief Point d'entrée sample_pool_pcm24_to_float.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_pcm24_to_float.
+ *
+ * @param p Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float sample_pool_pcm24_to_float(const uint8_t *p)
 {
     int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
@@ -40,6 +74,19 @@ static float sample_pool_pcm24_to_float(const uint8_t *p)
     return (float)v * (1.0f / 8388608.0f);
 }
 
+/**
+ * @brief Point d'entrée sample_pool_pcm32_to_float.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_pcm32_to_float.
+ *
+ * @param p Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float sample_pool_pcm32_to_float(const uint8_t *p)
 {
     int32_t v = (int32_t)((uint32_t)p[0] |
@@ -49,6 +96,17 @@ static float sample_pool_pcm32_to_float(const uint8_t *p)
     return (float)v * (1.0f / 2147483648.0f);
 }
 
+/**
+ * @brief Point d'entrée sample_pool_release_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_release_slot.
+ *
+ * @param sample_id Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void sample_pool_release_slot(uint16_t sample_id)
 {
     if(sample_id >= SAMPLE_POOL_SIZE)
@@ -61,6 +119,18 @@ static void sample_pool_release_slot(uint16_t sample_id)
     g_sample_slot_by_sample[sample_id] = -1;
 }
 
+/**
+ * @brief Point d'entrée sample_pool_alloc_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_alloc_slot.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int16_t sample_pool_alloc_slot(void)
 {
     for(uint32_t i = 0U; i < SAMPLE_POOL_RESIDENT_SLOTS; i++)
@@ -76,6 +146,23 @@ static int16_t sample_pool_alloc_slot(void)
 }
 
 #if SAMPLE_POOL_HAS_FATFS
+/**
+ * @brief Point d'entrée sample_pool_load_full_data.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_load_full_data.
+ *
+ * @param fp Paramètre d'entrée de l'API.
+ * @param slot Paramètre d'entrée de l'API.
+ * @param info Paramètre d'entrée de l'API.
+ * @param data_size_aligned Paramètre d'entrée de l'API.
+ * @param desc Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static bool sample_pool_load_full_data(FIL *fp,
                                        uint16_t slot,
                                        const wav_info_t *info,
@@ -149,6 +236,17 @@ static FATFS g_sample_pool_fs;
 static uint8_t g_sample_pool_fs_mounted;
 #endif
 
+/**
+ * @brief Point d'entrée sample_pool_clear_entry.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_clear_entry.
+ *
+ * @param desc Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void sample_pool_clear_entry(sample_desc_t *desc)
 {
     if(desc == NULL)
@@ -159,6 +257,21 @@ static void sample_pool_clear_entry(sample_desc_t *desc)
     desc->valid = 0U;
 }
 
+/**
+ * @brief Point d'entrée sample_pool_trim_path_copy.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_trim_path_copy.
+ *
+ * @param dst Paramètre d'entrée de l'API.
+ * @param dst_size Paramètre d'entrée de l'API.
+ * @param src Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static size_t sample_pool_trim_path_copy(char *dst, size_t dst_size, const char *src)
 {
     size_t start = 0U;
@@ -185,6 +298,16 @@ static size_t sample_pool_trim_path_copy(char *dst, size_t dst_size, const char 
     return trimmed_len;
 }
 
+/**
+ * @brief Point d'entrée sample_pool_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sample_pool_init(void)
 {
     for(uint32_t i = 0U; i < SAMPLE_POOL_SIZE; i++)
@@ -200,6 +323,20 @@ void sample_pool_init(void)
 #endif
 }
 
+/**
+ * @brief Point d'entrée sample_pool_load.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sample_pool_load.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ * @param path Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool sample_pool_load(uint16_t id, const char *path)
 {
     if(id >= SAMPLE_POOL_SIZE)
