@@ -7,9 +7,9 @@
 
 typedef enum
 {
-    LED_LAYER_BASE = 0,
+    LED_LAYER_SEQ_STATE = 0,
+    LED_LAYER_SEQ_CURSOR,
     LED_LAYER_UI,
-    LED_LAYER_SEQ,
     LED_LAYER_ANIM,
     LED_LAYER_COUNT
 } led_layer_id_t;
