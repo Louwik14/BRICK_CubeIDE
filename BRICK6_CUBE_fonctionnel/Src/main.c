@@ -157,9 +157,9 @@ int main(void)
 	     usb_host_tasklet_poll_bounded(4);
 	     midi_host_poll_bounded(8);
 
-	     if(engine_tick_count != last_tick)
+	     while(engine_tick_count != last_tick)
 	     {
-	         last_tick = engine_tick_count;
+	         last_tick++;
 	         ui_tasklet_poll();
 	     }
 	 #if PHASE0_DEBUG_LOG
