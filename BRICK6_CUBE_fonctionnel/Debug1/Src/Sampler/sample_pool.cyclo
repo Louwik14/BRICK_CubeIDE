@@ -1,8 +1,0 @@
-../Src/Sampler/sample_pool.c:28:14:sample_pool_pcm24_to_float	2
-../Src/Sampler/sample_pool.c:36:14:sample_pool_pcm32_to_float	1
-../Src/Sampler/sample_pool.c:113:13:sample_pool_clear_entry	2
-../Src/Sampler/sample_pool.c:124:15:sample_pool_trim_path_copy	8
-../Src/Sampler/sample_pool.c:46:13:sample_pool_fill_attack_cache	10
-../Src/Sampler/sample_pool.c:150:6:sample_pool_init	2
-../Src/Sampler/sample_pool.c:160:6:sample_pool_load	20
-../Src/Sampler/sample_pool.c:310:22:sample_pool_get	2

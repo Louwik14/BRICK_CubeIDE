@@ -458,6 +458,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Inc/Param}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Inc/Storage}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Inc/UI}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Inc/SD}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/CMSIS_DSP/Include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Drivers/CMSIS_DSP/PrivateInclude}&quot;"/>
 									<listOptionValue builtIn="false" value="../Inc"/>
@@ -471,6 +472,7 @@
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/App/Middlewares/Third_Party/FatFs/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="true" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.otherflags.1847937904" name="Other flags" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.otherflags" useByScannerDiscovery="true" valueType="stringList"/>
 								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.fstackusage.405334941" name="Enable stack usage analysis (-fstack-usage)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.fstackusage" useByScannerDiscovery="false" value="true" valueType="boolean"/>
@@ -650,8 +652,14 @@
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907.61211957;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907.61211957.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.1365445546;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.input.cpp.1746765453">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.2081980974;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.443687394">
 			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907.61211957;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907.61211957.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.1031186885;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.1286285109">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		</scannerConfigBuildInfo>
 		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.221446907.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.608904847;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.input.cpp.1746447719">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>

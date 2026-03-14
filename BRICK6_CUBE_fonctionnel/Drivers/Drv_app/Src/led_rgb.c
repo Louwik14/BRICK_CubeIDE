@@ -1,26 +1,27 @@
 #include "led_rgb.h"
 #include "tim.h"
 #include "usart.h"
-
 #include <string.h>
 
 /*
-TIM2 clock = 240 MHz
-WS2812 = 800 kHz
+Timer config attendu (CubeMX):
 
-Period = 240 MHz / 800 kHz = 300
+TIM2
+Prescaler = 0
 ARR = 299
+
+Timer clock = 240 MHz
+PWM period = 1.25 µs (800 kHz)
 */
 
-#define LED_COUNT 25
 #define BITS_PER_LED 24
-#define RESET_SLOTS 80
+#define RESET_SLOTS 100
 
 #define WS2812_0 84
-#define WS2812_1 168
+#define WS2812_1 175
 
-#define LED_BUFFER_SIZE (LED_COUNT * BITS_PER_LED + RESET_SLOTS)
-
+#define BUFFER_SIZE (LED_COUNT * BITS_PER_LED + RESET_SLOTS)
+extern DMA_HandleTypeDef hdma_tim2_ch4;
 typedef struct
 {
     uint8_t r;
@@ -30,10 +31,9 @@ typedef struct
 
 static led_t leds[LED_COUNT];
 
-static uint16_t pwm_buffer[LED_BUFFER_SIZE] __attribute__((section(".ram_d2_dma"), aligned(32)));
-
+/* buffer DMA aligné cache H7 */
+static uint32_t pwm_buffer[BUFFER_SIZE] __attribute__((aligned(32)));
 static volatile uint8_t dma_busy = 0;
-
 
 /* ------------------------------------------------ */
 
@@ -41,7 +41,6 @@ static void debug(const char *msg)
 {
     HAL_UART_Transmit(&huart1,(uint8_t*)msg,strlen(msg),100);
 }
-
 
 /* ------------------------------------------------ */
 
@@ -74,10 +73,7 @@ static void encode(void)
 
     for(int i=0;i<RESET_SLOTS;i++)
         pwm_buffer[idx++] = 0;
-
-    debug("LED encode\n");
 }
-
 
 /* ------------------------------------------------ */
 
@@ -86,23 +82,20 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     if(htim->Instance == TIM2)
     {
         HAL_TIM_PWM_Stop_DMA(&htim2, TIM_CHANNEL_4);
-
         dma_busy = 0;
-
-        debug("LED DMA done\n");
     }
 }
-
-
 /* ------------------------------------------------ */
 
 void led_init(void)
 {
     memset(leds,0,sizeof(leds));
 
+    /* assure timer stoppé */
+    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
+
     debug("LED init\n");
 }
-
 
 /* ------------------------------------------------ */
 
@@ -116,7 +109,6 @@ void led_set(uint32_t id,uint8_t r,uint8_t g,uint8_t b)
     leds[id].b = b;
 }
 
-
 /* ------------------------------------------------ */
 
 void led_fill(uint8_t r,uint8_t g,uint8_t b)
@@ -129,7 +121,6 @@ void led_fill(uint8_t r,uint8_t g,uint8_t b)
     }
 }
 
-
 /* ------------------------------------------------ */
 
 void led_clear(void)
@@ -137,57 +128,40 @@ void led_clear(void)
     led_fill(0,0,0);
 }
 
-
 /* ------------------------------------------------ */
 
 void led_show(void)
 {
     if(dma_busy)
-    {
-        debug("LED busy\n");
         return;
-    }
 
     encode();
-
-    dma_busy = 1;
-
-    debug("LED DMA start\n");
-
-    HAL_StatusTypeDef status;
-
-    /*
-     * TIM PWM DMA requests are generated on CC4 events. With OC preload enabled,
-     * the first DMA word would otherwise be applied one period late.
-     *
-     * Prime CCR4 with the first duty value, force an update event to latch it,
-     * then let DMA stream the remaining words.
-     */
-    __HAL_TIM_SET_COUNTER(&htim2, 0U);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, pwm_buffer[0]);
-    htim2.Instance->EGR = TIM_EGR_UG;
 
 #if (__DCACHE_PRESENT == 1U)
     if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U)
     {
-        uint32_t addr = (uint32_t)pwm_buffer;
-        uint32_t size = sizeof(pwm_buffer);
-        uint32_t aligned_addr = addr & ~31UL;
-        uint32_t aligned_size = ((addr + size + 31UL) & ~31UL) - aligned_addr;
-        SCB_CleanDCache_by_Addr((uint32_t *)aligned_addr, (int32_t)aligned_size);
+        SCB_CleanDCache_by_Addr(
+            (uint32_t*)pwm_buffer,
+            sizeof(pwm_buffer)
+        );
     }
 #endif
 
-    status = HAL_TIM_PWM_Start_DMA(
+    dma_busy = 1;
+
+    HAL_TIM_PWM_Stop_DMA(&htim2, TIM_CHANNEL_4);
+
+    __HAL_TIM_SET_COUNTER(&htim2,0);
+
+    HAL_StatusTypeDef status = HAL_TIM_PWM_Start_DMA(
         &htim2,
         TIM_CHANNEL_4,
-        (uint32_t*)&pwm_buffer[1],
-        LED_BUFFER_SIZE - 1U
+        (uint32_t*)pwm_buffer,
+        BUFFER_SIZE
     );
 
     if(status != HAL_OK)
     {
-        debug("LED DMA ERROR\n");
         dma_busy = 0;
     }
 }

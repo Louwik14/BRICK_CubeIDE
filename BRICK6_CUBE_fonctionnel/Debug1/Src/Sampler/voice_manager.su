@@ -1,6 +1,0 @@
-../Src/Sampler/voice_manager.c:21:14:finite_or_zero	0	static
-../Src/Sampler/voice_manager.c:26:13:voice_clear	8	static
-../Src/Sampler/voice_manager.c:51:6:voice_manager_init	8	static
-../Src/Sampler/voice_manager.c:60:6:voice_manager_trigger	40	static
-../Src/Sampler/voice_manager.c:159:6:voice_manager_service	16	static,ignoring_inline_asm
-../Src/Sampler/voice_manager.c:198:6:voice_manager_process	64	static

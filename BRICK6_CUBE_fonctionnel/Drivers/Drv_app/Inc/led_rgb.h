@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define LED_COUNT 25
+
 void led_init(void);
 void led_set(uint32_t id, uint8_t r, uint8_t g, uint8_t b);
 void led_fill(uint8_t r, uint8_t g, uint8_t b);

@@ -1,6 +1,0 @@
-../Src/Sampler/voice_manager.c:21:14:finite_or_zero	2
-../Src/Sampler/voice_manager.c:26:13:voice_clear	3
-../Src/Sampler/voice_manager.c:51:6:voice_manager_init	2
-../Src/Sampler/voice_manager.c:60:6:voice_manager_trigger	13
-../Src/Sampler/voice_manager.c:159:6:voice_manager_service	11
-../Src/Sampler/voice_manager.c:198:6:voice_manager_process	26
