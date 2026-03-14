@@ -8,7 +8,7 @@ typedef struct
 {
     uint8_t active;
     uint8_t on;
-    uint32_t led;
+    led_id_t led;
     uint8_t r;
     uint8_t g;
     uint8_t b;
@@ -18,7 +18,7 @@ typedef struct
 
 static led_anim_slot_t anim_slots[LED_ANIM_MAX_SLOTS];
 
-static led_anim_slot_t *find_slot(uint32_t led)
+static led_anim_slot_t *find_slot(led_id_t led)
 {
     for (uint32_t i = 0U; i < LED_ANIM_MAX_SLOTS; i++)
     {
@@ -56,7 +56,7 @@ void led_anim_stop_all(void)
     led_layer_clear(LED_LAYER_ANIM);
 }
 
-void led_anim_stop(uint32_t led)
+void led_anim_stop(led_id_t led)
 {
     for (uint32_t i = 0U; i < LED_ANIM_MAX_SLOTS; i++)
     {
@@ -70,9 +70,9 @@ void led_anim_stop(uint32_t led)
     led_layer_set(LED_LAYER_ANIM, led, 0U, 0U, 0U);
 }
 
-void led_anim_blink(uint32_t led, uint8_t r, uint8_t g, uint8_t b, uint32_t period)
+void led_anim_blink(led_id_t led, uint8_t r, uint8_t g, uint8_t b, uint32_t period)
 {
-    if ((period < 2U) || (led >= LED_FB_COUNT))
+    if ((period < 2U) || ((uint32_t)led >= LED_FB_COUNT))
     {
         return;
     }
@@ -91,8 +91,6 @@ void led_anim_blink(uint32_t led, uint8_t r, uint8_t g, uint8_t b, uint32_t peri
 
 void led_anim_tick(uint32_t ms)
 {
-    uint8_t changed = 0U;
-
     led_layer_clear(LED_LAYER_ANIM);
 
     for (uint32_t i = 0U; i < LED_ANIM_MAX_SLOTS; i++)
@@ -109,7 +107,6 @@ void led_anim_tick(uint32_t ms)
         {
             anim_slots[i].elapsed_ms -= half_period;
             anim_slots[i].on = (anim_slots[i].on == 0U) ? 1U : 0U;
-            changed = 1U;
         }
 
         if (anim_slots[i].on != 0U)
@@ -122,8 +119,4 @@ void led_anim_tick(uint32_t ms)
         }
     }
 
-    if (changed != 0U)
-    {
-        led_layer_commit();
-    }
 }

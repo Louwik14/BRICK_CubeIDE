@@ -10,9 +10,9 @@ void led_init(void)
     led_anim_init();
 }
 
-void led_set(uint32_t id, uint8_t r, uint8_t g, uint8_t b)
+void led_set(led_id_t led, uint8_t r, uint8_t g, uint8_t b)
 {
-    led_fb_set(id, r, g, b);
+    led_fb_set(led, r, g, b);
 }
 
 void led_fill(uint8_t r, uint8_t g, uint8_t b)
@@ -27,5 +27,11 @@ void led_clear(void)
 
 void led_show(void)
 {
-    led_fb_commit();
+    led_layer_commit();
+}
+
+void led_service(uint32_t dt_ms)
+{
+    led_anim_tick(dt_ms);
+    led_layer_commit();
 }

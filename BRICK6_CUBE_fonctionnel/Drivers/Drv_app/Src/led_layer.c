@@ -36,16 +36,16 @@ void led_layer_clear_all(void)
     memset(led_layers, 0, sizeof(led_layers));
 }
 
-void led_layer_set(uint32_t layer, uint32_t led, uint8_t r, uint8_t g, uint8_t b)
+void led_layer_set(uint32_t layer, led_id_t led, uint8_t r, uint8_t g, uint8_t b)
 {
-    if ((layer >= (uint32_t)LED_LAYER_COUNT) || (led >= LED_FB_COUNT))
+    if ((layer >= (uint32_t)LED_LAYER_COUNT) || ((uint32_t)led >= LED_FB_COUNT))
     {
         return;
     }
 
-    led_layers[layer][led][0] = r;
-    led_layers[layer][led][1] = g;
-    led_layers[layer][led][2] = b;
+    led_layers[layer][(uint32_t)led][0] = r;
+    led_layers[layer][(uint32_t)led][1] = g;
+    led_layers[layer][(uint32_t)led][2] = b;
 }
 
 void led_layer_fill(uint32_t layer, uint8_t r, uint8_t g, uint8_t b)
@@ -57,7 +57,7 @@ void led_layer_fill(uint32_t layer, uint8_t r, uint8_t g, uint8_t b)
 
     for (uint32_t led = 0U; led < LED_FB_COUNT; led++)
     {
-        led_layer_set(layer, led, r, g, b);
+        led_layer_set(layer, (led_id_t)led, r, g, b);
     }
 }
 
@@ -78,7 +78,7 @@ void led_layer_compose(void)
             b = sat_add_u8(b, led_layers[layer][led][2]);
         }
 
-        led_fb_set(led, r, g, b);
+        led_fb_set((led_id_t)led, r, g, b);
     }
 }
 

@@ -17,7 +17,7 @@ typedef enum
 void led_layer_init(void);
 void led_layer_clear(uint32_t layer);
 void led_layer_clear_all(void);
-void led_layer_set(uint32_t layer, uint32_t led, uint8_t r, uint8_t g, uint8_t b);
+void led_layer_set(uint32_t layer, led_id_t led, uint8_t r, uint8_t g, uint8_t b);
 void led_layer_fill(uint32_t layer, uint8_t r, uint8_t g, uint8_t b);
 void led_layer_compose(void);
 void led_layer_commit(void);
