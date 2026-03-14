@@ -30,7 +30,7 @@ typedef struct
 
 static led_t leds[LED_COUNT];
 
-static uint16_t pwm_buffer[LED_BUFFER_SIZE];
+static uint16_t pwm_buffer[LED_BUFFER_SIZE] __attribute__((section(".ram_d2_dma"), aligned(32)));
 
 static volatile uint8_t dma_busy = 0;
 
@@ -156,11 +156,33 @@ void led_show(void)
 
     HAL_StatusTypeDef status;
 
+    /*
+     * TIM PWM DMA requests are generated on CC4 events. With OC preload enabled,
+     * the first DMA word would otherwise be applied one period late.
+     *
+     * Prime CCR4 with the first duty value, force an update event to latch it,
+     * then let DMA stream the remaining words.
+     */
+    __HAL_TIM_SET_COUNTER(&htim2, 0U);
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, pwm_buffer[0]);
+    __HAL_TIM_GENERATE_EVENT(&htim2, TIM_EVENTSOURCE_UPDATE);
+
+#if (__DCACHE_PRESENT == 1U)
+    if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U)
+    {
+        uint32_t addr = (uint32_t)pwm_buffer;
+        uint32_t size = sizeof(pwm_buffer);
+        uint32_t aligned_addr = addr & ~31UL;
+        uint32_t aligned_size = ((addr + size + 31UL) & ~31UL) - aligned_addr;
+        SCB_CleanDCache_by_Addr((uint32_t *)aligned_addr, (int32_t)aligned_size);
+    }
+#endif
+
     status = HAL_TIM_PWM_Start_DMA(
         &htim2,
         TIM_CHANNEL_4,
-        (uint32_t*)pwm_buffer,
-        LED_BUFFER_SIZE
+        (uint32_t*)&pwm_buffer[1],
+        LED_BUFFER_SIZE - 1U
     );
 
     if(status != HAL_OK)
