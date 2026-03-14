@@ -34,6 +34,10 @@ extern "C" {
    ============================================================ */
 
 #define AUDIO_BLOCK_SIZE 64U
+/*
+ * Current DSP engine is fed from 3 stereo input tracks via TDM slots
+ * (0/1, 2/3, 4/5). Mixer layer may expose one extra logical track.
+ */
 #define MAX_TRACKS       3U
 
 /**
