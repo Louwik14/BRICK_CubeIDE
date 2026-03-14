@@ -20,6 +20,12 @@
  * - malloc: interdit.
  */
 
+/*
+ * Mixer abstraction supports 4 tracks for UI/routing consistency and future
+ * virtual/internal sources. The current audio input path feeds 3 DSP tracks
+ * (see MAX_TRACKS in audio_float.h), so track 3 is currently available for
+ * future expansion without changing the mixer control surface.
+ */
 #define MIXER_MAX_TRACKS 4U
 #define MIXER_NUM_SENDS 2U
 #define MIXER_INSERTS_PER_TRACK 2U

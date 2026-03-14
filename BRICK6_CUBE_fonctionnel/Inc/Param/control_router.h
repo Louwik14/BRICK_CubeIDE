@@ -56,7 +56,7 @@ typedef param_id_t control_param_id_t;
 #define CTRL_PARAM_BUS_COMP_ATTACK_INDEX    PARAM_BUS_COMP_ATTACK_INDEX
 #define CTRL_PARAM_BUS_COMP_RELEASE_INDEX   PARAM_BUS_COMP_RELEASE_INDEX
 #define CTRL_PARAM_BUS_COMP_MAKEUP_DB       PARAM_BUS_COMP_MAKEUP_DB
-#define CTRL_PARAM_BUS_COMP_MIX             PARAM_BUS_COMP_MIX
+#define CTRL_PARAM_BUS_COMP_AUTO_MAKEUP     PARAM_BUS_COMP_AUTO_MAKEUP
 #define CTRL_PARAM_BUS_COMP_DRYWET          PARAM_BUS_COMP_DRYWET
 #define CTRL_PARAM_BUS_COMP_HPF_HZ          PARAM_BUS_COMP_HPF_HZ
 
@@ -67,5 +67,18 @@ typedef param_id_t control_param_id_t;
 #define CTRL_PARAM_DAISY_COMP_MAKEUP_DB     PARAM_DAISY_COMP_MAKEUP_DB
 #define CTRL_PARAM_DAISY_COMP_AUTO_MAKEUP   PARAM_DAISY_COMP_AUTO_MAKEUP
 #define CTRL_PARAM_DAISY_COMP_MIX           PARAM_DAISY_COMP_MIX
+
+#define CTRL_PARAM_EQ_LOW_DB                 PARAM_EQ_LOW_DB
+#define CTRL_PARAM_EQ_MID_DB                 PARAM_EQ_MID_DB
+#define CTRL_PARAM_EQ_HIGH_DB                PARAM_EQ_HIGH_DB
+
+#define CTRL_PARAM_SAT_TONE                  PARAM_SAT_TONE
+#define CTRL_PARAM_SAT_BIAS                  PARAM_SAT_BIAS
+#define CTRL_PARAM_SAT_DRIVE                 PARAM_SAT_DRIVE
+#define CTRL_PARAM_SAT_MIX                   PARAM_SAT_MIX
+
+#define CTRL_PARAM_MASTER_GAIN               PARAM_MASTER_GAIN
+#define CTRL_PARAM_POST_GAIN                 PARAM_POST_GAIN
+#define CTRL_PARAM_OUTPUT_COMP               PARAM_OUTPUT_COMP
 
 void control_router_set_param(control_param_id_t id, float v);

@@ -8,6 +8,17 @@ extern "C" {
 
 typedef enum
 {
+    PARAM_DISPLAY_FLOAT,
+    PARAM_DISPLAY_DB,
+    PARAM_DISPLAY_PERCENT,
+    PARAM_DISPLAY_BOOL,
+    PARAM_DISPLAY_ENUM,
+    PARAM_DISPLAY_TIME_MS,
+    PARAM_DISPLAY_RATIO
+} param_display_type_t;
+
+typedef enum
+{
     PARAM_TYPE_FLOAT,
     PARAM_TYPE_INT,
     PARAM_TYPE_ENUM,
@@ -29,7 +40,10 @@ typedef struct
 
     float default_value;
 
+    param_display_type_t display_type;
+
     const char *unit;
+    const char *const *labels;
 
     void (*apply)(float value);
 
