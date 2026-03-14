@@ -145,16 +145,16 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
+    led_anim_blink(10,255,0,0,400);
   while (1)
   {
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	    led_fb_set(0, 255, 0, 0);
-	    led_fb_commit();
-	    HAL_Delay(500);
+	    led_anim_tick(10);
+	    HAL_Delay(10);
+
 	  engine_tasklet_poll();
 	     brick6_app_process();
 

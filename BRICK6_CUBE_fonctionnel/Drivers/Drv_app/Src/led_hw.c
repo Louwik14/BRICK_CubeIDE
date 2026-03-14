@@ -81,7 +81,7 @@ bool led_hw_busy(void)
     return (dma_busy != 0U);
 }
 
-void led_hw_send(uint8_t *rgb, uint32_t count)
+void led_hw_send(const uint8_t *rgb, uint32_t count)
 {
     if ((rgb == NULL) || (count == 0U) || (count > LED_HW_COUNT) || led_hw_busy())
     {
