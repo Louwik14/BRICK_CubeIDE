@@ -1,16 +1,17 @@
 #include "ui_core.h"
 
+#include "encoders.h"
 #include "ui_event.h"
 #include "ui_page.h"
+#include "pages/ui_page_param_test.h"
+#include "ui_param.h"
 #include "ui_renderer_oled.h"
-
-extern const ui_page_t g_ui_page_main;
 
 static const ui_page_t *g_ui_active_page = 0;
 
 void ui_core_init(void)
 {
-    g_ui_active_page = &g_ui_page_main;
+    g_ui_active_page = &g_ui_page_param_test;
 
     if (g_ui_active_page->enter != 0)
     {
@@ -21,6 +22,12 @@ void ui_core_init(void)
 void ui_core_tick(void)
 {
     ui_event_t ev;
+
+    for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
+    {
+        const int16_t delta = encoder_consume_delta(encoder);
+        ui_param_handle_encoder(encoder, delta);
+    }
 
     ui_event_from_inputs();
 
