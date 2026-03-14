@@ -328,6 +328,8 @@
 "./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_init_q31.o"
 "./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q15.o"
 "./Drivers/CMSIS_DSP/Source/TransformFunctions/arm_rfft_q31.o"
+"./Drivers/Drv_app/Src/buttons.o"
+"./Drivers/Drv_app/Src/buttons_hw.o"
 "./Drivers/Drv_app/Src/cs42448.o"
 "./Drivers/Drv_app/Src/drv_display.o"
 "./Drivers/Drv_app/Src/drv_encoders.o"

@@ -15,7 +15,7 @@ typedef enum
     BTN_PARAM_8,
 
     BTN_PLAY,
-    BTN_STOP,
+    BTN_REC,
 
     BTN_SHIFT,
 

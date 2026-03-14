@@ -7,6 +7,9 @@
 #include "cpu_load.h"
 #include "drv_display.h"
 #include "drv_encoders.h"
+#include "buttons.h"
+#include "led_layer.h"
+#include "led_ids.h"
 
 static float clampf(float v, float lo, float hi)
 {

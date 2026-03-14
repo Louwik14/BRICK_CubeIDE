@@ -3,3 +3,4 @@
 ../Drivers/Drv_app/Src/led_rgb.c:18:6:led_fill	0	static
 ../Drivers/Drv_app/Src/led_rgb.c:23:6:led_clear	0	static
 ../Drivers/Drv_app/Src/led_rgb.c:28:6:led_show	0	static
+../Drivers/Drv_app/Src/led_rgb.c:33:6:led_service	8	static

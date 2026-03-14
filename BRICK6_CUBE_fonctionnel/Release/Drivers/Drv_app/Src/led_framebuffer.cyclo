@@ -2,4 +2,4 @@
 ../Drivers/Drv_app/Src/led_framebuffer.c:13:6:led_fb_clear	1
 ../Drivers/Drv_app/Src/led_framebuffer.c:18:6:led_fb_set	2
 ../Drivers/Drv_app/Src/led_framebuffer.c:30:6:led_fb_fill	1
-../Drivers/Drv_app/Src/led_framebuffer.c:38:6:led_fb_commit	1
+../Drivers/Drv_app/Src/led_framebuffer.c:38:6:led_fb_commit	2

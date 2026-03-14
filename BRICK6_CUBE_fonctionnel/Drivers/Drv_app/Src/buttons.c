@@ -10,7 +10,7 @@
  * Set back to 0 (default) to compile all debug logging code out.
  */
 #ifndef BUTTON_DEBUG_LOG
-#define BUTTON_DEBUG_LOG 0
+#define BUTTON_DEBUG_LOG 1
 #endif
 
 #define BUTTONS_DEBOUNCE_MS 10U
@@ -50,7 +50,7 @@ static void buttons_debug_log_press(button_id_t btn)
     msg[pos++] = '\r';
     msg[pos++] = '\n';
 
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)pos, 0U);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)pos, HAL_MAX_DELAY);
 }
 #endif
 

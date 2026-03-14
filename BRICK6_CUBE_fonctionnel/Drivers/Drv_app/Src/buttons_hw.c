@@ -1,5 +1,4 @@
 #include "buttons_hw.h"
-
 #include "main.h"
 
 #define BUTTONS_HW_REG_COUNT 3U
@@ -9,6 +8,8 @@
 
 static uint8_t buttons_hw_state[BTN_COUNT];
 
+/* --------- GPIO helpers --------- */
+
 static inline void sr_pl_low(void)
 {
     SR_CS_GPIO_Port->BSRR = ((uint32_t)SR_CS_Pin << 16U);
@@ -16,7 +17,7 @@ static inline void sr_pl_low(void)
 
 static inline void sr_pl_high(void)
 {
-    SR_CS_GPIO_Port->BSRR = (uint32_t)SR_CS_Pin;
+    SR_CS_GPIO_Port->BSRR = SR_CS_Pin;
 }
 
 static inline void sr_sck_low(void)
@@ -26,59 +27,63 @@ static inline void sr_sck_low(void)
 
 static inline void sr_sck_high(void)
 {
-    SR_SCK_GPIO_Port->BSRR = (uint32_t)SR_SCK_Pin;
+    SR_SCK_GPIO_Port->BSRR = SR_SCK_Pin;
 }
 
 static inline uint32_t sr_data_read(void)
 {
-    return ((SR_DATA_GPIO_Port->IDR & SR_DATA_Pin) != 0U) ? 1U : 0U;
+    return (SR_DATA_GPIO_Port->IDR & SR_DATA_Pin) ? 1U : 0U;
 }
+
+/* --------- Init --------- */
 
 void buttons_hw_init(void)
 {
-    for (uint32_t i = 0U; i < (uint32_t)BTN_COUNT; i++)
-    {
-        buttons_hw_state[i] = 0U;
-    }
+    for(uint32_t i = 0; i < BTN_COUNT; i++)
+        buttons_hw_state[i] = 0;
 
     sr_pl_high();
     sr_sck_low();
 }
 
+/* --------- Read shift registers --------- */
+
 void buttons_hw_read(void)
 {
-    uint32_t raw_shifted = 0U;
+    uint32_t raw = 0;
 
-    sr_sck_low();
-
+    /* Latch parallel inputs */
     sr_pl_low();
     __NOP();
     sr_pl_high();
 
-    for (uint32_t i = 0U; i < BUTTONS_HW_TOTAL_BITS; i++)
+    for(uint32_t i = 0; i < BUTTONS_HW_TOTAL_BITS; i++)
     {
-        raw_shifted <<= 1U;
-        raw_shifted |= sr_data_read();
+        sr_sck_low();
+        __NOP();
+
+        raw <<= 1;
+        raw |= sr_data_read();
 
         sr_sck_high();
         __NOP();
-        sr_sck_low();
     }
 
-    const uint32_t pressed_mask = (~raw_shifted) & BUTTONS_HW_MASK;
+    /* active LOW buttons */
+    uint32_t pressed_mask = (~raw) & BUTTONS_HW_MASK;
 
-    for (uint32_t i = 0U; i < (uint32_t)BTN_COUNT; i++)
+    for(uint32_t i = 0; i < BTN_COUNT; i++)
     {
-        buttons_hw_state[i] = (uint8_t)((pressed_mask >> i) & 0x1U);
+        buttons_hw_state[i] = (pressed_mask >> i) & 1U;
     }
 }
 
+/* --------- API --------- */
+
 uint8_t buttons_hw_get(button_id_t btn)
 {
-    if ((uint32_t)btn >= (uint32_t)BTN_COUNT)
-    {
-        return 0U;
-    }
+    if(btn >= BTN_COUNT)
+        return 0;
 
-    return buttons_hw_state[(uint32_t)btn];
+    return buttons_hw_state[btn];
 }
