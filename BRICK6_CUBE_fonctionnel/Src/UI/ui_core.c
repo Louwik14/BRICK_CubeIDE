@@ -1,22 +1,26 @@
 #include "ui_core.h"
 
 #include "encoders.h"
-#include "ui_event.h"
-#include "ui_page.h"
+#include "pages/ui_page_main.h"
 #include "pages/ui_page_param_test.h"
+#include "ui_event.h"
+#include "ui_navigation.h"
+#include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_renderer_oled.h"
 
-static const ui_page_t *g_ui_active_page = 0;
-
 void ui_core_init(void)
 {
-    g_ui_active_page = &g_ui_page_param_test;
+    ui_page_manager_init();
 
-    if (g_ui_active_page->enter != 0)
-    {
-        g_ui_active_page->enter();
-    }
+    /*
+     * Register pages once at boot. Registration order defines stable page IDs
+     * used by the navigation rule table.
+     */
+    ui_page_manager_register(&g_ui_page_main);
+    ui_page_manager_register(&g_ui_page_param_test);
+
+    ui_page_set(UI_PAGE_MAIN);
 }
 
 void ui_core_tick(void)
@@ -33,16 +37,20 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
-        if ((g_ui_active_page != 0) && (g_ui_active_page->handle_event != 0))
+        ui_navigation_handle_event(&ev);
+
+        const ui_page_t *active_page = ui_page_get();
+        if ((active_page != 0) && (active_page->handle_event != 0))
         {
-            g_ui_active_page->handle_event(&ev);
+            active_page->handle_event(&ev);
         }
     }
 
-    if ((g_ui_active_page != 0) && (g_ui_active_page->tick != 0))
+    const ui_page_t *active_page = ui_page_get();
+    if ((active_page != 0) && (active_page->tick != 0))
     {
-        g_ui_active_page->tick();
+        active_page->tick();
     }
 
-    ui_renderer_oled_draw(g_ui_active_page);
+    ui_renderer_oled_draw();
 }
