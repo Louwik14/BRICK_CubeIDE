@@ -1,3 +1,24 @@
+/**
+ * @file ui_event.c
+ * @brief Module applicatif ui_event.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à ui_event.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "ui_event.h"
 
 #include "buttons.h"
@@ -8,6 +29,17 @@ static ui_event_t g_ui_evt_q[UI_EVENT_Q_LEN];
 static uint8_t g_ui_evt_w = 0U;
 static uint8_t g_ui_evt_r = 0U;
 
+/**
+ * @brief Point d'entrée ui_event_push.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_event_push.
+ *
+ * @param ev Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_event_push(const ui_event_t *ev)
 {
     const uint8_t next = (uint8_t)((g_ui_evt_w + 1U) & (UI_EVENT_Q_LEN - 1U));
@@ -20,6 +52,16 @@ static void ui_event_push(const ui_event_t *ev)
     g_ui_evt_w = next;
 }
 
+/**
+ * @brief Point d'entrée ui_event_from_inputs.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_event_from_inputs.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void ui_event_from_inputs(void)
 {
     ui_event_t ev;
@@ -43,6 +85,19 @@ void ui_event_from_inputs(void)
     }
 }
 
+/**
+ * @brief Point d'entrée ui_event_pop.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_event_pop.
+ *
+ * @param ev Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool ui_event_pop(ui_event_t *ev)
 {
     if (ev == 0)

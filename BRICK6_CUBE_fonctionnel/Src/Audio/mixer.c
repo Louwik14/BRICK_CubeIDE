@@ -42,6 +42,19 @@ typedef struct {
 static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
 
+/**
+ * @brief Point d'entrée clamp01.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à clamp01.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float clamp01(float v)
 {
     if(v < 0.0f) return 0.0f;
@@ -49,6 +62,19 @@ static float clamp01(float v)
     return v;
 }
 
+/**
+ * @brief Point d'entrée clamp_pan.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à clamp_pan.
+ *
+ * @param pan Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float clamp_pan(float pan)
 {
     if(pan < -1.0f) return -1.0f;
@@ -61,6 +87,16 @@ static float clamp_pan(float pan)
  *
  * Contexte d'appel:
  * - Init application, hors IRQ.
+ */
+/**
+ * @brief Point d'entrée mixer_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void mixer_init(void)
 {
@@ -92,6 +128,17 @@ void mixer_init(void)
  *
  * @param gain Gain linéaire master.
  */
+/**
+ * @brief Point d'entrée mixer_set_master.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_master.
+ *
+ * @param gain Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_master(float gain)
 {
     audio_float_set_master_gain(gain);
@@ -102,11 +149,35 @@ void mixer_set_master(float gain)
  *
  * @return Gain master linéaire.
  */
+/**
+ * @brief Point d'entrée mixer_get_master.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_get_master.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 float mixer_get_master(void)
 {
     return audio_float_get_master_gain();
 }
 
+/**
+ * @brief Point d'entrée mixer_set_track_gain.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_track_gain.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ * @param gain Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_track_gain(uint32_t track_id, float gain)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -120,6 +191,19 @@ void mixer_set_track_gain(uint32_t track_id, float gain)
         track_set_gain(track_id, gain);
 }
 
+/**
+ * @brief Point d'entrée mixer_get_track_gain.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_get_track_gain.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 float mixer_get_track_gain(uint32_t track_id)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -128,6 +212,18 @@ float mixer_get_track_gain(uint32_t track_id)
     return g_tracks[track_id].gain;
 }
 
+/**
+ * @brief Point d'entrée mixer_set_track_pan.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_track_pan.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ * @param pan Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_track_pan(uint32_t track_id, float pan)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -136,6 +232,18 @@ void mixer_set_track_pan(uint32_t track_id, float pan)
     g_tracks[track_id].pan = clamp_pan(pan);
 }
 
+/**
+ * @brief Point d'entrée mixer_set_track_mute.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_track_mute.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ * @param mute Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_track_mute(uint32_t track_id, uint8_t mute)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -144,6 +252,18 @@ void mixer_set_track_mute(uint32_t track_id, uint8_t mute)
     g_tracks[track_id].mute = mute ? 1U : 0U;
 }
 
+/**
+ * @brief Point d'entrée mixer_set_track_route.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_track_route.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ * @param route Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -153,6 +273,19 @@ void mixer_set_track_route(uint32_t track_id, mixer_route_t route)
     g_tracks[track_id].route_cue = ((route & MIXER_ROUTE_CUE) != 0U) ? 1U : 0U;
 }
 
+/**
+ * @brief Point d'entrée mixer_set_track_insert_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_track_insert_slot.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ * @param insert_idx Paramètre d'entrée de l'API.
+ * @param slot Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t slot)
 {
     if(track_id >= MIXER_MAX_TRACKS || insert_idx >= MIXER_INSERTS_PER_TRACK)
@@ -161,6 +294,19 @@ void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t 
     g_tracks[track_id].insert_slot[insert_idx] = slot;
 }
 
+/**
+ * @brief Point d'entrée mixer_set_track_send_level.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_track_send_level.
+ *
+ * @param track_id Paramètre d'entrée de l'API.
+ * @param send_idx Paramètre d'entrée de l'API.
+ * @param level Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float level)
 {
     if(track_id >= MIXER_MAX_TRACKS || send_idx >= MIXER_NUM_SENDS)
@@ -169,6 +315,18 @@ void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float leve
     g_tracks[track_id].send_level[send_idx] = clamp01(level);
 }
 
+/**
+ * @brief Point d'entrée mixer_set_send_fx_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_set_send_fx_slot.
+ *
+ * @param send_idx Paramètre d'entrée de l'API.
+ * @param slot Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
 {
     if(send_idx >= MIXER_NUM_SENDS)
@@ -186,6 +344,19 @@ void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
  *
  * Contexte d'appel:
  * - IRQ audio (hard realtime).
+ */
+/**
+ * @brief Point d'entrée mixer_process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à mixer_process.
+ *
+ * @param tracks Paramètre d'entrée de l'API.
+ * @param track_count Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {

@@ -1,3 +1,24 @@
+/**
+ * @file led_anim.c
+ * @brief Module applicatif led_anim.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à led_anim.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "led_anim.h"
 
 #include "led_layer.h"
@@ -39,11 +60,31 @@ static led_anim_slot_t *find_slot(led_id_t led)
     return &anim_slots[0];
 }
 
+/**
+ * @brief Point d'entrée led_anim_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_anim_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_anim_init(void)
 {
     led_anim_stop_all();
 }
 
+/**
+ * @brief Point d'entrée led_anim_stop_all.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_anim_stop_all.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_anim_stop_all(void)
 {
     for (uint32_t i = 0U; i < LED_ANIM_MAX_SLOTS; i++)
@@ -56,6 +97,17 @@ void led_anim_stop_all(void)
     led_layer_clear(LED_LAYER_ANIM);
 }
 
+/**
+ * @brief Point d'entrée led_anim_stop.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_anim_stop.
+ *
+ * @param led Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_anim_stop(led_id_t led)
 {
     for (uint32_t i = 0U; i < LED_ANIM_MAX_SLOTS; i++)
@@ -70,6 +122,21 @@ void led_anim_stop(led_id_t led)
     led_layer_set(LED_LAYER_ANIM, led, 0U, 0U, 0U);
 }
 
+/**
+ * @brief Point d'entrée led_anim_blink.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_anim_blink.
+ *
+ * @param led Paramètre d'entrée de l'API.
+ * @param r Paramètre d'entrée de l'API.
+ * @param g Paramètre d'entrée de l'API.
+ * @param b Paramètre d'entrée de l'API.
+ * @param period Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_anim_blink(led_id_t led, uint8_t r, uint8_t g, uint8_t b, uint32_t period)
 {
     if ((period < 2U) || ((uint32_t)led >= LED_FB_COUNT))
@@ -89,6 +156,17 @@ void led_anim_blink(led_id_t led, uint8_t r, uint8_t g, uint8_t b, uint32_t peri
     slot->elapsed_ms = 0U;
 }
 
+/**
+ * @brief Point d'entrée led_anim_tick.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_anim_tick.
+ *
+ * @param ms Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_anim_tick(uint32_t ms)
 {
     led_layer_clear(LED_LAYER_ANIM);

@@ -67,6 +67,21 @@ enum
   CS42448_DELAY_UNMUTE_MS = 2U
 };
 
+/**
+ * @brief Point d'entrée cs42448_write_reg.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à cs42448_write_reg.
+ *
+ * @param addr Paramètre d'entrée de l'API.
+ * @param reg Paramètre d'entrée de l'API.
+ * @param value Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t value)
 {
   return HAL_I2C_Mem_Write(&hi2c2,
@@ -78,6 +93,22 @@ static HAL_StatusTypeDef cs42448_write_reg(uint8_t addr, uint8_t reg, uint8_t va
                            100U);
 }
 
+/**
+ * @brief Point d'entrée cs42448_write_regs.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à cs42448_write_regs.
+ *
+ * @param addr Paramètre d'entrée de l'API.
+ * @param reg Paramètre d'entrée de l'API.
+ * @param values Paramètre d'entrée de l'API.
+ * @param len Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uint8_t *values, uint16_t len)
 {
   return HAL_I2C_Mem_Write(&hi2c2,
@@ -90,11 +121,37 @@ static HAL_StatusTypeDef cs42448_write_regs(uint8_t addr, uint8_t reg, const uin
 }
 
 
+/**
+ * @brief Point d'entrée cs42448_is_present.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à cs42448_is_present.
+ *
+ * @param addr Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static bool cs42448_is_present(uint8_t addr)
 {
   return HAL_I2C_IsDeviceReady(&hi2c2, (uint16_t)(addr << 1), 3U, 100U) == HAL_OK;
 }
 
+/**
+ * @brief Point d'entrée CS42448_Init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à CS42448_Init.
+ *
+ * @param addr Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool CS42448_Init(uint8_t addr)
 {
   static const uint8_t cs42448_default_config[] = {

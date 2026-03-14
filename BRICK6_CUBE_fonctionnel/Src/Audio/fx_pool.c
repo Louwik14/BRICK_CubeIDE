@@ -1,3 +1,24 @@
+/**
+ * @file fx_pool.c
+ * @brief Module applicatif fx_pool.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à fx_pool.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "fx_pool.h"
 
 #include "fx_dj_eq3_cmsis.h"
@@ -20,6 +41,16 @@ AUDIO_HOT ALIGN32 static uint8_t g_granular_state_storage[2048];
 
 static uint8_t g_granular_in_use;
 
+/**
+ * @brief Point d'entrée fx_pool_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_pool_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_pool_init(void)
 {
     for (uint32_t i = 0u; i < FX_POOL_SIZE; ++i)
@@ -32,6 +63,20 @@ void fx_pool_init(void)
     g_granular_in_use = 0u;
 }
 
+/**
+ * @brief Point d'entrée fx_pool_activate_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_pool_activate_slot.
+ *
+ * @param index Paramètre d'entrée de l'API.
+ * @param type Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int fx_pool_activate_slot(uint32_t index, fx_type_t type)
 {
     fx_slot_t* slot = NULL;
@@ -86,6 +131,17 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
     return 1;
 }
 
+/**
+ * @brief Point d'entrée fx_pool_deactivate_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_pool_deactivate_slot.
+ *
+ * @param index Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_pool_deactivate_slot(uint32_t index)
 {
     fx_slot_t* slot = NULL;
@@ -119,6 +175,19 @@ void fx_pool_deactivate_slot(uint32_t index)
     __DSB();
 }
 
+/**
+ * @brief Point d'entrée fx_pool_get_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_pool_get_slot.
+ *
+ * @param index Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 fx_slot_t* fx_pool_get_slot(uint32_t index)
 {
     if (index >= FX_POOL_SIZE)

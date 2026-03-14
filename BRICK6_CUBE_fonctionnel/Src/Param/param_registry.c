@@ -1,3 +1,24 @@
+/**
+ * @file param_registry.c
+ * @brief Module applicatif param_registry.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à param_registry.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "param_registry.h"
 
 #include "audio_float.h"
@@ -8,6 +29,21 @@
 #include <stddef.h>
 
 
+/**
+ * @brief Point d'entrée clamp_value.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à clamp_value.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ * @param lo Paramètre d'entrée de l'API.
+ * @param hi Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float clamp_value(float v, float lo, float hi)
 {
     if (v < lo)
@@ -17,6 +53,19 @@ static float clamp_value(float v, float lo, float hi)
     return v;
 }
 
+/**
+ * @brief Point d'entrée control_float_to_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à control_float_to_slot.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int8_t control_float_to_slot(float v)
 {
     if (v < 0.0f)
@@ -24,6 +73,19 @@ static int8_t control_float_to_slot(float v)
     return (int8_t)v;
 }
 
+/**
+ * @brief Point d'entrée control_float_to_ui127.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à control_float_to_ui127.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t control_float_to_ui127(float v)
 {
     if (v <= 0.0f)
@@ -89,36 +151,102 @@ static fx_granular_state_t *get_active_granular_state(void)
     return NULL;
 }
 
+/**
+ * @brief Point d'entrée apply_gran_density.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_density.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_gran_density(float v)
 {
     fx_granular_state_t *state = get_active_granular_state();
     if (state != NULL) fx_granular_set_density(state, v);
 }
 
+/**
+ * @brief Point d'entrée apply_gran_pitch.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_pitch.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_gran_pitch(float v)
 {
     fx_granular_state_t *state = get_active_granular_state();
     if (state != NULL) fx_granular_set_pitch(state, v);
 }
 
+/**
+ * @brief Point d'entrée apply_gran_mix.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_mix.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_gran_mix(float v)
 {
     fx_granular_state_t *state = get_active_granular_state();
     if (state != NULL) fx_granular_set_mix(state, v);
 }
 
+/**
+ * @brief Point d'entrée apply_gran_freeze.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_freeze.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_gran_freeze(float v)
 {
     fx_granular_state_t *state = get_active_granular_state();
     if (state != NULL) fx_granular_set_freeze(state, (v >= 0.5f));
 }
 
+/**
+ * @brief Point d'entrée apply_gran_spread.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_spread.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_gran_spread(float v)
 {
     fx_granular_state_t *state = get_active_granular_state();
     if (state != NULL) fx_granular_set_spread(state, v);
 }
 
+/**
+ * @brief Point d'entrée apply_gran_stereo.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_stereo.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_gran_stereo(float v)
 {
     fx_granular_state_t *state = get_active_granular_state();
@@ -145,42 +273,119 @@ static void apply_bus_comp_release_index(float v) { audio_float_set_bus_comp_rel
 static void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(v); }
 static void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
 
+/**
+ * @brief Point d'entrée apply_daisy_threshold.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_threshold.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_threshold(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
     if (comp != NULL) fx_daisy_comp_set_threshold_db(comp, v);
 }
 
+/**
+ * @brief Point d'entrée apply_daisy_ratio.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_ratio.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_ratio(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
     if (comp != NULL) fx_daisy_comp_set_ratio(comp, v);
 }
 
+/**
+ * @brief Point d'entrée apply_daisy_attack.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_attack.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_attack(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
     if (comp != NULL) fx_daisy_comp_set_attack_s(comp, v);
 }
 
+/**
+ * @brief Point d'entrée apply_daisy_release.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_release.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_release(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
     if (comp != NULL) fx_daisy_comp_set_release_s(comp, v);
 }
 
+/**
+ * @brief Point d'entrée apply_daisy_makeup.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_makeup.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_makeup(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
     if (comp != NULL) fx_daisy_comp_set_makeup_db(comp, v);
 }
 
+/**
+ * @brief Point d'entrée apply_daisy_auto_makeup.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_auto_makeup.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_auto_makeup(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
     if (comp != NULL) fx_daisy_comp_set_auto_makeup(comp, (v >= 0.5f) ? 1U : 0U);
 }
 
+/**
+ * @brief Point d'entrée apply_daisy_mix.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_mix.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void apply_daisy_mix(float v)
 {
     fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
@@ -302,16 +507,51 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_OUTPUT_COMP, "Output Comp", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_output_comp),
 };
 
+/**
+ * @brief Point d'entrée param_registry_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_registry_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void param_registry_init(void)
 {
     /* Registry is static metadata; runtime values are in param_store. */
 }
 
+/**
+ * @brief Point d'entrée param_get.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_get.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 float param_get(param_id_t id)
 {
     return param_store_get_active(id);
 }
 
+/**
+ * @brief Point d'entrée param_set.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_set.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ * @param value Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void param_set(param_id_t id, float value)
 {
     if (id >= PARAM_COUNT)
@@ -328,6 +568,17 @@ void param_set(param_id_t id, float value)
     }
 }
 
+/**
+ * @brief Point d'entrée param_reset.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_reset.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void param_reset(param_id_t id)
 {
     if (id >= PARAM_COUNT)

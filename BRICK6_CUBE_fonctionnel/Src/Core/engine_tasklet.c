@@ -55,6 +55,17 @@ static uint32_t engine_last_poll_ms = 0U;
  * Contexte d'appel:
  * - Main loop via engine_tasklet_poll.
  */
+/**
+ * @brief Point d'entrée engine_tick.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à engine_tick.
+ *
+ * @param dt_ms Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void engine_tick(uint32_t dt_ms)
 {
   engine_tick_count++;
@@ -71,6 +82,17 @@ static void engine_tick(uint32_t dt_ms)
  * @brief Initialise l'ordonnanceur de tasklet calé sur l'audio.
  *
  * @param sample_rate Fréquence audio (conservée pour API, non utilisée ici).
+ */
+/**
+ * @brief Point d'entrée engine_tasklet_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à engine_tasklet_init.
+ *
+ * @param sample_rate Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void engine_tasklet_init(uint32_t sample_rate)
 {
@@ -100,6 +122,17 @@ void engine_tasklet_init(uint32_t sample_rate)
  * Contexte d'appel:
  * - IRQ audio uniquement, chemin ultra court.
  */
+/**
+ * @brief Point d'entrée engine_tasklet_notify_frames.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à engine_tasklet_notify_frames.
+ *
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void engine_tasklet_notify_frames(uint32_t frames)
 {
   engine_frames_accum += frames;
@@ -114,6 +147,16 @@ void engine_tasklet_notify_frames(uint32_t frames)
  *
  * Contexte d'appel:
  * - Main loop (non IRQ).
+ */
+/**
+ * @brief Point d'entrée engine_tasklet_poll.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à engine_tasklet_poll.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void engine_tasklet_poll(void)
 {

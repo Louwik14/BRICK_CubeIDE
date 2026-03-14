@@ -38,6 +38,17 @@ static audio_dsp_cb s_cb = 0;
  * Contraintes:
  * - O(1), sans allocation.
  */
+/**
+ * @brief Point d'entrée dsp_engine_set_callback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à dsp_engine_set_callback.
+ *
+ * @param cb Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void dsp_engine_set_callback(audio_dsp_cb cb)
 {
     s_cb = cb;
@@ -58,6 +69,19 @@ void dsp_engine_set_callback(audio_dsp_cb cb)
  *
  * Contraintes:
  * - Hard realtime: aucune attente, aucun appel bloquant.
+ */
+/**
+ * @brief Point d'entrée dsp_engine_process_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à dsp_engine_process_block.
+ *
+ * @param tracks Paramètre d'entrée de l'API.
+ * @param track_count Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void dsp_engine_process_block(StereoTrack *tracks,
                               uint32_t track_count,

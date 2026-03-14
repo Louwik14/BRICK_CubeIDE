@@ -38,6 +38,16 @@ static volatile uint32_t g_evt_read;
  * Contexte d'appel:
  * - Init application.
  */
+/**
+ * @brief Point d'entrée control_event_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à control_event_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void control_event_init(void)
 {
     g_evt_write = 0U;
@@ -56,6 +66,19 @@ void control_event_init(void)
  *
  * Contraintes:
  * - Non bloquant, O(1), sans malloc.
+ */
+/**
+ * @brief Point d'entrée control_event_push.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à control_event_push.
+ *
+ * @param evt Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 bool control_event_push(const control_event_t *evt)
 {
@@ -81,6 +104,19 @@ bool control_event_push(const control_event_t *evt)
  *
  * Contexte d'appel:
  * - IRQ audio (chemin DSP) ou tasklet selon usage.
+ */
+/**
+ * @brief Point d'entrée control_event_pop.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à control_event_pop.
+ *
+ * @param evt Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 bool control_event_pop(control_event_t *evt)
 {

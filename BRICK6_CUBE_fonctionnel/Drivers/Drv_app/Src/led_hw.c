@@ -1,3 +1,24 @@
+/**
+ * @file led_hw.c
+ * @brief Module applicatif led_hw.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à led_hw.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "led_hw.h"
 
 #include "tim.h"
@@ -16,6 +37,18 @@
 static uint32_t pwm_buffer[LED_HW_BUFFER_SIZE] __attribute__((section(".ram_d2_dma"), aligned(32)));
 static volatile uint8_t dma_busy = 0U;
 
+/**
+ * @brief Point d'entrée led_hw_encode.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_hw_encode.
+ *
+ * @param rgb Paramètre d'entrée de l'API.
+ * @param count Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void led_hw_encode(const uint8_t *rgb, uint32_t count)
 {
     uint32_t idx = 0U;
@@ -53,6 +86,17 @@ static void led_hw_encode(const uint8_t *rgb, uint32_t count)
     }
 }
 
+/**
+ * @brief Point d'entrée HAL_TIM_PWM_PulseFinishedCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à HAL_TIM_PWM_PulseFinishedCallback.
+ *
+ * @param htim Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM2)
@@ -62,6 +106,16 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
     }
 }
 
+/**
+ * @brief Point d'entrée led_hw_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_hw_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_hw_init(void)
 {
     HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
@@ -69,11 +123,35 @@ void led_hw_init(void)
     dma_busy = 0U;
 }
 
+/**
+ * @brief Point d'entrée led_hw_busy.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_hw_busy.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool led_hw_busy(void)
 {
     return (dma_busy != 0U);
 }
 
+/**
+ * @brief Point d'entrée led_hw_send.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à led_hw_send.
+ *
+ * @param rgb Paramètre d'entrée de l'API.
+ * @param count Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void led_hw_send(const uint8_t *rgb, uint32_t count)
 {
     if ((rgb == NULL) || (count == 0U) || (count > LED_HW_COUNT) || led_hw_busy())

@@ -35,6 +35,20 @@
  * @param col Index de colonne (0..4)
  * @return Octet contenant les 7 bits verticaux du glyphe.
  */
+/**
+ * @brief Point d'entrée get_col_5x7.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à get_col_5x7.
+ *
+ * @param c Paramètre d'entrée de l'API.
+ * @param col Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t get_col_5x7(char c, uint8_t col) {
     if (c < 32 || c > 126) return 0;
     if (col >= 5) return 0;
@@ -53,6 +67,20 @@ static uint8_t get_col_5x7(char c, uint8_t col) {
 static uint8_t font4x6_expanded[95][4] SDRAM_BSS;
 static bool font4x6_ready = false;
 /* Colonne Elektron: on expose 5 colonnes "dessin" (0..4) ; la 6e est l'espace (gérée via spacing) */
+/**
+ * @brief Point d'entrée get_col_5x8_elektron.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à get_col_5x8_elektron.
+ *
+ * @param c Paramètre d'entrée de l'API.
+ * @param col Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t get_col_5x8_elektron(char c, uint8_t col) {
     if ((uint8_t)c < FONT5X8_FIRST_CHAR || (uint8_t)c >= FONT5X8_LAST_CHAR) return 0;
     if (col >= 5) return 0; /* width logique = 5 */
@@ -63,6 +91,16 @@ static uint8_t get_col_5x8_elektron(char c, uint8_t col) {
  * @brief Décompresse la table `font4x6` en RAM pour accès direct colonne/ligne.
  *
  * Appelée automatiquement au premier accès (`lazy init`).
+ */
+/**
+ * @brief Point d'entrée expand_font4x6.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à expand_font4x6.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 static void expand_font4x6(void) {
     for (int c = 32; c <= 126; c++) {
@@ -89,6 +127,20 @@ static void expand_font4x6(void) {
  * @param c   Caractère ASCII (32..126)
  * @param col Index de colonne (0..3)
  * @return Octet contenant les 6 bits verticaux du glyphe.
+ */
+/**
+ * @brief Point d'entrée get_col_4x6.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à get_col_4x6.
+ *
+ * @param c Paramètre d'entrée de l'API.
+ * @param col Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 static uint8_t get_col_4x6(char c, uint8_t col) {
     if (c < 32 || c > 126) return 0;

@@ -43,6 +43,20 @@
  * Contraintes:
  * - Hard realtime, sans appel bloquant.
  */
+/**
+ * @brief Point d'entrée fx_chain_process_fx_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_chain_process_fx_slot.
+ *
+ * @param s Paramètre d'entrée de l'API.
+ * @param L Paramètre d'entrée de l'API.
+ * @param R Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t frames)
 {
     if (!s || !s->active || !s->state)
@@ -81,6 +95,19 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
  * Contexte d'appel:
  * - IRQ audio.
  */
+/**
+ * @brief Point d'entrée fx_chain_process_track0.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_chain_process_track0.
+ *
+ * @param L Paramètre d'entrée de l'API.
+ * @param R Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_chain_process_track0(float* L, float* R, uint32_t frames)
 {
     for (uint32_t i = 0; i < 3; i++)
@@ -99,6 +126,20 @@ void fx_chain_process_track0(float* L, float* R, uint32_t frames)
  *
  * Contexte d'appel:
  * - IRQ audio.
+ */
+/**
+ * @brief Point d'entrée fx_chain_process_slot.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_chain_process_slot.
+ *
+ * @param slot Paramètre d'entrée de l'API.
+ * @param L Paramètre d'entrée de l'API.
+ * @param R Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 void fx_chain_process_slot(uint32_t slot, float* L, float* R, uint32_t frames)
 {

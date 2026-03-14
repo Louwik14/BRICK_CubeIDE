@@ -52,6 +52,16 @@ static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offs
  * Public API
  * ========================================================= */
 
+/**
+ * @brief Point d'entrée SDRAM_Init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SDRAM_Init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void SDRAM_Init(void)
 {
     const char *msg = "Starting SDRAM init...\r\n";
@@ -63,6 +73,16 @@ void SDRAM_Init(void)
     HAL_UART_Transmit(&huart1, (uint8_t *)msg, strlen(msg), 10);
 }
 
+/**
+ * @brief Point d'entrée SDRAM_Test.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SDRAM_Test.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void SDRAM_Test(void)
 {
     uint32_t index = 0;
@@ -122,6 +142,18 @@ void SDRAM_Test(void)
  * SDRAM Initialization Sequence (ST style)
  * ========================================================= */
 
+/**
+ * @brief Point d'entrée SDRAM_Initialization_Sequence.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SDRAM_Initialization_Sequence.
+ *
+ * @param hsdram Paramètre d'entrée de l'API.
+ * @param command Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
                                           FMC_SDRAM_CommandTypeDef *command)
 {
@@ -171,6 +203,19 @@ static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
  * Utils
  * ========================================================= */
 
+/**
+ * @brief Point d'entrée Fill_Buffer.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à Fill_Buffer.
+ *
+ * @param pBuffer Paramètre d'entrée de l'API.
+ * @param buffer_length Paramètre d'entrée de l'API.
+ * @param offset Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offset)
 {
     for (uint32_t index = 0; index < buffer_length; index++)

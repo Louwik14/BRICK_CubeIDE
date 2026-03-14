@@ -1,3 +1,24 @@
+/**
+ * @file voice_manager.c
+ * @brief Module applicatif voice_manager.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à voice_manager.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "Sampler/voice_manager.h"
 
 #include <math.h>
@@ -13,11 +34,35 @@ static uint32_t s_voice_generation[VOICE_MANAGER_MAX_VOICES];
 static uint32_t s_generation_counter;
 static uint32_t s_process_call_count;
 
+/**
+ * @brief Point d'entrée finite_or_zero.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à finite_or_zero.
+ *
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float finite_or_zero(float v)
 {
     return isfinite(v) ? v : 0.0f;
 }
 
+/**
+ * @brief Point d'entrée voice_clear.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à voice_clear.
+ *
+ * @param index Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void voice_clear(uint32_t index)
 {
     voices[index].sample_id = 0U;
@@ -33,6 +78,16 @@ static void voice_clear(uint32_t index)
     s_voice_generation[index] = 0U;
 }
 
+/**
+ * @brief Point d'entrée voice_manager_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à voice_manager_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void voice_manager_init(void)
 {
     for(uint32_t i = 0U; i < VOICE_MANAGER_MAX_VOICES; i++)
@@ -42,6 +97,19 @@ void voice_manager_init(void)
     s_process_call_count = 0U;
 }
 
+/**
+ * @brief Point d'entrée voice_manager_trigger.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à voice_manager_trigger.
+ *
+ * @param sample_id Paramètre d'entrée de l'API.
+ * @param gain_l Paramètre d'entrée de l'API.
+ * @param gain_r Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 {
     const sample_desc_t *sample_desc = sample_pool_get(sample_id);
@@ -94,10 +162,33 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
         s_generation_counter = 1U;
 }
 
+/**
+ * @brief Point d'entrée voice_manager_service.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à voice_manager_service.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void voice_manager_service(void)
 {
 }
 
+/**
+ * @brief Point d'entrée voice_manager_process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à voice_manager_process.
+ *
+ * @param out_l Paramètre d'entrée de l'API.
+ * @param out_r Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
 {
     if((out_l == NULL) || (out_r == NULL) || (frames == 0U))

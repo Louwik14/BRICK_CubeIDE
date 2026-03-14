@@ -1,3 +1,24 @@
+/**
+ * @file encoders_hw.c
+ * @brief Module applicatif encoders_hw.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à encoders_hw.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "encoders_hw.h"
 
 #include "stm32h7xx.h"
@@ -27,11 +48,38 @@ static const int8_t quad_table[16] = {
      0, +1, -1,  0,
 };
 
+/**
+ * @brief Point d'entrée enc_read_pin.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à enc_read_pin.
+ *
+ * @param port Paramètre d'entrée de l'API.
+ * @param pin Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline uint8_t enc_read_pin(GPIO_TypeDef *port, uint32_t pin)
 {
     return ((port->IDR & pin) != 0U) ? 1U : 0U;
 }
 
+/**
+ * @brief Point d'entrée enc_read_state.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à enc_read_state.
+ *
+ * @param encoder Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t enc_read_state(uint8_t encoder)
 {
     const encoder_hw_pin_t *h = &enc_hw_pins[encoder];
@@ -40,6 +88,16 @@ static uint8_t enc_read_state(uint8_t encoder)
     return (uint8_t)((a << 1) | b);
 }
 
+/**
+ * @brief Point d'entrée encoders_hw_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoders_hw_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void encoders_hw_init(void)
 {
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
@@ -49,6 +107,16 @@ void encoders_hw_init(void)
     }
 }
 
+/**
+ * @brief Point d'entrée encoders_hw_read.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoders_hw_read.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void encoders_hw_read(void)
 {
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
@@ -75,6 +143,19 @@ void encoders_hw_read(void)
     }
 }
 
+/**
+ * @brief Point d'entrée encoders_hw_get_delta.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoders_hw_get_delta.
+ *
+ * @param encoder Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int8_t encoders_hw_get_delta(uint8_t encoder)
 {
     if (encoder >= (uint8_t)ENC_COUNT)

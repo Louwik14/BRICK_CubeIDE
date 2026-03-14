@@ -1,3 +1,24 @@
+/**
+ * @file sd_multitrack_recorder.c
+ * @brief Module applicatif sd_multitrack_recorder.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à sd_multitrack_recorder.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "sd_multitrack_recorder.h"
 
 #include <stdio.h>
@@ -142,6 +163,19 @@ static ALIGN32 uint8_t g_writer_pcm24_block[REC_RING_MAX_SLOT_WORDS * 3U];
 
 _Static_assert(sizeof(recorder_wav_header_t) == 44U, "WAV header must be 44 bytes");
 
+/**
+ * @brief Point d'entrée recorder_ring_count.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_ring_count.
+ *
+ * @param ring Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint32_t recorder_ring_count(const recorder_ring_t *ring)
 {
     const uint32_t wr = ring->write_idx;
@@ -149,6 +183,18 @@ static uint32_t recorder_ring_count(const recorder_ring_t *ring)
     return (wr >= rd) ? (wr - rd) : (ring->slot_count - (rd - wr));
 }
 
+/**
+ * @brief Point d'entrée recorder_ring_reset.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_ring_reset.
+ *
+ * @param ring Paramètre d'entrée de l'API.
+ * @param channels Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void recorder_ring_reset(recorder_ring_t *ring, uint32_t channels)
 {
     ring->write_idx = 0U;
@@ -157,6 +203,22 @@ static void recorder_ring_reset(recorder_ring_t *ring, uint32_t channels)
     ring->slot_words = AUDIO_BLOCK_SIZE * ((channels == 1U) ? 1U : 2U);
 }
 
+/**
+ * @brief Point d'entrée recorder_ring_push_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_ring_push_block.
+ *
+ * @param stem Paramètre d'entrée de l'API.
+ * @param src_l Paramètre d'entrée de l'API.
+ * @param src_r Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_ring_push_block(recorder_stem_t *stem,
                                         const float *src_l,
                                         const float *src_r,
@@ -208,6 +270,21 @@ static uint8_t recorder_ring_push_block(recorder_stem_t *stem,
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_ring_pop_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_ring_pop_block.
+ *
+ * @param stem Paramètre d'entrée de l'API.
+ * @param dst_interleaved Paramètre d'entrée de l'API.
+ * @param dst_words Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_ring_pop_block(recorder_stem_t *stem,
                                        float *dst_interleaved,
                                        uint32_t dst_words)
@@ -228,6 +305,19 @@ static uint8_t recorder_ring_pop_block(recorder_stem_t *stem,
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_cmd_push.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_cmd_push.
+ *
+ * @param cmd Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_cmd_push(const recorder_cmd_t *cmd)
 {
     if(cmd == 0)
@@ -251,6 +341,19 @@ static uint8_t recorder_cmd_push(const recorder_cmd_t *cmd)
     return accepted;
 }
 
+/**
+ * @brief Point d'entrée recorder_cmd_pop.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_cmd_pop.
+ *
+ * @param cmd Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_cmd_pop(recorder_cmd_t *cmd)
 {
     if(cmd == 0)
@@ -264,6 +367,17 @@ static uint8_t recorder_cmd_pop(recorder_cmd_t *cmd)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_set_state.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_set_state.
+ *
+ * @param next Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void recorder_set_state(sd_recorder_state_t next)
 {
     if(g_rec.state != next)
@@ -273,6 +387,18 @@ static void recorder_set_state(sd_recorder_state_t next)
     }
 }
 
+/**
+ * @brief Point d'entrée recorder_has_armed_stems.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_has_armed_stems.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_has_armed_stems(void)
 {
     for(uint32_t i = 0U; i < SD_RECORDER_MAX_STEMS; i++)
@@ -283,6 +409,18 @@ static uint8_t recorder_has_armed_stems(void)
     return 0U;
 }
 
+/**
+ * @brief Point d'entrée recorder_count_armed_stems.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_count_armed_stems.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint32_t recorder_count_armed_stems(void)
 {
     uint32_t c = 0U;
@@ -294,6 +432,19 @@ static uint32_t recorder_count_armed_stems(void)
     return c;
 }
 
+/**
+ * @brief Point d'entrée recorder_pcm24_pack.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_pcm24_pack.
+ *
+ * @param src Paramètre d'entrée de l'API.
+ * @param words Paramètre d'entrée de l'API.
+ * @param dst Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void recorder_pcm24_pack(const float *src, uint32_t words, uint8_t *dst)
 {
     for(uint32_t i = 0U; i < words; i++)
@@ -316,6 +467,19 @@ static void recorder_pcm24_pack(const float *src, uint32_t words, uint8_t *dst)
     }
 }
 
+/**
+ * @brief Point d'entrée recorder_build_wav_header.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_build_wav_header.
+ *
+ * @param hdr Paramètre d'entrée de l'API.
+ * @param channels Paramètre d'entrée de l'API.
+ * @param data_bytes Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void recorder_build_wav_header(recorder_wav_header_t *hdr,
                                       uint16_t channels,
                                       uint32_t data_bytes)
@@ -337,6 +501,18 @@ static void recorder_build_wav_header(recorder_wav_header_t *hdr,
     hdr->data_size = data_bytes;
 }
 
+/**
+ * @brief Point d'entrée recorder_mount_fs.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_mount_fs.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_mount_fs(void)
 {
     if(g_rec.fs_mounted != 0U)
@@ -349,6 +525,19 @@ static uint8_t recorder_mount_fs(void)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_get_free_bytes.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_get_free_bytes.
+ *
+ * @param out_free_bytes Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_get_free_bytes(uint64_t *out_free_bytes)
 {
     if(out_free_bytes == 0)
@@ -367,6 +556,18 @@ static uint8_t recorder_get_free_bytes(uint64_t *out_free_bytes)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_prepare_files.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_prepare_files.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_prepare_files(void)
 {
     if(g_rec.files_prepared != 0U)
@@ -455,6 +656,16 @@ static uint8_t recorder_prepare_files(void)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_close_all_files.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_close_all_files.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void recorder_close_all_files(void)
 {
     for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
@@ -469,6 +680,18 @@ static void recorder_close_all_files(void)
     g_rec.files_prepared = 0U;
 }
 
+/**
+ * @brief Point d'entrée recorder_patch_headers_and_close.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_patch_headers_and_close.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_patch_headers_and_close(void)
 {
     for(uint32_t stem_id = 0U; stem_id < SD_RECORDER_MAX_STEMS; stem_id++)
@@ -508,6 +731,18 @@ static uint8_t recorder_patch_headers_and_close(void)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_pick_most_filled_stem.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_pick_most_filled_stem.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int32_t recorder_pick_most_filled_stem(void)
 {
     int32_t best = -1;
@@ -530,6 +765,17 @@ static int32_t recorder_pick_most_filled_stem(void)
     return best;
 }
 
+/**
+ * @brief Point d'entrée recorder_try_periodic_sync.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_try_periodic_sync.
+ *
+ * @param stem Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void recorder_try_periodic_sync(recorder_stem_t *stem)
 {
     if((stem == 0) || (stem->file_open == 0U) || (stem->io_failed != 0U))
@@ -558,6 +804,19 @@ static void recorder_try_periodic_sync(recorder_stem_t *stem)
     }
 }
 
+/**
+ * @brief Point d'entrée recorder_discard_one_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_discard_one_block.
+ *
+ * @param stem Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_discard_one_block(recorder_stem_t *stem)
 {
     if((stem == 0) || (recorder_ring_count(&stem->ring) == 0U))
@@ -567,6 +826,20 @@ static uint8_t recorder_discard_one_block(recorder_stem_t *stem)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée recorder_drain_one_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à recorder_drain_one_block.
+ *
+ * @param stem Paramètre d'entrée de l'API.
+ * @param io_budget Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budget)
 {
     if((stem == 0) || (io_budget == 0) || (*io_budget == 0U))
@@ -631,6 +904,16 @@ static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budg
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_init(void)
 {
     memset(&g_rec, 0, sizeof(g_rec));
@@ -645,6 +928,17 @@ void sd_recorder_init(void)
     g_rec.state = SD_RECORDER_STATE_IDLE;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_set_writer_budget.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_set_writer_budget.
+ *
+ * @param max_bytes_per_call Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_set_writer_budget(uint32_t max_bytes_per_call)
 {
     if(max_bytes_per_call == 0U)
@@ -653,6 +947,18 @@ void sd_recorder_set_writer_budget(uint32_t max_bytes_per_call)
     g_rec.writer_budget_bytes = max_bytes_per_call;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_request_start.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_request_start.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t sd_recorder_request_start(void)
 {
     recorder_cmd_t cmd;
@@ -667,6 +973,18 @@ uint8_t sd_recorder_request_start(void)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_request_stop.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_request_stop.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t sd_recorder_request_stop(void)
 {
     recorder_cmd_t cmd;
@@ -681,6 +999,20 @@ uint8_t sd_recorder_request_stop(void)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_request_arm_stem.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_request_arm_stem.
+ *
+ * @param stem_id Paramètre d'entrée de l'API.
+ * @param cfg Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t sd_recorder_request_arm_stem(uint8_t stem_id,
                                      const sd_recorder_stem_cfg_t *cfg)
 {
@@ -706,6 +1038,19 @@ uint8_t sd_recorder_request_arm_stem(uint8_t stem_id,
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_request_disarm_stem.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_request_disarm_stem.
+ *
+ * @param stem_id Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t sd_recorder_request_disarm_stem(uint8_t stem_id)
 {
     if(stem_id >= SD_RECORDER_MAX_STEMS)
@@ -729,6 +1074,17 @@ uint8_t sd_recorder_request_disarm_stem(uint8_t stem_id)
     return 1U;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_audio_block_begin.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_audio_block_begin.
+ *
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_audio_block_begin(uint32_t frames)
 {
     (void)frames;
@@ -825,6 +1181,21 @@ void sd_recorder_audio_block_begin(uint32_t frames)
     }
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_capture_tap_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_capture_tap_block.
+ *
+ * @param tap Paramètre d'entrée de l'API.
+ * @param bus_id Paramètre d'entrée de l'API.
+ * @param src_l Paramètre d'entrée de l'API.
+ * @param src_r Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
                                    uint8_t bus_id,
                                    const float *src_l,
@@ -848,6 +1219,16 @@ void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
     }
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_writer_service.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_writer_service.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_writer_service(void)
 {
     g_rec.writer_calls++;
@@ -939,6 +1320,19 @@ void sd_recorder_writer_service(void)
 }
 
 
+/**
+ * @brief Point d'entrée sd_recorder_get_ring_fill.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_get_ring_fill.
+ *
+ * @param stem_id Paramètre d'entrée de l'API.
+ * @param out_fill Paramètre d'entrée de l'API.
+ * @param out_capacity Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_get_ring_fill(uint32_t stem_id,
                                uint32_t *out_fill,
                                uint32_t *out_capacity)
@@ -957,11 +1351,34 @@ void sd_recorder_get_ring_fill(uint32_t stem_id,
         *out_capacity = g_rec.stems[stem_id].ring.slot_count;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_get_state.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_get_state.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 sd_recorder_state_t sd_recorder_get_state(void)
 {
     return g_rec.state;
 }
 
+/**
+ * @brief Point d'entrée sd_recorder_get_debug.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sd_recorder_get_debug.
+ *
+ * @param out_debug Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void sd_recorder_get_debug(sd_recorder_debug_t *out_debug)
 {
     if(out_debug == 0)

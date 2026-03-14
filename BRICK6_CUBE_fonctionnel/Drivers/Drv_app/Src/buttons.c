@@ -1,3 +1,24 @@
+/**
+ * @file buttons.c
+ * @brief Module applicatif buttons.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à buttons.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "buttons.h"
 
 #include <string.h>
@@ -25,6 +46,17 @@ static button_state_t button_states[BTN_COUNT];
  * - Called only from tasklet context (never IRQ).
  * - Called only on debounced press edges.
  * - Drops messages if UART is busy to avoid contention/blocking.
+ */
+/**
+ * @brief Point d'entrée buttons_debug_log_press.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à buttons_debug_log_press.
+ *
+ * @param btn Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
  */
 static void buttons_debug_log_press(button_id_t btn)
 {
@@ -54,6 +86,16 @@ static void buttons_debug_log_press(button_id_t btn)
 }
 #endif
 
+/**
+ * @brief Point d'entrée buttons_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à buttons_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void buttons_init(void)
 {
     memset(button_states, 0, sizeof(button_states));
@@ -69,6 +111,17 @@ void buttons_init(void)
     }
 }
 
+/**
+ * @brief Point d'entrée buttons_update.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à buttons_update.
+ *
+ * @param dt_ms Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void buttons_update(uint32_t dt_ms)
 {
     buttons_hw_read();
@@ -114,6 +167,19 @@ void buttons_update(uint32_t dt_ms)
     }
 }
 
+/**
+ * @brief Point d'entrée button_pressed.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à button_pressed.
+ *
+ * @param btn Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t button_pressed(button_id_t btn)
 {
     if ((uint32_t)btn >= (uint32_t)BTN_COUNT)
@@ -124,6 +190,19 @@ uint8_t button_pressed(button_id_t btn)
     return button_states[(uint32_t)btn].pressed;
 }
 
+/**
+ * @brief Point d'entrée button_released.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à button_released.
+ *
+ * @param btn Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t button_released(button_id_t btn)
 {
     if ((uint32_t)btn >= (uint32_t)BTN_COUNT)
@@ -134,6 +213,19 @@ uint8_t button_released(button_id_t btn)
     return button_states[(uint32_t)btn].released;
 }
 
+/**
+ * @brief Point d'entrée button_down.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à button_down.
+ *
+ * @param btn Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t button_down(button_id_t btn)
 {
     if ((uint32_t)btn >= (uint32_t)BTN_COUNT)

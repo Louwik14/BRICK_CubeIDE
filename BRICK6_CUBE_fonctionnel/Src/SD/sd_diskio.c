@@ -115,6 +115,19 @@ const Diskio_drvTypeDef  SD_Driver =
 
 /* Private functions ---------------------------------------------------------*/
 
+/**
+ * @brief Point d'entrée SD_CheckStatusWithTimeout.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_CheckStatusWithTimeout.
+ *
+ * @param timeout Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int SD_CheckStatusWithTimeout(uint32_t timeout)
 {
   uint32_t timer = HAL_GetTick();
@@ -130,6 +143,19 @@ static int SD_CheckStatusWithTimeout(uint32_t timeout)
   return -1;
 }
 
+/**
+ * @brief Point d'entrée SD_CheckStatus.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_CheckStatus.
+ *
+ * @param lun Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static DSTATUS SD_CheckStatus(BYTE lun)
 {
   Stat = STA_NOINIT;
@@ -147,6 +173,19 @@ static DSTATUS SD_CheckStatus(BYTE lun)
   * @param  lun : not used
   * @retval DSTATUS: Operation status
   */
+/**
+ * @brief Point d'entrée SD_initialize.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_initialize.
+ *
+ * @param lun Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 DSTATUS SD_initialize(BYTE lun)
 {
 
@@ -169,6 +208,19 @@ DSTATUS SD_initialize(BYTE lun)
   * @param  lun : not used
   * @retval DSTATUS: Operation status
   */
+/**
+ * @brief Point d'entrée SD_status.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_status.
+ *
+ * @param lun Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 DSTATUS SD_status(BYTE lun)
 {
   return SD_CheckStatus(lun);
@@ -186,6 +238,22 @@ DSTATUS SD_status(BYTE lun)
   * @retval DRESULT: Operation result
   */
 
+/**
+ * @brief Point d'entrée SD_read.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_read.
+ *
+ * @param lun Paramètre d'entrée de l'API.
+ * @param buff Paramètre d'entrée de l'API.
+ * @param sector Paramètre d'entrée de l'API.
+ * @param count Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
@@ -308,6 +376,22 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   */
 #if _USE_WRITE == 1
 
+/**
+ * @brief Point d'entrée SD_write.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_write.
+ *
+ * @param lun Paramètre d'entrée de l'API.
+ * @param buff Paramètre d'entrée de l'API.
+ * @param sector Paramètre d'entrée de l'API.
+ * @param count Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
@@ -427,6 +511,21 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_IOCTL == 1
+/**
+ * @brief Point d'entrée SD_ioctl.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à SD_ioctl.
+ *
+ * @param lun Paramètre d'entrée de l'API.
+ * @param cmd Paramètre d'entrée de l'API.
+ * @param buff Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 DRESULT SD_ioctl(BYTE lun, BYTE cmd, void *buff)
 {
   DRESULT res = RES_ERROR;
@@ -482,6 +581,16 @@ DRESULT SD_ioctl(BYTE lun, BYTE cmd, void *buff)
   * @param hsd: SD handle
   * @retval None
   */
+/**
+ * @brief Point d'entrée BSP_SD_WriteCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_WriteCpltCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void BSP_SD_WriteCpltCallback(void)
 {
 
@@ -493,6 +602,16 @@ void BSP_SD_WriteCpltCallback(void)
   * @param hsd: SD handle
   * @retval None
   */
+/**
+ * @brief Point d'entrée BSP_SD_ReadCpltCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_ReadCpltCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void BSP_SD_ReadCpltCallback(void)
 {
   ReadStatus = 1;
@@ -504,10 +623,30 @@ void BSP_SD_ReadCpltCallback(void)
   depending on the SD_HAL_Driver version, either the HAL_SD_ErrorCallback() or HAL_SD_AbortCallback()
   or both could be defined, activate the callbacks below when suitable and needed
 ==============================================================================================
+/**
+ * @brief Point d'entrée BSP_SD_AbortCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_AbortCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void BSP_SD_AbortCallback(void)
 {
 }
 
+/**
+ * @brief Point d'entrée BSP_SD_ErrorCallback.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à BSP_SD_ErrorCallback.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void BSP_SD_ErrorCallback(void)
 {
 }

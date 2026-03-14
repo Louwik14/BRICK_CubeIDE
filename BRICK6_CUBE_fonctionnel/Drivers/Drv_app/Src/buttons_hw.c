@@ -1,3 +1,24 @@
+/**
+ * @file buttons_hw.c
+ * @brief Module applicatif buttons_hw.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à buttons_hw.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "buttons_hw.h"
 #include "main.h"
 
@@ -57,26 +78,78 @@ static const uint8_t button_physical_to_logical[BTN_COUNT] = {
 
 /* --------- GPIO helpers --------- */
 
+/**
+ * @brief Point d'entrée sr_pl_low.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sr_pl_low.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline void sr_pl_low(void)
 {
     SR_CS_GPIO_Port->BSRR = ((uint32_t)SR_CS_Pin << 16U);
 }
 
+/**
+ * @brief Point d'entrée sr_pl_high.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sr_pl_high.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline void sr_pl_high(void)
 {
     SR_CS_GPIO_Port->BSRR = SR_CS_Pin;
 }
 
+/**
+ * @brief Point d'entrée sr_sck_low.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sr_sck_low.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline void sr_sck_low(void)
 {
     SR_SCK_GPIO_Port->BSRR = ((uint32_t)SR_SCK_Pin << 16U);
 }
 
+/**
+ * @brief Point d'entrée sr_sck_high.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sr_sck_high.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline void sr_sck_high(void)
 {
     SR_SCK_GPIO_Port->BSRR = SR_SCK_Pin;
 }
 
+/**
+ * @brief Point d'entrée sr_data_read.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à sr_data_read.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline uint32_t sr_data_read(void)
 {
     return (SR_DATA_GPIO_Port->IDR & SR_DATA_Pin) ? 1U : 0U;
@@ -84,6 +157,16 @@ static inline uint32_t sr_data_read(void)
 
 /* --------- Init --------- */
 
+/**
+ * @brief Point d'entrée buttons_hw_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à buttons_hw_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void buttons_hw_init(void)
 {
     for(uint32_t i = 0; i < BTN_COUNT; i++)
@@ -95,6 +178,16 @@ void buttons_hw_init(void)
 
 /* --------- Read shift registers --------- */
 
+/**
+ * @brief Point d'entrée buttons_hw_read.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à buttons_hw_read.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void buttons_hw_read(void)
 {
     uint32_t raw = 0;
@@ -133,6 +226,19 @@ void buttons_hw_read(void)
 
 /* --------- API --------- */
 
+/**
+ * @brief Point d'entrée buttons_hw_get.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à buttons_hw_get.
+ *
+ * @param btn Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t buttons_hw_get(button_id_t btn)
 {
     if(btn >= BTN_COUNT)

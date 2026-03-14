@@ -36,6 +36,19 @@ extern USBH_HandleTypeDef hUsbHostHS;
 static uint8_t midi_host_rx_packet[USBH_MIDI_PACKET_SIZE];
 static uint8_t midi_host_tx_packet[USBH_MIDI_PACKET_SIZE];
 
+/**
+ * @brief Point d'entrée midi_host_cin_to_length.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à midi_host_cin_to_length.
+ *
+ * @param cin Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static uint8_t midi_host_cin_to_length(uint8_t cin)
 {
   static const uint8_t cin_len[16] = {
@@ -46,11 +59,32 @@ static uint8_t midi_host_cin_to_length(uint8_t cin)
   return cin_len[cin & 0x0FU];
 }
 
+/**
+ * @brief Point d'entrée midi_host_poll.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à midi_host_poll.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void midi_host_poll(void)
 {
   midi_host_poll_bounded(8); // budget fixe simple
 }
 
+/**
+ * @brief Point d'entrée midi_host_poll_bounded.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à midi_host_poll_bounded.
+ *
+ * @param max_msgs Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void midi_host_poll_bounded(uint32_t max_msgs)
 {
 #if BRICK6_ENABLE_DIAGNOSTICS
@@ -89,6 +123,21 @@ void midi_host_poll_bounded(uint32_t max_msgs)
 #endif
 }
 
+/**
+ * @brief Point d'entrée midi_host_encode_packet.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à midi_host_encode_packet.
+ *
+ * @param msg Paramètre d'entrée de l'API.
+ * @param len Paramètre d'entrée de l'API.
+ * @param packet Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static bool midi_host_encode_packet(const uint8_t *msg, size_t len,
                                     uint8_t packet[USBH_MIDI_PACKET_SIZE])
 {
@@ -139,6 +188,20 @@ static bool midi_host_encode_packet(const uint8_t *msg, size_t len,
   return true;
 }
 
+/**
+ * @brief Point d'entrée midi_host_send.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à midi_host_send.
+ *
+ * @param msg Paramètre d'entrée de l'API.
+ * @param len Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool midi_host_send(const uint8_t *msg, size_t len)
 {
   if (!USBH_MIDI_IsReady(&hUsbHostHS))

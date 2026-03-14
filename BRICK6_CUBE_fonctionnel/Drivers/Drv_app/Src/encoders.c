@@ -1,3 +1,24 @@
+/**
+ * @file encoders.c
+ * @brief Module applicatif encoders.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à encoders.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "encoders.h"
 
 #include "encoders_hw.h"
@@ -6,6 +27,19 @@
 
 static int16_t enc_accumulated_delta[ENC_COUNT];
 
+/**
+ * @brief Point d'entrée encoder_clamp_step.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoder_clamp_step.
+ *
+ * @param value Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int16_t encoder_clamp_step(int16_t value)
 {
     if (value > ENCODER_MAX_STEP_PER_TICK)
@@ -21,6 +55,20 @@ static int16_t encoder_clamp_step(int16_t value)
     return value;
 }
 
+/**
+ * @brief Point d'entrée encoder_accumulate_saturating.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoder_accumulate_saturating.
+ *
+ * @param current Paramètre d'entrée de l'API.
+ * @param delta Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int16_t encoder_accumulate_saturating(int16_t current, int16_t delta)
 {
     int32_t sum = (int32_t)current + (int32_t)delta;
@@ -37,6 +85,16 @@ static int16_t encoder_accumulate_saturating(int16_t current, int16_t delta)
     return (int16_t)sum;
 }
 
+/**
+ * @brief Point d'entrée encoders_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoders_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void encoders_init(void)
 {
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
@@ -47,6 +105,17 @@ void encoders_init(void)
     encoders_hw_init();
 }
 
+/**
+ * @brief Point d'entrée encoders_update.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoders_update.
+ *
+ * @param dt_ms Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void encoders_update(uint32_t dt_ms)
 {
     (void)dt_ms;
@@ -67,6 +136,19 @@ void encoders_update(uint32_t dt_ms)
     }
 }
 
+/**
+ * @brief Point d'entrée encoder_get_delta.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoder_get_delta.
+ *
+ * @param encoder Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int16_t encoder_get_delta(uint8_t encoder)
 {
     if (encoder >= (uint8_t)ENC_COUNT)
@@ -77,6 +159,19 @@ int16_t encoder_get_delta(uint8_t encoder)
     return enc_accumulated_delta[encoder];
 }
 
+/**
+ * @brief Point d'entrée encoder_consume_delta.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à encoder_consume_delta.
+ *
+ * @param encoder Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int16_t encoder_consume_delta(uint8_t encoder)
 {
     if (encoder >= (uint8_t)ENC_COUNT)

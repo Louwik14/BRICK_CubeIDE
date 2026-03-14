@@ -21,6 +21,16 @@ typedef struct {
 
 static param_store_t g_ps;
 
+/**
+ * @brief Point d'entrée param_store_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void param_store_init(void)
 {
     memset(&g_ps, 0, sizeof(g_ps));
@@ -37,6 +47,18 @@ void param_store_init(void)
     g_ps.last_commit_block = g_audio_block_counter;
 }
 
+/**
+ * @brief Point d'entrée param_store_set_staging.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_set_staging.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void param_store_set_staging(param_id_t id, float v)
 {
     if (id >= PARAM_COUNT)
@@ -46,6 +68,18 @@ void param_store_set_staging(param_id_t id, float v)
     g_ps.dirty = 1U;
 }
 
+/**
+ * @brief Point d'entrée param_store_set_active.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_set_active.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ * @param v Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void param_store_set_active(param_id_t id, float v)
 {
     if (id >= PARAM_COUNT)
@@ -55,6 +89,18 @@ void param_store_set_active(param_id_t id, float v)
     g_ps.active[id] = v;
 }
 
+/**
+ * @brief Point d'entrée param_store_commit_if_block_advanced.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_commit_if_block_advanced.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool param_store_commit_if_block_advanced(void)
 {
     if (g_ps.dirty == 0U)
@@ -83,6 +129,19 @@ bool param_store_commit_if_block_advanced(void)
     return true;
 }
 
+/**
+ * @brief Point d'entrée param_store_get_active.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_get_active.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 float param_store_get_active(param_id_t id)
 {
     if (id >= PARAM_COUNT)
@@ -91,11 +150,35 @@ float param_store_get_active(param_id_t id)
     return g_ps.active[id];
 }
 
+/**
+ * @brief Point d'entrée param_store_get_commit_count.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_get_commit_count.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint32_t param_store_get_commit_count(void)
 {
     return g_ps.commit_count;
 }
 
+/**
+ * @brief Point d'entrée param_store_get_last_commit_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à param_store_get_last_commit_block.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint32_t param_store_get_last_commit_block(void)
 {
     return g_ps.last_commit_block;

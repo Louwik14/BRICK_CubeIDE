@@ -97,6 +97,19 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost);
 static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost);
+/**
+ * @brief Point d'entrée USBH_MIDI_SOFProcess.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_SOFProcess.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static USBH_StatusTypeDef USBH_MIDI_SOFProcess(USBH_HandleTypeDef *phost)
 {
     (void)phost;
@@ -117,6 +130,17 @@ USBH_ClassTypeDef USBH_MIDI_Class = {
 };
 
 
+/**
+ * @brief Point d'entrée USBH_MIDI_ResetHandle.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_ResetHandle.
+ *
+ * @param handle Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void USBH_MIDI_ResetHandle(USBH_MIDI_HandleTypeDef *handle)
 {
   (void)USBH_memset(handle, 0, sizeof(*handle));
@@ -126,6 +150,19 @@ static void USBH_MIDI_ResetHandle(USBH_MIDI_HandleTypeDef *handle)
   handle->tx_state = USBH_MIDI_TX_IDLE;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_InterfaceInit.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_InterfaceInit.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
 {
   USBH_UsrLog("USBH_MIDI_InterfaceInit");
@@ -246,6 +283,19 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceInit(USBH_HandleTypeDef *phost)
   return USBH_OK;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_InterfaceDeInit.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_InterfaceDeInit.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
 {
   USBH_UsrLog("USBH_MIDI_InterfaceDeInit (disconnect)");
@@ -282,6 +332,19 @@ static USBH_StatusTypeDef USBH_MIDI_InterfaceDeInit(USBH_HandleTypeDef *phost)
   return USBH_OK;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_ClassRequest.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_ClassRequest.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
 {
   (void)phost;
@@ -289,6 +352,18 @@ static USBH_StatusTypeDef USBH_MIDI_ClassRequest(USBH_HandleTypeDef *phost)
   return USBH_OK;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_PushRx.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_PushRx.
+ *
+ * @param handle Paramètre d'entrée de l'API.
+ * @param packet Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
                             const uint8_t packet[USBH_MIDI_PACKET_SIZE])
 {
@@ -305,6 +380,20 @@ static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
   handle->rx_count++;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_PopTx.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_PopTx.
+ *
+ * @param handle Paramètre d'entrée de l'API.
+ * @param packet Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static bool USBH_MIDI_PopTx(USBH_MIDI_HandleTypeDef *handle,
                            uint8_t packet[USBH_MIDI_PACKET_SIZE])
 {
@@ -322,6 +411,18 @@ static bool USBH_MIDI_PopTx(USBH_MIDI_HandleTypeDef *handle,
   return true;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_ProcessRx.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_ProcessRx.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ * @param handle Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeDef *handle)
 {
   switch (handle->rx_state)
@@ -385,6 +486,18 @@ static void USBH_MIDI_ProcessRx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
   }
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_ProcessTx.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_ProcessTx.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ * @param handle Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeDef *handle)
 {
   switch (handle->tx_state)
@@ -436,6 +549,19 @@ static void USBH_MIDI_ProcessTx(USBH_HandleTypeDef *phost, USBH_MIDI_HandleTypeD
   }
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_Process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_Process.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
 {
   if ((phost == NULL) || (phost->pActiveClass == NULL))
@@ -455,6 +581,20 @@ static USBH_StatusTypeDef USBH_MIDI_Process(USBH_HandleTypeDef *phost)
   return USBH_OK;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_ReadPacket.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_ReadPacket.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ * @param packet Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
                                         uint8_t packet[USBH_MIDI_PACKET_SIZE])
 {
@@ -480,6 +620,20 @@ USBH_StatusTypeDef USBH_MIDI_ReadPacket(USBH_HandleTypeDef *phost,
   return USBH_OK;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_Transmit.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_Transmit.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ * @param packet Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 USBH_StatusTypeDef USBH_MIDI_Transmit(USBH_HandleTypeDef *phost,
                                       const uint8_t packet[USBH_MIDI_PACKET_SIZE])
 {
@@ -505,6 +659,19 @@ USBH_StatusTypeDef USBH_MIDI_Transmit(USBH_HandleTypeDef *phost,
   return USBH_OK;
 }
 
+/**
+ * @brief Point d'entrée USBH_MIDI_IsReady.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à USBH_MIDI_IsReady.
+ *
+ * @param phost Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool USBH_MIDI_IsReady(USBH_HandleTypeDef *phost)
 {
   if ((phost == NULL) || (phost->pActiveClass == NULL) || (phost->pActiveClass != &USBH_MIDI_Class))

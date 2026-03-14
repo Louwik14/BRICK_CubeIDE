@@ -1,3 +1,24 @@
+/**
+ * @file fx_dj_eq3_cmsis.c
+ * @brief Module applicatif fx_dj_eq3_cmsis.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à fx_dj_eq3_cmsis.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "fx_dj_eq3_cmsis.h"
 
 #include <math.h>
@@ -11,6 +32,21 @@
 #define FX_DJ_EQ3_PARAM_DB_EPS  (0.10f)
 #define FX_DJ_EQ3_SANITIZE_OUTPUT 0
 
+/**
+ * @brief Point d'entrée fx_clamp.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_clamp.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ * @param lo Paramètre d'entrée de l'API.
+ * @param hi Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline float fx_clamp(float x, float lo, float hi)
 {
     if(x < lo)
@@ -24,16 +60,56 @@ static inline float fx_clamp(float x, float lo, float hi)
     return x;
 }
 
+/**
+ * @brief Point d'entrée fx_safe.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_safe.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline float fx_safe(float x)
 {
     return isfinite(x) ? x : 0.0f;
 }
 
+/**
+ * @brief Point d'entrée fx_clamp_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_clamp_db.
+ *
+ * @param db Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline float fx_clamp_db(float db)
 {
     return fx_clamp(db, FX_DJ_EQ3_MIN_DB, FX_DJ_EQ3_MAX_DB);
 }
 
+/**
+ * @brief Point d'entrée fx_clamp_freq.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_clamp_freq.
+ *
+ * @param f Paramètre d'entrée de l'API.
+ * @param sample_rate Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline float fx_clamp_freq(float f, float sample_rate)
 {
     const float nyquist_margin = sample_rate * 0.49f;
@@ -43,6 +119,19 @@ static inline float fx_clamp_freq(float f, float sample_rate)
 
 
 #if (FX_DJ_EQ3_SANITIZE_OUTPUT != 0)
+/**
+ * @brief Point d'entrée fx_sanitize_sample.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_sanitize_sample.
+ *
+ * @param x Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline float fx_sanitize_sample(float x)
 {
     if(!isfinite(x))
@@ -59,6 +148,21 @@ static inline float fx_sanitize_sample(float x)
 }
 #endif
 
+/**
+ * @brief Point d'entrée rbj_low_shelf.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à rbj_low_shelf.
+ *
+ * @param fs Paramètre d'entrée de l'API.
+ * @param f0 Paramètre d'entrée de l'API.
+ * @param gain_db Paramètre d'entrée de l'API.
+ * @param s Paramètre d'entrée de l'API.
+ * @param c Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void rbj_low_shelf(float fs, float f0, float gain_db, float s, float *c)
 {
     const float a = powf(10.0f, gain_db * 0.025f);
@@ -88,6 +192,21 @@ static void rbj_low_shelf(float fs, float f0, float gain_db, float s, float *c)
     c[4] = fx_safe((-a2) * inv_a0);
 }
 
+/**
+ * @brief Point d'entrée rbj_peaking.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à rbj_peaking.
+ *
+ * @param fs Paramètre d'entrée de l'API.
+ * @param f0 Paramètre d'entrée de l'API.
+ * @param q Paramètre d'entrée de l'API.
+ * @param gain_db Paramètre d'entrée de l'API.
+ * @param c Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void rbj_peaking(float fs, float f0, float q, float gain_db, float *c)
 {
     const float a = powf(10.0f, gain_db * 0.025f);
@@ -110,6 +229,21 @@ static void rbj_peaking(float fs, float f0, float q, float gain_db, float *c)
     c[4] = fx_safe((-a2) * inv_a0);
 }
 
+/**
+ * @brief Point d'entrée rbj_high_shelf.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à rbj_high_shelf.
+ *
+ * @param fs Paramètre d'entrée de l'API.
+ * @param f0 Paramètre d'entrée de l'API.
+ * @param gain_db Paramètre d'entrée de l'API.
+ * @param s Paramètre d'entrée de l'API.
+ * @param c Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
 {
     const float a = powf(10.0f, gain_db * 0.025f);
@@ -140,6 +274,17 @@ static void rbj_high_shelf(float fs, float f0, float gain_db, float s, float *c)
 }
 
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_reset.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_reset.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_reset(fx_dj_eq3_t *eq)
 {
     if(eq == NULL)
@@ -151,6 +296,17 @@ void fx_dj_eq3_reset(fx_dj_eq3_t *eq)
     memset(eq->state_r, 0, sizeof(eq->state_r));
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_update_coeffs.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_update_coeffs.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
 {
     if(eq == NULL)
@@ -187,6 +343,18 @@ void fx_dj_eq3_update_coeffs(fx_dj_eq3_t *eq)
     eq->coeffs_pending_update = 1U;
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_set_low_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_set_low_db.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ * @param gain_db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_set_low_db(fx_dj_eq3_t *eq, float gain_db)
 {
     if(eq == NULL)
@@ -202,6 +370,18 @@ void fx_dj_eq3_set_low_db(fx_dj_eq3_t *eq, float gain_db)
     }
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_set_mid_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_set_mid_db.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ * @param gain_db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_set_mid_db(fx_dj_eq3_t *eq, float gain_db)
 {
     if(eq == NULL)
@@ -217,6 +397,18 @@ void fx_dj_eq3_set_mid_db(fx_dj_eq3_t *eq, float gain_db)
     }
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_set_high_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_set_high_db.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ * @param gain_db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_set_high_db(fx_dj_eq3_t *eq, float gain_db)
 {
     if(eq == NULL)
@@ -232,6 +424,18 @@ void fx_dj_eq3_set_high_db(fx_dj_eq3_t *eq, float gain_db)
     }
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_set_bypass.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_set_bypass.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ * @param bypass Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_set_bypass(fx_dj_eq3_t *eq, uint8_t bypass)
 {
     if(eq == NULL)
@@ -242,6 +446,22 @@ void fx_dj_eq3_set_bypass(fx_dj_eq3_t *eq, uint8_t bypass)
     eq->bypass = (bypass != 0U) ? 1U : 0U;
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_init.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ * @param sample_rate Paramètre d'entrée de l'API.
+ * @param low_freq Paramètre d'entrée de l'API.
+ * @param mid_freq Paramètre d'entrée de l'API.
+ * @param mid_q Paramètre d'entrée de l'API.
+ * @param high_freq Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_init(fx_dj_eq3_t *eq,
                     float sample_rate,
                     float low_freq,
@@ -275,6 +495,20 @@ void fx_dj_eq3_init(fx_dj_eq3_t *eq,
     fx_dj_eq3_reset(eq);
 }
 
+/**
+ * @brief Point d'entrée fx_dj_eq3_process_block.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à fx_dj_eq3_process_block.
+ *
+ * @param eq Paramètre d'entrée de l'API.
+ * @param inout_l Paramètre d'entrée de l'API.
+ * @param inout_r Paramètre d'entrée de l'API.
+ * @param block_size Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
                              float *inout_l,
                              float *inout_r,

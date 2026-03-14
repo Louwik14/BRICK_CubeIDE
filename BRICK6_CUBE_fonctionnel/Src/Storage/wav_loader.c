@@ -1,3 +1,24 @@
+/**
+ * @file wav_loader.c
+ * @brief Module applicatif wav_loader.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à wav_loader.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "wav_loader.h"
 
 #include <stdio.h>
@@ -11,6 +32,19 @@
 
 static AUDIO_COLD_SDRAM float g_wav_pcm[WAV_BUFFER_SAMPLES];
 
+/**
+ * @brief Point d'entrée pcm24_to_float.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à pcm24_to_float.
+ *
+ * @param p Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float pcm24_to_float(const uint8_t *p)
 {
     int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
@@ -19,6 +53,19 @@ static float pcm24_to_float(const uint8_t *p)
     return (float)v * (1.0f / 8388608.0f);
 }
 
+/**
+ * @brief Point d'entrée pcm32_to_float.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à pcm32_to_float.
+ *
+ * @param p Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float pcm32_to_float(const uint8_t *p)
 {
     int32_t v = (int32_t)((uint32_t)p[0] |
@@ -33,6 +80,18 @@ const float *wav_loader_get_interleaved_buffer(void)
     return g_wav_pcm;
 }
 
+/**
+ * @brief Point d'entrée wav_loader_get_capacity_frames.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à wav_loader_get_capacity_frames.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint32_t wav_loader_get_capacity_frames(void)
 {
     return WAV_BUFFER_FRAMES;
@@ -43,6 +102,19 @@ uint32_t wav_loader_get_capacity_frames(void)
 static FATFS g_wav_fs;
 static uint8_t g_wav_fs_mounted;
 
+/**
+ * @brief Point d'entrée wav_ext_is_wav.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à wav_ext_is_wav.
+ *
+ * @param name Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int wav_ext_is_wav(const char *name)
 {
     size_t len;
@@ -62,6 +134,20 @@ static int wav_ext_is_wav(const char *name)
 
 #endif
 
+/**
+ * @brief Point d'entrée wav_loader_find_first_wav.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à wav_loader_find_first_wav.
+ *
+ * @param out_path Paramètre d'entrée de l'API.
+ * @param max_len Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 {
 #if WAV_LOADER_HAS_FATFS
@@ -136,6 +222,20 @@ bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 #endif
 }
 
+/**
+ * @brief Point d'entrée wav_loader_load_to_sdram.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à wav_loader_load_to_sdram.
+ *
+ * @param path Paramètre d'entrée de l'API.
+ * @param info Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 {
     uint32_t i;

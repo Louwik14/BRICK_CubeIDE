@@ -27,6 +27,16 @@ FIL SDFile;       /* File object for SD */
 
 /* USER CODE END Variables */
 
+/**
+ * @brief Point d'entrée MX_FATFS_Init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à MX_FATFS_Init.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void MX_FATFS_Init(void)
 {
   /*## FatFS: Link the SD driver ###########################*/
@@ -42,6 +52,18 @@ void MX_FATFS_Init(void)
   * @param  None
   * @retval Time in DWORD
   */
+/**
+ * @brief Point d'entrée get_fattime.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à get_fattime.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 DWORD get_fattime(void)
 {
   /* USER CODE BEGIN get_fattime */

@@ -1,3 +1,24 @@
+/**
+ * @file live_recorder.c
+ * @brief Module applicatif live_recorder.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à live_recorder.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "Audio/live_recorder.h"
 
 #include <stddef.h>
@@ -5,6 +26,17 @@
 
 #define LIVE_RECORDER_READ_SAFETY_MARGIN_FRAMES (256U)
 
+/**
+ * @brief Point d'entrée live_recorder_init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_init.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_init(live_recorder_t *rec)
 {
     if(rec == NULL)
@@ -21,6 +53,19 @@ void live_recorder_init(live_recorder_t *rec)
     rec->tap_mode = (uint8_t)LIVE_RECORDER_TAP_POST_MIX;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_set_buffer.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_set_buffer.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ * @param buffer Paramètre d'entrée de l'API.
+ * @param max_frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_set_buffer(live_recorder_t *rec,
                               float *buffer,
                               uint32_t max_frames)
@@ -41,6 +86,18 @@ void live_recorder_set_buffer(live_recorder_t *rec,
         rec->read_pos = 0U;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_set_loop_length.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_set_loop_length.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ * @param loop_frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_set_loop_length(live_recorder_t *rec,
                                    uint32_t loop_frames)
 {
@@ -59,6 +116,17 @@ void live_recorder_set_loop_length(live_recorder_t *rec,
         rec->read_pos = 0U;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_start_record.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_start_record.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_start_record(live_recorder_t *rec)
 {
     if(rec == NULL)
@@ -67,6 +135,17 @@ void live_recorder_start_record(live_recorder_t *rec)
     rec->recording = 1U;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_stop_record.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_stop_record.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_stop_record(live_recorder_t *rec)
 {
     if(rec == NULL)
@@ -75,6 +154,17 @@ void live_recorder_stop_record(live_recorder_t *rec)
     rec->recording = 0U;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_start_play.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_start_play.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_start_play(live_recorder_t *rec)
 {
     if(rec == NULL)
@@ -83,6 +173,17 @@ void live_recorder_start_play(live_recorder_t *rec)
     rec->playing = 1U;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_stop_play.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_stop_play.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_stop_play(live_recorder_t *rec)
 {
     if(rec == NULL)
@@ -91,6 +192,20 @@ void live_recorder_stop_play(live_recorder_t *rec)
     rec->playing = 0U;
 }
 
+/**
+ * @brief Point d'entrée live_recorder_write.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_write.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ * @param L Paramètre d'entrée de l'API.
+ * @param R Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_write(live_recorder_t *rec,
                          const float *L,
                          const float *R,
@@ -121,6 +236,20 @@ void live_recorder_write(live_recorder_t *rec,
 }
 
 
+/**
+ * @brief Point d'entrée live_recorder_read.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à live_recorder_read.
+ *
+ * @param rec Paramètre d'entrée de l'API.
+ * @param outL Paramètre d'entrée de l'API.
+ * @param outR Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void live_recorder_read(live_recorder_t *rec,
                         float *outL,
                         float *outR,

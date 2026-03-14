@@ -1,3 +1,24 @@
+/**
+ * @file ui_page_param_test.c
+ * @brief Module applicatif ui_page_param_test.
+ *
+ * Rôle du module:
+ * - Implémenter les traitements liés à ui_page_param_test.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
+ *
+ * Architecture:
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ *
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
+ *
+ * Notes:
+ * - Documentation ajoutée sans modification de la logique d'exécution.
+ */
+
 #include "pages/ui_page_param_test.h"
 
 #include <stdio.h>
@@ -15,20 +36,74 @@ static const ui_param_bank_t g_param_test_bank = {
     },
 };
 
+/**
+ * @brief Point d'entrée ui_page_param_test_enter.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_page_param_test_enter.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_page_param_test_enter(void)
 {
     ui_param_set_bank(&g_param_test_bank);
 }
 
+/**
+ * @brief Point d'entrée ui_page_param_test_leave.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_page_param_test_leave.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_page_param_test_leave(void) {}
 
+/**
+ * @brief Point d'entrée ui_page_param_test_handle_event.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_page_param_test_handle_event.
+ *
+ * @param ev Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_page_param_test_handle_event(const ui_event_t *ev)
 {
     (void)ev;
 }
 
+/**
+ * @brief Point d'entrée ui_page_param_test_tick.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_page_param_test_tick.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_page_param_test_tick(void) {}
 
+/**
+ * @brief Point d'entrée ui_page_param_test_format_value.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_page_param_test_format_value.
+ *
+ * @param id Paramètre d'entrée de l'API.
+ * @param out Paramètre d'entrée de l'API.
+ * @param out_len Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t out_len)
 {
     const param_desc_t *desc = &param_registry[id];
@@ -61,6 +136,16 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
     }
 }
 
+/**
+ * @brief Point d'entrée ui_page_param_test_render.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à ui_page_param_test_render.
+ *
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static void ui_page_param_test_render(void)
 {
     for (uint8_t i = 0U; i < 4U; i++)

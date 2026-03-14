@@ -61,6 +61,20 @@ static int32_t W9825G6KH_Delay(uint32_t Delay);
   * @param  pRegMode : Pointer to Register Mode structure
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_Init.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_Init.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param pRegMode Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_Init(SDRAM_HandleTypeDef *Ctx, W9825G6KH_Context_t *pRegMode)
 {
   int32_t ret = W9825G6KH_ERROR;
@@ -99,6 +113,20 @@ int32_t W9825G6KH_Init(SDRAM_HandleTypeDef *Ctx, W9825G6KH_Context_t *pRegMode)
   * @param  Interface Could be FMC_SDRAM_CMD_TARGET_BANK1 or FMC_SDRAM_CMD_TARGET_BANK2
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_ClockEnable.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_ClockEnable.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param Interface Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_ClockEnable(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
 {
   Command.CommandMode            = W9825G6KH_CLK_ENABLE_CMD;
@@ -123,6 +151,20 @@ int32_t W9825G6KH_ClockEnable(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
   * @param  Interface Could be FMC_SDRAM_CMD_TARGET_BANK1 or FMC_SDRAM_CMD_TARGET_BANK2
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_Precharge.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_Precharge.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param Interface Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_Precharge(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
 {
   Command.CommandMode            = W9825G6KH_PALL_CMD   ;
@@ -147,6 +189,20 @@ int32_t W9825G6KH_Precharge(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
   * @param  pRegMode : Pointer to Register Mode structure
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_ModeRegConfig.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_ModeRegConfig.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param pRegMode Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_ModeRegConfig(SDRAM_HandleTypeDef *Ctx, W9825G6KH_Context_t *pRegMode)
 {
   uint32_t tmpmrd;
@@ -180,6 +236,20 @@ int32_t W9825G6KH_ModeRegConfig(SDRAM_HandleTypeDef *Ctx, W9825G6KH_Context_t *p
   * @param  pTiming Pointer to SDRAM timing configuration structure
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_TimingConfig.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_TimingConfig.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param pTiming Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_TimingConfig(SDRAM_HandleTypeDef *Ctx, FMC_SDRAM_TimingTypeDef *pTiming)
 {
   /* Program the SDRAM timing */
@@ -201,6 +271,21 @@ int32_t W9825G6KH_TimingConfig(SDRAM_HandleTypeDef *Ctx, FMC_SDRAM_TimingTypeDef
   *                      W9825G6KH_CMD_SELFREFRESH_MODE
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_RefreshMode.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_RefreshMode.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param Interface Paramètre d'entrée de l'API.
+ * @param RefreshMode Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_RefreshMode(SDRAM_HandleTypeDef *Ctx, uint32_t Interface, uint32_t RefreshMode)
 {
   Command.CommandMode            = RefreshMode;
@@ -225,6 +310,20 @@ int32_t W9825G6KH_RefreshMode(SDRAM_HandleTypeDef *Ctx, uint32_t Interface, uint
   * @param  RefreshCount The refresh rate to be programmed
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_RefreshRate.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_RefreshRate.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param RefreshCount Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_RefreshRate(SDRAM_HandleTypeDef *Ctx, uint32_t RefreshCount)
 {
   /* Set the device refresh rate */
@@ -244,6 +343,20 @@ int32_t W9825G6KH_RefreshRate(SDRAM_HandleTypeDef *Ctx, uint32_t RefreshCount)
   * @param  Interface Could be FMC_SDRAM_CMD_TARGET_BANK1 or FMC_SDRAM_CMD_TARGET_BANK2
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_EnterPowerMode.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_EnterPowerMode.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param Interface Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_EnterPowerMode(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
 {
   Command.CommandMode            = W9825G6KH_POWERDOWN_MODE_CMD;
@@ -268,6 +381,20 @@ int32_t W9825G6KH_EnterPowerMode(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
   * @param  Interface Could be FMC_SDRAM_CMD_TARGET_BANK1 or FMC_SDRAM_CMD_TARGET_BANK2
   * @retval error status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_ExitPowerMode.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_ExitPowerMode.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param Interface Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_ExitPowerMode(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
 {
   Command.CommandMode            = W9825G6KH_NORMAL_MODE_CMD;
@@ -292,6 +419,20 @@ int32_t W9825G6KH_ExitPowerMode(SDRAM_HandleTypeDef *Ctx, uint32_t Interface)
   * @param  SdramCmd : Pointer to SDRAM command structure
   * @retval SDRAM status
   */
+/**
+ * @brief Point d'entrée W9825G6KH_Sendcmd.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_Sendcmd.
+ *
+ * @param Ctx Paramètre d'entrée de l'API.
+ * @param SdramCmd Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 int32_t W9825G6KH_Sendcmd(SDRAM_HandleTypeDef *Ctx, FMC_SDRAM_CommandTypeDef *SdramCmd)
 {
   if(HAL_SDRAM_SendCommand(Ctx, SdramCmd, W9825G6KH_TIMEOUT) != HAL_OK)
@@ -317,6 +458,19 @@ int32_t W9825G6KH_Sendcmd(SDRAM_HandleTypeDef *Ctx, FMC_SDRAM_CommandTypeDef *Sd
   * @param Delay : specifies the delay time length, in milliseconds
   * @retval W9825G6KH_OK
   */
+/**
+ * @brief Point d'entrée W9825G6KH_Delay.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à W9825G6KH_Delay.
+ *
+ * @param Delay Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static int32_t W9825G6KH_Delay(uint32_t Delay)
 {
   uint32_t tickstart;

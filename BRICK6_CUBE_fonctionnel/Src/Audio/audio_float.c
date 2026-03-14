@@ -63,6 +63,18 @@ static volatile uint8_t track0_eq_ui_low = 64U;
 static volatile uint8_t track0_eq_ui_mid = 64U;
 static volatile uint8_t track0_eq_ui_high = 64U;
 
+/**
+ * @brief Point d'entrée eq_is_neutral.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à eq_is_neutral.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline uint8_t eq_is_neutral(void)
 {
     return (track0_eq_ui_low == 64U) && (track0_eq_ui_mid == 64U) && (track0_eq_ui_high == 64U);
@@ -87,6 +99,19 @@ static inline fx_daisy_comp_t *fx_pool_daisy_comp_state(void)
     return (s != 0) ? (fx_daisy_comp_t *)s->state : 0;
 }
 
+/**
+ * @brief Point d'entrée bus_comp_attack_index_to_seconds.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à bus_comp_attack_index_to_seconds.
+ *
+ * @param attack_index Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float bus_comp_attack_index_to_seconds(uint8_t attack_index)
 {
     static const float attack_s[6] = {0.0001f, 0.0003f, 0.001f, 0.003f, 0.01f, 0.03f};
@@ -95,6 +120,19 @@ static float bus_comp_attack_index_to_seconds(uint8_t attack_index)
     return attack_s[attack_index];
 }
 
+/**
+ * @brief Point d'entrée bus_comp_release_index_to_seconds.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à bus_comp_release_index_to_seconds.
+ *
+ * @param release_index Paramètre d'entrée de l'API.
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static float bus_comp_release_index_to_seconds(uint8_t release_index)
 {
     static const float release_s[5] = {0.1f, 0.3f, 0.6f, 1.2f, 1.2f};
@@ -122,24 +160,70 @@ void audio_float_set_output_compensation(float comp)
     output_adjust = postgain * output_comp;
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_dj_eq_low_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_dj_eq_low_db.
+ *
+ * @param db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_dj_eq_low_db(float db)
 {
     fx_dj_eq3_t *eq = fx_pool_eq_state();
     if(eq) fx_dj_eq3_set_low_db(eq, db);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_dj_eq_mid_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_dj_eq_mid_db.
+ *
+ * @param db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_dj_eq_mid_db(float db)
 {
     fx_dj_eq3_t *eq = fx_pool_eq_state();
     if(eq) fx_dj_eq3_set_mid_db(eq, db);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_dj_eq_high_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_dj_eq_high_db.
+ *
+ * @param db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_dj_eq_high_db(float db)
 {
     fx_dj_eq3_t *eq = fx_pool_eq_state();
     if(eq) fx_dj_eq3_set_high_db(eq, db);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_dj_eq_ui_params.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_dj_eq_ui_params.
+ *
+ * @param low Paramètre d'entrée de l'API.
+ * @param mid Paramètre d'entrée de l'API.
+ * @param high Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
 {
     track0_eq_ui_low = low;
@@ -147,29 +231,85 @@ void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
     track0_eq_ui_high = high;
 }
 
+/**
+ * @brief Point d'entrée audio_float_is_dj_eq_ui_neutral.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_is_dj_eq_ui_neutral.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint8_t audio_float_is_dj_eq_ui_neutral(void)
 {
     return eq_is_neutral() ? 1U : 0U;
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_saturation_tone_ui.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_saturation_tone_ui.
+ *
+ * @param tone_0_127 Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_saturation_tone_ui(uint8_t tone_0_127)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
     if(sat) fx_saturation_set_tone_ui(sat, tone_0_127);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_saturation_bias_ui.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_saturation_bias_ui.
+ *
+ * @param bias_0_127 Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_saturation_bias_ui(uint8_t bias_0_127)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
     if(sat) fx_saturation_set_bias_ui(sat, bias_0_127);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_saturation_drive_ui.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_saturation_drive_ui.
+ *
+ * @param drive_0_127 Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_saturation_drive_ui(uint8_t drive_0_127)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
     if(sat) fx_saturation_set_drive_ui(sat, drive_0_127);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_saturation_mix_ui.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_saturation_mix_ui.
+ *
+ * @param mix_0_127 Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
@@ -177,36 +317,102 @@ void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
 }
 
 
+/**
+ * @brief Point d'entrée audio_float_set_bus_comp_threshold_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_bus_comp_threshold_db.
+ *
+ * @param threshold_db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_bus_comp_threshold_db(float threshold_db)
 {
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
     if(comp) fx_daisy_comp_set_threshold_db(comp, threshold_db);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_bus_comp_ratio.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_bus_comp_ratio.
+ *
+ * @param ratio Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_bus_comp_ratio(float ratio)
 {
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
     if(comp) fx_daisy_comp_set_ratio(comp, ratio);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_bus_comp_attack_index.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_bus_comp_attack_index.
+ *
+ * @param attack_index Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_bus_comp_attack_index(uint8_t attack_index)
 {
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
     if(comp) fx_daisy_comp_set_attack_s(comp, bus_comp_attack_index_to_seconds(attack_index));
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_bus_comp_release_index.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_bus_comp_release_index.
+ *
+ * @param release_index Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_bus_comp_release_index(uint8_t release_index)
 {
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
     if(comp) fx_daisy_comp_set_release_s(comp, bus_comp_release_index_to_seconds(release_index));
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_bus_comp_makeup_db.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_bus_comp_makeup_db.
+ *
+ * @param makeup_db Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_bus_comp_makeup_db(float makeup_db)
 {
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
     if(comp) fx_daisy_comp_set_makeup_db(comp, makeup_db);
 }
 
+/**
+ * @brief Point d'entrée audio_float_set_bus_comp_auto_makeup.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_float_set_bus_comp_auto_makeup.
+ *
+ * @param enabled Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_float_set_bus_comp_auto_makeup(uint8_t enabled)
 {
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
@@ -319,6 +525,18 @@ float audio_float_get_master_gain(void)
    - Copie bus_main -> bus_cue (par défaut)
    ============================================================ */
 
+/**
+ * @brief Point d'entrée audio_dsp_process.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_dsp_process.
+ *
+ * @param track_buf Paramètre d'entrée de l'API.
+ * @param frames Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 static inline void audio_dsp_process(StereoTrack *AUDIO_RESTRICT track_buf,
                                      uint32_t frames)
 {
@@ -366,11 +584,34 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                   output_adjust * master_gain);
 }
 
+/**
+ * @brief Point d'entrée audio_get_frame_counter.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_get_frame_counter.
+ *
+ *
+ * @return Valeur de retour définie par le contrat de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 uint32_t audio_get_frame_counter(void)
 {
     return g_audio_dsp_frames_counter;
 }
 
+/**
+ * @brief Point d'entrée audio_debug_get_stats.
+ *
+ * Rôle:
+ * - Exécuter le traitement associé à audio_debug_get_stats.
+ *
+ * @param out_stats Paramètre d'entrée de l'API.
+ *
+ * Contexte d'appel:
+ * - init / main loop / tasklet selon le module.
+ */
 void audio_debug_get_stats(audio_debug_stats_t *out_stats)
 {
     if(out_stats == NULL)
