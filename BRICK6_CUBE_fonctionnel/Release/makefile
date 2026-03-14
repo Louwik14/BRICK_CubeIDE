@@ -115,7 +115,7 @@ main-build: BRICK6_CUBE.elf secondary-outputs
 
 # Tool invocations
 BRICK6_CUBE.elf BRICK6_CUBE.map: $(OBJS) $(USER_OBJS) C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6_CUBE_fonctionnel\STM32H743IITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-g++ -o "BRICK6_CUBE.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6_CUBE_fonctionnel\STM32H743IITX_FLASH.ld" -Wl,-Map="BRICK6_CUBE.map" -Wl,--gc-sections -static -flto --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+	arm-none-eabi-g++ -o "BRICK6_CUBE.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6_CUBE_fonctionnel\STM32H743IITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BRICK6_CUBE.map" -Wl,--gc-sections -static -flto -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

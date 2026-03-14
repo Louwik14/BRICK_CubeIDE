@@ -1,0 +1,4 @@
+../Drivers/Drv_app/Src/drv_encoders.c:3:6:drv_encoders_init	1
+../Drivers/Drv_app/Src/drv_encoders.c:8:6:drv_encoders_poll	1
+../Drivers/Drv_app/Src/drv_encoders.c:13:9:drv_encoder_get_delta	1
+../Drivers/Drv_app/Src/drv_encoders.c:18:6:drv_encoder_reset	1

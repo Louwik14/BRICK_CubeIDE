@@ -1,0 +1,5 @@
+../Drivers/Drv_app/Src/buttons.c:57:6:buttons_init	2
+../Drivers/Drv_app/Src/buttons.c:72:6:buttons_update	9
+../Drivers/Drv_app/Src/buttons.c:117:9:button_pressed	2
+../Drivers/Drv_app/Src/buttons.c:127:9:button_released	2
+../Drivers/Drv_app/Src/buttons.c:137:9:button_down	2

@@ -1,0 +1,4 @@
+../Drivers/Drv_app/Src/encoders.c:40:6:encoders_init	0	static
+../Drivers/Drv_app/Src/encoders.c:50:6:encoders_update	24	static
+../Drivers/Drv_app/Src/encoders.c:70:9:encoder_get_delta	0	static
+../Drivers/Drv_app/Src/encoders.c:80:9:encoder_consume_delta	0	static

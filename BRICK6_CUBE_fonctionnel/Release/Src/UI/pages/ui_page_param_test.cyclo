@@ -1,0 +1,5 @@
+../Src/UI/pages/ui_page_param_test.c:23:13:ui_page_param_test_leave	1
+../Src/UI/pages/ui_page_param_test.c:25:13:ui_page_param_test_handle_event	1
+../Src/UI/pages/ui_page_param_test.c:18:13:ui_page_param_test_enter	1
+../Src/UI/pages/ui_page_param_test.c:64:13:ui_page_param_test_render	7
+../Src/UI/pages/ui_page_param_test.c:30:13:ui_page_param_test_tick	1

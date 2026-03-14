@@ -1,0 +1,2 @@
+../Src/UI/ui_event.c:23:6:ui_event_from_inputs	32	static
+../Src/UI/ui_event.c:46:6:ui_event_pop	4	static
