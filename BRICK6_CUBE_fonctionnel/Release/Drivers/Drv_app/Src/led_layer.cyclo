@@ -1,7 +1,0 @@
-../Drivers/Drv_app/Src/led_layer.c:19:6:led_layer_init	1
-../Drivers/Drv_app/Src/led_layer.c:24:6:led_layer_clear	2
-../Drivers/Drv_app/Src/led_layer.c:34:6:led_layer_clear_all	1
-../Drivers/Drv_app/Src/led_layer.c:39:6:led_layer_set	3
-../Drivers/Drv_app/Src/led_layer.c:51:6:led_layer_fill	2
-../Drivers/Drv_app/Src/led_layer.c:64:6:led_layer_compose	12
-../Drivers/Drv_app/Src/led_layer.c:85:6:led_layer_commit	1

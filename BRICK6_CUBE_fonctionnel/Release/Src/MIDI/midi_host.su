@@ -1,3 +1,0 @@
-../Src/MIDI/midi_host.c:49:6:midi_host_poll	24	static
-../Src/MIDI/midi_host.c:54:6:midi_host_poll_bounded	32	static
-../Src/MIDI/midi_host.c:142:6:midi_host_send	16	static

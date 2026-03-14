@@ -15,6 +15,7 @@ RM := rm -rf
 -include mutable_instruments/clouds/dsp/subdir.mk
 -include mutable_instruments/clouds/subdir.mk
 -include Startup/subdir.mk
+-include Src/UI/pages/subdir.mk
 -include Src/UI/subdir.mk
 -include Src/Storage/subdir.mk
 -include Src/Sampler/subdir.mk

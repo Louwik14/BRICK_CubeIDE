@@ -63,6 +63,7 @@ Src/SD \
 Src/Sampler \
 Src/Storage \
 Src/UI \
+Src/UI/pages \
 Src \
 Startup \
 mutable_instruments/clouds \

@@ -1,4 +1,0 @@
-../Src/Audio/audio.c:107:6:audio_init	1
-../Src/Audio/audio.c:126:6:audio_start	3
-../Src/Audio/audio.c:157:6:HAL_SAI_RxHalfCpltCallback	2
-../Src/Audio/audio.c:180:6:HAL_SAI_RxCpltCallback	2
