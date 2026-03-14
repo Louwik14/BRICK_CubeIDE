@@ -6,7 +6,7 @@
 #include "control_router.h"
 #include "cpu_load.h"
 #include "drv_display.h"
-#include "drv_encoders.h"
+#include "encoders.h"
 #include "buttons.h"
 #include "led_layer.h"
 #include "led_ids.h"
@@ -42,7 +42,6 @@ void ui_tasklet_poll(void)
     {
         init = 1U;
         drv_display_init();
-        drv_encoders_init();
 
         control_router_set_param(CTRL_PARAM_DAISY_COMP_THRESHOLD_DB, threshold_db);
         control_router_set_param(CTRL_PARAM_DAISY_COMP_RATIO, ratio);
@@ -54,12 +53,10 @@ void ui_tasklet_poll(void)
     }
 
     // -------- ENCODERS --------
-    drv_encoders_poll();
-
-    const int16_t d0 = drv_encoder_get_delta(0U);
-    const int16_t d1 = drv_encoder_get_delta(1U);
-    const int16_t d2 = drv_encoder_get_delta(2U);
-    const int16_t d3 = drv_encoder_get_delta(3U);
+    const int16_t d0 = encoder_consume_delta(ENC_PAGE);
+    const int16_t d1 = encoder_consume_delta(ENC_PARAM_A);
+    const int16_t d2 = encoder_consume_delta(ENC_PARAM_B);
+    const int16_t d3 = encoder_consume_delta(ENC_PARAM_C);
 
     // Page select
     if(d0 != 0)

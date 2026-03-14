@@ -33,6 +33,7 @@
 #include "stm32h7xx_hal.h"
 
 #include "buttons.h"
+#include "encoders.h"
 #include "led_rgb.h"
 
 volatile uint32_t engine_tick_count = 0U;
@@ -58,6 +59,7 @@ static void engine_tick(uint32_t dt_ms)
 {
   engine_tick_count++;
   buttons_update(dt_ms);
+  encoders_update(dt_ms);
   led_service(dt_ms);
 }
 
@@ -83,6 +85,7 @@ void engine_tasklet_init(uint32_t sample_rate)
   engine_last_poll_ms = HAL_GetTick();
 
   buttons_init();
+  encoders_init();
 }
 
 /* ============================================================
