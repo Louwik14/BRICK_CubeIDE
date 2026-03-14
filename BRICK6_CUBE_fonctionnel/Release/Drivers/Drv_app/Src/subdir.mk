@@ -8,6 +8,7 @@ C_SRCS += \
 ../Drivers/Drv_app/Src/cs42448.c \
 ../Drivers/Drv_app/Src/drv_display.c \
 ../Drivers/Drv_app/Src/drv_encoders.c \
+../Drivers/Drv_app/Src/led_rgb.c \
 ../Drivers/Drv_app/Src/sdram.c \
 ../Drivers/Drv_app/Src/sdram_alloc.c \
 ../Drivers/Drv_app/Src/w9825g6kh.c 
@@ -16,6 +17,7 @@ C_DEPS += \
 ./Drivers/Drv_app/Src/cs42448.d \
 ./Drivers/Drv_app/Src/drv_display.d \
 ./Drivers/Drv_app/Src/drv_encoders.d \
+./Drivers/Drv_app/Src/led_rgb.d \
 ./Drivers/Drv_app/Src/sdram.d \
 ./Drivers/Drv_app/Src/sdram_alloc.d \
 ./Drivers/Drv_app/Src/w9825g6kh.d 
@@ -24,6 +26,7 @@ OBJS += \
 ./Drivers/Drv_app/Src/cs42448.o \
 ./Drivers/Drv_app/Src/drv_display.o \
 ./Drivers/Drv_app/Src/drv_encoders.o \
+./Drivers/Drv_app/Src/led_rgb.o \
 ./Drivers/Drv_app/Src/sdram.o \
 ./Drivers/Drv_app/Src/sdram_alloc.o \
 ./Drivers/Drv_app/Src/w9825g6kh.o 
@@ -36,7 +39,7 @@ Drivers/Drv_app/Src/%.o Drivers/Drv_app/Src/%.su Drivers/Drv_app/Src/%.cyclo: ..
 clean: clean-Drivers-2f-Drv_app-2f-Src
 
 clean-Drivers-2f-Drv_app-2f-Src:
-	-$(RM) ./Drivers/Drv_app/Src/cs42448.cyclo ./Drivers/Drv_app/Src/cs42448.d ./Drivers/Drv_app/Src/cs42448.o ./Drivers/Drv_app/Src/cs42448.su ./Drivers/Drv_app/Src/drv_display.cyclo ./Drivers/Drv_app/Src/drv_display.d ./Drivers/Drv_app/Src/drv_display.o ./Drivers/Drv_app/Src/drv_display.su ./Drivers/Drv_app/Src/drv_encoders.cyclo ./Drivers/Drv_app/Src/drv_encoders.d ./Drivers/Drv_app/Src/drv_encoders.o ./Drivers/Drv_app/Src/drv_encoders.su ./Drivers/Drv_app/Src/sdram.cyclo ./Drivers/Drv_app/Src/sdram.d ./Drivers/Drv_app/Src/sdram.o ./Drivers/Drv_app/Src/sdram.su ./Drivers/Drv_app/Src/sdram_alloc.cyclo ./Drivers/Drv_app/Src/sdram_alloc.d ./Drivers/Drv_app/Src/sdram_alloc.o ./Drivers/Drv_app/Src/sdram_alloc.su ./Drivers/Drv_app/Src/w9825g6kh.cyclo ./Drivers/Drv_app/Src/w9825g6kh.d ./Drivers/Drv_app/Src/w9825g6kh.o ./Drivers/Drv_app/Src/w9825g6kh.su
+	-$(RM) ./Drivers/Drv_app/Src/cs42448.cyclo ./Drivers/Drv_app/Src/cs42448.d ./Drivers/Drv_app/Src/cs42448.o ./Drivers/Drv_app/Src/cs42448.su ./Drivers/Drv_app/Src/drv_display.cyclo ./Drivers/Drv_app/Src/drv_display.d ./Drivers/Drv_app/Src/drv_display.o ./Drivers/Drv_app/Src/drv_display.su ./Drivers/Drv_app/Src/drv_encoders.cyclo ./Drivers/Drv_app/Src/drv_encoders.d ./Drivers/Drv_app/Src/drv_encoders.o ./Drivers/Drv_app/Src/drv_encoders.su ./Drivers/Drv_app/Src/led_rgb.cyclo ./Drivers/Drv_app/Src/led_rgb.d ./Drivers/Drv_app/Src/led_rgb.o ./Drivers/Drv_app/Src/led_rgb.su ./Drivers/Drv_app/Src/sdram.cyclo ./Drivers/Drv_app/Src/sdram.d ./Drivers/Drv_app/Src/sdram.o ./Drivers/Drv_app/Src/sdram.su ./Drivers/Drv_app/Src/sdram_alloc.cyclo ./Drivers/Drv_app/Src/sdram_alloc.d ./Drivers/Drv_app/Src/sdram_alloc.o ./Drivers/Drv_app/Src/sdram_alloc.su ./Drivers/Drv_app/Src/w9825g6kh.cyclo ./Drivers/Drv_app/Src/w9825g6kh.d ./Drivers/Drv_app/Src/w9825g6kh.o ./Drivers/Drv_app/Src/w9825g6kh.su
 
 .PHONY: clean-Drivers-2f-Drv_app-2f-Src
 

@@ -252,7 +252,7 @@ void brick6_app_init(void)
     track_set_gain(1, 1.0f);
     track_set_gain(2, 1.0f);
 
-    audio_init(&hsai_BlockA1, &hsai_BlockB1);
+    audio_init(&hsai_BlockA2, &hsai_BlockB2);
     audio_set_float_callback(my_dsp);
 
     engine_tasklet_init(48000);

@@ -72,11 +72,12 @@ static void uart_log_hex(const char *label, uint32_t value)
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef hdma_sai1_a;
-extern DMA_HandleTypeDef hdma_sai1_b;
-extern SAI_HandleTypeDef hsai_BlockA1;
-extern SAI_HandleTypeDef hsai_BlockB1;
+extern DMA_HandleTypeDef hdma_sai2_a;
+extern DMA_HandleTypeDef hdma_sai2_b;
+extern SAI_HandleTypeDef hsai_BlockA2;
+extern SAI_HandleTypeDef hsai_BlockB2;
 extern SD_HandleTypeDef hsd1;
+extern DMA_HandleTypeDef hdma_tim2_ch4;
 /* USER CODE BEGIN EV */
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
@@ -236,24 +237,38 @@ void DMA1_Stream0_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
 
   /* USER CODE END DMA1_Stream0_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_sai1_a);
+  HAL_DMA_IRQHandler(&hdma_tim2_ch4);
   /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
 
   /* USER CODE END DMA1_Stream0_IRQn 1 */
 }
 
 /**
-  * @brief This function handles DMA1 stream1 global interrupt.
+  * @brief This function handles DMA1 stream3 global interrupt.
   */
-void DMA1_Stream1_IRQHandler(void)
+void DMA1_Stream3_IRQHandler(void)
 {
-  /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
-  cpu_load_irq_begin();
-  /* USER CODE END DMA1_Stream1_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_sai1_b);
-  /* USER CODE BEGIN DMA1_Stream1_IRQn 1 */
-  cpu_load_irq_end();
-  /* USER CODE END DMA1_Stream1_IRQn 1 */
+  /* USER CODE BEGIN DMA1_Stream3_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream3_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_sai2_a);
+  /* USER CODE BEGIN DMA1_Stream3_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream4 global interrupt.
+  */
+void DMA1_Stream4_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream4_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_sai2_b);
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream4_IRQn 1 */
 }
 
 /**
@@ -271,18 +286,18 @@ void SDMMC1_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles SAI1 global interrupt.
+  * @brief This function handles SAI2 global interrupt.
   */
-void SAI1_IRQHandler(void)
+void SAI2_IRQHandler(void)
 {
-  /* USER CODE BEGIN SAI1_IRQn 0 */
+  /* USER CODE BEGIN SAI2_IRQn 0 */
 
-  /* USER CODE END SAI1_IRQn 0 */
-  HAL_SAI_IRQHandler(&hsai_BlockA1);
-  HAL_SAI_IRQHandler(&hsai_BlockB1);
-  /* USER CODE BEGIN SAI1_IRQn 1 */
+  /* USER CODE END SAI2_IRQn 0 */
+  HAL_SAI_IRQHandler(&hsai_BlockA2);
+  HAL_SAI_IRQHandler(&hsai_BlockB2);
+  /* USER CODE BEGIN SAI2_IRQn 1 */
 
-  /* USER CODE END SAI1_IRQn 1 */
+  /* USER CODE END SAI2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

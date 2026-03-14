@@ -14,10 +14,10 @@ typedef struct {
 
 /* >>> MAPPING AVEC GPIO_PIN_X <<< */
 static const encoder_hw_t enc_hw[ENCODER_COUNT] = {
-    { GPIOA, GPIO_PIN_0, GPIOA, GPIO_PIN_2 },
-    { GPIOA, GPIO_PIN_5, GPIOA, GPIO_PIN_6 },
-    { GPIOC, GPIO_PIN_4, GPIOC, GPIO_PIN_5 },
-    { GPIOB, GPIO_PIN_1, GPIOI, GPIO_PIN_6 }
+    { GPIOB, GPIO_PIN_6, GPIOD, GPIO_PIN_12 },
+    { GPIOH, GPIO_PIN_8, GPIOH, GPIO_PIN_12 },
+    { GPIOH, GPIO_PIN_10, GPIOH, GPIO_PIN_11 },
+    { GPIOA, GPIO_PIN_2, GPIOA, GPIO_PIN_1 }
 };
 
 /* ========================= */
