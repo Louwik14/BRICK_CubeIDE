@@ -7,17 +7,20 @@
 C_SRCS += \
 ../Src/Param/control_events.c \
 ../Src/Param/control_router.c \
-../Src/Param/param_store.c 
+../Src/Param/param_store.c \
+../Src/Param/param_registry.c 
 
 C_DEPS += \
 ./Src/Param/control_events.d \
 ./Src/Param/control_router.d \
-./Src/Param/param_store.d 
+./Src/Param/param_store.d \
+./Src/Param/param_registry.d 
 
 OBJS += \
 ./Src/Param/control_events.o \
 ./Src/Param/control_router.o \
-./Src/Param/param_store.o 
+./Src/Param/param_store.o \
+./Src/Param/param_registry.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -27,7 +30,7 @@ Src/Param/%.o Src/Param/%.su Src/Param/%.cyclo: ../Src/Param/%.c Src/Param/subdi
 clean: clean-Src-2f-Param
 
 clean-Src-2f-Param:
-	-$(RM) ./Src/Param/control_events.cyclo ./Src/Param/control_events.d ./Src/Param/control_events.o ./Src/Param/control_events.su ./Src/Param/control_router.cyclo ./Src/Param/control_router.d ./Src/Param/control_router.o ./Src/Param/control_router.su ./Src/Param/param_store.cyclo ./Src/Param/param_store.d ./Src/Param/param_store.o ./Src/Param/param_store.su
+	-$(RM) ./Src/Param/control_events.cyclo ./Src/Param/control_events.d ./Src/Param/control_events.o ./Src/Param/control_events.su ./Src/Param/control_router.cyclo ./Src/Param/control_router.d ./Src/Param/control_router.o ./Src/Param/control_router.su ./Src/Param/param_store.cyclo ./Src/Param/param_store.d ./Src/Param/param_store.o ./Src/Param/param_store.su ./Src/Param/param_registry.cyclo ./Src/Param/param_registry.d ./Src/Param/param_registry.o ./Src/Param/param_registry.su
 
 .PHONY: clean-Src-2f-Param
 
