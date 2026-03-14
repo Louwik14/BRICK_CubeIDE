@@ -86,6 +86,7 @@ enum {
 
 void param_store_init(void);
 void param_store_set_staging(param_id_t id, float v);
+void param_store_set_active(param_id_t id, float v);
 bool param_store_commit_if_block_advanced(void);
 float param_store_get_active(param_id_t id);
 

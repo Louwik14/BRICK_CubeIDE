@@ -7,7 +7,6 @@
 #include "mixer.h"
 #include <stddef.h>
 
-static float param_values[PARAM_COUNT];
 
 static float clamp_value(float v, float lo, float hi)
 {
@@ -305,18 +304,12 @@ const param_desc_t param_registry[PARAM_COUNT] = {
 
 void param_registry_init(void)
 {
-    for (uint32_t i = 0U; i < (uint32_t)PARAM_COUNT; i++)
-    {
-        param_values[i] = param_registry[i].default_value;
-    }
+    /* Registry is static metadata; runtime values are in param_store. */
 }
 
 float param_get(param_id_t id)
 {
-    if (id >= PARAM_COUNT)
-        return 0.0f;
-
-    return param_values[id];
+    return param_store_get_active(id);
 }
 
 void param_set(param_id_t id, float value)
@@ -327,7 +320,7 @@ void param_set(param_id_t id, float value)
     const param_desc_t *desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 
-    param_values[id] = clamped;
+    param_store_set_active(id, clamped);
 
     if (desc->apply != NULL)
     {

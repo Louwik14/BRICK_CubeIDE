@@ -29,7 +29,7 @@ void param_store_init(void)
 
     for (uint32_t i = 0U; i < (uint32_t)PARAM_COUNT; i++)
     {
-        const float v = param_get((param_id_t)i);
+        const float v = param_registry[i].default_value;
         g_ps.staging[i] = v;
         g_ps.active[i] = v;
     }
@@ -44,6 +44,15 @@ void param_store_set_staging(param_id_t id, float v)
 
     g_ps.staging[id] = v;
     g_ps.dirty = 1U;
+}
+
+void param_store_set_active(param_id_t id, float v)
+{
+    if (id >= PARAM_COUNT)
+        return;
+
+    g_ps.staging[id] = v;
+    g_ps.active[id] = v;
 }
 
 bool param_store_commit_if_block_advanced(void)
