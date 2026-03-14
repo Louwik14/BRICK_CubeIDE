@@ -1,7 +1,6 @@
 #include "led_hw.h"
 
 #include "tim.h"
-#include "usart.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -14,13 +13,8 @@
 
 #define LED_HW_BUFFER_SIZE ((LED_HW_COUNT * LED_HW_BITS_PER_LED) + LED_HW_RESET_SLOTS)
 
-static uint32_t pwm_buffer[LED_HW_BUFFER_SIZE] __attribute__((aligned(32)));
+static uint32_t pwm_buffer[LED_HW_BUFFER_SIZE] __attribute__((section(".ram_d2_dma"), aligned(32)));
 static volatile uint8_t dma_busy = 0U;
-
-static void led_hw_debug(const char *msg)
-{
-    HAL_UART_Transmit(&huart1, (uint8_t *)msg, strlen(msg), 100U);
-}
 
 static void led_hw_encode(const uint8_t *rgb, uint32_t count)
 {
@@ -73,7 +67,6 @@ void led_hw_init(void)
     HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
     memset(pwm_buffer, 0, sizeof(pwm_buffer));
     dma_busy = 0U;
-    led_hw_debug("LED HW init\n");
 }
 
 bool led_hw_busy(void)

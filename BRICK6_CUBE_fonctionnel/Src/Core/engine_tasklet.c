@@ -32,6 +32,8 @@
 #include "engine_tasklet.h"
 #include "stm32h7xx_hal.h"
 
+#include "led_rgb.h"
+
 volatile uint32_t engine_tick_count = 0U;
 
 /* Shared between IRQ + main */
@@ -39,6 +41,7 @@ static volatile uint32_t engine_frames_accum = 0U;
 
 /* Tick fixed = 32 frames */
 static uint32_t engine_frames_per_tick = 32U;
+static uint32_t engine_last_poll_ms = 0U;
 
 /* ============================================================
    Internal tick
@@ -50,9 +53,10 @@ static uint32_t engine_frames_per_tick = 32U;
  * Contexte d'appel:
  * - Main loop via engine_tasklet_poll.
  */
-static void engine_tick(void)
+static void engine_tick(uint32_t dt_ms)
 {
   engine_tick_count++;
+  led_service(dt_ms);
 }
 
 /* ============================================================
@@ -74,6 +78,7 @@ void engine_tasklet_init(uint32_t sample_rate)
   /* Tick aligned with AUDIO_FRAMES_PER_HALF = 32
      => 48kHz / 32 = 1500 Hz stable */
   engine_frames_per_tick = 32U;
+  engine_last_poll_ms = HAL_GetTick();
 }
 
 /* ============================================================
@@ -123,6 +128,14 @@ void engine_tasklet_poll(void)
     __enable_irq();
     /* ------------------------------------------------------ */
 
-    engine_tick();
+    uint32_t now_ms = HAL_GetTick();
+    uint32_t dt_ms = now_ms - engine_last_poll_ms;
+    engine_last_poll_ms = now_ms;
+    if (dt_ms == 0U)
+    {
+      dt_ms = 1U;
+    }
+
+    engine_tick(dt_ms);
   }
 }
