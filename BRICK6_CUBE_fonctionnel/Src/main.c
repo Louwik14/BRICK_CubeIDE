@@ -45,7 +45,9 @@
 #include "audio_float.h"
 #include "fatfs.h"
 #include "audio_debug_log.h"
-#include "led_rgb.h"
+#include "led_anim.h"
+#include "led_framebuffer.h"
+#include "led_layer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -133,7 +135,9 @@ int main(void)
 
   MX_FATFS_Init();
   brick6_app_init();
-  led_init();
+  led_fb_init();
+  led_layer_init();
+  led_anim_init();
   uint32_t last_tick = 0;
     static uint32_t last_log_time = 0;
 
@@ -148,8 +152,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	    led_fill(255,0,0);
-	    led_show();
+	    led_fb_set(0, 255, 0, 0);
+	    led_fb_commit();
 	    HAL_Delay(500);
 	  engine_tasklet_poll();
 	     brick6_app_process();
