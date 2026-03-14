@@ -3,6 +3,7 @@
 #include "audio_float.h"
 #include "fx_daisy_comp.h"
 #include "mixer.h"
+#include <stddef.h>
 
 static float param_values[PARAM_COUNT];
 
