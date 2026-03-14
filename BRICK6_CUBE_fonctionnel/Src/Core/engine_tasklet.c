@@ -32,6 +32,7 @@
 #include "engine_tasklet.h"
 #include "stm32h7xx_hal.h"
 
+#include "buttons.h"
 #include "led_rgb.h"
 
 volatile uint32_t engine_tick_count = 0U;
@@ -56,6 +57,7 @@ static uint32_t engine_last_poll_ms = 0U;
 static void engine_tick(uint32_t dt_ms)
 {
   engine_tick_count++;
+  buttons_update(dt_ms);
   led_service(dt_ms);
 }
 
@@ -79,6 +81,8 @@ void engine_tasklet_init(uint32_t sample_rate)
      => 48kHz / 32 = 1500 Hz stable */
   engine_frames_per_tick = 32U;
   engine_last_poll_ms = HAL_GetTick();
+
+  buttons_init();
 }
 
 /* ============================================================
