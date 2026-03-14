@@ -4,9 +4,55 @@
 
 #include "buttons_hw.h"
 
+/*
+ * Temporary debug switch for physical->logical button mapping.
+ * Set to 1 to print only debounced press events as: "BTN <index>".
+ * Set back to 0 (default) to compile all debug logging code out.
+ */
+#ifndef BUTTON_DEBUG_LOG
+#define BUTTON_DEBUG_LOG 0
+#endif
+
 #define BUTTONS_DEBOUNCE_MS 10U
 
 static button_state_t button_states[BTN_COUNT];
+
+#if BUTTON_DEBUG_LOG
+#include "usart.h"
+
+/*
+ * Best-effort UART logging for mapping validation.
+ * - Called only from tasklet context (never IRQ).
+ * - Called only on debounced press edges.
+ * - Drops messages if UART is busy to avoid contention/blocking.
+ */
+static void buttons_debug_log_press(button_id_t btn)
+{
+    if (huart1.gState != HAL_UART_STATE_READY)
+    {
+        return;
+    }
+
+    char msg[12];
+    uint32_t idx = (uint32_t)btn;
+    uint32_t pos = 0U;
+
+    msg[pos++] = 'B';
+    msg[pos++] = 'T';
+    msg[pos++] = 'N';
+    msg[pos++] = ' ';
+
+    if (idx >= 10U)
+    {
+        msg[pos++] = (char)('0' + (idx / 10U));
+    }
+    msg[pos++] = (char)('0' + (idx % 10U));
+    msg[pos++] = '\r';
+    msg[pos++] = '\n';
+
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)pos, 0U);
+}
+#endif
 
 void buttons_init(void)
 {
@@ -47,6 +93,9 @@ void buttons_update(uint32_t dt_ms)
                 if ((s->prev_state == 0U) && (s->state != 0U))
                 {
                     s->pressed = 1U;
+#if BUTTON_DEBUG_LOG
+                    buttons_debug_log_press((button_id_t)i);
+#endif
                 }
                 else if ((s->prev_state != 0U) && (s->state == 0U))
                 {
