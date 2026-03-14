@@ -1,0 +1,16 @@
+#ifndef UI_PAGE_H
+#define UI_PAGE_H
+
+#include "ui_event.h"
+
+typedef struct
+{
+    void (*enter)(void);
+    void (*leave)(void);
+    void (*handle_event)(const ui_event_t *);
+    void (*tick)(void);
+    void (*render)(void);
+
+} ui_page_t;
+
+#endif /* UI_PAGE_H */
