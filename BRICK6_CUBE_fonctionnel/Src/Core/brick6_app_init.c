@@ -341,7 +341,7 @@ void brick6_app_process(void)
     uint32_t now = HAL_GetTick();
 
     g_brick6_app_process_call_count++;
-    hall_mux_test_poll();   // ← ajouter ici
+    hall_kbd_poll();
     engine_tasklet_poll();
     recorder_transport_process();
 
