@@ -20,6 +20,10 @@ uint8_t hall_kbd_get_value(uint8_t key);
 uint32_t hall_kbd_get_scan_overrun_count(void);
 uint32_t hall_kbd_get_event_overflow_count(void);
 uint32_t hall_kbd_get_isr_max_cycles(void);
+uint32_t hall_kbd_get_isr_max_time_us(void);
+uint32_t hall_kbd_get_adc_error_count(void);
+uint16_t hall_kbd_get_last_raw_adc1(void);
+uint16_t hall_kbd_get_last_raw_adc2(void);
 
 #ifdef __cplusplus
 }
