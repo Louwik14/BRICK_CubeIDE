@@ -83,6 +83,12 @@ static volatile uint16_t s_event_rd;
 static uint8_t s_key_pressed[HALL_KBD_KEY_COUNT];
 static uint8_t s_key_velocity[HALL_KBD_KEY_COUNT];
 static uint8_t s_key_value[HALL_KBD_KEY_COUNT];
+static uint16_t s_key_raw[HALL_KBD_KEY_COUNT];
+static uint16_t s_key_filtered[HALL_KBD_KEY_COUNT];
+static uint16_t s_key_min[HALL_KBD_KEY_COUNT];
+static uint16_t s_key_max[HALL_KBD_KEY_COUNT];
+static uint16_t s_key_threshold[HALL_KBD_KEY_COUNT];
+static uint16_t s_key_hysteresis[HALL_KBD_KEY_COUNT];
 
 static volatile uint8_t s_scan_in_progress;
 static volatile uint8_t s_hall_init_done;
@@ -567,6 +573,12 @@ void hall_kbd_init(void)
     s_key_pressed[i] = 0U;
     s_key_velocity[i] = 0U;
     s_key_value[i] = 0U;
+    s_key_raw[i] = 0U;
+    s_key_filtered[i] = 0U;
+    s_key_min[i] = 0U;
+    s_key_max[i] = 0U;
+    s_key_threshold[i] = 0U;
+    s_key_hysteresis[i] = 0U;
   }
 
   s_publish_idx = 0U;
@@ -621,11 +633,16 @@ void hall_kbd_poll(void)
   {
     __DMB();
     uint8_t idx = s_publish_idx;
-    (void)s_snapshots[idx];
 
     __disable_irq();
     for (uint8_t k = 0U; k < HALL_KBD_KEY_COUNT; k++)
     {
+      s_key_raw[k] = s_snapshots[idx].raw[k];
+      s_key_filtered[k] = s_key_scan[k].filtered;
+      s_key_min[k] = s_key_scan[k].min;
+      s_key_max[k] = s_key_scan[k].max;
+      s_key_threshold[k] = s_key_scan[k].threshold;
+      s_key_hysteresis[k] = s_key_scan[k].hysteresis;
       s_key_value[k] = s_key_scan[k].value;
     }
     __enable_irq();
@@ -694,7 +711,7 @@ uint16_t hall_kbd_get_raw(uint8_t key)
     return 0U;
   }
 
-  return s_key_scan[key].raw;
+  return s_key_raw[key];
 }
 
 uint16_t hall_kbd_get_filtered(uint8_t key)
@@ -704,7 +721,7 @@ uint16_t hall_kbd_get_filtered(uint8_t key)
     return 0U;
   }
 
-  return s_key_scan[key].filtered;
+  return s_key_filtered[key];
 }
 
 uint16_t hall_kbd_get_min(uint8_t key)
@@ -714,7 +731,7 @@ uint16_t hall_kbd_get_min(uint8_t key)
     return 0U;
   }
 
-  return s_key_scan[key].min;
+  return s_key_min[key];
 }
 
 uint16_t hall_kbd_get_max(uint8_t key)
@@ -724,7 +741,7 @@ uint16_t hall_kbd_get_max(uint8_t key)
     return 0U;
   }
 
-  return s_key_scan[key].max;
+  return s_key_max[key];
 }
 
 uint16_t hall_kbd_get_threshold(uint8_t key)
@@ -734,7 +751,7 @@ uint16_t hall_kbd_get_threshold(uint8_t key)
     return 0U;
   }
 
-  return s_key_scan[key].threshold;
+  return s_key_threshold[key];
 }
 
 uint16_t hall_kbd_get_hysteresis(uint8_t key)
@@ -744,7 +761,7 @@ uint16_t hall_kbd_get_hysteresis(uint8_t key)
     return 0U;
   }
 
-  return s_key_scan[key].hysteresis;
+  return s_key_hysteresis[key];
 }
 
 uint32_t hall_kbd_get_scan_overrun_count(void)
