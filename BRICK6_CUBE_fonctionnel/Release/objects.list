@@ -386,6 +386,7 @@
 "./Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_usb.o"
 "./Src/App/app_sample_boot.o"
 "./Src/App/hall_kbd.o"
+"./Src/App/hall_midi_test.o"
 "./Src/App/hall_mux_test.o"
 "./Src/App/mux_pots.o"
 "./Src/Audio/audio.o"

@@ -9,9 +9,9 @@
 
 #define HALL_SCAN_RATE_HZ             1000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
-#define HALL_SETTLE_US                7U
+#define HALL_SETTLE_US                20U
 #define HALL_ADC_POLL_MAX_ITER        128U
-#define HALL_FILTER_FACTOR            8U
+#define HALL_FILTER_FACTOR            32U
 #define HALL_PRESS_NUM                4U
 #define HALL_PRESS_DEN                10U
 #define HALL_RELEASE_NUM              6U
@@ -344,45 +344,68 @@ static void hall_process_key_sample(uint8_t key, uint16_t raw, uint32_t now_us)
 
   if (st->filter_init == 0U)
   {
-    hall_asc_reset(asc, HALL_FILTER_FACTOR);
-    st->filter_init = 1U;
+      hall_asc_reset(asc, HALL_FILTER_FACTOR);
+
+      st->raw = raw;
+      st->filtered = raw;
+
+      st->min = raw;
+      st->max = raw;
+
+      st->last_filtered = raw;
+
+      st->pressed = 0U;
+      st->velocity = 0U;
+      st->velocity_armed = 0U;
+
+      st->filter_init = 1U;
+
+      return;
   }
 
   st->filtered = hall_asc_process(asc, raw);
 
   uint16_t sample = st->filtered;
-
+  uint16_t min = st->min;
+  uint16_t max = st->max;
   if (sample < st->min)
   {
-    st->min = sample;
-  }
-  if (sample > st->max)
-  {
-    st->max = sample;
-  }
-  if (st->max < st->min)
-  {
-    st->max = st->min;
+      st->min = sample;
   }
 
-  uint16_t range = (uint16_t)(st->max - st->min);
+  if (sample > st->max)
+  {
+      st->max = sample;
+  }
+
+  min = st->min;
+  max = st->max;
+
+  uint16_t range = (uint16_t)(max - min);
   if (range == 0U)
   {
     range = 1U;
   }
 
-  uint16_t press_th = (uint16_t)(st->min + ((uint32_t)range * HALL_PRESS_NUM / HALL_PRESS_DEN));
-  uint16_t release_th = (uint16_t)(st->min + ((uint32_t)range * HALL_RELEASE_NUM / HALL_RELEASE_DEN));
+  if (range < 30U)
+  {
+    st->pressed = 0U;
+    st->velocity = 0U;
+    st->velocity_armed = 0U;
+    st->last_filtered = sample;
+    return;
+  }
+  uint16_t press_th = (uint16_t)(min + ((uint32_t)range * HALL_PRESS_NUM / HALL_PRESS_DEN));
+  uint16_t release_th = (uint16_t)(min + ((uint32_t)range * HALL_RELEASE_NUM / HALL_RELEASE_DEN));
 
   if (release_th <= press_th)
   {
     release_th = (uint16_t)(press_th + 1U);
   }
-  if (release_th > st->max)
+  if (release_th > max)
   {
-    release_th = st->max;
+    release_th = max;
   }
-
   uint16_t detent_width = hall_compute_detent_width(range);
   uint16_t center = (uint16_t)(st->min + range / 2U);
   uint16_t detent_low = (center > (detent_width / 2U))
@@ -396,16 +419,9 @@ static void hall_process_key_sample(uint8_t key, uint16_t raw, uint32_t now_us)
 
   st->threshold = press_th;
   st->hysteresis = release_th;
-  st->value = hall_normalize_with_deadzone(sample, st->min, st->max, detent_low, detent_high);
+  st->value = hall_normalize_with_deadzone(sample, min, max, detent_low, detent_high);
 
-  if (s_boot_calibration_remaining != 0U)
-  {
-    st->pressed = 0U;
-    st->velocity = 0U;
-    st->velocity_armed = 0U;
-    st->last_filtered = sample;
-    return;
-  }
+
 
   if (st->velocity_armed == 0U)
   {
@@ -451,6 +467,7 @@ static void hall_process_key_sample(uint8_t key, uint16_t raw, uint32_t now_us)
   {
     hall_event_push(key, HALL_EVENT_RELEASE, 0U);
   }
+
 }
 
 static void hall_scan_isr(void)
@@ -519,10 +536,7 @@ static void hall_scan_isr(void)
     s_scan_overrun_count++;
   }
 
-  if (s_boot_calibration_remaining != 0U)
-  {
-    s_boot_calibration_remaining--;
-  }
+
 
   s_scan_in_progress = 0U;
 }
@@ -608,7 +622,6 @@ void hall_kbd_init(void)
   s_isr_last_cycles = 0U;
   s_last_raw_adc1 = 0U;
   s_last_raw_adc2 = 0U;
-  s_boot_calibration_remaining = 0U;
 
   if ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) == 0U)
   {
