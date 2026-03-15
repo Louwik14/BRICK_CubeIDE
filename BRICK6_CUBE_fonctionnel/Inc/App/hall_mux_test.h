@@ -12,6 +12,9 @@ extern "C" {
 void hall_mux_test_init(void);
 void hall_mux_test_poll(void);
 uint16_t hall_mux_test_get_raw(uint8_t key);
+uint16_t hall_mux_test_get_last_adc1_raw(void);
+uint16_t hall_mux_test_get_last_adc2_raw(void);
+uint32_t hall_mux_test_get_adc_error_count(void);
 
 #ifdef __cplusplus
 }

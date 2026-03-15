@@ -21,6 +21,7 @@
 #define HALL_VELOCITY_MAX_US          30000U
 #define HALL_EVENT_RING_SIZE          64U
 #define HALL_MUX_CHANNEL_COUNT        8U
+#define HALL_CPU_CLOCK_HZ             480000000U
 
 typedef enum
 {
@@ -78,6 +79,10 @@ static volatile uint8_t s_hall_scan_started;
 static volatile uint32_t s_scan_overrun_count;
 static volatile uint32_t s_event_overflow_count;
 static volatile uint32_t s_isr_max_cycles;
+static volatile uint32_t s_adc_error_count;
+static volatile uint32_t s_isr_last_cycles;
+static volatile uint16_t s_last_raw_adc1;
+static volatile uint16_t s_last_raw_adc2;
 
 static uint32_t hall_get_apb1_timer_clk_hz(void)
 {
@@ -115,11 +120,13 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
 {
   if (HAL_ADC_Start(&hadc1) != HAL_OK)
   {
+    s_adc_error_count++;
     return 0U;
   }
 
   if (HAL_ADC_Start(&hadc2) != HAL_OK)
   {
+    s_adc_error_count++;
     (void)HAL_ADC_Stop(&hadc1);
     return 0U;
   }
@@ -147,6 +154,16 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
 
   if ((adc1_ready == 0U) || (adc2_ready == 0U))
   {
+    s_adc_error_count++;
+    (void)HAL_ADC_Stop(&hadc1);
+    (void)HAL_ADC_Stop(&hadc2);
+    return 0U;
+  }
+
+  if (((HAL_ADC_GetState(&hadc1) & HAL_ADC_STATE_REG_EOC) == 0U) ||
+      ((HAL_ADC_GetState(&hadc2) & HAL_ADC_STATE_REG_EOC) == 0U))
+  {
+    s_adc_error_count++;
     (void)HAL_ADC_Stop(&hadc1);
     (void)HAL_ADC_Stop(&hadc2);
     return 0U;
@@ -381,6 +398,7 @@ static void hall_scan_isr(void)
 
   if ((hadc1.State != HAL_ADC_STATE_READY) || (hadc2.State != HAL_ADC_STATE_READY))
   {
+    s_adc_error_count++;
     return;
   }
 
@@ -409,6 +427,9 @@ static void hall_scan_isr(void)
       continue;
     }
 
+    s_last_raw_adc1 = adc1;
+    s_last_raw_adc2 = adc2;
+
     uint8_t key_a = mux;
     uint8_t key_b = (uint8_t)(mux + HALL_MUX_CHANNEL_COUNT);
     uint32_t now_us = TIM5->CNT;
@@ -427,9 +448,15 @@ static void hall_scan_isr(void)
   s_publish_seq++;
 
   uint32_t cyccnt_delta = DWT->CYCCNT - cyccnt_start;
+  s_isr_last_cycles = cyccnt_delta;
   if (cyccnt_delta > s_isr_max_cycles)
   {
     s_isr_max_cycles = cyccnt_delta;
+  }
+
+  if (cyccnt_delta > (HALL_CPU_CLOCK_HZ / HALL_SCAN_RATE_HZ))
+  {
+    s_scan_overrun_count++;
   }
 
   s_scan_in_progress = 0U;
@@ -504,6 +531,10 @@ void hall_kbd_init(void)
   s_scan_overrun_count = 0U;
   s_event_overflow_count = 0U;
   s_isr_max_cycles = 0U;
+  s_adc_error_count = 0U;
+  s_isr_last_cycles = 0U;
+  s_last_raw_adc1 = 0U;
+  s_last_raw_adc2 = 0U;
 
   if ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) == 0U)
   {
@@ -618,6 +649,26 @@ uint32_t hall_kbd_get_event_overflow_count(void)
 uint32_t hall_kbd_get_isr_max_cycles(void)
 {
   return s_isr_max_cycles;
+}
+
+uint32_t hall_kbd_get_isr_max_time_us(void)
+{
+  return s_isr_max_cycles / (HALL_CPU_CLOCK_HZ / 1000000U);
+}
+
+uint32_t hall_kbd_get_adc_error_count(void)
+{
+  return s_adc_error_count;
+}
+
+uint16_t hall_kbd_get_last_raw_adc1(void)
+{
+  return s_last_raw_adc1;
+}
+
+uint16_t hall_kbd_get_last_raw_adc2(void)
+{
+  return s_last_raw_adc2;
 }
 
 void TIM6_DAC_IRQHandler(void)

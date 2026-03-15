@@ -9,6 +9,9 @@
 #define HALL_ADC_TIMEOUT_US    10U
 
 static uint16_t s_raw[HALL_MUX_TEST_KEY_COUNT];
+static uint16_t s_last_adc1_raw;
+static uint16_t s_last_adc2_raw;
+static uint32_t s_adc_error_count;
 
 static void hall_mux_select(uint8_t mux)
 {
@@ -33,17 +36,20 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
 {
   if (HAL_ADC_Start(&hadc1) != HAL_OK)
   {
+    s_adc_error_count++;
     return 0U;
   }
 
   if (HAL_ADC_Start(&hadc2) != HAL_OK)
   {
+    s_adc_error_count++;
     (void)HAL_ADC_Stop(&hadc1);
     return 0U;
   }
 
   if (HAL_ADC_PollForConversion(&hadc1, HALL_ADC_TIMEOUT_US) != HAL_OK)
   {
+    s_adc_error_count++;
     (void)HAL_ADC_Stop(&hadc1);
     (void)HAL_ADC_Stop(&hadc2);
     return 0U;
@@ -51,6 +57,16 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
 
   if (HAL_ADC_PollForConversion(&hadc2, HALL_ADC_TIMEOUT_US) != HAL_OK)
   {
+    s_adc_error_count++;
+    (void)HAL_ADC_Stop(&hadc1);
+    (void)HAL_ADC_Stop(&hadc2);
+    return 0U;
+  }
+
+  if (((HAL_ADC_GetState(&hadc1) & HAL_ADC_STATE_REG_EOC) == 0U) ||
+      ((HAL_ADC_GetState(&hadc2) & HAL_ADC_STATE_REG_EOC) == 0U))
+  {
+    s_adc_error_count++;
     (void)HAL_ADC_Stop(&hadc1);
     (void)HAL_ADC_Stop(&hadc2);
     return 0U;
@@ -72,6 +88,10 @@ void hall_mux_test_init(void)
     s_raw[i] = 0U;
   }
 
+  s_last_adc1_raw = 0U;
+  s_last_adc2_raw = 0U;
+  s_adc_error_count = 0U;
+
   hall_mux_select(0U);
 }
 
@@ -92,6 +112,8 @@ void hall_mux_test_poll(void)
 
     s_raw[mux] = adc1;
     s_raw[(uint8_t)(mux + HALL_MUX_CHANNEL_COUNT)] = adc2;
+    s_last_adc1_raw = adc1;
+    s_last_adc2_raw = adc2;
   }
 }
 
@@ -103,4 +125,19 @@ uint16_t hall_mux_test_get_raw(uint8_t key)
   }
 
   return s_raw[key];
+}
+
+uint16_t hall_mux_test_get_last_adc1_raw(void)
+{
+  return s_last_adc1_raw;
+}
+
+uint16_t hall_mux_test_get_last_adc2_raw(void)
+{
+  return s_last_adc2_raw;
+}
+
+uint32_t hall_mux_test_get_adc_error_count(void)
+{
+  return s_adc_error_count;
 }
