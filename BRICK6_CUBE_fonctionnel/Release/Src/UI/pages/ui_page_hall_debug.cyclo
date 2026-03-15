@@ -1,5 +1,5 @@
-../Src/UI/pages/ui_page_hall_debug.c:18:13:ui_page_hall_debug_leave	1
-../Src/UI/pages/ui_page_hall_debug.c:20:13:ui_page_hall_debug_handle_event	1
-../Src/UI/pages/ui_page_hall_debug.c:33:13:ui_page_hall_debug_render	2
-../Src/UI/pages/ui_page_hall_debug.c:10:13:ui_page_hall_debug_enter	2
-../Src/UI/pages/ui_page_hall_debug.c:25:13:ui_page_hall_debug_tick	2
+../Src/UI/pages/ui_page_hall_debug.c:17:13:ui_page_hall_debug_enter	1
+../Src/UI/pages/ui_page_hall_debug.c:21:13:ui_page_hall_debug_handle_event	1
+../Src/UI/pages/ui_page_hall_debug.c:28:13:ui_page_hall_debug_render	3
+../Src/UI/pages/ui_page_hall_debug.c:26:13:ui_page_hall_debug_tick	1
+../Src/UI/pages/ui_page_hall_debug.c:19:13:ui_page_hall_debug_leave	1

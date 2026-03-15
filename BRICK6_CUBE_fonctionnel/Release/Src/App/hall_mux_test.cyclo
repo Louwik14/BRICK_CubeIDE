@@ -1,0 +1,6 @@
+../Src/App/hall_mux_test.c:84:6:hall_mux_test_init	1
+../Src/App/hall_mux_test.c:98:6:hall_mux_test_poll	10
+../Src/App/hall_mux_test.c:120:10:hall_mux_test_get_raw	2
+../Src/App/hall_mux_test.c:130:10:hall_mux_test_get_last_adc1_raw	1
+../Src/App/hall_mux_test.c:135:10:hall_mux_test_get_last_adc2_raw	1
+../Src/App/hall_mux_test.c:140:10:hall_mux_test_get_adc_error_count	1
