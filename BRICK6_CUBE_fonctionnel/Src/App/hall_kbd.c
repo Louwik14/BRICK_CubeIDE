@@ -62,6 +62,8 @@ static uint8_t s_key_velocity[HALL_KBD_KEY_COUNT];
 static uint8_t s_key_value[HALL_KBD_KEY_COUNT];
 
 static volatile uint8_t s_scan_in_progress;
+static volatile uint8_t s_hall_init_done;
+static volatile uint8_t s_hall_scan_started;
 /* Counts TIM6 firings that arrived while a previous scan was still active. */
 static volatile uint32_t s_scan_overrun_count;
 /* Counts dropped key events when the SPSC ring is full. */
@@ -325,6 +327,16 @@ static void hall_process_key_sample(uint8_t key, uint16_t raw, uint32_t now_us)
 
 static void hall_scan_isr(void)
 {
+  if ((s_hall_init_done == 0U) || (s_hall_scan_started == 0U))
+  {
+    return;
+  }
+
+  if ((hadc1.State != HAL_ADC_STATE_READY) || (hadc2.State != HAL_ADC_STATE_READY))
+  {
+    return;
+  }
+
   if (s_scan_in_progress != 0U)
   {
     s_scan_overrun_count++;
@@ -420,9 +432,7 @@ static void hall_scan_timer_init(void)
   TIM6->DIER = TIM_DIER_UIE;
 
   HAL_NVIC_SetPriority(TIM6_DAC_IRQn, 6U, 0U);
-  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
-
-  TIM6->CR1 = TIM_CR1_CEN;
+  HAL_NVIC_DisableIRQ(TIM6_DAC_IRQn);
 }
 
 void hall_kbd_init(void)
@@ -446,6 +456,8 @@ void hall_kbd_init(void)
   s_event_wr = 0U;
   s_event_rd = 0U;
   s_scan_in_progress = 0U;
+  s_hall_init_done = 0U;
+  s_hall_scan_started = 0U;
   s_scan_overrun_count = 0U;
   s_event_overflow_count = 0U;
   s_isr_max_cycles = 0U;
@@ -460,6 +472,22 @@ void hall_kbd_init(void)
   hall_mux_select(0U);
   hall_timestamp_timer_init();
   hall_scan_timer_init();
+  s_hall_init_done = 1U;
+}
+
+void hall_kbd_start(void)
+{
+  if ((s_hall_init_done == 0U) || (s_hall_scan_started != 0U))
+  {
+    return;
+  }
+
+  s_scan_in_progress = 0U;
+  TIM6->SR = 0U;
+  HAL_NVIC_ClearPendingIRQ(TIM6_DAC_IRQn);
+  HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
+  TIM6->CR1 = TIM_CR1_CEN;
+  s_hall_scan_started = 1U;
 }
 
 void hall_kbd_poll(void)
@@ -558,6 +586,12 @@ uint32_t hall_kbd_get_isr_max_cycles(void)
 
 void TIM6_DAC_IRQHandler(void)
 {
+  if ((s_hall_init_done == 0U) || (s_hall_scan_started == 0U))
+  {
+    TIM6->SR = 0U;
+    return;
+  }
+
   if ((TIM6->SR & TIM_SR_UIF) != 0U)
   {
     TIM6->SR &= ~TIM_SR_UIF;
