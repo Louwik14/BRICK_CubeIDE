@@ -13,7 +13,7 @@ enum
 {
     UI_PAGE_MAIN = 0U,
     UI_PAGE_PARAM_TEST,
-    UI_PAGE_HALL_DEBUG,
+    UI_PAGE_HALL_KEY_DEBUG,
     UI_PAGE_COUNT
 };
 

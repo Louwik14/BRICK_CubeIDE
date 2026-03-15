@@ -5,6 +5,7 @@
 #include "stm32h7xx_hal.h"
 
 #include <limits.h>
+#include <string.h>
 
 #define HALL_SCAN_RATE_HZ             10000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
@@ -44,6 +45,15 @@ typedef struct
 
 typedef struct
 {
+  uint32_t sum;
+  uint16_t buffer[HALL_FILTER_FACTOR];
+  uint8_t head;
+  uint8_t count;
+  uint8_t factor;
+} hall_asc_t;
+
+typedef struct
+{
   uint16_t raw;
   uint16_t filtered;
   uint16_t min;
@@ -64,6 +74,7 @@ static volatile uint8_t s_publish_idx;
 static volatile uint32_t s_publish_seq;
 
 static hall_key_scan_state_t s_key_scan[HALL_KBD_KEY_COUNT];
+static hall_asc_t s_asc_state[HALL_KBD_KEY_COUNT];
 
 static hall_event_t s_event_ring[HALL_EVENT_RING_SIZE];
 static volatile uint16_t s_event_wr;
@@ -277,23 +288,58 @@ static void hall_event_push(uint8_t key, hall_event_type_t type, uint8_t velocit
   s_event_wr = next;
 }
 
+static void hall_asc_reset(hall_asc_t *asc, uint8_t factor)
+{
+  if (factor == 0U)
+  {
+    factor = 1U;
+  }
+  if (factor > HALL_FILTER_FACTOR)
+  {
+    factor = HALL_FILTER_FACTOR;
+  }
+
+  asc->sum = 0U;
+  asc->head = 0U;
+  asc->count = 0U;
+  asc->factor = factor;
+  memset(asc->buffer, 0, sizeof(asc->buffer));
+}
+
+static uint16_t hall_asc_process(hall_asc_t *asc, uint16_t raw)
+{
+  if ((asc->factor == 0U) || (asc->factor > HALL_FILTER_FACTOR))
+  {
+    hall_asc_reset(asc, HALL_FILTER_FACTOR);
+  }
+
+  asc->sum -= asc->buffer[asc->head];
+  asc->buffer[asc->head] = raw;
+  asc->sum += raw;
+
+  if (asc->count < asc->factor)
+  {
+    asc->count++;
+  }
+
+  asc->head = (uint8_t)((asc->head + 1U) % asc->factor);
+  return (uint16_t)(asc->sum / asc->count);
+}
+
 static void hall_process_key_sample(uint8_t key, uint16_t raw, uint32_t now_us)
 {
   hall_key_scan_state_t *st = &s_key_scan[key];
+  hall_asc_t *asc = &s_asc_state[key];
 
   st->raw = raw;
 
   if (st->filter_init == 0U)
   {
-    st->filtered = raw;
-    st->last_filtered = raw;
+    hall_asc_reset(asc, HALL_FILTER_FACTOR);
     st->filter_init = 1U;
   }
-  else
-  {
-    int32_t delta = (int32_t)raw - (int32_t)st->filtered;
-    st->filtered = (uint16_t)((int32_t)st->filtered + (delta / (int32_t)HALL_FILTER_FACTOR));
-  }
+
+  st->filtered = hall_asc_process(asc, raw);
 
   uint16_t sample = st->filtered;
 
@@ -516,6 +562,8 @@ void hall_kbd_init(void)
     s_key_scan[i].velocity_armed = 0U;
     s_key_scan[i].velocity_start_us = 0U;
 
+    hall_asc_reset(&s_asc_state[i], HALL_FILTER_FACTOR);
+
     s_key_pressed[i] = 0U;
     s_key_velocity[i] = 0U;
     s_key_value[i] = 0U;
@@ -571,13 +619,16 @@ void hall_kbd_poll(void)
 
   if (seq != last_seq)
   {
+    __DMB();
     uint8_t idx = s_publish_idx;
     (void)s_snapshots[idx];
 
+    __disable_irq();
     for (uint8_t k = 0U; k < HALL_KBD_KEY_COUNT; k++)
     {
       s_key_value[k] = s_key_scan[k].value;
     }
+    __enable_irq();
 
     last_seq = seq;
   }
@@ -634,6 +685,66 @@ uint8_t hall_kbd_get_value(uint8_t key)
   }
 
   return s_key_value[key];
+}
+
+uint16_t hall_kbd_get_raw(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_key_scan[key].raw;
+}
+
+uint16_t hall_kbd_get_filtered(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_key_scan[key].filtered;
+}
+
+uint16_t hall_kbd_get_min(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_key_scan[key].min;
+}
+
+uint16_t hall_kbd_get_max(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_key_scan[key].max;
+}
+
+uint16_t hall_kbd_get_threshold(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_key_scan[key].threshold;
+}
+
+uint16_t hall_kbd_get_hysteresis(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_key_scan[key].hysteresis;
 }
 
 uint32_t hall_kbd_get_scan_overrun_count(void)

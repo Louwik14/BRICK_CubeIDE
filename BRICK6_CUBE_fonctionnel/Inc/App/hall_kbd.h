@@ -17,6 +17,13 @@ uint8_t hall_kbd_is_pressed(uint8_t key);
 uint8_t hall_kbd_get_velocity(uint8_t key);
 uint8_t hall_kbd_get_value(uint8_t key);
 
+uint16_t hall_kbd_get_raw(uint8_t key);
+uint16_t hall_kbd_get_filtered(uint8_t key);
+uint16_t hall_kbd_get_min(uint8_t key);
+uint16_t hall_kbd_get_max(uint8_t key);
+uint16_t hall_kbd_get_threshold(uint8_t key);
+uint16_t hall_kbd_get_hysteresis(uint8_t key);
+
 uint32_t hall_kbd_get_scan_overrun_count(void);
 uint32_t hall_kbd_get_event_overflow_count(void);
 uint32_t hall_kbd_get_isr_max_cycles(void);
