@@ -36,6 +36,11 @@
  */
 void ui_renderer_oled_draw(void)
 {
+    static uint8_t drawing = 0;
+    if (drawing) return;
+
+    drawing = 1;
+
     const ui_page_t *page = ui_page_get();
 
     drv_display_clear();
@@ -46,4 +51,6 @@ void ui_renderer_oled_draw(void)
     }
 
     drv_display_update();
+
+    drawing = 0;
 }

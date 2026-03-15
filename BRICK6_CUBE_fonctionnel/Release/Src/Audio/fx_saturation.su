@@ -1,6 +1,0 @@
-../Src/Audio/fx_saturation.c:78:6:fx_saturation_init	0	static
-../Src/Audio/fx_saturation.c:111:6:fx_saturation_set_drive_ui	0	static
-../Src/Audio/fx_saturation.c:169:6:fx_saturation_set_mix_ui	8	static
-../Src/Audio/fx_saturation.c:190:6:fx_saturation_set_tone_ui	8	static
-../Src/Audio/fx_saturation.c:210:6:fx_saturation_set_bias_ui	8	static
-../Src/Audio/fx_saturation.c:232:6:fx_saturation_process_block	4	static
