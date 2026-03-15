@@ -42,11 +42,11 @@ static void ui_page_hall_debug_render(void)
 
         (void)snprintf(line,
                        sizeof(line),
-                       "%02u:%3u   %02u:%3u",
+                       "%02u:%4u %02u:%4u",
                        (unsigned int)key_left,
-                       (unsigned int)hall_kbd_get_value(key_left),
+                       (unsigned int)hall_kbd_get_raw_value(key_left),
                        (unsigned int)key_right,
-                       (unsigned int)hall_kbd_get_value(key_right));
+                       (unsigned int)hall_kbd_get_raw_value(key_right));
 
         drv_display_draw_text(0U, (uint8_t)(row * HALL_DEBUG_FONT_HEIGHT_PX), line);
     }

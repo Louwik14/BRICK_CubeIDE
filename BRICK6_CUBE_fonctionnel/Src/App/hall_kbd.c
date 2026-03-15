@@ -7,11 +7,12 @@
 #define HALL_SCAN_RATE_HZ             10000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
 #define HALL_SETTLE_US                7U
-#define HALL_PRESS_THRESHOLD          32000U
-#define HALL_RELEASE_THRESHOLD        28000U
-#define HALL_VALUE_SHIFT              8U
+#define HALL_ADC_RESOLUTION_BITS      12U
+#define HALL_PRESS_THRESHOLD          2000U
+#define HALL_RELEASE_THRESHOLD        1750U
+#define HALL_VALUE_SHIFT              (HALL_ADC_RESOLUTION_BITS - 8U)
 #define HALL_EVENT_RING_SIZE          64U
-#define HALL_ADC_POLL_MAX_ITER        128U
+#define HALL_ADC_POLL_MAX_ITER        8192U
 
 typedef enum
 {
@@ -64,6 +65,13 @@ static volatile uint32_t s_scan_overrun_count;
 static volatile uint32_t s_event_overflow_count;
 /* Tracks worst-case ISR execution time in core cycles (bring-up timing margin). */
 static volatile uint32_t s_isr_max_cycles;
+
+static volatile uint32_t s_tim6_irq_count;
+static volatile uint32_t s_scan_exec_count;
+static volatile uint32_t s_adc_poll_fail_count;
+static volatile uint8_t s_last_mux_index;
+static volatile uint16_t s_last_adc1_value;
+static volatile uint16_t s_last_adc2_value;
 
 static uint8_t hall_velocity_from_dt(uint32_t dt_us);
 
@@ -123,16 +131,17 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
   /*
    * Bounded polling by design for ISR safety: this loop executes at most
    * HALL_ADC_POLL_MAX_ITER iterations, preventing lockup if an ADC conversion
-   * never reaches EOC.
+   * never reaches EOC. Polling HAL with timeout=0 can spin too fast when
+   * sampling time is long, so we check EOC flags directly with a bounded wait.
    */
   for (uint32_t i = 0U; i < HALL_ADC_POLL_MAX_ITER; i++)
   {
-    if (!adc1_ready && (HAL_ADC_PollForConversion(&hadc1, 0U) == HAL_OK))
+    if (!adc1_ready && (__HAL_ADC_GET_FLAG(&hadc1, ADC_FLAG_EOC) != 0U))
     {
       adc1_ready = 1U;
     }
 
-    if (!adc2_ready && (HAL_ADC_PollForConversion(&hadc2, 0U) == HAL_OK))
+    if (!adc2_ready && (__HAL_ADC_GET_FLAG(&hadc2, ADC_FLAG_EOC) != 0U))
     {
       adc2_ready = 1U;
     }
@@ -141,10 +150,13 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
     {
       break;
     }
+
+    __NOP();
   }
 
   if (!(adc1_ready && adc2_ready))
   {
+    s_adc_poll_fail_count++;
     (void)HAL_ADC_Stop(&hadc1);
     (void)HAL_ADC_Stop(&hadc2);
     return 0U;
@@ -250,6 +262,8 @@ static void hall_scan_isr(void)
     return;
   }
 
+  s_scan_exec_count++;
+
   if ((hadc1.State != HAL_ADC_STATE_READY) || (hadc2.State != HAL_ADC_STATE_READY))
   {
     return;
@@ -281,6 +295,7 @@ static void hall_scan_isr(void)
     uint16_t adc1 = 0U;
     uint16_t adc2 = 0U;
 
+    s_last_mux_index = mux;
     hall_mux_select(mux);
     hall_wait_settle_us(HALL_SETTLE_US);
 
@@ -288,6 +303,9 @@ static void hall_scan_isr(void)
     {
       continue;
     }
+
+    s_last_adc1_value = adc1;
+    s_last_adc2_value = adc2;
 
     uint8_t key_a = (uint8_t)(mux * 2U);
     uint8_t key_b = (uint8_t)(key_a + 1U);
@@ -379,6 +397,12 @@ void hall_kbd_init(void)
   s_scan_overrun_count = 0U;
   s_event_overflow_count = 0U;
   s_isr_max_cycles = 0U;
+  s_tim6_irq_count = 0U;
+  s_scan_exec_count = 0U;
+  s_adc_poll_fail_count = 0U;
+  s_last_mux_index = 0U;
+  s_last_adc1_value = 0U;
+  s_last_adc2_value = 0U;
 
   if ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) == 0U)
   {
@@ -497,6 +521,7 @@ uint32_t hall_kbd_get_isr_max_cycles(void)
 
 void TIM6_DAC_IRQHandler(void)
 {
+  s_tim6_irq_count++;
   if ((s_hall_init_done == 0U) || (s_hall_scan_started == 0U))
   {
     TIM6->SR = 0U;
@@ -508,4 +533,44 @@ void TIM6_DAC_IRQHandler(void)
     TIM6->SR &= ~TIM_SR_UIF;
     hall_scan_isr();
   }
+}
+
+uint32_t hall_kbd_get_tim6_irq_count(void)
+{
+  return s_tim6_irq_count;
+}
+
+uint32_t hall_kbd_get_scan_exec_count(void)
+{
+  return s_scan_exec_count;
+}
+
+uint32_t hall_kbd_get_adc_poll_fail_count(void)
+{
+  return s_adc_poll_fail_count;
+}
+
+uint8_t hall_kbd_get_last_mux_index(void)
+{
+  return s_last_mux_index;
+}
+
+uint16_t hall_kbd_get_last_adc1_value(void)
+{
+  return s_last_adc1_value;
+}
+
+uint16_t hall_kbd_get_last_adc2_value(void)
+{
+  return s_last_adc2_value;
+}
+
+uint16_t hall_kbd_get_raw_value(uint8_t key)
+{
+  if (key >= HALL_KBD_KEY_COUNT)
+  {
+    return 0U;
+  }
+
+  return s_snapshots[s_publish_idx].raw[key];
 }
