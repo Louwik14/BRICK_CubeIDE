@@ -100,6 +100,7 @@ void ui_page_main_render(void)
     drv_display_draw_text(0U, 0U, "BRICK6 MAIN");
     drv_display_draw_text(0U, 16U, "BTN1: PARAM TEST");
     drv_display_draw_text(0U, 32U, "BTN2: MAIN PAGE");
+    drv_display_draw_text(0U, 48U, "BTN3: HALL DEBUG");
 }
 
 const ui_page_t g_ui_page_main = {
