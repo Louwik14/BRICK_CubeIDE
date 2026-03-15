@@ -10,7 +10,6 @@
 #define HALL_SCAN_RATE_HZ             1000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
 #define HALL_SETTLE_US                20U
-#define HALL_ADC_POLL_MAX_ITER        128U
 #define HALL_FILTER_FACTOR            32U
 #define HALL_PRESS_NUM                4U
 #define HALL_PRESS_DEN                10U
@@ -103,6 +102,8 @@ static volatile uint32_t s_isr_last_cycles;
 static volatile uint16_t s_last_raw_adc1;
 static volatile uint16_t s_last_raw_adc2;
 static volatile uint16_t s_boot_calibration_remaining;
+static volatile uint16_t s_adc1_dma_value;
+static volatile uint16_t s_adc2_dma_value;
 
 static uint32_t hall_get_apb1_timer_clk_hz(void)
 {
@@ -134,68 +135,6 @@ static void hall_wait_settle_us(uint32_t settle_us)
   {
     __NOP();
   }
-}
-
-static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
-{
-  if (HAL_ADC_Start(&hadc1) != HAL_OK)
-  {
-    s_adc_error_count++;
-    return 0U;
-  }
-
-  if (HAL_ADC_Start(&hadc2) != HAL_OK)
-  {
-    s_adc_error_count++;
-    (void)HAL_ADC_Stop(&hadc1);
-    return 0U;
-  }
-
-  uint8_t adc1_ready = 0U;
-  uint8_t adc2_ready = 0U;
-
-  for (uint32_t i = 0U; i < HALL_ADC_POLL_MAX_ITER; i++)
-  {
-    if ((adc1_ready == 0U) && (HAL_ADC_PollForConversion(&hadc1, 0U) == HAL_OK))
-    {
-      adc1_ready = 1U;
-    }
-
-    if ((adc2_ready == 0U) && (HAL_ADC_PollForConversion(&hadc2, 0U) == HAL_OK))
-    {
-      adc2_ready = 1U;
-    }
-
-    if ((adc1_ready != 0U) && (adc2_ready != 0U))
-    {
-      break;
-    }
-  }
-
-  if ((adc1_ready == 0U) || (adc2_ready == 0U))
-  {
-    s_adc_error_count++;
-    (void)HAL_ADC_Stop(&hadc1);
-    (void)HAL_ADC_Stop(&hadc2);
-    return 0U;
-  }
-
-  if (((HAL_ADC_GetState(&hadc1) & HAL_ADC_STATE_REG_EOC) == 0U) ||
-      ((HAL_ADC_GetState(&hadc2) & HAL_ADC_STATE_REG_EOC) == 0U))
-  {
-    s_adc_error_count++;
-    (void)HAL_ADC_Stop(&hadc1);
-    (void)HAL_ADC_Stop(&hadc2);
-    return 0U;
-  }
-
-  *adc1_out = (uint16_t)HAL_ADC_GetValue(&hadc1);
-  *adc2_out = (uint16_t)HAL_ADC_GetValue(&hadc2);
-
-  (void)HAL_ADC_Stop(&hadc1);
-  (void)HAL_ADC_Stop(&hadc2);
-
-  return 1U;
 }
 
 static uint8_t hall_clamp_u8(int32_t v)
@@ -493,16 +432,11 @@ static void hall_scan_isr(void)
 
   for (uint8_t mux = 0U; mux < HALL_MUX_CHANNEL_COUNT; mux++)
   {
-    uint16_t adc1 = 0U;
-    uint16_t adc2 = 0U;
-
     hall_mux_select(mux);
     hall_wait_settle_us(HALL_SETTLE_US);
 
-    if (hall_adc_sample_pair(&adc1, &adc2) == 0U)
-    {
-      continue;
-    }
+    uint16_t adc1 = s_adc1_dma_value;
+    uint16_t adc2 = s_adc2_dma_value;
 
     s_last_raw_adc1 = adc1;
     s_last_raw_adc2 = adc2;
@@ -622,6 +556,8 @@ void hall_kbd_init(void)
   s_isr_last_cycles = 0U;
   s_last_raw_adc1 = 0U;
   s_last_raw_adc2 = 0U;
+  s_adc1_dma_value = 0U;
+  s_adc2_dma_value = 0U;
 
   if ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) == 0U)
   {
@@ -644,6 +580,20 @@ void hall_kbd_start(void)
   }
 
   s_scan_in_progress = 0U;
+
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&s_adc1_dma_value, 1U) != HAL_OK)
+  {
+    s_adc_error_count++;
+    return;
+  }
+
+  if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&s_adc2_dma_value, 1U) != HAL_OK)
+  {
+    s_adc_error_count++;
+    (void)HAL_ADC_Stop_DMA(&hadc1);
+    return;
+  }
+
   TIM6->SR = 0U;
   HAL_NVIC_ClearPendingIRQ(TIM6_DAC_IRQn);
   HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
