@@ -7,7 +7,7 @@
 #include <limits.h>
 #include <string.h>
 
-#define HALL_SCAN_RATE_HZ             10000U
+#define HALL_SCAN_RATE_HZ             1000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
 #define HALL_SETTLE_US                7U
 #define HALL_ADC_POLL_MAX_ITER        128U
@@ -448,11 +448,7 @@ static void hall_scan_isr(void)
     return;
   }
 
-  if ((hadc1.State != HAL_ADC_STATE_READY) || (hadc2.State != HAL_ADC_STATE_READY))
-  {
-    s_adc_error_count++;
-    return;
-  }
+
 
   if (s_scan_in_progress != 0U)
   {
