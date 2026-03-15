@@ -7,9 +7,10 @@
 #define HALL_SCAN_RATE_HZ             10000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
 #define HALL_SETTLE_US                7U
-#define HALL_PRESS_THRESHOLD          32000U
-#define HALL_RELEASE_THRESHOLD        28000U
-#define HALL_VALUE_SHIFT              8U
+#define HALL_ADC_RESOLUTION_BITS      12U
+#define HALL_PRESS_THRESHOLD          2000U
+#define HALL_RELEASE_THRESHOLD        1750U
+#define HALL_VALUE_SHIFT              (HALL_ADC_RESOLUTION_BITS - 8U)
 #define HALL_EVENT_RING_SIZE          64U
 #define HALL_ADC_POLL_MAX_ITER        128U
 
