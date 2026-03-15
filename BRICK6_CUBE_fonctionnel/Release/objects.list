@@ -429,6 +429,8 @@
 "./Src/UI/font5x8_elektron.o"
 "./Src/UI/ui_core.o"
 "./Src/UI/ui_event.o"
+"./Src/UI/ui_navigation.o"
+"./Src/UI/ui_page_manager.o"
 "./Src/UI/ui_param.o"
 "./Src/UI/ui_renderer_oled.o"
 "./Src/UI/ui_tasklet.o"

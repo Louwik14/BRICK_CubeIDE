@@ -1,5 +1,5 @@
-../Drivers/Drv_app/Src/led_anim.c:42:6:led_anim_init	1
-../Drivers/Drv_app/Src/led_anim.c:47:6:led_anim_stop_all	1
-../Drivers/Drv_app/Src/led_anim.c:59:6:led_anim_stop	33
-../Drivers/Drv_app/Src/led_anim.c:73:6:led_anim_blink	51
-../Drivers/Drv_app/Src/led_anim.c:92:6:led_anim_tick	6
+../Drivers/Drv_app/Src/led_anim.c:73:6:led_anim_init	1
+../Drivers/Drv_app/Src/led_anim.c:88:6:led_anim_stop_all	1
+../Drivers/Drv_app/Src/led_anim.c:111:6:led_anim_stop	33
+../Drivers/Drv_app/Src/led_anim.c:140:6:led_anim_blink	51
+../Drivers/Drv_app/Src/led_anim.c:170:6:led_anim_tick	6

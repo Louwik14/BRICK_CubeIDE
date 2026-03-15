@@ -11,6 +11,8 @@ C_SRCS += \
 ../Src/UI/font5x8_elektron.c \
 ../Src/UI/ui_core.c \
 ../Src/UI/ui_event.c \
+../Src/UI/ui_navigation.c \
+../Src/UI/ui_page_manager.c \
 ../Src/UI/ui_param.c \
 ../Src/UI/ui_renderer_oled.c \
 ../Src/UI/ui_tasklet.c 
@@ -22,6 +24,8 @@ C_DEPS += \
 ./Src/UI/font5x8_elektron.d \
 ./Src/UI/ui_core.d \
 ./Src/UI/ui_event.d \
+./Src/UI/ui_navigation.d \
+./Src/UI/ui_page_manager.d \
 ./Src/UI/ui_param.d \
 ./Src/UI/ui_renderer_oled.d \
 ./Src/UI/ui_tasklet.d 
@@ -33,6 +37,8 @@ OBJS += \
 ./Src/UI/font5x8_elektron.o \
 ./Src/UI/ui_core.o \
 ./Src/UI/ui_event.o \
+./Src/UI/ui_navigation.o \
+./Src/UI/ui_page_manager.o \
 ./Src/UI/ui_param.o \
 ./Src/UI/ui_renderer_oled.o \
 ./Src/UI/ui_tasklet.o 
@@ -45,7 +51,7 @@ Src/UI/%.o Src/UI/%.su Src/UI/%.cyclo: ../Src/UI/%.c Src/UI/subdir.mk
 clean: clean-Src-2f-UI
 
 clean-Src-2f-UI:
-	-$(RM) ./Src/UI/font.cyclo ./Src/UI/font.d ./Src/UI/font.o ./Src/UI/font.su ./Src/UI/font4x6.cyclo ./Src/UI/font4x6.d ./Src/UI/font4x6.o ./Src/UI/font4x6.su ./Src/UI/font5x7.cyclo ./Src/UI/font5x7.d ./Src/UI/font5x7.o ./Src/UI/font5x7.su ./Src/UI/font5x8_elektron.cyclo ./Src/UI/font5x8_elektron.d ./Src/UI/font5x8_elektron.o ./Src/UI/font5x8_elektron.su ./Src/UI/ui_core.cyclo ./Src/UI/ui_core.d ./Src/UI/ui_core.o ./Src/UI/ui_core.su ./Src/UI/ui_event.cyclo ./Src/UI/ui_event.d ./Src/UI/ui_event.o ./Src/UI/ui_event.su ./Src/UI/ui_param.cyclo ./Src/UI/ui_param.d ./Src/UI/ui_param.o ./Src/UI/ui_param.su ./Src/UI/ui_renderer_oled.cyclo ./Src/UI/ui_renderer_oled.d ./Src/UI/ui_renderer_oled.o ./Src/UI/ui_renderer_oled.su ./Src/UI/ui_tasklet.cyclo ./Src/UI/ui_tasklet.d ./Src/UI/ui_tasklet.o ./Src/UI/ui_tasklet.su
+	-$(RM) ./Src/UI/font.cyclo ./Src/UI/font.d ./Src/UI/font.o ./Src/UI/font.su ./Src/UI/font4x6.cyclo ./Src/UI/font4x6.d ./Src/UI/font4x6.o ./Src/UI/font4x6.su ./Src/UI/font5x7.cyclo ./Src/UI/font5x7.d ./Src/UI/font5x7.o ./Src/UI/font5x7.su ./Src/UI/font5x8_elektron.cyclo ./Src/UI/font5x8_elektron.d ./Src/UI/font5x8_elektron.o ./Src/UI/font5x8_elektron.su ./Src/UI/ui_core.cyclo ./Src/UI/ui_core.d ./Src/UI/ui_core.o ./Src/UI/ui_core.su ./Src/UI/ui_event.cyclo ./Src/UI/ui_event.d ./Src/UI/ui_event.o ./Src/UI/ui_event.su ./Src/UI/ui_navigation.cyclo ./Src/UI/ui_navigation.d ./Src/UI/ui_navigation.o ./Src/UI/ui_navigation.su ./Src/UI/ui_page_manager.cyclo ./Src/UI/ui_page_manager.d ./Src/UI/ui_page_manager.o ./Src/UI/ui_page_manager.su ./Src/UI/ui_param.cyclo ./Src/UI/ui_param.d ./Src/UI/ui_param.o ./Src/UI/ui_param.su ./Src/UI/ui_renderer_oled.cyclo ./Src/UI/ui_renderer_oled.d ./Src/UI/ui_renderer_oled.o ./Src/UI/ui_renderer_oled.su ./Src/UI/ui_tasklet.cyclo ./Src/UI/ui_tasklet.d ./Src/UI/ui_tasklet.o ./Src/UI/ui_tasklet.su
 
 .PHONY: clean-Src-2f-UI
 

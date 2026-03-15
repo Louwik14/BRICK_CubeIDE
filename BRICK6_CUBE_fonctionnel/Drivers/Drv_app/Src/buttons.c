@@ -131,8 +131,7 @@ void buttons_update(uint32_t dt_ms)
         button_state_t *s = &button_states[i];
         const uint8_t raw = buttons_hw_get((button_id_t)i);
 
-        s->pressed = 0U;
-        s->released = 0U;
+
 
         if (raw != s->state)
         {
@@ -187,7 +186,9 @@ uint8_t button_pressed(button_id_t btn)
         return 0U;
     }
 
-    return button_states[(uint32_t)btn].pressed;
+    uint8_t v = button_states[(uint32_t)btn].pressed;
+    button_states[(uint32_t)btn].pressed = 0U;
+    return v;
 }
 
 /**
@@ -210,9 +211,10 @@ uint8_t button_released(button_id_t btn)
         return 0U;
     }
 
-    return button_states[(uint32_t)btn].released;
+    uint8_t v = button_states[(uint32_t)btn].released;
+    button_states[(uint32_t)btn].released = 0U;
+    return v;
 }
-
 /**
  * @brief Point d'entrée button_down.
  *

@@ -1,5 +1,5 @@
-../Src/Core/brick6_app_init.c:92:13:my_dsp	32	static
-../Src/Core/brick6_app_init.c:82:5:_write	8	static
-../Src/Core/brick6_app_init.c:187:6:brick6_app_init	64	static
-../Src/Core/brick6_app_init.c:273:6:brick6_app_process	16	static
-../Src/Core/brick6_app_init.c:326:6:brick6_app_get_stats	8	static
+../Src/Core/brick6_app_init.c:130:13:my_dsp	32	static
+../Src/Core/brick6_app_init.c:107:5:_write	8	static
+../Src/Core/brick6_app_init.c:235:6:brick6_app_init	64	static
+../Src/Core/brick6_app_init.c:331:6:brick6_app_process	16	static
+../Src/Core/brick6_app_init.c:395:6:brick6_app_get_stats	8	static

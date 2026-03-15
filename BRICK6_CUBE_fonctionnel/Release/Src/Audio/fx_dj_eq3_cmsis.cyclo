@@ -1,8 +1,8 @@
-../Src/Audio/fx_dj_eq3_cmsis.c:143:6:fx_dj_eq3_reset	2
-../Src/Audio/fx_dj_eq3_cmsis.c:154:6:fx_dj_eq3_update_coeffs	10
-../Src/Audio/fx_dj_eq3_cmsis.c:190:6:fx_dj_eq3_set_low_db	3
-../Src/Audio/fx_dj_eq3_cmsis.c:205:6:fx_dj_eq3_set_mid_db	3
-../Src/Audio/fx_dj_eq3_cmsis.c:220:6:fx_dj_eq3_set_high_db	3
-../Src/Audio/fx_dj_eq3_cmsis.c:235:6:fx_dj_eq3_set_bypass	2
-../Src/Audio/fx_dj_eq3_cmsis.c:245:6:fx_dj_eq3_init	4
-../Src/Audio/fx_dj_eq3_cmsis.c:278:6:fx_dj_eq3_process_block	7
+../Src/Audio/fx_dj_eq3_cmsis.c:288:6:fx_dj_eq3_reset	2
+../Src/Audio/fx_dj_eq3_cmsis.c:310:6:fx_dj_eq3_update_coeffs	10
+../Src/Audio/fx_dj_eq3_cmsis.c:358:6:fx_dj_eq3_set_low_db	3
+../Src/Audio/fx_dj_eq3_cmsis.c:385:6:fx_dj_eq3_set_mid_db	3
+../Src/Audio/fx_dj_eq3_cmsis.c:412:6:fx_dj_eq3_set_high_db	3
+../Src/Audio/fx_dj_eq3_cmsis.c:439:6:fx_dj_eq3_set_bypass	2
+../Src/Audio/fx_dj_eq3_cmsis.c:465:6:fx_dj_eq3_init	4
+../Src/Audio/fx_dj_eq3_cmsis.c:512:6:fx_dj_eq3_process_block	7

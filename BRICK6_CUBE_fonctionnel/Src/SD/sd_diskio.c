@@ -623,7 +623,8 @@ void BSP_SD_ReadCpltCallback(void)
   depending on the SD_HAL_Driver version, either the HAL_SD_ErrorCallback() or HAL_SD_AbortCallback()
   or both could be defined, activate the callbacks below when suitable and needed
 ==============================================================================================
-/**
+*/
+/*
  * @brief Point d'entrée BSP_SD_AbortCallback.
  *
  * Rôle:
@@ -650,7 +651,7 @@ void BSP_SD_AbortCallback(void)
 void BSP_SD_ErrorCallback(void)
 {
 }
-*/
+
 /* USER CODE END ErrorAbortCallbacks */
 
 /* USER CODE BEGIN lastSection */
