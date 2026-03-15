@@ -36,6 +36,7 @@
 #include "encoders.h"
 #include "led_rgb.h"
 #include "mux_pots.h"
+#include "hall_kbd.h"
 
 volatile uint32_t engine_tick_count = 0U;
 
@@ -74,6 +75,7 @@ static void engine_tick(uint32_t dt_ms)
   encoders_update(dt_ms);
   led_service(dt_ms);
   mux_pots_scan();
+  hall_kbd_poll();
 }
 
 /* ============================================================
@@ -111,6 +113,7 @@ void engine_tasklet_init(uint32_t sample_rate)
   buttons_init();
   encoders_init();
   mux_pots_init();
+  hall_kbd_init();
 }
 
 /* ============================================================
