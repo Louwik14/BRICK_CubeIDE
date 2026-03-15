@@ -10,6 +10,7 @@ extern "C" {
 #define HALL_KBD_KEY_COUNT 16U
 
 void hall_kbd_init(void);
+void hall_kbd_start(void);
 void hall_kbd_poll(void);
 
 uint8_t hall_kbd_is_pressed(uint8_t key);

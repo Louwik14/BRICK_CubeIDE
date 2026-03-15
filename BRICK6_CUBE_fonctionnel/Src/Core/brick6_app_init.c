@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "audio_debug_log.h"
+#include "App/hall_kbd.h"
 #include <math.h>
 
 #include "brick6_app_init.h"
@@ -308,6 +309,7 @@ void brick6_app_init(void)
     control_event_init();
 
     audio_start();
+    hall_kbd_start();
 
     HAL_Delay(200);
 
