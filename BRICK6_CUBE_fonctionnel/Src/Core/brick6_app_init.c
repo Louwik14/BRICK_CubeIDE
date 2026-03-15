@@ -36,6 +36,7 @@
 #include "Audio/sd_multitrack_recorder.h"
 #include "Storage/memory_layout.h"
 #include "App/hall_mux_test.h"
+#include "App/hall_midi_test.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -315,6 +316,7 @@ void brick6_app_init(void)
     HAL_Delay(200);
 
     midi_init();
+    hall_midi_test_init();
 }
 
 /* ============================================================
@@ -342,6 +344,7 @@ void brick6_app_process(void)
 
     g_brick6_app_process_call_count++;
     hall_kbd_poll();
+    hall_midi_test_process();
     engine_tasklet_poll();
     recorder_transport_process();
 
