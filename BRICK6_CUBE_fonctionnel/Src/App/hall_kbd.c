@@ -56,8 +56,11 @@ static uint8_t s_key_velocity[HALL_KBD_KEY_COUNT];
 static uint8_t s_key_value[HALL_KBD_KEY_COUNT];
 
 static volatile uint8_t s_scan_in_progress;
+/* Counts TIM6 firings that arrived while a previous scan was still active. */
 static volatile uint32_t s_scan_overrun_count;
+/* Counts dropped key events when the SPSC ring is full. */
 static volatile uint32_t s_event_overflow_count;
+/* Tracks worst-case ISR execution time in core cycles (bring-up timing margin). */
 static volatile uint32_t s_isr_max_cycles;
 
 static uint32_t hall_get_apb1_timer_clk_hz(void)
@@ -85,6 +88,11 @@ static void hall_mux_select(uint8_t mux)
 
 static void hall_wait_settle_us(uint32_t settle_us)
 {
+  /*
+   * Fixed settle delay: the MUX + analog front-end must settle for a known,
+   * deterministic window before conversion starts. This bounded busy-wait keeps
+   * TIM6 ISR runtime predictable.
+   */
   uint32_t start = TIM5->CNT;
   while ((uint32_t)(TIM5->CNT - start) < settle_us)
   {
@@ -108,6 +116,11 @@ static uint8_t hall_adc_sample_pair(uint16_t *adc1_out, uint16_t *adc2_out)
   uint8_t adc1_ready = 0U;
   uint8_t adc2_ready = 0U;
 
+  /*
+   * Bounded polling by design for ISR safety: this loop executes at most
+   * HALL_ADC_POLL_MAX_ITER iterations, preventing lockup if an ADC conversion
+   * never reaches EOC.
+   */
   for (uint32_t i = 0U; i < HALL_ADC_POLL_MAX_ITER; i++)
   {
     if (!adc1_ready && (HAL_ADC_PollForConversion(&hadc1, 0U) == HAL_OK))
@@ -158,6 +171,12 @@ static void hall_event_push(uint8_t key, hall_event_type_t type, uint32_t ts_us,
   s_event_ring[wr].timestamp_us = ts_us;
   s_event_ring[wr].velocity_dt_us = velocity_dt_us;
 
+  /*
+   * SPSC ring ordering rule:
+   *  - producer: TIM6 ISR writes payload
+   *  - consumer: main loop reads payload
+   * DMB ensures event fields are visible before write index publish.
+   */
   __DMB();
   s_event_wr = next;
 }
@@ -239,6 +258,10 @@ static void hall_scan_isr(void)
   HAL_GPIO_WritePin(HALL_KBD_DEBUG_SCOPE_GPIO_Port, HALL_KBD_DEBUG_SCOPE_Pin, GPIO_PIN_SET);
 #endif
 
+  /*
+   * Strictly bounded scan loop: exactly 8 mux steps per ISR tick. Combined with
+   * fixed settle wait and bounded ADC polling, ISR time remains deterministic.
+   */
   for (uint8_t mux = 0U; mux < 8U; mux++)
   {
     uint16_t adc1 = 0U;
@@ -254,12 +277,13 @@ static void hall_scan_isr(void)
 
     uint8_t key_a = (uint8_t)(mux * 2U);
     uint8_t key_b = (uint8_t)(key_a + 1U);
+    uint32_t now_us = TIM5->CNT;
 
     snap->raw[key_a] = adc1;
     snap->raw[key_b] = adc2;
 
-    hall_process_key_sample(key_a, adc1, TIM5->CNT);
-    hall_process_key_sample(key_b, adc2, TIM5->CNT);
+    hall_process_key_sample(key_a, adc1, now_us);
+    hall_process_key_sample(key_b, adc2, now_us);
 
     snap->pressed[key_a] = s_key_scan[key_a].is_down;
     snap->pressed[key_b] = s_key_scan[key_b].is_down;
@@ -366,7 +390,6 @@ void hall_kbd_poll(void)
 
     for (uint8_t k = 0U; k < HALL_KBD_KEY_COUNT; k++)
     {
-      s_key_pressed[k] = snap->pressed[k];
       s_key_value[k] = (uint8_t)(snap->raw[k] >> HALL_VALUE_SHIFT);
     }
 
