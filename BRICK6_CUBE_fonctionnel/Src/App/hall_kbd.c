@@ -3,6 +3,12 @@
 #include "adc.h"
 #include "main.h"
 #include "stm32h7xx_hal.h"
+#include "usart.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#define HALL_KBD_DEBUG               1
 
 #define HALL_SCAN_RATE_HZ             10000U
 #define HALL_TIMESTAMP_RATE_HZ        1000000U
@@ -62,6 +68,84 @@ static volatile uint32_t s_scan_overrun_count;
 static volatile uint32_t s_event_overflow_count;
 /* Tracks worst-case ISR execution time in core cycles (bring-up timing margin). */
 static volatile uint32_t s_isr_max_cycles;
+
+static uint8_t hall_velocity_from_dt(uint32_t dt_us);
+
+#if HALL_KBD_DEBUG
+/*
+ * Lightweight UART debug instrumentation for runtime verification.
+ *
+ * Design constraints:
+ *  - Never log from TIM6 ISR (all logging lives in hall_kbd_poll()).
+ *  - Keep scan ISR deterministic (ISR only updates existing counters/state).
+ *  - Use non-blocking UART writes to avoid stalling the main loop.
+ */
+static uint8_t hall_kbd_debug_uart_try_write(const char *msg)
+{
+  size_t len = strlen(msg);
+  for (size_t i = 0U; i < len; i++)
+  {
+    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TXE_TXFNF) == RESET)
+    {
+      return 0U;
+    }
+
+    huart1.Instance->TDR = (uint8_t)msg[i];
+  }
+
+  return 1U;
+}
+
+static void hall_kbd_debug_log_stats(void)
+{
+  char line[128];
+  static uint32_t s_last_log_ts_us = 0U;
+  static uint32_t s_last_seq = 0U;
+  uint32_t now_us = TIM5->CNT;
+
+  if ((uint32_t)(now_us - s_last_log_ts_us) < 1000000U)
+  {
+    return;
+  }
+
+  uint32_t seq = s_publish_seq;
+  uint32_t scans_per_sec = seq - s_last_seq;
+  int n = snprintf(line,
+                   sizeof(line),
+                   "[HALL] scan_hz=%lu isr_max_cycles=%lu overrun=%lu evt_ovf=%lu\r\n",
+                   (unsigned long)scans_per_sec,
+                   (unsigned long)s_isr_max_cycles,
+                   (unsigned long)s_scan_overrun_count,
+                   (unsigned long)s_event_overflow_count);
+
+  if ((n > 0) && ((size_t)n < sizeof(line)) && (hall_kbd_debug_uart_try_write(line) != 0U))
+  {
+    s_last_log_ts_us = now_us;
+    s_last_seq = seq;
+  }
+}
+
+static void hall_kbd_debug_log_press_event(const hall_event_t *ev)
+{
+  if (ev->type != (uint8_t)HALL_EVENT_PRESS)
+  {
+    return;
+  }
+
+  char line[48];
+  uint8_t velocity = hall_velocity_from_dt(ev->velocity_dt_us);
+  int n = snprintf(line,
+                   sizeof(line),
+                   "[HALL] key=%u vel=%u\r\n",
+                   (unsigned int)ev->key,
+                   (unsigned int)velocity);
+
+  if ((n > 0) && ((size_t)n < sizeof(line)))
+  {
+    (void)hall_kbd_debug_uart_try_write(line);
+  }
+}
+#endif
 
 static uint32_t hall_get_apb1_timer_clk_hz(void)
 {
@@ -380,6 +464,10 @@ void hall_kbd_init(void)
 
 void hall_kbd_poll(void)
 {
+#if HALL_KBD_DEBUG
+  hall_kbd_debug_log_stats();
+#endif
+
   static uint32_t last_seq = 0U;
   uint32_t seq = s_publish_seq;
 
@@ -411,6 +499,9 @@ void hall_kbd_poll(void)
     {
       s_key_velocity[ev.key] = hall_velocity_from_dt(ev.velocity_dt_us);
       s_key_pressed[ev.key] = 1U;
+#if HALL_KBD_DEBUG
+      hall_kbd_debug_log_press_event(&ev);
+#endif
     }
     else
     {
