@@ -1,4 +1,4 @@
-#include "hall_kbd.h"
+#include "App/hall_kbd.h"
 
 #include "adc.h"
 #include "main.h"
@@ -85,8 +85,8 @@ static uint8_t hall_kbd_debug_uart_try_write(const char *msg)
   size_t len = strlen(msg);
   for (size_t i = 0U; i < len; i++)
   {
-    if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TXE_TXFNF) == RESET)
-    {
+	  if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_TXFNF) == RESET)
+	  {
       return 0U;
     }
 

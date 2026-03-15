@@ -1,0 +1,10 @@
+../Src/App/hall_kbd.c:288:13:hall_process_key_sample	9
+../Src/App/hall_kbd.c:428:6:hall_kbd_init	4
+../Src/App/hall_kbd.c:465:6:hall_kbd_poll	15
+../Src/App/hall_kbd.c:514:9:hall_kbd_is_pressed	2
+../Src/App/hall_kbd.c:524:9:hall_kbd_get_velocity	2
+../Src/App/hall_kbd.c:534:9:hall_kbd_get_value	2
+../Src/App/hall_kbd.c:544:10:hall_kbd_get_scan_overrun_count	1
+../Src/App/hall_kbd.c:549:10:hall_kbd_get_event_overflow_count	1
+../Src/App/hall_kbd.c:554:10:hall_kbd_get_isr_max_cycles	1
+../Src/App/hall_kbd.c:559:6:TIM6_DAC_IRQHandler	18

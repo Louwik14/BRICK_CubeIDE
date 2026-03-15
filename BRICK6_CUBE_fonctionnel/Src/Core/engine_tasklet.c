@@ -35,8 +35,8 @@
 #include "buttons.h"
 #include "encoders.h"
 #include "led_rgb.h"
-#include "mux_pots.h"
-#include "hall_kbd.h"
+#include "App/mux_pots.h"
+#include "App/hall_kbd.h"
 
 volatile uint32_t engine_tick_count = 0U;
 

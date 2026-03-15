@@ -1,4 +1,4 @@
-#include "mux_pots.h"
+#include "App/mux_pots.h"
 
 #include "adc.h"
 #include "main.h"
