@@ -34,7 +34,7 @@ static void ui_page_hall_debug_render(void)
 {
     drv_display_draw_text(0U, 0U, "HALL DEBUG");
 
-    for (uint8_t row = 0U; row < (HALL_KBD_KEY_COUNT / 2U); row++)
+    for (uint8_t row = 0U; row < 7U; row++)
     {
         const uint8_t key_left = (uint8_t)(row * 2U);
         const uint8_t key_right = (uint8_t)(key_left + 1U);

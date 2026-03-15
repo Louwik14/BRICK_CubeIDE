@@ -1,5 +1,5 @@
 Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
- ../Inc/audio_debug_log.h \
+ ../Inc/audio_debug_log.h ../Inc/App/hall_kbd.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h \
  ../Inc/Audio/sd_multitrack_recorder.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h \
@@ -71,6 +71,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  ../Inc/Audio/live_recorder.h ../Inc/Audio/live_recorder_config.h \
  ../Inc/Audio/recorder_transport.h ../Inc/Storage/memory_layout.h
 ../Inc/audio_debug_log.h:
+../Inc/App/hall_kbd.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:

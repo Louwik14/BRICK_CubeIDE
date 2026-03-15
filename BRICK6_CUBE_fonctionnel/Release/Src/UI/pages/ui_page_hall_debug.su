@@ -1,0 +1,5 @@
+../Src/UI/pages/ui_page_hall_debug.c:18:13:ui_page_hall_debug_leave	0	static
+../Src/UI/pages/ui_page_hall_debug.c:20:13:ui_page_hall_debug_handle_event	0	static
+../Src/UI/pages/ui_page_hall_debug.c:33:13:ui_page_hall_debug_render	80	static
+../Src/UI/pages/ui_page_hall_debug.c:10:13:ui_page_hall_debug_enter	16	static
+../Src/UI/pages/ui_page_hall_debug.c:25:13:ui_page_hall_debug_tick	16	static

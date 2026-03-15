@@ -436,6 +436,7 @@
 "./Src/UI/ui_param.o"
 "./Src/UI/ui_renderer_oled.o"
 "./Src/UI/ui_tasklet.o"
+"./Src/UI/pages/ui_page_hall_debug.o"
 "./Src/UI/pages/ui_page_main.o"
 "./Src/UI/pages/ui_page_param_test.o"
 "./Src/adc.o"
