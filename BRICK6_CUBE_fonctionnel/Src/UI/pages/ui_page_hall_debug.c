@@ -5,15 +5,14 @@
 #include "App/hall_kbd.h"
 #include "drv_display.h"
 
-static uint8_t s_hall_values[HALL_KBD_KEY_COUNT];
-
-static void ui_page_hall_debug_enter(void)
+enum
 {
-    for (uint8_t key = 0U; key < HALL_KBD_KEY_COUNT; key++)
-    {
-        s_hall_values[key] = hall_kbd_get_value(key);
-    }
-}
+    HALL_DEBUG_FONT_HEIGHT_PX = 8U,
+    HALL_DEBUG_MAX_ROWS = 6U,
+    HALL_DEBUG_KEYS_PER_ROW = 2U,
+};
+
+static void ui_page_hall_debug_enter(void) {}
 
 static void ui_page_hall_debug_leave(void) {}
 
@@ -22,33 +21,34 @@ static void ui_page_hall_debug_handle_event(const ui_event_t *ev)
     (void)ev;
 }
 
-static void ui_page_hall_debug_tick(void)
-{
-    for (uint8_t key = 0U; key < HALL_KBD_KEY_COUNT; key++)
-    {
-        s_hall_values[key] = hall_kbd_get_value(key);
-    }
-}
+static void ui_page_hall_debug_tick(void) {}
 
 static void ui_page_hall_debug_render(void)
 {
-    drv_display_draw_text(0U, 0U, "HALL DEBUG");
+    const uint8_t available_rows = (uint8_t)(OLED_HEIGHT / HALL_DEBUG_FONT_HEIGHT_PX);
+    const uint8_t rows_to_draw = (available_rows < HALL_DEBUG_MAX_ROWS) ? available_rows : HALL_DEBUG_MAX_ROWS;
 
-    for (uint8_t row = 0U; row < 7U; row++)
+    for (uint8_t row = 0U; row < rows_to_draw; row++)
     {
-        const uint8_t key_left = (uint8_t)(row * 2U);
+        const uint8_t key_left = (uint8_t)(row * HALL_DEBUG_KEYS_PER_ROW);
         const uint8_t key_right = (uint8_t)(key_left + 1U);
+
         char line[28];
+
+        if (key_right >= HALL_KBD_KEY_COUNT)
+        {
+            break;
+        }
 
         (void)snprintf(line,
                        sizeof(line),
-                       "%02u: %3u   %02u: %3u",
+                       "%02u:%3u   %02u:%3u",
                        (unsigned int)key_left,
-                       (unsigned int)s_hall_values[key_left],
+                       (unsigned int)hall_kbd_get_value(key_left),
                        (unsigned int)key_right,
-                       (unsigned int)s_hall_values[key_right]);
+                       (unsigned int)hall_kbd_get_value(key_right));
 
-        drv_display_draw_text(0U, (uint8_t)(8U + (row * 7U)), line);
+        drv_display_draw_text(0U, (uint8_t)(row * HALL_DEBUG_FONT_HEIGHT_PX), line);
     }
 }
 
