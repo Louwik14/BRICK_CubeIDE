@@ -23,6 +23,8 @@
 #define HALL_EVENT_RING_SIZE          64U
 #define HALL_MUX_CHANNEL_COUNT        8U
 #define HALL_CPU_CLOCK_HZ             480000000U
+#define HALL_BOOT_CALIBRATION_MS      300U
+#define HALL_BOOT_CALIBRATION_SCANS   ((HALL_SCAN_RATE_HZ * HALL_BOOT_CALIBRATION_MS) / 1000U)
 
 typedef enum
 {
@@ -100,6 +102,7 @@ static volatile uint32_t s_adc_error_count;
 static volatile uint32_t s_isr_last_cycles;
 static volatile uint16_t s_last_raw_adc1;
 static volatile uint16_t s_last_raw_adc2;
+static volatile uint16_t s_boot_calibration_remaining;
 
 static uint32_t hall_get_apb1_timer_clk_hz(void)
 {
@@ -395,6 +398,15 @@ static void hall_process_key_sample(uint8_t key, uint16_t raw, uint32_t now_us)
   st->hysteresis = release_th;
   st->value = hall_normalize_with_deadzone(sample, st->min, st->max, detent_low, detent_high);
 
+  if (s_boot_calibration_remaining != 0U)
+  {
+    st->pressed = 0U;
+    st->velocity = 0U;
+    st->velocity_armed = 0U;
+    st->last_filtered = sample;
+    return;
+  }
+
   if (st->velocity_armed == 0U)
   {
     if ((st->last_filtered > release_th) && (sample <= release_th))
@@ -507,6 +519,11 @@ static void hall_scan_isr(void)
     s_scan_overrun_count++;
   }
 
+  if (s_boot_calibration_remaining != 0U)
+  {
+    s_boot_calibration_remaining--;
+  }
+
   s_scan_in_progress = 0U;
 }
 
@@ -591,6 +608,7 @@ void hall_kbd_init(void)
   s_isr_last_cycles = 0U;
   s_last_raw_adc1 = 0U;
   s_last_raw_adc2 = 0U;
+  s_boot_calibration_remaining = 0U;
 
   if ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) == 0U)
   {
@@ -617,6 +635,7 @@ void hall_kbd_start(void)
   HAL_NVIC_ClearPendingIRQ(TIM6_DAC_IRQn);
   HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
   TIM6->CR1 = TIM_CR1_CEN;
+  s_boot_calibration_remaining = (uint16_t)HALL_BOOT_CALIBRATION_SCANS;
   s_hall_scan_started = 1U;
 }
 
