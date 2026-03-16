@@ -10,7 +10,7 @@
 
 static volatile uint16_t adc1_dma[HALL_MUX_COUNT];
 static volatile uint16_t adc2_dma[HALL_MUX_COUNT];
-volatile uint8_t hall_mux_index;
+static volatile uint8_t hall_mux_index;
 
 void hall_mux_select(uint8_t index)
 {
@@ -29,6 +29,12 @@ void hall_adc_init(void)
     hall_mux_index = 0U;
     hall_mux_select(hall_mux_index);
 
+    for (uint8_t i = 0U; i < HALL_MUX_COUNT; i++)
+    {
+        adc1_dma[i] = 0U;
+        adc2_dma[i] = 0U;
+    }
+
     (void)HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_dma, HALL_MUX_COUNT);
     (void)HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_dma, HALL_MUX_COUNT);
 
@@ -45,10 +51,10 @@ uint16_t hall_adc_get_raw(uint8_t key)
 
     if (key < HALL_MUX_COUNT)
     {
-        return adc1_dma[key];
+        return adc1_dma[0];
     }
 
-    return adc2_dma[key - HALL_MUX_COUNT];
+    return adc2_dma[0];
 }
 
 uint8_t hall_adc_get_mux_index(void)
