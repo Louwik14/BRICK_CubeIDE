@@ -1,3 +1,0 @@
-../Src/Sampler/sample_pool.c:311:6:sample_pool_init	2
-../Src/Sampler/sample_pool.c:340:6:sample_pool_load	53
-../Src/Sampler/sample_pool.c:463:22:sample_pool_get	2

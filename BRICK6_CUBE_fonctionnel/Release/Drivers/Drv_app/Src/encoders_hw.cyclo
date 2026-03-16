@@ -1,3 +1,0 @@
-../Drivers/Drv_app/Src/encoders_hw.c:101:6:encoders_hw_init	1
-../Drivers/Drv_app/Src/encoders_hw.c:120:6:encoders_hw_read	9
-../Drivers/Drv_app/Src/encoders_hw.c:159:8:encoders_hw_get_delta	2

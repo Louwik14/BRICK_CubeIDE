@@ -130,6 +130,8 @@ int main(void)
   MX_ADC1_Init();
   MX_ADC3_Init();
   MX_TIM2_Init();
+  MX_TIM6_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
   MX_FATFS_Init();

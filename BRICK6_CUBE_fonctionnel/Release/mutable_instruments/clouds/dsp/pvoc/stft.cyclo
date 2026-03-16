@@ -1,4 +1,0 @@
-../mutable_instruments/clouds/dsp/pvoc/stft.cpp:41:6:void clouds::STFT::Init(clouds::FFT*, size_t, size_t, float*, float*, const float*, short int*, clouds::Modifier*)	5
-../mutable_instruments/clouds/dsp/pvoc/stft.cpp:80:6:void clouds::STFT::Reset()	3
-../mutable_instruments/clouds/dsp/pvoc/stft.cpp:90:6:void clouds::STFT::Process(const clouds::Parameters&, const float*, float*, size_t, size_t)	13
-../mutable_instruments/clouds/dsp/pvoc/stft.cpp:120:6:void clouds::STFT::Buffer()	74

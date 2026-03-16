@@ -6,23 +6,14 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../Src/App/app_sample_boot.c \
-../Src/App/hall_kbd.c \
-../Src/App/hall_midi_test.c \
-../Src/App/hall_mux_test.c \
 ../Src/App/mux_pots.c 
 
 C_DEPS += \
 ./Src/App/app_sample_boot.d \
-./Src/App/hall_kbd.d \
-./Src/App/hall_midi_test.d \
-./Src/App/hall_mux_test.d \
 ./Src/App/mux_pots.d 
 
 OBJS += \
 ./Src/App/app_sample_boot.o \
-./Src/App/hall_kbd.o \
-./Src/App/hall_midi_test.o \
-./Src/App/hall_mux_test.o \
 ./Src/App/mux_pots.o 
 
 
@@ -33,7 +24,7 @@ Src/App/%.o Src/App/%.su Src/App/%.cyclo: ../Src/App/%.c Src/App/subdir.mk
 clean: clean-Src-2f-App
 
 clean-Src-2f-App:
-	-$(RM) ./Src/App/app_sample_boot.cyclo ./Src/App/app_sample_boot.d ./Src/App/app_sample_boot.o ./Src/App/app_sample_boot.su ./Src/App/hall_kbd.cyclo ./Src/App/hall_kbd.d ./Src/App/hall_kbd.o ./Src/App/hall_kbd.su ./Src/App/hall_midi_test.cyclo ./Src/App/hall_midi_test.d ./Src/App/hall_midi_test.o ./Src/App/hall_midi_test.su ./Src/App/hall_mux_test.cyclo ./Src/App/hall_mux_test.d ./Src/App/hall_mux_test.o ./Src/App/hall_mux_test.su ./Src/App/mux_pots.cyclo ./Src/App/mux_pots.d ./Src/App/mux_pots.o ./Src/App/mux_pots.su
+	-$(RM) ./Src/App/app_sample_boot.cyclo ./Src/App/app_sample_boot.d ./Src/App/app_sample_boot.o ./Src/App/app_sample_boot.su ./Src/App/mux_pots.cyclo ./Src/App/mux_pots.d ./Src/App/mux_pots.o ./Src/App/mux_pots.su
 
 .PHONY: clean-Src-2f-App
 
