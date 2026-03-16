@@ -23,8 +23,8 @@
 
 #include <stdint.h>
 
-#include "ui_display.h"
 #include "ui_core.h"
+#include "ui_renderer_oled.h"
 
 /**
  * @brief Point d'entrée ui_tasklet_poll.
@@ -43,7 +43,7 @@ void ui_tasklet_poll(void)
     if (init == 0U)
     {
         init = 1U;
-        ui_display_init();
+        ui_renderer_oled_init();
         ui_core_init();
     }
 
