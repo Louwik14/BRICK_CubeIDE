@@ -1,8 +1,7 @@
 #ifndef UI_DISPLAY_H
 #define UI_DISPLAY_H
 
-#include "u8g2.h"
-
+#include "../../csrc/u8g2.h"
 void ui_display_init(void);
 void ui_display_begin_frame(void);
 void ui_display_end_frame(void);

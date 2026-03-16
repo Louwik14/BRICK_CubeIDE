@@ -1,5 +1,6 @@
-../Src/UI/pages/ui_page_calibration.c:28:13:ui_page_calibration_leave	1
-../Src/UI/pages/ui_page_calibration.c:32:13:ui_page_calibration_handle_event	1
-../Src/UI/pages/ui_page_calibration.c:60:13:ui_page_calibration_render	4
-../Src/UI/pages/ui_page_calibration.c:37:13:ui_page_calibration_tick	4
-../Src/UI/pages/ui_page_calibration.c:21:13:ui_page_calibration_enter	1
+../Src/UI/pages/ui_page_calibration.c:19:13:ui_page_calibration_enter	2
+../Src/UI/pages/ui_page_calibration.c:29:13:ui_page_calibration_leave	1
+../Src/UI/pages/ui_page_calibration.c:33:13:ui_page_calibration_handle_event	1
+../Src/UI/pages/ui_page_calibration.c:52:13:draw_cell	4
+../Src/UI/pages/ui_page_calibration.c:72:13:ui_page_calibration_render	4
+../Src/UI/pages/ui_page_calibration.c:38:13:ui_page_calibration_tick	4

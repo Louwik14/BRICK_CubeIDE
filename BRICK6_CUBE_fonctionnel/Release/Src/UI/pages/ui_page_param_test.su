@@ -1,5 +1,5 @@
 ../Src/UI/pages/ui_page_param_test.c:64:13:ui_page_param_test_leave	0	static
 ../Src/UI/pages/ui_page_param_test.c:77:13:ui_page_param_test_handle_event	0	static
 ../Src/UI/pages/ui_page_param_test.c:49:13:ui_page_param_test_enter	0	static
-../Src/UI/pages/ui_page_param_test.c:149:13:ui_page_param_test_render	104	static
+../Src/UI/pages/ui_page_param_test.c:149:13:ui_page_param_test_render	112	static
 ../Src/UI/pages/ui_page_param_test.c:92:13:ui_page_param_test_tick	0	static

@@ -1,0 +1,2 @@
+../Drivers/Drv_app/Src/u8g2_port.c:23:9:u8x8_byte_stm32_spi_hw	8	static
+../Drivers/Drv_app/Src/u8g2_port.c:55:9:u8x8_gpio_and_delay_stm32	8	static

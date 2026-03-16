@@ -1,0 +1,2 @@
+../Drivers/csrc/u8x8_d_ssd1318.c:277:9:u8x8_d_ssd1318_128x96	10
+../Drivers/csrc/u8x8_d_ssd1318.c:298:9:u8x8_d_ssd1318_128x96_xcp	10

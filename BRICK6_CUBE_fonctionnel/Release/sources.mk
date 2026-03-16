@@ -54,6 +54,7 @@ Drivers/CMSIS_DSP/Source/QuaternionMathFunctions \
 Drivers/CMSIS_DSP/Source/TransformFunctions \
 Drivers/Drv_app/Src \
 Drivers/STM32H7xx_HAL_Driver/Src \
+Drivers/csrc \
 Src/App/Hall \
 Src/App \
 Src/Audio \

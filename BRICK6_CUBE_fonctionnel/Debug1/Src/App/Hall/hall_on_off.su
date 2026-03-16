@@ -1,0 +1,4 @@
+../Src/App/Hall/hall_on_off.c:10:6:hall_on_off_init	0	static
+../Src/App/Hall/hall_on_off.c:19:6:hall_on_off_process	8	static
+../Src/App/Hall/hall_on_off.c:43:9:hall_on_off_pressed	0	static
+../Src/App/Hall/hall_on_off.c:51:9:hall_on_off_event	0	static

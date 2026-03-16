@@ -40,5 +40,10 @@
 			<type>2</type>
 			<location>C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Source</location>
 		</link>
+		<link>
+			<name>csrc</name>
+			<type>2</type>
+			<location>C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/csrc</location>
+		</link>
 	</linkedResources>
 </projectDescription>

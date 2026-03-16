@@ -2,4 +2,4 @@
 ../Src/UI/pages/ui_page_debug_hall.c:30:13:ui_page_debug_hall_handle_event	0	static
 ../Src/UI/pages/ui_page_debug_hall.c:35:13:ui_page_debug_hall_tick	0	static
 ../Src/UI/pages/ui_page_debug_hall.c:16:13:ui_page_debug_hall_enter	8	static
-../Src/UI/pages/ui_page_debug_hall.c:37:13:ui_page_debug_hall_render	192	static
+../Src/UI/pages/ui_page_debug_hall.c:37:13:ui_page_debug_hall_render	168	static

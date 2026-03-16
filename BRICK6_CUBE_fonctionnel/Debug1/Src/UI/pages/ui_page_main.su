@@ -1,5 +1,5 @@
-../Src/UI/pages/ui_page_main.c:61:6:ui_page_main_leave	0	static
-../Src/UI/pages/ui_page_main.c:73:6:ui_page_main_handle_event	0	static
-../Src/UI/pages/ui_page_main.c:87:6:ui_page_main_tick	0	static
-../Src/UI/pages/ui_page_main.c:46:6:ui_page_main_enter	8	static
-../Src/UI/pages/ui_page_main.c:98:6:ui_page_main_render	8	static
+../Src/UI/pages/ui_page_main.c:41:6:ui_page_main_leave	0	static
+../Src/UI/pages/ui_page_main.c:43:6:ui_page_main_handle_event	0	static
+../Src/UI/pages/ui_page_main.c:48:6:ui_page_main_tick	0	static
+../Src/UI/pages/ui_page_main.c:36:6:ui_page_main_enter	8	static
+../Src/UI/pages/ui_page_main.c:50:6:ui_page_main_render	8	static

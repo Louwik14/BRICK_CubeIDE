@@ -54,6 +54,8 @@ Drivers/CMSIS_DSP/Source/QuaternionMathFunctions \
 Drivers/CMSIS_DSP/Source/TransformFunctions \
 Drivers/Drv_app/Src \
 Drivers/STM32H7xx_HAL_Driver/Src \
+Drivers/csrc \
+Src/App/Hall \
 Src/App \
 Src/Audio \
 Src/Core \
@@ -63,6 +65,7 @@ Src/SD \
 Src/Sampler \
 Src/Storage \
 Src/UI \
+Src/UI/pages \
 Src \
 Startup \
 mutable_instruments/clouds \
