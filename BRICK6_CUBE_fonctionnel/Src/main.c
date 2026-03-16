@@ -26,7 +26,6 @@
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
-#include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
 
@@ -47,7 +46,6 @@
 #include "audio_debug_log.h"
 #include "led_rgb.h"
 #include "led_ids.h"
-#include "hall_adc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -121,7 +119,6 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART1_UART_Init();
-  //MX_USB_OTG_FS_PCD_Init();
   MX_FMC_Init();
   MX_SDMMC1_SD_Init();
   MX_SPI5_Init();
@@ -138,7 +135,6 @@ int main(void)
   MX_FATFS_Init();
   brick6_app_init();
   led_init();
-  hall_adc_init();
   uint32_t last_tick = 0;
     static uint32_t last_log_time = 0;
 
@@ -154,7 +150,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  engine_tasklet_poll();
+	     engine_tasklet_poll();
 	     brick6_app_process();
 
 	     MX_USB_HOST_Process();
@@ -255,12 +251,12 @@ void PeriphCommonClock_Config(void)
   /** Initializes the peripherals clock
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_SAI2;
-  PeriphClkInitStruct.PLL2.PLL2M = 25;
-  PeriphClkInitStruct.PLL2.PLL2N = 429;
-  PeriphClkInitStruct.PLL2.PLL2P = 38;
+  PeriphClkInitStruct.PLL2.PLL2M = 5;
+  PeriphClkInitStruct.PLL2.PLL2N = 144;
+  PeriphClkInitStruct.PLL2.PLL2P = 20;
   PeriphClkInitStruct.PLL2.PLL2Q = 1;
-  PeriphClkInitStruct.PLL2.PLL2R = 8;
-  PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_0;
+  PeriphClkInitStruct.PLL2.PLL2R = 20;
+  PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
   PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
   PeriphClkInitStruct.PLL3.PLL3M = 25;

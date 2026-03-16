@@ -1,0 +1,5 @@
+../Src/UI/pages/ui_page_calibration.c:13:13:ui_page_calibration_leave	1
+../Src/UI/pages/ui_page_calibration.c:17:13:ui_page_calibration_handle_event	1
+../Src/UI/pages/ui_page_calibration.c:22:13:ui_page_calibration_tick	1
+../Src/UI/pages/ui_page_calibration.c:8:13:ui_page_calibration_enter	1
+../Src/UI/pages/ui_page_calibration.c:27:13:ui_page_calibration_render	5

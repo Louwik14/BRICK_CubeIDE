@@ -24,6 +24,7 @@ RM := rm -rf
 -include Src/MIDI/subdir.mk
 -include Src/Core/subdir.mk
 -include Src/Audio/subdir.mk
+-include Src/App/Hall/subdir.mk
 -include Src/App/subdir.mk
 -include Src/subdir.mk
 -include Drivers/STM32H7xx_HAL_Driver/Src/subdir.mk

@@ -1,0 +1,6 @@
+../Src/App/Hall/hall_engine.c:14:6:hall_engine_init	8	static
+../Src/App/Hall/hall_engine.c:25:6:hall_engine_process	40	static
+../Src/App/Hall/hall_engine.c:65:10:hall_engine_get_value	0	static
+../Src/App/Hall/hall_engine.c:73:9:hall_engine_is_pressed	0	static
+../Src/App/Hall/hall_engine.c:81:10:hall_engine_get_min	0	static
+../Src/App/Hall/hall_engine.c:89:10:hall_engine_get_max	0	static

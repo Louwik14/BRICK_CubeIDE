@@ -35,6 +35,9 @@
 #include "Audio/sd_multitrack_recorder.h"
 #include "Storage/memory_layout.h"
 
+#include "App/Hall/hall_adc.h"
+#include "App/Hall/hall_filter.h"
+#include "App/Hall/hall_engine.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -307,6 +310,9 @@ void brick6_app_init(void)
     engine_tasklet_init(48000);
     param_store_init();
     control_event_init();
+    hall_adc_init();
+    hall_filter_init();
+    hall_engine_init();
 
     audio_start();
 
@@ -341,6 +347,11 @@ void brick6_app_process(void)
     g_brick6_app_process_call_count++;
 
     engine_tasklet_poll();
+
+    hall_filter_process();
+
+    hall_engine_process();
+
     recorder_transport_process();
 
     {

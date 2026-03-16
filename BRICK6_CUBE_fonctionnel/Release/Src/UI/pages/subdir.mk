@@ -5,14 +5,20 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Src/UI/pages/ui_page_calibration.c \
+../Src/UI/pages/ui_page_debug_hall.c \
 ../Src/UI/pages/ui_page_main.c \
 ../Src/UI/pages/ui_page_param_test.c 
 
 C_DEPS += \
+./Src/UI/pages/ui_page_calibration.d \
+./Src/UI/pages/ui_page_debug_hall.d \
 ./Src/UI/pages/ui_page_main.d \
 ./Src/UI/pages/ui_page_param_test.d 
 
 OBJS += \
+./Src/UI/pages/ui_page_calibration.o \
+./Src/UI/pages/ui_page_debug_hall.o \
 ./Src/UI/pages/ui_page_main.o \
 ./Src/UI/pages/ui_page_param_test.o 
 
@@ -24,7 +30,7 @@ Src/UI/pages/%.o Src/UI/pages/%.su Src/UI/pages/%.cyclo: ../Src/UI/pages/%.c Src
 clean: clean-Src-2f-UI-2f-pages
 
 clean-Src-2f-UI-2f-pages:
-	-$(RM) ./Src/UI/pages/ui_page_main.cyclo ./Src/UI/pages/ui_page_main.d ./Src/UI/pages/ui_page_main.o ./Src/UI/pages/ui_page_main.su ./Src/UI/pages/ui_page_param_test.cyclo ./Src/UI/pages/ui_page_param_test.d ./Src/UI/pages/ui_page_param_test.o ./Src/UI/pages/ui_page_param_test.su
+	-$(RM) ./Src/UI/pages/ui_page_calibration.cyclo ./Src/UI/pages/ui_page_calibration.d ./Src/UI/pages/ui_page_calibration.o ./Src/UI/pages/ui_page_calibration.su ./Src/UI/pages/ui_page_debug_hall.cyclo ./Src/UI/pages/ui_page_debug_hall.d ./Src/UI/pages/ui_page_debug_hall.o ./Src/UI/pages/ui_page_debug_hall.su ./Src/UI/pages/ui_page_main.cyclo ./Src/UI/pages/ui_page_main.d ./Src/UI/pages/ui_page_main.o ./Src/UI/pages/ui_page_main.su ./Src/UI/pages/ui_page_param_test.cyclo ./Src/UI/pages/ui_page_param_test.d ./Src/UI/pages/ui_page_param_test.o ./Src/UI/pages/ui_page_param_test.su
 
 .PHONY: clean-Src-2f-UI-2f-pages
 

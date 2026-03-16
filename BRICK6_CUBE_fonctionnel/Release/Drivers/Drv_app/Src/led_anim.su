@@ -1,0 +1,5 @@
+../Drivers/Drv_app/Src/led_anim.c:73:6:led_anim_init	0	static
+../Drivers/Drv_app/Src/led_anim.c:88:6:led_anim_stop_all	0	static
+../Drivers/Drv_app/Src/led_anim.c:111:6:led_anim_stop	16	static
+../Drivers/Drv_app/Src/led_anim.c:140:6:led_anim_blink	72	static
+../Drivers/Drv_app/Src/led_anim.c:170:6:led_anim_tick	32	static

@@ -1,0 +1,4 @@
+../Src/Audio/fx_Daisy_comp_core.cpp:21:6:void daisysp::Compressor::Init(float)	1
+../Src/Audio/fx_Daisy_comp_core.cpp:39:7:float daisysp::Compressor::Process(float)	2
+../Src/Audio/fx_Daisy_comp_core.cpp:52:6:void daisysp::Compressor::ProcessBlock(float*, float*, float*, size_t)	4
+../Src/Audio/fx_Daisy_comp_core.cpp:62:6:void daisysp::Compressor::ProcessBlock(float**, float**, float*, size_t, size_t)	5
