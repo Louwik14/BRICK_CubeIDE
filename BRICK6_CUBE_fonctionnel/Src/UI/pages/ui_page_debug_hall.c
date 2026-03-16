@@ -84,6 +84,9 @@ static void ui_page_debug_hall_render(void)
 
     u8g2_t *u8g2 = &g_u8g2;
 
+    u8g2_ClearBuffer(u8g2);
+    u8g2_SetFont(u8g2, u8g2_font_5x8_tf);
+
     u8g2_DrawStr(u8g2, 0U, 8U, "DEBUG - HALL");
 
     u8g2_DrawStr(u8g2, 0U, 18U, "RAW");
@@ -106,6 +109,8 @@ static void ui_page_debug_hall_render(void)
 
     u8g2_DrawFrame(u8g2, 0U, 56U, 127U, 8U);
     u8g2_DrawBox(u8g2, 1U, 57U, (uint8_t)((val * 125U) / 100U), 6U);
+
+    u8g2_SendBuffer(u8g2);
 }
 
 const ui_page_t g_ui_page_debug_hall = {

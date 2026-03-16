@@ -78,6 +78,8 @@ static void ui_page_calibration_render(void)
 
     g_last_draw = now;
 
+    u8g2_ClearBuffer(&g_u8g2);
+    u8g2_SetFont(&g_u8g2, u8g2_font_5x8_tf);
 
     for(uint8_t r = 0; r < GRID_ROWS; r++)
     {
@@ -91,6 +93,8 @@ static void ui_page_calibration_render(void)
             draw_cell(x, y, g_level[i]);
         }
     }
+
+    u8g2_SendBuffer(&g_u8g2);
 }
 
 const ui_page_t g_ui_page_calibration =
