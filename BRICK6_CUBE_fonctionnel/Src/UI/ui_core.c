@@ -22,6 +22,7 @@
 #include "ui_core.h"
 
 #include "encoders.h"
+#include "stm32h7xx_hal.h"
 #include "pages/ui_page_main.h"
 #include "pages/ui_page_param_test.h"
 #include "pages/ui_page_debug_hall.h"
@@ -30,7 +31,6 @@
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
-#include "ui_renderer_oled.h"
 #include "App/Hall/hall_calibration.h"
 
 /**
@@ -105,5 +105,26 @@ void ui_core_tick(void)
         active_page->tick();
     }
 
-    ui_renderer_oled_draw();
+    static uint8_t drawing = 0U;
+    static uint32_t last_refresh = 0U;
+
+    const uint32_t now = HAL_GetTick();
+    if ((now - last_refresh) < 16U)
+    {
+        return;
+    }
+    last_refresh = now;
+
+    if (drawing != 0U)
+    {
+        return;
+    }
+    drawing = 1U;
+
+    if ((active_page != 0) && (active_page->render != 0))
+    {
+        active_page->render();
+    }
+
+    drawing = 0U;
 }
