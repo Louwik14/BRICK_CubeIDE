@@ -5,6 +5,14 @@
 
 extern SPI_HandleTypeDef hspi5;
 
+static inline void busy_wait_cycles(uint32_t cycles)
+{
+    while (cycles--)
+    {
+        __NOP();
+    }
+}
+
 static inline void oled_set_cs(GPIO_PinState state)
 {
     HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, state);
@@ -39,9 +47,11 @@ uint8_t u8x8_byte_stm32_spi_hw(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void 
 
         case U8X8_MSG_BYTE_START_TRANSFER:
             oled_set_cs(GPIO_PIN_RESET);
+            busy_wait_cycles(32U);
             break;
 
         case U8X8_MSG_BYTE_END_TRANSFER:
+            busy_wait_cycles(32U);
             oled_set_cs(GPIO_PIN_SET);
             break;
 
@@ -67,6 +77,18 @@ uint8_t u8x8_gpio_and_delay_stm32(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, vo
 
         case U8X8_MSG_DELAY_MILLI:
             HAL_Delay(arg_int);
+            break;
+
+        case U8X8_MSG_DELAY_10MICRO:
+            busy_wait_cycles((SystemCoreClock / 1000000U) * (uint32_t)arg_int * 10U);
+            break;
+
+        case U8X8_MSG_DELAY_100NANO:
+            busy_wait_cycles(((SystemCoreClock / 10000000U) + 1U) * (uint32_t)arg_int);
+            break;
+
+        case U8X8_MSG_DELAY_NANO:
+            busy_wait_cycles(((SystemCoreClock / 1000000000U) + 1U) * (uint32_t)arg_int);
             break;
 
         case U8X8_MSG_GPIO_CS:
