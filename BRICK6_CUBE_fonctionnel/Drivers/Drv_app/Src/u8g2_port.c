@@ -30,7 +30,10 @@ uint8_t u8x8_byte_stm32_spi_hw(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void 
             break;
 
         case U8X8_MSG_BYTE_SEND:
-            (void)HAL_SPI_Transmit(&hspi5, (uint8_t *)arg_ptr, arg_int, HAL_MAX_DELAY);
+            if (HAL_SPI_Transmit(&hspi5, (uint8_t *)arg_ptr, arg_int, HAL_MAX_DELAY) != HAL_OK)
+            {
+                return 0;
+            }
             break;
 
         case U8X8_MSG_BYTE_SET_DC:
@@ -46,7 +49,7 @@ uint8_t u8x8_byte_stm32_spi_hw(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void 
             break;
 
         default:
-            return 0;
+            break;
     }
 
     return 1;
@@ -67,6 +70,22 @@ uint8_t u8x8_gpio_and_delay_stm32(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, vo
 
         case U8X8_MSG_DELAY_MILLI:
             HAL_Delay(arg_int);
+            break;
+
+        case U8X8_MSG_DELAY_10MICRO:
+            for (uint8_t i = 0U; i < arg_int; i++)
+            {
+                for (volatile uint32_t spin = 0U; spin < 800U; spin++)
+                {
+                    __NOP();
+                }
+            }
+            break;
+
+        case U8X8_MSG_DELAY_100NANO:
+        case U8X8_MSG_DELAY_NANO:
+        case U8X8_MSG_DELAY_I2C:
+            __NOP();
             break;
 
         case U8X8_MSG_GPIO_CS:
