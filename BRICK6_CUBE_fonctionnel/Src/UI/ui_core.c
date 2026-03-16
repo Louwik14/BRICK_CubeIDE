@@ -24,6 +24,7 @@
 #include "encoders.h"
 #include "pages/ui_page_main.h"
 #include "pages/ui_page_param_test.h"
+#include "pages/ui_page_debug_hall.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -50,6 +51,7 @@ void ui_core_init(void)
      */
     ui_page_manager_register(&g_ui_page_main);
     ui_page_manager_register(&g_ui_page_param_test);
+    ui_page_manager_register(&g_ui_page_debug_hall);
 
     ui_page_set(UI_PAGE_MAIN);
 }
