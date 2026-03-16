@@ -47,6 +47,7 @@
 #include "audio_debug_log.h"
 #include "led_rgb.h"
 #include "led_ids.h"
+#include "hall_adc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -137,6 +138,7 @@ int main(void)
   MX_FATFS_Init();
   brick6_app_init();
   led_init();
+  hall_adc_init();
   uint32_t last_tick = 0;
     static uint32_t last_log_time = 0;
 
