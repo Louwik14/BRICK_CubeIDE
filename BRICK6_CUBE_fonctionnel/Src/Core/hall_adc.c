@@ -68,7 +68,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if ((htim != NULL) && (htim->Instance == TIM7))
     {
-        hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
         hall_mux_select(hall_mux_index);
+        hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
     }
 }
