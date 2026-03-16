@@ -23,7 +23,7 @@
 
 #include <stdio.h>
 
-#include "drv_display.h"
+#include "ui_display.h"
 #include "param_registry.h"
 #include "ui_param.h"
 
@@ -148,6 +148,8 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
  */
 static void ui_page_param_test_render(void)
 {
+    u8g2_t *u8g2 = ui_display_get_u8g2();
+
     for (uint8_t i = 0U; i < 4U; i++)
     {
         const param_id_t id = g_param_test_bank.params[i];
@@ -157,7 +159,7 @@ static void ui_page_param_test_render(void)
         ui_page_param_test_format_value(id, value_txt, (uint32_t)sizeof(value_txt));
         (void)snprintf(line_txt, sizeof(line_txt), "%s %s", param_registry[id].name, value_txt);
 
-        drv_display_draw_text(0U, (uint8_t)(i * 16U), line_txt);
+        u8g2_DrawStr(u8g2, 0U, (uint8_t)(8U + i * 16U), line_txt);
     }
 
 }

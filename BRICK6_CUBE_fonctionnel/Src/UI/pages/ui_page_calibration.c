@@ -1,7 +1,6 @@
 #include "pages/ui_page_calibration.h"
 
-#include "drv_display.h"
-#include "ui_page_manager.h"
+#include "ui_display.h"
 #include "App/Hall/hall_on_off.h"
 #include "stm32h7xx_hal.h"
 
@@ -52,7 +51,8 @@ static void ui_page_calibration_tick(void)
 
 static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
 {
-    drv_display_draw_rect(x, y, CELL_W - 1, CELL_H - 1);
+    u8g2_t *u8g2 = ui_display_get_u8g2();
+    u8g2_DrawFrame(u8g2, x, y, CELL_W - 1, CELL_H - 1);
 
     if(level == 0)
         return;
@@ -60,13 +60,13 @@ static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
     uint8_t h = (CELL_H - 2) / 3;
 
     if(level >= 1)
-        drv_display_draw_rect(x + 1, y + 1, CELL_W - 3, h);
+        u8g2_DrawFrame(u8g2, x + 1, y + 1, CELL_W - 3, h);
 
     if(level >= 2)
-        drv_display_draw_rect(x + 1, y + 1 + h, CELL_W - 3, h);
+        u8g2_DrawFrame(u8g2, x + 1, y + 1 + h, CELL_W - 3, h);
 
     if(level >= 3)
-        drv_display_draw_rect(x + 1, y + 1 + 2*h, CELL_W - 3, h);
+        u8g2_DrawFrame(u8g2, x + 1, y + 1 + 2*h, CELL_W - 3, h);
 }
 
 static void ui_page_calibration_render(void)
@@ -78,7 +78,6 @@ static void ui_page_calibration_render(void)
 
     g_last_draw = now;
 
-    drv_display_clear();
 
     for(uint8_t r = 0; r < GRID_ROWS; r++)
     {
