@@ -1,6 +1,6 @@
 #include "pages/ui_page_calibration.h"
 
-#include "ui_display.h"
+#include "ui_renderer_oled.h"
 #include "App/Hall/hall_on_off.h"
 #include "stm32h7xx_hal.h"
 
@@ -51,7 +51,7 @@ static void ui_page_calibration_tick(void)
 
 static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
 {
-    u8g2_t *u8g2 = ui_display_get_u8g2();
+    u8g2_t *u8g2 = &g_u8g2;
     u8g2_DrawFrame(u8g2, x, y, CELL_W - 1, CELL_H - 1);
 
     if(level == 0)
@@ -78,6 +78,8 @@ static void ui_page_calibration_render(void)
 
     g_last_draw = now;
 
+    u8g2_ClearBuffer(&g_u8g2);
+    u8g2_SetFont(&g_u8g2, u8g2_font_5x8_tf);
 
     for(uint8_t r = 0; r < GRID_ROWS; r++)
     {
@@ -91,6 +93,8 @@ static void ui_page_calibration_render(void)
             draw_cell(x, y, g_level[i]);
         }
     }
+
+    u8g2_SendBuffer(&g_u8g2);
 }
 
 const ui_page_t g_ui_page_calibration =

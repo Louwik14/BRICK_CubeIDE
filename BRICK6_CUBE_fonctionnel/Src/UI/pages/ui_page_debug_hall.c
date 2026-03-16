@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "ui_display.h"
+#include "ui_renderer_oled.h"
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_filter.h"
 #include "App/Hall/hall_engine.h"
@@ -82,7 +82,10 @@ static void ui_page_debug_hall_render(void)
     snprintf(eng_min_txt, sizeof(eng_min_txt), "%u", (unsigned)eng_min);
     snprintf(eng_max_txt, sizeof(eng_max_txt), "%u", (unsigned)eng_max);
 
-    u8g2_t *u8g2 = ui_display_get_u8g2();
+    u8g2_t *u8g2 = &g_u8g2;
+
+    u8g2_ClearBuffer(u8g2);
+    u8g2_SetFont(u8g2, u8g2_font_5x8_tf);
 
     u8g2_DrawStr(u8g2, 0U, 8U, "DEBUG - HALL");
 
@@ -106,6 +109,8 @@ static void ui_page_debug_hall_render(void)
 
     u8g2_DrawFrame(u8g2, 0U, 56U, 127U, 8U);
     u8g2_DrawBox(u8g2, 1U, 57U, (uint8_t)((val * 125U) / 100U), 6U);
+
+    u8g2_SendBuffer(u8g2);
 }
 
 const ui_page_t g_ui_page_debug_hall = {
