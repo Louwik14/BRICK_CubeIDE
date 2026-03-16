@@ -388,6 +388,7 @@
 "./Src/App/Hall/hall_calibration.o"
 "./Src/App/Hall/hall_engine.o"
 "./Src/App/Hall/hall_filter.o"
+"./Src/App/Hall/hall_on_off.o"
 "./Src/App/app_sample_boot.o"
 "./Src/App/mux_pots.o"
 "./Src/Audio/audio.o"

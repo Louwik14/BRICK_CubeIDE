@@ -1,0 +1,3 @@
+../Src/Audio/fx_chain.c:60:13:fx_chain_process_fx_slot	8
+../Src/Audio/fx_chain.c:111:6:fx_chain_process_track0	2
+../Src/Audio/fx_chain.c:144:6:fx_chain_process_slot	1

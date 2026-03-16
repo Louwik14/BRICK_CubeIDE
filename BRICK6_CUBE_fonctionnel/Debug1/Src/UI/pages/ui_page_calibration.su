@@ -1,0 +1,5 @@
+../Src/UI/pages/ui_page_calibration.c:28:13:ui_page_calibration_leave	0	static
+../Src/UI/pages/ui_page_calibration.c:32:13:ui_page_calibration_handle_event	0	static
+../Src/UI/pages/ui_page_calibration.c:60:13:ui_page_calibration_render	32	static
+../Src/UI/pages/ui_page_calibration.c:37:13:ui_page_calibration_tick	8	static
+../Src/UI/pages/ui_page_calibration.c:21:13:ui_page_calibration_enter	8	static

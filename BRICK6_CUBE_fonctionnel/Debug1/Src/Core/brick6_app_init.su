@@ -1,0 +1,6 @@
+../Src/Core/brick6_app_init.c:134:13:my_dsp	32	static
+../Src/Core/brick6_app_init.c:70:13:debug_uart_init	40	static
+../Src/Core/brick6_app_init.c:111:5:_write	8	static
+../Src/Core/brick6_app_init.c:239:6:brick6_app_init	24	static
+../Src/Core/brick6_app_init.c:338:6:brick6_app_process	8	static
+../Src/Core/brick6_app_init.c:407:6:brick6_app_get_stats	8	static

@@ -1,0 +1,7 @@
+../Src/App/Hall/hall_engine.c:15:6:hall_engine_init	2
+../Src/App/Hall/hall_engine.c:28:6:hall_engine_set_calibration	3
+../Src/App/Hall/hall_engine.c:44:6:hall_engine_process	10
+../Src/App/Hall/hall_engine.c:84:10:hall_engine_get_value	2
+../Src/App/Hall/hall_engine.c:92:9:hall_engine_is_pressed	2
+../Src/App/Hall/hall_engine.c:100:10:hall_engine_get_min	2
+../Src/App/Hall/hall_engine.c:108:10:hall_engine_get_max	2

@@ -150,7 +150,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	     engine_tasklet_poll();
 	     brick6_app_process();
 
 	     MX_USB_HOST_Process();

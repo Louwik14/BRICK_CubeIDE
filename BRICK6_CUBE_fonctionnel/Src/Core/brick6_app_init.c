@@ -38,6 +38,7 @@
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_filter.h"
 #include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_on_off.h"
 
 #define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 #define FORCE_TONE_TEST 0
@@ -311,6 +312,7 @@ void brick6_app_init(void)
     param_store_init();
     control_event_init();
     hall_adc_init();
+    hall_on_off_init();
     hall_filter_init();
     hall_engine_init();
 
@@ -351,6 +353,8 @@ void brick6_app_process(void)
     hall_filter_process();
 
     hall_engine_process();
+
+    hall_on_off_process();
 
     recorder_transport_process();
 

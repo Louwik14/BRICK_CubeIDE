@@ -1,5 +1,5 @@
-../Src/UI/pages/ui_page_calibration.c:13:13:ui_page_calibration_leave	0	static
-../Src/UI/pages/ui_page_calibration.c:17:13:ui_page_calibration_handle_event	0	static
-../Src/UI/pages/ui_page_calibration.c:22:13:ui_page_calibration_tick	0	static
-../Src/UI/pages/ui_page_calibration.c:8:13:ui_page_calibration_enter	0	static
-../Src/UI/pages/ui_page_calibration.c:27:13:ui_page_calibration_render	32	static
+../Src/UI/pages/ui_page_calibration.c:20:13:ui_page_calibration_enter	0	static
+../Src/UI/pages/ui_page_calibration.c:30:13:ui_page_calibration_leave	0	static
+../Src/UI/pages/ui_page_calibration.c:34:13:ui_page_calibration_handle_event	0	static
+../Src/UI/pages/ui_page_calibration.c:39:13:ui_page_calibration_tick	16	static
+../Src/UI/pages/ui_page_calibration.c:72:13:ui_page_calibration_render	48	static

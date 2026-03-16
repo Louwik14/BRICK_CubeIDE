@@ -1,0 +1,18 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Daisy_SP/dsp.h:40:14:float daisysp::fmax(float, float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Daisy_SP/dsp.h:108:14:float daisysp::pow10f(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Daisy_SP/dsp.h:116:14:float daisysp::fastlog2f(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Daisy_SP/dsp.h:132:14:float daisysp::fastlog10f(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:62:11:float daisysp::Compressor::Apply(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:101:10:void daisysp::Compressor::SetRatio(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:113:10:void daisysp::Compressor::SetThreshold(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:125:10:void daisysp::Compressor::SetAttack(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:137:10:void daisysp::Compressor::SetRelease(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:154:10:void daisysp::Compressor::AutoMakeup(bool)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:183:10:void daisysp::Compressor::RecalculateRatio()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:188:10:void daisysp::Compressor::RecalculateAttack()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:196:10:void daisysp::Compressor::RecalculateRelease()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:198:10:void daisysp::Compressor::RecalculateMakeup()	2
+../Src/Audio/fx_Daisy_comp_core.cpp:21:6:void daisysp::Compressor::Init(float)	4
+../Src/Audio/fx_Daisy_comp_core.cpp:39:7:float daisysp::Compressor::Process(float)	2
+../Src/Audio/fx_Daisy_comp_core.cpp:52:6:void daisysp::Compressor::ProcessBlock(float*, float*, float*, size_t)	2
+../Src/Audio/fx_Daisy_comp_core.cpp:62:6:void daisysp::Compressor::ProcessBlock(float**, float**, float*, size_t, size_t)	3

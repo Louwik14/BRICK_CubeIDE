@@ -1,0 +1,4 @@
+../Drivers/Drv_app/Src/encoders_hw.c:83:16:enc_read_state	0	static
+../Drivers/Drv_app/Src/encoders_hw.c:101:6:encoders_hw_init	8	static
+../Drivers/Drv_app/Src/encoders_hw.c:120:6:encoders_hw_read	16	static
+../Drivers/Drv_app/Src/encoders_hw.c:159:8:encoders_hw_get_delta	0	static

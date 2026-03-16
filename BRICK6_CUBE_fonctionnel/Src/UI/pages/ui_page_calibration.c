@@ -1,28 +1,30 @@
 #include "pages/ui_page_calibration.h"
 
-#include <stdio.h>
-#include "stm32h7xx_hal.h"
-
-#include "App/Hall/hall_calibration.h"
 #include "drv_display.h"
 #include "ui_page_manager.h"
-#include "UI/font.h"
+#include "App/Hall/hall_on_off.h"
+#include "stm32h7xx_hal.h"
 
-#define CAL_GRID_COLS             8U
-#define CAL_CELL_W                16U
-#define CAL_CELL_H                22U
-#define CAL_GRID_X                0U
-#define CAL_GRID_Y                8U
-#define CAL_OK_DISPLAY_TIME_MS    1000U
+#define GRID_COLS 8
+#define GRID_ROWS 2
+#define CELL_W    16
+#define CELL_H    20
+#define GRID_X    0
+#define GRID_Y    10
 
-static uint8_t g_save_done = 0U;
-static uint32_t g_cal_done_tick = 0U;
+#define FRAME_INTERVAL_MS 16U
+
+static uint8_t g_level[16];
+static uint32_t g_last_draw = 0;
 
 static void ui_page_calibration_enter(void)
 {
-    hall_calibration_start();
-    g_save_done = 0U;
-    g_cal_done_tick = 0U;
+    for(uint8_t i = 0; i < 16; i++)
+    {
+        g_level[i] = 0;
+    }
+
+    g_last_draw = 0;
 }
 
 static void ui_page_calibration_leave(void)
@@ -36,65 +38,64 @@ static void ui_page_calibration_handle_event(const ui_event_t *ev)
 
 static void ui_page_calibration_tick(void)
 {
-    hall_calibration_process();
-
-    if (hall_calibration_is_done() == 0U)
+    for(uint8_t i = 0; i < 16; i++)
     {
+        if(hall_on_off_event(i))
+        {
+            if(g_level[i] < 3)
+            {
+                g_level[i]++;
+            }
+        }
+    }
+}
+
+static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
+{
+    drv_display_draw_rect(x, y, CELL_W - 1, CELL_H - 1);
+
+    if(level == 0)
         return;
-    }
 
-    if (g_save_done == 0U)
-    {
-        hall_calibration_save();
-        g_cal_done_tick = HAL_GetTick();
-        g_save_done = 1U;
-        return;
-    }
+    uint8_t h = (CELL_H - 2) / 3;
 
-    if ((HAL_GetTick() - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS)
-    {
-        ui_page_set(UI_PAGE_MAIN);
-    }
+    if(level >= 1)
+        drv_display_draw_rect(x + 1, y + 1, CELL_W - 3, h);
+
+    if(level >= 2)
+        drv_display_draw_rect(x + 1, y + 1 + h, CELL_W - 3, h);
+
+    if(level >= 3)
+        drv_display_draw_rect(x + 1, y + 1 + 2*h, CELL_W - 3, h);
 }
 
 static void ui_page_calibration_render(void)
 {
-    char txt[4];
+    uint32_t now = HAL_GetTick();
 
-    drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text(0U, 0U, "CALIBRATION");
+    if((now - g_last_draw) < FRAME_INTERVAL_MS)
+        return;
 
-    for (uint8_t i = 0U; i < 16U; i++)
+    g_last_draw = now;
+
+    drv_display_clear();
+
+    for(uint8_t r = 0; r < GRID_ROWS; r++)
     {
-        const uint8_t col = i % CAL_GRID_COLS;
-        const uint8_t row = i / CAL_GRID_COLS;
-        const uint8_t x = CAL_GRID_X + (col * CAL_CELL_W);
-        const uint8_t y = CAL_GRID_Y + (row * CAL_CELL_H);
-
-        const uint8_t hits = hall_calibration_get_count(i);
-
-        drv_display_draw_rect(x, y, CAL_CELL_W - 1U, CAL_CELL_H - 1U);
-
-        if (hits >= 3U)
+        for(uint8_t c = 0; c < GRID_COLS; c++)
         {
-            drv_display_draw_text((uint8_t)(x + 2U), (uint8_t)(y + 8U), "OK");
-        }
-        else
-        {
-            (void)snprintf(txt, sizeof(txt), "%u/3", hits);
-            drv_display_draw_text((uint8_t)(x + 1U), (uint8_t)(y + 8U), txt);
+            uint8_t i = r * GRID_COLS + c;
+
+            uint8_t x = GRID_X + c * CELL_W;
+            uint8_t y = GRID_Y + r * CELL_H;
+
+            draw_cell(x, y, g_level[i]);
         }
     }
-
-    if (hall_calibration_is_done() != 0U)
-    {
-        drv_display_draw_text(48U, 58U, "CAL OK");
-    }
-
-    drv_display_set_font(&FONT_5X7);
 }
 
-const ui_page_t g_ui_page_calibration = {
+const ui_page_t g_ui_page_calibration =
+{
     .enter = ui_page_calibration_enter,
     .leave = ui_page_calibration_leave,
     .handle_event = ui_page_calibration_handle_event,

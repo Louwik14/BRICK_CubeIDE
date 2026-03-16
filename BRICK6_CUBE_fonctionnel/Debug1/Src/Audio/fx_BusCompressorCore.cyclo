@@ -1,0 +1,31 @@
+../Src/Audio/fx_BusCompressorCore.cpp:9:24:EmbeddedPort::HarmonicProfile EmbeddedPort::makeHarmonic(float, float, float, float, float, float, float)	1
+../Src/Audio/fx_BusCompressorCore.cpp:22:21:EmbeddedPort::HardwareUnitProfile EmbeddedPort::getConsoleBusProfile()	1
+../Src/Audio/fx_BusCompressorCore.cpp:35:7:static float EmbeddedPort::WaveshaperCurvesCore::clampFloat(float, float, float)	3
+../Src/Audio/fx_BusCompressorCore.cpp:40:7:static float EmbeddedPort::WaveshaperCurvesCore::indexToInput(int)	1
+../Src/Audio/fx_BusCompressorCore.cpp:45:1:EmbeddedPort::WaveshaperCurvesCore::WaveshaperCurvesCore()	1
+../Src/Audio/fx_BusCompressorCore.cpp:50:7:float EmbeddedPort::WaveshaperCurvesCore::processTransformer(float) const	2
+../Src/Audio/fx_BusCompressorCore.cpp:63:6:void EmbeddedPort::WaveshaperCurvesCore::initializeTransformerCurve()	5
+../Src/Audio/fx_BusCompressorCore.cpp:92:1:EmbeddedPort::TransformerEmulationCore::TransformerEmulationCore()	1
+../Src/Audio/fx_BusCompressorCore.cpp:103:7:static float EmbeddedPort::TransformerEmulationCore::clampFloat(float, float, float)	3
+../Src/Audio/fx_BusCompressorCore.cpp:108:5:static int EmbeddedPort::TransformerEmulationCore::clampInt(int, int, int)	3
+../Src/Audio/fx_BusCompressorCore.cpp:113:6:void EmbeddedPort::TransformerEmulationCore::prepare(double, int)	1
+../Src/Audio/fx_BusCompressorCore.cpp:121:6:void EmbeddedPort::TransformerEmulationCore::reset()	2
+../Src/Audio/fx_BusCompressorCore.cpp:133:6:void EmbeddedPort::TransformerEmulationCore::setProfile(const EmbeddedPort::TransformerProfile&)	1
+../Src/Audio/fx_BusCompressorCore.cpp:141:6:void EmbeddedPort::TransformerEmulationCore::setEnabled(bool)	3
+../Src/Audio/fx_BusCompressorCore.cpp:146:6:void EmbeddedPort::TransformerEmulationCore::updateDCBlocker(float)	2
+../Src/Audio/fx_BusCompressorCore.cpp:152:6:void EmbeddedPort::TransformerEmulationCore::updateHFRolloff(float)	2
+../Src/Audio/fx_BusCompressorCore.cpp:166:7:float EmbeddedPort::TransformerEmulationCore::estimateHighFrequencyContent(float, int)	1
+../Src/Audio/fx_BusCompressorCore.cpp:174:7:float EmbeddedPort::TransformerEmulationCore::applyTransformerSaturation(float)	1
+../Src/Audio/fx_BusCompressorCore.cpp:179:7:float EmbeddedPort::TransformerEmulationCore::addHarmonics(float, const EmbeddedPort::HarmonicProfile&)	5
+../Src/Audio/fx_BusCompressorCore.cpp:195:7:float EmbeddedPort::TransformerEmulationCore::applyHFRolloff(float, int)	1
+../Src/Audio/fx_BusCompressorCore.cpp:201:7:float EmbeddedPort::TransformerEmulationCore::processDCBlocker(float, int)	1
+../Src/Audio/fx_BusCompressorCore.cpp:209:7:float EmbeddedPort::TransformerEmulationCore::processSample(float, int)	3
+../Src/Audio/fx_BusCompressorCore.cpp:227:1:EmbeddedPort::BusCompressorCore::BusCompressorCore()	2
+../Src/Audio/fx_BusCompressorCore.cpp:240:7:static float EmbeddedPort::BusCompressorCore::clampFloat(float, float, float)	3
+../Src/Audio/fx_BusCompressorCore.cpp:245:5:static int EmbeddedPort::BusCompressorCore::clampInt(int, int, int)	3
+../Src/Audio/fx_BusCompressorCore.cpp:250:7:static float EmbeddedPort::BusCompressorCore::absFloat(float)	2
+../Src/Audio/fx_BusCompressorCore.cpp:255:14:float EmbeddedPort::fastDbToGain(float)	1
+../Src/Audio/fx_BusCompressorCore.cpp:260:14:float EmbeddedPort::fastGainToDb(float)	2
+../Src/Audio/fx_BusCompressorCore.cpp:267:6:void EmbeddedPort::BusCompressorCore::prepare(double, int, int)	5
+../Src/Audio/fx_BusCompressorCore.cpp:291:7:float EmbeddedPort::BusCompressorCore::process(float, int, float, float, int, int, float, float, float, bool, float, bool)	15
+../Src/Audio/fx_BusCompressorCore.cpp:399:7:float EmbeddedPort::BusCompressorCore::getGainReduction(int) const	3

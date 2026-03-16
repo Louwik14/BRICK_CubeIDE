@@ -8,19 +8,22 @@ C_SRCS += \
 ../Src/App/Hall/hall_adc.c \
 ../Src/App/Hall/hall_calibration.c \
 ../Src/App/Hall/hall_engine.c \
-../Src/App/Hall/hall_filter.c 
+../Src/App/Hall/hall_filter.c \
+../Src/App/Hall/hall_on_off.c 
 
 C_DEPS += \
 ./Src/App/Hall/hall_adc.d \
 ./Src/App/Hall/hall_calibration.d \
 ./Src/App/Hall/hall_engine.d \
-./Src/App/Hall/hall_filter.d 
+./Src/App/Hall/hall_filter.d \
+./Src/App/Hall/hall_on_off.d 
 
 OBJS += \
 ./Src/App/Hall/hall_adc.o \
 ./Src/App/Hall/hall_calibration.o \
 ./Src/App/Hall/hall_engine.o \
-./Src/App/Hall/hall_filter.o 
+./Src/App/Hall/hall_filter.o \
+./Src/App/Hall/hall_on_off.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -30,7 +33,7 @@ Src/App/Hall/%.o Src/App/Hall/%.su Src/App/Hall/%.cyclo: ../Src/App/Hall/%.c Src
 clean: clean-Src-2f-App-2f-Hall
 
 clean-Src-2f-App-2f-Hall:
-	-$(RM) ./Src/App/Hall/hall_adc.cyclo ./Src/App/Hall/hall_adc.d ./Src/App/Hall/hall_adc.o ./Src/App/Hall/hall_adc.su ./Src/App/Hall/hall_calibration.cyclo ./Src/App/Hall/hall_calibration.d ./Src/App/Hall/hall_calibration.o ./Src/App/Hall/hall_calibration.su ./Src/App/Hall/hall_engine.cyclo ./Src/App/Hall/hall_engine.d ./Src/App/Hall/hall_engine.o ./Src/App/Hall/hall_engine.su ./Src/App/Hall/hall_filter.cyclo ./Src/App/Hall/hall_filter.d ./Src/App/Hall/hall_filter.o ./Src/App/Hall/hall_filter.su
+	-$(RM) ./Src/App/Hall/hall_adc.cyclo ./Src/App/Hall/hall_adc.d ./Src/App/Hall/hall_adc.o ./Src/App/Hall/hall_adc.su ./Src/App/Hall/hall_calibration.cyclo ./Src/App/Hall/hall_calibration.d ./Src/App/Hall/hall_calibration.o ./Src/App/Hall/hall_calibration.su ./Src/App/Hall/hall_engine.cyclo ./Src/App/Hall/hall_engine.d ./Src/App/Hall/hall_engine.o ./Src/App/Hall/hall_engine.su ./Src/App/Hall/hall_filter.cyclo ./Src/App/Hall/hall_filter.d ./Src/App/Hall/hall_filter.o ./Src/App/Hall/hall_filter.su ./Src/App/Hall/hall_on_off.cyclo ./Src/App/Hall/hall_on_off.d ./Src/App/Hall/hall_on_off.o ./Src/App/Hall/hall_on_off.su
 
 .PHONY: clean-Src-2f-App-2f-Hall
 
