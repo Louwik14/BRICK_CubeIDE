@@ -10,9 +10,12 @@ static uint16_t hall_max[HALL_KEY_COUNT];
 
 static uint16_t hall_value[HALL_KEY_COUNT];
 static uint8_t hall_pressed[HALL_KEY_COUNT];
+static uint8_t hall_calibrated = 0U;
 
 void hall_engine_init(void)
 {
+    hall_calibrated = 0U;
+
     for(uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         hall_min[i] = 0xFFFFU;
@@ -22,18 +25,36 @@ void hall_engine_init(void)
     }
 }
 
+void hall_engine_set_calibration(const uint16_t *min_values, const uint16_t *max_values)
+{
+    if ((min_values == 0) || (max_values == 0))
+    {
+        return;
+    }
+
+    hall_calibrated = 1U;
+
+    for(uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
+    {
+        hall_min[i] = min_values[i];
+        hall_max[i] = max_values[i];
+    }
+}
+
 void hall_engine_process(void)
 {
     for(uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         uint16_t v = hall_filter_get(i);
 
-        /* calibration min/max */
-        if(v < hall_min[i])
-            hall_min[i] = v;
+        if (hall_calibrated == 0U)
+        {
+            if(v < hall_min[i])
+                hall_min[i] = v;
 
-        if(v > hall_max[i])
-            hall_max[i] = v;
+            if(v > hall_max[i])
+                hall_max[i] = v;
+        }
 
         uint16_t range = hall_max[i] - hall_min[i];
 
@@ -42,13 +63,11 @@ void hall_engine_process(void)
 
         uint16_t pos = (uint32_t)(v - hall_min[i]) * 100U / range;
 
-        /* deadzone repos */
         if(pos < HALL_DEADZONE_PERCENT)
             pos = 0U;
 
         hall_value[i] = pos;
 
-        /* hysteresis press/release */
         if(!hall_pressed[i])
         {
             if(pos > HALL_PRESS_PERCENT)
