@@ -49,12 +49,14 @@ uint16_t hall_adc_get_raw(uint8_t key)
         return 0U;
     }
 
+    const uint8_t mux = hall_mux_index;
+
     if (key < HALL_MUX_COUNT)
     {
-        return adc1_dma[0];
+        return adc1_dma[mux];
     }
 
-    return adc2_dma[0];
+    return adc2_dma[mux];
 }
 
 uint8_t hall_adc_get_mux_index(void)
