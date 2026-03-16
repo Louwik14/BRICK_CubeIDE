@@ -25,6 +25,8 @@
 
 #include "ui_display.h"
 #include "ui_core.h"
+#include "ui_renderer_oled.h"
+#include "stm32h7xx_hal.h"
 
 /**
  * @brief Point d'entrée ui_tasklet_poll.
@@ -48,4 +50,13 @@ void ui_tasklet_poll(void)
     }
 
     ui_core_tick();
+
+    static uint32_t last_render = 0U;
+    const uint32_t now = HAL_GetTick();
+
+    if ((now - last_render) >= 20U)
+    {
+        last_render = now;
+        ui_renderer_oled_draw();
+    }
 }

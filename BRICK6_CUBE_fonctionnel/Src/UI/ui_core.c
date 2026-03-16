@@ -30,7 +30,6 @@
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
-#include "ui_renderer_oled.h"
 #include "App/Hall/hall_calibration.h"
 
 /**
@@ -105,5 +104,4 @@ void ui_core_tick(void)
         active_page->tick();
     }
 
-    ui_renderer_oled_draw();
 }
