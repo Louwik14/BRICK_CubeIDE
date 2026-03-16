@@ -23,6 +23,7 @@
 #include "font5x8_elektron.h"
 #include "sdram.h"
 #include <stdbool.h>
+#include <string.h>
 
 /* =======================================================================
    Helpers GET_COL pour chaque police
@@ -103,6 +104,11 @@ static uint8_t get_col_5x8_elektron(char c, uint8_t col) {
  * - init / main loop / tasklet selon le module.
  */
 static void expand_font4x6(void) {
+    /*
+     * Do not rely on SDRAM_BSS startup zeroing: this table is built with
+     * bitwise OR, so stale RAM content would corrupt glyphs.
+     */
+    memset(font4x6_expanded, 0, sizeof(font4x6_expanded));
     for (int c = 32; c <= 126; c++) {
         const uint8_t *g = font4x6[c];  // 3 octets = 6 lignes
         for (uint8_t row = 0; row < 6; row++) {

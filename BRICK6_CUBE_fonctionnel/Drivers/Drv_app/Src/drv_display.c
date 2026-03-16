@@ -519,7 +519,13 @@ void drv_display_init(void)
     send_cmd(0xA8); send_cmd(0x3F);
     send_cmd(0xD3); send_cmd(0x00);
     send_cmd(0x40);
-    send_cmd(0x20); send_cmd(0x00);
+    /*
+     * Use PAGE addressing mode because drv_display_update() pushes the
+     * framebuffer page by page with explicit 0xB0/0x00/0x10 addressing.
+     * Horizontal mode can desynchronize addressing and create visual artifacts
+     * on dense screens.
+     */
+    send_cmd(0x20); send_cmd(0x02);
     send_cmd(0xA1);
     send_cmd(0xC8);
     send_cmd(0xDA); send_cmd(0x12);
