@@ -1,6 +1,6 @@
 #include "pages/ui_page_calibration.h"
 
-#include "ui_display.h"
+#include "ui_renderer_oled.h"
 #include "App/Hall/hall_on_off.h"
 #include "stm32h7xx_hal.h"
 
@@ -51,7 +51,7 @@ static void ui_page_calibration_tick(void)
 
 static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
 {
-    u8g2_t *u8g2 = ui_display_get_u8g2();
+    u8g2_t *u8g2 = &g_u8g2;
     u8g2_DrawFrame(u8g2, x, y, CELL_W - 1, CELL_H - 1);
 
     if(level == 0)

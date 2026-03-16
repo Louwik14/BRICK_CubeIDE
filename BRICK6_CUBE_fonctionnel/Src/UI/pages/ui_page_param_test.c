@@ -23,7 +23,7 @@
 
 #include <stdio.h>
 
-#include "ui_display.h"
+#include "ui_renderer_oled.h"
 #include "param_registry.h"
 #include "ui_param.h"
 
@@ -148,7 +148,7 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
  */
 static void ui_page_param_test_render(void)
 {
-    u8g2_t *u8g2 = ui_display_get_u8g2();
+    u8g2_t *u8g2 = &g_u8g2;
 
     for (uint8_t i = 0U; i < 4U; i++)
     {
