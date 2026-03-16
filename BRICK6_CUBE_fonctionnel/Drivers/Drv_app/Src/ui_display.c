@@ -6,7 +6,7 @@ static u8g2_t g_u8g2;
 
 void ui_display_init(void)
 {
-    u8g2_Setup_ssd1309_128x64_noname0_f(
+	u8g2_Setup_ssd1309_128x64_noname2_f(
         &g_u8g2,
         U8G2_R0,
         u8x8_byte_stm32_spi_hw,
