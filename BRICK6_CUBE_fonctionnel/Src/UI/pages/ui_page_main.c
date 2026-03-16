@@ -21,7 +21,7 @@
 
 #include "pages/ui_page_main.h"
 
-#include "drv_display.h"
+#include "ui_display.h"
 #include "ui_param.h"
 
 static const ui_param_bank_t g_main_bank = {
@@ -33,74 +33,28 @@ static const ui_param_bank_t g_main_bank = {
     },
 };
 
-/**
- * @brief Point d'entrée ui_page_main_enter.
- *
- * Rôle:
- * - Exécuter le traitement associé à ui_page_main_enter.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
 void ui_page_main_enter(void)
 {
     ui_param_set_bank(&g_main_bank);
 }
 
-/**
- * @brief Point d'entrée ui_page_main_leave.
- *
- * Rôle:
- * - Exécuter le traitement associé à ui_page_main_leave.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
 void ui_page_main_leave(void) {}
-/**
- * @brief Point d'entrée ui_page_main_handle_event.
- *
- * Rôle:
- * - Exécuter le traitement associé à ui_page_main_handle_event.
- *
- * @param ev Paramètre d'entrée de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
+
 void ui_page_main_handle_event(const ui_event_t *ev)
 {
     (void)ev;
 }
-/**
- * @brief Point d'entrée ui_page_main_tick.
- *
- * Rôle:
- * - Exécuter le traitement associé à ui_page_main_tick.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
+
 void ui_page_main_tick(void) {}
-/**
- * @brief Point d'entrée ui_page_main_render.
- *
- * Rôle:
- * - Exécuter le traitement associé à ui_page_main_render.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
+
 void ui_page_main_render(void)
 {
-    drv_display_draw_text(0U, 0U, "BRICK6 MAIN");
-    drv_display_draw_text(0U, 16U, "BTN1: PARAM TEST");
-    drv_display_draw_text(0U, 32U, "BTN2: MAIN PAGE");
-    drv_display_draw_text(0U, 48U, "BTN3: HALL DEBUG");
+    u8g2_t *u8g2 = ui_display_get_u8g2();
+
+    u8g2_DrawStr(u8g2, 0U, 8U, "BRICK6 MAIN");
+    u8g2_DrawStr(u8g2, 0U, 24U, "BTN1: PARAM TEST");
+    u8g2_DrawStr(u8g2, 0U, 40U, "BTN2: MAIN PAGE");
+    u8g2_DrawStr(u8g2, 0U, 56U, "BTN3: HALL DEBUG");
 }
 
 const ui_page_t g_ui_page_main = {

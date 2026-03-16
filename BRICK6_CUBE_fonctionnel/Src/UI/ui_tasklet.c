@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 
-#include "drv_display.h"
+#include "ui_display.h"
 #include "ui_core.h"
 
 /**
@@ -43,7 +43,7 @@ void ui_tasklet_poll(void)
     if (init == 0U)
     {
         init = 1U;
-        drv_display_init();
+        ui_display_init();
         ui_core_init();
     }
 

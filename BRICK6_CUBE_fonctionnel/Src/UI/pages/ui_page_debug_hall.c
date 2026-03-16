@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "drv_display.h"
+#include "ui_display.h"
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_filter.h"
 #include "App/Hall/hall_engine.h"
@@ -38,11 +38,9 @@ static void ui_page_debug_hall_render(void)
 {
     char raw_txt[16];
     char raw_min_txt[16];
-    char raw_max_txt[16];
 
     char filt_txt[16];
     char filt_min_txt[16];
-    char filt_max_txt[16];
 
     char val_txt[16];
     char press_txt[16];
@@ -74,11 +72,9 @@ static void ui_page_debug_hall_render(void)
 
     snprintf(raw_txt, sizeof(raw_txt), "%u", (unsigned)raw);
     snprintf(raw_min_txt, sizeof(raw_min_txt), "%u", (unsigned)raw_min);
-    snprintf(raw_max_txt, sizeof(raw_max_txt), "%u", (unsigned)raw_max);
 
     snprintf(filt_txt, sizeof(filt_txt), "%u", (unsigned)filt);
     snprintf(filt_min_txt, sizeof(filt_min_txt), "%u", (unsigned)filt_min);
-    snprintf(filt_max_txt, sizeof(filt_max_txt), "%u", (unsigned)filt_max);
 
     snprintf(val_txt, sizeof(val_txt), "%u%%", (unsigned)val);
     snprintf(press_txt, sizeof(press_txt), "%u", (unsigned)pressed);
@@ -86,27 +82,30 @@ static void ui_page_debug_hall_render(void)
     snprintf(eng_min_txt, sizeof(eng_min_txt), "%u", (unsigned)eng_min);
     snprintf(eng_max_txt, sizeof(eng_max_txt), "%u", (unsigned)eng_max);
 
-    drv_display_draw_text(0U, 0U, "DEBUG - HALL");
+    u8g2_t *u8g2 = ui_display_get_u8g2();
 
-    drv_display_draw_text(0U, 12U, "RAW");
-    drv_display_draw_text(0U, 22U, raw_txt);
-    drv_display_draw_text(40U, 22U, raw_min_txt);
-    drv_display_draw_text(80U, 22U, raw_max_txt);
+    u8g2_DrawStr(u8g2, 0U, 8U, "DEBUG - HALL");
 
-    drv_display_draw_text(0U, 34U, "FILT");
-    drv_display_draw_text(0U, 44U, filt_txt);
-    drv_display_draw_text(40U, 44U, filt_min_txt);
-    drv_display_draw_text(80U, 44U, filt_max_txt);
+    u8g2_DrawStr(u8g2, 0U, 18U, "RAW");
+    u8g2_DrawStr(u8g2, 24U, 18U, raw_txt);
+    u8g2_DrawStr(u8g2, 64U, 18U, raw_min_txt);
 
-    drv_display_draw_text(0U, 56U, "VAL");
-    drv_display_draw_text(30U, 56U, val_txt);
+    u8g2_DrawStr(u8g2, 0U, 30U, "FILT");
+    u8g2_DrawStr(u8g2, 24U, 30U, filt_txt);
+    u8g2_DrawStr(u8g2, 64U, 30U, filt_min_txt);
 
-    drv_display_draw_text(60U, 56U, "P");
-    drv_display_draw_text(75U, 56U, press_txt);
+    u8g2_DrawStr(u8g2, 0U, 42U, "VAL");
+    u8g2_DrawStr(u8g2, 24U, 42U, val_txt);
 
-    drv_display_draw_text(0U, 64U, "ENG");
-    drv_display_draw_text(40U, 64U, eng_min_txt);
-    drv_display_draw_text(80U, 64U, eng_max_txt);
+    u8g2_DrawStr(u8g2, 64U, 42U, "P");
+    u8g2_DrawStr(u8g2, 76U, 42U, press_txt);
+
+    u8g2_DrawStr(u8g2, 0U, 54U, "ENG");
+    u8g2_DrawStr(u8g2, 24U, 54U, eng_min_txt);
+    u8g2_DrawStr(u8g2, 64U, 54U, eng_max_txt);
+
+    u8g2_DrawFrame(u8g2, 0U, 56U, 127U, 8U);
+    u8g2_DrawBox(u8g2, 1U, 57U, (uint8_t)((val * 125U) / 100U), 6U);
 }
 
 const ui_page_t g_ui_page_debug_hall = {
