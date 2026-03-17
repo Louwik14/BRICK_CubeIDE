@@ -1,0 +1,2 @@
+../Drivers/U8g2/u8x8_d_ssd1316.c:217:9:u8x8_d_ssd1316_128x32	24	static
+../Drivers/U8g2/u8x8_d_ssd1316.c:312:9:u8x8_d_ssd1316_96x32	24	static

@@ -1,0 +1,2 @@
+../Src/SD/fatfs.c:40:6:MX_FATFS_Init	1
+../Src/SD/fatfs.c:67:7:get_fattime	1

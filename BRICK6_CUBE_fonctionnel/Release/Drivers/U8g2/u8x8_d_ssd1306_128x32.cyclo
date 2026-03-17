@@ -1,0 +1,3 @@
+../Drivers/U8g2/u8x8_d_ssd1306_128x32.c:204:9:u8x8_d_ssd1306_128x32_univision	10
+../Drivers/U8g2/u8x8_d_ssd1306_128x32.c:244:9:u8x8_d_ssd1306_128x32_winstar	10
+../Drivers/U8g2/u8x8_d_ssd1306_128x32.c:308:9:u8x8_d_sh1106_128x32_visionox	10

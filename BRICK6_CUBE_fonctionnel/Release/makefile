@@ -27,6 +27,7 @@ RM := rm -rf
 -include Src/App/Hall/subdir.mk
 -include Src/App/subdir.mk
 -include Src/subdir.mk
+-include Drivers/U8g2/subdir.mk
 -include Drivers/STM32H7xx_HAL_Driver/Src/subdir.mk
 -include Drivers/Drv_app/Src/subdir.mk
 -include Drivers/CMSIS_DSP/Source/TransformFunctions/subdir.mk

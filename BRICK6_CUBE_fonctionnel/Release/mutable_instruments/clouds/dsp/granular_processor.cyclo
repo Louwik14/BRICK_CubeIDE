@@ -1,0 +1,11 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/clouds/dsp/fx/reverb.h:53:8:void clouds::Reverb::Process(clouds::FloatFrame*, size_t)	5
+../mutable_instruments/clouds/dsp/granular_processor.cpp:44:6:void clouds::GranularProcessor::Init(void*, size_t, void*, size_t)	3
+../mutable_instruments/clouds/dsp/granular_processor.cpp:66:6:void clouds::GranularProcessor::ResetFilters()	1
+../mutable_instruments/clouds/dsp/granular_processor.cpp:288:6:void clouds::GranularProcessor::PreparePersistentData()	2
+../mutable_instruments/clouds/dsp/granular_processor.cpp:297:6:void clouds::GranularProcessor::GetPersistentData(clouds::PersistentBlock*, size_t*)	3
+../mutable_instruments/clouds/dsp/granular_processor.cpp:369:6:void clouds::GranularProcessor::Prepare()	111
+../mutable_instruments/clouds/dsp/granular_processor.cpp:316:6:bool clouds::GranularProcessor::LoadPersistentData(const uint32_t*)	14
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/clouds/dsp/granular_sample_player.h:71:8:void clouds::GranularSamplePlayer::Play(const clouds::AudioBuffer<resolution>*, const clouds::Parameters&, float*, size_t) [with clouds::Resolution resolution = clouds::RESOLUTION_8_BIT_MU_LAW]	169
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/clouds/dsp/granular_sample_player.h:71:8:void clouds::GranularSamplePlayer::Play(const clouds::AudioBuffer<resolution>*, const clouds::Parameters&, float*, size_t) [with clouds::Resolution resolution = clouds::RESOLUTION_16_BIT]	169
+../mutable_instruments/clouds/dsp/granular_processor.cpp:74:6:void clouds::GranularProcessor::ProcessGranular(clouds::FloatFrame*, clouds::FloatFrame*, size_t)	195
+../mutable_instruments/clouds/dsp/granular_processor.cpp:158:6:void clouds::GranularProcessor::Process(clouds::ShortFrame*, clouds::ShortFrame*, size_t)	68

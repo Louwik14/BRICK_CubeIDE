@@ -2,8 +2,7 @@
 
 #include "gpio.h"
 #include "spi.h"
-#include "u8g2.h"
-
+#include "../../U8g2/u8g2.h"
 #include <stdio.h>
 
 extern SPI_HandleTypeDef hspi5;
