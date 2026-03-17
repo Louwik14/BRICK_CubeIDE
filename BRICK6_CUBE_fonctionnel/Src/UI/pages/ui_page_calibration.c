@@ -14,6 +14,7 @@
 #define CAL_GRID_X                0U
 #define CAL_GRID_Y                8U
 #define CAL_OK_DISPLAY_TIME_MS    1000U
+#define CAL_HITS_DISPLAY_MAX       3U
 
 static uint8_t g_save_done = 0U;
 static uint32_t g_cal_done_tick = 0U;
@@ -74,12 +75,19 @@ static void ui_page_calibration_render(void)
 
         if (hits > 0U)
         {
-            uint8_t fill_h = ((CAL_CELL_H - 2U) * hits) / 3U;
+            uint8_t safe_hits = hits;
+            if (safe_hits > CAL_HITS_DISPLAY_MAX)
+            {
+                safe_hits = CAL_HITS_DISPLAY_MAX;
+            }
+
+            int fill_h = (int)(((CAL_CELL_H - 2U) * safe_hits) / CAL_HITS_DISPLAY_MAX);
+            int fill_y = (int)y + (int)(CAL_CELL_H - 1U) - fill_h;
 
             drv_display_fill_rect(
-                (uint8_t)(x + 1U),
-                (uint8_t)(y + (CAL_CELL_H - 1U - fill_h)),
-                (uint8_t)(CAL_CELL_W - 2U),
+                (int)x + 1,
+                fill_y,
+                (int)(CAL_CELL_W - 2U),
                 fill_h
             );
         }
