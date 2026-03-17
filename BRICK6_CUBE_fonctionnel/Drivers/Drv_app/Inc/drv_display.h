@@ -42,6 +42,7 @@ void drv_display_draw_pixel(int x, int y, bool on);
 
 /* Rectangles */
 void drv_display_draw_rect(int x, int y, int w, int h);
+void drv_display_draw_line(int x1, int y1, int x2, int y2);
 void drv_display_fill_rect(int x, int y, int w, int h);
 void drv_display_clear_rect(int x, int y, int w, int h);
 

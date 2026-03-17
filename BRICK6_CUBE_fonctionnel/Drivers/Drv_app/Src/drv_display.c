@@ -13,12 +13,21 @@ const font_t FONT_4X6 = { .id = 1U };
 static u8g2_t g_u8g2;
 static const uint8_t *g_active_font = u8g2_font_5x7_tr;
 
+static inline int drv_display_baseline(int y)
+{
+    return y + u8g2_GetAscent(&g_u8g2);
+}
+
 uint8_t u8x8_byte_hw_spi(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
 {
     (void)u8x8;
 
     switch (msg)
     {
+    case U8X8_MSG_BYTE_INIT:
+        HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_SET);
+        break;
+
     case U8X8_MSG_BYTE_SEND:
         HAL_SPI_Transmit(&hspi5, (uint8_t *)arg_ptr, arg_int, 100U);
         break;
@@ -31,7 +40,6 @@ uint8_t u8x8_byte_hw_spi(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
         HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_SET);
         break;
 
-    case U8X8_MSG_BYTE_INIT:
     default:
         break;
     }
@@ -48,10 +56,6 @@ uint8_t u8x8_gpio_and_delay_stm32(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, vo
     {
     case U8X8_MSG_GPIO_DC:
         HAL_GPIO_WritePin(OLED_DC_GPIO_Port, OLED_DC_Pin, arg_int ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        break;
-
-    case U8X8_MSG_GPIO_CS:
-        HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, arg_int ? GPIO_PIN_SET : GPIO_PIN_RESET);
         break;
 
     case U8X8_MSG_GPIO_RESET:
@@ -155,7 +159,7 @@ void drv_display_clear_rect(int x, int y, int w, int h)
 void drv_display_draw_char(uint8_t x, uint8_t y, char c)
 {
     char txt[2] = { c, '\0' };
-    u8g2_DrawStr(&g_u8g2, x, y + u8g2_GetAscent(&g_u8g2), txt);
+    u8g2_DrawStr(&g_u8g2, x, drv_display_baseline(y), txt);
 }
 
 void drv_display_draw_text(uint8_t x, uint8_t y, const char *txt)
@@ -165,7 +169,12 @@ void drv_display_draw_text(uint8_t x, uint8_t y, const char *txt)
         return;
     }
 
-    u8g2_DrawStr(&g_u8g2, x, y + u8g2_GetAscent(&g_u8g2), txt);
+    u8g2_DrawStr(&g_u8g2, x, drv_display_baseline(y), txt);
+}
+
+void drv_display_draw_line(int x1, int y1, int x2, int y2)
+{
+    u8g2_DrawLine(&g_u8g2, x1, y1, x2, y2);
 }
 
 void drv_display_draw_number(uint8_t x, uint8_t y, int num)
