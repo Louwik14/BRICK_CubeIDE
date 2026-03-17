@@ -83,6 +83,13 @@ void drv_display_clear(void)
 
 void drv_display_update(void)
 {
+    /*
+     * U8g2 buffer uses page-oriented vertical bytes.
+     * Keep the controller in page addressing mode so 0xB0+page and
+     * page*OLED_WIDTH indexing stay aligned.
+     */
+    send_cmd(0x20); send_cmd(0x02);
+
     for (uint8_t page = 0; page < 8; page++)
     {
         send_cmd(0xB0 + page);
@@ -116,6 +123,12 @@ void drv_display_init(void)
     send_cmd(0xC8);
     send_cmd(0xDA); send_cmd(0x12);
     send_cmd(0xAF);
+
+    /*
+     * Configure the U8g2 display descriptor first so tile width/height are
+     * known (16x8 tiles for SSD1309 128x64), then attach our external buffer.
+     */
+    u8g2_SetupDisplay(&g_u8g2, u8x8_d_ssd1309_128x64_noname0, u8x8_cad_001, u8x8_byte_empty, NULL);
 
     /* Setup U8g2 to use external buffer */
     u8g2_SetupBuffer(&g_u8g2, buffer, 8, u8g2_ll_hvline_vertical_top_lsb, &u8g2_cb_r0);
