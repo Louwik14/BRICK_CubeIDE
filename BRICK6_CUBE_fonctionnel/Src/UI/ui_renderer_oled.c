@@ -21,8 +21,13 @@
 
 #include "ui_renderer_oled.h"
 
+#include "main.h"
 #include "drv_display.h"
 #include "ui_page_manager.h"
+
+#define UI_RENDER_PERIOD_MS 33U
+
+static volatile uint8_t g_ui_rendering = 0U;
 
 /**
  * @brief Point d'entrée ui_renderer_oled_draw.
@@ -36,12 +41,9 @@
  */
 void ui_renderer_oled_draw(void)
 {
-    static uint8_t drawing = 0;
-    if (drawing) return;
-
-    drawing = 1;
-
     const ui_page_t *page = ui_page_get();
+
+    g_ui_rendering = 1U;
 
     drv_display_clear();
 
@@ -50,6 +52,27 @@ void ui_renderer_oled_draw(void)
         page->render();
     }
 
+    g_ui_rendering = 0U;
+}
 
-    drawing = 0;
+/**
+ * @brief Cadence le rendu UI à une fréquence adaptée à l'OLED.
+ */
+void ui_renderer_oled_service_poll(void)
+{
+    static uint32_t last_render = 0U;
+    const uint32_t now = HAL_GetTick();
+
+    if ((now - last_render) < UI_RENDER_PERIOD_MS)
+    {
+        return;
+    }
+
+    ui_renderer_oled_draw();
+    last_render = now;
+}
+
+uint8_t ui_renderer_oled_is_rendering(void)
+{
+    return g_ui_rendering;
 }

@@ -36,16 +36,21 @@
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+static uint8_t g_ui_tasklet_init = 0U;
+
 void ui_tasklet_poll(void)
 {
-    static uint8_t init = 0U;
-
-    if (init == 0U)
+    if (g_ui_tasklet_init == 0U)
     {
-        init = 1U;
+        g_ui_tasklet_init = 1U;
         drv_display_init();
         ui_core_init();
     }
 
     ui_core_tick();
+}
+
+uint8_t ui_tasklet_is_initialized(void)
+{
+    return g_ui_tasklet_init;
 }
