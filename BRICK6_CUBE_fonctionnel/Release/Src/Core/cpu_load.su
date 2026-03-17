@@ -1,6 +1,0 @@
-../Src/Core/cpu_load.c:45:6:cpu_load_init	4	static,ignoring_inline_asm
-../Src/Core/cpu_load.c:93:6:cpu_load_irq_begin	4	static
-../Src/Core/cpu_load.c:116:6:cpu_load_irq_end	8	static
-../Src/Core/cpu_load.c:155:10:cpu_load_get_permille	0	static
-../Src/Core/cpu_load.c:172:10:cpu_load_get_max	0	static
-../Src/Core/cpu_load.c:189:10:cpu_load_is_valid	0	static

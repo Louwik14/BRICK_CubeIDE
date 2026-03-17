@@ -1,4 +1,0 @@
-../Src/Storage/wav_loader.c:78:14:wav_loader_get_interleaved_buffer	0	static
-../Src/Storage/wav_loader.c:95:10:wav_loader_get_capacity_frames	0	static
-../Src/Storage/wav_loader.c:151:6:wav_loader_find_first_wav	384	static
-../Src/Storage/wav_loader.c:239:6:wav_loader_load_to_sdram	4760	static
