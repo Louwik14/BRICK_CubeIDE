@@ -58,7 +58,10 @@ void ui_page_main_enter(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void ui_page_main_leave(void) {}
+void ui_page_main_leave(void)
+{
+    ui_param_set_bank(0);
+}
 /**
  * @brief Point d'entrée ui_page_main_handle_event.
  *

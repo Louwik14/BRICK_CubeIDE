@@ -61,7 +61,10 @@ static void ui_page_param_test_enter(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void ui_page_param_test_leave(void) {}
+static void ui_page_param_test_leave(void)
+{
+    ui_param_set_bank(0);
+}
 
 /**
  * @brief Point d'entrée ui_page_param_test_handle_event.

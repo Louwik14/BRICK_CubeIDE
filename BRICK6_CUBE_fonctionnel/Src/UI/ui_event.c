@@ -22,8 +22,9 @@
 #include "ui_event.h"
 
 #include "buttons.h"
+#include "encoders.h"
 
-#define UI_EVENT_Q_LEN 32U
+#define UI_EVENT_Q_LEN 64U
 
 static ui_event_t g_ui_evt_q[UI_EVENT_Q_LEN];
 static uint8_t g_ui_evt_w = 0U;
@@ -65,6 +66,20 @@ static void ui_event_push(const ui_event_t *ev)
 void ui_event_from_inputs(void)
 {
     ui_event_t ev;
+
+    for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
+    {
+        const int16_t delta = encoder_consume_delta(i);
+
+        if (delta != 0)
+        {
+            ev.type = UI_EVENT_ENCODER;
+            ev.id = i;
+            ev.value = delta;
+            ui_event_push(&ev);
+        }
+    }
+
     for (uint8_t i = 0U; i < (uint8_t)BTN_COUNT; i++)
     {
         if (button_pressed((button_id_t)i) != 0U)
