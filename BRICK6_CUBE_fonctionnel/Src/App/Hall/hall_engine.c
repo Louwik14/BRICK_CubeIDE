@@ -9,9 +9,9 @@
 
 #define HALL_SENSOR_COUNT    HALL_KEY_COUNT
 
-#define HALL_THRESHOLD_PPM   200U
-#define HALL_HYST_PPM         40U
-#define HALL_MIN_RANGE       500U
+#define HALL_THRESHOLD_PPM_DEFAULT   200U
+#define HALL_HYST_PPM_DEFAULT         40U
+#define HALL_MIN_RANGE_DEFAULT       500U
 
 /* -------------------- Vélocité -------------------- */
 
@@ -21,10 +21,18 @@ static volatile hall_vel_curve_t g_vel_curve = HALL_VEL_CURVE_SOFT;
 #define HALL_VEL_SLOW_SHIFT          12U
 #define HALL_VEL_FAST_SHIFT           2U
 
-#define HALL_VEL_TIME_START_PPM     150U
-#define HALL_VEL_TIME_END_PPM         0U
-#define HALL_VEL_TIME_FAST_DT         2U
-#define HALL_VEL_TIME_SLOW_DT        14U
+#define HALL_VEL_TIME_START_PPM_DEFAULT     150U
+#define HALL_VEL_TIME_END_PPM              0U
+#define HALL_VEL_TIME_FAST_DT_DEFAULT       2U
+#define HALL_VEL_TIME_SLOW_DT_DEFAULT      14U
+
+static volatile uint16_t g_threshold_ppm = HALL_THRESHOLD_PPM_DEFAULT;
+static volatile uint16_t g_hyst_ppm = HALL_HYST_PPM_DEFAULT;
+static volatile uint16_t g_min_range = HALL_MIN_RANGE_DEFAULT;
+
+static volatile uint16_t g_time_start_ppm = HALL_VEL_TIME_START_PPM_DEFAULT;
+static volatile uint16_t g_time_fast_dt = HALL_VEL_TIME_FAST_DT_DEFAULT;
+static volatile uint16_t g_time_slow_dt = HALL_VEL_TIME_SLOW_DT_DEFAULT;
 
 #define HALL_VEL_ENERGY_SLOW_SHIFT   6U
 #define HALL_VEL_ENERGY_FAST_SHIFT   2U
@@ -76,7 +84,7 @@ static bool hall_range_valid(const hall_button_t *b)
         return false;
     }
 
-    return ((uint16_t)(b->max - b->min) >= (uint16_t)HALL_MIN_RANGE);
+    return ((uint16_t)(b->max - b->min) >= (uint16_t)g_min_range);
 }
 
 static void hall_update_triggers(hall_button_t *b)
@@ -92,9 +100,9 @@ static void hall_update_triggers(hall_button_t *b)
 
     uint32_t range = (uint32_t)(b->max - b->min);
 
-    uint32_t half_hyst = (uint32_t)HALL_HYST_PPM / 2U;
-    uint32_t lo_ppm = (uint32_t)HALL_THRESHOLD_PPM;
-    uint32_t hi_ppm = (uint32_t)HALL_THRESHOLD_PPM;
+    uint32_t half_hyst = (uint32_t)g_hyst_ppm / 2U;
+    uint32_t lo_ppm = (uint32_t)g_threshold_ppm;
+    uint32_t hi_ppm = (uint32_t)g_threshold_ppm;
 
     if (lo_ppm > half_hyst)
     {
@@ -114,7 +122,7 @@ static void hall_update_triggers(hall_button_t *b)
     b->trig_lo = (uint16_t)(b->min + (range * lo_ppm) / 1000U);
     b->trig_hi = (uint16_t)(b->min + (range * hi_ppm) / 1000U);
 
-    b->vel_start_th = (uint16_t)(b->min + (range * (uint32_t)HALL_VEL_TIME_START_PPM) / 1000U);
+    b->vel_start_th = (uint16_t)(b->min + (range * (uint32_t)g_time_start_ppm) / 1000U);
 
     if (HALL_VEL_TIME_END_PPM == 0U)
     {
@@ -228,11 +236,11 @@ static uint8_t hall_velocity_from_dv(uint16_t range, uint16_t dv_peak)
 
 static uint8_t hall_velocity_from_time(uint16_t dt_count)
 {
-    if (dt_count <= HALL_VEL_TIME_FAST_DT) return 127U;
-    if (dt_count >= HALL_VEL_TIME_SLOW_DT) return 1U;
+    if (dt_count <= g_time_fast_dt) return 127U;
+    if (dt_count >= g_time_slow_dt) return 1U;
 
-    uint32_t num = (uint32_t)(HALL_VEL_TIME_SLOW_DT - dt_count) * 126U;
-    uint32_t den = (uint32_t)(HALL_VEL_TIME_SLOW_DT - HALL_VEL_TIME_FAST_DT);
+    uint32_t num = (uint32_t)(g_time_slow_dt - dt_count) * 126U;
+    uint32_t den = (uint32_t)(g_time_slow_dt - g_time_fast_dt);
     uint32_t v = 1U + (num / den);
 
     if (v < 1U) v = 1U;
@@ -385,6 +393,14 @@ static void hall_process_channel(uint8_t index, uint16_t raw)
 void hall_engine_init(void)
 {
     hall_calibrated = 0U;
+
+    g_threshold_ppm = HALL_THRESHOLD_PPM_DEFAULT;
+    g_hyst_ppm = HALL_HYST_PPM_DEFAULT;
+    g_min_range = HALL_MIN_RANGE_DEFAULT;
+
+    g_time_start_ppm = HALL_VEL_TIME_START_PPM_DEFAULT;
+    g_time_fast_dt = HALL_VEL_TIME_FAST_DT_DEFAULT;
+    g_time_slow_dt = HALL_VEL_TIME_SLOW_DT_DEFAULT;
 
     for (uint8_t i = 0U; i < HALL_SENSOR_COUNT; i++)
     {
@@ -567,4 +583,100 @@ uint8_t hall_engine_get_velocity_latched(uint8_t key)
 {
     if (key >= HALL_SENSOR_COUNT) return 0U;
     return hall_btn[key].vel_latched;
+}
+
+
+void hall_engine_set_threshold_ppm(uint16_t v)
+{
+    if (v > 1000U)
+    {
+        v = 1000U;
+    }
+
+    g_threshold_ppm = v;
+}
+
+uint16_t hall_engine_get_threshold_ppm(void)
+{
+    return g_threshold_ppm;
+}
+
+void hall_engine_set_hyst_ppm(uint16_t v)
+{
+    if (v > 1000U)
+    {
+        v = 1000U;
+    }
+
+    g_hyst_ppm = v;
+}
+
+uint16_t hall_engine_get_hyst_ppm(void)
+{
+    return g_hyst_ppm;
+}
+
+void hall_engine_set_min_range(uint16_t v)
+{
+    g_min_range = v;
+}
+
+uint16_t hall_engine_get_min_range(void)
+{
+    return g_min_range;
+}
+
+void hall_engine_set_time_start_ppm(uint16_t v)
+{
+    if (v > 1000U)
+    {
+        v = 1000U;
+    }
+
+    g_time_start_ppm = v;
+}
+
+uint16_t hall_engine_get_time_start_ppm(void)
+{
+    return g_time_start_ppm;
+}
+
+void hall_engine_set_time_fast_dt(uint16_t v)
+{
+    if (v < 1U)
+    {
+        v = 1U;
+    }
+
+    g_time_fast_dt = v;
+
+    if (g_time_fast_dt >= g_time_slow_dt)
+    {
+        g_time_slow_dt = (uint16_t)(g_time_fast_dt + 1U);
+    }
+}
+
+uint16_t hall_engine_get_time_fast_dt(void)
+{
+    return g_time_fast_dt;
+}
+
+void hall_engine_set_time_slow_dt(uint16_t v)
+{
+    if (v < 2U)
+    {
+        v = 2U;
+    }
+
+    g_time_slow_dt = v;
+
+    if (g_time_slow_dt <= g_time_fast_dt)
+    {
+        g_time_fast_dt = (uint16_t)(g_time_slow_dt - 1U);
+    }
+}
+
+uint16_t hall_engine_get_time_slow_dt(void)
+{
+    return g_time_slow_dt;
 }
