@@ -51,8 +51,7 @@ static void ui_page_calibration_tick(void)
 
 static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
 {
-    u8g2_t *u8g2 = ui_display_get_u8g2();
-    u8g2_DrawFrame(u8g2, x, y, CELL_W - 1, CELL_H - 1);
+    draw_rect(x, y, CELL_W - 1, CELL_H - 1);
 
     if(level == 0)
         return;
@@ -60,13 +59,13 @@ static void draw_cell(uint8_t x, uint8_t y, uint8_t level)
     uint8_t h = (CELL_H - 2) / 3;
 
     if(level >= 1)
-        u8g2_DrawFrame(u8g2, x + 1, y + 1, CELL_W - 3, h);
+        draw_rect(x + 1, y + 1, CELL_W - 3, h);
 
     if(level >= 2)
-        u8g2_DrawFrame(u8g2, x + 1, y + 1 + h, CELL_W - 3, h);
+        draw_rect(x + 1, y + 1 + h, CELL_W - 3, h);
 
     if(level >= 3)
-        u8g2_DrawFrame(u8g2, x + 1, y + 1 + 2*h, CELL_W - 3, h);
+        draw_rect(x + 1, y + 1 + 2*h, CELL_W - 3, h);
 }
 
 static void ui_page_calibration_render(void)

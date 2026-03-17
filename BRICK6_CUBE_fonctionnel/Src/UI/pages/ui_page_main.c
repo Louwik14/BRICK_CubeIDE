@@ -49,12 +49,10 @@ void ui_page_main_tick(void) {}
 
 void ui_page_main_render(void)
 {
-    u8g2_t *u8g2 = ui_display_get_u8g2();
-
-    u8g2_DrawStr(u8g2, 0U, 8U, "BRICK6 MAIN");
-    u8g2_DrawStr(u8g2, 0U, 24U, "BTN1: PARAM TEST");
-    u8g2_DrawStr(u8g2, 0U, 40U, "BTN2: MAIN PAGE");
-    u8g2_DrawStr(u8g2, 0U, 56U, "BTN3: HALL DEBUG");
+    draw_text(0U, 1U, "BRICK6 MAIN");
+    draw_text(0U, 17U, "BTN1: PARAM TEST");
+    draw_text(0U, 33U, "BTN2: MAIN PAGE");
+    draw_text(0U, 49U, "BTN3: HALL DEBUG");
 }
 
 const ui_page_t g_ui_page_main = {

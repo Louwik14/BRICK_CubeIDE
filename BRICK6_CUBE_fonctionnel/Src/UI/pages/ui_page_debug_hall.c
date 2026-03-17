@@ -82,30 +82,28 @@ static void ui_page_debug_hall_render(void)
     snprintf(eng_min_txt, sizeof(eng_min_txt), "%u", (unsigned)eng_min);
     snprintf(eng_max_txt, sizeof(eng_max_txt), "%u", (unsigned)eng_max);
 
-    u8g2_t *u8g2 = ui_display_get_u8g2();
+    draw_text(0U, 1U, "DEBUG - HALL");
 
-    u8g2_DrawStr(u8g2, 0U, 8U, "DEBUG - HALL");
+    draw_text(0U, 11U, "RAW");
+    draw_text(24U, 11U, raw_txt);
+    draw_text(64U, 11U, raw_min_txt);
 
-    u8g2_DrawStr(u8g2, 0U, 18U, "RAW");
-    u8g2_DrawStr(u8g2, 24U, 18U, raw_txt);
-    u8g2_DrawStr(u8g2, 64U, 18U, raw_min_txt);
+    draw_text(0U, 23U, "FILT");
+    draw_text(24U, 23U, filt_txt);
+    draw_text(64U, 23U, filt_min_txt);
 
-    u8g2_DrawStr(u8g2, 0U, 30U, "FILT");
-    u8g2_DrawStr(u8g2, 24U, 30U, filt_txt);
-    u8g2_DrawStr(u8g2, 64U, 30U, filt_min_txt);
+    draw_text(0U, 35U, "VAL");
+    draw_text(24U, 35U, val_txt);
 
-    u8g2_DrawStr(u8g2, 0U, 42U, "VAL");
-    u8g2_DrawStr(u8g2, 24U, 42U, val_txt);
+    draw_text(64U, 35U, "P");
+    draw_text(76U, 35U, press_txt);
 
-    u8g2_DrawStr(u8g2, 64U, 42U, "P");
-    u8g2_DrawStr(u8g2, 76U, 42U, press_txt);
+    draw_text(0U, 47U, "ENG");
+    draw_text(24U, 47U, eng_min_txt);
+    draw_text(64U, 47U, eng_max_txt);
 
-    u8g2_DrawStr(u8g2, 0U, 54U, "ENG");
-    u8g2_DrawStr(u8g2, 24U, 54U, eng_min_txt);
-    u8g2_DrawStr(u8g2, 64U, 54U, eng_max_txt);
-
-    u8g2_DrawFrame(u8g2, 0U, 56U, 127U, 8U);
-    u8g2_DrawBox(u8g2, 1U, 57U, (uint8_t)((val * 125U) / 100U), 6U);
+    draw_rect(0U, 56U, 127U, 8U);
+    fill_rect(1U, 57U, (uint8_t)((val * 125U) / 100U), 6U);
 }
 
 const ui_page_t g_ui_page_debug_hall = {

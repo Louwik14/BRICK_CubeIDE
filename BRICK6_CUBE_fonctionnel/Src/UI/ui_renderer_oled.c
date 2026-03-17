@@ -60,16 +60,13 @@ void ui_renderer_oled_draw(void)
 
     const ui_page_t *page = ui_page_get();
 
-    ui_display_begin_frame();
-
-    ui_display_set_font_default();
+    display_clear();
 
     if ((page != 0) && (page->render != 0))
     {
         page->render();
     }
 
-    ui_display_end_frame();
 
     drawing = 0;
 }

@@ -37,13 +37,11 @@
 #include "led_ids.h"
 #include "led_anim.h"
 
-#include "u8g2.h"
-#include "u8g2_port.h"
+#include "ui_display.h"
 /* USER CODE END Includes */
 
 /* USER CODE BEGIN PV */
 
-u8g2_t u8g2;
 extern volatile uint32_t engine_tick_count;
 
 /* USER CODE END PV */
@@ -77,31 +75,6 @@ int main(void)
   MX_TIM7_Init();
 
   /* =========================================================
-     OLED INIT
-     ========================================================= */
-
-  u8g2_Setup_ssd1309_128x64_noname0_f(
-      &u8g2,
-      U8G2_R0,
-      u8x8_byte_stm32_spi_hw,
-      u8x8_gpio_and_delay_stm32);
-
-  u8g2_InitDisplay(&u8g2);
-  u8g2_SetPowerSave(&u8g2, 0);
-
-  u8g2_ClearBuffer(&u8g2);
-  u8g2_SetFont(&u8g2, u8g2_font_5x8_tf);
-
-  for(uint8_t y = 8; y < 64; y += 8)
-  {
-      for(uint8_t x = 0; x < 128; x += 36)
-      {
-          u8g2_DrawStr(&u8g2, x, y, "HELLO");
-      }
-  }
-
-  u8g2_SendBuffer(&u8g2);
-  /* =========================================================
      APP INIT
      ========================================================= */
 
@@ -113,6 +86,7 @@ int main(void)
 
   uint32_t last_tick = 0;
   static uint32_t last_log_time = 0;
+  static uint32_t last_display_flush = 0;
 
   led_anim_blink(LED_STEP_2,255,0,0,400);
 
@@ -133,6 +107,12 @@ int main(void)
       {
           last_tick = engine_tick_count;
           ui_tasklet_poll();
+      }
+
+      if((HAL_GetTick() - last_display_flush) >= 33U)
+      {
+          last_display_flush = HAL_GetTick();
+          display_update();
       }
 
 #if PHASE0_DEBUG_LOG
