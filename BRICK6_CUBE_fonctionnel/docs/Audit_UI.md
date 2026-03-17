@@ -1,67 +1,222 @@
-# UI Architecture – Brick6 (Current Implementation)
+# Audit UI – Architecture actuelle (Brick6)
 
 ## 1. Vue d’ensemble
 
-L’interface utilisateur est organisée autour d’une **UI à pages pilotée par un tasklet** synchronisé avec le moteur audio.
+L’interface utilisateur est organisée autour d’une **UI à pages pilotée par un tasklet**, synchronisé avec le **moteur audio**.
 
-Architecture globale :
+L’architecture sépare clairement :
+
+* lecture des entrées (boutons / encodeurs)
+* logique UI
+* rendu graphique
+* transfert SPI vers l’écran
+
+Le rendu et le transfert SPI sont **découplés**, ce qui évite les glitches OLED.
+
+---
+
+# 2. Boucle principale
+
+Pipeline réel dans `main.c` :
 
 ```
 main loop
    │
    ├─ engine_tasklet_poll()
    │
-   └─ ui_tasklet_poll()
-          │
-          └─ ui_core_tick()
-                 │
-                 ├─ lecture encoders
-                 ├─ génération événements boutons
-                 ├─ navigation pages
-                 ├─ logique page active
-                 └─ rendu écran OLED
+   ├─ brick6_app_process()
+   │
+   ├─ MX_USB_HOST_Process()
+   ├─ usb_host_tasklet_poll_bounded()
+   ├─ midi_host_poll_bounded()
+   │
+   ├─ ui_tasklet_poll()
+   │     └─ ui_core_tick()
+   │
+   ├─ ui_renderer_oled_service_poll()
+   │     └─ ui_renderer_oled_draw()
+   │
+   └─ display_flush_service_poll()
+         └─ drv_display_update()
 ```
-
-Le rendu graphique est réalisé via :
-
-```
-drv_display
-```
-
-qui implémente un **framebuffer software + flush SPI SSD1309**.
 
 ---
 
-# 2. Pipeline UI complet
+# 3. Cadence temporelle
 
-## 2.1 Déclenchement dans la main loop
+La cadence UI est **dérivée de l’audio**.
 
-Dans `main.c` :
+Configuration :
 
-```c
-if(engine_tick_count != last_tick)
-{
-    last_tick = engine_tick_count;
-    ui_tasklet_poll();
-}
 ```
-
-L’UI est donc **cadencée par l’audio engine**.
+sample rate : 48 kHz
+audio block : 32 frames
+```
 
 Cadence :
 
 ```
-audio block = 32 frames
-48kHz / 32 = 1500 Hz
+48 000 / 32 = 1500 Hz
 ```
 
-Donc `ui_tasklet_poll()` peut être appelé jusqu’à **1500 fois par seconde**.
+Donc :
+
+```
+engine_tick = 1500 Hz
+ui_core_tick ≈ 1500 Hz max
+```
+
+Mais **le rendu écran est limité**.
 
 ---
 
-# 3. ui_tasklet
+# 4. Limitation de la fréquence de rendu
 
-Fichier :
+Le rendu UI est limité à **≈30 FPS**.
+
+Dans :
+
+```
+ui_renderer_oled.c
+```
+
+Constante :
+
+```
+UI_RENDER_PERIOD_MS = 33
+```
+
+Pipeline :
+
+```
+ui_renderer_oled_service_poll()
+
+if (now - last_render >= 33 ms)
+    ui_renderer_oled_draw()
+```
+
+Donc :
+
+```
+render ≈ 30 Hz
+```
+
+Ce qui évite de reconstruire le framebuffer 1500 fois par seconde.
+
+---
+
+# 5. Limitation du flush écran
+
+Le transfert SPI vers l’écran est **séparé du rendu**.
+
+Module :
+
+```
+display_flush_service.c
+```
+
+Fréquence :
+
+```
+DISPLAY_FLUSH_PERIOD_MS = 33
+```
+
+Pipeline :
+
+```
+display_flush_service_poll()
+
+if 33 ms elapsed
+    if renderer not active
+        drv_display_update()
+```
+
+Donc :
+
+```
+SPI flush ≈ 30 Hz
+```
+
+Protection supplémentaire :
+
+```
+if (ui_renderer_oled_is_rendering())
+    return
+```
+
+Empêche flush pendant rendu.
+
+---
+
+# 6. engine_tasklet
+
+Module :
+
+```
+engine_tasklet.c
+```
+
+Rôle :
+
+Créer une **base de temps stable dérivée de l’audio**.
+
+---
+
+## 6.1 Accumulation en IRQ
+
+Appelé depuis l’IRQ audio :
+
+```
+engine_tasklet_notify_frames(frames)
+```
+
+Code :
+
+```
+engine_frames_accum += frames
+```
+
+Ultra léger.
+
+---
+
+## 6.2 Consommation dans la main loop
+
+```
+engine_tasklet_poll()
+```
+
+Traitement :
+
+```
+while accumulated frames ≥ 32
+      engine_tick()
+```
+
+---
+
+## 6.3 engine_tick()
+
+Exécute :
+
+```
+buttons_update()
+encoders_update()
+led_service()
+mux_pots_scan()
+```
+
+Et incrémente :
+
+```
+engine_tick_count
+```
+
+---
+
+# 7. UI Tasklet
+
+Module :
 
 ```
 ui_tasklet.c
@@ -70,71 +225,66 @@ ui_tasklet.c
 Responsabilité :
 
 ```
-initialisation lazy + appel ui_core
+initialisation lazy
++
+appel ui_core_tick()
 ```
 
-Logique :
+Pipeline :
 
 ```
 ui_tasklet_poll()
-    if first call
-        drv_display_init()
-        ui_core_init()
 
-    ui_core_tick()
+if first call
+    drv_display_init()
+    ui_core_init()
+
+ui_core_tick()
 ```
 
 ---
 
-# 4. ui_core
+# 8. UI Core
 
-Fichier :
+Module :
 
 ```
 ui_core.c
 ```
 
-C’est le **coeur du système UI**.
-
 Responsabilités :
 
 ```
-- gestion des pages
-- gestion des paramètres via encodeurs
-- gestion des événements boutons
-- appel du renderer OLED
+- lecture encodeurs
+- génération événements boutons
+- navigation pages
+- tick logique page active
 ```
 
-Pipeline d’un tick :
+Pipeline complet :
 
 ```
 ui_core_tick()
 
-1) Lecture encodeurs
-   encoder_consume_delta()
+1) encoder_consume_delta()
 
-2) Application paramètres
-   ui_param_handle_encoder()
+2) ui_param_handle_encoder()
 
-3) Génération événements boutons
-   ui_event_from_inputs()
+3) ui_event_from_inputs()
 
-4) Consommation file d'événements
-   ui_event_pop()
+4) ui_event_pop()
 
        ├─ ui_navigation_handle_event()
        └─ active_page->handle_event()
 
-5) Tick logique page
-   active_page->tick()
-
-6) Rendu écran
-   ui_renderer_oled_draw()
+5) active_page->tick()
 ```
+
+Le rendu est **géré ailleurs**.
 
 ---
 
-# 5. Système d’événements
+# 9. Système d’événements
 
 Module :
 
@@ -144,36 +294,36 @@ ui_event.c
 
 Implémente une **queue circulaire lock-free**.
 
-Structure :
+Taille :
 
 ```
 UI_EVENT_Q_LEN = 32
-```
-
-Types d'événements :
-
-```
-UI_EVENT_BUTTON_PRESS
-UI_EVENT_BUTTON_RELEASE
 ```
 
 Pipeline :
 
 ```
 buttons driver
-    ↓
+      ↓
 ui_event_from_inputs()
-    ↓
+      ↓
 ui_event_push()
-    ↓
+      ↓
 queue
-    ↓
+      ↓
 ui_event_pop()
+```
+
+Types :
+
+```
+UI_EVENT_BUTTON_PRESS
+UI_EVENT_BUTTON_RELEASE
 ```
 
 ---
 
-# 6. Navigation entre pages
+# 10. Navigation entre pages
 
 Module :
 
@@ -181,9 +331,7 @@ Module :
 ui_navigation.c
 ```
 
-Navigation **data-driven**.
-
-Table :
+Navigation **data-driven** via une table :
 
 ```
 static const ui_nav_rule_t g_ui_nav_rules[]
@@ -192,25 +340,25 @@ static const ui_nav_rule_t g_ui_nav_rules[]
 Exemple :
 
 ```
-BTN_PARAM_1 -> PAGE_PARAM_TEST
-BTN_PARAM_2 -> PAGE_MAIN
-BTN_PARAM_3 -> PAGE_HALL_DEBUG
-BTN_PARAM_4 -> PAGE_CALIBRATION
+BTN_PARAM_1 → PAGE_PARAM_TEST
+BTN_PARAM_2 → PAGE_MAIN
+BTN_PARAM_3 → PAGE_HALL_KEY_DEBUG
+BTN_PARAM_4 → PAGE_CALIBRATION
 ```
 
-Logique :
+Pipeline :
 
 ```
 event bouton
       ↓
 ui_navigation_handle_event()
       ↓
-ui_page_set(target_page)
+ui_page_set()
 ```
 
 ---
 
-# 7. Page Manager
+# 11. Page Manager
 
 Module :
 
@@ -223,10 +371,10 @@ Responsabilités :
 ```
 - registry statique des pages
 - gestion page active
-- enter/leave hooks
+- enter / leave hooks
 ```
 
-Structure :
+Structures :
 
 ```
 g_ui_pages[16]
@@ -244,23 +392,17 @@ current_page_id = new
 next_page->enter()
 ```
 
-Récupération page active :
-
-```
-ui_page_get()
-```
-
 ---
 
-# 8. Structure d'une page
+# 12. Structure d’une page
 
-Chaque page implémente :
+Interface :
 
 ```
 ui_page_t
 ```
 
-Structure :
+Fonctions :
 
 ```
 enter()
@@ -285,13 +427,17 @@ leave()
 
 ---
 
-# 9. Renderer OLED
+# 13. Renderer OLED
 
 Module :
 
 ```
 ui_renderer_oled.c
 ```
+
+Rôle :
+
+Construire le **framebuffer complet**.
 
 Pipeline :
 
@@ -303,19 +449,48 @@ page = ui_page_get()
 drv_display_clear()
 
 page->render()
-
-drv_display_update()
 ```
 
-Protection reentrance :
+Note :
 
 ```
-static drawing flag
+pas de flush SPI ici
+```
+
+Protection :
+
+```
+g_ui_rendering flag
 ```
 
 ---
 
-# 10. Driver écran
+# 14. Service de flush écran
+
+Module :
+
+```
+display_flush_service.c
+```
+
+Responsabilité :
+
+Envoyer le framebuffer vers l’écran.
+
+Pipeline :
+
+```
+drv_display_update()
+```
+
+Ce module :
+
+* limite la fréquence
+* évite collision avec rendu
+
+---
+
+# 15. Driver écran
 
 Module :
 
@@ -328,28 +503,24 @@ Driver **SSD1309 SPI**.
 Architecture :
 
 ```
-Framebuffer software
-+ dirty pages
-+ flush SPI
+framebuffer software
++
+dirty page tracking
++
+flush SPI
 ```
 
 Framebuffer :
 
 ```
-buffer[OLED_WIDTH * OLED_HEIGHT / 8]
+128 × 64
+1 bit / pixel
 ```
 
-Pour écran :
+Mémoire :
 
 ```
-128 x 64
-```
-
-Format :
-
-```
-vertical pages
-8 pixels / byte
+buffer[1024 bytes]
 ```
 
 ---
@@ -363,25 +534,24 @@ display_dirty
 dirty_pages
 ```
 
-Chaque pixel modifié :
+Lors d’un pixel modifié :
 
 ```
 dirty_pages |= page_bit
 ```
 
-Update écran :
+Flush :
 
 ```
 drv_display_update()
 
-for each page
-    if dirty
-        SPI send page
+for each page dirty
+    SPI send page
 ```
 
 ---
 
-# 11. Primitive graphique
+# 16. Primitives graphiques
 
 Fournies par :
 
@@ -389,7 +559,7 @@ Fournies par :
 drv_display
 ```
 
-Primitives disponibles :
+Primitives :
 
 ```
 draw_pixel
@@ -402,7 +572,7 @@ draw_text
 draw_number
 ```
 
-Fonts supportées :
+Fonts :
 
 ```
 FONT_5X7
@@ -411,7 +581,7 @@ FONT_4X6
 
 ---
 
-# 12. Système de paramètres UI
+# 17. Système de paramètres UI
 
 Module :
 
@@ -422,7 +592,7 @@ ui_param.c
 Concept :
 
 ```
-encoder -> param_id -> param_registry
+encoder → param_id → param_registry
 ```
 
 Structure :
@@ -442,13 +612,13 @@ PARAM_GRAN_FREEZE
 }
 ```
 
-Flow :
+Pipeline :
 
 ```
 encoder delta
-    ↓
+      ↓
 ui_param_handle_encoder()
-    ↓
+      ↓
 param_get()
 param_set()
 ```
@@ -456,38 +626,35 @@ param_set()
 Clamp automatique :
 
 ```
-min/max
+min
+max
 step
 ```
 
 ---
 
-# 13. Pages existantes
+# 18. Pages existantes
 
-## Main Page
-
-```
-ui_page_main.c
-```
-
-Fonction :
+Pages enregistrées dans :
 
 ```
-page principale UI
+ui_core_init()
 ```
 
-Affiche :
+Ordre :
 
 ```
-BRICK6 MAIN
-BTN1: PARAM TEST
-BTN2: MAIN PAGE
-BTN3: HALL DEBUG
+0 → MAIN
+1 → PARAM_TEST
+2 → HALL_DEBUG
+3 → CALIBRATION
 ```
 
 ---
 
 ## Calibration Page
+
+Module :
 
 ```
 ui_page_calibration.c
@@ -495,14 +662,12 @@ ui_page_calibration.c
 
 Fonction :
 
-```
-calibration capteurs hall
-```
+Calibration capteurs hall.
 
 UI :
 
 ```
-grid 8x2
+grid 8 × 2
 16 cellules
 ```
 
@@ -510,192 +675,107 @@ Affichage :
 
 ```
 rectangle
-compteur hits
-OK quand >=3
+niveau = nombre de hits
 ```
 
-Puis :
+Quand calibration terminée :
 
 ```
 save calibration
-retour main
+affiche "CAL OK"
+attend 1 s
+retour MAIN
 ```
 
 ---
 
-# 14. Timing réel de l'UI
-
-Important.
-
-Cadence max :
-
-```
-1500 Hz
-```
-
-Mais **le rendu OLED est appelé à chaque tick** :
-
-```
-ui_renderer_oled_draw()
-```
-
-Donc :
-
-```
-clear framebuffer
-render page
-SPI flush
-```
-
-jusqu'à **1500 fois par seconde**.
-
----
-
-# 15. Chemin complet d'un rendu écran
-
-```
-main loop
-   ↓
-engine_tasklet_tick
-   ↓
-ui_tasklet_poll
-   ↓
-ui_core_tick
-   ↓
-ui_renderer_oled_draw
-   ↓
-drv_display_clear
-   ↓
-page->render
-   ↓
-drv_display_update
-   ↓
-SPI transfer
-```
-
----
-
-# 16. Points sensibles actuels
-
-Architecture solide mais **plusieurs points peuvent provoquer le glitch OLED**.
-
-### 1. fréquence de rendu extrême
-
-OLED appelé potentiellement :
-
-```
-1500 fps
-```
-
-Un SSD1309 SPI ne peut pas suivre.
-
----
-
-### 2. HAL_SPI_Transmit bloquant
-
-```
-HAL_SPI_Transmit()
-```
-
-bloque CPU.
-
-Si rendu trop fréquent :
-
-```
-SPI saturation
-bus contention
-glitch écran
-```
-
----
-
-### 3. rendu heavy
-
-Calibration page :
-
-```
-16 rectangles
-+ 16 textes
-+ snprintf
-```
-
-C'est beaucoup plus lourd que la page main.
-
----
-
-### 4. clear + redraw complet
-
-Chaque frame :
-
-```
-drv_display_clear()
-render
-update
-```
-
-pas de diff.
-
----
-
-### 5. SPI non DMA
-
-Actuellement :
-
-```
-HAL_SPI_Transmit
-```
-
-donc **blocking transfer**.
-
----
-
-# 17. Résumé architecture
+# 19. Architecture finale UI
 
 ```
 UI SYSTEM
 
-main
- └─ ui_tasklet
-      └─ ui_core
-           ├─ encoders
-           ├─ events
-           ├─ navigation
-           ├─ page manager
-           └─ renderer
-
-renderer
- └─ drv_display
-
-pages
- ├─ main
- ├─ param_test
- ├─ hall_debug
- └─ calibration
+main loop
+ ├─ engine_tasklet
+ │     └─ input scan
+ │
+ ├─ ui_tasklet
+ │     └─ ui_core
+ │           ├─ encoders
+ │           ├─ events
+ │           ├─ navigation
+ │           └─ page logic
+ │
+ ├─ ui_renderer_oled
+ │     └─ build framebuffer
+ │
+ └─ display_flush_service
+       └─ SPI OLED flush
 ```
 
 ---
 
-# 18. Conclusion
+# 20. Problème OLED initial (résolu)
+
+Ancien comportement :
+
+```
+render + SPI flush à chaque tick UI
+≈1500 FPS
+```
+
+Problèmes :
+
+```
+SPI saturé
+HAL_SPI_Transmit bloquant
+glitches écran
+```
+
+---
+
+# 21. Solution actuelle
+
+Découplage :
+
+```
+UI tick      : ~1500 Hz
+UI render    : ~30 Hz
+OLED flush   : ~30 Hz
+```
+
+Bénéfices :
+
+```
+✔ charge CPU stable
+✔ SPI non saturé
+✔ rendu fluide
+✔ architecture modulaire
+✔ séparation logique / rendu / IO
+```
+
+---
+
+# 22. Conclusion
 
 Architecture actuelle :
 
 Points forts :
 
 ```
-✔ architecture propre
-✔ pages modulaires
+✔ UI déterministe basée audio
+✔ rendu décorrélé du SPI
+✔ page system propre
 ✔ navigation data-driven
-✔ param system générique
-✔ renderer séparé
+✔ framebuffer + dirty tracking
+✔ code modulaire
 ```
 
-Points faibles :
+Points restant améliorables :
 
 ```
-✘ rendu OLED trop fréquent
-✘ SPI blocking
-✘ clear full frame
-✘ rendu lourd pages complexes
+- SPI toujours blocking
+- rendu full frame (clear + redraw)
+- snprintf dans certaines pages
 ```
 
-
+Mais la structure est maintenant **robuste et stable pour un système embarqué temps réel**.

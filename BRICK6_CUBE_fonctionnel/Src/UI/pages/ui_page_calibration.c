@@ -59,9 +59,6 @@ static void ui_page_calibration_tick(void)
 
 static void ui_page_calibration_render(void)
 {
-    char txt[4];
-
-    drv_display_set_font(&FONT_4X6);
     drv_display_draw_text(0U, 0U, "CALIBRATION");
 
     for (uint8_t i = 0U; i < 16U; i++)
@@ -75,14 +72,16 @@ static void ui_page_calibration_render(void)
 
         drv_display_draw_rect(x, y, CAL_CELL_W - 1U, CAL_CELL_H - 1U);
 
-        if (hits >= 3U)
+        if (hits > 0U)
         {
-            drv_display_draw_text((uint8_t)(x + 2U), (uint8_t)(y + 8U), "OK");
-        }
-        else
-        {
-            (void)snprintf(txt, sizeof(txt), "%u/3", hits);
-            drv_display_draw_text((uint8_t)(x + 1U), (uint8_t)(y + 8U), txt);
+            uint8_t fill_h = ((CAL_CELL_H - 2U) * hits) / 3U;
+
+            drv_display_fill_rect(
+                (uint8_t)(x + 1U),
+                (uint8_t)(y + (CAL_CELL_H - 1U - fill_h)),
+                (uint8_t)(CAL_CELL_W - 2U),
+                fill_h
+            );
         }
     }
 
@@ -90,10 +89,7 @@ static void ui_page_calibration_render(void)
     {
         drv_display_draw_text(48U, 58U, "CAL OK");
     }
-
-    drv_display_set_font(&FONT_5X7);
 }
-
 const ui_page_t g_ui_page_calibration = {
     .enter = ui_page_calibration_enter,
     .leave = ui_page_calibration_leave,
