@@ -83,6 +83,13 @@ void drv_display_clear(void)
 
 void drv_display_update(void)
 {
+    /*
+     * U8g2 buffer uses page-oriented vertical bytes.
+     * Keep the controller in page addressing mode so 0xB0+page and
+     * page*OLED_WIDTH indexing stay aligned.
+     */
+    send_cmd(0x20); send_cmd(0x02);
+
     for (uint8_t page = 0; page < 8; page++)
     {
         send_cmd(0xB0 + page);
@@ -117,6 +124,12 @@ void drv_display_init(void)
     send_cmd(0xDA); send_cmd(0x12);
     send_cmd(0xAF);
 
+    /*
+     * Configure the U8g2 display descriptor first so tile width/height are
+     * known (16x8 tiles for SSD1309 128x64), then attach our external buffer.
+     */
+    u8g2_SetupDisplay(&g_u8g2, u8x8_d_ssd1309_128x64_noname0, u8x8_cad_001, u8x8_byte_empty, NULL);
+
     /* Setup U8g2 to use external buffer */
     u8g2_SetupBuffer(&g_u8g2, buffer, 8, u8g2_ll_hvline_vertical_top_lsb, &u8g2_cb_r0);
 
@@ -150,6 +163,43 @@ static inline int drv_display_baseline(int y)
     return y + u8g2_GetAscent(&g_u8g2);
 }
 
+static bool drv_display_clip_rect(int *x, int *y, int *w, int *h)
+{
+    int x0 = *x;
+    int y0 = *y;
+    int x1 = x0 + *w;
+    int y1 = y0 + *h;
+
+    if (x1 <= 0 || y1 <= 0 || x0 >= OLED_WIDTH || y0 >= OLED_HEIGHT)
+    {
+        return false;
+    }
+
+    if (x0 < 0)
+    {
+        x0 = 0;
+    }
+    if (y0 < 0)
+    {
+        y0 = 0;
+    }
+    if (x1 > OLED_WIDTH)
+    {
+        x1 = OLED_WIDTH;
+    }
+    if (y1 > OLED_HEIGHT)
+    {
+        y1 = OLED_HEIGHT;
+    }
+
+    *x = x0;
+    *y = y0;
+    *w = x1 - x0;
+    *h = y1 - y0;
+
+    return (*w > 0 && *h > 0);
+}
+
 /* ====================================================================== */
 /*                          DRAW PRIMITIVES                               */
 /* ====================================================================== */
@@ -166,6 +216,9 @@ void drv_display_draw_rect(int x, int y, int w, int h)
     if (w <= 0 || h <= 0)
         return;
 
+    if (drv_display_clip_rect(&x, &y, &w, &h) == false)
+        return;
+
     u8g2_DrawFrame(&g_u8g2, x, y, w, h);
 }
 
@@ -174,12 +227,18 @@ void drv_display_fill_rect(int x, int y, int w, int h)
     if (w <= 0 || h <= 0)
         return;
 
+    if (drv_display_clip_rect(&x, &y, &w, &h) == false)
+        return;
+
     u8g2_DrawBox(&g_u8g2, x, y, w, h);
 }
 
 void drv_display_clear_rect(int x, int y, int w, int h)
 {
     if (w <= 0 || h <= 0)
+        return;
+
+    if (drv_display_clip_rect(&x, &y, &w, &h) == false)
         return;
 
     u8g2_SetDrawColor(&g_u8g2, 0);
