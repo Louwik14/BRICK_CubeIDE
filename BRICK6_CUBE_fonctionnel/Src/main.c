@@ -46,6 +46,7 @@
 #include "audio_debug_log.h"
 #include "led_rgb.h"
 #include "led_ids.h"
+#include "display_flush_service.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -156,6 +157,8 @@ int main(void)
 	     MX_USB_HOST_Process();
 	     usb_host_tasklet_poll_bounded(4);
 	     midi_host_poll_bounded(8);
+
+	     display_flush_service_poll();
 
 	     if(engine_tick_count != last_tick)
 	     {

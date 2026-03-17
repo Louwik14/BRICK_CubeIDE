@@ -5,6 +5,7 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Src/UI/display_flush_service.c \
 ../Src/UI/font.c \
 ../Src/UI/font4x6.c \
 ../Src/UI/font5x7.c \
@@ -12,6 +13,7 @@ C_SRCS += \
 ../Src/UI/ui_tasklet.c 
 
 C_DEPS += \
+./Src/UI/display_flush_service.d \
 ./Src/UI/font.d \
 ./Src/UI/font4x6.d \
 ./Src/UI/font5x7.d \
@@ -19,6 +21,7 @@ C_DEPS += \
 ./Src/UI/ui_tasklet.d 
 
 OBJS += \
+./Src/UI/display_flush_service.o \
 ./Src/UI/font.o \
 ./Src/UI/font4x6.o \
 ./Src/UI/font5x7.o \
@@ -33,7 +36,7 @@ Src/UI/%.o Src/UI/%.su Src/UI/%.cyclo: ../Src/UI/%.c Src/UI/subdir.mk
 clean: clean-Src-2f-UI
 
 clean-Src-2f-UI:
-	-$(RM) ./Src/UI/font.cyclo ./Src/UI/font.d ./Src/UI/font.o ./Src/UI/font.su ./Src/UI/font4x6.cyclo ./Src/UI/font4x6.d ./Src/UI/font4x6.o ./Src/UI/font4x6.su ./Src/UI/font5x7.cyclo ./Src/UI/font5x7.d ./Src/UI/font5x7.o ./Src/UI/font5x7.su ./Src/UI/font5x8_elektron.cyclo ./Src/UI/font5x8_elektron.d ./Src/UI/font5x8_elektron.o ./Src/UI/font5x8_elektron.su ./Src/UI/ui_tasklet.cyclo ./Src/UI/ui_tasklet.d ./Src/UI/ui_tasklet.o ./Src/UI/ui_tasklet.su
+	-$(RM) ./Src/UI/display_flush_service.cyclo ./Src/UI/display_flush_service.d ./Src/UI/display_flush_service.o ./Src/UI/display_flush_service.su ./Src/UI/font.cyclo ./Src/UI/font.d ./Src/UI/font.o ./Src/UI/font.su ./Src/UI/font4x6.cyclo ./Src/UI/font4x6.d ./Src/UI/font4x6.o ./Src/UI/font4x6.su ./Src/UI/font5x7.cyclo ./Src/UI/font5x7.d ./Src/UI/font5x7.o ./Src/UI/font5x7.su ./Src/UI/font5x8_elektron.cyclo ./Src/UI/font5x8_elektron.d ./Src/UI/font5x8_elektron.o ./Src/UI/font5x8_elektron.su ./Src/UI/ui_tasklet.cyclo ./Src/UI/ui_tasklet.d ./Src/UI/ui_tasklet.o ./Src/UI/ui_tasklet.su
 
 .PHONY: clean-Src-2f-UI
 

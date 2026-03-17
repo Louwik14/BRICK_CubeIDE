@@ -50,7 +50,6 @@ void ui_renderer_oled_draw(void)
         page->render();
     }
 
-    drv_display_update();
 
     drawing = 0;
 }
