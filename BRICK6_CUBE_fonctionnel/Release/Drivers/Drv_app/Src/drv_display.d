@@ -49,7 +49,8 @@ Drivers/Drv_app/Src/drv_display.o: ../Drivers/Drv_app/Src/drv_display.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/UI/font.h \
- ../Inc/gpio.h ../Inc/main.h ../Inc/spi.h \
+ ../Inc/spi.h ../Inc/main.h ../Inc/gpio.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/sdram.h \
  ../Drivers/Drv_app/Src/../../U8g2/u8g2.h \
  ../Drivers/Drv_app/Src/../../U8g2/u8x8.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/drv_display.h:
@@ -103,8 +104,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/D
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/UI/font.h:
-../Inc/gpio.h:
-../Inc/main.h:
 ../Inc/spi.h:
+../Inc/main.h:
+../Inc/gpio.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/sdram.h:
 ../Drivers/Drv_app/Src/../../U8g2/u8g2.h:
 ../Drivers/Drv_app/Src/../../U8g2/u8x8.h:
