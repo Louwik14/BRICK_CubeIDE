@@ -2,7 +2,7 @@
 ../Drivers/U8g2/u8g2_circle.c:217:13:u8g2_draw_ellipse_section	5
 ../Drivers/U8g2/u8g2_circle.c:129:13:u8g2_draw_disc_section	5
 ../Drivers/U8g2/u8g2_circle.c:350:13:u8g2_draw_filled_ellipse_section	5
-../Drivers/U8g2/u8g2_circle.c:109:6:u8g2_DrawCircle	6
-../Drivers/U8g2/u8g2_circle.c:195:6:u8g2_DrawDisc	6
-../Drivers/U8g2/u8g2_circle.c:333:6:u8g2_DrawEllipse	8
-../Drivers/U8g2/u8g2_circle.c:466:6:u8g2_DrawFilledEllipse	8
+../Drivers/U8g2/u8g2_circle.c:109:6:u8g2_DrawCircle	5
+../Drivers/U8g2/u8g2_circle.c:195:6:u8g2_DrawDisc	5
+../Drivers/U8g2/u8g2_circle.c:333:6:u8g2_DrawEllipse	6
+../Drivers/U8g2/u8g2_circle.c:466:6:u8g2_DrawFilledEllipse	6

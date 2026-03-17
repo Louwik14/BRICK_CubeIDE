@@ -1,4 +1,5 @@
-../Drivers/U8g2/u8log.c:138:6:u8log_write_char	29
+../Drivers/U8g2/u8log.c:96:13:u8log_cursor_on_screen	6
+../Drivers/U8g2/u8log.c:138:6:u8log_write_char	7
 ../Drivers/U8g2/u8log.c:172:6:u8log_Init	1
 ../Drivers/U8g2/u8log.c:181:6:u8log_SetCallback	1
 ../Drivers/U8g2/u8log.c:187:6:u8log_SetRedrawMode	1

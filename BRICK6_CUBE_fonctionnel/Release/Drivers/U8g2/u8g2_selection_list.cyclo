@@ -1,4 +1,3 @@
-../Drivers/U8g2/u8g2_selection_list.c:52:6:u8g2_DrawUTF8Line.constprop	2
 ../Drivers/U8g2/u8g2_selection_list.c:52:6:u8g2_DrawUTF8Line	7
 ../Drivers/U8g2/u8g2_selection_list.c:156:20:u8g2_draw_selection_list_line.isra	1
 ../Drivers/U8g2/u8g2_selection_list.c:133:13:u8g2_DrawUTF8Lines	3

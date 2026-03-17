@@ -2,4 +2,4 @@
 ../Drivers/U8g2/u8x8_string.c:66:13:u8x8_GetStringLineStart	6
 ../Drivers/U8g2/u8x8_string.c:93:6:u8x8_CopyStringLine	16
 ../Drivers/U8g2/u8x8_string.c:119:9:u8x8_DrawUTF8Line	6
-../Drivers/U8g2/u8x8_string.c:159:9:u8x8_DrawUTF8Lines	17
+../Drivers/U8g2/u8x8_string.c:159:9:u8x8_DrawUTF8Lines	12

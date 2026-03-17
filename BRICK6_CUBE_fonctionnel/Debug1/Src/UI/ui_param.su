@@ -1,0 +1,3 @@
+../Src/UI/ui_param.c:52:14:ui_param_clamp	0	static
+../Src/UI/ui_param.c:78:6:ui_param_set_bank	4	static
+../Src/UI/ui_param.c:102:6:ui_param_handle_encoder	16	static

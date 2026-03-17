@@ -1,4 +1,5 @@
 ../Drivers/U8g2/u8x8_byte.c:462:13:i2c_delay	0	static
+../Drivers/U8g2/u8x8_byte.c:536:13:i2c_write_bit	8	static
 ../Drivers/U8g2/u8x8_byte.c:561:13:i2c_write_byte	16	static
 ../Drivers/U8g2/u8x8_byte.c:39:9:u8x8_byte_SetDC	4	static
 ../Drivers/U8g2/u8x8_byte.c:44:9:u8x8_byte_SendBytes	4	static

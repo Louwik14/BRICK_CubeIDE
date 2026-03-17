@@ -1,0 +1,5 @@
+../Src/App/Hall/hall_adc.c:17:6:hall_mux_select	16	static
+../Src/App/Hall/hall_adc.c:31:6:hall_adc_init	8	static
+../Src/App/Hall/hall_adc.c:54:10:hall_adc_get_raw	0	static
+../Src/App/Hall/hall_adc.c:64:9:hall_adc_get_mux_index	0	static
+../Src/App/Hall/hall_adc.c:69:6:HAL_TIM_PeriodElapsedCallback	8	static

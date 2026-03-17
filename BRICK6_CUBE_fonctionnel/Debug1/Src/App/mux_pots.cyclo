@@ -1,0 +1,4 @@
+../Src/App/mux_pots.c:21:13:mux_pots_select_channel	1
+../Src/App/mux_pots.c:31:6:mux_pots_init	2
+../Src/App/mux_pots.c:45:6:mux_pots_scan	8
+../Src/App/mux_pots.c:86:10:mux_pots_get	2

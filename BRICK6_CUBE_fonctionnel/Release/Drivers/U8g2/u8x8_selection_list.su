@@ -2,4 +2,4 @@
 ../Drivers/U8g2/u8x8_selection_list.c:60:6:u8sl_Prev	0	static
 ../Drivers/U8g2/u8x8_selection_list.c:77:6:u8x8_DrawSelectionList	24	static
 ../Drivers/U8g2/u8x8_selection_list.c:87:6:u8x8_sl_string_line_cb	24	static
-../Drivers/U8g2/u8x8_selection_list.c:121:9:u8x8_UserInterfaceSelectionList	64	static
+../Drivers/U8g2/u8x8_selection_list.c:121:9:u8x8_UserInterfaceSelectionList	48	static

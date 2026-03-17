@@ -1,0 +1,2 @@
+../Drivers/U8g2/u8g2_kerning.c:47:9:u8g2_GetKerning	8	static
+../Drivers/U8g2/u8g2_kerning.c:78:9:u8g2_GetKerningByTable	8	static
