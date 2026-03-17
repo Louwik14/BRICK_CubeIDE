@@ -47,6 +47,7 @@
 #include "led_rgb.h"
 #include "led_ids.h"
 #include "display_flush_service.h"
+#include "ui_renderer_oled.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -158,12 +159,16 @@ int main(void)
 	     usb_host_tasklet_poll_bounded(4);
 	     midi_host_poll_bounded(8);
 
-	     display_flush_service_poll();
-
 	     if(engine_tick_count != last_tick)
 	     {
 	         last_tick = engine_tick_count;
 	         ui_tasklet_poll();
+	     }
+
+	     if (ui_tasklet_is_initialized() != 0U)
+	     {
+	         ui_renderer_oled_service_poll();
+	         display_flush_service_poll();
 	     }
 	 #if PHASE0_DEBUG_LOG
 		   if((HAL_GetTick() - last_log_time) >= 1000U)
