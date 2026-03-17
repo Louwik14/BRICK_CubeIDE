@@ -47,6 +47,24 @@ void hall_engine_set_velocity_curve(uint8_t curve);
 uint8_t hall_engine_get_velocity_mode(void);
 uint8_t hall_engine_get_velocity_curve(void);
 
+void hall_engine_set_threshold_ppm(uint16_t v);
+uint16_t hall_engine_get_threshold_ppm(void);
+
+void hall_engine_set_hyst_ppm(uint16_t v);
+uint16_t hall_engine_get_hyst_ppm(void);
+
+void hall_engine_set_min_range(uint16_t v);
+uint16_t hall_engine_get_min_range(void);
+
+void hall_engine_set_time_start_ppm(uint16_t v);
+uint16_t hall_engine_get_time_start_ppm(void);
+
+void hall_engine_set_time_fast_dt(uint16_t v);
+uint16_t hall_engine_get_time_fast_dt(void);
+
+void hall_engine_set_time_slow_dt(uint16_t v);
+uint16_t hall_engine_get_time_slow_dt(void);
+
 uint16_t hall_engine_get_min(uint8_t key);
 uint16_t hall_engine_get_max(uint8_t key);
 uint16_t hall_engine_get_trig_lo(uint8_t key);
