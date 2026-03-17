@@ -1,7 +1,8 @@
-../Src/App/Hall/hall_calibration.c:14:6:hall_calibration_start	8	static
-../Src/App/Hall/hall_calibration.c:26:6:hall_calibration_process	32	static
-../Src/App/Hall/hall_calibration.c:59:9:hall_calibration_get_count	0	static
-../Src/App/Hall/hall_calibration.c:67:9:hall_calibration_is_done	0	static
-../Src/App/Hall/hall_calibration.c:72:10:hall_calibration_get_min	0	static
-../Src/App/Hall/hall_calibration.c:80:10:hall_calibration_get_max	0	static
-../Src/App/Hall/hall_calibration.c:88:6:hall_calibration_save	0	static
+../Src/App/Hall/hall_calibration.c:49:6:hall_calibration_start	8	static
+../Src/App/Hall/hall_calibration.c:63:6:hall_calibration_process	40	static
+../Src/App/Hall/hall_calibration.c:121:9:hall_calibration_get_count	0	static
+../Src/App/Hall/hall_calibration.c:131:9:hall_calibration_is_done	0	static
+../Src/App/Hall/hall_calibration.c:136:10:hall_calibration_get_min	0	static
+../Src/App/Hall/hall_calibration.c:146:10:hall_calibration_get_max	0	static
+../Src/App/Hall/hall_calibration.c:156:9:hall_calibration_load	8	static
+../Src/App/Hall/hall_calibration.c:176:6:hall_calibration_save	48	static
