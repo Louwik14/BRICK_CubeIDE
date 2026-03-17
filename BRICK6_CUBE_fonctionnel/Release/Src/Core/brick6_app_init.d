@@ -1,5 +1,4 @@
 Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
- ../Inc/audio_debug_log.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h \
  ../Inc/Audio/sd_multitrack_recorder.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h \
@@ -70,9 +69,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  ../Inc/Sampler/sample_pool.h ../Inc/Sampler/voice_manager.h \
  ../Inc/Audio/live_recorder.h ../Inc/Audio/live_recorder_config.h \
  ../Inc/Audio/recorder_transport.h ../Inc/Storage/memory_layout.h \
- ../Inc/App/Hall/hall_adc.h ../Inc/App/Hall/hall_filter.h \
- ../Inc/App/Hall/hall_engine.h
-../Inc/audio_debug_log.h:
+ ../Inc/App/Hall/hall_loop.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
@@ -148,6 +145,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param
 ../Inc/Audio/live_recorder_config.h:
 ../Inc/Audio/recorder_transport.h:
 ../Inc/Storage/memory_layout.h:
-../Inc/App/Hall/hall_adc.h:
-../Inc/App/Hall/hall_filter.h:
-../Inc/App/Hall/hall_engine.h:
+../Inc/App/Hall/hall_loop.h:

@@ -1,0 +1,2 @@
+../Src/App/Hall/hall_loop.c:20:6:hall_loop_init	8	static
+../Src/App/Hall/hall_loop.c:27:6:hall_loop_process	8	static

@@ -25,7 +25,7 @@
 #include "drv_display.h"
 #include "ui_page_manager.h"
 
-#define UI_RENDER_PERIOD_MS 33U
+#define UI_RENDER_PERIOD_MS 16U
 
 static volatile uint8_t g_ui_rendering = 0U;
 

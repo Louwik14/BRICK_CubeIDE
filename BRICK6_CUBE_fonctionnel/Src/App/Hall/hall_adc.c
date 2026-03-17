@@ -7,8 +7,8 @@
 #define HALL_MUX_COUNT 8U
 #define HALL_KEY_COUNT 16U
 
-static volatile uint16_t adc1_dma[HALL_MUX_COUNT];
-static volatile uint16_t adc2_dma[HALL_MUX_COUNT];
+static volatile uint16_t adc1_dma;
+static volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
 
@@ -33,19 +33,16 @@ void hall_adc_init(void)
     hall_mux_index = 0U;
     hall_mux_select(hall_mux_index);
 
-    for (uint8_t i = 0U; i < HALL_MUX_COUNT; i++)
-    {
-        adc1_dma[i] = 0U;
-        adc2_dma[i] = 0U;
-    }
+    adc1_dma = 0U;
+    adc2_dma = 0U;
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         hall_raw[i] = 0U;
     }
 
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_dma, HALL_MUX_COUNT);
-    HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_dma, HALL_MUX_COUNT);
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc1_dma, 1);
+    HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&adc2_dma, 1);
 
     HAL_TIM_Base_Start(&htim6);
     HAL_TIM_Base_Start_IT(&htim7);
@@ -73,8 +70,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         uint8_t mux = hall_mux_index;
 
         /* Copier la mesure actuelle dans les touches */
-        hall_raw[mux] = adc1_dma[mux];
-        hall_raw[mux + 8U] = adc2_dma[mux];
+        hall_raw[mux] = adc1_dma;
+        hall_raw[mux + 8U] = adc2_dma;
 
         /* passer au mux suivant */
         hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);

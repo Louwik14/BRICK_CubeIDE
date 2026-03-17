@@ -1,17 +1,38 @@
+Voici le **nouveau `Audit_UI.md`** mis à jour pour refléter l’architecture actuelle (driver hybride **U8G2 + framebuffer interne + flush SPI séparé**).
+
+---
+
 # Audit UI – Architecture actuelle (Brick6)
 
 ## 1. Vue d’ensemble
 
-L’interface utilisateur est organisée autour d’une **UI à pages pilotée par un tasklet**, synchronisé avec le **moteur audio**.
+L’interface utilisateur repose sur une **UI temps réel pilotée par le moteur audio**.
 
-L’architecture sépare clairement :
+Architecture en **pipeline décorrélé** :
 
-* lecture des entrées (boutons / encodeurs)
-* logique UI
-* rendu graphique
-* transfert SPI vers l’écran
+```
+inputs → logique UI → rendu framebuffer → flush SPI écran
+```
 
-Le rendu et le transfert SPI sont **découplés**, ce qui évite les glitches OLED.
+Objectifs :
+
+```
+✔ UI déterministe
+✔ aucun travail UI dans l’IRQ audio
+✔ rendu découplé du SPI
+✔ coût CPU stable
+✔ architecture modulaire
+```
+
+Le système combine maintenant :
+
+```
+U8G2 → moteur de dessin
+Driver interne → framebuffer + SPI
+```
+
+U8G2 n’envoie **aucune donnée au display**.
+Il dessine uniquement dans **notre framebuffer externe**.
 
 ---
 
@@ -44,7 +65,7 @@ main loop
 
 # 3. Cadence temporelle
 
-La cadence UI est **dérivée de l’audio**.
+La cadence UI dérive du moteur audio.
 
 Configuration :
 
@@ -63,18 +84,16 @@ Donc :
 
 ```
 engine_tick = 1500 Hz
-ui_core_tick ≈ 1500 Hz max
+ui_core_tick ≈ 1500 Hz
 ```
 
-Mais **le rendu écran est limité**.
+Mais le rendu écran est **fortement limité**.
 
 ---
 
-# 4. Limitation de la fréquence de rendu
+# 4. Limitation du rendu UI
 
-Le rendu UI est limité à **≈30 FPS**.
-
-Dans :
+Module :
 
 ```
 ui_renderer_oled.c
@@ -98,16 +117,14 @@ if (now - last_render >= 33 ms)
 Donc :
 
 ```
-render ≈ 30 Hz
+UI render ≈ 30 FPS
 ```
 
-Ce qui évite de reconstruire le framebuffer 1500 fois par seconde.
+Cela évite de reconstruire le framebuffer à 1500 Hz.
 
 ---
 
 # 5. Limitation du flush écran
-
-Le transfert SPI vers l’écran est **séparé du rendu**.
 
 Module :
 
@@ -115,7 +132,7 @@ Module :
 display_flush_service.c
 ```
 
-Fréquence :
+Constante :
 
 ```
 DISPLAY_FLUSH_PERIOD_MS = 33
@@ -137,14 +154,14 @@ Donc :
 SPI flush ≈ 30 Hz
 ```
 
-Protection supplémentaire :
+Protection :
 
 ```
 if (ui_renderer_oled_is_rendering())
     return
 ```
 
-Empêche flush pendant rendu.
+Empêche un flush pendant un rendu.
 
 ---
 
@@ -190,7 +207,7 @@ Traitement :
 
 ```
 while accumulated frames ≥ 32
-      engine_tick()
+    engine_tick()
 ```
 
 ---
@@ -206,7 +223,7 @@ led_service()
 mux_pots_scan()
 ```
 
-Et incrémente :
+Puis incrémente :
 
 ```
 engine_tick_count
@@ -258,10 +275,10 @@ Responsabilités :
 - lecture encodeurs
 - génération événements boutons
 - navigation pages
-- tick logique page active
+- logique de page
 ```
 
-Pipeline complet :
+Pipeline :
 
 ```
 ui_core_tick()
@@ -280,7 +297,7 @@ ui_core_tick()
 5) active_page->tick()
 ```
 
-Le rendu est **géré ailleurs**.
+Le rendu est géré ailleurs.
 
 ---
 
@@ -331,7 +348,9 @@ Module :
 ui_navigation.c
 ```
 
-Navigation **data-driven** via une table :
+Navigation **data-driven**.
+
+Table :
 
 ```
 static const ui_nav_rule_t g_ui_nav_rules[]
@@ -370,7 +389,7 @@ Responsabilités :
 
 ```
 - registry statique des pages
-- gestion page active
+- page active
 - enter / leave hooks
 ```
 
@@ -412,7 +431,7 @@ tick()
 render()
 ```
 
-Cycle de vie :
+Cycle :
 
 ```
 enter()
@@ -435,9 +454,9 @@ Module :
 ui_renderer_oled.c
 ```
 
-Rôle :
+Responsabilité :
 
-Construire le **framebuffer complet**.
+Construire **le framebuffer complet**.
 
 Pipeline :
 
@@ -451,10 +470,10 @@ drv_display_clear()
 page->render()
 ```
 
-Note :
+Important :
 
 ```
-pas de flush SPI ici
+aucun flush SPI ici
 ```
 
 Protection :
@@ -465,32 +484,7 @@ g_ui_rendering flag
 
 ---
 
-# 14. Service de flush écran
-
-Module :
-
-```
-display_flush_service.c
-```
-
-Responsabilité :
-
-Envoyer le framebuffer vers l’écran.
-
-Pipeline :
-
-```
-drv_display_update()
-```
-
-Ce module :
-
-* limite la fréquence
-* évite collision avec rendu
-
----
-
-# 15. Driver écran
+# 14. Driver écran
 
 Module :
 
@@ -500,73 +494,121 @@ drv_display.c
 
 Driver **SSD1309 SPI**.
 
-Architecture :
+Architecture actuelle :
 
 ```
-framebuffer software
+framebuffer interne
 +
-dirty page tracking
+U8G2 comme moteur graphique
 +
-flush SPI
+flush SPI manuel
 ```
 
-Framebuffer :
+---
+
+# 15. Framebuffer
+
+Mémoire :
 
 ```
 128 × 64
 1 bit / pixel
 ```
 
-Mémoire :
+Taille :
 
 ```
-buffer[1024 bytes]
+1024 bytes
+```
+
+Stockage :
+
+```
+SDRAM
+```
+
+Buffer :
+
+```
+uint8_t buffer[1024]
 ```
 
 ---
 
-## Dirty tracking
+# 16. Intégration U8G2
 
-Variables :
+U8G2 est utilisé **uniquement comme moteur de dessin**.
 
-```
-display_dirty
-dirty_pages
-```
-
-Lors d’un pixel modifié :
+Initialisation :
 
 ```
-dirty_pages |= page_bit
+u8g2_SetupDisplay(...)
+u8g2_SetupBuffer(...)
 ```
 
-Flush :
+Le buffer fourni à U8G2 est **le framebuffer du driver**.
+
+Donc :
+
+```
+U8G2
+  ↓
+framebuffer
+  ↓
+drv_display_update()
+  ↓
+SPI OLED
+```
+
+U8G2 **ne contrôle pas le bus SPI**.
+
+---
+
+# 17. Flush écran
+
+Module :
 
 ```
 drv_display_update()
+```
 
-for each page dirty
-    SPI send page
+Pipeline :
+
+```
+for page = 0..7
+    set page address
+    send 128 bytes
+```
+
+Donc :
+
+```
+8 pages × 128 bytes
+```
+
+Total :
+
+```
+1024 bytes / frame
 ```
 
 ---
 
-# 16. Primitives graphiques
+# 18. Primitives graphiques
 
-Fournies par :
-
-```
-drv_display
-```
-
-Primitives :
+Implémentées via U8G2 :
 
 ```
 draw_pixel
 draw_rect
 fill_rect
 clear_rect
+draw_line
+```
 
+Texte :
+
+```
 draw_char
 draw_text
 draw_number
@@ -581,7 +623,7 @@ FONT_4X6
 
 ---
 
-# 17. Système de paramètres UI
+# 19. Paramètres UI
 
 Module :
 
@@ -599,17 +641,6 @@ Structure :
 
 ```
 ui_param_bank
-```
-
-Exemple :
-
-```
-{
-PARAM_GRAN_DENSITY
-PARAM_GRAN_PITCH
-PARAM_GRAN_MIX
-PARAM_GRAN_FREEZE
-}
 ```
 
 Pipeline :
@@ -633,7 +664,7 @@ step
 
 ---
 
-# 18. Pages existantes
+# 20. Pages existantes
 
 Pages enregistrées dans :
 
@@ -652,7 +683,7 @@ Ordre :
 
 ---
 
-## Calibration Page
+# 21. Calibration Page
 
 Module :
 
@@ -678,7 +709,7 @@ rectangle
 niveau = nombre de hits
 ```
 
-Quand calibration terminée :
+Fin calibration :
 
 ```
 save calibration
@@ -689,7 +720,7 @@ retour MAIN
 
 ---
 
-# 19. Architecture finale UI
+# 22. Architecture finale UI
 
 ```
 UI SYSTEM
@@ -706,7 +737,7 @@ main loop
  │           └─ page logic
  │
  ├─ ui_renderer_oled
- │     └─ build framebuffer
+ │     └─ build framebuffer (U8G2)
  │
  └─ display_flush_service
        └─ SPI OLED flush
@@ -714,68 +745,83 @@ main loop
 
 ---
 
-# 20. Problème OLED initial (résolu)
+# 23. Différence avec l’ancienne architecture
 
-Ancien comportement :
-
-```
-render + SPI flush à chaque tick UI
-≈1500 FPS
-```
-
-Problèmes :
+Avant :
 
 ```
-SPI saturé
-HAL_SPI_Transmit bloquant
-glitches écran
+driver maison complet
 ```
 
----
-
-# 21. Solution actuelle
-
-Découplage :
+Maintenant :
 
 ```
-UI tick      : ~1500 Hz
-UI render    : ~30 Hz
-OLED flush   : ~30 Hz
+driver hybride
 ```
 
-Bénéfices :
+Structure :
 
 ```
-✔ charge CPU stable
-✔ SPI non saturé
-✔ rendu fluide
-✔ architecture modulaire
-✔ séparation logique / rendu / IO
+U8G2 → rendu graphique
+Driver interne → SPI
+Framebuffer → partagé
+```
+
+Avantages :
+
+```
+✔ primitives graphiques riches
+✔ fonts U8G2
+✔ rendu plus simple
+✔ pas de dépendance SPI U8G2
+✔ contrôle total du flush
 ```
 
 ---
 
-# 22. Conclusion
+# 24. Performance
 
-Architecture actuelle :
-
-Points forts :
+Cadences :
 
 ```
-✔ UI déterministe basée audio
+UI tick     ≈ 1500 Hz
+UI render   ≈ 30 Hz
+OLED flush  ≈ 30 Hz
+```
+
+Coût :
+
+```
+render framebuffer ≈ très faible
+SPI transfer ≈ 1 KB / frame
+```
+
+---
+
+# 25. Points forts
+
+```
+✔ architecture déterministe
 ✔ rendu décorrélé du SPI
-✔ page system propre
-✔ navigation data-driven
-✔ framebuffer + dirty tracking
-✔ code modulaire
+✔ U8G2 utilisé seulement pour le dessin
+✔ framebuffer unique
+✔ pipeline clair
+✔ pas d’appel SPI dans U8G2
+✔ UI stable et modulaire
 ```
 
-Points restant améliorables :
+---
+
+# 26. Améliorations possibles
 
 ```
-- SPI toujours blocking
-- rendu full frame (clear + redraw)
-- snprintf dans certaines pages
+- SPI DMA au lieu de blocking
+- dirty page tracking
+- double buffering
+- batching des draw calls
+- profiler temps render
 ```
 
-Mais la structure est maintenant **robuste et stable pour un système embarqué temps réel**.
+---
+
+Si tu veux, je peux aussi te faire une **section supplémentaire dans l’audit qui explique exactement pourquoi ton port U8G2 buguait à l’init** (c’est très probablement lié au `u8x8_byte` driver manquant). C’est un point intéressant pour la doc.

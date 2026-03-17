@@ -170,21 +170,7 @@ int main(void)
 	         ui_renderer_oled_service_poll();
 	         display_flush_service_poll();
 	     }
-	 #if PHASE0_DEBUG_LOG
-		   if((HAL_GetTick() - last_log_time) >= 1000U)
-		   {
-			   audio_debug_stats_t audio_stats;
-			   brick6_app_stats_t app_stats;
-			   audio_debug_get_stats(&audio_stats);
-			   brick6_app_get_stats(&app_stats);
-			   last_log_time = HAL_GetTick();
-			   AUDIO_DEBUG_LOG("[P0] app_calls=%lu audio_blocks=%lu dsp_frames=%lu rec_state=%u\n",
-					  (unsigned long)app_stats.app_process_call_count,
-					  (unsigned long)audio_stats.audio_block_counter,
-					  (unsigned long)audio_stats.dsp_frames_counter,
-					  (unsigned)app_stats.recorder_state);
-		   }
-	 #endif
+
   }
   /* USER CODE END 3 */
 }

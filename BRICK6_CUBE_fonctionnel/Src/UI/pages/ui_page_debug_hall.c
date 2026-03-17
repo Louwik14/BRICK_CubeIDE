@@ -4,25 +4,18 @@
 
 #include "drv_display.h"
 #include "App/Hall/hall_adc.h"
-#include "App/Hall/hall_filter.h"
 #include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_velocity.h"
 
 static uint16_t raw_min;
 static uint16_t raw_max;
 
-static uint16_t filt_min;
-static uint16_t filt_max;
-
 static void ui_page_debug_hall_enter(void)
 {
     const uint16_t raw = hall_adc_get_raw(0U);
-    const uint16_t filt = hall_filter_get(0U);
 
     raw_min = raw;
     raw_max = raw;
-
-    filt_min = filt;
-    filt_max = filt;
 }
 
 static void ui_page_debug_hall_leave(void) {}
@@ -40,48 +33,35 @@ static void ui_page_debug_hall_render(void)
     char raw_min_txt[16];
     char raw_max_txt[16];
 
-    char filt_txt[16];
-    char filt_min_txt[16];
-    char filt_max_txt[16];
-
     char val_txt[16];
     char press_txt[16];
+    char vel_txt[16];
+
     char eng_min_txt[16];
     char eng_max_txt[16];
 
     const uint16_t raw = hall_adc_get_raw(0U);
-    const uint16_t filt = hall_filter_get(0U);
 
     const uint16_t val = hall_engine_get_value(0U);
     const uint8_t pressed = hall_engine_is_pressed(0U);
+    const uint8_t velocity = hall_velocity_get(0U);
 
     const uint16_t eng_min = hall_engine_get_min(0U);
     const uint16_t eng_max = hall_engine_get_max(0U);
 
-    /* update RAW min/max */
     if(raw < raw_min)
         raw_min = raw;
 
     if(raw > raw_max)
         raw_max = raw;
 
-    /* update FILT min/max */
-    if(filt < filt_min)
-        filt_min = filt;
-
-    if(filt > filt_max)
-        filt_max = filt;
-
     snprintf(raw_txt, sizeof(raw_txt), "%u", (unsigned)raw);
     snprintf(raw_min_txt, sizeof(raw_min_txt), "%u", (unsigned)raw_min);
     snprintf(raw_max_txt, sizeof(raw_max_txt), "%u", (unsigned)raw_max);
 
-    snprintf(filt_txt, sizeof(filt_txt), "%u", (unsigned)filt);
-    snprintf(filt_min_txt, sizeof(filt_min_txt), "%u", (unsigned)filt_min);
-    snprintf(filt_max_txt, sizeof(filt_max_txt), "%u", (unsigned)filt_max);
-
     snprintf(val_txt, sizeof(val_txt), "%u%%", (unsigned)val);
     snprintf(press_txt, sizeof(press_txt), "%u", (unsigned)pressed);
+    snprintf(vel_txt, sizeof(vel_txt), "%u", (unsigned)velocity);
 
     snprintf(eng_min_txt, sizeof(eng_min_txt), "%u", (unsigned)eng_min);
     snprintf(eng_max_txt, sizeof(eng_max_txt), "%u", (unsigned)eng_max);
@@ -93,20 +73,18 @@ static void ui_page_debug_hall_render(void)
     drv_display_draw_text(40U, 22U, raw_min_txt);
     drv_display_draw_text(80U, 22U, raw_max_txt);
 
-    drv_display_draw_text(0U, 34U, "FILT");
-    drv_display_draw_text(0U, 44U, filt_txt);
-    drv_display_draw_text(40U, 44U, filt_min_txt);
-    drv_display_draw_text(80U, 44U, filt_max_txt);
+    drv_display_draw_text(0U, 34U, "VAL");
+    drv_display_draw_text(30U, 34U, val_txt);
 
-    drv_display_draw_text(0U, 56U, "VAL");
-    drv_display_draw_text(30U, 56U, val_txt);
+    drv_display_draw_text(60U, 34U, "P");
+    drv_display_draw_text(75U, 34U, press_txt);
 
-    drv_display_draw_text(60U, 56U, "P");
-    drv_display_draw_text(75U, 56U, press_txt);
+    drv_display_draw_text(0U, 46U, "VEL");
+    drv_display_draw_text(40U, 46U, vel_txt);
 
-    drv_display_draw_text(0U, 64U, "ENG");
-    drv_display_draw_text(40U, 64U, eng_min_txt);
-    drv_display_draw_text(80U, 64U, eng_max_txt);
+    drv_display_draw_text(0U, 58U, "ENG");
+    drv_display_draw_text(40U, 58U, eng_min_txt);
+    drv_display_draw_text(80U, 58U, eng_max_txt);
 }
 
 const ui_page_t g_ui_page_debug_hall = {

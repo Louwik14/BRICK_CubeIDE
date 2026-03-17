@@ -2,7 +2,7 @@
 #include "stm32h7xx_hal.h"
 
 #include "App/Hall/hall_engine.h"
-#include "App/Hall/hall_filter.h"
+#include "App/Hall/hall_adc.h"
 
 #define CALIBRATION_HITS_REQUIRED 3U
 #define CALIBRATION_PRESS_ADC     50000U
@@ -73,7 +73,7 @@ void hall_calibration_process(void)
     {
         if (g_key_done[i] == 0U)
         {
-            const uint16_t v = hall_filter_get(i);
+        	const uint16_t v = hall_adc_get_raw(i);
 
             if (v < g_cal_blob.min[i])
             {

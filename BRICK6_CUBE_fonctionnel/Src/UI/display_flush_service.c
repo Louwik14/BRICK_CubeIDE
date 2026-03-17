@@ -4,7 +4,7 @@
 #include "drv_display.h"
 #include "ui_renderer_oled.h"
 
-#define DISPLAY_FLUSH_PERIOD_MS 33U
+#define DISPLAY_FLUSH_PERIOD_MS 16U
 
 void display_flush_service_poll(void)
 {
