@@ -21,7 +21,6 @@
 
 #include "ui_core.h"
 
-#include "encoders.h"
 #include "pages/ui_page_main.h"
 #include "pages/ui_page_param_test.h"
 #include "pages/ui_page_debug_hall.h"
@@ -83,17 +82,21 @@ void ui_core_tick(void)
 {
     ui_event_t ev;
 
-    for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
-    {
-        const int16_t delta = encoder_consume_delta(encoder);
-        ui_param_handle_encoder(encoder, delta);
-    }
-
     ui_event_from_inputs();
 
     while (ui_event_pop(&ev))
     {
         ui_navigation_handle_event(&ev);
+
+        if (ev.type == UI_EVENT_ENCODER)
+        {
+            const uint8_t active_page_id = ui_page_get_id();
+
+            if ((active_page_id == UI_PAGE_MAIN) || (active_page_id == UI_PAGE_PARAM_TEST))
+            {
+                ui_param_handle_encoder(ev.id, ev.value);
+            }
+        }
 
         const ui_page_t *active_page = ui_page_get();
         if ((active_page != 0) && (active_page->handle_event != 0))
