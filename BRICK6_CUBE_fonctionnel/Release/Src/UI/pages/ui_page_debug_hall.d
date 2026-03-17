@@ -53,8 +53,7 @@ Src/UI/pages/ui_page_debug_hall.o: ../Src/UI/pages/ui_page_debug_hall.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/UI/font.h \
- ../Inc/App/Hall/hall_adc.h ../Inc/App/Hall/hall_engine.h \
- ../Inc/App/Hall/hall_velocity.h
+ ../Inc/App/Hall/hall_adc.h ../Inc/App/Hall/hall_engine.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_debug_hall.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page_manager.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page.h:
@@ -112,4 +111,3 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/D
 ../Inc/UI/font.h:
 ../Inc/App/Hall/hall_adc.h:
 ../Inc/App/Hall/hall_engine.h:
-../Inc/App/Hall/hall_velocity.h:

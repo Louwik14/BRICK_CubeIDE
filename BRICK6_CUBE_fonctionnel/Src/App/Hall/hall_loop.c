@@ -2,7 +2,6 @@
 
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_engine.h"
-#include "App/Hall/hall_velocity.h"
 
 /*
 ===============================================================================
@@ -21,11 +20,9 @@ void hall_loop_init(void)
 {
     hall_adc_init();
     hall_engine_init();
-    hall_velocity_init();
 }
 
 void hall_loop_process(void)
 {
     hall_engine_process();
-    hall_velocity_process();
 }

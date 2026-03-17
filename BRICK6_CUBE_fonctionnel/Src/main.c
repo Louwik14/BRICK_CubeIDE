@@ -132,13 +132,13 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM6_Init();
   MX_TIM7_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_TIM_Base_Start(&htim5);
   MX_FATFS_Init();
   brick6_app_init();
   led_init();
   uint32_t last_tick = 0;
-    static uint32_t last_log_time = 0;
 
   /* USER CODE END 2 */
 

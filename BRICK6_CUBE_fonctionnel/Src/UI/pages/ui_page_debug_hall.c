@@ -5,7 +5,6 @@
 #include "drv_display.h"
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_engine.h"
-#include "App/Hall/hall_velocity.h"
 
 static uint16_t raw_min;
 static uint16_t raw_max;
@@ -44,7 +43,7 @@ static void ui_page_debug_hall_render(void)
 
     const uint16_t val = hall_engine_get_value(0U);
     const uint8_t pressed = hall_engine_is_pressed(0U);
-    const uint8_t velocity = hall_velocity_get(0U);
+    const uint8_t velocity = hall_engine_get_velocity(0U);
 
     const uint16_t eng_min = hall_engine_get_min(0U);
     const uint16_t eng_max = hall_engine_get_max(0U);
