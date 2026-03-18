@@ -6,15 +6,28 @@
 
 typedef struct
 {
-    uint16_t velocity_arm_threshold;
-    uint16_t trigger_threshold;
-    uint16_t raw_latched;
-    uint32_t elapsed_samples_latched;
-    uint32_t sample_count;
+    uint16_t raw_current;
+    uint16_t min_current;
+    uint16_t max_current;
     uint16_t position_percent;
+    uint16_t velocity1_arm_threshold;
+    uint16_t trigger1_threshold;
+    uint16_t velocity2_arm_threshold;
+    uint16_t trigger2_threshold;
+    uint16_t velocity1_raw_latched;
+    uint16_t velocity2_raw_latched;
+    uint32_t velocity1_elapsed_samples;
+    uint32_t velocity2_elapsed_samples;
+    uint32_t sample_count;
+    uint32_t sample_period_us;
     uint8_t velocity_latched;
+    uint8_t velocity2_latched;
     uint8_t velocity_ready;
-    uint8_t velocity_armed;
+    uint8_t velocity2_ready;
+    uint8_t velocity1_armed;
+    uint8_t velocity2_armed;
+    uint8_t velocity1_fallback;
+    uint8_t velocity2_fallback;
     uint8_t state;
 } hall_velocity_debug_t;
 
