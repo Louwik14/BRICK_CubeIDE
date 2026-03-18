@@ -24,6 +24,39 @@
 #include "led_anim.h"
 #include "led_layer.h"
 
+#define LED_FIXED_HALF_BRIGHTNESS 128U
+#define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_WHITE_G         LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_WHITE_B         LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_GREEN_R         0U
+#define LED_FIXED_GREEN_G         LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_GREEN_B         0U
+
+static void led_apply_fixed_scene(void)
+{
+    led_layer_clear_all();
+
+    for (uint32_t led = 0U; led < LED_FB_COUNT; led++)
+    {
+        if ((led >= (uint32_t)LED_STEP_1) && (led <= (uint32_t)LED_STEP_16))
+        {
+            led_layer_set(LED_LAYER_UI,
+                          (led_id_t)led,
+                          LED_FIXED_GREEN_R,
+                          LED_FIXED_GREEN_G,
+                          LED_FIXED_GREEN_B);
+        }
+        else
+        {
+            led_layer_set(LED_LAYER_UI,
+                          (led_id_t)led,
+                          LED_FIXED_WHITE_R,
+                          LED_FIXED_WHITE_G,
+                          LED_FIXED_WHITE_B);
+        }
+    }
+}
+
 /**
  * @brief Point d'entrée led_init.
  *
@@ -39,6 +72,8 @@ void led_init(void)
     led_fb_init();
     led_layer_init();
     led_anim_init();
+    led_apply_fixed_scene();
+    led_layer_commit();
 }
 
 /**
@@ -121,6 +156,9 @@ void led_show(void)
  */
 void led_service(uint32_t dt_ms)
 {
-    led_anim_tick(dt_ms);
+    (void)dt_ms;
+
+    led_anim_stop_all();
+    led_apply_fixed_scene();
     led_layer_commit();
 }

@@ -143,7 +143,6 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    led_anim_blink(LED_PARAM_2,255,0,0,400);
   while (1)
   {
 
