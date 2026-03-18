@@ -1,0 +1,8 @@
+../Src/App/Hall/hall_calibration.c:49:6:hall_calibration_start	1
+../Src/App/Hall/hall_calibration.c:63:6:hall_calibration_process	14
+../Src/App/Hall/hall_calibration.c:121:9:hall_calibration_get_count	2
+../Src/App/Hall/hall_calibration.c:131:9:hall_calibration_is_done	1
+../Src/App/Hall/hall_calibration.c:136:10:hall_calibration_get_min	2
+../Src/App/Hall/hall_calibration.c:146:10:hall_calibration_get_max	2
+../Src/App/Hall/hall_calibration.c:156:9:hall_calibration_load	33
+../Src/App/Hall/hall_calibration.c:176:6:hall_calibration_save	37

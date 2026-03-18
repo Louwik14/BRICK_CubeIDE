@@ -1,0 +1,3 @@
+../Src/App/mux_pots.c:31:6:mux_pots_init	1
+../Src/App/mux_pots.c:45:6:mux_pots_scan	7
+../Src/App/mux_pots.c:86:10:mux_pots_get	2

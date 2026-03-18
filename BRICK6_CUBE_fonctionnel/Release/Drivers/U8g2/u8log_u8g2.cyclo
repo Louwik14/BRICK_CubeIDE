@@ -1,0 +1,2 @@
+../Drivers/U8g2/u8log_u8g2.c:51:6:u8g2_DrawLog	5
+../Drivers/U8g2/u8log_u8g2.c:85:6:u8log_u8g2_cb	3
