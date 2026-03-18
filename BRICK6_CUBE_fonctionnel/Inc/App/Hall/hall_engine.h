@@ -53,5 +53,14 @@ uint16_t hall_engine_get_trig_lo(uint8_t key);
 uint16_t hall_engine_get_trig_hi(uint8_t key);
 uint8_t hall_engine_get_state(uint8_t key);
 uint8_t hall_engine_get_velocity_latched(uint8_t key);
+uint16_t hall_engine_get_debug_latched_raw(uint8_t key);
+uint16_t hall_engine_get_debug_latched_prev_raw(uint8_t key);
+uint16_t hall_engine_get_debug_latched_dv_peak(uint8_t key);
+uint16_t hall_engine_get_debug_latched_sum_dv(uint8_t key);
+uint16_t hall_engine_get_debug_latched_time_count(uint8_t key);
+uint16_t hall_engine_get_debug_latched_trig_lo(uint8_t key);
+uint16_t hall_engine_get_debug_latched_trig_hi(uint8_t key);
+uint16_t hall_engine_get_debug_latched_vel_start_th(uint8_t key);
+uint32_t hall_engine_get_debug_latched_sample_count(uint8_t key);
 
 #endif

@@ -62,6 +62,15 @@ typedef struct
     uint16_t time_count;
     uint8_t  time_active;
     uint8_t  vel_latched;
+    uint16_t dbg_latched_raw;
+    uint16_t dbg_latched_prev_raw;
+    uint16_t dbg_latched_dv_peak;
+    uint16_t dbg_latched_sum_dv;
+    uint16_t dbg_latched_time_count;
+    uint16_t dbg_latched_trig_lo;
+    uint16_t dbg_latched_trig_hi;
+    uint16_t dbg_latched_vel_start_th;
+    uint32_t dbg_latched_sample_count;
 
 } hall_button_t;
 
@@ -316,10 +325,11 @@ static void hall_process_channel(uint8_t index, uint16_t raw)
         return;
     }
 
+    const uint16_t prev_raw_before = b->prev_raw;
     uint16_t dv = 0U;
-    if (raw > b->prev_raw)
+    if (raw > prev_raw_before)
     {
-        dv = (uint16_t)(raw - b->prev_raw);
+        dv = (uint16_t)(raw - prev_raw_before);
     }
     b->prev_raw = raw;
 
@@ -364,6 +374,15 @@ static void hall_process_channel(uint8_t index, uint16_t raw)
         b->curr_out = 1U;
 
         uint16_t range = (uint16_t)(b->max - b->min);
+        b->dbg_latched_raw = raw;
+        b->dbg_latched_prev_raw = prev_raw_before;
+        b->dbg_latched_dv_peak = b->dv_peak;
+        b->dbg_latched_sum_dv = b->sum_dv;
+        b->dbg_latched_time_count = b->time_count;
+        b->dbg_latched_trig_lo = b->trig_lo;
+        b->dbg_latched_trig_hi = b->trig_hi;
+        b->dbg_latched_vel_start_th = b->vel_start_th;
+        b->dbg_latched_sample_count = hall_adc_get_sample_count(index);
         b->vel_latched = hall_velocity_compute(b, range);
         hall_velocity[index] = b->vel_latched;
     }
@@ -413,6 +432,15 @@ void hall_engine_init(void)
         hall_btn[i].time_count = 0U;
         hall_btn[i].time_active = 0U;
         hall_btn[i].vel_latched = 0U;
+        hall_btn[i].dbg_latched_raw = 0U;
+        hall_btn[i].dbg_latched_prev_raw = 0U;
+        hall_btn[i].dbg_latched_dv_peak = 0U;
+        hall_btn[i].dbg_latched_sum_dv = 0U;
+        hall_btn[i].dbg_latched_time_count = 0U;
+        hall_btn[i].dbg_latched_trig_lo = 0U;
+        hall_btn[i].dbg_latched_trig_hi = 0U;
+        hall_btn[i].dbg_latched_vel_start_th = 0U;
+        hall_btn[i].dbg_latched_sample_count = 0U;
     }
 }
 
@@ -442,6 +470,15 @@ void hall_engine_set_calibration(const uint16_t *min_values,
         hall_btn[i].time_count = 0U;
         hall_btn[i].time_active = 0U;
         hall_btn[i].vel_latched = 0U;
+        hall_btn[i].dbg_latched_raw = 0U;
+        hall_btn[i].dbg_latched_prev_raw = 0U;
+        hall_btn[i].dbg_latched_dv_peak = 0U;
+        hall_btn[i].dbg_latched_sum_dv = 0U;
+        hall_btn[i].dbg_latched_time_count = 0U;
+        hall_btn[i].dbg_latched_trig_lo = 0U;
+        hall_btn[i].dbg_latched_trig_hi = 0U;
+        hall_btn[i].dbg_latched_vel_start_th = 0U;
+        hall_btn[i].dbg_latched_sample_count = 0U;
 
         hall_note_on[i] = 0U;
         hall_note_off[i] = 0U;
@@ -455,7 +492,14 @@ void hall_engine_process(void)
 {
     for (uint8_t i = 0U; i < HALL_SENSOR_COUNT; i++)
     {
-        hall_process_channel(i, hall_adc_get_raw(i));
+        if (hall_adc_is_fresh(i) == 0U)
+        {
+            continue;
+        }
+
+        const uint16_t raw = hall_adc_get_raw(i);
+        hall_adc_clear_fresh(i);
+        hall_process_channel(i, raw);
     }
 }
 
@@ -567,4 +611,58 @@ uint8_t hall_engine_get_velocity_latched(uint8_t key)
 {
     if (key >= HALL_SENSOR_COUNT) return 0U;
     return hall_btn[key].vel_latched;
+}
+
+uint16_t hall_engine_get_debug_latched_raw(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_raw;
+}
+
+uint16_t hall_engine_get_debug_latched_prev_raw(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_prev_raw;
+}
+
+uint16_t hall_engine_get_debug_latched_dv_peak(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_dv_peak;
+}
+
+uint16_t hall_engine_get_debug_latched_sum_dv(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_sum_dv;
+}
+
+uint16_t hall_engine_get_debug_latched_time_count(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_time_count;
+}
+
+uint16_t hall_engine_get_debug_latched_trig_lo(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_trig_lo;
+}
+
+uint16_t hall_engine_get_debug_latched_trig_hi(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_trig_hi;
+}
+
+uint16_t hall_engine_get_debug_latched_vel_start_th(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_vel_start_th;
+}
+
+uint32_t hall_engine_get_debug_latched_sample_count(uint8_t key)
+{
+    if (key >= HALL_SENSOR_COUNT) return 0U;
+    return hall_btn[key].dbg_latched_sample_count;
 }
