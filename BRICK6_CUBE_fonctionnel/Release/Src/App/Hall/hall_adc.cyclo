@@ -1,4 +1,0 @@
-../Src/App/Hall/hall_adc.c:58:6:hall_adc_init	3
-../Src/App/Hall/hall_adc.c:92:10:hall_adc_get_raw	2
-../Src/App/Hall/hall_adc.c:102:9:hall_adc_get_mux_index	1
-../Src/App/Hall/hall_adc.c:107:6:HAL_ADC_ConvCpltCallback	7

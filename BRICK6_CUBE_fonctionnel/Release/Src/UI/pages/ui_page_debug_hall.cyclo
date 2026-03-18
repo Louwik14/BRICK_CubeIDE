@@ -1,5 +1,0 @@
-../Src/UI/pages/ui_page_debug_hall.c:20:13:ui_page_debug_hall_leave	1
-../Src/UI/pages/ui_page_debug_hall.c:22:13:ui_page_debug_hall_handle_event	1
-../Src/UI/pages/ui_page_debug_hall.c:12:13:ui_page_debug_hall_enter	1
-../Src/UI/pages/ui_page_debug_hall.c:29:13:ui_page_debug_hall_render	3
-../Src/UI/pages/ui_page_debug_hall.c:27:13:ui_page_debug_hall_tick	1
