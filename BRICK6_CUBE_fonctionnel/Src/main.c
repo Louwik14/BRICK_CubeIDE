@@ -131,7 +131,6 @@ int main(void)
   MX_ADC3_Init();
   MX_TIM2_Init();
   MX_TIM6_Init();
-  MX_TIM7_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim5);

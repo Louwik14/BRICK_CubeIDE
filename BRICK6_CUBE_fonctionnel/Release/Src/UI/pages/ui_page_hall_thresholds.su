@@ -1,0 +1,5 @@
+../Src/UI/pages/ui_page_hall_thresholds.c:23:13:ui_page_hall_thresholds_enter	0	static
+../Src/UI/pages/ui_page_hall_thresholds.c:62:13:ui_page_hall_thresholds_render	160	static
+../Src/UI/pages/ui_page_hall_thresholds.c:27:13:ui_page_hall_thresholds_handle_event	8	static
+../Src/UI/pages/ui_page_hall_thresholds.c:60:13:ui_page_hall_thresholds_tick	0	static
+../Src/UI/pages/ui_page_hall_thresholds.c:25:13:ui_page_hall_thresholds_leave	0	static

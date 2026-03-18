@@ -5,7 +5,6 @@
 #include "tim.h"
 
 #define HALL_MUX_COUNT 8U
-#define HALL_KEY_COUNT 16U
 
 static volatile uint16_t adc1_dma;
 static volatile uint16_t adc2_dma;
@@ -13,8 +12,12 @@ static volatile uint16_t adc2_dma;
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
 
 static volatile uint8_t hall_mux_index;
+static volatile uint8_t hall_discard_next;
 
-void hall_mux_select(uint8_t index)
+static volatile uint8_t adc1_ready;
+static volatile uint8_t adc2_ready;
+
+static void hall_mux_select(uint8_t index)
 {
     const uint8_t mux = index & 0x07U;
 
@@ -28,24 +31,62 @@ void hall_mux_select(uint8_t index)
                       (mux & 0x04U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
+static void hall_adc_process_pair(void)
+{
+    const uint16_t v1 = adc1_dma;
+    const uint16_t v2 = adc2_dma;
+
+    if (hall_discard_next != 0U)
+    {
+        hall_discard_next = 0U;
+        return;
+    }
+
+    {
+        const uint8_t mux = hall_mux_index;
+
+        hall_raw[mux] = v1;
+        hall_raw[mux + 8U] = v2;
+
+        hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
+        hall_mux_select(hall_mux_index);
+
+        hall_discard_next = 1U;
+    }
+}
+
 void hall_adc_init(void)
 {
     hall_mux_index = 0U;
-    hall_mux_select(hall_mux_index);
+    hall_discard_next = 1U;
 
     adc1_dma = 0U;
     adc2_dma = 0U;
+
+    adc1_ready = 0U;
+    adc2_ready = 0U;
+
+    hall_mux_select(hall_mux_index);
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         hall_raw[i] = 0U;
     }
 
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc1_dma, 1);
-    HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&adc2_dma, 1);
+    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc1_dma, 1U) != HAL_OK)
+    {
+        return;
+    }
 
-    HAL_TIM_Base_Start(&htim6);
-    HAL_TIM_Base_Start_IT(&htim7);
+    if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&adc2_dma, 1U) != HAL_OK)
+    {
+        return;
+    }
+
+    if (HAL_TIM_Base_Start(&htim6) != HAL_OK)
+    {
+        return;
+    }
 }
 
 uint16_t hall_adc_get_raw(uint8_t key)
@@ -63,19 +104,30 @@ uint8_t hall_adc_get_mux_index(void)
     return hall_mux_index;
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-    if ((htim != NULL) && (htim->Instance == TIM7))
+    if (hadc == NULL)
     {
-        uint8_t mux = hall_mux_index;
+        return;
+    }
 
-        /* Copier la mesure actuelle dans les touches */
-        hall_raw[mux] = adc1_dma;
-        hall_raw[mux + 8U] = adc2_dma;
+    if (hadc->Instance == ADC1)
+    {
+        adc1_ready = 1U;
+    }
+    else if (hadc->Instance == ADC2)
+    {
+        adc2_ready = 1U;
+    }
+    else
+    {
+        return;
+    }
 
-        /* passer au mux suivant */
-        hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
-
-        hall_mux_select(hall_mux_index);
+    if ((adc1_ready != 0U) && (adc2_ready != 0U))
+    {
+        adc1_ready = 0U;
+        adc2_ready = 0U;
+        hall_adc_process_pair();
     }
 }
