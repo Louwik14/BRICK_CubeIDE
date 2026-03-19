@@ -170,6 +170,33 @@ static uint8_t hall_range_is_valid(uint16_t min_value, uint16_t max_value)
     return (((uint16_t)(max_value - min_value)) >= HALL_MIN_RANGE) ? 1U : 0U;
 }
 
+static uint16_t hall_compute_position_percent(uint16_t raw,
+                                              uint16_t min_value,
+                                              uint16_t max_value)
+{
+    uint16_t range;
+    uint32_t delta;
+    uint32_t limited_delta;
+    uint16_t position_percent;
+
+    if (hall_range_is_valid(min_value, max_value) == 0U)
+    {
+        return 0U;
+    }
+
+    range = (uint16_t)(max_value - min_value);
+    delta = (raw > min_value) ? (uint32_t)(raw - min_value) : 0U;
+    limited_delta = (delta > range) ? range : delta;
+    position_percent = (uint16_t)((limited_delta * 100U) / range);
+
+    if (position_percent > 100U)
+    {
+        position_percent = 100U;
+    }
+
+    return position_percent;
+}
+
 static void hall_reset_attack_runtime(uint8_t key)
 {
     hall_buttons[key].prev_raw = hall_raw_current[key];
@@ -478,8 +505,6 @@ void hall_engine_set_calibration(const uint16_t *min_values,
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count)
 {
     uint16_t range;
-    uint32_t delta;
-    uint32_t limited_delta;
     uint16_t dv = 0U;
 
     if (key >= HALL_KEY_COUNT)
@@ -507,13 +532,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     }
 
     range = (uint16_t)(hall_max[key] - hall_min[key]);
-    delta = (raw > hall_min[key]) ? (uint32_t)(raw - hall_min[key]) : 0U;
-    limited_delta = (delta > range) ? range : delta;
-    hall_position[key] = (uint16_t)((limited_delta * 100U) / range);
-    if (hall_position[key] > 100U)
-    {
-        hall_position[key] = 100U;
-    }
+    hall_position[key] = hall_compute_position_percent(raw, hall_min[key], hall_max[key]);
     hall_value[key] = hall_position[key];
 
     hall_buttons[key].prev_out = hall_buttons[key].curr_out;
@@ -763,6 +782,9 @@ uint8_t hall_get_velocity_curve(void)
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
 {
     const uint32_t primask = hall_enter_critical();
+    uint16_t raw_current;
+    uint16_t min_current;
+    uint16_t max_current;
 
     if ((key >= HALL_KEY_COUNT) || (debug == 0))
     {
@@ -770,12 +792,16 @@ void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
         return;
     }
 
-    debug->raw_current = hall_raw_current[key];
-    debug->min_current = hall_min[key];
-    debug->max_current = hall_max[key];
-    debug->range_current = (hall_max[key] > hall_min[key]) ?
-                           (uint16_t)(hall_max[key] - hall_min[key]) : 0U;
-    debug->position_percent = hall_position[key];
+    raw_current = hall_raw_current[key];
+    min_current = hall_min[key];
+    max_current = hall_max[key];
+
+    debug->raw_current = raw_current;
+    debug->min_current = min_current;
+    debug->max_current = max_current;
+    debug->range_current = (max_current > min_current) ?
+                           (uint16_t)(max_current - min_current) : 0U;
+    debug->position_percent = hall_compute_position_percent(raw_current, min_current, max_current);
     debug->trig_lo = hall_trig_lo[key];
     debug->trig_hi = hall_trig_hi[key];
     debug->prev_raw = hall_buttons[key].prev_raw;
