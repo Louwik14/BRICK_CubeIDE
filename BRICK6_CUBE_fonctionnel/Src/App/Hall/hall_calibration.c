@@ -3,6 +3,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_adc.h"
+#include "App/Hall/hall_filter_asc.h"
 
 #define CALIBRATION_PRESS_ADC             50000U
 #define CALIBRATION_RELEASE_ADC           48000U
@@ -234,6 +235,7 @@ void hall_calibration_process(void)
         }
 
         g_calibration_done = 1U;
+        hall_filter_asc_reset_all();
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
     }
 }
@@ -298,6 +300,7 @@ uint8_t hall_calibration_load(void)
         g_cal_blob.max[i] = stored->max[i];
     }
 
+    hall_filter_asc_reset_all();
     hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
 
     return 1U;
