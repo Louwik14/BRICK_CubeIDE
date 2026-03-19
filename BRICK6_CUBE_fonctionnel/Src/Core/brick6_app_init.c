@@ -198,7 +198,6 @@ void brick6_app_init(void)
 
     juno_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
     juno_synth_set_enabled(1U);
-    juno_synth_set_test_mode(1U);
 
     recorder_transport_init();
     sd_recorder_init();

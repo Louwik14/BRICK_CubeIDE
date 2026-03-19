@@ -10,6 +10,11 @@ void juno_synth_init(float sample_rate, uint32_t block_size);
 void juno_synth_set_enabled(uint8_t enabled);
 uint8_t juno_synth_is_enabled(void);
 void juno_synth_set_test_mode(uint8_t enabled);
+void juno_synth_note_on(uint8_t midi_note, uint8_t velocity);
+void juno_synth_note_off(uint8_t midi_note);
+void juno_synth_pitch_bend(int16_t value);
+void juno_synth_all_notes_off(void);
+void juno_synth_cc(uint8_t cc, uint8_t value);
 void juno_synth_process_block(float *mono_out, uint32_t frames);
 
 #ifdef __cplusplus
