@@ -22,8 +22,9 @@ static volatile uint32_t hall_fifo_drop_count;
 static volatile uint16_t hall_fifo_max_depth;
 
 static volatile uint8_t hall_mux_index;
-static volatile uint8_t hall_discard_next;
-
+static volatile uint8_t hall_discard_count;
+static volatile uint8_t adc1_ready;
+static volatile uint8_t adc2_ready;
 /*
  * Table de remap physique MUX -> index logique hall.
  *
@@ -125,9 +126,9 @@ static void hall_adc_process_pair(void)
     const uint16_t v1 = adc1_dma;
     const uint16_t v2 = adc2_dma;
 
-    if (hall_discard_next != 0U)
+    if (hall_discard_count != 0U)
     {
-        hall_discard_next = 0U;
+        hall_discard_count--;
         return;
     }
 
@@ -142,15 +143,19 @@ static void hall_adc_process_pair(void)
 
         hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
         hall_mux_select(hall_mux_index);
+        adc1_ready = 0U;
+        adc2_ready = 0U;
 
-        hall_discard_next = 1U;
+        hall_discard_count = 6U;
+        adc1_ready = 0U;
+        adc2_ready = 0U;
     }
 }
 
 void hall_adc_init(void)
 {
     hall_mux_index = 0U;
-    hall_discard_next = 1U;
+    hall_discard_count = 6U;
 
     adc1_dma = 0U;
     adc2_dma = 0U;
@@ -266,10 +271,23 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
         return;
     }
 
-    if (hadc->Instance != ADC1)
+    if (hadc->Instance == ADC1)
+    {
+        adc1_ready = 1U;
+    }
+    else if (hadc->Instance == ADC2)
+    {
+        adc2_ready = 1U;
+    }
+    else
     {
         return;
     }
 
-    hall_adc_process_pair();
+    if ((adc1_ready != 0U) && (adc2_ready != 0U))
+    {
+        adc1_ready = 0U;
+        adc2_ready = 0U;
+        hall_adc_process_pair();
+    }
 }

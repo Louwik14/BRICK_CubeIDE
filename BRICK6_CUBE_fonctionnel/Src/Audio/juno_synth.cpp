@@ -21,6 +21,17 @@ constexpr const T& clamp(const T& value, const T& low, const T& high)
 #include "../../Juno/KR106VcfFreqJ6.h"
 #include "../../Juno/KR106Voice.h"
 
+const uint16_t kr106::LFO::kLfoRampTable[8] = {
+    0xFFFF,
+    0x0419,
+    0x020C,
+    0x015E,
+    0x0100,
+    0x0100,
+    0x0100,
+    0x0100
+};
+
 namespace {
 
 constexpr uint32_t JUNO_SYNTH_NUM_VOICES = 4U;
@@ -286,7 +297,7 @@ extern "C" {
 
 void juno_synth_init(float sample_rate, uint32_t block_size)
 {
-    memset(&g_juno, 0, sizeof(g_juno));
+	g_juno = JunoSynthState{};
 
     g_juno.sample_rate = (sample_rate > 0.0f) ? sample_rate : 48000.0f;
     g_juno.block_size = (block_size <= AUDIO_BLOCK_SIZE) ? block_size : AUDIO_BLOCK_SIZE;

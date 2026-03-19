@@ -157,7 +157,6 @@ void MX_TIM6_Init(void)
   /* USER CODE END TIM6_Init 2 */
 
 }
-
 /* TIM7 init function */
 void MX_TIM7_Init(void)
 {
@@ -258,6 +257,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
     /* TIM7 clock enable */
     __HAL_RCC_TIM7_CLK_ENABLE();
 
+    /* TIM7 interrupt Init */
     HAL_NVIC_SetPriority(TIM7_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(TIM7_IRQn);
   /* USER CODE BEGIN TIM7_MspInit 1 */
@@ -340,6 +340,7 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
     /* Peripheral clock disable */
     __HAL_RCC_TIM7_CLK_DISABLE();
 
+    /* TIM7 interrupt Deinit */
     HAL_NVIC_DisableIRQ(TIM7_IRQn);
   /* USER CODE BEGIN TIM7_MspDeInit 1 */
 

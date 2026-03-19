@@ -115,16 +115,7 @@ struct LFO
 
   // Clean-room LFO delay ramp table (0B30_LfoDelayRampTbl).
   // 8 entries, indexed by (pot >> 4). Larger value = faster ramp.
-  inline static constexpr uint16_t kLfoRampTable[8] = {
-    0xFFFF, // pot 0-15:   instant ramp
-    0x0419, // pot 16-31:  fast
-    0x020C, // pot 32-47
-    0x015E, // pot 48-63
-    0x0100, // pot 64-79:  slow
-    0x0100, // pot 80-95:  (same)
-    0x0100, // pot 96-111: (same)
-    0x0100  // pot 112-127:(same)
-  };
+  static const uint16_t kLfoRampTable[8];
 
   // Compute holdoff duration in seconds for J106 LFO delay.
   // Uses the same clean-room attack rate function as the ADSR.
