@@ -34,7 +34,6 @@ typedef struct
     uint16_t vel_end_th;
     uint16_t time_count;
     uint8_t  time_active;
-    uint8_t  vel_latched;
 } hall_button_t;
 
 static volatile uint16_t hall_min[HALL_KEY_COUNT];
@@ -180,7 +179,12 @@ static void hall_reset_attack_runtime(uint8_t key)
     hall_buttons[key].vel_end_th = hall_max[key];
     hall_buttons[key].time_count = 0U;
     hall_buttons[key].time_active = 0U;
-    hall_buttons[key].vel_latched = 0U;
+}
+
+static void hall_clear_velocity_state(uint8_t key)
+{
+    hall_velocity[key] = 0U;
+    hall_velocity_valid[key] = 0U;
 }
 
 static void hall_engine_reset_key_runtime(uint8_t key)
@@ -190,8 +194,7 @@ static void hall_engine_reset_key_runtime(uint8_t key)
     hall_value[key] = 0U;
     hall_position[key] = 0U;
     hall_pressed[key] = 0U;
-    hall_velocity[key] = 0U;
-    hall_velocity_valid[key] = 0U;
+    hall_clear_velocity_state(key);
     hall_note_on_pending[key] = 0U;
     hall_note_off_pending[key] = 0U;
 
@@ -201,6 +204,30 @@ static void hall_engine_reset_key_runtime(uint8_t key)
     hall_buttons[key].trig_hi = hall_trig_hi[key];
     hall_buttons[key].prev_out = 0U;
     hall_buttons[key].curr_out = 0U;
+    hall_reset_attack_runtime(key);
+}
+
+static void hall_engine_invalidate_key_state(uint8_t key, uint8_t emit_note_off)
+{
+    const uint8_t was_pressed = hall_buttons[key].curr_out;
+
+    hall_value[key] = 0U;
+    hall_position[key] = 0U;
+    hall_pressed[key] = 0U;
+    hall_note_on_pending[key] = 0U;
+
+    if ((emit_note_off != 0U) && (was_pressed != 0U))
+    {
+        hall_note_off_pending[key] = 1U;
+    }
+    else
+    {
+        hall_note_off_pending[key] = 0U;
+    }
+
+    hall_buttons[key].prev_out = was_pressed;
+    hall_buttons[key].curr_out = 0U;
+    hall_clear_velocity_state(key);
     hall_reset_attack_runtime(key);
 }
 
@@ -401,6 +428,8 @@ static uint8_t hall_velocity_compute(uint8_t key, uint16_t range)
 
 void hall_engine_init(void)
 {
+    const uint32_t primask = hall_enter_critical();
+
     hall_calibrated = 0U;
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
@@ -411,24 +440,33 @@ void hall_engine_init(void)
         hall_sample_count_current[i] = 0U;
         hall_engine_reset_key_runtime(i);
     }
+
+    hall_exit_critical(primask);
 }
 
 void hall_engine_set_calibration(const uint16_t *min_values,
                                  const uint16_t *max_values)
 {
+    const uint32_t primask = hall_enter_critical();
+
     if ((min_values == 0) || (max_values == 0))
     {
+        hall_exit_critical(primask);
         return;
     }
+
+    hall_calibrated = 0U;
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         hall_min[i] = min_values[i];
         hall_max[i] = max_values[i];
-        hall_engine_reset_key_runtime(i);
+        hall_engine_invalidate_key_state(i, 1U);
+        hall_update_triggers(i);
     }
 
     hall_calibrated = 1U;
+    hall_exit_critical(primask);
 }
 
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count)
@@ -448,7 +486,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
 
     if (hall_calibrated == 0U)
     {
-        hall_engine_reset_key_runtime(key);
+        hall_engine_invalidate_key_state(key, 1U);
         hall_buttons[key].prev_raw = raw;
         return;
     }
@@ -457,7 +495,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
 
     if (hall_range_is_valid(hall_min[key], hall_max[key]) == 0U)
     {
-        hall_engine_reset_key_runtime(key);
+        hall_engine_invalidate_key_state(key, 1U);
         hall_buttons[key].prev_raw = raw;
         return;
     }
@@ -527,8 +565,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     if ((hall_buttons[key].curr_out == 0U) && (raw >= hall_buttons[key].trig_hi))
     {
         hall_buttons[key].curr_out = 1U;
-        hall_buttons[key].vel_latched = hall_velocity_compute(key, range);
-        hall_velocity[key] = hall_buttons[key].vel_latched;
+        hall_velocity[key] = hall_velocity_compute(key, range);
         hall_velocity_valid[key] = 1U;
     }
     else if ((hall_buttons[key].curr_out != 0U) && (raw <= hall_buttons[key].trig_lo))
@@ -545,7 +582,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     else if ((hall_buttons[key].prev_out != 0U) && (hall_buttons[key].curr_out == 0U))
     {
         hall_note_off_pending[key] = 1U;
-        hall_velocity_valid[key] = 0U;
+        hall_clear_velocity_state(key);
         hall_buttons[key].dv_peak = 0U;
         hall_buttons[key].sum_dv = 0U;
         hall_buttons[key].time_count = 0U;
@@ -743,9 +780,10 @@ void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
     debug->time_count = hall_buttons[key].time_count;
     debug->sample_count = hall_sample_count_current[key];
     debug->sample_period_us = HALL_KEY_SAMPLE_PERIOD_US;
+    debug->calibrated = hall_calibrated;
     debug->range_valid = hall_range_is_valid(hall_min[key], hall_max[key]);
     debug->state = hall_buttons[key].curr_out;
-    debug->velocity_latched = hall_buttons[key].vel_latched;
+    debug->velocity = hall_velocity[key];
     debug->velocity_valid = hall_velocity_valid[key];
     debug->time_active = hall_buttons[key].time_active;
     debug->velocity_mode = (uint8_t)g_velocity_mode;

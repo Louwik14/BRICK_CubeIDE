@@ -41,9 +41,10 @@ typedef struct
     uint16_t time_count;
     uint32_t sample_count;
     uint32_t sample_period_us;
+    uint8_t  calibrated;
     uint8_t  range_valid;
     uint8_t  state;
-    uint8_t  velocity_latched;
+    uint8_t  velocity;
     uint8_t  velocity_valid;
     uint8_t  time_active;
     uint8_t  velocity_mode;
