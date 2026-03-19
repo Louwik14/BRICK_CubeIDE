@@ -84,9 +84,17 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
     }
 
     g_ui_param.bank = *bank;
-    g_ui_param.valid = 1U;
-}
+    g_ui_param.valid = 0U;
 
+    for (uint8_t i = 0U; i < 4U; i++)
+    {
+        if (g_ui_param.bank.params[i] < PARAM_COUNT)
+        {
+            g_ui_param.valid = 1U;
+            break;
+        }
+    }
+}
 /**
  * @brief Point d'entrée ui_param_handle_encoder.
  *

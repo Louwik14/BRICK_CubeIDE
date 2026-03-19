@@ -20,6 +20,7 @@
  */
 
 #include "ui_page_manager.h"
+#include "ui_param.h"
 
 #define UI_PAGE_MANAGER_MAX_PAGES 16U
 
@@ -97,6 +98,8 @@ void ui_page_set(uint8_t page_id)
     const ui_page_t *current_page = g_ui_pages[g_ui_current_page_id];
     const ui_page_t *next_page = g_ui_pages[page_id];
 
+    ui_param_set_bank(0);
+
     if ((current_page != 0) && (current_page->leave != 0))
     {
         current_page->leave();
@@ -109,7 +112,6 @@ void ui_page_set(uint8_t page_id)
         next_page->enter();
     }
 }
-
 const ui_page_t *ui_page_get(void)
 {
     if ((g_ui_current_page_id >= g_ui_page_count) || (g_ui_pages[g_ui_current_page_id] == 0))
