@@ -6,16 +6,19 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../Src/MIDI/midi.c \
+../Src/MIDI/juno_midi_input.c \
 ../Src/MIDI/midi_host.c \
 ../Src/MIDI/usbh_midi.c 
 
 C_DEPS += \
 ./Src/MIDI/midi.d \
+./Src/MIDI/juno_midi_input.d \
 ./Src/MIDI/midi_host.d \
 ./Src/MIDI/usbh_midi.d 
 
 OBJS += \
 ./Src/MIDI/midi.o \
+./Src/MIDI/juno_midi_input.o \
 ./Src/MIDI/midi_host.o \
 ./Src/MIDI/usbh_midi.o 
 
@@ -27,7 +30,7 @@ Src/MIDI/%.o Src/MIDI/%.su Src/MIDI/%.cyclo: ../Src/MIDI/%.c Src/MIDI/subdir.mk
 clean: clean-Src-2f-MIDI
 
 clean-Src-2f-MIDI:
-	-$(RM) ./Src/MIDI/midi.cyclo ./Src/MIDI/midi.d ./Src/MIDI/midi.o ./Src/MIDI/midi.su ./Src/MIDI/midi_host.cyclo ./Src/MIDI/midi_host.d ./Src/MIDI/midi_host.o ./Src/MIDI/midi_host.su ./Src/MIDI/usbh_midi.cyclo ./Src/MIDI/usbh_midi.d ./Src/MIDI/usbh_midi.o ./Src/MIDI/usbh_midi.su
+	-$(RM) ./Src/MIDI/midi.cyclo ./Src/MIDI/midi.d ./Src/MIDI/midi.o ./Src/MIDI/midi.su ./Src/MIDI/juno_midi_input.cyclo ./Src/MIDI/juno_midi_input.d ./Src/MIDI/juno_midi_input.o ./Src/MIDI/juno_midi_input.su ./Src/MIDI/midi_host.cyclo ./Src/MIDI/midi_host.d ./Src/MIDI/midi_host.o ./Src/MIDI/midi_host.su ./Src/MIDI/usbh_midi.cyclo ./Src/MIDI/usbh_midi.d ./Src/MIDI/usbh_midi.o ./Src/MIDI/usbh_midi.su
 
 .PHONY: clean-Src-2f-MIDI
 

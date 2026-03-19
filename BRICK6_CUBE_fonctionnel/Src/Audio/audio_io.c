@@ -17,6 +17,7 @@
  *
  * Notes:
  * - Mapping entrée: tracks 0..2 sur slots (0/1, 2/3, 4/5).
+ * - Track 3 est une source interne et reste zero-fill côté entrée TDM.
  * - Mapping sortie: MAIN->0/1, CUE->2/3, slots 4..7 à 0.
  */
 
@@ -170,6 +171,8 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
     float *AUDIO_RESTRICT tr1_r = track_buf[1].R;
     float *AUDIO_RESTRICT tr2_l = track_buf[2].L;
     float *AUDIO_RESTRICT tr2_r = track_buf[2].R;
+    float *AUDIO_RESTRICT tr3_l = track_buf[3].L;
+    float *AUDIO_RESTRICT tr3_r = track_buf[3].R;
 
     if(tr0_on == 0U)
     {
@@ -186,6 +189,9 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
         memset(tr2_l, 0, frames * sizeof(float));
         memset(tr2_r, 0, frames * sizeof(float));
     }
+
+    memset(tr3_l, 0, frames * sizeof(float));
+    memset(tr3_r, 0, frames * sizeof(float));
 
     const int32_t *AUDIO_RESTRICT prx = rx;
 
