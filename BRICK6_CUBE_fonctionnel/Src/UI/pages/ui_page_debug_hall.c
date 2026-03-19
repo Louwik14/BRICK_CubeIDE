@@ -28,33 +28,34 @@ static void ui_page_debug_hall_render(void)
 
     hall_engine_get_velocity_debug(0U, &debug);
 
-    snprintf(raw_txt, sizeof(raw_txt), "%u %u/%u",
+    snprintf(raw_txt, sizeof(raw_txt), "%u %u/%u %c",
              (unsigned)debug.raw_current,
-             (unsigned)debug.min_current,
-             (unsigned)debug.max_current);
-    snprintf(pos_txt, sizeof(pos_txt), "%u%% S%u N%u/%u",
+             (unsigned)debug.min_used,
+             (unsigned)debug.max_used,
+             (debug.calibration_valid != 0U) ? 'C' : '-');
+    snprintf(pos_txt, sizeof(pos_txt), "%u%% V%u P%u %u/%u",
              (unsigned)debug.position_percent,
-             (unsigned)debug.state,
+             (unsigned)debug.value,
+             (unsigned)debug.pressed,
              (unsigned)debug.note_on_pending,
              (unsigned)debug.note_off_pending);
-    snprintf(thr1_txt, sizeof(thr1_txt), "V1 %u>%u %c%c",
-             (unsigned)debug.velocity1_arm_threshold,
-             (unsigned)debug.trigger1_threshold,
-             (debug.velocity1_armed != 0U) ? 'A' : '-',
-             (debug.velocity1_fallback != 0U) ? 'F' : '-');
-    snprintf(thr2_txt, sizeof(thr2_txt), "V2 %u>%u %c%c",
-             (unsigned)debug.velocity2_arm_threshold,
-             (unsigned)debug.trigger2_threshold,
-             (debug.velocity2_armed != 0U) ? 'A' : '-',
-             (debug.velocity2_fallback != 0U) ? 'F' : '-');
-    snprintf(vel1_txt, sizeof(vel1_txt), "%u %lu %u",
+    snprintf(thr1_txt, sizeof(thr1_txt), "T %u>%u %c%c",
+             (unsigned)debug.time_start_threshold,
+             (unsigned)debug.time_end_threshold,
+             (debug.time_active != 0U) ? 'A' : '-',
+             (debug.range_valid != 0U) ? 'R' : '-');
+    snprintf(thr2_txt, sizeof(thr2_txt), "S %u>%u M%u",
+             (unsigned)debug.trigger_low_threshold,
+             (unsigned)debug.trigger_high_threshold,
+             (unsigned)debug.velocity_mode);
+    snprintf(vel1_txt, sizeof(vel1_txt), "V%u T%lu C%u",
              (unsigned)debug.velocity_latched,
-             (unsigned long)debug.velocity1_elapsed_samples,
-             (unsigned)debug.velocity1_raw_latched);
-    snprintf(vel2_txt, sizeof(vel2_txt), "%u %lu %u",
-             (unsigned)debug.velocity2_latched,
-             (unsigned long)debug.velocity2_elapsed_samples,
-             (unsigned)debug.velocity2_raw_latched);
+             (unsigned long)debug.time_samples,
+             (unsigned)debug.velocity_curve);
+    snprintf(vel2_txt, sizeof(vel2_txt), "D%u S%u %c",
+             (unsigned)debug.dv_peak,
+             (unsigned)debug.sum_dv,
+             (debug.velocity_valid != 0U) ? 'L' : '-');
 
     drv_display_draw_text(0U, 0U, "DEBUG HALL VEL");
     drv_display_draw_text(0U, 10U, raw_txt);
