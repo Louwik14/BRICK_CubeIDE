@@ -2,22 +2,25 @@
 
 #include "stm32h7xx_hal.h"
 
-#define HALL_THRESHOLD_PPM          400U
-#define HALL_HYST_PPM                100U
-#define HALL_MIN_RANGE              400U
+#define HALL_THRESHOLD_PPM                 400U
+#define HALL_HYST_PPM                      100U
+#define HALL_MIN_RANGE                     400U
 
-#define HALL_KEY_SAMPLE_PERIOD_US   800U
+#define HALL_KEY_SAMPLE_PERIOD_US          800U
 
-#define HALL_VEL_SLOW_SHIFT          5U
-#define HALL_VEL_FAST_SHIFT           1U
+#define HALL_VEL_SLOW_SHIFT                5U
+#define HALL_VEL_FAST_SHIFT                1U
 
-#define HALL_VEL_TIME_START_PPM     150U
-#define HALL_VEL_TIME_END_PPM         0U
-#define HALL_VEL_TIME_FAST_DT         1U
-#define HALL_VEL_TIME_SLOW_DT        14U
+#define HALL_VEL_TIME_START_PPM            150U
+#define HALL_VEL_TIME_END_PPM              0U
+#define HALL_VEL_TIME_FAST_DT              1U
+#define HALL_VEL_TIME_SLOW_DT              14U
 
-#define HALL_VEL_ENERGY_SLOW_SHIFT    6U
-#define HALL_VEL_ENERGY_FAST_SHIFT    2U
+#define HALL_VEL_ENERGY_SLOW_SHIFT         6U
+#define HALL_VEL_ENERGY_FAST_SHIFT         2U
+
+#define HALL_USER_CAPTURE_FIFO_LEN         16U
+#define HALL_USER_VEL_POINT_COUNT          10U
 
 typedef struct
 {
@@ -36,6 +39,12 @@ typedef struct
     uint8_t  time_active;
 } hall_button_t;
 
+typedef struct
+{
+    uint16_t x;
+    uint8_t y;
+} hall_user_curve_point_t;
+
 static volatile uint16_t hall_min[HALL_KEY_COUNT];
 static volatile uint16_t hall_max[HALL_KEY_COUNT];
 static volatile uint16_t hall_trig_lo[HALL_KEY_COUNT];
@@ -47,6 +56,7 @@ static volatile uint32_t hall_sample_count_current[HALL_KEY_COUNT];
 static volatile uint8_t  hall_pressed[HALL_KEY_COUNT];
 static volatile uint8_t  hall_velocity[HALL_KEY_COUNT];
 static volatile uint8_t  hall_velocity_valid[HALL_KEY_COUNT];
+static volatile uint16_t hall_last_metric[HALL_KEY_COUNT];
 static volatile uint8_t  hall_note_on_pending[HALL_KEY_COUNT];
 static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
 
@@ -54,6 +64,11 @@ static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
 static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_DV_PEAK;
 static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_LINEAR;
+static volatile hall_user_velocity_profile_t g_user_velocity_profile = {0};
+static volatile uint8_t g_user_mode_fallback = 0U;
+static volatile hall_velocity_capture_t g_velocity_capture_fifo[HALL_USER_CAPTURE_FIFO_LEN];
+static volatile uint8_t g_velocity_capture_w = 0U;
+static volatile uint8_t g_velocity_capture_r = 0U;
 
 static uint32_t hall_enter_critical(void)
 {
@@ -77,6 +92,32 @@ static uint8_t hall_consume_flag(volatile uint8_t *flag)
 
     hall_exit_critical(primask);
     return pending;
+}
+
+static void hall_velocity_capture_flush(void)
+{
+    const uint32_t primask = hall_enter_critical();
+
+    g_velocity_capture_w = 0U;
+    g_velocity_capture_r = 0U;
+
+    hall_exit_critical(primask);
+}
+
+static void hall_velocity_capture_push(uint8_t key, uint16_t metric)
+{
+    const uint8_t next = (uint8_t)((g_velocity_capture_w + 1U) & (HALL_USER_CAPTURE_FIFO_LEN - 1U));
+
+    if (next == g_velocity_capture_r)
+    {
+        g_velocity_capture_r = (uint8_t)((g_velocity_capture_r + 1U) & (HALL_USER_CAPTURE_FIFO_LEN - 1U));
+    }
+
+    g_velocity_capture_fifo[g_velocity_capture_w].key = key;
+    g_velocity_capture_fifo[g_velocity_capture_w].reserved0 = 0U;
+    g_velocity_capture_fifo[g_velocity_capture_w].metric = metric;
+    g_velocity_capture_fifo[g_velocity_capture_w].tick_ms = HAL_GetTick();
+    g_velocity_capture_w = next;
 }
 
 static uint16_t hall_isqrt_u32(uint32_t value)
@@ -212,6 +253,7 @@ static void hall_clear_velocity_state(uint8_t key)
 {
     hall_velocity[key] = 0U;
     hall_velocity_valid[key] = 0U;
+    hall_last_metric[key] = 0U;
 }
 
 static void hall_engine_reset_key_runtime(uint8_t key)
@@ -434,29 +476,167 @@ static uint8_t hall_velocity_from_energy(uint16_t range, uint16_t sum_dv)
     return (uint8_t)velocity_value;
 }
 
+static uint16_t hall_user_velocity_zone_last(const hall_user_velocity_zone_t *zone)
+{
+    if (zone == 0)
+    {
+        return 0U;
+    }
+
+    if (zone->q3 >= zone->median)
+    {
+        return zone->q3;
+    }
+
+    return zone->median;
+}
+
+static uint8_t hall_user_velocity_profile_is_usable(const hall_user_velocity_profile_t *profile)
+{
+    if ((profile == 0) || (profile->valid == 0U))
+    {
+        return 0U;
+    }
+
+    if ((profile->soft.q1 == 0U) || (profile->mid.q1 == 0U) || (profile->fort.q1 == 0U))
+    {
+        return 0U;
+    }
+
+    if ((profile->soft.q1 > profile->soft.median) || (profile->soft.median > profile->soft.q3))
+    {
+        return 0U;
+    }
+    if ((profile->mid.q1 > profile->mid.median) || (profile->mid.median > profile->mid.q3))
+    {
+        return 0U;
+    }
+    if ((profile->fort.q1 > profile->fort.median) || (profile->fort.median > profile->fort.q3))
+    {
+        return 0U;
+    }
+
+    if ((profile->soft.median + 4U) >= profile->mid.median)
+    {
+        return 0U;
+    }
+    if ((profile->mid.median + 4U) >= profile->fort.median)
+    {
+        return 0U;
+    }
+
+    if (hall_user_velocity_zone_last(&profile->soft) >= profile->fort.q1)
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t hall_user_velocity_interpolate(uint16_t metric,
+                                              const hall_user_curve_point_t *points,
+                                              uint8_t count)
+{
+    uint8_t idx;
+
+    if ((points == 0) || (count == 0U))
+    {
+        return 1U;
+    }
+
+    if (metric <= points[0].x)
+    {
+        return points[0].y;
+    }
+
+    for (idx = 1U; idx < count; idx++)
+    {
+        if (metric <= points[idx].x)
+        {
+            const uint16_t x0 = points[(uint8_t)(idx - 1U)].x;
+            const uint16_t x1 = points[idx].x;
+            const uint8_t y0 = points[(uint8_t)(idx - 1U)].y;
+            const uint8_t y1 = points[idx].y;
+
+            if (x1 <= x0)
+            {
+                return y1;
+            }
+
+            return (uint8_t)(y0 + (((uint32_t)(metric - x0) * (uint32_t)(y1 - y0)) /
+                                   (uint32_t)(x1 - x0)));
+        }
+    }
+
+    return 127U;
+}
+
+static uint8_t hall_velocity_from_user_profile(uint16_t dv_peak)
+{
+    static const uint8_t point_y[HALL_USER_VEL_POINT_COUNT] = { 1U, 14U, 26U, 38U, 54U,
+                                                                72U, 90U, 104U, 116U, 127U };
+    hall_user_curve_point_t points[HALL_USER_VEL_POINT_COUNT];
+    hall_user_velocity_profile_t profile;
+
+    hall_engine_get_user_velocity_profile(&profile);
+
+    points[0].x = 0U;
+    points[0].y = point_y[0];
+    points[1].x = profile.soft.q1;
+    points[1].y = point_y[1];
+    points[2].x = profile.soft.median;
+    points[2].y = point_y[2];
+    points[3].x = profile.soft.q3;
+    points[3].y = point_y[3];
+    points[4].x = profile.mid.q1;
+    points[4].y = point_y[4];
+    points[5].x = profile.mid.median;
+    points[5].y = point_y[5];
+    points[6].x = profile.mid.q3;
+    points[6].y = point_y[6];
+    points[7].x = profile.fort.q1;
+    points[7].y = point_y[7];
+    points[8].x = profile.fort.median;
+    points[8].y = point_y[8];
+    points[9].x = profile.fort.q3;
+    points[9].y = point_y[9];
+
+    return hall_user_velocity_interpolate(dv_peak, points, HALL_USER_VEL_POINT_COUNT);
+}
+
 static uint8_t hall_velocity_compute(uint8_t key, uint16_t range)
 {
     uint8_t velocity_value = 1U;
     const hall_velocity_mode_t mode = g_velocity_mode;
     const hall_velocity_curve_t curve = g_velocity_curve;
 
+    g_user_mode_fallback = 0U;
+
     switch (mode)
     {
         case HALL_VEL_MODE_TIME:
             velocity_value = hall_velocity_from_time(hall_buttons[key].time_count);
-            break;
+            return hall_apply_curve(velocity_value, curve);
 
         case HALL_VEL_MODE_ENERGY:
             velocity_value = hall_velocity_from_energy(range, hall_buttons[key].sum_dv);
-            break;
+            return hall_apply_curve(velocity_value, curve);
+
+        case HALL_VEL_MODE_USER:
+            if (hall_engine_user_velocity_profile_is_valid() != 0U)
+            {
+                return hall_velocity_from_user_profile(hall_buttons[key].dv_peak);
+            }
+
+            g_user_mode_fallback = 1U;
+            velocity_value = hall_velocity_from_dv(range, hall_buttons[key].dv_peak);
+            return hall_apply_curve(velocity_value, curve);
 
         case HALL_VEL_MODE_DV_PEAK:
         default:
             velocity_value = hall_velocity_from_dv(range, hall_buttons[key].dv_peak);
-            break;
+            return hall_apply_curve(velocity_value, curve);
     }
-
-    return hall_apply_curve(velocity_value, curve);
 }
 
 void hall_engine_init(void)
@@ -464,6 +644,13 @@ void hall_engine_init(void)
     const uint32_t primask = hall_enter_critical();
 
     hall_calibrated = 0U;
+    g_user_mode_fallback = 0U;
+    g_user_velocity_profile.valid = 0U;
+    g_user_velocity_profile.reserved0 = 0U;
+    g_user_velocity_profile.reserved1[0] = 0U;
+    g_user_velocity_profile.reserved1[1] = 0U;
+    g_velocity_capture_w = 0U;
+    g_velocity_capture_r = 0U;
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
@@ -498,8 +685,61 @@ void hall_engine_set_calibration(const uint16_t *min_values,
         hall_update_triggers(i);
     }
 
+    hall_velocity_capture_flush();
     hall_calibrated = 1U;
     hall_exit_critical(primask);
+}
+
+void hall_engine_set_user_velocity_profile(const hall_user_velocity_profile_t *profile)
+{
+    const uint32_t primask = hall_enter_critical();
+
+    if (profile == 0)
+    {
+        g_user_velocity_profile.valid = 0U;
+        g_user_velocity_profile.reserved0 = 0U;
+        g_user_velocity_profile.reserved1[0] = 0U;
+        g_user_velocity_profile.reserved1[1] = 0U;
+        hall_exit_critical(primask);
+        return;
+    }
+
+    if (hall_user_velocity_profile_is_usable(profile) != 0U)
+    {
+        g_user_velocity_profile = *profile;
+        g_user_velocity_profile.valid = 1U;
+    }
+    else
+    {
+        g_user_velocity_profile.valid = 0U;
+        g_user_velocity_profile.reserved0 = 0U;
+        g_user_velocity_profile.reserved1[0] = 0U;
+        g_user_velocity_profile.reserved1[1] = 0U;
+    }
+
+    hall_exit_critical(primask);
+}
+
+void hall_engine_get_user_velocity_profile(hall_user_velocity_profile_t *profile)
+{
+    const uint32_t primask = hall_enter_critical();
+
+    if (profile == 0)
+    {
+        hall_exit_critical(primask);
+        return;
+    }
+
+    *profile = g_user_velocity_profile;
+    hall_exit_critical(primask);
+}
+
+uint8_t hall_engine_user_velocity_profile_is_valid(void)
+{
+    hall_user_velocity_profile_t profile;
+
+    hall_engine_get_user_velocity_profile(&profile);
+    return hall_user_velocity_profile_is_usable(&profile);
 }
 
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count)
@@ -590,6 +830,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     if ((hall_buttons[key].curr_out == 0U) && (raw >= hall_buttons[key].trig_hi))
     {
         hall_buttons[key].curr_out = 1U;
+        hall_last_metric[key] = hall_buttons[key].dv_peak;
         hall_velocity[key] = hall_velocity_compute(key, range);
         hall_velocity_valid[key] = 1U;
     }
@@ -603,6 +844,7 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     if ((hall_buttons[key].prev_out == 0U) && (hall_buttons[key].curr_out == 1U))
     {
         hall_note_on_pending[key] = 1U;
+        hall_velocity_capture_push(key, hall_last_metric[key]);
     }
     else if ((hall_buttons[key].prev_out != 0U) && (hall_buttons[key].curr_out == 0U))
     {
@@ -749,6 +991,28 @@ uint8_t hall_engine_consume_note_off(uint8_t key)
     return hall_consume_flag(&hall_note_off_pending[key]);
 }
 
+uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture)
+{
+    const uint32_t primask = hall_enter_critical();
+
+    if (capture == 0)
+    {
+        hall_exit_critical(primask);
+        return 0U;
+    }
+
+    if (g_velocity_capture_r == g_velocity_capture_w)
+    {
+        hall_exit_critical(primask);
+        return 0U;
+    }
+
+    *capture = g_velocity_capture_fifo[g_velocity_capture_r];
+    g_velocity_capture_r = (uint8_t)((g_velocity_capture_r + 1U) & (HALL_USER_CAPTURE_FIFO_LEN - 1U));
+    hall_exit_critical(primask);
+    return 1U;
+}
+
 void hall_set_velocity_mode(uint8_t mode)
 {
     if (mode < (uint8_t)HALL_VEL_MODE_COUNT)
@@ -810,6 +1074,7 @@ void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
     debug->vel_start_th = hall_buttons[key].vel_start_th;
     debug->vel_end_th = hall_buttons[key].vel_end_th;
     debug->time_count = hall_buttons[key].time_count;
+    debug->last_metric = hall_last_metric[key];
     debug->sample_count = hall_sample_count_current[key];
     debug->sample_period_us = HALL_KEY_SAMPLE_PERIOD_US;
     debug->calibrated = hall_calibrated;
@@ -820,6 +1085,8 @@ void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
     debug->time_active = hall_buttons[key].time_active;
     debug->velocity_mode = (uint8_t)g_velocity_mode;
     debug->velocity_curve = (uint8_t)g_velocity_curve;
+    debug->user_profile_valid = g_user_velocity_profile.valid;
+    debug->user_mode_fallback = g_user_mode_fallback;
     debug->note_on_pending = hall_note_on_pending[key];
     debug->note_off_pending = hall_note_off_pending[key];
 

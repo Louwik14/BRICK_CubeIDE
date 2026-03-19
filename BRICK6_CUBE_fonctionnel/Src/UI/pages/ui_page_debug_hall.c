@@ -24,6 +24,7 @@ static void ui_page_debug_hall_render(void)
     char line4[24];
     char line5[24];
     char line6[24];
+    char line7[24];
     hall_velocity_debug_t debug = {0};
 
     hall_engine_get_velocity_debug(0U, &debug);
@@ -55,14 +56,19 @@ static void ui_page_debug_hall_render(void)
              (unsigned)debug.time_active,
              (unsigned)debug.note_on_pending,
              (unsigned)debug.note_off_pending);
+    snprintf(line7, sizeof(line7), "UM%u P%u DV%u",
+             (unsigned)debug.user_mode_fallback,
+             (unsigned)debug.user_profile_valid,
+             (unsigned)debug.last_metric);
 
     drv_display_draw_text(0U, 0U, line0);
     drv_display_draw_text(0U, 10U, line1);
     drv_display_draw_text(0U, 20U, line2);
     drv_display_draw_text(0U, 30U, line3);
-    drv_display_draw_text(0U, 40U, line4);
-    drv_display_draw_text(0U, 50U, line5);
-    drv_display_draw_text(0U, 60U, line6);
+    drv_display_draw_text(0U, 34U, line4);
+    drv_display_draw_text(0U, 43U, line5);
+    drv_display_draw_text(0U, 52U, line6);
+    drv_display_draw_text(0U, 61U, line7);
 }
 
 const ui_page_t g_ui_page_debug_hall = {
