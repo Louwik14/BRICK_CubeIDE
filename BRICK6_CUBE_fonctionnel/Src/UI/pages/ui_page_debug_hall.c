@@ -28,7 +28,8 @@ static void ui_page_debug_hall_render(void)
 
     hall_engine_get_velocity_debug(0U, &debug);
 
-    snprintf(line0, sizeof(line0), "HALL K0 M%u C%u",
+    snprintf(line0, sizeof(line0), "HALL K0 C%u M%uC%u",
+             (unsigned)debug.calibrated,
              (unsigned)debug.velocity_mode,
              (unsigned)debug.velocity_curve);
     snprintf(line1, sizeof(line1), "R%u %u/%u",
@@ -40,9 +41,9 @@ static void ui_page_debug_hall_render(void)
              (unsigned)debug.trig_hi,
              (unsigned)debug.range_valid,
              (unsigned)debug.state);
-    snprintf(line3, sizeof(line3), "P%u%% V%u %u",
+    snprintf(line3, sizeof(line3), "P%u%% V%u/%u",
              (unsigned)debug.position_percent,
-             (unsigned)debug.velocity_latched,
+             (unsigned)debug.velocity,
              (unsigned)debug.velocity_valid);
     snprintf(line4, sizeof(line4), "DV%u SD%u",
              (unsigned)debug.dv_peak,
