@@ -211,6 +211,8 @@ static void hall_engine_invalidate_key_state(uint8_t key, uint8_t emit_note_off)
 {
     const uint8_t was_pressed = hall_buttons[key].curr_out;
 
+    hall_trig_lo[key] = hall_min[key];
+    hall_trig_hi[key] = hall_max[key];
     hall_value[key] = 0U;
     hall_position[key] = 0U;
     hall_pressed[key] = 0U;
@@ -225,6 +227,10 @@ static void hall_engine_invalidate_key_state(uint8_t key, uint8_t emit_note_off)
         hall_note_off_pending[key] = 0U;
     }
 
+    hall_buttons[key].min = hall_min[key];
+    hall_buttons[key].max = hall_max[key];
+    hall_buttons[key].trig_lo = hall_trig_lo[key];
+    hall_buttons[key].trig_hi = hall_trig_hi[key];
     hall_buttons[key].prev_out = was_pressed;
     hall_buttons[key].curr_out = 0U;
     hall_clear_velocity_state(key);
