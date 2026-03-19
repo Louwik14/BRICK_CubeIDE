@@ -1,0 +1,9 @@
+../Src/Audio/juno_synth.cpp:135:13:void {anonymous}::juno_note_on(uint8_t, float)	29
+../Src/Audio/../../Juno/KR106VCF.h:228:9:float kr106::VCF::ProcessSample(float, float, float)	21
+../Src/Audio/juno_synth.cpp:189:6:void juno_synth_init(float, uint32_t)	4
+../Src/Audio/juno_synth.cpp:216:6:void juno_synth_set_enabled(uint8_t)	6
+../Src/Audio/juno_synth.cpp:224:9:uint8_t juno_synth_is_enabled()	1
+../Src/Audio/juno_synth.cpp:229:6:void juno_synth_set_test_mode(uint8_t)	6
+../Src/Audio/../../Juno/KR106Voice.h:429:8:void kr106::Voice<T>::ProcessSamplesAccumulating(T**, T**, int, int, int, int) [with T = float]	94
+../Src/Audio/juno_synth.cpp:237:6:void juno_synth_process_block(float*, uint32_t)	105
+../Src/Audio/juno_synth.cpp:287:1:cpp)	2

@@ -1,7 +1,7 @@
 ../Src/Audio/mixer.c:101:6:mixer_init	2
 ../Src/Audio/mixer.c:142:6:mixer_set_master	1
 ../Src/Audio/mixer.c:164:7:mixer_get_master	1
-../Src/Audio/mixer.c:181:6:mixer_set_track_gain	3
+../Src/Audio/mixer.c:181:6:mixer_set_track_gain	2
 ../Src/Audio/mixer.c:207:7:mixer_get_track_gain	2
 ../Src/Audio/mixer.c:227:6:mixer_set_track_pan	2
 ../Src/Audio/mixer.c:247:6:mixer_set_track_mute	2

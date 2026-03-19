@@ -50,7 +50,9 @@ Src/stm32h7xx_it.o: ../Src/stm32h7xx_it.c ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
  ../Inc/stm32h7xx_it.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h \
- ../Inc/usart.h ../Inc/main.h
+ ../Inc/usart.h ../Inc/main.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/encoders_hw.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/encoders.h
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -105,3 +107,5 @@ Src/stm32h7xx_it.o: ../Src/stm32h7xx_it.c ../Inc/main.h \
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h:
 ../Inc/usart.h:
 ../Inc/main.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/encoders_hw.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/encoders.h:

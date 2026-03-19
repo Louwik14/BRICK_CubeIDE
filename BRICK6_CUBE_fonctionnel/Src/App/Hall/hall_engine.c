@@ -2,7 +2,7 @@
 
 #include "stm32h7xx_hal.h"
 
-#define HALL_THRESHOLD_PPM          200U
+#define HALL_THRESHOLD_PPM          800U
 #define HALL_HYST_PPM                100U
 #define HALL_MIN_RANGE              400U
 

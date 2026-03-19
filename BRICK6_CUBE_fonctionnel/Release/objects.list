@@ -538,6 +538,7 @@
 "./Src/Audio/fx_pool.o"
 "./Src/Audio/fx_reverb.o"
 "./Src/Audio/fx_saturation.o"
+"./Src/Audio/juno_synth.o"
 "./Src/Audio/live_recorder.o"
 "./Src/Audio/mixer.o"
 "./Src/Audio/recorder_transport.o"

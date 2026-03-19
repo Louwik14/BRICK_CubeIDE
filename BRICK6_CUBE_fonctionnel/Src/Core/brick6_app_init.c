@@ -234,6 +234,8 @@ void brick6_app_init(void)
     HAL_Delay(200);
 
     midi_init();
+
+
 }
 
 
