@@ -328,8 +328,12 @@ void TIM7_IRQHandler(void)
   {
     __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
     encoders_fast_poll_irq();
+    return;
   }
+
+  return;
   /* USER CODE END TIM7_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim7);
   /* USER CODE BEGIN TIM7_IRQn 1 */
 
   /* USER CODE END TIM7_IRQn 1 */
