@@ -13,7 +13,7 @@ namespace kr106 {
 // complement values (0x10000 - entry) land on powers of 2.
 // Index 0 = $1000 (very fast, ~6% retained per tick),
 // index 127 = $FFF4 (slowest, multiplier ~ 0.9993).
-static constexpr std::array<uint16_t, 128> GenerateDecRelTable()
+static inline std::array<uint16_t, 128> GenerateDecRelTable()
 {
   constexpr int kCounts[] = {  4,      1,      10,     28,     22,     58,     4     };
   constexpr uint16_t kSteps[] = { 0x2000, 0x1000, 0x0800, 0x0080, 0x000C, 0x0004, 0x0001 };
@@ -26,7 +26,7 @@ static constexpr std::array<uint16_t, 128> GenerateDecRelTable()
       t[i++] = (val = static_cast<uint16_t>(val + kSteps[seg]));
   return t;
 }
-static constexpr auto kDecRelTable = GenerateDecRelTable();
+static const auto kDecRelTable = GenerateDecRelTable();
 
 // ============================================================
 // ADSR Envelope
