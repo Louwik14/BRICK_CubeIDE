@@ -32,12 +32,11 @@ static void ui_page_debug_hall_render(void)
              (unsigned)debug.raw_current,
              (unsigned)debug.min_current,
              (unsigned)debug.max_current);
-    snprintf(pos_txt, sizeof(pos_txt), "%u%% S%u %luus",
+    snprintf(pos_txt, sizeof(pos_txt), "%u%% S%u N%u/%u",
              (unsigned)debug.position_percent,
              (unsigned)debug.state,
-             (unsigned long)((debug.velocity1_elapsed_samples != 0U) ?
-                 (debug.velocity1_elapsed_samples * debug.sample_period_us) :
-                 debug.sample_period_us));
+             (unsigned)debug.note_on_pending,
+             (unsigned)debug.note_off_pending);
     snprintf(thr1_txt, sizeof(thr1_txt), "V1 %u>%u %c%c",
              (unsigned)debug.velocity1_arm_threshold,
              (unsigned)debug.trigger1_threshold,

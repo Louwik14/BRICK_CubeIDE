@@ -28,6 +28,8 @@ typedef struct
     uint8_t velocity2_armed;
     uint8_t velocity1_fallback;
     uint8_t velocity2_fallback;
+    uint8_t note_on_pending;
+    uint8_t note_off_pending;
     uint8_t state;
 } hall_velocity_debug_t;
 
@@ -36,15 +38,21 @@ void hall_engine_init(void);
 void hall_engine_set_calibration(const uint16_t *min_values,
                                  const uint16_t *max_values);
 
+void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count);
 void hall_engine_process(void);
 
+uint16_t hall_engine_get_raw(uint8_t key);
 uint16_t hall_engine_get_value(uint8_t key);
 uint8_t hall_engine_is_pressed(uint8_t key);
 uint16_t hall_engine_get_min(uint8_t key);
 uint16_t hall_engine_get_max(uint8_t key);
 uint8_t hall_engine_get_velocity(uint8_t key);
+/* état durable : 1 tant que l'appui courant possède une vélocité valide */
 uint8_t hall_engine_get_velocity_valid(uint8_t key);
 uint16_t hall_engine_get_velocity_position(uint8_t key);
+uint32_t hall_engine_get_sample_count(uint8_t key);
+uint8_t hall_engine_consume_note_on(uint8_t key);
+uint8_t hall_engine_consume_note_off(uint8_t key);
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug);
 
 #endif /* APP_HALL_HALL_ENGINE_H */
