@@ -9,7 +9,7 @@
 #define HALL_KEY_SAMPLE_PERIOD_US   800U
 
 #define HALL_VEL_SLOW_SHIFT          8U
-#define HALL_VEL_FAST_SHIFT           1U
+#define HALL_VEL_FAST_SHIFT           0U
 
 #define HALL_VEL_TIME_START_PPM     150U
 #define HALL_VEL_TIME_END_PPM         0U
