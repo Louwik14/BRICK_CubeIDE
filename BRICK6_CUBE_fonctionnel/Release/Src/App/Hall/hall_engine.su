@@ -1,7 +1,7 @@
 ../Src/App/Hall/hall_engine.c:237:13:hall_engine_invalidate_key_state.constprop	20	static
 ../Src/App/Hall/hall_engine.c:462:6:hall_engine_init	48	static,ignoring_inline_asm
 ../Src/App/Hall/hall_engine.c:480:6:hall_engine_set_calibration	48	static,ignoring_inline_asm
-../Src/App/Hall/hall_engine.c:505:6:hall_engine_process_sample	32	static
+../Src/App/Hall/hall_engine.c:505:6:hall_engine_process_sample	24	static
 ../Src/App/Hall/hall_engine.c:618:6:hall_engine_process	0	static
 ../Src/App/Hall/hall_engine.c:622:10:hall_engine_get_raw	0	static
 ../Src/App/Hall/hall_engine.c:632:10:hall_engine_get_value	0	static
