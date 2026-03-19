@@ -130,8 +130,9 @@ void ui_page_main_render(void)
 
     drv_display_draw_text(0U, 16U, line0);
     drv_display_draw_text(0U, 28U, line1);
-    drv_display_draw_text(0U, 44U, "BTN1: PARAM TEST");
-    drv_display_draw_text(0U, 54U, "BTN3: HALL DEBUG");
+    drv_display_draw_text(0U, 40U, "BTN1: PARAM TEST");
+    drv_display_draw_text(0U, 50U, "BTN3: HALL DEBUG");
+    drv_display_draw_text(0U, 60U, "BTN5: CALIB USER");
 }
 
 const ui_page_t g_ui_page_main = {

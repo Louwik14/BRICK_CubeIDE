@@ -54,6 +54,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_param_test);
     ui_page_manager_register(&g_ui_page_debug_hall);
     ui_page_manager_register(&g_ui_page_calibration);
+    ui_page_manager_register(&g_ui_page_user_calibration);
 
     if (hall_calibration_load() != 0U)
     {

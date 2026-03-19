@@ -13,6 +13,7 @@ static const ui_nav_rule_t g_ui_nav_rules[] = {
 
     /* calibration page */
     { BTN_PARAM_4, UI_NAV_ANY_PAGE, UI_PAGE_CALIBRATION },
+    { BTN_PARAM_5, UI_NAV_ANY_PAGE, UI_PAGE_USER_CALIBRATION },
 };
 
 void ui_navigation_handle_event(const ui_event_t *event)
