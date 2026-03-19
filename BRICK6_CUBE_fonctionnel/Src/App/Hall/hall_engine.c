@@ -1,127 +1,60 @@
 #include "App/Hall/hall_engine.h"
+
 #include "stm32h7xx_hal.h"
 
-/*
-===============================================================================
-Configuration comportement capteur Hall
-===============================================================================
+#define HALL_THRESHOLD_PPM          200U
+#define HALL_HYST_PPM                40U
+#define HALL_MIN_RANGE              500U
 
-Les valeurs sont exprimées en pourcentage de la course du capteur.
-
-Course = (raw - min) / (max - min)
-
-0%  = position repos
-100% = position enfoncée maximum
-*/
-
-/* zone morte autour du repos pour ignorer le bruit ADC */
-#define HALL_DEADZONE_PERCENT         12U
-
-/* premier seuil d’activation */
-#define HALL_TRG1_PERCENT             16U
-
-/* seuil profond permettant le retrigger rapide */
-#define HALL_TRG2_PERCENT             70U
-
-/* hystérésis pour éviter les oscillations autour des seuils */
-#define HALL_HYST_PERCENT              6U
-
-/* cadence observée: TIM6 = 50 us (20 kHz), 1 échantillon jeté, 8 positions mux */
 #define HALL_KEY_SAMPLE_PERIOD_US   800U
 
-#define HALL_US_TO_KEY_SAMPLES(us_) (((us_) + HALL_KEY_SAMPLE_PERIOD_US - 1U) / HALL_KEY_SAMPLE_PERIOD_US)
+#define HALL_VEL_SLOW_SHIFT          12U
+#define HALL_VEL_FAST_SHIFT           2U
 
-/* fenêtre VEL1 : sortie de deadzone -> TRG1 */
-#define HALL_VEL1_ARM_PERCENT         HALL_DEADZONE_PERCENT
-#define HALL_VEL1_TIMEOUT_SAMPLES     HALL_US_TO_KEY_SAMPLES(38400U)
-#define HALL_VEL1_FASTEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(3200U)
-#define HALL_VEL1_SLOWEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(19200U)
+#define HALL_VEL_TIME_START_PPM     150U
+#define HALL_VEL_TIME_END_PPM         0U
+#define HALL_VEL_TIME_FAST_DT         2U
+#define HALL_VEL_TIME_SLOW_DT        14U
 
-/* fenêtre VEL2 : seuil dédié avant TRG2 -> TRG2 */
-#define HALL_VEL2_ARM_PERCENT         52U
-#define HALL_VEL2_TIMEOUT_SAMPLES     HALL_US_TO_KEY_SAMPLES(32000U)
-#define HALL_VEL2_FASTEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(3200U)
-#define HALL_VEL2_SLOWEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(25600U)
-
-/* fallback explicite si une fenêtre n'a pas pu être armée proprement */
-#define HALL_VEL1_FALLBACK_MIDI      96U
-#define HALL_VEL2_FALLBACK_MIDI      88U
-
-/*
-===============================================================================
-Seuils avec hystérésis
-===============================================================================
-*/
-
-#define HALL_DEADZONE_EXIT_ON  HALL_VEL1_ARM_PERCENT
-#define HALL_DEADZONE_EXIT_OFF (HALL_DEADZONE_PERCENT - HALL_HYST_PERCENT)
-
-#define HALL_TRG1_ON           HALL_TRG1_PERCENT
-#define HALL_TRG1_OFF          (HALL_TRG1_PERCENT - HALL_HYST_PERCENT)
-
-#define HALL_VEL2_ARM_ON       HALL_VEL2_ARM_PERCENT
-#define HALL_VEL2_ARM_OFF      (HALL_VEL2_ARM_PERCENT - HALL_HYST_PERCENT)
-
-#define HALL_TRG2_ON           HALL_TRG2_PERCENT
-#define HALL_TRG2_OFF          (HALL_TRG2_PERCENT - HALL_HYST_PERCENT)
-
-/*
-===============================================================================
-Machine d'état du capteur
-===============================================================================
-
-Toute la logique critique Hall s'exécute désormais dans l'IRQ ADC/DMA Hall,
-exactement au rythme des samples ADC utiles, afin de ne plus perdre les
-franchissements intermédiaires entre IRQ et superloop.
-*/
-
-typedef enum
-{
-    HALL_IDLE = 0,
-    HALL_PRESSED_T1,
-    HALL_PRESSED_T2,
-    HALL_IDLE_T2
-} hall_state_t;
+#define HALL_VEL_ENERGY_SLOW_SHIFT    6U
+#define HALL_VEL_ENERGY_FAST_SHIFT    2U
 
 typedef struct
 {
-    uint16_t raw_latched;
-    uint16_t start_pos;
-    uint32_t start_sample;
-    uint32_t elapsed_samples;
-    uint8_t velocity_latched;
-    uint8_t armed;
-    uint8_t ready;
-    uint8_t fallback;
-} hall_velocity_window_t;
-
-/*
-===============================================================================
-Stockage état runtime partagé IRQ ADC Hall / superloop
-===============================================================================
-*/
+    uint16_t min;
+    uint16_t max;
+    uint16_t trig_lo;
+    uint16_t trig_hi;
+    uint8_t  prev_out;
+    uint8_t  curr_out;
+    uint16_t prev_raw;
+    uint16_t dv_peak;
+    uint16_t sum_dv;
+    uint16_t vel_start_th;
+    uint16_t vel_end_th;
+    uint16_t time_count;
+    uint8_t  time_active;
+    uint8_t  vel_latched;
+} hall_button_t;
 
 static volatile uint16_t hall_min[HALL_KEY_COUNT];
 static volatile uint16_t hall_max[HALL_KEY_COUNT];
-
+static volatile uint16_t hall_trig_lo[HALL_KEY_COUNT];
+static volatile uint16_t hall_trig_hi[HALL_KEY_COUNT];
 static volatile uint16_t hall_value[HALL_KEY_COUNT];
 static volatile uint16_t hall_position[HALL_KEY_COUNT];
 static volatile uint16_t hall_raw_current[HALL_KEY_COUNT];
-static volatile uint16_t hall_prev_position[HALL_KEY_COUNT];
 static volatile uint32_t hall_sample_count_current[HALL_KEY_COUNT];
 static volatile uint8_t  hall_pressed[HALL_KEY_COUNT];
 static volatile uint8_t  hall_velocity[HALL_KEY_COUNT];
-/* état latché durable : vitesse valide pour l'appui actuellement actif */
 static volatile uint8_t  hall_velocity_valid[HALL_KEY_COUNT];
 static volatile uint8_t  hall_note_on_pending[HALL_KEY_COUNT];
 static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
 
-static volatile hall_velocity_window_t hall_velocity_1[HALL_KEY_COUNT];
-static volatile hall_velocity_window_t hall_velocity_2[HALL_KEY_COUNT];
-
-static volatile hall_state_t hall_state[HALL_KEY_COUNT];
-
+static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
+static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_TIME;
+static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_SOFT;
 
 static uint32_t hall_enter_critical(void)
 {
@@ -147,158 +80,324 @@ static uint8_t hall_consume_flag(volatile uint8_t *flag)
     return pending;
 }
 
-
-static uint8_t hall_velocity_samples_to_midi(uint32_t elapsed_samples,
-                                             uint32_t fastest_samples,
-                                             uint32_t slowest_samples)
+static uint16_t hall_isqrt_u32(uint32_t value)
 {
-    if (elapsed_samples <= fastest_samples)
+    uint32_t op = value;
+    uint32_t res = 0U;
+    uint32_t one = 1UL << 30;
+
+    while (one > op)
     {
-        return 127U;
+        one >>= 2;
     }
 
-    if (elapsed_samples >= slowest_samples)
+    while (one != 0U)
     {
-        return 1U;
+        if (op >= (res + one))
+        {
+            op -= (res + one);
+            res += (2U * one);
+        }
+
+        res >>= 1;
+        one >>= 2;
     }
 
-    {
-        const uint32_t numerator = (elapsed_samples - fastest_samples) * 126U;
-        const uint32_t denominator = (slowest_samples - fastest_samples);
-        const uint32_t attenuated = numerator / denominator;
-        const uint32_t velocity_value = 127U - attenuated;
-
-        return (velocity_value > 127U) ? 127U : (uint8_t)velocity_value;
-    }
+    return (uint16_t)res;
 }
 
-static void hall_velocity_window_reset_runtime(volatile hall_velocity_window_t *window)
+static uint8_t hall_apply_curve(uint8_t velocity, hall_velocity_curve_t curve)
 {
-    if (window == 0)
+    uint32_t out;
+
+    if (velocity < 1U)
     {
-        return;
+        velocity = 1U;
+    }
+    if (velocity > 127U)
+    {
+        velocity = 127U;
     }
 
-    window->armed = 0U;
-    window->start_pos = 0U;
-    window->start_sample = 0U;
+    switch (curve)
+    {
+        case HALL_VEL_CURVE_LINEAR:
+            return velocity;
+
+        case HALL_VEL_CURVE_SOFT:
+            out = ((uint32_t)velocity * (uint32_t)velocity) / 127U;
+            break;
+
+        case HALL_VEL_CURVE_HARD:
+            out = hall_isqrt_u32((uint32_t)velocity * 127U);
+            break;
+
+        case HALL_VEL_CURVE_LOG:
+        {
+            const uint32_t delta = (uint32_t)(127U - velocity);
+            out = 127U - ((delta * delta) / 127U);
+        }
+            break;
+
+        case HALL_VEL_CURVE_EXP:
+            out = ((uint32_t)velocity * (uint32_t)velocity * (uint32_t)velocity) /
+                  (127U * 127U);
+            break;
+
+        default:
+            out = velocity;
+            break;
+    }
+
+    if (out < 1U)
+    {
+        out = 1U;
+    }
+    if (out > 127U)
+    {
+        out = 127U;
+    }
+
+    return (uint8_t)out;
 }
 
-static void hall_velocity_window_cancel(volatile hall_velocity_window_t *window)
+static uint8_t hall_range_is_valid(uint16_t min_value, uint16_t max_value)
 {
-    hall_velocity_window_reset_runtime(window);
+    if (max_value <= min_value)
+    {
+        return 0U;
+    }
+
+    return (((uint16_t)(max_value - min_value)) >= HALL_MIN_RANGE) ? 1U : 0U;
 }
 
-static void hall_velocity_window_arm(volatile hall_velocity_window_t *window,
-                                     uint16_t raw,
-                                     uint16_t pos,
-                                     uint32_t sample_count)
+static void hall_reset_attack_runtime(uint8_t key)
 {
-    if (window == 0)
-    {
-        return;
-    }
-
-    window->raw_latched = raw;
-    window->start_pos = pos;
-    window->start_sample = sample_count;
-    window->elapsed_samples = 0U;
-    window->velocity_latched = 0U;
-    window->ready = 0U;
-    window->fallback = 0U;
-    window->armed = 1U;
-}
-
-static void hall_velocity_window_commit(volatile hall_velocity_window_t *window,
-                                        uint16_t raw,
-                                        uint32_t sample_count,
-                                        uint32_t fastest_samples,
-                                        uint32_t slowest_samples)
-{
-    uint32_t elapsed_samples = 0U;
-
-    if (window == 0)
-    {
-        return;
-    }
-
-    if (sample_count > window->start_sample)
-    {
-        elapsed_samples = sample_count - window->start_sample;
-    }
-
-    if (elapsed_samples == 0U)
-    {
-        elapsed_samples = 1U;
-    }
-
-    window->raw_latched = raw;
-    window->elapsed_samples = elapsed_samples;
-    window->velocity_latched = hall_velocity_samples_to_midi(elapsed_samples,
-                                                             fastest_samples,
-                                                             slowest_samples);
-    window->ready = 1U;
-    window->fallback = 0U;
-    hall_velocity_window_reset_runtime(window);
-}
-
-static void hall_velocity_window_commit_fallback(volatile hall_velocity_window_t *window,
-                                                 uint16_t raw,
-                                                 uint8_t fallback_velocity)
-{
-    if (window == 0)
-    {
-        return;
-    }
-
-    window->raw_latched = raw;
-    window->elapsed_samples = 0U;
-    window->velocity_latched = fallback_velocity;
-    window->ready = 1U;
-    window->fallback = 1U;
-    hall_velocity_window_reset_runtime(window);
-}
-
-static void hall_velocity_windows_reset_key(uint8_t key)
-{
-    hall_velocity_window_cancel(&hall_velocity_1[key]);
-    hall_velocity_window_cancel(&hall_velocity_2[key]);
+    hall_buttons[key].prev_raw = hall_raw_current[key];
+    hall_buttons[key].dv_peak = 0U;
+    hall_buttons[key].sum_dv = 0U;
+    hall_buttons[key].vel_start_th = hall_min[key];
+    hall_buttons[key].vel_end_th = hall_max[key];
+    hall_buttons[key].time_count = 0U;
+    hall_buttons[key].time_active = 0U;
+    hall_buttons[key].vel_latched = 0U;
 }
 
 static void hall_engine_reset_key_runtime(uint8_t key)
 {
+    hall_trig_lo[key] = hall_min[key];
+    hall_trig_hi[key] = hall_max[key];
     hall_value[key] = 0U;
     hall_position[key] = 0U;
-    hall_prev_position[key] = 0U;
     hall_pressed[key] = 0U;
-    hall_velocity[key] = 1U;
+    hall_velocity[key] = 0U;
     hall_velocity_valid[key] = 0U;
     hall_note_on_pending[key] = 0U;
     hall_note_off_pending[key] = 0U;
-    hall_velocity_1[key].raw_latched = 0U;
-    hall_velocity_1[key].start_pos = 0U;
-    hall_velocity_1[key].start_sample = 0U;
-    hall_velocity_1[key].elapsed_samples = 0U;
-    hall_velocity_1[key].velocity_latched = 0U;
-    hall_velocity_1[key].armed = 0U;
-    hall_velocity_1[key].ready = 0U;
-    hall_velocity_1[key].fallback = 0U;
-    hall_velocity_2[key].raw_latched = 0U;
-    hall_velocity_2[key].start_pos = 0U;
-    hall_velocity_2[key].start_sample = 0U;
-    hall_velocity_2[key].elapsed_samples = 0U;
-    hall_velocity_2[key].velocity_latched = 0U;
-    hall_velocity_2[key].armed = 0U;
-    hall_velocity_2[key].ready = 0U;
-    hall_velocity_2[key].fallback = 0U;
-    hall_state[key] = HALL_IDLE;
+
+    hall_buttons[key].min = hall_min[key];
+    hall_buttons[key].max = hall_max[key];
+    hall_buttons[key].trig_lo = hall_trig_lo[key];
+    hall_buttons[key].trig_hi = hall_trig_hi[key];
+    hall_buttons[key].prev_out = 0U;
+    hall_buttons[key].curr_out = 0U;
+    hall_reset_attack_runtime(key);
 }
 
-/*
-===============================================================================
-Initialisation
-===============================================================================
-*/
+static void hall_update_triggers(uint8_t key)
+{
+    uint32_t range;
+    uint32_t half_hyst;
+    uint32_t lo_ppm;
+    uint32_t hi_ppm;
+
+    hall_buttons[key].min = hall_min[key];
+    hall_buttons[key].max = hall_max[key];
+
+    if (hall_range_is_valid(hall_min[key], hall_max[key]) == 0U)
+    {
+        hall_buttons[key].trig_lo = hall_min[key];
+        hall_buttons[key].trig_hi = hall_max[key];
+        hall_buttons[key].vel_start_th = hall_min[key];
+        hall_buttons[key].vel_end_th = hall_max[key];
+        hall_trig_lo[key] = hall_buttons[key].trig_lo;
+        hall_trig_hi[key] = hall_buttons[key].trig_hi;
+        return;
+    }
+
+    range = (uint32_t)(hall_max[key] - hall_min[key]);
+    half_hyst = HALL_HYST_PPM / 2U;
+    lo_ppm = HALL_THRESHOLD_PPM;
+    hi_ppm = HALL_THRESHOLD_PPM;
+
+    if (lo_ppm > half_hyst)
+    {
+        lo_ppm -= half_hyst;
+    }
+    else
+    {
+        lo_ppm = 0U;
+    }
+
+    hi_ppm += half_hyst;
+    if (hi_ppm > 1000U)
+    {
+        hi_ppm = 1000U;
+    }
+
+    hall_buttons[key].trig_lo = (uint16_t)(hall_min[key] + ((range * lo_ppm) / 1000U));
+    hall_buttons[key].trig_hi = (uint16_t)(hall_min[key] + ((range * hi_ppm) / 1000U));
+    hall_buttons[key].vel_start_th = (uint16_t)(hall_min[key] +
+                                  ((range * HALL_VEL_TIME_START_PPM) / 1000U));
+
+    if (HALL_VEL_TIME_END_PPM == 0U)
+    {
+        hall_buttons[key].vel_end_th = hall_buttons[key].trig_hi;
+    }
+    else
+    {
+        hall_buttons[key].vel_end_th = (uint16_t)(hall_min[key] +
+                                    ((range * HALL_VEL_TIME_END_PPM) / 1000U));
+    }
+
+    hall_trig_lo[key] = hall_buttons[key].trig_lo;
+    hall_trig_hi[key] = hall_buttons[key].trig_hi;
+}
+
+static uint8_t hall_velocity_from_dv(uint16_t range, uint16_t dv_peak)
+{
+    uint16_t dv_slow;
+    uint16_t dv_fast;
+    uint32_t velocity_value;
+
+    if (range == 0U)
+    {
+        return 1U;
+    }
+
+    dv_slow = (uint16_t)(range >> HALL_VEL_SLOW_SHIFT);
+    dv_fast = (uint16_t)(range >> HALL_VEL_FAST_SHIFT);
+
+    if (dv_slow < 1U)
+    {
+        dv_slow = 1U;
+    }
+    if (dv_fast <= (uint16_t)(dv_slow + 1U))
+    {
+        dv_fast = (uint16_t)(dv_slow + 2U);
+    }
+
+    if (dv_peak <= dv_slow)
+    {
+        return 1U;
+    }
+    if (dv_peak >= dv_fast)
+    {
+        return 127U;
+    }
+
+    velocity_value = 1U + (((uint32_t)(dv_peak - dv_slow) * 126U) /
+                           (uint32_t)(dv_fast - dv_slow));
+
+    if (velocity_value > 127U)
+    {
+        velocity_value = 127U;
+    }
+
+    return (uint8_t)velocity_value;
+}
+
+static uint8_t hall_velocity_from_time(uint16_t dt_count)
+{
+    uint32_t velocity_value;
+
+    if (dt_count <= HALL_VEL_TIME_FAST_DT)
+    {
+        return 127U;
+    }
+    if (dt_count >= HALL_VEL_TIME_SLOW_DT)
+    {
+        return 1U;
+    }
+
+    velocity_value = 1U + (((uint32_t)(HALL_VEL_TIME_SLOW_DT - dt_count) * 126U) /
+                           (uint32_t)(HALL_VEL_TIME_SLOW_DT - HALL_VEL_TIME_FAST_DT));
+
+    if (velocity_value > 127U)
+    {
+        velocity_value = 127U;
+    }
+
+    return (uint8_t)velocity_value;
+}
+
+static uint8_t hall_velocity_from_energy(uint16_t range, uint16_t sum_dv)
+{
+    uint16_t energy_slow;
+    uint16_t energy_fast;
+    uint32_t velocity_value;
+
+    if (range == 0U)
+    {
+        return 1U;
+    }
+
+    energy_slow = (uint16_t)(range >> HALL_VEL_ENERGY_SLOW_SHIFT);
+    energy_fast = (uint16_t)(range >> HALL_VEL_ENERGY_FAST_SHIFT);
+
+    if (energy_slow < 1U)
+    {
+        energy_slow = 1U;
+    }
+    if (energy_fast <= (uint16_t)(energy_slow + 1U))
+    {
+        energy_fast = (uint16_t)(energy_slow + 2U);
+    }
+
+    if (sum_dv <= energy_slow)
+    {
+        return 1U;
+    }
+    if (sum_dv >= energy_fast)
+    {
+        return 127U;
+    }
+
+    velocity_value = 1U + (((uint32_t)(sum_dv - energy_slow) * 126U) /
+                           (uint32_t)(energy_fast - energy_slow));
+
+    if (velocity_value > 127U)
+    {
+        velocity_value = 127U;
+    }
+
+    return (uint8_t)velocity_value;
+}
+
+static uint8_t hall_velocity_compute(uint8_t key, uint16_t range)
+{
+    uint8_t velocity_value = 1U;
+    const hall_velocity_mode_t mode = g_velocity_mode;
+    const hall_velocity_curve_t curve = g_velocity_curve;
+
+    switch (mode)
+    {
+        case HALL_VEL_MODE_TIME:
+            velocity_value = hall_velocity_from_time(hall_buttons[key].time_count);
+            break;
+
+        case HALL_VEL_MODE_ENERGY:
+            velocity_value = hall_velocity_from_energy(range, hall_buttons[key].sum_dv);
+            break;
+
+        case HALL_VEL_MODE_DV_PEAK:
+        default:
+            velocity_value = hall_velocity_from_dv(range, hall_buttons[key].dv_peak);
+            break;
+    }
+
+    return hall_apply_curve(velocity_value, curve);
+}
 
 void hall_engine_init(void)
 {
@@ -314,12 +413,6 @@ void hall_engine_init(void)
     }
 }
 
-/*
-===============================================================================
-Injection calibration min/max
-===============================================================================
-*/
-
 void hall_engine_set_calibration(const uint16_t *min_values,
                                  const uint16_t *max_values)
 {
@@ -328,29 +421,22 @@ void hall_engine_set_calibration(const uint16_t *min_values,
         return;
     }
 
-    hall_calibrated = 1U;
-
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         hall_min[i] = min_values[i];
         hall_max[i] = max_values[i];
+        hall_engine_reset_key_runtime(i);
     }
-}
 
-/*
-===============================================================================
-Traitement critique sample par sample - IRQ ADC Hall
-===============================================================================
-*/
+    hall_calibrated = 1U;
+}
 
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count)
 {
-    uint16_t pos;
-    uint16_t value;
-    uint16_t prev_pos;
     uint16_t range;
     uint32_t delta;
     uint32_t limited_delta;
+    uint16_t dv = 0U;
 
     if (key >= HALL_KEY_COUNT)
     {
@@ -362,217 +448,114 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
 
     if (hall_calibrated == 0U)
     {
-        if (raw < hall_min[key]) { hall_min[key] = raw; }
-        if (raw > hall_max[key]) { hall_max[key] = raw; }
-
         hall_engine_reset_key_runtime(key);
+        hall_buttons[key].prev_raw = raw;
         return;
     }
 
-    range = (hall_max[key] > hall_min[key]) ? (uint16_t)(hall_max[key] - hall_min[key]) : 0U;
+    hall_update_triggers(key);
 
-    if (range < 10U)
+    if (hall_range_is_valid(hall_min[key], hall_max[key]) == 0U)
     {
         hall_engine_reset_key_runtime(key);
+        hall_buttons[key].prev_raw = raw;
         return;
     }
 
+    range = (uint16_t)(hall_max[key] - hall_min[key]);
     delta = (raw > hall_min[key]) ? (uint32_t)(raw - hall_min[key]) : 0U;
     limited_delta = (delta > range) ? range : delta;
-    pos = (uint16_t)((limited_delta * 100U) / range);
-
-    if (pos > 100U)
+    hall_position[key] = (uint16_t)((limited_delta * 100U) / range);
+    if (hall_position[key] > 100U)
     {
-        pos = 100U;
+        hall_position[key] = 100U;
+    }
+    hall_value[key] = hall_position[key];
+
+    hall_buttons[key].prev_out = hall_buttons[key].curr_out;
+
+    if (raw > hall_buttons[key].prev_raw)
+    {
+        dv = (uint16_t)(raw - hall_buttons[key].prev_raw);
+    }
+    hall_buttons[key].prev_raw = raw;
+
+    if ((hall_buttons[key].curr_out == 0U) && (raw <= hall_buttons[key].trig_lo))
+    {
+        hall_buttons[key].dv_peak = 0U;
+        hall_buttons[key].sum_dv = 0U;
+        hall_buttons[key].time_count = 0U;
+        hall_buttons[key].time_active = 0U;
     }
 
-    prev_pos = hall_prev_position[key];
-    value = (pos < HALL_DEADZONE_PERCENT) ? 0U : pos;
-
-    hall_position[key] = pos;
-    hall_value[key] = value;
-
-    if (hall_velocity_1[key].armed != 0U)
+    if (hall_buttons[key].curr_out == 0U)
     {
-        const uint32_t elapsed_samples =
-            (sample_count >= hall_velocity_1[key].start_sample) ?
-            (sample_count - hall_velocity_1[key].start_sample) : 0U;
+        uint32_t sum;
 
-        if ((pos <= HALL_DEADZONE_EXIT_OFF) ||
-            (pos < hall_velocity_1[key].start_pos) ||
-            (elapsed_samples > HALL_VEL1_TIMEOUT_SAMPLES))
+        if (dv > hall_buttons[key].dv_peak)
         {
-            hall_velocity_window_cancel(&hall_velocity_1[key]);
+            hall_buttons[key].dv_peak = dv;
+        }
+
+        sum = (uint32_t)hall_buttons[key].sum_dv + (uint32_t)dv;
+        if (sum > 65535U)
+        {
+            sum = 65535U;
+        }
+        hall_buttons[key].sum_dv = (uint16_t)sum;
+
+        if ((hall_buttons[key].time_active == 0U) && (raw >= hall_buttons[key].vel_start_th))
+        {
+            hall_buttons[key].time_active = 1U;
+            hall_buttons[key].time_count = 0U;
+        }
+
+        if (hall_buttons[key].time_active != 0U)
+        {
+            if (hall_buttons[key].time_count < 65535U)
+            {
+                hall_buttons[key].time_count++;
+            }
+
+            if (raw >= hall_buttons[key].vel_end_th)
+            {
+                hall_buttons[key].time_active = 0U;
+            }
         }
     }
 
-    if (hall_velocity_2[key].armed != 0U)
+    if ((hall_buttons[key].curr_out == 0U) && (raw >= hall_buttons[key].trig_hi))
     {
-        const uint32_t elapsed_samples =
-            (sample_count >= hall_velocity_2[key].start_sample) ?
-            (sample_count - hall_velocity_2[key].start_sample) : 0U;
-
-        if ((pos <= HALL_VEL2_ARM_OFF) ||
-            (pos < hall_velocity_2[key].start_pos) ||
-            (elapsed_samples > HALL_VEL2_TIMEOUT_SAMPLES))
-        {
-            hall_velocity_window_cancel(&hall_velocity_2[key]);
-        }
+        hall_buttons[key].curr_out = 1U;
+        hall_buttons[key].vel_latched = hall_velocity_compute(key, range);
+        hall_velocity[key] = hall_buttons[key].vel_latched;
+        hall_velocity_valid[key] = 1U;
+    }
+    else if ((hall_buttons[key].curr_out != 0U) && (raw <= hall_buttons[key].trig_lo))
+    {
+        hall_buttons[key].curr_out = 0U;
     }
 
-    switch (hall_state[key])
+    hall_pressed[key] = hall_buttons[key].curr_out;
+
+    if ((hall_buttons[key].prev_out == 0U) && (hall_buttons[key].curr_out == 1U))
     {
-        case HALL_IDLE:
-            if ((hall_velocity_1[key].armed == 0U) &&
-                (prev_pos < HALL_DEADZONE_EXIT_ON) &&
-                (pos >= HALL_DEADZONE_EXIT_ON) &&
-                (pos < HALL_TRG1_ON))
-            {
-                hall_velocity_window_arm(&hall_velocity_1[key], raw, pos, sample_count);
-            }
-
-            if (pos > HALL_TRG1_ON)
-            {
-                if (hall_velocity_1[key].armed != 0U)
-                {
-                    hall_velocity_window_commit(&hall_velocity_1[key],
-                                                raw,
-                                                sample_count,
-                                                HALL_VEL1_FASTEST_SAMPLES,
-                                                HALL_VEL1_SLOWEST_SAMPLES);
-                }
-                else
-                {
-                    hall_velocity_window_commit_fallback(&hall_velocity_1[key],
-                                                         raw,
-                                                         HALL_VEL1_FALLBACK_MIDI);
-                }
-
-                hall_velocity[key] = hall_velocity_1[key].velocity_latched;
-                hall_velocity_valid[key] = hall_velocity_1[key].ready;
-                hall_pressed[key] = 1U;
-                hall_note_on_pending[key] = 1U;
-                hall_state[key] = HALL_PRESSED_T1;
-            }
-        break;
-
-        case HALL_PRESSED_T1:
-            if ((hall_velocity_2[key].armed == 0U) &&
-                (prev_pos < HALL_VEL2_ARM_ON) &&
-                (pos >= HALL_VEL2_ARM_ON) &&
-                (pos < HALL_TRG2_ON))
-            {
-                hall_velocity_window_arm(&hall_velocity_2[key], raw, pos, sample_count);
-            }
-
-            if (pos > HALL_TRG2_ON)
-            {
-                if (hall_velocity_2[key].armed != 0U)
-                {
-                    hall_velocity_window_commit(&hall_velocity_2[key],
-                                                raw,
-                                                sample_count,
-                                                HALL_VEL2_FASTEST_SAMPLES,
-                                                HALL_VEL2_SLOWEST_SAMPLES);
-                }
-                else
-                {
-                    hall_velocity_window_commit_fallback(&hall_velocity_2[key],
-                                                         raw,
-                                                         HALL_VEL2_FALLBACK_MIDI);
-                }
-
-                hall_state[key] = HALL_PRESSED_T2;
-            }
-            else if (pos < HALL_TRG1_OFF)
-            {
-                hall_pressed[key] = 0U;
-                hall_velocity_valid[key] = 0U;
-                hall_note_off_pending[key] = 1U;
-                hall_velocity_windows_reset_key(key);
-                hall_state[key] = HALL_IDLE;
-            }
-        break;
-
-        case HALL_PRESSED_T2:
-            if (pos < HALL_TRG2_OFF)
-            {
-                hall_pressed[key] = 0U;
-                hall_velocity_valid[key] = 0U;
-                hall_note_off_pending[key] = 1U;
-                hall_velocity_windows_reset_key(key);
-                hall_state[key] = HALL_IDLE_T2;
-            }
-        break;
-
-        case HALL_IDLE_T2:
-            if ((hall_velocity_2[key].armed == 0U) &&
-                (prev_pos < HALL_VEL2_ARM_ON) &&
-                (pos >= HALL_VEL2_ARM_ON) &&
-                (pos < HALL_TRG2_ON))
-            {
-                hall_velocity_window_arm(&hall_velocity_2[key], raw, pos, sample_count);
-            }
-
-            if (pos > HALL_TRG2_ON)
-            {
-                if (hall_velocity_2[key].armed != 0U)
-                {
-                    hall_velocity_window_commit(&hall_velocity_2[key],
-                                                raw,
-                                                sample_count,
-                                                HALL_VEL2_FASTEST_SAMPLES,
-                                                HALL_VEL2_SLOWEST_SAMPLES);
-                }
-                else
-                {
-                    hall_velocity_window_commit_fallback(&hall_velocity_2[key],
-                                                         raw,
-                                                         HALL_VEL2_FALLBACK_MIDI);
-                }
-
-                /*
-                 * hall_velocity_valid est un état latché durable pour l'appui
-                 * actuellement actif : on republie donc la vélocité retenue à
-                 * chaque nouveau note-on, y compris sur le retrigger profond.
-                 */
-                hall_velocity[key] = hall_velocity_2[key].velocity_latched;
-                hall_velocity_valid[key] = hall_velocity_2[key].ready;
-                hall_pressed[key] = 1U;
-                hall_note_on_pending[key] = 1U;
-                hall_state[key] = HALL_PRESSED_T2;
-            }
-            else if (pos < HALL_TRG1_OFF)
-            {
-                hall_velocity_windows_reset_key(key);
-                hall_state[key] = HALL_IDLE;
-            }
-        break;
-
-        default:
-            hall_velocity_windows_reset_key(key);
-            hall_state[key] = HALL_IDLE;
-        break;
+        hall_note_on_pending[key] = 1U;
     }
-
-    hall_prev_position[key] = pos;
+    else if ((hall_buttons[key].prev_out != 0U) && (hall_buttons[key].curr_out == 0U))
+    {
+        hall_note_off_pending[key] = 1U;
+        hall_velocity_valid[key] = 0U;
+        hall_buttons[key].dv_peak = 0U;
+        hall_buttons[key].sum_dv = 0U;
+        hall_buttons[key].time_count = 0U;
+        hall_buttons[key].time_active = 0U;
+    }
 }
-
-/*
-===============================================================================
-Compatibilité superloop : plus aucun recalcul Hall fin ici
-===============================================================================
-*/
 
 void hall_engine_process(void)
 {
 }
-
-/*
-===============================================================================
-Accesseurs
-===============================================================================
-*/
 
 uint16_t hall_engine_get_raw(uint8_t key)
 {
@@ -622,6 +605,26 @@ uint16_t hall_engine_get_max(uint8_t key)
     }
 
     return hall_max[key];
+}
+
+uint16_t hall_engine_get_trig_lo(uint8_t key)
+{
+    if (key >= HALL_KEY_COUNT)
+    {
+        return 0U;
+    }
+
+    return hall_trig_lo[key];
+}
+
+uint16_t hall_engine_get_trig_hi(uint8_t key)
+{
+    if (key >= HALL_KEY_COUNT)
+    {
+        return 0U;
+    }
+
+    return hall_trig_hi[key];
 }
 
 uint8_t hall_engine_get_velocity(uint8_t key)
@@ -684,6 +687,36 @@ uint8_t hall_engine_consume_note_off(uint8_t key)
     return hall_consume_flag(&hall_note_off_pending[key]);
 }
 
+void hall_set_velocity_mode(uint8_t mode)
+{
+    if (mode < (uint8_t)HALL_VEL_MODE_COUNT)
+    {
+        const uint32_t primask = hall_enter_critical();
+        g_velocity_mode = (hall_velocity_mode_t)mode;
+        hall_exit_critical(primask);
+    }
+}
+
+void hall_set_velocity_curve(uint8_t curve)
+{
+    if (curve < (uint8_t)HALL_VEL_CURVE_COUNT)
+    {
+        const uint32_t primask = hall_enter_critical();
+        g_velocity_curve = (hall_velocity_curve_t)curve;
+        hall_exit_critical(primask);
+    }
+}
+
+uint8_t hall_get_velocity_mode(void)
+{
+    return (uint8_t)g_velocity_mode;
+}
+
+uint8_t hall_get_velocity_curve(void)
+{
+    return (uint8_t)g_velocity_curve;
+}
+
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
 {
     const uint32_t primask = hall_enter_critical();
@@ -697,28 +730,28 @@ void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
     debug->raw_current = hall_raw_current[key];
     debug->min_current = hall_min[key];
     debug->max_current = hall_max[key];
+    debug->range_current = (hall_max[key] > hall_min[key]) ?
+                           (uint16_t)(hall_max[key] - hall_min[key]) : 0U;
     debug->position_percent = hall_position[key];
-    debug->velocity1_arm_threshold = HALL_DEADZONE_EXIT_ON;
-    debug->trigger1_threshold = HALL_TRG1_ON;
-    debug->velocity2_arm_threshold = HALL_VEL2_ARM_ON;
-    debug->trigger2_threshold = HALL_TRG2_ON;
-    debug->velocity1_raw_latched = hall_velocity_1[key].raw_latched;
-    debug->velocity2_raw_latched = hall_velocity_2[key].raw_latched;
-    debug->velocity1_elapsed_samples = hall_velocity_1[key].elapsed_samples;
-    debug->velocity2_elapsed_samples = hall_velocity_2[key].elapsed_samples;
+    debug->trig_lo = hall_trig_lo[key];
+    debug->trig_hi = hall_trig_hi[key];
+    debug->prev_raw = hall_buttons[key].prev_raw;
+    debug->dv_peak = hall_buttons[key].dv_peak;
+    debug->sum_dv = hall_buttons[key].sum_dv;
+    debug->vel_start_th = hall_buttons[key].vel_start_th;
+    debug->vel_end_th = hall_buttons[key].vel_end_th;
+    debug->time_count = hall_buttons[key].time_count;
     debug->sample_count = hall_sample_count_current[key];
     debug->sample_period_us = HALL_KEY_SAMPLE_PERIOD_US;
-    debug->velocity_latched = hall_velocity_1[key].velocity_latched;
-    debug->velocity2_latched = hall_velocity_2[key].velocity_latched;
-    debug->velocity_ready = hall_velocity_1[key].ready;
-    debug->velocity2_ready = hall_velocity_2[key].ready;
-    debug->velocity1_armed = hall_velocity_1[key].armed;
-    debug->velocity2_armed = hall_velocity_2[key].armed;
-    debug->velocity1_fallback = hall_velocity_1[key].fallback;
-    debug->velocity2_fallback = hall_velocity_2[key].fallback;
+    debug->range_valid = hall_range_is_valid(hall_min[key], hall_max[key]);
+    debug->state = hall_buttons[key].curr_out;
+    debug->velocity_latched = hall_buttons[key].vel_latched;
+    debug->velocity_valid = hall_velocity_valid[key];
+    debug->time_active = hall_buttons[key].time_active;
+    debug->velocity_mode = (uint8_t)g_velocity_mode;
+    debug->velocity_curve = (uint8_t)g_velocity_curve;
     debug->note_on_pending = hall_note_on_pending[key];
     debug->note_off_pending = hall_note_off_pending[key];
-    debug->state = (uint8_t)hall_state[key];
 
     hall_exit_critical(primask);
 }
