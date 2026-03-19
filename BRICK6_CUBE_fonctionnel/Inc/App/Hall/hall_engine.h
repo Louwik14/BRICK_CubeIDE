@@ -4,33 +4,52 @@
 #include <stdint.h>
 #include "App/Hall/hall_adc.h"
 
+typedef enum
+{
+    HALL_VEL_MODE_DV_PEAK = 0,
+    HALL_VEL_MODE_TIME    = 1,
+    HALL_VEL_MODE_ENERGY  = 2,
+
+    HALL_VEL_MODE_COUNT
+} hall_velocity_mode_t;
+
+typedef enum
+{
+    HALL_VEL_CURVE_LINEAR = 0,
+    HALL_VEL_CURVE_SOFT   = 1,
+    HALL_VEL_CURVE_HARD   = 2,
+    HALL_VEL_CURVE_LOG    = 3,
+    HALL_VEL_CURVE_EXP    = 4,
+
+    HALL_VEL_CURVE_COUNT
+} hall_velocity_curve_t;
+
 typedef struct
 {
     uint16_t raw_current;
     uint16_t min_current;
     uint16_t max_current;
+    uint16_t range_current;
     uint16_t position_percent;
-    uint16_t velocity1_arm_threshold;
-    uint16_t trigger1_threshold;
-    uint16_t velocity2_arm_threshold;
-    uint16_t trigger2_threshold;
-    uint16_t velocity1_raw_latched;
-    uint16_t velocity2_raw_latched;
-    uint32_t velocity1_elapsed_samples;
-    uint32_t velocity2_elapsed_samples;
+    uint16_t trig_lo;
+    uint16_t trig_hi;
+    uint16_t prev_raw;
+    uint16_t dv_peak;
+    uint16_t sum_dv;
+    uint16_t vel_start_th;
+    uint16_t vel_end_th;
+    uint16_t time_count;
     uint32_t sample_count;
     uint32_t sample_period_us;
-    uint8_t velocity_latched;
-    uint8_t velocity2_latched;
-    uint8_t velocity_ready;
-    uint8_t velocity2_ready;
-    uint8_t velocity1_armed;
-    uint8_t velocity2_armed;
-    uint8_t velocity1_fallback;
-    uint8_t velocity2_fallback;
-    uint8_t note_on_pending;
-    uint8_t note_off_pending;
-    uint8_t state;
+    uint8_t  range_valid;
+    uint8_t  state;
+    uint8_t  velocity_latched;
+    uint8_t  velocity_valid;
+    uint8_t  time_active;
+    uint8_t  velocity_mode;
+    uint8_t  velocity_curve;
+    uint8_t  note_on_pending;
+    uint8_t  note_off_pending;
 } hall_velocity_debug_t;
 
 void hall_engine_init(void);
@@ -46,13 +65,19 @@ uint16_t hall_engine_get_value(uint8_t key);
 uint8_t hall_engine_is_pressed(uint8_t key);
 uint16_t hall_engine_get_min(uint8_t key);
 uint16_t hall_engine_get_max(uint8_t key);
+uint16_t hall_engine_get_trig_lo(uint8_t key);
+uint16_t hall_engine_get_trig_hi(uint8_t key);
 uint8_t hall_engine_get_velocity(uint8_t key);
-/* état durable : 1 tant que l'appui courant possède une vélocité valide */
 uint8_t hall_engine_get_velocity_valid(uint8_t key);
 uint16_t hall_engine_get_velocity_position(uint8_t key);
 uint32_t hall_engine_get_sample_count(uint8_t key);
 uint8_t hall_engine_consume_note_on(uint8_t key);
 uint8_t hall_engine_consume_note_off(uint8_t key);
 void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug);
+
+void hall_set_velocity_mode(uint8_t mode);
+void hall_set_velocity_curve(uint8_t curve);
+uint8_t hall_get_velocity_mode(void);
+uint8_t hall_get_velocity_curve(void);
 
 #endif /* APP_HALL_HALL_ENGINE_H */
