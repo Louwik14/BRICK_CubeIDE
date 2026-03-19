@@ -21,7 +21,8 @@
 
 #include "encoders_hw.h"
 
-#include "stm32h7xx.h"
+#include "main.h"
+#include "tim.h"
 
 typedef struct
 {
@@ -39,7 +40,7 @@ static const encoder_hw_pin_t enc_hw_pins[ENC_COUNT] = {
 };
 
 static uint8_t enc_prev_state[ENC_COUNT];
-static int8_t enc_raw_delta[ENC_COUNT];
+static volatile int8_t enc_raw_delta[ENC_COUNT];
 
 static const int8_t quad_table[16] = {
      0, -1, +1,  0,
@@ -108,6 +109,39 @@ void encoders_hw_init(void)
 }
 
 /**
+ * @brief Point d'entrée encoders_fast_poll_init.
+ *
+ * Rôle:
+ * - Démarrer le timer dédié au polling rapide des encodeurs à 5 kHz.
+ *
+ *
+ * Contexte d'appel:
+ * - init uniquement.
+ */
+void encoders_fast_poll_init(void)
+{
+    if (HAL_TIM_Base_Start_IT(&htim7) != HAL_OK)
+    {
+        Error_Handler();
+    }
+}
+
+/**
+ * @brief Point d'entrée encoders_fast_poll_irq.
+ *
+ * Rôle:
+ * - Exécuter la capture matérielle minimale des encodeurs depuis l'IRQ timer dédiée.
+ *
+ *
+ * Contexte d'appel:
+ * - IRQ timer encodeurs uniquement, chemin ultra court.
+ */
+void encoders_fast_poll_irq(void)
+{
+    encoders_hw_read();
+}
+
+/**
  * @brief Point d'entrée encoders_hw_read.
  *
  * Rôle:
@@ -163,7 +197,12 @@ int8_t encoders_hw_get_delta(uint8_t encoder)
         return 0;
     }
 
-    const int8_t delta = enc_raw_delta[encoder];
+    int8_t delta;
+
+    __disable_irq();
+    delta = enc_raw_delta[encoder];
     enc_raw_delta[encoder] = 0;
+    __enable_irq();
+
     return delta;
 }
