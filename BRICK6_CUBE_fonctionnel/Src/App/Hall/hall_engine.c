@@ -26,20 +26,22 @@ Course = (raw - min) / (max - min)
 /* hystérésis pour éviter les oscillations autour des seuils */
 #define HALL_HYST_PERCENT              6U
 
-/* cadence observée: TIM6 = 200 us, 1 échantillon jeté, 8 positions mux */
-#define HALL_KEY_SAMPLE_PERIOD_US   3200U
+/* cadence observée: TIM6 = 50 us (20 kHz), 1 échantillon jeté, 8 positions mux */
+#define HALL_KEY_SAMPLE_PERIOD_US   800U
+
+#define HALL_US_TO_KEY_SAMPLES(us_) (((us_) + HALL_KEY_SAMPLE_PERIOD_US - 1U) / HALL_KEY_SAMPLE_PERIOD_US)
 
 /* fenêtre VEL1 : sortie de deadzone -> TRG1 */
-#define HALL_VEL1_ARM_PERCENT        HALL_DEADZONE_PERCENT
-#define HALL_VEL1_TIMEOUT_SAMPLES    12U
-#define HALL_VEL1_FASTEST_SAMPLES     1U
-#define HALL_VEL1_SLOWEST_SAMPLES     6U
+#define HALL_VEL1_ARM_PERCENT         HALL_DEADZONE_PERCENT
+#define HALL_VEL1_TIMEOUT_SAMPLES     HALL_US_TO_KEY_SAMPLES(38400U)
+#define HALL_VEL1_FASTEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(3200U)
+#define HALL_VEL1_SLOWEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(19200U)
 
 /* fenêtre VEL2 : seuil dédié avant TRG2 -> TRG2 */
-#define HALL_VEL2_ARM_PERCENT        52U
-#define HALL_VEL2_TIMEOUT_SAMPLES    10U
-#define HALL_VEL2_FASTEST_SAMPLES     1U
-#define HALL_VEL2_SLOWEST_SAMPLES     8U
+#define HALL_VEL2_ARM_PERCENT         52U
+#define HALL_VEL2_TIMEOUT_SAMPLES     HALL_US_TO_KEY_SAMPLES(32000U)
+#define HALL_VEL2_FASTEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(3200U)
+#define HALL_VEL2_SLOWEST_SAMPLES     HALL_US_TO_KEY_SAMPLES(25600U)
 
 /* fallback explicite si une fenêtre n'a pas pu être armée proprement */
 #define HALL_VEL1_FALLBACK_MIDI      96U

@@ -16,7 +16,6 @@ static volatile uint32_t hall_sample_count[HALL_KEY_COUNT];
 static volatile uint8_t hall_mux_index;
 static volatile uint8_t hall_discard_next;
 
-static volatile uint8_t hall_pair_ready;
 
 static void hall_mux_select(uint8_t index)
 {
@@ -68,7 +67,6 @@ void hall_adc_init(void)
     adc1_dma = 0U;
     adc2_dma = 0U;
 
-    hall_pair_ready = 0U;
 
     hall_mux_select(hall_mux_index);
 
@@ -149,13 +147,5 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
         return;
     }
 
-    if (hall_pair_ready != 0U)
-    {
-        hall_pair_ready = 0U;
-        hall_adc_process_pair();
-    }
-    else
-    {
-        hall_pair_ready = 1U;
-    }
+    hall_adc_process_pair();
 }
