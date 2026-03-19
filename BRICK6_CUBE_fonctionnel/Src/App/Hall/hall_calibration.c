@@ -166,8 +166,12 @@ uint8_t hall_calibration_load(void)
     {
         g_cal_blob.min[i] = stored->min[i];
         g_cal_blob.max[i] = stored->max[i];
+        g_press_count[i] = 0U;
+        g_key_done[i] = 1U;
+        g_key_state[i] = KEY_STATE_RELEASED;
     }
 
+    g_calibration_done = 1U;
     hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
 
     return 1U;
