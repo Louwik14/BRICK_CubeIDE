@@ -103,6 +103,7 @@ void encoders_init(void)
     }
 
     encoders_hw_init();
+    encoders_fast_poll_init();
 }
 
 /**
@@ -119,8 +120,6 @@ void encoders_init(void)
 void encoders_update(uint32_t dt_ms)
 {
     (void)dt_ms;
-
-    encoders_hw_read();
 
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
     {

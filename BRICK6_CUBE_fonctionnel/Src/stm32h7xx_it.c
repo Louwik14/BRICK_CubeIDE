@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "cpu_load.h"
 #include "usart.h"
+#include "encoders_hw.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -80,6 +81,7 @@ extern SAI_HandleTypeDef hsai_BlockA2;
 extern SAI_HandleTypeDef hsai_BlockB2;
 extern SD_HandleTypeDef hsd1;
 extern DMA_HandleTypeDef hdma_tim2_ch4;
+extern TIM_HandleTypeDef htim7;
 /* USER CODE BEGIN EV */
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
@@ -313,6 +315,24 @@ void SDMMC1_IRQHandler(void)
   /* USER CODE BEGIN SDMMC1_IRQn 1 */
 
   /* USER CODE END SDMMC1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM7 global interrupt.
+  */
+void TIM7_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM7_IRQn 0 */
+  if ((__HAL_TIM_GET_FLAG(&htim7, TIM_FLAG_UPDATE) != RESET) &&
+      (__HAL_TIM_GET_IT_SOURCE(&htim7, TIM_IT_UPDATE) != RESET))
+  {
+    __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
+    encoders_fast_poll_irq();
+  }
+  /* USER CODE END TIM7_IRQn 0 */
+  /* USER CODE BEGIN TIM7_IRQn 1 */
+
+  /* USER CODE END TIM7_IRQn 1 */
 }
 
 /**
