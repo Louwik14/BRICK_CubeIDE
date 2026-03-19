@@ -115,7 +115,7 @@ struct LFO
 
   // Clean-room LFO delay ramp table (0B30_LfoDelayRampTbl).
   // 8 entries, indexed by (pot >> 4). Larger value = faster ramp.
-  static constexpr uint16_t kLfoRampTable[8] = {
+  inline static constexpr uint16_t kLfoRampTable[8] = {
     0xFFFF, // pot 0-15:   instant ramp
     0x0419, // pot 16-31:  fast
     0x020C, // pot 32-47

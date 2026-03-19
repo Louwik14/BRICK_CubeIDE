@@ -21,6 +21,9 @@
 
 #include "pages/ui_page_main.h"
 
+#include <stdio.h>
+
+#include "cpu_load.h"
 #include "drv_display.h"
 #include "ui_param.h"
 
@@ -95,10 +98,40 @@ void ui_page_main_tick(void)
  */
 void ui_page_main_render(void)
 {
+    char line0[24];
+    char line1[24];
+
     drv_display_draw_text(0U, 0U, "BRICK6 MAIN");
-    drv_display_draw_text(0U, 16U, "BTN1: PARAM TEST");
-    drv_display_draw_text(0U, 32U, "BTN2: MAIN PAGE");
-    drv_display_draw_text(0U, 48U, "BTN3: HALL DEBUG");
+
+    if (cpu_load_is_valid() != 0U)
+    {
+        const uint32_t cpu_pm = cpu_load_get_permille();
+        const uint32_t cpu_max_pm = cpu_load_get_max();
+
+        (void)snprintf(
+            line0,
+            sizeof(line0),
+            "CPU %lu.%01lu%%",
+            (unsigned long)(cpu_pm / 10U),
+            (unsigned long)(cpu_pm % 10U));
+
+        (void)snprintf(
+            line1,
+            sizeof(line1),
+            "MAX %lu.%01lu%%",
+            (unsigned long)(cpu_max_pm / 10U),
+            (unsigned long)(cpu_max_pm % 10U));
+    }
+    else
+    {
+        (void)snprintf(line0, sizeof(line0), "CPU N/A");
+        (void)snprintf(line1, sizeof(line1), "MAX N/A");
+    }
+
+    drv_display_draw_text(0U, 16U, line0);
+    drv_display_draw_text(0U, 28U, line1);
+    drv_display_draw_text(0U, 44U, "BTN1: PARAM TEST");
+    drv_display_draw_text(0U, 54U, "BTN3: HALL DEBUG");
 }
 
 const ui_page_t g_ui_page_main = {

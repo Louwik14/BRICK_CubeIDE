@@ -2,6 +2,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h \
  ../Inc/Audio/sd_multitrack_recorder.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h \
  ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
@@ -66,13 +67,14 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_pool.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h \
- ../Inc/Sampler/sample_pool.h ../Inc/Sampler/voice_manager.h \
- ../Inc/Audio/live_recorder.h ../Inc/Audio/live_recorder_config.h \
- ../Inc/Audio/recorder_transport.h ../Inc/Storage/memory_layout.h \
- ../Inc/App/Hall/hall_loop.h
+ ../Inc/Audio/juno_synth.h ../Inc/Sampler/sample_pool.h \
+ ../Inc/Sampler/voice_manager.h ../Inc/Audio/live_recorder.h \
+ ../Inc/Audio/live_recorder_config.h ../Inc/Audio/recorder_transport.h \
+ ../Inc/Storage/memory_layout.h ../Inc/App/Hall/hall_loop.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h:
 ../Inc/sai.h:
 ../Inc/main.h:
@@ -139,6 +141,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_pool.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h:
+../Inc/Audio/juno_synth.h:
 ../Inc/Sampler/sample_pool.h:
 ../Inc/Sampler/voice_manager.h:
 ../Inc/Audio/live_recorder.h:
