@@ -1,6 +1,0 @@
-../Src/App/Hall/hall_adc.c:63:6:hall_adc_init	24	static
-../Src/App/Hall/hall_adc.c:98:10:hall_adc_get_raw	0	static
-../Src/App/Hall/hall_adc.c:108:9:hall_adc_get_mux_index	0	static
-../Src/App/Hall/hall_adc.c:113:9:hall_adc_consume_raw	8	static
-../Src/App/Hall/hall_adc.c:130:10:hall_adc_get_sample_count	0	static
-../Src/App/Hall/hall_adc.c:140:6:HAL_ADC_ConvCpltCallback	16	static

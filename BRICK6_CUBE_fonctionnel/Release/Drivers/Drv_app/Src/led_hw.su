@@ -1,4 +1,0 @@
-../Drivers/Drv_app/Src/led_hw.c:100:6:HAL_TIM_PWM_PulseFinishedCallback	8	static
-../Drivers/Drv_app/Src/led_hw.c:119:6:led_hw_init	8	static
-../Drivers/Drv_app/Src/led_hw.c:138:6:led_hw_busy	0	static
-../Drivers/Drv_app/Src/led_hw.c:155:6:led_hw_send	40	static,ignoring_inline_asm
