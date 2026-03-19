@@ -7,30 +7,29 @@
 typedef struct
 {
     uint16_t raw_current;
-    uint16_t min_current;
-    uint16_t max_current;
+    uint16_t min_used;
+    uint16_t max_used;
     uint16_t position_percent;
-    uint16_t velocity1_arm_threshold;
-    uint16_t trigger1_threshold;
-    uint16_t velocity2_arm_threshold;
-    uint16_t trigger2_threshold;
-    uint16_t velocity1_raw_latched;
-    uint16_t velocity2_raw_latched;
-    uint32_t velocity1_elapsed_samples;
-    uint32_t velocity2_elapsed_samples;
+    uint16_t value;
+    uint16_t time_start_threshold;
+    uint16_t time_end_threshold;
+    uint16_t trigger_low_threshold;
+    uint16_t trigger_high_threshold;
+    uint16_t dv_peak;
+    uint16_t sum_dv;
+    uint32_t time_samples;
     uint32_t sample_count;
     uint32_t sample_period_us;
     uint8_t velocity_latched;
-    uint8_t velocity2_latched;
-    uint8_t velocity_ready;
-    uint8_t velocity2_ready;
-    uint8_t velocity1_armed;
-    uint8_t velocity2_armed;
-    uint8_t velocity1_fallback;
-    uint8_t velocity2_fallback;
+    uint8_t velocity_valid;
+    uint8_t pressed;
+    uint8_t time_active;
+    uint8_t range_valid;
+    uint8_t calibration_valid;
     uint8_t note_on_pending;
     uint8_t note_off_pending;
-    uint8_t state;
+    uint8_t velocity_mode;
+    uint8_t velocity_curve;
 } hall_velocity_debug_t;
 
 void hall_engine_init(void);
@@ -41,6 +40,7 @@ void hall_engine_set_calibration(const uint16_t *min_values,
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count);
 void hall_engine_process(void);
 
+uint8_t hall_engine_has_calibration(void);
 uint16_t hall_engine_get_raw(uint8_t key);
 uint16_t hall_engine_get_value(uint8_t key);
 uint8_t hall_engine_is_pressed(uint8_t key);

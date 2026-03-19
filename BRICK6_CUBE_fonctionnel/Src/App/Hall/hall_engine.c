@@ -10,8 +10,8 @@ Port logique Hall ChibiOS -> CubeIDE
 - Le callback ADC Hall reste le point d'entrée critique sample par sample.
 - La logique métier portée ici reprend la philosophie du driver ChibiOS:
   * runtime par capteur,
-  * min/max dynamiques,
-  * seuils RAW dynamiques avec Schmitt,
+  * seuils RAW fixes issus d'une calibration stockée,
+  * Schmitt ON/OFF,
   * vélocité calculée pendant l'attaque,
   * flags NOTE ON / NOTE OFF consommables hors IRQ.
 */
@@ -80,6 +80,7 @@ static volatile uint8_t hall_note_on_pending[HALL_KEY_COUNT];
 static volatile uint8_t hall_note_off_pending[HALL_KEY_COUNT];
 
 static volatile hall_button_t hall_button[HALL_KEY_COUNT];
+static volatile uint8_t hall_calibration_valid = 0U;
 
 static volatile hall_velocity_mode_t g_velocity_mode = HALL_VEL_MODE_TIME;
 static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_SOFT;
@@ -300,14 +301,41 @@ static uint8_t hall_velocity_compute(const volatile hall_button_t *button,
     return hall_apply_curve(raw_velocity, g_velocity_curve);
 }
 
-static void hall_button_reset_runtime(volatile hall_button_t *button)
+static void hall_button_clear_calibration(volatile hall_button_t *button)
+{
+    if (button == 0)
+    {
+        case HALL_VEL_MODE_DV_PEAK:
+            raw_velocity = hall_velocity_from_dv(range, button->dv_peak);
+        break;
+
+        case HALL_VEL_MODE_ENERGY:
+            raw_velocity = hall_velocity_from_energy(range, button->sum_dv);
+        break;
+
+        case HALL_VEL_MODE_TIME:
+        default:
+            raw_velocity = hall_velocity_from_time(button->time_count);
+        break;
+    }
+
+    button->min = 0U;
+    button->max = 0U;
+    button->trig_lo = 0U;
+    button->trig_hi = 0U;
+    button->vel_start_th = 0U;
+    button->vel_end_th = 0U;
+    button->range_valid = 0U;
+}
+
+static void hall_button_reset_runtime(volatile hall_button_t *button, uint16_t raw)
 {
     if (button == 0)
     {
         return;
     }
 
-    button->prev_raw = 0U;
+    button->prev_raw = raw;
     button->dv_peak = 0U;
     button->sum_dv = 0U;
     button->time_count = 0U;
@@ -315,7 +343,6 @@ static void hall_button_reset_runtime(volatile hall_button_t *button)
     button->curr_out = 0U;
     button->time_active = 0U;
     button->vel_latched = 0U;
-    button->range_valid = 0U;
 }
 
 static void hall_key_reset_outputs(uint8_t key)
@@ -385,20 +412,50 @@ static void hall_button_update_thresholds(volatile hall_button_t *button)
     button->range_valid = 1U;
 }
 
+    return (((uint16_t)(button->max - button->min)) >= HALL_MIN_RANGE) ? 1U : 0U;
+}
+
+static void hall_button_update_thresholds(volatile hall_button_t *button)
+{
+    hall_calibration_valid = 0U;
+
+    range = (uint32_t)(button->max - button->min);
+    half_hyst = HALL_HYST_PPM / 2U;
+    lo_ppm = HALL_THRESHOLD_PPM;
+    hi_ppm = HALL_THRESHOLD_PPM;
+
+    if (lo_ppm > half_hyst)
+    {
+        lo_ppm -= half_hyst;
+    }
+    else
+    {
+        lo_ppm = 0U;
+    }
+
+    hi_ppm += half_hyst;
+    if (hi_ppm > 1000U)
+    {
+        hi_ppm = 1000U;
+    }
+
+    button->trig_lo = (uint16_t)(button->min + ((range * lo_ppm) / 1000U));
+    button->trig_hi = (uint16_t)(button->min + ((range * hi_ppm) / 1000U));
+    button->vel_start_th = (uint16_t)(button->min + ((range * HALL_VEL_TIME_START_PPM) / 1000U));
+    button->vel_end_th = (HALL_VEL_TIME_END_PPM == 0U)
+                       ? button->trig_hi
+                       : (uint16_t)(button->min + ((range * HALL_VEL_TIME_END_PPM) / 1000U));
+    button->range_valid = 1U;
+}
+
 void hall_engine_init(void)
 {
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
-        hall_button[i].min = 0xFFFFU;
-        hall_button[i].max = 0U;
-        hall_button[i].trig_lo = 0U;
-        hall_button[i].trig_hi = 0U;
-        hall_button[i].vel_start_th = 0U;
-        hall_button[i].vel_end_th = 0U;
-
+        hall_button_clear_calibration(&hall_button[i]);
         hall_raw_current[i] = 0U;
         hall_sample_count_current[i] = 0U;
-        hall_button_reset_runtime(&hall_button[i]);
+        hall_button_reset_runtime(&hall_button[i], 0U);
         hall_key_reset_outputs(i);
     }
 }
@@ -406,6 +463,8 @@ void hall_engine_init(void)
 void hall_engine_set_calibration(const uint16_t *min_values,
                                  const uint16_t *max_values)
 {
+    uint8_t valid = 1U;
+
     if ((min_values == 0) || (max_values == 0))
     {
         return;
@@ -416,9 +475,21 @@ void hall_engine_set_calibration(const uint16_t *min_values,
         hall_button[i].min = min_values[i];
         hall_button[i].max = max_values[i];
         hall_button_update_thresholds(&hall_button[i]);
-        hall_button_reset_runtime(&hall_button[i]);
+        hall_button_reset_runtime(&hall_button[i], hall_raw_current[i]);
         hall_key_reset_outputs(i);
+
+        if (hall_button[i].max <= hall_button[i].min)
+        {
+            valid = 0U;
+        }
     }
+
+    hall_calibration_valid = valid;
+}
+
+uint8_t hall_engine_has_calibration(void)
+{
+    return hall_calibration_valid;
 }
 
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count)
@@ -440,21 +511,16 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     hall_raw_current[key] = raw;
     hall_sample_count_current[key] = sample_count;
 
-    if (raw < button->min)
+    if (hall_calibration_valid == 0U)
     {
-        button->min = raw;
+        hall_button_reset_runtime(button, raw);
+        hall_key_reset_outputs(key);
+        return;
     }
-    if (raw > button->max)
-    {
-        button->max = raw;
-    }
-
-    hall_button_update_thresholds(button);
 
     if (button->range_valid == 0U)
     {
-        hall_button_reset_runtime(button);
-        button->prev_raw = raw;
+        hall_button_reset_runtime(button, raw);
         hall_key_reset_outputs(key);
         return;
     }
@@ -582,7 +648,7 @@ uint8_t hall_engine_is_pressed(uint8_t key)
 
 uint16_t hall_engine_get_min(uint8_t key)
 {
-    if (key >= HALL_KEY_COUNT)
+    if ((key >= HALL_KEY_COUNT) || (hall_calibration_valid == 0U))
     {
         return 0U;
     }
@@ -592,7 +658,7 @@ uint16_t hall_engine_get_min(uint8_t key)
 
 uint16_t hall_engine_get_max(uint8_t key)
 {
-    if (key >= HALL_KEY_COUNT)
+    if ((key >= HALL_KEY_COUNT) || (hall_calibration_valid == 0U))
     {
         return 0U;
     }
@@ -674,30 +740,29 @@ void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug)
     button = &hall_button[key];
 
     debug->raw_current = hall_raw_current[key];
-    debug->min_current = button->min;
-    debug->max_current = button->max;
+    debug->min_used = (hall_calibration_valid != 0U) ? button->min : 0U;
+    debug->max_used = (hall_calibration_valid != 0U) ? button->max : 0U;
     debug->position_percent = hall_position[key];
-    debug->velocity1_arm_threshold = button->vel_start_th;
-    debug->trigger1_threshold = button->vel_end_th;
-    debug->velocity2_arm_threshold = button->trig_lo;
-    debug->trigger2_threshold = button->trig_hi;
-    debug->velocity1_raw_latched = button->dv_peak;
-    debug->velocity2_raw_latched = button->sum_dv;
-    debug->velocity1_elapsed_samples = button->time_count;
-    debug->velocity2_elapsed_samples = hall_sample_count_current[key];
+    debug->value = hall_value[key];
+    debug->time_start_threshold = button->vel_start_th;
+    debug->time_end_threshold = button->vel_end_th;
+    debug->trigger_low_threshold = button->trig_lo;
+    debug->trigger_high_threshold = button->trig_hi;
+    debug->dv_peak = button->dv_peak;
+    debug->sum_dv = button->sum_dv;
+    debug->time_samples = button->time_count;
     debug->sample_count = hall_sample_count_current[key];
     debug->sample_period_us = HALL_KEY_SAMPLE_PERIOD_US;
-    debug->velocity_latched = button->vel_latched;
-    debug->velocity2_latched = hall_velocity[key];
-    debug->velocity_ready = hall_velocity_valid[key];
-    debug->velocity2_ready = button->range_valid;
-    debug->velocity1_armed = button->time_active;
-    debug->velocity2_armed = button->curr_out;
-    debug->velocity1_fallback = 0U;
-    debug->velocity2_fallback = 0U;
+    debug->velocity_latched = hall_velocity[key];
+    debug->velocity_valid = hall_velocity_valid[key];
+    debug->pressed = hall_pressed[key];
+    debug->time_active = button->time_active;
+    debug->range_valid = button->range_valid;
+    debug->calibration_valid = hall_calibration_valid;
     debug->note_on_pending = hall_note_on_pending[key];
     debug->note_off_pending = hall_note_off_pending[key];
-    debug->state = button->curr_out;
+    debug->velocity_mode = (uint8_t)g_velocity_mode;
+    debug->velocity_curve = (uint8_t)g_velocity_curve;
 
     hall_exit_critical(primask);
 }
