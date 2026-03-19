@@ -305,7 +305,18 @@ static void hall_button_clear_calibration(volatile hall_button_t *button)
 {
     if (button == 0)
     {
-        return;
+        case HALL_VEL_MODE_DV_PEAK:
+            raw_velocity = hall_velocity_from_dv(range, button->dv_peak);
+        break;
+
+        case HALL_VEL_MODE_ENERGY:
+            raw_velocity = hall_velocity_from_energy(range, button->sum_dv);
+        break;
+
+        case HALL_VEL_MODE_TIME:
+        default:
+            raw_velocity = hall_velocity_from_time(button->time_count);
+        break;
     }
 
     button->min = 0U;
@@ -417,10 +428,79 @@ static uint8_t hall_button_apply_calibration(volatile hall_button_t *button,
     return button->range_valid;
 }
 
-void hall_engine_init(void)
+    return (((uint16_t)(button->max - button->min)) >= HALL_MIN_RANGE) ? 1U : 0U;
+}
+
+static void hall_button_update_thresholds(volatile hall_button_t *button)
+{
+    uint32_t range;
+    uint32_t half_hyst;
+    uint32_t lo_ppm;
+    uint32_t hi_ppm;
+
+    if (hall_button_range_valid(button) == 0U)
+    {
+        button->trig_lo = button->min;
+        button->trig_hi = button->max;
+        button->vel_start_th = button->min;
+        button->vel_end_th = button->max;
+        button->range_valid = 0U;
+        return;
+    }
+
+    range = (uint32_t)(button->max - button->min);
+    half_hyst = HALL_HYST_PPM / 2U;
+    lo_ppm = HALL_THRESHOLD_PPM;
+    hi_ppm = HALL_THRESHOLD_PPM;
+
+    if (lo_ppm > half_hyst)
+    {
+        lo_ppm -= half_hyst;
+    }
+    else
+    {
+        lo_ppm = 0U;
+    }
+
+    hi_ppm += half_hyst;
+    if (hi_ppm > 1000U)
+    {
+        hi_ppm = 1000U;
+    }
+
+    button->trig_lo = (uint16_t)(button->min + ((range * lo_ppm) / 1000U));
+    button->trig_hi = (uint16_t)(button->min + ((range * hi_ppm) / 1000U));
+    button->vel_start_th = (uint16_t)(button->min + ((range * HALL_VEL_TIME_START_PPM) / 1000U));
+    button->vel_end_th = (HALL_VEL_TIME_END_PPM == 0U)
+                       ? button->trig_hi
+                       : (uint16_t)(button->min + ((range * HALL_VEL_TIME_END_PPM) / 1000U));
+    button->range_valid = 1U;
+}
+
+    return (((uint16_t)(button->max - button->min)) >= HALL_MIN_RANGE) ? 1U : 0U;
+}
+
+static void hall_button_update_thresholds(volatile hall_button_t *button)
 {
     hall_calibration_valid = 0U;
 
+    hi_ppm += half_hyst;
+    if (hi_ppm > 1000U)
+    {
+        hi_ppm = 1000U;
+    }
+
+    button->trig_lo = (uint16_t)(button->min + ((range * lo_ppm) / 1000U));
+    button->trig_hi = (uint16_t)(button->min + ((range * hi_ppm) / 1000U));
+    button->vel_start_th = (uint16_t)(button->min + ((range * HALL_VEL_TIME_START_PPM) / 1000U));
+    button->vel_end_th = (HALL_VEL_TIME_END_PPM == 0U)
+                       ? button->trig_hi
+                       : (uint16_t)(button->min + ((range * HALL_VEL_TIME_END_PPM) / 1000U));
+    button->range_valid = 1U;
+}
+
+void hall_engine_init(void)
+{
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         hall_button_clear_calibration(&hall_button[i]);
