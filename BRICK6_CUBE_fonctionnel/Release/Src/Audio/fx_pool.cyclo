@@ -1,0 +1,4 @@
+../Src/Audio/fx_pool.c:54:6:fx_pool_init	1
+../Src/Audio/fx_pool.c:80:5:fx_pool_activate_slot	9
+../Src/Audio/fx_pool.c:145:6:fx_pool_deactivate_slot	3
+../Src/Audio/fx_pool.c:191:12:fx_pool_get_slot	2
