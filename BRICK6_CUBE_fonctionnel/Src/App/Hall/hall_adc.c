@@ -16,6 +16,52 @@ static volatile uint32_t hall_sample_count[HALL_KEY_COUNT];
 static volatile uint8_t hall_mux_index;
 static volatile uint8_t hall_discard_next;
 
+/*
+ * Table de remap physique MUX -> index logique hall.
+ *
+ * Mapping demandé :
+ * hall 0 -> mux 4
+ * hall 1 -> mux 6
+ * hall 2 -> mux 7
+ * hall 3 -> mux 5
+ * hall 4 -> mux 3
+ * hall 5 -> mux 0
+ * hall 6 -> mux 1
+ * hall 7 -> mux 2
+ * hall 8 -> mux 12
+ * hall 9 -> mux 14
+ * hall 10 -> mux 15
+ * hall 11 -> mux 13
+ * hall 12 -> mux 11
+ * hall 13 -> mux 8
+ * hall 14 -> mux 9
+ * hall 15 -> mux 10
+ *
+ * Donc inverse MUX -> hall :
+ * mux 0  -> hall 5
+ * mux 1  -> hall 6
+ * mux 2  -> hall 7
+ * mux 3  -> hall 4
+ * mux 4  -> hall 0
+ * mux 5  -> hall 3
+ * mux 6  -> hall 1
+ * mux 7  -> hall 2
+ * mux 8  -> hall 13
+ * mux 9  -> hall 14
+ * mux 10 -> hall 15
+ * mux 11 -> hall 12
+ * mux 12 -> hall 8
+ * mux 13 -> hall 11
+ * mux 14 -> hall 9
+ * mux 15 -> hall 10
+ */
+static const uint8_t hall_key_from_mux[HALL_KEY_COUNT] =
+{
+    5U,  6U,  7U,  4U,
+    0U,  3U,  1U,  2U,
+    13U, 14U, 15U, 12U,
+    8U,  11U, 9U,  10U
+};
 
 static void hall_mux_select(uint8_t index)
 {
@@ -53,10 +99,13 @@ static void hall_adc_process_pair(void)
     }
 
     {
-        const uint8_t mux = hall_mux_index;
+        const uint8_t mux_a = hall_mux_index;
+        const uint8_t mux_b = (uint8_t)(mux_a + HALL_MUX_COUNT);
+        const uint8_t key_a = hall_key_from_mux[mux_a];
+        const uint8_t key_b = hall_key_from_mux[mux_b];
 
-        hall_adc_publish_sample(mux, v1);
-        hall_adc_publish_sample((uint8_t)(mux + HALL_MUX_COUNT), v2);
+        hall_adc_publish_sample(key_a, v1);
+        hall_adc_publish_sample(key_b, v2);
 
         hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
         hall_mux_select(hall_mux_index);
@@ -72,7 +121,6 @@ void hall_adc_init(void)
 
     adc1_dma = 0U;
     adc2_dma = 0U;
-
 
     hall_mux_select(hall_mux_index);
 

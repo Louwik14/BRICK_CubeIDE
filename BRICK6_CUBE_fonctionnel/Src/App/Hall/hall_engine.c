@@ -2,14 +2,14 @@
 
 #include "stm32h7xx_hal.h"
 
-#define HALL_THRESHOLD_PPM          200U
-#define HALL_HYST_PPM                40U
-#define HALL_MIN_RANGE              500U
+#define HALL_THRESHOLD_PPM          400U
+#define HALL_HYST_PPM                150U
+#define HALL_MIN_RANGE              400U
 
 #define HALL_KEY_SAMPLE_PERIOD_US   800U
 
-#define HALL_VEL_SLOW_SHIFT          12U
-#define HALL_VEL_FAST_SHIFT           2U
+#define HALL_VEL_SLOW_SHIFT          8U
+#define HALL_VEL_FAST_SHIFT           1U
 
 #define HALL_VEL_TIME_START_PPM     150U
 #define HALL_VEL_TIME_END_PPM         0U
@@ -52,8 +52,8 @@ static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
 
 static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
-static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_TIME;
-static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_SOFT;
+static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_DV_PEAK;
+static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_LOG;
 
 static uint32_t hall_enter_critical(void)
 {

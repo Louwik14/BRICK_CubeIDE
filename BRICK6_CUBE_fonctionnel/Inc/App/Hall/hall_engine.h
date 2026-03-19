@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "App/Hall/hall_adc.h"
 
+#define HALL_KEY_COUNT 16U
+
 typedef enum
 {
     HALL_VEL_MODE_DV_PEAK = 0,

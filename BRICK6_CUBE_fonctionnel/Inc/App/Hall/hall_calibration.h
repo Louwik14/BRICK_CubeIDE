@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define HALL_KEY_COUNT 16U
+#include "App/Hall/hall_engine.h"
 
 typedef struct
 {
@@ -14,8 +14,10 @@ typedef struct
 void hall_calibration_start(void);
 void hall_calibration_process(void);
 
-uint8_t hall_calibration_get_count(uint8_t key);
 uint8_t hall_calibration_is_done(void);
+uint8_t hall_calibration_is_key_done(uint8_t key);
+
+uint8_t hall_calibration_get_count(uint8_t key);
 
 uint16_t hall_calibration_get_min(uint8_t key);
 uint16_t hall_calibration_get_max(uint8_t key);
@@ -23,4 +25,4 @@ uint16_t hall_calibration_get_max(uint8_t key);
 uint8_t hall_calibration_load(void);
 void hall_calibration_save(void);
 
-#endif
+#endif /* APP_HALL_HALL_CALIBRATION_H */

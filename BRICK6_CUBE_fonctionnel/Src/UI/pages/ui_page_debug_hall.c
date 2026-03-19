@@ -41,8 +41,7 @@ static void ui_page_debug_hall_render(void)
              (unsigned)debug.trig_hi,
              (unsigned)debug.range_valid,
              (unsigned)debug.state);
-    snprintf(line3, sizeof(line3), "P%u%% V%u/%u",
-             (unsigned)debug.position_percent,
+    snprintf(line3, sizeof(line3), "V%u/%u",
              (unsigned)debug.velocity,
              (unsigned)debug.velocity_valid);
     snprintf(line4, sizeof(line4), "DV%u SD%u",

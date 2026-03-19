@@ -61,20 +61,26 @@ static void ui_page_calibration_render(void)
 {
     drv_display_draw_text(0U, 0U, "CALIBRATION");
 
-    for (uint8_t i = 0U; i < 16U; i++)
+    for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         const uint8_t col = i % CAL_GRID_COLS;
         const uint8_t row = i / CAL_GRID_COLS;
         const uint8_t x = CAL_GRID_X + (col * CAL_CELL_W);
         const uint8_t y = CAL_GRID_Y + (row * CAL_CELL_H);
 
-        const uint8_t hits = hall_calibration_get_count(i);
+        const uint8_t progress = hall_calibration_get_count(i);
+        const uint8_t done = hall_calibration_is_key_done(i);
 
         drv_display_draw_rect(x, y, CAL_CELL_W - 1U, CAL_CELL_H - 1U);
 
-        if (hits > 0U)
+        if (done != 0U)
         {
-            uint8_t fill_h = ((CAL_CELL_H - 2U) * hits) / 3U;
+            drv_display_draw_text((uint8_t)(x + 2U), (uint8_t)(y + 7U), "OK");
+        }
+        else if (progress > 0U)
+        {
+            const uint8_t fill_h =
+                (uint8_t)(((uint16_t)(CAL_CELL_H - 2U) * progress) / 100U);
 
             drv_display_fill_rect(
                 (uint8_t)(x + 1U),
@@ -88,6 +94,10 @@ static void ui_page_calibration_render(void)
     if (hall_calibration_is_done() != 0U)
     {
         drv_display_draw_text(48U, 58U, "CAL OK");
+    }
+    else
+    {
+        drv_display_draw_text(30U, 58U, "HOLD KEYS");
     }
 }
 const ui_page_t g_ui_page_calibration = {
