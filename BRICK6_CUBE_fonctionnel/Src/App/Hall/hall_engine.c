@@ -531,6 +531,13 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
                                                          HALL_VEL2_FALLBACK_MIDI);
                 }
 
+                /*
+                 * hall_velocity_valid est un état latché durable pour l'appui
+                 * actuellement actif : on republie donc la vélocité retenue à
+                 * chaque nouveau note-on, y compris sur le retrigger profond.
+                 */
+                hall_velocity[key] = hall_velocity_2[key].velocity_latched;
+                hall_velocity_valid[key] = hall_velocity_2[key].ready;
                 hall_pressed[key] = 1U;
                 hall_note_on_pending[key] = 1U;
                 hall_state[key] = HALL_PRESSED_T2;
