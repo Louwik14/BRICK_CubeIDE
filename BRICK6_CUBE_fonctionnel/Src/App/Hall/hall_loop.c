@@ -3,6 +3,7 @@
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_filter_asc.h"
+#include "App/Hall/hall_juno_midi.h"
 
 /*
 ===============================================================================
@@ -20,6 +21,7 @@ void hall_loop_init(void)
 {
     hall_engine_init();
     hall_filter_asc_init();
+    hall_juno_midi_init();
     hall_adc_init();
 }
 
@@ -38,4 +40,5 @@ void hall_loop_process(void)
     }
 
     hall_engine_process();
+    hall_juno_midi_process();
 }
