@@ -62,8 +62,8 @@ static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
 
 static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
-static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_DV_PEAK;
-static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_LINEAR;
+static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_USER;
+static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_LOG;
 static volatile hall_user_velocity_profile_t g_user_velocity_profile = {0};
 static volatile uint8_t g_user_mode_fallback = 0U;
 static volatile hall_velocity_capture_t g_velocity_capture_fifo[HALL_USER_CAPTURE_FIFO_LEN];
