@@ -10,6 +10,7 @@
 
 #include "engine_tasklet.h"
 #include "midi.h"
+#include "midi_host.h"
 #include "sai.h"
 #include "sdmmc.h"
 #include "sdram.h"
@@ -285,6 +286,9 @@ void brick6_app_process(void)
     }
 
     voice_manager_service();
+
+    midi_poll();
+    midi_host_poll();
 
     /* Service writer SD hors IRQ */
     sd_recorder_writer_service();
