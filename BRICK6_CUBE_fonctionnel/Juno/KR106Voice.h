@@ -98,6 +98,31 @@ public:
   float mVcaGainScale  = 1.f; // linear gain (±0.5 dB)
   float mPwMinOffset   = 0.f; // ±0.02 around 0.50 (PW range low end)
   float mPwMaxOffset   = 0.f; // ±0.02 around 0.95 (PW range high end)
+  float mSubLevelTapered = 1.f;
+  float mNoiseAmpTapered = 0.f;
+  float mSubLevelCache   = -1.f;
+  float mNoiseAmpCache   = -1.f;
+
+  static float AudioTaper(float value)
+  {
+    static constexpr float kExp3Minus1 = 19.085536923187668f; // exp(3) - 1
+    return (expf(3.f * value) - 1.f) / kExp3Minus1;
+  }
+
+  void UpdateMixCaches()
+  {
+    if (mDcoSub != mSubLevelCache)
+    {
+      mSubLevelCache = mDcoSub;
+      mSubLevelTapered = AudioTaper(mDcoSub);
+    }
+
+    if (mDcoNoise != mNoiseAmpCache)
+    {
+      mNoiseAmpCache = mDcoNoise;
+      mNoiseAmpTapered = (mDcoNoise > 0.f) ? AudioTaper(mDcoNoise) : 0.f;
+    }
+  }
 
   void InitVariance(int voiceIndex)
   {
@@ -429,6 +454,8 @@ public:
   void ProcessSamplesAccumulating(T** inputs, T** outputs, int nInputs, int nOutputs, int startIdx,
                                   int nFrames)
   {
+    UpdateMixCaches();
+
     double pitch     = mPitch;
     double pitchBend = mPitchBend;
     float velocity   = mVelocity;
@@ -523,7 +550,8 @@ public:
 
       // --- Oscillators ---
       bool sync    = false;
-      float oscOut = mOsc.Process(cps, pw, mSawOn, mPulseOn, mSubOn, mDcoSub, mDcoNoise, sync);
+      float oscOut = mOsc.Process(
+          cps, pw, mSawOn, mPulseOn, mSubOn, mSubLevelTapered, mNoiseAmpTapered, sync);
 
       // Scope sync: shadow accumulator at base pitch (all mod except LFO)
       // so LFO pitch modulation is visible as waveform drift on the scope.

@@ -116,11 +116,11 @@ struct Oscillators {
   // cps: frequency in cycles per sample (freqHz / sampleRate)
   // pulseWidth: pulse width [0.52, 0.98] (caller scales from knob/LFO)
   // sawOn, pulseOn, subOn: waveform enable switches
-  // subLevel: sub oscillator mix level [0, 1]
-  // noiseAmp: noise mix level [0, 1]
+  // subLevelTapered: pre-tapered sub oscillator mix level [0, 1]
+  // noiseAmpTapered: pre-tapered noise mix level [0, 1]
   // sync: set true on phase wraparound (for scope sync output)
-  float Process(float cps, float pulseWidth, bool sawOn, bool pulseOn, bool subOn, float subLevel,
-                float noiseAmp, bool &sync) {
+  float Process(float cps, float pulseWidth, bool sawOn, bool pulseOn, bool subOn,
+                float subLevelTapered, float noiseAmpTapered, bool &sync) {
 
     // --- Phase accumulator (shared by all oscillators) ---
     mPos += cps;
@@ -177,14 +177,11 @@ struct Oscillators {
     // (6-10dB below predicted) are phase cancellation from the shared
     // phase accumulator, not mixer saturation. The VCF input OTA
     // provides soft clipping downstream when driven harder.
-    // 50K Audio taper pot emulation (same curve as noise fader)
-    float subAT = (std::exp(3.f * subLevel) - 1.f) / (std::exp(3.f) - 1.f);
-
     float out = saw * kSawAmp * mSawGain + pulse * kPulseAmp * mPulseGain +
-                sub * kSubAmp * subAT * mSubGain;
+                sub * kSubAmp * subLevelTapered * mSubGain;
 
     // --- Noise: 2SC945 NZ avalanche source ---
-    if (noiseAmp > 0.f) {
+    if (noiseAmpTapered > 0.f) {
       // Sum of 4 uniform samples → approximate Gaussian via CLT.
       float g = 0.f;
       for (int i = 0; i < 4; i++) {
@@ -196,10 +193,7 @@ struct Oscillators {
       // Mixer resistor network rolls off highs (~8kHz RC lowpass).
       mNoiseLPState += 0.7f * (white - mNoiseLPState);
 
-      // 50K Audio taper pot emulation
-      noiseAmp = (std::exp(3.f * noiseAmp) - 1.f) / (std::exp(3.f) - 1.f);
-
-      out += mNoiseLPState * noiseAmp;
+      out += mNoiseLPState * noiseAmpTapered;
     }
 
     return out;
