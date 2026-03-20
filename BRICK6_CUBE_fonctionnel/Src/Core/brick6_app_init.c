@@ -23,6 +23,7 @@
 #include "fx_pool.h"
 #include "param_store.h"
 #include "control_events.h"
+#include "cpu_load.h"
 #include "Audio/juno_synth.h"
 
 #include "Sampler/sample_pool.h"
@@ -232,6 +233,8 @@ void brick6_app_init(void)
     audio_start();
 
     HAL_Delay(200);
+
+    cpu_load_reset_peak();
 
     midi_init();
 

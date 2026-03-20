@@ -1,5 +1,5 @@
 ../Src/UI/pages/ui_page_main.c:55:6:ui_page_main_leave	0	static
 ../Src/UI/pages/ui_page_main.c:70:6:ui_page_main_handle_event	0	static
 ../Src/UI/pages/ui_page_main.c:40:6:ui_page_main_enter	0	static
-../Src/UI/pages/ui_page_main.c:99:6:ui_page_main_render	80	static
+../Src/UI/pages/ui_page_main.c:99:6:ui_page_main_render	144	static
 ../Src/UI/pages/ui_page_main.c:85:6:ui_page_main_tick	0	static
