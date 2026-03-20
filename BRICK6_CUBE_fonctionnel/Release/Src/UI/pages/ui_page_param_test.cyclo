@@ -1,5 +1,5 @@
-../Src/UI/pages/ui_page_param_test.c:64:13:ui_page_param_test_leave	1
-../Src/UI/pages/ui_page_param_test.c:77:13:ui_page_param_test_handle_event	1
-../Src/UI/pages/ui_page_param_test.c:49:13:ui_page_param_test_enter	1
-../Src/UI/pages/ui_page_param_test.c:149:13:ui_page_param_test_render	7
-../Src/UI/pages/ui_page_param_test.c:92:13:ui_page_param_test_tick	1
+../Src/UI/pages/ui_page_param_test.c:79:13:ui_page_param_test_leave	1
+../Src/UI/pages/ui_page_param_test.c:64:13:ui_page_param_test_enter	1
+../Src/UI/pages/ui_page_param_test.c:155:13:ui_page_param_test_handle_event	4
+../Src/UI/pages/ui_page_param_test.c:190:13:ui_page_param_test_render	19
+../Src/UI/pages/ui_page_param_test.c:178:13:ui_page_param_test_tick	1

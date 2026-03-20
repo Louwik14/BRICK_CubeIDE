@@ -1,14 +1,20 @@
-../Src/Audio/juno_synth.cpp:150:13:void {anonymous}::juno_note_on_internal(uint8_t, uint8_t)	32	static
+../Src/Audio/juno_synth.cpp:318:13:void {anonymous}::juno_release_sustained_voices()	0	static
+../Src/Audio/juno_synth.cpp:371:13:void {anonymous}::juno_note_on_poly(uint8_t, uint8_t)	32	static
+../Src/Audio/juno_synth.cpp:247:13:void {anonymous}::juno_push_held_note(uint8_t)	16	static
+../Src/Audio/juno_synth.cpp:427:13:void {anonymous}::juno_unison_play_note(uint8_t, uint8_t, uint8_t)	64	static
+../Src/Audio/juno_synth.cpp:452:13:void {anonymous}::juno_note_off_unison(uint8_t)	16	static
+../Src/Audio/juno_synth.cpp:689:13:void {anonymous}::juno_apply_pending_params()	64	static,ignoring_inline_asm
 ../Src/Audio/../../Juno/KR106VCF.h:228:9:float kr106::VCF::ProcessSample(float, float, float)	24	static
-../Src/Audio/juno_synth.cpp:298:6:void juno_synth_init(float, uint32_t)	2600	static
-../Src/Audio/juno_synth.cpp:331:6:void juno_synth_set_enabled(uint8_t)	0	static
-../Src/Audio/juno_synth.cpp:342:9:uint8_t juno_synth_is_enabled()	0	static
-../Src/Audio/juno_synth.cpp:347:6:void juno_synth_set_test_mode(uint8_t)	0	static
-../Src/Audio/juno_synth.cpp:355:6:void juno_synth_note_on(uint8_t, uint8_t)	16	static
-../Src/Audio/juno_synth.cpp:374:6:void juno_synth_note_off(uint8_t)	0	static
-../Src/Audio/juno_synth.cpp:379:6:void juno_synth_pitch_bend(int16_t)	0	static
-../Src/Audio/juno_synth.cpp:384:6:void juno_synth_all_notes_off()	0	static
-../Src/Audio/juno_synth.cpp:389:6:void juno_synth_cc(uint8_t, uint8_t)	0	static
+../Src/Audio/juno_synth.cpp:781:6:void juno_synth_init(float, uint32_t)	3392	static
+../Src/Audio/juno_synth.cpp:825:6:void juno_synth_set_enabled(uint8_t)	0	static
+../Src/Audio/juno_synth.cpp:836:9:uint8_t juno_synth_is_enabled()	0	static
+../Src/Audio/juno_synth.cpp:841:6:void juno_synth_set_test_mode(uint8_t)	0	static
+../Src/Audio/juno_synth.cpp:851:6:void juno_synth_set_param(juno_param_id_t, float)	0	static,ignoring_inline_asm
+../Src/Audio/juno_synth.cpp:863:6:void juno_synth_note_on(uint8_t, uint8_t)	16	static
+../Src/Audio/juno_synth.cpp:880:6:void juno_synth_note_off(uint8_t)	0	static
+../Src/Audio/juno_synth.cpp:892:6:void juno_synth_pitch_bend(int16_t)	0	static
+../Src/Audio/juno_synth.cpp:897:6:void juno_synth_all_notes_off()	0	static
+../Src/Audio/juno_synth.cpp:902:6:void juno_synth_cc(uint8_t, uint8_t)	8	static
 ../Src/Audio/../../Juno/KR106Voice.h:429:8:void kr106::Voice<T>::ProcessSamplesAccumulating(T**, T**, int, int, int, int) [with T = float]	160	static
-../Src/Audio/juno_synth.cpp:394:6:void juno_synth_process_block(float*, uint32_t)	120	static
-../Src/Audio/juno_synth.cpp:457:1:cpp)	56	static
+../Src/Audio/juno_synth.cpp:907:6:void juno_synth_process_block(float*, uint32_t)	128	static
+../Src/Audio/juno_synth.cpp:990:1:cpp)	56	static

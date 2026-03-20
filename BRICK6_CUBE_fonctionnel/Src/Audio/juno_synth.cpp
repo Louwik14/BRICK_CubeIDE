@@ -74,7 +74,7 @@ struct JunoHpf
 {
     static constexpr float kShelfFreqHz = 150.0f;
     static constexpr float kShelfGainLin = 3.162f;
-    static constexpr float kHPFFreqs[4] = { 0.0f, 0.0f, 240.0f, 720.0f };
+    static const float kHPFFreqs[4];
     static constexpr float kDCBlockHz = 5.0f;
 
     int mode = 1;
@@ -155,6 +155,8 @@ struct JunoHpf
         return input - lp;
     }
 };
+
+const float JunoHpf::kHPFFreqs[4] = { 0.0f, 0.0f, 240.0f, 720.0f };
 
 struct JunoSynthState
 {
