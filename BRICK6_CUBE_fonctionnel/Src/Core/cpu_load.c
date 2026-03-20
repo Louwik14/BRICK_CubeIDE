@@ -22,7 +22,7 @@
 #include "cpu_load.h"
 #include "stm32h7xx.h"
 
-#define CPU_LOAD_MAX_PERMILLE        2000U
+#define CPU_LOAD_MAX_PERMILLE        1000U
 #define CPU_LOAD_AVG_SHIFT           4U
 #define CPU_LOAD_AVG_ROUNDING        (1U << 7)
 #define CPU_LOAD_AVG_SCALE_SHIFT     8U
@@ -34,6 +34,7 @@
 static uint32_t irq_start_cycles = 0U;
 static uint32_t last_irq_entry_cycles = 0U;
 static uint32_t current_period_cycles = 0U;
+static uint32_t period_is_ready = 0U;
 
 static volatile uint32_t cpu_last_permille = 0U;
 static volatile uint32_t cpu_avg_permille_q8 = 0U;
@@ -89,6 +90,7 @@ void cpu_load_init(void)
     irq_start_cycles = 0U;
     last_irq_entry_cycles = 0U;
     current_period_cycles = 0U;
+    period_is_ready = 0U;
     cpu_last_permille = 0U;
     cpu_avg_permille_q8 = 0U;
     cpu_peak_permille = 0U;
@@ -148,6 +150,16 @@ void cpu_load_irq_begin(void)
         return;
 
     now = DWT->CYCCNT;
+
+    if(period_is_ready == 0U)
+    {
+        last_irq_entry_cycles = now;
+        irq_start_cycles = now;
+        current_period_cycles = 0U;
+        period_is_ready = 1U;
+        return;
+    }
+
     current_period_cycles = now - last_irq_entry_cycles;
     last_irq_entry_cycles = now;
     irq_start_cycles = now;
@@ -167,6 +179,7 @@ void cpu_load_irq_end(void)
 {
     uint32_t end;
     uint32_t elapsed;
+    uint32_t raw_pm;
     uint32_t pm;
     uint32_t avg_q8;
 
@@ -179,8 +192,10 @@ void cpu_load_irq_end(void)
     if(current_period_cycles == 0U)
         return;
 
-    pm = (uint32_t)(((uint64_t)elapsed * 1000ULL) /
-                    (uint64_t)current_period_cycles);
+    raw_pm = (uint32_t)(((uint64_t)elapsed * 1000ULL) /
+                        (uint64_t)current_period_cycles);
+
+    pm = raw_pm;
 
     if(pm > CPU_LOAD_MAX_PERMILLE)
         pm = CPU_LOAD_MAX_PERMILLE;
@@ -216,13 +231,13 @@ void cpu_load_irq_end(void)
 
     cpu_peak_recent_permille = cpu_load_compute_recent_peak();
 
-    if(pm > CPU_LOAD_THRESH_80_PERMILLE)
+    if(raw_pm > CPU_LOAD_THRESH_80_PERMILLE)
         cpu_over_80_count++;
 
-    if(pm > CPU_LOAD_THRESH_90_PERMILLE)
+    if(raw_pm > CPU_LOAD_THRESH_90_PERMILLE)
         cpu_over_90_count++;
 
-    if(pm > CPU_LOAD_THRESH_100_PERMILLE)
+    if(raw_pm > CPU_LOAD_THRESH_100_PERMILLE)
         cpu_over_100_count++;
 
     cpu_block_count++;
@@ -338,7 +353,7 @@ void cpu_load_reset_peak(void)
 
     primask = __get_PRIMASK();
     __disable_irq();
-    cpu_peak_permille = cpu_last_permille;
+    cpu_peak_permille = 0U;
 
     __set_PRIMASK(primask);
 }
