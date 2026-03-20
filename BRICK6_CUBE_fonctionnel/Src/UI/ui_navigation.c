@@ -32,7 +32,10 @@ void ui_navigation_handle_event(const ui_event_t *event)
         if ((event->id == (uint8_t)rule->button)
                 && ((rule->required_page == UI_NAV_ANY_PAGE) || (rule->required_page == current_page)))
         {
-            ui_page_set(rule->target_page);
+            if (rule->target_page != current_page)
+            {
+                ui_page_set(rule->target_page);
+            }
             break;
         }
     }
