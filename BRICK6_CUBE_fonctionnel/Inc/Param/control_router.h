@@ -81,4 +81,21 @@ typedef param_id_t control_param_id_t;
 #define CTRL_PARAM_POST_GAIN                 PARAM_POST_GAIN
 #define CTRL_PARAM_OUTPUT_COMP               PARAM_OUTPUT_COMP
 
+#define CTRL_PARAM_JUNO_SAW                  PARAM_JUNO_SAW
+#define CTRL_PARAM_JUNO_PULSE                PARAM_JUNO_PULSE
+#define CTRL_PARAM_JUNO_SUB                  PARAM_JUNO_SUB
+#define CTRL_PARAM_JUNO_PWM                  PARAM_JUNO_PWM
+#define CTRL_PARAM_JUNO_VCF_FREQ             PARAM_JUNO_VCF_FREQ
+#define CTRL_PARAM_JUNO_VCF_RES              PARAM_JUNO_VCF_RES
+#define CTRL_PARAM_JUNO_VCF_ENV              PARAM_JUNO_VCF_ENV
+#define CTRL_PARAM_JUNO_VCF_LFO              PARAM_JUNO_VCF_LFO
+#define CTRL_PARAM_JUNO_ATTACK               PARAM_JUNO_ATTACK
+#define CTRL_PARAM_JUNO_DECAY                PARAM_JUNO_DECAY
+#define CTRL_PARAM_JUNO_SUSTAIN              PARAM_JUNO_SUSTAIN
+#define CTRL_PARAM_JUNO_RELEASE              PARAM_JUNO_RELEASE
+#define CTRL_PARAM_JUNO_LFO_RATE             PARAM_JUNO_LFO_RATE
+#define CTRL_PARAM_JUNO_HPF                  PARAM_JUNO_HPF
+#define CTRL_PARAM_JUNO_PORTA                PARAM_JUNO_PORTA
+#define CTRL_PARAM_JUNO_MODE                 PARAM_JUNO_MODE
+
 void control_router_set_param(control_param_id_t id, float v);
