@@ -22,15 +22,53 @@
 #include "cpu_load.h"
 #include "stm32h7xx.h"
 
-#define CPU_LOAD_MAX_PERMILLE 2000U
+#define CPU_LOAD_MAX_PERMILLE        2000U
+#define CPU_LOAD_AVG_SHIFT           4U
+#define CPU_LOAD_AVG_ROUNDING        (1U << 7)
+#define CPU_LOAD_AVG_SCALE_SHIFT     8U
+#define CPU_LOAD_RECENT_WINDOW       16U
+#define CPU_LOAD_THRESH_80_PERMILLE  800U
+#define CPU_LOAD_THRESH_90_PERMILLE  900U
+#define CPU_LOAD_THRESH_100_PERMILLE 1000U
 
 static uint32_t irq_start_cycles = 0U;
 static uint32_t last_irq_entry_cycles = 0U;
 static uint32_t current_period_cycles = 0U;
 
-static volatile uint32_t cpu_permille = 0U;
-static volatile uint32_t cpu_max_permille = 0U;
+static volatile uint32_t cpu_last_permille = 0U;
+static volatile uint32_t cpu_avg_permille_q8 = 0U;
+static volatile uint32_t cpu_peak_permille = 0U;
+static volatile uint32_t cpu_peak_recent_permille = 0U;
+static volatile uint32_t cpu_over_80_count = 0U;
+static volatile uint32_t cpu_over_90_count = 0U;
+static volatile uint32_t cpu_over_100_count = 0U;
+static volatile uint32_t cpu_block_count = 0U;
 static volatile uint32_t cpu_counter_valid = 0U;
+
+static uint16_t recent_permille_ring[CPU_LOAD_RECENT_WINDOW];
+static uint32_t recent_permille_index = 0U;
+static uint32_t recent_permille_count = 0U;
+
+static uint32_t cpu_load_avg_permille_from_q8(uint32_t avg_q8)
+{
+    return (avg_q8 + CPU_LOAD_AVG_ROUNDING) >> CPU_LOAD_AVG_SCALE_SHIFT;
+}
+
+static uint32_t cpu_load_compute_recent_peak(void)
+{
+    uint32_t peak = 0U;
+    uint32_t i;
+
+    for(i = 0U; i < recent_permille_count; ++i)
+    {
+        const uint32_t sample = recent_permille_ring[i];
+
+        if(sample > peak)
+            peak = sample;
+    }
+
+    return peak;
+}
 
 /**
  * @brief Point d'entrée cpu_load_init.
@@ -46,13 +84,25 @@ void cpu_load_init(void)
 {
     uint32_t t0;
     uint32_t t1;
+    uint32_t i;
 
     irq_start_cycles = 0U;
     last_irq_entry_cycles = 0U;
     current_period_cycles = 0U;
-    cpu_permille = 0U;
-    cpu_max_permille = 0U;
+    cpu_last_permille = 0U;
+    cpu_avg_permille_q8 = 0U;
+    cpu_peak_permille = 0U;
+    cpu_peak_recent_permille = 0U;
+    cpu_over_80_count = 0U;
+    cpu_over_90_count = 0U;
+    cpu_over_100_count = 0U;
+    cpu_block_count = 0U;
     cpu_counter_valid = 0U;
+    recent_permille_index = 0U;
+    recent_permille_count = 0U;
+
+    for(i = 0U; i < CPU_LOAD_RECENT_WINDOW; ++i)
+        recent_permille_ring[i] = 0U;
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
 
@@ -118,6 +168,7 @@ void cpu_load_irq_end(void)
     uint32_t end;
     uint32_t elapsed;
     uint32_t pm;
+    uint32_t avg_q8;
 
     if(cpu_counter_valid == 0U)
         return;
@@ -134,10 +185,47 @@ void cpu_load_irq_end(void)
     if(pm > CPU_LOAD_MAX_PERMILLE)
         pm = CPU_LOAD_MAX_PERMILLE;
 
-    cpu_permille = pm;
+    cpu_last_permille = pm;
 
-    if(pm > cpu_max_permille)
-        cpu_max_permille = pm;
+    if(cpu_block_count == 0U)
+    {
+        avg_q8 = pm << CPU_LOAD_AVG_SCALE_SHIFT;
+    }
+    else
+    {
+        const int32_t target_q8 = (int32_t)(pm << CPU_LOAD_AVG_SCALE_SHIFT);
+        const int32_t current_q8 = (int32_t)cpu_avg_permille_q8;
+
+        avg_q8 = (uint32_t)(current_q8 +
+                            ((target_q8 - current_q8) >> CPU_LOAD_AVG_SHIFT));
+    }
+
+    cpu_avg_permille_q8 = avg_q8;
+
+    if(pm > cpu_peak_permille)
+        cpu_peak_permille = pm;
+
+    recent_permille_ring[recent_permille_index] = (uint16_t)pm;
+    recent_permille_index++;
+
+    if(recent_permille_index >= CPU_LOAD_RECENT_WINDOW)
+        recent_permille_index = 0U;
+
+    if(recent_permille_count < CPU_LOAD_RECENT_WINDOW)
+        recent_permille_count++;
+
+    cpu_peak_recent_permille = cpu_load_compute_recent_peak();
+
+    if(pm > CPU_LOAD_THRESH_80_PERMILLE)
+        cpu_over_80_count++;
+
+    if(pm > CPU_LOAD_THRESH_90_PERMILLE)
+        cpu_over_90_count++;
+
+    if(pm > CPU_LOAD_THRESH_100_PERMILLE)
+        cpu_over_100_count++;
+
+    cpu_block_count++;
 }
 
 /**
@@ -154,7 +242,7 @@ void cpu_load_irq_end(void)
  */
 uint32_t cpu_load_get_permille(void)
 {
-    return cpu_permille;
+    return cpu_last_permille;
 }
 
 /**
@@ -171,7 +259,37 @@ uint32_t cpu_load_get_permille(void)
  */
 uint32_t cpu_load_get_max(void)
 {
-    return cpu_max_permille;
+    return cpu_peak_permille;
+}
+
+uint32_t cpu_load_get_avg_permille(void)
+{
+    return cpu_load_avg_permille_from_q8(cpu_avg_permille_q8);
+}
+
+uint32_t cpu_load_get_peak_recent_permille(void)
+{
+    return cpu_peak_recent_permille;
+}
+
+uint32_t cpu_load_get_over_80_count(void)
+{
+    return cpu_over_80_count;
+}
+
+uint32_t cpu_load_get_over_90_count(void)
+{
+    return cpu_over_90_count;
+}
+
+uint32_t cpu_load_get_over_100_count(void)
+{
+    return cpu_over_100_count;
+}
+
+uint32_t cpu_load_get_block_count(void)
+{
+    return cpu_block_count;
 }
 
 /**
@@ -189,4 +307,38 @@ uint32_t cpu_load_get_max(void)
 uint32_t cpu_load_is_valid(void)
 {
     return cpu_counter_valid;
+}
+
+void cpu_load_get_metrics(cpu_load_metrics_t *metrics)
+{
+    uint32_t primask;
+
+    if(metrics == 0)
+        return;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+
+    metrics->last_permille = cpu_last_permille;
+    metrics->avg_permille = cpu_load_avg_permille_from_q8(cpu_avg_permille_q8);
+    metrics->peak_permille = cpu_peak_permille;
+    metrics->peak_recent_permille = cpu_peak_recent_permille;
+    metrics->over_80_count = cpu_over_80_count;
+    metrics->over_90_count = cpu_over_90_count;
+    metrics->over_100_count = cpu_over_100_count;
+    metrics->block_count = cpu_block_count;
+    metrics->counter_valid = cpu_counter_valid;
+
+    __set_PRIMASK(primask);
+}
+
+void cpu_load_reset_peak(void)
+{
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    cpu_peak_permille = cpu_last_permille;
+
+    __set_PRIMASK(primask);
 }

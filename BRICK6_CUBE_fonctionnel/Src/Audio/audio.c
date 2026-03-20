@@ -202,10 +202,14 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
     {
+        cpu_load_irq_begin();
+
         process_half(0);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
+
+        cpu_load_irq_end();
     }
 }
 
@@ -236,9 +240,13 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 {
     if(hsai == sai_rx)
     {
+        cpu_load_irq_begin();
+
         process_half(1);
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
+
+        cpu_load_irq_end();
     }
 }
