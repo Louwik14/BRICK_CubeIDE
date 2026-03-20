@@ -100,39 +100,48 @@ void ui_page_main_render(void)
 {
     char line0[24];
     char line1[24];
+    char line2[24];
+    cpu_load_metrics_t cpu_metrics;
+
+    cpu_load_get_metrics(&cpu_metrics);
 
     drv_display_draw_text(0U, 0U, "BRICK6 MAIN");
 
-    if (cpu_load_is_valid() != 0U)
+    if (cpu_metrics.counter_valid != 0U)
     {
-        const uint32_t cpu_pm = cpu_load_get_permille();
-        const uint32_t cpu_max_pm = cpu_load_get_max();
-
         (void)snprintf(
             line0,
             sizeof(line0),
-            "CPU %lu.%01lu%%",
-            (unsigned long)(cpu_pm / 10U),
-            (unsigned long)(cpu_pm % 10U));
+            "LAST %lu.%01lu%%",
+            (unsigned long)(cpu_metrics.last_permille / 10U),
+            (unsigned long)(cpu_metrics.last_permille % 10U));
 
         (void)snprintf(
             line1,
             sizeof(line1),
-            "MAX %lu.%01lu%%",
-            (unsigned long)(cpu_max_pm / 10U),
-            (unsigned long)(cpu_max_pm % 10U));
+            "AVG  %lu.%01lu%%",
+            (unsigned long)(cpu_metrics.avg_permille / 10U),
+            (unsigned long)(cpu_metrics.avg_permille % 10U));
+
+        (void)snprintf(
+            line2,
+            sizeof(line2),
+            "PEAK %lu.%01lu%%",
+            (unsigned long)(cpu_metrics.peak_permille / 10U),
+            (unsigned long)(cpu_metrics.peak_permille % 10U));
     }
     else
     {
-        (void)snprintf(line0, sizeof(line0), "CPU N/A");
-        (void)snprintf(line1, sizeof(line1), "MAX N/A");
+        (void)snprintf(line0, sizeof(line0), "LAST N/A");
+        (void)snprintf(line1, sizeof(line1), "AVG  N/A");
+        (void)snprintf(line2, sizeof(line2), "PEAK N/A");
     }
 
-    drv_display_draw_text(0U, 16U, line0);
-    drv_display_draw_text(0U, 28U, line1);
-    drv_display_draw_text(0U, 40U, "BTN1: JUNO PARAMS");
-    drv_display_draw_text(0U, 50U, "BTN3: HALL DEBUG");
-    drv_display_draw_text(0U, 60U, "BTN5: CALIB USER");
+    drv_display_draw_text(0U, 14U, line0);
+    drv_display_draw_text(0U, 24U, line1);
+    drv_display_draw_text(0U, 34U, line2);
+    drv_display_draw_text(0U, 48U, "BTN1: JUNO PARAMS");
+    drv_display_draw_text(0U, 58U, "BTN3:HALL BTN5:CAL");
 }
 
 const ui_page_t g_ui_page_main = {
