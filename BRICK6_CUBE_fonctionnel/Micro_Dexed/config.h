@@ -26,9 +26,11 @@
 #ifndef CONFIG_H_INCLUDED
 #define CONFIG_H_INCLUDED
 
-#include <Arduino.h>
+#include "microdexed_compat.h"
 #include "midinotes.h"
+#ifndef MICRODEXED_MINIMAL
 #include "teensy_board_detection.h"
+#endif
 
 // ATTENTION! For better latency you have to redefine AUDIO_BLOCK_SAMPLES from
 // 128 to 64 in <ARDUINO-IDE-DIR>/cores/teensy3/AudioStream.h
@@ -67,17 +69,21 @@
 //*************************************************************************************************
 //* MIDI HARDWARE SETTINGS
 //*************************************************************************************************
+#ifndef MICRODEXED_MINIMAL
 #define MIDI_DEVICE_DIN Serial1
 #define MIDI_DEVICE_USB 1
 #define MIDI_DEVICE_USB_HOST 1
+#endif
 
 //*************************************************************************************************
 //* AUDIO HARDWARE SETTINGS
 //*************************************************************************************************
 // If nothing is defined Teensy internal DAC is used as audio output device!
 // Left and right channel audio signal is presented on pins A21 and A22.
+#ifndef MICRODEXED_MINIMAL
 #define AUDIO_DEVICE_USB
 #define TEENSY_AUDIO_BOARD
+#endif
 //#define PT8211_AUDIO
 //#define TGA_AUDIO_BOARD
 //#define TEENSY_DAC
@@ -102,12 +108,22 @@
 //*************************************************************************************************
 //* DEXED AND EFFECTS SETTINGS
 //*************************************************************************************************
+#ifdef MICRODEXED_MINIMAL
+#define DEXED_ENGINE DEXED_ENGINE_MARKI
+#else
 #define DEXED_ENGINE DEXED_ENGINE_MODERN // DEXED_ENGINE_MARKI // DEXED_ENGINE_OPL
+#endif
 
 // Number of Dexed instances
+#ifdef MICRODEXED_MINIMAL
+#define NUM_DEXED 1
+#else
 #define NUM_DEXED 2 // 1 or 2 - nothing else!
+#endif
 // FX-CHAIN ENABLE/DISABLE
+#ifndef MICRODEXED_MINIMAL
 #define USE_FX 1
+#endif
 // CHORUS parameters
 #define MOD_DELAY_SAMPLE_BUFFER int32_t(TIME_MS2SAMPLES(20.0)) // 20.0 ms delay buffer. 
 #define MOD_WAVEFORM WAVEFORM_TRIANGLE // WAVEFORM_SINE WAVEFORM_TRIANGLE WAVEFORM_SAWTOOTH WAVEFORM_SAWTOOTH_REVERSE
@@ -126,7 +142,13 @@
 //*************************************************************************************************
 //* AUDIO SOFTWARE SETTINGS
 //*************************************************************************************************
+#ifdef MICRODEXED_MINIMAL
+#define SAMPLE_RATE 48000
+#define DEXED_RENDER_MAX_FRAMES 128
+#else
 #define SAMPLE_RATE 44100
+#define DEXED_RENDER_MAX_FRAMES AUDIO_BLOCK_SAMPLES
+#endif
 
 #ifndef TEENSY_AUDIO_BOARD
 #if AUDIO_BLOCK_SAMPLES == 64
@@ -186,8 +208,10 @@
 //*************************************************************************************************
 //* UI
 //*************************************************************************************************
+#ifndef MICRODEXED_MINIMAL
 #define ENABLE_LCD_UI 1
 #define STANDARD_LCD_I2C
+#endif
 //#define OLED_SPI
 
 // LCD Display
@@ -301,6 +325,10 @@
 #endif
 
 // Teensy-4.x settings
+#ifdef MICRODEXED_MINIMAL
+#define MAX_NOTES 4
+#endif
+
 #ifdef TEENSY4
 #define MAX_NOTES 32
 #endif
@@ -369,6 +397,9 @@
 #define USE_TEENSY_DSP 1
 
 // HELPER MACROS
+#ifndef AUDIO_SAMPLE_RATE
+#define AUDIO_SAMPLE_RATE SAMPLE_RATE
+#endif
 #define TIME_MS2SAMPLES(x) floor(uint32_t(x) * AUDIO_SAMPLE_RATE / 1000)
 #define SAMPLES2TIME_MS(x) float(uint32_t(x) * 1000 / AUDIO_SAMPLE_RATE)
 // Modulated delay options
