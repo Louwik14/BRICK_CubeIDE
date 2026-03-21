@@ -140,7 +140,7 @@ void ui_page_main_render(void)
     drv_display_draw_text(0U, 14U, line0);
     drv_display_draw_text(0U, 24U, line1);
     drv_display_draw_text(0U, 34U, line2);
-    drv_display_draw_text(0U, 48U, "BTN1: JUNO PARAMS");
+    drv_display_draw_text(0U, 48U, "BTN1: DISABLED");
     drv_display_draw_text(0U, 58U, "BTN3:HALL BTN5:CAL");
 }
 
