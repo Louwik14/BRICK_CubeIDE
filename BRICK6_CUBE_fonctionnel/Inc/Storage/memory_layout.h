@@ -25,6 +25,9 @@
 /* DMA-owned buffers (SAI/SDMMC/other DMA) */
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 
+/* Read-mostly audio LUTs moved out of D1 without using SDRAM. */
+#define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_lut")
+
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")
 

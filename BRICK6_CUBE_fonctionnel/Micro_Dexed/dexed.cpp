@@ -33,8 +33,12 @@
 #include "controllers.h"
 #include <limits.h>
 #include "porta.h"
+#include "Storage/memory_layout.h"
 
 extern config_t configuration;
+
+AUDIO_HOT static float g_dx7_mix_buffer[DEXED_RENDER_MAX_FRAMES];
+AUDIO_HOT static AlignedBuf<int32_t, _N_> g_dx7_audio_buffer;
 
 Dexed::Dexed(int rate)
 {
@@ -51,12 +55,11 @@ Dexed::Dexed(int rate)
   Porta::init_sr(rate);
 
 
-  engineMkI = new EngineMkI;
-
+  engineMkI = &engineMkIStorage_;
 
   for (i = 0; i < MAX_ACTIVE_NOTES; i++)
   {
-    voices[i].dx7_note = new Dx7Note;
+    voices[i].dx7_note = &voiceNoteStorage_[i];
     voices[i].keydown = false;
     voices[i].sustained = false;
     voices[i].live = false;
@@ -84,12 +87,10 @@ Dexed::Dexed(int rate)
 Dexed::~Dexed()
 {
   currentNote = -1;
+  engineMkI = nullptr;
 
   for (uint8_t note = 0; note < MAX_ACTIVE_NOTES; note++)
-    delete voices[note].dx7_note;
-
-
-  delete(engineMkI);
+    voices[note].dx7_note = nullptr;
 }
 
 void Dexed::activate(void)
@@ -110,7 +111,8 @@ void Dexed::getSamples(uint16_t n_samples, int16_t* buffer)
 
   uint16_t i, j;
   uint8_t note;
-  float sumbuf[DEXED_RENDER_MAX_FRAMES];
+  float *sumbuf = g_dx7_mix_buffer;
+  int32_t *audiobuf = g_dx7_audio_buffer.get();
   float s;
   const double decayFactor = 0.99992;
 
@@ -127,12 +129,10 @@ void Dexed::getSamples(uint16_t n_samples, int16_t* buffer)
 
   for (i = 0; i < n_samples; i += _N_)
   {
-    AlignedBuf<int32_t, _N_> audiobuf;
-
     for (uint8_t j = 0; j < _N_; ++j)
     {
-      audiobuf.get()[j] = 0;
-      sumbuf[i + j] = 0.0;
+      audiobuf[j] = 0;
+      sumbuf[i + j] = 0.0f;
     }
 
     int32_t lfovalue = lfo.getsample();
@@ -142,12 +142,12 @@ void Dexed::getSamples(uint16_t n_samples, int16_t* buffer)
     {
       if (voices[note].live)
       {
-        voices[note].dx7_note->compute(audiobuf.get(), lfovalue, lfodelay, &controllers);
+        voices[note].dx7_note->compute(audiobuf, lfovalue, lfodelay, &controllers);
 
         for (j = 0; j < _N_; ++j)
         {
-          sumbuf[i + j] += signed_saturate_rshift(audiobuf.get()[j] >> 4, 24, 9) / 32768.0;
-          audiobuf.get()[j] = 0;
+          sumbuf[i + j] += signed_saturate_rshift(audiobuf[j] >> 4, 24, 9) / 32768.0f;
+          audiobuf[j] = 0;
           /*
                     int32_t val = audiobuf.get()[j];
                     val = val >> 4;

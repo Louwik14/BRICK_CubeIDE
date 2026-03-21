@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "Storage/memory_layout.h"
+
 #ifndef MICRODEXED_MINIMAL
 #define MICRODEXED_MINIMAL
 #endif
@@ -9,10 +11,10 @@
 
 namespace
 {
-MicroDexedMarkIMinimal g_microdexed;
-uint8_t g_microdexed_initialized = 0U;
-uint8_t g_microdexed_enabled = 0U;
-int16_t g_render_buffer[DEXED_RENDER_MAX_FRAMES];
+AUDIO_WARM MicroDexedMarkIMinimal g_microdexed;
+CTRL_STATE uint8_t g_microdexed_initialized = 0U;
+CTRL_STATE uint8_t g_microdexed_enabled = 0U;
+AUDIO_HOT ALIGN32 int16_t g_render_buffer[DEXED_RENDER_MAX_FRAMES];
 
 constexpr float kInt16ToFloat = 1.0f / 32768.0f;
 }

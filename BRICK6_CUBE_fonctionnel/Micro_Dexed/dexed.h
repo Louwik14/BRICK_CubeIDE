@@ -149,6 +149,8 @@ class Dexed
     uint8_t engineType;
     VoiceStatus voiceStatus;
     Lfo lfo;
+    EngineMkI engineMkIStorage_;
+    Dx7Note voiceNoteStorage_[MAX_NOTES];
     EngineMkI* engineMkI;
 };
 
