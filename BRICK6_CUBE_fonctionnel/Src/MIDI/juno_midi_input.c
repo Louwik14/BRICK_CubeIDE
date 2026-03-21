@@ -16,7 +16,11 @@ static void juno_midi_push_event(uint8_t type,
     (void)juno_midi_queue_push(&event);
 }
 
-void midi_internal_receive(const uint8_t *msg, size_t len)
+/*
+ * Entrée conservée hors chemin runtime actif: pour réactiver le Juno,
+ * il suffit de rebrancher cette fonction sur midi_internal_receive().
+ */
+void juno_midi_input_receive(const uint8_t *msg, size_t len)
 {
     if((msg == NULL) || (len == 0U))
         return;

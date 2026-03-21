@@ -25,7 +25,6 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "cpu_load.h"
-#include "Audio/juno_synth.h"
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
@@ -65,19 +64,6 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
-    if((track_count > 3U) && (tracks[3].enabled != 0U))
-    {
-        static float juno_mono[AUDIO_BLOCK_SIZE];
-
-        juno_synth_process_block(juno_mono, frames);
-
-        for(uint32_t i = 0U; i < frames; ++i)
-        {
-            tracks[3].L[i] = juno_mono[i];
-            tracks[3].R[i] = juno_mono[i];
-        }
-    }
-
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
         voice_manager_process(tracks[0].L, tracks[0].R, frames);
@@ -198,9 +184,6 @@ void brick6_app_init(void)
 
     live_recorder_start_play(&g_live_recorder);
 
-    juno_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
-    juno_synth_set_enabled(1U);
-
     recorder_transport_init();
     sd_recorder_init();
 
@@ -215,7 +198,7 @@ void brick6_app_init(void)
     track_enable(0, 1U);
     track_enable(1, 1U);
     track_enable(2, 1U);
-    track_enable(3, 1U);
+    track_enable(3, 0U);
 
     track_set_gain(0, 1.0f);
     track_set_gain(1, 1.0f);
