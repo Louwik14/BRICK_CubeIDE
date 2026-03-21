@@ -7,6 +7,7 @@
  * To add a new workflow, add/edit rules here without changing the engine logic.
  */
 static const ui_nav_rule_t g_ui_nav_rules[] = {
+    { BTN_PARAM_1, UI_NAV_ANY_PAGE, UI_PAGE_PARAM_TEST },
     { BTN_PARAM_2, UI_NAV_ANY_PAGE, UI_PAGE_MAIN },
     { BTN_PARAM_3, UI_NAV_ANY_PAGE, UI_PAGE_HALL_KEY_DEBUG },
 

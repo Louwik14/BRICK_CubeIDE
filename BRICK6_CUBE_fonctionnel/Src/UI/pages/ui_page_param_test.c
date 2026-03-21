@@ -28,27 +28,27 @@
 #include "param_registry.h"
 #include "ui_param.h"
 
-static const ui_param_bank_t g_juno_param_banks[] = {
-    { .params = { PARAM_JUNO_SAW, PARAM_JUNO_PULSE, PARAM_JUNO_SUB, PARAM_JUNO_PWM } },
-    { .params = { PARAM_JUNO_VCF_FREQ, PARAM_JUNO_VCF_RES, PARAM_JUNO_VCF_ENV, PARAM_JUNO_VCF_LFO } },
-    { .params = { PARAM_JUNO_ATTACK, PARAM_JUNO_DECAY, PARAM_JUNO_SUSTAIN, PARAM_JUNO_RELEASE } },
-    { .params = { PARAM_JUNO_LFO_RATE, PARAM_JUNO_HPF, PARAM_JUNO_PORTA, PARAM_JUNO_MODE } },
+static const ui_param_bank_t g_dx7_param_banks[] = {
+    { .params = { PARAM_DX7_ALGORITHM, PARAM_DX7_FEEDBACK, PARAM_MIX_TRACK3_GAIN, PARAM_DX7_TRANSPOSE } },
+    { .params = { PARAM_DX7_LFO_SPEED, PARAM_DX7_LFO_DELAY, PARAM_DX7_LFO_PITCH_MOD_DEPTH, PARAM_DX7_LFO_AMP_MOD_DEPTH } },
+    { .params = { PARAM_DX7_PITCH_BEND_RANGE, PARAM_DX7_PORTAMENTO_TIME, PARAM_DX7_MONO_MODE, PARAM_DX7_OPERATOR_MASK } },
+    { .params = { PARAM_DX7_OPERATOR_1_LEVEL, PARAM_DX7_OPERATOR_2_LEVEL, PARAM_DX7_OPERATOR_3_LEVEL, PARAM_DX7_OPERATOR_4_LEVEL } },
 };
 
-static const char *const g_juno_page_names[] = {
-    "OSC",
-    "FILTER",
-    "ENV",
-    "PERF",
+static const char *const g_dx7_page_names[] = {
+    "PLAY",
+    "MOTION",
+    "CTRL",
+    "COLOR",
 };
 
-static uint8_t g_juno_page_index = 0U;
+static uint8_t g_dx7_page_index = 0U;
 
 static void ui_page_param_test_select_page(uint8_t page_index)
 {
-    const uint8_t page_count = (uint8_t)(sizeof(g_juno_param_banks) / sizeof(g_juno_param_banks[0]));
-    g_juno_page_index = (page_count == 0U) ? 0U : (uint8_t)(page_index % page_count);
-    ui_param_set_bank(&g_juno_param_banks[g_juno_page_index]);
+    const uint8_t page_count = (uint8_t)(sizeof(g_dx7_param_banks) / sizeof(g_dx7_param_banks[0]));
+    g_dx7_page_index = (page_count == 0U) ? 0U : (uint8_t)(page_index % page_count);
+    ui_param_set_bank(&g_dx7_param_banks[g_dx7_page_index]);
 }
 
 /**
@@ -161,7 +161,7 @@ static void ui_page_param_test_handle_event(const ui_event_t *ev)
 
     if (ev->id == (uint8_t)BTN_PARAM_1)
     {
-        ui_page_param_test_select_page((uint8_t)(g_juno_page_index + 1U));
+        ui_page_param_test_select_page((uint8_t)(g_dx7_page_index + 1U));
     }
 }
 
@@ -189,7 +189,7 @@ static void ui_page_param_test_tick(void) {}
  */
 static void ui_page_param_test_render(void)
 {
-    const ui_param_bank_t *bank = &g_juno_param_banks[g_juno_page_index];
+    const ui_param_bank_t *bank = &g_dx7_param_banks[g_dx7_page_index];
 
     for (uint8_t i = 0U; i < 4U; i++)
     {
@@ -202,7 +202,7 @@ static void ui_page_param_test_render(void)
 
         if (i == 0U)
         {
-            (void)snprintf(line_txt, sizeof(line_txt), "%s %s %s", g_juno_page_names[g_juno_page_index], desc->name, value_txt);
+            (void)snprintf(line_txt, sizeof(line_txt), "%s %s %s", g_dx7_page_names[g_dx7_page_index], desc->name, value_txt);
         }
         else
         {

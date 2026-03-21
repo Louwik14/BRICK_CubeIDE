@@ -78,3 +78,59 @@ void MicroDexedMarkIMinimal::render(int16_t *out, int nframes)
     offset += frames;
   }
 }
+
+
+bool MicroDexedMarkIMinimal::getPatchData(uint8_t *patch_data) const
+{
+  if (engine_ == nullptr || patch_data == nullptr)
+    return false;
+
+  return engine_->getVoiceData(patch_data);
+}
+
+bool MicroDexedMarkIMinimal::setVoiceParameter(uint8_t offset, uint8_t value)
+{
+  if (engine_ == nullptr || offset >= sizeof(engine_->data))
+    return false;
+
+  engine_->data[offset] = value;
+  engine_->doRefreshVoice();
+  return true;
+}
+
+uint8_t MicroDexedMarkIMinimal::getVoiceParameter(uint8_t offset) const
+{
+  if (engine_ == nullptr || offset >= sizeof(engine_->data))
+    return 0U;
+
+  return engine_->data[offset];
+}
+
+void MicroDexedMarkIMinimal::setMonoMode(bool enabled)
+{
+  if (engine_ != nullptr)
+    engine_->setMonoMode(enabled);
+}
+
+bool MicroDexedMarkIMinimal::isMonoMode() const
+{
+  return (engine_ != nullptr) ? engine_->isMonoMode() : false;
+}
+
+void MicroDexedMarkIMinimal::setPitchBendRange(uint8_t range, uint8_t step)
+{
+  if (engine_ != nullptr)
+    engine_->setPBController(range, step);
+}
+
+void MicroDexedMarkIMinimal::setPortamento(uint8_t mode, uint8_t glissando, uint8_t time)
+{
+  if (engine_ != nullptr)
+    engine_->setPortamentoMode(mode, glissando, time);
+}
+
+void MicroDexedMarkIMinimal::setOperatorMask(uint8_t mask)
+{
+  if (engine_ != nullptr)
+    engine_->setOPs(mask);
+}
