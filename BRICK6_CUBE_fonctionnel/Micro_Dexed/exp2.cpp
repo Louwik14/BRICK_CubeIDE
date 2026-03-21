@@ -28,6 +28,7 @@
 
 
 
+// FUTURE_CONST_FLASH: filled once by Exp2::init(), then used as a read-only LUT.
 int32_t exp2tab[EXP2_N_SAMPLES << 1];
 
 void Exp2::init() {
@@ -43,6 +44,7 @@ void Exp2::init() {
   exp2tab[(EXP2_N_SAMPLES << 1) - 2] = (1U << 31) - exp2tab[(EXP2_N_SAMPLES << 1) - 1];
 }
 
+// FUTURE_CONST_FLASH: filled once by Tanh::init(), then used as a read-only LUT.
 int32_t tanhtab[TANH_N_SAMPLES << 1];
 
 static FRAC_NUM dtanh(FRAC_NUM y) {
