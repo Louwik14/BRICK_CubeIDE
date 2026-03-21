@@ -189,6 +189,14 @@ SECTIONS
     . = ALIGN(32);
   } >RAM_D2
 
+  .ram_d2_lut (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ram_d2_lut)
+    *(.ram_d2_lut*)
+    . = ALIGN(32);
+  } >RAM_D2
+
   .ram_d3_ctrl (NOLOAD) :
   {
     . = ALIGN(32);

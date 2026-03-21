@@ -17,6 +17,7 @@
 #include <math.h>
 #include "porta.h"
 #include "synth.h"
+#include "Storage/memory_layout.h"
 
 void Porta::init_sr(double sampleRate)
 {
@@ -32,4 +33,4 @@ void Porta::init_sr(double sampleRate)
   }
 }
 
-int32_t Porta::rates[128];
+AUDIO_LUT_D2 int32_t Porta::rates[128];

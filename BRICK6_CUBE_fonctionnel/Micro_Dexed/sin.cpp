@@ -19,14 +19,15 @@
 
 #include "synth.h"
 #include "sin.h"
+#include "Storage/memory_layout.h"
 
 #define R (1 << 29)
 
 #ifdef SIN_DELTA
-int32_t sintab[SIN_N_SAMPLES << 1];
+AUDIO_LUT_D2 int32_t sintab[SIN_N_SAMPLES << 1];
 #else
 // FUTURE_CONST_FLASH: filled once by Sin::init(), then used as a read-only LUT.
-int32_t sintab[SIN_N_SAMPLES + 1];
+AUDIO_LUT_D2 int32_t sintab[SIN_N_SAMPLES + 1];
 #endif
 
 void Sin::init() {
