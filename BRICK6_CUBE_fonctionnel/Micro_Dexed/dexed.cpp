@@ -27,7 +27,9 @@
 #include "synth.h"
 #include "dexed.h"
 #include "EngineMkI.h"
+#ifndef MICRODEXED_MINIMAL
 #include "EngineOpl.h"
+#endif
 #include "fm_core.h"
 #include "exp2.h"
 #include "sin.h"
@@ -37,7 +39,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include "porta.h"
-#ifdef USE_TEENSY_DSP
+#if defined(USE_TEENSY_DSP) && !defined(MICRODEXED_MINIMAL)
 #include <Audio.h>
 #endif
 
@@ -59,8 +61,10 @@ Dexed::Dexed(int rate)
   fx.init(rate);
 
   engineMkI = new EngineMkI;
+#ifndef MICRODEXED_MINIMAL
   engineOpl = new EngineOpl;
   engineMsfa = new FmCore;
+#endif
 
   for (i = 0; i < MAX_ACTIVE_NOTES; i++)
   {
@@ -96,8 +100,10 @@ Dexed::~Dexed()
   for (uint8_t note = 0; note < MAX_ACTIVE_NOTES; note++)
     delete voices[note].dx7_note;
 
+#ifndef MICRODEXED_MINIMAL
   delete(engineMsfa);
   delete(engineOpl);
+#endif
   delete(engineMkI);
 }
 
@@ -114,9 +120,12 @@ void Dexed::deactivate(void)
 
 void Dexed::getSamples(uint16_t n_samples, int16_t* buffer)
 {
+  if (n_samples > DEXED_RENDER_MAX_FRAMES)
+    n_samples = DEXED_RENDER_MAX_FRAMES;
+
   uint16_t i, j;
   uint8_t note;
-  float sumbuf[n_samples];
+  float sumbuf[DEXED_RENDER_MAX_FRAMES];
   float s;
   const double decayFactor = 0.99992;
 
@@ -184,7 +193,7 @@ void Dexed::getSamples(uint16_t n_samples, int16_t* buffer)
   }
 
   //arm_scale_f32(sumbuf, 0.00015, sumbuf, AUDIO_BLOCK_SAMPLES);
-  arm_float_to_q15(sumbuf, buffer, AUDIO_BLOCK_SAMPLES);
+  arm_float_to_q15(sumbuf, buffer, n_samples);
 }
 
 void Dexed::keydown(int16_t pitch, uint8_t velo) {
@@ -219,7 +228,7 @@ void Dexed::keydown(int16_t pitch, uint8_t velo) {
         voices[i].sustained = sustain;
         voices[i].live = true;
         voices[i].dx7_note->init(data, pitch, velo, pitch, porta, &controllers);
-        voices[i].key_pressed_timer = millis();
+        voices[i].key_pressed_timer = ++key_event_id;
         return;
       }
     }
@@ -261,7 +270,7 @@ void Dexed::keydown(int16_t pitch, uint8_t velo) {
       voices[note].dx7_note->init(data, pitch, velo, srcnote, porta, &controllers);
       if ( data[136] )
         voices[note].dx7_note->oscSync();
-      voices[i].key_pressed_timer = millis();
+      voices[note].key_pressed_timer = ++key_event_id;
       keydown_counter++;
       break;
     }
@@ -360,6 +369,13 @@ void Dexed::setEngineType(uint8_t tp) {
   if (engineType == tp)
     return;
 
+#ifdef MICRODEXED_MINIMAL
+  controllers.core = engineMkI;
+  engineType = DEXED_ENGINE_MARKI;
+  panic();
+  controllers.refresh();
+  return;
+#else
   switch (tp)  {
     case DEXED_ENGINE_MARKI:
       controllers.core = engineMkI;
@@ -375,6 +391,7 @@ void Dexed::setEngineType(uint8_t tp) {
   engineType = tp;
   panic();
   controllers.refresh();
+#endif
 }
 
 bool Dexed::isMonoMode(void) {

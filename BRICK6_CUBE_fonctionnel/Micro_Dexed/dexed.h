@@ -26,20 +26,26 @@
 #ifndef DEXED_H_INCLUDED
 #define DEXED_H_INCLUDED
 
-#include <Arduino.h>
+#include "microdexed_compat.h"
 #include "controllers.h"
 #include "dx7note.h"
 #include "lfo.h"
 #include "synth.h"
 #include "fm_core.h"
 #include "EngineMkI.h"
+#ifndef MICRODEXED_MINIMAL
 #include "EngineOpl.h"
+#endif
 #include "PluginFx.h"
+#ifndef MICRODEXED_MINIMAL
 #include <Audio.h>
+#endif
 #include "config.h"
 
 extern bool load_sysex(uint8_t bank, uint8_t voice_number);
+#ifndef MICRODEXED_MINIMAL
 extern AudioControlSGTL5000 sgtl5000_1;
+#endif
 extern float vol;
 extern float vol_right;
 extern float vol_left;
@@ -199,6 +205,7 @@ class Dexed
   protected:
     static const uint8_t MAX_ACTIVE_NOTES = MAX_NOTES;
     uint8_t max_notes = MAX_ACTIVE_NOTES;
+    uint32_t key_event_id = 0;
     int16_t currentNote;
     bool sustain;
     float vuSignal;
@@ -208,9 +215,13 @@ class Dexed
     uint8_t engineType;
     VoiceStatus voiceStatus;
     Lfo lfo;
+#ifndef MICRODEXED_MINIMAL
     FmCore* engineMsfa;
+#endif
     EngineMkI* engineMkI;
+#ifndef MICRODEXED_MINIMAL
     EngineOpl* engineOpl;
+#endif
 };
 
 #endif  // PLUGINPROCESSOR_H_INCLUDED

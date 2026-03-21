@@ -17,7 +17,7 @@
 #ifndef __CONTROLLERS_H
 #define __CONTROLLERS_H
 
-#include <Arduino.h>
+#include "microdexed_compat.h"
 #include "synth.h"
 #include <stdio.h>
 #include <string.h>
@@ -52,12 +52,12 @@ class FmMod {
 
     void setRange(uint8_t r)
     {
-      range = r < 0 && r > 99 ? 0 : r;
+      range = r > 99 ? 0 : r;
     }
 
     void setTarget(uint8_t assign)
     {
-      assign = assign < 0 && assign > 7 ? 0 : assign;
+      assign = assign > 7 ? 0 : assign;
       pitch = assign & 1; // PITCH
       amp = assign & 2; // AMP
       eg = assign & 4; // EG
