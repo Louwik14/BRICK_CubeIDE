@@ -23,6 +23,7 @@
 #include "mixer.h"
 #include "fx_pool.h"
 #include "param_store.h"
+#include "param_registry.h"
 #include "control_events.h"
 #include "cpu_load.h"
 #include "Audio/microdexed_synth.h"
@@ -36,6 +37,7 @@
 #include "Storage/memory_layout.h"
 
 #include "App/Hall/hall_loop.h"
+#include "App/Hall/hall_juno_midi.h"
 
 #define HALFPI_F 1.57079632679489661923f
 
@@ -200,6 +202,7 @@ void brick6_app_init(void)
 
     microdexed_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
     microdexed_synth_set_enabled(1U);
+    hall_juno_midi_init();
 
     recorder_transport_init();
     sd_recorder_init();
@@ -215,7 +218,7 @@ void brick6_app_init(void)
     track_enable(0, 1U);
     track_enable(1, 1U);
     track_enable(2, 1U);
-    track_enable(3, 0U);
+    track_enable(3, 1U);
 
     track_set_gain(0, 1.0f);
     track_set_gain(1, 1.0f);
@@ -227,6 +230,22 @@ void brick6_app_init(void)
 
     engine_tasklet_init(48000);
     param_store_init();
+    param_reset(PARAM_MIX_TRACK3_GAIN);
+    param_reset(PARAM_DX7_ALGORITHM);
+    param_reset(PARAM_DX7_FEEDBACK);
+    param_reset(PARAM_DX7_TRANSPOSE);
+    param_reset(PARAM_DX7_LFO_SPEED);
+    param_reset(PARAM_DX7_LFO_DELAY);
+    param_reset(PARAM_DX7_LFO_PITCH_MOD_DEPTH);
+    param_reset(PARAM_DX7_LFO_AMP_MOD_DEPTH);
+    param_reset(PARAM_DX7_PITCH_BEND_RANGE);
+    param_reset(PARAM_DX7_PORTAMENTO_TIME);
+    param_reset(PARAM_DX7_MONO_MODE);
+    param_reset(PARAM_DX7_OPERATOR_MASK);
+    param_reset(PARAM_DX7_OPERATOR_1_LEVEL);
+    param_reset(PARAM_DX7_OPERATOR_2_LEVEL);
+    param_reset(PARAM_DX7_OPERATOR_3_LEVEL);
+    param_reset(PARAM_DX7_OPERATOR_4_LEVEL);
     control_event_init();
 
     hall_loop_init();
@@ -262,6 +281,7 @@ void brick6_app_process(void)
     engine_tasklet_poll();
 
     hall_loop_process();
+    hall_juno_midi_process();
 
     recorder_transport_process();
 

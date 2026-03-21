@@ -23,6 +23,7 @@
 
 #include "audio_float.h"
 #include "Audio/juno_synth.h"
+#include "Audio/microdexed_synth.h"
 #include "fx_daisy_comp.h"
 #include "fx_granular.h"
 #include "fx_pool.h"
@@ -136,6 +137,22 @@ static void apply_mix_track3_send1(float v) { mixer_set_track_send_level(3U, 1U,
 
 static void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
 static void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
+
+static void apply_dx7_algorithm(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_ALGORITHM, v); }
+static void apply_dx7_feedback(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_FEEDBACK, v); }
+static void apply_dx7_transpose(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_TRANSPOSE, v); }
+static void apply_dx7_lfo_speed(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_SPEED, v); }
+static void apply_dx7_lfo_delay(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_DELAY, v); }
+static void apply_dx7_lfo_pitch_mod_depth(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_PITCH_MOD_DEPTH, v); }
+static void apply_dx7_lfo_amp_mod_depth(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_AMP_MOD_DEPTH, v); }
+static void apply_dx7_pitch_bend_range(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_PITCH_BEND_RANGE, v); }
+static void apply_dx7_portamento_time(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_PORTAMENTO_TIME, v); }
+static void apply_dx7_mono_mode(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_MONO_MODE, v); }
+static void apply_dx7_operator_mask(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_MASK, v); }
+static void apply_dx7_operator_1_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_1_LEVEL, v); }
+static void apply_dx7_operator_2_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_2_LEVEL, v); }
+static void apply_dx7_operator_3_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_3_LEVEL, v); }
+static void apply_dx7_operator_4_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_4_LEVEL, v); }
 
 static fx_granular_state_t *get_active_granular_state(void)
 {
@@ -542,6 +559,22 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_JUNO_HPF, "HPF", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_juno_hpf_labels, apply_juno_hpf),
     PARAM_DESC_EX(PARAM_JUNO_PORTA, "PORTA", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.22f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_porta),
     PARAM_DESC_EX(PARAM_JUNO_MODE, "MODE", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_juno_mode_labels, apply_juno_mode),
+
+    PARAM_DESC(PARAM_DX7_ALGORITHM, "ALGO", PARAM_TYPE_INT, 0.0f, 31.0f, 1.0f, 4.0f, "", apply_dx7_algorithm),
+    PARAM_DESC(PARAM_DX7_FEEDBACK, "FDBK", PARAM_TYPE_INT, 0.0f, 7.0f, 1.0f, 6.0f, "", apply_dx7_feedback),
+    PARAM_DESC(PARAM_DX7_TRANSPOSE, "TRANS", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, "st", apply_dx7_transpose),
+    PARAM_DESC(PARAM_DX7_LFO_SPEED, "LFO SPD", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 34.0f, "", apply_dx7_lfo_speed),
+    PARAM_DESC(PARAM_DX7_LFO_DELAY, "LFO DLY", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 33.0f, "", apply_dx7_lfo_delay),
+    PARAM_DESC(PARAM_DX7_LFO_PITCH_MOD_DEPTH, "PMD", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, "", apply_dx7_lfo_pitch_mod_depth),
+    PARAM_DESC(PARAM_DX7_LFO_AMP_MOD_DEPTH, "AMD", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, "", apply_dx7_lfo_amp_mod_depth),
+    PARAM_DESC(PARAM_DX7_PITCH_BEND_RANGE, "BEND", PARAM_TYPE_INT, 0.0f, 12.0f, 1.0f, 2.0f, "st", apply_dx7_pitch_bend_range),
+    PARAM_DESC(PARAM_DX7_PORTAMENTO_TIME, "PORTA", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, "", apply_dx7_portamento_time),
+    PARAM_DESC_EX(PARAM_DX7_MONO_MODE, "MONO", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_dx7_mono_mode),
+    PARAM_DESC(PARAM_DX7_OPERATOR_MASK, "OPS", PARAM_TYPE_INT, 0.0f, 63.0f, 1.0f, 63.0f, "", apply_dx7_operator_mask),
+    PARAM_DESC(PARAM_DX7_OPERATOR_1_LEVEL, "OP1", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 79.0f, "", apply_dx7_operator_1_level),
+    PARAM_DESC(PARAM_DX7_OPERATOR_2_LEVEL, "OP2", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 99.0f, "", apply_dx7_operator_2_level),
+    PARAM_DESC(PARAM_DX7_OPERATOR_3_LEVEL, "OP3", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 89.0f, "", apply_dx7_operator_3_level),
+    PARAM_DESC(PARAM_DX7_OPERATOR_4_LEVEL, "OP4", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 99.0f, "", apply_dx7_operator_4_level),
 };
 
 /**
