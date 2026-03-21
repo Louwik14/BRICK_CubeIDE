@@ -1,0 +1,3 @@
+../Src/App/Hall/hall_juno_midi.c:9:13:hall_juno_midi_emit_internal	1
+../Src/App/Hall/hall_juno_midi.c:17:6:hall_juno_midi_init	1
+../Src/App/Hall/hall_juno_midi.c:22:6:hall_juno_midi_process	6

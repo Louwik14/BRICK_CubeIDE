@@ -36,7 +36,7 @@ const uint16_t kr106::LFO::kLfoRampTable[8] = {
 
 namespace {
 
-constexpr uint32_t JUNO_SYNTH_NUM_VOICES = 4U;
+constexpr uint32_t JUNO_SYNTH_NUM_VOICES = 1U;
 constexpr uint32_t JUNO_MIDI_EVENTS_PER_BLOCK = 16U;
 constexpr uint32_t JUNO_HELD_NOTE_STACK_LEN = 16U;
 constexpr float JUNO_BEND_RANGE_OCT = 2.0f / 12.0f;
