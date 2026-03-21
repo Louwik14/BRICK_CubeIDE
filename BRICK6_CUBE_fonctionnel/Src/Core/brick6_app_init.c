@@ -215,7 +215,7 @@ void brick6_app_init(void)
     track_enable(0, 1U);
     track_enable(1, 1U);
     track_enable(2, 1U);
-    track_enable(3, 1U);
+    track_enable(3, 0U);
 
     track_set_gain(0, 1.0f);
     track_set_gain(1, 1.0f);
