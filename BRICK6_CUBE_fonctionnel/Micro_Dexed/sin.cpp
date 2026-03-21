@@ -25,6 +25,7 @@
 #ifdef SIN_DELTA
 int32_t sintab[SIN_N_SAMPLES << 1];
 #else
+// FUTURE_CONST_FLASH: filled once by Sin::init(), then used as a read-only LUT.
 int32_t sintab[SIN_N_SAMPLES + 1];
 #endif
 

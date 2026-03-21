@@ -22,6 +22,7 @@
 struct Porta {
   public:
     static void init_sr(double sampleRate);
+    // FUTURE_CONST_FLASH: computed once from sample rate, then read-only in steady state.
     static int32_t rates[128];
 };
 
