@@ -1,1 +1,1 @@
-../Src/MIDI/juno_midi_input.c:19:6:midi_internal_receive	16
+../Src/MIDI/juno_midi_input.c:23:6:juno_midi_input_receive	16

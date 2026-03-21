@@ -27,21 +27,12 @@
 #include "synth.h"
 #include "dexed.h"
 #include "EngineMkI.h"
-#ifndef MICRODEXED_MINIMAL
-#include "EngineOpl.h"
-#endif
-#include "fm_core.h"
 #include "exp2.h"
 #include "sin.h"
 #include "freqlut.h"
 #include "controllers.h"
-#include "PluginFx.h"
-#include <unistd.h>
 #include <limits.h>
 #include "porta.h"
-#if defined(USE_TEENSY_DSP) && !defined(MICRODEXED_MINIMAL)
-#include <Audio.h>
-#endif
 
 extern config_t configuration;
 
@@ -58,13 +49,10 @@ Dexed::Dexed(int rate)
   PitchEnv::init(rate);
   Env::init_sr(rate);
   Porta::init_sr(rate);
-  fx.init(rate);
+
 
   engineMkI = new EngineMkI;
-#ifndef MICRODEXED_MINIMAL
-  engineOpl = new EngineOpl;
-  engineMsfa = new FmCore;
-#endif
+
 
   for (i = 0; i < MAX_ACTIVE_NOTES; i++)
   {
@@ -100,10 +88,7 @@ Dexed::~Dexed()
   for (uint8_t note = 0; note < MAX_ACTIVE_NOTES; note++)
     delete voices[note].dx7_note;
 
-#ifndef MICRODEXED_MINIMAL
-  delete(engineMsfa);
-  delete(engineOpl);
-#endif
+
   delete(engineMkI);
 }
 
@@ -178,7 +163,7 @@ void Dexed::getSamples(uint16_t n_samples, int16_t* buffer)
     }
   }
 
-  fx.process(sumbuf, n_samples); // Needed for fx.Gain()!!!
+
 
   // mild compression
   for (i = 0; i < n_samples; i++)
@@ -366,32 +351,11 @@ uint8_t Dexed::getEngineType() {
 }
 
 void Dexed::setEngineType(uint8_t tp) {
-  if (engineType == tp)
-    return;
-
-#ifdef MICRODEXED_MINIMAL
+  (void)tp;
   controllers.core = engineMkI;
   engineType = DEXED_ENGINE_MARKI;
   panic();
   controllers.refresh();
-  return;
-#else
-  switch (tp)  {
-    case DEXED_ENGINE_MARKI:
-      controllers.core = engineMkI;
-      break;
-    case DEXED_ENGINE_OPL:
-      controllers.core = engineOpl;
-      break;
-    default:
-      controllers.core = engineMsfa;
-      tp = DEXED_ENGINE_MODERN;
-      break;
-  }
-  engineType = tp;
-  panic();
-  controllers.refresh();
-#endif
 }
 
 bool Dexed::isMonoMode(void) {
@@ -517,10 +481,7 @@ uint8_t Dexed::getNumNotesPlaying(void)
         voices[i].live = false;
         voices[i].sustained = false;
         voices[i].keydown = false;
-#ifdef DEBUG
-        Serial.print(F("Shutdown voice: "));
-        Serial.println(i, DEC);
-#endif
+
       }
       else
         count_playing_voices++;
@@ -597,11 +558,7 @@ bool Dexed::decodeVoice(uint8_t* encoded_data, uint8_t* new_data)
 
   strncpy(dexed_voice_name, (char *)&encoded_data[118], sizeof(dexed_voice_name) - 1);
   dexed_voice_name[10] = '\0';
-#ifdef DEBUG
-  Serial.print(F("Voice ["));
-  Serial.print(dexed_voice_name);
-  Serial.println(F("] decoded."));
-#endif
+
 
   return (true);
 }
@@ -675,20 +632,14 @@ bool Dexed::loadVoiceParameters(uint8_t* new_data)
 
   strncpy(dexed_voice_name, (char *)&new_data[145], sizeof(dexed_voice_name) - 1);
   dexed_voice_name[10] = '\0';
-#ifdef DEBUG
-  Serial.print(F("Voice ["));
-  Serial.print(dexed_voice_name);
-  Serial.println(F("] loaded."));
-#endif
+
 
   return (true);
 }
 
 void Dexed::setPBController(uint8_t pb_range, uint8_t pb_step)
 {
-#ifdef DEBUG
-  Serial.println(F("Dexed::setPBController"));
-#endif
+
 
   pb_range = constrain(pb_range, PB_RANGE_MIN, PB_RANGE_MAX);
   pb_step = constrain(pb_step, PB_STEP_MIN, PB_STEP_MAX);
@@ -701,9 +652,7 @@ void Dexed::setPBController(uint8_t pb_range, uint8_t pb_step)
 
 void Dexed::setMWController(uint8_t mw_range, uint8_t mw_assign, uint8_t mw_mode)
 {
-#ifdef DEBUG
-  Serial.println(F("Dexed::setMWController"));
-#endif
+
 
   mw_range = constrain(mw_range, MW_RANGE_MIN, MW_RANGE_MAX);
   mw_assign = constrain(mw_assign, MW_ASSIGN_MIN, MW_ASSIGN_MAX);
@@ -718,9 +667,7 @@ void Dexed::setMWController(uint8_t mw_range, uint8_t mw_assign, uint8_t mw_mode
 
 void Dexed::setFCController(uint8_t fc_range, uint8_t fc_assign, uint8_t fc_mode)
 {
-#ifdef DEBUG
-  Serial.println(F("Dexed::setFCController"));
-#endif
+
 
   fc_range = constrain(fc_range, FC_RANGE_MIN, FC_RANGE_MAX);
   fc_assign = constrain(fc_assign, FC_ASSIGN_MIN, FC_ASSIGN_MAX);
@@ -735,9 +682,6 @@ void Dexed::setFCController(uint8_t fc_range, uint8_t fc_assign, uint8_t fc_mode
 
 void Dexed::setBCController(uint8_t bc_range, uint8_t bc_assign, uint8_t bc_mode)
 {
-#ifdef DEBUG
-  Serial.println(F("Dexed::setBCController"));
-#endif
 
   bc_range = constrain(bc_range, BC_RANGE_MIN, BC_RANGE_MAX);
   bc_assign = constrain(bc_assign, BC_ASSIGN_MIN, BC_ASSIGN_MAX);
@@ -752,9 +696,7 @@ void Dexed::setBCController(uint8_t bc_range, uint8_t bc_assign, uint8_t bc_mode
 
 void Dexed::setATController(uint8_t at_range, uint8_t at_assign, uint8_t at_mode)
 {
-#ifdef DEBUG
-  Serial.println(F("Dexed::setATController"));
-#endif
+
 
   at_range = constrain(at_range, AT_RANGE_MIN, AT_RANGE_MAX);
   at_assign = constrain(at_assign, AT_ASSIGN_MIN, AT_ASSIGN_MAX);

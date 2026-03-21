@@ -3,6 +3,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  ../Inc/Audio/sd_multitrack_recorder.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi_host.h \
  ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
@@ -67,7 +68,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h \
- ../Inc/Audio/juno_synth.h ../Inc/Sampler/sample_pool.h \
+ ../Inc/Audio/microdexed_synth.h ../Inc/Sampler/sample_pool.h \
  ../Inc/Sampler/voice_manager.h ../Inc/Audio/live_recorder.h \
  ../Inc/Audio/live_recorder_config.h ../Inc/Audio/recorder_transport.h \
  ../Inc/Storage/memory_layout.h ../Inc/App/Hall/hall_loop.h
@@ -75,6 +76,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi_host.h:
 ../Inc/sai.h:
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
@@ -141,7 +143,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h:
-../Inc/Audio/juno_synth.h:
+../Inc/Audio/microdexed_synth.h:
 ../Inc/Sampler/sample_pool.h:
 ../Inc/Sampler/voice_manager.h:
 ../Inc/Audio/live_recorder.h:

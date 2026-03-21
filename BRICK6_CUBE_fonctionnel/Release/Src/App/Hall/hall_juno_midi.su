@@ -1,3 +1,2 @@
-../Src/App/Hall/hall_juno_midi.c:9:13:hall_juno_midi_emit_internal	0	static
-../Src/App/Hall/hall_juno_midi.c:17:6:hall_juno_midi_init	0	static
-../Src/App/Hall/hall_juno_midi.c:22:6:hall_juno_midi_process	40	static
+../Src/App/Hall/hall_juno_midi.c:7:6:hall_juno_midi_init	0	static
+../Src/App/Hall/hall_juno_midi.c:12:6:hall_juno_midi_process	24	static

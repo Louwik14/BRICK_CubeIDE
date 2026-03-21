@@ -1,0 +1,32 @@
+../Micro_Dexed/dexed.cpp:39:1:Dexed::Dexed(int)	53
+../Micro_Dexed/dexed.cpp:84:1:Dexed::~Dexed()	4
+../Micro_Dexed/dexed.cpp:95:6:void Dexed::activate()	28
+../Micro_Dexed/dexed.cpp:101:6:void Dexed::deactivate()	5
+../Micro_Dexed/dexed.cpp:106:6:void Dexed::getSamples(uint16_t, int16_t*)	25
+../Micro_Dexed/dexed.cpp:295:6:void Dexed::keyup(int16_t)	20
+../Micro_Dexed/dexed.cpp:184:6:void Dexed::keydown(int16_t, uint8_t)	51
+../Micro_Dexed/dexed.cpp:339:6:void Dexed::doRefreshVoice()	1
+../Micro_Dexed/dexed.cpp:344:6:void Dexed::setOPs(uint8_t)	1
+../Micro_Dexed/dexed.cpp:349:9:uint8_t Dexed::getEngineType()	1
+../Micro_Dexed/dexed.cpp:353:6:void Dexed::setEngineType(uint8_t)	28
+../Micro_Dexed/dexed.cpp:361:6:bool Dexed::isMonoMode()	1
+../Micro_Dexed/dexed.cpp:365:6:void Dexed::setMonoMode(bool)	6
+../Micro_Dexed/dexed.cpp:374:6:void Dexed::setRefreshMode(bool)	1
+../Micro_Dexed/dexed.cpp:378:6:void Dexed::setSustain(bool)	2
+../Micro_Dexed/dexed.cpp:386:6:bool Dexed::getSustain()	1
+../Micro_Dexed/dexed.cpp:391:6:void Dexed::panic()	5
+../Micro_Dexed/dexed.cpp:408:6:void Dexed::resetControllers()	20
+../Micro_Dexed/dexed.cpp:424:6:void Dexed::notesOff()	5
+../Micro_Dexed/dexed.cpp:433:6:void Dexed::setMaxNotes(uint8_t)	29
+../Micro_Dexed/dexed.cpp:443:9:uint8_t Dexed::getMaxNotes()	1
+../Micro_Dexed/dexed.cpp:448:9:uint8_t Dexed::getNumNotesPlaying()	145
+../Micro_Dexed/dexed.cpp:493:6:bool Dexed::decodeVoice(uint8_t*, uint8_t*)	10
+../Micro_Dexed/dexed.cpp:566:6:bool Dexed::encodeVoice(uint8_t*)	2
+../Micro_Dexed/dexed.cpp:616:6:bool Dexed::getVoiceData(uint8_t*)	1
+../Micro_Dexed/dexed.cpp:622:6:bool Dexed::loadVoiceParameters(uint8_t*)	5
+../Micro_Dexed/dexed.cpp:640:6:void Dexed::setPBController(uint8_t, uint8_t)	24
+../Micro_Dexed/dexed.cpp:653:6:void Dexed::setMWController(uint8_t, uint8_t, uint8_t)	23
+../Micro_Dexed/dexed.cpp:668:6:void Dexed::setFCController(uint8_t, uint8_t, uint8_t)	23
+../Micro_Dexed/dexed.cpp:683:6:void Dexed::setBCController(uint8_t, uint8_t, uint8_t)	23
+../Micro_Dexed/dexed.cpp:697:6:void Dexed::setATController(uint8_t, uint8_t, uint8_t)	23
+../Micro_Dexed/dexed.cpp:712:6:void Dexed::setPortamentoMode(uint8_t, uint8_t, uint8_t)	24

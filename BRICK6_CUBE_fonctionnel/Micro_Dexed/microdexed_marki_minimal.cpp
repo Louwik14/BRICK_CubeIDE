@@ -24,9 +24,7 @@ bool MicroDexedMarkIMinimal::init(int sample_rate)
   engine_->setEngineType(DEXED_ENGINE_MARKI);
   engine_->setMaxNotes(4);
   engine_->setMonoMode(false);
-  engine_->fx.Gain = 1.0f;
-  engine_->fx.Cutoff = 1.0f;
-  engine_->fx.Reso = 0.0f;
+
 
   return true;
 }

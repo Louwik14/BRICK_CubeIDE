@@ -55,6 +55,7 @@ Drivers/CMSIS_DSP/Source/TransformFunctions \
 Drivers/Drv_app/Src \
 Drivers/STM32H7xx_HAL_Driver/Src \
 Drivers/U8g2 \
+Micro_Dexed \
 Src/App/Hall \
 Src/App \
 Src/Audio \

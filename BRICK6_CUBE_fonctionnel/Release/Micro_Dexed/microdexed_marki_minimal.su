@@ -1,0 +1,9 @@
+../Micro_Dexed/microdexed_marki_minimal.cpp:7:1:MicroDexedMarkIMinimal::MicroDexedMarkIMinimal()	0	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:9:1:MicroDexedMarkIMinimal::~MicroDexedMarkIMinimal()	8	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:15:6:bool MicroDexedMarkIMinimal::init(int)	16	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:32:6:bool MicroDexedMarkIMinimal::loadPatchFromMemory(const uint8_t*)	0	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:40:6:void MicroDexedMarkIMinimal::loadDefaultPatch()	168	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:50:6:void MicroDexedMarkIMinimal::noteOn(uint8_t, uint8_t)	0	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:56:6:void MicroDexedMarkIMinimal::noteOff(uint8_t)	0	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:62:6:void MicroDexedMarkIMinimal::allNotesOff()	0	static
+../Micro_Dexed/microdexed_marki_minimal.cpp:68:6:void MicroDexedMarkIMinimal::render(int16_t*, int)	24	static

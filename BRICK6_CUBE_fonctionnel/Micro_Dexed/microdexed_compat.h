@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef MICRODEXED_MINIMAL
 
 #include <algorithm>
 #include <chrono>
@@ -49,9 +48,4 @@ inline void arm_float_to_q15(const float *src, int16_t *dst, uint32_t block_size
   }
 }
 
-#else
 
-#include <Arduino.h>
-#include <Audio.h>
-
-#endif
