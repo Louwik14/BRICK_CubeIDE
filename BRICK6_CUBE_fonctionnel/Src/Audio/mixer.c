@@ -130,31 +130,36 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
     if(filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
         return;
 
-    for(uint32_t i = 0U; i < frames; ++i)
+    switch((mixer_track_filter_type_t)filter->type)
     {
-        svf_process(&filter->left, left[i]);
-        svf_process(&filter->right, right[i]);
+        case MIXER_TRACK_FILTER_LP:
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_LP);
+                right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_LP);
+            }
+            break;
 
-        switch((mixer_track_filter_type_t)filter->type)
-        {
-            case MIXER_TRACK_FILTER_LP:
-                left[i] = svf_low(&filter->left);
-                right[i] = svf_low(&filter->right);
-                break;
+        case MIXER_TRACK_FILTER_HP:
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_HP);
+                right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_HP);
+            }
+            break;
 
-            case MIXER_TRACK_FILTER_HP:
-                left[i] = svf_high(&filter->left);
-                right[i] = svf_high(&filter->right);
-                break;
+        case MIXER_TRACK_FILTER_BP:
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_BP);
+                right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_BP);
+            }
+            break;
 
-            case MIXER_TRACK_FILTER_BP:
-                left[i] = svf_band(&filter->left);
-                right[i] = svf_band(&filter->right);
+        default:
+            {
                 break;
-
-            default:
-                break;
-        }
+            }
     }
 }
 

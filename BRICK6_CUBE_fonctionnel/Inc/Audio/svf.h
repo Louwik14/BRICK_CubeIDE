@@ -24,34 +24,24 @@ typedef struct
     float freq;
     float damp;
 
-    float notch;
     float low;
-    float high;
     float band;
-    float peak;
-    float input;
-
-    float out_low;
-    float out_high;
-    float out_band;
-    float out_peak;
-    float out_notch;
-
     float pre_drive;
     float fc_max;
 } svf_t;
 
+typedef enum
+{
+    SVF_MODE_LP = 0,
+    SVF_MODE_HP,
+    SVF_MODE_BP
+} svf_mode_t;
+
 void svf_init(svf_t *svf, float sample_rate);
-void svf_process(svf_t *svf, float in);
 void svf_set_freq(svf_t *svf, float cutoff_hz);
 void svf_set_res(svf_t *svf, float resonance_0_1);
 void svf_set_drive(svf_t *svf, float drive);
-
-static inline float svf_low(const svf_t *svf) { return svf->out_low; }
-static inline float svf_high(const svf_t *svf) { return svf->out_high; }
-static inline float svf_band(const svf_t *svf) { return svf->out_band; }
-static inline float svf_notch(const svf_t *svf) { return svf->out_notch; }
-static inline float svf_peak(const svf_t *svf) { return svf->out_peak; }
+float svf_process_mode(svf_t *svf, float in, svf_mode_t mode);
 
 #ifdef __cplusplus
 }

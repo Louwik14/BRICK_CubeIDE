@@ -35,50 +35,46 @@ void svf_init(svf_t *svf, float sample_rate)
     svf->freq      = 0.25f;
     svf->damp      = 0.0f;
 
-    svf->notch     = 0.0f;
     svf->low       = 0.0f;
-    svf->high      = 0.0f;
     svf->band      = 0.0f;
-    svf->peak      = 0.0f;
-    svf->input     = 0.0f;
-
-    svf->out_notch = 0.0f;
-    svf->out_low   = 0.0f;
-    svf->out_high  = 0.0f;
-    svf->out_peak  = 0.0f;
-    svf->out_band  = 0.0f;
 
     svf->fc_max    = svf->sr / 3.0f;
 }
 
-void svf_process(svf_t *svf, float in)
+static inline float svf_process_pass(svf_t *svf, float in, svf_mode_t mode)
+{
+    const float notch = in - svf->damp * svf->band;
+    const float low = svf->low + svf->freq * svf->band;
+    const float high = notch - low;
+    const float band_sq = svf->band * svf->band;
+    const float band = svf->freq * high + svf->band - svf->drive * band_sq * svf->band;
+
+    svf->low = low;
+    svf->band = band;
+
+    switch(mode)
+    {
+        case SVF_MODE_HP:
+            return high;
+
+        case SVF_MODE_BP:
+            return band;
+
+        case SVF_MODE_LP:
+        default:
+            return low;
+    }
+}
+
+float svf_process_mode(svf_t *svf, float in, svf_mode_t mode)
 {
     if(svf == nullptr)
-        return;
+        return 0.0f;
 
-    svf->input = in;
+    const float pass1 = svf_process_pass(svf, in, mode);
+    const float pass2 = svf_process_pass(svf, in, mode);
 
-    svf->notch = svf->input - svf->damp * svf->band;
-    svf->low   = svf->low + svf->freq * svf->band;
-    svf->high  = svf->notch - svf->low;
-    svf->band  = svf->freq * svf->high + svf->band - svf->drive * svf->band * svf->band * svf->band;
-
-    svf->out_low   = 0.5f * svf->low;
-    svf->out_high  = 0.5f * svf->high;
-    svf->out_band  = 0.5f * svf->band;
-    svf->out_peak  = 0.5f * (svf->low - svf->high);
-    svf->out_notch = 0.5f * svf->notch;
-
-    svf->notch = svf->input - svf->damp * svf->band;
-    svf->low   = svf->low + svf->freq * svf->band;
-    svf->high  = svf->notch - svf->low;
-    svf->band  = svf->freq * svf->high + svf->band - svf->drive * svf->band * svf->band * svf->band;
-
-    svf->out_low += 0.5f * svf->low;
-    svf->out_high += 0.5f * svf->high;
-    svf->out_band += 0.5f * svf->band;
-    svf->out_peak += 0.5f * (svf->low - svf->high);
-    svf->out_notch += 0.5f * svf->notch;
+    return 0.5f * (pass1 + pass2);
 }
 
 void svf_set_freq(svf_t *svf, float cutoff_hz)
