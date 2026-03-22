@@ -28,6 +28,7 @@
 #include "fx_granular.h"
 #include "fx_pool.h"
 #include "mixer.h"
+#include <math.h>
 #include <stddef.h>
 
 
@@ -95,6 +96,39 @@ static uint8_t control_float_to_ui127(float v)
     if (v >= 1.0f)
         return 127U;
     return (uint8_t)(v * 127.0f + 0.5f);
+}
+
+static float filter_ui127_clamp(float v)
+{
+    return clamp_value(v, 0.0f, 127.0f);
+}
+
+static float filter_ui127_to_unit(float v)
+{
+    return filter_ui127_clamp(v) * (1.0f / 127.0f);
+}
+
+static float filter_ui127_to_cutoff_hz(float v)
+{
+    const float t = filter_ui127_to_unit(v);
+    const float min_hz = 20.0f;
+    const float max_hz = 16000.0f;
+    const float ratio = max_hz / min_hz;
+
+    return min_hz * powf(ratio, t);
+}
+
+static float filter_ui127_to_resonance(float v)
+{
+    const float t = filter_ui127_to_unit(v);
+    const float shaped = t * t;
+
+    return shaped * 0.75f;
+}
+
+static float filter_ui127_to_eg_amount(float v)
+{
+    return filter_ui127_to_unit(v);
 }
 
 static void apply_mix_track0_gain(float v) { mixer_set_track_gain(0U, v); }
@@ -280,6 +314,25 @@ static void apply_sat_bias(float v) { audio_float_set_saturation_bias_ui(control
 static void apply_sat_drive(float v) { audio_float_set_saturation_drive_ui(control_float_to_ui127(v)); }
 static void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to_ui127(v)); }
 
+/*
+ * Première passe FILTER:
+ * - le runtime du mixer supporte un SVF indépendant par track jusqu'à MIXER_MAX_TRACKS
+ * - le système de paramètres n'expose pour l'instant qu'un jeu global `PARAM_FILTER_*`
+ * - ces paramètres pilotent donc la track 0 par convention provisoire
+ */
+static void apply_filter_type(float v)
+{
+    mixer_set_track_filter_type(0U, (mixer_track_filter_type_t)((uint32_t)v & 0x3U));
+}
+
+static void apply_filter_cutoff(float v) { mixer_set_track_filter_cutoff(0U, filter_ui127_to_cutoff_hz(v)); }
+static void apply_filter_resonance(float v) { mixer_set_track_filter_resonance(0U, filter_ui127_to_resonance(v)); }
+static void apply_filter_eg_amount(float v) { mixer_set_track_filter_eg_amount(0U, filter_ui127_to_eg_amount(v)); }
+static void apply_filter_attack(float v) { mixer_set_track_filter_attack(0U, v); }
+static void apply_filter_decay(float v) { mixer_set_track_filter_decay(0U, v); }
+static void apply_filter_sustain(float v) { mixer_set_track_filter_sustain(0U, v); }
+static void apply_filter_release(float v) { mixer_set_track_filter_release(0U, v); }
+
 static void apply_master_gain(float v) { audio_float_set_master_gain(v); }
 static void apply_post_gain(float v) { audio_float_set_postgain(v); }
 static void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
@@ -461,6 +514,7 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison", NULL};
 static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
+static const char *const g_filter_type_labels[] = {"Off", "LP", "HP", "BP", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -538,6 +592,15 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAT_BIAS, "Sat Bias", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_bias),
     PARAM_DESC_EX(PARAM_SAT_DRIVE, "Sat Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_drive),
     PARAM_DESC_EX(PARAM_SAT_MIX, "Sat Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_mix),
+
+    PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
+    PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
+    PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
+    PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),
+    PARAM_DESC_EX(PARAM_FILTER_ATTACK, "Attack", PARAM_TYPE_FLOAT, 0.001f, 5.0f, 0.001f, 0.01f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_filter_attack),
+    PARAM_DESC_EX(PARAM_FILTER_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.001f, 5.0f, 0.001f, 0.10f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_filter_decay),
+    PARAM_DESC_EX(PARAM_FILTER_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_filter_sustain),
+    PARAM_DESC_EX(PARAM_FILTER_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.001f, 5.0f, 0.001f, 0.10f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_filter_release),
 
     PARAM_DESC_EX(PARAM_MASTER_GAIN, "Master Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_master_gain),
     PARAM_DESC_EX(PARAM_POST_GAIN, "Post Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_post_gain),
