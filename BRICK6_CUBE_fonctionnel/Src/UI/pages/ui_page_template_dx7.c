@@ -4,7 +4,7 @@
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_dx7_family = {
-    .family_title = "DX7 TPL",
+    .family_title = "FM DX7",
     .nav_labels = { "PLAY", "MOT", "CTRL", "COL" },
     .subpages = {
         {

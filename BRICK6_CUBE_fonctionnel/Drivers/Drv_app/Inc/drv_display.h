@@ -31,7 +31,10 @@ void drv_display_set_font(const font_t *font);
 
 void drv_display_draw_char(uint8_t x, uint8_t y, char c);
 void drv_display_draw_text(uint8_t x, uint8_t y, const char *txt);
+void drv_display_draw_text_inverted(uint8_t x, uint8_t y, const char *txt);
 void drv_display_draw_number(uint8_t x, uint8_t y, int num);
+uint8_t drv_display_text_width(const char *txt);
+uint8_t drv_display_font_height(void);
 
 /* ====================================================================== */
 /*                        PRIMITIVES GRAPHIQUES                           */

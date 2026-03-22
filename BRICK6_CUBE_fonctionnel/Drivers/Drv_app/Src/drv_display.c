@@ -223,9 +223,33 @@ void drv_display_draw_text(uint8_t x, uint8_t y, const char *txt)
     u8g2_DrawStr(&g_u8g2, x, drv_display_baseline(y), txt);
 }
 
+void drv_display_draw_text_inverted(uint8_t x, uint8_t y, const char *txt)
+{
+    if (!txt)
+        return;
+
+    u8g2_SetDrawColor(&g_u8g2, 0);
+    u8g2_DrawStr(&g_u8g2, x, drv_display_baseline(y), txt);
+    u8g2_SetDrawColor(&g_u8g2, 1);
+}
+
 void drv_display_draw_number(uint8_t x, uint8_t y, int num)
 {
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", num);
     drv_display_draw_text(x, y, buf);
+}
+
+uint8_t drv_display_text_width(const char *txt)
+{
+    if (!txt)
+        return 0U;
+
+    return (uint8_t)u8g2_GetStrWidth(&g_u8g2, txt);
+}
+
+uint8_t drv_display_font_height(void)
+{
+    const int height = u8g2_GetAscent(&g_u8g2) - u8g2_GetDescent(&g_u8g2);
+    return (height > 0) ? (uint8_t)height : 0U;
 }
