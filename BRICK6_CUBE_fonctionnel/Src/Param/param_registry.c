@@ -131,6 +131,34 @@ static float filter_ui127_to_eg_amount(float v)
     return filter_ui127_to_unit(v);
 }
 
+static float filter_ui127_to_time_s(float v, float min_s, float max_s)
+{
+    const float t = filter_ui127_to_unit(v);
+    const float ratio = max_s / min_s;
+
+    return min_s * powf(ratio, t);
+}
+
+static float filter_ui127_to_attack_s(float v)
+{
+    return filter_ui127_to_time_s(v, 0.001f, 5.0f);
+}
+
+static float filter_ui127_to_decay_s(float v)
+{
+    return filter_ui127_to_time_s(v, 0.001f, 5.0f);
+}
+
+static float filter_ui127_to_sustain(float v)
+{
+    return filter_ui127_to_unit(v);
+}
+
+static float filter_ui127_to_release_s(float v)
+{
+    return filter_ui127_to_time_s(v, 0.001f, 5.0f);
+}
+
 static void apply_mix_track0_gain(float v) { mixer_set_track_gain(0U, v); }
 static void apply_mix_track1_gain(float v) { mixer_set_track_gain(1U, v); }
 static void apply_mix_track2_gain(float v) { mixer_set_track_gain(2U, v); }
@@ -328,10 +356,10 @@ static void apply_filter_type(float v)
 static void apply_filter_cutoff(float v) { mixer_set_track_filter_cutoff(0U, filter_ui127_to_cutoff_hz(v)); }
 static void apply_filter_resonance(float v) { mixer_set_track_filter_resonance(0U, filter_ui127_to_resonance(v)); }
 static void apply_filter_eg_amount(float v) { mixer_set_track_filter_eg_amount(0U, filter_ui127_to_eg_amount(v)); }
-static void apply_filter_attack(float v) { mixer_set_track_filter_attack(0U, v); }
-static void apply_filter_decay(float v) { mixer_set_track_filter_decay(0U, v); }
-static void apply_filter_sustain(float v) { mixer_set_track_filter_sustain(0U, v); }
-static void apply_filter_release(float v) { mixer_set_track_filter_release(0U, v); }
+static void apply_filter_attack(float v) { mixer_set_track_filter_attack(0U, filter_ui127_to_attack_s(v)); }
+static void apply_filter_decay(float v) { mixer_set_track_filter_decay(0U, filter_ui127_to_decay_s(v)); }
+static void apply_filter_sustain(float v) { mixer_set_track_filter_sustain(0U, filter_ui127_to_sustain(v)); }
+static void apply_filter_release(float v) { mixer_set_track_filter_release(0U, filter_ui127_to_release_s(v)); }
 
 static void apply_master_gain(float v) { audio_float_set_master_gain(v); }
 static void apply_post_gain(float v) { audio_float_set_postgain(v); }
@@ -594,13 +622,13 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAT_MIX, "Sat Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_mix),
 
     PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
-    PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
-    PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
-    PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),
-    PARAM_DESC_EX(PARAM_FILTER_ATTACK, "Attack", PARAM_TYPE_FLOAT, 0.001f, 5.0f, 0.001f, 0.01f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_filter_attack),
-    PARAM_DESC_EX(PARAM_FILTER_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.001f, 5.0f, 0.001f, 0.10f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_filter_decay),
-    PARAM_DESC_EX(PARAM_FILTER_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_filter_sustain),
-    PARAM_DESC_EX(PARAM_FILTER_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.001f, 5.0f, 0.001f, 0.10f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_filter_release),
+    PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
+    PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
+    PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),
+    PARAM_DESC_EX(PARAM_FILTER_ATTACK, "Attack", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 34.3f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_attack),
+    PARAM_DESC_EX(PARAM_FILTER_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_decay),
+    PARAM_DESC_EX(PARAM_FILTER_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_sustain),
+    PARAM_DESC_EX(PARAM_FILTER_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 0.1f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_release),
 
     PARAM_DESC_EX(PARAM_MASTER_GAIN, "Master Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_master_gain),
     PARAM_DESC_EX(PARAM_POST_GAIN, "Post Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_post_gain),
