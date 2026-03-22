@@ -10,6 +10,7 @@ typedef struct
     void (*handle_event)(const ui_event_t *);
     void (*tick)(void);
     void (*render)(void);
+    const void *context;
 
 } ui_page_t;
 
