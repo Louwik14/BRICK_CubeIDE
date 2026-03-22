@@ -26,6 +26,7 @@
 #include "fx_chain.h"
 #include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
+#include "svf.h"
 
 typedef struct {
     float gain;
@@ -39,8 +40,123 @@ typedef struct {
     float send_level[MIXER_NUM_SENDS];
 } mixer_track_t;
 
+typedef struct {
+    svf_t left;
+    svf_t right;
+    float sample_rate;
+    float cutoff_hz;
+    float resonance;
+    /* First pass: stored for future envelope modulation, not applied yet. */
+    float eg_amount;
+    float attack_s;
+    float decay_s;
+    float sustain;
+    float release_s;
+    uint8_t type;
+} mixer_track_filter_t;
+
 static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
+static mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
+
+#define MIXER_FILTER_SAMPLE_RATE_DEFAULT 48000.0f
+#define MIXER_FILTER_CUTOFF_MIN_HZ 20.0f
+#define MIXER_FILTER_CUTOFF_MAX_HZ 16000.0f
+#define MIXER_FILTER_ATTACK_MIN_S 0.001f
+#define MIXER_FILTER_ATTACK_MAX_S 5.0f
+#define MIXER_FILTER_DECAY_MIN_S 0.001f
+#define MIXER_FILTER_DECAY_MAX_S 5.0f
+#define MIXER_FILTER_RELEASE_MIN_S 0.001f
+#define MIXER_FILTER_RELEASE_MAX_S 5.0f
+
+static float clampf_local(float v, float lo, float hi)
+{
+    if(v < lo)
+        return lo;
+    if(v > hi)
+        return hi;
+    return v;
+}
+
+static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
+{
+    if(filter == NULL)
+        return;
+
+    svf_set_freq(&filter->left, filter->cutoff_hz);
+    svf_set_freq(&filter->right, filter->cutoff_hz);
+    svf_set_res(&filter->left, filter->resonance);
+    svf_set_res(&filter->right, filter->resonance);
+    svf_set_drive(&filter->left, 0.0f);
+    svf_set_drive(&filter->right, 0.0f);
+}
+
+static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
+{
+    if(filter == NULL)
+        return;
+
+    svf_init(&filter->left, filter->sample_rate);
+    svf_init(&filter->right, filter->sample_rate);
+    mixer_track_filter_apply_core_params(filter);
+}
+
+static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_rate)
+{
+    if(filter == NULL)
+        return;
+
+    filter->sample_rate = (sample_rate > 0.0f) ? sample_rate : MIXER_FILTER_SAMPLE_RATE_DEFAULT;
+    filter->cutoff_hz = MIXER_FILTER_CUTOFF_MAX_HZ;
+    filter->resonance = 0.0f;
+    filter->eg_amount = 0.0f;
+    filter->attack_s = 0.01f;
+    filter->decay_s = 0.10f;
+    filter->sustain = 1.0f;
+    filter->release_s = 0.10f;
+    filter->type = (uint8_t)MIXER_TRACK_FILTER_OFF;
+
+    mixer_track_filter_reset_dsp(filter);
+}
+
+static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
+                                             float *left,
+                                             float *right,
+                                             uint32_t frames)
+{
+    if((filter == NULL) || (left == NULL) || (right == NULL))
+        return;
+
+    if(filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
+        return;
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        svf_process(&filter->left, left[i]);
+        svf_process(&filter->right, right[i]);
+
+        switch((mixer_track_filter_type_t)filter->type)
+        {
+            case MIXER_TRACK_FILTER_LP:
+                left[i] = svf_low(&filter->left);
+                right[i] = svf_low(&filter->right);
+                break;
+
+            case MIXER_TRACK_FILTER_HP:
+                left[i] = svf_high(&filter->left);
+                right[i] = svf_high(&filter->right);
+                break;
+
+            case MIXER_TRACK_FILTER_BP:
+                left[i] = svf_band(&filter->left);
+                right[i] = svf_band(&filter->right);
+                break;
+
+            default:
+                break;
+        }
+    }
+}
 
 /**
  * @brief Point d'entrée clamp01.
@@ -114,6 +230,8 @@ void mixer_init(void)
 
         for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
             g_tracks[t].send_level[s] = 0.0f;
+
+        mixer_track_filter_init(&g_track_filters[t], MIXER_FILTER_SAMPLE_RATE_DEFAULT);
 
         if(t < MAX_TRACKS)
             track_set_gain(t, 1.0f);
@@ -335,6 +453,88 @@ void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
     g_send_fx_slot[send_idx] = slot;
 }
 
+void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    if(type > MIXER_TRACK_FILTER_BP)
+        type = MIXER_TRACK_FILTER_BP;
+
+    g_track_filters[track_id].type = (uint8_t)type;
+
+    if(type != MIXER_TRACK_FILTER_OFF)
+        mixer_track_filter_reset_dsp(&g_track_filters[track_id]);
+}
+
+void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->cutoff_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
+    svf_set_freq(&filter->left, filter->cutoff_hz);
+    svf_set_freq(&filter->right, filter->cutoff_hz);
+}
+
+void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->resonance = clampf_local(resonance, 0.0f, 1.0f);
+    svf_set_res(&filter->left, filter->resonance);
+    svf_set_res(&filter->right, filter->resonance);
+}
+
+void mixer_set_track_filter_eg_amount(uint32_t track_id, float eg_amount)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].eg_amount = clampf_local(eg_amount, -1.0f, 1.0f);
+}
+
+void mixer_set_track_filter_attack(uint32_t track_id, float attack_s)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].attack_s = clampf_local(attack_s,
+                                                      MIXER_FILTER_ATTACK_MIN_S,
+                                                      MIXER_FILTER_ATTACK_MAX_S);
+}
+
+void mixer_set_track_filter_decay(uint32_t track_id, float decay_s)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].decay_s = clampf_local(decay_s,
+                                                     MIXER_FILTER_DECAY_MIN_S,
+                                                     MIXER_FILTER_DECAY_MAX_S);
+}
+
+void mixer_set_track_filter_sustain(uint32_t track_id, float sustain)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].sustain = clamp01(sustain);
+}
+
+void mixer_set_track_filter_release(uint32_t track_id, float release_s)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].release_s = clampf_local(release_s,
+                                                       MIXER_FILTER_RELEASE_MIN_S,
+                                                       MIXER_FILTER_RELEASE_MAX_S);
+}
+
 /**
  * @brief Traite un bloc de mixage final MAIN/CUE.
  *
@@ -389,6 +589,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         float *L = tr->L;
         float *R = tr->R;
+
+        mixer_track_filter_process_block(&g_track_filters[t], L, R, frames);
 
         for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
         {
