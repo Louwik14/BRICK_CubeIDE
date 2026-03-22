@@ -47,13 +47,14 @@ static uint8_t buttons_hw_state[BTN_COUNT];
  *  20: param2,         21: param1,
  *  22: param5,         23: param6.
  *
- * Unused / not assigned physical inputs are routed to BTN_UNUSED_* slots.
+ * Dedicated page buttons are routed to BTN_PAGE_1..BTN_PAGE_4.
+ * Remaining unassigned physical inputs are routed to BTN_UNUSED_* slots.
  */
 static const uint8_t button_physical_to_logical[BTN_COUNT] = {
     [0]  = BTN_TRANSPOSE_DOWN,
     [1]  = BTN_TRANSPOSE_UP,
-    [2]  = BTN_UNUSED_2, /* page2 */
-    [3]  = BTN_UNUSED_1, /* page1 */
+    [2]  = BTN_PAGE_2, /* page2 */
+    [3]  = BTN_PAGE_1, /* page1 */
     [4]  = BTN_SETTINGS,
     [5]  = BTN_PASTE,
     [6]  = BTN_COPY,
@@ -61,8 +62,8 @@ static const uint8_t button_physical_to_logical[BTN_COUNT] = {
     [8]  = BTN_UNUSED_5,
     [9]  = BTN_PLAY,
     [10] = BTN_REC,
-    [11] = BTN_UNUSED_3, /* page3 */
-    [12] = BTN_UNUSED_4, /* page4 */
+    [11] = BTN_PAGE_3, /* page3 */
+    [12] = BTN_PAGE_4, /* page4 */
     [13] = BTN_UNUSED_6,
     [14] = BTN_UNUSED_7,
     [15] = BTN_UNUSED_8,
