@@ -19,6 +19,7 @@
  * - Slots insert/send à -1 => FX inactif (coût CPU nul sur le slot).
  */
 
+#include <fx_svf.h>
 #include "mixer.h"
 
 #include <string.h>
@@ -26,7 +27,6 @@
 #include "fx_chain.h"
 #include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
-#include "svf.h"
 
 typedef struct {
     float gain;

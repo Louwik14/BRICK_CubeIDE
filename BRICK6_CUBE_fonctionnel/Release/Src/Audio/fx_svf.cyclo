@@ -1,0 +1,5 @@
+../Src/Audio/fx_svf.cpp:24:6:void svf_init(svf_t*, float)	3
+../Src/Audio/fx_svf.cpp:68:7:float svf_process_mode(svf_t*, float, svf_mode_t)	4
+../Src/Audio/fx_svf.cpp:79:6:void svf_set_freq(svf_t*, float)	3
+../Src/Audio/fx_svf.cpp:90:6:void svf_set_res(svf_t*, float)	2
+../Src/Audio/fx_svf.cpp:101:6:void svf_set_drive(svf_t*, float)	2

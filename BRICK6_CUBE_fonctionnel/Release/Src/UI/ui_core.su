@@ -1,2 +1,2 @@
-../Src/UI/ui_core.c:46:6:ui_core_init	8	static
-../Src/UI/ui_core.c:81:6:ui_core_tick	24	static
+../Src/UI/ui_core.c:47:6:ui_core_init	8	static
+../Src/UI/ui_core.c:83:6:ui_core_tick	24	static
