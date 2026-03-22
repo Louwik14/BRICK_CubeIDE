@@ -140,7 +140,7 @@ void ui_page_main_render(void)
     drv_display_draw_text(0U, 14U, line0);
     drv_display_draw_text(0U, 24U, line1);
     drv_display_draw_text(0U, 34U, line2);
-    drv_display_draw_text(0U, 48U, "B1:DX7 B3:HALL B6:TPL");
+    drv_display_draw_text(0U, 48U, "B1:FILT B3:HALL B6:DX7");
     drv_display_draw_text(0U, 58U, "B4:CAL B5:UCAL");
 }
 
