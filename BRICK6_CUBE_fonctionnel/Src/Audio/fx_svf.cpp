@@ -70,10 +70,7 @@ float svf_process_mode(svf_t *svf, float in, svf_mode_t mode)
     if(svf == nullptr)
         return 0.0f;
 
-    const float pass1 = svf_process_pass(svf, in, mode);
-    const float pass2 = svf_process_pass(svf, in, mode);
-
-    return 0.5f * (pass1 + pass2);
+    return svf_process_pass(svf, in, mode);
 }
 
 void svf_set_freq(svf_t *svf, float cutoff_hz)
