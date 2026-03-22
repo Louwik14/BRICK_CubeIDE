@@ -9,10 +9,10 @@ extern "C" {
 #endif
 
 /**
- * @brief Implémentation C-compatible du SVF double-samplé Daisy.
+ * @brief Implémentation C-compatible du SVF Daisy en passe simple.
  *
- * Ce module garde l'algorithme stable de DaisySP, mais expose une structure
- * et des fonctions C pour pouvoir l'utiliser depuis `mixer.c` sans partager
+ * Ce module garde le principe du SVF actuel, mais expose une structure et des
+ * fonctions C pour pouvoir l'utiliser depuis `mixer.c` sans partager
  * d'instance entre tracks.
  */
 typedef struct
