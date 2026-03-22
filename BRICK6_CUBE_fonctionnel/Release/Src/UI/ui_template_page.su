@@ -1,0 +1,7 @@
+../Src/UI/ui_template_page.c:30:6:ui_template_page_select_subpage	0	static
+../Src/UI/ui_template_page.c:42:30:ui_template_page_get_active_subpage	0	static
+../Src/UI/ui_template_page.c:52:6:ui_template_page_enter	8	static
+../Src/UI/ui_template_page.c:70:6:ui_template_page_leave	0	static
+../Src/UI/ui_template_page.c:74:6:ui_template_page_handle_event	8	static
+../Src/UI/ui_template_page.c:110:6:ui_template_page_tick	0	static
+../Src/UI/ui_template_page.c:114:6:ui_template_page_render	8	static

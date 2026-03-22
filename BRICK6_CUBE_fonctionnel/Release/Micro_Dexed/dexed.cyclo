@@ -1,8 +1,8 @@
-../Micro_Dexed/dexed.cpp:39:1:Dexed::Dexed(int)	53
-../Micro_Dexed/dexed.cpp:84:1:Dexed::~Dexed()	4
-../Micro_Dexed/dexed.cpp:95:6:void Dexed::activate()	28
-../Micro_Dexed/dexed.cpp:101:6:void Dexed::deactivate()	5
-../Micro_Dexed/dexed.cpp:106:6:void Dexed::getSamples(uint16_t, int16_t*)	25
+../Micro_Dexed/dexed.cpp:43:1:Dexed::Dexed(int)	53
+../Micro_Dexed/dexed.cpp:87:1:Dexed::~Dexed()	1
+../Micro_Dexed/dexed.cpp:96:6:void Dexed::activate()	28
+../Micro_Dexed/dexed.cpp:102:6:void Dexed::deactivate()	5
+../Micro_Dexed/dexed.cpp:107:6:void Dexed::getSamples(uint16_t, int16_t*)	25
 ../Micro_Dexed/dexed.cpp:295:6:void Dexed::keyup(int16_t)	20
 ../Micro_Dexed/dexed.cpp:184:6:void Dexed::keydown(int16_t, uint8_t)	51
 ../Micro_Dexed/dexed.cpp:339:6:void Dexed::doRefreshVoice()	1

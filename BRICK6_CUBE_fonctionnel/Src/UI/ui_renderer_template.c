@@ -16,7 +16,7 @@
 #define UI_TEMPLATE_NOTE_Y           1
 
 static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 65U, 97U};
-static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 64U, 96U};
+static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_w[4] = {31U, 31U, 31U, 31U};
 
 typedef enum
@@ -103,20 +103,20 @@ static int ui_renderer_template_center_x(int x, int w, const char *txt)
 
 static void ui_renderer_template_draw_open_corner_frame(int x, int y, int w, int h)
 {
-    const int c = 4;
+    const int c = 2;
 
-    drv_display_draw_line(x + c, y, x + w - 1 - c, y);
-    drv_display_draw_line(x + c, y + h - 1, x + w - 1 - c, y + h - 1);
-    drv_display_draw_line(x, y + c, x, y + h - 1 - c);
-    drv_display_draw_line(x + w - 1, y + c, x + w - 1, y + h - 1 - c);
+    drv_display_draw_line(x + c,         y,             x + w - 1 - c, y);
+    drv_display_draw_line(x + c,         y + h - 1,     x + w - 1 - c, y + h - 1);
 
-    drv_display_draw_line(x, y + c, x + c, y);
-    drv_display_draw_line(x + w - 1 - c, y, x + w - 1, y + c);
-    drv_display_draw_line(x, y + h - 1 - c, x + c, y + h - 1);
-    drv_display_draw_line(x + w - 1 - c, y + h - 1, x + w - 1, y + h - 1 - c);
-}
+    drv_display_draw_line(x,             y + c,         x,             y + h - 1 - c);
+    drv_display_draw_line(x + w - 1,     y + c,         x + w - 1,     y + h - 1 - c);
 
-static void ui_renderer_template_draw_note_icon(int x, int y)
+    drv_display_draw_line(x,             y + c,         x + c,         y);
+    drv_display_draw_line(x + w - 1 - c, y,             x + w - 1,     y + c);
+
+    drv_display_draw_line(x,             y + h - 1 - c, x + c,         y + h - 1);
+    drv_display_draw_line(x + w - 1 - c, y + h - 1,     x + w - 1,     y + h - 1 - c);
+}static void ui_renderer_template_draw_note_icon(int x, int y)
 {
     drv_display_draw_line(x + 2, y + 1, x + 2, y + 10);
     drv_display_draw_line(x + 2, y + 1, x + 7, y + 3);
@@ -349,11 +349,14 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, "1", &FONT_5X7);
     drv_display_draw_text(9U, 1U, "Synth");
-    ui_renderer_template_draw_inverted_label(0U, 9U, "SEQ", &FONT_5X7);
 
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 9U, family_title);
+    drv_display_draw_text(9U, 9U, "SEQ");
 
+    drv_display_set_font(&FONT_5X7);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 2U, family_title);
+
+    drv_display_set_font(&FONT_4X6);
     ui_renderer_template_draw_note_icon(UI_TEMPLATE_NOTE_X, UI_TEMPLATE_NOTE_Y);
     drv_display_draw_text(109U, 1U, "120.0");
     drv_display_draw_text(113U, 9U, "A-12");
@@ -374,14 +377,29 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
             label = "-";
         }
 
-        const int text_w = (int)drv_display_text_width(label);
+
         const int x_label = ui_renderer_template_center_x(bx, bw, label);
 
         if (i == state->active_subpage)
         {
-            const uint8_t box_x = (uint8_t)((x_label > (bx + 1)) ? (x_label - 1) : (bx + 1));
-            const uint8_t box_w = (uint8_t)((text_w + 2 < bw - 2) ? (text_w + 2) : (bw - 2));
-            drv_display_fill_rect(box_x, 55, box_w, (int)drv_display_font_height() + 2);
+            drv_display_fill_rect(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H);
+
+            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y,                 false);
+            drv_display_draw_pixel(bx + 1,             UI_TEMPLATE_FOOTER_Y,                 false);
+            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y + 1,             false);
+
+            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y,                 false);
+            drv_display_draw_pixel(bx + bw - 2,        UI_TEMPLATE_FOOTER_Y,                 false);
+            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + 1,             false);
+
+            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
+            drv_display_draw_pixel(bx + 1,             UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
+            drv_display_draw_pixel(bx,                 UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 2, false);
+
+            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
+            drv_display_draw_pixel(bx + bw - 2,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
+            drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 2, false);
+
             drv_display_draw_text_inverted((uint8_t)x_label, 56U, label);
         }
         else

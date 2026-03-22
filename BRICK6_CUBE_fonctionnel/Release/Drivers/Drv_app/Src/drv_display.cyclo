@@ -10,4 +10,7 @@
 ../Drivers/Drv_app/Src/drv_display.c:203:6:drv_display_draw_line	1
 ../Drivers/Drv_app/Src/drv_display.c:212:6:drv_display_draw_char	1
 ../Drivers/Drv_app/Src/drv_display.c:218:6:drv_display_draw_text	2
-../Drivers/Drv_app/Src/drv_display.c:226:6:drv_display_draw_number	1
+../Drivers/Drv_app/Src/drv_display.c:226:6:drv_display_draw_text_inverted	2
+../Drivers/Drv_app/Src/drv_display.c:236:6:drv_display_draw_number	1
+../Drivers/Drv_app/Src/drv_display.c:243:9:drv_display_text_width	2
+../Drivers/Drv_app/Src/drv_display.c:251:9:drv_display_font_height	1
