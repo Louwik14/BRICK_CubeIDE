@@ -70,6 +70,49 @@ static void ui_core_update_shift_state(uint8_t shift_down)
     }
 }
 
+typedef struct
+{
+    uint8_t active_track;
+    uint8_t shift_down;
+    uint8_t track_select_armed;
+} ui_track_state_t;
+
+static ui_track_state_t g_ui_track_state = {
+    .active_track = 0U,
+    .shift_down = 0U,
+    .track_select_armed = 0U,
+};
+
+static void ui_core_handle_track_selection_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SHIFT))
+    {
+        g_ui_track_state.shift_down = 1U;
+        g_ui_track_state.track_select_armed = 1U;
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)BTN_SHIFT))
+    {
+        g_ui_track_state.shift_down = 0U;
+        g_ui_track_state.track_select_armed = 0U;
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_HALL_PRESS)
+            && (g_ui_track_state.shift_down != 0U)
+            && (g_ui_track_state.track_select_armed != 0U)
+            && (ev->id < UI_TRACK_COUNT))
+    {
+        g_ui_track_state.active_track = ev->id;
+    }
+}
+
 /**
  * @brief Point d'entrée ui_core_init.
  *
@@ -164,6 +207,7 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
+        ui_core_handle_track_selection_event(&ev);
         ui_navigation_handle_event(&ev);
 
         const ui_page_t *active_page = ui_page_get();
