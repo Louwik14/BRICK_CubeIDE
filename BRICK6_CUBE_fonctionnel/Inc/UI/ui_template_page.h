@@ -24,6 +24,7 @@ typedef struct
 typedef enum
 {
     UI_TEMPLATE_FAMILY_FILTER = 0,
+    UI_TEMPLATE_FAMILY_CFG,
     UI_TEMPLATE_FAMILY_COUNT
 } ui_template_family_id_t;
 

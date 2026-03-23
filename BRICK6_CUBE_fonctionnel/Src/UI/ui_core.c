@@ -29,6 +29,7 @@
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_template_filter.h"
 #include "pages/ui_page_template_dx7.h"
+#include "pages/ui_page_template_cfg.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -36,12 +37,17 @@
 #include "ui_template_page.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
+#include "param_store.h"
+
+#define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
+#define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 
 typedef struct
 {
     uint8_t active_track;
     uint8_t shift_down;
     uint8_t track_select_armed;
+    ui_track_type_t track_types[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[UI_TRACK_COUNT];
     uint8_t hall_note_suppressed[UI_TRACK_COUNT];
 } ui_track_state_t;
@@ -50,9 +56,47 @@ static ui_track_state_t g_ui_track_state = {
     .active_track = 0U,
     .shift_down = 0U,
     .track_select_armed = 0U,
+    .track_types = {
+        UI_TRACK_TYPE_AUDIO,
+        UI_TRACK_TYPE_AUDIO,
+        UI_TRACK_TYPE_AUDIO,
+        UI_TRACK_TYPE_AUDIO,
+        UI_TRACK_TYPE_SYNTH,
+        UI_TRACK_TYPE_SYNTH,
+        UI_TRACK_TYPE_SYNTH,
+        UI_TRACK_TYPE_SYNTH,
+    },
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
 };
+
+static void ui_core_sync_active_track_cfg_params(void)
+{
+    const uint8_t active_track = g_ui_track_state.active_track;
+    const ui_track_type_t active_type = g_ui_track_state.track_types[active_track];
+
+    param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_track);
+    param_store_set_active(UI_CFG_TRACK_TYPE_PARAM, (float)active_type);
+}
+
+static void ui_core_set_active_track(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_ui_track_state.active_track = track;
+    ui_core_sync_active_track_cfg_params();
+}
+
+static void ui_core_reset_track_types(void)
+{
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; track++)
+    {
+        g_ui_track_state.track_types[track] = (track < UI_AUDIO_TRACK_LIMIT) ? UI_TRACK_TYPE_AUDIO : UI_TRACK_TYPE_SYNTH;
+    }
+}
 
 static void ui_core_update_shift_state(uint8_t shift_down)
 {
@@ -96,7 +140,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
             && (g_ui_track_state.track_select_armed != 0U)
             && (ev->id < UI_TRACK_COUNT))
     {
-        g_ui_track_state.active_track = ev->id;
+        ui_core_set_active_track(ev->id);
     }
 }
 
@@ -113,6 +157,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
 void ui_core_init(void)
 {
     g_ui_track_state.active_track = 0U;
+    ui_core_reset_track_types();
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
 
@@ -122,8 +167,11 @@ void ui_core_init(void)
         g_ui_track_state.hall_note_suppressed[hall] = 0U;
     }
 
+    ui_core_sync_active_track_cfg_params();
+
     ui_template_family_registry_init();
     ui_page_template_filter_register_families();
+    ui_page_template_cfg_register_families();
 
     ui_page_manager_init();
 
@@ -137,6 +185,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_calibration);
     ui_page_manager_register(&g_ui_page_user_calibration);
     ui_page_manager_register(&g_ui_page_template_filter);
+    ui_page_manager_register(&g_ui_page_template_cfg);
     ui_page_manager_register(&g_ui_page_template_dx7);
 
     if (hall_calibration_load() != 0U)
@@ -162,7 +211,7 @@ void ui_core_service_track_selection_inputs(void)
                 && (g_ui_track_state.shift_down != 0U)
                 && (g_ui_track_state.track_select_armed != 0U))
         {
-            g_ui_track_state.active_track = hall;
+            ui_core_set_active_track(hall);
             g_ui_track_state.hall_note_suppressed[hall] = 1U;
         }
 
@@ -223,7 +272,105 @@ ui_track_type_t ui_get_track_type(uint8_t track)
         return UI_TRACK_TYPE_AUDIO;
     }
 
-    return UI_TRACK_TYPE_AUDIO;
+    return g_ui_track_state.track_types[track];
+}
+
+bool ui_set_track_type(uint8_t track, ui_track_type_t type)
+{
+    if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    {
+        return false;
+    }
+
+    const ui_track_type_t current_type = g_ui_track_state.track_types[track];
+    if (current_type == type)
+    {
+        if (track == g_ui_track_state.active_track)
+        {
+            ui_core_sync_active_track_cfg_params();
+        }
+        return true;
+    }
+
+    if ((type == UI_TRACK_TYPE_AUDIO) && (ui_count_tracks_of_type(UI_TRACK_TYPE_AUDIO) >= UI_AUDIO_TRACK_LIMIT))
+    {
+        if (track == g_ui_track_state.active_track)
+        {
+            ui_core_sync_active_track_cfg_params();
+        }
+        return false;
+    }
+
+    g_ui_track_state.track_types[track] = type;
+
+    if (track == g_ui_track_state.active_track)
+    {
+        ui_core_sync_active_track_cfg_params();
+    }
+
+    return true;
+}
+
+uint8_t ui_count_tracks_of_type(ui_track_type_t type)
+{
+    uint8_t count = 0U;
+
+    if ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; track++)
+    {
+        if (g_ui_track_state.track_types[track] == type)
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+const char *ui_get_track_type_display_name(ui_track_type_t type)
+{
+    switch (type)
+    {
+        case UI_TRACK_TYPE_AUDIO:
+            return "Audio";
+
+        case UI_TRACK_TYPE_SYNTH:
+            return "Synth";
+
+        case UI_TRACK_TYPE_MIDI:
+            return "MIDI";
+
+        case UI_TRACK_TYPE_CARD:
+            return "Card";
+
+        default:
+            return "Track";
+    }
+}
+
+const char *ui_get_track_type_short_name(ui_track_type_t type)
+{
+    switch (type)
+    {
+        case UI_TRACK_TYPE_AUDIO:
+            return "AUD";
+
+        case UI_TRACK_TYPE_SYNTH:
+            return "SYN";
+
+        case UI_TRACK_TYPE_MIDI:
+            return "MID";
+
+        case UI_TRACK_TYPE_CARD:
+            return "CRD";
+
+        default:
+            return "---";
+    }
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
