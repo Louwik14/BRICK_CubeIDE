@@ -297,7 +297,6 @@ void brick6_app_init(void)
     param_reset(PARAM_MONOB_OSC1_DETUNE);
     param_reset(PARAM_MONOB_OSC2_DETUNE);
     param_reset(PARAM_MONOB_OSC3_DETUNE);
-    param_reset(PARAM_MONOB_DRIFT);
     param_reset(PARAM_MONOB_OSC1_MIX);
     param_reset(PARAM_MONOB_OSC2_MIX);
     param_reset(PARAM_MONOB_OSC3_MIX);
@@ -375,6 +374,5 @@ void brick6_app_process(void)
     /* Service writer SD hors IRQ */
     sd_recorder_writer_service();
 }
-
 
 
