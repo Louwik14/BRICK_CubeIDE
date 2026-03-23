@@ -22,10 +22,10 @@
  */
 
 /*
- * Mixer runtime is prepared for up to 8 tracks so per-track processors such as
- * the SVF can own an independent state per track. The current audio path still
- * exposes 4 DSP tracks (`MAX_TRACKS` in audio_float.h), but the storage is
- * deliberately sized for future expansion.
+ * Mixer runtime is prepared for up to 8 tracks so per-track processors can own
+ * an independent state per track. The current audio path still exposes 4 DSP
+ * tracks (`MAX_TRACKS` in audio_float.h), but the storage is deliberately
+ * sized for future expansion.
  */
 #define MIXER_MAX_TRACKS 8U
 #define MIXER_NUM_SENDS 2U
@@ -34,9 +34,6 @@
 typedef enum
 {
     MIXER_TRACK_FILTER_OFF = 0,
-    MIXER_TRACK_FILTER_LP,
-    MIXER_TRACK_FILTER_HP,
-    MIXER_TRACK_FILTER_BP,
     MIXER_TRACK_FILTER_EQ3,
     MIXER_TRACK_FILTER_LP_BI,
     MIXER_TRACK_FILTER_HP_BI,
