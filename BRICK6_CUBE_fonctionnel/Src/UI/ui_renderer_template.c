@@ -153,13 +153,14 @@ static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_templ
                                                                   uint8_t slot,
                                                                   param_id_t id,
                                                                   const param_desc_t *desc,
-                                                                  const char *enum_label)
+                                                                  const char *enum_label,
+                                                                  const char *value_label)
 {
     uiw_widget_type_t widget = uiw_pick_widget_type(desc, enum_label);
 
     if ((state != NULL) && (state->widget_picker != NULL))
     {
-        widget = state->widget_picker(slot, id, widget);
+        widget = state->widget_picker(slot, id, value_label, widget);
     }
 
     return widget;
@@ -198,16 +199,27 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     drv_display_set_font(&FONT_4X6);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name), (uint8_t)(y + 3), desc->name);
 
-    const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label);
+    const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label, value_txt);
 
     switch (widget_type)
     {
+        case UIW_WIDGET_EMPTY:
+            break;
+
         case UIW_WIDGET_SWITCH:
             uiw_draw_switch(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (value >= 0.5f) ? 1U : 0U);
             break;
 
         case UIW_WIDGET_ENUM_TEXT:
             uiw_draw_enum_text(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (enum_label != NULL) ? enum_label : value_txt);
+            break;
+
+        case UIW_WIDGET_JACK:
+            uiw_draw_jack_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            break;
+
+        case UIW_WIDGET_KEYBOARD:
+            uiw_draw_keyboard_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
             break;
 
         case UIW_WIDGET_WAVE_ICON:
@@ -229,10 +241,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         }
     }
 
-    if (widget_type != UIW_WIDGET_ENUM_TEXT)
-    {
-        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, value_txt), (uint8_t)(y + UI_TEMPLATE_FRAME_H - 8), value_txt);
-    }
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, value_txt), (uint8_t)(y + UI_TEMPLATE_FRAME_H - 8), value_txt);
 }
 
 static void ui_renderer_template_draw_header(const ui_template_page_state_t *state)

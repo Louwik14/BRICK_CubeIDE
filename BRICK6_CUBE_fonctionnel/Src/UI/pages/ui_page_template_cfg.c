@@ -1,5 +1,7 @@
 #include "pages/ui_page_template_cfg.h"
 
+#include <string.h>
+
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_cfg_family = {
@@ -28,16 +30,27 @@ static const ui_template_family_t g_ui_template_cfg_family = {
 
 static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
                                                           param_id_t id,
+                                                          const char *value_label,
                                                           uiw_widget_type_t suggested_widget)
 {
     (void)slot;
 
-    if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
+    if (id == PARAM_CFG_TRACK_TYPE)
     {
-        return UIW_WIDGET_ENUM_TEXT;
+        return UIW_WIDGET_EMPTY;
     }
 
-    return suggested_widget;
+    if (id != PARAM_CFG_TRACK)
+    {
+        return suggested_widget;
+    }
+
+    if ((value_label != NULL) && (strncmp(value_label, "Synth", 5) == 0))
+    {
+        return UIW_WIDGET_KEYBOARD;
+    }
+
+    return UIW_WIDGET_JACK;
 }
 
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)

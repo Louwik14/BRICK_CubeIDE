@@ -32,6 +32,7 @@ typedef enum
 typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);
 typedef uiw_widget_type_t (*ui_template_widget_picker_fn)(uint8_t slot,
                                                          param_id_t id,
+                                                         const char *value_label,
                                                          uiw_widget_type_t suggested_widget);
 
 typedef struct

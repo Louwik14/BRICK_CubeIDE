@@ -62,6 +62,8 @@ void uiw_draw_knob(int x, int y, int w, int h, int value, int vmin, int vmax)
     const int r = 6;
     int idx;
 
+    (void)h;
+
     drv_display_draw_line(cx - r, cy, cx - 4, cy - 4);
     drv_display_draw_line(cx - 4, cy - 4, cx, cy - r);
     drv_display_draw_line(cx, cy - r, cx + 4, cy - 4);
@@ -203,6 +205,44 @@ void uiw_draw_enum_text(int x, int y, int w, int h, const char *label)
                                    display_label);
 
     drv_display_draw_line(box_x + 2, box_y + box_h + 2, box_x + box_w - 3, box_y + box_h + 2);
+}
+
+void uiw_draw_jack_icon(int x, int y, int w, int h)
+{
+    const int cx = x + (w / 2);
+    const int top = y + 10;
+    const int ring_y = y + 22;
+
+    (void)h;
+
+    drv_display_draw_line(cx, top, cx, ring_y - 4);
+    drv_display_draw_line(cx - 2, top + 3, cx + 2, top + 3);
+    drv_display_draw_line(cx - 3, ring_y - 4, cx + 3, ring_y - 4);
+    drv_display_draw_rect(cx - 4, ring_y - 4, 8, 8);
+    drv_display_draw_rect(cx - 2, ring_y - 2, 4, 4);
+    drv_display_draw_line(cx - 6, ring_y + 6, cx + 6, ring_y + 6);
+}
+
+void uiw_draw_keyboard_icon(int x, int y, int w, int h)
+{
+    const int key_x = x + 4;
+    const int key_y = y + 12;
+    const int key_w = w - 8;
+    const int key_h = 12;
+    const int white_w = key_w / 5;
+
+    (void)h;
+
+    drv_display_draw_rect(key_x, key_y, key_w, key_h);
+
+    for (int i = 1; i < 5; i++)
+    {
+        drv_display_draw_line(key_x + (i * white_w), key_y + 5, key_x + (i * white_w), key_y + key_h - 1);
+    }
+
+    drv_display_fill_rect(key_x + 2, key_y, 3, 6);
+    drv_display_fill_rect(key_x + white_w + 1, key_y, 3, 6);
+    drv_display_fill_rect(key_x + (3 * white_w) - 1, key_y, 3, 6);
 }
 
 uiw_widget_type_t uiw_pick_widget_type(const param_desc_t *desc, const char *enum_label)
