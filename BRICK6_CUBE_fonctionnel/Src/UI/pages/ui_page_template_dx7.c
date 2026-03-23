@@ -1,6 +1,6 @@
 #include "pages/ui_page_template_dx7.h"
 
-#include "param_store.h"
+#include "ui_core.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_dx7_family = {
@@ -27,11 +27,65 @@ static const ui_template_family_t g_ui_template_dx7_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_monob = {
+    .family_title = "TONE",
+    .nav_labels = { "OSC", "RNG", "DET", "MIX" },
+    .subpages = {
+        {
+            .title = "OSC",
+            .param_bank = { .params = { PARAM_MONOB_OSC1_WAVE, PARAM_MONOB_OSC2_WAVE, PARAM_MONOB_OSC3_WAVE, PARAM_MONOB_SUB_WAVE } },
+        },
+        {
+            .title = "RANGE",
+            .param_bank = { .params = { PARAM_MONOB_OSC1_RANGE, PARAM_MONOB_OSC2_RANGE, PARAM_MONOB_OSC3_RANGE, PARAM_MONOB_SUB_OCTAVE } },
+        },
+        {
+            .title = "DETUNE",
+            .param_bank = { .params = { PARAM_MONOB_OSC1_DETUNE, PARAM_MONOB_OSC2_DETUNE, PARAM_MONOB_OSC3_DETUNE, PARAM_MONOB_DRIFT } },
+        },
+        {
+            .title = "MIX",
+            .param_bank = { .params = { PARAM_MONOB_OSC1_MIX, PARAM_MONOB_OSC2_MIX, PARAM_MONOB_OSC3_MIX, PARAM_MONOB_SUB_MIX } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t *ui_page_template_dx7_resolve_family(void)
+{
+    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
+}
+
 static ui_template_page_state_t g_ui_template_dx7_state = {
-    .family = &g_ui_template_dx7_family,
+    .family = 0,
+    .family_resolver = ui_page_template_dx7_resolve_family,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
+
+void ui_page_template_dx7_register_families(void)
+{
+    for(uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
+    {
+        const ui_track_family_t track_family = (ui_track_family_t)family;
+        for(uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        {
+            const ui_track_type_t track_type = (ui_track_type_t)type;
+            if(!ui_track_type_is_valid_for_family(track_family, track_type))
+            {
+                continue;
+            }
+
+            const ui_template_family_t *family_template = &g_ui_template_dx7_family;
+            if((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_MONOB))
+            {
+                family_template = &g_ui_template_tone_family_monob;
+            }
+
+            ui_template_family_register(UI_TEMPLATE_FAMILY_TONE, track_family, track_type, family_template);
+        }
+    }
+}
 
 const ui_page_t g_ui_page_template_dx7 = {
     .enter = ui_template_page_enter,

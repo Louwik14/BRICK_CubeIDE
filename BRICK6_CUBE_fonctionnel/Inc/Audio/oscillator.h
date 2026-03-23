@@ -10,7 +10,7 @@ https://opensource.org/licenses/MIT.
 #ifndef DSY_OSCILLATOR_H
 #define DSY_OSCILLATOR_H
 #include <stdint.h>
-#include "Utility/dsp.h"
+#include "dsp.h"
 #ifdef __cplusplus
 
 namespace daisysp

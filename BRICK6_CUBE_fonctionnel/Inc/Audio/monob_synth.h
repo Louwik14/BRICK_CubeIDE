@@ -20,6 +20,13 @@ void monob_synth_set_filter_attack(float attack_s);
 void monob_synth_set_filter_decay(float decay_s);
 void monob_synth_set_filter_sustain(float sustain);
 void monob_synth_set_filter_release(float release_s);
+void monob_synth_set_osc_wave(uint8_t osc_index, uint8_t wave);
+void monob_synth_set_osc_range(uint8_t osc_index, int8_t octave);
+void monob_synth_set_sub_octave(int8_t octave);
+void monob_synth_set_osc_detune(uint8_t osc_index, float detune_cents);
+void monob_synth_set_drift(float drift_amount);
+void monob_synth_set_osc_mix(uint8_t osc_index, float mix);
+void monob_synth_set_sub_mix(float mix);
 
 #ifdef __cplusplus
 }

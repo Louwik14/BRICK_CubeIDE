@@ -297,6 +297,7 @@ void ui_core_init(void)
     ui_template_family_registry_init();
     ui_page_template_filter_register_families();
     ui_page_template_cfg_register_families();
+    ui_page_template_dx7_register_families();
 
     ui_page_manager_init();
 

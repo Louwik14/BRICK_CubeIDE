@@ -274,6 +274,22 @@ void brick6_app_init(void)
     param_reset(PARAM_MONOB_FILTER_DECAY);
     param_reset(PARAM_MONOB_FILTER_SUSTAIN);
     param_reset(PARAM_MONOB_FILTER_RELEASE);
+    param_reset(PARAM_MONOB_OSC1_WAVE);
+    param_reset(PARAM_MONOB_OSC2_WAVE);
+    param_reset(PARAM_MONOB_OSC3_WAVE);
+    param_reset(PARAM_MONOB_SUB_WAVE);
+    param_reset(PARAM_MONOB_OSC1_RANGE);
+    param_reset(PARAM_MONOB_OSC2_RANGE);
+    param_reset(PARAM_MONOB_OSC3_RANGE);
+    param_reset(PARAM_MONOB_SUB_OCTAVE);
+    param_reset(PARAM_MONOB_OSC1_DETUNE);
+    param_reset(PARAM_MONOB_OSC2_DETUNE);
+    param_reset(PARAM_MONOB_OSC3_DETUNE);
+    param_reset(PARAM_MONOB_DRIFT);
+    param_reset(PARAM_MONOB_OSC1_MIX);
+    param_reset(PARAM_MONOB_OSC2_MIX);
+    param_reset(PARAM_MONOB_OSC3_MIX);
+    param_reset(PARAM_MONOB_SUB_MIX);
     control_event_init();
 
     hall_loop_init();
