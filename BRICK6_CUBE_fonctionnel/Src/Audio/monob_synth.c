@@ -3,13 +3,14 @@
 #include <math.h>
 #include <string.h>
 
-#include "Audio/fx_filter_ladder_moog.h"
+#include "Audio/monob_moog_ladder.h"
 #include "Audio/monob_osc_bank.h"
 
 #define MONOB_SYNTH_MIN_FREQ_HZ 20.0f
 #define MONOB_SYNTH_MAX_FREQ_HZ 16000.0f
 #define MONOB_SYNTH_MAX_FILTER_CUTOFF_HZ 16000.0f
 #define MONOB_SYNTH_OSC_GAIN 0.22f
+#define MONOB_SYNTH_FILTER_MAX_RESONANCE 1.8f
 #define MONOB_SYNTH_AMP_ATTACK_S 0.005f
 #define MONOB_SYNTH_AMP_RELEASE_S 0.03f
 
@@ -39,7 +40,6 @@ typedef struct
     uint8_t note_active;
     uint8_t current_note;
     monob_env_stage_t filter_env_stage;
-    fx_filter_ladder_moog_t ladder;
 } monob_synth_state_t;
 
 static monob_synth_state_t g_monob_synth;
@@ -150,8 +150,9 @@ void monob_synth_init(float sample_rate)
     g_monob_synth.filter_sustain = 1.0f;
     g_monob_synth.filter_release_s = 0.10f;
     monob_osc_bank_init(g_monob_synth.sample_rate);
-    fx_filter_ladder_moog_init(&g_monob_synth.ladder, g_monob_synth.sample_rate);
-    fx_filter_ladder_moog_set_drive(&g_monob_synth.ladder, 1.0f);
+    monob_moog_ladder_init(g_monob_synth.sample_rate);
+    monob_moog_ladder_set_cutoff(g_monob_synth.filter_cutoff_hz);
+    monob_moog_ladder_set_resonance(g_monob_synth.filter_resonance * MONOB_SYNTH_FILTER_MAX_RESONANCE);
 }
 
 void monob_synth_note_on(uint8_t midi_note, uint8_t velocity)
@@ -184,7 +185,7 @@ void monob_synth_all_notes_off(void)
     g_monob_synth.filter_env_stage = MONOB_ENV_IDLE;
     g_monob_synth.base_frequency_hz = 0.0f;
     monob_osc_bank_reset();
-    fx_filter_ladder_moog_reset(&g_monob_synth.ladder);
+    monob_moog_ladder_reset();
 }
 
 void monob_synth_process_block(float *mono_out, uint32_t frames)
@@ -226,8 +227,8 @@ void monob_synth_process_block(float *mono_out, uint32_t frames)
                                             + ((MONOB_SYNTH_MAX_FILTER_CUTOFF_HZ - g_monob_synth.filter_cutoff_hz)
                                                * g_monob_synth.filter_eg_amount
                                                * env);
-            fx_filter_ladder_moog_set_cutoff(&g_monob_synth.ladder, modulated_cutoff_hz);
-            sample = fx_filter_ladder_moog_process_sample(&g_monob_synth.ladder, sample);
+            monob_moog_ladder_set_cutoff(modulated_cutoff_hz);
+            sample = monob_moog_ladder_process_sample(sample);
         }
 
         mono_out[i] = sample;
@@ -241,20 +242,20 @@ void monob_synth_set_filter_type(uint8_t enabled)
     {
         g_monob_synth.filter_env = 0.0f;
         g_monob_synth.filter_env_stage = MONOB_ENV_IDLE;
-        fx_filter_ladder_moog_reset(&g_monob_synth.ladder);
+        monob_moog_ladder_reset();
     }
 }
 
 void monob_synth_set_filter_cutoff(float cutoff_hz)
 {
     g_monob_synth.filter_cutoff_hz = monob_synth_clampf(cutoff_hz, MONOB_SYNTH_MIN_FREQ_HZ, MONOB_SYNTH_MAX_FILTER_CUTOFF_HZ);
-    fx_filter_ladder_moog_set_cutoff(&g_monob_synth.ladder, g_monob_synth.filter_cutoff_hz);
+    monob_moog_ladder_set_cutoff(g_monob_synth.filter_cutoff_hz);
 }
 
 void monob_synth_set_filter_resonance(float resonance)
 {
     g_monob_synth.filter_resonance = monob_synth_clampf(resonance, 0.0f, 1.0f);
-    fx_filter_ladder_moog_set_resonance(&g_monob_synth.ladder, g_monob_synth.filter_resonance * 4.0f);
+    monob_moog_ladder_set_resonance(g_monob_synth.filter_resonance * MONOB_SYNTH_FILTER_MAX_RESONANCE);
 }
 
 void monob_synth_set_filter_eg_amount(float eg_amount)
