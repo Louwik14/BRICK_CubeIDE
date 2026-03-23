@@ -84,8 +84,10 @@ static void led_apply_param_button_scene(led_id_t led)
     led_layer_set(LED_LAYER_UI, led, r, g, b);
 }
 
-static void led_apply_default_hall_scene(led_id_t led)
+static void led_apply_default_hall_scene(uint8_t hall)
 {
+    const led_id_t led = led_remap_led_for_hall(hall);
+
     led_layer_set(LED_LAYER_UI,
                   led,
                   LED_FIXED_GREEN_R,
@@ -93,9 +95,9 @@ static void led_apply_default_hall_scene(led_id_t led)
                   LED_FIXED_GREEN_B);
 }
 
-static void led_apply_keyboard_hall_scene(led_id_t led)
+static void led_apply_keyboard_hall_scene(uint8_t hall)
 {
-    const uint8_t hall = led_remap_hall_for_led(led);
+    const led_id_t led = led_remap_led_for_hall(hall);
 
     if (!keyboard_runtime_get_omnichord())
     {
@@ -124,18 +126,23 @@ static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
 
+    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+    {
+        if (ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
+        {
+            led_apply_keyboard_hall_scene(hall);
+        }
+        else
+        {
+            led_apply_default_hall_scene(hall);
+        }
+    }
+
     for (uint32_t led = 0U; led < LED_FB_COUNT; led++)
     {
         if (led_remap_is_hall_led((led_id_t)led))
         {
-            if (ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
-            {
-                led_apply_keyboard_hall_scene((led_id_t)led);
-            }
-            else
-            {
-                led_apply_default_hall_scene((led_id_t)led);
-            }
+            continue;
         }
         else if (led_remap_is_param_led((led_id_t)led))
         {
