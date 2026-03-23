@@ -23,6 +23,8 @@
 
 #include <stdio.h>
 
+#include "stm32h7xx_hal.h"
+
 #include "buttons.h"
 #include "encoders.h"
 #include "pages/ui_page_main.h"
@@ -32,6 +34,7 @@
 #include "pages/ui_page_template_filter.h"
 #include "pages/ui_page_template_dx7.h"
 #include "pages/ui_page_template_cfg.h"
+#include "pages/ui_page_template_keyboard.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -39,25 +42,32 @@
 #include "ui_template_page.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "param_store.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
+#define UI_HALL_KEYBOARD_MODE_TRIGGER 9U
+#define UI_HALL_KEYBOARD_DOUBLE_TAP_MS 400U
 
 typedef struct
 {
     uint8_t active_track;
     uint8_t shift_down;
     uint8_t track_select_armed;
+    ui_hall_mode_t hall_mode;
+    uint32_t last_keyboard_mode_tap_ms;
     ui_track_config_t track_configs[UI_TRACK_COUNT];
-    uint8_t hall_prev_pressed[UI_TRACK_COUNT];
-    uint8_t hall_note_suppressed[UI_TRACK_COUNT];
+    uint8_t hall_prev_pressed[HALL_KEY_COUNT];
+    uint8_t hall_note_suppressed[HALL_KEY_COUNT];
 } ui_track_state_t;
 
 static ui_track_state_t g_ui_track_state = {
     .active_track = 0U,
     .shift_down = 0U,
     .track_select_armed = 0U,
+    .hall_mode = UI_HALL_MODE_SEQ,
+    .last_keyboard_mode_tap_ms = 0U,
     .track_configs = {
         { UI_TRACK_FAMILY_INPUT1, UI_TRACK_TYPE_AUDIO },
         { UI_TRACK_FAMILY_INPUT2, UI_TRACK_TYPE_AUDIO },
@@ -202,6 +212,13 @@ static void ui_core_set_active_track(uint8_t track)
         return;
     }
 
+    if (g_ui_track_state.active_track == track)
+    {
+        ui_core_sync_active_track_cfg_params();
+        return;
+    }
+
+    keyboard_runtime_on_active_track_changed();
     g_ui_track_state.active_track = track;
     ui_core_sync_active_track_cfg_params();
 }
@@ -239,6 +256,41 @@ static void ui_core_update_shift_state(uint8_t shift_down)
     }
 }
 
+static void ui_core_activate_keyboard_hall_mode(uint8_t open_keyboard_page)
+{
+    ui_set_hall_mode(UI_HALL_MODE_KEYBOARD);
+
+    if (open_keyboard_page != 0U)
+    {
+        ui_page_set(UI_PAGE_TEMPLATE_KEYBOARD);
+    }
+}
+
+static void ui_core_handle_shift_hall_action(uint8_t hall)
+{
+    if (hall >= HALL_KEY_COUNT)
+    {
+        return;
+    }
+
+    g_ui_track_state.hall_note_suppressed[hall] = 1U;
+
+    if (hall == UI_HALL_KEYBOARD_MODE_TRIGGER)
+    {
+        const uint32_t now = HAL_GetTick();
+        const uint8_t is_double_tap = ((g_ui_track_state.last_keyboard_mode_tap_ms != 0U)
+                                       && ((now - g_ui_track_state.last_keyboard_mode_tap_ms) <= UI_HALL_KEYBOARD_DOUBLE_TAP_MS)) ? 1U : 0U;
+        g_ui_track_state.last_keyboard_mode_tap_ms = now;
+        ui_core_activate_keyboard_hall_mode(is_double_tap);
+        return;
+    }
+
+    if (hall < UI_TRACK_COUNT)
+    {
+        ui_core_set_active_track(hall);
+    }
+}
+
 static void ui_core_handle_track_selection_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -259,14 +311,6 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
         g_ui_track_state.track_select_armed = 0U;
         return;
     }
-
-    if ((ev->type == UI_EVENT_HALL_PRESS)
-            && (g_ui_track_state.shift_down != 0U)
-            && (g_ui_track_state.track_select_armed != 0U)
-            && (ev->id < UI_TRACK_COUNT))
-    {
-        ui_core_set_active_track(ev->id);
-    }
 }
 
 /**
@@ -285,8 +329,10 @@ void ui_core_init(void)
     ui_core_reset_track_configs();
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
+    g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
+    g_ui_track_state.last_keyboard_mode_tap_ms = 0U;
 
-    for (uint8_t hall = 0U; hall < UI_TRACK_COUNT; hall++)
+    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
         g_ui_track_state.hall_prev_pressed[hall] = 0U;
         g_ui_track_state.hall_note_suppressed[hall] = 0U;
@@ -298,6 +344,7 @@ void ui_core_init(void)
     ui_page_template_filter_register_families();
     ui_page_template_cfg_register_families();
     ui_page_template_dx7_register_families();
+    ui_page_template_keyboard_register_families();
 
     ui_page_manager_init();
 
@@ -313,6 +360,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_filter);
     ui_page_manager_register(&g_ui_page_template_cfg);
     ui_page_manager_register(&g_ui_page_template_dx7);
+    ui_page_manager_register(&g_ui_page_template_keyboard);
 
     if (hall_calibration_load() != 0U)
     {
@@ -328,7 +376,7 @@ void ui_core_service_track_selection_inputs(void)
 {
     ui_core_update_shift_state(button_down(BTN_SHIFT));
 
-    for (uint8_t hall = 0U; hall < UI_TRACK_COUNT; hall++)
+    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
         const uint8_t pressed = hall_engine_is_pressed(hall);
         const uint8_t was_pressed = g_ui_track_state.hall_prev_pressed[hall];
@@ -337,11 +385,23 @@ void ui_core_service_track_selection_inputs(void)
                 && (g_ui_track_state.shift_down != 0U)
                 && (g_ui_track_state.track_select_armed != 0U))
         {
-            ui_core_set_active_track(hall);
-            g_ui_track_state.hall_note_suppressed[hall] = 1U;
+            ui_core_handle_shift_hall_action(hall);
         }
 
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
+    }
+
+    if ((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD) && (g_ui_track_state.shift_down == 0U))
+    {
+        if (button_pressed(BTN_TRANSPOSE_UP) != 0U)
+        {
+            keyboard_runtime_step_octave(1);
+        }
+
+        if (button_pressed(BTN_TRANSPOSE_DOWN) != 0U)
+        {
+            keyboard_runtime_step_octave(-1);
+        }
     }
 }
 
@@ -451,6 +511,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
     if (track == g_ui_track_state.active_track)
     {
+        keyboard_runtime_on_active_track_changed();
         ui_core_sync_active_track_cfg_params();
     }
 
@@ -478,6 +539,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 
     if (track == g_ui_track_state.active_track)
     {
+        keyboard_runtime_on_active_track_changed();
         ui_core_sync_active_track_cfg_params();
     }
 
@@ -630,9 +692,39 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
     (void)snprintf(out, out_len, "%s", ui_get_track_family_short_name(config.family));
 }
 
+ui_hall_mode_t ui_get_hall_mode(void)
+{
+    return g_ui_track_state.hall_mode;
+}
+
+void ui_set_hall_mode(ui_hall_mode_t mode)
+{
+    if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)
+    {
+        return;
+    }
+
+    if (g_ui_track_state.hall_mode == mode)
+    {
+        return;
+    }
+
+    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD) && (mode != UI_HALL_MODE_KEYBOARD))
+    {
+        keyboard_runtime_all_notes_off();
+    }
+
+    g_ui_track_state.hall_mode = mode;
+}
+
+const char *ui_get_hall_mode_short_label(void)
+{
+    return (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD) ? "KBD" : "SEQ";
+}
+
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
 {
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= HALL_KEY_COUNT)
     {
         return 0U;
     }
@@ -642,7 +734,7 @@ uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
 
 void ui_core_clear_hall_note_suppression(uint8_t hall)
 {
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= HALL_KEY_COUNT)
     {
         return;
     }

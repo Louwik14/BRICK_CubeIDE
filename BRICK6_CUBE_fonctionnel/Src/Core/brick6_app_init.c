@@ -48,6 +48,18 @@ static float g_master_gain = 1.0f;
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 static ui_track_type_t g_runtime_synth_type = UI_TRACK_TYPE_DX7;
 
+static ui_track_type_t brick6_get_runtime_synth_type(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+
+    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+    {
+        return ui_get_track_type(active_track);
+    }
+
+    return UI_TRACK_TYPE_DX7;
+}
+
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
 
@@ -70,7 +82,7 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
-    const ui_track_type_t runtime_synth_type = ui_get_track_type(UI_AUDIO_INPUT_RESOURCE_COUNT);
+    const ui_track_type_t runtime_synth_type = brick6_get_runtime_synth_type();
 
     if (runtime_synth_type != g_runtime_synth_type)
     {
@@ -290,6 +302,11 @@ void brick6_app_init(void)
     param_reset(PARAM_MONOB_OSC2_MIX);
     param_reset(PARAM_MONOB_OSC3_MIX);
     param_reset(PARAM_MONOB_SUB_MIX);
+    param_reset(PARAM_KBD_ROOT);
+    param_reset(PARAM_KBD_SCALE);
+    param_reset(PARAM_KBD_OMNICHORD);
+    param_reset(PARAM_KBD_NOTE_ORDER);
+    param_reset(PARAM_KBD_CHORD_OVERRIDE);
     control_event_init();
 
     hall_loop_init();
