@@ -2,6 +2,7 @@
 
 #include "Keyboard/kbd_input_mapper.h"
 #include "Audio/microdexed_synth.h"
+#include "Audio/mixer.h"
 #include "Audio/monob_synth.h"
 #include "ui_core.h"
 
@@ -38,6 +39,8 @@ static ui_track_type_t keyboard_runtime_get_active_synth_type(void)
 
 static void keyboard_runtime_note_on_sink(uint8_t note, uint8_t velocity)
 {
+    mixer_track_filter_note_on(0U, note, velocity);
+
     if (!keyboard_runtime_active_track_is_synth())
     {
         return;
@@ -55,10 +58,18 @@ static void keyboard_runtime_note_on_sink(uint8_t note, uint8_t velocity)
     {
         microdexed_synth_note_on(note, velocity);
     }
+
 }
 
 static void keyboard_runtime_note_off_sink(uint8_t note)
 {
+    mixer_track_filter_note_off(0U, note);
+
+    if (!keyboard_runtime_active_track_is_synth() && !g_keyboard_runtime.sounding_active)
+    {
+        return;
+    }
+
     const ui_track_type_t synth_type = g_keyboard_runtime.sounding_active ? g_keyboard_runtime.sounding_type : keyboard_runtime_get_active_synth_type();
 
     if (synth_type == UI_TRACK_TYPE_MONOB)
@@ -69,12 +80,14 @@ static void keyboard_runtime_note_off_sink(uint8_t note)
     {
         microdexed_synth_note_off(note);
     }
+
 }
 
 static void keyboard_runtime_all_notes_off_sink(void)
 {
     microdexed_synth_all_notes_off();
     monob_synth_all_notes_off();
+    mixer_track_filter_all_notes_off(0U);
     g_keyboard_runtime.sounding_active = false;
 }
 
