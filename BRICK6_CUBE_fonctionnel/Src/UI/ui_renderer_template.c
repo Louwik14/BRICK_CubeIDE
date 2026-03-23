@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cpu_load.h"
 #include "drv_display.h"
 #include "font.h"
 #include "param_registry.h"
@@ -100,6 +101,23 @@ static void ui_renderer_template_format_value(param_id_t id, char *out, uint32_t
             }
             break;
     }
+}
+
+static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    if (cpu_load_is_valid() == 0U)
+    {
+        (void)snprintf(out, out_len, "--%%");
+        return;
+    }
+
+    const uint32_t avg_percent = (cpu_load_get_avg_permille() + 5U) / 10U;
+    (void)snprintf(out, out_len, "%lu%%", (unsigned long)avg_percent);
 }
 
 static int ui_renderer_template_center_x(int x, int w, const char *txt)
@@ -251,9 +269,11 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     const uint8_t active_track = ui_get_active_track();
     char track_label[4];
     char runtime_label[12];
+    char cpu_avg_label[8];
 
     (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)(active_track + 1U));
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
+    ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label));
 
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
@@ -266,6 +286,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 2U, family_title);
 
     drv_display_set_font(&FONT_4X6);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, cpu_avg_label), 9U, cpu_avg_label);
     ui_renderer_template_draw_note_icon(UI_TEMPLATE_NOTE_X, UI_TEMPLATE_NOTE_Y);
     drv_display_draw_text(109U, 1U, "120.0");
     drv_display_draw_text(113U, 9U, "A-12");
