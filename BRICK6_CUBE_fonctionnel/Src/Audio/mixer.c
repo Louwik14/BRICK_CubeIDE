@@ -19,7 +19,6 @@
  * - Slots insert/send à -1 => FX inactif (coût CPU nul sur le slot).
  */
 
-#include <fx_svf.h>
 #include "mixer.h"
 
 #include "fx_biquad_filter.h"
@@ -43,8 +42,6 @@ typedef struct {
 } mixer_track_t;
 
 typedef struct {
-    svf_t left;
-    svf_t right;
     fx_biquad_filter_t biquad;
     fx_dj_eq3_t eq3;
     float sample_rate;
@@ -119,13 +116,6 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     if(filter == NULL)
         return;
 
-    svf_set_freq(&filter->left, filter->cutoff_hz);
-    svf_set_freq(&filter->right, filter->cutoff_hz);
-    svf_set_res(&filter->left, filter->resonance);
-    svf_set_res(&filter->right, filter->resonance);
-    svf_set_drive(&filter->left, 0.0f);
-    svf_set_drive(&filter->right, 0.0f);
-
     fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
     fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
     fx_biquad_filter_set_mode(&filter->biquad,
@@ -144,8 +134,6 @@ static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
     if(filter == NULL)
         return;
 
-    svf_init(&filter->left, filter->sample_rate);
-    svf_init(&filter->right, filter->sample_rate);
     fx_biquad_filter_init(&filter->biquad, filter->sample_rate);
     fx_dj_eq3_init(&filter->eq3, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
     fx_biquad_filter_reset(&filter->biquad);
@@ -186,30 +174,6 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
 
     switch((mixer_track_filter_type_t)filter->type)
     {
-        case MIXER_TRACK_FILTER_LP:
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_LP);
-                right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_LP);
-            }
-            break;
-
-        case MIXER_TRACK_FILTER_HP:
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_HP);
-                right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_HP);
-            }
-            break;
-
-        case MIXER_TRACK_FILTER_BP:
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_BP);
-                right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_BP);
-            }
-            break;
-
         case MIXER_TRACK_FILTER_EQ3:
             fx_dj_eq3_process_block(&filter->eq3, left, right, frames);
             break;
@@ -542,8 +506,6 @@ void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->cutoff_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
-    svf_set_freq(&filter->left, filter->cutoff_hz);
-    svf_set_freq(&filter->right, filter->cutoff_hz);
     fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
 }
 
@@ -554,8 +516,6 @@ void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->resonance = clampf_local(resonance, 0.0f, 1.0f);
-    svf_set_res(&filter->left, filter->resonance);
-    svf_set_res(&filter->right, filter->resonance);
     fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
 }
 
