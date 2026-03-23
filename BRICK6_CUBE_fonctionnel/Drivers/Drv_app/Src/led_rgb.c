@@ -21,8 +21,14 @@
 
 #include "led_rgb.h"
 
+#include <stdbool.h>
+
+#include "Keyboard/keyboard_runtime.h"
 #include "led_anim.h"
 #include "led_layer.h"
+#include "ui_core.h"
+#include "ui_navigation.h"
+#include "ui_page_manager.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
 #define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
@@ -31,6 +37,112 @@
 #define LED_FIXED_GREEN_R         0U
 #define LED_FIXED_GREEN_G         LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_GREEN_B         0U
+#define LED_FIXED_LIGHT_BLUE_R    32U
+#define LED_FIXED_LIGHT_BLUE_G    96U
+#define LED_FIXED_LIGHT_BLUE_B    LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_DARK_BLUE_R     0U
+#define LED_FIXED_DARK_BLUE_G     24U
+#define LED_FIXED_DARK_BLUE_B     88U
+#define LED_FIXED_BLUE_R          0U
+#define LED_FIXED_BLUE_G          0U
+#define LED_FIXED_BLUE_B          LED_FIXED_HALF_BRIGHTNESS
+
+typedef struct
+{
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} led_rgb_color_t;
+
+/*
+ * Omnichord chord-zone colors.
+ * Pairing is driven by hall & 0x03 so halls 0/8, 1/9, 2/10 and 3/11
+ * share the same group color.
+ */
+static const led_rgb_color_t g_led_keyboard_omni_chord_colors[4] = {
+    { 128U, 32U, 32U },
+    { 128U, 80U, 0U },
+    { 96U, 96U, 0U },
+    { 80U, 0U, 128U },
+};
+
+static bool led_is_param_button(led_id_t led)
+{
+    return ((uint32_t)led >= (uint32_t)LED_PARAM_1) && ((uint32_t)led <= (uint32_t)LED_PARAM_8);
+}
+
+static bool led_is_hall_button(led_id_t led)
+{
+    return ((uint32_t)led >= (uint32_t)LED_STEP_1) && ((uint32_t)led <= (uint32_t)LED_STEP_16);
+}
+
+static led_id_t led_param_for_button(button_id_t button)
+{
+    if (((uint32_t)button < (uint32_t)BTN_PARAM_1) || ((uint32_t)button > (uint32_t)BTN_PARAM_8))
+    {
+        return LED_COUNT_TOTAL;
+    }
+
+    return (led_id_t)((uint32_t)LED_PARAM_1 + ((uint32_t)button - (uint32_t)BTN_PARAM_1));
+}
+
+static uint8_t led_hall_index(led_id_t led)
+{
+    return (uint8_t)((uint32_t)led - (uint32_t)LED_STEP_1);
+}
+
+static void led_apply_param_button_scene(led_id_t led)
+{
+    uint8_t r = LED_FIXED_GREEN_R;
+    uint8_t g = LED_FIXED_GREEN_G;
+    uint8_t b = LED_FIXED_GREEN_B;
+
+    const button_id_t active_button = ui_navigation_get_button_for_page(ui_page_get_id());
+    if (led == led_param_for_button(active_button))
+    {
+        r = LED_FIXED_WHITE_R;
+        g = LED_FIXED_WHITE_G;
+        b = LED_FIXED_WHITE_B;
+    }
+
+    led_layer_set(LED_LAYER_UI, led, r, g, b);
+}
+
+static void led_apply_default_hall_scene(led_id_t led)
+{
+    led_layer_set(LED_LAYER_UI,
+                  led,
+                  LED_FIXED_GREEN_R,
+                  LED_FIXED_GREEN_G,
+                  LED_FIXED_GREEN_B);
+}
+
+static void led_apply_keyboard_hall_scene(led_id_t led)
+{
+    const uint8_t hall = led_hall_index(led);
+
+    if (!keyboard_runtime_get_omnichord())
+    {
+        if (hall < 8U)
+        {
+            led_layer_set(LED_LAYER_UI, led, LED_FIXED_LIGHT_BLUE_R, LED_FIXED_LIGHT_BLUE_G, LED_FIXED_LIGHT_BLUE_B);
+        }
+        else
+        {
+            led_layer_set(LED_LAYER_UI, led, LED_FIXED_DARK_BLUE_R, LED_FIXED_DARK_BLUE_G, LED_FIXED_DARK_BLUE_B);
+        }
+        return;
+    }
+
+    if (((hall >= 4U) && (hall <= 7U)) || (hall >= 12U))
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_BLUE_R, LED_FIXED_BLUE_G, LED_FIXED_BLUE_B);
+        return;
+    }
+
+    const led_rgb_color_t color = g_led_keyboard_omni_chord_colors[hall & 0x03U];
+    led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
+}
 
 static void led_apply_fixed_scene(void)
 {
@@ -38,13 +150,20 @@ static void led_apply_fixed_scene(void)
 
     for (uint32_t led = 0U; led < LED_FB_COUNT; led++)
     {
-        if ((led >= (uint32_t)LED_STEP_1) && (led <= (uint32_t)LED_STEP_16))
+        if (led_is_hall_button((led_id_t)led))
         {
-            led_layer_set(LED_LAYER_UI,
-                          (led_id_t)led,
-                          LED_FIXED_GREEN_R,
-                          LED_FIXED_GREEN_G,
-                          LED_FIXED_GREEN_B);
+            if (ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
+            {
+                led_apply_keyboard_hall_scene((led_id_t)led);
+            }
+            else
+            {
+                led_apply_default_hall_scene((led_id_t)led);
+            }
+        }
+        else if (led_is_param_button((led_id_t)led))
+        {
+            led_apply_param_button_scene((led_id_t)led);
         }
         else
         {
