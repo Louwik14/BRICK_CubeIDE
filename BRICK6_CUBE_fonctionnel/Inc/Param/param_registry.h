@@ -14,7 +14,8 @@ typedef enum
     PARAM_DISPLAY_BOOL,
     PARAM_DISPLAY_ENUM,
     PARAM_DISPLAY_TIME_MS,
-    PARAM_DISPLAY_RATIO
+    PARAM_DISPLAY_RATIO,
+    PARAM_DISPLAY_INT
 } param_display_type_t;
 
 typedef enum
