@@ -27,7 +27,6 @@ typedef struct
     float sample_rate;
     float amp_env;
     float base_frequency_hz;
-    float drift_amount;
     float filter_env;
     float filter_cutoff_hz;
     float filter_resonance;
@@ -80,6 +79,18 @@ static float monob_synth_step_linear(float current, float target, float time_s)
     }
 
     current -= max_delta;
+    return (current < target) ? target : current;
+}
+
+static float monob_synth_step_with_delta(float current, float target, float delta)
+{
+    if (current < target)
+    {
+        current += delta;
+        return (current > target) ? target : current;
+    }
+
+    current -= delta;
     return (current < target) ? target : current;
 }
 
@@ -183,16 +194,27 @@ void monob_synth_process_block(float *mono_out, uint32_t frames)
         return;
     }
 
+    if ((g_monob_synth.note_active == 0U)
+        && (g_monob_synth.amp_env <= 0.0f)
+        && (g_monob_synth.base_frequency_hz <= 0.0f)
+        && (g_monob_synth.filter_enabled == 0U))
+    {
+        (void)memset(mono_out, 0, frames * sizeof(float));
+        return;
+    }
+
+    const float amp_target = (g_monob_synth.note_active != 0U) ? 1.0f : 0.0f;
+    const float amp_time_s = (g_monob_synth.note_active != 0U) ? MONOB_SYNTH_AMP_ATTACK_S : MONOB_SYNTH_AMP_RELEASE_S;
+    const float amp_delta = (amp_time_s > 0.0f) ? (1.0f / (amp_time_s * g_monob_synth.sample_rate)) : 1.0f;
+
     for (uint32_t i = 0U; i < frames; ++i)
     {
-        const float amp_target = (g_monob_synth.note_active != 0U) ? 1.0f : 0.0f;
-        const float amp_time_s = (g_monob_synth.note_active != 0U) ? MONOB_SYNTH_AMP_ATTACK_S : MONOB_SYNTH_AMP_RELEASE_S;
-        g_monob_synth.amp_env = monob_synth_step_linear(g_monob_synth.amp_env, amp_target, amp_time_s);
+        g_monob_synth.amp_env = monob_synth_step_with_delta(g_monob_synth.amp_env, amp_target, amp_delta);
 
         float sample = 0.0f;
         if ((g_monob_synth.base_frequency_hz > 0.0f) && (g_monob_synth.amp_env > 0.0f))
         {
-            sample = monob_osc_bank_process(g_monob_synth.base_frequency_hz, g_monob_synth.drift_amount)
+            sample = monob_osc_bank_process(g_monob_synth.base_frequency_hz)
                    * MONOB_SYNTH_OSC_GAIN
                    * g_monob_synth.amp_env;
         }
@@ -283,11 +305,6 @@ void monob_synth_set_sub_octave(int8_t octave)
 void monob_synth_set_osc_detune(uint8_t osc_index, float detune_cents)
 {
     monob_osc_bank_set_detune(osc_index, detune_cents);
-}
-
-void monob_synth_set_drift(float drift_amount)
-{
-    g_monob_synth.drift_amount = monob_synth_clampf(drift_amount, 0.0f, 1.0f);
 }
 
 void monob_synth_set_osc_mix(uint8_t osc_index, float mix)

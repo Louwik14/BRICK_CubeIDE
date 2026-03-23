@@ -30,14 +30,17 @@ struct MonobOscSource
 
     uint32_t phase;
     uint32_t phase_inc;
-    float current_freq_hz;
 };
 
 struct MonobOscBank
 {
     MonobOscSource sources[MONOB_OSC_COUNT];
+    uint8_t active_indices[MONOB_OSC_COUNT];
+    uint8_t active_count;
     float sample_rate;
     float inv_sample_rate;
+    float cached_base_frequency_hz;
+    float output_gain;
 };
 
 MonobOscBank g_bank;
@@ -102,6 +105,18 @@ inline uint32_t freq_to_phase_inc(float frequency_hz)
     return (uint32_t)(frequency_hz * g_bank.inv_sample_rate * MONOB_PHASE_SCALE);
 }
 
+inline float compute_source_frequency(const MonobOscSource &source, float base_frequency_hz, uint8_t osc_index)
+{
+    float frequency_hz = base_frequency_hz * k_octave_mul[octave_to_index(source.octave)];
+
+    if(osc_index < MONOB_MAIN_OSC_COUNT)
+    {
+        frequency_hz *= k_detune_mul[source.detune_index];
+    }
+
+    return clampf_local(frequency_hz, MONOB_MIN_FREQ_HZ, MONOB_MAX_FREQ_HZ);
+}
+
 inline float process_saw(uint32_t phase)
 {
     const float p = ((float)phase) * MONOB_INV_PHASE_SCALE;
@@ -138,6 +153,39 @@ inline float process_wave(uint8_t wave, uint32_t phase)
         default:                return 0.0f;
     }
 }
+
+void refresh_active_sources(void)
+{
+    uint8_t active_count = 0U;
+    float mix_sum = 0.0f;
+
+    for(uint8_t i = 0U; i < MONOB_OSC_COUNT; ++i)
+    {
+        const MonobOscSource &source = g_bank.sources[i];
+        if((source.wave == MONOB_WAVE_OFF) || (source.mix <= 0.0f))
+        {
+            continue;
+        }
+
+        g_bank.active_indices[active_count++] = i;
+        mix_sum += source.mix;
+    }
+
+    g_bank.active_count = active_count;
+    g_bank.output_gain = (mix_sum > 1.0f) ? (1.0f / mix_sum) : 1.0f;
+}
+
+void refresh_phase_increments(float base_frequency_hz)
+{
+    for(uint8_t n = 0U; n < g_bank.active_count; ++n)
+    {
+        const uint8_t osc_index = g_bank.active_indices[n];
+        MonobOscSource &source = g_bank.sources[osc_index];
+        source.phase_inc = freq_to_phase_inc(compute_source_frequency(source, base_frequency_hz, osc_index));
+    }
+
+    g_bank.cached_base_frequency_hz = base_frequency_hz;
+}
 } // namespace
 
 extern "C" void monob_osc_bank_init(float sample_rate)
@@ -145,6 +193,8 @@ extern "C" void monob_osc_bank_init(float sample_rate)
     memset(&g_bank, 0, sizeof(g_bank));
     g_bank.sample_rate = (sample_rate > 1000.0f) ? sample_rate : 48000.0f;
     g_bank.inv_sample_rate = 1.0f / g_bank.sample_rate;
+    g_bank.cached_base_frequency_hz = -1.0f;
+    g_bank.output_gain = 1.0f;
 
     for(uint8_t i = 0U; i < MONOB_OSC_COUNT; ++i)
     {
@@ -155,7 +205,6 @@ extern "C" void monob_osc_bank_init(float sample_rate)
         source.mix = 0.0f;
         source.phase = 0U;
         source.phase_inc = 0U;
-        source.current_freq_hz = -1.0f;
     }
 }
 
@@ -165,8 +214,9 @@ extern "C" void monob_osc_bank_reset(void)
     {
         g_bank.sources[i].phase = 0U;
         g_bank.sources[i].phase_inc = 0U;
-        g_bank.sources[i].current_freq_hz = -1.0f;
     }
+
+    g_bank.cached_base_frequency_hz = -1.0f;
 }
 
 extern "C" void monob_osc_bank_note_on(void)
@@ -174,8 +224,9 @@ extern "C" void monob_osc_bank_note_on(void)
     for(uint8_t i = 0U; i < MONOB_OSC_COUNT; ++i)
     {
         g_bank.sources[i].phase = 0U;
-        g_bank.sources[i].current_freq_hz = -1.0f;
     }
+
+    g_bank.cached_base_frequency_hz = -1.0f;
 }
 
 extern "C" void monob_osc_bank_set_wave(uint8_t osc_index, uint8_t wave)
@@ -187,6 +238,7 @@ extern "C" void monob_osc_bank_set_wave(uint8_t osc_index, uint8_t wave)
 
     MonobOscSource &source = g_bank.sources[osc_index];
     source.wave = (wave <= MONOB_WAVE_SAW) ? wave : MONOB_WAVE_OFF;
+    refresh_active_sources();
 }
 
 extern "C" void monob_osc_bank_set_octave(uint8_t osc_index, int8_t octave)
@@ -197,7 +249,7 @@ extern "C" void monob_osc_bank_set_octave(uint8_t osc_index, int8_t octave)
     }
 
     g_bank.sources[osc_index].octave = octave;
-    g_bank.sources[osc_index].current_freq_hz = -1.0f;
+    g_bank.cached_base_frequency_hz = -1.0f;
 }
 
 extern "C" void monob_osc_bank_set_detune(uint8_t osc_index, float detune_cents)
@@ -208,7 +260,7 @@ extern "C" void monob_osc_bank_set_detune(uint8_t osc_index, float detune_cents)
     }
 
     g_bank.sources[osc_index].detune_index = cents_to_index(detune_cents);
-    g_bank.sources[osc_index].current_freq_hz = -1.0f;
+    g_bank.cached_base_frequency_hz = -1.0f;
 }
 
 extern "C" void monob_osc_bank_set_mix(uint8_t osc_index, float mix)
@@ -219,48 +271,29 @@ extern "C" void monob_osc_bank_set_mix(uint8_t osc_index, float mix)
     }
 
     g_bank.sources[osc_index].mix = clampf_local(mix, 0.0f, 1.0f);
+    refresh_active_sources();
 }
 
-extern "C" float monob_osc_bank_process(float base_frequency_hz, float drift_amount)
+extern "C" float monob_osc_bank_process(float base_frequency_hz)
 {
-    (void)drift_amount;
+    if(g_bank.active_count == 0U)
+    {
+        return 0.0f;
+    }
+
+    const float clamped_base = clampf_local(base_frequency_hz, MONOB_MIN_FREQ_HZ, MONOB_MAX_FREQ_HZ);
+    if(clamped_base != g_bank.cached_base_frequency_hz)
+    {
+        refresh_phase_increments(clamped_base);
+    }
 
     float mixed = 0.0f;
-    float mix_sum = 0.0f;
-    const float clamped_base = clampf_local(base_frequency_hz, MONOB_MIN_FREQ_HZ, MONOB_MAX_FREQ_HZ);
-
-    for(uint8_t i = 0U; i < MONOB_OSC_COUNT; ++i)
+    for(uint8_t n = 0U; n < g_bank.active_count; ++n)
     {
-        MonobOscSource &source = g_bank.sources[i];
-        if((source.wave == MONOB_WAVE_OFF) || (source.mix <= 0.0f))
-        {
-            continue;
-        }
-
-        float frequency_hz = clamped_base * k_octave_mul[octave_to_index(source.octave)];
-
-        if(i < MONOB_MAIN_OSC_COUNT)
-        {
-            frequency_hz *= k_detune_mul[source.detune_index];
-        }
-
-        frequency_hz = clampf_local(frequency_hz, MONOB_MIN_FREQ_HZ, MONOB_MAX_FREQ_HZ);
-
-        if(frequency_hz != source.current_freq_hz)
-        {
-            source.phase_inc = freq_to_phase_inc(frequency_hz);
-            source.current_freq_hz = frequency_hz;
-        }
-
+        MonobOscSource &source = g_bank.sources[g_bank.active_indices[n]];
         mixed += process_wave(source.wave, source.phase) * source.mix;
-        mix_sum += source.mix;
         source.phase += source.phase_inc;
     }
 
-    if(mix_sum > 1.0f)
-    {
-        mixed /= mix_sum;
-    }
-
-    return mixed;
+    return mixed * g_bank.output_gain;
 }

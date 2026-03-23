@@ -41,7 +41,7 @@ static const ui_template_family_t g_ui_template_tone_family_monob = {
         },
         {
             .title = "DETUNE",
-            .param_bank = { .params = { PARAM_MONOB_OSC1_DETUNE, PARAM_MONOB_OSC2_DETUNE, PARAM_MONOB_OSC3_DETUNE, PARAM_MONOB_DRIFT } },
+            .param_bank = { .params = { PARAM_MONOB_OSC1_DETUNE, PARAM_MONOB_OSC2_DETUNE, PARAM_MONOB_OSC3_DETUNE, PARAM_COUNT } },
         },
         {
             .title = "MIX",
