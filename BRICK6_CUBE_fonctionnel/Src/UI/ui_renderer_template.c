@@ -348,7 +348,8 @@ static void ui_renderer_template_draw_param_slot(uint8_t slot, param_id_t id)
 
 static void ui_renderer_template_draw_header(const ui_template_page_state_t *state)
 {
-    const char *family_title = (state->family->family_title != NULL) ? state->family->family_title : "TEMPLATE";
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    const char *family_title = ((family != NULL) && (family->family_title != NULL)) ? family->family_title : "TEMPLATE";
 
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, "1", &FONT_5X7);
@@ -368,13 +369,15 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
 {
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+
     drv_display_set_font(&FONT_4X6);
 
     for (uint8_t i = 0U; i < 4U; i++)
     {
         const int bx = g_ui_template_footer_x[i];
         const int bw = g_ui_template_footer_w[i];
-        const char *label = state->family->nav_labels[i];
+        const char *label = family->nav_labels[i];
 
         if ((label == NULL) || (label[0] == '\0'))
         {
@@ -416,7 +419,9 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
 void ui_renderer_template_draw(const ui_template_page_state_t *state)
 {
-    if ((state == NULL) || (state->family == NULL))
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+
+    if ((state == NULL) || (family == NULL))
     {
         drv_display_draw_text(0U, 0U, "TEMPLATE N/A");
         return;

@@ -27,6 +27,7 @@
 #include "control_events.h"
 #include "cpu_load.h"
 #include "Audio/microdexed_synth.h"
+#include "ui_core.h"
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
@@ -281,6 +282,7 @@ void brick6_app_process(void)
     engine_tasklet_poll();
 
     hall_loop_process();
+    ui_core_service_track_selection_inputs();
     hall_juno_midi_process();
 
     recorder_transport_process();

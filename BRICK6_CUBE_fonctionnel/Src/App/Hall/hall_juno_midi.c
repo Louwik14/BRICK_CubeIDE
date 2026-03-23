@@ -3,6 +3,7 @@
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_note_midi.h"
 #include "Audio/microdexed_synth.h"
+#include "ui_core.h"
 
 void hall_juno_midi_init(void)
 {
@@ -16,6 +17,18 @@ void hall_juno_midi_process(void)
     for (key = 0U; key < HALL_KEY_COUNT; key++)
     {
         const uint8_t note = hall_note_midi_note_for_sensor(key);
+
+        if ((key < UI_TRACK_COUNT) && (ui_core_hall_note_is_suppressed(key) != 0U))
+        {
+            (void)hall_engine_consume_note_on(key);
+
+            if (hall_engine_consume_note_off(key) != 0U)
+            {
+                ui_core_clear_hall_note_suppression(key);
+            }
+
+            continue;
+        }
 
         if (hall_engine_consume_note_on(key) != 0U)
         {

@@ -35,6 +35,40 @@
 #include "ui_param.h"
 #include "ui_template_page.h"
 #include "App/Hall/hall_calibration.h"
+#include "App/Hall/hall_engine.h"
+
+typedef struct
+{
+    uint8_t active_track;
+    uint8_t shift_down;
+    uint8_t track_select_armed;
+    uint8_t hall_prev_pressed[UI_TRACK_COUNT];
+    uint8_t hall_note_suppressed[UI_TRACK_COUNT];
+} ui_track_state_t;
+
+static ui_track_state_t g_ui_track_state = {
+    .active_track = 0U,
+    .shift_down = 0U,
+    .track_select_armed = 0U,
+    .hall_prev_pressed = { 0U },
+    .hall_note_suppressed = { 0U },
+};
+
+static void ui_core_update_shift_state(uint8_t shift_down)
+{
+    if ((shift_down != 0U) && (g_ui_track_state.shift_down == 0U))
+    {
+        g_ui_track_state.shift_down = 1U;
+        g_ui_track_state.track_select_armed = 1U;
+        return;
+    }
+
+    if ((shift_down == 0U) && (g_ui_track_state.shift_down != 0U))
+    {
+        g_ui_track_state.shift_down = 0U;
+        g_ui_track_state.track_select_armed = 0U;
+    }
+}
 
 typedef struct
 {
@@ -95,6 +129,12 @@ void ui_core_init(void)
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
 
+    for (uint8_t hall = 0U; hall < UI_TRACK_COUNT; hall++)
+    {
+        g_ui_track_state.hall_prev_pressed[hall] = 0U;
+        g_ui_track_state.hall_note_suppressed[hall] = 0U;
+    }
+
     ui_template_family_registry_init();
     ui_page_template_filter_register_families();
 
@@ -119,6 +159,27 @@ void ui_core_init(void)
     else
     {
         ui_page_set(UI_PAGE_CALIBRATION);
+    }
+}
+
+void ui_core_service_track_selection_inputs(void)
+{
+    ui_core_update_shift_state(button_down(BTN_SHIFT));
+
+    for (uint8_t hall = 0U; hall < UI_TRACK_COUNT; hall++)
+    {
+        const uint8_t pressed = hall_engine_is_pressed(hall);
+        const uint8_t was_pressed = g_ui_track_state.hall_prev_pressed[hall];
+
+        if ((was_pressed == 0U) && (pressed != 0U)
+                && (g_ui_track_state.shift_down != 0U)
+                && (g_ui_track_state.track_select_armed != 0U))
+        {
+            g_ui_track_state.active_track = hall;
+            g_ui_track_state.hall_note_suppressed[hall] = 1U;
+        }
+
+        g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 }
 
@@ -177,4 +238,24 @@ ui_track_type_t ui_get_track_type(uint8_t track)
     }
 
     return UI_TRACK_TYPE_AUDIO;
+}
+
+uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
+{
+    if (hall >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    return g_ui_track_state.hall_note_suppressed[hall];
+}
+
+void ui_core_clear_hall_note_suppression(uint8_t hall)
+{
+    if (hall >= UI_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_ui_track_state.hall_note_suppressed[hall] = 0U;
 }

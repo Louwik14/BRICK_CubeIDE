@@ -16,6 +16,12 @@ typedef enum
 
 void ui_core_init(void);
 void ui_core_tick(void);
+void ui_core_service_track_selection_inputs(void);
+
+uint8_t ui_get_active_track(void);
+ui_track_type_t ui_get_track_type(uint8_t track);
+uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
+void ui_core_clear_hall_note_suppression(uint8_t hall);
 
 uint8_t ui_get_active_track(void);
 ui_track_type_t ui_get_track_type(uint8_t track);
