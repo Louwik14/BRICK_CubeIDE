@@ -1,2 +1,2 @@
-../Src/UI/ui_param.c:79:6:ui_param_set_bank	6
-../Src/UI/ui_param.c:111:6:ui_param_handle_encoder	9
+../Src/UI/ui_param.c:164:6:ui_param_set_bank	6
+../Src/UI/ui_param.c:196:6:ui_param_handle_encoder	14

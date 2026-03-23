@@ -14,7 +14,8 @@ C_SRCS += \
 ../Src/UI/ui_renderer_oled.c \
 ../Src/UI/ui_renderer_template.c \
 ../Src/UI/ui_tasklet.c \
-../Src/UI/ui_template_page.c 
+../Src/UI/ui_template_page.c \
+../Src/UI/ui_widgets.c 
 
 C_DEPS += \
 ./Src/UI/display_flush_service.d \
@@ -26,7 +27,8 @@ C_DEPS += \
 ./Src/UI/ui_renderer_oled.d \
 ./Src/UI/ui_renderer_template.d \
 ./Src/UI/ui_tasklet.d \
-./Src/UI/ui_template_page.d 
+./Src/UI/ui_template_page.d \
+./Src/UI/ui_widgets.d 
 
 OBJS += \
 ./Src/UI/display_flush_service.o \
@@ -38,7 +40,8 @@ OBJS += \
 ./Src/UI/ui_renderer_oled.o \
 ./Src/UI/ui_renderer_template.o \
 ./Src/UI/ui_tasklet.o \
-./Src/UI/ui_template_page.o 
+./Src/UI/ui_template_page.o \
+./Src/UI/ui_widgets.o 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -48,7 +51,7 @@ Src/UI/%.o Src/UI/%.su Src/UI/%.cyclo: ../Src/UI/%.c Src/UI/subdir.mk
 clean: clean-Src-2f-UI
 
 clean-Src-2f-UI:
-	-$(RM) ./Src/UI/display_flush_service.cyclo ./Src/UI/display_flush_service.d ./Src/UI/display_flush_service.o ./Src/UI/display_flush_service.su ./Src/UI/ui_core.cyclo ./Src/UI/ui_core.d ./Src/UI/ui_core.o ./Src/UI/ui_core.su ./Src/UI/ui_event.cyclo ./Src/UI/ui_event.d ./Src/UI/ui_event.o ./Src/UI/ui_event.su ./Src/UI/ui_navigation.cyclo ./Src/UI/ui_navigation.d ./Src/UI/ui_navigation.o ./Src/UI/ui_navigation.su ./Src/UI/ui_page_manager.cyclo ./Src/UI/ui_page_manager.d ./Src/UI/ui_page_manager.o ./Src/UI/ui_page_manager.su ./Src/UI/ui_param.cyclo ./Src/UI/ui_param.d ./Src/UI/ui_param.o ./Src/UI/ui_param.su ./Src/UI/ui_renderer_oled.cyclo ./Src/UI/ui_renderer_oled.d ./Src/UI/ui_renderer_oled.o ./Src/UI/ui_renderer_oled.su ./Src/UI/ui_renderer_template.cyclo ./Src/UI/ui_renderer_template.d ./Src/UI/ui_renderer_template.o ./Src/UI/ui_renderer_template.su ./Src/UI/ui_tasklet.cyclo ./Src/UI/ui_tasklet.d ./Src/UI/ui_tasklet.o ./Src/UI/ui_tasklet.su ./Src/UI/ui_template_page.cyclo ./Src/UI/ui_template_page.d ./Src/UI/ui_template_page.o ./Src/UI/ui_template_page.su
+	-$(RM) ./Src/UI/display_flush_service.cyclo ./Src/UI/display_flush_service.d ./Src/UI/display_flush_service.o ./Src/UI/display_flush_service.su ./Src/UI/ui_core.cyclo ./Src/UI/ui_core.d ./Src/UI/ui_core.o ./Src/UI/ui_core.su ./Src/UI/ui_event.cyclo ./Src/UI/ui_event.d ./Src/UI/ui_event.o ./Src/UI/ui_event.su ./Src/UI/ui_navigation.cyclo ./Src/UI/ui_navigation.d ./Src/UI/ui_navigation.o ./Src/UI/ui_navigation.su ./Src/UI/ui_page_manager.cyclo ./Src/UI/ui_page_manager.d ./Src/UI/ui_page_manager.o ./Src/UI/ui_page_manager.su ./Src/UI/ui_param.cyclo ./Src/UI/ui_param.d ./Src/UI/ui_param.o ./Src/UI/ui_param.su ./Src/UI/ui_renderer_oled.cyclo ./Src/UI/ui_renderer_oled.d ./Src/UI/ui_renderer_oled.o ./Src/UI/ui_renderer_oled.su ./Src/UI/ui_renderer_template.cyclo ./Src/UI/ui_renderer_template.d ./Src/UI/ui_renderer_template.o ./Src/UI/ui_renderer_template.su ./Src/UI/ui_tasklet.cyclo ./Src/UI/ui_tasklet.d ./Src/UI/ui_tasklet.o ./Src/UI/ui_tasklet.su ./Src/UI/ui_template_page.cyclo ./Src/UI/ui_template_page.d ./Src/UI/ui_template_page.o ./Src/UI/ui_template_page.su ./Src/UI/ui_widgets.cyclo ./Src/UI/ui_widgets.d ./Src/UI/ui_widgets.o ./Src/UI/ui_widgets.su
 
 .PHONY: clean-Src-2f-UI
 

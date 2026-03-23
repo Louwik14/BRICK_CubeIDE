@@ -1,2 +1,3 @@
-../Src/UI/pages/ui_page_template_cfg.c:29:36:ui_page_template_cfg_resolve_family	0	static
-../Src/UI/pages/ui_page_template_cfg.c:41:6:ui_page_template_cfg_register_families	24	static
+../Src/UI/pages/ui_page_template_cfg.c:56:36:ui_page_template_cfg_resolve_family	0	static
+../Src/UI/pages/ui_page_template_cfg.c:31:26:ui_page_template_cfg_pick_widget	8	static
+../Src/UI/pages/ui_page_template_cfg.c:69:6:ui_page_template_cfg_register_families	24	static
