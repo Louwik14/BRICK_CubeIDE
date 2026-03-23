@@ -33,6 +33,20 @@ static void ui_renderer_template_format_value(param_id_t id, char *out, uint32_t
     const param_desc_t *desc = &param_registry[id];
     const float value = param_get(id);
 
+    if (id == PARAM_CFG_TRACK)
+    {
+        (void)snprintf(out, out_len, "%s", ui_get_track_family_display_name((ui_track_family_t)((uint8_t)(value + 0.5f))));
+        return;
+    }
+
+    if (id == PARAM_CFG_TRACK_TYPE)
+    {
+        const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
+        const ui_track_type_t active_type = ui_get_track_type_from_family_index(active_family, (uint8_t)(value + 0.5f));
+        (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(active_family, active_type));
+        return;
+    }
+
     switch (desc->display_type)
     {
         case PARAM_DISPLAY_BOOL:
@@ -352,15 +366,15 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
     const char *family_title = ((family != NULL) && (family->family_title != NULL)) ? family->family_title : "TEMPLATE";
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_type_t active_type = ui_get_track_type(active_track);
-    const char *track_type_name = ui_get_track_type_display_name(active_type);
     char track_label[4];
+    char runtime_label[12];
 
     (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)(active_track + 1U));
+    ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
 
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
-    drv_display_draw_text(9U, 1U, track_type_name);
+    drv_display_draw_text(9U, 1U, runtime_label);
 
     drv_display_set_font(&FONT_4X6);
     drv_display_draw_text(9U, 9U, "SEQ");

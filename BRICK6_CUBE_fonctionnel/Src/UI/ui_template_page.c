@@ -6,7 +6,7 @@
 #include "ui_page_manager.h"
 #include "ui_renderer_template.h"
 
-static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
+static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
 
 static ui_template_page_state_t *ui_template_page_get_active_state(void)
 {
@@ -38,45 +38,55 @@ void ui_template_family_registry_init(void)
 {
     for (uint8_t family_index = 0U; family_index < (uint8_t)UI_TEMPLATE_FAMILY_COUNT; family_index++)
     {
-        for (uint8_t type_index = 0U; type_index < (uint8_t)UI_TRACK_TYPE_COUNT; type_index++)
+        for (uint8_t track_family_index = 0U; track_family_index < (uint8_t)UI_TRACK_FAMILY_COUNT; track_family_index++)
         {
-            g_ui_template_family_registry[family_index][type_index] = 0;
+            for (uint8_t type_index = 0U; type_index < (uint8_t)UI_TRACK_TYPE_COUNT; type_index++)
+            {
+                g_ui_template_family_registry[family_index][track_family_index][type_index] = 0;
+            }
         }
     }
 }
 
 void ui_template_family_register(ui_template_family_id_t family_id,
+                                 ui_track_family_t track_family,
                                  ui_track_type_t track_type,
                                  const ui_template_family_t *family)
 {
     if (((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
-            || ((uint8_t)track_type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+            || ((uint8_t)track_family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+            || ((uint8_t)track_type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+            || !ui_track_type_is_valid_for_family(track_family, track_type))
     {
         return;
     }
 
-    g_ui_template_family_registry[family_id][track_type] = family;
+    g_ui_template_family_registry[family_id][track_family][track_type] = family;
 }
 
 const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t family_id,
                                                        uint8_t track,
+                                                       ui_track_family_t track_family,
                                                        ui_track_type_t track_type)
 {
     (void)track;
 
     if (((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
-            || ((uint8_t)track_type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+            || ((uint8_t)track_family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+            || ((uint8_t)track_type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+            || !ui_track_type_is_valid_for_family(track_family, track_type))
     {
         return 0;
     }
 
-    return g_ui_template_family_registry[family_id][track_type];
+    return g_ui_template_family_registry[family_id][track_family][track_type];
 }
 
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id)
 {
     const uint8_t active_track = ui_get_active_track();
-    return ui_template_family_resolve(family_id, active_track, ui_get_track_type(active_track));
+    const ui_track_config_t config = ui_get_track_config(active_track);
+    return ui_template_family_resolve(family_id, active_track, config.family, config.type);
 }
 
 static void ui_template_page_apply_active_bank(ui_template_page_state_t *state)

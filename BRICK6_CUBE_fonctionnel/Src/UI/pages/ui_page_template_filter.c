@@ -42,10 +42,20 @@ static ui_template_page_state_t g_ui_template_filter_state = {
 
 void ui_page_template_filter_register_families(void)
 {
-    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_AUDIO, &g_ui_template_filter_family_audio);
-    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_SYNTH, &g_ui_template_filter_family_audio);
-    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_MIDI, &g_ui_template_filter_family_audio);
-    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_CARD, &g_ui_template_filter_family_audio);
+    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; family++)
+    {
+        const ui_track_family_t track_family = (ui_track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; type++)
+        {
+            const ui_track_type_t track_type = (ui_track_type_t)type;
+            if (!ui_track_type_is_valid_for_family(track_family, track_type))
+            {
+                continue;
+            }
+
+            ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, track_family, track_type, &g_ui_template_filter_family_audio);
+        }
+    }
 }
 
 static ui_template_family_t *ui_page_template_filter_get_audio_family(void)
