@@ -5,4 +5,6 @@
 
 extern const ui_page_t g_ui_page_template_dx7;
 
+void ui_page_template_dx7_register_families(void);
+
 #endif /* UI_PAGE_TEMPLATE_DX7_H */

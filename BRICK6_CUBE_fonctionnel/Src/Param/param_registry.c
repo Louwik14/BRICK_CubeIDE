@@ -161,6 +161,20 @@ static float filter_ui127_to_release_s(float v)
     return filter_ui127_to_time_s(v, 0.001f, 5.0f);
 }
 
+static int8_t monob_range_index_to_octave(float v)
+{
+    static const int8_t octave_map[] = {-1, 0, 1, 2};
+    uint8_t index = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    return octave_map[index];
+}
+
+static int8_t monob_sub_octave_index_to_octave(float v)
+{
+    static const int8_t octave_map[] = {-1, -2, -3, -4};
+    uint8_t index = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    return octave_map[index];
+}
+
 static float filter_eq_ui127_to_db(float v)
 {
     const float clamped = filter_ui127_clamp(v);
@@ -387,6 +401,23 @@ static void apply_monob_filter_decay(float v) { monob_synth_set_filter_decay(fil
 static void apply_monob_filter_sustain(float v) { monob_synth_set_filter_sustain(filter_ui127_to_sustain(v)); }
 static void apply_monob_filter_release(float v) { monob_synth_set_filter_release(filter_ui127_to_release_s(v)); }
 
+static void apply_monob_osc1_wave(float v) { monob_synth_set_osc_wave(0U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+static void apply_monob_osc2_wave(float v) { monob_synth_set_osc_wave(1U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+static void apply_monob_osc3_wave(float v) { monob_synth_set_osc_wave(2U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+static void apply_monob_sub_wave(float v) { monob_synth_set_osc_wave(3U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+static void apply_monob_osc1_range(float v) { monob_synth_set_osc_range(0U, monob_range_index_to_octave(v)); }
+static void apply_monob_osc2_range(float v) { monob_synth_set_osc_range(1U, monob_range_index_to_octave(v)); }
+static void apply_monob_osc3_range(float v) { monob_synth_set_osc_range(2U, monob_range_index_to_octave(v)); }
+static void apply_monob_sub_octave(float v) { monob_synth_set_sub_octave(monob_sub_octave_index_to_octave(v)); }
+static void apply_monob_osc1_detune(float v) { monob_synth_set_osc_detune(0U, clamp_value(v, -24.0f, 24.0f)); }
+static void apply_monob_osc2_detune(float v) { monob_synth_set_osc_detune(1U, clamp_value(v, -24.0f, 24.0f)); }
+static void apply_monob_osc3_detune(float v) { monob_synth_set_osc_detune(2U, clamp_value(v, -24.0f, 24.0f)); }
+static void apply_monob_drift(float v) { monob_synth_set_drift(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_monob_osc1_mix(float v) { monob_synth_set_osc_mix(0U, clamp_value(v, 0.0f, 1.0f)); }
+static void apply_monob_osc2_mix(float v) { monob_synth_set_osc_mix(1U, clamp_value(v, 0.0f, 1.0f)); }
+static void apply_monob_osc3_mix(float v) { monob_synth_set_osc_mix(2U, clamp_value(v, 0.0f, 1.0f)); }
+static void apply_monob_sub_mix(float v) { monob_synth_set_sub_mix(clamp_value(v, 0.0f, 1.0f)); }
+
 static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -602,6 +633,9 @@ static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP BI", "HP BI", "BP BI", NULL};
 static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
+static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
+static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
+static const char *const g_monob_sub_octave_labels[] = {"-1", "-2", "-3", "-4", NULL};
 static const char *const g_track_family_labels[] = {"Input1", "Input2", "Input3", "Input4", "Synth", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
@@ -741,6 +775,22 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MONOB_FILTER_DECAY, "D", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_decay),
     PARAM_DESC_EX(PARAM_MONOB_FILTER_SUSTAIN, "S", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_sustain),
     PARAM_DESC_EX(PARAM_MONOB_FILTER_RELEASE, "R", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_release),
+    PARAM_DESC_EX(PARAM_MONOB_OSC1_WAVE, "Osc1", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc1_wave),
+    PARAM_DESC_EX(PARAM_MONOB_OSC2_WAVE, "Osc2", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc2_wave),
+    PARAM_DESC_EX(PARAM_MONOB_OSC3_WAVE, "Osc3", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc3_wave),
+    PARAM_DESC_EX(PARAM_MONOB_SUB_WAVE, "Sub", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_sub_wave),
+    PARAM_DESC_EX(PARAM_MONOB_OSC1_RANGE, "O1 Rng", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_range_labels, apply_monob_osc1_range),
+    PARAM_DESC_EX(PARAM_MONOB_OSC2_RANGE, "O2 Rng", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_range_labels, apply_monob_osc2_range),
+    PARAM_DESC_EX(PARAM_MONOB_OSC3_RANGE, "O3 Rng", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_range_labels, apply_monob_osc3_range),
+    PARAM_DESC_EX(PARAM_MONOB_SUB_OCTAVE, "SubOct", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_sub_octave_labels, apply_monob_sub_octave),
+    PARAM_DESC(PARAM_MONOB_OSC1_DETUNE, "O1 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, "ct", apply_monob_osc1_detune),
+    PARAM_DESC(PARAM_MONOB_OSC2_DETUNE, "O2 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, -7.0f, "ct", apply_monob_osc2_detune),
+    PARAM_DESC(PARAM_MONOB_OSC3_DETUNE, "O3 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 7.0f, "ct", apply_monob_osc3_detune),
+    PARAM_DESC_EX(PARAM_MONOB_DRIFT, "Drift", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.18f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_drift),
+    PARAM_DESC_EX(PARAM_MONOB_OSC1_MIX, "O1 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.9f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc1_mix),
+    PARAM_DESC_EX(PARAM_MONOB_OSC2_MIX, "O2 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.6f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc2_mix),
+    PARAM_DESC_EX(PARAM_MONOB_OSC3_MIX, "O3 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.45f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc3_mix),
+    PARAM_DESC_EX(PARAM_MONOB_SUB_MIX, "SubMix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.35f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_sub_mix),
 };
 
 /**

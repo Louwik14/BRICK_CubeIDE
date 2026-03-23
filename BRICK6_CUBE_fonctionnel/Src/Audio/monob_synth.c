@@ -4,11 +4,12 @@
 #include <string.h>
 
 #include "Audio/fx_filter_ladder_moog.h"
+#include "Audio/monob_osc_bank.h"
 
 #define MONOB_SYNTH_MIN_FREQ_HZ 20.0f
 #define MONOB_SYNTH_MAX_FREQ_HZ 16000.0f
 #define MONOB_SYNTH_MAX_FILTER_CUTOFF_HZ 16000.0f
-#define MONOB_SYNTH_OSC_GAIN 0.18f
+#define MONOB_SYNTH_OSC_GAIN 0.22f
 #define MONOB_SYNTH_AMP_ATTACK_S 0.005f
 #define MONOB_SYNTH_AMP_RELEASE_S 0.03f
 
@@ -24,9 +25,9 @@ typedef enum
 typedef struct
 {
     float sample_rate;
-    float phase;
-    float phase_increment;
     float amp_env;
+    float base_frequency_hz;
+    float drift_amount;
     float filter_env;
     float filter_cutoff_hz;
     float filter_resonance;
@@ -137,6 +138,7 @@ void monob_synth_init(float sample_rate)
     g_monob_synth.filter_decay_s = 0.10f;
     g_monob_synth.filter_sustain = 1.0f;
     g_monob_synth.filter_release_s = 0.10f;
+    monob_osc_bank_init(g_monob_synth.sample_rate);
     fx_filter_ladder_moog_init(&g_monob_synth.ladder, g_monob_synth.sample_rate);
     fx_filter_ladder_moog_set_drive(&g_monob_synth.ladder, 1.0f);
 }
@@ -145,8 +147,9 @@ void monob_synth_note_on(uint8_t midi_note, uint8_t velocity)
 {
     (void)velocity;
     g_monob_synth.current_note = midi_note;
-    g_monob_synth.phase_increment = monob_synth_midi_note_to_hz(midi_note) / g_monob_synth.sample_rate;
+    g_monob_synth.base_frequency_hz = monob_synth_midi_note_to_hz(midi_note);
     g_monob_synth.note_active = 1U;
+    monob_osc_bank_note_on();
     g_monob_synth.filter_env = 0.0f;
     g_monob_synth.filter_env_stage = MONOB_ENV_ATTACK;
 }
@@ -168,6 +171,8 @@ void monob_synth_all_notes_off(void)
     g_monob_synth.amp_env = 0.0f;
     g_monob_synth.filter_env = 0.0f;
     g_monob_synth.filter_env_stage = MONOB_ENV_IDLE;
+    g_monob_synth.base_frequency_hz = 0.0f;
+    monob_osc_bank_reset();
     fx_filter_ladder_moog_reset(&g_monob_synth.ladder);
 }
 
@@ -184,13 +189,13 @@ void monob_synth_process_block(float *mono_out, uint32_t frames)
         const float amp_time_s = (g_monob_synth.note_active != 0U) ? MONOB_SYNTH_AMP_ATTACK_S : MONOB_SYNTH_AMP_RELEASE_S;
         g_monob_synth.amp_env = monob_synth_step_linear(g_monob_synth.amp_env, amp_target, amp_time_s);
 
-        g_monob_synth.phase += g_monob_synth.phase_increment;
-        if (g_monob_synth.phase >= 1.0f)
+        float sample = 0.0f;
+        if ((g_monob_synth.base_frequency_hz > 0.0f) && (g_monob_synth.amp_env > 0.0f))
         {
-            g_monob_synth.phase -= floorf(g_monob_synth.phase);
+            sample = monob_osc_bank_process(g_monob_synth.base_frequency_hz, g_monob_synth.drift_amount)
+                   * MONOB_SYNTH_OSC_GAIN
+                   * g_monob_synth.amp_env;
         }
-
-        float sample = ((g_monob_synth.phase * 2.0f) - 1.0f) * MONOB_SYNTH_OSC_GAIN * g_monob_synth.amp_env;
 
         if (g_monob_synth.filter_enabled != 0U)
         {
@@ -253,4 +258,49 @@ void monob_synth_set_filter_sustain(float sustain)
 void monob_synth_set_filter_release(float release_s)
 {
     g_monob_synth.filter_release_s = monob_synth_clampf(release_s, 0.001f, 5.0f);
+}
+
+void monob_synth_set_osc_wave(uint8_t osc_index, uint8_t wave)
+{
+    monob_osc_bank_set_wave(osc_index, wave);
+}
+
+void monob_synth_set_osc_range(uint8_t osc_index, int8_t octave)
+{
+    if (osc_index >= 3U)
+    {
+        return;
+    }
+
+    monob_osc_bank_set_octave(osc_index, octave);
+}
+
+void monob_synth_set_sub_octave(int8_t octave)
+{
+    monob_osc_bank_set_octave(3U, octave);
+}
+
+void monob_synth_set_osc_detune(uint8_t osc_index, float detune_cents)
+{
+    monob_osc_bank_set_detune(osc_index, detune_cents);
+}
+
+void monob_synth_set_drift(float drift_amount)
+{
+    g_monob_synth.drift_amount = monob_synth_clampf(drift_amount, 0.0f, 1.0f);
+}
+
+void monob_synth_set_osc_mix(uint8_t osc_index, float mix)
+{
+    if (osc_index >= 3U)
+    {
+        return;
+    }
+
+    monob_osc_bank_set_mix(osc_index, mix);
+}
+
+void monob_synth_set_sub_mix(float mix)
+{
+    monob_osc_bank_set_mix(3U, mix);
 }
