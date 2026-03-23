@@ -764,6 +764,20 @@ ui_hall_mode_t ui_get_hall_mode(void)
     return g_ui_track_state.hall_mode;
 }
 
+static const char *ui_format_keyboard_hall_mode_short_label(void)
+{
+    static char label[8];
+    const int8_t octave_shift = keyboard_runtime_get_octave_shift();
+
+    if (octave_shift == 0)
+    {
+        return "KBD";
+    }
+
+    (void)snprintf(label, sizeof(label), "KBD%+d", (int)octave_shift);
+    return label;
+}
+
 void ui_set_hall_mode(ui_hall_mode_t mode)
 {
     if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)
@@ -786,7 +800,9 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
 
 const char *ui_get_hall_mode_short_label(void)
 {
-    return (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD) ? "KBD" : "SEQ";
+    return (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
+        ? ui_format_keyboard_hall_mode_short_label()
+        : "SEQ";
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
