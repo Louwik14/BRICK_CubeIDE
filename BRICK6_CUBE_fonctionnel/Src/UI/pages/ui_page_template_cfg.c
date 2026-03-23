@@ -45,6 +45,11 @@ static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
         return suggested_widget;
     }
 
+    if ((value_label != NULL) && (strncmp(value_label, "Off", 3) == 0))
+    {
+        return UIW_WIDGET_EMPTY;
+    }
+
     if ((value_label != NULL) && (strncmp(value_label, "Synth", 5) == 0))
     {
         return UIW_WIDGET_KEYBOARD;
@@ -55,6 +60,11 @@ static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
 
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
+    if (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF)
+    {
+        return &g_ui_template_cfg_family;
+    }
+
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_CFG);
 }
 
