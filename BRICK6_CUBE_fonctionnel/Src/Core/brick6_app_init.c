@@ -47,6 +47,13 @@ static float g_master_gain = 1.0f;
 
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 static ui_track_type_t g_runtime_synth_type = UI_TRACK_TYPE_DX7;
+static uint8_t g_runtime_track_enabled = 1U;
+
+static uint8_t brick6_runtime_track_is_enabled(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    return (ui_get_track_family(active_track) != UI_TRACK_FAMILY_OFF) ? 1U : 0U;
+}
 
 static ui_track_type_t brick6_get_runtime_synth_type(void)
 {
@@ -82,32 +89,44 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
+    const uint8_t runtime_track_enabled = brick6_runtime_track_is_enabled();
     const ui_track_type_t runtime_synth_type = brick6_get_runtime_synth_type();
 
-    if (runtime_synth_type != g_runtime_synth_type)
+    if (((runtime_track_enabled == 0U) && (g_runtime_track_enabled != 0U))
+            || ((runtime_track_enabled != 0U) && (g_runtime_track_enabled == 0U))
+            || ((runtime_track_enabled != 0U) && (runtime_synth_type != g_runtime_synth_type)))
     {
         microdexed_synth_all_notes_off();
         monob_synth_all_notes_off();
         g_runtime_synth_type = runtime_synth_type;
     }
+    g_runtime_track_enabled = runtime_track_enabled;
 
     if((track_count > 3U) && (tracks[3].enabled != 0U))
     {
-        static float synth_mono[AUDIO_BLOCK_SIZE];
-
-        if (runtime_synth_type == UI_TRACK_TYPE_MONOB)
+        if (runtime_track_enabled == 0U)
         {
-            monob_synth_process_block(synth_mono, frames);
+            memset(tracks[3].L, 0, sizeof(float) * frames);
+            memset(tracks[3].R, 0, sizeof(float) * frames);
         }
         else
         {
-            microdexed_synth_process_block(synth_mono, frames);
-        }
+            static float synth_mono[AUDIO_BLOCK_SIZE];
 
-        for(uint32_t i = 0U; i < frames; ++i)
-        {
-            tracks[3].L[i] = synth_mono[i];
-            tracks[3].R[i] = synth_mono[i];
+            if (runtime_synth_type == UI_TRACK_TYPE_MONOB)
+            {
+                monob_synth_process_block(synth_mono, frames);
+            }
+            else
+            {
+                microdexed_synth_process_block(synth_mono, frames);
+            }
+
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                tracks[3].L[i] = synth_mono[i];
+                tracks[3].R[i] = synth_mono[i];
+            }
         }
     }
 
@@ -155,27 +174,29 @@ static void my_dsp(StereoTrack *tracks,
                         tracks[0].R,
                         frames);
 
-    static float recL[AUDIO_BLOCK_SIZE];
-    static float recR[AUDIO_BLOCK_SIZE];
-
     const float xfade = 0.0f;
-
-    /*
-    Constant Power Crossfade
-
-    Linear crossfades produce a volume dip at the center (-6 dB).
-    Using sin/cos gains preserves constant perceived loudness.
-    */
-
-    const float gain_rec  = sinf(xfade * HALFPI_F);
-    const float gain_live = cosf(xfade * HALFPI_F);
-
-    live_recorder_read(&g_live_recorder, recL, recR, frames);
-
-    for(uint32_t i = 0U; i < frames; i++)
+    if(xfade > 0.0f)
     {
-        tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
-        tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
+        static float recL[AUDIO_BLOCK_SIZE];
+        static float recR[AUDIO_BLOCK_SIZE];
+
+        /*
+        Constant Power Crossfade
+
+        Linear crossfades produce a volume dip at the center (-6 dB).
+        Using sin/cos gains preserves constant perceived loudness.
+        */
+
+        const float gain_rec  = sinf(xfade * HALFPI_F);
+        const float gain_live = cosf(xfade * HALFPI_F);
+
+        live_recorder_read(&g_live_recorder, recL, recR, frames);
+
+        for(uint32_t i = 0U; i < frames; i++)
+        {
+            tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
+            tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
+        }
     }
 }
 
@@ -374,5 +395,3 @@ void brick6_app_process(void)
     /* Service writer SD hors IRQ */
     sd_recorder_writer_service();
 }
-
-

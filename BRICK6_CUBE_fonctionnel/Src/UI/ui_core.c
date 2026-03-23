@@ -44,6 +44,7 @@
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "param_store.h"
+#include "audio_float.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
@@ -94,7 +95,10 @@ static ui_track_config_t ui_core_get_default_track_config(void)
 
 bool ui_track_family_is_input(ui_track_family_t family)
 {
-    return ((uint8_t)family < (uint8_t)UI_AUDIO_INPUT_RESOURCE_COUNT);
+    return (family == UI_TRACK_FAMILY_INPUT1)
+            || (family == UI_TRACK_FAMILY_INPUT2)
+            || (family == UI_TRACK_FAMILY_INPUT3)
+            || (family == UI_TRACK_FAMILY_INPUT4);
 }
 
 bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type)
@@ -108,6 +112,11 @@ bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t
     if (ui_track_family_is_input(family))
     {
         return (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID);
+    }
+
+    if (family == UI_TRACK_FAMILY_OFF)
+    {
+        return false;
     }
 
     if (family == UI_TRACK_FAMILY_SYNTH)
@@ -131,6 +140,11 @@ ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family)
 uint8_t ui_get_track_type_count_for_family(ui_track_family_t family)
 {
     if ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+    {
+        return 0U;
+    }
+
+    if (family == UI_TRACK_FAMILY_OFF)
     {
         return 0U;
     }
@@ -160,6 +174,11 @@ ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, ui
         return UI_TRACK_TYPE_AUDIO;
     }
 
+    if (family == UI_TRACK_FAMILY_OFF)
+    {
+        return UI_TRACK_TYPE_AUDIO;
+    }
+
     if (family == UI_TRACK_FAMILY_SYNTH)
     {
         return (index == 0U) ? UI_TRACK_TYPE_DX7 : UI_TRACK_TYPE_MONOB;
@@ -173,6 +192,11 @@ static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t f
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
         return false;
+    }
+
+    if (family == UI_TRACK_FAMILY_OFF)
+    {
+        return true;
     }
 
     if (!ui_track_family_is_input(family))
@@ -194,6 +218,32 @@ static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t f
     }
 
     return true;
+}
+
+static uint8_t ui_core_has_track_family(ui_track_family_t family)
+{
+    if ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; track++)
+    {
+        if (g_ui_track_state.track_configs[track].family == family)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static void ui_core_sync_audio_runtime_enables(void)
+{
+    track_enable(0U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT1));
+    track_enable(1U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT2));
+    track_enable(2U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT3));
+    track_enable(3U, ui_core_has_track_family(UI_TRACK_FAMILY_SYNTH));
 }
 
 static void ui_core_sync_active_track_cfg_params(void)
@@ -229,7 +279,7 @@ static void ui_core_reset_track_configs(void)
     {
         if (track < UI_AUDIO_INPUT_RESOURCE_COUNT)
         {
-            g_ui_track_state.track_configs[track].family = (ui_track_family_t)track;
+            g_ui_track_state.track_configs[track].family = (ui_track_family_t)((uint8_t)UI_TRACK_FAMILY_INPUT1 + track);
             g_ui_track_state.track_configs[track].type = UI_TRACK_TYPE_AUDIO;
         }
         else
@@ -237,7 +287,10 @@ static void ui_core_reset_track_configs(void)
             g_ui_track_state.track_configs[track].family = UI_TRACK_FAMILY_SYNTH;
             g_ui_track_state.track_configs[track].type = UI_TRACK_TYPE_DX7;
         }
+
     }
+
+    ui_core_sync_audio_runtime_enables();
 }
 
 static void ui_core_update_shift_state(uint8_t shift_down)
@@ -509,6 +562,8 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         config->type = ui_get_default_track_type_for_family(config->family);
     }
 
+    ui_core_sync_audio_runtime_enables();
+
     if (track == g_ui_track_state.active_track)
     {
         keyboard_runtime_on_active_track_changed();
@@ -570,6 +625,9 @@ const char *ui_get_track_family_display_name(ui_track_family_t family)
 {
     switch (family)
     {
+        case UI_TRACK_FAMILY_OFF:
+            return "Off";
+
         case UI_TRACK_FAMILY_INPUT1:
             return "Input1";
 
@@ -594,6 +652,9 @@ const char *ui_get_track_family_short_name(ui_track_family_t family)
 {
     switch (family)
     {
+        case UI_TRACK_FAMILY_OFF:
+            return "Off";
+
         case UI_TRACK_FAMILY_INPUT1:
             return "In1";
 
@@ -674,6 +735,12 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
     }
 
     const ui_track_config_t config = ui_get_track_config(track);
+
+    if (config.family == UI_TRACK_FAMILY_OFF)
+    {
+        (void)snprintf(out, out_len, "Off");
+        return;
+    }
 
     if (config.family == UI_TRACK_FAMILY_SYNTH)
     {

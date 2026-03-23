@@ -630,12 +630,25 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
+    uint8_t send_fx_active = 0U;
+    for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+    {
+        if(g_send_fx_slot[s] >= 0)
+        {
+            send_fx_active = 1U;
+            break;
+        }
+    }
+
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
     memset(bus_cue_l, 0, sizeof(bus_cue_l));
     memset(bus_cue_r, 0, sizeof(bus_cue_r));
-    memset(send_l, 0, sizeof(send_l));
-    memset(send_r, 0, sizeof(send_r));
+    if(send_fx_active != 0U)
+    {
+        memset(send_l, 0, sizeof(send_l));
+        memset(send_r, 0, sizeof(send_r));
+    }
 
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
 
@@ -670,10 +683,13 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         const float gain_l = mt->gain * pan_l;
         const float gain_r = mt->gain * pan_r;
 
-        for(uint32_t i = 0; i < frames; i++)
+        if((gain_l != 1.0f) || (gain_r != 1.0f))
         {
-            L[i] *= gain_l;
-            R[i] *= gain_r;
+            for(uint32_t i = 0; i < frames; i++)
+            {
+                L[i] *= gain_l;
+                R[i] *= gain_r;
+            }
         }
 
         sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_FADER,
@@ -682,15 +698,21 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                       R,
                                       frames);
 
-        for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+        if(send_fx_active != 0U)
         {
-            if(g_send_fx_slot[s] >= 0)
+            for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
             {
-                const float send_g = mt->send_level[s];
-                for(uint32_t i = 0; i < frames; i++)
+                if(g_send_fx_slot[s] >= 0)
                 {
-                    send_l[s][i] += L[i] * send_g;
-                    send_r[s][i] += R[i] * send_g;
+                    const float send_g = mt->send_level[s];
+                    if(send_g <= 0.0f)
+                        continue;
+
+                    for(uint32_t i = 0; i < frames; i++)
+                    {
+                        send_l[s][i] += L[i] * send_g;
+                        send_r[s][i] += R[i] * send_g;
+                    }
                 }
             }
         }
@@ -729,16 +751,19 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         }
     }
 
-    for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+    if(send_fx_active != 0U)
     {
-        const int8_t slot = g_send_fx_slot[s];
-        if(slot >= 0)
+        for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
         {
-            fx_chain_process_slot((uint32_t)slot, send_l[s], send_r[s], frames);
-            for(uint32_t i = 0; i < frames; i++)
+            const int8_t slot = g_send_fx_slot[s];
+            if(slot >= 0)
             {
-                bus_main_l[i] += send_l[s][i];
-                bus_main_r[i] += send_r[s][i];
+                fx_chain_process_slot((uint32_t)slot, send_l[s], send_r[s], frames);
+                for(uint32_t i = 0; i < frames; i++)
+                {
+                    bus_main_l[i] += send_l[s][i];
+                    bus_main_r[i] += send_r[s][i];
+                }
             }
         }
     }
