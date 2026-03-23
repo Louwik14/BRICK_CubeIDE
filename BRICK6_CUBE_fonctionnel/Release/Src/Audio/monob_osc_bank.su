@@ -1,8 +1,8 @@
-../Src/Audio/monob_osc_bank.cpp:143:17:void monob_osc_bank_init(float)	16	static
-../Src/Audio/monob_osc_bank.cpp:162:17:void monob_osc_bank_reset()	0	static
-../Src/Audio/monob_osc_bank.cpp:172:17:void monob_osc_bank_note_on()	0	static
-../Src/Audio/monob_osc_bank.cpp:181:17:void monob_osc_bank_set_wave(uint8_t, uint8_t)	0	static
-../Src/Audio/monob_osc_bank.cpp:192:17:void monob_osc_bank_set_octave(uint8_t, int8_t)	0	static
-../Src/Audio/monob_osc_bank.cpp:203:17:void monob_osc_bank_set_detune(uint8_t, float)	0	static
-../Src/Audio/monob_osc_bank.cpp:214:17:void monob_osc_bank_set_mix(uint8_t, float)	0	static
-../Src/Audio/monob_osc_bank.cpp:224:18:float monob_osc_bank_process(float, float)	16	static
+../Src/Audio/monob_osc_bank.cpp:191:17:void monob_osc_bank_init(float)	16	static
+../Src/Audio/monob_osc_bank.cpp:211:17:void monob_osc_bank_reset()	0	static
+../Src/Audio/monob_osc_bank.cpp:222:17:void monob_osc_bank_note_on()	0	static
+../Src/Audio/monob_osc_bank.cpp:232:17:void monob_osc_bank_set_wave(uint8_t, uint8_t)	0	static
+../Src/Audio/monob_osc_bank.cpp:244:17:void monob_osc_bank_set_octave(uint8_t, int8_t)	0	static
+../Src/Audio/monob_osc_bank.cpp:255:17:void monob_osc_bank_set_detune(uint8_t, float)	0	static
+../Src/Audio/monob_osc_bank.cpp:266:17:void monob_osc_bank_set_mix(uint8_t, float)	0	static
+../Src/Audio/monob_osc_bank.cpp:277:18:float monob_osc_bank_process(float)	12	static

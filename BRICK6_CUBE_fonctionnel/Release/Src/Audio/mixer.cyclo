@@ -21,4 +21,4 @@
 ../Src/Audio/mixer.c:568:6:mixer_set_track_filter_eq_low	2
 ../Src/Audio/mixer.c:578:6:mixer_set_track_filter_eq_mid	2
 ../Src/Audio/mixer.c:588:6:mixer_set_track_filter_eq_high	2
-../Src/Audio/mixer.c:621:6:mixer_process	33
+../Src/Audio/mixer.c:621:6:mixer_process	41

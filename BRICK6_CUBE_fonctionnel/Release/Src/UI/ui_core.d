@@ -75,7 +75,8 @@ Src/UI/ui_core.o: ../Src/UI/ui_core.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
  ../Inc/App/Hall/hall_calibration.h ../Inc/App/Hall/hall_engine.h \
  ../Inc/App/Hall/hall_adc.h ../Inc/Keyboard/keyboard_runtime.h \
- ../Inc/Keyboard/ui_keyboard_app.h
+ ../Inc/Keyboard/ui_keyboard_app.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/audio_float.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -155,3 +156,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param
 ../Inc/App/Hall/hall_adc.h:
 ../Inc/Keyboard/keyboard_runtime.h:
 ../Inc/Keyboard/ui_keyboard_app.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/audio_float.h:

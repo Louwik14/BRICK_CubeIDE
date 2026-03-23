@@ -34,4 +34,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_i
 ../Src/Audio/fx_reverb.cpp:87:6:void fx_reverb_set_room_size(fx_reverb_t*, float)	3
 ../Src/Audio/fx_reverb.cpp:95:6:void fx_reverb_set_damping(fx_reverb_t*, float)	3
 ../Src/Audio/fx_reverb.cpp:103:6:void fx_reverb_set_bypass(fx_reverb_t*, uint8_t)	2
-../Src/Audio/fx_reverb.cpp:111:14:fx_reverb_t* fx_reverb_get_instance()	3
+../Src/Audio/fx_reverb.cpp:111:14:fx_reverb_t* fx_reverb_get_instance()	2
