@@ -165,7 +165,7 @@ static float filter_eq_ui127_to_db(float v)
 
     if(clamped <= 64.0f)
     {
-        return -60.0f + ((clamped / 64.0f) * 60.0f);
+        return -80.0f + ((clamped / 64.0f) * 80.0f);
     }
 
     return ((clamped - 64.0f) / 63.0f) * 12.0f;
