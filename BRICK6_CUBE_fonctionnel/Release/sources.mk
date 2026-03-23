@@ -60,6 +60,7 @@ Src/App/Hall \
 Src/App \
 Src/Audio \
 Src/Core \
+Src/Keyboard \
 Src/MIDI \
 Src/Param \
 Src/SD \
