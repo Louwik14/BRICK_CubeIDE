@@ -43,6 +43,7 @@ typedef struct {
 typedef struct {
     svf_t left;
     svf_t right;
+    fx_dj_eq3_t eq3;
     float sample_rate;
     float cutoff_hz;
     float resonance;
@@ -52,6 +53,9 @@ typedef struct {
     float decay_s;
     float sustain;
     float release_s;
+    float eq_low_db;
+    float eq_mid_db;
+    float eq_high_db;
     uint8_t type;
 } mixer_track_filter_t;
 
@@ -89,6 +93,11 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     svf_set_res(&filter->right, filter->resonance);
     svf_set_drive(&filter->left, 0.0f);
     svf_set_drive(&filter->right, 0.0f);
+
+    fx_dj_eq3_set_low_db(&filter->eq3, filter->eq_low_db);
+    fx_dj_eq3_set_mid_db(&filter->eq3, filter->eq_mid_db);
+    fx_dj_eq3_set_high_db(&filter->eq3, filter->eq_high_db);
+    fx_dj_eq3_set_bypass(&filter->eq3, (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 0U : 1U);
 }
 
 static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
@@ -98,6 +107,7 @@ static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
 
     svf_init(&filter->left, filter->sample_rate);
     svf_init(&filter->right, filter->sample_rate);
+    fx_dj_eq3_init(&filter->eq3, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
     mixer_track_filter_apply_core_params(filter);
 }
 
@@ -114,6 +124,9 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->decay_s = 0.10f;
     filter->sustain = 1.0f;
     filter->release_s = 0.10f;
+    filter->eq_low_db = 0.0f;
+    filter->eq_mid_db = 0.0f;
+    filter->eq_high_db = 0.0f;
     filter->type = (uint8_t)MIXER_TRACK_FILTER_OFF;
 
     mixer_track_filter_reset_dsp(filter);
@@ -154,6 +167,10 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
                 left[i] = svf_process_mode(&filter->left, left[i], SVF_MODE_BP);
                 right[i] = svf_process_mode(&filter->right, right[i], SVF_MODE_BP);
             }
+            break;
+
+        case MIXER_TRACK_FILTER_EQ3:
+            fx_dj_eq3_process_block(&filter->eq3, left, right, frames);
             break;
 
         default:
@@ -463,13 +480,12 @@ void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t ty
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    if(type > MIXER_TRACK_FILTER_BP)
-        type = MIXER_TRACK_FILTER_BP;
+    if(type > MIXER_TRACK_FILTER_EQ3)
+        type = MIXER_TRACK_FILTER_EQ3;
 
     g_track_filters[track_id].type = (uint8_t)type;
 
-    if(type != MIXER_TRACK_FILTER_OFF)
-        mixer_track_filter_reset_dsp(&g_track_filters[track_id]);
+    mixer_track_filter_reset_dsp(&g_track_filters[track_id]);
 }
 
 void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
@@ -538,6 +554,36 @@ void mixer_set_track_filter_release(uint32_t track_id, float release_s)
     g_track_filters[track_id].release_s = clampf_local(release_s,
                                                        MIXER_FILTER_RELEASE_MIN_S,
                                                        MIXER_FILTER_RELEASE_MAX_S);
+}
+
+void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->eq_low_db = gain_db;
+    fx_dj_eq3_set_low_db(&filter->eq3, filter->eq_low_db);
+}
+
+void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->eq_mid_db = gain_db;
+    fx_dj_eq3_set_mid_db(&filter->eq3, filter->eq_mid_db);
+}
+
+void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->eq_high_db = gain_db;
+    fx_dj_eq3_set_high_db(&filter->eq3, filter->eq_high_db);
 }
 
 /**

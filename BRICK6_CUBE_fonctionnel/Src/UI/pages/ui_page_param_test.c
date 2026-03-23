@@ -128,6 +128,10 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
             (void)snprintf(out, out_len, "%.2f", (double)value);
             break;
 
+        case PARAM_DISPLAY_INT:
+            (void)snprintf(out, out_len, "%ld", (long)(value + 0.5f));
+            break;
+
         default:
             if ((desc->unit != 0) && (desc->unit[0] != '\0'))
             {

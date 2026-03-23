@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "audio_float.h"
+#include "fx_dj_eq3_cmsis.h"
 
 /**
  * @file mixer.h
@@ -35,7 +36,8 @@ typedef enum
     MIXER_TRACK_FILTER_OFF = 0,
     MIXER_TRACK_FILTER_LP,
     MIXER_TRACK_FILTER_HP,
-    MIXER_TRACK_FILTER_BP
+    MIXER_TRACK_FILTER_BP,
+    MIXER_TRACK_FILTER_EQ3
 } mixer_track_filter_type_t;
 
 typedef enum
@@ -67,6 +69,9 @@ void mixer_set_track_filter_attack(uint32_t track_id, float attack_s);
 void mixer_set_track_filter_decay(uint32_t track_id, float decay_s);
 void mixer_set_track_filter_sustain(uint32_t track_id, float sustain);
 void mixer_set_track_filter_release(uint32_t track_id, float release_s);
+void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db);
+void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db);
+void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db);
 
 void mixer_process(StereoTrack *tracks,
                    uint32_t track_count,
