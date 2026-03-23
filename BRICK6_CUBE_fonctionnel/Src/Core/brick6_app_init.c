@@ -27,6 +27,7 @@
 #include "control_events.h"
 #include "cpu_load.h"
 #include "Audio/microdexed_synth.h"
+#include "Audio/monob_synth.h"
 #include "ui_core.h"
 
 #include "Sampler/sample_pool.h"
@@ -45,6 +46,7 @@
 static float g_master_gain = 1.0f;
 
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
+static ui_track_type_t g_runtime_synth_type = UI_TRACK_TYPE_DX7;
 
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
@@ -68,16 +70,32 @@ static void my_dsp(StereoTrack *tracks,
                    uint32_t track_count,
                    uint32_t frames)
 {
+    const ui_track_type_t runtime_synth_type = ui_get_track_type(UI_AUDIO_INPUT_RESOURCE_COUNT);
+
+    if (runtime_synth_type != g_runtime_synth_type)
+    {
+        microdexed_synth_all_notes_off();
+        monob_synth_all_notes_off();
+        g_runtime_synth_type = runtime_synth_type;
+    }
+
     if((track_count > 3U) && (tracks[3].enabled != 0U))
     {
-        static float microdexed_mono[AUDIO_BLOCK_SIZE];
+        static float synth_mono[AUDIO_BLOCK_SIZE];
 
-        microdexed_synth_process_block(microdexed_mono, frames);
+        if (runtime_synth_type == UI_TRACK_TYPE_MONOB)
+        {
+            monob_synth_process_block(synth_mono, frames);
+        }
+        else
+        {
+            microdexed_synth_process_block(synth_mono, frames);
+        }
 
         for(uint32_t i = 0U; i < frames; ++i)
         {
-            tracks[3].L[i] = microdexed_mono[i];
-            tracks[3].R[i] = microdexed_mono[i];
+            tracks[3].L[i] = synth_mono[i];
+            tracks[3].R[i] = synth_mono[i];
         }
     }
 
@@ -203,6 +221,7 @@ void brick6_app_init(void)
 
     microdexed_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
     microdexed_synth_set_enabled(1U);
+    monob_synth_init(48000.0f);
     hall_juno_midi_init();
 
     recorder_transport_init();
@@ -247,6 +266,14 @@ void brick6_app_init(void)
     param_reset(PARAM_DX7_OPERATOR_2_LEVEL);
     param_reset(PARAM_DX7_OPERATOR_3_LEVEL);
     param_reset(PARAM_DX7_OPERATOR_4_LEVEL);
+    param_reset(PARAM_MONOB_FILTER_TYPE);
+    param_reset(PARAM_MONOB_FILTER_CUTOFF);
+    param_reset(PARAM_MONOB_FILTER_RESONANCE);
+    param_reset(PARAM_MONOB_FILTER_EG_AMT);
+    param_reset(PARAM_MONOB_FILTER_ATTACK);
+    param_reset(PARAM_MONOB_FILTER_DECAY);
+    param_reset(PARAM_MONOB_FILTER_SUSTAIN);
+    param_reset(PARAM_MONOB_FILTER_RELEASE);
     control_event_init();
 
     hall_loop_init();
