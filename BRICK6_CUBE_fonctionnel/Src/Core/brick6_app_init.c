@@ -155,27 +155,29 @@ static void my_dsp(StereoTrack *tracks,
                         tracks[0].R,
                         frames);
 
-    static float recL[AUDIO_BLOCK_SIZE];
-    static float recR[AUDIO_BLOCK_SIZE];
-
     const float xfade = 0.0f;
-
-    /*
-    Constant Power Crossfade
-
-    Linear crossfades produce a volume dip at the center (-6 dB).
-    Using sin/cos gains preserves constant perceived loudness.
-    */
-
-    const float gain_rec  = sinf(xfade * HALFPI_F);
-    const float gain_live = cosf(xfade * HALFPI_F);
-
-    live_recorder_read(&g_live_recorder, recL, recR, frames);
-
-    for(uint32_t i = 0U; i < frames; i++)
+    if(xfade > 0.0f)
     {
-        tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
-        tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
+        static float recL[AUDIO_BLOCK_SIZE];
+        static float recR[AUDIO_BLOCK_SIZE];
+
+        /*
+        Constant Power Crossfade
+
+        Linear crossfades produce a volume dip at the center (-6 dB).
+        Using sin/cos gains preserves constant perceived loudness.
+        */
+
+        const float gain_rec  = sinf(xfade * HALFPI_F);
+        const float gain_live = cosf(xfade * HALFPI_F);
+
+        live_recorder_read(&g_live_recorder, recL, recR, frames);
+
+        for(uint32_t i = 0U; i < frames; i++)
+        {
+            tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
+            tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
+        }
     }
 }
 
