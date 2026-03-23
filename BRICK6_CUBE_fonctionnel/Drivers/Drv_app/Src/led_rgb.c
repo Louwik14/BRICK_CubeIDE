@@ -24,6 +24,7 @@
 #include <stdbool.h>
 
 #include "Keyboard/keyboard_runtime.h"
+#include "led_remap.h"
 #include "led_anim.h"
 #include "led_layer.h"
 #include "UI/ui_core.h"
@@ -66,31 +67,6 @@ static const led_rgb_color_t g_led_keyboard_omni_chord_colors[4] = {
     { 80U, 0U, 128U },
 };
 
-static bool led_is_param_button(led_id_t led)
-{
-    return ((uint32_t)led >= (uint32_t)LED_PARAM_1) && ((uint32_t)led <= (uint32_t)LED_PARAM_8);
-}
-
-static bool led_is_hall_button(led_id_t led)
-{
-    return ((uint32_t)led >= (uint32_t)LED_STEP_1) && ((uint32_t)led <= (uint32_t)LED_STEP_16);
-}
-
-static led_id_t led_param_for_button(button_id_t button)
-{
-    if (((uint32_t)button < (uint32_t)BTN_PARAM_1) || ((uint32_t)button > (uint32_t)BTN_PARAM_8))
-    {
-        return LED_COUNT_TOTAL;
-    }
-
-    return (led_id_t)((uint32_t)LED_PARAM_1 + ((uint32_t)button - (uint32_t)BTN_PARAM_1));
-}
-
-static uint8_t led_hall_index(led_id_t led)
-{
-    return (uint8_t)((uint32_t)led - (uint32_t)LED_STEP_1);
-}
-
 static void led_apply_param_button_scene(led_id_t led)
 {
     uint8_t r = LED_FIXED_GREEN_R;
@@ -98,7 +74,7 @@ static void led_apply_param_button_scene(led_id_t led)
     uint8_t b = LED_FIXED_GREEN_B;
 
     const button_id_t active_button = ui_navigation_get_button_for_page(ui_page_get_id());
-    if (led == led_param_for_button(active_button))
+    if (led == led_remap_param_led_for_button(active_button))
     {
         r = LED_FIXED_WHITE_R;
         g = LED_FIXED_WHITE_G;
@@ -119,7 +95,7 @@ static void led_apply_default_hall_scene(led_id_t led)
 
 static void led_apply_keyboard_hall_scene(led_id_t led)
 {
-    const uint8_t hall = led_hall_index(led);
+    const uint8_t hall = led_remap_hall_for_led(led);
 
     if (!keyboard_runtime_get_omnichord())
     {
@@ -150,7 +126,7 @@ static void led_apply_fixed_scene(void)
 
     for (uint32_t led = 0U; led < LED_FB_COUNT; led++)
     {
-        if (led_is_hall_button((led_id_t)led))
+        if (led_remap_is_hall_led((led_id_t)led))
         {
             if (ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
             {
@@ -161,7 +137,7 @@ static void led_apply_fixed_scene(void)
                 led_apply_default_hall_scene((led_id_t)led);
             }
         }
-        else if (led_is_param_button((led_id_t)led))
+        else if (led_remap_is_param_led((led_id_t)led))
         {
             led_apply_param_button_scene((led_id_t)led);
         }
