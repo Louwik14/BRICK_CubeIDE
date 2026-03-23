@@ -5,6 +5,7 @@
 
 #include "Audio/fx_filter_ladder_moog.h"
 #include "Audio/monob_osc_bank.h"
+#include "stm32h7xx.h"
 
 #define MONOB_SYNTH_MIN_FREQ_HZ 20.0f
 #define MONOB_SYNTH_MAX_FREQ_HZ 16000.0f
@@ -27,7 +28,6 @@ typedef struct
     float sample_rate;
     float amp_env;
     float base_frequency_hz;
-    float drift_amount;
     float filter_env;
     float filter_cutoff_hz;
     float filter_resonance;
@@ -44,6 +44,7 @@ typedef struct
 } monob_synth_state_t;
 
 static monob_synth_state_t g_monob_synth;
+static monob_synth_profile_t g_monob_profile;
 
 static float monob_synth_clampf(float value, float min_value, float max_value)
 {
@@ -81,6 +82,36 @@ static float monob_synth_step_linear(float current, float target, float time_s)
 
     current -= max_delta;
     return (current < target) ? target : current;
+}
+
+static float monob_synth_step_with_delta(float current, float target, float delta)
+{
+    if (current < target)
+    {
+        current += delta;
+        return (current > target) ? target : current;
+    }
+
+    current -= delta;
+    return (current < target) ? target : current;
+}
+
+static uint32_t monob_synth_profile_counter_valid(void)
+{
+    return ((CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) != 0U)
+        && ((DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk) != 0U);
+}
+
+static void monob_synth_profile_update_avg(uint32_t *avg_cycles, uint32_t sample_cycles)
+{
+    if (*avg_cycles == 0U)
+    {
+        *avg_cycles = sample_cycles;
+        return;
+    }
+
+    *avg_cycles = (uint32_t)((int32_t)(*avg_cycles)
+                           + (((int32_t)sample_cycles - (int32_t)(*avg_cycles)) >> 4));
 }
 
 static float monob_synth_process_filter_env(void)
@@ -132,6 +163,7 @@ static float monob_synth_process_filter_env(void)
 void monob_synth_init(float sample_rate)
 {
     (void)memset(&g_monob_synth, 0, sizeof(g_monob_synth));
+    (void)memset(&g_monob_profile, 0, sizeof(g_monob_profile));
     g_monob_synth.sample_rate = (sample_rate > 1000.0f) ? sample_rate : 48000.0f;
     g_monob_synth.filter_cutoff_hz = 16000.0f;
     g_monob_synth.filter_attack_s = 0.01f;
@@ -178,23 +210,54 @@ void monob_synth_all_notes_off(void)
 
 void monob_synth_process_block(float *mono_out, uint32_t frames)
 {
+    uint32_t block_start_cycles = 0U;
+    uint32_t osc_cycles_accum = 0U;
+    const uint32_t counter_valid = monob_synth_profile_counter_valid();
+
     if (mono_out == NULL)
     {
         return;
     }
 
+    if (counter_valid != 0U)
+    {
+        block_start_cycles = DWT->CYCCNT;
+    }
+
+    if ((g_monob_synth.note_active == 0U)
+        && (g_monob_synth.amp_env <= 0.0f)
+        && (g_monob_synth.base_frequency_hz <= 0.0f)
+        && (g_monob_synth.filter_enabled == 0U))
+    {
+        (void)memset(mono_out, 0, frames * sizeof(float));
+        return;
+    }
+
+    const float amp_target = (g_monob_synth.note_active != 0U) ? 1.0f : 0.0f;
+    const float amp_time_s = (g_monob_synth.note_active != 0U) ? MONOB_SYNTH_AMP_ATTACK_S : MONOB_SYNTH_AMP_RELEASE_S;
+    const float amp_delta = (amp_time_s > 0.0f) ? (1.0f / (amp_time_s * g_monob_synth.sample_rate)) : 1.0f;
+
     for (uint32_t i = 0U; i < frames; ++i)
     {
-        const float amp_target = (g_monob_synth.note_active != 0U) ? 1.0f : 0.0f;
-        const float amp_time_s = (g_monob_synth.note_active != 0U) ? MONOB_SYNTH_AMP_ATTACK_S : MONOB_SYNTH_AMP_RELEASE_S;
-        g_monob_synth.amp_env = monob_synth_step_linear(g_monob_synth.amp_env, amp_target, amp_time_s);
+        g_monob_synth.amp_env = monob_synth_step_with_delta(g_monob_synth.amp_env, amp_target, amp_delta);
 
         float sample = 0.0f;
         if ((g_monob_synth.base_frequency_hz > 0.0f) && (g_monob_synth.amp_env > 0.0f))
         {
-            sample = monob_osc_bank_process(g_monob_synth.base_frequency_hz, g_monob_synth.drift_amount)
-                   * MONOB_SYNTH_OSC_GAIN
-                   * g_monob_synth.amp_env;
+            if (counter_valid != 0U)
+            {
+                const uint32_t osc_start_cycles = DWT->CYCCNT;
+                sample = monob_osc_bank_process(g_monob_synth.base_frequency_hz)
+                       * MONOB_SYNTH_OSC_GAIN
+                       * g_monob_synth.amp_env;
+                osc_cycles_accum += (DWT->CYCCNT - osc_start_cycles);
+            }
+            else
+            {
+                sample = monob_osc_bank_process(g_monob_synth.base_frequency_hz)
+                       * MONOB_SYNTH_OSC_GAIN
+                       * g_monob_synth.amp_env;
+            }
         }
 
         if (g_monob_synth.filter_enabled != 0U)
@@ -209,6 +272,19 @@ void monob_synth_process_block(float *mono_out, uint32_t frames)
         }
 
         mono_out[i] = sample;
+    }
+
+    g_monob_profile.counter_valid = counter_valid;
+    g_monob_profile.frames_last = frames;
+    g_monob_profile.osc_last_cycles = osc_cycles_accum;
+
+    if (counter_valid != 0U)
+    {
+        const uint32_t block_cycles = DWT->CYCCNT - block_start_cycles;
+        g_monob_profile.block_last_cycles = block_cycles;
+        monob_synth_profile_update_avg(&g_monob_profile.osc_avg_cycles, osc_cycles_accum);
+        monob_synth_profile_update_avg(&g_monob_profile.block_avg_cycles, block_cycles);
+        g_monob_profile.sample_count++;
     }
 }
 
@@ -285,11 +361,6 @@ void monob_synth_set_osc_detune(uint8_t osc_index, float detune_cents)
     monob_osc_bank_set_detune(osc_index, detune_cents);
 }
 
-void monob_synth_set_drift(float drift_amount)
-{
-    g_monob_synth.drift_amount = monob_synth_clampf(drift_amount, 0.0f, 1.0f);
-}
-
 void monob_synth_set_osc_mix(uint8_t osc_index, float mix)
 {
     if (osc_index >= 3U)
@@ -303,4 +374,19 @@ void monob_synth_set_osc_mix(uint8_t osc_index, float mix)
 void monob_synth_set_sub_mix(float mix)
 {
     monob_osc_bank_set_mix(3U, mix);
+}
+
+void monob_synth_get_profile(monob_synth_profile_t *out_profile)
+{
+    if (out_profile == NULL)
+    {
+        return;
+    }
+
+    *out_profile = g_monob_profile;
+}
+
+void monob_synth_reset_profile(void)
+{
+    (void)memset(&g_monob_profile, 0, sizeof(g_monob_profile));
 }

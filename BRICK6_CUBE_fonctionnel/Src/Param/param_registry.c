@@ -413,7 +413,6 @@ static void apply_monob_sub_octave(float v) { monob_synth_set_sub_octave(monob_s
 static void apply_monob_osc1_detune(float v) { monob_synth_set_osc_detune(0U, clamp_value(v, -24.0f, 24.0f)); }
 static void apply_monob_osc2_detune(float v) { monob_synth_set_osc_detune(1U, clamp_value(v, -24.0f, 24.0f)); }
 static void apply_monob_osc3_detune(float v) { monob_synth_set_osc_detune(2U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_drift(float v) { monob_synth_set_drift(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_monob_osc1_mix(float v) { monob_synth_set_osc_mix(0U, clamp_value(v, 0.0f, 1.0f)); }
 static void apply_monob_osc2_mix(float v) { monob_synth_set_osc_mix(1U, clamp_value(v, 0.0f, 1.0f)); }
 static void apply_monob_osc3_mix(float v) { monob_synth_set_osc_mix(2U, clamp_value(v, 0.0f, 1.0f)); }
@@ -802,7 +801,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC(PARAM_MONOB_OSC1_DETUNE, "O1 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, "ct", apply_monob_osc1_detune),
     PARAM_DESC(PARAM_MONOB_OSC2_DETUNE, "O2 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, -7.0f, "ct", apply_monob_osc2_detune),
     PARAM_DESC(PARAM_MONOB_OSC3_DETUNE, "O3 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 7.0f, "ct", apply_monob_osc3_detune),
-    PARAM_DESC_EX(PARAM_MONOB_DRIFT, "Drift", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.18f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_drift),
+    PARAM_DESC_EX(PARAM_MONOB_DRIFT, "-", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MONOB_OSC1_MIX, "O1 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.9f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc1_mix),
     PARAM_DESC_EX(PARAM_MONOB_OSC2_MIX, "O2 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.6f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc2_mix),
     PARAM_DESC_EX(PARAM_MONOB_OSC3_MIX, "O3 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.45f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc3_mix),
