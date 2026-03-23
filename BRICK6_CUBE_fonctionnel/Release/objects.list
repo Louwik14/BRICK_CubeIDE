@@ -596,6 +596,7 @@
 "./Src/UI/pages/ui_page_debug_hall.o"
 "./Src/UI/pages/ui_page_main.o"
 "./Src/UI/pages/ui_page_param_test.o"
+"./Src/UI/pages/ui_page_template_cfg.o"
 "./Src/UI/pages/ui_page_template_dx7.o"
 "./Src/UI/pages/ui_page_template_filter.o"
 "./Src/adc.o"
