@@ -6,6 +6,7 @@
 #include "ui_core.h"
 #include "ui_page.h"
 #include "ui_param.h"
+#include "ui_widgets.h"
 
 typedef struct
 {
@@ -29,11 +30,15 @@ typedef enum
 } ui_template_family_id_t;
 
 typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);
+typedef uiw_widget_type_t (*ui_template_widget_picker_fn)(uint8_t slot,
+                                                         param_id_t id,
+                                                         uiw_widget_type_t suggested_widget);
 
 typedef struct
 {
     const ui_template_family_t *family;
     ui_template_family_resolver_fn family_resolver;
+    ui_template_widget_picker_fn widget_picker;
     uint8_t active_subpage;
     uint8_t has_visited;
 } ui_template_page_state_t;
