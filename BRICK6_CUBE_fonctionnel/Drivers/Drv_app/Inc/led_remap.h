@@ -24,14 +24,14 @@
  * LED_PARAM_1..LED_PARAM_8 follow that physical LED order.
  */
 static const led_id_t g_led_remap_param_led_for_button[LED_REMAP_PARAM_COUNT] = {
-    [0] = LED_PARAM_6, /* BTN_PARAM_1 */
-    [1] = LED_PARAM_5, /* BTN_PARAM_2 */
-    [2] = LED_PARAM_4, /* BTN_PARAM_3 */
-    [3] = LED_PARAM_3, /* BTN_PARAM_4 */
-    [4] = LED_PARAM_7, /* BTN_PARAM_5 */
-    [5] = LED_PARAM_8, /* BTN_PARAM_6 */
-    [6] = LED_PARAM_1, /* BTN_PARAM_7 */
-    [7] = LED_PARAM_2, /* BTN_PARAM_8 */
+    [0] = LED_PARAM_2, /* BTN_PARAM_1 */
+    [1] = LED_PARAM_3, /* BTN_PARAM_2 */
+    [2] = LED_PARAM_6, /* BTN_PARAM_3 */
+    [3] = LED_PARAM_7, /* BTN_PARAM_4 */
+    [4] = LED_PARAM_1, /* BTN_PARAM_5 */
+    [5] = LED_PARAM_4, /* BTN_PARAM_6 */
+    [6] = LED_PARAM_5, /* BTN_PARAM_7 */
+    [7] = LED_PARAM_8, /* BTN_PARAM_8 */
 };
 
 /*
@@ -55,22 +55,22 @@ static const uint8_t g_led_remap_hall_for_led[HALL_KEY_COUNT] = {
  * can map a logical hall back to its real LED without recomputing anything.
  */
 static const led_id_t g_led_remap_led_for_hall[HALL_KEY_COUNT] = {
-    [0]  = LED_STEP_5,
-    [1]  = LED_STEP_7,
-    [2]  = LED_STEP_8,
+    [0]  = LED_STEP_9,
+    [1]  = LED_STEP_8,
+    [2]  = LED_STEP_7,
     [3]  = LED_STEP_6,
-    [4]  = LED_STEP_4,
-    [5]  = LED_STEP_1,
-    [6]  = LED_STEP_2,
-    [7]  = LED_STEP_3,
-    [8]  = LED_STEP_13,
-    [9]  = LED_STEP_15,
-    [10] = LED_STEP_16,
+    [4]  = LED_STEP_5,
+    [5]  = LED_STEP_4,
+    [6]  = LED_STEP_3,
+    [7]  = LED_STEP_2,
+    [8]  = LED_STEP_1,
+    [9]  = LED_STEP_16,
+    [10] = LED_STEP_15,
     [11] = LED_STEP_14,
-    [12] = LED_STEP_12,
-    [13] = LED_STEP_9,
-    [14] = LED_STEP_10,
-    [15] = LED_STEP_11,
+    [12] = LED_STEP_13,
+    [13] = LED_STEP_12,
+    [14] = LED_STEP_11,
+    [15] = LED_STEP_10,
 };
 
 static inline bool led_remap_is_param_led(led_id_t led)
