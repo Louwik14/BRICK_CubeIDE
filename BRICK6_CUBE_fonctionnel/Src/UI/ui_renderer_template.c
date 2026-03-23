@@ -6,6 +6,7 @@
 #include "drv_display.h"
 #include "font.h"
 #include "param_registry.h"
+#include "ui_core.h"
 
 #define UI_TEMPLATE_FRAME_W          31
 #define UI_TEMPLATE_FRAME_H          37
@@ -350,10 +351,16 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 {
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
     const char *family_title = ((family != NULL) && (family->family_title != NULL)) ? family->family_title : "TEMPLATE";
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_type_t active_type = ui_get_track_type(active_track);
+    const char *track_type_name = ui_get_track_type_display_name(active_type);
+    char track_label[4];
+
+    (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)(active_track + 1U));
 
     drv_display_set_font(&FONT_5X7);
-    ui_renderer_template_draw_inverted_label(0U, 1U, "1", &FONT_5X7);
-    drv_display_draw_text(9U, 1U, "Synth");
+    ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
+    drv_display_draw_text(9U, 1U, track_type_name);
 
     drv_display_set_font(&FONT_4X6);
     drv_display_draw_text(9U, 9U, "SEQ");

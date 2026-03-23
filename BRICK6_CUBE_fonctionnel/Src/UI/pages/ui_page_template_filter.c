@@ -42,9 +42,10 @@ static ui_template_page_state_t g_ui_template_filter_state = {
 
 void ui_page_template_filter_register_families(void)
 {
-    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER,
-                                UI_TRACK_TYPE_AUDIO,
-                                &g_ui_template_filter_family_audio);
+    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_AUDIO, &g_ui_template_filter_family_audio);
+    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_SYNTH, &g_ui_template_filter_family_audio);
+    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_MIDI, &g_ui_template_filter_family_audio);
+    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, UI_TRACK_TYPE_CARD, &g_ui_template_filter_family_audio);
 }
 
 static ui_template_family_t *ui_page_template_filter_get_audio_family(void)
