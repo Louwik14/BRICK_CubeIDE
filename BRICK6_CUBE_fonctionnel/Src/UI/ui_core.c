@@ -21,6 +21,7 @@
 
 #include "ui_core.h"
 
+#include "buttons.h"
 #include "encoders.h"
 #include "pages/ui_page_main.h"
 #include "pages/ui_page_param_test.h"
@@ -32,7 +33,51 @@
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
+#include "ui_template_page.h"
 #include "App/Hall/hall_calibration.h"
+
+typedef struct
+{
+    uint8_t active_track;
+    uint8_t shift_down;
+    uint8_t track_select_armed;
+} ui_track_state_t;
+
+static ui_track_state_t g_ui_track_state = {
+    .active_track = 0U,
+    .shift_down = 0U,
+    .track_select_armed = 0U,
+};
+
+static void ui_core_handle_track_selection_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SHIFT))
+    {
+        g_ui_track_state.shift_down = 1U;
+        g_ui_track_state.track_select_armed = 1U;
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)BTN_SHIFT))
+    {
+        g_ui_track_state.shift_down = 0U;
+        g_ui_track_state.track_select_armed = 0U;
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_HALL_PRESS)
+            && (g_ui_track_state.shift_down != 0U)
+            && (g_ui_track_state.track_select_armed != 0U)
+            && (ev->id < UI_TRACK_COUNT))
+    {
+        g_ui_track_state.active_track = ev->id;
+    }
+}
 
 /**
  * @brief Point d'entrée ui_core_init.
@@ -46,6 +91,13 @@
  */
 void ui_core_init(void)
 {
+    g_ui_track_state.active_track = 0U;
+    g_ui_track_state.shift_down = 0U;
+    g_ui_track_state.track_select_armed = 0U;
+
+    ui_template_family_registry_init();
+    ui_page_template_filter_register_families();
+
     ui_page_manager_init();
 
     /*
@@ -94,6 +146,7 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
+        ui_core_handle_track_selection_event(&ev);
         ui_navigation_handle_event(&ev);
 
         const ui_page_t *active_page = ui_page_get();
@@ -109,4 +162,19 @@ void ui_core_tick(void)
         active_page->tick();
     }
 
+}
+
+uint8_t ui_get_active_track(void)
+{
+    return g_ui_track_state.active_track;
+}
+
+ui_track_type_t ui_get_track_type(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return UI_TRACK_TYPE_AUDIO;
+    }
+
+    return UI_TRACK_TYPE_AUDIO;
 }
