@@ -22,7 +22,7 @@
  */
 
 #include "moogladder.h"
-#include <Utility/dsp.h>
+#include "dsp.h"
 
 using namespace infrasonic;
 
