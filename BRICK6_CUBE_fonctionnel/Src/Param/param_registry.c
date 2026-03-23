@@ -159,6 +159,18 @@ static float filter_ui127_to_release_s(float v)
     return filter_ui127_to_time_s(v, 0.001f, 5.0f);
 }
 
+static float filter_eq_ui127_to_db(float v)
+{
+    const float clamped = filter_ui127_clamp(v);
+
+    if(clamped <= 64.0f)
+    {
+        return -24.0f + ((clamped / 64.0f) * 24.0f);
+    }
+
+    return ((clamped - 64.0f) / 63.0f) * 12.0f;
+}
+
 static void apply_mix_track0_gain(float v) { mixer_set_track_gain(0U, v); }
 static void apply_mix_track1_gain(float v) { mixer_set_track_gain(1U, v); }
 static void apply_mix_track2_gain(float v) { mixer_set_track_gain(2U, v); }
@@ -344,13 +356,13 @@ static void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_f
 
 /*
  * Première passe FILTER:
- * - le runtime du mixer supporte un SVF indépendant par track jusqu'à MIXER_MAX_TRACKS
+ * - le runtime du mixer supporte un SVF ou un EQ3 indépendant par track jusqu'à MIXER_MAX_TRACKS
  * - le système de paramètres n'expose pour l'instant qu'un jeu global `PARAM_FILTER_*`
  * - ces paramètres pilotent donc la track 0 par convention provisoire
  */
 static void apply_filter_type(float v)
 {
-    mixer_set_track_filter_type(0U, (mixer_track_filter_type_t)((uint32_t)v & 0x3U));
+    mixer_set_track_filter_type(0U, (mixer_track_filter_type_t)((uint32_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)));
 }
 
 static void apply_filter_cutoff(float v) { mixer_set_track_filter_cutoff(0U, filter_ui127_to_cutoff_hz(v)); }
@@ -360,6 +372,9 @@ static void apply_filter_attack(float v) { mixer_set_track_filter_attack(0U, fil
 static void apply_filter_decay(float v) { mixer_set_track_filter_decay(0U, filter_ui127_to_decay_s(v)); }
 static void apply_filter_sustain(float v) { mixer_set_track_filter_sustain(0U, filter_ui127_to_sustain(v)); }
 static void apply_filter_release(float v) { mixer_set_track_filter_release(0U, filter_ui127_to_release_s(v)); }
+static void apply_filter_eq_low(float v) { mixer_set_track_filter_eq_low(0U, filter_eq_ui127_to_db(v)); }
+static void apply_filter_eq_mid(float v) { mixer_set_track_filter_eq_mid(0U, filter_eq_ui127_to_db(v)); }
+static void apply_filter_eq_high(float v) { mixer_set_track_filter_eq_high(0U, filter_eq_ui127_to_db(v)); }
 
 static void apply_master_gain(float v) { audio_float_set_master_gain(v); }
 static void apply_post_gain(float v) { audio_float_set_postgain(v); }
@@ -542,7 +557,7 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison", NULL};
 static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
-static const char *const g_filter_type_labels[] = {"Off", "LP", "HP", "BP", NULL};
+static const char *const g_filter_type_labels[] = {"Off", "LP", "HP", "BP", "EQ3", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -621,7 +636,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAT_DRIVE, "Sat Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_drive),
     PARAM_DESC_EX(PARAM_SAT_MIX, "Sat Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_mix),
 
-    PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
+    PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
     PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
     PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
     PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),
@@ -629,6 +644,9 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_decay),
     PARAM_DESC_EX(PARAM_FILTER_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_sustain),
     PARAM_DESC_EX(PARAM_FILTER_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_release),
+    PARAM_DESC_EX(PARAM_FILTER_EQ_LOW, "Low", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_low),
+    PARAM_DESC_EX(PARAM_FILTER_EQ_MID, "Mid", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_mid),
+    PARAM_DESC_EX(PARAM_FILTER_EQ_HIGH, "High", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_high),
 
     PARAM_DESC_EX(PARAM_MASTER_GAIN, "Master Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_master_gain),
     PARAM_DESC_EX(PARAM_POST_GAIN, "Post Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_post_gain),

@@ -77,6 +77,10 @@ static void ui_renderer_template_format_value(param_id_t id, char *out, uint32_t
             (void)snprintf(out, out_len, "%.2f", (double)value);
             break;
 
+        case PARAM_DISPLAY_INT:
+            (void)snprintf(out, out_len, "%ld", (long)(value + 0.5f));
+            break;
+
         default:
             if ((desc->unit != NULL) && (desc->unit[0] != '\0'))
             {
