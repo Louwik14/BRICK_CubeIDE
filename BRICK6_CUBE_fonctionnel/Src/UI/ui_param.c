@@ -22,6 +22,7 @@
 #include "ui_param.h"
 
 #include "param_registry.h"
+#include "ui_core.h"
 
 typedef struct
 {
@@ -121,10 +122,23 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     }
 
     const param_desc_t *desc = &param_registry[param];
+    float min_value = desc->min;
+    float max_value = desc->max;
+
+    if (param == PARAM_CFG_TRACK)
+    {
+        max_value = (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U);
+    }
+    else if (param == PARAM_CFG_TRACK_TYPE)
+    {
+        const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
+        const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
+        max_value = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
+    }
 
     float value = param_get(param);
     value += (float)delta * desc->step;
-    value = ui_param_clamp(value, desc->min, desc->max);
+    value = ui_param_clamp(value, min_value, max_value);
 
     param_set(param, value);
 }

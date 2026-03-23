@@ -379,19 +379,34 @@ static void apply_filter_eq_high(float v) { mixer_set_track_filter_eq_high(0U, f
 
 static void apply_cfg_track(float v)
 {
-    (void)v;
-    param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_active_track());
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
+
+    if (ui_set_track_family(active_track, requested_family) == false)
+    {
+        param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
+        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+        return;
+    }
+
+    param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
+    param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
 }
 
 static void apply_cfg_track_type(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_type_t requested_type = (ui_track_type_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f));
+    const ui_track_family_t active_family = ui_get_track_family(active_track);
+    const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
+    const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
 
     if (ui_set_track_type(active_track, requested_type) == false)
     {
-        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type(active_track));
+        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+        return;
     }
+
+    param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
 }
 
 static void apply_master_gain(float v) { audio_float_set_master_gain(v); }
@@ -576,8 +591,7 @@ static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison",
 static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP BI", "HP BI", "BP BI", NULL};
-static const char *const g_track_labels[] = {"T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", NULL};
-static const char *const g_track_type_labels[] = {"Audio", "Synth", "MIDI", "Card", NULL};
+static const char *const g_track_family_labels[] = {"Input1", "Input2", "Input3", "Input4", "Synth", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -668,8 +682,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_EQ_MID, "Mid", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_mid),
     PARAM_DESC_EX(PARAM_FILTER_EQ_HIGH, "High", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_high),
 
-    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 7.0f, 0.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_track_labels, apply_cfg_track),
-    PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_track_type_labels, apply_cfg_track_type),
+    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
+    PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
 
     PARAM_DESC_EX(PARAM_MASTER_GAIN, "Master Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_master_gain),
     PARAM_DESC_EX(PARAM_POST_GAIN, "Post Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_post_gain),

@@ -4,7 +4,7 @@
 
 static const ui_template_family_t g_ui_template_cfg_family = {
     .family_title = "CFG",
-    .nav_labels = { "TRACK", "-", "-", "-" },
+    .nav_labels = { "MAIN", "-", "-", "-" },
     .subpages = {
         {
             .title = "TRACK",
@@ -40,10 +40,20 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
 
 void ui_page_template_cfg_register_families(void)
 {
-    ui_template_family_register(UI_TEMPLATE_FAMILY_CFG, UI_TRACK_TYPE_AUDIO, &g_ui_template_cfg_family);
-    ui_template_family_register(UI_TEMPLATE_FAMILY_CFG, UI_TRACK_TYPE_SYNTH, &g_ui_template_cfg_family);
-    ui_template_family_register(UI_TEMPLATE_FAMILY_CFG, UI_TRACK_TYPE_MIDI, &g_ui_template_cfg_family);
-    ui_template_family_register(UI_TEMPLATE_FAMILY_CFG, UI_TRACK_TYPE_CARD, &g_ui_template_cfg_family);
+    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; family++)
+    {
+        const ui_track_family_t track_family = (ui_track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; type++)
+        {
+            const ui_track_type_t track_type = (ui_track_type_t)type;
+            if (!ui_track_type_is_valid_for_family(track_family, track_type))
+            {
+                continue;
+            }
+
+            ui_template_family_register(UI_TEMPLATE_FAMILY_CFG, track_family, track_type, &g_ui_template_cfg_family);
+        }
+    }
 }
 
 const ui_page_t g_ui_page_template_cfg = {
