@@ -4,7 +4,7 @@
 #include "param_store.h"
 #include "ui_template_page.h"
 
-static ui_template_family_t g_ui_template_filter_family = {
+static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "FILTER",
     .nav_labels = { "MAIN", "ENV", "-", "-" },
     .subpages = {
@@ -28,34 +28,58 @@ static ui_template_family_t g_ui_template_filter_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t *ui_page_template_filter_resolve_family(void)
+{
+    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_FILTER);
+}
+
 static ui_template_page_state_t g_ui_template_filter_state = {
-    .family = &g_ui_template_filter_family,
+    .family = 0,
+    .family_resolver = ui_page_template_filter_resolve_family,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
 
+void ui_page_template_filter_register_families(void)
+{
+    ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER,
+                                UI_TRACK_TYPE_AUDIO,
+                                &g_ui_template_filter_family_audio);
+}
+
+static ui_template_family_t *ui_page_template_filter_get_audio_family(void)
+{
+    return (ui_template_family_t *)ui_page_template_filter_resolve_family();
+}
+
 static void ui_page_template_filter_sync_family(void)
 {
+    ui_template_family_t *family = ui_page_template_filter_get_audio_family();
+    if (family == 0)
+    {
+        return;
+    }
+
     const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
     /* Only EQ3 swaps the FILTER template to Low/Mid/High; LP/HP/BP and LP/HP/BP BI keep the shared Cutoff/Res/EG+ENV workflow. */
     const uint8_t is_eq3 = (filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
 
-    g_ui_template_filter_family.nav_labels[0] = "MAIN";
-    g_ui_template_filter_family.nav_labels[1] = (is_eq3 != 0U) ? "-" : "ENV";
-    g_ui_template_filter_family.nav_labels[2] = "-";
-    g_ui_template_filter_family.nav_labels[3] = "-";
+    family->nav_labels[0] = "MAIN";
+    family->nav_labels[1] = (is_eq3 != 0U) ? "-" : "ENV";
+    family->nav_labels[2] = "-";
+    family->nav_labels[3] = "-";
 
-    g_ui_template_filter_family.subpages[0].title = "MAIN";
-    g_ui_template_filter_family.subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
-    g_ui_template_filter_family.subpages[0].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_LOW : PARAM_FILTER_CUTOFF;
-    g_ui_template_filter_family.subpages[0].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_MID : PARAM_FILTER_RESONANCE;
-    g_ui_template_filter_family.subpages[0].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_HIGH : PARAM_FILTER_EG_AMT;
+    family->subpages[0].title = "MAIN";
+    family->subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
+    family->subpages[0].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_LOW : PARAM_FILTER_CUTOFF;
+    family->subpages[0].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_MID : PARAM_FILTER_RESONANCE;
+    family->subpages[0].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_HIGH : PARAM_FILTER_EG_AMT;
 
-    g_ui_template_filter_family.subpages[1].title = (is_eq3 != 0U) ? "-" : "ENV";
-    g_ui_template_filter_family.subpages[1].param_bank.params[0] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_ATTACK;
-    g_ui_template_filter_family.subpages[1].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_DECAY;
-    g_ui_template_filter_family.subpages[1].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_SUSTAIN;
-    g_ui_template_filter_family.subpages[1].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_RELEASE;
+    family->subpages[1].title = (is_eq3 != 0U) ? "-" : "ENV";
+    family->subpages[1].param_bank.params[0] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_ATTACK;
+    family->subpages[1].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_DECAY;
+    family->subpages[1].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_SUSTAIN;
+    family->subpages[1].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_COUNT : PARAM_FILTER_RELEASE;
 }
 
 static void ui_page_template_filter_enter(void)

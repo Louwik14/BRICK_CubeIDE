@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "ui_core.h"
 #include "ui_page.h"
 #include "ui_param.h"
 
@@ -20,9 +21,18 @@ typedef struct
     uint8_t default_subpage;
 } ui_template_family_t;
 
+typedef enum
+{
+    UI_TEMPLATE_FAMILY_FILTER = 0,
+    UI_TEMPLATE_FAMILY_COUNT
+} ui_template_family_id_t;
+
+typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);
+
 typedef struct
 {
     const ui_template_family_t *family;
+    ui_template_family_resolver_fn family_resolver;
     uint8_t active_subpage;
     uint8_t has_visited;
 } ui_template_page_state_t;
@@ -35,5 +45,15 @@ void ui_template_page_render(void);
 
 void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t subpage_index);
 const ui_template_subpage_t *ui_template_page_get_active_subpage(const ui_template_page_state_t *state);
+const ui_template_family_t *ui_template_page_get_active_family(const ui_template_page_state_t *state);
+
+void ui_template_family_registry_init(void);
+void ui_template_family_register(ui_template_family_id_t family_id,
+                                 ui_track_type_t track_type,
+                                 const ui_template_family_t *family);
+const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t family_id,
+                                                       uint8_t track,
+                                                       ui_track_type_t track_type);
+const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id);
 
 #endif /* UI_TEMPLATE_PAGE_H */

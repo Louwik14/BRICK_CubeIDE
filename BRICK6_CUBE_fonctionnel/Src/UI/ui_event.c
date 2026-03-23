@@ -22,12 +22,15 @@
 #include "ui_event.h"
 
 #include "buttons.h"
+#include "ui_core.h"
+#include "App/Hall/hall_engine.h"
 
 #define UI_EVENT_Q_LEN 32U
 
 static ui_event_t g_ui_evt_q[UI_EVENT_Q_LEN];
 static uint8_t g_ui_evt_w = 0U;
 static uint8_t g_ui_evt_r = 0U;
+static uint8_t g_ui_hall_prev_pressed[UI_TRACK_COUNT];
 
 /**
  * @brief Point d'entrée ui_event_push.
@@ -82,6 +85,27 @@ void ui_event_from_inputs(void)
             ev.value = 0;
             ui_event_push(&ev);
         }
+    }
+
+    for (uint8_t hall = 0U; hall < UI_TRACK_COUNT; hall++)
+    {
+        const uint8_t pressed = hall_engine_is_pressed(hall);
+        if ((g_ui_hall_prev_pressed[hall] == 0U) && (pressed != 0U))
+        {
+            ev.type = UI_EVENT_HALL_PRESS;
+            ev.id = hall;
+            ev.value = 1;
+            ui_event_push(&ev);
+        }
+        else if ((g_ui_hall_prev_pressed[hall] != 0U) && (pressed == 0U))
+        {
+            ev.type = UI_EVENT_HALL_RELEASE;
+            ev.id = hall;
+            ev.value = 0;
+            ui_event_push(&ev);
+        }
+
+        g_ui_hall_prev_pressed[hall] = pressed;
     }
 }
 
