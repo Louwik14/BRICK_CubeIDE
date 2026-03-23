@@ -22,6 +22,8 @@
 #include <fx_svf.h>
 #include "mixer.h"
 
+#include "fx_biquad_filter.h"
+
 #include <string.h>
 
 #include "fx_chain.h"
@@ -43,6 +45,7 @@ typedef struct {
 typedef struct {
     svf_t left;
     svf_t right;
+    fx_biquad_filter_t biquad;
     fx_dj_eq3_t eq3;
     float sample_rate;
     float cutoff_hz;
@@ -82,6 +85,35 @@ static float clampf_local(float v, float lo, float hi)
     return v;
 }
 
+static uint8_t mixer_track_filter_type_is_biquad(mixer_track_filter_type_t type)
+{
+    return ((type == MIXER_TRACK_FILTER_LP_BI)
+         || (type == MIXER_TRACK_FILTER_HP_BI)
+         || (type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
+}
+
+static fx_biquad_filter_mode_t mixer_track_filter_type_to_biquad_mode(mixer_track_filter_type_t type)
+{
+    switch(type)
+    {
+        case MIXER_TRACK_FILTER_HP_BI:
+            return FX_BIQUAD_FILTER_MODE_HP;
+
+        case MIXER_TRACK_FILTER_BP_BI:
+            return FX_BIQUAD_FILTER_MODE_BP;
+
+        case MIXER_TRACK_FILTER_LP_BI:
+        default:
+            return FX_BIQUAD_FILTER_MODE_LP;
+    }
+}
+
+static float mixer_track_filter_resonance_to_biquad_q(float resonance)
+{
+    const float clamped = clampf_local(resonance, 0.0f, 1.0f);
+    return 0.70710678f + (clamped * 11.29289322f);
+}
+
 static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
 {
     if(filter == NULL)
@@ -93,6 +125,13 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     svf_set_res(&filter->right, filter->resonance);
     svf_set_drive(&filter->left, 0.0f);
     svf_set_drive(&filter->right, 0.0f);
+
+    fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
+    fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+    fx_biquad_filter_set_mode(&filter->biquad,
+                              mixer_track_filter_type_to_biquad_mode((mixer_track_filter_type_t)filter->type));
+    fx_biquad_filter_set_bypass(&filter->biquad,
+                                (mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U) ? 0U : 1U);
 
     fx_dj_eq3_set_low_db(&filter->eq3, filter->eq_low_db);
     fx_dj_eq3_set_mid_db(&filter->eq3, filter->eq_mid_db);
@@ -107,7 +146,9 @@ static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
 
     svf_init(&filter->left, filter->sample_rate);
     svf_init(&filter->right, filter->sample_rate);
+    fx_biquad_filter_init(&filter->biquad, filter->sample_rate);
     fx_dj_eq3_init(&filter->eq3, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
+    fx_biquad_filter_reset(&filter->biquad);
     mixer_track_filter_apply_core_params(filter);
 }
 
@@ -171,6 +212,12 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
 
         case MIXER_TRACK_FILTER_EQ3:
             fx_dj_eq3_process_block(&filter->eq3, left, right, frames);
+            break;
+
+        case MIXER_TRACK_FILTER_LP_BI:
+        case MIXER_TRACK_FILTER_HP_BI:
+        case MIXER_TRACK_FILTER_BP_BI:
+            fx_biquad_filter_process_block(&filter->biquad, left, right, frames);
             break;
 
         default:
@@ -480,8 +527,8 @@ void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t ty
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    if(type > MIXER_TRACK_FILTER_EQ3)
-        type = MIXER_TRACK_FILTER_EQ3;
+    if(type > MIXER_TRACK_FILTER_BP_BI)
+        type = MIXER_TRACK_FILTER_BP_BI;
 
     g_track_filters[track_id].type = (uint8_t)type;
 
@@ -497,6 +544,7 @@ void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
     filter->cutoff_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
     svf_set_freq(&filter->left, filter->cutoff_hz);
     svf_set_freq(&filter->right, filter->cutoff_hz);
+    fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
 }
 
 void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
@@ -508,6 +556,7 @@ void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
     filter->resonance = clampf_local(resonance, 0.0f, 1.0f);
     svf_set_res(&filter->left, filter->resonance);
     svf_set_res(&filter->right, filter->resonance);
+    fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
 }
 
 void mixer_set_track_filter_eg_amount(uint32_t track_id, float eg_amount)

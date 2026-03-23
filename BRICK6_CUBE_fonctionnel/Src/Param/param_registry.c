@@ -356,13 +356,13 @@ static void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_f
 
 /*
  * Première passe FILTER:
- * - le runtime du mixer supporte un SVF ou un EQ3 indépendant par track jusqu'à MIXER_MAX_TRACKS
+ * - le runtime du mixer supporte un SVF, un biquad CMSIS ou un EQ3 indépendant par track jusqu'à MIXER_MAX_TRACKS
  * - le système de paramètres n'expose pour l'instant qu'un jeu global `PARAM_FILTER_*`
  * - ces paramètres pilotent donc la track 0 par convention provisoire
  */
 static void apply_filter_type(float v)
 {
-    mixer_set_track_filter_type(0U, (mixer_track_filter_type_t)((uint32_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)));
+    mixer_set_track_filter_type(0U, (mixer_track_filter_type_t)((uint32_t)(clamp_value(v, 0.0f, 7.0f) + 0.5f)));
 }
 
 static void apply_filter_cutoff(float v) { mixer_set_track_filter_cutoff(0U, filter_ui127_to_cutoff_hz(v)); }
@@ -557,7 +557,7 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison", NULL};
 static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
-static const char *const g_filter_type_labels[] = {"Off", "LP", "HP", "BP", "EQ3", NULL};
+static const char *const g_filter_type_labels[] = {"Off", "LP", "HP", "BP", "EQ3", "LP BI", "HP BI", "BP BI", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -636,7 +636,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAT_DRIVE, "Sat Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_drive),
     PARAM_DESC_EX(PARAM_SAT_MIX, "Sat Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "%", NULL, apply_sat_mix),
 
-    PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
+    PARAM_DESC_EX(PARAM_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_filter_type_labels, apply_filter_type),
     PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
     PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
     PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),

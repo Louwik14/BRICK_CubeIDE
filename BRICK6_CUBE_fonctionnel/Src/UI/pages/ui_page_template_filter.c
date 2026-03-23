@@ -36,7 +36,9 @@ static ui_template_page_state_t g_ui_template_filter_state = {
 
 static void ui_page_template_filter_sync_family(void)
 {
-    const uint8_t is_eq3 = ((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f) == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
+    const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
+    /* Only EQ3 swaps the FILTER template to Low/Mid/High; LP/HP/BP and LP/HP/BP BI keep the shared Cutoff/Res/EG+ENV workflow. */
+    const uint8_t is_eq3 = (filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
 
     g_ui_template_filter_family.nav_labels[0] = "MAIN";
     g_ui_template_filter_family.nav_labels[1] = (is_eq3 != 0U) ? "-" : "ENV";
