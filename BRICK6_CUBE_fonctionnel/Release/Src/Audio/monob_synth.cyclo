@@ -1,0 +1,13 @@
+../Src/Audio/monob_synth.c:131:6:monob_synth_init	2
+../Src/Audio/monob_synth.c:144:6:monob_synth_note_on	1
+../Src/Audio/monob_synth.c:154:6:monob_synth_note_off	3
+../Src/Audio/monob_synth.c:165:6:monob_synth_all_notes_off	1
+../Src/Audio/monob_synth.c:174:6:monob_synth_process_block	25
+../Src/Audio/monob_synth.c:210:6:monob_synth_set_filter_type	2
+../Src/Audio/monob_synth.c:221:6:monob_synth_set_filter_cutoff	1
+../Src/Audio/monob_synth.c:227:6:monob_synth_set_filter_resonance	1
+../Src/Audio/monob_synth.c:233:6:monob_synth_set_filter_eg_amount	1
+../Src/Audio/monob_synth.c:238:6:monob_synth_set_filter_attack	1
+../Src/Audio/monob_synth.c:243:6:monob_synth_set_filter_decay	1
+../Src/Audio/monob_synth.c:248:6:monob_synth_set_filter_sustain	1
+../Src/Audio/monob_synth.c:253:6:monob_synth_set_filter_release	1

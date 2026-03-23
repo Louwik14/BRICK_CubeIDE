@@ -30,8 +30,8 @@ C_SRCS += \
 ../Src/Audio/fx_saturation.c \
 ../Src/Audio/juno_midi_queue.c \
 ../Src/Audio/live_recorder.c \
-../Src/Audio/monob_synth.c \
 ../Src/Audio/mixer.c \
+../Src/Audio/monob_synth.c \
 ../Src/Audio/recorder_transport.c \
 ../Src/Audio/sampler.c \
 ../Src/Audio/sd_multitrack_recorder.c 
@@ -50,8 +50,8 @@ C_DEPS += \
 ./Src/Audio/fx_saturation.d \
 ./Src/Audio/juno_midi_queue.d \
 ./Src/Audio/live_recorder.d \
-./Src/Audio/monob_synth.d \
 ./Src/Audio/mixer.d \
+./Src/Audio/monob_synth.d \
 ./Src/Audio/recorder_transport.d \
 ./Src/Audio/sampler.d \
 ./Src/Audio/sd_multitrack_recorder.d 
@@ -79,9 +79,9 @@ OBJS += \
 ./Src/Audio/juno_midi_queue.o \
 ./Src/Audio/juno_synth.o \
 ./Src/Audio/live_recorder.o \
-./Src/Audio/monob_synth.o \
 ./Src/Audio/microdexed_synth.o \
 ./Src/Audio/mixer.o \
+./Src/Audio/monob_synth.o \
 ./Src/Audio/recorder_transport.o \
 ./Src/Audio/sampler.o \
 ./Src/Audio/sd_multitrack_recorder.o 
@@ -108,7 +108,7 @@ Src/Audio/%.o Src/Audio/%.su Src/Audio/%.cyclo: ../Src/Audio/%.cpp Src/Audio/sub
 clean: clean-Src-2f-Audio
 
 clean-Src-2f-Audio:
-	-$(RM) ./Src/Audio/audio.cyclo ./Src/Audio/audio.d ./Src/Audio/audio.o ./Src/Audio/audio.su ./Src/Audio/audio_float.cyclo ./Src/Audio/audio_float.d ./Src/Audio/audio_float.o ./Src/Audio/audio_float.su ./Src/Audio/audio_io.cyclo ./Src/Audio/audio_io.d ./Src/Audio/audio_io.o ./Src/Audio/audio_io.su ./Src/Audio/dsp_engine.cyclo ./Src/Audio/dsp_engine.d ./Src/Audio/dsp_engine.o ./Src/Audio/dsp_engine.su ./Src/Audio/fx_BusCompressorCore.cyclo ./Src/Audio/fx_BusCompressorCore.d ./Src/Audio/fx_BusCompressorCore.o ./Src/Audio/fx_BusCompressorCore.su ./Src/Audio/fx_Daisy_comp_core.cyclo ./Src/Audio/fx_Daisy_comp_core.d ./Src/Audio/fx_Daisy_comp_core.o ./Src/Audio/fx_Daisy_comp_core.su ./Src/Audio/fx_biquad_filter.cyclo ./Src/Audio/fx_biquad_filter.d ./Src/Audio/fx_biquad_filter.o ./Src/Audio/fx_biquad_filter.su ./Src/Audio/fx_bus_compressor.cyclo ./Src/Audio/fx_bus_compressor.d ./Src/Audio/fx_bus_compressor.o ./Src/Audio/fx_bus_compressor.su ./Src/Audio/fx_chain.cyclo ./Src/Audio/fx_chain.d ./Src/Audio/fx_chain.o ./Src/Audio/fx_chain.su ./Src/Audio/fx_clouds.cyclo ./Src/Audio/fx_clouds.d ./Src/Audio/fx_clouds.o ./Src/Audio/fx_clouds.su ./Src/Audio/fx_daisy_comp.cyclo ./Src/Audio/fx_daisy_comp.d ./Src/Audio/fx_daisy_comp.o ./Src/Audio/fx_daisy_comp.su ./Src/Audio/fx_dj_eq3_cmsis.cyclo ./Src/Audio/fx_dj_eq3_cmsis.d ./Src/Audio/fx_dj_eq3_cmsis.o ./Src/Audio/fx_dj_eq3_cmsis.su ./Src/Audio/fx_filter_ladder_moog.cyclo ./Src/Audio/fx_filter_ladder_moog.d ./Src/Audio/fx_filter_ladder_moog.o ./Src/Audio/fx_filter_ladder_moog.su ./Src/Audio/fx_granular.cyclo ./Src/Audio/fx_granular.d ./Src/Audio/fx_granular.o ./Src/Audio/fx_granular.su ./Src/Audio/fx_onepole.cyclo ./Src/Audio/fx_onepole.d ./Src/Audio/fx_onepole.o ./Src/Audio/fx_onepole.su ./Src/Audio/fx_pool.cyclo ./Src/Audio/fx_pool.d ./Src/Audio/fx_pool.o ./Src/Audio/fx_pool.su ./Src/Audio/fx_reverb.cyclo ./Src/Audio/fx_reverb.d ./Src/Audio/fx_reverb.o ./Src/Audio/fx_reverb.su ./Src/Audio/fx_saturation.cyclo ./Src/Audio/fx_saturation.d ./Src/Audio/fx_saturation.o ./Src/Audio/fx_saturation.su ./Src/Audio/fx_svf.cyclo ./Src/Audio/fx_svf.d ./Src/Audio/fx_svf.o ./Src/Audio/fx_svf.su ./Src/Audio/juno_midi_queue.cyclo ./Src/Audio/juno_midi_queue.d ./Src/Audio/juno_midi_queue.o ./Src/Audio/juno_midi_queue.su ./Src/Audio/juno_synth.cyclo ./Src/Audio/juno_synth.d ./Src/Audio/juno_synth.o ./Src/Audio/juno_synth.su ./Src/Audio/live_recorder.cyclo ./Src/Audio/live_recorder.d ./Src/Audio/live_recorder.o ./Src/Audio/live_recorder.su ./Src/Audio/monob_synth.cyclo ./Src/Audio/monob_synth.d ./Src/Audio/monob_synth.o ./Src/Audio/monob_synth.su ./Src/Audio/microdexed_synth.cyclo ./Src/Audio/microdexed_synth.d ./Src/Audio/microdexed_synth.o ./Src/Audio/microdexed_synth.su ./Src/Audio/mixer.cyclo ./Src/Audio/mixer.d ./Src/Audio/mixer.o ./Src/Audio/mixer.su ./Src/Audio/recorder_transport.cyclo ./Src/Audio/recorder_transport.d ./Src/Audio/recorder_transport.o ./Src/Audio/recorder_transport.su ./Src/Audio/sampler.cyclo ./Src/Audio/sampler.d ./Src/Audio/sampler.o ./Src/Audio/sampler.su ./Src/Audio/sd_multitrack_recorder.cyclo ./Src/Audio/sd_multitrack_recorder.d ./Src/Audio/sd_multitrack_recorder.o ./Src/Audio/sd_multitrack_recorder.su
+	-$(RM) ./Src/Audio/audio.cyclo ./Src/Audio/audio.d ./Src/Audio/audio.o ./Src/Audio/audio.su ./Src/Audio/audio_float.cyclo ./Src/Audio/audio_float.d ./Src/Audio/audio_float.o ./Src/Audio/audio_float.su ./Src/Audio/audio_io.cyclo ./Src/Audio/audio_io.d ./Src/Audio/audio_io.o ./Src/Audio/audio_io.su ./Src/Audio/dsp_engine.cyclo ./Src/Audio/dsp_engine.d ./Src/Audio/dsp_engine.o ./Src/Audio/dsp_engine.su ./Src/Audio/fx_BusCompressorCore.cyclo ./Src/Audio/fx_BusCompressorCore.d ./Src/Audio/fx_BusCompressorCore.o ./Src/Audio/fx_BusCompressorCore.su ./Src/Audio/fx_Daisy_comp_core.cyclo ./Src/Audio/fx_Daisy_comp_core.d ./Src/Audio/fx_Daisy_comp_core.o ./Src/Audio/fx_Daisy_comp_core.su ./Src/Audio/fx_biquad_filter.cyclo ./Src/Audio/fx_biquad_filter.d ./Src/Audio/fx_biquad_filter.o ./Src/Audio/fx_biquad_filter.su ./Src/Audio/fx_bus_compressor.cyclo ./Src/Audio/fx_bus_compressor.d ./Src/Audio/fx_bus_compressor.o ./Src/Audio/fx_bus_compressor.su ./Src/Audio/fx_chain.cyclo ./Src/Audio/fx_chain.d ./Src/Audio/fx_chain.o ./Src/Audio/fx_chain.su ./Src/Audio/fx_clouds.cyclo ./Src/Audio/fx_clouds.d ./Src/Audio/fx_clouds.o ./Src/Audio/fx_clouds.su ./Src/Audio/fx_daisy_comp.cyclo ./Src/Audio/fx_daisy_comp.d ./Src/Audio/fx_daisy_comp.o ./Src/Audio/fx_daisy_comp.su ./Src/Audio/fx_dj_eq3_cmsis.cyclo ./Src/Audio/fx_dj_eq3_cmsis.d ./Src/Audio/fx_dj_eq3_cmsis.o ./Src/Audio/fx_dj_eq3_cmsis.su ./Src/Audio/fx_filter_ladder_moog.cyclo ./Src/Audio/fx_filter_ladder_moog.d ./Src/Audio/fx_filter_ladder_moog.o ./Src/Audio/fx_filter_ladder_moog.su ./Src/Audio/fx_granular.cyclo ./Src/Audio/fx_granular.d ./Src/Audio/fx_granular.o ./Src/Audio/fx_granular.su ./Src/Audio/fx_onepole.cyclo ./Src/Audio/fx_onepole.d ./Src/Audio/fx_onepole.o ./Src/Audio/fx_onepole.su ./Src/Audio/fx_pool.cyclo ./Src/Audio/fx_pool.d ./Src/Audio/fx_pool.o ./Src/Audio/fx_pool.su ./Src/Audio/fx_reverb.cyclo ./Src/Audio/fx_reverb.d ./Src/Audio/fx_reverb.o ./Src/Audio/fx_reverb.su ./Src/Audio/fx_saturation.cyclo ./Src/Audio/fx_saturation.d ./Src/Audio/fx_saturation.o ./Src/Audio/fx_saturation.su ./Src/Audio/fx_svf.cyclo ./Src/Audio/fx_svf.d ./Src/Audio/fx_svf.o ./Src/Audio/fx_svf.su ./Src/Audio/juno_midi_queue.cyclo ./Src/Audio/juno_midi_queue.d ./Src/Audio/juno_midi_queue.o ./Src/Audio/juno_midi_queue.su ./Src/Audio/juno_synth.cyclo ./Src/Audio/juno_synth.d ./Src/Audio/juno_synth.o ./Src/Audio/juno_synth.su ./Src/Audio/live_recorder.cyclo ./Src/Audio/live_recorder.d ./Src/Audio/live_recorder.o ./Src/Audio/live_recorder.su ./Src/Audio/microdexed_synth.cyclo ./Src/Audio/microdexed_synth.d ./Src/Audio/microdexed_synth.o ./Src/Audio/microdexed_synth.su ./Src/Audio/mixer.cyclo ./Src/Audio/mixer.d ./Src/Audio/mixer.o ./Src/Audio/mixer.su ./Src/Audio/monob_synth.cyclo ./Src/Audio/monob_synth.d ./Src/Audio/monob_synth.o ./Src/Audio/monob_synth.su ./Src/Audio/recorder_transport.cyclo ./Src/Audio/recorder_transport.d ./Src/Audio/recorder_transport.o ./Src/Audio/recorder_transport.su ./Src/Audio/sampler.cyclo ./Src/Audio/sampler.d ./Src/Audio/sampler.o ./Src/Audio/sampler.su ./Src/Audio/sd_multitrack_recorder.cyclo ./Src/Audio/sd_multitrack_recorder.d ./Src/Audio/sd_multitrack_recorder.o ./Src/Audio/sd_multitrack_recorder.su
 
 .PHONY: clean-Src-2f-Audio
 

@@ -1,2 +1,2 @@
-../Src/App/Hall/hall_juno_midi.c:8:6:hall_juno_midi_init	1
-../Src/App/Hall/hall_juno_midi.c:13:6:hall_juno_midi_process	9
+../Src/App/Hall/hall_juno_midi.c:14:6:hall_juno_midi_init	1
+../Src/App/Hall/hall_juno_midi.c:20:6:hall_juno_midi_process	11

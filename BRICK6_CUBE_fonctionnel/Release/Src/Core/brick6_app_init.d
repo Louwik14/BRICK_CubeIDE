@@ -100,7 +100,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h \
- ../Inc/Audio/microdexed_synth.h \
+ ../Inc/Audio/microdexed_synth.h ../Inc/Audio/monob_synth.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  ../Inc/Sampler/sample_pool.h ../Inc/Sampler/voice_manager.h \
  ../Inc/Audio/live_recorder.h ../Inc/Audio/live_recorder_config.h \
@@ -210,6 +210,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h:
 ../Inc/Audio/microdexed_synth.h:
+../Inc/Audio/monob_synth.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Inc/Sampler/sample_pool.h:
 ../Inc/Sampler/voice_manager.h:

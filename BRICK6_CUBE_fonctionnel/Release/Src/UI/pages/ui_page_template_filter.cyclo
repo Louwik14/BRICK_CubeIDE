@@ -1,6 +1,7 @@
-../Src/UI/pages/ui_page_template_filter.c:31:36:ui_page_template_filter_resolve_family	1
-../Src/UI/pages/ui_page_template_filter.c:117:13:ui_page_template_filter_render	2
-../Src/UI/pages/ui_page_template_filter.c:96:13:ui_page_template_filter_enter	2
-../Src/UI/pages/ui_page_template_filter.c:110:13:ui_page_template_filter_tick	2
-../Src/UI/pages/ui_page_template_filter.c:102:13:ui_page_template_filter_handle_event	3
-../Src/UI/pages/ui_page_template_filter.c:43:6:ui_page_template_filter_register_families	4
+../Src/UI/pages/ui_page_template_filter.c:56:36:ui_page_template_filter_resolve_family	1
+../Src/UI/pages/ui_page_template_filter.c:97:13:ui_page_template_filter_sync_family	3
+../Src/UI/pages/ui_page_template_filter.c:162:13:ui_page_template_filter_tick	1
+../Src/UI/pages/ui_page_template_filter.c:154:13:ui_page_template_filter_handle_event	1
+../Src/UI/pages/ui_page_template_filter.c:169:13:ui_page_template_filter_render	3
+../Src/UI/pages/ui_page_template_filter.c:148:13:ui_page_template_filter_enter	3
+../Src/UI/pages/ui_page_template_filter.c:68:6:ui_page_template_filter_register_families	6
