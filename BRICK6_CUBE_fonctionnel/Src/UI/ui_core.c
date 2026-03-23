@@ -70,19 +70,6 @@ static void ui_core_update_shift_state(uint8_t shift_down)
     }
 }
 
-typedef struct
-{
-    uint8_t active_track;
-    uint8_t shift_down;
-    uint8_t track_select_armed;
-} ui_track_state_t;
-
-static ui_track_state_t g_ui_track_state = {
-    .active_track = 0U,
-    .shift_down = 0U,
-    .track_select_armed = 0U,
-};
-
 static void ui_core_handle_track_selection_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -222,7 +209,6 @@ void ui_core_tick(void)
     {
         active_page->tick();
     }
-
 }
 
 uint8_t ui_get_active_track(void)

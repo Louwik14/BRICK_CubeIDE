@@ -1,2 +1,7 @@
-../Src/UI/ui_core.c:47:6:ui_core_init	8	static
-../Src/UI/ui_core.c:83:6:ui_core_tick	24	static
+../Src/UI/ui_core.c:113:6:ui_core_init	8	static
+../Src/UI/ui_core.c:152:6:ui_core_service_track_selection_inputs	24	static
+../Src/UI/ui_core.c:183:6:ui_core_tick	24	static
+../Src/UI/ui_core.c:214:9:ui_get_active_track	0	static
+../Src/UI/ui_core.c:219:17:ui_get_track_type	0	static
+../Src/UI/ui_core.c:229:9:ui_core_hall_note_is_suppressed	0	static
+../Src/UI/ui_core.c:239:6:ui_core_clear_hall_note_suppression	0	static

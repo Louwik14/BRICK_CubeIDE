@@ -100,11 +100,12 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h \
- ../Inc/Audio/microdexed_synth.h ../Inc/Sampler/sample_pool.h \
- ../Inc/Sampler/voice_manager.h ../Inc/Audio/live_recorder.h \
- ../Inc/Audio/live_recorder_config.h ../Inc/Audio/recorder_transport.h \
- ../Inc/Storage/memory_layout.h ../Inc/App/Hall/hall_loop.h \
- ../Inc/App/Hall/hall_juno_midi.h
+ ../Inc/Audio/microdexed_synth.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
+ ../Inc/Sampler/sample_pool.h ../Inc/Sampler/voice_manager.h \
+ ../Inc/Audio/live_recorder.h ../Inc/Audio/live_recorder_config.h \
+ ../Inc/Audio/recorder_transport.h ../Inc/Storage/memory_layout.h \
+ ../Inc/App/Hall/hall_loop.h ../Inc/App/Hall/hall_juno_midi.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
@@ -209,6 +210,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/control_events.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/cpu_load.h:
 ../Inc/Audio/microdexed_synth.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Inc/Sampler/sample_pool.h:
 ../Inc/Sampler/voice_manager.h:
 ../Inc/Audio/live_recorder.h:

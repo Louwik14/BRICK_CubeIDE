@@ -544,6 +544,7 @@
 "./Src/Audio/dsp_engine.o"
 "./Src/Audio/fx_BusCompressorCore.o"
 "./Src/Audio/fx_Daisy_comp_core.o"
+"./Src/Audio/fx_biquad_filter.o"
 "./Src/Audio/fx_bus_compressor.o"
 "./Src/Audio/fx_chain.o"
 "./Src/Audio/fx_clouds.o"

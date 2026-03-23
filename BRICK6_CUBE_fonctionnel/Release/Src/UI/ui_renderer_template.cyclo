@@ -1,2 +1,2 @@
 ../Src/UI/ui_renderer_template.c:108:13:ui_renderer_template_draw_open_corner_frame	1
-../Src/UI/ui_renderer_template.c:417:6:ui_renderer_template_draw	91
+../Src/UI/ui_renderer_template.c:420:6:ui_renderer_template_draw	93
