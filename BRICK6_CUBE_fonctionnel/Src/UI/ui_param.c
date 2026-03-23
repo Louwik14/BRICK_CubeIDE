@@ -65,6 +65,91 @@ static float ui_param_clamp(float v, float min, float max)
     return v;
 }
 
+static int8_t ui_param_signum(int16_t value)
+{
+    if (value > 0)
+    {
+        return 1;
+    }
+
+    if (value < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family)
+{
+    if ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+    {
+        return 0U;
+    }
+
+    if (!ui_track_family_is_input(family))
+    {
+        return 1U;
+    }
+
+    if (family == ui_get_track_family(ui_get_active_track()))
+    {
+        return 1U;
+    }
+
+    return (uint8_t)((ui_count_tracks_with_family(family) == 0U) ? 1U : 0U);
+}
+
+static float ui_param_step_cfg_track(float current_value, int8_t direction)
+{
+    int16_t candidate = (int16_t)(current_value + 0.5f);
+
+    if (direction == 0)
+    {
+        return current_value;
+    }
+
+    while (1)
+    {
+        candidate = (int16_t)(candidate + direction);
+
+        if ((candidate < 0) || (candidate >= (int16_t)UI_TRACK_FAMILY_COUNT))
+        {
+            return current_value;
+        }
+
+        if (ui_param_cfg_track_family_is_available((ui_track_family_t)candidate) != 0U)
+        {
+            return (float)candidate;
+        }
+    }
+}
+
+static float ui_param_step_cfg_track_type(float current_value, int8_t direction)
+{
+    const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
+    const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
+    int16_t candidate = (int16_t)(current_value + 0.5f);
+
+    if ((direction == 0) || (type_count == 0U))
+    {
+        return current_value;
+    }
+
+    candidate = (int16_t)(candidate + direction);
+    if (candidate < 0)
+    {
+        candidate = 0;
+    }
+    if (candidate >= (int16_t)type_count)
+    {
+        candidate = (int16_t)type_count - 1;
+    }
+
+    return (float)candidate;
+}
+
+
 /**
  * @brief Point d'entrée ui_param_set_bank.
  *
@@ -137,6 +222,21 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     }
 
     float value = param_get(param);
+
+    if (param == PARAM_CFG_TRACK)
+    {
+        value = ui_param_step_cfg_track(value, ui_param_signum(delta));
+        param_set(param, value);
+        return;
+    }
+
+    if (param == PARAM_CFG_TRACK_TYPE)
+    {
+        value = ui_param_step_cfg_track_type(value, ui_param_signum(delta));
+        param_set(param, value);
+        return;
+    }
+
     value += (float)delta * desc->step;
     value = ui_param_clamp(value, min_value, max_value);
 
