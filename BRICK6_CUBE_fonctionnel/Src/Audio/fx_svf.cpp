@@ -29,8 +29,8 @@ void svf_init(svf_t *svf, float sample_rate)
     svf->sr        = sample_rate;
     svf->fc        = 200.0f;
     svf->res       = 0.5f;
-    svf->drive     = 0.5f;
-    svf->pre_drive = 0.5f;
+    svf->drive     = 0.0f;
+    svf->pre_drive = 0.0f;
     svf->freq      = 0.25f;
     svf->damp      = 0.0f;
 
@@ -45,9 +45,7 @@ static inline float svf_process_pass(svf_t *svf, float in, svf_mode_t mode)
     const float notch = in - svf->damp * svf->band;
     const float low = svf->low + svf->freq * svf->band;
     const float high = notch - low;
-    const float band_sq = svf->band * svf->band;
-    const float band = svf->freq * high + svf->band - svf->drive * band_sq * svf->band;
-
+    const float band = svf->freq * high + svf->band;
     svf->low = low;
     svf->band = band;
 
@@ -92,16 +90,11 @@ void svf_set_res(svf_t *svf, float resonance_0_1)
     svf->res = svf_clamp(resonance_0_1, 0.0f, 1.0f);
     svf->damp = svf_min(2.0f * (1.0f - powf(svf->res, 0.25f)),
                         svf_min(2.0f, 2.0f / svf->freq - svf->freq * 0.5f));
-    svf->drive = svf->pre_drive * svf->res;
 }
 
 void svf_set_drive(svf_t *svf, float drive)
 {
-    if(svf == nullptr)
-        return;
-
-    svf->pre_drive = svf_clamp(drive * 0.1f, 0.0f, 1.0f);
-    svf->drive = svf->pre_drive * svf->res;
+    (void)svf;
+    (void)drive;
 }
-
 } // extern "C"

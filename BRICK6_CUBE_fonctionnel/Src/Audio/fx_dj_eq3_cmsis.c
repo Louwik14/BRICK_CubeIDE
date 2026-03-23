@@ -25,7 +25,7 @@
 #include <string.h>
 
 #define FX_DJ_EQ3_NUM_STAGES 3U
-#define FX_DJ_EQ3_MIN_DB    (-60.0f)
+#define FX_DJ_EQ3_MIN_DB    (-80.0f)
 #define FX_DJ_EQ3_MAX_DB    (12.0f)
 #define FX_DJ_EQ3_SHELF_S   (1.0f)
 #define FX_DJ_EQ3_MIN_FREQ  (10.0f)
@@ -477,10 +477,10 @@ void fx_dj_eq3_init(fx_dj_eq3_t *eq,
     memset(eq, 0, sizeof(*eq));
 
     eq->sample_rate = sample_rate;
-    eq->low_freq = low_freq;
-    eq->mid_freq = mid_freq;
-    eq->high_freq = high_freq;
-    eq->mid_q = mid_q;
+    eq->low_freq = 300.0f;
+    eq->mid_freq = 1000.0f;
+    eq->high_freq = 4000.0f;
+    eq->mid_q = 0.8f;
 
 
     arm_biquad_cascade_df1_init_f32(&eq->inst_l, FX_DJ_EQ3_NUM_STAGES, eq->coeffs, eq->state_l);
@@ -514,10 +514,15 @@ void fx_dj_eq3_process_block(fx_dj_eq3_t *eq,
                              float *inout_r,
                              uint32_t block_size)
 {
-    if((eq == NULL) || (inout_l == NULL) || (inout_r == NULL) || (block_size == 0U))
-    {
-        return;
-    }
+	if((eq == NULL) || (inout_l == NULL) || (inout_r == NULL) || (block_size == 0U))
+	{
+	    return;
+	}
+
+	if(eq->bypass != 0U)
+	{
+	    return;
+	}
 
     if(eq->coeffs_pending_update != 0U)
     {
