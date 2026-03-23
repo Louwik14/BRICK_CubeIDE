@@ -55,22 +55,22 @@ static const uint8_t g_led_remap_hall_for_led[HALL_KEY_COUNT] = {
  * can map a logical hall back to its real LED without recomputing anything.
  */
 static const led_id_t g_led_remap_led_for_hall[HALL_KEY_COUNT] = {
-    [0]  = LED_STEP_5,
+    [0]  = LED_STEP_8,
     [1]  = LED_STEP_7,
-    [2]  = LED_STEP_8,
-    [3]  = LED_STEP_6,
+    [2]  = LED_STEP_6,
+    [3]  = LED_STEP_5,
     [4]  = LED_STEP_4,
-    [5]  = LED_STEP_1,
+    [5]  = LED_STEP_3,
     [6]  = LED_STEP_2,
-    [7]  = LED_STEP_3,
-    [8]  = LED_STEP_13,
-    [9]  = LED_STEP_15,
-    [10] = LED_STEP_16,
-    [11] = LED_STEP_14,
-    [12] = LED_STEP_12,
-    [13] = LED_STEP_9,
-    [14] = LED_STEP_10,
-    [15] = LED_STEP_11,
+    [7]  = LED_STEP_1,
+    [8]  = LED_STEP_9,
+    [9]  = LED_STEP_10,
+    [10] = LED_STEP_11,
+    [11] = LED_STEP_12,
+    [12] = LED_STEP_13,
+    [13] = LED_STEP_14,
+    [14] = LED_STEP_15,
+    [15] = LED_STEP_16,
 };
 
 static inline bool led_remap_is_param_led(led_id_t led)
