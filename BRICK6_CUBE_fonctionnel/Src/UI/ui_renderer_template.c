@@ -260,7 +260,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_draw_text(9U, 1U, runtime_label);
 
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text(9U, 9U, "SEQ");
+    drv_display_draw_text(9U, 9U, ui_get_hall_mode_short_label());
 
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 2U, family_title);

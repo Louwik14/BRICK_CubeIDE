@@ -30,7 +30,7 @@
 static ui_event_t g_ui_evt_q[UI_EVENT_Q_LEN];
 static uint8_t g_ui_evt_w = 0U;
 static uint8_t g_ui_evt_r = 0U;
-static uint8_t g_ui_hall_prev_pressed[UI_TRACK_COUNT];
+static uint8_t g_ui_hall_prev_pressed[HALL_KEY_COUNT];
 
 /**
  * @brief Point d'entrée ui_event_push.
@@ -87,7 +87,7 @@ void ui_event_from_inputs(void)
         }
     }
 
-    for (uint8_t hall = 0U; hall < UI_TRACK_COUNT; hall++)
+    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
         const uint8_t pressed = hall_engine_is_pressed(hall);
         if ((g_ui_hall_prev_pressed[hall] == 0U) && (pressed != 0U))
