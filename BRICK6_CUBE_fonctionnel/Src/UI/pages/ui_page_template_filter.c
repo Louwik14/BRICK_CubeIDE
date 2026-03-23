@@ -2,6 +2,7 @@
 
 #include "mixer.h"
 #include "param_store.h"
+#include "ui_core.h"
 #include "ui_template_page.h"
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
@@ -15,6 +16,30 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
         {
             .title = "-",
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static ui_template_family_t g_ui_template_filter_family_monob = {
+    .family_title = "FILTER",
+    .nav_labels = { "MAIN", "ENV", "-", "-" },
+    .subpages = {
+        {
+            .title = "MAIN",
+            .param_bank = { .params = { PARAM_MONOB_FILTER_TYPE, PARAM_MONOB_FILTER_CUTOFF, PARAM_MONOB_FILTER_RESONANCE, PARAM_MONOB_FILTER_EG_AMT } },
+        },
+        {
+            .title = "ENV",
+            .param_bank = { .params = { PARAM_MONOB_FILTER_ATTACK, PARAM_MONOB_FILTER_DECAY, PARAM_MONOB_FILTER_SUSTAIN, PARAM_MONOB_FILTER_RELEASE } },
         },
         {
             .title = "-",
@@ -53,7 +78,13 @@ void ui_page_template_filter_register_families(void)
                 continue;
             }
 
-            ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, track_family, track_type, &g_ui_template_filter_family_audio);
+            const ui_template_family_t *family_template = &g_ui_template_filter_family_audio;
+            if ((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_MONOB))
+            {
+                family_template = &g_ui_template_filter_family_monob;
+            }
+
+            ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, track_family, track_type, family_template);
         }
     }
 }
@@ -68,6 +99,27 @@ static void ui_page_template_filter_sync_family(void)
     ui_template_family_t *family = ui_page_template_filter_get_audio_family();
     if (family == 0)
     {
+        return;
+    }
+
+    if (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_MONOB)
+    {
+        family->nav_labels[0] = "MAIN";
+        family->nav_labels[1] = "ENV";
+        family->nav_labels[2] = "-";
+        family->nav_labels[3] = "-";
+
+        family->subpages[0].title = "MAIN";
+        family->subpages[0].param_bank.params[0] = PARAM_MONOB_FILTER_TYPE;
+        family->subpages[0].param_bank.params[1] = PARAM_MONOB_FILTER_CUTOFF;
+        family->subpages[0].param_bank.params[2] = PARAM_MONOB_FILTER_RESONANCE;
+        family->subpages[0].param_bank.params[3] = PARAM_MONOB_FILTER_EG_AMT;
+
+        family->subpages[1].title = "ENV";
+        family->subpages[1].param_bank.params[0] = PARAM_MONOB_FILTER_ATTACK;
+        family->subpages[1].param_bank.params[1] = PARAM_MONOB_FILTER_DECAY;
+        family->subpages[1].param_bank.params[2] = PARAM_MONOB_FILTER_SUSTAIN;
+        family->subpages[1].param_bank.params[3] = PARAM_MONOB_FILTER_RELEASE;
         return;
     }
 

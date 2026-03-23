@@ -3,11 +3,18 @@
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_note_midi.h"
 #include "Audio/microdexed_synth.h"
+#include "Audio/monob_synth.h"
 #include "ui_core.h"
+
+static ui_track_type_t hall_juno_midi_get_runtime_synth_type(void)
+{
+    return ui_get_track_type(UI_AUDIO_INPUT_RESOURCE_COUNT);
+}
 
 void hall_juno_midi_init(void)
 {
     microdexed_synth_all_notes_off();
+    monob_synth_all_notes_off();
 }
 
 void hall_juno_midi_process(void)
@@ -39,12 +46,26 @@ void hall_juno_midi_process(void)
                 velocity = 100U;
             }
 
-            microdexed_synth_note_on(note, velocity);
+            if (hall_juno_midi_get_runtime_synth_type() == UI_TRACK_TYPE_MONOB)
+            {
+                monob_synth_note_on(note, velocity);
+            }
+            else
+            {
+                microdexed_synth_note_on(note, velocity);
+            }
         }
 
         if (hall_engine_consume_note_off(key) != 0U)
         {
-            microdexed_synth_note_off(note);
+            if (hall_juno_midi_get_runtime_synth_type() == UI_TRACK_TYPE_MONOB)
+            {
+                monob_synth_note_off(note);
+            }
+            else
+            {
+                microdexed_synth_note_off(note);
+            }
         }
     }
 }
