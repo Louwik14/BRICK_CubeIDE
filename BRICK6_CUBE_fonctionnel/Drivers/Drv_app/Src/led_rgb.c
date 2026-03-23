@@ -26,9 +26,9 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "led_anim.h"
 #include "led_layer.h"
-#include "ui_core.h"
-#include "ui_navigation.h"
-#include "ui_page_manager.h"
+#include "UI/ui_core.h"
+#include "UI/ui_navigation.h"
+#include "UI/ui_page_manager.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
 #define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
