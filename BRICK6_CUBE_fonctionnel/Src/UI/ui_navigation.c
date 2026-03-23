@@ -41,3 +41,18 @@ void ui_navigation_handle_event(const ui_event_t *event)
         }
     }
 }
+
+button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
+{
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
+    {
+        const ui_nav_rule_t *rule = &g_ui_nav_rules[i];
+
+        if (rule->target_page == page_id)
+        {
+            return rule->button;
+        }
+    }
+
+    return BTN_COUNT;
+}

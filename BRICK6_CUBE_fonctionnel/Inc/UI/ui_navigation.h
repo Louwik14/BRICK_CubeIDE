@@ -20,5 +20,6 @@ typedef struct
  * perform page changes without hardcoding workflow in ui_core.
  */
 void ui_navigation_handle_event(const ui_event_t *event);
+button_id_t ui_navigation_get_button_for_page(uint8_t page_id);
 
 #endif /* UI_NAVIGATION_H */
