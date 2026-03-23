@@ -7,15 +7,15 @@
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "FILTER",
-    .nav_labels = { "MAIN", "-", "-", "-" },
+    .nav_labels = { "MAIN", "-", "MOD", "-" },
     .subpages = {
         {
             .title = "MAIN",
             .param_bank = { .params = { PARAM_FILTER_TYPE, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_COUNT } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "MOD",
+            .param_bank = { .params = { PARAM_FILTER_KEYTRK, PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -31,7 +31,7 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
 
 static ui_template_family_t g_ui_template_filter_family_monob = {
     .family_title = "FILTER",
-    .nav_labels = { "MAIN", "ENV", "-", "-" },
+    .nav_labels = { "MAIN", "ENV", "MOD", "-" },
     .subpages = {
         {
             .title = "MAIN",
@@ -42,8 +42,8 @@ static ui_template_family_t g_ui_template_filter_family_monob = {
             .param_bank = { .params = { PARAM_MONOB_FILTER_ATTACK, PARAM_MONOB_FILTER_DECAY, PARAM_MONOB_FILTER_SUSTAIN, PARAM_MONOB_FILTER_RELEASE } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "MOD",
+            .param_bank = { .params = { PARAM_MONOB_FILTER_KEYTRK, PARAM_MONOB_FILTER_ENVRST, PARAM_MONOB_FILTER_ENVDLY, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -106,7 +106,7 @@ static void ui_page_template_filter_sync_family(void)
     {
         family->nav_labels[0] = "MAIN";
         family->nav_labels[1] = "ENV";
-        family->nav_labels[2] = "-";
+        family->nav_labels[2] = "MOD";
         family->nav_labels[3] = "-";
 
         family->subpages[0].title = "MAIN";
@@ -120,16 +120,25 @@ static void ui_page_template_filter_sync_family(void)
         family->subpages[1].param_bank.params[1] = PARAM_MONOB_FILTER_DECAY;
         family->subpages[1].param_bank.params[2] = PARAM_MONOB_FILTER_SUSTAIN;
         family->subpages[1].param_bank.params[3] = PARAM_MONOB_FILTER_RELEASE;
+
+        family->subpages[2].title = "MOD";
+        family->subpages[2].param_bank.params[0] = PARAM_MONOB_FILTER_KEYTRK;
+        family->subpages[2].param_bank.params[1] = PARAM_MONOB_FILTER_ENVRST;
+        family->subpages[2].param_bank.params[2] = PARAM_MONOB_FILTER_ENVDLY;
+        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
         return;
     }
 
     const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
     /* Audio FILTER keeps a compact track-aware variant: EQ3 swaps to Low/Mid/High, biquad keeps Cutoff/Res, no ENV page. */
     const uint8_t is_eq3 = (filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
+    const uint8_t has_mod_page = ((filter_type == MIXER_TRACK_FILTER_LP_BI)
+                               || (filter_type == MIXER_TRACK_FILTER_HP_BI)
+                               || (filter_type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
 
     family->nav_labels[0] = "MAIN";
     family->nav_labels[1] = "-";
-    family->nav_labels[2] = "-";
+    family->nav_labels[2] = (has_mod_page != 0U) ? "MOD" : "-";
     family->nav_labels[3] = "-";
 
     family->subpages[0].title = "MAIN";
@@ -143,6 +152,12 @@ static void ui_page_template_filter_sync_family(void)
     family->subpages[1].param_bank.params[1] = PARAM_COUNT;
     family->subpages[1].param_bank.params[2] = PARAM_COUNT;
     family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+
+    family->subpages[2].title = (has_mod_page != 0U) ? "MOD" : "-";
+    family->subpages[2].param_bank.params[0] = (has_mod_page != 0U) ? PARAM_FILTER_KEYTRK : PARAM_COUNT;
+    family->subpages[2].param_bank.params[1] = (has_mod_page != 0U) ? PARAM_FILTER_ENVRST : PARAM_COUNT;
+    family->subpages[2].param_bank.params[2] = (has_mod_page != 0U) ? PARAM_FILTER_ENVDLY : PARAM_COUNT;
+    family->subpages[2].param_bank.params[3] = PARAM_COUNT;
 }
 
 static void ui_page_template_filter_enter(void)

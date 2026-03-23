@@ -307,6 +307,9 @@ void brick6_app_init(void)
     param_reset(PARAM_MONOB_FILTER_DECAY);
     param_reset(PARAM_MONOB_FILTER_SUSTAIN);
     param_reset(PARAM_MONOB_FILTER_RELEASE);
+    param_reset(PARAM_MONOB_FILTER_KEYTRK);
+    param_reset(PARAM_MONOB_FILTER_ENVRST);
+    param_reset(PARAM_MONOB_FILTER_ENVDLY);
     param_reset(PARAM_MONOB_OSC1_WAVE);
     param_reset(PARAM_MONOB_OSC2_WAVE);
     param_reset(PARAM_MONOB_OSC3_WAVE);

@@ -69,9 +69,15 @@ void mixer_set_track_filter_attack(uint32_t track_id, float attack_s);
 void mixer_set_track_filter_decay(uint32_t track_id, float decay_s);
 void mixer_set_track_filter_sustain(uint32_t track_id, float sustain);
 void mixer_set_track_filter_release(uint32_t track_id, float release_s);
+void mixer_set_track_filter_keytrack(uint32_t track_id, float amount);
+void mixer_set_track_filter_env_reset(uint32_t track_id, uint8_t enabled);
+void mixer_set_track_filter_env_delay(uint32_t track_id, float delay_s);
 void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db);
 void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db);
 void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db);
+void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
+void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);
+void mixer_track_filter_all_notes_off(uint32_t track_id);
 
 void mixer_process(StereoTrack *tracks,
                    uint32_t track_count,

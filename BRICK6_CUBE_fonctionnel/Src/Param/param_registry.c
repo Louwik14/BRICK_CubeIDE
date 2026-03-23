@@ -162,6 +162,21 @@ static float filter_ui127_to_release_s(float v)
     return filter_ui127_to_time_s(v, 0.001f, 5.0f);
 }
 
+static float filter_ui127_to_keytrack(float v)
+{
+    return filter_ui127_to_unit(v);
+}
+
+static uint8_t filter_ui127_to_bool(float v)
+{
+    return (filter_ui127_clamp(v) >= 63.5f) ? 1U : 0U;
+}
+
+static float filter_ui127_to_env_delay_s(float v)
+{
+    return filter_ui127_to_time_s(v, 0.001f, 5.0f) - 0.001f;
+}
+
 static int8_t monob_range_index_to_octave(float v)
 {
     static const int8_t octave_map[] = {-1, 0, 1, 2};
@@ -389,6 +404,9 @@ static void apply_filter_attack(float v) { mixer_set_track_filter_attack(0U, fil
 static void apply_filter_decay(float v) { mixer_set_track_filter_decay(0U, filter_ui127_to_decay_s(v)); }
 static void apply_filter_sustain(float v) { mixer_set_track_filter_sustain(0U, filter_ui127_to_sustain(v)); }
 static void apply_filter_release(float v) { mixer_set_track_filter_release(0U, filter_ui127_to_release_s(v)); }
+static void apply_filter_keytrack(float v) { mixer_set_track_filter_keytrack(0U, filter_ui127_to_keytrack(v)); }
+static void apply_filter_env_reset(float v) { mixer_set_track_filter_env_reset(0U, filter_ui127_to_bool(v)); }
+static void apply_filter_env_delay(float v) { mixer_set_track_filter_env_delay(0U, filter_ui127_to_env_delay_s(v)); }
 static void apply_filter_eq_low(float v) { mixer_set_track_filter_eq_low(0U, filter_eq_ui127_to_db(v)); }
 static void apply_filter_eq_mid(float v) { mixer_set_track_filter_eq_mid(0U, filter_eq_ui127_to_db(v)); }
 static void apply_filter_eq_high(float v) { mixer_set_track_filter_eq_high(0U, filter_eq_ui127_to_db(v)); }
@@ -401,6 +419,9 @@ static void apply_monob_filter_attack(float v) { monob_synth_set_filter_attack(f
 static void apply_monob_filter_decay(float v) { monob_synth_set_filter_decay(filter_ui127_to_decay_s(v)); }
 static void apply_monob_filter_sustain(float v) { monob_synth_set_filter_sustain(filter_ui127_to_sustain(v)); }
 static void apply_monob_filter_release(float v) { monob_synth_set_filter_release(filter_ui127_to_release_s(v)); }
+static void apply_monob_filter_keytrack(float v) { monob_synth_set_filter_keytrack(filter_ui127_to_keytrack(v)); }
+static void apply_monob_filter_env_reset(float v) { monob_synth_set_filter_env_reset(filter_ui127_to_bool(v)); }
+static void apply_monob_filter_env_delay(float v) { monob_synth_set_filter_env_delay(filter_ui127_to_env_delay_s(v)); }
 
 static void apply_monob_osc1_wave(float v) { monob_synth_set_osc_wave(0U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
 static void apply_monob_osc2_wave(float v) { monob_synth_set_osc_wave(1U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
@@ -732,6 +753,9 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_decay),
     PARAM_DESC_EX(PARAM_FILTER_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_sustain),
     PARAM_DESC_EX(PARAM_FILTER_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_release),
+    PARAM_DESC_EX(PARAM_FILTER_KEYTRK, "KeyTrk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_keytrack),
+    PARAM_DESC_EX(PARAM_FILTER_ENVRST, "EnvRst", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_filter_env_reset),
+    PARAM_DESC_EX(PARAM_FILTER_ENVDLY, "EnvDly", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_env_delay),
     PARAM_DESC_EX(PARAM_FILTER_EQ_LOW, "Low", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_low),
     PARAM_DESC_EX(PARAM_FILTER_EQ_MID, "Mid", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_mid),
     PARAM_DESC_EX(PARAM_FILTER_EQ_HIGH, "High", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_high),
@@ -790,6 +814,9 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MONOB_FILTER_DECAY, "D", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_decay),
     PARAM_DESC_EX(PARAM_MONOB_FILTER_SUSTAIN, "S", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_sustain),
     PARAM_DESC_EX(PARAM_MONOB_FILTER_RELEASE, "R", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_release),
+    PARAM_DESC_EX(PARAM_MONOB_FILTER_KEYTRK, "KeyTrk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_keytrack),
+    PARAM_DESC_EX(PARAM_MONOB_FILTER_ENVRST, "EnvRst", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_monob_filter_env_reset),
+    PARAM_DESC_EX(PARAM_MONOB_FILTER_ENVDLY, "EnvDly", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_env_delay),
     PARAM_DESC_EX(PARAM_MONOB_OSC1_WAVE, "Osc1", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc1_wave),
     PARAM_DESC_EX(PARAM_MONOB_OSC2_WAVE, "Osc2", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc2_wave),
     PARAM_DESC_EX(PARAM_MONOB_OSC3_WAVE, "Osc3", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc3_wave),
