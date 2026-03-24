@@ -44,6 +44,7 @@
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "param_registry.h"
 #include "param_store.h"
 #include "audio_float.h"
 
@@ -268,6 +269,7 @@ static void ui_core_sync_active_track_cfg_params(void)
 
     param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_config->family);
     param_store_set_active(UI_CFG_TRACK_TYPE_PARAM, (float)ui_get_track_type_index_for_family(active_config->family, active_config->type));
+    param_registry_sync_filter_ui_for_active_track();
 }
 
 static void ui_core_set_active_track(uint8_t track)

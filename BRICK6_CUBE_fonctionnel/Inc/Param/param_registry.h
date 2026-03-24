@@ -53,6 +53,7 @@ typedef struct
 extern const param_desc_t param_registry[PARAM_COUNT];
 
 void param_registry_init(void);
+void param_registry_sync_filter_ui_for_active_track(void);
 
 float param_get(param_id_t id);
 void param_set(param_id_t id, float value);
