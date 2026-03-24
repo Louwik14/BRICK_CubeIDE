@@ -5,6 +5,7 @@
 
 #define MUX_POTS_COUNT        6U
 #define MUX_POTS_SETTLE_MS    1U
+#define MUX_POTS_DEADBAND     768U
 
 typedef enum
 {
@@ -85,7 +86,17 @@ void mux_pots_scan(void)
     case MUX_POTS_STATE_CONVERT:
       if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
       {
-        pot_values[current_channel] = (uint16_t)HAL_ADC_GetValue(&hadc3);
+        uint16_t raw = (uint16_t)(65535U - HAL_ADC_GetValue(&hadc3));
+
+        if (((raw > pot_values[current_channel]) &&
+             ((raw - pot_values[current_channel]) >= MUX_POTS_DEADBAND)) ||
+            ((pot_values[current_channel] > raw) &&
+             ((pot_values[current_channel] - raw) >= MUX_POTS_DEADBAND)) ||
+            ((pot_valid_mask & (uint8_t)(1U << current_channel)) == 0U))
+        {
+          pot_values[current_channel] = raw;
+        }
+
         pot_valid_mask |= (uint8_t)(1U << current_channel);
         (void)HAL_ADC_Stop(&hadc3);
 

@@ -23,6 +23,6 @@
 ../Src/UI/ui_core.c:771:6:ui_get_track_runtime_header_label	16	static
 ../Src/UI/ui_core.c:803:16:ui_get_hall_mode	0	static
 ../Src/UI/ui_core.c:822:6:ui_set_hall_mode	16	static
-../Src/UI/ui_core.c:843:13:ui_get_hall_mode_short_label	8	static
+../Src/UI/ui_core.c:843:13:ui_get_hall_mode_short_label	16	static
 ../Src/UI/ui_core.c:858:9:ui_core_hall_note_is_suppressed	0	static
 ../Src/UI/ui_core.c:868:6:ui_core_clear_hall_note_suppression	0	static

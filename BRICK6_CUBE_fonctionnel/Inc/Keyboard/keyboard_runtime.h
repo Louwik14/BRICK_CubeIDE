@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "Keyboard/ui_keyboard_app.h"
-#include "ui_core.h"
+#include "UI/ui_core.h"
 
 #ifdef __cplusplus
 extern "C" {

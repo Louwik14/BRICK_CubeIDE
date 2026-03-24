@@ -66,74 +66,61 @@ static ui_track_type_t brick6_get_runtime_synth_type(void)
     return UI_TRACK_TYPE_DX7;
 }
 
-static void brick6_update_master_from_pot1(void)
+static void brick6_update_master_from_pot5(void)
 {
     enum
     {
         POT_MASTER_INDEX = 4U,
-        POT_RAW_DEADBAND = 3U,
-        POT_RAW_MAX = 4095U,
-        POT_MUTE_ON_THRESHOLD = 20U,
-        POT_MUTE_OFF_THRESHOLD = 36U
+        POT_RAW_MAX = 65535U,
+        POT_MUTE_THRESHOLD = 1024U,
+        POT_MASTER_STEPS = 128U
     };
 
-    static uint16_t last_pot_raw = 0U;
     static uint8_t initialized = 0U;
-    static uint8_t mute_latched = 0U;
+    static uint16_t last_step = 0xFFFFU;
 
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
     {
         return;
     }
 
-    const uint16_t raw = mux_pots_get(POT_MASTER_INDEX);
+    uint16_t raw = mux_pots_get(POT_MASTER_INDEX);
+
+    if (raw <= POT_MUTE_THRESHOLD)
+    {
+        if ((initialized == 0U) || (last_step != 0U))
+        {
+            mixer_set_master(0.0f);
+            last_step = 0U;
+            initialized = 1U;
+        }
+        return;
+    }
+
+    raw = (uint16_t)(raw - POT_MUTE_THRESHOLD);
+
+    const float norm = (float)raw / (float)(POT_RAW_MAX - POT_MUTE_THRESHOLD);
+    uint16_t step = (uint16_t)(norm * (float)(POT_MASTER_STEPS - 1U) + 0.5f);
+
+    if (step >= POT_MASTER_STEPS)
+    {
+        step = (uint16_t)(POT_MASTER_STEPS - 1U);
+    }
 
     if ((initialized != 0U) &&
-        ((raw > last_pot_raw)
-             ? ((raw - last_pot_raw) < POT_RAW_DEADBAND)
-             : ((last_pot_raw - raw) < POT_RAW_DEADBAND)))
+        (((step > last_step) ? (step - last_step) : (last_step - step)) < 2U))
     {
         return;
     }
 
-    /*
-     * Pot 1 is wired with inverted polarity on this board:
-     * low ADC -> max volume, high ADC -> mute side.
-     */
-    const uint16_t inverted_raw = (uint16_t)(POT_RAW_MAX - raw);
-
-    if (mute_latched != 0U)
-    {
-        if (inverted_raw >= POT_MUTE_OFF_THRESHOLD)
-        {
-            mute_latched = 0U;
-        }
-    }
-    else if (inverted_raw <= POT_MUTE_ON_THRESHOLD)
-    {
-        mute_latched = 1U;
-    }
-
-    float gain;
-    if (mute_latched != 0U)
-    {
-        gain = 0.0f;
-    }
-    else
-    {
-        gain = (float)inverted_raw / (float)POT_RAW_MAX;
-        if (gain > 1.0f)
-        {
-            gain = 1.0f;
-        }
-    }
+    const float level = (float)step / (float)(POT_MASTER_STEPS - 1U);
+    const float gain = level * level;
 
     mixer_set_master(gain);
 
-    last_pot_raw = raw;
+    last_step = step;
     initialized = 1U;
 }
-
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
 
@@ -318,7 +305,7 @@ void brick6_app_init(void)
     voice_manager_trigger(0, 0.30f, 0.30f);
     voice_manager_trigger(1, 0.30f, 0.30f);
 
-    mixer_set_master(1.0f);
+    mixer_set_master(0.0f);
 
     track_enable(0, 1U);
     track_enable(1, 1U);
@@ -415,7 +402,7 @@ void brick6_app_process(void)
     g_brick6_app_process_call_count++;
 
     engine_tasklet_poll();
-    brick6_update_master_from_pot1();
+    brick6_update_master_from_pot5();
 
     hall_loop_process();
     ui_core_service_track_selection_inputs();

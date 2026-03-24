@@ -36,7 +36,7 @@
 #include "encoders.h"
 #include "led_rgb.h"
 #include "App/mux_pots.h"
-#include "Audio/mixer.h"
+
 
 volatile uint32_t engine_tick_count = 0U;
 
@@ -47,11 +47,7 @@ static volatile uint32_t engine_frames_accum = 0U;
 static uint32_t engine_frames_per_tick = 32U;
 static uint32_t engine_last_poll_ms = 0U;
 
-#define POT_MASTER_INDEX         0U
-#define POT_ADC_MAX_VALUE        4095.0f
-#define POT_RAW_DEADBAND         4U
-#define MASTER_GAIN_MIN          0.0f
-#define MASTER_GAIN_MAX          2.0f
+
 
 /* ============================================================
    Internal tick
@@ -76,8 +72,7 @@ static uint32_t engine_last_poll_ms = 0U;
  */
 static void engine_tick(uint32_t dt_ms)
 {
-  static uint16_t last_master_pot_raw = 0U;
-  static uint8_t master_pot_initialized = 0U;
+
 
   engine_tick_count++;
   buttons_update(dt_ms);
@@ -85,21 +80,7 @@ static void engine_tick(uint32_t dt_ms)
   led_service(dt_ms);
   mux_pots_scan();
 
-  {
-    const uint16_t pot_raw = mux_pots_get(POT_MASTER_INDEX);
 
-    if ((master_pot_initialized == 0U) ||
-        ((pot_raw > last_master_pot_raw)
-             ? ((pot_raw - last_master_pot_raw) >= POT_RAW_DEADBAND)
-             : ((last_master_pot_raw - pot_raw) >= POT_RAW_DEADBAND)))
-    {
-      const float pot_norm = (float)pot_raw / POT_ADC_MAX_VALUE;
-      const float master_gain = MASTER_GAIN_MIN + (pot_norm * (MASTER_GAIN_MAX - MASTER_GAIN_MIN));
-      mixer_set_master(master_gain);
-      last_master_pot_raw = pot_raw;
-      master_pot_initialized = 1U;
-    }
-  }
 }
 
 /* ============================================================
