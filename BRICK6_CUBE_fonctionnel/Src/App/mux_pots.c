@@ -10,10 +10,12 @@ typedef enum
 {
   MUX_POTS_STATE_SELECT = 0,
   MUX_POTS_STATE_SETTLE,
+  MUX_POTS_STATE_DUMMY_CONVERT,
   MUX_POTS_STATE_CONVERT
 } mux_pots_state_t;
 
 static uint16_t pot_values[MUX_POTS_COUNT];
+static uint8_t pot_valid_mask;
 static uint8_t current_channel;
 static mux_pots_state_t scan_state;
 static uint32_t settle_started_ms;
@@ -36,6 +38,7 @@ void mux_pots_init(void)
   }
 
   current_channel = 0U;
+  pot_valid_mask = 0U;
   scan_state = MUX_POTS_STATE_SELECT;
   settle_started_ms = 0U;
 
@@ -57,7 +60,24 @@ void mux_pots_scan(void)
       {
         if (HAL_ADC_Start(&hadc3) == HAL_OK)
         {
+          scan_state = MUX_POTS_STATE_DUMMY_CONVERT;
+        }
+      }
+      break;
+
+    case MUX_POTS_STATE_DUMMY_CONVERT:
+      if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
+      {
+        (void)HAL_ADC_GetValue(&hadc3);
+        (void)HAL_ADC_Stop(&hadc3);
+
+        if (HAL_ADC_Start(&hadc3) == HAL_OK)
+        {
           scan_state = MUX_POTS_STATE_CONVERT;
+        }
+        else
+        {
+          scan_state = MUX_POTS_STATE_SELECT;
         }
       }
       break;
@@ -66,6 +86,7 @@ void mux_pots_scan(void)
       if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
       {
         pot_values[current_channel] = (uint16_t)HAL_ADC_GetValue(&hadc3);
+        pot_valid_mask |= (uint8_t)(1U << current_channel);
         (void)HAL_ADC_Stop(&hadc3);
 
         current_channel++;
@@ -91,4 +112,14 @@ uint16_t mux_pots_get(uint8_t pot)
   }
 
   return pot_values[pot];
+}
+
+uint8_t mux_pots_is_valid(uint8_t pot)
+{
+  if (pot >= MUX_POTS_COUNT)
+  {
+    return 0U;
+  }
+
+  return ((pot_valid_mask & (uint8_t)(1U << pot)) != 0U) ? 1U : 0U;
 }

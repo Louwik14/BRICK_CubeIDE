@@ -55,6 +55,8 @@
 
 static AUDIO_HOT float postgain_recip = 1.0f;
 static AUDIO_HOT float output_adjust = 1.0f;
+static AUDIO_HOT float master_gain_smoothed = 1.0f;
+static AUDIO_HOT float master_gain_target = 1.0f;
 
 static float postgain = 1.0f;
 static float output_comp = 1.0f;
@@ -460,6 +462,8 @@ void audio_tracks_init(void)
     if(sat) fx_saturation_init(sat);
 
     master_gain = 1.0f;
+    master_gain_target = 1.0f;
+    master_gain_smoothed = 1.0f;
 
     fx_daisy_comp_t *comp = fx_pool_daisy_comp_state();
     if(comp) fx_daisy_comp_init(comp, 48000.0f);
@@ -508,6 +512,7 @@ void audio_float_set_master_gain(float gain)
         gain = 2.0f;
 
     master_gain = gain;
+    master_gain_target = gain;
 }
 
 /** Voir audio_float.h */
@@ -573,6 +578,8 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     sd_recorder_audio_block_begin(frames);
 
+    master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.1f;
+
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
     audio_io_pack(tx,
@@ -581,7 +588,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                   tracks[1].L,
                   tracks[1].R,
                   frames,
-                  output_adjust * master_gain);
+                  output_adjust * master_gain_smoothed);
 }
 
 /**
