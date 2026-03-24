@@ -6,8 +6,8 @@
 #include "ui_template_page.h"
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
-    .family_title = "FILTER",
-    .nav_labels = { "MAIN", "-", "MOD", "-" },
+    .family_title = "COLORS",
+    .nav_labels = { "MAIN", "-", "MOD", "CRUNCH" },
     .subpages = {
         {
             .title = "MAIN",
@@ -22,15 +22,15 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "CRUNCH",
+            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
 };
 
 static ui_template_family_t g_ui_template_filter_family_monob = {
-    .family_title = "FILTER",
+    .family_title = "COLORS",
     .nav_labels = { "MAIN", "ENV", "MOD", "-" },
     .subpages = {
         {
@@ -53,19 +53,19 @@ static ui_template_family_t g_ui_template_filter_family_monob = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t *ui_page_template_filter_resolve_family(void)
+static const ui_template_family_t *ui_page_template_colors_resolve_family(void)
 {
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_FILTER);
+    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_COLORS);
 }
 
 static ui_template_page_state_t g_ui_template_filter_state = {
     .family = 0,
-    .family_resolver = ui_page_template_filter_resolve_family,
+    .family_resolver = ui_page_template_colors_resolve_family,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
 
-void ui_page_template_filter_register_families(void)
+void ui_page_template_colors_register_families(void)
 {
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; family++)
     {
@@ -84,19 +84,19 @@ void ui_page_template_filter_register_families(void)
                 family_template = &g_ui_template_filter_family_monob;
             }
 
-            ui_template_family_register(UI_TEMPLATE_FAMILY_FILTER, track_family, track_type, family_template);
+            ui_template_family_register(UI_TEMPLATE_FAMILY_COLORS, track_family, track_type, family_template);
         }
     }
 }
 
-static ui_template_family_t *ui_page_template_filter_get_audio_family(void)
+static ui_template_family_t *ui_page_template_colors_get_audio_family(void)
 {
-    return (ui_template_family_t *)ui_page_template_filter_resolve_family();
+    return (ui_template_family_t *)ui_page_template_colors_resolve_family();
 }
 
-static void ui_page_template_filter_sync_family(void)
+static void ui_page_template_colors_sync_family(void)
 {
-    ui_template_family_t *family = ui_page_template_filter_get_audio_family();
+    ui_template_family_t *family = ui_page_template_colors_get_audio_family();
     uint8_t filter_target_track = 0U;
     if (family == 0)
     {
@@ -127,6 +127,12 @@ static void ui_page_template_filter_sync_family(void)
         family->subpages[2].param_bank.params[1] = PARAM_MONOB_FILTER_ENVRST;
         family->subpages[2].param_bank.params[2] = PARAM_MONOB_FILTER_ENVDLY;
         family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+
+        family->subpages[3].title = "-";
+        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[3] = PARAM_COUNT;
         return;
     }
 
@@ -154,20 +160,27 @@ static void ui_page_template_filter_sync_family(void)
         family->subpages[2].param_bank.params[1] = PARAM_COUNT;
         family->subpages[2].param_bank.params[2] = PARAM_COUNT;
         family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+
+        family->subpages[3].title = "-";
+        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[3] = PARAM_COUNT;
         return;
     }
 
     const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
-    /* Audio FILTER keeps a compact track-aware variant: EQ3 swaps to Low/Mid/High, biquad keeps Cutoff/Res, no ENV page. */
     const uint8_t is_eq3 = (filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
-    const uint8_t has_mod_page = ((filter_type == MIXER_TRACK_FILTER_LP_BI)
-                               || (filter_type == MIXER_TRACK_FILTER_HP_BI)
-                               || (filter_type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
+    const uint8_t is_input_audio = (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
+    const uint8_t has_mod_page = (((filter_type == MIXER_TRACK_FILTER_LP_BI)
+                                || (filter_type == MIXER_TRACK_FILTER_HP_BI)
+                                || (filter_type == MIXER_TRACK_FILTER_BP_BI))
+                                && (is_input_audio == 0U)) ? 1U : 0U;
 
     family->nav_labels[0] = "MAIN";
     family->nav_labels[1] = "-";
     family->nav_labels[2] = (has_mod_page != 0U) ? "MOD" : "-";
-    family->nav_labels[3] = "-";
+    family->nav_labels[3] = "CRUNCH";
 
     family->subpages[0].title = "MAIN";
     family->subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
@@ -186,40 +199,46 @@ static void ui_page_template_filter_sync_family(void)
     family->subpages[2].param_bank.params[1] = (has_mod_page != 0U) ? PARAM_FILTER_ENVRST : PARAM_COUNT;
     family->subpages[2].param_bank.params[2] = (has_mod_page != 0U) ? PARAM_FILTER_ENVDLY : PARAM_COUNT;
     family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+
+    family->subpages[3].title = "CRUNCH";
+    family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
+    family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+    family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+    family->subpages[3].param_bank.params[3] = PARAM_COUNT;
 }
 
-static void ui_page_template_filter_enter(void)
+static void ui_page_template_colors_enter(void)
 {
-    ui_page_template_filter_sync_family();
+    ui_page_template_colors_sync_family();
     ui_template_page_enter();
 }
 
-static void ui_page_template_filter_handle_event(const ui_event_t *ev)
+static void ui_page_template_colors_handle_event(const ui_event_t *ev)
 {
-    ui_page_template_filter_sync_family();
+    ui_page_template_colors_sync_family();
     ui_template_page_handle_event(ev);
-    ui_page_template_filter_sync_family();
+    ui_page_template_colors_sync_family();
     ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
 }
 
-static void ui_page_template_filter_tick(void)
+static void ui_page_template_colors_tick(void)
 {
-    ui_page_template_filter_sync_family();
+    ui_page_template_colors_sync_family();
     ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
     ui_template_page_tick();
 }
 
-static void ui_page_template_filter_render(void)
+static void ui_page_template_colors_render(void)
 {
-    ui_page_template_filter_sync_family();
+    ui_page_template_colors_sync_family();
     ui_template_page_render();
 }
 
-const ui_page_t g_ui_page_template_filter = {
-    .enter = ui_page_template_filter_enter,
+const ui_page_t g_ui_page_template_colors = {
+    .enter = ui_page_template_colors_enter,
     .leave = ui_template_page_leave,
-    .handle_event = ui_page_template_filter_handle_event,
-    .tick = ui_page_template_filter_tick,
-    .render = ui_page_template_filter_render,
+    .handle_event = ui_page_template_colors_handle_event,
+    .tick = ui_page_template_colors_tick,
+    .render = ui_page_template_colors_render,
     .context = &g_ui_template_filter_state,
 };

@@ -170,7 +170,7 @@ Le principe n’est pas de changer les noms d’ensembles selon le moteur, mais 
 ### 7.1 Ensembles stables existants
 Au minimum, l’architecture s’appuie aujourd’hui sur :
 - `CFG`
-- `FILTER`
+- `COLORS`
 - `TONE`
 - `KEYBOARD`
 - `ARP`
@@ -211,10 +211,10 @@ Exemples :
 
 ---
 
-## 9. Ensemble FILTER
+## 9. Ensemble COLORS
 
 ### 9.1 Tracks audio
-Pour les tracks `InputX` en type `Audio`, `FILTER` expose :
+Pour les tracks `InputX` en type `Audio`, `COLORS` expose :
 - `Off`
 - `EQ3`
 - `LP BI`
@@ -226,13 +226,19 @@ Organisation actuelle :
   - page 1 : `Type`, `Low`, `Mid`, `High`
 - `LP BI / HP BI / BP BI`
   - page 1 : `Type`, `Cutoff`, `Res`, `-`
-  - autres pages selon l’évolution du runtime
+  - page `MOD` absente en `InputX + Audio` (runtime forcé `KeyTrack=0`, `EnvRst=Off`, `EnvDly=0`)
+- `InputX + Hybrid`
+  - page `MOD` conservée pour les biquads
+- page 4 `CRUNCH`
+  - paramètre unique `Drive` (Off..127)
+  - `Drive = Off` => saturation bypass (hors traitement effectif)
+  - `Drive > 0` => saturation active et niveau piloté par `Drive`
 
 L’ancien SVF audio a été abandonné.
 Le biquad CMSIS est la base retenue pour les tracks audio.
 
 ### 9.2 MonoB
-`MonoB` a un `FILTER` propre à son moteur, distinct des tracks audio.
+`MonoB` a un `COLORS` propre à son moteur, distinct des tracks audio.
 Le filtre ladder moog-like est propre à `MonoB`.
 
 Le runtime filtre de `MonoB` expose au minimum :
@@ -454,7 +460,7 @@ Caractéristiques principales :
 - filtre ladder moog-like dédié
 - enveloppe d’amplitude
 - `TONE` dédié
-- `FILTER` dédié
+- `COLORS` dédié
 
 `MonoB` a été optimisé au fil du projet :
 - oscillateurs simplifiés
@@ -561,4 +567,3 @@ Exemples :
 - `ARP` doit rester un sous-mode du keyboard, pas casser `KEYBOARD`
 
 ---
-

@@ -68,7 +68,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité de la trac
 ## 4. Où brancher les choses
 
 - choix family/type d’une track : `CFG`
-- paramètres filtre : `FILTER`
+- paramètres filtre / couleur audio : `COLORS`
 - paramètres moteur sonore / oscillateurs : `TONE`
 - jeu clavier : `KEYBOARD`
 - arpégiateur : `ARP`
@@ -112,7 +112,7 @@ Toujours penser :
 
 Ensembles importants existants :
 - `CFG`
-- `FILTER`
+- `COLORS`
 - `TONE`
 - `KEYBOARD`
 - `ARP`
@@ -149,11 +149,23 @@ toujours utiliser des tables explicites.
 - moteur `Synth` stable
 - monophonique mono
 - `TONE` dédié
-- `FILTER` dédié
+- `COLORS` dédié
 
 Ne pas mélanger :
 - filtres audio des tracks input
 - filtre dédié d’un moteur synth comme `MonoB`
+
+### COLORS : règles runtime UI/audio
+- l’ensemble UI historique `FILTER` est renommé produit en `COLORS`
+- pour `InputX + Audio` :
+  - page `MOD` non exposée
+  - runtime forcé : `KeyTrack = 0`, `EnvRst = Off`, `EnvDly = 0`
+- pour `InputX + Hybrid` :
+  - page `MOD` conservée
+- page 4 `CRUNCH` :
+  - paramètre unique `Drive`
+  - `Drive = Off` => saturation bypass (hors traitement effectif)
+  - `Drive > 0` => saturation active et pilotée par `Drive`
 
 ---
 

@@ -3,8 +3,8 @@
 
 #include "ui_page.h"
 
-extern const ui_page_t g_ui_page_template_filter;
+extern const ui_page_t g_ui_page_template_colors;
 
-void ui_page_template_filter_register_families(void);
+void ui_page_template_colors_register_families(void);
 
 #endif /* UI_PAGE_TEMPLATE_FILTER_H */

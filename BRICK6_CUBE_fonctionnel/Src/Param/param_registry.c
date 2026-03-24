@@ -406,9 +406,19 @@ typedef struct
     float eq_low;
     float eq_mid;
     float eq_high;
+    float drive;
 } filter_ui_state_t;
 
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
+
+static uint8_t filter_mod_locked_for_active_track(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t family = ui_get_track_family(active_track);
+    const ui_track_type_t type = ui_get_track_type(active_track);
+
+    return (ui_track_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO)) ? 1U : 0U;
+}
 
 static void filter_ui_state_init_defaults(void)
 {
@@ -428,6 +438,7 @@ static void filter_ui_state_init_defaults(void)
         g_filter_ui_state[i].eq_low = param_registry[PARAM_FILTER_EQ_LOW].default_value;
         g_filter_ui_state[i].eq_mid = param_registry[PARAM_FILTER_EQ_MID].default_value;
         g_filter_ui_state[i].eq_high = param_registry[PARAM_FILTER_EQ_HIGH].default_value;
+        g_filter_ui_state[i].drive = param_registry[PARAM_FILTER_DRIVE].default_value;
     }
 }
 
@@ -480,6 +491,19 @@ void param_registry_sync_filter_ui_for_active_track(void)
     param_store_set_active(PARAM_FILTER_EQ_LOW, state->eq_low);
     param_store_set_active(PARAM_FILTER_EQ_MID, state->eq_mid);
     param_store_set_active(PARAM_FILTER_EQ_HIGH, state->eq_high);
+    param_store_set_active(PARAM_FILTER_DRIVE, state->drive);
+    audio_float_set_saturation_drive_ui((uint8_t)(clamp_value(state->drive, 0.0f, 127.0f) + 0.5f));
+
+    if (filter_mod_locked_for_active_track() != 0U)
+    {
+        param_store_set_active(PARAM_FILTER_KEYTRK, 0.0f);
+        param_store_set_active(PARAM_FILTER_ENVRST, 0.0f);
+        param_store_set_active(PARAM_FILTER_ENVDLY, 0.0f);
+
+        mixer_set_track_filter_keytrack(target_track, 0.0f);
+        mixer_set_track_filter_env_reset(target_track, false);
+        mixer_set_track_filter_env_delay(target_track, 0.0f);
+    }
 }
 
 /*
@@ -616,6 +640,13 @@ static void apply_filter_keytrack(float v)
     {
         return;
     }
+    if (filter_mod_locked_for_active_track() != 0U)
+    {
+        mixer_set_track_filter_keytrack(target_track, 0.0f);
+        param_store_set_active(PARAM_FILTER_KEYTRK, 0.0f);
+        return;
+    }
+
     mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(v));
     filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
@@ -631,6 +662,13 @@ static void apply_filter_env_reset(float v)
     {
         return;
     }
+    if (filter_mod_locked_for_active_track() != 0U)
+    {
+        mixer_set_track_filter_env_reset(target_track, false);
+        param_store_set_active(PARAM_FILTER_ENVRST, 0.0f);
+        return;
+    }
+
     mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(v));
     filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
@@ -646,6 +684,13 @@ static void apply_filter_env_delay(float v)
     {
         return;
     }
+    if (filter_mod_locked_for_active_track() != 0U)
+    {
+        mixer_set_track_filter_env_delay(target_track, 0.0f);
+        param_store_set_active(PARAM_FILTER_ENVDLY, 0.0f);
+        return;
+    }
+
     mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(v));
     filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
@@ -696,6 +741,24 @@ static void apply_filter_eq_high(float v)
     if (state != NULL)
     {
         state->eq_high = filter_ui127_clamp(v);
+    }
+}
+
+static void apply_filter_drive(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+
+    const float drive_ui = clamp_value(v, 0.0f, 127.0f);
+    audio_float_set_saturation_drive_ui((uint8_t)(drive_ui + 0.5f));
+
+    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
+    if (state != NULL)
+    {
+        state->drive = drive_ui;
     }
 }
 
@@ -1073,6 +1136,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_EQ_LOW, "Low", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_low),
     PARAM_DESC_EX(PARAM_FILTER_EQ_MID, "Mid", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_mid),
     PARAM_DESC_EX(PARAM_FILTER_EQ_HIGH, "High", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_high),
+    PARAM_DESC_EX(PARAM_FILTER_DRIVE, "Drive", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_drive),
 
     PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),

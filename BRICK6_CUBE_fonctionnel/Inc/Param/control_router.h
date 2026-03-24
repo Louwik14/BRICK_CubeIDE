@@ -88,6 +88,7 @@ typedef param_id_t control_param_id_t;
 #define CTRL_PARAM_FILTER_EQ_LOW             PARAM_FILTER_EQ_LOW
 #define CTRL_PARAM_FILTER_EQ_MID             PARAM_FILTER_EQ_MID
 #define CTRL_PARAM_FILTER_EQ_HIGH            PARAM_FILTER_EQ_HIGH
+#define CTRL_PARAM_FILTER_DRIVE              PARAM_FILTER_DRIVE
 
 #define CTRL_PARAM_MASTER_GAIN               PARAM_MASTER_GAIN
 #define CTRL_PARAM_POST_GAIN                 PARAM_POST_GAIN
