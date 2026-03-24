@@ -463,6 +463,18 @@ static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
     return &g_filter_ui_state[target_track];
 }
 
+static void apply_filter_drive_runtime(uint32_t target_track, float drive_ui)
+{
+    const uint8_t drive_0_127 = (uint8_t)(clamp_value(drive_ui, 0.0f, 127.0f) + 0.5f);
+    audio_float_set_saturation_drive_ui(drive_0_127);
+
+    for (uint32_t track = 0U; track < FILTER_TRACK_TARGET_COUNT; ++track)
+    {
+        const int8_t sat_slot = ((track == target_track) && (drive_0_127 > 0U)) ? 1 : -1;
+        mixer_set_track_insert_slot(track, 1U, sat_slot);
+    }
+}
+
 void param_registry_sync_filter_ui_for_active_track(void)
 {
     uint32_t target_track = 0U;
@@ -492,7 +504,7 @@ void param_registry_sync_filter_ui_for_active_track(void)
     param_store_set_active(PARAM_FILTER_EQ_MID, state->eq_mid);
     param_store_set_active(PARAM_FILTER_EQ_HIGH, state->eq_high);
     param_store_set_active(PARAM_FILTER_DRIVE, state->drive);
-    audio_float_set_saturation_drive_ui((uint8_t)(clamp_value(state->drive, 0.0f, 127.0f) + 0.5f));
+    apply_filter_drive_runtime(target_track, state->drive);
 
     if (filter_mod_locked_for_active_track() != 0U)
     {
@@ -753,7 +765,7 @@ static void apply_filter_drive(float v)
     }
 
     const float drive_ui = clamp_value(v, 0.0f, 127.0f);
-    audio_float_set_saturation_drive_ui((uint8_t)(drive_ui + 0.5f));
+    apply_filter_drive_runtime(target_track, drive_ui);
 
     filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)

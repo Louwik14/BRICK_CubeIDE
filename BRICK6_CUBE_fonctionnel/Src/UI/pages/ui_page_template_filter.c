@@ -31,7 +31,7 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
 
 static ui_template_family_t g_ui_template_filter_family_monob = {
     .family_title = "COLORS",
-    .nav_labels = { "MAIN", "ENV", "MOD", "-" },
+    .nav_labels = { "MAIN", "ENV", "MOD", "CRUNCH" },
     .subpages = {
         {
             .title = "MAIN",
@@ -46,8 +46,8 @@ static ui_template_family_t g_ui_template_filter_family_monob = {
             .param_bank = { .params = { PARAM_MONOB_FILTER_KEYTRK, PARAM_MONOB_FILTER_ENVRST, PARAM_MONOB_FILTER_ENVDLY, PARAM_COUNT } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "CRUNCH",
+            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -108,7 +108,7 @@ static void ui_page_template_colors_sync_family(void)
         family->nav_labels[0] = "MAIN";
         family->nav_labels[1] = "ENV";
         family->nav_labels[2] = "MOD";
-        family->nav_labels[3] = "-";
+        family->nav_labels[3] = "CRUNCH";
 
         family->subpages[0].title = "MAIN";
         family->subpages[0].param_bank.params[0] = PARAM_MONOB_FILTER_TYPE;
@@ -128,8 +128,8 @@ static void ui_page_template_colors_sync_family(void)
         family->subpages[2].param_bank.params[2] = PARAM_MONOB_FILTER_ENVDLY;
         family->subpages[2].param_bank.params[3] = PARAM_COUNT;
 
-        family->subpages[3].title = "-";
-        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[3].title = "CRUNCH";
+        family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
         family->subpages[3].param_bank.params[1] = PARAM_COUNT;
         family->subpages[3].param_bank.params[2] = PARAM_COUNT;
         family->subpages[3].param_bank.params[3] = PARAM_COUNT;
