@@ -342,7 +342,7 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
 
     g_ui_track_state.hall_note_suppressed[hall] = 1U;
 
-    if (hall == UI_HALL_KEYBOARD_MODE_TRIGGER)
+    if (hall == UI_HALL_ARP_MODE_TRIGGER)
     {
         const uint32_t now = HAL_GetTick();
         const uint8_t is_double_tap = ((g_ui_track_state.last_keyboard_mode_tap_ms != 0U)
