@@ -1,7 +1,7 @@
-../Src/UI/pages/ui_page_template_filter.c:56:36:ui_page_template_filter_resolve_family	1
-../Src/UI/pages/ui_page_template_filter.c:97:13:ui_page_template_filter_sync_family	6
-../Src/UI/pages/ui_page_template_filter.c:212:13:ui_page_template_filter_render	1
-../Src/UI/pages/ui_page_template_filter.c:205:13:ui_page_template_filter_tick	1
-../Src/UI/pages/ui_page_template_filter.c:197:13:ui_page_template_filter_handle_event	1
-../Src/UI/pages/ui_page_template_filter.c:191:13:ui_page_template_filter_enter	1
-../Src/UI/pages/ui_page_template_filter.c:68:6:ui_page_template_filter_register_families	6
+../Src/UI/pages/ui_page_template_filter.c:56:36:ui_page_template_colors_resolve_family	1
+../Src/UI/pages/ui_page_template_filter.c:97:13:ui_page_template_colors_sync_family	6
+../Src/UI/pages/ui_page_template_filter.c:231:13:ui_page_template_colors_render	1
+../Src/UI/pages/ui_page_template_filter.c:224:13:ui_page_template_colors_tick	1
+../Src/UI/pages/ui_page_template_filter.c:216:13:ui_page_template_colors_handle_event	1
+../Src/UI/pages/ui_page_template_filter.c:210:13:ui_page_template_colors_enter	1
+../Src/UI/pages/ui_page_template_filter.c:68:6:ui_page_template_colors_register_families	6

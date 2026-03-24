@@ -121,7 +121,11 @@ void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
         return;
     }
 
-    const float d = (float)drive_0_127 * (1.0f / 128.0f);
+    const uint8_t drive_eff = (drive_0_127 == 0U)
+                            ? 0U
+                            : (uint8_t)(25U + (((uint32_t)(drive_0_127 - 1U) * 112U) / 126U));
+
+    const float d = (float)drive_eff * (1.0f / 128.0f);
 
     // 🔥 mapping Daisy (musical + progressif)
     const float d2 = d * d;
