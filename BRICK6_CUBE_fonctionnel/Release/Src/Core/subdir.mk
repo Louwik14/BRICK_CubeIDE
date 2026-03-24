@@ -6,16 +6,34 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../Src/Core/brick6_app_init.c \
+../Src/Core/brick6_audio_runtime.c \
+../Src/Core/brick6_boot_defaults.c \
+../Src/Core/brick6_boot_fx_policy.c \
+../Src/Core/brick6_master_control.c \
+../Src/Core/brick6_recorder_runtime.c \
+../Src/Core/brick6_sampler_bootstrap.c \
 ../Src/Core/cpu_load.c \
 ../Src/Core/engine_tasklet.c 
 
 C_DEPS += \
 ./Src/Core/brick6_app_init.d \
+./Src/Core/brick6_audio_runtime.d \
+./Src/Core/brick6_boot_defaults.d \
+./Src/Core/brick6_boot_fx_policy.d \
+./Src/Core/brick6_master_control.d \
+./Src/Core/brick6_recorder_runtime.d \
+./Src/Core/brick6_sampler_bootstrap.d \
 ./Src/Core/cpu_load.d \
 ./Src/Core/engine_tasklet.d 
 
 OBJS += \
 ./Src/Core/brick6_app_init.o \
+./Src/Core/brick6_audio_runtime.o \
+./Src/Core/brick6_boot_defaults.o \
+./Src/Core/brick6_boot_fx_policy.o \
+./Src/Core/brick6_master_control.o \
+./Src/Core/brick6_recorder_runtime.o \
+./Src/Core/brick6_sampler_bootstrap.o \
 ./Src/Core/cpu_load.o \
 ./Src/Core/engine_tasklet.o 
 
@@ -27,7 +45,7 @@ Src/Core/%.o Src/Core/%.su Src/Core/%.cyclo: ../Src/Core/%.c Src/Core/subdir.mk
 clean: clean-Src-2f-Core
 
 clean-Src-2f-Core:
-	-$(RM) ./Src/Core/brick6_app_init.cyclo ./Src/Core/brick6_app_init.d ./Src/Core/brick6_app_init.o ./Src/Core/brick6_app_init.su ./Src/Core/cpu_load.cyclo ./Src/Core/cpu_load.d ./Src/Core/cpu_load.o ./Src/Core/cpu_load.su ./Src/Core/engine_tasklet.cyclo ./Src/Core/engine_tasklet.d ./Src/Core/engine_tasklet.o ./Src/Core/engine_tasklet.su
+	-$(RM) ./Src/Core/brick6_app_init.cyclo ./Src/Core/brick6_app_init.d ./Src/Core/brick6_app_init.o ./Src/Core/brick6_app_init.su ./Src/Core/brick6_audio_runtime.cyclo ./Src/Core/brick6_audio_runtime.d ./Src/Core/brick6_audio_runtime.o ./Src/Core/brick6_audio_runtime.su ./Src/Core/brick6_boot_defaults.cyclo ./Src/Core/brick6_boot_defaults.d ./Src/Core/brick6_boot_defaults.o ./Src/Core/brick6_boot_defaults.su ./Src/Core/brick6_boot_fx_policy.cyclo ./Src/Core/brick6_boot_fx_policy.d ./Src/Core/brick6_boot_fx_policy.o ./Src/Core/brick6_boot_fx_policy.su ./Src/Core/brick6_master_control.cyclo ./Src/Core/brick6_master_control.d ./Src/Core/brick6_master_control.o ./Src/Core/brick6_master_control.su ./Src/Core/brick6_recorder_runtime.cyclo ./Src/Core/brick6_recorder_runtime.d ./Src/Core/brick6_recorder_runtime.o ./Src/Core/brick6_recorder_runtime.su ./Src/Core/brick6_sampler_bootstrap.cyclo ./Src/Core/brick6_sampler_bootstrap.d ./Src/Core/brick6_sampler_bootstrap.o ./Src/Core/brick6_sampler_bootstrap.su ./Src/Core/cpu_load.cyclo ./Src/Core/cpu_load.d ./Src/Core/cpu_load.o ./Src/Core/cpu_load.su ./Src/Core/engine_tasklet.cyclo ./Src/Core/engine_tasklet.d ./Src/Core/engine_tasklet.o ./Src/Core/engine_tasklet.su
 
 .PHONY: clean-Src-2f-Core
 

@@ -1,3 +1,2 @@
-../Src/Core/brick6_app_init.c:142:13:my_dsp	40	static
-../Src/Core/brick6_app_init.c:253:6:brick6_app_init	24	static
-../Src/Core/brick6_app_init.c:398:6:brick6_app_process	16	static
+../Src/Core/brick6_app_init.c:54:6:brick6_app_init	16	static
+../Src/Core/brick6_app_init.c:125:6:brick6_app_process	8	static
