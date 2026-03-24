@@ -2,8 +2,8 @@
 
 #include <stdio.h>
 
+#include "App/mux_pots.h"
 #include "drv_display.h"
-#include "App/Hall/hall_engine.h"
 
 static void ui_page_debug_hall_enter(void) {}
 static void ui_page_debug_hall_leave(void) {}
@@ -22,53 +22,43 @@ static void ui_page_debug_hall_render(void)
     char line2[24];
     char line3[24];
     char line4[24];
-    char line5[24];
-    char line6[24];
-    char line7[24];
-    hall_velocity_debug_t debug = {0};
+    const uint8_t pot_count = 4U;
 
-    hall_engine_get_velocity_debug(0U, &debug);
+    drv_display_draw_text(0U, 0U, "POTS DEBUG (ADC)");
 
-    snprintf(line0, sizeof(line0), "HALL K0 C%u M%uC%u",
-             (unsigned)debug.calibrated,
-             (unsigned)debug.velocity_mode,
-             (unsigned)debug.velocity_curve);
-    snprintf(line1, sizeof(line1), "R%u %u/%u",
-             (unsigned)debug.raw_current,
-             (unsigned)debug.min_current,
-             (unsigned)debug.max_current);
-    snprintf(line2, sizeof(line2), "T%u %u RV%u O%u",
-             (unsigned)debug.trig_lo,
-             (unsigned)debug.trig_hi,
-             (unsigned)debug.range_valid,
-             (unsigned)debug.state);
-    snprintf(line3, sizeof(line3), "V%u",
-             (unsigned)debug.velocity,
-             (unsigned)debug.velocity_valid);
-    snprintf(line4, sizeof(line4), "DV%u SD%u",
-             (unsigned)debug.dv_peak,
-             (unsigned)debug.sum_dv);
-    snprintf(line5, sizeof(line5), "TS%u TE%u",
-             (unsigned)debug.vel_start_th,
-             (unsigned)debug.vel_end_th);
-    snprintf(line6, sizeof(line6), "TC%u A%u N%u/%u",
-             (unsigned)debug.time_count,
-             (unsigned)debug.time_active,
-             (unsigned)debug.note_on_pending,
-             (unsigned)debug.note_off_pending);
-    snprintf(line7, sizeof(line7), "UM%u P%u DV%u",
-             (unsigned)debug.user_mode_fallback,
-             (unsigned)debug.user_profile_valid,
-             (unsigned)debug.last_metric);
+    for (uint8_t pot = 0U; pot < pot_count; pot++)
+    {
+        char *line = line1;
 
-    drv_display_draw_text(0U, 0U, line0);
-    drv_display_draw_text(0U, 10U, line1);
-    drv_display_draw_text(0U, 20U, line2);
-    drv_display_draw_text(0U, 30U, line3);
-    drv_display_draw_text(0U, 34U, line4);
-    drv_display_draw_text(0U, 43U, line5);
-    drv_display_draw_text(0U, 52U, line6);
-    drv_display_draw_text(0U, 61U, line7);
+        if (pot == 1U)
+        {
+            line = line2;
+        }
+        else if (pot == 2U)
+        {
+            line = line3;
+        }
+        else if (pot == 3U)
+        {
+            line = line4;
+        }
+
+        if (mux_pots_is_valid(pot) != 0U)
+        {
+            (void)snprintf(line, sizeof(line0), "P%u: %4u",
+                           (unsigned)(pot + 1U),
+                           (unsigned)mux_pots_get(pot));
+        }
+        else
+        {
+            (void)snprintf(line, sizeof(line0), "P%u: ----", (unsigned)(pot + 1U));
+        }
+    }
+
+    drv_display_draw_text(0U, 14U, line1);
+    drv_display_draw_text(0U, 24U, line2);
+    drv_display_draw_text(0U, 34U, line3);
+    drv_display_draw_text(0U, 44U, line4);
 }
 
 const ui_page_t g_ui_page_debug_hall = {
