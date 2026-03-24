@@ -368,6 +368,16 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
             break;
     }
 
+    if (hall == UI_HALL_ARP_MODE_TRIGGER)
+    {
+        const uint32_t now = HAL_GetTick();
+        const uint8_t is_double_tap = ((g_ui_track_state.last_arp_mode_tap_ms != 0U)
+                                       && ((now - g_ui_track_state.last_arp_mode_tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+        g_ui_track_state.last_arp_mode_tap_ms = now;
+        ui_core_activate_arp_hall_mode(is_double_tap);
+        return;
+    }
+
     if (hall < UI_TRACK_COUNT)
     {
         ui_core_set_active_track(hall);
