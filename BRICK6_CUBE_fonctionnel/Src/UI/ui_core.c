@@ -569,6 +569,10 @@ bool ui_resolve_filter_target_track(uint8_t *out_track_id)
             *out_track_id = 2U;
             return true;
 
+        case UI_TRACK_FAMILY_SYNTH:
+            *out_track_id = 3U;
+            return true;
+
         default:
             return false;
     }
