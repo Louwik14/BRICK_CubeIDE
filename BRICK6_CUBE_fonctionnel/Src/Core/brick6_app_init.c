@@ -29,15 +29,16 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "ui_core.h"
-#include "App/mux_pots.h"
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
-#include "Audio/recorder_transport.h"
 #include "Audio/sd_multitrack_recorder.h"
 #include "Storage/memory_layout.h"
+#include "brick6_boot_defaults.h"
+#include "brick6_master_control.h"
+#include "brick6_recorder_runtime.h"
 
 #include "App/Hall/hall_loop.h"
 #include "App/Hall/hall_juno_midi.h"
@@ -64,62 +65,6 @@ static ui_track_type_t brick6_get_runtime_synth_type(void)
     }
 
     return UI_TRACK_TYPE_DX7;
-}
-
-static void brick6_update_master_from_pot5(void)
-{
-    enum
-    {
-        POT_MASTER_INDEX = 4U,
-        POT_RAW_MAX = 65535U,
-        POT_MUTE_THRESHOLD = 1024U,
-        POT_MASTER_STEPS = 128U
-    };
-
-    static uint8_t initialized = 0U;
-    static uint16_t last_step = 0xFFFFU;
-
-    if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
-    {
-        return;
-    }
-
-    uint16_t raw = mux_pots_get(POT_MASTER_INDEX);
-
-    if (raw <= POT_MUTE_THRESHOLD)
-    {
-        if ((initialized == 0U) || (last_step != 0U))
-        {
-            mixer_set_master(0.0f);
-            last_step = 0U;
-            initialized = 1U;
-        }
-        return;
-    }
-
-    raw = (uint16_t)(raw - POT_MUTE_THRESHOLD);
-
-    const float norm = (float)raw / (float)(POT_RAW_MAX - POT_MUTE_THRESHOLD);
-    uint16_t step = (uint16_t)(norm * (float)(POT_MASTER_STEPS - 1U) + 0.5f);
-
-    if (step >= POT_MASTER_STEPS)
-    {
-        step = (uint16_t)(POT_MASTER_STEPS - 1U);
-    }
-
-    if ((initialized != 0U) &&
-        (((step > last_step) ? (step - last_step) : (last_step - step)) < 2U))
-    {
-        return;
-    }
-
-    const float level = (float)step / (float)(POT_MASTER_STEPS - 1U);
-    const float gain = level * level;
-
-    mixer_set_master(gain);
-
-    last_step = step;
-    initialized = 1U;
 }
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
@@ -278,26 +223,14 @@ void brick6_app_init(void)
     sample_pool_load(0, "0:/Drum.wav");
     sample_pool_load(1, "0:/La ritournelle.wav");
 
-    live_recorder_init(&g_live_recorder);
-
-    live_recorder_set_buffer(
-        &g_live_recorder,
-        g_live_recorder_buffer,
-        LIVE_RECORDER_MAX_FRAMES);
-
-    live_recorder_set_loop_length(
-        &g_live_recorder,
-        LIVE_RECORDER_MAX_FRAMES);
-
-    live_recorder_start_play(&g_live_recorder);
+    brick6_recorder_runtime_boot_init(&g_live_recorder,
+                                      g_live_recorder_buffer,
+                                      LIVE_RECORDER_MAX_FRAMES);
 
     microdexed_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
     microdexed_synth_set_enabled(1U);
     monob_synth_init(48000.0f);
     hall_juno_midi_init();
-
-    recorder_transport_init();
-    sd_recorder_init();
 
     voice_manager_init();
 
@@ -322,53 +255,7 @@ void brick6_app_init(void)
 
     engine_tasklet_init(48000);
     param_store_init();
-    param_reset(PARAM_MIX_TRACK3_GAIN);
-    param_reset(PARAM_DX7_ALGORITHM);
-    param_reset(PARAM_DX7_FEEDBACK);
-    param_reset(PARAM_DX7_TRANSPOSE);
-    param_reset(PARAM_DX7_LFO_SPEED);
-    param_reset(PARAM_DX7_LFO_DELAY);
-    param_reset(PARAM_DX7_LFO_PITCH_MOD_DEPTH);
-    param_reset(PARAM_DX7_LFO_AMP_MOD_DEPTH);
-    param_reset(PARAM_DX7_PITCH_BEND_RANGE);
-    param_reset(PARAM_DX7_PORTAMENTO_TIME);
-    param_reset(PARAM_DX7_MONO_MODE);
-    param_reset(PARAM_DX7_OPERATOR_MASK);
-    param_reset(PARAM_DX7_OPERATOR_1_LEVEL);
-    param_reset(PARAM_DX7_OPERATOR_2_LEVEL);
-    param_reset(PARAM_DX7_OPERATOR_3_LEVEL);
-    param_reset(PARAM_DX7_OPERATOR_4_LEVEL);
-    param_reset(PARAM_MONOB_FILTER_TYPE);
-    param_reset(PARAM_MONOB_FILTER_CUTOFF);
-    param_reset(PARAM_MONOB_FILTER_RESONANCE);
-    param_reset(PARAM_MONOB_FILTER_EG_AMT);
-    param_reset(PARAM_MONOB_FILTER_ATTACK);
-    param_reset(PARAM_MONOB_FILTER_DECAY);
-    param_reset(PARAM_MONOB_FILTER_SUSTAIN);
-    param_reset(PARAM_MONOB_FILTER_RELEASE);
-    param_reset(PARAM_MONOB_FILTER_KEYTRK);
-    param_reset(PARAM_MONOB_FILTER_ENVRST);
-    param_reset(PARAM_MONOB_FILTER_ENVDLY);
-    param_reset(PARAM_MONOB_OSC1_WAVE);
-    param_reset(PARAM_MONOB_OSC2_WAVE);
-    param_reset(PARAM_MONOB_OSC3_WAVE);
-    param_reset(PARAM_MONOB_SUB_WAVE);
-    param_reset(PARAM_MONOB_OSC1_RANGE);
-    param_reset(PARAM_MONOB_OSC2_RANGE);
-    param_reset(PARAM_MONOB_OSC3_RANGE);
-    param_reset(PARAM_MONOB_SUB_OCTAVE);
-    param_reset(PARAM_MONOB_OSC1_DETUNE);
-    param_reset(PARAM_MONOB_OSC2_DETUNE);
-    param_reset(PARAM_MONOB_OSC3_DETUNE);
-    param_reset(PARAM_MONOB_OSC1_MIX);
-    param_reset(PARAM_MONOB_OSC2_MIX);
-    param_reset(PARAM_MONOB_OSC3_MIX);
-    param_reset(PARAM_MONOB_SUB_MIX);
-    param_reset(PARAM_KBD_ROOT);
-    param_reset(PARAM_KBD_SCALE);
-    param_reset(PARAM_KBD_OMNICHORD);
-    param_reset(PARAM_KBD_NOTE_ORDER);
-    param_reset(PARAM_KBD_CHORD_OVERRIDE);
+    brick6_boot_apply_param_defaults();
     control_event_init();
 
     hall_loop_init();
@@ -397,38 +284,16 @@ void brick6_app_init(void)
  */
 void brick6_app_process(void)
 {
-    static uint8_t last_transport_recording = 0U;
-
     g_brick6_app_process_call_count++;
 
     engine_tasklet_poll();
-    brick6_update_master_from_pot5();
+    brick6_master_control_process();
 
     hall_loop_process();
     ui_core_service_track_selection_inputs();
     hall_juno_midi_process();
 
-    recorder_transport_process();
-
-    {
-        const uint8_t transport_recording =
-            recorder_transport_is_recording();
-
-        if((transport_recording != 0U) &&
-           (last_transport_recording == 0U))
-        {
-            live_recorder_start_record(&g_live_recorder);
-            (void)sd_recorder_request_start();
-        }
-        else if((transport_recording == 0U) &&
-                (last_transport_recording != 0U))
-        {
-            live_recorder_stop_record(&g_live_recorder);
-            (void)sd_recorder_request_stop();
-        }
-
-        last_transport_recording = transport_recording;
-    }
+    brick6_recorder_runtime_process_transport(&g_live_recorder);
 
     voice_manager_service();
 
@@ -436,5 +301,5 @@ void brick6_app_process(void)
     midi_host_poll();
 
     /* Service writer SD hors IRQ */
-    sd_recorder_writer_service();
+    brick6_recorder_runtime_service_writer();
 }
