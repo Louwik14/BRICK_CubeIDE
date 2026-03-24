@@ -29,6 +29,7 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "ui_core.h"
+#include "App/mux_pots.h"
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
@@ -42,8 +43,6 @@
 #include "App/Hall/hall_juno_midi.h"
 
 #define HALFPI_F 1.57079632679489661923f
-
-static float g_master_gain = 1.0f;
 
 static volatile uint32_t g_brick6_app_process_call_count = 0U;
 static ui_track_type_t g_runtime_synth_type = UI_TRACK_TYPE_DX7;
@@ -65,6 +64,74 @@ static ui_track_type_t brick6_get_runtime_synth_type(void)
     }
 
     return UI_TRACK_TYPE_DX7;
+}
+
+static void brick6_update_master_from_pot1(void)
+{
+    enum
+    {
+        POT_MASTER_INDEX = 0U,
+        POT_RAW_DEADBAND = 3U,
+        POT_RAW_MAX = 4095U,
+        POT_MUTE_ON_THRESHOLD = 20U,
+        POT_MUTE_OFF_THRESHOLD = 36U
+    };
+
+    static uint16_t last_pot_raw = 0U;
+    static uint8_t initialized = 0U;
+    static uint8_t mute_latched = 0U;
+
+    if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
+    {
+        return;
+    }
+
+    const uint16_t raw = mux_pots_get(POT_MASTER_INDEX);
+
+    if ((initialized != 0U) &&
+        ((raw > last_pot_raw)
+             ? ((raw - last_pot_raw) < POT_RAW_DEADBAND)
+             : ((last_pot_raw - raw) < POT_RAW_DEADBAND)))
+    {
+        return;
+    }
+
+    /*
+     * Pot 1 is wired with inverted polarity on this board:
+     * low ADC -> max volume, high ADC -> mute side.
+     */
+    const uint16_t inverted_raw = (uint16_t)(POT_RAW_MAX - raw);
+
+    if (mute_latched != 0U)
+    {
+        if (inverted_raw >= POT_MUTE_OFF_THRESHOLD)
+        {
+            mute_latched = 0U;
+        }
+    }
+    else if (inverted_raw <= POT_MUTE_ON_THRESHOLD)
+    {
+        mute_latched = 1U;
+    }
+
+    float gain;
+    if (mute_latched != 0U)
+    {
+        gain = 0.0f;
+    }
+    else
+    {
+        gain = (float)inverted_raw / (float)POT_RAW_MAX;
+        if (gain > 1.0f)
+        {
+            gain = 1.0f;
+        }
+    }
+
+    mixer_set_master(gain);
+
+    last_pot_raw = raw;
+    initialized = 1U;
 }
 
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
@@ -133,21 +200,6 @@ static void my_dsp(StereoTrack *tracks,
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
         voice_manager_process(tracks[0].L, tracks[0].R, frames);
-
-        for(uint32_t i = 0U; i < frames; i++)
-        {
-            float l = tracks[0].L[i] * g_master_gain;
-            float r = tracks[0].R[i] * g_master_gain;
-
-            if(!isfinite(l) || !isfinite(r))
-            {
-                l = 0.0f;
-                r = 0.0f;
-            }
-
-            tracks[0].L[i] = l;
-            tracks[0].R[i] = r;
-        }
 
         sd_recorder_capture_tap_block(
             SD_RECORDER_TAP_TRACK_RAW,
@@ -363,6 +415,7 @@ void brick6_app_process(void)
     g_brick6_app_process_call_count++;
 
     engine_tasklet_poll();
+    brick6_update_master_from_pot1();
 
     hall_loop_process();
     ui_core_service_track_selection_inputs();
