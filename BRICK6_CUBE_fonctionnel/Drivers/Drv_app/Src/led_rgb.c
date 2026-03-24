@@ -122,13 +122,19 @@ static void led_apply_keyboard_hall_scene(uint8_t hall)
     led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
 }
 
+static bool led_hall_mode_uses_keyboard_scene(void)
+{
+    const ui_hall_mode_t mode = ui_get_hall_mode();
+    return (mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP);
+}
+
 static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
-        if (ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
+        if (led_hall_mode_uses_keyboard_scene())
         {
             led_apply_keyboard_hall_scene(hall);
         }
