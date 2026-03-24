@@ -318,7 +318,7 @@ void brick6_app_init(void)
     voice_manager_trigger(0, 0.30f, 0.30f);
     voice_manager_trigger(1, 0.30f, 0.30f);
 
-    mixer_set_master(2.0f);
+    mixer_set_master(1.0f);
 
     track_enable(0, 1U);
     track_enable(1, 1U);
