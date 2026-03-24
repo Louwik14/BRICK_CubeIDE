@@ -59,8 +59,7 @@ typedef struct
     uint8_t shift_down;
     uint8_t track_select_armed;
     ui_hall_mode_t hall_mode;
-    uint32_t last_keyboard_mode_tap_ms;
-    uint32_t last_arp_mode_tap_ms;
+    uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
     ui_track_config_t track_configs[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
@@ -71,8 +70,7 @@ static ui_track_state_t g_ui_track_state = {
     .shift_down = 0U,
     .track_select_armed = 0U,
     .hall_mode = UI_HALL_MODE_SEQ,
-    .last_keyboard_mode_tap_ms = 0U,
-    .last_arp_mode_tap_ms = 0U,
+    .mode_tap_ms = { 0U },
     .track_configs = {
         { UI_TRACK_FAMILY_INPUT1, UI_TRACK_TYPE_AUDIO },
         { UI_TRACK_FAMILY_INPUT2, UI_TRACK_TYPE_AUDIO },
@@ -86,6 +84,19 @@ static ui_track_state_t g_ui_track_state = {
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
 };
+
+typedef struct
+{
+    uint8_t hall_index;
+    ui_hall_mode_t target_mode;
+    uint8_t target_page;
+} ui_hall_mode_trigger_t;
+
+static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
+    { UI_HALL_KEYBOARD_MODE_TRIGGER, UI_HALL_MODE_KEYBOARD, UI_PAGE_TEMPLATE_KEYBOARD },
+    { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
+};
+
 
 static ui_track_config_t ui_core_get_default_track_config(void)
 {
@@ -313,13 +324,31 @@ static void ui_core_update_shift_state(uint8_t shift_down)
     }
 }
 
-static void ui_core_activate_keyboard_hall_mode(uint8_t open_keyboard_page)
+static const ui_hall_mode_trigger_t *ui_core_find_hall_mode_trigger(uint8_t hall)
 {
-    ui_set_hall_mode(UI_HALL_MODE_KEYBOARD);
-
-    if (open_keyboard_page != 0U)
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_hall_mode_triggers) / sizeof(g_ui_hall_mode_triggers[0])); ++i)
     {
-        ui_page_set(UI_PAGE_TEMPLATE_KEYBOARD);
+        if (g_ui_hall_mode_triggers[i].hall_index == hall)
+        {
+            return &g_ui_hall_mode_triggers[i];
+        }
+    }
+
+    return 0;
+}
+
+static void ui_core_activate_hall_mode_trigger(const ui_hall_mode_trigger_t *trigger, uint8_t open_target_page)
+{
+    if (trigger == 0)
+    {
+        return;
+    }
+
+    ui_set_hall_mode(trigger->target_mode);
+
+    if (open_target_page != 0U)
+    {
+        ui_page_set(trigger->target_page);
     }
 }
 
@@ -342,23 +371,16 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
 
     g_ui_track_state.hall_note_suppressed[hall] = 1U;
 
-    if (hall == UI_HALL_ARP_MODE_TRIGGER)
+    const ui_hall_mode_trigger_t *trigger = ui_core_find_hall_mode_trigger(hall);
+    if (trigger != 0)
     {
         const uint32_t now = HAL_GetTick();
-        const uint8_t is_double_tap = ((g_ui_track_state.last_keyboard_mode_tap_ms != 0U)
-                                       && ((now - g_ui_track_state.last_keyboard_mode_tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
-        g_ui_track_state.last_keyboard_mode_tap_ms = now;
-        ui_core_activate_keyboard_hall_mode(is_double_tap);
-        return;
-    }
+        const uint32_t last_tap = g_ui_track_state.mode_tap_ms[trigger->target_mode];
+        const uint8_t is_double_tap = ((last_tap != 0U)
+                                       && ((now - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
 
-    if (hall == UI_HALL_ARP_MODE_TRIGGER)
-    {
-        const uint32_t now = HAL_GetTick();
-        const uint8_t is_double_tap = ((g_ui_track_state.last_arp_mode_tap_ms != 0U)
-                                       && ((now - g_ui_track_state.last_arp_mode_tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
-        g_ui_track_state.last_arp_mode_tap_ms = now;
-        ui_core_activate_arp_hall_mode(is_double_tap);
+        g_ui_track_state.mode_tap_ms[trigger->target_mode] = now;
+        ui_core_activate_hall_mode_trigger(trigger, is_double_tap);
         return;
     }
 
@@ -407,8 +429,10 @@ void ui_core_init(void)
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
-    g_ui_track_state.last_keyboard_mode_tap_ms = 0U;
-    g_ui_track_state.last_arp_mode_tap_ms = 0U;
+    for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
+    {
+        g_ui_track_state.mode_tap_ms[mode] = 0U;
+    }
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
