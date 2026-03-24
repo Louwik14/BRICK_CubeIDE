@@ -37,6 +37,7 @@ typedef enum
 {
     UI_HALL_MODE_SEQ = 0,
     UI_HALL_MODE_KEYBOARD,
+    UI_HALL_MODE_ARP,
     UI_HALL_MODE_COUNT
 } ui_hall_mode_t;
 
