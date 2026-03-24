@@ -49,6 +49,7 @@
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
+#define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 
@@ -58,6 +59,7 @@ typedef struct
     uint8_t shift_down;
     uint8_t track_select_armed;
     ui_hall_mode_t hall_mode;
+    uint32_t last_keyboard_mode_tap_ms;
     uint32_t last_arp_mode_tap_ms;
     ui_track_config_t track_configs[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
@@ -69,6 +71,7 @@ static ui_track_state_t g_ui_track_state = {
     .shift_down = 0U,
     .track_select_armed = 0U,
     .hall_mode = UI_HALL_MODE_SEQ,
+    .last_keyboard_mode_tap_ms = 0U,
     .last_arp_mode_tap_ms = 0U,
     .track_configs = {
         { UI_TRACK_FAMILY_INPUT1, UI_TRACK_TYPE_AUDIO },
@@ -342,6 +345,16 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
     if (hall == UI_HALL_ARP_MODE_TRIGGER)
     {
         const uint32_t now = HAL_GetTick();
+        const uint8_t is_double_tap = ((g_ui_track_state.last_keyboard_mode_tap_ms != 0U)
+                                       && ((now - g_ui_track_state.last_keyboard_mode_tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+        g_ui_track_state.last_keyboard_mode_tap_ms = now;
+        ui_core_activate_keyboard_hall_mode(is_double_tap);
+        return;
+    }
+
+    if (hall == UI_HALL_ARP_MODE_TRIGGER)
+    {
+        const uint32_t now = HAL_GetTick();
         const uint8_t is_double_tap = ((g_ui_track_state.last_arp_mode_tap_ms != 0U)
                                        && ((now - g_ui_track_state.last_arp_mode_tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
         g_ui_track_state.last_arp_mode_tap_ms = now;
@@ -394,6 +407,7 @@ void ui_core_init(void)
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
+    g_ui_track_state.last_keyboard_mode_tap_ms = 0U;
     g_ui_track_state.last_arp_mode_tap_ms = 0U;
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
