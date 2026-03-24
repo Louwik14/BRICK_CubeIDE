@@ -70,7 +70,7 @@ static void brick6_update_master_from_pot1(void)
 {
     enum
     {
-        POT_MASTER_INDEX = 0U,
+        POT_MASTER_INDEX = 4U,
         POT_RAW_DEADBAND = 3U,
         POT_RAW_MAX = 4095U,
         POT_MUTE_ON_THRESHOLD = 20U,

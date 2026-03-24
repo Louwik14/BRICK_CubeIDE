@@ -10,6 +10,7 @@ typedef enum
 {
   MUX_POTS_STATE_SELECT = 0,
   MUX_POTS_STATE_SETTLE,
+  MUX_POTS_STATE_DUMMY_CONVERT,
   MUX_POTS_STATE_CONVERT
 } mux_pots_state_t;
 
@@ -59,7 +60,24 @@ void mux_pots_scan(void)
       {
         if (HAL_ADC_Start(&hadc3) == HAL_OK)
         {
+          scan_state = MUX_POTS_STATE_DUMMY_CONVERT;
+        }
+      }
+      break;
+
+    case MUX_POTS_STATE_DUMMY_CONVERT:
+      if (HAL_ADC_PollForConversion(&hadc3, 0U) == HAL_OK)
+      {
+        (void)HAL_ADC_GetValue(&hadc3);
+        (void)HAL_ADC_Stop(&hadc3);
+
+        if (HAL_ADC_Start(&hadc3) == HAL_OK)
+        {
           scan_state = MUX_POTS_STATE_CONVERT;
+        }
+        else
+        {
+          scan_state = MUX_POTS_STATE_SELECT;
         }
       }
       break;
