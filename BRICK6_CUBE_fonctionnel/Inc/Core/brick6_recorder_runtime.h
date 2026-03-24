@@ -1,3 +1,15 @@
+/**
+ * @file brick6_recorder_runtime.h
+ * @brief Recorder runtime orchestration API.
+ *
+ * Rôle du module:
+ * - Exposer les hooks boot/runtime du live recorder + transport + SD writer.
+ *
+ * Frontière:
+ * - Ne contient pas les implémentations DSP internes des recorders.
+ * - Ne décide pas des policy UI de déclenchement.
+ */
+
 #pragma once
 
 #include <stdint.h>

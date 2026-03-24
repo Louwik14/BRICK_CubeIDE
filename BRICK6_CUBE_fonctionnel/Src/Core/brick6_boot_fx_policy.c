@@ -1,3 +1,15 @@
+/**
+ * @file brick6_boot_fx_policy.c
+ * @brief Application de la policy FX au boot.
+ *
+ * Rôle du module:
+ * - Activer les slots FX boot et le routage insert par défaut.
+ *
+ * Frontière:
+ * - Ne pilote pas les changements FX runtime.
+ * - Ne gère pas les paramètres FX utilisateurs.
+ */
+
 #include "brick6_boot_fx_policy.h"
 
 #include "fx_pool.h"

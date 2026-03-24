@@ -1,3 +1,15 @@
+/**
+ * @file brick6_master_control.c
+ * @brief Traitement runtime du master depuis le pot mux.
+ *
+ * Rôle du module:
+ * - Convertir la valeur pot en gain master et l'appliquer au mixer.
+ *
+ * Frontière:
+ * - Ne fait pas de boot policy.
+ * - Ne traite pas le reste des contrôles.
+ */
+
 #include "brick6_master_control.h"
 
 #include <stdint.h>

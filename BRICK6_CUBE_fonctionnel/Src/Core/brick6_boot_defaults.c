@@ -1,3 +1,15 @@
+/**
+ * @file brick6_boot_defaults.c
+ * @brief Application des defaults paramètres au boot.
+ *
+ * Rôle du module:
+ * - Regrouper la séquence de param_reset(...) utilisée au démarrage.
+ *
+ * Frontière:
+ * - N'embarque aucune logique runtime.
+ * - N'orchestre pas l'ordre global du boot.
+ */
+
 #include "brick6_boot_defaults.h"
 
 #include "param_registry.h"

@@ -1,3 +1,15 @@
+/**
+ * @file brick6_audio_runtime.h
+ * @brief Audio DSP runtime callback API.
+ *
+ * Rôle du module:
+ * - Exposer le callback DSP runtime et son init de contexte.
+ *
+ * Frontière:
+ * - Ne gère pas l'init hardware/audio globale.
+ * - Ne porte pas la superloop applicative.
+ */
+
 #pragma once
 
 #include <stdint.h>

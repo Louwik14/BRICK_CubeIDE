@@ -1,3 +1,15 @@
+/**
+ * @file brick6_sampler_bootstrap.c
+ * @brief Bootstrap sampler (pool + voix de démarrage).
+ *
+ * Rôle du module:
+ * - Isoler le chargement initial des samples et l'init voix bootstrap.
+ *
+ * Frontière:
+ * - Ne contient pas le moteur sampler runtime.
+ * - Ne remplace pas la logique métier future de preset/sessions.
+ */
+
 #include "brick6_sampler_bootstrap.h"
 
 #include "Sampler/sample_pool.h"

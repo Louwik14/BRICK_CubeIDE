@@ -1,3 +1,15 @@
+/**
+ * @file brick6_audio_runtime.c
+ * @brief Callback DSP runtime extrait de brick6_app_init.
+ *
+ * Rôle du module:
+ * - Regrouper le traitement audio bloc (synth, sampler, mixer, taps recorder).
+ *
+ * Frontière:
+ * - Ne fait pas l'init applicative globale.
+ * - Ne gère pas la policy de boot.
+ */
+
 #include "brick6_audio_runtime.h"
 
 #include <math.h>

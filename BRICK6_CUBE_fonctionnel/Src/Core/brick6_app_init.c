@@ -21,6 +21,7 @@
 #include "cpu_load.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
+#include "ui_core.h"
 
 #include "Sampler/voice_manager.h"
 #include "Audio/live_recorder.h"

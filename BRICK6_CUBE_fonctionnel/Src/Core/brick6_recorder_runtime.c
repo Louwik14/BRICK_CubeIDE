@@ -1,3 +1,15 @@
+/**
+ * @file brick6_recorder_runtime.c
+ * @brief Orchestration recorder runtime (live/transport/sd writer).
+ *
+ * Rôle du module:
+ * - Regrouper l'init recorder boot et la logique de service runtime.
+ *
+ * Frontière:
+ * - Ne remplace pas les modules live_recorder / recorder_transport / sd_recorder.
+ * - N'implémente pas la policy UI amont.
+ */
+
 #include "brick6_recorder_runtime.h"
 
 #include <stddef.h>
