@@ -388,7 +388,7 @@ static void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_f
 
 extern const param_desc_t param_registry[PARAM_COUNT];
 
-#define FILTER_TRACK_TARGET_COUNT 3U
+#define FILTER_TRACK_TARGET_COUNT 4U
 
 typedef struct
 {
