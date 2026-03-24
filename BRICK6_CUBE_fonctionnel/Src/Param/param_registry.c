@@ -491,7 +491,12 @@ static void apply_arp_spread(float v) { keyboard_runtime_set_arp_spread((uint8_t
 static void apply_arp_dir(float v) { keyboard_runtime_set_arp_dir((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f)); }
 static void apply_arp_sync(float v) { keyboard_runtime_set_arp_sync((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f)); }
 
-static void apply_master_gain(float v) { audio_float_set_master_gain(v); }
+/*
+ * Master gain authority is hardware Pot 1 (see brick6_update_master_from_pot1).
+ * Keep PARAM_MASTER_GAIN inert to avoid any parallel control path rewriting
+ * the final output gain after Pot 1 updates.
+ */
+static void apply_master_gain(float v) { (void)v; }
 static void apply_post_gain(float v) { audio_float_set_postgain(v); }
 static void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
 
