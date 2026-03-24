@@ -352,6 +352,16 @@ static void ui_core_activate_hall_mode_trigger(const ui_hall_mode_trigger_t *tri
     }
 }
 
+static void ui_core_activate_arp_hall_mode(uint8_t open_arp_page)
+{
+    ui_set_hall_mode(UI_HALL_MODE_ARP);
+
+    if (open_arp_page != 0U)
+    {
+        ui_page_set(UI_PAGE_TEMPLATE_ARP);
+    }
+}
+
 static void ui_core_handle_shift_hall_action(uint8_t hall)
 {
     if (hall >= HALL_KEY_COUNT)
