@@ -145,9 +145,23 @@ static ui_track_type_t keyboard_runtime_get_active_synth_type(void)
     return ui_get_track_type(ui_get_active_track());
 }
 
+static uint8_t keyboard_runtime_get_filter_target_track(void)
+{
+    uint8_t track_id = 0U;
+    if (ui_resolve_filter_target_track(&track_id))
+    {
+        return track_id;
+    }
+    return 0xFFU;
+}
+
 static void keyboard_runtime_engine_note_on(uint8_t note, uint8_t velocity)
 {
-    mixer_track_filter_note_on(0U, note, velocity);
+    const uint8_t filter_track = keyboard_runtime_get_filter_target_track();
+    if (filter_track != 0xFFU)
+    {
+        mixer_track_filter_note_on(filter_track, note, velocity);
+    }
 
     if (!keyboard_runtime_active_track_has_midi_note_path())
     {
@@ -177,7 +191,11 @@ static void keyboard_runtime_engine_note_on(uint8_t note, uint8_t velocity)
 
 static void keyboard_runtime_engine_note_off(uint8_t note)
 {
-    mixer_track_filter_note_off(0U, note);
+    const uint8_t filter_track = keyboard_runtime_get_filter_target_track();
+    if (filter_track != 0xFFU)
+    {
+        mixer_track_filter_note_off(filter_track, note);
+    }
 
     if (keyboard_runtime_active_track_has_midi_note_path())
     {
@@ -205,7 +223,11 @@ static void keyboard_runtime_engine_all_notes_off(void)
 {
     microdexed_synth_all_notes_off();
     monob_synth_all_notes_off();
-    mixer_track_filter_all_notes_off(0U);
+    const uint8_t filter_track = keyboard_runtime_get_filter_target_track();
+    if (filter_track != 0xFFU)
+    {
+        mixer_track_filter_all_notes_off(filter_track);
+    }
 
     if (keyboard_runtime_active_track_has_midi_note_path())
     {

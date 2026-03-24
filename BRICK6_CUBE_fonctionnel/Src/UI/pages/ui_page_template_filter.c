@@ -97,6 +97,7 @@ static ui_template_family_t *ui_page_template_filter_get_audio_family(void)
 static void ui_page_template_filter_sync_family(void)
 {
     ui_template_family_t *family = ui_page_template_filter_get_audio_family();
+    uint8_t filter_target_track = 0U;
     if (family == 0)
     {
         return;
@@ -125,6 +126,33 @@ static void ui_page_template_filter_sync_family(void)
         family->subpages[2].param_bank.params[0] = PARAM_MONOB_FILTER_KEYTRK;
         family->subpages[2].param_bank.params[1] = PARAM_MONOB_FILTER_ENVRST;
         family->subpages[2].param_bank.params[2] = PARAM_MONOB_FILTER_ENVDLY;
+        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+        return;
+    }
+
+    if (!ui_resolve_filter_target_track(&filter_target_track))
+    {
+        family->nav_labels[0] = "-";
+        family->nav_labels[1] = "-";
+        family->nav_labels[2] = "-";
+        family->nav_labels[3] = "-";
+
+        family->subpages[0].title = "N/A";
+        family->subpages[0].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[0].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+
+        family->subpages[1].title = "-";
+        family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+
+        family->subpages[2].title = "-";
+        family->subpages[2].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[2] = PARAM_COUNT;
         family->subpages[2].param_bank.params[3] = PARAM_COUNT;
         return;
     }
