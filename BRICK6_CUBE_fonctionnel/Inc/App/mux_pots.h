@@ -10,6 +10,7 @@ extern "C" {
 void mux_pots_init(void);
 void mux_pots_scan(void);
 uint16_t mux_pots_get(uint8_t pot);
+uint8_t mux_pots_is_valid(uint8_t pot);
 
 #ifdef __cplusplus
 }
