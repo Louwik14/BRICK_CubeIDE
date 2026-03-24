@@ -1,5 +1,7 @@
 #include "brick6_recorder_runtime.h"
 
+#include <stddef.h>
+
 #include "Audio/live_recorder.h"
 #include "Audio/recorder_transport.h"
 #include "Audio/sd_multitrack_recorder.h"

@@ -2,17 +2,12 @@
  * @file brick6_app_init.c
  */
 
-#include <string.h>
-#include <stdio.h>
-#include <math.h>
-
 #include "brick6_app_init.h"
 
 #include "engine_tasklet.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sai.h"
-#include "sdmmc.h"
 #include "sdram.h"
 #include "stm32h7xx_hal.h"
 #include "usb_host.h"
@@ -21,168 +16,28 @@
 #include "audio_float.h"
 #include "cs42448.h"
 #include "mixer.h"
-#include "fx_pool.h"
 #include "param_store.h"
-#include "param_registry.h"
 #include "control_events.h"
 #include "cpu_load.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
-#include "ui_core.h"
 
-#include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
-#include "Audio/sd_multitrack_recorder.h"
 #include "Storage/memory_layout.h"
+#include "brick6_audio_runtime.h"
 #include "brick6_boot_defaults.h"
+#include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
 #include "brick6_recorder_runtime.h"
+#include "brick6_sampler_bootstrap.h"
 
 #include "App/Hall/hall_loop.h"
 #include "App/Hall/hall_juno_midi.h"
 
-#define HALFPI_F 1.57079632679489661923f
-
-static volatile uint32_t g_brick6_app_process_call_count = 0U;
-static ui_track_type_t g_runtime_synth_type = UI_TRACK_TYPE_DX7;
-static uint8_t g_runtime_track_enabled = 1U;
-
-static uint8_t brick6_runtime_track_is_enabled(void)
-{
-    const uint8_t active_track = ui_get_active_track();
-    return (ui_get_track_family(active_track) != UI_TRACK_FAMILY_OFF) ? 1U : 0U;
-}
-
-static ui_track_type_t brick6_get_runtime_synth_type(void)
-{
-    const uint8_t active_track = ui_get_active_track();
-
-    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-    {
-        return ui_get_track_type(active_track);
-    }
-
-    return UI_TRACK_TYPE_DX7;
-}
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
-
-
-/* ============================================================
-   DSP CALLBACK
-   ============================================================ */
-
-/**
- * @brief Point d'entrée my_dsp.
- *
- * Rôle:
- * - Traitement audio temps réel.
- *
- * @param tracks Tableau de pistes audio.
- * @param track_count Nombre de pistes.
- * @param frames Nombre d'échantillons par bloc.
- */
-static void my_dsp(StereoTrack *tracks,
-                   uint32_t track_count,
-                   uint32_t frames)
-{
-    const uint8_t runtime_track_enabled = brick6_runtime_track_is_enabled();
-    const ui_track_type_t runtime_synth_type = brick6_get_runtime_synth_type();
-
-    if (((runtime_track_enabled == 0U) && (g_runtime_track_enabled != 0U))
-            || ((runtime_track_enabled != 0U) && (g_runtime_track_enabled == 0U))
-            || ((runtime_track_enabled != 0U) && (runtime_synth_type != g_runtime_synth_type)))
-    {
-        microdexed_synth_all_notes_off();
-        monob_synth_all_notes_off();
-        g_runtime_synth_type = runtime_synth_type;
-    }
-    g_runtime_track_enabled = runtime_track_enabled;
-
-    if((track_count > 3U) && (tracks[3].enabled != 0U))
-    {
-        if (runtime_track_enabled == 0U)
-        {
-            memset(tracks[3].L, 0, sizeof(float) * frames);
-            memset(tracks[3].R, 0, sizeof(float) * frames);
-        }
-        else
-        {
-            static float synth_mono[AUDIO_BLOCK_SIZE];
-
-            if (runtime_synth_type == UI_TRACK_TYPE_MONOB)
-            {
-                monob_synth_process_block(synth_mono, frames);
-            }
-            else
-            {
-                microdexed_synth_process_block(synth_mono, frames);
-            }
-
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                tracks[3].L[i] = synth_mono[i];
-                tracks[3].R[i] = synth_mono[i];
-            }
-        }
-    }
-
-    if((track_count > 0U) && (tracks[0].enabled != 0U))
-    {
-        voice_manager_process(tracks[0].L, tracks[0].R, frames);
-
-        sd_recorder_capture_tap_block(
-            SD_RECORDER_TAP_TRACK_RAW,
-            0U,
-            tracks[0].L,
-            tracks[0].R,
-            frames);
-    }
-
-    mixer_process(tracks, track_count, frames);
-
-    if(track_count > 0U)
-    {
-        sd_recorder_capture_tap_block(
-            SD_RECORDER_TAP_MASTER,
-            0U,
-            tracks[0].L,
-            tracks[0].R,
-            frames);
-    }
-
-    live_recorder_write(&g_live_recorder,
-                        tracks[0].L,
-                        tracks[0].R,
-                        frames);
-
-    const float xfade = 0.0f;
-    if(xfade > 0.0f)
-    {
-        static float recL[AUDIO_BLOCK_SIZE];
-        static float recR[AUDIO_BLOCK_SIZE];
-
-        /*
-        Constant Power Crossfade
-
-        Linear crossfades produce a volume dip at the center (-6 dB).
-        Using sin/cos gains preserves constant perceived loudness.
-        */
-
-        const float gain_rec  = sinf(xfade * HALFPI_F);
-        const float gain_live = cosf(xfade * HALFPI_F);
-
-        live_recorder_read(&g_live_recorder, recL, recR, frames);
-
-        for(uint32_t i = 0U; i < frames; i++)
-        {
-            tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
-            tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
-        }
-    }
-}
 
 
 /* ============================================================
@@ -205,23 +60,14 @@ void brick6_app_init(void)
     CS42448_Init(0x48);
 
     mixer_init();
-    fx_pool_init();
-
-    (void)fx_pool_activate_slot(0U, FX_EQ3);
-    (void)fx_pool_activate_slot(1U, FX_SAT);
-    (void)fx_pool_activate_slot(2U, FX_DAISY_COMP);
-
-    mixer_set_track_insert_slot(0U, 0U, 2);
+    brick6_boot_fx_policy_init();
 
     audio_float_set_postgain(1.0f);
     audio_float_set_output_compensation(1.0f);
 
     audio_tracks_init();
 
-    sample_pool_init();
-
-    sample_pool_load(0, "0:/Drum.wav");
-    sample_pool_load(1, "0:/La ritournelle.wav");
+    brick6_sampler_bootstrap_load_pool();
 
     brick6_recorder_runtime_boot_init(&g_live_recorder,
                                       g_live_recorder_buffer,
@@ -232,11 +78,7 @@ void brick6_app_init(void)
     monob_synth_init(48000.0f);
     hall_juno_midi_init();
 
-    voice_manager_init();
-
-    /* Trigger immédiat pour tester la lecture RAM */
-    voice_manager_trigger(0, 0.30f, 0.30f);
-    voice_manager_trigger(1, 0.30f, 0.30f);
+    brick6_sampler_bootstrap_init_voices();
 
     mixer_set_master(0.0f);
 
@@ -245,13 +87,10 @@ void brick6_app_init(void)
     track_enable(2, 1U);
     track_enable(3, 1U);
 
-    track_set_gain(0, 1.0f);
-    track_set_gain(1, 1.0f);
-    track_set_gain(2, 1.0f);
-    track_set_gain(3, 1.0f);
+    brick6_audio_runtime_init(&g_live_recorder);
 
     audio_init(&hsai_BlockA2, &hsai_BlockB2);
-    audio_set_float_callback(my_dsp);
+    audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
     param_store_init();
@@ -284,8 +123,6 @@ void brick6_app_init(void)
  */
 void brick6_app_process(void)
 {
-    g_brick6_app_process_call_count++;
-
     engine_tasklet_poll();
     brick6_master_control_process();
 
