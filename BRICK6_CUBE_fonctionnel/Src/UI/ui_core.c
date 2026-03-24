@@ -35,6 +35,7 @@
 #include "pages/ui_page_template_dx7.h"
 #include "pages/ui_page_template_cfg.h"
 #include "pages/ui_page_template_keyboard.h"
+#include "pages/ui_page_template_arp.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -48,8 +49,8 @@
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
-#define UI_HALL_KEYBOARD_MODE_TRIGGER 9U
-#define UI_HALL_KEYBOARD_DOUBLE_TAP_MS 400U
+#define UI_HALL_ARP_MODE_TRIGGER 9U
+#define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 
 typedef struct
 {
@@ -57,7 +58,7 @@ typedef struct
     uint8_t shift_down;
     uint8_t track_select_armed;
     ui_hall_mode_t hall_mode;
-    uint32_t last_keyboard_mode_tap_ms;
+    uint32_t last_arp_mode_tap_ms;
     ui_track_config_t track_configs[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
@@ -68,7 +69,7 @@ static ui_track_state_t g_ui_track_state = {
     .shift_down = 0U,
     .track_select_armed = 0U,
     .hall_mode = UI_HALL_MODE_SEQ,
-    .last_keyboard_mode_tap_ms = 0U,
+    .last_arp_mode_tap_ms = 0U,
     .track_configs = {
         { UI_TRACK_FAMILY_INPUT1, UI_TRACK_TYPE_AUDIO },
         { UI_TRACK_FAMILY_INPUT2, UI_TRACK_TYPE_AUDIO },
@@ -319,6 +320,16 @@ static void ui_core_activate_keyboard_hall_mode(uint8_t open_keyboard_page)
     }
 }
 
+static void ui_core_activate_arp_hall_mode(uint8_t open_arp_page)
+{
+    ui_set_hall_mode(UI_HALL_MODE_ARP);
+
+    if (open_arp_page != 0U)
+    {
+        ui_page_set(UI_PAGE_TEMPLATE_ARP);
+    }
+}
+
 static void ui_core_handle_shift_hall_action(uint8_t hall)
 {
     if (hall >= HALL_KEY_COUNT)
@@ -328,13 +339,13 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
 
     g_ui_track_state.hall_note_suppressed[hall] = 1U;
 
-    if (hall == UI_HALL_KEYBOARD_MODE_TRIGGER)
+    if (hall == UI_HALL_ARP_MODE_TRIGGER)
     {
         const uint32_t now = HAL_GetTick();
-        const uint8_t is_double_tap = ((g_ui_track_state.last_keyboard_mode_tap_ms != 0U)
-                                       && ((now - g_ui_track_state.last_keyboard_mode_tap_ms) <= UI_HALL_KEYBOARD_DOUBLE_TAP_MS)) ? 1U : 0U;
-        g_ui_track_state.last_keyboard_mode_tap_ms = now;
-        ui_core_activate_keyboard_hall_mode(is_double_tap);
+        const uint8_t is_double_tap = ((g_ui_track_state.last_arp_mode_tap_ms != 0U)
+                                       && ((now - g_ui_track_state.last_arp_mode_tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+        g_ui_track_state.last_arp_mode_tap_ms = now;
+        ui_core_activate_arp_hall_mode(is_double_tap);
         return;
     }
 
@@ -383,7 +394,7 @@ void ui_core_init(void)
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
-    g_ui_track_state.last_keyboard_mode_tap_ms = 0U;
+    g_ui_track_state.last_arp_mode_tap_ms = 0U;
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
@@ -398,6 +409,7 @@ void ui_core_init(void)
     ui_page_template_cfg_register_families();
     ui_page_template_dx7_register_families();
     ui_page_template_keyboard_register_families();
+    ui_page_template_arp_register_families();
 
     ui_page_manager_init();
 
@@ -414,6 +426,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_cfg);
     ui_page_manager_register(&g_ui_page_template_dx7);
     ui_page_manager_register(&g_ui_page_template_keyboard);
+    ui_page_manager_register(&g_ui_page_template_arp);
 
     if (hall_calibration_load() != 0U)
     {
@@ -444,7 +457,7 @@ void ui_core_service_track_selection_inputs(void)
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 
-    if ((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD) && (g_ui_track_state.shift_down == 0U))
+    if (((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD) || (ui_get_hall_mode() == UI_HALL_MODE_ARP)) && (g_ui_track_state.shift_down == 0U))
     {
         if (button_pressed(BTN_TRANSPOSE_UP) != 0U)
         {
@@ -790,19 +803,28 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
         return;
     }
 
-    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD) && (mode != UI_HALL_MODE_KEYBOARD))
+    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD) && (mode == UI_HALL_MODE_SEQ))
     {
         keyboard_runtime_all_notes_off();
     }
 
+    keyboard_runtime_on_hall_mode_changed(g_ui_track_state.hall_mode, mode);
     g_ui_track_state.hall_mode = mode;
 }
 
 const char *ui_get_hall_mode_short_label(void)
 {
-    return (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
-        ? ui_format_keyboard_hall_mode_short_label()
-        : "SEQ";
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
+    {
+        return ui_format_keyboard_hall_mode_short_label();
+    }
+
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)
+    {
+        return "ARP";
+    }
+
+    return "SEQ";
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
