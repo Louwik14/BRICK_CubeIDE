@@ -73,11 +73,13 @@ static void brick6_update_master_from_pot1(void)
         POT_MASTER_INDEX = 0U,
         POT_RAW_DEADBAND = 3U,
         POT_RAW_MAX = 4095U,
-        POT_ZERO_THRESHOLD = 8U
+        POT_MUTE_ON_THRESHOLD = 20U,
+        POT_MUTE_OFF_THRESHOLD = 36U
     };
 
     static uint16_t last_pot_raw = 0U;
     static uint8_t initialized = 0U;
+    static uint8_t mute_latched = 0U;
 
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
     {
@@ -94,16 +96,36 @@ static void brick6_update_master_from_pot1(void)
         return;
     }
 
-    float gain;
+    /*
+     * Pot 1 is wired with inverted polarity on this board:
+     * low ADC -> max volume, high ADC -> mute side.
+     */
+    const uint16_t inverted_raw = (uint16_t)(POT_RAW_MAX - raw);
 
-    if (raw <= POT_ZERO_THRESHOLD)
+    if (mute_latched != 0U)
+    {
+        if (inverted_raw >= POT_MUTE_OFF_THRESHOLD)
+        {
+            mute_latched = 0U;
+        }
+    }
+    else if (inverted_raw <= POT_MUTE_ON_THRESHOLD)
+    {
+        mute_latched = 1U;
+    }
+
+    float gain;
+    if (mute_latched != 0U)
     {
         gain = 0.0f;
     }
     else
     {
-        const float normalized = (float)raw / (float)POT_RAW_MAX;
-        gain = (normalized > 1.0f) ? 1.0f : normalized;
+        gain = (float)inverted_raw / (float)POT_RAW_MAX;
+        if (gain > 1.0f)
+        {
+            gain = 1.0f;
+        }
     }
 
     mixer_set_master(gain);
