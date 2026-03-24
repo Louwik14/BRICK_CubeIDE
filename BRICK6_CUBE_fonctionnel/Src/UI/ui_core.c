@@ -435,7 +435,7 @@ void ui_core_init(void)
     ui_core_sync_active_track_cfg_params();
 
     ui_template_family_registry_init();
-    ui_page_template_filter_register_families();
+    ui_page_template_colors_register_families();
     ui_page_template_cfg_register_families();
     ui_page_template_dx7_register_families();
     ui_page_template_keyboard_register_families();
@@ -452,7 +452,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_debug_hall);
     ui_page_manager_register(&g_ui_page_calibration);
     ui_page_manager_register(&g_ui_page_user_calibration);
-    ui_page_manager_register(&g_ui_page_template_filter);
+    ui_page_manager_register(&g_ui_page_template_colors);
     ui_page_manager_register(&g_ui_page_template_cfg);
     ui_page_manager_register(&g_ui_page_template_dx7);
     ui_page_manager_register(&g_ui_page_template_keyboard);
