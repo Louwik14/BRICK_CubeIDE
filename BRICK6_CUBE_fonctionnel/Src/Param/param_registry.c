@@ -386,30 +386,164 @@ static void apply_sat_bias(float v) { audio_float_set_saturation_bias_ui(control
 static void apply_sat_drive(float v) { audio_float_set_saturation_drive_ui(control_float_to_ui127(v)); }
 static void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to_ui127(v)); }
 
+static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
+{
+    uint8_t track_id = 0U;
+    if ((out_track_id == NULL) || !ui_resolve_filter_target_track(&track_id))
+    {
+        return 0U;
+    }
+
+    *out_track_id = (uint32_t)track_id;
+    return 1U;
+}
+
 /*
  * Variante FILTER audio:
- * - le runtime audio n'expose plus que Off / EQ3 / biquad CMSIS
- * - le système de paramètres conserve pour l'instant un jeu global `PARAM_FILTER_*`
- * - ces paramètres pilotent donc la track 0 par convention provisoire
+ * - le runtime audio n'expose plus que Off / EQ3 / biquad CMSIS.
+ * - le système de paramètres conserve un jeu global `PARAM_FILTER_*`.
+ * - la cible DSP est résolue dynamiquement depuis le contexte UI actif.
  */
 static void apply_filter_type(float v)
 {
-    mixer_set_track_filter_type(0U, (mixer_track_filter_type_t)((uint32_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)));
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+
+    mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)));
 }
 
-static void apply_filter_cutoff(float v) { mixer_set_track_filter_cutoff(0U, filter_ui127_to_cutoff_hz(v)); }
-static void apply_filter_resonance(float v) { mixer_set_track_filter_resonance(0U, filter_ui127_to_resonance(v)); }
-static void apply_filter_eg_amount(float v) { mixer_set_track_filter_eg_amount(0U, filter_ui127_to_eg_amount(v)); }
-static void apply_filter_attack(float v) { mixer_set_track_filter_attack(0U, filter_ui127_to_attack_s(v)); }
-static void apply_filter_decay(float v) { mixer_set_track_filter_decay(0U, filter_ui127_to_decay_s(v)); }
-static void apply_filter_sustain(float v) { mixer_set_track_filter_sustain(0U, filter_ui127_to_sustain(v)); }
-static void apply_filter_release(float v) { mixer_set_track_filter_release(0U, filter_ui127_to_release_s(v)); }
-static void apply_filter_keytrack(float v) { mixer_set_track_filter_keytrack(0U, filter_ui127_to_keytrack(v)); }
-static void apply_filter_env_reset(float v) { mixer_set_track_filter_env_reset(0U, filter_ui127_to_bool(v)); }
-static void apply_filter_env_delay(float v) { mixer_set_track_filter_env_delay(0U, filter_ui127_to_env_delay_s(v)); }
-static void apply_filter_eq_low(float v) { mixer_set_track_filter_eq_low(0U, filter_eq_ui127_to_db(v)); }
-static void apply_filter_eq_mid(float v) { mixer_set_track_filter_eq_mid(0U, filter_eq_ui127_to_db(v)); }
-static void apply_filter_eq_high(float v) { mixer_set_track_filter_eq_high(0U, filter_eq_ui127_to_db(v)); }
+static void apply_filter_cutoff(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(v));
+}
+
+static void apply_filter_resonance(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(v));
+}
+
+static void apply_filter_eg_amount(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(v));
+}
+
+static void apply_filter_attack(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(v));
+}
+
+static void apply_filter_decay(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(v));
+}
+
+static void apply_filter_sustain(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(v));
+}
+
+static void apply_filter_release(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(v));
+}
+
+static void apply_filter_keytrack(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(v));
+}
+
+static void apply_filter_env_reset(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(v));
+}
+
+static void apply_filter_env_delay(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(v));
+}
+
+static void apply_filter_eq_low(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(v));
+}
+
+static void apply_filter_eq_mid(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(v));
+}
+
+static void apply_filter_eq_high(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_target_track(&target_track))
+    {
+        return;
+    }
+    mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(v));
+}
 
 static void apply_monob_filter_type(float v) { monob_synth_set_filter_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
 static void apply_monob_filter_cutoff(float v) { monob_synth_set_filter_cutoff(filter_ui127_to_cutoff_hz(v)); }
