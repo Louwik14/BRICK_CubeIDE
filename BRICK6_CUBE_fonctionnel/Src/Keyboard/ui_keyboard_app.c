@@ -1,3 +1,19 @@
+/******************************************************************************
+ * @file    ui_keyboard_app.c
+ * @brief   Logique musicale de l’interface clavier.
+ *
+ * Ce module gère l’état musical du clavier côté application :
+ * - notes actives et accords actifs
+ * - mode normal / omnichord
+ * - construction des notes à jouer selon gamme, root et ordre
+ * - application de l’octave shift et de la quantification de gamme
+ * - mise à jour différentielle des notes sonnées via un sink externe
+ *
+ * Il ne gère ni le scan matériel, ni le routage global de l’application,
+ * ni la synthèse directement. Il produit un état musical cohérent à partir
+ * des actions clavier et l’envoie vers la couche de sortie.
+ ******************************************************************************/
+
 #include "Keyboard/ui_keyboard_app.h"
 
 #include <string.h>

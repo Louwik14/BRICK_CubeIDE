@@ -1,3 +1,17 @@
+/******************************************************************************
+ * @file    kbd_chords_dict.c
+ * @brief   Dictionnaire des accords et des gammes du clavier.
+ *
+ * Ce module fournit les briques musicales statiques utilisées par le clavier :
+ * - construction d’un accord à partir d’un masque base + extensions
+ * - fusion et tri des intervalles d’accord
+ * - table des offsets de gammes par slot
+ * - conversion d’un slot de gamme en décalage en demi-tons
+ *
+ * Il ne gère ni les entrées physiques, ni le jeu temps-réel, ni la synthèse.
+ * Son rôle est de fournir des données musicales prêtes à l’emploi.
+ ******************************************************************************/
+
 #include "Keyboard/kbd_chords_dict.h"
 
 #include <stddef.h>

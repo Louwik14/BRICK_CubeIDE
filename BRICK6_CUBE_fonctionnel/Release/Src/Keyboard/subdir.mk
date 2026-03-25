@@ -7,18 +7,30 @@
 C_SRCS += \
 ../Src/Keyboard/kbd_chords_dict.c \
 ../Src/Keyboard/kbd_input_mapper.c \
+../Src/Keyboard/keyboard_arp.c \
+../Src/Keyboard/keyboard_engine.c \
+../Src/Keyboard/keyboard_input.c \
+../Src/Keyboard/keyboard_params.c \
 ../Src/Keyboard/keyboard_runtime.c \
 ../Src/Keyboard/ui_keyboard_app.c 
 
 C_DEPS += \
 ./Src/Keyboard/kbd_chords_dict.d \
 ./Src/Keyboard/kbd_input_mapper.d \
+./Src/Keyboard/keyboard_arp.d \
+./Src/Keyboard/keyboard_engine.d \
+./Src/Keyboard/keyboard_input.d \
+./Src/Keyboard/keyboard_params.d \
 ./Src/Keyboard/keyboard_runtime.d \
 ./Src/Keyboard/ui_keyboard_app.d 
 
 OBJS += \
 ./Src/Keyboard/kbd_chords_dict.o \
 ./Src/Keyboard/kbd_input_mapper.o \
+./Src/Keyboard/keyboard_arp.o \
+./Src/Keyboard/keyboard_engine.o \
+./Src/Keyboard/keyboard_input.o \
+./Src/Keyboard/keyboard_params.o \
 ./Src/Keyboard/keyboard_runtime.o \
 ./Src/Keyboard/ui_keyboard_app.o 
 
@@ -30,7 +42,7 @@ Src/Keyboard/%.o Src/Keyboard/%.su Src/Keyboard/%.cyclo: ../Src/Keyboard/%.c Src
 clean: clean-Src-2f-Keyboard
 
 clean-Src-2f-Keyboard:
-	-$(RM) ./Src/Keyboard/kbd_chords_dict.cyclo ./Src/Keyboard/kbd_chords_dict.d ./Src/Keyboard/kbd_chords_dict.o ./Src/Keyboard/kbd_chords_dict.su ./Src/Keyboard/kbd_input_mapper.cyclo ./Src/Keyboard/kbd_input_mapper.d ./Src/Keyboard/kbd_input_mapper.o ./Src/Keyboard/kbd_input_mapper.su ./Src/Keyboard/keyboard_runtime.cyclo ./Src/Keyboard/keyboard_runtime.d ./Src/Keyboard/keyboard_runtime.o ./Src/Keyboard/keyboard_runtime.su ./Src/Keyboard/ui_keyboard_app.cyclo ./Src/Keyboard/ui_keyboard_app.d ./Src/Keyboard/ui_keyboard_app.o ./Src/Keyboard/ui_keyboard_app.su
+	-$(RM) ./Src/Keyboard/kbd_chords_dict.cyclo ./Src/Keyboard/kbd_chords_dict.d ./Src/Keyboard/kbd_chords_dict.o ./Src/Keyboard/kbd_chords_dict.su ./Src/Keyboard/kbd_input_mapper.cyclo ./Src/Keyboard/kbd_input_mapper.d ./Src/Keyboard/kbd_input_mapper.o ./Src/Keyboard/kbd_input_mapper.su ./Src/Keyboard/keyboard_arp.cyclo ./Src/Keyboard/keyboard_arp.d ./Src/Keyboard/keyboard_arp.o ./Src/Keyboard/keyboard_arp.su ./Src/Keyboard/keyboard_engine.cyclo ./Src/Keyboard/keyboard_engine.d ./Src/Keyboard/keyboard_engine.o ./Src/Keyboard/keyboard_engine.su ./Src/Keyboard/keyboard_input.cyclo ./Src/Keyboard/keyboard_input.d ./Src/Keyboard/keyboard_input.o ./Src/Keyboard/keyboard_input.su ./Src/Keyboard/keyboard_params.cyclo ./Src/Keyboard/keyboard_params.d ./Src/Keyboard/keyboard_params.o ./Src/Keyboard/keyboard_params.su ./Src/Keyboard/keyboard_runtime.cyclo ./Src/Keyboard/keyboard_runtime.d ./Src/Keyboard/keyboard_runtime.o ./Src/Keyboard/keyboard_runtime.su ./Src/Keyboard/ui_keyboard_app.cyclo ./Src/Keyboard/ui_keyboard_app.d ./Src/Keyboard/ui_keyboard_app.o ./Src/Keyboard/ui_keyboard_app.su
 
 .PHONY: clean-Src-2f-Keyboard
 

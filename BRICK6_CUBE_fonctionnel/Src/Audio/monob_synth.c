@@ -13,7 +13,7 @@
 #define MONOB_SYNTH_FILTER_MAX_RESONANCE 1.8f
 #define MONOB_SYNTH_AMP_ATTACK_S 0.005f
 #define MONOB_SYNTH_AMP_RELEASE_S 0.03f
-#define MONOB_SYNTH_FILTER_UPDATE_PERIOD 8U
+#define MONOB_SYNTH_FILTER_UPDATE_PERIOD 2U
 #define MONOB_SYNTH_ENV_EPSILON 0.0001f
 
 typedef enum
@@ -210,8 +210,14 @@ void monob_synth_note_on(uint8_t midi_note, uint8_t velocity)
     if(g_monob_synth.filter_env_reset != 0U)
     {
         g_monob_synth.filter_env = 0.0f;
+        g_monob_synth.filter_env_delay_remaining_s = g_monob_synth.filter_env_delay_s;
+        monob_moog_ladder_reset();
     }
-    g_monob_synth.filter_env_delay_remaining_s = g_monob_synth.filter_env_delay_s;
+    else
+    {
+        g_monob_synth.filter_env_delay_remaining_s = g_monob_synth.filter_env_delay_s;
+    }
+
     g_monob_synth.filter_env_stage = (g_monob_synth.filter_env_delay_s > 0.0f) ? MONOB_ENV_DELAY : MONOB_ENV_ATTACK;
 }
 
@@ -325,7 +331,7 @@ void monob_synth_set_filter_resonance(float resonance)
 
 void monob_synth_set_filter_eg_amount(float eg_amount)
 {
-    g_monob_synth.filter_eg_amount = monob_synth_clampf(eg_amount, 0.0f, 1.0f);
+	g_monob_synth.filter_eg_amount = monob_synth_clampf(eg_amount, -1.0f, 1.0f);
 }
 
 void monob_synth_set_filter_attack(float attack_s)

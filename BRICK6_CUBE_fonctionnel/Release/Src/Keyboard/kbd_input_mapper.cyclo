@@ -1,3 +1,0 @@
-../Src/Keyboard/kbd_input_mapper.c:7:6:kbd_input_mapper_init	1
-../Src/Keyboard/kbd_input_mapper.c:12:6:kbd_input_mapper_set_omnichord_state	1
-../Src/Keyboard/kbd_input_mapper.c:17:6:kbd_input_mapper_process	7

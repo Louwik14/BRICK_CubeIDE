@@ -1,3 +1,17 @@
+/******************************************************************************
+ * @file    kbd_input_mapper.c
+ * @brief   Traduction des entrées physiques du clavier vers l’interface clavier.
+ *
+ * Ce module convertit les index issus du scan matériel en événements compris
+ * par ui_keyboard_app :
+ * - mapping direct en mode clavier normal
+ * - redistribution note / accord en mode omnichord
+ * - filtrage des index hors plage
+ *
+ * Il ne gère ni l’état musical du clavier, ni le moteur audio, ni la logique
+ * d’arpégiateur. Son rôle se limite au routage des entrées physiques.
+ ******************************************************************************/
+
 #include "Keyboard/kbd_input_mapper.h"
 
 #include "Keyboard/ui_keyboard_app.h"

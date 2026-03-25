@@ -14,9 +14,6 @@
  * - IRQ: selon les API appelées.
  * - Hard realtime: selon le chemin d'exécution.
  * - malloc: éviter en chemin critique.
- *
- * Notes:
- * - Documentation ajoutée sans modification de la logique d'exécution.
  */
 
 #include "wav_parser.h"

@@ -1,3 +1,0 @@
-../Src/Core/brick6_recorder_runtime.c:21:6:brick6_recorder_runtime_boot_init	2
-../Src/Core/brick6_recorder_runtime.c:37:6:brick6_recorder_runtime_process_transport	5
-../Src/Core/brick6_recorder_runtime.c:67:6:brick6_recorder_runtime_service_writer	1
