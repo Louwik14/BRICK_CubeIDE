@@ -36,6 +36,7 @@
 #include "pages/ui_page_template_cfg.h"
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_arp.h"
+#include "pages/ui_page_template_seq.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -47,11 +48,14 @@
 #include "param_registry.h"
 #include "param_store.h"
 #include "audio_float.h"
+#include "Seq/seq_runtime.h"
+#include "Seq/seq_edit.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
+#define UI_HALL_SEQ_MODE_TRIGGER 10U
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 
 typedef struct
@@ -96,6 +100,7 @@ typedef struct
 static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
     { UI_HALL_KEYBOARD_MODE_TRIGGER, UI_HALL_MODE_KEYBOARD, UI_PAGE_TEMPLATE_KEYBOARD },
     { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
+    { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
 };
 
 
@@ -414,9 +419,48 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+
+static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if ((ui_get_hall_mode() != UI_HALL_MODE_SEQ) || (g_ui_track_state.shift_down != 0U))
+    {
+        return 0U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+
+    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_STEPS_PER_PAGE))
+    {
+        return seq_edit_toggle_hall_step(track, ev->id);
+    }
+
+    if (ev->type == UI_EVENT_BUTTON_PRESS)
+    {
+        if (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+        {
+            seq_edit_change_page(track, 1);
+            return 1U;
+        }
+
+        if (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
+        {
+            seq_edit_change_page(track, -1);
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
 void ui_core_init(void)
 {
     g_ui_track_state.active_track = 0U;
+    seq_runtime_init();
     ui_core_reset_track_configs();
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
@@ -440,6 +484,7 @@ void ui_core_init(void)
     ui_page_template_dx7_register_families();
     ui_page_template_keyboard_register_families();
     ui_page_template_arp_register_families();
+    ui_page_template_seq_register_families();
 
     ui_page_manager_init();
 
@@ -457,6 +502,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_dx7);
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
+    ui_page_manager_register(&g_ui_page_template_seq);
 
     if (hall_calibration_load() != 0U)
     {
@@ -526,6 +572,12 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_core_handle_seq_mode_event(&ev) != 0U)
+        {
+            continue;
+        }
+
         ui_navigation_handle_event(&ev);
 
         const ui_page_t *active_page = ui_page_get();
