@@ -127,7 +127,7 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     engine_tasklet_poll();
-    /* SEQ Step-0 anchor: seq_runtime_process() will be wired here in Step-1+. */
+    seq_runtime_process();
     brick6_master_control_process();
 
     hall_loop_process();
