@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "param_registry.h"
 
 typedef struct
 {
@@ -133,4 +134,169 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     state->runtime_locked = 0U;
 
     return 1U;
+}
+
+
+static uint8_t seq_param_iface_param_is_colors(param_id_t param)
+{
+    switch (param)
+    {
+        case PARAM_FILTER_TYPE:
+        case PARAM_FILTER_CUTOFF:
+        case PARAM_FILTER_RESONANCE:
+        case PARAM_FILTER_KEYTRK:
+        case PARAM_FILTER_ENVRST:
+        case PARAM_FILTER_ENVDLY:
+        case PARAM_FILTER_DRIVE:
+        case PARAM_FILTER_EQ_LOW:
+        case PARAM_FILTER_EQ_MID:
+        case PARAM_FILTER_EQ_HIGH:
+        case PARAM_MONOB_FILTER_TYPE:
+        case PARAM_MONOB_FILTER_CUTOFF:
+        case PARAM_MONOB_FILTER_RESONANCE:
+        case PARAM_MONOB_FILTER_EG_AMT:
+        case PARAM_MONOB_FILTER_ATTACK:
+        case PARAM_MONOB_FILTER_DECAY:
+        case PARAM_MONOB_FILTER_SUSTAIN:
+        case PARAM_MONOB_FILTER_RELEASE:
+        case PARAM_MONOB_FILTER_KEYTRK:
+        case PARAM_MONOB_FILTER_ENVRST:
+        case PARAM_MONOB_FILTER_ENVDLY:
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t seq_param_iface_param_is_tone(param_id_t param)
+{
+    switch (param)
+    {
+        case PARAM_DX7_ALGORITHM:
+        case PARAM_DX7_FEEDBACK:
+        case PARAM_DX7_TRANSPOSE:
+        case PARAM_DX7_LFO_SPEED:
+        case PARAM_DX7_LFO_DELAY:
+        case PARAM_DX7_LFO_PITCH_MOD_DEPTH:
+        case PARAM_DX7_LFO_AMP_MOD_DEPTH:
+        case PARAM_DX7_PITCH_BEND_RANGE:
+        case PARAM_DX7_PORTAMENTO_TIME:
+        case PARAM_DX7_MONO_MODE:
+        case PARAM_DX7_OPERATOR_MASK:
+        case PARAM_DX7_OPERATOR_1_LEVEL:
+        case PARAM_DX7_OPERATOR_2_LEVEL:
+        case PARAM_DX7_OPERATOR_3_LEVEL:
+        case PARAM_DX7_OPERATOR_4_LEVEL:
+        case PARAM_MONOB_OSC1_WAVE:
+        case PARAM_MONOB_OSC2_WAVE:
+        case PARAM_MONOB_OSC3_WAVE:
+        case PARAM_MONOB_SUB_WAVE:
+        case PARAM_MONOB_OSC1_RANGE:
+        case PARAM_MONOB_OSC2_RANGE:
+        case PARAM_MONOB_OSC3_RANGE:
+        case PARAM_MONOB_SUB_OCTAVE:
+        case PARAM_MONOB_OSC1_DETUNE:
+        case PARAM_MONOB_OSC2_DETUNE:
+        case PARAM_MONOB_OSC3_DETUNE:
+        case PARAM_MONOB_OSC1_MIX:
+        case PARAM_MONOB_OSC2_MIX:
+        case PARAM_MONOB_OSC3_MIX:
+        case PARAM_MONOB_SUB_MIX:
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
+uint8_t seq_param_iface_map_param(param_id_t param,
+                                  uint8_t *out_set_id,
+                                  seq_param8_t *out_param8)
+{
+    if ((out_set_id == 0) || (out_param8 == 0))
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_param_is_colors(param) != 0U)
+    {
+        *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+        *out_param8 = (seq_param8_t)param;
+        return 1U;
+    }
+
+    if (seq_param_iface_param_is_tone(param) != 0U)
+    {
+        *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+        *out_param8 = (seq_param8_t)param;
+        return 1U;
+    }
+
+    return 0U;
+}
+
+seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value)
+{
+    if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const param_desc_t *const desc = &param_registry[param];
+    float clamped = value;
+    if (clamped < desc->min)
+    {
+        clamped = desc->min;
+    }
+    if (clamped > desc->max)
+    {
+        clamped = desc->max;
+    }
+
+    float step = desc->step;
+    if (step <= 0.0f)
+    {
+        step = 1.0f;
+    }
+
+    const float encoded = (clamped - desc->min) / step;
+    if (encoded <= 0.0f)
+    {
+        return 0U;
+    }
+
+    if (encoded >= 65535.0f)
+    {
+        return 65535U;
+    }
+
+    return (seq_value16_t)(encoded + 0.5f);
+}
+
+float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16)
+{
+    if (param >= PARAM_COUNT)
+    {
+        return 0.0f;
+    }
+
+    const param_desc_t *const desc = &param_registry[param];
+    float step = desc->step;
+    if (step <= 0.0f)
+    {
+        step = 1.0f;
+    }
+
+    float value = desc->min + ((float)value16 * step);
+    if (value < desc->min)
+    {
+        value = desc->min;
+    }
+    if (value > desc->max)
+    {
+        value = desc->max;
+    }
+
+    return value;
 }

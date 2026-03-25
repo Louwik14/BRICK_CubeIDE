@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
+#include "param_store.h"
 
 typedef enum
 {
@@ -34,5 +35,11 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      uint8_t set_id,
                                      seq_param8_t param8,
                                      seq_value16_t base_value16);
+
+uint8_t seq_param_iface_map_param(param_id_t param,
+                                  uint8_t *out_set_id,
+                                  seq_param8_t *out_param8);
+seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value);
+float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16);
 
 #endif /* SEQ_PARAM_IFACE_H */
