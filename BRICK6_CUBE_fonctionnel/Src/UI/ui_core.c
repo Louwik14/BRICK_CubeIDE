@@ -22,6 +22,7 @@
 #include "ui_core.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "stm32h7xx_hal.h"
 
@@ -36,6 +37,7 @@
 #include "pages/ui_page_template_cfg.h"
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_arp.h"
+#include "pages/ui_page_template_seq.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -47,12 +49,16 @@
 #include "param_registry.h"
 #include "param_store.h"
 #include "audio_float.h"
+#include "Seq/seq_edit.h"
+#include "Seq/seq_runtime.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
+#define UI_HALL_SEQ_MODE_TRIGGER 10U
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
+#define UI_FEEDBACK_DURATION_MS 1000U
 
 typedef struct
 {
@@ -64,6 +70,8 @@ typedef struct
     ui_track_config_t track_configs[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
+    char feedback_message[16];
+    uint32_t feedback_until_ms;
 } ui_track_state_t;
 
 static ui_track_state_t g_ui_track_state = {
@@ -84,6 +92,8 @@ static ui_track_state_t g_ui_track_state = {
     },
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
+    .feedback_message = { 0 },
+    .feedback_until_ms = 0U,
 };
 
 typedef struct
@@ -96,6 +106,7 @@ typedef struct
 static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
     { UI_HALL_KEYBOARD_MODE_TRIGGER, UI_HALL_MODE_KEYBOARD, UI_PAGE_TEMPLATE_KEYBOARD },
     { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
+    { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
 };
 
 
@@ -414,6 +425,155 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+
+
+static void ui_core_set_feedback(const char *message)
+{
+    if (message == 0)
+    {
+        g_ui_track_state.feedback_message[0] = '\0';
+        g_ui_track_state.feedback_until_ms = 0U;
+        return;
+    }
+
+    (void)snprintf(g_ui_track_state.feedback_message,
+                   sizeof(g_ui_track_state.feedback_message),
+                   "%s",
+                   message);
+    g_ui_track_state.feedback_until_ms = HAL_GetTick() + UI_FEEDBACK_DURATION_MS;
+}
+
+static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t track,
+                                              seq_step_id_t *out_steps,
+                                              uint8_t max_steps)
+{
+    if ((out_steps == 0) || (max_steps == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if (hall_engine_is_pressed(hall) == 0U)
+        {
+            continue;
+        }
+
+        seq_step_id_t step = 0U;
+        if (seq_edit_map_hall_to_step(track, hall, &step) == 0U)
+        {
+            continue;
+        }
+
+        if (count < max_steps)
+        {
+            out_steps[count] = step;
+            count++;
+        }
+    }
+
+    return count;
+}
+
+static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
+    {
+        seq_runtime_toggle_play_stop();
+        return 1U;
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
+    {
+        return 0U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && ((ev->id == (uint8_t)BTN_COPY) || (ev->id == (uint8_t)BTN_PASTE)))
+    {
+        seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
+        const uint8_t held_count = ui_core_collect_held_seq_steps(track,
+                                                                  held_steps,
+                                                                  (uint8_t)SEQ_STEPS_PER_PAGE);
+        if (held_count == 0U)
+        {
+            return 1U;
+        }
+
+        if (ev->id == (uint8_t)BTN_COPY)
+        {
+            (void)seq_edit_copy_steps(track, held_steps, held_count);
+            return 1U;
+        }
+
+        if (g_ui_track_state.shift_down != 0U)
+        {
+            seq_edit_clear_steps(track, held_steps, held_count);
+            return 1U;
+        }
+
+        seq_clipboard_paste_result_t paste_result;
+        if (seq_edit_paste_steps(track, held_steps, held_count, &paste_result) != 0U)
+        {
+            if (paste_result.trunc != 0U)
+            {
+                ui_core_set_feedback("PASTE TRUNC");
+            }
+            else if (paste_result.partial != 0U)
+            {
+                ui_core_set_feedback("PASTE PARTIAL");
+            }
+        }
+
+        return 1U;
+    }
+
+    if (g_ui_track_state.shift_down != 0U)
+    {
+        return 0U;
+    }
+
+    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_STEPS_PER_PAGE))
+    {
+        return seq_edit_toggle_hall_step(track, ev->id);
+    }
+
+    if (ev->type == UI_EVENT_BUTTON_PRESS)
+    {
+        if (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+        {
+            seq_edit_change_page(track, 1);
+            return 1U;
+        }
+
+        if (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
+        {
+            seq_edit_change_page(track, -1);
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
 void ui_core_init(void)
 {
     g_ui_track_state.active_track = 0U;
@@ -421,6 +581,7 @@ void ui_core_init(void)
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
+    ui_core_set_feedback(0);
     for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
     {
         g_ui_track_state.mode_tap_ms[mode] = 0U;
@@ -440,6 +601,7 @@ void ui_core_init(void)
     ui_page_template_dx7_register_families();
     ui_page_template_keyboard_register_families();
     ui_page_template_arp_register_families();
+    ui_page_template_seq_register_families();
 
     ui_page_manager_init();
 
@@ -457,6 +619,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_dx7);
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
+    ui_page_manager_register(&g_ui_page_template_seq);
 
     if (hall_calibration_load() != 0U)
     {
@@ -526,6 +689,17 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_core_handle_transport_event(&ev) != 0U)
+        {
+            continue;
+        }
+
+        if (ui_core_handle_seq_mode_event(&ev) != 0U)
+        {
+            continue;
+        }
+
         ui_navigation_handle_event(&ev);
 
         const ui_page_t *active_page = ui_page_get();
@@ -805,6 +979,14 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
 {
     if ((out == NULL) || (out_len == 0U))
     {
+        return;
+    }
+
+    if ((track == g_ui_track_state.active_track)
+        && (g_ui_track_state.feedback_message[0] != '\0')
+        && ((int32_t)(g_ui_track_state.feedback_until_ms - HAL_GetTick()) > 0))
+    {
+        (void)snprintf(out, out_len, "%s", g_ui_track_state.feedback_message);
         return;
     }
 
