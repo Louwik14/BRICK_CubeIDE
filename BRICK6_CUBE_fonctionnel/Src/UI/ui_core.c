@@ -506,7 +506,8 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 
     const uint8_t track = ui_get_active_track();
 
-    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_COPY))
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && ((ev->id == (uint8_t)BTN_COPY) || (ev->id == (uint8_t)BTN_PASTE)))
     {
         seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
         const uint8_t held_count = ui_core_collect_held_seq_steps(track,
@@ -517,9 +518,15 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
             return 1U;
         }
 
-        if (g_ui_track_state.shift_down == 0U)
+        if (ev->id == (uint8_t)BTN_COPY)
         {
             (void)seq_edit_copy_steps(track, held_steps, held_count);
+            return 1U;
+        }
+
+        if (g_ui_track_state.shift_down != 0U)
+        {
+            seq_edit_clear_steps(track, held_steps, held_count);
             return 1U;
         }
 
