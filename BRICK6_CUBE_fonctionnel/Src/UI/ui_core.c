@@ -476,6 +476,7 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 void ui_core_init(void)
 {
     g_ui_track_state.active_track = 0U;
+    seq_runtime_init();
     ui_core_reset_track_configs();
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
