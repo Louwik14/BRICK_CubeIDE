@@ -102,11 +102,21 @@ void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index)
         return;
     }
 
+    g_seq_hold_state.step_id[hall_index] = step;
+    g_seq_hold_state.track_id[hall_index] = track;
+
+    if (seq_model_get_trig(track, step) == 0U)
+    {
+        seq_model_set_trig(track, step, 1U);
+        g_seq_hold_state.pending[hall_index] = 0U;
+        g_seq_hold_state.held[hall_index] = 1U;
+        g_seq_hold_state.press_tick[hall_index] = engine_tick_count;
+        return;
+    }
+
     g_seq_hold_state.pending[hall_index] = 1U;
     g_seq_hold_state.held[hall_index] = 0U;
     g_seq_hold_state.press_tick[hall_index] = engine_tick_count;
-    g_seq_hold_state.step_id[hall_index] = step;
-    g_seq_hold_state.track_id[hall_index] = track;
 }
 
 void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index)
