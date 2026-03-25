@@ -140,6 +140,75 @@ const seq_project_data_t *seq_model_get_project(void)
     return &g_seq_project;
 }
 
+
+uint8_t seq_model_load_project(const seq_project_data_t *project)
+{
+    if (project == 0)
+    {
+        return 0U;
+    }
+
+    seq_model_init_defaults();
+
+    uint8_t pool_seen[SEQ_PLOCK_POOL_CAP];
+    memset(pool_seen, 0, sizeof(pool_seen));
+
+    for (seq_track_id_t tr = 0U; tr < SEQ_TRACK_COUNT; ++tr)
+    {
+        uint8_t length_steps = project->tracks[tr].length_steps;
+        if ((length_steps == 0U) || (length_steps > SEQ_MAX_STEPS))
+        {
+            length_steps = SEQ_MAX_STEPS;
+        }
+        g_seq_project.tracks[tr].length_steps = length_steps;
+
+        uint8_t ui_page = project->tracks[tr].ui_page;
+        if (ui_page >= SEQ_PAGE_COUNT)
+        {
+            ui_page = (uint8_t)(SEQ_PAGE_COUNT - 1U);
+        }
+        g_seq_project.tracks[tr].ui_page = ui_page;
+
+        for (seq_step_id_t st = 0U; st < SEQ_MAX_STEPS; ++st)
+        {
+            const seq_step_t *in_step = &project->tracks[tr].steps[st];
+            g_seq_project.tracks[tr].steps[st].trig = (in_step->trig != 0U) ? 1U : 0U;
+
+            uint16_t idx = in_step->lock_head;
+            uint8_t imported = 0U;
+            uint16_t guard = 0U;
+
+            while ((idx != SEQ_LOCK_NONE) &&
+                   (idx < (uint16_t)SEQ_PLOCK_POOL_CAP) &&
+                   (imported < in_step->lock_count) &&
+                   (imported < SEQ_STEP_MAX_LOCKS) &&
+                   (guard < (uint16_t)SEQ_PLOCK_POOL_CAP))
+            {
+                if (pool_seen[idx] != 0U)
+                {
+                    break;
+                }
+
+                pool_seen[idx] = 1U;
+                guard++;
+
+                const seq_plock_entry_t *entry = &project->pool[idx];
+                (void)seq_model_step_plock_upsert(tr,
+                                                  st,
+                                                  entry->set_id,
+                                                  entry->param8,
+                                                  entry->value16,
+                                                  entry->flags);
+
+                idx = entry->next;
+                imported++;
+            }
+        }
+    }
+
+    return 1U;
+}
+
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step)
 {
     if ((seq_model_track_is_valid(track) == 0U) || (seq_model_step_is_valid(step) == 0U))

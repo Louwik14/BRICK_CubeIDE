@@ -54,6 +54,7 @@ typedef enum
 
 void seq_model_init_defaults(void);
 const seq_project_data_t *seq_model_get_project(void);
+uint8_t seq_model_load_project(const seq_project_data_t *project);
 
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);
 void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step);

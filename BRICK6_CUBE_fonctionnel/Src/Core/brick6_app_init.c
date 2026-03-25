@@ -37,6 +37,7 @@
 #include "App/Hall/hall_loop.h"
 #include "App/Hall/hall_juno_midi.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_persistence.h"
 
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
@@ -96,6 +97,7 @@ void brick6_app_init(void)
 
     engine_tasklet_init(48000);
     seq_runtime_init();
+    (void)seq_persistence_load();
     param_store_init();
     brick6_boot_apply_param_defaults();
     control_event_init();

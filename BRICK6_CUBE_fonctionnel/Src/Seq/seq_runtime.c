@@ -8,6 +8,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_param_iface.h"
+#include "Seq/seq_persistence.h"
 
 #define SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT 188U
 
@@ -288,6 +289,8 @@ void seq_runtime_stop(void)
         seq_runtime_restore_all_active_locks(track);
         g_seq_runtime.prev_step_valid[track] = 0U;
     }
+
+    (void)seq_persistence_save();
 }
 
 void seq_runtime_toggle_play_stop(void)
