@@ -94,6 +94,7 @@ void brick6_app_init(void)
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
+    /* SEQ Step-0 anchor: seq_runtime_init() will be wired here in Step-1+. */
     param_store_init();
     brick6_boot_apply_param_defaults();
     control_event_init();
@@ -125,6 +126,7 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     engine_tasklet_poll();
+    /* SEQ Step-0 anchor: seq_runtime_process() will be wired here in Step-1+. */
     brick6_master_control_process();
 
     hall_loop_process();
