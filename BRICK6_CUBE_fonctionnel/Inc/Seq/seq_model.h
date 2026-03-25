@@ -61,6 +61,8 @@ void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step);
 void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig);
 uint8_t seq_model_get_track_page(seq_track_id_t track);
 void seq_model_set_track_page(seq_track_id_t track, uint8_t page);
+void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps);
+uint8_t seq_model_get_track_length(seq_track_id_t track);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,

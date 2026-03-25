@@ -265,6 +265,35 @@ void seq_model_set_track_page(seq_track_id_t track, uint8_t page)
     g_seq_project.tracks[track].ui_page = page;
 }
 
+void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
+{
+    if (seq_model_track_is_valid(track) == 0U)
+    {
+        return;
+    }
+
+    if (length_steps == 0U)
+    {
+        length_steps = 1U;
+    }
+    if (length_steps > SEQ_MAX_STEPS)
+    {
+        length_steps = SEQ_MAX_STEPS;
+    }
+
+    g_seq_project.tracks[track].length_steps = length_steps;
+}
+
+uint8_t seq_model_get_track_length(seq_track_id_t track)
+{
+    if (seq_model_track_is_valid(track) == 0U)
+    {
+        return SEQ_MAX_STEPS;
+    }
+
+    return g_seq_project.tracks[track].length_steps;
+}
+
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,
                                   uint8_t set_id,

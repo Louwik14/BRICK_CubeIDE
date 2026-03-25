@@ -15,7 +15,6 @@
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_RUNTIME_PLAY_VOICE_COUNT 4U
 #define SEQ_RUNTIME_PLAY_EVENT_CAP 64U
-#define SEQ_PLAY_NOTE_NONE 128U
 
 typedef enum
 {
@@ -236,15 +235,15 @@ static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t s
         const param_id_t len_id = seq_runtime_play_param_len(voice);
         const param_id_t mictim_id = seq_runtime_play_param_mictim(voice);
 
-        const float note_f = seq_param_iface_decode_param_value(note_id, seq_runtime_play_get_locked_or_default(track, step, note_id));
-        const uint8_t note = (uint8_t)(note_f + 0.5f);
-        if (note >= SEQ_PLAY_NOTE_NONE)
+        const float vel_f = seq_param_iface_decode_param_value(vel_id, seq_runtime_play_get_locked_or_default(track, step, vel_id));
+        const uint8_t vel = (uint8_t)(vel_f + 0.5f);
+        if (vel == 0U)
         {
             continue;
         }
 
-        const float vel_f = seq_param_iface_decode_param_value(vel_id, seq_runtime_play_get_locked_or_default(track, step, vel_id));
-        const uint8_t vel = (uint8_t)(vel_f + 0.5f);
+        const float note_f = seq_param_iface_decode_param_value(note_id, seq_runtime_play_get_locked_or_default(track, step, note_id));
+        const uint8_t note = (uint8_t)(note_f + 0.5f);
 
         const float len_f = seq_param_iface_decode_param_value(len_id, seq_runtime_play_get_locked_or_default(track, step, len_id));
         const uint32_t len_ticks = (uint32_t)(((len_f < 1.0f ? 1.0f : len_f) * (float)g_seq_runtime.ticks_per_step) / 100.0f);
@@ -419,6 +418,13 @@ void seq_runtime_init(void)
     g_seq_runtime.ticks_per_step = SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT;
     g_seq_runtime.last_tick_count = engine_tick_count;
     seq_runtime_play_events_clear();
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        g_seq_runtime.track_div[track] = 1U;
+        g_seq_runtime.track_quant[track] = 1U;
+        g_seq_runtime.track_swing[track] = 0U;
+    }
 
     seq_edit_init();
 }
@@ -618,4 +624,43 @@ uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_s
 
     *out_step = g_seq_runtime.play_step[track];
     return 1U;
+}
+
+void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    if (div == 0U)
+    {
+        div = 1U;
+    }
+    g_seq_runtime.track_div[track] = div;
+}
+
+void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_seq_runtime.track_quant[track] = quant;
+}
+
+void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    if (swing > 100U)
+    {
+        swing = 100U;
+    }
+
+    g_seq_runtime.track_swing[track] = swing;
 }

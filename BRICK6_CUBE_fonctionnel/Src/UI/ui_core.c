@@ -38,6 +38,7 @@
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_arp.h"
 #include "pages/ui_page_template_seq.h"
+#include "pages/ui_page_template_play.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -587,6 +588,7 @@ void ui_core_init(void)
     ui_page_template_keyboard_register_families();
     ui_page_template_arp_register_families();
     ui_page_template_seq_register_families();
+    ui_page_template_play_register_families();
 
     ui_page_manager_init();
 
@@ -605,6 +607,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
     ui_page_manager_register(&g_ui_page_template_seq);
+    ui_page_manager_register(&g_ui_page_template_play);
 
     if (hall_calibration_load() != 0U)
     {

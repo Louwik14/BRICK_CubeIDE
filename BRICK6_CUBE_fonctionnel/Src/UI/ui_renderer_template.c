@@ -40,6 +40,15 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
+    if ((id == PARAM_SEQ_PLAY_V1_VEL) || (id == PARAM_SEQ_PLAY_V2_VEL) || (id == PARAM_SEQ_PLAY_V3_VEL) || (id == PARAM_SEQ_PLAY_V4_VEL))
+    {
+        if (value < 0.5f)
+        {
+            (void)snprintf(out, out_len, "OFF");
+            return;
+        }
+    }
+
     switch (desc->display_type)
     {
         case PARAM_DISPLAY_BOOL:
