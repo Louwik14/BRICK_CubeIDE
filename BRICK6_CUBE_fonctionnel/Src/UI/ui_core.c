@@ -48,7 +48,6 @@
 #include "param_registry.h"
 #include "param_store.h"
 #include "audio_float.h"
-#include "Seq/seq_runtime.h"
 #include "Seq/seq_edit.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
