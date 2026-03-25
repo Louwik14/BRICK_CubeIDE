@@ -1,5 +1,6 @@
 #include "ui_navigation.h"
 
+#include "ui_core.h"
 #include "ui_page_manager.h"
 
 /*
@@ -13,7 +14,6 @@ static const ui_nav_rule_t g_ui_nav_rules[] = {
 
     /* calibration page */
     { BTN_PARAM_4, UI_NAV_ANY_PAGE, UI_PAGE_CALIBRATION },
-    { BTN_PARAM_5, UI_NAV_ANY_PAGE, UI_PAGE_USER_CALIBRATION },
     { BTN_PARAM_6, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_DX7 },
     { BTN_PARAM_8, UI_NAV_ANY_PAGE, UI_PAGE_HALL_KEY_DEBUG },
 };
@@ -26,6 +26,20 @@ void ui_navigation_handle_event(const ui_event_t *event)
     }
 
     const uint8_t current_page = ui_page_get_id();
+
+    if (event->id == (uint8_t)BTN_PARAM_5)
+    {
+        if (ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_SYNTH)
+        {
+            return;
+        }
+
+        if (current_page != UI_PAGE_TEMPLATE_PLAY)
+        {
+            ui_page_set(UI_PAGE_TEMPLATE_PLAY);
+        }
+        return;
+    }
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
     {
