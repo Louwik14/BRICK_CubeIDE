@@ -9,7 +9,7 @@
 #define SEQ_MAX_STEPS         (SEQ_STEPS_PER_PAGE * SEQ_PAGE_COUNT)
 
 /* V1 fixed product limit: per-step lock cap. */
-#define SEQ_STEP_MAX_LOCKS    16U
+#define SEQ_STEP_MAX_LOCKS    32U
 
 /* Memory capacity materialization (not a separate product rule). */
 #define SEQ_PLOCK_POOL_CAP    (SEQ_TRACK_COUNT * SEQ_MAX_STEPS * SEQ_STEP_MAX_LOCKS)

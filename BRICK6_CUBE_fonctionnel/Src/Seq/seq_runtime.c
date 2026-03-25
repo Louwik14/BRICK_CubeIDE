@@ -4,6 +4,8 @@
 
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
+#include "midi.h"
+#include "param_registry.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
@@ -11,6 +13,24 @@
 
 #define SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT 188U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
+#define SEQ_RUNTIME_PLAY_VOICE_COUNT 4U
+#define SEQ_RUNTIME_PLAY_EVENT_CAP 64U
+#define SEQ_PLAY_NOTE_NONE 128U
+
+typedef enum
+{
+    SEQ_PLAY_EVT_NOTE_ON = 0,
+    SEQ_PLAY_EVT_NOTE_OFF
+} seq_play_evt_type_t;
+
+typedef struct
+{
+    uint32_t due_tick;
+    uint8_t track;
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t type;
+} seq_play_evt_t;
 
 typedef struct
 {
@@ -21,10 +41,67 @@ typedef struct
 } seq_runtime_step_lock_t;
 
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
+SEQ_STATE_D2 static seq_play_evt_t g_seq_play_events[SEQ_RUNTIME_PLAY_EVENT_CAP];
+SEQ_STATE_D2 static uint8_t g_seq_play_event_count;
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
+}
+
+static void seq_runtime_play_events_clear(void)
+{
+    g_seq_play_event_count = 0U;
+}
+
+static void seq_runtime_play_event_push(uint32_t due_tick,
+                                        uint8_t type,
+                                        seq_track_id_t track,
+                                        uint8_t note,
+                                        uint8_t velocity)
+{
+    if (g_seq_play_event_count >= SEQ_RUNTIME_PLAY_EVENT_CAP)
+    {
+        return;
+    }
+
+    seq_play_evt_t *const evt = &g_seq_play_events[g_seq_play_event_count++];
+    evt->due_tick = due_tick;
+    evt->type = type;
+    evt->track = track;
+    evt->note = note;
+    evt->velocity = velocity;
+}
+
+static void seq_runtime_play_events_service(void)
+{
+    const uint32_t now = engine_tick_count;
+    uint8_t i = 0U;
+    while (i < g_seq_play_event_count)
+    {
+        seq_play_evt_t *const evt = &g_seq_play_events[i];
+        if ((int32_t)(now - evt->due_tick) < 0)
+        {
+            i++;
+            continue;
+        }
+
+        const uint8_t channel = (uint8_t)(evt->track & 0x0FU);
+        if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+        {
+            midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
+        }
+        else
+        {
+            midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
+        }
+
+        for (uint8_t j = i + 1U; j < g_seq_play_event_count; ++j)
+        {
+            g_seq_play_events[j - 1U] = g_seq_play_events[j];
+        }
+        g_seq_play_event_count--;
+    }
 }
 
 static uint8_t seq_runtime_lock_equals(const seq_runtime_active_lock_t *active,
@@ -94,6 +171,94 @@ static uint8_t seq_runtime_collect_step_locks(seq_track_id_t track,
 
     *out_count = count;
     return 1U;
+}
+
+static param_id_t seq_runtime_play_param_note(uint8_t voice)
+{
+    static const param_id_t k_note[SEQ_RUNTIME_PLAY_VOICE_COUNT] = {
+        PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
+    };
+    return (voice < SEQ_RUNTIME_PLAY_VOICE_COUNT) ? k_note[voice] : PARAM_SEQ_PLAY_V1_NOTE;
+}
+
+static param_id_t seq_runtime_play_param_vel(uint8_t voice)
+{
+    static const param_id_t k_vel[SEQ_RUNTIME_PLAY_VOICE_COUNT] = {
+        PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V2_VEL, PARAM_SEQ_PLAY_V3_VEL, PARAM_SEQ_PLAY_V4_VEL
+    };
+    return (voice < SEQ_RUNTIME_PLAY_VOICE_COUNT) ? k_vel[voice] : PARAM_SEQ_PLAY_V1_VEL;
+}
+
+static param_id_t seq_runtime_play_param_len(uint8_t voice)
+{
+    static const param_id_t k_len[SEQ_RUNTIME_PLAY_VOICE_COUNT] = {
+        PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V4_LEN
+    };
+    return (voice < SEQ_RUNTIME_PLAY_VOICE_COUNT) ? k_len[voice] : PARAM_SEQ_PLAY_V1_LEN;
+}
+
+static param_id_t seq_runtime_play_param_mictim(uint8_t voice)
+{
+    static const param_id_t k_mictim[SEQ_RUNTIME_PLAY_VOICE_COUNT] = {
+        PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM
+    };
+    return (voice < SEQ_RUNTIME_PLAY_VOICE_COUNT) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
+}
+
+static seq_value16_t seq_runtime_play_get_locked_or_default(seq_track_id_t track,
+                                                            seq_step_id_t step,
+                                                            param_id_t param_id)
+{
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    {
+        return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
+    }
+
+    seq_plock_entry_t entry;
+    if (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U)
+    {
+        return entry.value16;
+    }
+
+    return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
+}
+
+static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t step)
+{
+    const uint32_t step_tick = engine_tick_count;
+
+    for (uint8_t voice = 0U; voice < SEQ_RUNTIME_PLAY_VOICE_COUNT; ++voice)
+    {
+        const param_id_t note_id = seq_runtime_play_param_note(voice);
+        const param_id_t vel_id = seq_runtime_play_param_vel(voice);
+        const param_id_t len_id = seq_runtime_play_param_len(voice);
+        const param_id_t mictim_id = seq_runtime_play_param_mictim(voice);
+
+        const float note_f = seq_param_iface_decode_param_value(note_id, seq_runtime_play_get_locked_or_default(track, step, note_id));
+        const uint8_t note = (uint8_t)(note_f + 0.5f);
+        if (note >= SEQ_PLAY_NOTE_NONE)
+        {
+            continue;
+        }
+
+        const float vel_f = seq_param_iface_decode_param_value(vel_id, seq_runtime_play_get_locked_or_default(track, step, vel_id));
+        const uint8_t vel = (uint8_t)(vel_f + 0.5f);
+
+        const float len_f = seq_param_iface_decode_param_value(len_id, seq_runtime_play_get_locked_or_default(track, step, len_id));
+        const uint32_t len_ticks = (uint32_t)(((len_f < 1.0f ? 1.0f : len_f) * (float)g_seq_runtime.ticks_per_step) / 100.0f);
+
+        const float mictim_f = seq_param_iface_decode_param_value(mictim_id, seq_runtime_play_get_locked_or_default(track, step, mictim_id));
+        int32_t on_tick = (int32_t)step_tick + (int32_t)((mictim_f * (float)g_seq_runtime.ticks_per_step) / 96.0f);
+        if (on_tick < (int32_t)step_tick)
+        {
+            on_tick = (int32_t)step_tick;
+        }
+
+        seq_runtime_play_event_push((uint32_t)on_tick, (uint8_t)SEQ_PLAY_EVT_NOTE_ON, track, note, vel);
+        seq_runtime_play_event_push((uint32_t)on_tick + ((len_ticks == 0U) ? 1U : len_ticks), (uint8_t)SEQ_PLAY_EVT_NOTE_OFF, track, note, 0U);
+    }
 }
 
 static void seq_runtime_restore_all_active_locks(seq_track_id_t track)
@@ -212,6 +377,7 @@ static void seq_runtime_process_step_boundaries(void)
                                                     g_seq_runtime.prev_step[track],
                                                     g_seq_runtime.prev_step_valid[track],
                                                     current_step);
+            seq_runtime_schedule_play_step(track, current_step);
 
             g_seq_runtime.prev_step[track] = current_step;
             g_seq_runtime.prev_step_valid[track] = 1U;
@@ -252,6 +418,7 @@ void seq_runtime_init(void)
     g_seq_runtime.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_runtime.ticks_per_step = SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT;
     g_seq_runtime.last_tick_count = engine_tick_count;
+    seq_runtime_play_events_clear();
 
     seq_edit_init();
 }
@@ -267,6 +434,7 @@ void seq_runtime_start(void)
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.last_tick_count = engine_tick_count;
     g_seq_runtime.ext_clock_tick_accum = 0U;
+    seq_runtime_play_events_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -286,6 +454,7 @@ void seq_runtime_stop(void)
 
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
+    seq_runtime_play_events_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -316,12 +485,14 @@ void seq_runtime_process(void)
     if (g_seq_runtime.running == 0U)
     {
         g_seq_runtime.last_tick_count = engine_tick_count;
+        seq_runtime_play_events_service();
         return;
     }
 
     if (g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
     {
         seq_runtime_process_step_boundaries();
+        seq_runtime_play_events_service();
         return;
     }
 
@@ -343,6 +514,8 @@ void seq_runtime_process(void)
         seq_runtime_advance_one_step();
         seq_runtime_process_step_boundaries();
     }
+
+    seq_runtime_play_events_service();
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
@@ -355,6 +528,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     g_seq_runtime.clock_src = src;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.tick_accum = 0U;
+    seq_runtime_play_events_clear();
 }
 
 seq_clock_src_t seq_runtime_get_clock_source(void)
@@ -378,6 +552,7 @@ void seq_runtime_midi_clock(void)
     g_seq_runtime.ext_clock_tick_accum = 0U;
     seq_runtime_advance_one_step();
     seq_runtime_process_step_boundaries();
+    seq_runtime_play_events_service();
 }
 
 void seq_runtime_midi_start(void)

@@ -210,6 +210,33 @@ static uint8_t seq_param_iface_param_is_tone(param_id_t param)
     }
 }
 
+static uint8_t seq_param_iface_param_is_play(param_id_t param)
+{
+    switch (param)
+    {
+        case PARAM_SEQ_PLAY_V1_NOTE:
+        case PARAM_SEQ_PLAY_V1_VEL:
+        case PARAM_SEQ_PLAY_V1_LEN:
+        case PARAM_SEQ_PLAY_V1_MICTIM:
+        case PARAM_SEQ_PLAY_V2_NOTE:
+        case PARAM_SEQ_PLAY_V2_VEL:
+        case PARAM_SEQ_PLAY_V2_LEN:
+        case PARAM_SEQ_PLAY_V2_MICTIM:
+        case PARAM_SEQ_PLAY_V3_NOTE:
+        case PARAM_SEQ_PLAY_V3_VEL:
+        case PARAM_SEQ_PLAY_V3_LEN:
+        case PARAM_SEQ_PLAY_V3_MICTIM:
+        case PARAM_SEQ_PLAY_V4_NOTE:
+        case PARAM_SEQ_PLAY_V4_VEL:
+        case PARAM_SEQ_PLAY_V4_LEN:
+        case PARAM_SEQ_PLAY_V4_MICTIM:
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
 uint8_t seq_param_iface_map_param(param_id_t param,
                                   uint8_t *out_set_id,
                                   seq_param8_t *out_param8)
@@ -229,6 +256,13 @@ uint8_t seq_param_iface_map_param(param_id_t param,
     if (seq_param_iface_param_is_tone(param) != 0U)
     {
         *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+        *out_param8 = (seq_param8_t)param;
+        return 1U;
+    }
+
+    if (seq_param_iface_param_is_play(param) != 0U)
+    {
+        *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
         *out_param8 = (seq_param8_t)param;
         return 1U;
     }
