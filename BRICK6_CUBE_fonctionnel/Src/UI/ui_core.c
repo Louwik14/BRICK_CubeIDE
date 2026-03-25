@@ -36,6 +36,7 @@
 #include "pages/ui_page_template_cfg.h"
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_arp.h"
+#include "pages/ui_page_template_seq.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -52,6 +53,7 @@
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
+#define UI_HALL_SEQ_MODE_TRIGGER 10U
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 
 typedef struct
@@ -96,6 +98,7 @@ typedef struct
 static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
     { UI_HALL_KEYBOARD_MODE_TRIGGER, UI_HALL_MODE_KEYBOARD, UI_PAGE_TEMPLATE_KEYBOARD },
     { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
+    { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
 };
 
 
@@ -440,6 +443,7 @@ void ui_core_init(void)
     ui_page_template_dx7_register_families();
     ui_page_template_keyboard_register_families();
     ui_page_template_arp_register_families();
+    ui_page_template_seq_register_families();
 
     ui_page_manager_init();
 
@@ -457,6 +461,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_dx7);
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
+    ui_page_manager_register(&g_ui_page_template_seq);
 
     if (hall_calibration_load() != 0U)
     {
