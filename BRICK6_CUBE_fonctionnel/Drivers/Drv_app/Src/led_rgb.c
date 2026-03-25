@@ -30,6 +30,7 @@
 #include "UI/ui_core.h"
 #include "UI/ui_navigation.h"
 #include "UI/ui_page_manager.h"
+#include "Seq/seq_led.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
 #define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
@@ -132,15 +133,22 @@ static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
 
-    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+    if (ui_get_hall_mode() == UI_HALL_MODE_SEQ)
     {
-        if (led_hall_mode_uses_keyboard_scene())
+        seq_led_render_active_track_page();
+    }
+    else
+    {
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
-            led_apply_keyboard_hall_scene(hall);
-        }
-        else
-        {
-            led_apply_default_hall_scene(hall);
+            if (led_hall_mode_uses_keyboard_scene())
+            {
+                led_apply_keyboard_hall_scene(hall);
+            }
+            else
+            {
+                led_apply_default_hall_scene(hall);
+            }
         }
     }
 
