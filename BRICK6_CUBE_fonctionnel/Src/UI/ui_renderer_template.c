@@ -22,10 +22,9 @@ static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_w[4] = {31U, 31U, 31U, 31U};
 
-static void ui_renderer_template_format_value(param_id_t id, char *out, uint32_t out_len)
+static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
 {
     const param_desc_t *desc = &param_registry[id];
-    const float value = param_get(id);
 
     if (id == PARAM_CFG_TRACK)
     {
@@ -201,7 +200,10 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
 
     const param_desc_t *desc = &param_registry[id];
-    const float value = param_get(id);
+    float value = param_get(id);
+    uint8_t draw_name_inverted = 0U;
+    (void)ui_param_try_get_seq_plock_feedback(id, &value, &draw_name_inverted);
+
     const char *enum_label = NULL;
     char value_txt[20];
 
@@ -214,10 +216,20 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         }
     }
 
-    ui_renderer_template_format_value(id, value_txt, (uint32_t)sizeof(value_txt));
+    ui_renderer_template_format_value(id, value, value_txt, (uint32_t)sizeof(value_txt));
 
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name), (uint8_t)(y + 3), desc->name);
+    if (draw_name_inverted != 0U)
+    {
+        ui_renderer_template_draw_inverted_label((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name),
+                                                 (uint8_t)(y + 2),
+                                                 desc->name,
+                                                 &FONT_4X6);
+    }
+    else
+    {
+        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name), (uint8_t)(y + 3), desc->name);
+    }
 
     const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label, value_txt);
 
@@ -282,7 +294,14 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_draw_text(9U, 1U, runtime_label);
 
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text(9U, 9U, ui_get_hall_mode_short_label());
+    const char *hall_mode_label = ui_get_hall_mode_short_label();
+    const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
+    drv_display_draw_text(9U, 9U, hall_mode_label);
+    if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
+    {
+        const uint8_t suffix_x = (uint8_t)(9U + drv_display_text_width(hall_mode_label) + 2U);
+        drv_display_draw_text(suffix_x, 9U, hall_mode_suffix);
+    }
 
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 2U, family_title);

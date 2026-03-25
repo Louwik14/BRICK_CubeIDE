@@ -12,5 +12,6 @@ typedef struct
 
 void ui_param_set_bank(const ui_param_bank_t *bank);
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
+uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, uint8_t *out_inverted);
 
 #endif /* UI_PARAM_H */
