@@ -161,6 +161,16 @@ void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step)
     s->trig = (s->trig == 0U) ? 1U : 0U;
 }
 
+void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
+{
+    if ((seq_model_track_is_valid(track) == 0U) || (seq_model_step_is_valid(step) == 0U))
+    {
+        return;
+    }
+
+    g_seq_project.tracks[track].steps[step].trig = (trig != 0U) ? 1U : 0U;
+}
+
 uint8_t seq_model_get_track_page(seq_track_id_t track)
 {
     if (seq_model_track_is_valid(track) == 0U)

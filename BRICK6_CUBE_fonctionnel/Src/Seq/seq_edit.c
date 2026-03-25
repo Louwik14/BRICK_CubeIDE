@@ -1,10 +1,11 @@
 #include "Seq/seq_edit.h"
 
 #include "Seq/seq_model.h"
+#include "Seq/seq_clipboard.h"
 
 void seq_edit_init(void)
 {
-    /* Step-2: editor has no private state yet. */
+    seq_clipboard_init();
 }
 
 uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
@@ -113,4 +114,20 @@ uint8_t seq_edit_step_plock_get_at(seq_track_id_t track,
                                    seq_plock_entry_t *out_entry)
 {
     return seq_model_step_plock_get_at(track, step, ordinal, out_entry);
+}
+
+
+uint8_t seq_edit_copy_steps(seq_track_id_t track,
+                            const seq_step_id_t *steps,
+                            uint8_t step_count)
+{
+    return seq_clipboard_copy(track, steps, step_count);
+}
+
+uint8_t seq_edit_paste_steps(seq_track_id_t track,
+                             const seq_step_id_t *dest_steps,
+                             uint8_t dest_count,
+                             seq_clipboard_paste_result_t *out_result)
+{
+    return seq_clipboard_paste(track, dest_steps, dest_count, out_result);
 }
