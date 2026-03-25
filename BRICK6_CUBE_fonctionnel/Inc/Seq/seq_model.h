@@ -40,7 +40,13 @@ typedef struct
     uint16_t free_count;
 } seq_project_data_t;
 
+
 void seq_model_init_defaults(void);
 const seq_project_data_t *seq_model_get_project(void);
+
+uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step);
+void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_get_track_page(seq_track_id_t track);
+void seq_model_set_track_page(seq_track_id_t track, uint8_t page);
 
 #endif /* SEQ_MODEL_H */
