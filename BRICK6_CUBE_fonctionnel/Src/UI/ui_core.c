@@ -443,37 +443,12 @@ static void ui_core_set_feedback(const char *message)
     g_ui_track_state.feedback_until_ms = HAL_GetTick() + UI_FEEDBACK_DURATION_MS;
 }
 
-static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t track,
+static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t *out_track,
                                               seq_step_id_t *out_steps,
-                                              uint8_t max_steps)
+                                              uint8_t max_steps,
+                                              uint8_t promote_pending)
 {
-    if ((out_steps == 0) || (max_steps == 0U))
-    {
-        return 0U;
-    }
-
-    uint8_t count = 0U;
-    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
-    {
-        if (hall_engine_is_pressed(hall) == 0U)
-        {
-            continue;
-        }
-
-        seq_step_id_t step = 0U;
-        if (seq_edit_map_hall_to_step(track, hall, &step) == 0U)
-        {
-            continue;
-        }
-
-        if (count < max_steps)
-        {
-            out_steps[count] = step;
-            count++;
-        }
-    }
-
-    return count;
+    return seq_edit_collect_held_steps(out_track, out_steps, max_steps, promote_pending);
 }
 
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
@@ -504,15 +479,15 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
         return 0U;
     }
 
-    const uint8_t track = ui_get_active_track();
-
     if ((ev->type == UI_EVENT_BUTTON_PRESS)
         && ((ev->id == (uint8_t)BTN_COPY) || (ev->id == (uint8_t)BTN_PASTE)))
     {
         seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
-        const uint8_t held_count = ui_core_collect_held_seq_steps(track,
+        seq_track_id_t held_track = 0U;
+        const uint8_t held_count = ui_core_collect_held_seq_steps(&held_track,
                                                                   held_steps,
-                                                                  (uint8_t)SEQ_STEPS_PER_PAGE);
+                                                                  (uint8_t)SEQ_STEPS_PER_PAGE,
+                                                                  1U);
         if (held_count == 0U)
         {
             return 1U;
@@ -520,18 +495,18 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 
         if (ev->id == (uint8_t)BTN_COPY)
         {
-            (void)seq_edit_copy_steps(track, held_steps, held_count);
+            (void)seq_edit_copy_steps(held_track, held_steps, held_count);
             return 1U;
         }
 
         if (g_ui_track_state.shift_down != 0U)
         {
-            seq_edit_clear_steps(track, held_steps, held_count);
+            seq_edit_clear_steps(held_track, held_steps, held_count);
             return 1U;
         }
 
         seq_clipboard_paste_result_t paste_result;
-        if (seq_edit_paste_steps(track, held_steps, held_count, &paste_result) != 0U)
+        if (seq_edit_paste_steps(held_track, held_steps, held_count, &paste_result) != 0U)
         {
             if (paste_result.trunc != 0U)
             {
@@ -551,9 +526,18 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
         return 0U;
     }
 
+    const uint8_t track = ui_get_active_track();
+
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_STEPS_PER_PAGE))
     {
-        return seq_edit_toggle_hall_step(track, ev->id);
+        seq_edit_step_press(ui_get_active_track(), ev->id);
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_STEPS_PER_PAGE))
+    {
+        seq_edit_step_release(ui_get_active_track(), ev->id);
+        return 1U;
     }
 
     if (ev->type == UI_EVENT_BUTTON_PRESS)
@@ -686,6 +670,7 @@ void ui_core_tick(void)
     }
 
     ui_event_from_inputs();
+    seq_edit_step_hold_update();
 
     while (ui_event_pop(&ev))
     {
