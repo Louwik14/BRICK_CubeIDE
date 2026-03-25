@@ -2,10 +2,12 @@
 
 #include <string.h>
 
+#include "Storage/memory_layout.h"
+
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
 
-static seq_runtime_state_t g_seq_runtime;
+SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
 
 void seq_runtime_init(void)
 {

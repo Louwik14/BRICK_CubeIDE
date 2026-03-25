@@ -2,9 +2,11 @@
 
 #include <string.h>
 
+#include "Storage/memory_layout.h"
+
 #define SEQ_LOCK_NONE 0xFFFFU
 
-static seq_project_data_t g_seq_project;
+SEQ_STATE_D2 static seq_project_data_t g_seq_project;
 
 static uint8_t seq_model_track_is_valid(seq_track_id_t track)
 {
