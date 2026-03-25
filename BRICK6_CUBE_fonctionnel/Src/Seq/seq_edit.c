@@ -69,3 +69,48 @@ uint8_t seq_edit_map_hall_to_step(seq_track_id_t track, uint8_t hall_index, seq_
 
     return 1U;
 }
+
+uint8_t seq_edit_step_plock_find(seq_track_id_t track,
+                                 seq_step_id_t step,
+                                 uint8_t set_id,
+                                 seq_param8_t param8,
+                                 seq_plock_entry_t *out_entry)
+{
+    return seq_model_step_plock_find(track, step, set_id, param8, out_entry);
+}
+
+seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
+                                                  seq_step_id_t step,
+                                                  uint8_t set_id,
+                                                  seq_param8_t param8,
+                                                  seq_value16_t value16,
+                                                  uint8_t flags)
+{
+    return seq_model_step_plock_upsert(track, step, set_id, param8, value16, flags);
+}
+
+seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
+                                                  seq_step_id_t step,
+                                                  uint8_t set_id,
+                                                  seq_param8_t param8)
+{
+    return seq_model_step_plock_delete(track, step, set_id, param8);
+}
+
+void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
+{
+    seq_model_step_plock_clear(track, step);
+}
+
+uint8_t seq_edit_step_plock_count(seq_track_id_t track, seq_step_id_t step)
+{
+    return seq_model_step_plock_count(track, step);
+}
+
+uint8_t seq_edit_step_plock_get_at(seq_track_id_t track,
+                                   seq_step_id_t step,
+                                   uint8_t ordinal,
+                                   seq_plock_entry_t *out_entry)
+{
+    return seq_model_step_plock_get_at(track, step, ordinal, out_entry);
+}
