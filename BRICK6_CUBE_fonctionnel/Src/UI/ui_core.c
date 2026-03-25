@@ -49,6 +49,7 @@
 #include "param_store.h"
 #include "audio_float.h"
 #include "Seq/seq_edit.h"
+#include "Seq/seq_runtime.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
@@ -419,6 +420,22 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
  * - init / main loop / tasklet selon le module.
  */
 
+static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
+    {
+        seq_runtime_toggle_play_stop();
+        return 1U;
+    }
+
+    return 0U;
+}
+
 static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -571,6 +588,11 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_core_handle_transport_event(&ev) != 0U)
+        {
+            continue;
+        }
 
         if (ui_core_handle_seq_mode_event(&ev) != 0U)
         {
