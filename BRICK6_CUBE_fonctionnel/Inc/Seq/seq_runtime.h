@@ -15,5 +15,6 @@ typedef struct
 void seq_runtime_init(void);
 void seq_runtime_process(void);
 const seq_runtime_state_t *seq_runtime_get_state(void);
+uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step);
 
 #endif /* SEQ_RUNTIME_H */

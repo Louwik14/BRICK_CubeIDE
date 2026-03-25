@@ -26,3 +26,14 @@ const seq_runtime_state_t *seq_runtime_get_state(void)
 {
     return &g_seq_runtime;
 }
+
+uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step)
+{
+    if ((out_step == 0) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_step = g_seq_runtime.play_step[track];
+    return 1U;
+}
