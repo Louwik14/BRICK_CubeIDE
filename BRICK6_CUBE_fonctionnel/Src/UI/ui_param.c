@@ -184,6 +184,39 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
     }
 }
 
+
+static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track, seq_step_id_t *out_ref_step)
+{
+    if ((out_track == 0) || (out_ref_step == 0) || (ui_get_hall_mode() != UI_HALL_MODE_SEQ))
+    {
+        return 0U;
+    }
+
+    seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
+    seq_track_id_t held_track = 0U;
+    const uint8_t held_count = seq_edit_collect_held_steps(&held_track,
+                                                           held_steps,
+                                                           (uint8_t)SEQ_STEPS_PER_PAGE,
+                                                           1U);
+    if (held_count == 0U)
+    {
+        return 0U;
+    }
+
+    seq_step_id_t ref_step = held_steps[0];
+    for (uint8_t i = 1U; i < held_count; ++i)
+    {
+        if (held_steps[i] < ref_step)
+        {
+            ref_step = held_steps[i];
+        }
+    }
+
+    *out_track = held_track;
+    *out_ref_step = ref_step;
+    return 1U;
+}
+
 static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
                                             const param_desc_t *desc,
                                             int16_t delta,
@@ -213,16 +246,6 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
         return 0U;
     }
 
-    seq_step_id_t ref_step = held_steps[0];
-    for (uint8_t i = 1U; i < held_count; ++i)
-    {
-        if (held_steps[i] < ref_step)
-        {
-            ref_step = held_steps[i];
-        }
-    }
-    (void)ref_step;
-
     const float delta_value = (float)delta * desc->step;
     const float base_track_value = param_get(param);
 
@@ -247,6 +270,47 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
                                          param8,
                                          encoded,
                                          0U);
+    }
+
+    return 1U;
+}
+
+uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, uint8_t *out_inverted)
+{
+    if (out_inverted != 0)
+    {
+        *out_inverted = 0U;
+    }
+
+    if (out_value == 0)
+    {
+        return 0U;
+    }
+
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    seq_track_id_t ref_track = 0U;
+    seq_step_id_t ref_step = 0U;
+    if (ui_param_seq_resolve_ref_step(&ref_track, &ref_step) == 0U)
+    {
+        return 0U;
+    }
+
+    seq_plock_entry_t existing;
+    if (seq_edit_step_plock_find(ref_track, ref_step, set_id, param8, &existing) == 0U)
+    {
+        return 0U;
+    }
+
+    *out_value = seq_param_iface_decode_param_value(param, existing.value16);
+    if (out_inverted != 0)
+    {
+        *out_inverted = 1U;
     }
 
     return 1U;
