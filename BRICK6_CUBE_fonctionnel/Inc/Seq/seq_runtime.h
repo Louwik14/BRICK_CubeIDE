@@ -25,7 +25,9 @@ typedef struct
     uint32_t last_tick_count;
     uint32_t tick_accum;
     uint16_t ticks_per_step;
-    uint16_t reserved;
+    uint8_t save_pending;
+    uint8_t reserved;
+    uint32_t save_retry_tick;
     seq_runtime_active_lock_t active_locks[SEQ_TRACK_COUNT][SEQ_STEP_MAX_LOCKS];
 } seq_runtime_state_t;
 

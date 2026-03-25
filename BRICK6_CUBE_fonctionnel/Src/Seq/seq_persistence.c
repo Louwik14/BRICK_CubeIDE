@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ff.h"
+#include "SD/bsp_driver_sd.h"
 
 #include "Seq/seq_model.h"
 
@@ -57,6 +58,12 @@ static uint8_t seq_persistence_mount_if_needed(void)
     if (g_seq_fs_mounted != 0U)
     {
         return 1U;
+    }
+
+    if (BSP_SD_IsDetected() != SD_PRESENT)
+    {
+        printf("[SEQ][PERSIST] sd absent\r\n");
+        return 0U;
     }
 
     if (f_mount(&g_seq_fs, "0:", 1U) != FR_OK)

@@ -294,7 +294,14 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_draw_text(9U, 1U, runtime_label);
 
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text(9U, 9U, ui_get_hall_mode_short_label());
+    const char *hall_mode_label = ui_get_hall_mode_short_label();
+    const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
+    drv_display_draw_text(9U, 9U, hall_mode_label);
+    if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
+    {
+        const uint8_t suffix_x = (uint8_t)(9U + drv_display_text_width(hall_mode_label) + 2U);
+        drv_display_draw_text(suffix_x, 9U, hall_mode_suffix);
+    }
 
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 2U, family_title);

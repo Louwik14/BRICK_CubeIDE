@@ -1045,15 +1045,36 @@ const char *ui_get_hall_mode_short_label(void)
 {
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
     {
-        return ui_format_transposed_hall_mode_short_label("KBD");
+        return "KBD";
     }
 
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)
     {
-        return ui_format_transposed_hall_mode_short_label("ARP");
+        return "ARP";
     }
 
     return "SEQ";
+}
+
+const char *ui_get_hall_mode_suffix_label(void)
+{
+    static char label[6];
+
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_SEQ)
+    {
+        const uint8_t page = seq_edit_get_page(ui_get_active_track());
+        (void)snprintf(label, sizeof(label), "P%u", (unsigned int)(page + 1U));
+        return label;
+    }
+
+    const int8_t octave_shift = keyboard_runtime_get_octave_shift();
+    if (octave_shift == 0)
+    {
+        return "";
+    }
+
+    (void)snprintf(label, sizeof(label), "%+d", (int)octave_shift);
+    return label;
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)

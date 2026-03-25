@@ -264,6 +264,7 @@ void seq_runtime_start(void)
     g_seq_runtime.running = 1U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.last_tick_count = engine_tick_count;
+    g_seq_runtime.save_retry_tick = engine_tick_count;
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -290,7 +291,7 @@ void seq_runtime_stop(void)
         g_seq_runtime.prev_step_valid[track] = 0U;
     }
 
-    (void)seq_persistence_save();
+    g_seq_runtime.save_pending = 1U;
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -315,6 +316,19 @@ void seq_runtime_process(void)
     if (g_seq_runtime.running == 0U)
     {
         g_seq_runtime.last_tick_count = engine_tick_count;
+
+        if ((g_seq_runtime.save_pending != 0U) && (engine_tick_count >= g_seq_runtime.save_retry_tick))
+        {
+            if (seq_persistence_save() != 0U)
+            {
+                g_seq_runtime.save_pending = 0U;
+            }
+            else
+            {
+                g_seq_runtime.save_retry_tick = engine_tick_count + 2000U;
+            }
+        }
+
         return;
     }
 
