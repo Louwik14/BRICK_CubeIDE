@@ -28,6 +28,9 @@
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */
 #define AUDIO_LUT_D2 SEC_ATTR(".ram_d2_lut")
 
+/* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
+#define SEQ_STATE_D2 SEC_ATTR(".ram_d2_lut")
+
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")
 
