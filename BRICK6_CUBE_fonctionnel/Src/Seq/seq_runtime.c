@@ -8,9 +8,9 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_param_iface.h"
-#include "Seq/seq_persistence.h"
 
 #define SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT 188U
+#define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 
 typedef struct
 {
@@ -247,6 +247,8 @@ void seq_runtime_init(void)
     seq_param_iface_init();
 
     memset(&g_seq_runtime, 0, sizeof(g_seq_runtime));
+    /* TODO(clock-source): wire this to a global runtime/menu setting (INT/EXT).
+     * For now, keep forced to internal clock to preserve current UX. */
     g_seq_runtime.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_runtime.ticks_per_step = SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT;
     g_seq_runtime.last_tick_count = engine_tick_count;
@@ -264,7 +266,7 @@ void seq_runtime_start(void)
     g_seq_runtime.running = 1U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.last_tick_count = engine_tick_count;
-    g_seq_runtime.save_retry_tick = engine_tick_count;
+    g_seq_runtime.ext_clock_tick_accum = 0U;
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -290,8 +292,6 @@ void seq_runtime_stop(void)
         seq_runtime_restore_all_active_locks(track);
         g_seq_runtime.prev_step_valid[track] = 0U;
     }
-
-    g_seq_runtime.save_pending = 1U;
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -316,19 +316,12 @@ void seq_runtime_process(void)
     if (g_seq_runtime.running == 0U)
     {
         g_seq_runtime.last_tick_count = engine_tick_count;
+        return;
+    }
 
-        if ((g_seq_runtime.save_pending != 0U) && (engine_tick_count >= g_seq_runtime.save_retry_tick))
-        {
-            if (seq_persistence_save() != 0U)
-            {
-                g_seq_runtime.save_pending = 0U;
-            }
-            else
-            {
-                g_seq_runtime.save_retry_tick = engine_tick_count + 2000U;
-            }
-        }
-
+    if (g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        seq_runtime_process_step_boundaries();
         return;
     }
 
@@ -350,6 +343,79 @@ void seq_runtime_process(void)
         seq_runtime_advance_one_step();
         seq_runtime_process_step_boundaries();
     }
+}
+
+void seq_runtime_set_clock_source(seq_clock_src_t src)
+{
+    if ((uint8_t)src >= (uint8_t)SEQ_CLOCK_SRC_COUNT)
+    {
+        return;
+    }
+
+    g_seq_runtime.clock_src = src;
+    g_seq_runtime.ext_clock_tick_accum = 0U;
+    g_seq_runtime.tick_accum = 0U;
+}
+
+seq_clock_src_t seq_runtime_get_clock_source(void)
+{
+    return g_seq_runtime.clock_src;
+}
+
+void seq_runtime_midi_clock(void)
+{
+    if ((g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI) || (g_seq_runtime.running == 0U))
+    {
+        return;
+    }
+
+    g_seq_runtime.ext_clock_tick_accum++;
+    if (g_seq_runtime.ext_clock_tick_accum < SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP)
+    {
+        return;
+    }
+
+    g_seq_runtime.ext_clock_tick_accum = 0U;
+    seq_runtime_advance_one_step();
+    seq_runtime_process_step_boundaries();
+}
+
+void seq_runtime_midi_start(void)
+{
+    if (g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    seq_runtime_start();
+}
+
+void seq_runtime_midi_continue(void)
+{
+    if (g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    if (g_seq_runtime.running != 0U)
+    {
+        return;
+    }
+
+    g_seq_runtime.running = 1U;
+    g_seq_runtime.tick_accum = 0U;
+    g_seq_runtime.ext_clock_tick_accum = 0U;
+    g_seq_runtime.last_tick_count = engine_tick_count;
+}
+
+void seq_runtime_midi_stop(void)
+{
+    if (g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    seq_runtime_stop();
 }
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)

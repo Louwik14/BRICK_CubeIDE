@@ -25,9 +25,8 @@ typedef struct
     uint32_t last_tick_count;
     uint32_t tick_accum;
     uint16_t ticks_per_step;
-    uint8_t save_pending;
+    uint8_t ext_clock_tick_accum;
     uint8_t reserved;
-    uint32_t save_retry_tick;
     seq_runtime_active_lock_t active_locks[SEQ_TRACK_COUNT][SEQ_STEP_MAX_LOCKS];
 } seq_runtime_state_t;
 
@@ -39,6 +38,13 @@ void seq_runtime_start(void);
 void seq_runtime_stop(void);
 void seq_runtime_toggle_play_stop(void);
 uint8_t seq_runtime_is_running(void);
+
+void seq_runtime_set_clock_source(seq_clock_src_t src);
+seq_clock_src_t seq_runtime_get_clock_source(void);
+void seq_runtime_midi_clock(void);
+void seq_runtime_midi_start(void);
+void seq_runtime_midi_continue(void);
+void seq_runtime_midi_stop(void);
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step);

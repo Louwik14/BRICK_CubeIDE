@@ -70,7 +70,8 @@ Référence unique de cadrage/roadmap pour implémenter le séquenceur dans le f
 ### 3.4 Copy / paste
 
 - Maintenir step(s) + COPY => copie.
-- Maintenir step(s) + SHIFT + COPY => paste.
+- Maintenir step(s) + PASTE => paste.
+- Maintenir step(s) + SHIFT + PASTE => clear steps tenus.
 - Paste avec positions relatives (offsets depuis ancre source).
 - Inter-track autorisé:
   - copier ce qui est compatible
@@ -115,7 +116,7 @@ Référence unique de cadrage/roadmap pour implémenter le séquenceur dans le f
 - UI state (focus/page)
 - Edit state (sélection, référence)
 - Runtime state (playhead/clock)
-- Saved state (séquence persistée)
+- Saved state: persistance locale SEQ retirée temporairement (runtime RAM-only en attendant persistance globale projet/state).
 
 Aucune fusion de ces plans en une seule autorité globale.
 
@@ -156,7 +157,7 @@ Aucune fusion de ces plans en une seule autorité globale.
   - Pourquoi: ne pas surcharger `led_rgb.c` avec logique métier.
 
 - `seq_persistence`
-  - Rôle: save/load format V1 versionné (`magic/version/crc`).
+  - Statut actuel: module local mis de côté, non branché au boot/runtime (attente persistance globale projet/state).
   - Dépendances: storage projet.
   - Pourquoi: versioning maîtrisé et évolutif.
 
@@ -265,25 +266,19 @@ Autres points bloquants:
 - Validation: start/stop répétés, changement track active en lecture.
 
 ## Étape 7 — Copy/paste
-- Objectif: COPY et SHIFT+COPY avec offsets relatifs.
+- Objectif: COPY/PASTE + SHIFT+PASTE(clear) avec offsets relatifs.
 - Fichiers/modules: `seq_clipboard`, `seq_edit`, hooks UI.
 - DoD: paste local/inter-track, partial/trunc feedback.
 - Risques: dépassement longueur, compat param.
 - Validation: copies contiguës/non contiguës.
 
 ## Étape 8 — Persistance
-- Objectif: format V1 versionné + save/load.
-- Fichiers/modules: `seq_persistence`, init boot/save projet.
-- DoD: rappel projet fidèle des séquences.
-- Risques: versioning incomplet.
-- Validation: cycle save/reboot/load.
+- Statut actuel: rollback persistance locale SEQ.
+- Décision: runtime SEQ en RAM only en attendant une persistance globale projet/state.
 
 ## Étape 9 — Clock externe
-- Objectif: préparer/brancher source MIDI clock externe.
-- Fichiers/modules: `seq_transport`, bridge MIDI clock.
-- DoD: clock source INT/EXT commutable.
-- Risques: jitter/edge start-stop.
-- Validation: sync basique F8/FA/FC.
+- Statut actuel: support MIDI realtime implémenté (F8/FA/FB/FC) côté runtime SEQ.
+- Source clock active forcée sur INT pour le moment (préparation architecture INT/EXT en place, commutation runtime future).
 
 ## Étape 10 — Extensions futures
 - Objectif: couleurs dérivées avancées, notes/trigs/realtime rec.
