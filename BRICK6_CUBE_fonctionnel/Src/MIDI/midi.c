@@ -628,8 +628,26 @@ static void backend_din_send(const uint8_t *msg, size_t len) {
 /* ====================================================================== */
 
 __attribute__((weak)) void midi_internal_receive(const uint8_t *msg, size_t len) {
-  (void)msg;
-  (void)len;
+  if ((msg == NULL) || (len == 0U)) {
+    return;
+  }
+
+  switch (msg[0]) {
+    case 0xF8U: /* MIDI Clock */
+      seq_runtime_midi_clock();
+      break;
+    case 0xFAU: /* MIDI Start */
+      seq_runtime_midi_start();
+      break;
+    case 0xFBU: /* MIDI Continue */
+      seq_runtime_midi_continue();
+      break;
+    case 0xFCU: /* MIDI Stop */
+      seq_runtime_midi_stop();
+      break;
+    default:
+      break;
+  }
 }
 
 /**
