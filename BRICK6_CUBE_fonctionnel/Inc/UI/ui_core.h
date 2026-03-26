@@ -67,6 +67,7 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
 ui_hall_mode_t ui_get_hall_mode(void);
 void ui_set_hall_mode(ui_hall_mode_t mode);
 const char *ui_get_hall_mode_short_label(void);
+const char *ui_get_hall_mode_suffix_label(void);
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
 void ui_core_clear_hall_note_suppression(uint8_t hall);
 
