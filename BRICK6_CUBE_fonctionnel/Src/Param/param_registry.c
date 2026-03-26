@@ -456,6 +456,36 @@ static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
     return 1U;
 }
 
+static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
+{
+    if (out_track_id == NULL)
+    {
+        return 0U;
+    }
+
+    switch (ui_get_track_family(ui_track))
+    {
+        case UI_TRACK_FAMILY_INPUT1:
+            *out_track_id = 0U;
+            return 1U;
+
+        case UI_TRACK_FAMILY_INPUT2:
+            *out_track_id = 1U;
+            return 1U;
+
+        case UI_TRACK_FAMILY_INPUT3:
+            *out_track_id = 2U;
+            return 1U;
+
+        case UI_TRACK_FAMILY_SYNTH:
+            *out_track_id = 3U;
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
 static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
 {
     if (target_track >= FILTER_TRACK_TARGET_COUNT)
@@ -475,6 +505,182 @@ static void apply_filter_drive_runtime(uint32_t target_track, float drive_ui)
         const int8_t sat_slot = ((track == target_track) && (drive_0_127 > 0U)) ? 1 : -1;
         mixer_set_track_insert_slot(track, 1U, sat_slot);
     }
+}
+
+uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
+{
+    if ((id >= PARAM_COUNT) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    uint32_t target_track = 0U;
+    filter_ui_state_t *state = NULL;
+    switch (id)
+    {
+        case PARAM_FILTER_TYPE:
+        case PARAM_FILTER_CUTOFF:
+        case PARAM_FILTER_RESONANCE:
+        case PARAM_FILTER_EG_AMT:
+        case PARAM_FILTER_ATTACK:
+        case PARAM_FILTER_DECAY:
+        case PARAM_FILTER_SUSTAIN:
+        case PARAM_FILTER_RELEASE:
+        case PARAM_FILTER_KEYTRK:
+        case PARAM_FILTER_ENVRST:
+        case PARAM_FILTER_ENVDLY:
+        case PARAM_FILTER_EQ_LOW:
+        case PARAM_FILTER_EQ_MID:
+        case PARAM_FILTER_EQ_HIGH:
+        case PARAM_FILTER_DRIVE:
+            if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
+            {
+                return 0U;
+            }
+            state = resolve_filter_ui_state(target_track);
+            if (state == NULL)
+            {
+                return 0U;
+            }
+            break;
+
+        default:
+            *out_value = param_get(id);
+            return 1U;
+    }
+
+    switch (id)
+    {
+        case PARAM_FILTER_TYPE: *out_value = state->type; return 1U;
+        case PARAM_FILTER_CUTOFF: *out_value = state->cutoff; return 1U;
+        case PARAM_FILTER_RESONANCE: *out_value = state->resonance; return 1U;
+        case PARAM_FILTER_EG_AMT: *out_value = state->eg_amount; return 1U;
+        case PARAM_FILTER_ATTACK: *out_value = state->attack; return 1U;
+        case PARAM_FILTER_DECAY: *out_value = state->decay; return 1U;
+        case PARAM_FILTER_SUSTAIN: *out_value = state->sustain; return 1U;
+        case PARAM_FILTER_RELEASE: *out_value = state->release; return 1U;
+        case PARAM_FILTER_KEYTRK: *out_value = state->keytrack; return 1U;
+        case PARAM_FILTER_ENVRST: *out_value = state->env_reset; return 1U;
+        case PARAM_FILTER_ENVDLY: *out_value = state->env_delay; return 1U;
+        case PARAM_FILTER_EQ_LOW: *out_value = state->eq_low; return 1U;
+        case PARAM_FILTER_EQ_MID: *out_value = state->eq_mid; return 1U;
+        case PARAM_FILTER_EQ_HIGH: *out_value = state->eq_high; return 1U;
+        case PARAM_FILTER_DRIVE: *out_value = state->drive; return 1U;
+        default: break;
+    }
+
+    return 0U;
+}
+
+uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
+{
+    if (id >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    uint32_t target_track = 0U;
+    filter_ui_state_t *state = NULL;
+    switch (id)
+    {
+        case PARAM_FILTER_TYPE:
+        case PARAM_FILTER_CUTOFF:
+        case PARAM_FILTER_RESONANCE:
+        case PARAM_FILTER_EG_AMT:
+        case PARAM_FILTER_ATTACK:
+        case PARAM_FILTER_DECAY:
+        case PARAM_FILTER_SUSTAIN:
+        case PARAM_FILTER_RELEASE:
+        case PARAM_FILTER_KEYTRK:
+        case PARAM_FILTER_ENVRST:
+        case PARAM_FILTER_ENVDLY:
+        case PARAM_FILTER_EQ_LOW:
+        case PARAM_FILTER_EQ_MID:
+        case PARAM_FILTER_EQ_HIGH:
+        case PARAM_FILTER_DRIVE:
+            if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
+            {
+                return 0U;
+            }
+            state = resolve_filter_ui_state(target_track);
+            if (state == NULL)
+            {
+                return 0U;
+            }
+            break;
+
+        default:
+            param_set(id, value);
+            return 1U;
+    }
+
+    switch (id)
+    {
+        case PARAM_FILTER_TYPE:
+            mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)));
+            state->type = clamp_value(value, 0.0f, 4.0f);
+            return 1U;
+        case PARAM_FILTER_CUTOFF:
+            mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(value));
+            state->cutoff = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_RESONANCE:
+            mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(value));
+            state->resonance = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_EG_AMT:
+            mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(value));
+            state->eg_amount = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_ATTACK:
+            mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(value));
+            state->attack = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_DECAY:
+            mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(value));
+            state->decay = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_SUSTAIN:
+            mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(value));
+            state->sustain = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_RELEASE:
+            mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(value));
+            state->release = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_KEYTRK:
+            mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(value));
+            state->keytrack = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_ENVRST:
+            mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(value));
+            state->env_reset = filter_ui127_to_bool(value) ? 1.0f : 0.0f;
+            return 1U;
+        case PARAM_FILTER_ENVDLY:
+            mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(value));
+            state->env_delay = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_EQ_LOW:
+            mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(value));
+            state->eq_low = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_EQ_MID:
+            mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(value));
+            state->eq_mid = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_EQ_HIGH:
+            mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(value));
+            state->eq_high = filter_ui127_clamp(value);
+            return 1U;
+        case PARAM_FILTER_DRIVE:
+            apply_filter_drive_runtime(target_track, clamp_value(value, 0.0f, 127.0f));
+            state->drive = clamp_value(value, 0.0f, 127.0f);
+            return 1U;
+        default:
+            break;
+    }
+
+    return 0U;
 }
 
 void param_registry_sync_filter_ui_for_active_track(void)
