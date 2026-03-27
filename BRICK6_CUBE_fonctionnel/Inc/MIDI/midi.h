@@ -135,6 +135,10 @@ void midi_clock_set_mode(midi_clock_mode_t mode);
 
 midi_clock_mode_t midi_clock_get_mode(void);
 
+void midi_clock_set_bpm_milli(uint32_t bpm_milli);
+
+uint32_t midi_clock_get_bpm_milli(void);
+
 void midi_clock_set_running(bool running);
 
 bool midi_clock_is_running(void);
