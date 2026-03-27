@@ -8,8 +8,17 @@
 #define TRACK_RUNTIME_FLAG_CAN_FILTER  (1U << 0)
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
 #define TRACK_RUNTIME_FLAG_CAN_PLAY    (1U << 2)
+#define TRACK_RUNTIME_INSTANCE_NONE    0xFFU
+#define TRACK_RUNTIME_DX7_MAX_INSTANCES 2U
+#define TRACK_RUNTIME_MONOB_MAX_INSTANCES 1U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
+
+typedef struct
+{
+    uint8_t dx7_used;
+    uint8_t monob_used;
+} track_runtime_allocator_state_t;
 
 static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
 {
@@ -76,6 +85,85 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     return flags;
 }
 
+static void track_runtime_set_unbound(track_runtime_ctx_t *ctx, track_runtime_bind_reason_t reason)
+{
+    ctx->engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
+    ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
+    ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
+    ctx->bind_reason = reason;
+}
+
+static void track_runtime_set_quota_blocked(track_runtime_ctx_t *ctx)
+{
+    ctx->engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
+    ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
+    ctx->bind_state = TRACK_RUNTIME_BIND_QUOTA_BLOCKED;
+    ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_QUOTA_EXCEEDED;
+}
+
+static void track_runtime_set_bound(track_runtime_ctx_t *ctx,
+                                    track_runtime_engine_t engine,
+                                    uint8_t instance_id)
+{
+    ctx->engine = (uint8_t)engine;
+    ctx->instance_id = instance_id;
+    ctx->bind_state = TRACK_RUNTIME_BIND_BOUND;
+    ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
+}
+
+static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
+                                   track_runtime_allocator_state_t *allocator)
+{
+    const track_runtime_family_t family = (track_runtime_family_t)ctx->family;
+    const track_runtime_type_t type = (track_runtime_type_t)ctx->type;
+
+    if (family == TRACK_RUNTIME_FAMILY_OFF)
+    {
+        track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_TRACK_OFF);
+        return;
+    }
+
+    if (family == TRACK_RUNTIME_FAMILY_INPUT)
+    {
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_AUDIO_TRACK, ctx->track_id);
+        return;
+    }
+
+    if (family != TRACK_RUNTIME_FAMILY_SYNTH)
+    {
+        track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
+        return;
+    }
+
+    if (type == TRACK_RUNTIME_TYPE_DX7)
+    {
+        if (allocator->dx7_used >= TRACK_RUNTIME_DX7_MAX_INSTANCES)
+        {
+            track_runtime_set_quota_blocked(ctx);
+            return;
+        }
+
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DX7, allocator->dx7_used);
+        allocator->dx7_used++;
+        return;
+    }
+
+    if (type == TRACK_RUNTIME_TYPE_MONOB)
+    {
+        if (allocator->monob_used >= TRACK_RUNTIME_MONOB_MAX_INSTANCES)
+        {
+            track_runtime_set_quota_blocked(ctx);
+            return;
+        }
+
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_MONOB, allocator->monob_used);
+        allocator->monob_used++;
+        return;
+    }
+
+    track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
+}
+
 void track_runtime_init(void)
 {
     memset(&g_track_runtime_ctx, 0, sizeof(g_track_runtime_ctx));
@@ -84,9 +172,27 @@ void track_runtime_init(void)
 
 void track_runtime_refresh_all(void)
 {
+    track_runtime_allocator_state_t allocator = { 0U, 0U };
+
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        track_runtime_refresh_track(track);
+        track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        const ui_track_family_t ui_family = ui_get_track_family(track);
+        const ui_track_type_t ui_type = ui_get_track_type(track);
+
+        const track_runtime_family_t family = track_runtime_family_from_ui(ui_family);
+        const track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
+
+        ctx->track_id = track;
+        ctx->family = (uint8_t)family;
+        ctx->type = (uint8_t)type;
+        ctx->flags = track_runtime_compute_flags(family, type);
+        ctx->engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
+        ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
+        ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
+        ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
+
+        track_runtime_bind_ctx(ctx, &allocator);
     }
 }
 
@@ -97,20 +203,8 @@ void track_runtime_refresh_track(uint8_t track)
         return;
     }
 
-    track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
-    const ui_track_family_t ui_family = ui_get_track_family(track);
-    const ui_track_type_t ui_type = ui_get_track_type(track);
-
-    const track_runtime_family_t family = track_runtime_family_from_ui(ui_family);
-    const track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
-
-    ctx->track_id = track;
-    ctx->family = (uint8_t)family;
-    ctx->type = (uint8_t)type;
-    ctx->bind_state = (family == TRACK_RUNTIME_FAMILY_OFF)
-            ? TRACK_RUNTIME_BIND_UNBOUND
-            : TRACK_RUNTIME_BIND_BOUND;
-    ctx->flags = track_runtime_compute_flags(family, type);
+    /* Quotas are global to all tracks, so one-track refresh recomputes a full pass. */
+    track_runtime_refresh_all();
 }
 
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track)
@@ -257,16 +351,28 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_FILTER:
+            if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_SYNTH:
+            if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
+            if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

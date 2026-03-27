@@ -16,12 +16,31 @@ typedef enum
     TRACK_RUNTIME_BIND_QUOTA_BLOCKED
 } track_runtime_bind_state_t;
 
+typedef enum
+{
+    TRACK_RUNTIME_BIND_REASON_NONE = 0,
+    TRACK_RUNTIME_BIND_REASON_TRACK_OFF,
+    TRACK_RUNTIME_BIND_REASON_UNSUPPORTED,
+    TRACK_RUNTIME_BIND_REASON_QUOTA_EXCEEDED
+} track_runtime_bind_reason_t;
+
+typedef enum
+{
+    TRACK_RUNTIME_ENGINE_NONE = 0,
+    TRACK_RUNTIME_ENGINE_AUDIO_TRACK,
+    TRACK_RUNTIME_ENGINE_DX7,
+    TRACK_RUNTIME_ENGINE_MONOB
+} track_runtime_engine_t;
+
 typedef struct
 {
     uint8_t track_id;
     uint8_t family;
     uint8_t type;
+    uint8_t engine;
+    uint8_t instance_id;
     track_runtime_bind_state_t bind_state;
+    track_runtime_bind_reason_t bind_reason;
     uint8_t flags;
 } track_runtime_ctx_t;
 

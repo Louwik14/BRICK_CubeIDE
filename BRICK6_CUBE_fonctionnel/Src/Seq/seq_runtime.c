@@ -239,10 +239,17 @@ static seq_value16_t seq_runtime_play_get_locked_or_default(seq_track_id_t track
 
 static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t step)
 {
-    if (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
+    const track_runtime_param_status_t play_status =
+            track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == 0) || (play_status == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
     {
-        SEQ_BIND_LOG("[SEQ][RT] skip PLAY tr=%u status=blocked ui_active=%u\r\n",
+        SEQ_BIND_LOG("[SEQ][RT] skip PLAY tr=%u bind_state=%u reason=%u engine=%u inst=%u ui_active=%u\r\n",
                      (unsigned)track,
+                     (unsigned)((ctx != 0) ? ctx->bind_state : 0xFFU),
+                     (unsigned)((ctx != 0) ? ctx->bind_reason : 0xFFU),
+                     (unsigned)((ctx != 0) ? ctx->engine : 0xFFU),
+                     (unsigned)((ctx != 0) ? ctx->instance_id : 0xFFU),
                      (unsigned)ui_get_active_track());
         return;
     }
