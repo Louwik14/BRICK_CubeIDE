@@ -1,0 +1,7 @@
+../Drivers/U8g2/u8x8_d_ssd1322.c:150:9:u8x8_d_ssd1322_common	48	static
+../Drivers/U8g2/u8x8_d_ssd1322.c:303:9:u8x8_d_ssd1322_nhd_256x64	16	static
+../Drivers/U8g2/u8x8_d_ssd1322.c:400:9:u8x8_d_ssd1322_zjy_256x64	16	static
+../Drivers/U8g2/u8x8_d_ssd1322.c:498:9:u8x8_d_ssd1322_240x128	16	static
+../Drivers/U8g2/u8x8_d_ssd1322.c:618:9:u8x8_d_ssd1322_topwin_240x128	16	static
+../Drivers/U8g2/u8x8_d_ssd1322.c:658:9:u8x8_d_ssd1322_common2	56	static
+../Drivers/U8g2/u8x8_d_ssd1322.c:843:9:u8x8_d_ssd1322_nhd_128x64	16	static

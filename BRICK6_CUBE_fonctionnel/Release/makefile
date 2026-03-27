@@ -18,6 +18,7 @@ RM := rm -rf
 -include Src/UI/pages/subdir.mk
 -include Src/UI/subdir.mk
 -include Src/Storage/subdir.mk
+-include Src/Seq/subdir.mk
 -include Src/Sampler/subdir.mk
 -include Src/SD/subdir.mk
 -include Src/Param/subdir.mk

@@ -1,0 +1,11 @@
+../Src/App/Hall/hall_adc.c:89:13:hall_adc_queue_sample	16	static,ignoring_inline_asm
+../Src/App/Hall/hall_adc.c:155:6:hall_adc_init	24	static
+../Src/App/Hall/hall_adc.c:193:9:hall_adc_pop_sample	4	static,ignoring_inline_asm
+../Src/App/Hall/hall_adc.c:215:10:hall_adc_get_raw	0	static
+../Src/App/Hall/hall_adc.c:225:9:hall_adc_get_mux_index	0	static
+../Src/App/Hall/hall_adc.c:230:10:hall_adc_get_sample_count	0	static
+../Src/App/Hall/hall_adc.c:240:10:hall_adc_get_fifo_push_count	0	static
+../Src/App/Hall/hall_adc.c:245:10:hall_adc_get_fifo_drop_count	0	static
+../Src/App/Hall/hall_adc.c:250:10:hall_adc_get_fifo_depth	0	static
+../Src/App/Hall/hall_adc.c:262:10:hall_adc_get_fifo_max_depth	0	static
+../Src/App/Hall/hall_adc.c:267:6:HAL_ADC_ConvCpltCallback	32	static

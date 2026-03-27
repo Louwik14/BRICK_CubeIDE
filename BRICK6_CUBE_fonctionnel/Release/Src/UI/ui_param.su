@@ -1,0 +1,3 @@
+../Src/UI/ui_param.c:167:6:ui_param_set_bank	0	static
+../Src/UI/ui_param.c:318:9:ui_param_try_get_seq_plock_feedback	56	static
+../Src/UI/ui_param.c:371:6:ui_param_handle_encoder	96	static

@@ -65,6 +65,7 @@ Src/MIDI \
 Src/Param \
 Src/SD \
 Src/Sampler \
+Src/Seq \
 Src/Storage \
 Src/UI \
 Src/UI/pages \

@@ -1,0 +1,11 @@
+../Src/Seq/seq_param_iface.c:36:6:seq_param_iface_init	1
+../Src/Seq/seq_param_iface.c:42:9:seq_param_iface_is_set_plockable	1
+../Src/Seq/seq_param_iface.c:47:9:seq_param_iface_set_to_mask	2
+../Src/Seq/seq_param_iface.c:57:9:seq_param_iface_is_param_supported	10
+../Src/Seq/seq_param_iface.c:88:9:seq_param_iface_get_base_value	17
+../Src/Seq/seq_param_iface.c:116:9:seq_param_iface_set_base_value	12
+../Src/Seq/seq_param_iface.c:138:9:seq_param_iface_apply_lock	14
+../Src/Seq/seq_param_iface.c:179:9:seq_param_iface_restore_base	13
+../Src/Seq/seq_param_iface.c:211:9:seq_param_iface_map_param	6
+../Src/Seq/seq_param_iface.c:245:15:seq_param_iface_encode_param_value	5
+../Src/Seq/seq_param_iface.c:283:7:seq_param_iface_decode_param_value	3
