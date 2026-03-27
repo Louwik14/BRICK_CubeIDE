@@ -186,7 +186,9 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
 }
 
 
-static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track, seq_step_id_t *out_ref_step)
+static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,
+                                             seq_step_id_t *out_ref_step,
+                                             uint8_t promote_pending)
 {
     if ((out_track == 0) || (out_ref_step == 0) || (ui_get_hall_mode() != UI_HALL_MODE_SEQ))
     {
@@ -198,7 +200,7 @@ static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track, seq_step
     const uint8_t held_count = seq_edit_collect_held_steps(&held_track,
                                                            held_steps,
                                                            (uint8_t)SEQ_STEPS_PER_PAGE,
-                                                           1U);
+                                                           promote_pending);
     if (held_count == 0U)
     {
         return 0U;
@@ -334,7 +336,7 @@ uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, 
 
     seq_track_id_t ref_track = 0U;
     seq_step_id_t ref_step = 0U;
-    if (ui_param_seq_resolve_ref_step(&ref_track, &ref_step) == 0U)
+    if (ui_param_seq_resolve_ref_step(&ref_track, &ref_step, 0U) == 0U)
     {
         return 0U;
     }
