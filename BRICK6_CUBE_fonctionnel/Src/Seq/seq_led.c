@@ -3,10 +3,12 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_param_iface.h"
 #include "UI/ui_core.h"
 #include "led_layer.h"
 #include "led_remap.h"
 
+#define SEQ_LED_BLUE_B 128U
 #define SEQ_LED_GREEN_G 128U
 #define SEQ_LED_WHITE   128U
 
@@ -24,12 +26,42 @@ void seq_led_render_active_track_page(void)
 
         if (trig_on != 0U)
         {
-            led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, SEQ_LED_GREEN_G, 0U);
+            const uint8_t plock_count = seq_model_step_plock_count(track, step);
+            uint8_t has_play_plock = 0U;
+
+            for (uint8_t i = 0U; i < plock_count; ++i)
+            {
+                seq_plock_entry_t entry;
+                if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U)
+                {
+                    continue;
+                }
+
+                if (entry.set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+                {
+                    has_play_plock = 1U;
+                    break;
+                }
+            }
+
+            if ((plock_count != 0U) && (has_play_plock == 0U))
+            {
+                led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, SEQ_LED_BLUE_B);
+            }
+            else
+            {
+                led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, SEQ_LED_GREEN_G, 0U);
+            }
         }
         else
         {
             led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, 0U);
         }
+    }
+
+    if (seq_runtime_is_running() == 0U)
+    {
+        return;
     }
 
     seq_step_id_t playhead = 0U;

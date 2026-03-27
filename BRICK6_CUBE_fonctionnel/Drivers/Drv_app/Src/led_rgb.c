@@ -31,6 +31,9 @@
 #include "UI/ui_navigation.h"
 #include "UI/ui_page_manager.h"
 #include "Seq/seq_led.h"
+#include "Seq/seq_edit.h"
+#include "Seq/seq_model.h"
+#include "Seq/seq_param_iface.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
 #define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
@@ -48,6 +51,47 @@
 #define LED_FIXED_BLUE_R          0U
 #define LED_FIXED_BLUE_G          0U
 #define LED_FIXED_BLUE_B          LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_ORANGE_R        LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_ORANGE_G        64U
+#define LED_FIXED_ORANGE_B        0U
+
+static uint8_t led_seq_collect_held_plock_set_mask(void)
+{
+    if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
+    {
+        return 0U;
+    }
+
+    seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
+    seq_track_id_t held_track = 0U;
+    const uint8_t held_count = seq_edit_collect_held_steps(&held_track,
+                                                           held_steps,
+                                                           (uint8_t)SEQ_STEPS_PER_PAGE,
+                                                           0U);
+    if (held_count == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t set_mask = 0U;
+    for (uint8_t i = 0U; i < held_count; ++i)
+    {
+        const seq_step_id_t step = held_steps[i];
+        const uint8_t plock_count = seq_model_step_plock_count(held_track, step);
+        for (uint8_t p = 0U; p < plock_count; ++p)
+        {
+            seq_plock_entry_t entry;
+            if (seq_model_step_plock_get_at(held_track, step, p, &entry) == 0U)
+            {
+                continue;
+            }
+
+            set_mask |= seq_param_iface_set_to_mask(entry.set_id);
+        }
+    }
+
+    return set_mask;
+}
 
 typedef struct
 {
@@ -68,7 +112,7 @@ static const led_rgb_color_t g_led_keyboard_omni_chord_colors[4] = {
     { 80U, 0U, 128U },
 };
 
-static void led_apply_param_button_scene(led_id_t led)
+static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets)
 {
     uint8_t r = LED_FIXED_GREEN_R;
     uint8_t g = LED_FIXED_GREEN_G;
@@ -80,6 +124,33 @@ static void led_apply_param_button_scene(led_id_t led)
         r = LED_FIXED_WHITE_R;
         g = LED_FIXED_WHITE_G;
         b = LED_FIXED_WHITE_B;
+    }
+
+    if (held_plock_sets != 0U)
+    {
+        uint8_t match_set = 0U;
+        if ((led == led_remap_param_led_for_button(BTN_PARAM_1))
+                && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_COLORS)) != 0U))
+        {
+            match_set = 1U;
+        }
+        else if ((led == led_remap_param_led_for_button(BTN_PARAM_3))
+                 && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_TONE)) != 0U))
+        {
+            match_set = 1U;
+        }
+        else if ((led == led_remap_param_led_for_button(BTN_PARAM_5))
+                 && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_PLAY)) != 0U))
+        {
+            match_set = 1U;
+        }
+
+        if (match_set != 0U)
+        {
+            r = LED_FIXED_ORANGE_R;
+            g = LED_FIXED_ORANGE_G;
+            b = LED_FIXED_ORANGE_B;
+        }
     }
 
     led_layer_set(LED_LAYER_UI, led, r, g, b);
@@ -132,6 +203,7 @@ static bool led_hall_mode_uses_keyboard_scene(void)
 static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
+    const uint8_t held_plock_sets = led_seq_collect_held_plock_set_mask();
 
     if (ui_get_hall_mode() == UI_HALL_MODE_SEQ)
     {
@@ -160,7 +232,7 @@ static void led_apply_fixed_scene(void)
         }
         else if (led_remap_is_param_led((led_id_t)led))
         {
-            led_apply_param_button_scene((led_id_t)led);
+            led_apply_param_button_scene((led_id_t)led, held_plock_sets);
         }
         else
         {

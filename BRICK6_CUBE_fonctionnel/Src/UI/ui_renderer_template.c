@@ -22,6 +22,8 @@
 static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_w[4] = {31U, 31U, 31U, 31U};
+static const char *const g_ui_template_midi_note_names[12] = {"C", "C#", "D", "D#", "E", "F",
+                                                               "F#", "G", "G#", "A", "A#", "B"};
 
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
 {
@@ -56,6 +58,24 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
             (void)snprintf(out, out_len, "OFF");
             return;
         }
+    }
+
+    if ((id == PARAM_SEQ_PLAY_V1_NOTE) || (id == PARAM_SEQ_PLAY_V2_NOTE) || (id == PARAM_SEQ_PLAY_V3_NOTE) || (id == PARAM_SEQ_PLAY_V4_NOTE))
+    {
+        int32_t note = (int32_t)(value + 0.5f);
+        if (note < 0)
+        {
+            note = 0;
+        }
+        if (note > 127)
+        {
+            note = 127;
+        }
+
+        const int32_t note_index = note % 12;
+        const int32_t octave = (note / 12) - 1;
+        (void)snprintf(out, out_len, "%s%ld", g_ui_template_midi_note_names[note_index], (long)octave);
+        return;
     }
 
     switch (desc->display_type)
