@@ -51,16 +51,6 @@
 #define SEQ_BIND_LOG(...) do { } while (0)
 #endif
 
-#ifndef SEQ_DEBUG_TRACK_BINDING
-#define SEQ_DEBUG_TRACK_BINDING 0
-#endif
-
-#if SEQ_DEBUG_TRACK_BINDING
-#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
-#else
-#define SEQ_BIND_LOG(...) do { } while (0)
-#endif
-
 
 /**
  * @brief Point d'entrée clamp_value.
@@ -271,21 +261,26 @@ static void apply_mix_track3_send1(float v) { mixer_set_track_send_level(3U, 1U,
 static void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
 static void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
 
-static void apply_dx7_algorithm(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_ALGORITHM, v); }
-static void apply_dx7_feedback(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_FEEDBACK, v); }
-static void apply_dx7_transpose(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_TRANSPOSE, v); }
-static void apply_dx7_lfo_speed(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_SPEED, v); }
-static void apply_dx7_lfo_delay(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_DELAY, v); }
-static void apply_dx7_lfo_pitch_mod_depth(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_PITCH_MOD_DEPTH, v); }
-static void apply_dx7_lfo_amp_mod_depth(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_AMP_MOD_DEPTH, v); }
-static void apply_dx7_pitch_bend_range(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_PITCH_BEND_RANGE, v); }
-static void apply_dx7_portamento_time(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_PORTAMENTO_TIME, v); }
-static void apply_dx7_mono_mode(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_MONO_MODE, v); }
-static void apply_dx7_operator_mask(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_MASK, v); }
-static void apply_dx7_operator_1_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_1_LEVEL, v); }
-static void apply_dx7_operator_2_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_2_LEVEL, v); }
-static void apply_dx7_operator_3_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_3_LEVEL, v); }
-static void apply_dx7_operator_4_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_4_LEVEL, v); }
+static void apply_tone_live_track(param_id_t id, float value)
+{
+    (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
+}
+
+static void apply_dx7_algorithm(float v) { apply_tone_live_track(PARAM_DX7_ALGORITHM, v); }
+static void apply_dx7_feedback(float v) { apply_tone_live_track(PARAM_DX7_FEEDBACK, v); }
+static void apply_dx7_transpose(float v) { apply_tone_live_track(PARAM_DX7_TRANSPOSE, v); }
+static void apply_dx7_lfo_speed(float v) { apply_tone_live_track(PARAM_DX7_LFO_SPEED, v); }
+static void apply_dx7_lfo_delay(float v) { apply_tone_live_track(PARAM_DX7_LFO_DELAY, v); }
+static void apply_dx7_lfo_pitch_mod_depth(float v) { apply_tone_live_track(PARAM_DX7_LFO_PITCH_MOD_DEPTH, v); }
+static void apply_dx7_lfo_amp_mod_depth(float v) { apply_tone_live_track(PARAM_DX7_LFO_AMP_MOD_DEPTH, v); }
+static void apply_dx7_pitch_bend_range(float v) { apply_tone_live_track(PARAM_DX7_PITCH_BEND_RANGE, v); }
+static void apply_dx7_portamento_time(float v) { apply_tone_live_track(PARAM_DX7_PORTAMENTO_TIME, v); }
+static void apply_dx7_mono_mode(float v) { apply_tone_live_track(PARAM_DX7_MONO_MODE, v); }
+static void apply_dx7_operator_mask(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_MASK, v); }
+static void apply_dx7_operator_1_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_1_LEVEL, v); }
+static void apply_dx7_operator_2_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_2_LEVEL, v); }
+static void apply_dx7_operator_3_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_3_LEVEL, v); }
+static void apply_dx7_operator_4_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_4_LEVEL, v); }
 
 static fx_granular_state_t *get_active_granular_state(void)
 {
@@ -1192,21 +1187,21 @@ static void apply_monob_filter_keytrack(float v) { monob_synth_set_filter_keytra
 static void apply_monob_filter_env_reset(float v) { monob_synth_set_filter_env_reset(filter_ui127_to_bool(v)); }
 static void apply_monob_filter_env_delay(float v) { monob_synth_set_filter_env_delay(filter_ui127_to_env_delay_s(v)); }
 
-static void apply_monob_osc1_wave(float v) { monob_synth_set_osc_wave(0U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_osc2_wave(float v) { monob_synth_set_osc_wave(1U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_osc3_wave(float v) { monob_synth_set_osc_wave(2U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_sub_wave(float v) { monob_synth_set_osc_wave(3U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_osc1_range(float v) { monob_synth_set_osc_range(0U, monob_range_index_to_octave(v)); }
-static void apply_monob_osc2_range(float v) { monob_synth_set_osc_range(1U, monob_range_index_to_octave(v)); }
-static void apply_monob_osc3_range(float v) { monob_synth_set_osc_range(2U, monob_range_index_to_octave(v)); }
-static void apply_monob_sub_octave(float v) { monob_synth_set_sub_octave(monob_sub_octave_index_to_octave(v)); }
-static void apply_monob_osc1_detune(float v) { monob_synth_set_osc_detune(0U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_osc2_detune(float v) { monob_synth_set_osc_detune(1U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_osc3_detune(float v) { monob_synth_set_osc_detune(2U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_osc1_mix(float v) { monob_synth_set_osc_mix(0U, clamp_value(v, 0.0f, 1.0f)); }
-static void apply_monob_osc2_mix(float v) { monob_synth_set_osc_mix(1U, clamp_value(v, 0.0f, 1.0f)); }
-static void apply_monob_osc3_mix(float v) { monob_synth_set_osc_mix(2U, clamp_value(v, 0.0f, 1.0f)); }
-static void apply_monob_sub_mix(float v) { monob_synth_set_sub_mix(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_monob_osc1_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_WAVE, v); }
+static void apply_monob_osc2_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_WAVE, v); }
+static void apply_monob_osc3_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_WAVE, v); }
+static void apply_monob_sub_wave(float v) { apply_tone_live_track(PARAM_MONOB_SUB_WAVE, v); }
+static void apply_monob_osc1_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_RANGE, v); }
+static void apply_monob_osc2_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_RANGE, v); }
+static void apply_monob_osc3_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_RANGE, v); }
+static void apply_monob_sub_octave(float v) { apply_tone_live_track(PARAM_MONOB_SUB_OCTAVE, v); }
+static void apply_monob_osc1_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_DETUNE, v); }
+static void apply_monob_osc2_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_DETUNE, v); }
+static void apply_monob_osc3_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_DETUNE, v); }
+static void apply_monob_osc1_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_MIX, v); }
+static void apply_monob_osc2_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_MIX, v); }
+static void apply_monob_osc3_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_MIX, v); }
+static void apply_monob_sub_mix(float v) { apply_tone_live_track(PARAM_MONOB_SUB_MIX, v); }
 
 static void apply_cfg_track(float v)
 {
