@@ -67,7 +67,9 @@ typedef struct
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
 SEQ_STATE_D2 static seq_play_evt_t g_seq_play_events[SEQ_RUNTIME_PLAY_EVENT_CAP];
 SEQ_STATE_D2 static uint8_t g_seq_play_event_count;
-SEQ_STATE_D2 static uint32_t g_seq_midi_clock_tick_accum;
+SEQ_STATE_D2 static uint32_t g_seq_midi_clock_period_q16;
+SEQ_STATE_D2 static uint32_t g_seq_midi_clock_accum_q16;
+SEQ_STATE_D2 static uint32_t g_seq_midi_clock_last_audio_frames;
 SEQ_STATE_D2 static uint8_t g_seq_active_note_counts[SEQ_TRACK_COUNT][128];
 
 static void seq_runtime_active_notes_clear(void)
@@ -179,23 +181,44 @@ static void seq_runtime_send_transport_stop_and_panic(void)
     SEQ_STOP_LOG("[SEQ][STOP] end\r\n");
 }
 
-static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
+static void seq_runtime_update_internal_clock_period(void)
+{
+    uint32_t ticks_per_step = g_seq_runtime.ticks_per_step;
+    if (ticks_per_step == 0U)
+    {
+        ticks_per_step = 1U;
+    }
+
+    /* clock period = ticks_per_step * 32 frames / 6 clocks-per-step.
+     * Keep fractional precision in Q16 to avoid coarse 31/32 tick quantization jitter. */
+    g_seq_midi_clock_period_q16 = (uint32_t)(((uint64_t)ticks_per_step * 32ULL * 65536ULL) / (uint64_t)SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP);
+    if (g_seq_midi_clock_period_q16 == 0U)
+    {
+        g_seq_midi_clock_period_q16 = 1U;
+    }
+}
+
+static void seq_runtime_send_internal_clock(void)
 {
     if ((g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI) || (g_seq_runtime.running == 0U))
+    {
+        g_seq_midi_clock_last_audio_frames = engine_audio_frame_count;
+        return;
+    }
+
+    const uint32_t current_audio_frames = engine_audio_frame_count;
+    const uint32_t elapsed_frames = current_audio_frames - g_seq_midi_clock_last_audio_frames;
+    g_seq_midi_clock_last_audio_frames = current_audio_frames;
+
+    if (elapsed_frames == 0U)
     {
         return;
     }
 
-    uint32_t clock_period_ticks = g_seq_runtime.ticks_per_step / SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP;
-    if (clock_period_ticks == 0U)
+    g_seq_midi_clock_accum_q16 += (elapsed_frames << 16);
+    while (g_seq_midi_clock_accum_q16 >= g_seq_midi_clock_period_q16)
     {
-        clock_period_ticks = 1U;
-    }
-
-    g_seq_midi_clock_tick_accum += elapsed_ticks;
-    while (g_seq_midi_clock_tick_accum >= clock_period_ticks)
-    {
-        g_seq_midi_clock_tick_accum -= clock_period_ticks;
+        g_seq_midi_clock_accum_q16 -= g_seq_midi_clock_period_q16;
         midi_clock(MIDI_DEST_BOTH);
     }
 }
@@ -650,6 +673,9 @@ void seq_runtime_init(void)
     g_seq_runtime.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_runtime.ticks_per_step = SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT;
     g_seq_runtime.last_tick_count = engine_tick_count;
+    seq_runtime_update_internal_clock_period();
+    g_seq_midi_clock_accum_q16 = 0U;
+    g_seq_midi_clock_last_audio_frames = engine_audio_frame_count;
     seq_runtime_play_events_clear();
     seq_runtime_active_notes_clear();
 
@@ -685,7 +711,8 @@ void seq_runtime_start(void)
         seq_runtime_restore_all_active_locks(track);
     }
 
-    g_seq_midi_clock_tick_accum = 0U;
+    g_seq_midi_clock_accum_q16 = 0U;
+    g_seq_midi_clock_last_audio_frames = engine_audio_frame_count;
     seq_runtime_send_transport_start();
 }
 
@@ -707,7 +734,8 @@ void seq_runtime_stop(void)
         g_seq_runtime.prev_step_valid[track] = 0U;
     }
 
-    g_seq_midi_clock_tick_accum = 0U;
+    g_seq_midi_clock_accum_q16 = 0U;
+    g_seq_midi_clock_last_audio_frames = engine_audio_frame_count;
     seq_runtime_send_transport_stop_and_panic();
     seq_runtime_active_notes_clear();
 }
@@ -756,7 +784,7 @@ void seq_runtime_process(void)
     const uint32_t elapsed = current_tick - g_seq_runtime.last_tick_count;
     g_seq_runtime.last_tick_count = current_tick;
     g_seq_runtime.tick_accum += elapsed;
-    seq_runtime_send_internal_clock(elapsed);
+    seq_runtime_send_internal_clock();
 
     while (g_seq_runtime.tick_accum >= g_seq_runtime.ticks_per_step)
     {
@@ -778,7 +806,8 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     g_seq_runtime.clock_src = src;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.tick_accum = 0U;
-    g_seq_midi_clock_tick_accum = 0U;
+    g_seq_midi_clock_accum_q16 = 0U;
+    g_seq_midi_clock_last_audio_frames = engine_audio_frame_count;
     seq_runtime_play_events_clear();
 }
 

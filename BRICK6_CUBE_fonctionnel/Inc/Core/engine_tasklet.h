@@ -13,6 +13,7 @@
  */
 
 extern volatile uint32_t engine_tick_count;
+extern volatile uint32_t engine_audio_frame_count;
 
 void engine_tasklet_init(uint32_t sample_rate);
 void engine_tasklet_notify_frames(uint32_t frames);

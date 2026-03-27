@@ -39,6 +39,7 @@
 
 
 volatile uint32_t engine_tick_count = 0U;
+volatile uint32_t engine_audio_frame_count = 0U;
 
 /* Shared between IRQ + main */
 static volatile uint32_t engine_frames_accum = 0U;
@@ -108,6 +109,7 @@ void engine_tasklet_init(uint32_t sample_rate)
   (void)sample_rate;
 
   engine_tick_count = 0U;
+  engine_audio_frame_count = 0U;
   engine_frames_accum = 0U;
 
   /* Tick aligned with AUDIO_FRAMES_PER_HALF = 32
@@ -145,6 +147,7 @@ void engine_tasklet_init(uint32_t sample_rate)
  */
 void engine_tasklet_notify_frames(uint32_t frames)
 {
+  engine_audio_frame_count += frames;
   engine_frames_accum += frames;
 }
 
