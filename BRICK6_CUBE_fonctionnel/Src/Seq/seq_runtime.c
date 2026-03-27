@@ -150,6 +150,32 @@ static void seq_runtime_send_transport_stop_and_panic(void)
     {
         midi_stop(MIDI_DEST_BOTH);
     }
+
+    uint8_t monob_killed[8U] = { 0U };
+    uint8_t dx7_killed = 0U;
+    track_runtime_refresh_all();
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+        {
+            continue;
+        }
+
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+        {
+            if ((ctx->instance_id < 8U) && (monob_killed[ctx->instance_id] == 0U))
+            {
+                monob_killed[ctx->instance_id] = 1U;
+                monob_synth_all_notes_off_for_instance(ctx->instance_id);
+            }
+        }
+        else if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7) && (dx7_killed == 0U))
+        {
+            dx7_killed = 1U;
+            microdexed_synth_all_notes_off();
+        }
+    }
     SEQ_STOP_LOG("[SEQ][STOP] end\r\n");
 }
 

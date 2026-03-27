@@ -171,7 +171,7 @@ void keyboard_engine_all_notes_off(void)
 
 void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
 {
-    if ((msg == NULL) || (len < 3U))
+    if ((msg == NULL) || (len < 2U))
     {
         return;
     }
@@ -179,18 +179,25 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
     const uint8_t status = msg[0];
     const uint8_t type = status & 0xF0U;
     const uint8_t channel = status & 0x0FU;
-    const uint8_t note = msg[1] & 0x7FU;
-    const uint8_t velocity = msg[2] & 0x7FU;
+    const uint8_t data1 = msg[1] & 0x7FU;
+    const uint8_t data2 = (len >= 3U) ? (msg[2] & 0x7FU) : 0U;
 
-    if ((type != 0x90U) && (type != 0x80U))
+    const uint8_t is_note_msg = ((type == 0x90U) || (type == 0x80U)) ? 1U : 0U;
+    const uint8_t is_cc_msg = (type == 0xB0U) ? 1U : 0U;
+    if ((is_note_msg == 0U) && (is_cc_msg == 0U))
     {
         return;
     }
 
+    const uint8_t note = data1;
+    const uint8_t velocity = data2;
+    const uint8_t cc = data1;
     const uint8_t is_note_on = ((type == 0x90U) && (velocity > 0U)) ? 1U : 0U;
-    const uint8_t is_note_off = (is_note_on == 0U) ? 1U : 0U;
+    const uint8_t is_note_off = ((type == 0x80U) || ((type == 0x90U) && (velocity == 0U))) ? 1U : 0U;
+    const uint8_t is_all_notes_off = ((is_cc_msg != 0U) && ((cc == 123U) || (cc == 120U))) ? 1U : 0U;
 
     uint8_t dx7_hit = 0U;
+    uint8_t dx7_panic_hit = 0U;
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -224,10 +231,21 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             {
                 monob_synth_note_off_for_instance(ctx->instance_id, note);
             }
+            else if (is_all_notes_off != 0U)
+            {
+                monob_synth_all_notes_off_for_instance(ctx->instance_id);
+            }
         }
         else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
         {
-            dx7_hit = 1U;
+            if ((is_note_on != 0U) || (is_note_off != 0U))
+            {
+                dx7_hit = 1U;
+            }
+            else if (is_all_notes_off != 0U)
+            {
+                dx7_panic_hit = 1U;
+            }
         }
     }
 
@@ -241,5 +259,10 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         {
             microdexed_synth_note_off(note);
         }
+    }
+
+    if (dx7_panic_hit != 0U)
+    {
+        microdexed_synth_all_notes_off();
     }
 }
