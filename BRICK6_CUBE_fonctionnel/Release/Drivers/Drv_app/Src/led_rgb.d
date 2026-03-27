@@ -13,7 +13,9 @@ Drivers/Drv_app/Src/led_rgb.o: ../Drivers/Drv_app/Src/led_rgb.c \
  ../Inc/UI/ui_navigation.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/buttons.h \
  ../Inc/UI/ui_event.h ../Inc/UI/ui_page_manager.h ../Inc/UI/ui_page.h \
- ../Inc/Seq/seq_led.h
+ ../Inc/Seq/seq_led.h ../Inc/Seq/seq_edit.h ../Inc/Seq/seq_types.h \
+ ../Inc/Seq/seq_model.h ../Inc/Seq/seq_clipboard.h \
+ ../Inc/Seq/seq_param_iface.h ../Inc/Param/param_store.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/led_rgb.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/led_framebuffer.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/led_hw.h:
@@ -33,3 +35,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/D
 ../Inc/UI/ui_page_manager.h:
 ../Inc/UI/ui_page.h:
 ../Inc/Seq/seq_led.h:
+../Inc/Seq/seq_edit.h:
+../Inc/Seq/seq_types.h:
+../Inc/Seq/seq_model.h:
+../Inc/Seq/seq_clipboard.h:
+../Inc/Seq/seq_param_iface.h:
+../Inc/Param/param_store.h:

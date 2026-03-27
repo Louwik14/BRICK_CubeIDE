@@ -1,1 +1,1 @@
-../Src/Seq/seq_led.c:13:6:seq_led_render_active_track_page	48	static
+../Src/Seq/seq_led.c:15:6:seq_led_render_active_track_page	64	static

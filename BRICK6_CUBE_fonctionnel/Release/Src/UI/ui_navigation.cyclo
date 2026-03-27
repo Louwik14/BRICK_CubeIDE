@@ -1,2 +1,2 @@
-../Src/UI/ui_navigation.c:21:6:ui_navigation_handle_event	13
-../Src/UI/ui_navigation.c:60:13:ui_navigation_get_button_for_page	7
+../Src/UI/ui_navigation.c:20:6:ui_navigation_handle_event	12
+../Src/UI/ui_navigation.c:59:13:ui_navigation_get_button_for_page	6

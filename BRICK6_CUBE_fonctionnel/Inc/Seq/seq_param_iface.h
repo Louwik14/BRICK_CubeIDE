@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
-#include "param_store.h"
+#include "Param/param_store.h"
 
 typedef enum
 {
