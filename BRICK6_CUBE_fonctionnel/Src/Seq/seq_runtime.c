@@ -244,6 +244,34 @@ static void seq_runtime_play_events_service(void)
             }
         }
 
+        track_runtime_refresh_track(evt->track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(evt->track);
+        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+        {
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    monob_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
+                }
+                else
+                {
+                    monob_synth_note_off_for_instance(ctx->instance_id, evt->note);
+                }
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    microdexed_synth_note_on(evt->note, evt->velocity);
+                }
+                else
+                {
+                    microdexed_synth_note_off(evt->note);
+                }
+            }
+        }
+
         for (uint8_t j = i + 1U; j < g_seq_play_event_count; ++j)
         {
             g_seq_play_events[j - 1U] = g_seq_play_events[j];
