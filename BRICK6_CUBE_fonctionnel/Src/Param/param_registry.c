@@ -51,6 +51,16 @@
 #define SEQ_BIND_LOG(...) do { } while (0)
 #endif
 
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
+
 
 /**
  * @brief Point d'entrée clamp_value.
