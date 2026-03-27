@@ -241,6 +241,27 @@ static bool usb_tx_queue_pop(midi_usb_packet_t *out) {
   return true;
 }
 
+static bool usb_tx_queue_push_front(const midi_usb_packet_t *packet) {
+  if (packet == NULL) {
+    return false;
+  }
+
+  uint32_t primask = midi_enter_critical();
+  if (midi_usb_tx_count >= MIDI_USB_TX_QUEUE_LEN) {
+    midi_exit_critical(primask);
+    return false;
+  }
+
+  midi_usb_tx_tail = (uint16_t)((midi_usb_tx_tail + MIDI_USB_TX_QUEUE_LEN - 1U) % MIDI_USB_TX_QUEUE_LEN);
+  midi_usb_tx_queue[midi_usb_tx_tail] = *packet;
+  midi_usb_tx_count++;
+  if (midi_usb_tx_count > midi_usb_tx_high_water) {
+    midi_usb_tx_high_water = midi_usb_tx_count;
+  }
+  midi_exit_critical(primask);
+  return true;
+}
+
 /**
  * @brief Point d'entrée usb_rx_queue_push.
  *
@@ -340,7 +361,16 @@ static void midi_usb_try_flush(void) {
   if (usb_device_send_packets(buffer, (uint16_t)(packets * 4U))) {
     midi_tx_stats.tx_sent_batched++;
   } else {
-    midi_tx_stats.usb_not_ready_drops += packets;
+    for (uint16_t i = 0U; i < packets; ++i) {
+      midi_usb_packet_t packet;
+      packet.bytes[0] = buffer[(packets - 1U - i) * 4U + 0U];
+      packet.bytes[1] = buffer[(packets - 1U - i) * 4U + 1U];
+      packet.bytes[2] = buffer[(packets - 1U - i) * 4U + 2U];
+      packet.bytes[3] = buffer[(packets - 1U - i) * 4U + 3U];
+      if (!usb_tx_queue_push_front(&packet)) {
+        midi_tx_stats.usb_not_ready_drops++;
+      }
+    }
   }
 }
 

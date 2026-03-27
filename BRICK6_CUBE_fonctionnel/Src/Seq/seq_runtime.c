@@ -25,10 +25,20 @@
 #define SEQ_DEBUG_TRACK_BINDING 0
 #endif
 
+#ifndef SEQ_DEBUG_STOP
+#define SEQ_DEBUG_STOP 0
+#endif
+
 #if SEQ_DEBUG_TRACK_BINDING
 #define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
 #else
 #define SEQ_BIND_LOG(...) do { } while (0)
+#endif
+
+#if SEQ_DEBUG_STOP
+#define SEQ_STOP_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_STOP_LOG(...) do { } while (0)
 #endif
 
 typedef enum
@@ -128,16 +138,19 @@ static void seq_runtime_send_transport_start(void)
 
 static void seq_runtime_send_transport_stop_and_panic(void)
 {
+    SEQ_STOP_LOG("[SEQ][STOP] begin active_evts=%u\r\n", (unsigned)g_seq_play_event_count);
+    seq_runtime_kill_all_active_notes();
+    for (uint8_t ch = 0U; ch < 16U; ++ch)
+    {
+        midi_all_sound_off(MIDI_DEST_BOTH, ch);
+        midi_all_notes_off(MIDI_DEST_BOTH, ch);
+    }
+
     if (g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI)
     {
         midi_stop(MIDI_DEST_BOTH);
     }
-
-    seq_runtime_kill_all_active_notes();
-    for (uint8_t ch = 0U; ch < 16U; ++ch)
-    {
-        midi_all_notes_off(MIDI_DEST_BOTH, ch);
-    }
+    SEQ_STOP_LOG("[SEQ][STOP] end\r\n");
 }
 
 static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
@@ -177,6 +190,11 @@ static void seq_runtime_play_event_push(uint32_t due_tick,
                                         uint8_t note,
                                         uint8_t velocity)
 {
+    if ((g_seq_runtime.running == 0U) && (type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON))
+    {
+        return;
+    }
+
     if (g_seq_play_event_count >= SEQ_RUNTIME_PLAY_EVENT_CAP)
     {
         return;
@@ -207,7 +225,11 @@ static void seq_runtime_play_events_service(void)
         const uint8_t channel_1_16 = ui_get_track_midi_channel(evt->track);
         const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
 
-        if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+        if ((evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON) && (g_seq_runtime.running == 0U))
+        {
+            /* Garde-fou STOP: aucun NOTE ON ne doit sortir après l'arrêt. */
+        }
+        else if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
         {
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
             seq_runtime_mark_note_on(evt->track, evt->note);
@@ -650,6 +672,7 @@ void seq_runtime_stop(void)
 
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
+    SEQ_STOP_LOG("[SEQ][STOP] request queued_evts=%u\r\n", (unsigned)g_seq_play_event_count);
     seq_runtime_play_events_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
