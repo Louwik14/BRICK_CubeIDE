@@ -52,9 +52,12 @@
 #include "audio_float.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
+#include "Core/runtime_target.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
+#define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
+#define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
@@ -69,6 +72,8 @@ typedef struct
     ui_hall_mode_t hall_mode;
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
     ui_track_config_t track_configs[UI_TRACK_COUNT];
+    uint8_t track_midi_channel[UI_TRACK_COUNT];
+    uint8_t track_midi_source[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
     char feedback_message[16];
@@ -90,6 +95,13 @@ static ui_track_state_t g_ui_track_state = {
         { UI_TRACK_FAMILY_SYNTH, UI_TRACK_TYPE_DX7 },
         { UI_TRACK_FAMILY_SYNTH, UI_TRACK_TYPE_DX7 },
         { UI_TRACK_FAMILY_SYNTH, UI_TRACK_TYPE_DX7 },
+    },
+    .track_midi_channel = { 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U },
+    .track_midi_source = {
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL
     },
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
@@ -281,7 +293,9 @@ static void ui_core_sync_active_track_cfg_params(void)
 
     param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_config->family);
     param_store_set_active(UI_CFG_TRACK_TYPE_PARAM, (float)ui_get_track_type_index_for_family(active_config->family, active_config->type));
-    param_registry_sync_filter_ui_for_active_track();
+    param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)g_ui_track_state.track_midi_channel[active_track]);
+    param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)g_ui_track_state.track_midi_source[active_track]);
+    param_registry_sync_ui_for_active_track();
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -317,9 +331,90 @@ static void ui_core_reset_track_configs(void)
             g_ui_track_state.track_configs[track].type = UI_TRACK_TYPE_DX7;
         }
 
+        g_ui_track_state.track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
+        g_ui_track_state.track_midi_source[track] = (uint8_t)UI_TRACK_MIDI_SRC_ALL;
     }
 
     ui_core_sync_audio_runtime_enables();
+}
+
+uint8_t ui_get_track_midi_channel(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return 1U;
+    }
+
+    const uint8_t ch = g_ui_track_state.track_midi_channel[track];
+    return (ch < 1U) ? 1U : ((ch > 16U) ? 16U : ch);
+}
+
+bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
+{
+    if ((track >= UI_TRACK_COUNT) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
+    {
+        return false;
+    }
+
+    g_ui_track_state.track_midi_channel[track] = channel_1_16;
+    if (track == g_ui_track_state.active_track)
+    {
+        param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)channel_1_16);
+    }
+    return true;
+}
+
+ui_track_midi_source_t ui_get_track_midi_source(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return UI_TRACK_MIDI_SRC_ALL;
+    }
+
+    const uint8_t source = g_ui_track_state.track_midi_source[track];
+    if (source >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT)
+    {
+        return UI_TRACK_MIDI_SRC_ALL;
+    }
+    return (ui_track_midi_source_t)source;
+}
+
+bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
+{
+    if ((track >= UI_TRACK_COUNT) || ((uint8_t)source >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
+    {
+        return false;
+    }
+
+    g_ui_track_state.track_midi_source[track] = (uint8_t)source;
+    if (track == g_ui_track_state.active_track)
+    {
+        param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)source);
+    }
+    return true;
+}
+
+uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16)
+{
+    if ((track >= UI_TRACK_COUNT) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t other = 0U; other < UI_TRACK_COUNT; ++other)
+    {
+        if (other == track)
+        {
+            continue;
+        }
+
+        if (ui_get_track_midi_channel(other) == channel_1_16)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
 }
 
 static void ui_core_update_shift_state(uint8_t shift_down)
@@ -712,33 +807,7 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
-    if (out_track_id == 0)
-    {
-        return false;
-    }
-
-    const ui_track_family_t family = ui_get_track_family(ui_get_active_track());
-    switch (family)
-    {
-        case UI_TRACK_FAMILY_INPUT1:
-            *out_track_id = 0U;
-            return true;
-
-        case UI_TRACK_FAMILY_INPUT2:
-            *out_track_id = 1U;
-            return true;
-
-        case UI_TRACK_FAMILY_INPUT3:
-            *out_track_id = 2U;
-            return true;
-
-        case UI_TRACK_FAMILY_SYNTH:
-            *out_track_id = 3U;
-            return true;
-
-        default:
-            return false;
-    }
+    return (runtime_target_resolve_filter_for_ui_track(ui_get_active_track(), out_track_id) != 0U) ? true : false;
 }
 
 ui_track_config_t ui_get_track_config(uint8_t track)

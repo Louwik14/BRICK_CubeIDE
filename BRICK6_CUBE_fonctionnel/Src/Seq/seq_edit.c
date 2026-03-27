@@ -6,6 +6,7 @@
 #include "Storage/memory_layout.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_clipboard.h"
+#include "App/Hall/hall_engine.h"
 
 #define SEQ_STEP_HOLD_THRESHOLD_TICKS 120U
 
@@ -149,6 +150,15 @@ void seq_edit_step_hold_update(void)
     {
         if (g_seq_hold_state.pending[hall] == 0U)
         {
+            continue;
+        }
+
+        if (hall_engine_is_pressed(hall) == 0U)
+        {
+            seq_model_toggle_trig(g_seq_hold_state.track_id[hall],
+                                  g_seq_hold_state.step_id[hall]);
+            g_seq_hold_state.pending[hall] = 0U;
+            g_seq_hold_state.held[hall] = 0U;
             continue;
         }
 

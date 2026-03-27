@@ -54,6 +54,7 @@ extern const param_desc_t param_registry[PARAM_COUNT];
 
 void param_registry_init(void);
 void param_registry_sync_filter_ui_for_active_track(void);
+void param_registry_sync_ui_for_active_track(void);
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value);
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
 

@@ -10,7 +10,7 @@ static const ui_template_family_t g_ui_template_cfg_family = {
     .subpages = {
         {
             .title = "TRACK",
-            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
         },
         {
             .title = "-",
