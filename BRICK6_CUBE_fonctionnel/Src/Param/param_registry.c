@@ -35,7 +35,18 @@
 #include "Seq/seq_model.h"
 #include "Core/runtime_target.h"
 #include <math.h>
+#include <stdio.h>
 #include <stddef.h>
+
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
 
 
 /**
@@ -518,6 +529,10 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_DRIVE:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
             {
+                SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_target ui_active=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ui_get_active_track());
                 return 0U;
             }
             state = resolve_filter_ui_state(target_track);
@@ -583,6 +598,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_DRIVE:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
             {
+                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_target ui_active=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ui_get_active_track());
                 return 0U;
             }
             state = resolve_filter_ui_state(target_track);
@@ -593,9 +612,20 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             break;
 
         default:
+            SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u global_apply ui_active=%u\r\n",
+                         (unsigned)track,
+                         (unsigned)id,
+                         (unsigned)ui_get_active_track());
             param_set(id, value);
             return 1U;
     }
+
+    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u -> target=%u ui_active=%u v=%.3f\r\n",
+                 (unsigned)track,
+                 (unsigned)id,
+                 (unsigned)target_track,
+                 (unsigned)ui_get_active_track(),
+                 (double)value);
 
     switch (id)
     {
