@@ -25,6 +25,7 @@
 #include "ui_core.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
+#include "Core/track_runtime.h"
 
 typedef struct
 {
@@ -217,6 +218,43 @@ static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track, seq_step
     return 1U;
 }
 
+static uint8_t ui_param_is_track_scoped(param_id_t param)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    return ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
+}
+
+static float ui_param_get_active_track_value(param_id_t param)
+{
+    float value = param_get(param);
+    if (ui_param_is_track_scoped(param) == 0U)
+    {
+        return value;
+    }
+
+    if (param_registry_get_track_value(param, ui_get_active_track(), &value) != 0U)
+    {
+        return value;
+    }
+
+    return value;
+}
+
+static void ui_param_set_active_track_value(param_id_t param, float value)
+{
+    if (ui_param_is_track_scoped(param) == 0U)
+    {
+        param_set(param, value);
+        return;
+    }
+
+    const param_desc_t *const desc = &param_registry[param];
+    const float clamped = ui_param_clamp(value, desc->min, desc->max);
+    (void)param_registry_apply_track_value(param, ui_get_active_track(), clamped);
+    param_store_set_active(param, clamped);
+}
+
 static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
                                             const param_desc_t *desc,
                                             int16_t delta,
@@ -247,7 +285,7 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
     }
 
     const float delta_value = (float)delta * desc->step;
-    const float base_track_value = param_get(param);
+    const float base_track_value = ui_param_get_active_track_value(param);
 
     for (uint8_t i = 0U; i < held_count; ++i)
     {
@@ -361,24 +399,24 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
         return;
     }
 
-    float value = param_get(param);
+    float value = ui_param_get_active_track_value(param);
 
     if (param == PARAM_CFG_TRACK)
     {
         value = ui_param_step_cfg_track(value, ui_param_signum(delta));
-        param_set(param, value);
+        ui_param_set_active_track_value(param, value);
         return;
     }
 
     if (param == PARAM_CFG_TRACK_TYPE)
     {
         value = ui_param_step_cfg_track_type(value, ui_param_signum(delta));
-        param_set(param, value);
+        ui_param_set_active_track_value(param, value);
         return;
     }
 
     value += (float)delta * desc->step;
     value = ui_param_clamp(value, min_value, max_value);
 
-    param_set(param, value);
+    ui_param_set_active_track_value(param, value);
 }
