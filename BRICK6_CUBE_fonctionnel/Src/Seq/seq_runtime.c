@@ -20,6 +20,7 @@
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_RUNTIME_PLAY_VOICE_COUNT 4U
 #define SEQ_RUNTIME_PLAY_EVENT_CAP 64U
+#define SEQ_RUNTIME_ENGINE_TICK_HZ 1500U
 
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
@@ -133,6 +134,9 @@ static void seq_runtime_send_transport_start(void)
         return;
     }
 
+    const uint32_t bpm_milli = (uint32_t)(((uint64_t)SEQ_RUNTIME_ENGINE_TICK_HZ * 60000ULL) /
+                                          ((uint64_t)g_seq_runtime.ticks_per_step * 4ULL));
+    midi_clock_set_bpm_milli(bpm_milli);
     midi_start(MIDI_DEST_BOTH);
 }
 
@@ -181,23 +185,7 @@ static void seq_runtime_send_transport_stop_and_panic(void)
 
 static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
 {
-    if ((g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI) || (g_seq_runtime.running == 0U))
-    {
-        return;
-    }
-
-    uint32_t clock_period_ticks = g_seq_runtime.ticks_per_step / SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP;
-    if (clock_period_ticks == 0U)
-    {
-        clock_period_ticks = 1U;
-    }
-
-    g_seq_midi_clock_tick_accum += elapsed_ticks;
-    while (g_seq_midi_clock_tick_accum >= clock_period_ticks)
-    {
-        g_seq_midi_clock_tick_accum -= clock_period_ticks;
-        midi_clock(MIDI_DEST_BOTH);
-    }
+    (void)elapsed_ticks;
 }
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
