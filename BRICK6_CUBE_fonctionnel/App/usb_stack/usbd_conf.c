@@ -192,7 +192,6 @@ void HAL_PCD_SOFCallback(PCD_HandleTypeDef *hpcd)
 #endif /* USE_HAL_PCD_REGISTER_CALLBACKS */
 {
   USBD_LL_SOF((USBD_HandleTypeDef*)hpcd->pData);
-  midi_clock_on_usb_sof();
 }
 
 /**

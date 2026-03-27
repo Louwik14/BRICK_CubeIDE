@@ -84,7 +84,7 @@ static uint32_t midi_clock_get_tim5_counter_hz(void) {
     tim_kernel_hz *= 2U;
   }
 
-  const uint32_t psc = (__HAL_TIM_GET_PRESCALER(&htim5) + 1U);
+  const uint32_t psc = ((uint32_t)(htim5.Instance->PSC) + 1U);
   if (psc == 0U) {
     return MIDI_CLOCK_TIMER_HZ_DEFAULT;
   }
