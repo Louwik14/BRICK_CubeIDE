@@ -1,11 +1,16 @@
 #include "Seq/seq_runtime.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
+#include "Core/track_runtime.h"
+#include "Audio/microdexed_synth.h"
+#include "Audio/monob_synth.h"
 #include "midi.h"
 #include "param_registry.h"
+#include "ui_core.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
@@ -15,6 +20,16 @@
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_RUNTIME_PLAY_VOICE_COUNT 4U
 #define SEQ_RUNTIME_PLAY_EVENT_CAP 64U
+
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
 
 typedef enum
 {
@@ -85,7 +100,8 @@ static void seq_runtime_play_events_service(void)
             continue;
         }
 
-        const uint8_t channel = (uint8_t)(evt->track & 0x0FU);
+        const uint8_t channel_1_16 = ui_get_track_midi_channel(evt->track);
+        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
         if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
         {
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
@@ -93,6 +109,34 @@ static void seq_runtime_play_events_service(void)
         else
         {
             midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
+        }
+
+        track_runtime_refresh_track(evt->track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(evt->track);
+        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+        {
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    monob_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
+                }
+                else
+                {
+                    monob_synth_note_off_for_instance(ctx->instance_id, evt->note);
+                }
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    microdexed_synth_note_on(evt->note, evt->velocity);
+                }
+                else
+                {
+                    microdexed_synth_note_off(evt->note);
+                }
+            }
         }
 
         for (uint8_t j = i + 1U; j < g_seq_play_event_count; ++j)
@@ -226,6 +270,21 @@ static seq_value16_t seq_runtime_play_get_locked_or_default(seq_track_id_t track
 
 static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t step)
 {
+    const track_runtime_param_status_t play_status =
+            track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == 0) || (play_status == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
+    {
+        SEQ_BIND_LOG("[SEQ][RT] skip PLAY tr=%u bind_state=%u reason=%u engine=%u inst=%u ui_active=%u\r\n",
+                     (unsigned)track,
+                     (unsigned)((ctx != 0) ? ctx->bind_state : 0xFFU),
+                     (unsigned)((ctx != 0) ? ctx->bind_reason : 0xFFU),
+                     (unsigned)((ctx != 0) ? ctx->engine : 0xFFU),
+                     (unsigned)((ctx != 0) ? ctx->instance_id : 0xFFU),
+                     (unsigned)ui_get_active_track());
+        return;
+    }
+
     const uint32_t step_tick = engine_tick_count;
 
     for (uint8_t voice = 0U; voice < SEQ_RUNTIME_PLAY_VOICE_COUNT; ++voice)
@@ -296,6 +355,12 @@ static void seq_runtime_step_boundary_apply_restore(seq_track_id_t track,
         return;
     }
 
+    SEQ_BIND_LOG("[SEQ][RT] tr=%u step=%u locks=%u ui_active=%u\r\n",
+                 (unsigned)track,
+                 (unsigned)step_curr,
+                 (unsigned)next_count,
+                 (unsigned)ui_get_active_track());
+
     seq_runtime_active_lock_t *const active = g_seq_runtime.active_locks[track];
     uint8_t active_count = g_seq_runtime.active_lock_count[track];
 
@@ -348,6 +413,11 @@ static void seq_runtime_step_boundary_apply_restore(seq_track_id_t track,
                                    next_locks[i].set_id,
                                    next_locks[i].param8,
                                    next_locks[i].value16);
+        SEQ_BIND_LOG("[SEQ][RT] apply tr=%u set=%u p=%u v16=%u\r\n",
+                     (unsigned)track,
+                     (unsigned)next_locks[i].set_id,
+                     (unsigned)next_locks[i].param8,
+                     (unsigned)next_locks[i].value16);
     }
 
     memset(active, 0, sizeof(g_seq_runtime.active_locks[track]));

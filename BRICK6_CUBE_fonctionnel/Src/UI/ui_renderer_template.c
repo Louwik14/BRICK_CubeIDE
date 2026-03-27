@@ -9,6 +9,7 @@
 #include "param_registry.h"
 #include "ui_core.h"
 #include "ui_widgets.h"
+#include "Core/track_runtime.h"
 
 #define UI_TEMPLATE_FRAME_W          31
 #define UI_TEMPLATE_FRAME_H          37
@@ -37,6 +38,14 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
         const ui_track_type_t active_type = ui_get_track_type_from_family_index(active_family, (uint8_t)(value + 0.5f));
         (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(active_family, active_type));
+        return;
+    }
+
+    if (id == PARAM_CFG_MIDI_CH)
+    {
+        const uint8_t channel = (uint8_t)(value + 0.5f);
+        const uint8_t duplicate = ui_track_midi_channel_used_by_other(ui_get_active_track(), channel);
+        (void)snprintf(out, out_len, "%u%s", (unsigned int)channel, (duplicate != 0U) ? "*" : "");
         return;
     }
 
@@ -194,6 +203,24 @@ static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_templ
     return widget;
 }
 
+static float ui_renderer_template_get_param_display_value(param_id_t id)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+    {
+        return param_get(id);
+    }
+
+    float value = param_get(id);
+    if (param_registry_get_track_value(id, ui_get_active_track(), &value) != 0U)
+    {
+        return value;
+    }
+
+    return value;
+}
+
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state, uint8_t slot, param_id_t id)
 {
     const int x = g_ui_template_frame_x[slot];
@@ -209,7 +236,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
 
     const param_desc_t *desc = &param_registry[id];
-    float value = param_get(id);
+    float value = ui_renderer_template_get_param_display_value(id);
     uint8_t draw_name_inverted = 0U;
     (void)ui_param_try_get_seq_plock_feedback(id, &value, &draw_name_inverted);
 
