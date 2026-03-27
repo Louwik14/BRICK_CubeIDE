@@ -33,6 +33,7 @@
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_model.h"
+#include "Core/runtime_target.h"
 #include <math.h>
 #include <stddef.h>
 
@@ -447,7 +448,7 @@ static void filter_ui_state_init_defaults(void)
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 {
     uint8_t track_id = 0U;
-    if ((out_track_id == NULL) || !ui_resolve_filter_target_track(&track_id))
+    if ((out_track_id == NULL) || (runtime_target_resolve_filter_for_ui_track(ui_get_active_track(), &track_id) == 0U))
     {
         return 0U;
     }
@@ -458,32 +459,14 @@ static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 
 static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
 {
-    if (out_track_id == NULL)
+    uint8_t track_id = 0U;
+    if ((out_track_id == NULL) || (runtime_target_resolve_filter_for_ui_track(ui_track, &track_id) == 0U))
     {
         return 0U;
     }
 
-    switch (ui_get_track_family(ui_track))
-    {
-        case UI_TRACK_FAMILY_INPUT1:
-            *out_track_id = 0U;
-            return 1U;
-
-        case UI_TRACK_FAMILY_INPUT2:
-            *out_track_id = 1U;
-            return 1U;
-
-        case UI_TRACK_FAMILY_INPUT3:
-            *out_track_id = 2U;
-            return 1U;
-
-        case UI_TRACK_FAMILY_SYNTH:
-            *out_track_id = 3U;
-            return 1U;
-
-        default:
-            return 0U;
-    }
+    *out_track_id = (uint32_t)track_id;
+    return 1U;
 }
 
 static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
