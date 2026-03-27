@@ -34,9 +34,22 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_model.h"
 #include "Core/runtime_target.h"
+#include "Core/track_runtime.h"
+#include "Storage/memory_layout.h"
 #include <math.h>
 #include <stdio.h>
 #include <stddef.h>
+#include <string.h>
+
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
 
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
@@ -424,6 +437,123 @@ typedef struct
 } filter_ui_state_t;
 
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
+SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
+SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
+
+static uint8_t param_runtime_cache_get(uint8_t track, param_id_t id, float *out_value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    if (g_param_runtime_track_valid[track][id] == 0U)
+    {
+        return 0U;
+    }
+
+    *out_value = g_param_runtime_track_values[track][id];
+    return 1U;
+}
+
+static void param_runtime_cache_set(uint8_t track, param_id_t id, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    {
+        return;
+    }
+
+    g_param_runtime_track_values[track][id] = value;
+    g_param_runtime_track_valid[track][id] = 1U;
+}
+
+static uint8_t param_runtime_apply_tone_dx7(uint8_t instance_id, param_id_t id, float value)
+{
+    if (instance_id != 0U)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_DX7_ALGORITHM: microdexed_synth_set_param(MICRODEXED_PARAM_ALGORITHM, value); return 1U;
+        case PARAM_DX7_FEEDBACK: microdexed_synth_set_param(MICRODEXED_PARAM_FEEDBACK, value); return 1U;
+        case PARAM_DX7_TRANSPOSE: microdexed_synth_set_param(MICRODEXED_PARAM_TRANSPOSE, value); return 1U;
+        case PARAM_DX7_LFO_SPEED: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_SPEED, value); return 1U;
+        case PARAM_DX7_LFO_DELAY: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_DELAY, value); return 1U;
+        case PARAM_DX7_LFO_PITCH_MOD_DEPTH: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_PITCH_MOD_DEPTH, value); return 1U;
+        case PARAM_DX7_LFO_AMP_MOD_DEPTH: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_AMP_MOD_DEPTH, value); return 1U;
+        case PARAM_DX7_PITCH_BEND_RANGE: microdexed_synth_set_param(MICRODEXED_PARAM_PITCH_BEND_RANGE, value); return 1U;
+        case PARAM_DX7_PORTAMENTO_TIME: microdexed_synth_set_param(MICRODEXED_PARAM_PORTAMENTO_TIME, value); return 1U;
+        case PARAM_DX7_MONO_MODE: microdexed_synth_set_param(MICRODEXED_PARAM_MONO_MODE, value); return 1U;
+        case PARAM_DX7_OPERATOR_MASK: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_MASK, value); return 1U;
+        case PARAM_DX7_OPERATOR_1_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_1_LEVEL, value); return 1U;
+        case PARAM_DX7_OPERATOR_2_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_2_LEVEL, value); return 1U;
+        case PARAM_DX7_OPERATOR_3_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_3_LEVEL, value); return 1U;
+        case PARAM_DX7_OPERATOR_4_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_4_LEVEL, value); return 1U;
+        default: return 0U;
+    }
+}
+
+static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id, float value)
+{
+    if (instance_id != 0U)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_MONOB_OSC1_WAVE: monob_synth_set_osc_wave(0U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC2_WAVE: monob_synth_set_osc_wave(1U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC3_WAVE: monob_synth_set_osc_wave(2U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_SUB_WAVE: monob_synth_set_osc_wave(3U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC1_RANGE: monob_synth_set_osc_range(0U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC2_RANGE: monob_synth_set_osc_range(1U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC3_RANGE: monob_synth_set_osc_range(2U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_SUB_OCTAVE: monob_synth_set_sub_octave(monob_sub_octave_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC1_DETUNE: monob_synth_set_osc_detune(0U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC2_DETUNE: monob_synth_set_osc_detune(1U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC3_DETUNE: monob_synth_set_osc_detune(2U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC1_MIX: monob_synth_set_osc_mix(0U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC2_MIX: monob_synth_set_osc_mix(1U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC3_MIX: monob_synth_set_osc_mix(2U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_SUB_MIX: monob_synth_set_sub_mix(clamp_value(value, 0.0f, 1.0f)); return 1U;
+        default: return 0U;
+    }
+}
+
+static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float value)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    {
+        return 0U;
+    }
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    uint8_t applied = 0U;
+    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+    {
+        applied = param_runtime_apply_tone_dx7(ctx->instance_id, id, value);
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+    {
+        applied = param_runtime_apply_tone_monob(ctx->instance_id, id, value);
+    }
+
+    if (applied != 0U)
+    {
+        param_runtime_cache_set(track, id, value);
+    }
+
+    return applied;
+}
 
 static uint8_t filter_mod_locked_for_active_track(void)
 {
@@ -543,8 +673,28 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
             break;
 
         default:
+        {
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+            if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            {
+                if (track >= SEQ_TRACK_COUNT)
+                {
+                    return 0U;
+                }
+
+                if (param_runtime_cache_get(track, id, out_value) != 0U)
+                {
+                    return 1U;
+                }
+
+                *out_value = param_registry[id].default_value;
+                param_runtime_cache_set(track, id, *out_value);
+                return 1U;
+            }
+
             *out_value = param_get(id);
             return 1U;
+        }
     }
 
     switch (id)
@@ -612,12 +762,52 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             break;
 
         default:
+        {
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+            if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            {
+                if (track >= SEQ_TRACK_COUNT)
+                {
+                    return 0U;
+                }
+
+                track_runtime_refresh_track(track);
+                const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+                if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+                {
+                    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_blocked bind=%u reason=%u\r\n",
+                                 (unsigned)track,
+                                 (unsigned)id,
+                                 (unsigned)((ctx != NULL) ? ctx->bind_state : 0xFFU),
+                                 (unsigned)((ctx != NULL) ? ctx->bind_reason : 0xFFU));
+                    return 0U;
+                }
+
+                if (param_runtime_apply_track(track, id, value) == 0U)
+                {
+                    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_unsupported engine=%u inst=%u\r\n",
+                                 (unsigned)track,
+                                 (unsigned)id,
+                                 (unsigned)ctx->engine,
+                                 (unsigned)ctx->instance_id);
+                    return 0U;
+                }
+
+                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_apply engine=%u inst=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ctx->engine,
+                             (unsigned)ctx->instance_id);
+                return 1U;
+            }
+
             SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u global_apply ui_active=%u\r\n",
                          (unsigned)track,
                          (unsigned)id,
                          (unsigned)ui_get_active_track());
             param_set(id, value);
             return 1U;
+        }
     }
 
     SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u -> target=%u ui_active=%u v=%.3f\r\n",
@@ -1513,6 +1703,8 @@ void param_registry_init(void)
 {
     /* Registry is static metadata; runtime values are in param_store. */
     filter_ui_state_init_defaults();
+    memset(&g_param_runtime_track_values, 0, sizeof(g_param_runtime_track_values));
+    memset(&g_param_runtime_track_valid, 0, sizeof(g_param_runtime_track_valid));
 }
 
 /**
