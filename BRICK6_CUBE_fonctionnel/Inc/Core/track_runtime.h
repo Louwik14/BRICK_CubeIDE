@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #include "param_registry.h"
-#include "ui_core.h"
+#include "Seq/seq_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,11 +19,28 @@ typedef enum
 typedef struct
 {
     uint8_t track_id;
-    ui_track_family_t family;
-    ui_track_type_t type;
+    uint8_t family;
+    uint8_t type;
     track_runtime_bind_state_t bind_state;
     uint8_t flags;
 } track_runtime_ctx_t;
+
+typedef enum
+{
+    TRACK_RUNTIME_FAMILY_OFF = 0,
+    TRACK_RUNTIME_FAMILY_INPUT,
+    TRACK_RUNTIME_FAMILY_SYNTH,
+    TRACK_RUNTIME_FAMILY_OTHER
+} track_runtime_family_t;
+
+typedef enum
+{
+    TRACK_RUNTIME_TYPE_AUDIO = 0,
+    TRACK_RUNTIME_TYPE_HYBRID,
+    TRACK_RUNTIME_TYPE_DX7,
+    TRACK_RUNTIME_TYPE_MONOB,
+    TRACK_RUNTIME_TYPE_OTHER
+} track_runtime_type_t;
 
 typedef enum
 {
@@ -65,6 +82,7 @@ typedef struct
 
 void track_runtime_init(void);
 void track_runtime_refresh_track(uint8_t track);
+void track_runtime_refresh_all(void);
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
@@ -72,4 +90,3 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
 #ifdef __cplusplus
 }
 #endif
-

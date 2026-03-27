@@ -5,6 +5,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
+#include "Core/track_runtime.h"
 #include "midi.h"
 #include "param_registry.h"
 #include "ui_core.h"
@@ -238,6 +239,14 @@ static seq_value16_t seq_runtime_play_get_locked_or_default(seq_track_id_t track
 
 static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t step)
 {
+    if (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
+    {
+        SEQ_BIND_LOG("[SEQ][RT] skip PLAY tr=%u status=blocked ui_active=%u\r\n",
+                     (unsigned)track,
+                     (unsigned)ui_get_active_track());
+        return;
+    }
+
     const uint32_t step_tick = engine_tick_count;
 
     for (uint8_t voice = 0U; voice < SEQ_RUNTIME_PLAY_VOICE_COUNT; ++voice)
