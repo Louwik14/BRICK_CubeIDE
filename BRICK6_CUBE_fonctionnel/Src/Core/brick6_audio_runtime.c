@@ -23,6 +23,7 @@
 #include "Sampler/voice_manager.h"
 #include "mixer.h"
 #include "ui_core.h"
+#include "Core/track_runtime.h"
 
 #define HALFPI_F 1.57079632679489661923f
 
@@ -67,7 +68,7 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
             || ((runtime_track_enabled != 0U) && (runtime_synth_type != g_runtime_synth_type)))
     {
         microdexed_synth_all_notes_off();
-        monob_synth_all_notes_off();
+        monob_synth_all_notes_off_all();
         g_runtime_synth_type = runtime_synth_type;
     }
     g_runtime_track_enabled = runtime_track_enabled;
@@ -85,7 +86,15 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
             if (runtime_synth_type == UI_TRACK_TYPE_MONOB)
             {
-                monob_synth_process_block(synth_mono, frames);
+                const uint8_t active_track = ui_get_active_track();
+                track_runtime_refresh_track(active_track);
+                const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+                const uint8_t instance_id = ((ctx != NULL)
+                        && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+                        && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+                        ? ctx->instance_id
+                        : 0U;
+                monob_synth_process_block_for_instance(instance_id, synth_mono, frames);
             }
             else
             {
