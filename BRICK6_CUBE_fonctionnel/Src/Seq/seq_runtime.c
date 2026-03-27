@@ -1,11 +1,14 @@
 #include "Seq/seq_runtime.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
+#include "Core/track_runtime.h"
 #include "midi.h"
 #include "param_registry.h"
+#include "ui_core.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
@@ -15,6 +18,16 @@
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_RUNTIME_PLAY_VOICE_COUNT 4U
 #define SEQ_RUNTIME_PLAY_EVENT_CAP 64U
+
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
 
 typedef enum
 {
@@ -226,6 +239,14 @@ static seq_value16_t seq_runtime_play_get_locked_or_default(seq_track_id_t track
 
 static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t step)
 {
+    if (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
+    {
+        SEQ_BIND_LOG("[SEQ][RT] skip PLAY tr=%u status=blocked ui_active=%u\r\n",
+                     (unsigned)track,
+                     (unsigned)ui_get_active_track());
+        return;
+    }
+
     const uint32_t step_tick = engine_tick_count;
 
     for (uint8_t voice = 0U; voice < SEQ_RUNTIME_PLAY_VOICE_COUNT; ++voice)
@@ -296,6 +317,12 @@ static void seq_runtime_step_boundary_apply_restore(seq_track_id_t track,
         return;
     }
 
+    SEQ_BIND_LOG("[SEQ][RT] tr=%u step=%u locks=%u ui_active=%u\r\n",
+                 (unsigned)track,
+                 (unsigned)step_curr,
+                 (unsigned)next_count,
+                 (unsigned)ui_get_active_track());
+
     seq_runtime_active_lock_t *const active = g_seq_runtime.active_locks[track];
     uint8_t active_count = g_seq_runtime.active_lock_count[track];
 
@@ -348,6 +375,11 @@ static void seq_runtime_step_boundary_apply_restore(seq_track_id_t track,
                                    next_locks[i].set_id,
                                    next_locks[i].param8,
                                    next_locks[i].value16);
+        SEQ_BIND_LOG("[SEQ][RT] apply tr=%u set=%u p=%u v16=%u\r\n",
+                     (unsigned)track,
+                     (unsigned)next_locks[i].set_id,
+                     (unsigned)next_locks[i].param8,
+                     (unsigned)next_locks[i].value16);
     }
 
     memset(active, 0, sizeof(g_seq_runtime.active_locks[track]));
