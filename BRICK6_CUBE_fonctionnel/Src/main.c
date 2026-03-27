@@ -135,6 +135,7 @@ int main(void)
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim5);
+  HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   MX_FATFS_Init();
   brick6_app_init();
   led_init();

@@ -28,6 +28,7 @@
 
 #include "midi.h"
 #include "main.h"
+#include "tim.h"
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Seq/seq_runtime.h"
@@ -47,9 +48,68 @@ static midi_dest_t midi_rx_dest = MIDI_DEST_BOTH;
 /*                              CLOCK MIDI                               */
 /* ====================================================================== */
 
-static midi_clock_mode_t midi_clock_mode = MIDI_CLOCK_MODE_SLAVE;
+static midi_clock_mode_t midi_clock_mode = MIDI_CLOCK_MODE_MASTER;
 static volatile bool midi_clock_running = false;
 static midi_dest_t midi_clock_dest = MIDI_DEST_BOTH;
+
+#define MIDI_CLOCK_TIMER_HZ           1000000ULL
+#define MIDI_CLOCK_TICKS_PER_MIN_X1K  (MIDI_CLOCK_TIMER_HZ * 60ULL * 1000ULL)
+#define MIDI_CLOCK_PPQN               24ULL
+#define MIDI_CLOCK_DEFAULT_BPM_MILLI  120000UL
+
+static volatile uint32_t midi_clock_bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
+static volatile uint32_t midi_clock_period_ticks = 0U;
+static volatile uint32_t midi_clock_period_rem = 0U;
+static volatile uint32_t midi_clock_period_den = 1U;
+static volatile uint32_t midi_clock_rem_accum = 0U;
+static volatile uint32_t midi_clock_next_ccr = 0U;
+static volatile bool midi_clock_timer_armed = false;
+
+static inline uint32_t midi_clock_compute_next_delta_ticks(void) {
+  uint32_t delta = midi_clock_period_ticks;
+  uint32_t rem_accum = midi_clock_rem_accum + midi_clock_period_rem;
+  if (rem_accum >= midi_clock_period_den) {
+    rem_accum -= midi_clock_period_den;
+    delta += 1U;
+  }
+  midi_clock_rem_accum = rem_accum;
+  return delta;
+}
+
+static void midi_clock_recompute_period(uint32_t bpm_milli) {
+  if (bpm_milli == 0U) {
+    bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
+  }
+
+  const uint32_t den = (uint32_t)(MIDI_CLOCK_PPQN * (uint64_t)bpm_milli);
+  const uint64_t num = MIDI_CLOCK_TICKS_PER_MIN_X1K;
+
+  midi_clock_bpm_milli = bpm_milli;
+  midi_clock_period_ticks = (uint32_t)(num / den);
+  midi_clock_period_rem = (uint32_t)(num % den);
+  midi_clock_period_den = den;
+  midi_clock_rem_accum = 0U;
+}
+
+static void midi_clock_hw_start(void) {
+  if (midi_clock_timer_armed) {
+    return;
+  }
+
+  const uint32_t now = __HAL_TIM_GET_COUNTER(&htim5);
+  const uint32_t warmup = 200U;
+  const uint32_t first_delta = midi_clock_compute_next_delta_ticks();
+  midi_clock_next_ccr = now + warmup + first_delta;
+  __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, midi_clock_next_ccr);
+  __HAL_TIM_ENABLE_IT(&htim5, TIM_IT_CC1);
+  midi_clock_timer_armed = true;
+}
+
+static void midi_clock_hw_stop(void) {
+  __HAL_TIM_DISABLE_IT(&htim5, TIM_IT_CC1);
+  midi_clock_timer_armed = false;
+  midi_clock_rem_accum = 0U;
+}
 
 /* ====================================================================== */
 /*                              FILES USB                                */
@@ -712,8 +772,16 @@ void midi_init(void) {
 
   midi_usb_rx_drops = 0U;
   midi_usb_tx_kick = false;
+  midi_clock_recompute_period(MIDI_CLOCK_DEFAULT_BPM_MILLI);
+  midi_clock_hw_stop();
 
   midi_stats_reset();
+}
+
+void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
+  if ((htim != NULL) && (htim->Instance == TIM5) && (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)) {
+    midi_clock_on_timer_tick();
+  }
 }
 
 /**
@@ -829,6 +897,11 @@ void midi_send_raw(midi_dest_t dest, const uint8_t *msg, size_t len) {
  */
 void midi_clock_set_mode(midi_clock_mode_t mode) {
   midi_clock_mode = mode;
+  if (mode != MIDI_CLOCK_MODE_MASTER) {
+    midi_clock_hw_stop();
+  } else if (midi_clock_running) {
+    midi_clock_hw_start();
+  }
 }
 
 /**
@@ -847,6 +920,16 @@ midi_clock_mode_t midi_clock_get_mode(void) {
   return midi_clock_mode;
 }
 
+void midi_clock_set_bpm_milli(uint32_t bpm_milli) {
+  uint32_t primask = midi_enter_critical();
+  midi_clock_recompute_period(bpm_milli);
+  midi_exit_critical(primask);
+}
+
+uint32_t midi_clock_get_bpm_milli(void) {
+  return midi_clock_bpm_milli;
+}
+
 /**
  * @brief Point d'entrée midi_clock_set_running.
  *
@@ -859,7 +942,14 @@ midi_clock_mode_t midi_clock_get_mode(void) {
  * - init / main loop / tasklet selon le module.
  */
 void midi_clock_set_running(bool running) {
+  uint32_t primask = midi_enter_critical();
   midi_clock_running = running;
+  if (!running) {
+    midi_clock_hw_stop();
+  } else if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
+    midi_clock_hw_start();
+  }
+  midi_exit_critical(primask);
 }
 
 /**
@@ -920,10 +1010,19 @@ midi_dest_t midi_clock_get_destination(void) {
  * - init / main loop / tasklet selon le module.
  */
 void midi_clock_on_timer_tick(void) {
-  /* TODO CubeMX: configure TIMx à 24 PPQN pour générer l'horloge MIDI. */
+  if (!midi_clock_timer_armed) {
+    return;
+  }
+
   if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER && midi_clock_running) {
     midi_clock(midi_clock_dest);
+    const uint32_t delta = midi_clock_compute_next_delta_ticks();
+    midi_clock_next_ccr += delta;
+    __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, midi_clock_next_ccr);
+    return;
   }
+
+  midi_clock_hw_stop();
 }
 
 /* ====================================================================== */
@@ -1200,6 +1299,10 @@ void midi_clock(midi_dest_t dest) {
 void midi_start(midi_dest_t dest) {
   uint8_t msg[1] = { 0xFAU };
   midi_send(dest, msg, 1U);
+
+  if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
+    midi_clock_set_running(true);
+  }
 }
 
 /**
@@ -1216,6 +1319,10 @@ void midi_start(midi_dest_t dest) {
 void midi_continue(midi_dest_t dest) {
   uint8_t msg[1] = { 0xFBU };
   midi_send(dest, msg, 1U);
+
+  if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
+    midi_clock_set_running(true);
+  }
 }
 
 /**
@@ -1232,6 +1339,10 @@ void midi_continue(midi_dest_t dest) {
 void midi_stop(midi_dest_t dest) {
   uint8_t msg[1] = { 0xFCU };
   midi_send(dest, msg, 1U);
+
+  if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
+    midi_clock_set_running(false);
+  }
 }
 
 /**
