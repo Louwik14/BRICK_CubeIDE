@@ -29,6 +29,8 @@
 #include "midi.h"
 #include "main.h"
 #include "usbd_midi.h"
+#include "Keyboard/keyboard_engine.h"
+#include "Seq/seq_runtime.h"
 #include <string.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
@@ -646,6 +648,7 @@ __attribute__((weak)) void midi_internal_receive(const uint8_t *msg, size_t len)
       seq_runtime_midi_stop();
       break;
     default:
+      keyboard_engine_midi_receive(msg, len);
       break;
   }
 }

@@ -41,6 +41,14 @@ typedef enum
     UI_HALL_MODE_COUNT
 } ui_hall_mode_t;
 
+typedef enum
+{
+    UI_TRACK_MIDI_SRC_INT = 0,
+    UI_TRACK_MIDI_SRC_EXT,
+    UI_TRACK_MIDI_SRC_ALL,
+    UI_TRACK_MIDI_SRC_COUNT
+} ui_track_midi_source_t;
+
 void ui_core_init(void);
 void ui_core_tick(void);
 void ui_core_service_track_selection_inputs(void);
@@ -63,6 +71,11 @@ const char *ui_get_track_family_display_name(ui_track_family_t family);
 const char *ui_get_track_family_short_name(ui_track_family_t family);
 const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_type_t type);
 const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type_t type);
+uint8_t ui_get_track_midi_channel(uint8_t track);
+bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16);
+ui_track_midi_source_t ui_get_track_midi_source(uint8_t track);
+bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source);
+uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16);
 void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_len);
 ui_hall_mode_t ui_get_hall_mode(void);
 void ui_set_hall_mode(ui_hall_mode_t mode);
