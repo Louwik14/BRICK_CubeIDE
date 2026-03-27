@@ -71,6 +71,7 @@ typedef struct
     uint8_t track_select_armed;
     ui_hall_mode_t hall_mode;
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
+    uint32_t cfg_tap_ms[UI_TRACK_COUNT];
     ui_track_config_t track_configs[UI_TRACK_COUNT];
     uint8_t track_midi_channel[UI_TRACK_COUNT];
     uint8_t track_midi_source[UI_TRACK_COUNT];
@@ -86,6 +87,7 @@ static ui_track_state_t g_ui_track_state = {
     .track_select_armed = 0U,
     .hall_mode = UI_HALL_MODE_SEQ,
     .mode_tap_ms = { 0U },
+    .cfg_tap_ms = { 0U },
     .track_configs = {
         { UI_TRACK_FAMILY_INPUT1, UI_TRACK_TYPE_AUDIO },
         { UI_TRACK_FAMILY_INPUT2, UI_TRACK_TYPE_AUDIO },
@@ -485,7 +487,17 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
 
     if (hall < UI_TRACK_COUNT)
     {
+        const uint32_t now = HAL_GetTick();
+        const uint32_t last_tap = g_ui_track_state.cfg_tap_ms[hall];
+        const uint8_t is_double_tap = ((last_tap != 0U)
+                                       && ((now - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+        g_ui_track_state.cfg_tap_ms[hall] = now;
+
         ui_core_set_active_track(hall);
+        if (is_double_tap != 0U)
+        {
+            ui_page_set(UI_PAGE_TEMPLATE_CFG);
+        }
     }
 }
 
