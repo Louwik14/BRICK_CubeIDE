@@ -33,8 +33,23 @@
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_model.h"
+#include "Core/runtime_target.h"
+#include "Core/track_runtime.h"
+#include "Storage/memory_layout.h"
 #include <math.h>
+#include <stdio.h>
 #include <stddef.h>
+#include <string.h>
+
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
 
 
 /**
@@ -246,21 +261,26 @@ static void apply_mix_track3_send1(float v) { mixer_set_track_send_level(3U, 1U,
 static void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
 static void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
 
-static void apply_dx7_algorithm(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_ALGORITHM, v); }
-static void apply_dx7_feedback(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_FEEDBACK, v); }
-static void apply_dx7_transpose(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_TRANSPOSE, v); }
-static void apply_dx7_lfo_speed(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_SPEED, v); }
-static void apply_dx7_lfo_delay(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_DELAY, v); }
-static void apply_dx7_lfo_pitch_mod_depth(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_PITCH_MOD_DEPTH, v); }
-static void apply_dx7_lfo_amp_mod_depth(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_LFO_AMP_MOD_DEPTH, v); }
-static void apply_dx7_pitch_bend_range(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_PITCH_BEND_RANGE, v); }
-static void apply_dx7_portamento_time(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_PORTAMENTO_TIME, v); }
-static void apply_dx7_mono_mode(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_MONO_MODE, v); }
-static void apply_dx7_operator_mask(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_MASK, v); }
-static void apply_dx7_operator_1_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_1_LEVEL, v); }
-static void apply_dx7_operator_2_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_2_LEVEL, v); }
-static void apply_dx7_operator_3_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_3_LEVEL, v); }
-static void apply_dx7_operator_4_level(float v) { microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_4_LEVEL, v); }
+static void apply_tone_live_track(param_id_t id, float value)
+{
+    (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
+}
+
+static void apply_dx7_algorithm(float v) { apply_tone_live_track(PARAM_DX7_ALGORITHM, v); }
+static void apply_dx7_feedback(float v) { apply_tone_live_track(PARAM_DX7_FEEDBACK, v); }
+static void apply_dx7_transpose(float v) { apply_tone_live_track(PARAM_DX7_TRANSPOSE, v); }
+static void apply_dx7_lfo_speed(float v) { apply_tone_live_track(PARAM_DX7_LFO_SPEED, v); }
+static void apply_dx7_lfo_delay(float v) { apply_tone_live_track(PARAM_DX7_LFO_DELAY, v); }
+static void apply_dx7_lfo_pitch_mod_depth(float v) { apply_tone_live_track(PARAM_DX7_LFO_PITCH_MOD_DEPTH, v); }
+static void apply_dx7_lfo_amp_mod_depth(float v) { apply_tone_live_track(PARAM_DX7_LFO_AMP_MOD_DEPTH, v); }
+static void apply_dx7_pitch_bend_range(float v) { apply_tone_live_track(PARAM_DX7_PITCH_BEND_RANGE, v); }
+static void apply_dx7_portamento_time(float v) { apply_tone_live_track(PARAM_DX7_PORTAMENTO_TIME, v); }
+static void apply_dx7_mono_mode(float v) { apply_tone_live_track(PARAM_DX7_MONO_MODE, v); }
+static void apply_dx7_operator_mask(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_MASK, v); }
+static void apply_dx7_operator_1_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_1_LEVEL, v); }
+static void apply_dx7_operator_2_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_2_LEVEL, v); }
+static void apply_dx7_operator_3_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_3_LEVEL, v); }
+static void apply_dx7_operator_4_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_4_LEVEL, v); }
 
 static fx_granular_state_t *get_active_granular_state(void)
 {
@@ -412,6 +432,196 @@ typedef struct
 } filter_ui_state_t;
 
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
+SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
+SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
+
+static uint8_t param_runtime_cache_get(uint8_t track, param_id_t id, float *out_value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    if (g_param_runtime_track_valid[track][id] == 0U)
+    {
+        return 0U;
+    }
+
+    *out_value = g_param_runtime_track_values[track][id];
+    return 1U;
+}
+
+static void param_runtime_cache_set(uint8_t track, param_id_t id, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    {
+        return;
+    }
+
+    g_param_runtime_track_values[track][id] = value;
+    g_param_runtime_track_valid[track][id] = 1U;
+}
+
+static uint8_t param_is_filter_ui_param(param_id_t id)
+{
+    switch (id)
+    {
+        case PARAM_FILTER_TYPE:
+        case PARAM_FILTER_CUTOFF:
+        case PARAM_FILTER_RESONANCE:
+        case PARAM_FILTER_EG_AMT:
+        case PARAM_FILTER_ATTACK:
+        case PARAM_FILTER_DECAY:
+        case PARAM_FILTER_SUSTAIN:
+        case PARAM_FILTER_RELEASE:
+        case PARAM_FILTER_KEYTRK:
+        case PARAM_FILTER_ENVRST:
+        case PARAM_FILTER_ENVDLY:
+        case PARAM_FILTER_EQ_LOW:
+        case PARAM_FILTER_EQ_MID:
+        case PARAM_FILTER_EQ_HIGH:
+        case PARAM_FILTER_DRIVE:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t param_runtime_apply_tone_dx7(uint8_t instance_id, param_id_t id, float value)
+{
+    if (instance_id != 0U)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_DX7_ALGORITHM: microdexed_synth_set_param(MICRODEXED_PARAM_ALGORITHM, value); return 1U;
+        case PARAM_DX7_FEEDBACK: microdexed_synth_set_param(MICRODEXED_PARAM_FEEDBACK, value); return 1U;
+        case PARAM_DX7_TRANSPOSE: microdexed_synth_set_param(MICRODEXED_PARAM_TRANSPOSE, value); return 1U;
+        case PARAM_DX7_LFO_SPEED: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_SPEED, value); return 1U;
+        case PARAM_DX7_LFO_DELAY: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_DELAY, value); return 1U;
+        case PARAM_DX7_LFO_PITCH_MOD_DEPTH: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_PITCH_MOD_DEPTH, value); return 1U;
+        case PARAM_DX7_LFO_AMP_MOD_DEPTH: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_AMP_MOD_DEPTH, value); return 1U;
+        case PARAM_DX7_PITCH_BEND_RANGE: microdexed_synth_set_param(MICRODEXED_PARAM_PITCH_BEND_RANGE, value); return 1U;
+        case PARAM_DX7_PORTAMENTO_TIME: microdexed_synth_set_param(MICRODEXED_PARAM_PORTAMENTO_TIME, value); return 1U;
+        case PARAM_DX7_MONO_MODE: microdexed_synth_set_param(MICRODEXED_PARAM_MONO_MODE, value); return 1U;
+        case PARAM_DX7_OPERATOR_MASK: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_MASK, value); return 1U;
+        case PARAM_DX7_OPERATOR_1_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_1_LEVEL, value); return 1U;
+        case PARAM_DX7_OPERATOR_2_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_2_LEVEL, value); return 1U;
+        case PARAM_DX7_OPERATOR_3_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_3_LEVEL, value); return 1U;
+        case PARAM_DX7_OPERATOR_4_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_4_LEVEL, value); return 1U;
+        default: return 0U;
+    }
+}
+
+static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id, float value)
+{
+    switch (id)
+    {
+        case PARAM_MONOB_OSC1_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 0U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC2_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 1U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC3_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 2U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_SUB_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 3U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC1_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 0U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC2_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 1U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC3_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 2U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_SUB_OCTAVE: monob_synth_set_sub_octave_for_instance(instance_id, monob_sub_octave_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC1_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 0U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC2_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 1U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC3_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 2U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC1_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 0U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC2_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 1U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC3_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 2U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_SUB_MIX: monob_synth_set_sub_mix_for_instance(instance_id, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        default: return 0U;
+    }
+}
+
+static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float value)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    {
+        return 0U;
+    }
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    uint8_t applied = 0U;
+    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+    {
+        applied = param_runtime_apply_tone_dx7(ctx->instance_id, id, value);
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+    {
+        applied = param_runtime_apply_tone_monob(ctx->instance_id, id, value);
+    }
+
+    if (applied != 0U)
+    {
+        param_runtime_cache_set(track, id, value);
+    }
+
+    return applied;
+}
+
+static uint8_t param_runtime_apply_colors_track(uint8_t track, param_id_t id, float value)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_MONOB_FILTER_TYPE:
+            monob_synth_set_filter_type_for_instance(ctx->instance_id, (uint8_t)(clamp_value(value, 0.0f, 1.0f) + 0.5f));
+            return 1U;
+        case PARAM_MONOB_FILTER_CUTOFF:
+            monob_synth_set_filter_cutoff_for_instance(ctx->instance_id, filter_ui127_to_cutoff_hz(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_RESONANCE:
+            monob_synth_set_filter_resonance_for_instance(ctx->instance_id, filter_ui127_to_resonance(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_EG_AMT:
+            monob_synth_set_filter_eg_amount_for_instance(ctx->instance_id, filter_ui127_to_eg_amount(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_ATTACK:
+            monob_synth_set_filter_attack_for_instance(ctx->instance_id, filter_ui127_to_attack_s(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_DECAY:
+            monob_synth_set_filter_decay_for_instance(ctx->instance_id, filter_ui127_to_decay_s(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_SUSTAIN:
+            monob_synth_set_filter_sustain_for_instance(ctx->instance_id, filter_ui127_to_sustain(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_RELEASE:
+            monob_synth_set_filter_release_for_instance(ctx->instance_id, filter_ui127_to_release_s(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_KEYTRK:
+            monob_synth_set_filter_keytrack_for_instance(ctx->instance_id, filter_ui127_to_keytrack(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_ENVRST:
+            monob_synth_set_filter_env_reset_for_instance(ctx->instance_id, filter_ui127_to_bool(value));
+            return 1U;
+        case PARAM_MONOB_FILTER_ENVDLY:
+            monob_synth_set_filter_env_delay_for_instance(ctx->instance_id, filter_ui127_to_env_delay_s(value));
+            return 1U;
+        default:
+            return 0U;
+    }
+}
 
 static uint8_t filter_mod_locked_for_active_track(void)
 {
@@ -447,7 +657,7 @@ static void filter_ui_state_init_defaults(void)
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 {
     uint8_t track_id = 0U;
-    if ((out_track_id == NULL) || !ui_resolve_filter_target_track(&track_id))
+    if ((out_track_id == NULL) || (runtime_target_resolve_filter_for_ui_track(ui_get_active_track(), &track_id) == 0U))
     {
         return 0U;
     }
@@ -458,32 +668,14 @@ static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 
 static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
 {
-    if (out_track_id == NULL)
+    uint8_t track_id = 0U;
+    if ((out_track_id == NULL) || (runtime_target_resolve_filter_for_ui_track(ui_track, &track_id) == 0U))
     {
         return 0U;
     }
 
-    switch (ui_get_track_family(ui_track))
-    {
-        case UI_TRACK_FAMILY_INPUT1:
-            *out_track_id = 0U;
-            return 1U;
-
-        case UI_TRACK_FAMILY_INPUT2:
-            *out_track_id = 1U;
-            return 1U;
-
-        case UI_TRACK_FAMILY_INPUT3:
-            *out_track_id = 2U;
-            return 1U;
-
-        case UI_TRACK_FAMILY_SYNTH:
-            *out_track_id = 3U;
-            return 1U;
-
-        default:
-            return 0U;
-    }
+    *out_track_id = (uint32_t)track_id;
+    return 1U;
 }
 
 static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
@@ -535,6 +727,10 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_DRIVE:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
             {
+                SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_target ui_active=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ui_get_active_track());
                 return 0U;
             }
             state = resolve_filter_ui_state(target_track);
@@ -545,8 +741,29 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
             break;
 
         default:
+        {
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+            if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                    && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+            {
+                if (track >= SEQ_TRACK_COUNT)
+                {
+                    return 0U;
+                }
+
+                if (param_runtime_cache_get(track, id, out_value) != 0U)
+                {
+                    return 1U;
+                }
+
+                *out_value = param_registry[id].default_value;
+                param_runtime_cache_set(track, id, *out_value);
+                return 1U;
+            }
+
             *out_value = param_get(id);
             return 1U;
+        }
     }
 
     switch (id)
@@ -579,6 +796,9 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return 0U;
     }
 
+    const param_desc_t *const desc = &param_registry[id];
+    const float clamped = clamp_value(value, desc->min, desc->max);
+
     uint32_t target_track = 0U;
     filter_ui_state_t *state = NULL;
     switch (id)
@@ -600,6 +820,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_DRIVE:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
             {
+                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_target ui_active=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ui_get_active_track());
                 return 0U;
             }
             state = resolve_filter_ui_state(target_track);
@@ -610,71 +834,136 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             break;
 
         default:
-            param_set(id, value);
+        {
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+            if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                    && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+            {
+                if (track >= SEQ_TRACK_COUNT)
+                {
+                    return 0U;
+                }
+
+                track_runtime_refresh_track(track);
+                const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+                if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+                {
+                    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_blocked bind=%u reason=%u\r\n",
+                                 (unsigned)track,
+                                 (unsigned)id,
+                                 (unsigned)((ctx != NULL) ? ctx->bind_state : 0xFFU),
+                                 (unsigned)((ctx != NULL) ? ctx->bind_reason : 0xFFU));
+                    return 0U;
+                }
+
+                if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                {
+                    if (param_runtime_apply_track(track, id, clamped) == 0U)
+                    {
+                        SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_unsupported engine=%u inst=%u\r\n",
+                                     (unsigned)track,
+                                     (unsigned)id,
+                                     (unsigned)ctx->engine,
+                                     (unsigned)ctx->instance_id);
+                        return 0U;
+                    }
+                }
+                else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+                {
+                    (void)param_runtime_apply_colors_track(track, id, clamped);
+                    param_runtime_cache_set(track, id, clamped);
+                }
+                else
+                {
+                    param_runtime_cache_set(track, id, clamped);
+                }
+
+                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u domain=%u engine=%u inst=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)rule.domain,
+                             (unsigned)ctx->engine,
+                             (unsigned)ctx->instance_id);
+                return 1U;
+            }
+
+            SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u global_apply ui_active=%u\r\n",
+                         (unsigned)track,
+                         (unsigned)id,
+                         (unsigned)ui_get_active_track());
+            param_set(id, clamped);
             return 1U;
+        }
     }
+
+    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u -> target=%u ui_active=%u v=%.3f\r\n",
+                 (unsigned)track,
+                 (unsigned)id,
+                 (unsigned)target_track,
+                 (unsigned)ui_get_active_track(),
+                 (double)clamped);
 
     switch (id)
     {
         case PARAM_FILTER_TYPE:
-            mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)));
-            state->type = clamp_value(value, 0.0f, 4.0f);
+            mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(clamped, 0.0f, 4.0f) + 0.5f)));
+            state->type = clamp_value(clamped, 0.0f, 4.0f);
             return 1U;
         case PARAM_FILTER_CUTOFF:
-            mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(value));
-            state->cutoff = filter_ui127_clamp(value);
+            mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(clamped));
+            state->cutoff = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_RESONANCE:
-            mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(value));
-            state->resonance = filter_ui127_clamp(value);
+            mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(clamped));
+            state->resonance = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_EG_AMT:
-            mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(value));
-            state->eg_amount = filter_ui127_clamp(value);
+            mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(clamped));
+            state->eg_amount = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_ATTACK:
-            mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(value));
-            state->attack = filter_ui127_clamp(value);
+            mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(clamped));
+            state->attack = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_DECAY:
-            mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(value));
-            state->decay = filter_ui127_clamp(value);
+            mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(clamped));
+            state->decay = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_SUSTAIN:
-            mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(value));
-            state->sustain = filter_ui127_clamp(value);
+            mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(clamped));
+            state->sustain = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_RELEASE:
-            mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(value));
-            state->release = filter_ui127_clamp(value);
+            mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(clamped));
+            state->release = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_KEYTRK:
-            mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(value));
-            state->keytrack = filter_ui127_clamp(value);
+            mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(clamped));
+            state->keytrack = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_ENVRST:
-            mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(value));
-            state->env_reset = filter_ui127_to_bool(value) ? 1.0f : 0.0f;
+            mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(clamped));
+            state->env_reset = filter_ui127_to_bool(clamped) ? 1.0f : 0.0f;
             return 1U;
         case PARAM_FILTER_ENVDLY:
-            mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(value));
-            state->env_delay = filter_ui127_clamp(value);
+            mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(clamped));
+            state->env_delay = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_EQ_LOW:
-            mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(value));
-            state->eq_low = filter_ui127_clamp(value);
+            mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(clamped));
+            state->eq_low = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_EQ_MID:
-            mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(value));
-            state->eq_mid = filter_ui127_clamp(value);
+            mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(clamped));
+            state->eq_mid = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_EQ_HIGH:
-            mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(value));
-            state->eq_high = filter_ui127_clamp(value);
+            mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(clamped));
+            state->eq_high = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_DRIVE:
-            apply_filter_drive_runtime(target_track, clamp_value(value, 0.0f, 127.0f));
-            state->drive = clamp_value(value, 0.0f, 127.0f);
+            apply_filter_drive_runtime(target_track, clamp_value(clamped, 0.0f, 127.0f));
+            state->drive = clamp_value(clamped, 0.0f, 127.0f);
             return 1U;
         default:
             break;
@@ -712,18 +1001,38 @@ void param_registry_sync_filter_ui_for_active_track(void)
     param_store_set_active(PARAM_FILTER_EQ_MID, state->eq_mid);
     param_store_set_active(PARAM_FILTER_EQ_HIGH, state->eq_high);
     param_store_set_active(PARAM_FILTER_DRIVE, state->drive);
-    apply_filter_drive_runtime(target_track, state->drive);
 
     if (filter_mod_locked_for_active_track() != 0U)
     {
         param_store_set_active(PARAM_FILTER_KEYTRK, 0.0f);
         param_store_set_active(PARAM_FILTER_ENVRST, 0.0f);
         param_store_set_active(PARAM_FILTER_ENVDLY, 0.0f);
-
-        mixer_set_track_filter_keytrack(target_track, 0.0f);
-        mixer_set_track_filter_env_reset(target_track, false);
-        mixer_set_track_filter_env_delay(target_track, 0.0f);
     }
+}
+
+void param_registry_sync_ui_for_active_track(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+                || (param_is_filter_ui_param(id) != 0U))
+        {
+            continue;
+        }
+
+        float value = 0.0f;
+        if (param_registry_get_track_value(id, active_track, &value) != 0U)
+        {
+            param_store_set_active(id, value);
+        }
+    }
+
+    param_registry_sync_filter_ui_for_active_track();
 }
 
 /*
@@ -994,21 +1303,21 @@ static void apply_monob_filter_keytrack(float v) { monob_synth_set_filter_keytra
 static void apply_monob_filter_env_reset(float v) { monob_synth_set_filter_env_reset(filter_ui127_to_bool(v)); }
 static void apply_monob_filter_env_delay(float v) { monob_synth_set_filter_env_delay(filter_ui127_to_env_delay_s(v)); }
 
-static void apply_monob_osc1_wave(float v) { monob_synth_set_osc_wave(0U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_osc2_wave(float v) { monob_synth_set_osc_wave(1U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_osc3_wave(float v) { monob_synth_set_osc_wave(2U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_sub_wave(float v) { monob_synth_set_osc_wave(3U, (uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
-static void apply_monob_osc1_range(float v) { monob_synth_set_osc_range(0U, monob_range_index_to_octave(v)); }
-static void apply_monob_osc2_range(float v) { monob_synth_set_osc_range(1U, monob_range_index_to_octave(v)); }
-static void apply_monob_osc3_range(float v) { monob_synth_set_osc_range(2U, monob_range_index_to_octave(v)); }
-static void apply_monob_sub_octave(float v) { monob_synth_set_sub_octave(monob_sub_octave_index_to_octave(v)); }
-static void apply_monob_osc1_detune(float v) { monob_synth_set_osc_detune(0U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_osc2_detune(float v) { monob_synth_set_osc_detune(1U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_osc3_detune(float v) { monob_synth_set_osc_detune(2U, clamp_value(v, -24.0f, 24.0f)); }
-static void apply_monob_osc1_mix(float v) { monob_synth_set_osc_mix(0U, clamp_value(v, 0.0f, 1.0f)); }
-static void apply_monob_osc2_mix(float v) { monob_synth_set_osc_mix(1U, clamp_value(v, 0.0f, 1.0f)); }
-static void apply_monob_osc3_mix(float v) { monob_synth_set_osc_mix(2U, clamp_value(v, 0.0f, 1.0f)); }
-static void apply_monob_sub_mix(float v) { monob_synth_set_sub_mix(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_monob_osc1_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_WAVE, v); }
+static void apply_monob_osc2_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_WAVE, v); }
+static void apply_monob_osc3_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_WAVE, v); }
+static void apply_monob_sub_wave(float v) { apply_tone_live_track(PARAM_MONOB_SUB_WAVE, v); }
+static void apply_monob_osc1_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_RANGE, v); }
+static void apply_monob_osc2_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_RANGE, v); }
+static void apply_monob_osc3_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_RANGE, v); }
+static void apply_monob_sub_octave(float v) { apply_tone_live_track(PARAM_MONOB_SUB_OCTAVE, v); }
+static void apply_monob_osc1_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_DETUNE, v); }
+static void apply_monob_osc2_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_DETUNE, v); }
+static void apply_monob_osc3_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_DETUNE, v); }
+static void apply_monob_osc1_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_MIX, v); }
+static void apply_monob_osc2_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_MIX, v); }
+static void apply_monob_osc3_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_MIX, v); }
+static void apply_monob_sub_mix(float v) { apply_tone_live_track(PARAM_MONOB_SUB_MIX, v); }
 
 static void apply_cfg_track(float v)
 {
@@ -1505,6 +1814,8 @@ void param_registry_init(void)
 {
     /* Registry is static metadata; runtime values are in param_store. */
     filter_ui_state_init_defaults();
+    memset(&g_param_runtime_track_values, 0, sizeof(g_param_runtime_track_values));
+    memset(&g_param_runtime_track_valid, 0, sizeof(g_param_runtime_track_valid));
 }
 
 /**

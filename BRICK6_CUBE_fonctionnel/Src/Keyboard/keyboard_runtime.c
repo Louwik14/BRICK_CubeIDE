@@ -83,6 +83,12 @@ void keyboard_runtime_all_notes_off(void)
 
 void keyboard_runtime_on_active_track_changed(void)
 {
+    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    if ((hall_mode != UI_HALL_MODE_KEYBOARD) && (hall_mode != UI_HALL_MODE_ARP))
+    {
+        return;
+    }
+
     keyboard_runtime_all_notes_off();
 }
 

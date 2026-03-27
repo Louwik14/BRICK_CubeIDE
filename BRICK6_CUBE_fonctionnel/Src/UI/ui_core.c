@@ -52,6 +52,7 @@
 #include "audio_float.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
+#include "Core/runtime_target.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
@@ -281,7 +282,7 @@ static void ui_core_sync_active_track_cfg_params(void)
 
     param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_config->family);
     param_store_set_active(UI_CFG_TRACK_TYPE_PARAM, (float)ui_get_track_type_index_for_family(active_config->family, active_config->type));
-    param_registry_sync_filter_ui_for_active_track();
+    param_registry_sync_ui_for_active_track();
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -712,33 +713,7 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
-    if (out_track_id == 0)
-    {
-        return false;
-    }
-
-    const ui_track_family_t family = ui_get_track_family(ui_get_active_track());
-    switch (family)
-    {
-        case UI_TRACK_FAMILY_INPUT1:
-            *out_track_id = 0U;
-            return true;
-
-        case UI_TRACK_FAMILY_INPUT2:
-            *out_track_id = 1U;
-            return true;
-
-        case UI_TRACK_FAMILY_INPUT3:
-            *out_track_id = 2U;
-            return true;
-
-        case UI_TRACK_FAMILY_SYNTH:
-            *out_track_id = 3U;
-            return true;
-
-        default:
-            return false;
-    }
+    return (runtime_target_resolve_filter_for_ui_track(ui_get_active_track(), out_track_id) != 0U) ? true : false;
 }
 
 ui_track_config_t ui_get_track_config(uint8_t track)
