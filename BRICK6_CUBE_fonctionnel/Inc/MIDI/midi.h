@@ -138,6 +138,7 @@ midi_clock_mode_t midi_clock_get_mode(void);
 void midi_clock_set_bpm_milli(uint32_t bpm_milli);
 
 uint32_t midi_clock_get_bpm_milli(void);
+void midi_clock_on_usb_sof(void);
 
 void midi_clock_set_running(bool running);
 
