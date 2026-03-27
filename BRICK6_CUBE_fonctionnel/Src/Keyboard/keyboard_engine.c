@@ -19,11 +19,13 @@
 #include "Audio/monob_synth.h"
 #include "MIDI/midi.h"
 #include "ui_core.h"
+#include "Core/track_runtime.h"
 
 #define KBD_ARP_MIDI_CHANNEL 0U
 
 static ui_track_type_t g_keyboard_engine_sounding_type = UI_TRACK_TYPE_DX7;
 static bool g_keyboard_engine_sounding_active = false;
+static uint8_t g_keyboard_engine_sounding_monob_instance = 0U;
 
 static bool keyboard_engine_active_track_is_synth(void)
 {
@@ -49,6 +51,21 @@ static uint8_t keyboard_engine_get_filter_target_track(void)
         return track_id;
     }
     return 0xFFU;
+}
+
+static uint8_t keyboard_engine_get_active_monob_instance(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    track_runtime_refresh_track(active_track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+    if ((ctx == NULL)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    return ctx->instance_id;
 }
 
 void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
@@ -77,7 +94,8 @@ void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
 
     if (synth_type == UI_TRACK_TYPE_MONOB)
     {
-        monob_synth_note_on(note, velocity);
+        g_keyboard_engine_sounding_monob_instance = keyboard_engine_get_active_monob_instance();
+        monob_synth_note_on_for_instance(g_keyboard_engine_sounding_monob_instance, note, velocity);
     }
     else
     {
@@ -109,7 +127,7 @@ void keyboard_engine_note_off(uint8_t note)
 
     if (synth_type == UI_TRACK_TYPE_MONOB)
     {
-        monob_synth_note_off(note);
+        monob_synth_note_off_for_instance(g_keyboard_engine_sounding_monob_instance, note);
     }
     else
     {
@@ -120,7 +138,7 @@ void keyboard_engine_note_off(uint8_t note)
 void keyboard_engine_all_notes_off(void)
 {
     microdexed_synth_all_notes_off();
-    monob_synth_all_notes_off();
+    monob_synth_all_notes_off_all();
 
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
     if (filter_track != 0xFFU)
@@ -134,4 +152,5 @@ void keyboard_engine_all_notes_off(void)
     }
 
     g_keyboard_engine_sounding_active = false;
+    g_keyboard_engine_sounding_monob_instance = 0U;
 }

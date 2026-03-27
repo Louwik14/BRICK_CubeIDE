@@ -492,28 +492,23 @@ static uint8_t param_runtime_apply_tone_dx7(uint8_t instance_id, param_id_t id, 
 
 static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id, float value)
 {
-    if (instance_id != 0U)
-    {
-        return 0U;
-    }
-
     switch (id)
     {
-        case PARAM_MONOB_OSC1_WAVE: monob_synth_set_osc_wave(0U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_OSC2_WAVE: monob_synth_set_osc_wave(1U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_OSC3_WAVE: monob_synth_set_osc_wave(2U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_SUB_WAVE: monob_synth_set_osc_wave(3U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_OSC1_RANGE: monob_synth_set_osc_range(0U, monob_range_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_OSC2_RANGE: monob_synth_set_osc_range(1U, monob_range_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_OSC3_RANGE: monob_synth_set_osc_range(2U, monob_range_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_SUB_OCTAVE: monob_synth_set_sub_octave(monob_sub_octave_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_OSC1_DETUNE: monob_synth_set_osc_detune(0U, clamp_value(value, -24.0f, 24.0f)); return 1U;
-        case PARAM_MONOB_OSC2_DETUNE: monob_synth_set_osc_detune(1U, clamp_value(value, -24.0f, 24.0f)); return 1U;
-        case PARAM_MONOB_OSC3_DETUNE: monob_synth_set_osc_detune(2U, clamp_value(value, -24.0f, 24.0f)); return 1U;
-        case PARAM_MONOB_OSC1_MIX: monob_synth_set_osc_mix(0U, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        case PARAM_MONOB_OSC2_MIX: monob_synth_set_osc_mix(1U, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        case PARAM_MONOB_OSC3_MIX: monob_synth_set_osc_mix(2U, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        case PARAM_MONOB_SUB_MIX: monob_synth_set_sub_mix(clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC1_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 0U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC2_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 1U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC3_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 2U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_SUB_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 3U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
+        case PARAM_MONOB_OSC1_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 0U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC2_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 1U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC3_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 2U, monob_range_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_SUB_OCTAVE: monob_synth_set_sub_octave_for_instance(instance_id, monob_sub_octave_index_to_octave(value)); return 1U;
+        case PARAM_MONOB_OSC1_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 0U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC2_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 1U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC3_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 2U, clamp_value(value, -24.0f, 24.0f)); return 1U;
+        case PARAM_MONOB_OSC1_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 0U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC2_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 1U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_OSC3_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 2U, clamp_value(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_MONOB_SUB_MIX: monob_synth_set_sub_mix_for_instance(instance_id, clamp_value(value, 0.0f, 1.0f)); return 1U;
         default: return 0U;
     }
 }
