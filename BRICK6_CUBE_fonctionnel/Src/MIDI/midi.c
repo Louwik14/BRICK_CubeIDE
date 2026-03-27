@@ -30,6 +30,7 @@
 #include "main.h"
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_engine.h"
+#include "Seq/seq_runtime.h"
 #include <string.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;

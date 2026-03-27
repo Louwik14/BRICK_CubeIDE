@@ -57,6 +57,52 @@ typedef struct
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
 SEQ_STATE_D2 static seq_play_evt_t g_seq_play_events[SEQ_RUNTIME_PLAY_EVENT_CAP];
 SEQ_STATE_D2 static uint8_t g_seq_play_event_count;
+SEQ_STATE_D2 static uint32_t g_seq_midi_clock_tick_accum;
+
+static void seq_runtime_send_transport_start(void)
+{
+    if (g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    midi_start(MIDI_DEST_BOTH);
+}
+
+static void seq_runtime_send_transport_stop_and_panic(void)
+{
+    if (g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    midi_stop(MIDI_DEST_BOTH);
+    for (uint8_t ch = 0U; ch < 16U; ++ch)
+    {
+        midi_all_notes_off(MIDI_DEST_BOTH, ch);
+    }
+}
+
+static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
+{
+    if ((g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI) || (g_seq_runtime.running == 0U))
+    {
+        return;
+    }
+
+    uint32_t clock_period_ticks = g_seq_runtime.ticks_per_step / SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP;
+    if (clock_period_ticks == 0U)
+    {
+        clock_period_ticks = 1U;
+    }
+
+    g_seq_midi_clock_tick_accum += elapsed_ticks;
+    while (g_seq_midi_clock_tick_accum >= clock_period_ticks)
+    {
+        g_seq_midi_clock_tick_accum -= clock_period_ticks;
+        midi_clock(MIDI_DEST_BOTH);
+    }
+}
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
@@ -519,6 +565,9 @@ void seq_runtime_start(void)
         g_seq_runtime.prev_step[track] = 0U;
         seq_runtime_restore_all_active_locks(track);
     }
+
+    g_seq_midi_clock_tick_accum = 0U;
+    seq_runtime_send_transport_start();
 }
 
 void seq_runtime_stop(void)
@@ -537,6 +586,9 @@ void seq_runtime_stop(void)
         seq_runtime_restore_all_active_locks(track);
         g_seq_runtime.prev_step_valid[track] = 0U;
     }
+
+    g_seq_midi_clock_tick_accum = 0U;
+    seq_runtime_send_transport_stop_and_panic();
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -583,6 +635,7 @@ void seq_runtime_process(void)
     const uint32_t elapsed = current_tick - g_seq_runtime.last_tick_count;
     g_seq_runtime.last_tick_count = current_tick;
     g_seq_runtime.tick_accum += elapsed;
+    seq_runtime_send_internal_clock(elapsed);
 
     while (g_seq_runtime.tick_accum >= g_seq_runtime.ticks_per_step)
     {
@@ -604,6 +657,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     g_seq_runtime.clock_src = src;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.tick_accum = 0U;
+    g_seq_midi_clock_tick_accum = 0U;
     seq_runtime_play_events_clear();
 }
 
