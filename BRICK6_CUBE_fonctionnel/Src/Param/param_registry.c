@@ -712,17 +712,12 @@ void param_registry_sync_filter_ui_for_active_track(void)
     param_store_set_active(PARAM_FILTER_EQ_MID, state->eq_mid);
     param_store_set_active(PARAM_FILTER_EQ_HIGH, state->eq_high);
     param_store_set_active(PARAM_FILTER_DRIVE, state->drive);
-    apply_filter_drive_runtime(target_track, state->drive);
 
     if (filter_mod_locked_for_active_track() != 0U)
     {
         param_store_set_active(PARAM_FILTER_KEYTRK, 0.0f);
         param_store_set_active(PARAM_FILTER_ENVRST, 0.0f);
         param_store_set_active(PARAM_FILTER_ENVDLY, 0.0f);
-
-        mixer_set_track_filter_keytrack(target_track, 0.0f);
-        mixer_set_track_filter_env_reset(target_track, false);
-        mixer_set_track_filter_env_delay(target_track, 0.0f);
     }
 }
 
