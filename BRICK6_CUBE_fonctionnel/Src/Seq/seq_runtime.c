@@ -58,6 +58,63 @@ SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
 SEQ_STATE_D2 static seq_play_evt_t g_seq_play_events[SEQ_RUNTIME_PLAY_EVENT_CAP];
 SEQ_STATE_D2 static uint8_t g_seq_play_event_count;
 SEQ_STATE_D2 static uint32_t g_seq_midi_clock_tick_accum;
+SEQ_STATE_D2 static uint8_t g_seq_active_note_counts[SEQ_TRACK_COUNT][128];
+
+static void seq_runtime_active_notes_clear(void)
+{
+    memset(g_seq_active_note_counts, 0, sizeof(g_seq_active_note_counts));
+}
+
+static void seq_runtime_mark_note_on(seq_track_id_t track, uint8_t note)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (note >= 128U))
+    {
+        return;
+    }
+
+    if (g_seq_active_note_counts[track][note] < 0xFFU)
+    {
+        g_seq_active_note_counts[track][note]++;
+    }
+}
+
+static void seq_runtime_mark_note_off(seq_track_id_t track, uint8_t note)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (note >= 128U))
+    {
+        return;
+    }
+
+    if (g_seq_active_note_counts[track][note] > 0U)
+    {
+        g_seq_active_note_counts[track][note]--;
+    }
+}
+
+static void seq_runtime_kill_all_active_notes(void)
+{
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
+        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+
+        for (uint8_t note = 0U; note < 128U; ++note)
+        {
+            const uint8_t count = g_seq_active_note_counts[track][note];
+            if (count == 0U)
+            {
+                continue;
+            }
+
+            for (uint8_t i = 0U; i < count; ++i)
+            {
+                midi_note_off(MIDI_DEST_BOTH, channel, note, 0U);
+            }
+
+            g_seq_active_note_counts[track][note] = 0U;
+        }
+    }
+}
 
 static void seq_runtime_send_transport_start(void)
 {
@@ -71,12 +128,12 @@ static void seq_runtime_send_transport_start(void)
 
 static void seq_runtime_send_transport_stop_and_panic(void)
 {
-    if (g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    if (g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI)
     {
-        return;
+        midi_stop(MIDI_DEST_BOTH);
     }
 
-    midi_stop(MIDI_DEST_BOTH);
+    seq_runtime_kill_all_active_notes();
     for (uint8_t ch = 0U; ch < 16U; ++ch)
     {
         midi_all_notes_off(MIDI_DEST_BOTH, ch);
@@ -151,10 +208,40 @@ static void seq_runtime_play_events_service(void)
         if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
         {
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
+            seq_runtime_mark_note_on(evt->track, evt->note);
         }
         else
         {
             midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
+            seq_runtime_mark_note_off(evt->track, evt->note);
+        }
+
+        track_runtime_refresh_track(evt->track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(evt->track);
+        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+        {
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    monob_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
+                }
+                else
+                {
+                    monob_synth_note_off_for_instance(ctx->instance_id, evt->note);
+                }
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    microdexed_synth_note_on(evt->note, evt->velocity);
+                }
+                else
+                {
+                    microdexed_synth_note_off(evt->note);
+                }
+            }
         }
 
         track_runtime_refresh_track(evt->track);
@@ -316,6 +403,11 @@ static seq_value16_t seq_runtime_play_get_locked_or_default(seq_track_id_t track
 
 static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t step)
 {
+    if (seq_model_get_trig(track, step) == 0U)
+    {
+        return;
+    }
+
     const track_runtime_param_status_t play_status =
             track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -349,6 +441,10 @@ static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t s
 
         const float note_f = seq_param_iface_decode_param_value(note_id, seq_runtime_play_get_locked_or_default(track, step, note_id));
         const uint8_t note = (uint8_t)(note_f + 0.5f);
+        if (note >= 128U)
+        {
+            continue;
+        }
 
         const float len_f = seq_param_iface_decode_param_value(len_id, seq_runtime_play_get_locked_or_default(track, step, len_id));
         const uint32_t len_ticks = (uint32_t)(((len_f < 1.0f ? 1.0f : len_f) * (float)g_seq_runtime.ticks_per_step) / 100.0f);
@@ -534,6 +630,7 @@ void seq_runtime_init(void)
     g_seq_runtime.ticks_per_step = SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT;
     g_seq_runtime.last_tick_count = engine_tick_count;
     seq_runtime_play_events_clear();
+    seq_runtime_active_notes_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -557,6 +654,7 @@ void seq_runtime_start(void)
     g_seq_runtime.last_tick_count = engine_tick_count;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     seq_runtime_play_events_clear();
+    seq_runtime_active_notes_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -589,6 +687,7 @@ void seq_runtime_stop(void)
 
     g_seq_midi_clock_tick_accum = 0U;
     seq_runtime_send_transport_stop_and_panic();
+    seq_runtime_active_notes_clear();
 }
 
 void seq_runtime_toggle_play_stop(void)
