@@ -1,9 +1,12 @@
 #include "Seq/seq_param_iface.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Storage/memory_layout.h"
+#include "Core/track_runtime.h"
 #include "param_registry.h"
+#include "ui_core.h"
 
 typedef struct
 {
@@ -15,6 +18,16 @@ typedef struct
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
 
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
+
 static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 {
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
@@ -23,6 +36,7 @@ static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 void seq_param_iface_init(void)
 {
     memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
+    track_runtime_init();
 }
 
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id)
@@ -42,14 +56,33 @@ uint8_t seq_param_iface_set_to_mask(uint8_t set_id)
 
 uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id, seq_param8_t param8)
 {
-    (void)param8;
-
     if ((seq_param_iface_track_is_valid(track) == 0U) || (seq_param_iface_is_set_plockable(set_id) == 0U))
     {
         return 0U;
     }
 
-    return 1U;
+    const param_id_t param = (param_id_t)param8;
+    if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS) && (set_id != (uint8_t)SEQ_PLOCK_SET_COLORS))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE) && (set_id != (uint8_t)SEQ_PLOCK_SET_TONE))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) && (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, param);
+    return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
 uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
@@ -126,6 +159,13 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, value16);
+    SEQ_BIND_LOG("[SEQ][IFACE] apply tr=%u set=%u p=%u v16=%u dec=%.3f ui_active=%u\r\n",
+                 (unsigned)track,
+                 (unsigned)set_id,
+                 (unsigned)param8,
+                 (unsigned)value16,
+                 (double)decoded,
+                 (unsigned)ui_get_active_track());
     if (param_registry_apply_track_value(param, track, decoded) == 0U)
     {
         return 0U;
@@ -168,106 +208,6 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 }
 
 
-static uint8_t seq_param_iface_param_is_colors(param_id_t param)
-{
-    switch (param)
-    {
-        case PARAM_FILTER_TYPE:
-        case PARAM_FILTER_CUTOFF:
-        case PARAM_FILTER_RESONANCE:
-        case PARAM_FILTER_KEYTRK:
-        case PARAM_FILTER_ENVRST:
-        case PARAM_FILTER_ENVDLY:
-        case PARAM_FILTER_DRIVE:
-        case PARAM_FILTER_EQ_LOW:
-        case PARAM_FILTER_EQ_MID:
-        case PARAM_FILTER_EQ_HIGH:
-        case PARAM_MONOB_FILTER_TYPE:
-        case PARAM_MONOB_FILTER_CUTOFF:
-        case PARAM_MONOB_FILTER_RESONANCE:
-        case PARAM_MONOB_FILTER_EG_AMT:
-        case PARAM_MONOB_FILTER_ATTACK:
-        case PARAM_MONOB_FILTER_DECAY:
-        case PARAM_MONOB_FILTER_SUSTAIN:
-        case PARAM_MONOB_FILTER_RELEASE:
-        case PARAM_MONOB_FILTER_KEYTRK:
-        case PARAM_MONOB_FILTER_ENVRST:
-        case PARAM_MONOB_FILTER_ENVDLY:
-            return 1U;
-
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t seq_param_iface_param_is_tone(param_id_t param)
-{
-    switch (param)
-    {
-        case PARAM_DX7_ALGORITHM:
-        case PARAM_DX7_FEEDBACK:
-        case PARAM_DX7_TRANSPOSE:
-        case PARAM_DX7_LFO_SPEED:
-        case PARAM_DX7_LFO_DELAY:
-        case PARAM_DX7_LFO_PITCH_MOD_DEPTH:
-        case PARAM_DX7_LFO_AMP_MOD_DEPTH:
-        case PARAM_DX7_PITCH_BEND_RANGE:
-        case PARAM_DX7_PORTAMENTO_TIME:
-        case PARAM_DX7_MONO_MODE:
-        case PARAM_DX7_OPERATOR_MASK:
-        case PARAM_DX7_OPERATOR_1_LEVEL:
-        case PARAM_DX7_OPERATOR_2_LEVEL:
-        case PARAM_DX7_OPERATOR_3_LEVEL:
-        case PARAM_DX7_OPERATOR_4_LEVEL:
-        case PARAM_MONOB_OSC1_WAVE:
-        case PARAM_MONOB_OSC2_WAVE:
-        case PARAM_MONOB_OSC3_WAVE:
-        case PARAM_MONOB_SUB_WAVE:
-        case PARAM_MONOB_OSC1_RANGE:
-        case PARAM_MONOB_OSC2_RANGE:
-        case PARAM_MONOB_OSC3_RANGE:
-        case PARAM_MONOB_SUB_OCTAVE:
-        case PARAM_MONOB_OSC1_DETUNE:
-        case PARAM_MONOB_OSC2_DETUNE:
-        case PARAM_MONOB_OSC3_DETUNE:
-        case PARAM_MONOB_OSC1_MIX:
-        case PARAM_MONOB_OSC2_MIX:
-        case PARAM_MONOB_OSC3_MIX:
-        case PARAM_MONOB_SUB_MIX:
-            return 1U;
-
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t seq_param_iface_param_is_play(param_id_t param)
-{
-    switch (param)
-    {
-        case PARAM_SEQ_PLAY_V1_NOTE:
-        case PARAM_SEQ_PLAY_V1_VEL:
-        case PARAM_SEQ_PLAY_V1_LEN:
-        case PARAM_SEQ_PLAY_V1_MICTIM:
-        case PARAM_SEQ_PLAY_V2_NOTE:
-        case PARAM_SEQ_PLAY_V2_VEL:
-        case PARAM_SEQ_PLAY_V2_LEN:
-        case PARAM_SEQ_PLAY_V2_MICTIM:
-        case PARAM_SEQ_PLAY_V3_NOTE:
-        case PARAM_SEQ_PLAY_V3_VEL:
-        case PARAM_SEQ_PLAY_V3_LEN:
-        case PARAM_SEQ_PLAY_V3_MICTIM:
-        case PARAM_SEQ_PLAY_V4_NOTE:
-        case PARAM_SEQ_PLAY_V4_VEL:
-        case PARAM_SEQ_PLAY_V4_LEN:
-        case PARAM_SEQ_PLAY_V4_MICTIM:
-            return 1U;
-
-        default:
-            return 0U;
-    }
-}
-
 uint8_t seq_param_iface_map_param(param_id_t param,
                                   uint8_t *out_set_id,
                                   seq_param8_t *out_param8)
@@ -277,21 +217,22 @@ uint8_t seq_param_iface_map_param(param_id_t param,
         return 0U;
     }
 
-    if (seq_param_iface_param_is_colors(param) != 0U)
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
     {
         *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
         *out_param8 = (seq_param8_t)param;
         return 1U;
     }
 
-    if (seq_param_iface_param_is_tone(param) != 0U)
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
         *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
         *out_param8 = (seq_param8_t)param;
         return 1U;
     }
 
-    if (seq_param_iface_param_is_play(param) != 0U)
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
     {
         *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
         *out_param8 = (seq_param8_t)param;
