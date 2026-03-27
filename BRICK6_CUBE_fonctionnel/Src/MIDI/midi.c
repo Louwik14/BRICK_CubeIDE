@@ -65,10 +65,6 @@ static volatile uint32_t midi_clock_rem_accum = 0U;
 static volatile uint32_t midi_clock_next_ccr = 0U;
 static volatile bool midi_clock_timer_armed = false;
 
-static volatile uint32_t midi_clock_sof_prev_cnt = 0U;
-static volatile uint32_t midi_clock_sof_acc_ticks = 0U;
-static volatile uint16_t midi_clock_sof_acc_frames = 0U;
-
 static inline uint32_t midi_clock_compute_next_delta_ticks(void) {
   uint32_t delta = midi_clock_period_ticks;
   uint32_t rem_accum = midi_clock_rem_accum + midi_clock_period_rem;
@@ -80,10 +76,29 @@ static inline uint32_t midi_clock_compute_next_delta_ticks(void) {
   return delta;
 }
 
+static uint32_t midi_clock_get_tim5_counter_hz(void) {
+  uint32_t tim_kernel_hz = HAL_RCC_GetPCLK1Freq();
+  const uint32_t apb1_presc = (RCC->D2CFGR & RCC_D2CFGR_D2PPRE1);
+
+  if (apb1_presc != RCC_APB1_DIV1) {
+    tim_kernel_hz *= 2U;
+  }
+
+  const uint32_t psc = (__HAL_TIM_GET_PRESCALER(&htim5) + 1U);
+  if (psc == 0U) {
+    return MIDI_CLOCK_TIMER_HZ_DEFAULT;
+  }
+
+  const uint32_t counter_hz = tim_kernel_hz / psc;
+  return (counter_hz > 0U) ? counter_hz : MIDI_CLOCK_TIMER_HZ_DEFAULT;
+}
+
 static void midi_clock_recompute_period(uint32_t bpm_milli) {
   if (bpm_milli == 0U) {
     bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
   }
+
+  midi_clock_timer_hz = midi_clock_get_tim5_counter_hz();
 
   const uint32_t den = (uint32_t)(MIDI_CLOCK_PPQN * (uint64_t)bpm_milli);
   const uint64_t num = ((uint64_t)midi_clock_timer_hz * 60ULL * 1000ULL);
@@ -93,33 +108,6 @@ static void midi_clock_recompute_period(uint32_t bpm_milli) {
   midi_clock_period_rem = (uint32_t)(num % den);
   midi_clock_period_den = den;
   midi_clock_rem_accum = 0U;
-}
-
-void midi_clock_on_usb_sof(void) {
-  const uint32_t now_cnt = __HAL_TIM_GET_COUNTER(&htim5);
-
-  if (midi_clock_sof_acc_frames == 0U) {
-    midi_clock_sof_prev_cnt = now_cnt;
-    midi_clock_sof_acc_frames = 1U;
-    return;
-  }
-
-  const uint32_t delta = now_cnt - midi_clock_sof_prev_cnt;
-  midi_clock_sof_prev_cnt = now_cnt;
-  midi_clock_sof_acc_ticks += delta;
-  midi_clock_sof_acc_frames++;
-
-  if (midi_clock_sof_acc_frames >= 128U) {
-    const uint32_t measured_hz = (uint32_t)(((uint64_t)midi_clock_sof_acc_ticks * 1000ULL) / midi_clock_sof_acc_frames);
-    if ((measured_hz >= 500000U) && (measured_hz <= 2000000U)) {
-      uint32_t primask = midi_enter_critical();
-      midi_clock_timer_hz = measured_hz;
-      midi_clock_recompute_period(midi_clock_bpm_milli);
-      midi_exit_critical(primask);
-    }
-    midi_clock_sof_acc_ticks = 0U;
-    midi_clock_sof_acc_frames = 0U;
-  }
 }
 
 static void midi_clock_hw_start(void) {
