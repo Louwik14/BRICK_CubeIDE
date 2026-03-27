@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "ui_core.h"
 
@@ -17,6 +18,16 @@ typedef struct
     uint8_t synth_target_id;
     uint8_t midi_channel;
 } runtime_target_t;
+
+#ifndef SEQ_DEBUG_TRACK_BINDING
+#define SEQ_DEBUG_TRACK_BINDING 0
+#endif
+
+#if SEQ_DEBUG_TRACK_BINDING
+#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_BIND_LOG(...) do { } while (0)
+#endif
 
 static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runtime_target_t *out_target)
 {
@@ -54,7 +65,7 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
         case UI_TRACK_FAMILY_SYNTH:
             out_target->has_synth_target = 1U;
             out_target->synth_target_id = 0U; /* moteur synth global actuel */
-            if (config.type != UI_TRACK_TYPE_MONOB)
+            if (ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH) == 1U)
             {
                 out_target->has_filter_target = 1U;
                 out_target->filter_target_track = 3U;
@@ -64,6 +75,14 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
         default:
             break;
     }
+
+    SEQ_BIND_LOG("[SEQ][TARGET] tr=%u family=%u type=%u -> has_filter=%u target=%u ui_active=%u\r\n",
+                 (unsigned)ui_track,
+                 (unsigned)config.family,
+                 (unsigned)config.type,
+                 (unsigned)out_target->has_filter_target,
+                 (unsigned)out_target->filter_target_track,
+                 (unsigned)ui_get_active_track());
 
     return 1U;
 }
