@@ -6,6 +6,8 @@
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
 #include "Core/track_runtime.h"
+#include "Audio/microdexed_synth.h"
+#include "Audio/monob_synth.h"
 #include "midi.h"
 #include "param_registry.h"
 #include "ui_core.h"
@@ -98,7 +100,8 @@ static void seq_runtime_play_events_service(void)
             continue;
         }
 
-        const uint8_t channel = (uint8_t)(evt->track & 0x0FU);
+        const uint8_t channel_1_16 = ui_get_track_midi_channel(evt->track);
+        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
         if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
         {
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
@@ -106,6 +109,34 @@ static void seq_runtime_play_events_service(void)
         else
         {
             midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
+        }
+
+        track_runtime_refresh_track(evt->track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(evt->track);
+        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+        {
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    monob_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
+                }
+                else
+                {
+                    monob_synth_note_off_for_instance(ctx->instance_id, evt->note);
+                }
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_EVT_NOTE_ON)
+                {
+                    microdexed_synth_note_on(evt->note, evt->velocity);
+                }
+                else
+                {
+                    microdexed_synth_note_off(evt->note);
+                }
+            }
         }
 
         for (uint8_t j = i + 1U; j < g_seq_play_event_count; ++j)

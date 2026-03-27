@@ -43,7 +43,7 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
     out_target->filter_target_track = 0U;
     out_target->has_synth_target = 0U;
     out_target->synth_target_id = 0U;
-    out_target->midi_channel = (uint8_t)(ui_track & 0x0FU);
+    out_target->midi_channel = (uint8_t)(ui_get_track_midi_channel(ui_track) - 1U);
 
     switch (config.family)
     {

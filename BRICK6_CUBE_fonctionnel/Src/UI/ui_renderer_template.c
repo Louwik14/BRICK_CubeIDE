@@ -41,6 +41,14 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
+    if (id == PARAM_CFG_MIDI_CH)
+    {
+        const uint8_t channel = (uint8_t)(value + 0.5f);
+        const uint8_t duplicate = ui_track_midi_channel_used_by_other(ui_get_active_track(), channel);
+        (void)snprintf(out, out_len, "%u%s", (unsigned int)channel, (duplicate != 0U) ? "*" : "");
+        return;
+    }
+
     if ((id == PARAM_SEQ_PLAY_V1_VEL) || (id == PARAM_SEQ_PLAY_V2_VEL) || (id == PARAM_SEQ_PLAY_V3_VEL) || (id == PARAM_SEQ_PLAY_V4_VEL))
     {
         if (value < 0.5f)
