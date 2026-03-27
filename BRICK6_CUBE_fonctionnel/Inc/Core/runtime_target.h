@@ -52,10 +52,13 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
             break;
 
         case UI_TRACK_FAMILY_SYNTH:
-            out_target->has_filter_target = 1U;
-            out_target->filter_target_track = 3U;
             out_target->has_synth_target = 1U;
             out_target->synth_target_id = 0U; /* moteur synth global actuel */
+            if (config.type != UI_TRACK_TYPE_MONOB)
+            {
+                out_target->has_filter_target = 1U;
+                out_target->filter_target_track = 3U;
+            }
             break;
 
         default:
@@ -90,4 +93,3 @@ static inline uint8_t runtime_target_resolve_filter_for_ui_track(uint8_t ui_trac
 #ifdef __cplusplus
 }
 #endif
-
