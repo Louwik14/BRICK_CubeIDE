@@ -196,6 +196,17 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len);
 static void backend_usb_host_send(const uint8_t *msg, size_t len) __attribute__((unused));
 static void backend_din_send(const uint8_t *msg, size_t len);
 
+static inline bool midi_is_realtime_clock_transport_status(uint8_t st) {
+  return (st == 0xF8U) || (st == 0xFAU) || (st == 0xFBU) || (st == 0xFCU);
+}
+
+static inline bool usb_packet_is_realtime_clock_transport(const uint8_t packet[4]) {
+  if ((packet[0] & 0x0FU) != 0x0FU) {
+    return false;
+  }
+  return midi_is_realtime_clock_transport_status(packet[1]);
+}
+
 /**
  * @brief Point d'entrée usb_device_ready.
  *
@@ -405,17 +416,23 @@ static void midi_usb_try_flush(void) {
     return;
   }
 
-  while (packets < MIDI_USB_MAX_BURST) {
-    midi_usb_packet_t packet;
-    if (!usb_tx_queue_pop(&packet)) {
-      break;
-    }
-    memcpy(&buffer[packets * 4U], packet.bytes, 4U);
-    packets++;
+  midi_usb_packet_t first_packet;
+  if (!usb_tx_queue_pop(&first_packet)) {
+    return;
   }
 
-  if (packets == 0U) {
-    return;
+  memcpy(&buffer[0], first_packet.bytes, 4U);
+  packets = 1U;
+
+  if (!usb_packet_is_realtime_clock_transport(first_packet.bytes)) {
+    while (packets < MIDI_USB_MAX_BURST) {
+      midi_usb_packet_t packet;
+      if (!usb_tx_queue_pop(&packet)) {
+        break;
+      }
+      memcpy(&buffer[packets * 4U], packet.bytes, 4U);
+      packets++;
+    }
   }
 
   if (usb_device_send_packets(buffer, (uint16_t)(packets * 4U))) {
@@ -599,6 +616,7 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   uint8_t packet[4] = {0, 0, 0, 0};
   const uint8_t st = msg[0];
   const uint8_t cable = (uint8_t)(MIDI_USB_CABLE << 4);
+  const bool is_rt_clock_transport = midi_is_realtime_clock_transport_status(st);
 
   /* Channel Voice */
   if ((st & 0xF0U) == 0x80U && len >= 3U) {
@@ -668,14 +686,21 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
     packet[3] = len > 2U ? msg[2] : 0U;
   }
 
-  if (!midi_in_isr() && usb_device_ready() && midi_usb_tx_count == 0U) {
+  if (!midi_in_isr() && usb_device_ready() && (is_rt_clock_transport || (midi_usb_tx_count == 0U))) {
     if (usb_device_send_packets(packet, 4U)) {
       midi_tx_stats.tx_sent_immediate++;
       return;
     }
   }
 
-  usb_device_enqueue_packet(packet);
+  if (is_rt_clock_transport) {
+    midi_usb_packet_t rt_packet = { .bytes = { packet[0], packet[1], packet[2], packet[3] } };
+    if (!usb_tx_queue_push_front(&rt_packet)) {
+      midi_tx_stats.tx_mb_drops++;
+    }
+  } else {
+    usb_device_enqueue_packet(packet);
+  }
   midi_usb_try_flush();
 }
 
