@@ -27,6 +27,7 @@
 #include "MIDI/midi.h"
 
 /* USER CODE BEGIN Includes */
+#include "usb_clock_select.h"
 
 /* USER CODE END Includes */
 
@@ -68,6 +69,8 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  HAL_StatusTypeDef usb_clk_status = HAL_OK;
+  uint32_t usb_clk_source = usb_stack_get_rcc_usb_clock_source();
   if(pcdHandle->Instance==USB_OTG_FS)
   {
   /* USER CODE BEGIN USB_OTG_FS_MspInit 0 */
@@ -77,8 +80,11 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
-    PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    PeriphClkInitStruct.UsbClockSelection = usb_clk_source;
+    usb_stack_log_clock_diag("USBD MSP pre", usb_clk_source, HAL_OK);
+    usb_clk_status = HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
+    usb_stack_log_clock_diag("USBD MSP post", usb_clk_source, usb_clk_status);
+    if (usb_clk_status != HAL_OK)
     {
       Error_Handler();
     }
@@ -355,7 +361,9 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   hpcd_USB_OTG_FS.Init.battery_charging_enable = DISABLE;
   hpcd_USB_OTG_FS.Init.vbus_sensing_enable = DISABLE;
   hpcd_USB_OTG_FS.Init.use_dedicated_ep1 = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_OTG_FS) != HAL_OK)
+  HAL_StatusTypeDef pcd_init_status = HAL_PCD_Init(&hpcd_USB_OTG_FS);
+  usb_stack_log_clock_diag("USBD HAL_PCD_Init", 0UL, pcd_init_status);
+  if (pcd_init_status != HAL_OK)
   {
     Error_Handler( );
   }
