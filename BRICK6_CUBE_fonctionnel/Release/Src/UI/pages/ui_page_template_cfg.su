@@ -1,3 +1,4 @@
 ../Src/UI/pages/ui_page_template_cfg.c:31:26:ui_page_template_cfg_pick_widget	8	static
 ../Src/UI/pages/ui_page_template_cfg.c:61:36:ui_page_template_cfg_resolve_family	8	static
 ../Src/UI/pages/ui_page_template_cfg.c:79:6:ui_page_template_cfg_register_families	24	static
+../Src/UI/pages/ui_page_template_cfg.c:106:6:ui_page_template_cfg_open_rec	0	static

@@ -38,7 +38,7 @@ Src/Keyboard/keyboard_engine.o: ../Src/Keyboard/keyboard_engine.c \
  ../Inc/Core/track_runtime.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
- ../Inc/Seq/seq_types.h
+ ../Inc/Seq/seq_types.h ../Inc/Seq/seq_runtime.h
 ../Inc/Keyboard/keyboard_engine.h:
 ../Inc/Audio/microdexed_synth.h:
 ../Inc/Audio/mixer.h:
@@ -82,3 +82,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 ../Inc/Seq/seq_types.h:
+../Inc/Seq/seq_runtime.h:
