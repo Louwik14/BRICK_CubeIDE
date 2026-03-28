@@ -572,6 +572,12 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
         return 1U;
     }
 
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_REC))
+    {
+        seq_runtime_rec_toggle_arm();
+        return 1U;
+    }
+
     return 0U;
 }
 

@@ -21,6 +21,7 @@
 #define SEQ_RUNTIME_PLAY_VOICE_COUNT 4U
 #define SEQ_RUNTIME_PLAY_EVENT_CAP 64U
 #define SEQ_RUNTIME_ENGINE_TICK_HZ 1500U
+#define SEQ_RUNTIME_LIVE_REC_PENDING_CAP 64U
 
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
@@ -65,15 +66,38 @@ typedef struct
     seq_value16_t base_value16;
 } seq_runtime_step_lock_t;
 
+typedef struct
+{
+    uint8_t active;
+    uint8_t track;
+    uint8_t note;
+    uint8_t source;
+    uint8_t voice;
+    uint8_t step;
+    uint32_t start_tick;
+} seq_live_rec_pending_note_t;
+
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
 SEQ_STATE_D2 static seq_play_evt_t g_seq_play_events[SEQ_RUNTIME_PLAY_EVENT_CAP];
 SEQ_STATE_D2 static uint8_t g_seq_play_event_count;
 SEQ_STATE_D2 static uint32_t g_seq_midi_clock_tick_accum;
 SEQ_STATE_D2 static uint8_t g_seq_active_note_counts[SEQ_TRACK_COUNT][128];
+SEQ_STATE_D2 static seq_live_rec_pending_note_t g_seq_live_rec_pending[SEQ_RUNTIME_LIVE_REC_PENDING_CAP];
+SEQ_STATE_D2 static uint8_t g_seq_rec_armed;
+
+static param_id_t seq_runtime_play_param_note(uint8_t voice);
+static param_id_t seq_runtime_play_param_vel(uint8_t voice);
+static param_id_t seq_runtime_play_param_len(uint8_t voice);
+static param_id_t seq_runtime_play_param_mictim(uint8_t voice);
 
 static void seq_runtime_active_notes_clear(void)
 {
     memset(g_seq_active_note_counts, 0, sizeof(g_seq_active_note_counts));
+}
+
+static void seq_runtime_live_rec_pending_clear(void)
+{
+    memset(g_seq_live_rec_pending, 0, sizeof(g_seq_live_rec_pending));
 }
 
 static void seq_runtime_mark_note_on(seq_track_id_t track, uint8_t note)
@@ -194,6 +218,211 @@ static void seq_runtime_send_transport_stop_and_panic(void)
 static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
 {
     (void)elapsed_ticks;
+}
+
+static int32_t seq_runtime_live_rec_find_voice_with_note_lock(seq_track_id_t track,
+                                                              seq_step_id_t step,
+                                                              uint8_t note)
+{
+    for (uint8_t voice = 0U; voice < SEQ_RUNTIME_PLAY_VOICE_COUNT; ++voice)
+    {
+        uint8_t set_id = 0U;
+        seq_param8_t param8 = 0U;
+        const param_id_t note_id = seq_runtime_play_param_note(voice);
+        if (seq_param_iface_map_param(note_id, &set_id, &param8) == 0U)
+        {
+            continue;
+        }
+
+        seq_plock_entry_t entry;
+        if (seq_model_step_plock_find(track, step, set_id, param8, &entry) == 0U)
+        {
+            continue;
+        }
+
+        const float note_f = seq_param_iface_decode_param_value(note_id, entry.value16);
+        const uint8_t existing_note = (uint8_t)(note_f + 0.5f);
+        if (existing_note == note)
+        {
+            return (int32_t)voice;
+        }
+    }
+
+    return -1;
+}
+
+static uint8_t seq_runtime_live_rec_voice_has_any_lock(seq_track_id_t track,
+                                                       seq_step_id_t step,
+                                                       uint8_t voice)
+{
+    const param_id_t note_id = seq_runtime_play_param_note(voice);
+    const param_id_t vel_id = seq_runtime_play_param_vel(voice);
+    const param_id_t len_id = seq_runtime_play_param_len(voice);
+    const param_id_t mictim_id = seq_runtime_play_param_mictim(voice);
+    const param_id_t params[4] = { note_id, vel_id, len_id, mictim_id };
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        uint8_t set_id = 0U;
+        seq_param8_t param8 = 0U;
+        if (seq_param_iface_map_param(params[i], &set_id, &param8) == 0U)
+        {
+            continue;
+        }
+
+        seq_plock_entry_t entry;
+        if (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static int32_t seq_runtime_live_rec_find_free_voice(seq_track_id_t track,
+                                                    seq_step_id_t step)
+{
+    for (uint8_t voice = 0U; voice < SEQ_RUNTIME_PLAY_VOICE_COUNT; ++voice)
+    {
+        if (seq_runtime_live_rec_voice_has_any_lock(track, step, voice) == 0U)
+        {
+            return (int32_t)voice;
+        }
+    }
+
+    return -1;
+}
+
+static int32_t seq_runtime_live_rec_alloc_pending_slot(void)
+{
+    for (uint8_t i = 0U; i < SEQ_RUNTIME_LIVE_REC_PENDING_CAP; ++i)
+    {
+        if (g_seq_live_rec_pending[i].active == 0U)
+        {
+            return (int32_t)i;
+        }
+    }
+
+    return -1;
+}
+
+static int32_t seq_runtime_live_rec_find_pending_for_note(seq_track_id_t track,
+                                                          seq_live_rec_source_t source,
+                                                          uint8_t note)
+{
+    int32_t best = -1;
+    uint32_t best_tick = 0U;
+
+    for (uint8_t i = 0U; i < SEQ_RUNTIME_LIVE_REC_PENDING_CAP; ++i)
+    {
+        if ((g_seq_live_rec_pending[i].active == 0U)
+            || (g_seq_live_rec_pending[i].track != track)
+            || (g_seq_live_rec_pending[i].note != note)
+            || (g_seq_live_rec_pending[i].source != (uint8_t)source))
+        {
+            continue;
+        }
+
+        if ((best < 0) || (g_seq_live_rec_pending[i].start_tick >= best_tick))
+        {
+            best = (int32_t)i;
+            best_tick = g_seq_live_rec_pending[i].start_tick;
+        }
+    }
+
+    return best;
+}
+
+static uint8_t seq_runtime_live_rec_track_accepts_source(seq_track_id_t track,
+                                                         seq_live_rec_source_t source)
+{
+    const ui_track_midi_source_t track_source = ui_get_track_midi_source(track);
+    if (source == SEQ_LIVE_REC_SRC_INTERNAL)
+    {
+        return ((track_source == UI_TRACK_MIDI_SRC_INT) || (track_source == UI_TRACK_MIDI_SRC_ALL)) ? 1U : 0U;
+    }
+
+    return ((track_source == UI_TRACK_MIDI_SRC_EXT) || (track_source == UI_TRACK_MIDI_SRC_ALL)) ? 1U : 0U;
+}
+
+static uint8_t seq_runtime_live_rec_is_active(void)
+{
+    return ((g_seq_rec_armed != 0U) && (g_seq_runtime.running != 0U)) ? 1U : 0U;
+}
+
+static int8_t seq_runtime_live_rec_compute_mictim(void)
+{
+    const uint16_t tps = (g_seq_runtime.ticks_per_step == 0U) ? 1U : g_seq_runtime.ticks_per_step;
+    int32_t mictim = (int32_t)((g_seq_runtime.tick_accum * 96U) / (uint32_t)tps);
+
+    if (mictim > 24)
+    {
+        mictim = 24;
+    }
+    if (mictim < -24)
+    {
+        mictim = -24;
+    }
+
+    return (int8_t)mictim;
+}
+
+static uint8_t seq_runtime_live_rec_upsert_play_param(seq_track_id_t track,
+                                                      seq_step_id_t step,
+                                                      param_id_t param_id,
+                                                      float value)
+{
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    const seq_value16_t encoded = seq_param_iface_encode_param_value(param_id, value);
+    const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
+                                                                  step,
+                                                                  set_id,
+                                                                  param8,
+                                                                  encoded,
+                                                                  0U);
+    return (st == SEQ_PLOCK_OP_INVALID) ? 0U : 1U;
+}
+
+static void seq_runtime_live_rec_finalize_pending(seq_live_rec_pending_note_t *pending,
+                                                  uint32_t stop_tick)
+{
+    if ((pending == 0) || (pending->active == 0U))
+    {
+        return;
+    }
+
+    const uint32_t duration_ticks = (stop_tick >= pending->start_tick) ? (stop_tick - pending->start_tick) : 0U;
+    const uint16_t tps = (g_seq_runtime.ticks_per_step == 0U) ? 1U : g_seq_runtime.ticks_per_step;
+    uint32_t len_percent = (duration_ticks * 100U) / (uint32_t)tps;
+    if (len_percent < 1U)
+    {
+        len_percent = 1U;
+    }
+    if (len_percent > 100U)
+    {
+        len_percent = 100U;
+    }
+
+    (void)seq_runtime_live_rec_upsert_play_param(pending->track,
+                                                 pending->step,
+                                                 seq_runtime_play_param_len(pending->voice),
+                                                 (float)len_percent);
+    pending->active = 0U;
+}
+
+static void seq_runtime_live_rec_flush_all_pending(uint32_t stop_tick)
+{
+    for (uint8_t i = 0U; i < SEQ_RUNTIME_LIVE_REC_PENDING_CAP; ++i)
+    {
+        seq_runtime_live_rec_finalize_pending(&g_seq_live_rec_pending[i], stop_tick);
+    }
 }
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
@@ -648,6 +877,8 @@ void seq_runtime_init(void)
     g_seq_runtime.last_tick_count = engine_tick_count;
     seq_runtime_play_events_clear();
     seq_runtime_active_notes_clear();
+    seq_runtime_live_rec_pending_clear();
+    g_seq_rec_armed = 0U;
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -672,6 +903,7 @@ void seq_runtime_start(void)
     g_seq_runtime.ext_clock_tick_accum = 0U;
     seq_runtime_play_events_clear();
     seq_runtime_active_notes_clear();
+    seq_runtime_live_rec_pending_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -692,6 +924,7 @@ void seq_runtime_stop(void)
         return;
     }
 
+    seq_runtime_live_rec_flush_all_pending(engine_tick_count);
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
     SEQ_STOP_LOG("[SEQ][STOP] request queued_evts=%u\r\n", (unsigned)g_seq_play_event_count);
@@ -706,6 +939,7 @@ void seq_runtime_stop(void)
     g_seq_midi_clock_tick_accum = 0U;
     seq_runtime_send_transport_stop_and_panic();
     seq_runtime_active_notes_clear();
+    seq_runtime_live_rec_pending_clear();
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -904,4 +1138,126 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
     }
 
     g_seq_runtime.track_swing[track] = swing;
+}
+
+void seq_runtime_rec_toggle_arm(void)
+{
+    g_seq_rec_armed = (g_seq_rec_armed == 0U) ? 1U : 0U;
+    if (g_seq_rec_armed == 0U)
+    {
+        seq_runtime_live_rec_flush_all_pending(engine_tick_count);
+        seq_runtime_live_rec_pending_clear();
+    }
+}
+
+uint8_t seq_runtime_rec_is_armed(void)
+{
+    return g_seq_rec_armed;
+}
+
+void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
+                                  uint8_t channel_zero_based,
+                                  uint8_t note,
+                                  uint8_t velocity)
+{
+    if ((velocity == 0U) || (note >= 128U) || (source > SEQ_LIVE_REC_SRC_EXTERNAL))
+    {
+        return;
+    }
+
+    if (seq_runtime_live_rec_is_active() == 0U)
+    {
+        return;
+    }
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
+        const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
+        if (track_ch != channel_zero_based)
+        {
+            continue;
+        }
+
+        if (seq_runtime_live_rec_track_accepts_source(track, source) == 0U)
+        {
+            continue;
+        }
+
+        if (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) != TRACK_RUNTIME_PARAM_ALLOWED)
+        {
+            continue;
+        }
+
+        const seq_step_id_t step = g_seq_runtime.play_step[track];
+        int32_t voice = seq_runtime_live_rec_find_voice_with_note_lock(track, step, note);
+        if (voice < 0)
+        {
+            voice = seq_runtime_live_rec_find_free_voice(track, step);
+        }
+        if (voice < 0)
+        {
+            continue;
+        }
+
+        const int32_t pending_slot = seq_runtime_live_rec_alloc_pending_slot();
+        if (pending_slot < 0)
+        {
+            continue;
+        }
+
+        seq_model_set_trig(track, step, 1U);
+        (void)seq_runtime_live_rec_upsert_play_param(track, step, seq_runtime_play_param_note((uint8_t)voice), (float)note);
+        (void)seq_runtime_live_rec_upsert_play_param(track, step, seq_runtime_play_param_vel((uint8_t)voice), (float)velocity);
+        (void)seq_runtime_live_rec_upsert_play_param(track,
+                                                     step,
+                                                     seq_runtime_play_param_mictim((uint8_t)voice),
+                                                     (float)seq_runtime_live_rec_compute_mictim());
+
+        g_seq_live_rec_pending[pending_slot].active = 1U;
+        g_seq_live_rec_pending[pending_slot].track = track;
+        g_seq_live_rec_pending[pending_slot].note = note;
+        g_seq_live_rec_pending[pending_slot].source = (uint8_t)source;
+        g_seq_live_rec_pending[pending_slot].voice = (uint8_t)voice;
+        g_seq_live_rec_pending[pending_slot].step = step;
+        g_seq_live_rec_pending[pending_slot].start_tick = engine_tick_count;
+    }
+}
+
+void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
+                                   uint8_t channel_zero_based,
+                                   uint8_t note)
+{
+    if ((note >= 128U) || (source > SEQ_LIVE_REC_SRC_EXTERNAL))
+    {
+        return;
+    }
+
+    if (seq_runtime_live_rec_is_active() == 0U)
+    {
+        return;
+    }
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
+        const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
+        if (track_ch != channel_zero_based)
+        {
+            continue;
+        }
+
+        if (seq_runtime_live_rec_track_accepts_source(track, source) == 0U)
+        {
+            continue;
+        }
+
+        const int32_t pending_slot = seq_runtime_live_rec_find_pending_for_note(track, source, note);
+        if (pending_slot < 0)
+        {
+            continue;
+        }
+
+        seq_runtime_live_rec_finalize_pending(&g_seq_live_rec_pending[pending_slot], engine_tick_count);
+    }
 }

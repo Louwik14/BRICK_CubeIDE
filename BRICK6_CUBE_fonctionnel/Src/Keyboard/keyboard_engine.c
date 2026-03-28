@@ -20,6 +20,7 @@
 #include "MIDI/midi.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
+#include "Seq/seq_runtime.h"
 
 static ui_track_type_t g_keyboard_engine_sounding_type = UI_TRACK_TYPE_DX7;
 static bool g_keyboard_engine_sounding_active = false;
@@ -81,6 +82,9 @@ static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
 
 void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
 {
+    const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(ui_get_active_track());
+    seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, active_channel, note, velocity);
+
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
     if (filter_track != 0xFFU)
     {
@@ -119,6 +123,9 @@ void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
 
 void keyboard_engine_note_off(uint8_t note)
 {
+    const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(ui_get_active_track());
+    seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL, active_channel, note);
+
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
     if (filter_track != 0xFFU)
     {
@@ -195,6 +202,15 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
     const uint8_t is_note_on = ((type == 0x90U) && (velocity > 0U)) ? 1U : 0U;
     const uint8_t is_note_off = ((type == 0x80U) || ((type == 0x90U) && (velocity == 0U))) ? 1U : 0U;
     const uint8_t is_all_notes_off = ((is_cc_msg != 0U) && ((cc == 123U) || (cc == 120U))) ? 1U : 0U;
+
+    if (is_note_on != 0U)
+    {
+        seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_EXTERNAL, channel, note, velocity);
+    }
+    else if (is_note_off != 0U)
+    {
+        seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL, channel, note);
+    }
 
     uint8_t dx7_hit = 0U;
     uint8_t dx7_panic_hit = 0U;
