@@ -63,6 +63,8 @@ void HAL_HCD_MspInit(HCD_HandleTypeDef* hcdHandle)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  HAL_StatusTypeDef usb_clk_status = HAL_OK;
+  uint32_t usb_clk_source = usb_stack_get_rcc_usb_clock_source();
   if(hcdHandle->Instance==USB_OTG_HS)
   {
   /* USER CODE BEGIN USB_OTG_HS_MspInit 0 */
@@ -72,8 +74,11 @@ void HAL_HCD_MspInit(HCD_HandleTypeDef* hcdHandle)
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
-    PeriphClkInitStruct.UsbClockSelection = usb_stack_get_rcc_usb_clock_source();
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    PeriphClkInitStruct.UsbClockSelection = usb_clk_source;
+    usb_stack_log_clock_diag("USBH MSP pre", usb_clk_source, HAL_OK);
+    usb_clk_status = HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
+    usb_stack_log_clock_diag("USBH MSP post", usb_clk_source, usb_clk_status);
+    if (usb_clk_status != HAL_OK)
     {
       Error_Handler();
     }
@@ -220,7 +225,9 @@ USBH_StatusTypeDef USBH_LL_Init(USBH_HandleTypeDef *phost)
   hhcd_USB_OTG_HS.Init.Sof_enable = DISABLE;
   hhcd_USB_OTG_HS.Init.low_power_enable = DISABLE;
   hhcd_USB_OTG_HS.Init.use_external_vbus = DISABLE;
-  if (HAL_HCD_Init(&hhcd_USB_OTG_HS) != HAL_OK)
+  HAL_StatusTypeDef hcd_init_status = HAL_HCD_Init(&hhcd_USB_OTG_HS);
+  usb_stack_log_clock_diag("USBH HAL_HCD_Init", 0UL, hcd_init_status);
+  if (hcd_init_status != HAL_OK)
   {
     Error_Handler( );
   }
@@ -568,4 +575,3 @@ USBH_StatusTypeDef USBH_Get_USB_Status(HAL_StatusTypeDef hal_status)
   }
   return usb_status;
 }
-
