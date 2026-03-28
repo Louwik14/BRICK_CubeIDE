@@ -13,8 +13,8 @@ static const ui_template_family_t g_ui_template_cfg_family = {
             .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "REC",
+            .param_bank = { .params = { PARAM_CFG_REC, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -102,3 +102,8 @@ const ui_page_t g_ui_page_template_cfg = {
     .render = ui_template_page_render,
     .context = &g_ui_template_cfg_state,
 };
+
+void ui_page_template_cfg_open_rec(void)
+{
+    ui_template_page_select_subpage(&g_ui_template_cfg_state, 1U);
+}

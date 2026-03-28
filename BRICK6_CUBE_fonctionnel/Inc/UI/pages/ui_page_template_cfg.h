@@ -6,5 +6,6 @@
 extern const ui_page_t g_ui_page_template_cfg;
 
 void ui_page_template_cfg_register_families(void);
+void ui_page_template_cfg_open_rec(void);
 
 #endif /* UI_PAGE_TEMPLATE_CFG_H */
