@@ -20,10 +20,16 @@
 #include "MIDI/midi.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
+#include "Seq/seq_runtime.h"
+#include <string.h>
 
 static ui_track_type_t g_keyboard_engine_sounding_type = UI_TRACK_TYPE_DX7;
 static bool g_keyboard_engine_sounding_active = false;
 static uint8_t g_keyboard_engine_sounding_monob_instance = 0U;
+
+#define KBD_REC_NOTE_STACK_DEPTH 8U
+static uint8_t g_kbd_rec_note_stack_ch[128U][KBD_REC_NOTE_STACK_DEPTH];
+static uint8_t g_kbd_rec_note_stack_count[128U];
 
 static bool keyboard_engine_active_track_is_synth(void)
 {
@@ -79,8 +85,52 @@ static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
     return (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
 }
 
+static void keyboard_engine_live_rec_push_internal_channel(uint8_t note, uint8_t channel)
+{
+    if (note >= 128U)
+    {
+        return;
+    }
+
+    uint8_t count = g_kbd_rec_note_stack_count[note];
+    if (count >= KBD_REC_NOTE_STACK_DEPTH)
+    {
+        for (uint8_t i = 1U; i < KBD_REC_NOTE_STACK_DEPTH; ++i)
+        {
+            g_kbd_rec_note_stack_ch[note][i - 1U] = g_kbd_rec_note_stack_ch[note][i];
+        }
+        count = (uint8_t)(KBD_REC_NOTE_STACK_DEPTH - 1U);
+    }
+
+    g_kbd_rec_note_stack_ch[note][count] = channel;
+    g_kbd_rec_note_stack_count[note] = (uint8_t)(count + 1U);
+}
+
+static uint8_t keyboard_engine_live_rec_pop_internal_channel(uint8_t note, uint8_t fallback_channel)
+{
+    if (note >= 128U)
+    {
+        return fallback_channel;
+    }
+
+    const uint8_t count = g_kbd_rec_note_stack_count[note];
+    if (count == 0U)
+    {
+        return fallback_channel;
+    }
+
+    const uint8_t index = (uint8_t)(count - 1U);
+    const uint8_t channel = g_kbd_rec_note_stack_ch[note][index];
+    g_kbd_rec_note_stack_count[note] = index;
+    return channel;
+}
+
 void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
 {
+    const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(ui_get_active_track());
+    keyboard_engine_live_rec_push_internal_channel(note, active_channel);
+    seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, active_channel, note, velocity);
+
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
     if (filter_track != 0xFFU)
     {
@@ -119,6 +169,10 @@ void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
 
 void keyboard_engine_note_off(uint8_t note)
 {
+    const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(ui_get_active_track());
+    const uint8_t note_on_channel = keyboard_engine_live_rec_pop_internal_channel(note, active_channel);
+    seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL, note_on_channel, note);
+
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
     if (filter_track != 0xFFU)
     {
@@ -167,6 +221,7 @@ void keyboard_engine_all_notes_off(void)
 
     g_keyboard_engine_sounding_active = false;
     g_keyboard_engine_sounding_monob_instance = 0U;
+    memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
 }
 
 void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
@@ -195,6 +250,15 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
     const uint8_t is_note_on = ((type == 0x90U) && (velocity > 0U)) ? 1U : 0U;
     const uint8_t is_note_off = ((type == 0x80U) || ((type == 0x90U) && (velocity == 0U))) ? 1U : 0U;
     const uint8_t is_all_notes_off = ((is_cc_msg != 0U) && ((cc == 123U) || (cc == 120U))) ? 1U : 0U;
+
+    if (is_note_on != 0U)
+    {
+        seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_EXTERNAL, channel, note, velocity);
+    }
+    else if (is_note_off != 0U)
+    {
+        seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL, channel, note);
+    }
 
     uint8_t dx7_hit = 0U;
     uint8_t dx7_panic_hit = 0U;
