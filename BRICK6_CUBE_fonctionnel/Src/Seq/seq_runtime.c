@@ -70,6 +70,7 @@ typedef struct
 {
     uint8_t active;
     uint8_t track;
+    uint8_t channel;
     uint8_t note;
     uint8_t source;
     uint8_t voice;
@@ -309,6 +310,7 @@ static int32_t seq_runtime_live_rec_alloc_pending_slot(void)
 
 static int32_t seq_runtime_live_rec_find_pending_for_note(seq_track_id_t track,
                                                           seq_live_rec_source_t source,
+                                                          uint8_t channel_zero_based,
                                                           uint8_t note)
 {
     int32_t best = -1;
@@ -318,6 +320,7 @@ static int32_t seq_runtime_live_rec_find_pending_for_note(seq_track_id_t track,
     {
         if ((g_seq_live_rec_pending[i].active == 0U)
             || (g_seq_live_rec_pending[i].track != track)
+            || (g_seq_live_rec_pending[i].channel != channel_zero_based)
             || (g_seq_live_rec_pending[i].note != note)
             || (g_seq_live_rec_pending[i].source != (uint8_t)source))
         {
@@ -351,21 +354,75 @@ static uint8_t seq_runtime_live_rec_is_active(void)
     return ((g_seq_rec_armed != 0U) && (g_seq_runtime.running != 0U)) ? 1U : 0U;
 }
 
-static int8_t seq_runtime_live_rec_compute_mictim(void)
+static void seq_runtime_live_rec_compute_step_and_mictim(seq_track_id_t track,
+                                                         seq_step_id_t *io_step,
+                                                         int8_t *out_mictim)
 {
+    if ((io_step == 0) || (out_mictim == 0))
+    {
+        return;
+    }
+
     const uint16_t tps = (g_seq_runtime.ticks_per_step == 0U) ? 1U : g_seq_runtime.ticks_per_step;
-    int32_t mictim = (int32_t)((g_seq_runtime.tick_accum * 96U) / (uint32_t)tps);
+    const uint32_t offset_ticks = g_seq_runtime.tick_accum;
+    int32_t micro = 0;
 
-    if (mictim > 24)
+    if (offset_ticks <= (uint32_t)(tps / 4U))
     {
-        mictim = 24;
-    }
-    if (mictim < -24)
-    {
-        mictim = -24;
+        micro = (int32_t)((offset_ticks * 96U) / tps);
+        if (micro > 24)
+        {
+            micro = 24;
+        }
+        *out_mictim = (int8_t)micro;
+        return;
     }
 
-    return (int8_t)mictim;
+    if (offset_ticks >= (uint32_t)((3U * tps) / 4U))
+    {
+        micro = (int32_t)(((int32_t)offset_ticks - (int32_t)tps) * 96) / (int32_t)tps;
+        if (micro < -24)
+        {
+            micro = -24;
+        }
+
+        uint8_t length = seq_model_get_track_length(track);
+        if ((length == 0U) || (length > SEQ_MAX_STEPS))
+        {
+            length = SEQ_MAX_STEPS;
+        }
+
+        uint8_t next = (uint8_t)(*io_step + 1U);
+        if (next >= length)
+        {
+            next = 0U;
+        }
+
+        *io_step = next;
+        *out_mictim = (int8_t)micro;
+        return;
+    }
+
+    if (offset_ticks < (uint32_t)(tps / 2U))
+    {
+        *out_mictim = 24;
+        return;
+    }
+
+    uint8_t length = seq_model_get_track_length(track);
+    if ((length == 0U) || (length > SEQ_MAX_STEPS))
+    {
+        length = SEQ_MAX_STEPS;
+    }
+
+    uint8_t next = (uint8_t)(*io_step + 1U);
+    if (next >= length)
+    {
+        next = 0U;
+    }
+
+    *io_step = next;
+    *out_mictim = -24;
 }
 
 static uint8_t seq_runtime_live_rec_upsert_play_param(seq_track_id_t track,
@@ -387,7 +444,7 @@ static uint8_t seq_runtime_live_rec_upsert_play_param(seq_track_id_t track,
                                                                   param8,
                                                                   encoded,
                                                                   0U);
-    return (st == SEQ_PLOCK_OP_INVALID) ? 0U : 1U;
+    return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
 
 static void seq_runtime_live_rec_finalize_pending(seq_live_rec_pending_note_t *pending,
@@ -1190,10 +1247,13 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
         }
 
         const seq_step_id_t step = g_seq_runtime.play_step[track];
-        int32_t voice = seq_runtime_live_rec_find_voice_with_note_lock(track, step, note);
+        seq_step_id_t write_step = step;
+        int8_t mictim = 0;
+        seq_runtime_live_rec_compute_step_and_mictim(track, &write_step, &mictim);
+        int32_t voice = seq_runtime_live_rec_find_voice_with_note_lock(track, write_step, note);
         if (voice < 0)
         {
-            voice = seq_runtime_live_rec_find_free_voice(track, step);
+            voice = seq_runtime_live_rec_find_free_voice(track, write_step);
         }
         if (voice < 0)
         {
@@ -1206,20 +1266,32 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
             continue;
         }
 
-        seq_model_set_trig(track, step, 1U);
-        (void)seq_runtime_live_rec_upsert_play_param(track, step, seq_runtime_play_param_note((uint8_t)voice), (float)note);
-        (void)seq_runtime_live_rec_upsert_play_param(track, step, seq_runtime_play_param_vel((uint8_t)voice), (float)velocity);
-        (void)seq_runtime_live_rec_upsert_play_param(track,
-                                                     step,
-                                                     seq_runtime_play_param_mictim((uint8_t)voice),
-                                                     (float)seq_runtime_live_rec_compute_mictim());
+        const uint8_t note_ok = seq_runtime_live_rec_upsert_play_param(track,
+                                                                       write_step,
+                                                                       seq_runtime_play_param_note((uint8_t)voice),
+                                                                       (float)note);
+        const uint8_t vel_ok = seq_runtime_live_rec_upsert_play_param(track,
+                                                                      write_step,
+                                                                      seq_runtime_play_param_vel((uint8_t)voice),
+                                                                      (float)velocity);
+        const uint8_t micro_ok = seq_runtime_live_rec_upsert_play_param(track,
+                                                                        write_step,
+                                                                        seq_runtime_play_param_mictim((uint8_t)voice),
+                                                                        (float)mictim);
+        if ((note_ok == 0U) || (vel_ok == 0U) || (micro_ok == 0U))
+        {
+            continue;
+        }
+
+        seq_model_set_trig(track, write_step, 1U);
 
         g_seq_live_rec_pending[pending_slot].active = 1U;
         g_seq_live_rec_pending[pending_slot].track = track;
+        g_seq_live_rec_pending[pending_slot].channel = channel_zero_based;
         g_seq_live_rec_pending[pending_slot].note = note;
         g_seq_live_rec_pending[pending_slot].source = (uint8_t)source;
         g_seq_live_rec_pending[pending_slot].voice = (uint8_t)voice;
-        g_seq_live_rec_pending[pending_slot].step = step;
+        g_seq_live_rec_pending[pending_slot].step = write_step;
         g_seq_live_rec_pending[pending_slot].start_tick = engine_tick_count;
     }
 }
@@ -1252,7 +1324,10 @@ void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
             continue;
         }
 
-        const int32_t pending_slot = seq_runtime_live_rec_find_pending_for_note(track, source, note);
+        const int32_t pending_slot = seq_runtime_live_rec_find_pending_for_note(track,
+                                                                                 source,
+                                                                                 channel_zero_based,
+                                                                                 note);
         if (pending_slot < 0)
         {
             continue;
