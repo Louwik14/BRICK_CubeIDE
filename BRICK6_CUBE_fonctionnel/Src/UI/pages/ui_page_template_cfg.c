@@ -34,7 +34,7 @@ static const ui_template_family_t g_ui_template_rec_cfg_family = {
     .subpages = {
         {
             .title = "MAIN",
-            .param_bank = { .params = { PARAM_CFG_REC, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_CFG_REC, PARAM_CFG_TEMPO, PARAM_CFG_SYNC, PARAM_COUNT } },
         },
         {
             .title = "-",

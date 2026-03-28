@@ -23,6 +23,7 @@ typedef enum
 {
     SEQ_CLOCK_SRC_INTERNAL = 0,
     SEQ_CLOCK_SRC_EXTERNAL_MIDI,
+    SEQ_CLOCK_SRC_EXTERNAL_USB,
     SEQ_CLOCK_SRC_COUNT
 } seq_clock_src_t;
 

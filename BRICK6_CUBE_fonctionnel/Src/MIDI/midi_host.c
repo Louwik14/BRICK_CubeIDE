@@ -111,7 +111,7 @@ void midi_host_poll_bounded(uint32_t max_msgs)
       continue;
     }
 
-    midi_internal_receive(&midi_host_rx_packet[1], length);
+    midi_internal_receive_with_source(&midi_host_rx_packet[1], length, SEQ_CLOCK_SRC_EXTERNAL_USB);
     midi_send_raw(MIDI_DEST_USB, &midi_host_rx_packet[1], length);
   }
 

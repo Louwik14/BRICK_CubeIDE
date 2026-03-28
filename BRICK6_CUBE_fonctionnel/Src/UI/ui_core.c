@@ -59,6 +59,8 @@
 #define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
 #define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
 #define UI_CFG_REC_PARAM ((param_id_t)PARAM_CFG_REC)
+#define UI_CFG_TEMPO_PARAM ((param_id_t)PARAM_CFG_TEMPO)
+#define UI_CFG_SYNC_PARAM ((param_id_t)PARAM_CFG_SYNC)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
@@ -299,6 +301,24 @@ static void ui_core_sync_active_track_cfg_params(void)
     param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)g_ui_track_state.track_midi_channel[active_track]);
     param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)g_ui_track_state.track_midi_source[active_track]);
     param_store_set_active(UI_CFG_REC_PARAM, (float)seq_runtime_get_rec_count_in_mode());
+    param_store_set_active(UI_CFG_TEMPO_PARAM, (float)seq_runtime_get_tempo_bpm_milli() / 1000.0f);
+    {
+        float sync_value = 0.0f;
+        switch (seq_runtime_get_clock_source())
+        {
+            case SEQ_CLOCK_SRC_EXTERNAL_MIDI:
+                sync_value = 1.0f;
+                break;
+            case SEQ_CLOCK_SRC_EXTERNAL_USB:
+                sync_value = 2.0f;
+                break;
+            case SEQ_CLOCK_SRC_INTERNAL:
+            default:
+                sync_value = 0.0f;
+                break;
+        }
+        param_store_set_active(UI_CFG_SYNC_PARAM, sync_value);
+    }
     param_registry_sync_ui_for_active_track();
 }
 

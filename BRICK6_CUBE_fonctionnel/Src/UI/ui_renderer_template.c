@@ -10,7 +10,7 @@
 #include "ui_core.h"
 #include "ui_widgets.h"
 #include "Core/track_runtime.h"
-#include "MIDI/midi.h"
+#include "Seq/seq_runtime.h"
 
 #define UI_TEMPLATE_FRAME_W          31
 #define UI_TEMPLATE_FRAME_H          37
@@ -346,12 +346,31 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)(active_track + 1U));
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
     ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label));
-    const uint32_t bpm_milli = midi_clock_get_bpm_milli();
-    (void)snprintf(bpm_label,
-                   sizeof(bpm_label),
-                   "%lu.%01lu",
-                   (unsigned long)(bpm_milli / 1000U),
-                   (unsigned long)((bpm_milli % 1000U) / 100U));
+    uint8_t draw_bpm = 0U;
+    uint8_t bpm_inverted = 0U;
+    uint32_t bpm_milli = 0U;
+
+    if (seq_runtime_get_clock_source() == SEQ_CLOCK_SRC_INTERNAL)
+    {
+        bpm_milli = seq_runtime_get_tempo_bpm_milli();
+        draw_bpm = 1U;
+        bpm_inverted = 0U;
+    }
+    else if (seq_runtime_is_external_tempo_valid() != 0U)
+    {
+        bpm_milli = seq_runtime_get_external_tempo_bpm_milli();
+        draw_bpm = 1U;
+        bpm_inverted = 1U;
+    }
+
+    if (draw_bpm != 0U)
+    {
+        (void)snprintf(bpm_label,
+                       sizeof(bpm_label),
+                       "%lu.%01lu",
+                       (unsigned long)(bpm_milli / 1000U),
+                       (unsigned long)((bpm_milli % 1000U) / 100U));
+    }
 
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
@@ -373,7 +392,17 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_set_font(&FONT_4X6);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, cpu_avg_label), 9U, cpu_avg_label);
     ui_renderer_template_draw_note_icon(UI_TEMPLATE_NOTE_X, UI_TEMPLATE_NOTE_Y);
-    drv_display_draw_text(109U, 1U, bpm_label);
+    if (draw_bpm != 0U)
+    {
+        if (bpm_inverted != 0U)
+        {
+            ui_renderer_template_draw_inverted_label(109U, 1U, bpm_label, &FONT_5X7);
+        }
+        else
+        {
+            drv_display_draw_text(109U, 1U, bpm_label);
+        }
+    }
     drv_display_draw_text(113U, 9U, "A-12");
 }
 

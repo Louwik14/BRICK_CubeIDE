@@ -15,6 +15,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "Seq/seq_types.h"
+
 /* ====================================================================== */
 /*                        CONFIGURATION GLOBALE                           */
 /* ====================================================================== */
@@ -230,6 +232,7 @@ void midi_clock_tx_probe_snapshot(midi_clock_tx_probe_t *out);
  * @brief Callback faible injectant un message MIDI dans le moteur interne.
  */
 void midi_internal_receive(const uint8_t *msg, size_t len);
+void midi_internal_receive_with_source(const uint8_t *msg, size_t len, seq_clock_src_t source);
 
 /**
  * @brief Alimente la file RX USB (appel depuis l'ISR USB OUT).

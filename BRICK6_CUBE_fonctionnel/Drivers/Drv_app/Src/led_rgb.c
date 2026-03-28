@@ -248,7 +248,8 @@ static void led_apply_fixed_scene(void)
                 {
                     if (seq_runtime_get_rec_count_in_remaining_steps() > 0U)
                     {
-                        rec_on = ((HAL_GetTick() / 200U) & 0x1U) ? 1U : 0U;
+                        const uint32_t remaining_steps = seq_runtime_get_rec_count_in_remaining_steps();
+                        rec_on = (uint8_t)((remaining_steps & 0x1U) == 0U ? 1U : 0U);
                     }
                     else
                     {
