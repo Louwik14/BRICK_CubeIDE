@@ -134,8 +134,16 @@ static void seq_runtime_send_transport_start(void)
         return;
     }
 
-    const uint32_t bpm_milli = (uint32_t)(((uint64_t)SEQ_RUNTIME_ENGINE_TICK_HZ * 60000ULL) /
-                                          ((uint64_t)g_seq_runtime.ticks_per_step * 4ULL));
+    /*
+     * MIDI clock TX must follow the requested BPM domain directly.
+     * The previous conversion from internal scheduler ticks_per_step introduced
+     * a fixed absolute scaling error on clock TX (e.g. 120 BPM request was not
+     * forwarded as 120000 milli-BPM).
+     *
+     * Keep transport start aligned on the explicit 120 BPM baseline until
+     * sequencer tempo is sourced from a dedicated BPM parameter.
+     */
+    const uint32_t bpm_milli = 120000U;
     midi_clock_set_bpm_milli(bpm_milli);
     midi_start(MIDI_DEST_BOTH);
 }

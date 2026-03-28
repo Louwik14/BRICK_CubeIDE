@@ -68,6 +68,21 @@ typedef struct {
 
 extern midi_tx_stats_t midi_tx_stats;
 
+typedef struct {
+  volatile uint32_t clock_f8_generated_count;
+  volatile uint32_t clock_f8_enqueued_count;
+  volatile uint32_t clock_f8_usb_send_count;
+  volatile uint32_t clock_f8_usb_complete_count;
+  volatile uint32_t clock_f8_queue_drop_count;
+  volatile uint32_t clock_f8_send_deferred_count;
+  volatile uint32_t clock_f8_send_rollback_count;
+  volatile uint32_t clock_f8_inflight_count;
+  volatile uint32_t clock_f8_last_send_tick_ms;
+  volatile uint32_t clock_f8_last_complete_tick_ms;
+} midi_clock_tx_probe_t;
+
+extern midi_clock_tx_probe_t midi_clock_tx_probe;
+
 /**
  * @struct midi_rx_stats_t
  * @brief Statistiques de réception MIDI (USB → moteur interne / DIN).
@@ -207,6 +222,9 @@ void midi_stats_reset(void);
 
 uint16_t midi_usb_queue_high_watermark(void);
 uint16_t midi_usb_rx_high_watermark(void);
+
+void midi_clock_tx_probe_reset(void);
+void midi_clock_tx_probe_snapshot(midi_clock_tx_probe_t *out);
 
 /**
  * @brief Callback faible injectant un message MIDI dans le moteur interne.
