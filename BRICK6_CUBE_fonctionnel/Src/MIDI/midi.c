@@ -880,28 +880,32 @@ static void backend_din_send(const uint8_t *msg, size_t len) {
 /*                            API PUBLIQUE                                */
 /* ====================================================================== */
 
-__attribute__((weak)) void midi_internal_receive(const uint8_t *msg, size_t len) {
+void midi_internal_receive_with_source(const uint8_t *msg, size_t len, seq_clock_src_t source) {
   if ((msg == NULL) || (len == 0U)) {
     return;
   }
 
   switch (msg[0]) {
     case 0xF8U: /* MIDI Clock */
-      seq_runtime_midi_clock();
+      seq_runtime_midi_clock_from_source(source);
       break;
     case 0xFAU: /* MIDI Start */
-      seq_runtime_midi_start();
+      seq_runtime_midi_start_from_source(source);
       break;
     case 0xFBU: /* MIDI Continue */
-      seq_runtime_midi_continue();
+      seq_runtime_midi_continue_from_source(source);
       break;
     case 0xFCU: /* MIDI Stop */
-      seq_runtime_midi_stop();
+      seq_runtime_midi_stop_from_source(source);
       break;
     default:
       keyboard_engine_midi_receive(msg, len);
       break;
   }
+}
+
+__attribute__((weak)) void midi_internal_receive(const uint8_t *msg, size_t len) {
+  midi_internal_receive_with_source(msg, len, SEQ_CLOCK_SRC_EXTERNAL_MIDI);
 }
 
 /**

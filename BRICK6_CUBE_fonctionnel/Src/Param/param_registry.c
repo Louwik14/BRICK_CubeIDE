@@ -1376,6 +1376,46 @@ static void apply_cfg_rec(float v)
     param_store_set_active(PARAM_CFG_REC, (float)mode);
 }
 
+static void apply_cfg_tempo(float v)
+{
+    uint32_t bpm_milli = (uint32_t)(clamp_value(v, 40.0f, 300.0f) * 1000.0f + 0.5f);
+    seq_runtime_set_tempo_bpm_milli(bpm_milli);
+    bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    param_store_set_active(PARAM_CFG_TEMPO, (float)bpm_milli / 1000.0f);
+}
+
+static void apply_cfg_sync(float v)
+{
+    const uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f);
+    seq_clock_src_t source = SEQ_CLOCK_SRC_INTERNAL;
+    if (mode == 1U)
+    {
+        source = SEQ_CLOCK_SRC_EXTERNAL_MIDI;
+    }
+    else if (mode == 2U)
+    {
+        source = SEQ_CLOCK_SRC_EXTERNAL_USB;
+    }
+
+    seq_runtime_set_clock_source(source);
+
+    uint8_t synced_mode = 0U;
+    switch (seq_runtime_get_clock_source())
+    {
+        case SEQ_CLOCK_SRC_EXTERNAL_MIDI:
+            synced_mode = 1U;
+            break;
+        case SEQ_CLOCK_SRC_EXTERNAL_USB:
+            synced_mode = 2U;
+            break;
+        case SEQ_CLOCK_SRC_INTERNAL:
+        default:
+            synced_mode = 0U;
+            break;
+    }
+    param_store_set_active(PARAM_CFG_SYNC, (float)synced_mode);
+}
+
 static void apply_seq_length(float v)
 {
     const uint8_t track = ui_get_active_track();
@@ -1612,6 +1652,7 @@ static const char *const g_monob_sub_octave_labels[] = {"-1", "-2", "-3", "-4", 
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
+static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
 static const char *const g_kbd_root_labels[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", NULL};
 static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "Mixoly", "PntMaj", "PntMin", "Chrom", NULL};
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
@@ -1720,6 +1761,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
     PARAM_DESC_EX(PARAM_CFG_REC, "Préroll", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_labels, apply_cfg_rec),
+    PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
+    PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
     PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 1.0f, 8.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_div),

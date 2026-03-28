@@ -51,9 +51,13 @@ uint8_t seq_runtime_is_running(void);
 void seq_runtime_set_clock_source(seq_clock_src_t src);
 seq_clock_src_t seq_runtime_get_clock_source(void);
 void seq_runtime_midi_clock(void);
+void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
 void seq_runtime_midi_start(void);
+void seq_runtime_midi_start_from_source(seq_clock_src_t source);
 void seq_runtime_midi_continue(void);
+void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
 void seq_runtime_midi_stop(void);
+void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step);
@@ -67,6 +71,10 @@ uint8_t seq_runtime_rec_is_armed(void);
 void seq_runtime_set_rec_count_in_mode(uint8_t mode);
 uint8_t seq_runtime_get_rec_count_in_mode(void);
 uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
+uint32_t seq_runtime_get_tempo_bpm_milli(void);
+void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli);
+uint8_t seq_runtime_is_external_tempo_valid(void);
+uint32_t seq_runtime_get_external_tempo_bpm_milli(void);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
