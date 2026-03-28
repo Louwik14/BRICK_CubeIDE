@@ -22,6 +22,7 @@
 #include "usbh_core.h"
 
 /* USER CODE BEGIN Includes */
+#include "usb_clock_select.h"
 
 /* USER CODE END Includes */
 
@@ -71,7 +72,7 @@ void HAL_HCD_MspInit(HCD_HandleTypeDef* hcdHandle)
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
-    PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
+    PeriphClkInitStruct.UsbClockSelection = usb_stack_get_rcc_usb_clock_source();
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();
