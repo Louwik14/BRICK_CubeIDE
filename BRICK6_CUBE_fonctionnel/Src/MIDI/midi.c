@@ -501,11 +501,11 @@ static bool usb_rx_queue_pop(midi_usb_packet_t *out) {
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void midi_usb_try_flush(void) {
+static void midi_usb_try_flush_internal(bool allow_in_isr) {
   uint8_t buffer[4U * MIDI_USB_MAX_BURST];
   uint16_t packets = 0U;
 
-  if (midi_in_isr()) {
+  if (!allow_in_isr && midi_in_isr()) {
     return;
   }
 
@@ -557,6 +557,10 @@ static void midi_usb_try_flush(void) {
       }
     }
   }
+}
+
+static void midi_usb_try_flush(void) {
+  midi_usb_try_flush_internal(false);
 }
 
 /* ====================================================================== */
@@ -1823,7 +1827,8 @@ void USBD_MIDI_OnPacketsReceived(uint8_t *data, uint8_t len) {
  * - init / main loop / tasklet selon le module.
  */
 void USBD_MIDI_OnPacketsSent(void) {
-  /* Interruption USB: ne pas émettre ici, seulement demander un flush. */
+  /* Completion IN USB: relancer immédiatement le flush pour éviter le trou
+     superloop entre deux paquets realtime. */
 #if MIDI_CLOCK_TX_PROBE_ENABLE
   if (midi_clock_f8_inflight_pending > 0U) {
     midi_clock_tx_probe.clock_f8_usb_complete_count += midi_clock_f8_inflight_pending;
@@ -1832,5 +1837,6 @@ void USBD_MIDI_OnPacketsSent(void) {
     midi_clock_tx_probe.clock_f8_inflight_count = 0U;
   }
 #endif
+  midi_usb_try_flush_internal(true);
   midi_usb_tx_kick = true;
 }
