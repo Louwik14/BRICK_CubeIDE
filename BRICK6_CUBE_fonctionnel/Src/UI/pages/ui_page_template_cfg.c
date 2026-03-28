@@ -13,8 +13,32 @@ static const ui_template_family_t g_ui_template_cfg_family = {
             .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
         },
         {
-            .title = "REC",
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_rec_cfg_family = {
+    .family_title = "REC CFG",
+    .nav_labels = { "MAIN", "-", "-", "-" },
+    .subpages = {
+        {
+            .title = "MAIN",
             .param_bank = { .params = { PARAM_CFG_REC, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -103,7 +127,24 @@ const ui_page_t g_ui_page_template_cfg = {
     .context = &g_ui_template_cfg_state,
 };
 
-void ui_page_template_cfg_open_rec(void)
+static ui_template_page_state_t g_ui_template_rec_cfg_state = {
+    .family = &g_ui_template_rec_cfg_family,
+    .family_resolver = 0,
+    .widget_picker = 0,
+    .active_subpage = 0U,
+    .has_visited = 0U,
+};
+
+const ui_page_t g_ui_page_template_rec_cfg = {
+    .enter = ui_template_page_enter,
+    .leave = ui_template_page_leave,
+    .handle_event = ui_template_page_handle_event,
+    .tick = ui_template_page_tick,
+    .render = ui_template_page_render,
+    .context = &g_ui_template_rec_cfg_state,
+};
+
+void ui_page_template_rec_cfg_open_main(void)
 {
-    ui_template_page_select_subpage(&g_ui_template_cfg_state, 1U);
+    ui_template_page_select_subpage(&g_ui_template_rec_cfg_state, 0U);
 }

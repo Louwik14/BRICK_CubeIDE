@@ -578,8 +578,8 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
     {
         if (g_ui_track_state.shift_down != 0U)
         {
-            ui_page_template_cfg_open_rec();
-            ui_page_set(UI_PAGE_TEMPLATE_CFG);
+            ui_page_template_rec_cfg_open_main();
+            ui_page_set(UI_PAGE_TEMPLATE_REC_CFG);
             return 1U;
         }
 
@@ -725,6 +725,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_user_calibration);
     ui_page_manager_register(&g_ui_page_template_colors);
     ui_page_manager_register(&g_ui_page_template_cfg);
+    ui_page_manager_register(&g_ui_page_template_rec_cfg);
     ui_page_manager_register(&g_ui_page_template_dx7);
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
@@ -1072,20 +1073,6 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         && ((int32_t)(g_ui_track_state.feedback_until_ms - HAL_GetTick()) > 0))
     {
         (void)snprintf(out, out_len, "%s", g_ui_track_state.feedback_message);
-        return;
-    }
-
-    if ((seq_runtime_rec_is_armed() != 0U) && (seq_runtime_is_running() != 0U))
-    {
-        const uint32_t remain = seq_runtime_get_rec_count_in_remaining_steps();
-        if (remain > 0U)
-        {
-            (void)snprintf(out, out_len, "CNT %lu", (unsigned long)remain);
-        }
-        else
-        {
-            (void)snprintf(out, out_len, "REC");
-        }
         return;
     }
 
