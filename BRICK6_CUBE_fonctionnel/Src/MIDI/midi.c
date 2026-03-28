@@ -29,6 +29,7 @@
 #include "midi.h"
 #include "main.h"
 #include "tim.h"
+#include "usart.h"
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Seq/seq_runtime.h"
@@ -109,16 +110,22 @@ static void midi_clock_probe_uart_dump_if_due(void) {
   }
 
   midi_clock_tx_probe_t snap;
+  char msg[192];
   midi_clock_tx_probe_snapshot(&snap);
-  printf("[MCLK] F8 gen=%lu enq=%lu send=%lu done=%lu drop=%lu defer=%lu rollback=%lu inflight=%lu\r\n",
-         (unsigned long)snap.clock_f8_generated_count,
-         (unsigned long)snap.clock_f8_enqueued_count,
-         (unsigned long)snap.clock_f8_usb_send_count,
-         (unsigned long)snap.clock_f8_usb_complete_count,
-         (unsigned long)snap.clock_f8_queue_drop_count,
-         (unsigned long)snap.clock_f8_send_deferred_count,
-         (unsigned long)snap.clock_f8_send_rollback_count,
-         (unsigned long)snap.clock_f8_inflight_count);
+  const int n = snprintf(msg, sizeof(msg),
+                         "[MCLK] F8 gen=%lu enq=%lu send=%lu done=%lu drop=%lu defer=%lu rollback=%lu inflight=%lu\r\n",
+                         (unsigned long)snap.clock_f8_generated_count,
+                         (unsigned long)snap.clock_f8_enqueued_count,
+                         (unsigned long)snap.clock_f8_usb_send_count,
+                         (unsigned long)snap.clock_f8_usb_complete_count,
+                         (unsigned long)snap.clock_f8_queue_drop_count,
+                         (unsigned long)snap.clock_f8_send_deferred_count,
+                         (unsigned long)snap.clock_f8_send_rollback_count,
+                         (unsigned long)snap.clock_f8_inflight_count);
+  if (n > 0) {
+    const uint16_t tx_len = (uint16_t)(((size_t)n < sizeof(msg)) ? (size_t)n : (sizeof(msg) - 1U));
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)msg, tx_len, 10U);
+  }
   midi_clock_probe_uart_last_dump_ms = now;
 }
 #endif
