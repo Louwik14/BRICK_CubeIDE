@@ -576,6 +576,13 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_REC))
     {
+        if (g_ui_track_state.shift_down != 0U)
+        {
+            ui_page_template_cfg_open_rec();
+            ui_page_set(UI_PAGE_TEMPLATE_CFG);
+            return 1U;
+        }
+
         seq_runtime_rec_toggle_arm();
         return 1U;
     }

@@ -102,3 +102,8 @@ const ui_page_t g_ui_page_template_cfg = {
     .render = ui_template_page_render,
     .context = &g_ui_template_cfg_state,
 };
+
+void ui_page_template_cfg_open_rec(void)
+{
+    ui_template_page_select_subpage(&g_ui_template_cfg_state, 1U);
+}

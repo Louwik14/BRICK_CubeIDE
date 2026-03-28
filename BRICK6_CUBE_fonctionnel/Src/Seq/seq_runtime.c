@@ -94,33 +94,14 @@ static uint32_t seq_runtime_rec_count_in_steps_from_mode(uint8_t mode)
     switch (mode)
     {
         case 1U:
-            return 16U;
+            return 4U;
         case 2U:
-            return 32U;
+            return 8U;
         case 3U:
-            return 64U;
+            return 16U;
         default:
             return 0U;
     }
-}
-
-static void seq_runtime_rec_led_update(void)
-{
-    GPIO_PinState state = GPIO_PIN_RESET;
-    if (g_seq_rec_armed != 0U)
-    {
-        if ((g_seq_runtime.running != 0U) && (g_seq_rec_count_in_remaining_steps == 0U))
-        {
-            state = GPIO_PIN_SET;
-        }
-        else
-        {
-            const uint32_t blink_div = (g_seq_runtime.running != 0U) ? 7U : 8U;
-            state = (((engine_tick_count >> blink_div) & 0x1U) != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET;
-        }
-    }
-
-    HAL_GPIO_WritePin(LED_DEBUG_GPIO_Port, LED_DEBUG_Pin, state);
 }
 
 static param_id_t seq_runtime_play_param_note(uint8_t voice);
@@ -496,20 +477,20 @@ static void seq_runtime_live_rec_finalize_pending(seq_live_rec_pending_note_t *p
 
     const uint32_t duration_ticks = (stop_tick >= pending->start_tick) ? (stop_tick - pending->start_tick) : 0U;
     const uint16_t tps = (g_seq_runtime.ticks_per_step == 0U) ? 1U : g_seq_runtime.ticks_per_step;
-    uint32_t len_percent = (duration_ticks * 100U) / (uint32_t)tps;
-    if (len_percent < 1U)
+    uint32_t len_steps = (duration_ticks + (uint32_t)tps - 1U) / (uint32_t)tps;
+    if (len_steps < 1U)
     {
-        len_percent = 1U;
+        len_steps = 1U;
     }
-    if (len_percent > 100U)
+    if (len_steps > 64U)
     {
-        len_percent = 100U;
+        len_steps = 64U;
     }
 
     (void)seq_runtime_live_rec_upsert_play_param(pending->track,
                                                  pending->step,
                                                  seq_runtime_play_param_len(pending->voice),
-                                                 (float)len_percent);
+                                                 (float)len_steps);
     pending->active = 0U;
 }
 
@@ -789,7 +770,16 @@ static void seq_runtime_schedule_play_step(seq_track_id_t track, seq_step_id_t s
         }
 
         const float len_f = seq_param_iface_decode_param_value(len_id, seq_runtime_play_get_locked_or_default(track, step, len_id));
-        const uint32_t len_ticks = (uint32_t)(((len_f < 1.0f ? 1.0f : len_f) * (float)g_seq_runtime.ticks_per_step) / 100.0f);
+        float len_steps_f = len_f;
+        if (len_steps_f < 1.0f)
+        {
+            len_steps_f = 1.0f;
+        }
+        if (len_steps_f > 64.0f)
+        {
+            len_steps_f = 64.0f;
+        }
+        const uint32_t len_ticks = (uint32_t)(len_steps_f * (float)g_seq_runtime.ticks_per_step);
 
         const float mictim_f = seq_param_iface_decode_param_value(mictim_id, seq_runtime_play_get_locked_or_default(track, step, mictim_id));
         int32_t on_tick = (int32_t)step_tick + (int32_t)((mictim_f * (float)g_seq_runtime.ticks_per_step) / 96.0f);
@@ -977,7 +967,6 @@ void seq_runtime_init(void)
     g_seq_rec_armed = 0U;
     g_seq_rec_count_in_mode = 0U;
     g_seq_rec_count_in_remaining_steps = 0U;
-    seq_runtime_rec_led_update();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -1044,7 +1033,6 @@ void seq_runtime_stop(void)
     seq_runtime_send_transport_stop_and_panic();
     seq_runtime_active_notes_clear();
     seq_runtime_live_rec_pending_clear();
-    seq_runtime_rec_led_update();
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -1066,7 +1054,6 @@ uint8_t seq_runtime_is_running(void)
 
 void seq_runtime_process(void)
 {
-    seq_runtime_rec_led_update();
 
     if (g_seq_runtime.running == 0U)
     {
@@ -1102,7 +1089,6 @@ void seq_runtime_process(void)
         if ((g_seq_rec_count_in_remaining_steps > 0U) && (g_seq_runtime.running != 0U))
         {
             g_seq_rec_count_in_remaining_steps--;
-            seq_runtime_rec_led_update();
         }
         seq_runtime_process_step_boundaries();
     }
@@ -1269,7 +1255,6 @@ void seq_runtime_rec_toggle_arm(void)
     {
         g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
     }
-    seq_runtime_rec_led_update();
 }
 
 uint8_t seq_runtime_rec_is_armed(void)
@@ -1289,7 +1274,6 @@ void seq_runtime_set_rec_count_in_mode(uint8_t mode)
     {
         g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
     }
-    seq_runtime_rec_led_update();
 }
 
 uint8_t seq_runtime_get_rec_count_in_mode(void)

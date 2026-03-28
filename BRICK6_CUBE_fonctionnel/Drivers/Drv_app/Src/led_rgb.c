@@ -22,6 +22,7 @@
 #include "led_rgb.h"
 
 #include <stdbool.h>
+#include "stm32h7xx_hal.h"
 
 #include "Keyboard/keyboard_runtime.h"
 #include "led_remap.h"
@@ -34,6 +35,7 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
+#include "Seq/seq_runtime.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
 #define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
@@ -54,6 +56,9 @@
 #define LED_FIXED_ORANGE_R        LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_ORANGE_G        64U
 #define LED_FIXED_ORANGE_B        0U
+#define LED_FIXED_RED_R           LED_FIXED_HALF_BRIGHTNESS
+#define LED_FIXED_RED_G           0U
+#define LED_FIXED_RED_B           0U
 
 static uint8_t led_seq_collect_held_plock_set_mask(void)
 {
@@ -236,11 +241,43 @@ static void led_apply_fixed_scene(void)
         }
         else
         {
-            led_layer_set(LED_LAYER_UI,
-                          (led_id_t)led,
-                          LED_FIXED_WHITE_R,
-                          LED_FIXED_WHITE_G,
-                          LED_FIXED_WHITE_B);
+            if ((led_id_t)led == LED_REC)
+            {
+                uint8_t rec_on = 0U;
+                if (seq_runtime_rec_is_armed() != 0U)
+                {
+                    if ((seq_runtime_is_running() != 0U)
+                        && (seq_runtime_get_rec_count_in_remaining_steps() > 0U))
+                    {
+                        rec_on = ((HAL_GetTick() / 200U) & 0x1U) ? 1U : 0U;
+                    }
+                    else
+                    {
+                        rec_on = 1U;
+                    }
+                }
+
+                if (rec_on != 0U)
+                {
+                    led_layer_set(LED_LAYER_UI,
+                                  (led_id_t)led,
+                                  LED_FIXED_RED_R,
+                                  LED_FIXED_RED_G,
+                                  LED_FIXED_RED_B);
+                }
+                else
+                {
+                    led_layer_set(LED_LAYER_UI, (led_id_t)led, 0U, 0U, 0U);
+                }
+            }
+            else
+            {
+                led_layer_set(LED_LAYER_UI,
+                              (led_id_t)led,
+                              LED_FIXED_WHITE_R,
+                              LED_FIXED_WHITE_G,
+                              LED_FIXED_WHITE_B);
+            }
         }
     }
 }
