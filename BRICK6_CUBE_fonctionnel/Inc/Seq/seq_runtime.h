@@ -64,6 +64,9 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing);
 
 void seq_runtime_rec_toggle_arm(void);
 uint8_t seq_runtime_rec_is_armed(void);
+void seq_runtime_set_rec_count_in_mode(uint8_t mode);
+uint8_t seq_runtime_get_rec_count_in_mode(void);
+uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,

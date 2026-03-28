@@ -58,6 +58,7 @@
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
 #define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
 #define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
+#define UI_CFG_REC_PARAM ((param_id_t)PARAM_CFG_REC)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
@@ -297,6 +298,7 @@ static void ui_core_sync_active_track_cfg_params(void)
     param_store_set_active(UI_CFG_TRACK_TYPE_PARAM, (float)ui_get_track_type_index_for_family(active_config->family, active_config->type));
     param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)g_ui_track_state.track_midi_channel[active_track]);
     param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)g_ui_track_state.track_midi_source[active_track]);
+    param_store_set_active(UI_CFG_REC_PARAM, (float)seq_runtime_get_rec_count_in_mode());
     param_registry_sync_ui_for_active_track();
 }
 
@@ -1063,6 +1065,20 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         && ((int32_t)(g_ui_track_state.feedback_until_ms - HAL_GetTick()) > 0))
     {
         (void)snprintf(out, out_len, "%s", g_ui_track_state.feedback_message);
+        return;
+    }
+
+    if ((seq_runtime_rec_is_armed() != 0U) && (seq_runtime_is_running() != 0U))
+    {
+        const uint32_t remain = seq_runtime_get_rec_count_in_remaining_steps();
+        if (remain > 0U)
+        {
+            (void)snprintf(out, out_len, "CNT %lu", (unsigned long)remain);
+        }
+        else
+        {
+            (void)snprintf(out, out_len, "REC");
+        }
         return;
     }
 
