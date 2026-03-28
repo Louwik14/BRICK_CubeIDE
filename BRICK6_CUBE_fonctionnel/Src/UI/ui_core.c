@@ -1075,20 +1075,6 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         return;
     }
 
-    if ((seq_runtime_rec_is_armed() != 0U) && (seq_runtime_is_running() != 0U))
-    {
-        const uint32_t remain = seq_runtime_get_rec_count_in_remaining_steps();
-        if (remain > 0U)
-        {
-            (void)snprintf(out, out_len, "CNT %lu", (unsigned long)remain);
-        }
-        else
-        {
-            (void)snprintf(out, out_len, "REC");
-        }
-        return;
-    }
-
     const ui_track_config_t config = ui_get_track_config(track);
 
     if (config.family == UI_TRACK_FAMILY_OFF)

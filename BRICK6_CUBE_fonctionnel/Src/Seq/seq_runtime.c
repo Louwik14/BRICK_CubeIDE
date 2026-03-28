@@ -88,6 +88,7 @@ SEQ_STATE_D2 static seq_live_rec_pending_note_t g_seq_live_rec_pending[SEQ_RUNTI
 SEQ_STATE_D2 static uint8_t g_seq_rec_armed;
 SEQ_STATE_D2 static uint8_t g_seq_rec_count_in_mode;
 SEQ_STATE_D2 static uint32_t g_seq_rec_count_in_remaining_steps;
+SEQ_STATE_D2 static uint8_t g_seq_rec_count_in_pending_start;
 
 static uint32_t seq_runtime_rec_count_in_steps_from_mode(uint8_t mode)
 {
@@ -108,6 +109,8 @@ static param_id_t seq_runtime_play_param_note(uint8_t voice);
 static param_id_t seq_runtime_play_param_vel(uint8_t voice);
 static param_id_t seq_runtime_play_param_len(uint8_t voice);
 static param_id_t seq_runtime_play_param_mictim(uint8_t voice);
+static void seq_runtime_start_immediate(void);
+static void seq_runtime_process_rec_count_in(void);
 
 static void seq_runtime_active_notes_clear(void)
 {
@@ -967,6 +970,7 @@ void seq_runtime_init(void)
     g_seq_rec_armed = 0U;
     g_seq_rec_count_in_mode = 0U;
     g_seq_rec_count_in_remaining_steps = 0U;
+    g_seq_rec_count_in_pending_start = 0U;
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -978,23 +982,17 @@ void seq_runtime_init(void)
     seq_edit_init();
 }
 
-void seq_runtime_start(void)
+static void seq_runtime_start_immediate(void)
 {
-    if (g_seq_runtime.running != 0U)
-    {
-        return;
-    }
-
     g_seq_runtime.running = 1U;
+    g_seq_rec_count_in_pending_start = 0U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.last_tick_count = engine_tick_count;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     seq_runtime_play_events_clear();
     seq_runtime_active_notes_clear();
     seq_runtime_live_rec_pending_clear();
-    g_seq_rec_count_in_remaining_steps = (g_seq_rec_armed != 0U)
-                                         ? seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode)
-                                         : 0U;
+    g_seq_rec_count_in_remaining_steps = 0U;
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -1006,13 +1004,59 @@ void seq_runtime_start(void)
 
     g_seq_midi_clock_tick_accum = 0U;
     seq_runtime_send_transport_start();
-    seq_runtime_rec_led_update();
+}
+
+void seq_runtime_start(void)
+{
+    if ((g_seq_runtime.running != 0U) || (g_seq_rec_count_in_pending_start != 0U))
+    {
+        return;
+    }
+
+    g_seq_runtime.tick_accum = 0U;
+    g_seq_runtime.last_tick_count = engine_tick_count;
+    g_seq_runtime.ext_clock_tick_accum = 0U;
+    seq_runtime_play_events_clear();
+    seq_runtime_active_notes_clear();
+    seq_runtime_live_rec_pending_clear();
+
+    if (g_seq_rec_armed != 0U)
+    {
+        g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
+    }
+    else
+    {
+        g_seq_rec_count_in_remaining_steps = 0U;
+    }
+
+    if (g_seq_rec_count_in_remaining_steps > 0U)
+    {
+        g_seq_runtime.running = 0U;
+        g_seq_rec_count_in_pending_start = 1U;
+        return;
+    }
+
+    seq_runtime_start_immediate();
 }
 
 void seq_runtime_stop(void)
 {
-    if (g_seq_runtime.running == 0U)
+    if ((g_seq_runtime.running == 0U) && (g_seq_rec_count_in_pending_start == 0U))
     {
+        return;
+    }
+
+    if (g_seq_rec_count_in_pending_start != 0U)
+    {
+        g_seq_rec_count_in_pending_start = 0U;
+        g_seq_rec_count_in_remaining_steps = 0U;
+        g_seq_runtime.running = 0U;
+        g_seq_runtime.tick_accum = 0U;
+        g_seq_runtime.ext_clock_tick_accum = 0U;
+        g_seq_runtime.last_tick_count = engine_tick_count;
+        seq_runtime_play_events_clear();
+        seq_runtime_active_notes_clear();
+        seq_runtime_live_rec_pending_clear();
         return;
     }
 
@@ -1037,7 +1081,7 @@ void seq_runtime_stop(void)
 
 void seq_runtime_toggle_play_stop(void)
 {
-    if (g_seq_runtime.running == 0U)
+    if ((g_seq_runtime.running == 0U) && (g_seq_rec_count_in_pending_start == 0U))
     {
         seq_runtime_start();
     }
@@ -1054,6 +1098,12 @@ uint8_t seq_runtime_is_running(void)
 
 void seq_runtime_process(void)
 {
+    if (g_seq_rec_count_in_pending_start != 0U)
+    {
+        seq_runtime_process_rec_count_in();
+        seq_runtime_play_events_service();
+        return;
+    }
 
     if (g_seq_runtime.running == 0U)
     {
@@ -1096,6 +1146,46 @@ void seq_runtime_process(void)
     seq_runtime_play_events_service();
 }
 
+static void seq_runtime_process_rec_count_in(void)
+{
+    if (g_seq_rec_count_in_remaining_steps == 0U)
+    {
+        seq_runtime_start_immediate();
+        return;
+    }
+
+    if (g_seq_runtime.clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    const uint32_t current_tick = engine_tick_count;
+    if (current_tick == g_seq_runtime.last_tick_count)
+    {
+        return;
+    }
+
+    const uint32_t elapsed = current_tick - g_seq_runtime.last_tick_count;
+    g_seq_runtime.last_tick_count = current_tick;
+    g_seq_runtime.tick_accum += elapsed;
+    seq_runtime_send_internal_clock(elapsed);
+
+    while (g_seq_runtime.tick_accum >= g_seq_runtime.ticks_per_step)
+    {
+        g_seq_runtime.tick_accum -= g_seq_runtime.ticks_per_step;
+        if (g_seq_rec_count_in_remaining_steps > 0U)
+        {
+            g_seq_rec_count_in_remaining_steps--;
+        }
+
+        if (g_seq_rec_count_in_remaining_steps == 0U)
+        {
+            seq_runtime_start_immediate();
+            break;
+        }
+    }
+}
+
 void seq_runtime_set_clock_source(seq_clock_src_t src)
 {
     if ((uint8_t)src >= (uint8_t)SEQ_CLOCK_SRC_COUNT)
@@ -1117,7 +1207,33 @@ seq_clock_src_t seq_runtime_get_clock_source(void)
 
 void seq_runtime_midi_clock(void)
 {
-    if ((g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI) || (g_seq_runtime.running == 0U))
+    if (g_seq_runtime.clock_src != SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+    {
+        return;
+    }
+
+    if (g_seq_rec_count_in_pending_start != 0U)
+    {
+        g_seq_runtime.ext_clock_tick_accum++;
+        if (g_seq_runtime.ext_clock_tick_accum < SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP)
+        {
+            return;
+        }
+
+        g_seq_runtime.ext_clock_tick_accum = 0U;
+        if (g_seq_rec_count_in_remaining_steps > 0U)
+        {
+            g_seq_rec_count_in_remaining_steps--;
+        }
+
+        if (g_seq_rec_count_in_remaining_steps == 0U)
+        {
+            seq_runtime_start_immediate();
+        }
+        return;
+    }
+
+    if (g_seq_runtime.running == 0U)
     {
         return;
     }
@@ -1250,8 +1366,9 @@ void seq_runtime_rec_toggle_arm(void)
         seq_runtime_live_rec_flush_all_pending(engine_tick_count);
         seq_runtime_live_rec_pending_clear();
         g_seq_rec_count_in_remaining_steps = 0U;
+        g_seq_rec_count_in_pending_start = 0U;
     }
-    else if (g_seq_runtime.running != 0U)
+    else if ((g_seq_runtime.running != 0U) || (g_seq_rec_count_in_pending_start != 0U))
     {
         g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
     }
@@ -1270,7 +1387,8 @@ void seq_runtime_set_rec_count_in_mode(uint8_t mode)
     }
 
     g_seq_rec_count_in_mode = mode;
-    if ((g_seq_runtime.running != 0U) && (g_seq_rec_armed != 0U))
+    if (((g_seq_runtime.running != 0U) || (g_seq_rec_count_in_pending_start != 0U))
+        && (g_seq_rec_armed != 0U))
     {
         g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
     }
