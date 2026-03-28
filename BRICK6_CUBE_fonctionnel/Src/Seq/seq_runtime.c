@@ -15,6 +15,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_param_iface.h"
+#include "main.h"
 
 #define SEQ_RUNTIME_TICKS_PER_STEP_DEFAULT 188U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
@@ -1005,6 +1006,7 @@ void seq_runtime_start(void)
 
     g_seq_midi_clock_tick_accum = 0U;
     seq_runtime_send_transport_start();
+    seq_runtime_rec_led_update();
 }
 
 void seq_runtime_stop(void)
