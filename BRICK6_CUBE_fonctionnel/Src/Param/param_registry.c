@@ -1368,6 +1368,14 @@ static void apply_cfg_midi_src(float v)
     param_store_set_active(PARAM_CFG_MIDI_SRC, (float)ui_get_track_midi_source(active_track));
 }
 
+static void apply_cfg_rec(float v)
+{
+    uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    seq_runtime_set_rec_count_in_mode(mode);
+    mode = seq_runtime_get_rec_count_in_mode();
+    param_store_set_active(PARAM_CFG_REC, (float)mode);
+}
+
 static void apply_seq_length(float v)
 {
     const uint8_t track = ui_get_active_track();
@@ -1603,6 +1611,7 @@ static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL
 static const char *const g_monob_sub_octave_labels[] = {"-1", "-2", "-3", "-4", NULL};
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
+static const char *const g_cfg_rec_labels[] = {"Off", "1Bar", "2Bar", "4Bar", NULL};
 static const char *const g_kbd_root_labels[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", NULL};
 static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "Mixoly", "PntMaj", "PntMin", "Chrom", NULL};
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
@@ -1710,6 +1719,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
+    PARAM_DESC_EX(PARAM_CFG_REC, "Rec CntIn", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_labels, apply_cfg_rec),
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
     PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 1.0f, 8.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_div),
