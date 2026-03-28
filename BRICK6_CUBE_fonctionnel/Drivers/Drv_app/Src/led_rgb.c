@@ -246,8 +246,7 @@ static void led_apply_fixed_scene(void)
                 uint8_t rec_on = 0U;
                 if (seq_runtime_rec_is_armed() != 0U)
                 {
-                    if ((seq_runtime_is_running() != 0U)
-                        && (seq_runtime_get_rec_count_in_remaining_steps() > 0U))
+                    if (seq_runtime_get_rec_count_in_remaining_steps() > 0U)
                     {
                         rec_on = ((HAL_GetTick() / 200U) & 0x1U) ? 1U : 0U;
                     }
