@@ -167,7 +167,7 @@ bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t
 
     if (family == UI_TRACK_FAMILY_SYNTH)
     {
-        return (type == UI_TRACK_TYPE_DX7) || (type == UI_TRACK_TYPE_MONOB);
+        return (type == UI_TRACK_TYPE_DX7) || (type == UI_TRACK_TYPE_MONOB) || (type == UI_TRACK_TYPE_TB3);
     }
 
     return false;
@@ -195,7 +195,7 @@ uint8_t ui_get_track_type_count_for_family(ui_track_family_t family)
         return 0U;
     }
 
-    return (family == UI_TRACK_FAMILY_SYNTH) ? 2U : 2U;
+    return (family == UI_TRACK_FAMILY_SYNTH) ? 3U : 2U;
 }
 
 uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_type_t type)
@@ -207,7 +207,12 @@ uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_ty
 
     if (family == UI_TRACK_FAMILY_SYNTH)
     {
-        return (type == UI_TRACK_TYPE_MONOB) ? 1U : 0U;
+        if (type == UI_TRACK_TYPE_MONOB)
+        {
+            return 1U;
+        }
+
+        return (type == UI_TRACK_TYPE_TB3) ? 2U : 0U;
     }
 
     return (type == UI_TRACK_TYPE_HYBRID) ? 1U : 0U;
@@ -227,7 +232,12 @@ ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, ui
 
     if (family == UI_TRACK_FAMILY_SYNTH)
     {
-        return (index == 0U) ? UI_TRACK_TYPE_DX7 : UI_TRACK_TYPE_MONOB;
+        if (index == 0U)
+        {
+            return UI_TRACK_TYPE_DX7;
+        }
+
+        return (index == 1U) ? UI_TRACK_TYPE_MONOB : UI_TRACK_TYPE_TB3;
     }
 
     return (index == 0U) ? UI_TRACK_TYPE_AUDIO : UI_TRACK_TYPE_HYBRID;
@@ -1052,6 +1062,9 @@ const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_ty
         case UI_TRACK_TYPE_MONOB:
             return "MonoB";
 
+        case UI_TRACK_TYPE_TB3:
+            return "TB-3";
+
         default:
             return "-";
     }
@@ -1077,6 +1090,9 @@ const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type
 
         case UI_TRACK_TYPE_MONOB:
             return "MB";
+
+        case UI_TRACK_TYPE_TB3:
+            return "TB3";
 
         default:
             return "---";
