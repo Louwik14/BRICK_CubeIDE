@@ -29,7 +29,7 @@
 
 namespace
 {
-constexpr uint8_t TB3_SYNTH_MAX_INSTANCES = 8U;
+constexpr uint8_t TB3_SYNTH_MAX_INSTANCES = 2U;
 constexpr float TB3_MIN_SAMPLE_RATE = 1000.0f;
 constexpr float TB3_DEFAULT_SAMPLE_RATE = 48000.0f;
 

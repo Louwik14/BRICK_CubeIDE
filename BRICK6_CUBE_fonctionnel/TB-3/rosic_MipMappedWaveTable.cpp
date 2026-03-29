@@ -1,4 +1,5 @@
 #include "rosic_MipMappedWaveTable.h"
+#include "Storage/memory_layout.h"
 using namespace rosic;
 
 MipMappedWaveTable::MipMappedWaveTable()
@@ -136,7 +137,7 @@ void MipMappedWaveTable::renderWaveform()
 
 void MipMappedWaveTable::generateMipMap()
 {
-  static double spectrum[tableLength];
+  static AUDIO_COLD_SDRAM double spectrum[tableLength];
   //static int    position, offset;
   static int t, i; // indices for the table and position
 
