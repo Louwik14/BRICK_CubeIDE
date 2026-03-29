@@ -61,6 +61,7 @@
 #define UI_CFG_REC_PARAM ((param_id_t)PARAM_CFG_REC)
 #define UI_CFG_TEMPO_PARAM ((param_id_t)PARAM_CFG_TEMPO)
 #define UI_CFG_SYNC_PARAM ((param_id_t)PARAM_CFG_SYNC)
+#define UI_CFG_REC_LEN_PARAM ((param_id_t)PARAM_CFG_REC_LEN)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
@@ -319,6 +320,7 @@ static void ui_core_sync_active_track_cfg_params(void)
         }
         param_store_set_active(UI_CFG_SYNC_PARAM, sync_value);
     }
+    param_store_set_active(UI_CFG_REC_LEN_PARAM, (float)seq_runtime_get_rec_len_mode());
     param_registry_sync_ui_for_active_track();
 }
 

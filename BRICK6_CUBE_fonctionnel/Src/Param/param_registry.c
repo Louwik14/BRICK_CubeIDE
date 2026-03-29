@@ -1416,6 +1416,14 @@ static void apply_cfg_sync(float v)
     param_store_set_active(PARAM_CFG_SYNC, (float)synced_mode);
 }
 
+static void apply_cfg_rec_len(float v)
+{
+    uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f);
+    seq_runtime_set_rec_len_mode(mode);
+    mode = seq_runtime_get_rec_len_mode();
+    param_store_set_active(PARAM_CFG_REC_LEN, (float)mode);
+}
+
 static void apply_seq_length(float v)
 {
     const uint8_t track = ui_get_active_track();
@@ -1653,6 +1661,7 @@ static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
+static const char *const g_cfg_rec_len_labels[] = {"Overdub", "Pattern", NULL};
 static const char *const g_kbd_root_labels[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", NULL};
 static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "Mixoly", "PntMaj", "PntMin", "Chrom", NULL};
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
@@ -1763,6 +1772,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_REC, "Préroll", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_labels, apply_cfg_rec),
     PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
     PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
+    PARAM_DESC_EX(PARAM_CFG_REC_LEN, "Len", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_len_labels, apply_cfg_rec_len),
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
     PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 1.0f, 8.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_div),

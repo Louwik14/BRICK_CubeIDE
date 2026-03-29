@@ -39,6 +39,12 @@ typedef enum
     SEQ_LIVE_REC_SRC_EXTERNAL
 } seq_live_rec_source_t;
 
+typedef enum
+{
+    SEQ_REC_LEN_MODE_OVERDUB = 0,
+    SEQ_REC_LEN_MODE_PATTERN = 1
+} seq_rec_len_mode_t;
+
 void seq_runtime_init(void);
 void seq_runtime_process(void);
 const seq_runtime_state_t *seq_runtime_get_state(void);
@@ -70,6 +76,8 @@ void seq_runtime_rec_toggle_arm(void);
 uint8_t seq_runtime_rec_is_armed(void);
 void seq_runtime_set_rec_count_in_mode(uint8_t mode);
 uint8_t seq_runtime_get_rec_count_in_mode(void);
+void seq_runtime_set_rec_len_mode(uint8_t mode);
+uint8_t seq_runtime_get_rec_len_mode(void);
 uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
 uint32_t seq_runtime_get_tempo_bpm_milli(void);
 void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli);
