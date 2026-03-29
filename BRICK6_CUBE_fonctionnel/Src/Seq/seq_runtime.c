@@ -711,6 +711,12 @@ uint32_t seq_runtime_get_rec_count_in_remaining_steps(void)
     return seq_transport_fsm_get_rec_count_in_remaining_steps(&g_seq_transport_fsm);
 }
 
+uint8_t seq_runtime_rec_is_pattern_pending_start(void)
+{
+    return ((g_seq_rec_len_mode == (uint8_t)SEQ_REC_LEN_MODE_PATTERN)
+            && (g_seq_pattern_rec_pending_start != 0U)) ? 1U : 0U;
+}
+
 uint32_t seq_runtime_get_tempo_bpm_milli(void)
 {
     return seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge);

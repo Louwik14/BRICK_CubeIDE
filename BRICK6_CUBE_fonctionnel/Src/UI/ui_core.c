@@ -1154,11 +1154,6 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
         return;
     }
 
-    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD) && (mode == UI_HALL_MODE_SEQ))
-    {
-        keyboard_runtime_all_notes_off();
-    }
-
     keyboard_runtime_on_hall_mode_changed(g_ui_track_state.hall_mode, mode);
     g_ui_track_state.hall_mode = mode;
 }

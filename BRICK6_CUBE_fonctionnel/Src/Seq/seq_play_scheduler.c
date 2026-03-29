@@ -176,7 +176,11 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         {
             len_steps_f = 64.0f;
         }
-        const uint32_t len_ticks = (uint32_t)(len_steps_f * tps_f);
+        uint32_t len_ticks = (uint32_t)((len_steps_f * tps_f) + 0.5f);
+        if (len_ticks == 0U)
+        {
+            len_ticks = 1U;
+        }
 
         const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
                                                                   seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
@@ -191,7 +195,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                 track,
                                 note,
                                 vel);
-        seq_play_scheduler_push((uint32_t)on_tick + ((len_ticks == 0U) ? 1U : len_ticks),
+        seq_play_scheduler_push((uint32_t)on_tick + len_ticks,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
                                 track,
                                 note,
