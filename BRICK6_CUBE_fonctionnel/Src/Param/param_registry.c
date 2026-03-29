@@ -25,6 +25,7 @@
 #include "Audio/juno_synth.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
+#include "Audio/tb3_synth.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
 #include "fx_granular.h"
@@ -538,6 +539,27 @@ static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id
     }
 }
 
+static uint8_t param_runtime_apply_tb3(uint8_t instance_id, param_id_t id, float value)
+{
+    switch (id)
+    {
+        case PARAM_TB3_WAVEFORM:
+            tb3_synth_set_param_for_instance(instance_id, id, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_TB3_CUTOFF:
+        case PARAM_TB3_RESONANCE:
+        case PARAM_TB3_ENV_MOD:
+        case PARAM_TB3_DECAY:
+        case PARAM_TB3_ACCENT:
+        case PARAM_TB3_VOLUME:
+        case PARAM_TB3_SLIDE_TIME:
+            tb3_synth_set_param_for_instance(instance_id, id, clamp_value(value, 0.0f, 127.0f));
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float value)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -561,6 +583,10 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     {
         applied = param_runtime_apply_tone_monob(ctx->instance_id, id, value);
     }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
+    {
+        applied = param_runtime_apply_tb3(ctx->instance_id, id, value);
+    }
 
     if (applied != 0U)
     {
@@ -578,46 +604,49 @@ static uint8_t param_runtime_apply_colors_track(uint8_t track, param_id_t id, fl
         return 0U;
     }
 
-    if (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+    switch (ctx->engine)
     {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_MONOB_FILTER_TYPE:
-            monob_synth_set_filter_type_for_instance(ctx->instance_id, (uint8_t)(clamp_value(value, 0.0f, 1.0f) + 0.5f));
-            return 1U;
-        case PARAM_MONOB_FILTER_CUTOFF:
-            monob_synth_set_filter_cutoff_for_instance(ctx->instance_id, filter_ui127_to_cutoff_hz(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_RESONANCE:
-            monob_synth_set_filter_resonance_for_instance(ctx->instance_id, filter_ui127_to_resonance(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_EG_AMT:
-            monob_synth_set_filter_eg_amount_for_instance(ctx->instance_id, filter_ui127_to_eg_amount(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_ATTACK:
-            monob_synth_set_filter_attack_for_instance(ctx->instance_id, filter_ui127_to_attack_s(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_DECAY:
-            monob_synth_set_filter_decay_for_instance(ctx->instance_id, filter_ui127_to_decay_s(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_SUSTAIN:
-            monob_synth_set_filter_sustain_for_instance(ctx->instance_id, filter_ui127_to_sustain(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_RELEASE:
-            monob_synth_set_filter_release_for_instance(ctx->instance_id, filter_ui127_to_release_s(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_KEYTRK:
-            monob_synth_set_filter_keytrack_for_instance(ctx->instance_id, filter_ui127_to_keytrack(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_ENVRST:
-            monob_synth_set_filter_env_reset_for_instance(ctx->instance_id, filter_ui127_to_bool(value));
-            return 1U;
-        case PARAM_MONOB_FILTER_ENVDLY:
-            monob_synth_set_filter_env_delay_for_instance(ctx->instance_id, filter_ui127_to_env_delay_s(value));
-            return 1U;
+        case (uint8_t)TRACK_RUNTIME_ENGINE_MONOB:
+            switch (id)
+            {
+                case PARAM_MONOB_FILTER_TYPE:
+                    monob_synth_set_filter_type_for_instance(ctx->instance_id, (uint8_t)(clamp_value(value, 0.0f, 1.0f) + 0.5f));
+                    return 1U;
+                case PARAM_MONOB_FILTER_CUTOFF:
+                    monob_synth_set_filter_cutoff_for_instance(ctx->instance_id, filter_ui127_to_cutoff_hz(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_RESONANCE:
+                    monob_synth_set_filter_resonance_for_instance(ctx->instance_id, filter_ui127_to_resonance(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_EG_AMT:
+                    monob_synth_set_filter_eg_amount_for_instance(ctx->instance_id, filter_ui127_to_eg_amount(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_ATTACK:
+                    monob_synth_set_filter_attack_for_instance(ctx->instance_id, filter_ui127_to_attack_s(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_DECAY:
+                    monob_synth_set_filter_decay_for_instance(ctx->instance_id, filter_ui127_to_decay_s(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_SUSTAIN:
+                    monob_synth_set_filter_sustain_for_instance(ctx->instance_id, filter_ui127_to_sustain(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_RELEASE:
+                    monob_synth_set_filter_release_for_instance(ctx->instance_id, filter_ui127_to_release_s(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_KEYTRK:
+                    monob_synth_set_filter_keytrack_for_instance(ctx->instance_id, filter_ui127_to_keytrack(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_ENVRST:
+                    monob_synth_set_filter_env_reset_for_instance(ctx->instance_id, filter_ui127_to_bool(value));
+                    return 1U;
+                case PARAM_MONOB_FILTER_ENVDLY:
+                    monob_synth_set_filter_env_delay_for_instance(ctx->instance_id, filter_ui127_to_env_delay_s(value));
+                    return 1U;
+                default:
+                    return 0U;
+            }
+        case (uint8_t)TRACK_RUNTIME_ENGINE_TB3:
+            return param_runtime_apply_tb3(ctx->instance_id, id, value);
         default:
             return 0U;
     }
@@ -1318,6 +1347,14 @@ static void apply_monob_osc1_mix(float v) { apply_tone_live_track(PARAM_MONOB_OS
 static void apply_monob_osc2_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_MIX, v); }
 static void apply_monob_osc3_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_MIX, v); }
 static void apply_monob_sub_mix(float v) { apply_tone_live_track(PARAM_MONOB_SUB_MIX, v); }
+static void apply_tb3_waveform(float v) { apply_tone_live_track(PARAM_TB3_WAVEFORM, v); }
+static void apply_tb3_cutoff(float v) { apply_tone_live_track(PARAM_TB3_CUTOFF, v); }
+static void apply_tb3_resonance(float v) { apply_tone_live_track(PARAM_TB3_RESONANCE, v); }
+static void apply_tb3_env_mod(float v) { apply_tone_live_track(PARAM_TB3_ENV_MOD, v); }
+static void apply_tb3_decay(float v) { apply_tone_live_track(PARAM_TB3_DECAY, v); }
+static void apply_tb3_accent(float v) { apply_tone_live_track(PARAM_TB3_ACCENT, v); }
+static void apply_tb3_volume(float v) { apply_tone_live_track(PARAM_TB3_VOLUME, v); }
+static void apply_tb3_slide_time(float v) { apply_tone_live_track(PARAM_TB3_SLIDE_TIME, v); }
 
 static void apply_cfg_track(float v)
 {
@@ -1881,6 +1918,14 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MONOB_OSC2_MIX, "O2 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.6f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc2_mix),
     PARAM_DESC_EX(PARAM_MONOB_OSC3_MIX, "O3 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.45f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc3_mix),
     PARAM_DESC_EX(PARAM_MONOB_SUB_MIX, "SubMix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.35f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_sub_mix),
+    PARAM_DESC_EX(PARAM_TB3_WAVEFORM, "Wave", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_tb3_waveform),
+    PARAM_DESC_EX(PARAM_TB3_VOLUME, "Vol", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_volume),
+    PARAM_DESC_EX(PARAM_TB3_ACCENT, "Accent", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_accent),
+    PARAM_DESC_EX(PARAM_TB3_SLIDE_TIME, "Slide", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_slide_time),
+    PARAM_DESC_EX(PARAM_TB3_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_cutoff),
+    PARAM_DESC_EX(PARAM_TB3_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_resonance),
+    PARAM_DESC_EX(PARAM_TB3_ENV_MOD, "Env Mod", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_env_mod),
+    PARAM_DESC_EX(PARAM_TB3_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_decay),
 };
 
 /**
