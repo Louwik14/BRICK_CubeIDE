@@ -1,3 +1,9 @@
+/*
+ * Module: seq_led
+ * Role: Rendu LED de l'état séquenceur pour la page active.
+ * Responsibilities: afficher trig/plocks, playhead, et couches visuelles associées.
+ * Integration: lit seq_model + seq_runtime et écrit via led_layer; aucune logique transport.
+ */
 #include "Seq/seq_led.h"
 
 #include "Seq/seq_edit.h"

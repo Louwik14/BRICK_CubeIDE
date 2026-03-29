@@ -1,3 +1,10 @@
+/*
+ * Module: seq_clipboard
+ * Role: Presse-papiers d'édition pour copier/coller des pas de séquence.
+ * Responsibilities: stocke une sélection normalisée (ancre + offsets), trig + plocks,
+ * et recolle sur une destination en respectant les paramètres supportés.
+ * Integration: service utilisé par seq_edit; ne gère pas l'UI ni l'exécution temps réel.
+ */
 #include "Seq/seq_clipboard.h"
 
 #include <string.h>

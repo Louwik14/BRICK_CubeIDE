@@ -1,3 +1,10 @@
+/*
+ * Module: seq_persistence
+ * Role: Persistance SD du projet séquenceur (format binaire versionné).
+ * Responsibilities: mount/IO fichier, en-tête magic/version, CRC16,
+ * chargement/sauvegarde atomiques de l'état exposé par seq_model.
+ * Integration: frontière stockage du séquenceur; ne contient aucune logique d'édition/playback.
+ */
 #include "Seq/seq_persistence.h"
 
 #include <stdio.h>
