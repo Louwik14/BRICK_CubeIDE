@@ -12,6 +12,7 @@
 #include "Core/track_runtime.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
+#include "Audio/tb3_synth.h"
 #include "param_registry.h"
 #include "midi.h"
 #include "ui_core.h"
@@ -258,6 +259,17 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
                 else
                 {
                     microdexed_synth_note_off(evt->note);
+                }
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
+            {
+                if (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
+                {
+                    tb3_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
+                }
+                else
+                {
+                    tb3_synth_note_off_for_instance(ctx->instance_id, evt->note);
                 }
             }
         }
