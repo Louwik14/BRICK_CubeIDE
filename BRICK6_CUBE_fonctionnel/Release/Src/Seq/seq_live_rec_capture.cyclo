@@ -1,0 +1,5 @@
+../Src/Seq/seq_live_rec_capture.c:349:6:seq_live_rec_capture_init	1
+../Src/Seq/seq_live_rec_capture.c:354:6:seq_live_rec_capture_reset	1
+../Src/Seq/seq_live_rec_capture.c:359:6:seq_live_rec_capture_flush	7
+../Src/Seq/seq_live_rec_capture.c:367:6:seq_live_rec_capture_note_on	41
+../Src/Seq/seq_live_rec_capture.c:484:6:seq_live_rec_capture_note_off	25

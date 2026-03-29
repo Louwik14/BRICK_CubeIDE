@@ -1,13 +1,13 @@
 Src/Seq/seq_runtime.o: ../Src/Seq/seq_runtime.c ../Inc/Seq/seq_runtime.h \
  ../Inc/Seq/seq_types.h ../Inc/Storage/memory_layout.h \
- ../Inc/Core/engine_tasklet.h ../Inc/Core/track_runtime.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
- ../Inc/Audio/microdexed_synth.h ../Inc/Audio/monob_synth.h \
+ ../Inc/Core/engine_tasklet.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  ../Inc/Seq/seq_model.h ../Inc/Seq/seq_edit.h ../Inc/Seq/seq_clipboard.h \
- ../Inc/Seq/seq_param_iface.h ../Inc/main.h \
+ ../Inc/Seq/seq_param_iface.h ../Inc/Param/param_store.h \
+ ../Inc/Seq/seq_play_scheduler.h ../Inc/Seq/seq_output_guard.h \
+ ../Inc/Seq/seq_boundary_engine.h ../Inc/Seq/seq_live_rec_capture.h \
+ ../Inc/Seq/seq_transport_fsm.h ../Inc/Seq/seq_clock_bridge.h \
+ ../Inc/UI/ui_core.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -61,17 +61,19 @@ Src/Seq/seq_runtime.o: ../Src/Seq/seq_runtime.c ../Inc/Seq/seq_runtime.h \
 ../Inc/Seq/seq_types.h:
 ../Inc/Storage/memory_layout.h:
 ../Inc/Core/engine_tasklet.h:
-../Inc/Core/track_runtime.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
-../Inc/Audio/microdexed_synth.h:
-../Inc/Audio/monob_synth.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Inc/Seq/seq_model.h:
 ../Inc/Seq/seq_edit.h:
 ../Inc/Seq/seq_clipboard.h:
 ../Inc/Seq/seq_param_iface.h:
+../Inc/Param/param_store.h:
+../Inc/Seq/seq_play_scheduler.h:
+../Inc/Seq/seq_output_guard.h:
+../Inc/Seq/seq_boundary_engine.h:
+../Inc/Seq/seq_live_rec_capture.h:
+../Inc/Seq/seq_transport_fsm.h:
+../Inc/Seq/seq_clock_bridge.h:
+../Inc/UI/ui_core.h:
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:

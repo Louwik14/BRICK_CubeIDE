@@ -3,6 +3,7 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  ../Inc/Audio/sd_multitrack_recorder.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h \
+ ../Inc/Seq/seq_types.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi_host.h \
  ../Inc/sai.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
@@ -110,11 +111,12 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_recorder_runtime.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_sampler_bootstrap.h \
  ../Inc/App/Hall/hall_loop.h ../Inc/App/Hall/hall_juno_midi.h \
- ../Inc/Seq/seq_runtime.h ../Inc/Seq/seq_types.h
+ ../Inc/Seq/seq_runtime.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h:
+../Inc/Seq/seq_types.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi_host.h:
 ../Inc/sai.h:
 ../Inc/main.h:
@@ -228,4 +230,3 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/
 ../Inc/App/Hall/hall_loop.h:
 ../Inc/App/Hall/hall_juno_midi.h:
 ../Inc/Seq/seq_runtime.h:
-../Inc/Seq/seq_types.h:
