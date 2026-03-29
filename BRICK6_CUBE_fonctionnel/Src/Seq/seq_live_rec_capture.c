@@ -281,6 +281,36 @@ static uint8_t seq_live_rec_capture_upsert_play_param(seq_track_id_t track,
     return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
 
+static uint8_t seq_live_rec_capture_delete_play_param(seq_track_id_t track,
+                                                       seq_step_id_t step,
+                                                       param_id_t param_id)
+{
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    const seq_plock_op_status_t st = seq_model_step_plock_delete(track, step, set_id, param8);
+    return (st == SEQ_PLOCK_OP_DELETED) ? 1U : 0U;
+}
+
+static uint8_t seq_live_rec_capture_has_play_param(seq_track_id_t track,
+                                                    seq_step_id_t step,
+                                                    param_id_t param_id)
+{
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    seq_plock_entry_t entry;
+    return (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U) ? 1U : 0U;
+}
+
 static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_note_t *pending,
                                                   uint32_t stop_tick,
                                                   uint16_t ticks_per_step)
@@ -394,20 +424,40 @@ void seq_live_rec_capture_note_on(uint8_t active,
             continue;
         }
 
+        const param_id_t note_param = seq_live_rec_capture_play_param_note((uint8_t)voice);
+        const param_id_t vel_param = seq_live_rec_capture_play_param_vel((uint8_t)voice);
+        const param_id_t mictim_param = seq_live_rec_capture_play_param_mictim((uint8_t)voice);
+
+        const uint8_t had_note_before = seq_live_rec_capture_has_play_param(track, write_step, note_param);
+        const uint8_t had_vel_before = seq_live_rec_capture_has_play_param(track, write_step, vel_param);
+        const uint8_t had_mictim_before = seq_live_rec_capture_has_play_param(track, write_step, mictim_param);
+
         const uint8_t note_ok = seq_live_rec_capture_upsert_play_param(track,
                                                                         write_step,
-                                                                        seq_live_rec_capture_play_param_note((uint8_t)voice),
+                                                                        note_param,
                                                                         (float)note);
         const uint8_t vel_ok = seq_live_rec_capture_upsert_play_param(track,
                                                                        write_step,
-                                                                       seq_live_rec_capture_play_param_vel((uint8_t)voice),
+                                                                       vel_param,
                                                                        (float)velocity);
         const uint8_t micro_ok = seq_live_rec_capture_upsert_play_param(track,
                                                                          write_step,
-                                                                         seq_live_rec_capture_play_param_mictim((uint8_t)voice),
+                                                                         mictim_param,
                                                                          (float)mictim);
         if ((note_ok == 0U) || (vel_ok == 0U) || (micro_ok == 0U))
         {
+            if ((note_ok != 0U) && (had_note_before == 0U))
+            {
+                (void)seq_live_rec_capture_delete_play_param(track, write_step, note_param);
+            }
+            if ((vel_ok != 0U) && (had_vel_before == 0U))
+            {
+                (void)seq_live_rec_capture_delete_play_param(track, write_step, vel_param);
+            }
+            if ((micro_ok != 0U) && (had_mictim_before == 0U))
+            {
+                (void)seq_live_rec_capture_delete_play_param(track, write_step, mictim_param);
+            }
             continue;
         }
 
