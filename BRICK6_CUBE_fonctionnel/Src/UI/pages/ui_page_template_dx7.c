@@ -51,6 +51,30 @@ static const ui_template_family_t g_ui_template_tone_family_monob = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_tb3 = {
+    .family_title = "TONE",
+    .nav_labels = { "MAIN", "-", "-", "-" },
+    .subpages = {
+        {
+            .title = "MAIN",
+            .param_bank = { .params = { PARAM_TB3_WAVEFORM, PARAM_TB3_VOLUME, PARAM_TB3_ACCENT, PARAM_TB3_SLIDE_TIME } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t *ui_page_template_dx7_resolve_family(void)
 {
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
@@ -80,6 +104,10 @@ void ui_page_template_dx7_register_families(void)
             if((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_MONOB))
             {
                 family_template = &g_ui_template_tone_family_monob;
+            }
+            else if((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_TB3))
+            {
+                family_template = &g_ui_template_tone_family_tb3;
             }
 
             ui_template_family_register(UI_TEMPLATE_FAMILY_TONE, track_family, track_type, family_template);

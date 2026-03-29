@@ -36,6 +36,10 @@ void ui_page_template_play_register_families(void)
                                 UI_TRACK_FAMILY_SYNTH,
                                 UI_TRACK_TYPE_MONOB,
                                 &g_ui_template_play_family);
+    ui_template_family_register(UI_TEMPLATE_FAMILY_PLAY,
+                                UI_TRACK_FAMILY_SYNTH,
+                                UI_TRACK_TYPE_TB3,
+                                &g_ui_template_play_family);
 }
 
 const ui_page_t g_ui_page_template_play = {
