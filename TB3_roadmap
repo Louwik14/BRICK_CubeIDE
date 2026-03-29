@@ -185,3 +185,59 @@ Le prochain prompt devra:
 ### Hypothèses (à confirmer en implémentation)
 - Sous-ensemble exact minimal de fichiers Open303 à intégrer sans dette technique.
 - Budget CPU cible acceptable selon nombre d’instances TB-3 simultanées.
+
+---
+
+## 8. Préparation patch
+
+### Ordre d’édition recommandé (court)
+1. `BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h`
+2. `BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h`
+3. `BRICK6_CUBE_fonctionnel/Src/UI/ui_core.c`
+4. `BRICK6_CUBE_fonctionnel/Inc/Core/track_runtime.h`
+5. `BRICK6_CUBE_fonctionnel/Src/Core/track_runtime.c`
+6. `BRICK6_CUBE_fonctionnel/Inc/Audio/tb3_synth.h` (nouveau)
+7. `BRICK6_CUBE_fonctionnel/Src/Audio/tb3_synth.cpp` (nouveau)
+8. `BRICK6_CUBE_fonctionnel/Src/Core/brick6_app_init.c`
+9. `BRICK6_CUBE_fonctionnel/Src/Core/brick6_audio_runtime.c`
+10. `BRICK6_CUBE_fonctionnel/Src/Seq/seq_play_scheduler.c`
+11. `BRICK6_CUBE_fonctionnel/Src/Keyboard/keyboard_engine.c`
+12. `BRICK6_CUBE_fonctionnel/Src/Param/param_registry.c`
+13. `BRICK6_CUBE_fonctionnel/Src/UI/pages/ui_page_template_dx7.c`
+14. `BRICK6_CUBE_fonctionnel/Src/UI/pages/ui_page_template_filter.c`
+15. `BRICK6_CUBE_fonctionnel/Src/UI/pages/ui_page_template_play.c`
+16. Fichier build CubeIDE (Hypothèse, si ajout manuel des nouveaux `.cpp/.h` requis)
+
+### Nouveaux symboles attendus (V1)
+- Type track UI: `UI_TRACK_TYPE_TB3`
+- Runtime type: `TRACK_RUNTIME_TYPE_TB3`
+- Runtime engine: `TRACK_RUNTIME_ENGINE_TB3`
+- Quota runtime: `TRACK_RUNTIME_TB3_MAX_INSTANCES`
+- Params TB-3 (8):
+  - TONE: `PARAM_TB3_WAVEFORM`, `PARAM_TB3_VOLUME`, `PARAM_TB3_ACCENT`, `PARAM_TB3_SLIDE_TIME`
+  - COLORS: `PARAM_TB3_CUTOFF`, `PARAM_TB3_RESONANCE`, `PARAM_TB3_ENV_MOD`, `PARAM_TB3_DECAY`
+- Façade firmware TB-3:
+  - `tb3_synth_init`
+  - `tb3_synth_instance_count`
+  - `tb3_synth_note_on_for_instance`
+  - `tb3_synth_note_off_for_instance`
+  - `tb3_synth_all_notes_off_for_instance`
+  - `tb3_synth_all_notes_off_all`
+  - `tb3_synth_set_param_for_instance`
+  - `tb3_synth_process_block_for_instance`
+- Templates UI TB-3 (noms de constantes):
+  - `g_ui_template_tone_family_tb3`
+  - `g_ui_template_filter_family_tb3`
+
+### Points de compile à surveiller
+- C/C++ mix: appels C depuis wrapper C++ (`extern "C"`), includes C dans `.cpp`.
+- Linkage: symbole manquant si `tb3_synth.cpp` non inclus au build.
+- Switch incomplets sur nouveaux enums (`UI_TRACK_TYPE_*`, `TRACK_RUNTIME_TYPE_*`, `TRACK_RUNTIME_ENGINE_*`).
+- Index/type count UI (`UI_TRACK_TYPE_COUNT`, index family/type, labels display/short).
+- Registry param incomplet:
+  - IDs sans metadata `param_registry[]`
+  - IDs sans routing runtime (`track_runtime_get_param_rule`)
+  - IDs sans apply engine (`param_registry_apply_track_value`)
+- Runtime bind incomplet: type TB-3 présent UI mais non alloué dans `track_runtime_bind_ctx`.
+- UI registration oubliée: TONE/COLORS/PLAY non enregistrés pour TB-3.
+- Build CubeIDE (Hypothèse): régénération requise des fichiers de projet/sources.
