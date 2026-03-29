@@ -1,4 +1,5 @@
 #include "Audio/tb3_synth.h"
+#include "Storage/memory_layout.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -37,7 +38,9 @@ struct tb3_synth_instance_t
     rosic::Open303 synth;
 };
 
-static tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
+// Open303 carries large internal state (~432 KB per instance).
+// 8 instances would overflow internal SRAM domains; keep them in SDRAM cold pool.
+static AUDIO_COLD_SDRAM tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
 static float g_tb3_sample_rate = TB3_DEFAULT_SAMPLE_RATE;
 
 static inline float clampf(float v, float lo, float hi)
