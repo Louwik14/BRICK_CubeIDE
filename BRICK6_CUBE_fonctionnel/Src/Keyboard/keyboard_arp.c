@@ -903,3 +903,10 @@ void keyboard_arp_on_mode_leave(void)
     g_keyboard_arp.arp_pending_on_count = 0U;
     g_keyboard_arp.arp_last_played_count = 0U;
 }
+
+void keyboard_arp_on_mode_leave_silent(void)
+{
+    g_keyboard_arp.arp_active_count = 0U;
+    g_keyboard_arp.arp_pending_on_count = 0U;
+    g_keyboard_arp.arp_last_played_count = 0U;
+}

@@ -556,6 +556,16 @@ void ui_keyboard_app_all_notes_off(void)
     g_keyboard_state.chord_mask = 0U;
 }
 
+void ui_keyboard_app_clear_state_silent(void)
+{
+    g_keyboard_state.sounding_count = 0U;
+    g_keyboard_state.active.valid = false;
+    g_keyboard_state.active.interval_count = 0U;
+    g_keyboard_state.active.root_midi = 0U;
+    g_keyboard_state.note_mask = 0U;
+    g_keyboard_state.chord_mask = 0U;
+}
+
 const ui_keyboard_active_chord_t *ui_keyboard_app_get_active_chord(void)
 {
     return &g_keyboard_state.active;

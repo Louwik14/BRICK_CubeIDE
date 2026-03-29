@@ -79,6 +79,7 @@ uint8_t seq_runtime_get_rec_count_in_mode(void);
 void seq_runtime_set_rec_len_mode(uint8_t mode);
 uint8_t seq_runtime_get_rec_len_mode(void);
 uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
+uint8_t seq_runtime_rec_is_pattern_pending_start(void);
 uint32_t seq_runtime_get_tempo_bpm_milli(void);
 void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli);
 uint8_t seq_runtime_is_external_tempo_valid(void);

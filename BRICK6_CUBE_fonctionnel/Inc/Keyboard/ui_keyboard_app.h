@@ -50,6 +50,7 @@ int8_t ui_keyboard_app_get_octave_shift(void);
 void ui_keyboard_app_note_button(uint8_t note_slot, bool pressed);
 void ui_keyboard_app_chord_button(uint8_t chord_index, bool pressed);
 void ui_keyboard_app_all_notes_off(void);
+void ui_keyboard_app_clear_state_silent(void);
 const ui_keyboard_active_chord_t *ui_keyboard_app_get_active_chord(void);
 void ui_keyboard_app_tick(uint32_t elapsed_ms);
 
