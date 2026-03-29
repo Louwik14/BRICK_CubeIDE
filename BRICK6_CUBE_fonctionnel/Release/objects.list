@@ -605,6 +605,7 @@
 "./Src/Seq/seq_clipboard.o"
 "./Src/Seq/seq_edit.o"
 "./Src/Seq/seq_led.o"
+"./Src/Seq/seq_live_rec_capture.o"
 "./Src/Seq/seq_model.o"
 "./Src/Seq/seq_output_guard.o"
 "./Src/Seq/seq_param_iface.o"
