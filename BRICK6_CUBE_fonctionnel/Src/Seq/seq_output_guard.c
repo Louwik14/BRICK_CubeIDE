@@ -1,3 +1,10 @@
+/*
+ * Module: seq_output_guard
+ * Role: Garde-fou de sorties note pour éviter les notes bloquées.
+ * Responsibilities: compter notes actives par track, filtrer état canal,
+ * fournir panic/cleanup vers synthés et MIDI lors des transitions transport.
+ * Integration: utilisé par scheduler/runtime/live-rec; ne décide pas du contenu musical.
+ */
 #include "Seq/seq_output_guard.h"
 
 #include <string.h>

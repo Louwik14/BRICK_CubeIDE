@@ -1,3 +1,10 @@
+/*
+ * Module: seq_boundary_engine
+ * Role: Noyau boundary des parameter-locks au passage de pas.
+ * Responsibilities: capture/restitue valeurs de base, applique/verifie locks actifs,
+ * gère les transitions step->step sans casser l'état runtime des paramètres.
+ * Integration: appelé par seq_runtime autour du scheduling PLAY; ne pilote ni clock ni transport.
+ */
 #include "Seq/seq_boundary_engine.h"
 
 #include <string.h>

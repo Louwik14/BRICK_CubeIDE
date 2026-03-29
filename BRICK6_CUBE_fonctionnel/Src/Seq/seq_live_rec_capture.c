@@ -1,3 +1,10 @@
+/*
+ * Module: seq_live_rec_capture
+ * Role: Capture live-record des événements note vers le pattern séquenceur.
+ * Responsibilities: suivre note-on/off pendantes, quantifier vers steps,
+ * écrire trig/plocks NOTE/VEL/LEN/MICTIM et sécuriser les sorties associées.
+ * Integration: piloté par seq_runtime en mode REC; ne remplace pas le scheduler de playback.
+ */
 #include "Seq/seq_live_rec_capture.h"
 
 #include <string.h>

@@ -1,3 +1,10 @@
+/*
+ * Module: seq_edit
+ * Role: Façade d'édition des pas (interaction hall/step, pages, gestes hold).
+ * Responsibilities: mapping entrées vers steps, toggle/copy/paste/clear,
+ * capture d'intentions d'édition et délégation au modèle/clipboard.
+ * Integration: couche edition au-dessus de seq_model; hors scheduling audio temps réel.
+ */
 #include "Seq/seq_edit.h"
 
 #include <string.h>

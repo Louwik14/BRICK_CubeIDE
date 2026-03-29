@@ -1,3 +1,10 @@
+/*
+ * Module: seq_clock_bridge
+ * Role: Pont d'horloge entre tempo interne moteur et sources externes MIDI/USB.
+ * Responsibilities: clamp tempo, convertir BPM<->périodes de tick/step,
+ * estimer le tempo externe et produire les impulsions de step consommées par runtime.
+ * Integration: utilisé par seq_runtime; ne déclenche pas directement les notes.
+ */
 #include "Seq/seq_clock_bridge.h"
 
 #define SEQ_CLOCK_BRIDGE_MIDI_CLOCKS_PER_STEP 6U

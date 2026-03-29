@@ -1,3 +1,10 @@
+/*
+ * Module: seq_model
+ * Role: Modèle de données central du séquenceur (project/tracks/steps/plock pool).
+ * Responsibilities: CRUD sur trigs/pages/plocks, validations d'index,
+ * allocation/libération du pool de locks et accès cohérent à l'état persistant.
+ * Integration: backend partagé par édition, runtime, persistence et modules Seq.
+ */
 #include "Seq/seq_model.h"
 
 #include <string.h>

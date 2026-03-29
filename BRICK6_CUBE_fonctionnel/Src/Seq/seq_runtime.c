@@ -1,3 +1,10 @@
+/*
+ * Module: seq_runtime
+ * Role: Orchestrateur principal du séquenceur en exécution.
+ * Responsibilities: cycle start/stop/process, gestion playhead/ticks,
+ * coordination clock bridge, transport FSM, scheduler, boundary engine et live-rec.
+ * Integration: point d'intégration central des modules Src/Seq avec MIDI et engine_tasklet.
+ */
 #include "Seq/seq_runtime.h"
 
 #include <string.h>

@@ -1,3 +1,10 @@
+/*
+ * Module: seq_param_iface
+ * Role: Interface de binding entre paramètres globaux et domaines plock séquenceur.
+ * Responsibilities: valider mapping set/param, maintenir base/runtime values,
+ * appliquer/restaurer locks par track et exposer une API stable aux autres modules Seq.
+ * Integration: couche d'abstraction entre seq_model et track_runtime/param_registry.
+ */
 #include "Seq/seq_param_iface.h"
 
 #include <string.h>

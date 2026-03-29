@@ -1,3 +1,10 @@
+/*
+ * Module: seq_transport_fsm
+ * Role: Machine d'états transport (STOPPED/START_PENDING/RUNNING).
+ * Responsibilities: traiter requêtes start/stop/continue,
+ * gérer le count-in REC et transitions d'état déterministes.
+ * Integration: utilisée par seq_runtime; ne gère ni clock timing fin ni émission de notes.
+ */
 #include "Seq/seq_transport_fsm.h"
 
 static uint32_t seq_transport_fsm_count_in_steps_from_mode(uint8_t mode)
