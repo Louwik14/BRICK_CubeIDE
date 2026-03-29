@@ -340,17 +340,16 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
 
-    if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
-    {
-        return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-    }
-
     switch (rule.resource)
     {
         case TRACK_RUNTIME_RESOURCE_NONE:
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_FILTER:
+            if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
             if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
@@ -360,6 +359,10 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_SYNTH:
+            if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
             if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
@@ -369,10 +372,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
-            if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-            }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
