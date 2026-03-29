@@ -1206,10 +1206,6 @@ void seq_runtime_rec_toggle_arm(void)
         g_seq_rec_count_in_remaining_steps = 0U;
         g_seq_start_pending = 0U;
     }
-    else if (g_seq_runtime.running != 0U)
-    {
-        g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
-    }
 }
 
 uint8_t seq_runtime_rec_is_armed(void)
@@ -1225,10 +1221,6 @@ void seq_runtime_set_rec_count_in_mode(uint8_t mode)
     }
 
     g_seq_rec_count_in_mode = mode;
-    if ((g_seq_runtime.running != 0U) && (g_seq_rec_armed != 0U))
-    {
-        g_seq_rec_count_in_remaining_steps = seq_runtime_rec_count_in_steps_from_mode(g_seq_rec_count_in_mode);
-    }
 }
 
 uint8_t seq_runtime_get_rec_count_in_mode(void)
@@ -1288,6 +1280,13 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
 
     if (seq_runtime_live_rec_is_active() == 0U)
     {
+        return;
+    }
+
+    if ((source == SEQ_LIVE_REC_SRC_EXTERNAL)
+        && (seq_output_guard_is_note_active_on_channel(channel_zero_based, note) != 0U))
+    {
+        /* Ignore external echo of sequencer playback notes to avoid live-rec feedback duplication. */
         return;
     }
 

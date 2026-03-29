@@ -51,6 +51,31 @@ void seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note)
     }
 }
 
+uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, uint8_t note)
+{
+    if ((channel_zero_based >= 16U) || (note >= 128U))
+    {
+        return 0U;
+    }
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
+        const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
+        if (track_ch != channel_zero_based)
+        {
+            continue;
+        }
+
+        if (g_seq_output_guard.note_counts[track][note] > 0U)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
 void seq_output_guard_panic(uint8_t send_transport_stop)
 {
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
