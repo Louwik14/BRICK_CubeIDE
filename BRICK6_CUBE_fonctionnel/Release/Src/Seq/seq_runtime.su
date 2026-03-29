@@ -29,9 +29,10 @@
 ../Src/Seq/seq_runtime.c:690:6:seq_runtime_set_rec_len_mode	0	static
 ../Src/Seq/seq_runtime.c:704:9:seq_runtime_get_rec_len_mode	0	static
 ../Src/Seq/seq_runtime.c:709:10:seq_runtime_get_rec_count_in_remaining_steps	0	static
-../Src/Seq/seq_runtime.c:714:10:seq_runtime_get_tempo_bpm_milli	0	static
-../Src/Seq/seq_runtime.c:719:6:seq_runtime_set_tempo_bpm_milli	8	static
-../Src/Seq/seq_runtime.c:728:9:seq_runtime_is_external_tempo_valid	0	static
-../Src/Seq/seq_runtime.c:733:10:seq_runtime_get_external_tempo_bpm_milli	0	static
-../Src/Seq/seq_runtime.c:738:6:seq_runtime_live_rec_note_on	40	static
-../Src/Seq/seq_runtime.c:752:6:seq_runtime_live_rec_note_off	24	static
+../Src/Seq/seq_runtime.c:714:9:seq_runtime_rec_is_pattern_pending_start	0	static
+../Src/Seq/seq_runtime.c:720:10:seq_runtime_get_tempo_bpm_milli	0	static
+../Src/Seq/seq_runtime.c:725:6:seq_runtime_set_tempo_bpm_milli	8	static
+../Src/Seq/seq_runtime.c:734:9:seq_runtime_is_external_tempo_valid	0	static
+../Src/Seq/seq_runtime.c:739:10:seq_runtime_get_external_tempo_bpm_milli	0	static
+../Src/Seq/seq_runtime.c:744:6:seq_runtime_live_rec_note_on	40	static
+../Src/Seq/seq_runtime.c:758:6:seq_runtime_live_rec_note_off	24	static

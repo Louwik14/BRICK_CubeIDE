@@ -570,6 +570,7 @@
 "./Src/Audio/recorder_transport.o"
 "./Src/Audio/sampler.o"
 "./Src/Audio/sd_multitrack_recorder.o"
+"./Src/Audio/tb3_synth.o"
 "./Src/Core/brick6_app_init.o"
 "./Src/Core/brick6_audio_runtime.o"
 "./Src/Core/brick6_boot_defaults.o"

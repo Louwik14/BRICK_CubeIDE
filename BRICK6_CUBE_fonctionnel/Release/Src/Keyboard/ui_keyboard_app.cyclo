@@ -11,5 +11,6 @@
 ../Src/Keyboard/ui_keyboard_app.c:479:6:ui_keyboard_app_note_button	17
 ../Src/Keyboard/ui_keyboard_app.c:522:6:ui_keyboard_app_chord_button	11
 ../Src/Keyboard/ui_keyboard_app.c:549:6:ui_keyboard_app_all_notes_off	5
-../Src/Keyboard/ui_keyboard_app.c:559:35:ui_keyboard_app_get_active_chord	1
-../Src/Keyboard/ui_keyboard_app.c:564:6:ui_keyboard_app_tick	1
+../Src/Keyboard/ui_keyboard_app.c:559:6:ui_keyboard_app_clear_state_silent	1
+../Src/Keyboard/ui_keyboard_app.c:569:35:ui_keyboard_app_get_active_chord	1
+../Src/Keyboard/ui_keyboard_app.c:574:6:ui_keyboard_app_tick	1

@@ -1,0 +1,188 @@
+../Src/Audio/../../TB-3/fft4g.c:686:6:void makect(int, int*, double*)	3
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:36:6:0(int)	14
+../Src/Audio/../../TB-3/rosic_Complex.cpp:7:1:rosic::Complex::Complex()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:12:1:rosic::Complex::Complex(double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:18:1:rosic::Complex::Complex(double, double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:24:1:rosic::Complex::~Complex()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:32:8:double rosic::Complex::getRadius()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:37:8:double rosic::Complex::getAngle()	3
+../Src/Audio/../../TB-3/rosic_Complex.cpp:45:6:void rosic::Complex::setRadius(double)	3
+../Src/Audio/../../TB-3/rosic_Complex.cpp:53:6:void rosic::Complex::setAngle(double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:61:6:void rosic::Complex::setRadiusAndAngle(double, double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:68:9:rosic::Complex rosic::Complex::getConjugate()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:73:9:rosic::Complex rosic::Complex::getReciprocal()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:79:6:bool rosic::Complex::isReal()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:84:6:bool rosic::Complex::isImaginary()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:89:6:bool rosic::Complex::isInfinite()	1
+../Src/Audio/../../TB-3/fft4g.c:686:6:void makect(int, int*, double*)	2
+../Src/Audio/../../TB-3/fft4g.c:708:6:void bitrv2(int, int*, double*)	14
+../Src/Audio/../../TB-3/fft4g.c:656:6:0(int, int*, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:656:6:void makewt(int, int*, double*)	2
+../Src/Audio/../../TB-3/fft4g.c:808:6:void bitrv2conj(int, int*, double*)	14
+../Src/Audio/../../TB-3/fft4g.c:1021:6:void cft1st(int, double*, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:1126:6:void cftmdl(int, int, double*, double*)	10
+../Src/Audio/../../TB-3/fft4g.c:917:6:void cftfsub(int, double*, double*)	11
+../Src/Audio/../../TB-3/fft4g.c:969:6:void cftbsub(int, double*, double*)	11
+../Src/Audio/../../TB-3/fft4g.c:278:6:void cdft(int, int, double*, int*, double*)	6
+../Src/Audio/../../TB-3/fft4g.c:1253:6:void rftfsub(int, double*, int, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:1278:6:void rftbsub(int, double*, int, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:303:6:void rdft(int, int, double*, int*, double*)	17
+../Src/Audio/../../TB-3/fft4g.c:1305:6:void dctsub(int, double*, int, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:350:6:void ddct(int, int, double*, int*, double*)	18
+../Src/Audio/../../TB-3/fft4g.c:468:6:void dfct(int, double*, double*, int*, double*)	18
+../Src/Audio/../../TB-3/fft4g.c:1326:6:void dstsub(int, double*, int, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:409:6:void ddst(int, int, double*, int*, double*)	18
+../Src/Audio/../../TB-3/fft4g.c:564:6:void dfst(int, double*, double*, int*, double*)	22
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:8:1:rosic::FourierTransformerRadix2::FourierTransformerRadix2()	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:22:1:rosic::FourierTransformerRadix2::~FourierTransformerRadix2()	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:36:6:void rosic::FourierTransformerRadix2::setBlockSize(int)	5
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:67:6:void rosic::FourierTransformerRadix2::setDirection(int)	8
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:83:6:void rosic::FourierTransformerRadix2::setNormalizationMode(int)	6
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:95:6:void rosic::FourierTransformerRadix2::setRealSignalMode(bool)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:103:6:void rosic::FourierTransformerRadix2::transformComplexBufferInPlace(rosic::Complex*)	9
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:125:6:void rosic::FourierTransformerRadix2::transformComplexBuffer(rosic::Complex*, rosic::Complex*)	6
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:157:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, rosic::Complex*)	12
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:187:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:194:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudesAndPhases(double*, double*, double*)	7
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:220:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudes(double*, double*)	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:236:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(rosic::Complex*, double*)	12
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:266:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(double*, double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:272:6:void rosic::FourierTransformerRadix2::getRealSignalFromMagnitudesAndPhases(double*, double*, double*)	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:295:6:void rosic::FourierTransformerRadix2::updateNormalizationFactor()	6
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:5:1:rosic::MipMappedWaveTable::MipMappedWaveTable()	2
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:25:1:rosic::MipMappedWaveTable::~MipMappedWaveTable()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:68:6:void rosic::MipMappedWaveTable::initPrototypeTable()	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:74:6:void rosic::MipMappedWaveTable::initTableSet()	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:82:6:void rosic::MipMappedWaveTable::removeDC()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:96:6:void rosic::MipMappedWaveTable::normalize()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:111:6:void rosic::MipMappedWaveTable::reverseTime()	2
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:138:6:void rosic::MipMappedWaveTable::generateMipMap()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:33:6:void rosic::MipMappedWaveTable::setWaveform(double*, int)	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:195:6:void rosic::MipMappedWaveTable::fillWithSine()	2
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:202:6:void rosic::MipMappedWaveTable::fillWithTriangle()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:217:6:void rosic::MipMappedWaveTable::fillWithSquare()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:230:6:void rosic::MipMappedWaveTable::fillWithSaw()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:246:6:void rosic::MipMappedWaveTable::fillWithSquare303()	9
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:123:6:void rosic::MipMappedWaveTable::renderWaveform()	17
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:59:6:void rosic::MipMappedWaveTable::setSymmetry(double)	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:50:6:void rosic::MipMappedWaveTable::setWaveform(int)	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:123:6:constprop()	20
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:271:6:void rosic::MipMappedWaveTable::fillWithSaw303()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:292:6:void rosic::MipMappedWaveTable::fillWithPeak()	6
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:307:6:void rosic::MipMappedWaveTable::fillWithMoogSaw()	9
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:7:1:rosic::BlendOscillator::BlendOscillator()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:30:1:rosic::BlendOscillator::~BlendOscillator()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:38:6:void rosic::BlendOscillator::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:46:6:void rosic::BlendOscillator::setWaveForm1(int)	4
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:52:6:void rosic::BlendOscillator::setWaveForm2(int)	4
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:58:6:void rosic::BlendOscillator::setWaveTable1(rosic::MipMappedWaveTable*)	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:63:6:void rosic::BlendOscillator::setWaveTable2(rosic::MipMappedWaveTable*)	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:68:6:void rosic::BlendOscillator::setStartPhase(double)	3
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:77:6:void rosic::BlendOscillator::resetPhase()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:82:6:void rosic::BlendOscillator::setPhase(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:7:1:rosic::BiquadFilter::BiquadFilter()	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:55:6:void rosic::BiquadFilter::calcCoeffs()	9
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:21:6:void rosic::BiquadFilter::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:28:6:void rosic::BiquadFilter::setMode(int)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:34:6:void rosic::BiquadFilter::setFrequency(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:40:6:void rosic::BiquadFilter::setGain(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:46:6:void rosic::BiquadFilter::setBandwidth(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:183:6:void rosic::BiquadFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:7:1:rosic::OnePoleFilter::OnePoleFilter()	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:19:6:void rosic::OnePoleFilter::setSampleRate(double)	9
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:29:6:void rosic::OnePoleFilter::setMode(int)	8
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:35:6:void rosic::OnePoleFilter::setCutoff(double)	10
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:46:6:void rosic::OnePoleFilter::setShelvingGain(double)	9
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:57:6:void rosic::OnePoleFilter::setShelvingGainInDecibels(double)	9
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:62:6:void rosic::OnePoleFilter::setCoefficients(double, double, double)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:69:6:void rosic::OnePoleFilter::setInternalState(double, double)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:78:6:void rosic::OnePoleFilter::calcCoeffs()	8
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:154:6:void rosic::OnePoleFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:7:1:rosic::TeeBeeFilter::TeeBeeFilter()	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:27:1:rosic::TeeBeeFilter::~TeeBeeFilter()	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:35:6:void rosic::TeeBeeFilter::setSampleRate(double)	3
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:44:6:void rosic::TeeBeeFilter::setDrive(double)	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:50:6:void rosic::TeeBeeFilter::setMode(int)	18
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:81:6:void rosic::TeeBeeFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:7:1:rosic::AnalogEnvelope::AnalogEnvelope()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:38:1:rosic::AnalogEnvelope::~AnalogEnvelope()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:46:6:void rosic::AnalogEnvelope::setSampleRate(double)	5
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:60:6:void rosic::AnalogEnvelope::setAttack(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:76:6:void rosic::AnalogEnvelope::setHold(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:83:6:void rosic::AnalogEnvelope::setDecay(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:99:6:void rosic::AnalogEnvelope::setRelease(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:115:6:void rosic::AnalogEnvelope::setTimeScale(double)	5
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:128:6:void rosic::AnalogEnvelope::setTauScale(double)	5
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:138:6:void rosic::AnalogEnvelope::setPeakScale(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:147:6:void rosic::AnalogEnvelope::reset()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:152:6:void rosic::AnalogEnvelope::noteOn(bool)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:167:6:void rosic::AnalogEnvelope::noteOff()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:175:6:bool rosic::AnalogEnvelope::endIsReached()	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:188:6:void rosic::AnalogEnvelope::calculateAccumulatedTimes()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:7:1:rosic::DecayEnvelope::DecayEnvelope()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:18:1:rosic::DecayEnvelope::~DecayEnvelope()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:26:6:void rosic::DecayEnvelope::setSampleRate(double)	3
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:35:6:void rosic::DecayEnvelope::setDecayTimeConstant(double)	3
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:44:6:void rosic::DecayEnvelope::setNormalizeSum(bool)	2
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:53:6:void rosic::DecayEnvelope::trigger()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:58:6:bool rosic::DecayEnvelope::endIsReached(double)	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:69:6:void rosic::DecayEnvelope::calculateCoefficient()	2
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:7:1:rosic::LeakyIntegrator::LeakyIntegrator()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:16:1:rosic::LeakyIntegrator::~LeakyIntegrator()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:24:6:void rosic::LeakyIntegrator::setSampleRate(double)	3
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:33:6:void rosic::LeakyIntegrator::setTimeConstant(double)	4
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:45:8:static double rosic::LeakyIntegrator::getNormalizer(double, double, double)	6
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:97:6:void rosic::LeakyIntegrator::reset()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:102:6:void rosic::LeakyIntegrator::calculateCoefficient()	2
+../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.cpp:7:1:rosic::EllipticQuarterBandFilter::EllipticQuarterBandFilter()	1
+../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.cpp:15:6:void rosic::EllipticQuarterBandFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:7:1:rosic::MidiNoteEvent::MidiNoteEvent()	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:15:1:rosic::MidiNoteEvent::MidiNoteEvent(int, int, int, int)	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:35:1:rosic::MidiNoteEvent::~MidiNoteEvent()	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:43:6:void rosic::MidiNoteEvent::setKey(int)	2
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:49:6:void rosic::MidiNoteEvent::setVelocity(int)	2
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:55:6:void rosic::MidiNoteEvent::setDetune(double)	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:60:6:void rosic::MidiNoteEvent::setPriority(int)	2
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:4:1:rosic::AcidPattern::AcidPattern()	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:13:6:void rosic::AcidPattern::clear()	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:25:6:void rosic::AcidPattern::randomize()	7
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:37:6:void rosic::AcidPattern::circularShift(int)	20
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:45:6:bool rosic::AcidPattern::isEmpty() const	16
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:7:1:rosic::AcidSequencer::AcidSequencer()	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:26:6:void rosic::AcidSequencer::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:32:6:void rosic::AcidSequencer::setMode(int)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:41:6:void rosic::AcidSequencer::setKeyPermissible(int, bool)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:47:6:void rosic::AcidSequencer::toggleKeyPermissibility(int)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:56:14:rosic::AcidPattern* rosic::AcidSequencer::getPattern(int)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:64:6:bool rosic::AcidSequencer::modeWasChanged()	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:73:6:bool rosic::AcidSequencer::isKeyPermissible(int)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:84:6:void rosic::AcidSequencer::start()	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:93:6:void rosic::AcidSequencer::stop()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:76:1:rosic::Open303::~Open303()	9
+../Src/Audio/../../TB-3/rosic_Open303.cpp:84:6:void rosic::Open303::setSampleRate(double)	13
+../Src/Audio/../../TB-3/rosic_Open303.cpp:8:1:rosic::Open303::Open303()	11
+../Src/Audio/../../TB-3/rosic_Open303.cpp:104:6:void rosic::Open303::setCutoff(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:110:6:void rosic::Open303::setEnvMod(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:116:6:void rosic::Open303::setAccent(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:121:6:void rosic::Open303::setVolume(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:127:6:void rosic::Open303::setSlideTime(double)	5
+../Src/Audio/../../TB-3/rosic_Open303.cpp:136:6:void rosic::Open303::setPitchBend(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:200:6:void rosic::Open303::allNotesOff()	3
+../Src/Audio/../../TB-3/rosic_Open303.cpp:207:6:void rosic::Open303::triggerNote(int, bool)	9
+../Src/Audio/../../TB-3/rosic_Open303.cpp:242:6:void rosic::Open303::slideToNote(int, bool)	8
+../Src/Audio/../../TB-3/rosic_Open303.cpp:144:6:void rosic::Open303::noteOn(int, int)	17
+../Src/Audio/../../TB-3/rosic_Open303.cpp:261:6:void rosic::Open303::releaseNote(int)	2
+../Src/Audio/../../TB-3/rosic_Open303.cpp:277:6:void rosic::Open303::setMainEnvDecay(double)	3
+../Src/Audio/../../TB-3/rosic_Open303.cpp:284:6:void rosic::Open303::calculateEnvModScalerAndOffset()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:319:6:void rosic::Open303::updateNormalizer1()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:326:6:void rosic::Open303::updateNormalizer2()	1
+../Src/Audio/tb3_synth.cpp:113:6:void tb3_synth_init(float)	7
+../Src/Audio/tb3_synth.cpp:125:9:uint8_t tb3_synth_instance_count()	1
+../Src/Audio/tb3_synth.cpp:130:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	2
+../Src/Audio/tb3_synth.cpp:140:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	2
+../Src/Audio/tb3_synth.cpp:150:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	4
+../Src/Audio/tb3_synth.cpp:160:6:void tb3_synth_all_notes_off_all()	3
+../Src/Audio/tb3_synth.cpp:168:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	14
+../Src/Audio/tb3_synth.cpp:178:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	167
+../Src/Audio/tb3_synth.cpp:198:1:cpp)	1
+../Src/Audio/tb3_synth.cpp:198:1:cpp)	1

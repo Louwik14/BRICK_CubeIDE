@@ -4,6 +4,7 @@ Src/Seq/seq_play_scheduler.o: ../Src/Seq/seq_play_scheduler.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
  ../Inc/Audio/microdexed_synth.h ../Inc/Audio/monob_synth.h \
+ ../Inc/Audio/tb3_synth.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  ../Inc/Seq/seq_model.h ../Inc/Seq/seq_param_iface.h \
@@ -15,6 +16,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 ../Inc/Audio/microdexed_synth.h:
 ../Inc/Audio/monob_synth.h:
+../Inc/Audio/tb3_synth.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/MIDI/midi.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Inc/Seq/seq_model.h:

@@ -1,5 +1,5 @@
 ../Src/UI/ui_template_page.c:22:29:ui_template_page_get_active_family	3
-../Src/UI/ui_template_page.c:37:6:ui_template_family_registry_init	1
+../Src/UI/ui_template_page.c:37:6:ui_template_family_registry_init	2
 ../Src/UI/ui_template_page.c:51:6:ui_template_family_register	4
 ../Src/UI/ui_template_page.c:67:29:ui_template_family_resolve	4
 ../Src/UI/ui_template_page.c:85:29:ui_template_family_resolve_active_track	4

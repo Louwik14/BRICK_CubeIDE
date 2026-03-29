@@ -33,11 +33,11 @@ Src/Keyboard/keyboard_engine.o: ../Src/Keyboard/keyboard_engine.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include/dsp/filtering_functions.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include/dsp/support_functions.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include/dsp/quaternion_math_functions.h \
- ../Inc/Audio/monob_synth.h ../Inc/MIDI/midi.h ../Inc/Seq/seq_types.h \
+ ../Inc/Audio/monob_synth.h ../Inc/Audio/tb3_synth.h \
+ ../Inc/Param/param_store.h ../Inc/MIDI/midi.h ../Inc/Seq/seq_types.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  ../Inc/Core/track_runtime.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h \
  ../Inc/Seq/seq_runtime.h
 ../Inc/Keyboard/keyboard_engine.h:
 ../Inc/Audio/microdexed_synth.h:
@@ -76,10 +76,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/C
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include/dsp/support_functions.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/CMSIS_DSP/Include/dsp/quaternion_math_functions.h:
 ../Inc/Audio/monob_synth.h:
+../Inc/Audio/tb3_synth.h:
+../Inc/Param/param_store.h:
 ../Inc/MIDI/midi.h:
 ../Inc/Seq/seq_types.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Inc/Core/track_runtime.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 ../Inc/Seq/seq_runtime.h:

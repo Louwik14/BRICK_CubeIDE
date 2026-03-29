@@ -20,3 +20,4 @@
 ../Src/Keyboard/keyboard_arp.c:887:6:keyboard_arp_set_sync	8	static
 ../Src/Keyboard/keyboard_arp.c:894:6:keyboard_arp_on_mode_enter	8	static
 ../Src/Keyboard/keyboard_arp.c:899:6:keyboard_arp_on_mode_leave	8	static
+../Src/Keyboard/keyboard_arp.c:907:6:keyboard_arp_on_mode_leave_silent	0	static
