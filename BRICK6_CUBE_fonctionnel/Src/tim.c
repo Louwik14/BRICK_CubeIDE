@@ -132,7 +132,7 @@ void MX_TIM5_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 2000;
+  sConfigOC.Pulse = 666;
   if (HAL_TIM_OC_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();

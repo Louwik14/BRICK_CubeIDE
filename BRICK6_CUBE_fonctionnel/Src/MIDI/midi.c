@@ -57,7 +57,7 @@ static midi_dest_t midi_clock_dest = MIDI_DEST_BOTH;
 #define MIDI_CLOCK_TIMER_HZ_DEFAULT   1000000UL
 #define MIDI_CLOCK_PPQN               24ULL
 #define MIDI_CLOCK_DEFAULT_BPM_MILLI  120000UL
-#define SEQ_TIME_ADAPTER_TIM5_DELTA_TICKS 1000UL
+#define SEQ_TIME_ADAPTER_TIM5_BASE_DELTA_TICKS 666UL
 
 static volatile uint32_t midi_clock_bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
 static volatile uint32_t midi_clock_timer_hz = MIDI_CLOCK_TIMER_HZ_DEFAULT;
@@ -68,6 +68,17 @@ static volatile uint32_t midi_clock_rem_accum = 0U;
 static volatile uint32_t midi_clock_next_ccr = 0U;
 static volatile bool midi_clock_timer_armed = false;
 static volatile uint32_t seq_time_adapter_next_ccr = 0U;
+static volatile uint8_t seq_time_adapter_delta_rem_accum = 0U;
+
+static inline uint32_t seq_time_adapter_compute_next_delta_ticks(void) {
+  uint32_t delta = SEQ_TIME_ADAPTER_TIM5_BASE_DELTA_TICKS;
+  seq_time_adapter_delta_rem_accum = (uint8_t)(seq_time_adapter_delta_rem_accum + 2U);
+  if (seq_time_adapter_delta_rem_accum >= 3U) {
+    seq_time_adapter_delta_rem_accum = (uint8_t)(seq_time_adapter_delta_rem_accum - 3U);
+    delta += 1U;
+  }
+  return delta;
+}
 
 #ifndef MIDI_CLOCK_TX_PROBE_ENABLE
 #define MIDI_CLOCK_TX_PROBE_ENABLE 1
@@ -942,7 +953,8 @@ void midi_init(void) {
   midi_clock_recompute_period(MIDI_CLOCK_DEFAULT_BPM_MILLI);
   midi_clock_hw_stop();
   const uint32_t now = __HAL_TIM_GET_COUNTER(&htim5);
-  seq_time_adapter_next_ccr = now + SEQ_TIME_ADAPTER_TIM5_DELTA_TICKS;
+  seq_time_adapter_delta_rem_accum = 0U;
+  seq_time_adapter_next_ccr = now + seq_time_adapter_compute_next_delta_ticks();
   __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, seq_time_adapter_next_ccr);
   __HAL_TIM_ENABLE_IT(&htim5, TIM_IT_CC2);
 
@@ -954,7 +966,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
     midi_clock_on_timer_tick();
   }
   if ((htim != NULL) && (htim->Instance == TIM5) && (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)) {
-    seq_time_adapter_next_ccr += SEQ_TIME_ADAPTER_TIM5_DELTA_TICKS;
+    seq_time_adapter_next_ccr += seq_time_adapter_compute_next_delta_ticks();
     __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, seq_time_adapter_next_ccr);
     seq_runtime_time_adapter_process_internal_from_irq();
   }
