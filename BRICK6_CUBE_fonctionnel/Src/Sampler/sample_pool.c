@@ -44,14 +44,14 @@
 #define SAMPLE_POOL_LOG(...)
 #endif
 
-static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
+static AUDIO_COLD_SDRAM sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
 
 #define SAMPLE_POOL_RESIDENT_SLOTS (8U)
 #define SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE (32768U)
 static AUDIO_COLD_SDRAM float g_sample_pool_data[SAMPLE_POOL_RESIDENT_SLOTS][SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE * 2U];
 
-static int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
-static uint8_t g_sample_slot_in_use[SAMPLE_POOL_RESIDENT_SLOTS];
+static CTRL_STATE int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
+static CTRL_STATE uint8_t g_sample_slot_in_use[SAMPLE_POOL_RESIDENT_SLOTS];
 
 /**
  * @brief Point d'entrée sample_pool_pcm24_to_float.
