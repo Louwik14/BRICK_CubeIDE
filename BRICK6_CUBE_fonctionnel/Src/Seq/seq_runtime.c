@@ -719,12 +719,8 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
         return;
     }
 
-    if (swing > 100U)
-    {
-        swing = 100U;
-    }
-
-    g_seq_runtime.track_swing[track] = swing;
+    (void)swing;
+    g_seq_runtime.track_swing[track] = 0U;
 }
 
 void seq_runtime_rec_toggle_arm(void)
