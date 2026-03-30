@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include "GlobalDefinitions.h"
+#include "Storage/memory_layout.h"
 
 /** This file contains a bunch of useful macros and functions which are not wrapped into the
 rosic namespace to facilitate their global use. */
@@ -56,10 +57,6 @@ INLINE double freqToPitch(double freq);
 /** Converts a frequency in Hz into a MIDI-note value for tunings different than the
 default 440 Hz. */
 INLINE double freqToPitch(double freq, double masterTuneA4);
-
-/** Checks a pointer for nullity and if it is not NULL, it calls delete for the associated object
-and then sets the pointer to NULL. */
-INLINE void ifNotNullDeleteAndSetNull(void* pointer);
 
 /** Maps an integer index in the range 0...numIndices-1 into a normalized floating point number in 
 the range 0...1. */
@@ -215,14 +212,6 @@ INLINE double degreeToRadiant(double degrees)
   return (PI/180.0)*degrees;
 }
 
-/*
-INLINE void deleteAndNullifyPointer(void *pointer)
-{
-  delete pointer;
-  pointer = NULL;
-}
-*/
-
 INLINE double euclideanDistance(double x1, double y1, double x2, double y2)
 {
   return sqrt( (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) );
@@ -249,17 +238,6 @@ INLINE double freqToPitch(double freq, double masterTuneA4)
 {
   return 12.0 * log2(freq/masterTuneA4) + 69.0;
 }
-
-/*
-INLINE void ifNotNullDeleteAndSetNull(void* pointer)
-{
-  if( pointer != NULL )
-  {
-    delete pointer;
-    pointer = NULL;
-  }
-}
-*/
 
 INLINE float indexToNormalizedValue(int index, int numIndices)
 {
@@ -400,7 +378,7 @@ INLINE double radiantToDegree(double radiant)
 
 INLINE double randomUniform(double min, double max, int seed)
 {
-  static unsigned long state = 0;
+  static CTRL_STATE unsigned long state = 0;
   if( seed >= 0 )
     state = seed;                                        // initialization, if desired
   state = 1664525*state + 1013904223;                    // mod implicitely by integer overflow

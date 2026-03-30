@@ -174,20 +174,21 @@ namespace rosic
     int na = abs(numPositions);
     while( na > length )
       na -=length;
-    T *tmp = new T[na];
+    if( na == 0 || length <= 1 )
+      return;
+
     if( numPositions < 0 )
     {
-      memcpy(  tmp,                buffer,              na*sizeof(T));
-      memmove( buffer,            &buffer[na], (length-na)*sizeof(T));
-      memcpy( &buffer[length-na],  tmp,                 na*sizeof(T));
+      reverse(buffer, na);
+      reverse(buffer+na, length-na);
+      reverse(buffer, length);
     }
     else if( numPositions > 0 )
     {
-      memcpy(  tmp,        &buffer[length-na],          na*sizeof(T));
-      memmove(&buffer[na],  buffer,            (length-na)*sizeof(T));
-      memcpy(  buffer,      tmp,                        na*sizeof(T));
+      reverse(buffer, length-na);
+      reverse(buffer+length-na, na);
+      reverse(buffer, length);
     }
-    delete[] tmp;
   }
 
   template <class T>

@@ -2,7 +2,7 @@
 #include "Storage/memory_layout.h"
 
 #include <math.h>
-#include <new>
+#include <memory>
 #include <stddef.h>
 #include <string.h>
 
@@ -146,7 +146,10 @@ void tb3_synth_init(float sample_rate)
     {
         if (g_tb3_instance_constructed[i] == 0U)
         {
-            (void)new (&tb3_instances()[i].synth_storage[0]) rosic::Open303();
+            rosic::Open303 *const synth_ptr =
+                reinterpret_cast<rosic::Open303 *>(&tb3_instances()[i].synth_storage[0]);
+            std::allocator<rosic::Open303> synth_allocator;
+            synth_allocator.construct(synth_ptr);
             g_tb3_instance_constructed[i] = 1U;
         }
 
