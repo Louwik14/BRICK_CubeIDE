@@ -235,7 +235,6 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         }
 
         uint32_t note_on_due_tick = (uint32_t)on_tick;
-        const uint32_t note_off_due_tick = note_on_due_tick + len_ticks;
 
         /*
          * Adjacent same-note retrigger guard:
@@ -246,6 +245,12 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         if (seq_play_scheduler_has_note_off_due_at(note_on_due_tick, track, note) != 0U)
         {
             note_on_due_tick += 1U;
+        }
+
+        uint32_t note_off_due_tick = note_on_due_tick + len_ticks;
+        if (note_off_due_tick <= note_on_due_tick)
+        {
+            note_off_due_tick = note_on_due_tick + 1U;
         }
 
         seq_play_scheduler_push(note_on_due_tick,
