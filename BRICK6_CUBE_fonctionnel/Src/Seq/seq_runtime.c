@@ -464,11 +464,22 @@ static void seq_runtime_process_core(void)
 void seq_runtime_time_adapter_process(void)
 {
     /*
-     * Superloop-facing adapter entry for the sequencer time-domain.
-     * Keeps caller context thin (producer service + adapter invoke)
-     * while preserving seq_runtime as the single orchestration authority.
+     * Superloop adapter kept for external clock path only.
+     * Internal clock path is invoked directly from TIM5 cadence IRQ
+     * through seq_runtime_time_adapter_process_internal_from_irq().
      */
-    seq_runtime_process_core();
+    if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) != 0U)
+    {
+        seq_runtime_process_core();
+    }
+}
+
+void seq_runtime_time_adapter_process_internal_from_irq(void)
+{
+    if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) == 0U)
+    {
+        seq_runtime_process_core();
+    }
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
