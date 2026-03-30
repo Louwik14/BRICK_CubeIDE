@@ -28,6 +28,7 @@ Open303::Open303()
   currentNote      =    -1;
   idle             = true;
   heldNoteCount    = 0;
+  lastFilterCutoff =   -1.0;
 
   setEnvMod(25.0);
 
@@ -96,6 +97,7 @@ void Open303::setSampleRate(double newSampleRate)
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
+  lastFilterCutoff = -1.0;
 }
 
 void Open303::setCutoff(double newCutoff)
