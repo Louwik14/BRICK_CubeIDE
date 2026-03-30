@@ -115,6 +115,11 @@ static ui_track_state_t g_ui_track_state = {
     .feedback_until_ms = 0U,
 };
 
+volatile uint32_t g_ui_tb3_type_switch_stage = 0U;
+volatile uint32_t g_ui_tb3_type_switch_track = 0U;
+volatile uint32_t g_ui_tb3_type_switch_type = 0U;
+volatile uint32_t g_ui_tb3_cfg_sync_seen = 0U;
+
 typedef struct
 {
     uint8_t hall_index;
@@ -332,6 +337,10 @@ static void ui_core_sync_active_track_cfg_params(void)
     }
     param_store_set_active(UI_CFG_REC_LEN_PARAM, (float)seq_runtime_get_rec_len_mode());
     param_registry_sync_ui_for_active_track();
+    if (active_config->type == UI_TRACK_TYPE_TB3)
+    {
+        g_ui_tb3_cfg_sync_seen++;
+    }
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -941,14 +950,20 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
 bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 {
+    g_ui_tb3_type_switch_stage = 1U;
+    g_ui_tb3_type_switch_track = track;
+    g_ui_tb3_type_switch_type = (uint32_t)type;
+
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
     {
+        g_ui_tb3_type_switch_stage = 2U;
         return false;
     }
 
     ui_track_config_t *config = &g_ui_track_state.track_configs[track];
     if (!ui_track_type_is_valid_for_family(config->family, type))
     {
+        g_ui_tb3_type_switch_stage = 3U;
         if (track == g_ui_track_state.active_track)
         {
             ui_core_sync_active_track_cfg_params();
@@ -957,13 +972,17 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     }
 
     config->type = type;
+    g_ui_tb3_type_switch_stage = 4U;
 
     if (track == g_ui_track_state.active_track)
     {
         keyboard_runtime_on_active_track_changed();
+        g_ui_tb3_type_switch_stage = 5U;
         ui_core_sync_active_track_cfg_params();
+        g_ui_tb3_type_switch_stage = 6U;
     }
 
+    g_ui_tb3_type_switch_stage = 7U;
     return true;
 }
 

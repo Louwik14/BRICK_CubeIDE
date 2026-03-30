@@ -433,6 +433,9 @@ typedef struct
 } filter_ui_state_t;
 
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
+volatile uint32_t g_param_tb3_apply_seen = 0U;
+volatile uint32_t g_param_tb3_apply_last_id = 0U;
+volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
 SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
 
@@ -541,6 +544,9 @@ static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id
 
 static uint8_t param_runtime_apply_tb3(uint8_t instance_id, param_id_t id, float value)
 {
+    g_param_tb3_apply_seen++;
+    g_param_tb3_apply_last_id = (uint32_t)id;
+
     switch (id)
     {
         case PARAM_TB3_WAVEFORM:
@@ -1374,18 +1380,22 @@ static void apply_cfg_track(float v)
 
 static void apply_cfg_track_type(float v)
 {
+    g_param_cfg_track_type_apply_stage = 1U;
     const uint8_t active_track = ui_get_active_track();
     const ui_track_family_t active_family = ui_get_track_family(active_track);
     const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
     const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
+    g_param_cfg_track_type_apply_stage = 2U;
 
     if (ui_set_track_type(active_track, requested_type) == false)
     {
+        g_param_cfg_track_type_apply_stage = 3U;
         param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
         return;
     }
 
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+    g_param_cfg_track_type_apply_stage = 4U;
 }
 
 static void apply_cfg_midi_ch(float v)

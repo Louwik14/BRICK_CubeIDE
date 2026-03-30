@@ -2,6 +2,7 @@
 #define GlobalDefinitions_h
 
 #include <float.h>
+#include <cstring>
 
 /** This file contains a bunch of useful macros which are not wrapped into the
 rosic namespace to facilitate their global use. */
@@ -87,8 +88,22 @@ inline double dummyFunction(double x) { return x; }
 // bit twiddling:
 
 //extract the exponent from a IEEE 754 floating point number (single and double precision):
-#define EXPOFFLT(value) (((*((reinterpret_cast<UINT32 *>(&value)))&0x7FFFFFFF)>>23)-127)
-#define EXPOFDBL(value) (((*((reinterpret_cast<UINT64 *>(&value)))&0x7FFFFFFFFFFFFFFFULL)>>52)-1023)
+INLINE int extractExponentFromFloat(float value)
+{
+  UINT32 bits = 0U;
+  std::memcpy(&bits, &value, sizeof(bits));
+  return (int)(((bits & 0x7FFFFFFFU) >> 23) - 127U);
+}
+
+INLINE int extractExponentFromDouble(double value)
+{
+  UINT64 bits = 0ULL;
+  std::memcpy(&bits, &value, sizeof(bits));
+  return (int)(((bits & 0x7FFFFFFFFFFFFFFFULL) >> 52) - 1023ULL);
+}
+
+#define EXPOFFLT(value) extractExponentFromFloat(value)
+#define EXPOFDBL(value) extractExponentFromDouble(value)
   // ULL indicates an unsigned long long literal constant
 
 #endif
