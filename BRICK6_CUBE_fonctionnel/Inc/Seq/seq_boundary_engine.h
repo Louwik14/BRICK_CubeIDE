@@ -1,6 +1,10 @@
 #ifndef SEQ_BOUNDARY_ENGINE_H
 #define SEQ_BOUNDARY_ENGINE_H
 
+#if !defined(SEQ_RUNTIME_INTERNAL_USE) && !defined(SEQ_BOUNDARY_ENGINE_IMPLEMENTATION)
+#error "seq_boundary_engine is internal to the sequencer time-domain runtime."
+#endif
+
 #include <stdint.h>
 
 #include "Seq/seq_runtime.h"

@@ -10,6 +10,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#define SEQ_RUNTIME_INTERNAL_USE 1
+
 #include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
 #include "midi.h"
@@ -61,7 +63,7 @@ SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
 
 static void seq_runtime_pattern_rec_start_now(void);
-static void seq_runtime_dispatch_and_publish(uint32_t now);
+static void seq_runtime_dispatch_due_events(uint32_t now);
 static void seq_runtime_live_rec_flush_and_reset(void);
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 
@@ -234,7 +236,7 @@ static void seq_runtime_process_step_boundaries(void)
     }
 }
 
-static void seq_runtime_dispatch_and_publish(uint32_t now)
+static void seq_runtime_dispatch_due_events(uint32_t now)
 {
     seq_play_scheduler_service(now, g_seq_runtime.running);
 }
@@ -407,7 +409,7 @@ void seq_runtime_process(void)
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
     {
         g_seq_runtime.last_tick_count = engine_tick_count;
-        seq_runtime_dispatch_and_publish(engine_tick_count);
+        seq_runtime_dispatch_due_events(engine_tick_count);
         return;
     }
 
@@ -435,7 +437,7 @@ void seq_runtime_process(void)
     if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) != 0U)
     {
         seq_runtime_process_step_boundaries();
-        seq_runtime_dispatch_and_publish(engine_tick_count);
+        seq_runtime_dispatch_due_events(engine_tick_count);
         return;
     }
 
@@ -457,7 +459,7 @@ void seq_runtime_process(void)
         seq_runtime_process_step_pulse(current_tick);
     }
 
-    seq_runtime_dispatch_and_publish(engine_tick_count);
+    seq_runtime_dispatch_due_events(engine_tick_count);
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
@@ -518,7 +520,7 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
     }
 
     seq_runtime_process_step_pulse(now);
-    seq_runtime_dispatch_and_publish(now);
+    seq_runtime_dispatch_due_events(now);
 }
 
 void seq_runtime_midi_start(void)

@@ -5,6 +5,7 @@
  * planifier et émettre les événements vers moteurs audio/MIDI avec output guard.
  * Integration: exécuté par seq_runtime à chaque step/tick; hors transport FSM/clock source.
  */
+#define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
 #include "Seq/seq_play_scheduler.h"
 
 #include <stdint.h>
