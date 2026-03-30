@@ -63,6 +63,7 @@ static volatile uint32_t g_seq_internal_time_tick;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
 static void seq_runtime_pattern_rec_start_now(void);
+static void seq_runtime_process_step_boundaries(void);
 static void seq_runtime_dispatch_due_events(uint32_t now);
 static void seq_runtime_live_rec_flush_and_reset(void);
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
@@ -154,6 +155,14 @@ static void seq_runtime_begin_running_now(void)
     }
 
     g_seq_midi_clock_tick_accum = 0U;
+
+    /*
+     * Force deterministic initial boundary at RUN entry.
+     * This guarantees step 0 scheduling exactly once at START/
+     * START_PENDING->RUNNING transition, independent of next tick timing.
+     */
+    seq_runtime_process_step_boundaries();
+
     seq_runtime_send_transport_start();
 
     if ((g_seq_rec_len_mode == (uint8_t)SEQ_REC_LEN_MODE_PATTERN)
@@ -484,8 +493,6 @@ static void seq_runtime_process_core(void)
         seq_runtime_dispatch_due_events(now_tick);
         return;
     }
-
-    seq_runtime_process_step_boundaries();
 
     const uint32_t current_tick = now_tick;
     if (current_tick == g_seq_runtime.last_tick_count)
