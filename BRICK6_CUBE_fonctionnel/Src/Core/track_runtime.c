@@ -14,6 +14,9 @@
 #define TRACK_RUNTIME_TB3_MAX_INSTANCES 1U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
+volatile uint32_t g_track_runtime_tb3_bind_seen = 0U;
+volatile uint32_t g_track_runtime_tb3_bind_track = 0U;
+volatile uint32_t g_track_runtime_tb3_bind_instance = 0U;
 
 typedef struct
 {
@@ -175,6 +178,9 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         }
 
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_TB3, allocator->tb3_used);
+        g_track_runtime_tb3_bind_seen++;
+        g_track_runtime_tb3_bind_track = ctx->track_id;
+        g_track_runtime_tb3_bind_instance = allocator->tb3_used;
         allocator->tb3_used++;
         return;
     }

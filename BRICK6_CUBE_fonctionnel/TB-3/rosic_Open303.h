@@ -340,14 +340,23 @@ namespace rosic
     ampEnvOut = ampDeClicker.getSample(ampEnvOut);
 
     // oversampled calculations:
-    double tmp;
-    for(int i=1; i<=oversampling; i++)
+    double tmp = 0.0;
+    if( oversampling > 1 )
     {
-      tmp  = -oscillator.getSample();         // the raw oscillator signal 
-      tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      tmp  = filter.getSample(tmp);           // now it's filtered
-      tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
-
+      for(int i=1; i<=oversampling; i++)
+      {
+        tmp  = -oscillator.getSample();         // the raw oscillator signal
+        tmp  = highpass1.getSample(tmp);        // pre-filter highpass
+        tmp  = filter.getSample(tmp);           // now it's filtered
+        tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
+      }
+    }
+    else
+    {
+      // no oversampling: run a single direct path and bypass quarter-band anti-alias filter
+      tmp  = -oscillator.getSample();
+      tmp  = highpass1.getSample(tmp);
+      tmp  = filter.getSample(tmp);
     }
 
     // these filters may actually operate without oversampling (but only if we reset them in
