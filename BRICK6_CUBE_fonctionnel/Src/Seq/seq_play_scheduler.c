@@ -95,6 +95,37 @@ static param_id_t seq_play_scheduler_param_mictim(uint8_t voice)
     return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
 }
 
+static uint8_t seq_play_scheduler_track_channel0(seq_track_id_t track)
+{
+    const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
+    return (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+}
+
+static uint8_t seq_play_scheduler_has_note_off_due_at(uint32_t due_tick,
+                                                      seq_track_id_t track,
+                                                      uint8_t note)
+{
+    const uint8_t channel = seq_play_scheduler_track_channel0(track);
+
+    for (uint8_t i = 0U; i < g_seq_play_event_count; ++i)
+    {
+        const seq_play_scheduler_evt_t *const evt = &g_seq_play_events[i];
+        if ((evt->type != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
+            || (evt->due_tick != due_tick)
+            || (evt->note != note))
+        {
+            continue;
+        }
+
+        if (seq_play_scheduler_track_channel0(evt->track) == channel)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
                                                               seq_step_id_t step,
                                                               param_id_t param_id)
@@ -203,12 +234,31 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
             on_tick = (int32_t)step_tick_swinged;
         }
 
-        seq_play_scheduler_push((uint32_t)on_tick,
+        uint32_t note_on_due_tick = (uint32_t)on_tick;
+
+        /*
+         * Adjacent same-note retrigger guard:
+         * if a NOTE_OFF for the same MIDI key (channel+note) is already due
+         * on this exact tick, delay NOTE_ON by 1 tick to avoid zero-gap OFF/ON
+         * collapse on some sinks/engines.
+         */
+        if (seq_play_scheduler_has_note_off_due_at(note_on_due_tick, track, note) != 0U)
+        {
+            note_on_due_tick += 1U;
+        }
+
+        uint32_t note_off_due_tick = note_on_due_tick + len_ticks;
+        if (note_off_due_tick <= note_on_due_tick)
+        {
+            note_off_due_tick = note_on_due_tick + 1U;
+        }
+
+        seq_play_scheduler_push(note_on_due_tick,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
                                 track,
                                 note,
                                 vel);
-        seq_play_scheduler_push((uint32_t)on_tick + len_ticks,
+        seq_play_scheduler_push(note_off_due_tick,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
                                 track,
                                 note,
