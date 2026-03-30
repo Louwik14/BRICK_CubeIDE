@@ -151,6 +151,7 @@ static void seq_runtime_begin_running_now(void)
         g_seq_runtime.play_step[track] = 0U;
         g_seq_runtime.prev_step_valid[track] = 0U;
         g_seq_runtime.prev_step[track] = 0U;
+        g_seq_runtime.track_div_phase[track] = 0U;
         seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, track);
     }
 
@@ -307,6 +308,7 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     {
         seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, track);
         g_seq_runtime.prev_step_valid[track] = 0U;
+        g_seq_runtime.track_div_phase[track] = 0U;
     }
 
     g_seq_midi_clock_tick_accum = 0U;
@@ -708,11 +710,23 @@ void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
         return;
     }
 
-    if (div == 0U)
+    if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
     {
         div = 1U;
     }
     g_seq_runtime.track_div[track] = div;
+    g_seq_runtime.track_div_phase[track] = 0U;
+}
+
+uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div)
+{
+    if ((out_div == NULL) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_div = g_seq_runtime.track_div[track];
+    return 1U;
 }
 
 void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
@@ -725,6 +739,17 @@ void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
     g_seq_runtime.track_quant[track] = quant;
 }
 
+uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant)
+{
+    if ((out_quant == NULL) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_quant = g_seq_runtime.track_quant[track];
+    return 1U;
+}
+
 void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
 {
     if (track >= SEQ_TRACK_COUNT)
@@ -732,8 +757,22 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
         return;
     }
 
-    (void)swing;
-    g_seq_runtime.track_swing[track] = 0U;
+    if (swing > 100U)
+    {
+        swing = 100U;
+    }
+    g_seq_runtime.track_swing[track] = swing;
+}
+
+uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing)
+{
+    if ((out_swing == NULL) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_swing = g_seq_runtime.track_swing[track];
+    return 1U;
 }
 
 void seq_runtime_rec_toggle_arm(void)

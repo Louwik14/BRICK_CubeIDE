@@ -52,6 +52,8 @@
 #define SEQ_BIND_LOG(...) do { } while (0)
 #endif
 
+static uint8_t seq_div_ui_to_runtime(float v);
+static float seq_div_runtime_to_ui(uint8_t runtime_div);
 
 /**
  * @brief Point d'entrée clamp_value.
@@ -1048,6 +1050,10 @@ void param_registry_sync_filter_ui_for_active_track(void)
 void param_registry_sync_ui_for_active_track(void)
 {
     const uint8_t active_track = ui_get_active_track();
+    const float seq_length = (float)seq_model_get_track_length(active_track);
+    uint8_t track_div = 1U;
+    uint8_t track_quant = 1U;
+    uint8_t track_swing = 0U;
 
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
     {
@@ -1065,6 +1071,20 @@ void param_registry_sync_ui_for_active_track(void)
         {
             param_store_set_active(id, value);
         }
+    }
+
+    param_store_set_active(PARAM_SEQ_LENGTH, seq_length);
+    if (seq_runtime_get_track_div(active_track, &track_div) != 0U)
+    {
+        param_store_set_active(PARAM_SEQ_DIV, seq_div_runtime_to_ui(track_div));
+    }
+    if (seq_runtime_get_track_quant(active_track, &track_quant) != 0U)
+    {
+        param_store_set_active(PARAM_SEQ_QUANT, (float)track_quant);
+    }
+    if (seq_runtime_get_track_swing(active_track, &track_swing) != 0U)
+    {
+        param_store_set_active(PARAM_SEQ_SWING, (float)track_swing);
     }
 
     param_registry_sync_filter_ui_for_active_track();
@@ -1477,9 +1497,34 @@ static void apply_seq_length(float v)
     seq_model_set_track_length(track, (uint8_t)(v + 0.5f));
 }
 
+static uint8_t seq_div_ui_to_runtime(float v)
+{
+    const uint8_t ui = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    switch (ui)
+    {
+        case 1U: return 2U;
+        case 2U: return 4U;
+        case 3U: return 8U;
+        case 0U:
+        default: return 1U;
+    }
+}
+
+static float seq_div_runtime_to_ui(uint8_t runtime_div)
+{
+    switch (runtime_div)
+    {
+        case 2U: return 1.0f;
+        case 4U: return 2.0f;
+        case 8U: return 3.0f;
+        case 1U:
+        default: return 0.0f;
+    }
+}
+
 static void apply_seq_div(float v)
 {
-    seq_runtime_set_track_div(ui_get_active_track(), (uint8_t)(v + 0.5f));
+    seq_runtime_set_track_div(ui_get_active_track(), seq_div_ui_to_runtime(v));
 }
 
 static void apply_seq_quant(float v)
@@ -1709,6 +1754,7 @@ static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NU
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
 static const char *const g_cfg_rec_len_labels[] = {"Overdub", "Pattern", NULL};
+static const char *const g_seq_div_labels[] = {"OFF", "1/2", "1/4", "1/8", NULL};
 static const char *const g_kbd_root_labels[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", NULL};
 static const char *const g_kbd_scale_labels[] = {"Major", "NatMin", "Dorian", "Mixoly", "PntMaj", "PntMin", "Chrom", NULL};
 static const char *const g_kbd_note_order_labels[] = {"Natural", "Fifths", NULL};
@@ -1822,7 +1868,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_REC_LEN, "Len", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_len_labels, apply_cfg_rec_len),
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
-    PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 1.0f, 8.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_div),
+    PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_seq_div_labels, apply_seq_div),
     PARAM_DESC_EX(PARAM_SEQ_QUANT, "QUANT", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_quant),
     PARAM_DESC_EX(PARAM_SEQ_SWING, "SWING", PARAM_TYPE_INT, 0.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "%", NULL, apply_seq_swing),
 

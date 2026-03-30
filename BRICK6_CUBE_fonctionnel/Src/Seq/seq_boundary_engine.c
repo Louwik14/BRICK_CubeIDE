@@ -258,6 +258,23 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        uint8_t div = state->track_div[track];
+        if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
+        {
+            div = 1U;
+        }
+
+        uint8_t phase = state->track_div_phase[track];
+        if (phase >= (uint8_t)(div - 1U))
+        {
+            state->track_div_phase[track] = 0U;
+        }
+        else
+        {
+            state->track_div_phase[track] = (uint8_t)(phase + 1U);
+            continue;
+        }
+
         uint8_t length = project->tracks[track].length_steps;
         if ((length == 0U) || (length > SEQ_MAX_STEPS))
         {
