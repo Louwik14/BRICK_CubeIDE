@@ -166,19 +166,14 @@ namespace rosic
     int    waveform;   // index of the currently chosen native waveform
     double sampleRate; // the sampleRate
 
-    double prototypeTable[tableLength];
-      // this is the prototype-table with full bandwidth. one additional sample (same as 
-      // prototypeTable[0]) for linear interpolation without need for table wraparound at the last 
-      // sample (-> saves one if-statement each audio-cycle) ...and a three further addtional 
-      // samples for more elaborate interpolations like cubic (not implemented yet, also:
-      // the fillWith...()-functions don't support these samples yet). */
+    int storageSlot;
+      // index in the global SDRAM wavetable storage pool
 
-    double tableSet[numTables][tableLength+4];
-      // The multisample for anti-aliased waveform generation. The 4 additional values are equal 
-      // to the first 4 values in the table for easier interpolation. The first index is for the 
-      // table-number - index 0 accesses the first version which has full bandwidth, index 1 
-      // accesses the second version which is bandlimited to Nyquist/2, 2->Nyquist/4, 
-      // 3->Nyquist/8, etc. */
+    double *prototypeTable;
+      // points to [tableLength] in SDRAM storage pool
+
+    double (*tableSet)[tableLength+4];
+      // points to [numTables][tableLength+4] in SDRAM storage pool
 
     // embedded objects:
     FourierTransformerRadix2 fourierTransformer;
