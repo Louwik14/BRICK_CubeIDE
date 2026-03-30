@@ -48,27 +48,26 @@
 ../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:284:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(double*, double*)	0	static
 ../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:290:6:void rosic::FourierTransformerRadix2::getRealSignalFromMagnitudesAndPhases(double*, double*, double*)	56	static
 ../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:313:6:void rosic::FourierTransformerRadix2::updateNormalizationFactor()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:5:1:rosic::MipMappedWaveTable::MipMappedWaveTable()	24	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:25:1:rosic::MipMappedWaveTable::~MipMappedWaveTable()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:68:6:void rosic::MipMappedWaveTable::initPrototypeTable()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:74:6:void rosic::MipMappedWaveTable::initTableSet()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:82:6:void rosic::MipMappedWaveTable::removeDC()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:96:6:void rosic::MipMappedWaveTable::normalize()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:111:6:void rosic::MipMappedWaveTable::reverseTime()	16424	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:138:6:void rosic::MipMappedWaveTable::generateMipMap()	56	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:33:6:void rosic::MipMappedWaveTable::setWaveform(double*, int)	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:195:6:void rosic::MipMappedWaveTable::fillWithSine()	24	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:202:6:void rosic::MipMappedWaveTable::fillWithTriangle()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:217:6:void rosic::MipMappedWaveTable::fillWithSquare()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:230:6:void rosic::MipMappedWaveTable::fillWithSaw()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:246:6:void rosic::MipMappedWaveTable::fillWithSquare303()	48	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:123:6:void rosic::MipMappedWaveTable::renderWaveform()	24	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:59:6:void rosic::MipMappedWaveTable::setSymmetry(double)	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:50:6:void rosic::MipMappedWaveTable::setWaveform(int)	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:123:6:constprop()	24	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:271:6:void rosic::MipMappedWaveTable::fillWithSaw303()	0	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:292:6:void rosic::MipMappedWaveTable::fillWithPeak()	16	static
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:307:6:void rosic::MipMappedWaveTable::fillWithMoogSaw()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:36:1:rosic::MipMappedWaveTable::MipMappedWaveTable()	16	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:69:1:rosic::MipMappedWaveTable::~MipMappedWaveTable()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:112:6:void rosic::MipMappedWaveTable::initPrototypeTable()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:118:6:void rosic::MipMappedWaveTable::initTableSet()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:126:6:void rosic::MipMappedWaveTable::removeDC()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:140:6:void rosic::MipMappedWaveTable::normalize()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:155:6:void rosic::MipMappedWaveTable::reverseTime()	16424	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:182:6:void rosic::MipMappedWaveTable::generateMipMap()	56	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:77:6:void rosic::MipMappedWaveTable::setWaveform(double*, int)	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:239:6:void rosic::MipMappedWaveTable::fillWithSine()	24	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:246:6:void rosic::MipMappedWaveTable::fillWithTriangle()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:261:6:void rosic::MipMappedWaveTable::fillWithSquare()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:274:6:void rosic::MipMappedWaveTable::fillWithSaw()	4	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:290:6:void rosic::MipMappedWaveTable::fillWithSquare303()	32	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:167:6:void rosic::MipMappedWaveTable::renderWaveform()	24	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:103:6:void rosic::MipMappedWaveTable::setSymmetry(double)	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:94:6:void rosic::MipMappedWaveTable::setWaveform(int)	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:315:6:void rosic::MipMappedWaveTable::fillWithSaw303()	0	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:336:6:void rosic::MipMappedWaveTable::fillWithPeak()	16	static
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:351:6:void rosic::MipMappedWaveTable::fillWithMoogSaw()	4	static
 ../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:7:1:rosic::BlendOscillator::BlendOscillator()	0	static
 ../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:30:1:rosic::BlendOscillator::~BlendOscillator()	0	static
 ../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:38:6:void rosic::BlendOscillator::setSampleRate(double)	0	static
@@ -142,29 +141,29 @@
 ../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:49:6:void rosic::MidiNoteEvent::setVelocity(int)	0	static
 ../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:55:6:void rosic::MidiNoteEvent::setDetune(double)	0	static
 ../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:60:6:void rosic::MidiNoteEvent::setPriority(int)	0	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:75:1:rosic::Open303::~Open303()	0	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:83:6:void rosic::Open303::setSampleRate(double)	64	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:8:1:rosic::Open303::Open303()	280	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:101:6:void rosic::Open303::setCutoff(double)	16	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:107:6:void rosic::Open303::setEnvMod(double)	16	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:113:6:void rosic::Open303::setAccent(double)	0	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:118:6:void rosic::Open303::setVolume(double)	8	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:124:6:void rosic::Open303::setSlideTime(double)	8	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:133:6:void rosic::Open303::setPitchBend(double)	8	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:190:6:void rosic::Open303::allNotesOff()	0	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:197:6:void rosic::Open303::triggerNote(int, bool)	56	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:232:6:void rosic::Open303::slideToNote(int, bool)	32	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:141:6:void rosic::Open303::noteOn(int, int)	56	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:251:6:void rosic::Open303::releaseNote(int)	8	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:267:6:void rosic::Open303::setMainEnvDecay(double)	16	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:274:6:void rosic::Open303::calculateEnvModScalerAndOffset()	16	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:309:6:void rosic::Open303::updateNormalizer1()	0	static
-../Src/Audio/../../TB-3/rosic_Open303.cpp:316:6:void rosic::Open303::updateNormalizer2()	0	static
-../Src/Audio/tb3_synth.cpp:140:6:void tb3_synth_init(float)	40	static
-../Src/Audio/tb3_synth.cpp:166:9:uint8_t tb3_synth_instance_count()	0	static
-../Src/Audio/tb3_synth.cpp:171:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	4	static
-../Src/Audio/tb3_synth.cpp:192:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	32	static
-../Src/Audio/tb3_synth.cpp:208:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	4	static
-../Src/Audio/tb3_synth.cpp:224:6:void tb3_synth_all_notes_off_all()	4	static
-../Src/Audio/tb3_synth.cpp:236:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	16	static
-../Src/Audio/tb3_synth.cpp:252:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	128	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:76:1:rosic::Open303::~Open303()	0	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:84:6:void rosic::Open303::setSampleRate(double)	64	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:8:1:rosic::Open303::Open303()	200	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:103:6:void rosic::Open303::setCutoff(double)	16	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:109:6:void rosic::Open303::setEnvMod(double)	16	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:115:6:void rosic::Open303::setAccent(double)	0	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:120:6:void rosic::Open303::setVolume(double)	8	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:126:6:void rosic::Open303::setSlideTime(double)	16	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:135:6:void rosic::Open303::setPitchBend(double)	8	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:192:6:void rosic::Open303::allNotesOff()	0	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:199:6:void rosic::Open303::triggerNote(int, bool)	56	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:234:6:void rosic::Open303::slideToNote(int, bool)	32	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:143:6:void rosic::Open303::noteOn(int, int)	40	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:253:6:void rosic::Open303::releaseNote(int)	8	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:269:6:void rosic::Open303::setMainEnvDecay(double)	8	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:276:6:void rosic::Open303::calculateEnvModScalerAndOffset()	16	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:311:6:void rosic::Open303::updateNormalizer1()	0	static
+../Src/Audio/../../TB-3/rosic_Open303.cpp:318:6:void rosic::Open303::updateNormalizer2()	0	static
+../Src/Audio/tb3_synth.cpp:146:6:void tb3_synth_init(float)	32	static
+../Src/Audio/tb3_synth.cpp:180:9:uint8_t tb3_synth_instance_count()	0	static
+../Src/Audio/tb3_synth.cpp:185:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	4	static
+../Src/Audio/tb3_synth.cpp:206:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	32	static
+../Src/Audio/tb3_synth.cpp:222:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	0	static
+../Src/Audio/tb3_synth.cpp:238:6:void tb3_synth_all_notes_off_all()	4	static
+../Src/Audio/tb3_synth.cpp:251:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	16	static
+../Src/Audio/tb3_synth.cpp:270:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	576	static
