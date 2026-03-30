@@ -196,8 +196,8 @@ namespace rosic
     // ensure, that the table index is in the valid range:
     if( tableIndex<=0 )
       tableIndex = 0;
-    else if ( tableIndex>numTables )
-      tableIndex = 11;
+    else if ( tableIndex >= numTables )
+      tableIndex = numTables-1;
 
     return   (1.0-fractionalPart) * tableSet[tableIndex][integerPart] 
            +      fractionalPart  * tableSet[tableIndex][integerPart+1];
