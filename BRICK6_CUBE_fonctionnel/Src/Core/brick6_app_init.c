@@ -129,7 +129,7 @@ void brick6_app_init(void)
 void brick6_app_process(void)
 {
     engine_tasklet_poll();
-    seq_runtime_process();
+    seq_runtime_time_adapter_process();
     brick6_master_control_process();
 
     hall_loop_process();

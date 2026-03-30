@@ -5,6 +5,7 @@
  * planifier et émettre les événements vers moteurs audio/MIDI avec output guard.
  * Integration: exécuté par seq_runtime à chaque step/tick; hors transport FSM/clock source.
  */
+#define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
 #include "Seq/seq_play_scheduler.h"
 
 #include <stdint.h>
@@ -261,20 +262,22 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
         seq_play_scheduler_evt_t *const evt = &g_seq_play_events[selected_index];
         const uint8_t channel_1_16 = ui_get_track_midi_channel(evt->track);
         const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+        const uint8_t emit_note_on = ((evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) && (running != 0U)) ? 1U : 0U;
+        const uint8_t emit_note_off = (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF) ? 1U : 0U;
 
-        if ((evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) && (running == 0U))
-        {
-            /* STOP guard: block NOTE ON when transport is stopped. */
-        }
-        else if (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
+        if (emit_note_on != 0U)
         {
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
             seq_output_guard_note_on_seen(evt->track, evt->note);
         }
-        else
+        else if (emit_note_off != 0U)
         {
             midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
             seq_output_guard_note_off_seen(evt->track, evt->note);
+        }
+        else
+        {
+            /* STOP guard: drop NOTE ON when transport is stopped. */
         }
 
         track_runtime_refresh_track(evt->track);
@@ -283,33 +286,33 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
         {
             if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
             {
-                if (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
+                if (emit_note_on != 0U)
                 {
                     monob_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
                 }
-                else
+                else if (emit_note_off != 0U)
                 {
                     monob_synth_note_off_for_instance(ctx->instance_id, evt->note);
                 }
             }
             else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
             {
-                if (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
+                if (emit_note_on != 0U)
                 {
                     microdexed_synth_note_on(evt->note, evt->velocity);
                 }
-                else
+                else if (emit_note_off != 0U)
                 {
                     microdexed_synth_note_off(evt->note);
                 }
             }
             else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
             {
-                if (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
+                if (emit_note_on != 0U)
                 {
                     tb3_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
                 }
-                else
+                else if (emit_note_off != 0U)
                 {
                     tb3_synth_note_off_for_instance(ctx->instance_id, evt->note);
                 }

@@ -1,6 +1,10 @@
 #ifndef SEQ_PLAY_SCHEDULER_H
 #define SEQ_PLAY_SCHEDULER_H
 
+#if !defined(SEQ_RUNTIME_INTERNAL_USE) && !defined(SEQ_PLAY_SCHEDULER_IMPLEMENTATION)
+#error "seq_play_scheduler is internal to the sequencer time-domain runtime."
+#endif
+
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
