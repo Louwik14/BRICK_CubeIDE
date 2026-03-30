@@ -61,8 +61,10 @@ SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_track;
 SEQ_STATE_D2 static uint32_t g_seq_pattern_rec_steps_remaining;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
+static const uint8_t g_seq_time_domain_owner_token = 0xA5U;
 
 static void seq_runtime_pattern_rec_start_now(void);
+static const void *seq_runtime_time_domain_owner(void);
 static void seq_runtime_dispatch_due_events(uint32_t now);
 static void seq_runtime_live_rec_flush_and_reset(void);
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
@@ -116,7 +118,9 @@ static void seq_runtime_begin_running_now(void)
         g_seq_runtime.play_step[track] = 0U;
         g_seq_runtime.prev_step_valid[track] = 0U;
         g_seq_runtime.prev_step[track] = 0U;
-        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, track);
+        seq_boundary_engine_restore_all_active_locks(seq_runtime_time_domain_owner(),
+                                                     &g_seq_runtime,
+                                                     track);
     }
 
     g_seq_midi_clock_tick_accum = 0U;
@@ -222,14 +226,16 @@ static void seq_runtime_process_step_boundaries(void)
 
     seq_boundary_hit_t hits[SEQ_TRACK_COUNT];
     uint8_t hit_count = 0U;
-    seq_boundary_engine_process(&g_seq_runtime,
+    seq_boundary_engine_process(seq_runtime_time_domain_owner(),
+                                &g_seq_runtime,
                                 hits,
                                 SEQ_TRACK_COUNT,
                                 &hit_count);
 
     for (uint8_t i = 0U; i < hit_count; ++i)
     {
-        seq_play_scheduler_schedule_step(hits[i].track,
+        seq_play_scheduler_schedule_step(seq_runtime_time_domain_owner(),
+                                         hits[i].track,
                                          hits[i].step,
                                          g_seq_runtime.ticks_per_step,
                                          engine_tick_count);
@@ -238,7 +244,7 @@ static void seq_runtime_process_step_boundaries(void)
 
 static void seq_runtime_dispatch_due_events(uint32_t now)
 {
-    seq_play_scheduler_service(now, g_seq_runtime.running);
+    seq_play_scheduler_service(seq_runtime_time_domain_owner(), now, g_seq_runtime.running);
 }
 
 static void seq_runtime_live_rec_flush_and_reset(void)
@@ -255,11 +261,13 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
-    seq_play_scheduler_clear();
+    seq_play_scheduler_clear(seq_runtime_time_domain_owner());
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, track);
+        seq_boundary_engine_restore_all_active_locks(seq_runtime_time_domain_owner(),
+                                                     &g_seq_runtime,
+                                                     track);
         g_seq_runtime.prev_step_valid[track] = 0U;
     }
 
@@ -294,7 +302,7 @@ static void seq_runtime_process_step_pulse(uint32_t now)
 
     if (seq_transport_fsm_allow_advance(&g_seq_transport_fsm) != 0U)
     {
-        seq_boundary_engine_advance_one_step(&g_seq_runtime);
+        seq_boundary_engine_advance_one_step(seq_runtime_time_domain_owner(), &g_seq_runtime);
         seq_runtime_pattern_rec_on_step_advanced();
     }
 
@@ -311,7 +319,9 @@ void seq_runtime_init(void)
      * For now, keep forced to internal clock to preserve current UX. */
     g_seq_runtime.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_runtime.last_tick_count = engine_tick_count;
-    seq_play_scheduler_init();
+    seq_play_scheduler_bind_owner(seq_runtime_time_domain_owner());
+    seq_boundary_engine_bind_owner(seq_runtime_time_domain_owner());
+    seq_play_scheduler_init(seq_runtime_time_domain_owner());
     seq_output_guard_init();
     seq_live_rec_capture_init();
     seq_transport_fsm_init(&g_seq_transport_fsm);
@@ -349,7 +359,7 @@ void seq_runtime_start(void)
     seq_clock_bridge_prepare_internal_run(&g_seq_clock_bridge);
     g_seq_runtime.last_tick_count = engine_tick_count;
     g_seq_runtime.ext_clock_tick_accum = 0U;
-    seq_play_scheduler_clear();
+    seq_play_scheduler_clear(seq_runtime_time_domain_owner());
     seq_output_guard_reset();
     seq_live_rec_capture_reset();
 
@@ -472,7 +482,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     seq_clock_bridge_set_source(&g_seq_clock_bridge, &g_seq_runtime, src);
     g_seq_midi_clock_tick_accum = 0U;
     seq_transport_fsm_on_clock_source_change(&g_seq_transport_fsm);
-    seq_play_scheduler_clear();
+    seq_play_scheduler_clear(seq_runtime_time_domain_owner());
 
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
@@ -779,4 +789,8 @@ void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                   channel_zero_based,
                                   note,
                                   engine_tick_count);
+}
+static const void *seq_runtime_time_domain_owner(void)
+{
+    return &g_seq_time_domain_owner_token;
 }

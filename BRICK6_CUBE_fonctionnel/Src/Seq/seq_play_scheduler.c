@@ -43,6 +43,7 @@ typedef struct
 
 static seq_play_scheduler_evt_t g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP];
 static uint8_t g_seq_play_event_count;
+static const void *g_seq_play_scheduler_owner_token;
 
 static void seq_play_scheduler_push(uint32_t due_tick,
                                     uint8_t type,
@@ -115,21 +116,40 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
     return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
 }
 
-void seq_play_scheduler_init(void)
+void seq_play_scheduler_bind_owner(const void *owner_token)
 {
+    g_seq_play_scheduler_owner_token = owner_token;
+}
+
+void seq_play_scheduler_init(const void *owner_token)
+{
+    if ((owner_token == 0) || (owner_token != g_seq_play_scheduler_owner_token))
+    {
+        return;
+    }
     g_seq_play_event_count = 0U;
 }
 
-void seq_play_scheduler_clear(void)
+void seq_play_scheduler_clear(const void *owner_token)
 {
+    if ((owner_token == 0) || (owner_token != g_seq_play_scheduler_owner_token))
+    {
+        return;
+    }
     g_seq_play_event_count = 0U;
 }
 
-void seq_play_scheduler_schedule_step(seq_track_id_t track,
+void seq_play_scheduler_schedule_step(const void *owner_token,
+                                      seq_track_id_t track,
                                       seq_step_id_t step,
                                       uint16_t ticks_per_step,
                                       uint32_t step_tick)
 {
+    if ((owner_token == 0) || (owner_token != g_seq_play_scheduler_owner_token))
+    {
+        return;
+    }
+
     if (seq_model_get_trig(track, step) == 0U)
     {
         return;
@@ -216,8 +236,13 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
 }
 
-void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
+void seq_play_scheduler_service(const void *owner_token, uint32_t now_tick, uint8_t running)
 {
+    if ((owner_token == 0) || (owner_token != g_seq_play_scheduler_owner_token))
+    {
+        return;
+    }
+
     while (g_seq_play_event_count > 0U)
     {
         uint8_t selected_index = 0xFFU;
