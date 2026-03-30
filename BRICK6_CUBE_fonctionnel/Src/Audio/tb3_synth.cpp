@@ -4,7 +4,6 @@
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
-#include <new>
 
 #include "../../TB-3/rosic_Open303.h"
 
@@ -24,8 +23,6 @@
 #include "../../TB-3/rosic_LeakyIntegrator.cpp"
 #include "../../TB-3/rosic_EllipticQuarterBandFilter.cpp"
 #include "../../TB-3/rosic_MidiNoteEvent.cpp"
-#include "../../TB-3/rosic_AcidPattern.cpp"
-#include "../../TB-3/rosic_AcidSequencer.cpp"
 #include "../../TB-3/rosic_Open303.cpp"
 
 namespace
@@ -40,22 +37,19 @@ struct tb3_synth_instance_t
 };
 
 // Open303 carries large internal state (~432 KB per instance).
-// Keep backing storage in SDRAM, but defer C++ construction until tb3_synth_init()
-// (after SDRAM_Init) to avoid pre-main constructors touching external SDRAM.
-static AUDIO_COLD_SDRAM alignas(tb3_synth_instance_t)
-    unsigned char g_tb3_instances_storage[sizeof(tb3_synth_instance_t) * TB3_SYNTH_MAX_INSTANCES];
-static uint8_t g_tb3_instances_constructed = 0U;
+// Keep single voice instance in regular static storage to avoid manual placement-new.
+static tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
 static float g_tb3_sample_rate = TB3_DEFAULT_SAMPLE_RATE;
 static uint8_t tb3_synth_instance_valid(uint8_t instance_id);
 
 static tb3_synth_instance_t *tb3_instances(void)
 {
-    return reinterpret_cast<tb3_synth_instance_t *>(g_tb3_instances_storage);
+    return &g_tb3_instances[0];
 }
 
 static rosic::Open303 *tb3_synth_for_instance(uint8_t instance_id)
 {
-    if ((g_tb3_instances_constructed == 0U) || (tb3_synth_instance_valid(instance_id) == 0U))
+    if (tb3_synth_instance_valid(instance_id) == 0U)
     {
         return nullptr;
     }
@@ -139,18 +133,6 @@ void tb3_synth_init(float sample_rate)
 {
     g_tb3_debug_stage = 1U; // entered tb3_synth_init
     g_tb3_sample_rate = (sample_rate > TB3_MIN_SAMPLE_RATE) ? sample_rate : TB3_DEFAULT_SAMPLE_RATE;
-
-    if (g_tb3_instances_constructed == 0U)
-    {
-        g_tb3_debug_stage = 2U; // before placement-new loop
-        for (uint8_t i = 0U; i < TB3_SYNTH_MAX_INSTANCES; ++i)
-        {
-            g_tb3_debug_init_instance = i;
-            new (&tb3_instances()[i]) tb3_synth_instance_t();
-        }
-        g_tb3_instances_constructed = 1U;
-        g_tb3_debug_stage = 3U; // after placement-new loop
-    }
 
     for (uint8_t i = 0U; i < TB3_SYNTH_MAX_INSTANCES; ++i)
     {

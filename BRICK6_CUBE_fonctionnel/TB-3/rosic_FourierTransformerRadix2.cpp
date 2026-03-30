@@ -13,21 +13,6 @@ constexpr int kFftStaticMaxIpSize = 64;
 static AUDIO_COLD_SDRAM double g_fft_static_w[2 * kFftStaticMaxBlockSize];
 static AUDIO_COLD_SDRAM int g_fft_static_ip[kFftStaticMaxIpSize];
 static AUDIO_COLD_SDRAM rosic::Complex g_fft_static_tmp[kFftStaticMaxBlockSize];
-
-static bool fft_is_static_w(const double *ptr)
-{
-  return ptr == &g_fft_static_w[0];
-}
-
-static bool fft_is_static_ip(const int *ptr)
-{
-  return ptr == &g_fft_static_ip[0];
-}
-
-static bool fft_is_static_tmp(const rosic::Complex *ptr)
-{
-  return ptr == &g_fft_static_tmp[0];
-}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -49,13 +34,10 @@ FourierTransformerRadix2::FourierTransformerRadix2()
 
 FourierTransformerRadix2::~FourierTransformerRadix2()
 {
-  // free dynamically allocated memory:
-  if( w != NULL && !fft_is_static_w(w) )
-    delete[] w;
-  if( ip != NULL && !fft_is_static_ip(ip) )
-    delete[] ip;
-  if( tmpBuffer != NULL && !fft_is_static_tmp(tmpBuffer) )
-    delete[] tmpBuffer;
+  // Static storage only in embedded mode (no heap ownership).
+  w         = NULL;
+  ip        = NULL;
+  tmpBuffer = NULL;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -74,13 +56,6 @@ void FourierTransformerRadix2::setBlockSize(int newBlockSize)
       logN = (int) floor( log2((double) N + 0.5 ) );
       updateNormalizationFactor();
 
-      if( w != NULL && !fft_is_static_w(w) )
-        delete[] w;
-      if( ip != NULL && !fft_is_static_ip(ip) )
-        delete[] ip;
-      if( tmpBuffer != NULL && !fft_is_static_tmp(tmpBuffer) )
-        delete[] tmpBuffer;
-
       if( N <= kFftStaticMaxBlockSize )
       {
         w         = &g_fft_static_w[0];
@@ -90,10 +65,15 @@ void FourierTransformerRadix2::setBlockSize(int newBlockSize)
       }
       else
       {
-        w    = new double[2*N];
-        ip   = new int[(int) ceil(4.0+sqrt((double)N))];
-        ip[0] = 0; // indicate that re-initialization is necesarry
-        tmpBuffer = new Complex[N];
+        // Embedded-safe build: no dynamic allocations allowed.
+        N    = kFftStaticMaxBlockSize;
+        logN = (int) floor( log2((double) N + 0.5 ) );
+        updateNormalizationFactor();
+        w         = &g_fft_static_w[0];
+        ip        = &g_fft_static_ip[0];
+        tmpBuffer = &g_fft_static_tmp[0];
+        ip[0]     = 0;
+        DEBUG_BREAK;
       }
     }
   }
@@ -343,5 +323,3 @@ void FourierTransformerRadix2::updateNormalizationFactor()
   else
     normalizationFactor = 1.0;
 }
-
-
