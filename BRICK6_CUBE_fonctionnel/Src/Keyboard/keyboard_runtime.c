@@ -89,7 +89,21 @@ void keyboard_runtime_on_active_track_changed(void)
         return;
     }
 
-    keyboard_runtime_all_notes_off();
+    /*
+     * Le changement de focus track est une action UI.
+     * On ne doit pas envoyer de panic/runtime reset global ici,
+     * sinon on coupe aussi des notes/séquences qui jouent encore.
+     *
+     * On purge uniquement l'état local clavier/arp pour éviter que
+     * des relâchements tardifs d'anciens halls pilotent la nouvelle track.
+     */
+    ui_keyboard_app_clear_state_silent();
+    keyboard_arp_on_mode_leave_silent();
+
+    if (hall_mode == UI_HALL_MODE_ARP)
+    {
+        keyboard_arp_on_mode_enter();
+    }
 }
 
 void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall_mode_t new_mode)
