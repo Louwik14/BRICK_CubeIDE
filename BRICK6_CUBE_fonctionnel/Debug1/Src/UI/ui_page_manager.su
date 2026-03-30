@@ -1,5 +1,5 @@
-../Src/UI/ui_page_manager.c:46:6:ui_page_manager_init	0	static
-../Src/UI/ui_page_manager.c:68:6:ui_page_manager_register	0	static
-../Src/UI/ui_page_manager.c:90:6:ui_page_set	16	static
-../Src/UI/ui_page_manager.c:113:18:ui_page_get	0	static
-../Src/UI/ui_page_manager.c:135:9:ui_page_get_id	0	static
+../Src/UI/ui_page_manager.c:47:6:ui_page_manager_init	0	static
+../Src/UI/ui_page_manager.c:69:6:ui_page_manager_register	0	static
+../Src/UI/ui_page_manager.c:91:6:ui_page_set	16	static
+../Src/UI/ui_page_manager.c:115:18:ui_page_get	0	static
+../Src/UI/ui_page_manager.c:137:9:ui_page_get_id	0	static

@@ -1,0 +1,2 @@
+../Src/UI/pages/ui_page_template_play.c:17:36:ui_page_template_play_resolve_family	1
+../Src/UI/pages/ui_page_template_play.c:29:6:ui_page_template_play_register_families	1

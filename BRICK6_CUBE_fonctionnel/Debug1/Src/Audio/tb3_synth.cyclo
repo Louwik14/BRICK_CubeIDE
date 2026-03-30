@@ -1,0 +1,316 @@
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/new:174:33:void* operator new(std::size_t, void*)	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.h:49:9:int rosic::MidiNoteEvent::getKey() const	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.h:64:10:bool rosic::MidiNoteEvent::operator==(const rosic::MidiNoteEvent&) const	1
+../Src/Audio/../../TB-3/GlobalDefinitions.h:60:15:double dummyFunction(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:156:15:double amp2dB(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:202:15:double beatsToSeconds(double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:207:15:double dB2amp(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:293:13:bool isPowerOfTwo(unsigned int)	3
+../Src/Audio/../../TB-3/GlobalFunctions.h:305:15:double log2(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:315:15:double linToLin(double, double, double, double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:346:15:double expToLin(double, double, double, double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:380:15:double pitchOffsetToFreqFactor(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:385:15:double pitchToFreq(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:390:15:double pitchToFreq(double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:401:15:double randomUniform(double, double, int)	2
+../Src/Audio/../../TB-3/rosic_NumberManipulations.h:20:14:int rosic::roundToInt(double)	2
+../Src/Audio/../../TB-3/rosic_NumberManipulations.h:56:14:int rosic::floorInt(double)	1
+../Src/Audio/../../TB-3/rosic_RealFunctions.h:59:17:double rosic::asinh(double)	1
+../Src/Audio/../../TB-3/rosic_RealFunctions.h:122:15:void rosic::sinCos(double, double*, double*)	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.h:194:17:double rosic::MipMappedWaveTable::getValueLinear(int, double, int)	3
+../Src/Audio/../../TB-3/rosic_BlendOscillator.h:59:10:void rosic::BlendOscillator::setBlendFactor(double)	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.h:120:15:void rosic::BlendOscillator::setFrequency(double)	3
+../Src/Audio/../../TB-3/rosic_BlendOscillator.h:126:15:void rosic::BlendOscillator::setPulseWidth(double)	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.h:132:15:void rosic::BlendOscillator::calculateIncrement()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.h:137:17:double rosic::BlendOscillator::getSample()	4
+../Src/Audio/../../TB-3/rosic_BiquadFilter.h:109:17:double rosic::BiquadFilter::getSample(double)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.h:115:17:double rosic::OnePoleFilter::getSample(double)	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:83:10:void rosic::TeeBeeFilter::setFeedbackHighpassCutoff(double)	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:150:15:void rosic::TeeBeeFilter::setCutoff(double, bool)	5
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:166:15:void rosic::TeeBeeFilter::setResonance(double, bool)	2
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:174:15:void rosic::TeeBeeFilter::calculateCoefficientsExact()	2
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:206:15:void rosic::TeeBeeFilter::calculateCoefficientsApprox4()	2
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:268:17:double rosic::TeeBeeFilter::shape(double)	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.h:280:17:double rosic::TeeBeeFilter::getSample(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.h:77:10:void rosic::AnalogEnvelope::setSustainLevel(double)	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.h:138:10:bool rosic::AnalogEnvelope::isNoteOn() const	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.h:193:17:double rosic::AnalogEnvelope::getSample()	4
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.h:50:12:double rosic::DecayEnvelope::getDecayTimeConstant() const	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.h:87:17:double rosic::DecayEnvelope::getSample()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.h:41:10:void rosic::LeakyIntegrator::setState(double)	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.h:47:12:double rosic::LeakyIntegrator::getTimeConstant() const	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.h:83:17:double rosic::LeakyIntegrator::getSample(double)	1
+../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.h:53:17:double rosic::EllipticQuarterBandFilter::getSample(double)	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.h:27:5:rosic::AcidNote::AcidNote()	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.h:104:12:double rosic::AcidPattern::getStepLength() const	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.h:125:9:int rosic::AcidPattern::getNumSteps() const	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.h:131:15:rosic::AcidNote* rosic::AcidPattern::getNote(int)	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:92:10:bool rosic::AcidSequencer::isRunning() const	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:102:12:double rosic::AcidSequencer::getStepLength() const	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:105:9:int rosic::AcidSequencer::getStepLengthInSamples() const	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:109:9:int rosic::AcidSequencer::getSequencerMode() const	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:124:22:rosic::AcidNote* rosic::AcidSequencer::getNextScheduledNote()	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:172:20:rosic::AcidNote* rosic::AcidSequencer::getNote()	5
+../Src/Audio/../../TB-3/rosic_AcidSequencer.h:209:14:int rosic::AcidSequencer::getClosestPermissibleKey(int)	14
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:110:7:std::__detail::_List_node_header::_List_node_header()	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:150:7:void std::__detail::_List_node_header::_M_init()	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/limits:1068:7:static constexpr int std::numeric_limits<int>::max()	1
+../Src/Audio/../../TB-3/rosic_Open303.h:49:10:void rosic::Open303::setWaveform(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.h:58:10:void rosic::Open303::setResonance(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.h:67:10:void rosic::Open303::setDecay(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.h:316:17:double rosic::Open303::getSample()	15
+../Src/Audio/../../TB-3/rosic_Complex.cpp:7:1:rosic::Complex::Complex()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:12:1:rosic::Complex::Complex(double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:18:1:rosic::Complex::Complex(double, double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:24:1:rosic::Complex::~Complex()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:32:8:double rosic::Complex::getRadius()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:37:8:double rosic::Complex::getAngle()	3
+../Src/Audio/../../TB-3/rosic_Complex.cpp:45:6:void rosic::Complex::setRadius(double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:53:6:void rosic::Complex::setAngle(double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:61:6:void rosic::Complex::setRadiusAndAngle(double, double)	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:68:9:rosic::Complex rosic::Complex::getConjugate()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:73:9:rosic::Complex rosic::Complex::getReciprocal()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:79:6:bool rosic::Complex::isReal()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:84:6:bool rosic::Complex::isImaginary()	1
+../Src/Audio/../../TB-3/rosic_Complex.cpp:89:6:bool rosic::Complex::isInfinite()	6
+../Src/Audio/../../TB-3/fft4g.c:278:6:void cdft(int, int, double*, int*, double*)	5
+../Src/Audio/../../TB-3/fft4g.c:303:6:void rdft(int, int, double*, int*, double*)	8
+../Src/Audio/../../TB-3/fft4g.c:350:6:void ddct(int, int, double*, int*, double*)	11
+../Src/Audio/../../TB-3/fft4g.c:409:6:void ddst(int, int, double*, int*, double*)	11
+../Src/Audio/../../TB-3/fft4g.c:468:6:void dfct(int, double*, double*, int*, double*)	13
+../Src/Audio/../../TB-3/fft4g.c:564:6:void dfst(int, double*, double*, int*, double*)	13
+../Src/Audio/../../TB-3/fft4g.c:656:6:void makewt(int, int*, double*)	4
+../Src/Audio/../../TB-3/fft4g.c:686:6:void makect(int, int*, double*)	3
+../Src/Audio/../../TB-3/fft4g.c:708:6:void bitrv2(int, int*, double*)	8
+../Src/Audio/../../TB-3/fft4g.c:808:6:void bitrv2conj(int, int*, double*)	8
+../Src/Audio/../../TB-3/fft4g.c:917:6:void cftfsub(int, double*, double*)	6
+../Src/Audio/../../TB-3/fft4g.c:969:6:void cftbsub(int, double*, double*)	6
+../Src/Audio/../../TB-3/fft4g.c:1021:6:void cft1st(int, double*, double*)	2
+../Src/Audio/../../TB-3/fft4g.c:1126:6:void cftmdl(int, int, double*, double*)	6
+../Src/Audio/../../TB-3/fft4g.c:1253:6:void rftfsub(int, double*, int, double*)	2
+../Src/Audio/../../TB-3/fft4g.c:1278:6:void rftbsub(int, double*, int, double*)	2
+../Src/Audio/../../TB-3/fft4g.c:1305:6:void dctsub(int, double*, int, double*)	2
+../Src/Audio/../../TB-3/fft4g.c:1326:6:void dstsub(int, double*, int, double*)	2
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:17:13:bool {anonymous}::fft_is_static_w(const double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:22:13:bool {anonymous}::fft_is_static_ip(const int*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:27:13:bool {anonymous}::fft_is_static_tmp(const rosic::Complex*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:36:1:rosic::FourierTransformerRadix2::FourierTransformerRadix2()	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:50:1:rosic::FourierTransformerRadix2::~FourierTransformerRadix2()	14
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:64:6:void rosic::FourierTransformerRadix2::setBlockSize(int)	25
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:104:6:void rosic::FourierTransformerRadix2::setDirection(int)	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:120:6:void rosic::FourierTransformerRadix2::setNormalizationMode(int)	3
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:132:6:void rosic::FourierTransformerRadix2::setRealSignalMode(bool)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:140:6:void rosic::FourierTransformerRadix2::transformComplexBufferInPlace(rosic::Complex*)	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:162:6:void rosic::FourierTransformerRadix2::transformComplexBuffer(rosic::Complex*, rosic::Complex*)	5
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:194:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, rosic::Complex*)	5
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:224:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:231:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudesAndPhases(double*, double*, double*)	5
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:257:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudes(double*, double*)	3
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:273:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(rosic::Complex*, double*)	5
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:303:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(double*, double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:309:6:void rosic::FourierTransformerRadix2::getRealSignalFromMagnitudesAndPhases(double*, double*, double*)	3
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:332:6:void rosic::FourierTransformerRadix2::updateNormalizationFactor()	6
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:5:1:rosic::MipMappedWaveTable::MipMappedWaveTable()	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:25:1:rosic::MipMappedWaveTable::~MipMappedWaveTable()	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:33:6:void rosic::MipMappedWaveTable::setWaveform(double*, int)	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:50:6:void rosic::MipMappedWaveTable::setWaveform(int)	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:59:6:void rosic::MipMappedWaveTable::setSymmetry(double)	1
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:68:6:void rosic::MipMappedWaveTable::initPrototypeTable()	2
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:74:6:void rosic::MipMappedWaveTable::initTableSet()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:82:6:void rosic::MipMappedWaveTable::removeDC()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:96:6:void rosic::MipMappedWaveTable::normalize()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:111:6:void rosic::MipMappedWaveTable::reverseTime()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:123:6:void rosic::MipMappedWaveTable::renderWaveform()	7
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:138:6:void rosic::MipMappedWaveTable::generateMipMap()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:195:6:void rosic::MipMappedWaveTable::fillWithSine()	2
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:202:6:void rosic::MipMappedWaveTable::fillWithTriangle()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:217:6:void rosic::MipMappedWaveTable::fillWithSquare()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:230:6:void rosic::MipMappedWaveTable::fillWithSaw()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:246:6:void rosic::MipMappedWaveTable::fillWithSquare303()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:271:6:void rosic::MipMappedWaveTable::fillWithSaw303()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:292:6:void rosic::MipMappedWaveTable::fillWithPeak()	3
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:307:6:void rosic::MipMappedWaveTable::fillWithMoogSaw()	5
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:7:1:rosic::BlendOscillator::BlendOscillator()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:30:1:rosic::BlendOscillator::~BlendOscillator()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:38:6:void rosic::BlendOscillator::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:46:6:void rosic::BlendOscillator::setWaveForm1(int)	2
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:52:6:void rosic::BlendOscillator::setWaveForm2(int)	2
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:58:6:void rosic::BlendOscillator::setWaveTable1(rosic::MipMappedWaveTable*)	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:63:6:void rosic::BlendOscillator::setWaveTable2(rosic::MipMappedWaveTable*)	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:68:6:void rosic::BlendOscillator::setStartPhase(double)	3
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:77:6:void rosic::BlendOscillator::resetPhase()	1
+../Src/Audio/../../TB-3/rosic_BlendOscillator.cpp:82:6:void rosic::BlendOscillator::setPhase(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:7:1:rosic::BiquadFilter::BiquadFilter()	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:21:6:void rosic::BiquadFilter::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:28:6:void rosic::BiquadFilter::setMode(int)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:34:6:void rosic::BiquadFilter::setFrequency(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:40:6:void rosic::BiquadFilter::setGain(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:46:6:void rosic::BiquadFilter::setBandwidth(double)	1
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:55:6:void rosic::BiquadFilter::calcCoeffs()	9
+../Src/Audio/../../TB-3/rosic_BiquadFilter.cpp:183:6:void rosic::BiquadFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:7:1:rosic::OnePoleFilter::OnePoleFilter()	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:19:6:void rosic::OnePoleFilter::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:29:6:void rosic::OnePoleFilter::setMode(int)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:35:6:void rosic::OnePoleFilter::setCutoff(double)	3
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:46:6:void rosic::OnePoleFilter::setShelvingGain(double)	2
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:57:6:void rosic::OnePoleFilter::setShelvingGainInDecibels(double)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:62:6:void rosic::OnePoleFilter::setCoefficients(double, double, double)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:69:6:void rosic::OnePoleFilter::setInternalState(double, double)	1
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:78:6:void rosic::OnePoleFilter::calcCoeffs()	8
+../Src/Audio/../../TB-3/rosic_OnePoleFilter.cpp:154:6:void rosic::OnePoleFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:7:1:rosic::TeeBeeFilter::TeeBeeFilter()	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:27:1:rosic::TeeBeeFilter::~TeeBeeFilter()	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:35:6:void rosic::TeeBeeFilter::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:44:6:void rosic::TeeBeeFilter::setDrive(double)	1
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:50:6:void rosic::TeeBeeFilter::setMode(int)	18
+../Src/Audio/../../TB-3/rosic_TeeBeeFilter.cpp:81:6:void rosic::TeeBeeFilter::reset()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:7:1:rosic::AnalogEnvelope::AnalogEnvelope()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:38:1:rosic::AnalogEnvelope::~AnalogEnvelope()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:46:6:void rosic::AnalogEnvelope::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:60:6:void rosic::AnalogEnvelope::setAttack(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:76:6:void rosic::AnalogEnvelope::setHold(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:83:6:void rosic::AnalogEnvelope::setDecay(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:99:6:void rosic::AnalogEnvelope::setRelease(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:115:6:void rosic::AnalogEnvelope::setTimeScale(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:128:6:void rosic::AnalogEnvelope::setTauScale(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:138:6:void rosic::AnalogEnvelope::setPeakScale(double)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:147:6:void rosic::AnalogEnvelope::reset()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:152:6:void rosic::AnalogEnvelope::noteOn(bool)	2
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:167:6:void rosic::AnalogEnvelope::noteOff()	1
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:175:6:bool rosic::AnalogEnvelope::endIsReached()	3
+../Src/Audio/../../TB-3/rosic_AnalogEnvelope.cpp:188:6:void rosic::AnalogEnvelope::calculateAccumulatedTimes()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:7:1:rosic::DecayEnvelope::DecayEnvelope()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:18:1:rosic::DecayEnvelope::~DecayEnvelope()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:26:6:void rosic::DecayEnvelope::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:35:6:void rosic::DecayEnvelope::setDecayTimeConstant(double)	2
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:44:6:void rosic::DecayEnvelope::setNormalizeSum(bool)	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:53:6:void rosic::DecayEnvelope::trigger()	1
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:58:6:bool rosic::DecayEnvelope::endIsReached(double)	2
+../Src/Audio/../../TB-3/rosic_DecayEnvelope.cpp:69:6:void rosic::DecayEnvelope::calculateCoefficient()	2
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:7:1:rosic::LeakyIntegrator::LeakyIntegrator()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:16:1:rosic::LeakyIntegrator::~LeakyIntegrator()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:24:6:void rosic::LeakyIntegrator::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:33:6:void rosic::LeakyIntegrator::setTimeConstant(double)	3
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:45:8:static double rosic::LeakyIntegrator::getNormalizer(double, double, double)	6
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:97:6:void rosic::LeakyIntegrator::reset()	1
+../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:102:6:void rosic::LeakyIntegrator::calculateCoefficient()	2
+../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.cpp:7:1:rosic::EllipticQuarterBandFilter::EllipticQuarterBandFilter()	1
+../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.cpp:15:6:void rosic::EllipticQuarterBandFilter::reset()	2
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:7:1:rosic::MidiNoteEvent::MidiNoteEvent()	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:15:1:rosic::MidiNoteEvent::MidiNoteEvent(int, int, int, int)	6
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:35:1:rosic::MidiNoteEvent::~MidiNoteEvent()	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:43:6:void rosic::MidiNoteEvent::setKey(int)	3
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:49:6:void rosic::MidiNoteEvent::setVelocity(int)	3
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:55:6:void rosic::MidiNoteEvent::setDetune(double)	1
+../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:60:6:void rosic::MidiNoteEvent::setPriority(int)	2
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:4:1:rosic::AcidPattern::AcidPattern()	2
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:13:6:void rosic::AcidPattern::clear()	2
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:25:6:void rosic::AcidPattern::randomize()	2
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:37:6:void rosic::AcidPattern::circularShift(int)	1
+../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:45:6:bool rosic::AcidPattern::isEmpty() const	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:7:1:rosic::AcidSequencer::AcidSequencer()	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:26:6:void rosic::AcidSequencer::setSampleRate(double)	2
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:32:6:void rosic::AcidSequencer::setMode(int)	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:41:6:void rosic::AcidSequencer::setKeyPermissible(int, bool)	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:47:6:void rosic::AcidSequencer::toggleKeyPermissibility(int)	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:56:14:rosic::AcidPattern* rosic::AcidSequencer::getPattern(int)	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:64:6:bool rosic::AcidSequencer::modeWasChanged()	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:73:6:bool rosic::AcidSequencer::isKeyPermissible(int)	3
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:84:6:void rosic::AcidSequencer::start()	1
+../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:93:6:void rosic::AcidSequencer::stop()	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:450:14:std::__cxx11::_List_base<rosic::MidiNoteEvent, std::allocator<rosic::MidiNoteEvent> >::_List_impl::~_List_impl()	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:536:7:std::__cxx11::_List_base<_Tp, _Alloc>::_List_base() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:749:7:std::__cxx11::list<_Tp, _Alloc>::list() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:903:7:std::__cxx11::list<_Tp, _Alloc>::~list() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:8:1:rosic::Open303::Open303()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:76:1:rosic::Open303::~Open303()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:84:6:void rosic::Open303::setSampleRate(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:104:6:void rosic::Open303::setCutoff(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:110:6:void rosic::Open303::setEnvMod(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:116:6:void rosic::Open303::setAccent(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:121:6:void rosic::Open303::setVolume(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:127:6:void rosic::Open303::setSlideTime(double)	2
+../Src/Audio/../../TB-3/rosic_Open303.cpp:136:6:void rosic::Open303::setPitchBend(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:144:6:void rosic::Open303::noteOn(int, int)	7
+../Src/Audio/../../TB-3/rosic_Open303.cpp:200:6:void rosic::Open303::allNotesOff()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:207:6:void rosic::Open303::triggerNote(int, bool)	3
+../Src/Audio/../../TB-3/rosic_Open303.cpp:242:6:void rosic::Open303::slideToNote(int, bool)	2
+../Src/Audio/../../TB-3/rosic_Open303.cpp:261:6:void rosic::Open303::releaseNote(int)	2
+../Src/Audio/../../TB-3/rosic_Open303.cpp:277:6:void rosic::Open303::setMainEnvDecay(double)	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:284:6:void rosic::Open303::calculateEnvModScalerAndOffset()	3
+../Src/Audio/../../TB-3/rosic_Open303.cpp:319:6:void rosic::Open303::updateNormalizer1()	1
+../Src/Audio/../../TB-3/rosic_Open303.cpp:326:6:void rosic::Open303::updateNormalizer2()	1
+../Src/Audio/tb3_synth.cpp:51:30:{anonymous}::tb3_synth_instance_t* {anonymous}::tb3_instances()	1
+../Src/Audio/tb3_synth.cpp:56:24:rosic::Open303* {anonymous}::tb3_synth_for_instance(uint8_t)	4
+../Src/Audio/tb3_synth.cpp:66:21:float {anonymous}::clampf(float, float, float)	3
+../Src/Audio/tb3_synth.cpp:71:22:double {anonymous}::lin_map(float, float, float, double, double)	1
+../Src/Audio/tb3_synth.cpp:77:16:uint8_t {anonymous}::tb3_synth_instance_valid(uint8_t)	2
+../Src/Audio/tb3_synth.cpp:82:13:void {anonymous}::tb3_apply_default_params(rosic::Open303&)	1
+../Src/Audio/tb3_synth.cpp:94:13:void {anonymous}::tb3_apply_param(rosic::Open303&, param_id_t, float)	9
+../Src/Audio/tb3_synth.cpp:37:8:{anonymous}::tb3_synth_instance_t::tb3_synth_instance_t()	1
+../Src/Audio/tb3_synth.cpp:138:6:void tb3_synth_init(float)	5
+../Src/Audio/tb3_synth.cpp:167:9:uint8_t tb3_synth_instance_count()	1
+../Src/Audio/tb3_synth.cpp:172:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	4
+../Src/Audio/tb3_synth.cpp:193:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	3
+../Src/Audio/tb3_synth.cpp:209:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	3
+../Src/Audio/tb3_synth.cpp:225:6:void tb3_synth_all_notes_off_all()	3
+../Src/Audio/tb3_synth.cpp:237:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	3
+../Src/Audio/tb3_synth.cpp:253:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	6
+../Src/Audio/../../TB-3/rosic_RealFunctions.h:75:12:T rosic::clip(T, T, T) [with T = double]	3
+../Src/Audio/../../TB-3/rosic_RealFunctions.h:75:12:T rosic::clip(T, T, T) [with T = int]	3
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/cmath:1070:5:constexpr typename __gnu_cxx::__promote_2<_Tp, _Up>::__type std::pow(_Tp, _Up) [with _Tp = double; _Up = int]	1
+../Src/Audio/../../TB-3/rosic_FunctionTemplates.h:172:8:void rosic::circularShift(T*, int, int) [with T = double]	6
+../Src/Audio/../../TB-3/rosic_FunctionTemplates.h:172:8:void rosic::circularShift(T*, int, int) [with T = AcidNote]	7
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:455:2:std::__cxx11::_List_base<_Tp, _Alloc>::_List_impl::_List_impl() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:574:7:std::__cxx11::_List_base<_Tp, _Alloc>::~_List_base() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/list.tcc:331:5:std::__cxx11::list<_Tp, _Alloc>::__remove_return_type std::__cxx11::list<_Tp, _Alloc>::remove(const value_type&) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	3
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1143:7:bool std::__cxx11::list<_Tp, _Alloc>::empty() const [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1205:7:std::__cxx11::list<_Tp, _Alloc>::reference std::__cxx11::list<_Tp, _Alloc>::front() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1255:7:void std::__cxx11::list<_Tp, _Alloc>::push_front(const value_type&) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1592:7:void std::__cxx11::list<_Tp, _Alloc>::clear() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\new_allocator.h:104:7:std::__new_allocator<_Tp>::~__new_allocator() [with _Tp = std::_List_node<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/list.tcc:66:5:void std::__cxx11::_List_base<_Tp, _Alloc>::_M_clear() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	2
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1012:7:std::__cxx11::list<_Tp, _Alloc>::allocator_type std::__cxx11::list<_Tp, _Alloc>::get_allocator() const [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:759:7:std::__cxx11::list<_Tp, _Alloc>::list(const allocator_type&) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1022:7:std::__cxx11::list<_Tp, _Alloc>::iterator std::__cxx11::list<_Tp, _Alloc>::begin() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1042:7:std::__cxx11::list<_Tp, _Alloc>::iterator std::__cxx11::list<_Tp, _Alloc>::end() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:324:7:bool std::operator!=(const _List_iterator<rosic::MidiNoteEvent>::_Self&, const _List_iterator<rosic::MidiNoteEvent>::_Self&)	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:287:7:std::_List_iterator< <template-parameter-1-1> >::_Self& std::_List_iterator< <template-parameter-1-1> >::operator++() [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:278:7:_Tp& std::_List_iterator< <template-parameter-1-1> >::operator*() const [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:358:7:std::_List_const_iterator< <template-parameter-1-1> >::_List_const_iterator(const iterator&) [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1689:7:void std::__cxx11::list<_Tp, _Alloc>::splice(const_iterator, std::__cxx11::list<_Tp, _Alloc>&, const_iterator) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:2003:8:) [with _Args = {const rosic::MidiNoteEvent&}; _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:581:7:void std::__cxx11::_List_base<_Tp, _Alloc>::_M_init() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:238:18:_Tp* std::_List_node<_Tp>::_M_valptr() [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:528:7:std::__cxx11::_List_base<_Tp, _Alloc>::_Node_alloc_type& std::__cxx11::_List_base<_Tp, _Alloc>::_M_get_Node_allocator() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:521:7:void std::__cxx11::_List_base<_Tp, _Alloc>::_M_put_node(typename _Node_alloc_traits::pointer) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:532:7:const std::__cxx11::_List_base<_Tp, _Alloc>::_Node_alloc_type& std::__cxx11::_List_base<_Tp, _Alloc>::_M_get_Node_allocator() const [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\new_allocator.h:104:7:std::__new_allocator<_Tp>::~__new_allocator() [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:564:7:std::__cxx11::_List_base<_Tp, _Alloc>::_List_base(_Node_alloc_type&&) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:268:7:std::_List_iterator< <template-parameter-1-1> >::_List_iterator(std::__detail::_List_node_base*) [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/move.h:97:5:constexpr typename std::remove_reference<_Tp>::type&& std::move(_Tp&&) [with _Tp = __cxx11::list<rosic::MidiNoteEvent>&]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1647:7:void std::__cxx11::list<_Tp, _Alloc>::splice(const_iterator, std::__cxx11::list<_Tp, _Alloc>&&, const_iterator) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	5
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/move.h:70:5:constexpr _Tp&& std::forward(typename remove_reference<_Functor>::type&) [with _Tp = const rosic::MidiNoteEvent&]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:708:2:) [with _Args = {const rosic::MidiNoteEvent&}; _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:484:12:void std::__cxx11::_List_base<_Tp, _Alloc>::_M_inc_size(std::size_t) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\ext\aligned_buffer.h:72:7:_Tp* __gnu_cxx::__aligned_membuf<_Tp>::_M_ptr() [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/move.h:97:5:constexpr typename std::remove_reference<_Tp>::type&& std::move(_Tp&&) [with _Tp = allocator<_List_node<rosic::MidiNoteEvent> >&]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:471:2:std::__cxx11::_List_base<_Tp, _Alloc>::_List_impl::_List_impl(std::__cxx11::_List_base<_Tp, _Alloc>::_Node_alloc_type&&) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:362:7:std::_List_const_iterator< <template-parameter-1-1> >::iterator std::_List_const_iterator< <template-parameter-1-1> >::_M_const_cast() const [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:408:7:bool std::operator==(const _List_const_iterator<rosic::MidiNoteEvent>::_Self&, const _List_const_iterator<rosic::MidiNoteEvent>::_Self&)	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/move.h:51:5:constexpr _Tp* std::__addressof(_Tp&) [with _Tp = __cxx11::list<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:2029:7:void std::__cxx11::list<_Tp, _Alloc>::_M_check_equal_allocators(const std::__cxx11::list<_Tp, _Alloc>&) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:1988:7:void std::__cxx11::list<_Tp, _Alloc>::_M_transfer(iterator, iterator, iterator) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:486:12:void std::__cxx11::_List_base<_Tp, _Alloc>::_M_dec_size(std::size_t) [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/stl_list.h:517:7:typename std::__cxx11::_List_base<_Tp, _Alloc>::_Node_alloc_traits::pointer std::__cxx11::_List_base<_Tp, _Alloc>::_M_get_node() [with _Tp = rosic::MidiNoteEvent; _Alloc = std::allocator<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\allocated_ptr.h:53:7:std::__allocated_ptr<_Alloc>::__allocated_ptr(_Alloc&, pointer) [with _Alloc = std::allocator<std::_List_node<rosic::MidiNoteEvent> >]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\allocated_ptr.h:71:7:std::__allocated_ptr<_Alloc>::~__allocated_ptr() [with _Alloc = std::allocator<std::_List_node<rosic::MidiNoteEvent> >]	2
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\allocated_ptr.h:79:7:std::__allocated_ptr<_Alloc>& std::__allocated_ptr<_Alloc>::operator=(std::nullptr_t) [with _Alloc = std::allocator<std::_List_node<rosic::MidiNoteEvent> >]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\ext\aligned_buffer.h:64:7:void* __gnu_cxx::__aligned_membuf<_Tp>::_M_addr() [with _Tp = rosic::MidiNoteEvent]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\new_allocator.h:156:7:void std::__new_allocator<_Tp>::deallocate(_Tp*, size_type) [with _Tp = std::_List_node<rosic::MidiNoteEvent>]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/move.h:51:5:constexpr _Tp* std::__addressof(_Tp&) [with _Tp = allocator<_List_node<rosic::MidiNoteEvent> >]	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\new_allocator.h:126:7:_Tp* std::__new_allocator<_Tp>::allocate(size_type, const void*) [with _Tp = std::_List_node<rosic::MidiNoteEvent>]	1
+../Src/Audio/tb3_synth.cpp:284:1:void __static_initialization_and_destruction_0()	2
+../Src/Audio/tb3_synth.cpp:284:1:void __static_initialization_and_destruction_1()	2
+../Src/Audio/tb3_synth.cpp:284:1:cpp)	1
+../Src/Audio/tb3_synth.cpp:284:1:cpp)	1

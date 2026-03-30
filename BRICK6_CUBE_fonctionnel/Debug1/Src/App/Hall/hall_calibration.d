@@ -1,5 +1,6 @@
 Src/App/Hall/hall_calibration.o: ../Src/App/Hall/hall_calibration.c \
- ../Inc/App/Hall/hall_calibration.h \
+ ../Inc/App/Hall/hall_calibration.h ../Inc/App/Hall/hall_engine.h \
+ ../Inc/App/Hall/hall_adc.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -49,8 +50,10 @@ Src/App/Hall/hall_calibration.o: ../Src/App/Hall/hall_calibration.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- ../Inc/App/Hall/hall_engine.h ../Inc/App/Hall/hall_filter.h
+ ../Inc/App/Hall/hall_filter_asc.h
 ../Inc/App/Hall/hall_calibration.h:
+../Inc/App/Hall/hall_engine.h:
+../Inc/App/Hall/hall_adc.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:
@@ -100,5 +103,4 @@ Src/App/Hall/hall_calibration.o: ../Src/App/Hall/hall_calibration.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
-../Inc/App/Hall/hall_engine.h:
-../Inc/App/Hall/hall_filter.h:
+../Inc/App/Hall/hall_filter_asc.h:

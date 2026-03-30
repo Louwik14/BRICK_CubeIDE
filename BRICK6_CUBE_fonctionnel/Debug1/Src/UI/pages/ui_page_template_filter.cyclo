@@ -1,0 +1,8 @@
+../Src/UI/pages/ui_page_template_filter.c:80:36:ui_page_template_colors_resolve_family	1
+../Src/UI/pages/ui_page_template_filter.c:120:30:ui_page_template_colors_get_audio_family	1
+../Src/UI/pages/ui_page_template_filter.c:125:13:ui_page_template_colors_sync_family	12
+../Src/UI/pages/ui_page_template_filter.c:291:13:ui_page_template_colors_render	1
+../Src/UI/pages/ui_page_template_filter.c:284:13:ui_page_template_colors_tick	1
+../Src/UI/pages/ui_page_template_filter.c:276:13:ui_page_template_colors_handle_event	1
+../Src/UI/pages/ui_page_template_filter.c:270:13:ui_page_template_colors_enter	1
+../Src/UI/pages/ui_page_template_filter.c:92:6:ui_page_template_colors_register_families	6

@@ -1,0 +1,23 @@
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/std_abs.h:56:3:long int std::abs(long int)	16	static
+../Micro_Dexed/exp2.h:36:9:static int32_t Exp2::lookup(int32_t)	56	static
+../Micro_Dexed/dx7note.cpp:30:9:int32_t midinote_to_logfreq(int)	24	static
+../Micro_Dexed/dx7note.cpp:37:9:int32_t logfreq_round2semi(int)	32	static
+../Micro_Dexed/dx7note.cpp:52:9:int32_t osc_freq(int, int, int, int, int)	32	static
+../Micro_Dexed/dx7note.cpp:89:5:int ScaleVelocity(int, int)	40	static
+../Micro_Dexed/dx7note.cpp:96:5:int ScaleRate(int, int)	40	static
+../Micro_Dexed/dx7note.cpp:115:5:int ScaleCurve(int, int, int)	40	static
+../Micro_Dexed/dx7note.cpp:132:5:int ScaleLevel(int, int, int, int, int, int)	32	static
+../Micro_Dexed/dx7note.cpp:151:1:Dx7Note::Dx7Note()	24	static
+../Micro_Dexed/dx7note.cpp:159:6:void Dx7Note::init(const uint8_t*, int, int, int, int, const Controllers*)	136	static
+../Micro_Dexed/dx7note.cpp:208:6:void Dx7Note::compute(int32_t*, int32_t, int32_t, const Controllers*)	320	static
+../Micro_Dexed/dx7note.cpp:302:6:void Dx7Note::keyup()	24	static
+../Micro_Dexed/dx7note.cpp:309:6:void Dx7Note::update(const uint8_t*, int, int, int, const Controllers*)	128	static
+../Micro_Dexed/dx7note.cpp:351:6:void Dx7Note::peekVoiceStatus(VoiceStatus&)	24	static
+../Micro_Dexed/dx7note.cpp:362:6:void Dx7Note::transferState(Dx7Note&)	24	static
+../Micro_Dexed/dx7note.cpp:370:6:void Dx7Note::transferSignal(Dx7Note&)	24	static
+../Micro_Dexed/dx7note.cpp:377:6:void Dx7Note::transferPortamento(Dx7Note&)	24	static
+../Micro_Dexed/dx7note.cpp:383:6:void Dx7Note::oscSync()	24	static
+../Micro_Dexed/synth.h:55:17:T min(const T&, const T&) [with T = int]	16	static
+../Micro_Dexed/synth.h:60:17:T max(const T&, const T&) [with T = int]	16	static
+../Micro_Dexed/synth.h:60:17:T max(const T&, const T&) [with T = long int]	16	static
+../Micro_Dexed/synth.h:60:17:T max(const T&, const T&) [with T = long unsigned int]	16	static

@@ -1,0 +1,28 @@
+../Src/Audio/monob_osc_bank.cpp:63:22:{anonymous}::MonobOscBank* {anonymous}::bank_for(uint8_t)	2
+../Src/Audio/monob_osc_bank.cpp:72:14:float {anonymous}::clampf_local(float, float, float)	3
+../Src/Audio/monob_osc_bank.cpp:79:12:int {anonymous}::octave_to_index(int8_t)	3
+../Src/Audio/monob_osc_bank.cpp:86:16:uint8_t {anonymous}::cents_to_index(float)	4
+../Src/Audio/monob_osc_bank.cpp:94:17:uint32_t {anonymous}::freq_to_phase_inc(const MonobOscBank*, float)	1
+../Src/Audio/monob_osc_bank.cpp:99:14:float {anonymous}::compute_source_frequency(const MonobOscSource&, float, uint8_t)	2
+../Src/Audio/monob_osc_bank.cpp:109:14:float {anonymous}::process_saw(uint32_t)	1
+../Src/Audio/monob_osc_bank.cpp:115:14:float {anonymous}::process_square(uint32_t)	2
+../Src/Audio/monob_osc_bank.cpp:120:14:float {anonymous}::process_tri(uint32_t)	3
+../Src/Audio/monob_osc_bank.cpp:128:14:float {anonymous}::process_wave(uint8_t, uint32_t)	5
+../Src/Audio/monob_osc_bank.cpp:140:6:void {anonymous}::refresh_active_sources(MonobOscBank*)	5
+../Src/Audio/monob_osc_bank.cpp:161:6:void {anonymous}::refresh_phase_increments(MonobOscBank*, float)	2
+../Src/Audio/monob_osc_bank.cpp:174:17:void monob_osc_bank_init_for_instance(uint8_t, float)	5
+../Src/Audio/monob_osc_bank.cpp:200:17:void monob_osc_bank_init(float)	1
+../Src/Audio/monob_osc_bank.cpp:205:17:void monob_osc_bank_reset_for_instance(uint8_t)	3
+../Src/Audio/monob_osc_bank.cpp:222:17:void monob_osc_bank_reset()	1
+../Src/Audio/monob_osc_bank.cpp:227:17:void monob_osc_bank_note_on_for_instance(uint8_t)	3
+../Src/Audio/monob_osc_bank.cpp:243:17:void monob_osc_bank_note_on()	1
+../Src/Audio/monob_osc_bank.cpp:248:17:void monob_osc_bank_set_wave_for_instance(uint8_t, uint8_t, uint8_t)	4
+../Src/Audio/monob_osc_bank.cpp:261:17:void monob_osc_bank_set_wave(uint8_t, uint8_t)	1
+../Src/Audio/monob_osc_bank.cpp:266:17:void monob_osc_bank_set_octave_for_instance(uint8_t, uint8_t, int8_t)	3
+../Src/Audio/monob_osc_bank.cpp:278:17:void monob_osc_bank_set_octave(uint8_t, int8_t)	1
+../Src/Audio/monob_osc_bank.cpp:283:17:void monob_osc_bank_set_detune_for_instance(uint8_t, uint8_t, float)	3
+../Src/Audio/monob_osc_bank.cpp:295:17:void monob_osc_bank_set_detune(uint8_t, float)	1
+../Src/Audio/monob_osc_bank.cpp:300:17:void monob_osc_bank_set_mix_for_instance(uint8_t, uint8_t, float)	3
+../Src/Audio/monob_osc_bank.cpp:312:17:void monob_osc_bank_set_mix(uint8_t, float)	1
+../Src/Audio/monob_osc_bank.cpp:317:18:float monob_osc_bank_process_for_instance(uint8_t, float)	5
+../Src/Audio/monob_osc_bank.cpp:342:18:float monob_osc_bank_process(float)	1

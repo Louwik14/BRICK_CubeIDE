@@ -1,3 +1,13 @@
-../Src/UI/ui_param.c:52:14:ui_param_clamp	0	static
-../Src/UI/ui_param.c:78:6:ui_param_set_bank	4	static
-../Src/UI/ui_param.c:102:6:ui_param_handle_encoder	16	static
+../Src/UI/ui_param.c:56:14:ui_param_clamp	0	static
+../Src/UI/ui_param.c:71:15:ui_param_signum	0	static
+../Src/UI/ui_param.c:189:16:ui_param_seq_resolve_ref_step	40	static
+../Src/UI/ui_param.c:131:14:ui_param_step_cfg_track_type	16	static
+../Src/UI/ui_param.c:223:16:ui_param_is_track_scoped	16	static
+../Src/UI/ui_param.c:230:14:ui_param_get_active_track_value	16	static
+../Src/UI/ui_param.c:260:16:ui_param_try_apply_seq_plock	80	static
+../Src/UI/ui_param.c:86:16:ui_param_cfg_track_family_is_available	8	static
+../Src/UI/ui_param.c:106:14:ui_param_step_cfg_track	24	static
+../Src/UI/ui_param.c:246:13:ui_param_set_active_track_value	16	static
+../Src/UI/ui_param.c:167:6:ui_param_set_bank	4	static
+../Src/UI/ui_param.c:318:9:ui_param_try_get_seq_plock_feedback	40	static
+../Src/UI/ui_param.c:371:6:ui_param_handle_encoder	32	static

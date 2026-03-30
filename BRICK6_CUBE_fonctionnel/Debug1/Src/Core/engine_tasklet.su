@@ -1,4 +1,4 @@
-../Src/Core/engine_tasklet.c:70:13:engine_tick	8	static
-../Src/Core/engine_tasklet.c:99:6:engine_tasklet_init	8	static
-../Src/Core/engine_tasklet.c:139:6:engine_tasklet_notify_frames	0	static
-../Src/Core/engine_tasklet.c:164:6:engine_tasklet_poll	8	static,ignoring_inline_asm
+../Src/Core/engine_tasklet.c:73:13:engine_tick	8	static
+../Src/Core/engine_tasklet.c:106:6:engine_tasklet_init	8	static
+../Src/Core/engine_tasklet.c:146:6:engine_tasklet_notify_frames	0	static
+../Src/Core/engine_tasklet.c:171:6:engine_tasklet_poll	8	static,ignoring_inline_asm

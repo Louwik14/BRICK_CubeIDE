@@ -1,4 +1,4 @@
-../Src/Storage/wav_parser.c:41:17:le16	1
-../Src/Storage/wav_parser.c:59:17:le32	1
-../Src/Storage/wav_parser.c:67:13:wav_find_chunks	22
-../Src/Storage/wav_parser.c:184:6:wav_parser_parse_info	3
+../Src/Storage/wav_parser.c:38:17:le16	1
+../Src/Storage/wav_parser.c:56:17:le32	1
+../Src/Storage/wav_parser.c:64:13:wav_find_chunks	22
+../Src/Storage/wav_parser.c:181:6:wav_parser_parse_info	3

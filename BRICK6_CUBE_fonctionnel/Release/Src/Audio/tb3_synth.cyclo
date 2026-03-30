@@ -1,5 +1,5 @@
 ../Src/Audio/../../TB-3/fft4g.c:686:6:void makect(int, int*, double*)	3
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:36:6:0(int)	14
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:64:6:0(int)	18
 ../Src/Audio/../../TB-3/rosic_Complex.cpp:7:1:rosic::Complex::Complex()	1
 ../Src/Audio/../../TB-3/rosic_Complex.cpp:12:1:rosic::Complex::Complex(double)	1
 ../Src/Audio/../../TB-3/rosic_Complex.cpp:18:1:rosic::Complex::Complex(double, double)	1
@@ -33,24 +33,24 @@
 ../Src/Audio/../../TB-3/fft4g.c:1326:6:void dstsub(int, double*, int, double*)	3
 ../Src/Audio/../../TB-3/fft4g.c:409:6:void ddst(int, int, double*, int*, double*)	18
 ../Src/Audio/../../TB-3/fft4g.c:564:6:void dfst(int, double*, double*, int*, double*)	22
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:8:1:rosic::FourierTransformerRadix2::FourierTransformerRadix2()	1
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:22:1:rosic::FourierTransformerRadix2::~FourierTransformerRadix2()	4
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:36:6:void rosic::FourierTransformerRadix2::setBlockSize(int)	5
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:67:6:void rosic::FourierTransformerRadix2::setDirection(int)	8
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:83:6:void rosic::FourierTransformerRadix2::setNormalizationMode(int)	6
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:95:6:void rosic::FourierTransformerRadix2::setRealSignalMode(bool)	1
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:103:6:void rosic::FourierTransformerRadix2::transformComplexBufferInPlace(rosic::Complex*)	9
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:125:6:void rosic::FourierTransformerRadix2::transformComplexBuffer(rosic::Complex*, rosic::Complex*)	6
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:157:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, rosic::Complex*)	12
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:187:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, double*)	1
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:194:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudesAndPhases(double*, double*, double*)	7
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:220:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudes(double*, double*)	4
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:236:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(rosic::Complex*, double*)	12
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:266:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(double*, double*)	1
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:272:6:void rosic::FourierTransformerRadix2::getRealSignalFromMagnitudesAndPhases(double*, double*, double*)	4
-../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:295:6:void rosic::FourierTransformerRadix2::updateNormalizationFactor()	6
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:36:1:rosic::FourierTransformerRadix2::FourierTransformerRadix2()	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:50:1:rosic::FourierTransformerRadix2::~FourierTransformerRadix2()	7
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:64:6:void rosic::FourierTransformerRadix2::setBlockSize(int)	5
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:104:6:void rosic::FourierTransformerRadix2::setDirection(int)	8
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:120:6:void rosic::FourierTransformerRadix2::setNormalizationMode(int)	6
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:132:6:void rosic::FourierTransformerRadix2::setRealSignalMode(bool)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:140:6:void rosic::FourierTransformerRadix2::transformComplexBufferInPlace(rosic::Complex*)	9
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:162:6:void rosic::FourierTransformerRadix2::transformComplexBuffer(rosic::Complex*, rosic::Complex*)	6
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:194:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, rosic::Complex*)	12
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:224:6:void rosic::FourierTransformerRadix2::transformRealSignal(double*, double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:231:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudesAndPhases(double*, double*, double*)	7
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:257:6:void rosic::FourierTransformerRadix2::getRealSignalMagnitudes(double*, double*)	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:273:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(rosic::Complex*, double*)	12
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:303:6:void rosic::FourierTransformerRadix2::transformSymmetricSpectrum(double*, double*)	1
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:309:6:void rosic::FourierTransformerRadix2::getRealSignalFromMagnitudesAndPhases(double*, double*, double*)	4
+../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:332:6:void rosic::FourierTransformerRadix2::updateNormalizationFactor()	6
 ../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:5:1:rosic::MipMappedWaveTable::MipMappedWaveTable()	2
-../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:25:1:rosic::MipMappedWaveTable::~MipMappedWaveTable()	4
+../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:25:1:rosic::MipMappedWaveTable::~MipMappedWaveTable()	7
 ../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:68:6:void rosic::MipMappedWaveTable::initPrototypeTable()	1
 ../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:74:6:void rosic::MipMappedWaveTable::initTableSet()	1
 ../Src/Audio/../../TB-3/rosic_MipMappedWaveTable.cpp:82:6:void rosic::MipMappedWaveTable::removeDC()	3
@@ -158,7 +158,7 @@
 ../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:73:6:bool rosic::AcidSequencer::isKeyPermissible(int)	2
 ../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:84:6:void rosic::AcidSequencer::start()	1
 ../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:93:6:void rosic::AcidSequencer::stop()	1
-../Src/Audio/../../TB-3/rosic_Open303.cpp:76:1:rosic::Open303::~Open303()	9
+../Src/Audio/../../TB-3/rosic_Open303.cpp:76:1:rosic::Open303::~Open303()	15
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:84:6:void rosic::Open303::setSampleRate(double)	13
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:8:1:rosic::Open303::Open303()	11
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:104:6:void rosic::Open303::setCutoff(double)	1
@@ -170,19 +170,19 @@
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:200:6:void rosic::Open303::allNotesOff()	3
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:207:6:void rosic::Open303::triggerNote(int, bool)	9
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:242:6:void rosic::Open303::slideToNote(int, bool)	8
+../Src/Audio/../../TB-3/rosic_Open303.h:316:17:double rosic::Open303::getSample()	162
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:144:6:void rosic::Open303::noteOn(int, int)	17
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:261:6:void rosic::Open303::releaseNote(int)	2
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:277:6:void rosic::Open303::setMainEnvDecay(double)	3
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:284:6:void rosic::Open303::calculateEnvModScalerAndOffset()	1
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:319:6:void rosic::Open303::updateNormalizer1()	1
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:326:6:void rosic::Open303::updateNormalizer2()	1
-../Src/Audio/tb3_synth.cpp:113:6:void tb3_synth_init(float)	7
-../Src/Audio/tb3_synth.cpp:125:9:uint8_t tb3_synth_instance_count()	1
-../Src/Audio/tb3_synth.cpp:130:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	2
-../Src/Audio/tb3_synth.cpp:140:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	2
-../Src/Audio/tb3_synth.cpp:150:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	4
-../Src/Audio/tb3_synth.cpp:160:6:void tb3_synth_all_notes_off_all()	3
-../Src/Audio/tb3_synth.cpp:168:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	14
-../Src/Audio/tb3_synth.cpp:178:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	167
-../Src/Audio/tb3_synth.cpp:198:1:cpp)	1
-../Src/Audio/tb3_synth.cpp:198:1:cpp)	1
+../Src/Audio/tb3_synth.cpp:138:6:void tb3_synth_init(float)	8
+../Src/Audio/tb3_synth.cpp:167:9:uint8_t tb3_synth_instance_count()	1
+../Src/Audio/tb3_synth.cpp:172:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	4
+../Src/Audio/tb3_synth.cpp:193:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	3
+../Src/Audio/tb3_synth.cpp:209:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	5
+../Src/Audio/tb3_synth.cpp:225:6:void tb3_synth_all_notes_off_all()	4
+../Src/Audio/tb3_synth.cpp:237:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	15
+../Src/Audio/tb3_synth.cpp:253:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	7
+../Src/Audio/tb3_synth.cpp:284:1:cpp)	2
