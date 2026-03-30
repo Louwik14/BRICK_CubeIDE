@@ -58,6 +58,12 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
         return 0U;
     }
 
+    if (seq_model_get_trig(track, step) == 0U)
+    {
+        *out_count = 0U;
+        return 1U;
+    }
+
     uint8_t count = 0U;
     const uint8_t lock_count = seq_model_step_plock_count(track, step);
     for (uint8_t i = 0U; i < lock_count; ++i)
