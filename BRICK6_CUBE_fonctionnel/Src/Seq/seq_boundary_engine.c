@@ -5,6 +5,7 @@
  * gère les transitions step->step sans casser l'état runtime des paramètres.
  * Integration: appelé par seq_runtime autour du scheduling PLAY; ne pilote ni clock ni transport.
  */
+#define SEQ_BOUNDARY_ENGINE_IMPLEMENTATION 1
 #include "Seq/seq_boundary_engine.h"
 
 #include <string.h>
