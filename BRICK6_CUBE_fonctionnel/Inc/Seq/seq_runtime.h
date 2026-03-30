@@ -23,6 +23,7 @@ typedef struct
     uint8_t prev_step_valid[SEQ_TRACK_COUNT];
     uint8_t active_lock_count[SEQ_TRACK_COUNT];
     uint8_t track_div[SEQ_TRACK_COUNT];
+    uint8_t track_div_phase[SEQ_TRACK_COUNT];
     uint8_t track_quant[SEQ_TRACK_COUNT];
     uint8_t track_swing[SEQ_TRACK_COUNT];
     uint32_t last_tick_count;
@@ -70,8 +71,11 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step);
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div);
+uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div);
 void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant);
+uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant);
 void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing);
+uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing);
 
 void seq_runtime_rec_toggle_arm(void);
 uint8_t seq_runtime_rec_is_armed(void);
