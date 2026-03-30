@@ -12,7 +12,8 @@ constexpr int kFftStaticMaxIpSize = 64;
 // Use fixed SDRAM scratch to avoid heap allocations during Open303 construction on target.
 static AUDIO_COLD_SDRAM double g_fft_static_w[2 * kFftStaticMaxBlockSize];
 static AUDIO_COLD_SDRAM int g_fft_static_ip[kFftStaticMaxIpSize];
-static AUDIO_COLD_SDRAM rosic::Complex g_fft_static_tmp[kFftStaticMaxBlockSize];
+static AUDIO_COLD_SDRAM ALIGN64 unsigned char g_fft_static_tmp_raw[sizeof(rosic::Complex) * kFftStaticMaxBlockSize];
+
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -60,7 +61,7 @@ void FourierTransformerRadix2::setBlockSize(int newBlockSize)
       {
         w         = &g_fft_static_w[0];
         ip        = &g_fft_static_ip[0];
-        tmpBuffer = &g_fft_static_tmp[0];
+        tmpBuffer = reinterpret_cast<rosic::Complex*>(&g_fft_static_tmp_raw[0]);
         ip[0]     = 0; // indicate that re-initialization is necesarry
       }
       else
@@ -71,7 +72,7 @@ void FourierTransformerRadix2::setBlockSize(int newBlockSize)
         updateNormalizationFactor();
         w         = &g_fft_static_w[0];
         ip        = &g_fft_static_ip[0];
-        tmpBuffer = &g_fft_static_tmp[0];
+        tmpBuffer = reinterpret_cast<rosic::Complex*>(&g_fft_static_tmp_raw[0]);
         ip[0]     = 0;
         DEBUG_BREAK;
       }

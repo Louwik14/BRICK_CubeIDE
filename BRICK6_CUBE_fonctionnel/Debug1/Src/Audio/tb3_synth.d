@@ -18,8 +18,6 @@ Src/Audio/tb3_synth.o: ../Src/Audio/tb3_synth.cpp \
  ../Src/Audio/../../TB-3/rosic_DecayEnvelope.h \
  ../Src/Audio/../../TB-3/rosic_LeakyIntegrator.h \
  ../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.h \
- ../Src/Audio/../../TB-3/rosic_AcidSequencer.h \
- ../Src/Audio/../../TB-3/rosic_AcidPattern.h \
  ../Src/Audio/../../TB-3/GlobalFunctions.cpp \
  ../Src/Audio/../../TB-3/rosic_Complex.cpp \
  ../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp \
@@ -34,8 +32,6 @@ Src/Audio/tb3_synth.o: ../Src/Audio/tb3_synth.cpp \
  ../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp \
  ../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.cpp \
  ../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp \
- ../Src/Audio/../../TB-3/rosic_AcidPattern.cpp \
- ../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp \
  ../Src/Audio/../../TB-3/rosic_Open303.cpp \
  ../Src/Audio/../../TB-3/rosic_Open303.h
 ../Inc/Audio/tb3_synth.h:
@@ -59,8 +55,6 @@ Src/Audio/tb3_synth.o: ../Src/Audio/tb3_synth.cpp \
 ../Src/Audio/../../TB-3/rosic_DecayEnvelope.h:
 ../Src/Audio/../../TB-3/rosic_LeakyIntegrator.h:
 ../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.h:
-../Src/Audio/../../TB-3/rosic_AcidSequencer.h:
-../Src/Audio/../../TB-3/rosic_AcidPattern.h:
 ../Src/Audio/../../TB-3/GlobalFunctions.cpp:
 ../Src/Audio/../../TB-3/rosic_Complex.cpp:
 ../Src/Audio/../../TB-3/rosic_FourierTransformerRadix2.cpp:
@@ -75,7 +69,5 @@ Src/Audio/tb3_synth.o: ../Src/Audio/tb3_synth.cpp \
 ../Src/Audio/../../TB-3/rosic_LeakyIntegrator.cpp:
 ../Src/Audio/../../TB-3/rosic_EllipticQuarterBandFilter.cpp:
 ../Src/Audio/../../TB-3/rosic_MidiNoteEvent.cpp:
-../Src/Audio/../../TB-3/rosic_AcidPattern.cpp:
-../Src/Audio/../../TB-3/rosic_AcidSequencer.cpp:
 ../Src/Audio/../../TB-3/rosic_Open303.cpp:
 ../Src/Audio/../../TB-3/rosic_Open303.h:
