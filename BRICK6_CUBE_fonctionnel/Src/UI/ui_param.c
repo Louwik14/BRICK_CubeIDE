@@ -26,6 +26,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Core/track_runtime.h"
+#include "param_store.h"
 
 typedef struct
 {
@@ -229,18 +230,12 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
 
 static float ui_param_get_active_track_value(param_id_t param)
 {
-    float value = param_get(param);
     if (ui_param_is_track_scoped(param) == 0U)
     {
-        return value;
+        return param_get(param);
     }
 
-    if (param_registry_get_track_value(param, ui_get_active_track(), &value) != 0U)
-    {
-        return value;
-    }
-
-    return value;
+    return param_store_get_active(param);
 }
 
 static void ui_param_set_active_track_value(param_id_t param, float value)
