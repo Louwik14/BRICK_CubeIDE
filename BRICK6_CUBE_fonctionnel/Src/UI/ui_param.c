@@ -26,6 +26,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Core/track_runtime.h"
+#include "param_store.h"
 
 typedef struct
 {
@@ -229,18 +230,12 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
 
 static float ui_param_get_active_track_value(param_id_t param)
 {
-    float value = param_get(param);
     if (ui_param_is_track_scoped(param) == 0U)
     {
-        return value;
+        return param_get(param);
     }
 
-    if (param_registry_get_track_value(param, ui_get_active_track(), &value) != 0U)
-    {
-        return value;
-    }
-
-    return value;
+    return param_store_get_active(param);
 }
 
 static void ui_param_set_active_track_value(param_id_t param, float value)
@@ -253,6 +248,14 @@ static void ui_param_set_active_track_value(param_id_t param, float value)
 
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param, &set_id, &param8) != 0U)
+    {
+        const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
+        (void)seq_param_iface_set_base_value(ui_get_active_track(), set_id, param8, encoded);
+    }
+
     (void)param_registry_apply_track_value(param, ui_get_active_track(), clamped);
     param_store_set_active(param, clamped);
 }
