@@ -29,7 +29,6 @@
 #include "main.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
-#define SEQ_TIME_ADAPTER_PENDING_MAX       8U
 
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
@@ -62,7 +61,6 @@ SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_track;
 SEQ_STATE_D2 static uint32_t g_seq_pattern_rec_steps_remaining;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
-static volatile uint8_t g_seq_time_adapter_pending_cadence;
 static void seq_runtime_pattern_rec_start_now(void);
 static void seq_runtime_dispatch_due_events(uint32_t now);
 static void seq_runtime_live_rec_flush_and_reset(void);
@@ -312,7 +310,6 @@ void seq_runtime_init(void)
      * For now, keep forced to internal clock to preserve current UX. */
     g_seq_runtime.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_runtime.last_tick_count = engine_tick_count;
-    g_seq_time_adapter_pending_cadence = 1U;
     seq_play_scheduler_init();
     seq_output_guard_init();
     seq_live_rec_capture_init();
@@ -467,27 +464,21 @@ static void seq_runtime_process_core(void)
 void seq_runtime_time_adapter_process(void)
 {
     /*
-     * Superloop-facing adapter entry for the sequencer time-domain.
-     * Keeps caller context thin (producer service + adapter invoke)
-     * while preserving seq_runtime as the single orchestration authority.
+     * Superloop adapter kept for external clock path only.
+     * Internal clock path is invoked directly from TIM5 cadence IRQ
+     * through seq_runtime_time_adapter_process_internal_from_irq().
      */
-    uint8_t pending = 0U;
-    __disable_irq();
-    pending = g_seq_time_adapter_pending_cadence;
-    g_seq_time_adapter_pending_cadence = 0U;
-    __enable_irq();
-
-    while (pending-- > 0U)
+    if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) != 0U)
     {
         seq_runtime_process_core();
     }
 }
 
-void seq_runtime_time_adapter_on_cadence_irq(void)
+void seq_runtime_time_adapter_process_internal_from_irq(void)
 {
-    if (g_seq_time_adapter_pending_cadence < SEQ_TIME_ADAPTER_PENDING_MAX)
+    if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) == 0U)
     {
-        g_seq_time_adapter_pending_cadence++;
+        seq_runtime_process_core();
     }
 }
 

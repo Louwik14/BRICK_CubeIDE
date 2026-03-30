@@ -956,7 +956,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
   if ((htim != NULL) && (htim->Instance == TIM5) && (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)) {
     seq_time_adapter_next_ccr += SEQ_TIME_ADAPTER_TIM5_DELTA_TICKS;
     __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_2, seq_time_adapter_next_ccr);
-    seq_runtime_time_adapter_on_cadence_irq();
+    seq_runtime_time_adapter_process_internal_from_irq();
   }
 }
 

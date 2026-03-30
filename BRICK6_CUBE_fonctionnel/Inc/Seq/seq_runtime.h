@@ -46,7 +46,7 @@ typedef enum
 } seq_rec_len_mode_t;
 
 void seq_runtime_init(void);
-void seq_runtime_time_adapter_on_cadence_irq(void);
+void seq_runtime_time_adapter_process_internal_from_irq(void);
 void seq_runtime_time_adapter_process(void);
 const seq_runtime_state_t *seq_runtime_get_state(void);
 
