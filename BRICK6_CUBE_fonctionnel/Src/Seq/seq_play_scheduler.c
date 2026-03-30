@@ -20,6 +20,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_output_guard.h"
+#include "Seq/seq_runtime.h"
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 64U
@@ -142,6 +143,16 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
 
     const float tps_f = (ticks_per_step == 0U) ? 1.0f : (float)ticks_per_step;
+    const seq_runtime_state_t *const runtime = seq_runtime_get_state();
+    uint32_t step_tick_swinged = step_tick;
+    if ((runtime != 0)
+        && (track < SEQ_TRACK_COUNT)
+        && ((step & 0x01U) != 0U))
+    {
+        const uint32_t swing = runtime->track_swing[track];
+        const uint32_t swing_delay_ticks = ((uint32_t)ticks_per_step * swing) / 200U;
+        step_tick_swinged += swing_delay_ticks;
+    }
 
     for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
     {
@@ -185,10 +196,10 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
 
         const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
                                                                   seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
-        int32_t on_tick = (int32_t)step_tick + (int32_t)((mictim_f * tps_f) / 96.0f);
-        if (on_tick < (int32_t)step_tick)
+        int32_t on_tick = (int32_t)step_tick_swinged + (int32_t)((mictim_f * tps_f) / 96.0f);
+        if (on_tick < (int32_t)step_tick_swinged)
         {
-            on_tick = (int32_t)step_tick;
+            on_tick = (int32_t)step_tick_swinged;
         }
 
         seq_play_scheduler_push((uint32_t)on_tick,
@@ -206,17 +217,48 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
 
 void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
 {
-    uint8_t i = 0U;
-
-    while (i < g_seq_play_event_count)
+    while (g_seq_play_event_count > 0U)
     {
-        seq_play_scheduler_evt_t *const evt = &g_seq_play_events[i];
-        if ((int32_t)(now_tick - evt->due_tick) < 0)
+        uint8_t selected_index = 0xFFU;
+        uint32_t selected_due_tick = 0U;
+
+        for (uint8_t i = 0U; i < g_seq_play_event_count; ++i)
         {
-            i++;
-            continue;
+            const seq_play_scheduler_evt_t *const candidate = &g_seq_play_events[i];
+            if ((int32_t)(now_tick - candidate->due_tick) < 0)
+            {
+                continue;
+            }
+
+            if (selected_index == 0xFFU)
+            {
+                selected_index = i;
+                selected_due_tick = candidate->due_tick;
+                continue;
+            }
+
+            const seq_play_scheduler_evt_t *const selected = &g_seq_play_events[selected_index];
+            if (candidate->due_tick < selected_due_tick)
+            {
+                selected_index = i;
+                selected_due_tick = candidate->due_tick;
+                continue;
+            }
+
+            if ((candidate->due_tick == selected_due_tick)
+                && (candidate->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
+                && (selected->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON))
+            {
+                selected_index = i;
+            }
         }
 
+        if (selected_index == 0xFFU)
+        {
+            break;
+        }
+
+        seq_play_scheduler_evt_t *const evt = &g_seq_play_events[selected_index];
         const uint8_t channel_1_16 = ui_get_track_midi_channel(evt->track);
         const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
 
@@ -274,7 +316,7 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
             }
         }
 
-        for (uint8_t j = i + 1U; j < g_seq_play_event_count; ++j)
+        for (uint8_t j = selected_index + 1U; j < g_seq_play_event_count; ++j)
         {
             g_seq_play_events[j - 1U] = g_seq_play_events[j];
         }
