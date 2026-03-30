@@ -29,6 +29,7 @@
 #include "main.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
+#define SEQ_TIME_ADAPTER_PENDING_MAX       8U
 
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
@@ -61,6 +62,7 @@ SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_track;
 SEQ_STATE_D2 static uint32_t g_seq_pattern_rec_steps_remaining;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
+static volatile uint8_t g_seq_time_adapter_pending_cadence;
 static void seq_runtime_pattern_rec_start_now(void);
 static void seq_runtime_dispatch_due_events(uint32_t now);
 static void seq_runtime_live_rec_flush_and_reset(void);
@@ -310,6 +312,7 @@ void seq_runtime_init(void)
      * For now, keep forced to internal clock to preserve current UX. */
     g_seq_runtime.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_runtime.last_tick_count = engine_tick_count;
+    g_seq_time_adapter_pending_cadence = 1U;
     seq_play_scheduler_init();
     seq_output_guard_init();
     seq_live_rec_capture_init();
@@ -468,7 +471,24 @@ void seq_runtime_time_adapter_process(void)
      * Keeps caller context thin (producer service + adapter invoke)
      * while preserving seq_runtime as the single orchestration authority.
      */
-    seq_runtime_process_core();
+    uint8_t pending = 0U;
+    __disable_irq();
+    pending = g_seq_time_adapter_pending_cadence;
+    g_seq_time_adapter_pending_cadence = 0U;
+    __enable_irq();
+
+    while (pending-- > 0U)
+    {
+        seq_runtime_process_core();
+    }
+}
+
+void seq_runtime_time_adapter_on_cadence_irq(void)
+{
+    if (g_seq_time_adapter_pending_cadence < SEQ_TIME_ADAPTER_PENDING_MAX)
+    {
+        g_seq_time_adapter_pending_cadence++;
+    }
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
