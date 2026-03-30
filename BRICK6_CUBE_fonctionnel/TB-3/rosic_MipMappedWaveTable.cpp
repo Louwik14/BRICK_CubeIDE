@@ -1,9 +1,53 @@
 #include "rosic_MipMappedWaveTable.h"
 #include "Storage/memory_layout.h"
+#include <stdint.h>
+#include <string.h>
 using namespace rosic;
+
+namespace
+{
+static const int kWaveTableStorageSlots = 8;
+static const int kTableLength = 2048;
+static const int kNumTables   = 12;
+static AUDIO_COLD_SDRAM double g_prototypePool[kWaveTableStorageSlots][kTableLength];
+static AUDIO_COLD_SDRAM double g_tableSetPool[kWaveTableStorageSlots][kNumTables][kTableLength+4];
+static uint8_t g_storageSlotUsed[kWaveTableStorageSlots];
+
+static int acquireWaveTableStorageSlot()
+{
+  for(int i=0; i<kWaveTableStorageSlots; i++)
+  {
+    if(g_storageSlotUsed[i] == 0U)
+    {
+      g_storageSlotUsed[i] = 1U;
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void releaseWaveTableStorageSlot(int slot)
+{
+  if(slot >= 0 && slot < kWaveTableStorageSlots)
+    g_storageSlotUsed[slot] = 0U;
+}
+}
 
 MipMappedWaveTable::MipMappedWaveTable()
 {
+  storageSlot = acquireWaveTableStorageSlot();
+  if( storageSlot >= 0 )
+  {
+    prototypeTable = g_prototypePool[storageSlot];
+    tableSet       = g_tableSetPool[storageSlot];
+  }
+  else
+  {
+    prototypeTable = g_prototypePool[0];
+    tableSet       = g_tableSetPool[0];
+    DEBUG_BREAK;
+  }
+
   // init member variables:
   sampleRate = 44100.0;
   waveform   = 0;
@@ -24,7 +68,7 @@ MipMappedWaveTable::MipMappedWaveTable()
 
 MipMappedWaveTable::~MipMappedWaveTable()
 {
-
+  releaseWaveTableStorageSlot(storageSlot);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -67,7 +111,7 @@ void MipMappedWaveTable::setSymmetry(double newSymmetry)
 
 void MipMappedWaveTable::initPrototypeTable()
 {
-  for(int i=0; i<(tableLength+4); i++)
+  for(int i=0; i<tableLength; i++)
     prototypeTable[i] = 0.0;
 }
 
@@ -326,10 +370,6 @@ void MipMappedWaveTable::fillWithMoogSaw()
 
   generateMipMap();
 }
-
-
-
-
 
 
 

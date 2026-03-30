@@ -38,11 +38,13 @@ struct tb3_synth_instance_t
 };
 
 // Open303 carries large internal state (~432 KB per instance):
-// - fixed raw storage in explicit SDRAM section
+// - hot voice/runtime state kept in fast internal RAM (DTCM)
 // - runtime construction in tb3_synth_init (no pre-main C++ object construction)
-static AUDIO_COLD_SDRAM tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
+static AUDIO_HOT tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
 static CTRL_STATE float g_tb3_sample_rate = TB3_DEFAULT_SAMPLE_RATE;
 static CTRL_STATE uint8_t g_tb3_instance_constructed[TB3_SYNTH_MAX_INSTANCES];
+static uint32_t g_tb3_instance_magic[TB3_SYNTH_MAX_INSTANCES];
+constexpr uint32_t TB3_INSTANCE_MAGIC = 0x54423331UL; // "TB31"
 static uint8_t tb3_synth_instance_valid(uint8_t instance_id);
 
 static tb3_synth_instance_t *tb3_instances(void)
@@ -57,7 +59,8 @@ static rosic::Open303 *tb3_synth_for_instance(uint8_t instance_id)
         return nullptr;
     }
 
-    if (g_tb3_instance_constructed[instance_id] == 0U)
+    if ((g_tb3_instance_constructed[instance_id] == 0U)
+        || (g_tb3_instance_magic[instance_id] != TB3_INSTANCE_MAGIC))
     {
         return nullptr;
     }
@@ -136,6 +139,9 @@ volatile CTRL_STATE uint32_t g_tb3_debug_stage = 0U;
 volatile CTRL_STATE uint32_t g_tb3_debug_init_instance = 0U;
 volatile CTRL_STATE uint32_t g_tb3_debug_first_process_seen = 0U;
 volatile CTRL_STATE uint32_t g_tb3_debug_first_note_on_seen = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_last_param_id = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_last_param_instance = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_all_notes_off_all_seen = 0U;
 
 void tb3_synth_init(float sample_rate)
 {
@@ -144,18 +150,26 @@ void tb3_synth_init(float sample_rate)
 
     for (uint8_t i = 0U; i < TB3_SYNTH_MAX_INSTANCES; ++i)
     {
-        if (g_tb3_instance_constructed[i] == 0U)
+        rosic::Open303 *const synth_ptr =
+            reinterpret_cast<rosic::Open303 *>(&tb3_instances()[i].synth_storage[0]);
+
+        if ((g_tb3_instance_constructed[i] != 0U) && (g_tb3_instance_magic[i] == TB3_INSTANCE_MAGIC))
         {
-            rosic::Open303 *const synth_ptr =
-                reinterpret_cast<rosic::Open303 *>(&tb3_instances()[i].synth_storage[0]);
-            std::allocator<rosic::Open303> synth_allocator;
-            synth_allocator.construct(synth_ptr);
-            g_tb3_instance_constructed[i] = 1U;
+            synth_ptr->~Open303();
         }
+
+        (void)memset(tb3_instances()[i].synth_storage, 0, sizeof(tb3_instances()[i].synth_storage));
+        g_tb3_instance_constructed[i] = 0U;
+        g_tb3_instance_magic[i] = 0U;
+
+        std::allocator<rosic::Open303> synth_allocator;
+        synth_allocator.construct(synth_ptr);
+        g_tb3_instance_constructed[i] = 1U;
+        g_tb3_instance_magic[i] = TB3_INSTANCE_MAGIC;
 
         g_tb3_debug_stage = 4U; // before default param setup
         g_tb3_debug_init_instance = i;
-        rosic::Open303 &synth = *reinterpret_cast<rosic::Open303 *>(&tb3_instances()[i].synth_storage[0]);
+        rosic::Open303 &synth = *synth_ptr;
         synth.setSampleRate((double)g_tb3_sample_rate);
         synth.allNotesOff();
         tb3_apply_default_params(synth);
@@ -223,6 +237,7 @@ void tb3_synth_all_notes_off_for_instance(uint8_t instance_id)
 
 void tb3_synth_all_notes_off_all(void)
 {
+    g_tb3_debug_all_notes_off_all_seen++;
     for (uint8_t i = 0U; i < TB3_SYNTH_MAX_INSTANCES; ++i)
     {
         rosic::Open303 *synth = tb3_synth_for_instance(i);
@@ -235,6 +250,9 @@ void tb3_synth_all_notes_off_all(void)
 
 void tb3_synth_set_param_for_instance(uint8_t instance_id, param_id_t param_id, float value)
 {
+    g_tb3_debug_last_param_id = (uint32_t)param_id;
+    g_tb3_debug_last_param_instance = (uint32_t)instance_id;
+
     if (tb3_synth_instance_valid(instance_id) == 0U)
     {
         return;

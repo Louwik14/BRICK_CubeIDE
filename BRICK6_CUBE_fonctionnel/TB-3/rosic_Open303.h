@@ -298,6 +298,7 @@ namespace rosic
     double accentGain;       // between 0.0...1.0 - to scale the 3rd amp-envelope on accents
     double pitchWheelFactor; // scale factor for oscillator frequency from pitch-wheel
     double n1, n2;           // normalizers for the RCs that are driven by the MEG
+    double lastFilterCutoff; // last cutoff value actually pushed into TeeBeeFilter coefficients
     int    currentNote;      // note which is currently played (-1 if none)
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
 
@@ -331,7 +332,18 @@ namespace rosic
     tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
     tmp2 = accentGain*tmp2;
     double instCutoff = cutoff * pow(2.0, tmp1+tmp2);
-    filter.setCutoff(instCutoff);
+    double cutoffDelta = instCutoff - lastFilterCutoff;
+    if( cutoffDelta < 0.0 )
+      cutoffDelta = -cutoffDelta;
+
+    // Push new coefficients only when the modulation moved enough to matter audibly.
+    // This keeps the filter response transparent while avoiding per-sample coefficient rebuild.
+    double cutoffUpdateThreshold = 0.25 + 0.0005*instCutoff; // Hz
+    if( lastFilterCutoff < 0.0 || cutoffDelta >= cutoffUpdateThreshold )
+    {
+      filter.setCutoff(instCutoff);
+      lastFilterCutoff = instCutoff;
+    }
 
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut; 
@@ -340,14 +352,23 @@ namespace rosic
     ampEnvOut = ampDeClicker.getSample(ampEnvOut);
 
     // oversampled calculations:
-    double tmp;
-    for(int i=1; i<=oversampling; i++)
+    double tmp = 0.0;
+    if( oversampling > 1 )
     {
-      tmp  = -oscillator.getSample();         // the raw oscillator signal 
-      tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      tmp  = filter.getSample(tmp);           // now it's filtered
-      tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
-
+      for(int i=1; i<=oversampling; i++)
+      {
+        tmp  = -oscillator.getSample();         // the raw oscillator signal
+        tmp  = highpass1.getSample(tmp);        // pre-filter highpass
+        tmp  = filter.getSample(tmp);           // now it's filtered
+        tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
+      }
+    }
+    else
+    {
+      // no oversampling: run a single direct path and bypass quarter-band anti-alias filter
+      tmp  = -oscillator.getSample();
+      tmp  = highpass1.getSample(tmp);
+      tmp  = filter.getSample(tmp);
     }
 
     // these filters may actually operate without oversampling (but only if we reset them in
