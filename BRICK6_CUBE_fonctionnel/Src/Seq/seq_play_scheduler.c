@@ -175,16 +175,6 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
 
     const float tps_f = (ticks_per_step == 0U) ? 1.0f : (float)ticks_per_step;
-    const seq_runtime_state_t *const runtime = seq_runtime_get_state();
-    uint32_t step_tick_swinged = step_tick;
-    if ((runtime != 0)
-        && (track < SEQ_TRACK_COUNT)
-        && ((step & 0x01U) != 0U))
-    {
-        const uint32_t swing = runtime->track_swing[track];
-        const uint32_t swing_delay_ticks = ((uint32_t)ticks_per_step * swing) / 200U;
-        step_tick_swinged += swing_delay_ticks;
-    }
 
     for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
     {
@@ -228,10 +218,10 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
 
         const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
                                                                   seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
-        int32_t on_tick = (int32_t)step_tick_swinged + (int32_t)((mictim_f * tps_f) / 96.0f);
-        if (on_tick < (int32_t)step_tick_swinged)
+        int32_t on_tick = (int32_t)step_tick + (int32_t)((mictim_f * tps_f) / 96.0f);
+        if (on_tick < (int32_t)step_tick)
         {
-            on_tick = (int32_t)step_tick_swinged;
+            on_tick = (int32_t)step_tick;
         }
 
         uint32_t note_on_due_tick = (uint32_t)on_tick;
