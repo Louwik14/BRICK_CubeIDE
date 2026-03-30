@@ -38,9 +38,9 @@ struct tb3_synth_instance_t
 };
 
 // Open303 carries large internal state (~432 KB per instance):
-// - hot voice/runtime state kept in internal RAM (D2)
+// - hot voice/runtime state kept in fast internal RAM (DTCM)
 // - runtime construction in tb3_synth_init (no pre-main C++ object construction)
-static SEQ_STATE_D2 tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
+static AUDIO_HOT tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
 static CTRL_STATE float g_tb3_sample_rate = TB3_DEFAULT_SAMPLE_RATE;
 static CTRL_STATE uint8_t g_tb3_instance_constructed[TB3_SYNTH_MAX_INSTANCES];
 static uint32_t g_tb3_instance_magic[TB3_SYNTH_MAX_INSTANCES];
