@@ -274,7 +274,7 @@ namespace rosic
     main envelope generator. */
     void updateNormalizer2();
 
-    static const int oversampling = 4;
+    static const int oversampling = 1;
 
     double tuning;           // master tunung for A4 in Hz
     double ampScaler;        // final volume as raw factor

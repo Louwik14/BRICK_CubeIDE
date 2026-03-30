@@ -1,15 +1,16 @@
 C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/new:174:33:void* operator new(std::size_t, void*)	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\arm-none-eabi\thumb\v7e-m+dp\hard\bits\gthr-default.h:229:1:int __gthread_key_delete(__gthread_key_t)	1
 ../Src/Audio/../../TB-3/rosic_MidiNoteEvent.h:49:9:int rosic::MidiNoteEvent::getKey() const	1
 ../Src/Audio/../../TB-3/GlobalDefinitions.h:60:15:double dummyFunction(double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:156:15:double amp2dB(double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:207:15:double dB2amp(double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:293:13:bool isPowerOfTwo(unsigned int)	3
-../Src/Audio/../../TB-3/GlobalFunctions.h:305:15:double log2(double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:315:15:double linToLin(double, double, double, double, double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:346:15:double expToLin(double, double, double, double, double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:380:15:double pitchOffsetToFreqFactor(double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:385:15:double pitchToFreq(double)	1
-../Src/Audio/../../TB-3/GlobalFunctions.h:390:15:double pitchToFreq(double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:153:15:double amp2dB(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:204:15:double dB2amp(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:271:13:bool isPowerOfTwo(unsigned int)	3
+../Src/Audio/../../TB-3/GlobalFunctions.h:283:15:double log2(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:293:15:double linToLin(double, double, double, double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:324:15:double expToLin(double, double, double, double, double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:358:15:double pitchOffsetToFreqFactor(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:363:15:double pitchToFreq(double)	1
+../Src/Audio/../../TB-3/GlobalFunctions.h:368:15:double pitchToFreq(double, double)	1
 ../Src/Audio/../../TB-3/rosic_NumberManipulations.h:20:14:int rosic::roundToInt(double)	2
 ../Src/Audio/../../TB-3/rosic_NumberManipulations.h:56:14:int rosic::floorInt(double)	1
 ../Src/Audio/../../TB-3/rosic_RealFunctions.h:59:17:double rosic::asinh(double)	1
@@ -209,14 +210,16 @@ C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externalt
 ../Src/Audio/tb3_synth.cpp:84:13:void {anonymous}::tb3_apply_default_params(rosic::Open303&)	1
 ../Src/Audio/tb3_synth.cpp:96:13:void {anonymous}::tb3_apply_param(rosic::Open303&, param_id_t, float)	9
 ../Src/Audio/tb3_synth.cpp:140:6:void tb3_synth_init(float)	4
-../Src/Audio/tb3_synth.cpp:163:9:uint8_t tb3_synth_instance_count()	1
-../Src/Audio/tb3_synth.cpp:168:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	4
-../Src/Audio/tb3_synth.cpp:189:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	3
-../Src/Audio/tb3_synth.cpp:205:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	3
-../Src/Audio/tb3_synth.cpp:221:6:void tb3_synth_all_notes_off_all()	3
-../Src/Audio/tb3_synth.cpp:233:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	3
-../Src/Audio/tb3_synth.cpp:249:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	6
+../Src/Audio/tb3_synth.cpp:166:9:uint8_t tb3_synth_instance_count()	1
+../Src/Audio/tb3_synth.cpp:171:6:void tb3_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	4
+../Src/Audio/tb3_synth.cpp:192:6:void tb3_synth_note_off_for_instance(uint8_t, uint8_t)	3
+../Src/Audio/tb3_synth.cpp:208:6:void tb3_synth_all_notes_off_for_instance(uint8_t)	3
+../Src/Audio/tb3_synth.cpp:224:6:void tb3_synth_all_notes_off_all()	3
+../Src/Audio/tb3_synth.cpp:236:6:void tb3_synth_set_param_for_instance(uint8_t, param_id_t, float)	3
+../Src/Audio/tb3_synth.cpp:252:6:void tb3_synth_process_block_for_instance(uint8_t, float*, uint32_t)	6
 ../Src/Audio/../../TB-3/rosic_RealFunctions.h:75:12:T rosic::clip(T, T, T) [with T = double]	3
 C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/cmath:1070:5:constexpr typename __gnu_cxx::__promote_2<_Tp, _Up>::__type std::pow(_Tp, _Up) [with _Tp = double; _Up = int]	1
 ../Src/Audio/../../TB-3/rosic_RealFunctions.h:75:12:T rosic::clip(T, T, T) [with T = int]	3
 ../Src/Audio/../../TB-3/rosic_FunctionTemplates.h:172:8:void rosic::circularShift(T*, int, int) [with T = double]	6
+../Src/Audio/../../TB-3/rosic_FunctionTemplates.h:346:8:void rosic::reverse(T*, int) [with T = double]	3
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\new_allocator.h:104:7:std::__new_allocator<_Tp>::~__new_allocator() [with _Tp = rosic::Open303]	1
