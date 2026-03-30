@@ -401,7 +401,7 @@ uint8_t seq_runtime_is_running(void)
     return g_seq_runtime.running;
 }
 
-void seq_runtime_process(void)
+static void seq_runtime_process_core(void)
 {
     seq_clock_bridge_on_process(&g_seq_clock_bridge, g_seq_runtime.clock_src, engine_tick_count);
 
@@ -459,6 +459,16 @@ void seq_runtime_process(void)
     }
 
     seq_runtime_dispatch_due_events(engine_tick_count);
+}
+
+void seq_runtime_time_adapter_process(void)
+{
+    /*
+     * Superloop-facing adapter entry for the sequencer time-domain.
+     * Keeps caller context thin (producer service + adapter invoke)
+     * while preserving seq_runtime as the single orchestration authority.
+     */
+    seq_runtime_process_core();
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
