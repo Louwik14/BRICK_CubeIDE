@@ -2,6 +2,7 @@
 #include "Storage/memory_layout.h"
 
 #include <math.h>
+#include <new>
 #include <stddef.h>
 #include <string.h>
 
@@ -33,13 +34,15 @@ constexpr float TB3_DEFAULT_SAMPLE_RATE = 48000.0f;
 
 struct tb3_synth_instance_t
 {
-    rosic::Open303 synth;
+    alignas(rosic::Open303) uint8_t synth_storage[sizeof(rosic::Open303)];
 };
 
-// Open303 carries large internal state (~432 KB per instance).
-// Keep single voice instance in regular static storage to avoid manual placement-new.
-static tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
-static float g_tb3_sample_rate = TB3_DEFAULT_SAMPLE_RATE;
+// Open303 carries large internal state (~432 KB per instance):
+// - fixed raw storage in explicit SDRAM section
+// - runtime construction in tb3_synth_init (no pre-main C++ object construction)
+static AUDIO_COLD_SDRAM tb3_synth_instance_t g_tb3_instances[TB3_SYNTH_MAX_INSTANCES];
+static CTRL_STATE float g_tb3_sample_rate = TB3_DEFAULT_SAMPLE_RATE;
+static CTRL_STATE uint8_t g_tb3_instance_constructed[TB3_SYNTH_MAX_INSTANCES];
 static uint8_t tb3_synth_instance_valid(uint8_t instance_id);
 
 static tb3_synth_instance_t *tb3_instances(void)
@@ -54,7 +57,12 @@ static rosic::Open303 *tb3_synth_for_instance(uint8_t instance_id)
         return nullptr;
     }
 
-    return &tb3_instances()[instance_id].synth;
+    if (g_tb3_instance_constructed[instance_id] == 0U)
+    {
+        return nullptr;
+    }
+
+    return reinterpret_cast<rosic::Open303 *>(&tb3_instances()[instance_id].synth_storage[0]);
 }
 
 static inline float clampf(float v, float lo, float hi)
@@ -124,10 +132,10 @@ static void tb3_apply_param(rosic::Open303 &synth, param_id_t param_id, float va
 
 extern "C" {
 
-volatile uint32_t g_tb3_debug_stage = 0U;
-volatile uint32_t g_tb3_debug_init_instance = 0U;
-volatile uint32_t g_tb3_debug_first_process_seen = 0U;
-volatile uint32_t g_tb3_debug_first_note_on_seen = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_stage = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_init_instance = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_first_process_seen = 0U;
+volatile CTRL_STATE uint32_t g_tb3_debug_first_note_on_seen = 0U;
 
 void tb3_synth_init(float sample_rate)
 {
@@ -136,9 +144,15 @@ void tb3_synth_init(float sample_rate)
 
     for (uint8_t i = 0U; i < TB3_SYNTH_MAX_INSTANCES; ++i)
     {
+        if (g_tb3_instance_constructed[i] == 0U)
+        {
+            (void)new (&tb3_instances()[i].synth_storage[0]) rosic::Open303();
+            g_tb3_instance_constructed[i] = 1U;
+        }
+
         g_tb3_debug_stage = 4U; // before default param setup
         g_tb3_debug_init_instance = i;
-        rosic::Open303 &synth = tb3_instances()[i].synth;
+        rosic::Open303 &synth = *reinterpret_cast<rosic::Open303 *>(&tb3_instances()[i].synth_storage[0]);
         synth.setSampleRate((double)g_tb3_sample_rate);
         synth.allNotesOff();
         tb3_apply_default_params(synth);
