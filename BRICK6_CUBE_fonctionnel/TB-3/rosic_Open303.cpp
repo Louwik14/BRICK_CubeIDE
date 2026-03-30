@@ -26,9 +26,8 @@ Open303::Open303()
   accentGain       =     0.0;
   pitchWheelFactor =     1.0;
   currentNote      =    -1;
-  noteOffCountDown =     0;
-  slideToNextNote  = false;
   idle             = true;
+  heldNoteCount    = 0;
 
   setEnvMod(25.0);
 
@@ -89,8 +88,6 @@ void Open303::setSampleRate(double newSampleRate)
   ampDeClicker.setSampleRate(    (float)newSampleRate);
   rc1.setSampleRate(             (float)newSampleRate);
   rc2.setSampleRate(             (float)newSampleRate);
-  sequencer.setSampleRate(              newSampleRate);
-
   highpass2.setSampleRate     (         newSampleRate);
   allpass.setSampleRate       (         newSampleRate);
   notch.setSampleRate         (         newSampleRate);
@@ -143,39 +140,26 @@ void Open303::setPitchBend(double newPitchBend)
 
 void Open303::noteOn(int noteNumber, int velocity)
 {
-  if( sequencer.modeWasChanged() )
-    allNotesOff();
-
-  if( sequencer.getSequencerMode() != AcidSequencer::OFF )
-  {
-    if( velocity == 0 )
-    {
-      sequencer.stop();
-      releaseNote(currentNote);
-      currentNote = -1;
-    }
-    else
-    {
-      sequencer.start();
-      noteOffCountDown = std::numeric_limits<int>::max();
-      slideToNextNote  = false;
-      currentNote      = noteNumber;
-    }
-    idle = false;
-    return;
-  }
-
   if( velocity == 0 ) // velocity zero indicates note-off events
   {
-    MidiNoteEvent releasedNote(noteNumber, 0);
-    noteList.remove(releasedNote);
-    if( noteList.empty() )
+    int newCount = 0;
+    for(int i=0; i<heldNoteCount; ++i)
+    {
+      if( heldNotes[i].getKey() != noteNumber )
+      {
+        heldNotes[newCount] = heldNotes[i];
+        newCount++;
+      }
+    }
+    heldNoteCount = newCount;
+
+    if( heldNoteCount == 0 )
     {
       currentNote = -1;
     }
     else
     {
-      currentNote = noteList.front().getKey();
+      currentNote = heldNotes[0].getKey();
     }
     releaseNote(noteNumber);
   }
@@ -183,23 +167,29 @@ void Open303::noteOn(int noteNumber, int velocity)
   {
     // check if the note-list is empty (indicating that currently no note is playing) - if so,
     // trigger a new note, otherwise, slide to the new note:
-    if( noteList.empty() )
+    if( heldNoteCount == 0 )
       triggerNote(noteNumber, velocity >= 100);
     else
       slideToNote(noteNumber, velocity >= 100);
 
     currentNote = noteNumber;
 
-    // and we need to add the new note to our list, of course:
+    // Push to front in fixed-capacity stack.
     MidiNoteEvent newNote(noteNumber, velocity);
-    noteList.push_front(newNote);
+    const int limit = maxHeldNotes - 1;
+    const int copyCount = (heldNoteCount < limit) ? heldNoteCount : limit;
+    for(int i=copyCount; i>0; --i)
+      heldNotes[i] = heldNotes[i-1];
+    heldNotes[0] = newNote;
+    if( heldNoteCount < maxHeldNotes )
+      heldNoteCount++;
   }
   idle = false;
 }
 
 void Open303::allNotesOff()
 {
-  noteList.clear();
+  heldNoteCount = 0;
   ampEnv.noteOff();
   currentNote = -1;
 }
@@ -263,7 +253,7 @@ void Open303::releaseNote(int noteNumber)
   // check if the note-list is empty now. if so, trigger a release, otherwise slide to the note
   // at the beginning of the list (this is the most recent one which is still in the list). this
   // initiates a slide back to the most recent note that is still being held:
-  if( noteList.empty() )
+  if( heldNoteCount == 0 )
   {
     ampEnv.noteOff();
   }

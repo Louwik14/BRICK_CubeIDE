@@ -9,9 +9,7 @@
 #include "rosic_DecayEnvelope.h"
 #include "rosic_LeakyIntegrator.h"
 #include "rosic_EllipticQuarterBandFilter.h"
-#include "rosic_AcidSequencer.h"
 
-#include <list>
 #include <limits>
 
 namespace rosic
@@ -248,7 +246,6 @@ namespace rosic
     OnePoleFilter             highpass1, highpass2, allpass; 
     BiquadFilter              notch;
     EllipticQuarterBandFilter antiAliasFilter;
-    AcidSequencer             sequencer;
 
   protected:
 
@@ -302,11 +299,11 @@ namespace rosic
     double pitchWheelFactor; // scale factor for oscillator frequency from pitch-wheel
     double n1, n2;           // normalizers for the RCs that are driven by the MEG
     int    currentNote;      // note which is currently played (-1 if none)
-    int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
-    bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
 
-    std::list<MidiNoteEvent> noteList;
+    static const int maxHeldNotes = 16;
+    MidiNoteEvent heldNotes[maxHeldNotes];
+    int           heldNoteCount;
 
   };
 
@@ -315,45 +312,8 @@ namespace rosic
 
   inline double Open303::getSample()
   {
-    //if( sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() )
-    //  return 0.0;
     if( idle )
       return 0.0;
-
-    // check the sequencer if we have some note to trigger:
-    if( sequencer.getSequencerMode() != AcidSequencer::OFF )
-    {
-      noteOffCountDown--;
-      if( noteOffCountDown == 0 || sequencer.isRunning() == false )
-        releaseNote(currentNote);
-
-      AcidNote *note = sequencer.getNote();
-      if( note != NULL )
-      {
-        if( note->gate == true && currentNote != -1)
-        {
-          int key = note->key + 12*note->octave + currentNote;
-          key = clip(key, 0, 127);
-
-          if( !slideToNextNote )
-            triggerNote(key, note->accent);
-          else
-            slideToNote(key, note->accent);
-
-          AcidNote* nextNote = sequencer.getNextScheduledNote();
-          if( note->slide && nextNote->gate == true )
-          {
-            noteOffCountDown = std::numeric_limits<int>::max();
-            slideToNextNote  = true;
-          }
-          else
-          {
-            noteOffCountDown = sequencer.getStepLengthInSamples();
-            slideToNextNote  = false;
-          }
-        }
-      }
-    }
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
     double instFreq = pitchSlewLimiter.getSample(oscFreq);
@@ -400,9 +360,6 @@ namespace rosic
 
     // find out whether we may switch ourselves off for the next call:
     idle = false;
-    //idle = (sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() 
-    //        && fabs(tmp) < 0.000001); // ampEnvOut < 0.000001;
-
     return tmp;
   }
 
