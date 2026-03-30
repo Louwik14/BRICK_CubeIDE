@@ -13,8 +13,6 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 
-static const void *g_seq_boundary_engine_owner_token;
-
 typedef struct
 {
     uint8_t set_id;
@@ -98,17 +96,10 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
     return 1U;
 }
 
-void seq_boundary_engine_bind_owner(const void *owner_token)
-{
-    g_seq_boundary_engine_owner_token = owner_token;
-}
-
-void seq_boundary_engine_restore_all_active_locks(const void *owner_token,
-                                                  seq_runtime_state_t *state,
+void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
                                                   seq_track_id_t track)
 {
-    if ((owner_token == 0) || (owner_token != g_seq_boundary_engine_owner_token)
-        || (state == 0) || (track >= SEQ_TRACK_COUNT))
+    if ((state == 0) || (track >= SEQ_TRACK_COUNT))
     {
         return;
     }
@@ -213,17 +204,11 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
     }
 }
 
-void seq_boundary_engine_process(const void *owner_token,
-                                 seq_runtime_state_t *state,
+void seq_boundary_engine_process(seq_runtime_state_t *state,
                                  seq_boundary_hit_t *out_hits,
                                  uint8_t max_hits,
                                  uint8_t *out_hit_count)
 {
-    if ((owner_token == 0) || (owner_token != g_seq_boundary_engine_owner_token))
-    {
-        return;
-    }
-
     if (out_hit_count != 0)
     {
         *out_hit_count = 0U;
@@ -262,9 +247,9 @@ void seq_boundary_engine_process(const void *owner_token,
     *out_hit_count = hit_count;
 }
 
-void seq_boundary_engine_advance_one_step(const void *owner_token, seq_runtime_state_t *state)
+void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
 {
-    if ((owner_token == 0) || (owner_token != g_seq_boundary_engine_owner_token) || (state == 0))
+    if (state == 0)
     {
         return;
     }
