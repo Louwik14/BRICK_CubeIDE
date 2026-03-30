@@ -154,7 +154,10 @@ static void seq_runtime_begin_running_now(void)
         seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, track);
     }
 
-    g_seq_midi_clock_tick_accum = 0U;
+    g_seq_runtime.ticks_per_step =
+            (uint16_t)((g_seq_clock_bridge.internal_next_step_ticks == 0U)
+                           ? 1U
+                           : g_seq_clock_bridge.internal_next_step_ticks);
 
     /*
      * Force deterministic initial boundary at RUN entry.
@@ -481,6 +484,11 @@ static void seq_runtime_process_core(void)
         while ((seq_clock_bridge_consume_internal_step_due(&g_seq_clock_bridge, &g_seq_runtime.tick_accum) != 0U)
                && (seq_transport_fsm_is_start_pending(&g_seq_transport_fsm) != 0U))
         {
+            g_seq_runtime.ticks_per_step =
+                    (uint16_t)((g_seq_clock_bridge.internal_next_step_ticks == 0U)
+                                   ? 1U
+                                   : g_seq_clock_bridge.internal_next_step_ticks);
+
             seq_runtime_process_step_pulse(current_tick);
         }
 
@@ -507,6 +515,11 @@ static void seq_runtime_process_core(void)
 
     while (seq_clock_bridge_consume_internal_step_due(&g_seq_clock_bridge, &g_seq_runtime.tick_accum) != 0U)
     {
+        g_seq_runtime.ticks_per_step =
+                (uint16_t)((g_seq_clock_bridge.internal_next_step_ticks == 0U)
+                               ? 1U
+                               : g_seq_clock_bridge.internal_next_step_ticks);
+
         seq_runtime_process_step_pulse(current_tick);
     }
 

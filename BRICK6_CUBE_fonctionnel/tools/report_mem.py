@@ -307,7 +307,6 @@ def main() -> int:
     print_region_usage(regions, order)
 
     entries = parse_symbol_entries(map_text, regions, target_regions)
-    print_symbol_tables(entries, detail_regions, max(1, args.top))
 
     if args.csv:
         csv_path = pathlib.Path(args.csv)

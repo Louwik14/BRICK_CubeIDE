@@ -232,10 +232,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
          * on this exact tick, delay NOTE_ON by 1 tick to avoid zero-gap OFF/ON
          * collapse on some sinks/engines.
          */
-        if (seq_play_scheduler_has_note_off_due_at(note_on_due_tick, track, note) != 0U)
-        {
-            note_on_due_tick += 1U;
-        }
+        (void)track;
 
         uint32_t note_off_due_tick = note_on_due_tick + len_ticks;
         if (note_off_due_tick <= note_on_due_tick)
