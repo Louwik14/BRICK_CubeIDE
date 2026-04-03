@@ -140,8 +140,8 @@ void ui_page_main_render(void)
     drv_display_draw_text(0U, 14U, line0);
     drv_display_draw_text(0U, 24U, line1);
     drv_display_draw_text(0U, 34U, line2);
-    drv_display_draw_text(0U, 48U, "B1:FILT B3:HALL B6:TONE");
-    drv_display_draw_text(0U, 58U, "B4:CAL B5:UCAL");
+    drv_display_draw_text(0U, 48U, "B1:COL B2:TONE B3:MAIN");
+    drv_display_draw_text(0U, 58U, "B5:PLAY (Synth)");
 }
 
 const ui_page_t g_ui_page_main = {

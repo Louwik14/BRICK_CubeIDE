@@ -9,13 +9,20 @@
  */
 static const ui_nav_rule_t g_ui_nav_rules[] = {
     { BTN_PARAM_1, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_COLORS },
+    { BTN_PARAM_2, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_DX7 },
     { BTN_PARAM_3, UI_NAV_ANY_PAGE, UI_PAGE_MAIN },
-
-    /* calibration page */
-    { BTN_PARAM_4, UI_NAV_ANY_PAGE, UI_PAGE_CALIBRATION },
-    { BTN_PARAM_6, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_DX7 },
-    { BTN_PARAM_8, UI_NAV_ANY_PAGE, UI_PAGE_HALL_KEY_DEBUG },
+    { BTN_PARAM_5, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_PLAY },
 };
+
+static uint8_t ui_navigation_is_page_available(uint8_t page_id)
+{
+    if (page_id == UI_PAGE_TEMPLATE_PLAY)
+    {
+        return (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_SYNTH) ? 1U : 0U;
+    }
+
+    return 1U;
+}
 
 void ui_navigation_handle_event(const ui_event_t *event)
 {
@@ -26,26 +33,13 @@ void ui_navigation_handle_event(const ui_event_t *event)
 
     const uint8_t current_page = ui_page_get_id();
 
-    if (event->id == (uint8_t)BTN_PARAM_5)
-    {
-        if (ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_SYNTH)
-        {
-            return;
-        }
-
-        if (current_page != UI_PAGE_TEMPLATE_PLAY)
-        {
-            ui_page_set(UI_PAGE_TEMPLATE_PLAY);
-        }
-        return;
-    }
-
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
     {
         const ui_nav_rule_t *rule = &g_ui_nav_rules[i];
 
         if ((event->id == (uint8_t)rule->button)
-                && ((rule->required_page == UI_NAV_ANY_PAGE) || (rule->required_page == current_page)))
+                && ((rule->required_page == UI_NAV_ANY_PAGE) || (rule->required_page == current_page))
+                && (ui_navigation_is_page_available(rule->target_page) != 0U))
         {
             if (rule->target_page != current_page)
             {
@@ -64,7 +58,11 @@ button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 
         if (rule->target_page == page_id)
         {
-            return rule->button;
+            if (ui_navigation_is_page_available(page_id) != 0U)
+            {
+                return rule->button;
+            }
+            break;
         }
     }
 
