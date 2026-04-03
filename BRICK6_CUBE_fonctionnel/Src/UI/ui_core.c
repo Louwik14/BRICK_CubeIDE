@@ -28,7 +28,6 @@
 
 #include "buttons.h"
 #include "encoders.h"
-#include "pages/ui_page_main.h"
 #include "pages/ui_page_param_test.h"
 #include "pages/ui_page_debug_hall.h"
 #include "pages/ui_page_calibration.h"
@@ -759,7 +758,6 @@ void ui_core_init(void)
      * Register pages once at boot. Registration order defines stable page IDs
      * used by the navigation rule table.
      */
-    ui_page_manager_register(&g_ui_page_main);
     ui_page_manager_register(&g_ui_page_param_test);
     ui_page_manager_register(&g_ui_page_debug_hall);
     ui_page_manager_register(&g_ui_page_calibration);
@@ -775,7 +773,7 @@ void ui_core_init(void)
 
     if (hall_calibration_load() != 0U)
     {
-        ui_page_set(UI_PAGE_MAIN);
+        ui_page_set(UI_PAGE_TEMPLATE_COLORS);
     }
     else
     {
