@@ -78,6 +78,8 @@ void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db);
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);
 void mixer_track_filter_all_notes_off(uint32_t track_id);
+void mixer_external_inputs_clear(void);
+void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
 
 void mixer_process(StereoTrack *tracks,
                    uint32_t track_count,

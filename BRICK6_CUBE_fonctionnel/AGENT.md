@@ -37,6 +37,11 @@ Toujours raisonner avec :
 
 Ne pas ajouter une feature “globale” si elle dépend en réalité de la track active.
 
+### Routing mix structurant (runtime)
+- L’autorité de binding reste `track_runtime`.
+- Le mapping `UI track -> mix target runtime` est explicite et unique (pas de mapping parallèle caché).
+- Les contributions `Synth` doivent rester séparées par track jusqu’au `mixer` (pas de somme précoce globale).
+
 ---
 
 ## 3. Families et types actuels
@@ -114,6 +119,7 @@ Ensembles importants existants :
 - `CFG`
 - `COLORS`
 - `TONE`
+- `MIX`
 - `KEYBOARD`
 - `ARP`
 
@@ -129,6 +135,7 @@ Ensembles importants existants :
 ### Mapping boutons param (autorité unique)
 - `BTN_PARAM_1` -> `COLORS`
 - `BTN_PARAM_2` -> `TONE` (résolution contextuelle track-aware ; sur `Synth + DX7` ouvre l’UI DX7)
+- `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est `Synth`)
 - `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
 

@@ -264,6 +264,24 @@ static void apply_mix_track3_send1(float v) { mixer_set_track_send_level(3U, 1U,
 static void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
 static void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
 
+static void apply_mix_live_track(param_id_t id, float v)
+{
+    const uint8_t track = ui_get_active_track();
+    const param_desc_t *const desc = param_get_desc(id);
+    if (desc == NULL)
+    {
+        return;
+    }
+    const float clamped = clamp_value(v, desc->min, desc->max);
+    (void)param_registry_apply_track_value(id, track, clamped);
+    param_store_set_active(id, clamped);
+}
+
+static void apply_mix_level(float v) { apply_mix_live_track(PARAM_MIX_LEVEL, v); }
+static void apply_mix_pan(float v) { apply_mix_live_track(PARAM_MIX_PAN, v); }
+static void apply_mix_send1(float v) { apply_mix_live_track(PARAM_MIX_SEND1, v); }
+static void apply_mix_send2(float v) { apply_mix_live_track(PARAM_MIX_SEND2, v); }
+
 static void apply_tone_live_track(param_id_t id, float value)
 {
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
@@ -568,10 +586,42 @@ static uint8_t param_runtime_apply_tb3(uint8_t instance_id, param_id_t id, float
     }
 }
 
+static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float value)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_MIX_LEVEL:
+            mixer_set_track_gain(ctx->mix_track_id, clamp_value(value, 0.0f, 2.0f));
+            return 1U;
+
+        case PARAM_MIX_PAN:
+            mixer_set_track_pan(ctx->mix_track_id, clamp_value(value, -1.0f, 1.0f));
+            return 1U;
+
+        case PARAM_MIX_SEND1:
+            mixer_set_track_send_level(ctx->mix_track_id, 0U, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+
+        case PARAM_MIX_SEND2:
+            mixer_set_track_send_level(ctx->mix_track_id, 1U, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float value)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
     {
         return 0U;
     }
@@ -583,7 +633,11 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     }
 
     uint8_t applied = 0U;
-    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+    {
+        applied = param_runtime_apply_mix_track(track, id, value);
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
     {
         applied = param_runtime_apply_tone_dx7(ctx->instance_id, id, value);
     }
@@ -902,6 +956,18 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                                      (unsigned)id,
                                      (unsigned)ctx->engine,
                                      (unsigned)ctx->instance_id);
+                        return 0U;
+                    }
+                }
+                else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                {
+                    if (param_runtime_apply_track(track, id, clamped) == 0U)
+                    {
+                        SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u mix_unsupported engine=%u mix=%u\r\n",
+                                     (unsigned)track,
+                                     (unsigned)id,
+                                     (unsigned)ctx->engine,
+                                     (unsigned)ctx->mix_track_id);
                         return 0U;
                     }
                 }
@@ -1813,6 +1879,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
 
     PARAM_DESC(PARAM_MIX_SEND0_FX, "Send0 FX", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", apply_mix_send0_fx),
     PARAM_DESC(PARAM_MIX_SEND1_FX, "Send1 FX", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", apply_mix_send1_fx),
+    PARAM_DESC(PARAM_MIX_LEVEL, "Level", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", apply_mix_level),
+    PARAM_DESC(PARAM_MIX_PAN, "Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", apply_mix_pan),
+    PARAM_DESC(PARAM_MIX_SEND1, "Send1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", apply_mix_send1),
+    PARAM_DESC(PARAM_MIX_SEND2, "Send2", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", apply_mix_send2),
 
     PARAM_DESC_EX(PARAM_BUS_COMP_THRESHOLD_DB, "BusComp Threshold", PARAM_TYPE_FLOAT, -60.0f, 0.0f, 0.5f, -18.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_bus_comp_threshold),
     PARAM_DESC_EX(PARAM_BUS_COMP_RATIO, "BusComp Ratio", PARAM_TYPE_FLOAT, 1.0f, 20.0f, 0.1f, 2.0f, PARAM_DISPLAY_RATIO, "", NULL, apply_bus_comp_ratio),
