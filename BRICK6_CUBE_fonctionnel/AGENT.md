@@ -126,6 +126,12 @@ Ensembles importants existants :
 - sauf le bouton de l’ensemble UI actif : blanc
 - si l’ensemble actif n’a pas de bouton param associé : toutes vertes
 
+### Mapping boutons param (autorité unique)
+- `BTN_PARAM_1` -> `COLORS`
+- `BTN_PARAM_2` -> `TONE` (résolution contextuelle track-aware ; sur `Synth + DX7` ouvre l’UI DX7)
+- `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est `Synth`)
+- `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
+
 ### Halls
 - `ARP` réutilise la scène LED du `KEYBOARD`
 - ne pas dupliquer une scène si la même logique peut être partagée

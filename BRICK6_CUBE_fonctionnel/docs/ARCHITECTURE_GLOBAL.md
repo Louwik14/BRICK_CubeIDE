@@ -186,6 +186,18 @@ La résolution d’une famille template dépend de :
 
 Cette logique est déjà en place et doit être conservée.
 
+### 7.3 Mapping des boutons parameter
+Le mapping parameter button doit rester centralisé dans une table unique.
+
+État courant :
+- `BTN_PARAM_1` -> `COLORS`
+- `BTN_PARAM_2` -> `TONE`
+- `BTN_PARAM_5` -> `PLAY` (disponible seulement si la track active est de family `Synth`)
+
+Contraintes :
+- `CALIBRATION` et `POTS DEBUG` restent des pages/runtime existants mais ne sont pas exposés par boutons parameter.
+- `FM DX7` n’est pas un point d’entrée bouton séparé : sur `Synth + DX7`, `TONE` résout vers le contenu UI DX7.
+
 ---
 
 ## 8. Ensemble CFG
