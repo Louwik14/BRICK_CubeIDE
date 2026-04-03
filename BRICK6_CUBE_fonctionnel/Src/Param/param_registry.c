@@ -1448,6 +1448,37 @@ static void apply_tb3_accent(float v) { apply_tone_live_track(PARAM_TB3_ACCENT, 
 static void apply_tb3_volume(float v) { apply_tone_live_track(PARAM_TB3_VOLUME, v); }
 static void apply_tb3_slide_time(float v) { apply_tone_live_track(PARAM_TB3_SLIDE_TIME, v); }
 
+static void param_registry_push_track_defaults_to_runtime(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    track_runtime_refresh_track(track);
+
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+                || ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)))
+        {
+            continue;
+        }
+
+        float value = 0.0f;
+        if (param_registry_get_track_value(id, track, &value) == 0U)
+        {
+            continue;
+        }
+
+        (void)param_registry_apply_track_value(id, track, value);
+    }
+}
+
 static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -1462,6 +1493,7 @@ static void apply_cfg_track(float v)
 
     param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+    param_registry_push_track_defaults_to_runtime(active_track);
 }
 
 static void apply_cfg_track_type(float v)
@@ -1481,6 +1513,7 @@ static void apply_cfg_track_type(float v)
     }
 
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+    param_registry_push_track_defaults_to_runtime(active_track);
     g_param_cfg_track_type_apply_stage = 4U;
 }
 

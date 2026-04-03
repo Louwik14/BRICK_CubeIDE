@@ -63,6 +63,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family);
 bool ui_set_track_type(uint8_t track, ui_track_type_t type);
 bool ui_track_family_is_input(ui_track_family_t family);
 bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type);
+bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type);
 ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family);
 uint8_t ui_get_track_type_count_for_family(ui_track_family_t family);
 uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_type_t type);
