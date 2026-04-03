@@ -139,7 +139,7 @@ static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets)
         {
             match_set = 1U;
         }
-        else if ((led == led_remap_param_led_for_button(BTN_PARAM_3))
+        else if ((led == led_remap_param_led_for_button(BTN_PARAM_2))
                  && ((held_plock_sets & seq_param_iface_set_to_mask((uint8_t)SEQ_PLOCK_SET_TONE)) != 0U))
         {
             match_set = 1U;
