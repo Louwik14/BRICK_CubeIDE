@@ -69,6 +69,14 @@ Le pipeline global suit cette logique :
 
 Le DSP applicatif alimente ensuite le mixeur principal.
 
+### 4.1 Routing mix track-aware (synth)
+
+- `track_runtime` reste l’autorité unique du binding track -> moteur/instance.
+- Un mapping explicite `UI track -> mix target runtime` est maintenu côté runtime (table unique).
+- Les sources `Synth` ne sont plus fusionnées en amont dans une strip unique :
+  chaque track synth active injecte sa contribution sur sa cible mix runtime,
+  et c’est le `mixer` qui applique ensuite `Level / Pan / Send1 / Send2` par track.
+
 Le pipeline est déjà modulaire et doit être conservé.
 Les optimisations CPU doivent privilégier :
 - bypass évidents
