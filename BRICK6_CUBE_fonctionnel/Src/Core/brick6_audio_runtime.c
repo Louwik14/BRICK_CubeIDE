@@ -101,6 +101,19 @@ static void brick6_render_synth_tracks(uint32_t frames,
     uint8_t tb3_tracks = 0U;
     uint8_t dx7_tracks = 0U;
     uint8_t dx7_rendered_once = 0U;
+    uint8_t dx7_mix_track = 0xFFU;
+
+    {
+        const uint8_t active_track = ui_get_active_track();
+        const track_runtime_ctx_t *const active_ctx = track_runtime_get_ctx(active_track);
+        if ((active_ctx != NULL)
+                && (active_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (active_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+                && (active_ctx->mix_track_id < MIXER_MAX_TRACKS))
+        {
+            dx7_mix_track = active_ctx->mix_track_id;
+        }
+    }
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -130,13 +143,21 @@ static void brick6_render_synth_tracks(uint32_t frames,
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
         {
+            if ((dx7_mix_track == 0xFFU) && (ctx->mix_track_id < MIXER_MAX_TRACKS))
+            {
+                dx7_mix_track = ctx->mix_track_id;
+            }
+
             if (dx7_rendered_once == 0U)
             {
                 microdexed_synth_process_block(dx7_tmp, frames);
                 dx7_rendered_once = 1U;
             }
 
-            mixer_submit_external_mono(ctx->mix_track_id, dx7_tmp, frames);
+            if (ctx->mix_track_id == dx7_mix_track)
+            {
+                mixer_submit_external_mono(ctx->mix_track_id, dx7_tmp, frames);
+            }
             dx7_tracks++;
         }
     }

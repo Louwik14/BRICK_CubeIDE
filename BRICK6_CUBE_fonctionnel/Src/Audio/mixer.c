@@ -33,6 +33,8 @@
 typedef struct {
     float gain;
     float pan;
+    float gain_current;
+    float pan_current;
     uint8_t mute;
 
     uint8_t route_master;
@@ -390,6 +392,8 @@ void mixer_init(void)
     {
         g_tracks[t].gain = 1.0f;
         g_tracks[t].pan = 0.0f;
+        g_tracks[t].gain_current = 1.0f;
+        g_tracks[t].pan_current = 0.0f;
         g_tracks[t].mute = 0U;
 
         g_tracks[t].route_master = 1U;
@@ -936,18 +940,31 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                       R,
                                       frames);
 
-        const float pan_l = (mt->pan <= 0.0f) ? 1.0f : (1.0f - mt->pan);
-        const float pan_r = (mt->pan >= 0.0f) ? 1.0f : (1.0f + mt->pan);
-        const float gain_l = mt->gain * pan_l;
-        const float gain_r = mt->gain * pan_r;
-
-        if((gain_l != 1.0f) || (gain_r != 1.0f))
         {
+            float gain_cur = mt->gain_current;
+            float pan_cur = mt->pan_current;
+            const float inv_frames = (frames > 0U) ? (1.0f / (float)frames) : 0.0f;
+            const float gain_step = (mt->gain - gain_cur) * inv_frames;
+            const float pan_step = (mt->pan - pan_cur) * inv_frames;
+
             for(uint32_t i = 0; i < frames; i++)
             {
+                /* Standard user convention: pan<0 => left, pan>0 => right.
+                 * Runtime output stage wiring is mirrored, so mixer pan is compensated here. */
+                const float pan_for_mix = -pan_cur;
+                const float pan_l = (pan_for_mix <= 0.0f) ? 1.0f : (1.0f - pan_for_mix);
+                const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
+                const float gain_l = gain_cur * pan_l;
+                const float gain_r = gain_cur * pan_r;
                 L[i] *= gain_l;
                 R[i] *= gain_r;
+
+                gain_cur += gain_step;
+                pan_cur += pan_step;
             }
+
+            mt->gain_current = mt->gain;
+            mt->pan_current = mt->pan;
         }
 
         sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_FADER,
