@@ -37,6 +37,11 @@ Toujours raisonner avec :
 
 Ne pas ajouter une feature “globale” si elle dépend en réalité de la track active.
 
+### Routing mix structurant (runtime)
+- L’autorité de binding reste `track_runtime`.
+- Le mapping `UI track -> mix target runtime` est explicite et unique (pas de mapping parallèle caché).
+- Les contributions `Synth` doivent rester séparées par track jusqu’au `mixer` (pas de somme précoce globale).
+
 ---
 
 ## 3. Families et types actuels
