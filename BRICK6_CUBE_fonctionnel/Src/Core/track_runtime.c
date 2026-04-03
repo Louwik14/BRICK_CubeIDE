@@ -9,11 +9,13 @@
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
 #define TRACK_RUNTIME_FLAG_CAN_PLAY    (1U << 2)
 #define TRACK_RUNTIME_INSTANCE_NONE    0xFFU
+#define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DX7_MAX_INSTANCES 2U
 #define TRACK_RUNTIME_MONOB_MAX_INSTANCES 8U
 #define TRACK_RUNTIME_TB3_MAX_INSTANCES 1U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
+static const uint8_t g_track_to_mix_track[] = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
 volatile uint32_t g_track_runtime_tb3_bind_seen = 0U;
 volatile uint32_t g_track_runtime_tb3_bind_track = 0U;
 volatile uint32_t g_track_runtime_tb3_bind_instance = 0U;
@@ -208,6 +210,7 @@ void track_runtime_refresh_all(void)
         const track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
 
         ctx->track_id = track;
+        ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
         ctx->family = (uint8_t)family;
         ctx->type = (uint8_t)type;
         ctx->flags = track_runtime_compute_flags(family, type);
@@ -215,6 +218,10 @@ void track_runtime_refresh_all(void)
         ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
         ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
         ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
+        if (track < (uint8_t)(sizeof(g_track_to_mix_track) / sizeof(g_track_to_mix_track[0])))
+        {
+            ctx->mix_track_id = g_track_to_mix_track[track];
+        }
 
         track_runtime_bind_ctx(ctx, &allocator);
     }
@@ -239,6 +246,22 @@ const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track)
     }
 
     return &g_track_runtime_ctx[track];
+}
+
+uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE))
+    {
+        return 0U;
+    }
+
+    if (out_mix_track != NULL)
+    {
+        *out_mix_track = ctx->mix_track_id;
+    }
+
+    return 1U;
 }
 
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
@@ -317,6 +340,14 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_TB3_SLIDE_TIME:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
+            return rule;
+
+        case PARAM_MIX_LEVEL:
+        case PARAM_MIX_PAN:
+        case PARAM_MIX_SEND1:
+        case PARAM_MIX_SEND2:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIX;
+            rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
             return rule;
 
         case PARAM_SEQ_PLAY_V1_NOTE:

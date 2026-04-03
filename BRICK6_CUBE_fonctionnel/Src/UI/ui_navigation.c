@@ -10,6 +10,7 @@
 static const ui_nav_rule_t g_ui_nav_rules[] = {
     { BTN_PARAM_1, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_COLORS },
     { BTN_PARAM_2, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_DX7 },
+    { BTN_PARAM_4, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_MIX },
     { BTN_PARAM_5, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_PLAY },
 };
 
@@ -18,6 +19,11 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
     if (page_id == UI_PAGE_TEMPLATE_PLAY)
     {
         return (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_SYNTH) ? 1U : 0U;
+    }
+    if (page_id == UI_PAGE_TEMPLATE_MIX)
+    {
+        const ui_track_family_t family = ui_get_track_family(ui_get_active_track());
+        return (ui_track_family_is_input(family) || (family == UI_TRACK_FAMILY_SYNTH)) ? 1U : 0U;
     }
 
     return 1U;
