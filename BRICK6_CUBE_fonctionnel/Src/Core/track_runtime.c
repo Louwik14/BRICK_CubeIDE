@@ -342,6 +342,14 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
             return rule;
 
+        case PARAM_MIX_LEVEL:
+        case PARAM_MIX_PAN:
+        case PARAM_MIX_SEND1:
+        case PARAM_MIX_SEND2:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIX;
+            rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
+            return rule;
+
         case PARAM_SEQ_PLAY_V1_NOTE:
         case PARAM_SEQ_PLAY_V1_VEL:
         case PARAM_SEQ_PLAY_V1_LEN:

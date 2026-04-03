@@ -119,6 +119,7 @@ Ensembles importants existants :
 - `CFG`
 - `COLORS`
 - `TONE`
+- `MIX`
 - `KEYBOARD`
 - `ARP`
 
@@ -134,6 +135,7 @@ Ensembles importants existants :
 ### Mapping boutons param (autorité unique)
 - `BTN_PARAM_1` -> `COLORS`
 - `BTN_PARAM_2` -> `TONE` (résolution contextuelle track-aware ; sur `Synth + DX7` ouvre l’UI DX7)
+- `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est `Synth`)
 - `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
 
