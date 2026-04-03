@@ -58,6 +58,16 @@ void seq_output_guard_note_off_seen(seq_track_id_t track, uint8_t note)
     }
 }
 
+uint8_t seq_output_guard_is_note_active_on_track(seq_track_id_t track, uint8_t note)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (note >= 128U))
+    {
+        return 0U;
+    }
+
+    return (g_seq_output_guard.note_counts[track][note] > 0U) ? 1U : 0U;
+}
+
 uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, uint8_t note)
 {
     if ((channel_zero_based >= 16U) || (note >= 128U))

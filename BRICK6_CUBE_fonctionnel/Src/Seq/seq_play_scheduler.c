@@ -95,35 +95,72 @@ static param_id_t seq_play_scheduler_param_mictim(uint8_t voice)
     return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
 }
 
-static uint8_t seq_play_scheduler_track_channel0(seq_track_id_t track)
-{
-    const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
-    return (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
-}
-
 static uint8_t seq_play_scheduler_has_note_off_due_at(uint32_t due_tick,
                                                       seq_track_id_t track,
                                                       uint8_t note)
 {
-    const uint8_t channel = seq_play_scheduler_track_channel0(track);
-
     for (uint8_t i = 0U; i < g_seq_play_event_count; ++i)
     {
         const seq_play_scheduler_evt_t *const evt = &g_seq_play_events[i];
         if ((evt->type != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
             || (evt->due_tick != due_tick)
-            || (evt->note != note))
+            || (evt->note != note)
+            || (evt->track != track))
         {
             continue;
         }
 
-        if (seq_play_scheduler_track_channel0(evt->track) == channel)
-        {
-            return 1U;
-        }
+        return 1U;
     }
 
     return 0U;
+}
+
+static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
+                                                uint8_t note,
+                                                uint8_t velocity,
+                                                uint8_t is_note_on)
+{
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return;
+    }
+
+    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+    {
+        if (is_note_on != 0U)
+        {
+            monob_synth_note_on_for_instance(ctx->instance_id, note, velocity);
+        }
+        else
+        {
+            monob_synth_note_off_for_instance(ctx->instance_id, note);
+        }
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+    {
+        if (is_note_on != 0U)
+        {
+            microdexed_synth_note_on(note, velocity);
+        }
+        else
+        {
+            microdexed_synth_note_off(note);
+        }
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
+    {
+        if (is_note_on != 0U)
+        {
+            tb3_synth_note_on_for_instance(ctx->instance_id, note, velocity);
+        }
+        else
+        {
+            tb3_synth_note_off_for_instance(ctx->instance_id, note);
+        }
+    }
 }
 
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
@@ -304,56 +341,32 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
 
         if (emit_note_on != 0U)
         {
+            /*
+             * Retrigger correctness for long notes across pattern wrap:
+             * if this track still owns the same note at NOTE_ON time, force
+             * a NOTE_OFF first (unless one is already due at this exact tick).
+             */
+            if ((seq_output_guard_is_note_active_on_track(evt->track, evt->note) != 0U)
+                && (seq_play_scheduler_has_note_off_due_at(evt->due_tick, evt->track, evt->note) == 0U))
+            {
+                midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
+                seq_output_guard_note_off_seen(evt->track, evt->note);
+                seq_play_scheduler_emit_engine_note(evt->track, evt->note, 0U, 0U);
+            }
+
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
             seq_output_guard_note_on_seen(evt->track, evt->note);
+            seq_play_scheduler_emit_engine_note(evt->track, evt->note, evt->velocity, 1U);
         }
         else if (emit_note_off != 0U)
         {
             midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
             seq_output_guard_note_off_seen(evt->track, evt->note);
+            seq_play_scheduler_emit_engine_note(evt->track, evt->note, 0U, 0U);
         }
         else
         {
             /* STOP guard: drop NOTE ON when transport is stopped. */
-        }
-
-        track_runtime_refresh_track(evt->track);
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(evt->track);
-        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
-        {
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-            {
-                if (emit_note_on != 0U)
-                {
-                    monob_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
-                }
-                else if (emit_note_off != 0U)
-                {
-                    monob_synth_note_off_for_instance(ctx->instance_id, evt->note);
-                }
-            }
-            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-            {
-                if (emit_note_on != 0U)
-                {
-                    microdexed_synth_note_on(evt->note, evt->velocity);
-                }
-                else if (emit_note_off != 0U)
-                {
-                    microdexed_synth_note_off(evt->note);
-                }
-            }
-            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
-            {
-                if (emit_note_on != 0U)
-                {
-                    tb3_synth_note_on_for_instance(ctx->instance_id, evt->note, evt->velocity);
-                }
-                else if (emit_note_off != 0U)
-                {
-                    tb3_synth_note_off_for_instance(ctx->instance_id, evt->note);
-                }
-            }
         }
 
         for (uint8_t j = selected_index + 1U; j < g_seq_play_event_count; ++j)
