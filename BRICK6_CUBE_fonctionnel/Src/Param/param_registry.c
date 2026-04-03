@@ -267,11 +267,11 @@ static void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_flo
 static void apply_mix_live_track(param_id_t id, float v)
 {
     const uint8_t track = ui_get_active_track();
-    const param_desc_t *const desc = param_get_desc(id);
-    if (desc == NULL)
+    if (id >= PARAM_COUNT)
     {
         return;
     }
+    const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(v, desc->min, desc->max);
     (void)param_registry_apply_track_value(id, track, clamped);
     param_store_set_active(id, clamped);
