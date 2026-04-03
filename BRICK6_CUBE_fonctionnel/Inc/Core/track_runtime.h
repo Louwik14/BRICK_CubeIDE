@@ -36,6 +36,7 @@ typedef enum
 typedef struct
 {
     uint8_t track_id;
+    uint8_t mix_track_id;
     uint8_t family;
     uint8_t type;
     uint8_t engine;
@@ -105,6 +106,7 @@ void track_runtime_init(void);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
+uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
 

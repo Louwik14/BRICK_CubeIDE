@@ -89,88 +89,72 @@ static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
     }
 }
 
-static void brick6_synth_bus_clear(float *bus, uint32_t frames)
+static void brick6_render_synth_tracks(uint32_t frames,
+                                       uint8_t *out_monob_tracks,
+                                       uint8_t *out_tb3_tracks,
+                                       uint8_t *out_dx7_tracks)
 {
-    memset(bus, 0, sizeof(float) * frames);
-}
-
-static void brick6_synth_bus_accumulate(float *dst, const float *src, uint32_t frames)
-{
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        dst[i] += src[i];
-    }
-}
-
-static uint8_t brick6_render_monob_instances(float *mix_bus, uint32_t frames)
-{
-    uint8_t processed = 0U;
-    static float mono_tmp[AUDIO_BLOCK_SIZE];
+    static float monob_tmp[AUDIO_BLOCK_SIZE];
+    static float tb3_tmp[AUDIO_BLOCK_SIZE];
+    static float dx7_tmp[AUDIO_BLOCK_SIZE];
+    uint8_t monob_tracks = 0U;
+    uint8_t tb3_tracks = 0U;
+    uint8_t dx7_tracks = 0U;
+    uint8_t dx7_rendered_once = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_MONOB))
+                || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
         {
             continue;
         }
 
-        monob_synth_process_block_for_instance(ctx->instance_id, mono_tmp, frames);
-        brick6_synth_bus_accumulate(mix_bus, mono_tmp, frames);
-        processed++;
-    }
-
-    return processed;
-}
-
-static uint8_t brick6_render_dx7_instances(float *mix_bus, uint32_t frames)
-{
-    static float dx7_tmp[AUDIO_BLOCK_SIZE];
-    uint8_t dx7_tracks = 0U;
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx != NULL)
-                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7))
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
         {
+            monob_synth_process_block_for_instance(ctx->instance_id, monob_tmp, frames);
+            mixer_submit_external_mono(ctx->mix_track_id, monob_tmp, frames);
+            monob_tracks++;
+            continue;
+        }
+
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
+        {
+            tb3_synth_process_block_for_instance(ctx->instance_id, tb3_tmp, frames);
+            mixer_submit_external_mono(ctx->mix_track_id, tb3_tmp, frames);
+            tb3_tracks++;
+            continue;
+        }
+
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+        {
+            if (dx7_rendered_once == 0U)
+            {
+                microdexed_synth_process_block(dx7_tmp, frames);
+                dx7_rendered_once = 1U;
+            }
+
+            mixer_submit_external_mono(ctx->mix_track_id, dx7_tmp, frames);
             dx7_tracks++;
         }
     }
 
-    if (dx7_tracks > 0U)
+    if (out_monob_tracks != NULL)
     {
-        microdexed_synth_process_block(dx7_tmp, frames);
-        brick6_synth_bus_accumulate(mix_bus, dx7_tmp, frames);
+        *out_monob_tracks = monob_tracks;
     }
 
-    return dx7_tracks;
-}
-
-static uint8_t brick6_render_tb3_instances(float *mix_bus, uint32_t frames)
-{
-    uint8_t processed = 0U;
-    static float tb3_tmp[AUDIO_BLOCK_SIZE];
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    if (out_tb3_tracks != NULL)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL)
-                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_TB3))
-        {
-            continue;
-        }
-
-        tb3_synth_process_block_for_instance(ctx->instance_id, tb3_tmp, frames);
-        brick6_synth_bus_accumulate(mix_bus, tb3_tmp, frames);
-        processed++;
+        *out_tb3_tracks = tb3_tracks;
     }
 
-    return processed;
+    if (out_dx7_tracks != NULL)
+    {
+        *out_dx7_tracks = dx7_tracks;
+    }
 }
 
 void brick6_audio_runtime_init(live_recorder_t *live_recorder)
@@ -198,42 +182,28 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     }
     g_runtime_track_enabled = synth_runtime_enabled;
 
-    if((track_count > 3U) && (tracks[3].enabled != 0U))
+    mixer_external_inputs_clear();
+    if (synth_runtime_enabled != 0U)
     {
-        if (synth_runtime_enabled == 0U)
-        {
-            memset(tracks[3].L, 0, sizeof(float) * frames);
-            memset(tracks[3].R, 0, sizeof(float) * frames);
-        }
-        else
-        {
-            static float synth_mono[AUDIO_BLOCK_SIZE];
-            brick6_synth_bus_clear(synth_mono, frames);
-            const uint8_t monob_processed = brick6_render_monob_instances(synth_mono, frames);
-            const uint8_t tb3_processed = brick6_render_tb3_instances(synth_mono, frames);
-            const uint8_t dx7_tracks = brick6_render_dx7_instances(synth_mono, frames);
+        uint8_t monob_processed = 0U;
+        uint8_t tb3_processed = 0U;
+        uint8_t dx7_tracks = 0U;
+        brick6_render_synth_tracks(frames, &monob_processed, &tb3_processed, &dx7_tracks);
 
-            if ((monob_processed != g_runtime_last_monob_processed)
-                    || (tb3_processed != g_runtime_last_tb3_processed)
-                    || (dx7_tracks != g_runtime_last_dx7_tracks)
-                    || (ui_get_active_track() != g_runtime_last_ui_active_track))
-            {
-                BRICK6_RT_LOG("[AUDIO][RT] monob_processed=%u tb3_processed=%u dx7_tracks=%u ui_active=%u\r\n",
-                              (unsigned)monob_processed,
-                              (unsigned)tb3_processed,
-                              (unsigned)dx7_tracks,
-                              (unsigned)ui_get_active_track());
-                g_runtime_last_monob_processed = monob_processed;
-                g_runtime_last_tb3_processed = tb3_processed;
-                g_runtime_last_dx7_tracks = dx7_tracks;
-                g_runtime_last_ui_active_track = ui_get_active_track();
-            }
-
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                tracks[3].L[i] = synth_mono[i];
-                tracks[3].R[i] = synth_mono[i];
-            }
+        if ((monob_processed != g_runtime_last_monob_processed)
+                || (tb3_processed != g_runtime_last_tb3_processed)
+                || (dx7_tracks != g_runtime_last_dx7_tracks)
+                || (ui_get_active_track() != g_runtime_last_ui_active_track))
+        {
+            BRICK6_RT_LOG("[AUDIO][RT] monob_tracks=%u tb3_tracks=%u dx7_tracks=%u ui_active=%u\r\n",
+                          (unsigned)monob_processed,
+                          (unsigned)tb3_processed,
+                          (unsigned)dx7_tracks,
+                          (unsigned)ui_get_active_track());
+            g_runtime_last_monob_processed = monob_processed;
+            g_runtime_last_tb3_processed = tb3_processed;
+            g_runtime_last_dx7_tracks = dx7_tracks;
+            g_runtime_last_ui_active_track = ui_get_active_track();
         }
     }
 
