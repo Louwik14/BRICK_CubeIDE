@@ -76,7 +76,7 @@ static void ui_page_calibration_tick(void)
 
     if ((HAL_GetTick() - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS)
     {
-        ui_page_set(UI_PAGE_MAIN);
+        ui_page_set(UI_PAGE_TEMPLATE_COLORS);
     }
 }
 
@@ -167,7 +167,7 @@ static void ui_page_user_calibration_tick(void)
 
     if (g_user_save_done != 0U)
     {
-        ui_page_set(UI_PAGE_MAIN);
+        ui_page_set(UI_PAGE_TEMPLATE_COLORS);
     }
     else
     {
