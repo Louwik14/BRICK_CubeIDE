@@ -368,8 +368,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
 {
-    if ((pattern_live_slot_is_valid(bank, pattern) == 0U)
-        || (g_pattern_slot_meta[bank][pattern].has_snapshot == 0U))
+    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
         return 0U;
     }
@@ -378,7 +377,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
     {
         return 0U;
     }
-    g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
+    g_pattern_slot_meta[bank][pattern].has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
 
     if (seq_runtime_is_running() == 0U)
     {

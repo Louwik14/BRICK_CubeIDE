@@ -94,11 +94,11 @@ Le projet est track-aware.
 Il existe une notion de track active côté UI.
 
 Sélection :
-- maintenir `SHIFT`
+- maintenir `TRACK` (bouton spécial `BTN_PARAM_8`)
 - puis appuyer sur `HALL 0..7`
 
 Règle stricte :
-- `SHIFT` doit être pressé avant le hall
+- `TRACK` doit être pressé avant le hall
 - l’ordre inverse n’est pas voulu
 - les événements UI liés à cette logique doivent être consommés pour éviter les effets parasites sur le chemin note/runtime
 
@@ -203,6 +203,7 @@ Le mapping parameter button doit rester centralisé dans une table unique.
 - `BTN_PARAM_2` -> `TONE`
 - `BTN_PARAM_4` -> `MIX` (disponible sur tracks `Input` et `Synth`)
 - `BTN_PARAM_5` -> `PLAY` (disponible seulement si la track active est de family `Synth`)
+- `BTN_PARAM_8` -> bouton spécial `TRACK` (modificateur, pas un ensemble UI)
 
 Contraintes :
 - `CALIBRATION` et `POTS DEBUG` restent des pages/runtime existants mais ne sont pas exposés par boutons parameter.
@@ -320,6 +321,7 @@ Le petit label de hall mode affiché dans le header peut être :
 - `SEQ`
 - `KBD`
 - `ARP`
+- `PAT`
 
 Et il peut intégrer l’offset de transposition du keyboard :
 - `KBD`
@@ -365,6 +367,17 @@ Comportement :
 - il ne doit jamais casser l’activation explicite de `KEYBOARD`
 
 La logique de dispatch entre `KEYBOARD` et `ARP` doit rester table-driven / factorisée / robuste.
+
+### 12.5 Hall mode PATTERN
+Activation :
+- `SHIFT + -` => `PATTERN RECALL`
+- `TRACK + -` => `PATTERN STORE`
+
+Comportement :
+- même UI en 2 niveaux (banque puis pattern)
+- `RECALL` : précharge/queue ou recall immédiat (transport arrêté)
+- `STORE` : capture l’état live et écrit le slot SD sélectionné
+- un slot pattern vide reste sélectionnable et charge le snapshot boot par défaut
 
 ---
 

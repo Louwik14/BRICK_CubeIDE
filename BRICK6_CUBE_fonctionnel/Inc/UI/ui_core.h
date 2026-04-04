@@ -49,6 +49,12 @@ typedef enum
     UI_PATTERN_SUBSTATE_PATTERN_SELECT
 } ui_pattern_substate_t;
 
+typedef enum
+{
+    UI_PATTERN_MODE_RECALL = 0,
+    UI_PATTERN_MODE_STORE
+} ui_pattern_mode_t;
+
 typedef struct
 {
     uint8_t active_bank;
@@ -58,6 +64,7 @@ typedef struct
     uint8_t queued_pattern;
     ui_pattern_substate_t substate;
     uint8_t selected_bank;
+    ui_pattern_mode_t mode;
 } ui_pattern_stub_state_t;
 
 typedef enum
