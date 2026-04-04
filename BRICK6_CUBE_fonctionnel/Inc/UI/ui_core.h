@@ -49,6 +49,12 @@ typedef enum
     UI_PATTERN_SUBSTATE_PATTERN_SELECT
 } ui_pattern_substate_t;
 
+typedef enum
+{
+    UI_PATTERN_MODE_RECALL = 0,
+    UI_PATTERN_MODE_STORE
+} ui_pattern_mode_t;
+
 typedef struct
 {
     uint8_t active_bank;
@@ -58,6 +64,7 @@ typedef struct
     uint8_t queued_pattern;
     ui_pattern_substate_t substate;
     uint8_t selected_bank;
+    ui_pattern_mode_t mode;
 } ui_pattern_stub_state_t;
 
 typedef enum
@@ -103,6 +110,7 @@ const char *ui_get_hall_mode_short_label(void);
 const char *ui_get_hall_mode_suffix_label(void);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
 uint8_t ui_core_request_undo(void);
+uint8_t ui_is_track_modifier_held(void);
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
 void ui_core_clear_hall_note_suppression(uint8_t hall);
 

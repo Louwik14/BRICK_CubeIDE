@@ -69,6 +69,7 @@
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_FEEDBACK_DURATION_MS 1000U
+#define UI_TRACK_MOD_BUTTON BTN_PARAM_8
 
 typedef struct
 {
@@ -84,6 +85,7 @@ typedef struct
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
     ui_pattern_substate_t pattern_substate;
+    ui_pattern_mode_t pattern_mode;
     uint8_t pattern_selected_bank;
     ui_hall_mode_t pattern_prev_mode;
     uint8_t pattern_prev_mode_valid;
@@ -118,6 +120,7 @@ static ui_track_state_t g_ui_track_state = {
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
     .pattern_substate = UI_PATTERN_SUBSTATE_BANK_SELECT,
+    .pattern_mode = UI_PATTERN_MODE_RECALL,
     .pattern_selected_bank = 0U,
     .pattern_prev_mode = UI_HALL_MODE_SEQ,
     .pattern_prev_mode_valid = 0U,
@@ -155,10 +158,11 @@ static void ui_core_pattern_abort_internal(void)
     g_ui_track_state.pattern_prev_mode_valid = 0U;
 }
 
-static void ui_core_pattern_enter(void)
+static void ui_core_pattern_enter(ui_pattern_mode_t mode)
 {
     g_ui_track_state.pattern_prev_mode = ui_get_hall_mode();
     g_ui_track_state.pattern_prev_mode_valid = (g_ui_track_state.pattern_prev_mode != UI_HALL_MODE_PATTERN) ? 1U : 0U;
+    g_ui_track_state.pattern_mode = mode;
     ui_core_pattern_reset_selection_only();
     ui_set_hall_mode(UI_HALL_MODE_PATTERN);
 }
@@ -609,15 +613,18 @@ static void ui_core_update_shift_state(uint8_t shift_down)
     if ((shift_down != 0U) && (g_ui_track_state.shift_down == 0U))
     {
         g_ui_track_state.shift_down = 1U;
-        g_ui_track_state.track_select_armed = 1U;
         return;
     }
 
     if ((shift_down == 0U) && (g_ui_track_state.shift_down != 0U))
     {
         g_ui_track_state.shift_down = 0U;
-        g_ui_track_state.track_select_armed = 0U;
     }
+}
+
+static void ui_core_update_track_modifier_state(uint8_t track_modifier_down)
+{
+    g_ui_track_state.track_select_armed = (track_modifier_down != 0U) ? 1U : 0U;
 }
 
 static const ui_hall_mode_trigger_t *ui_core_find_hall_mode_trigger(uint8_t hall)
@@ -655,11 +662,10 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
         return;
     }
 
-    g_ui_track_state.hall_note_suppressed[hall] = 1U;
-
     const ui_hall_mode_trigger_t *trigger = ui_core_find_hall_mode_trigger(hall);
     if (trigger != 0)
     {
+        g_ui_track_state.hall_note_suppressed[hall] = 1U;
         const uint32_t now = HAL_GetTick();
         const uint32_t last_tap = g_ui_track_state.mode_tap_ms[trigger->target_mode];
         const uint8_t is_double_tap = ((last_tap != 0U)
@@ -670,19 +676,27 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
         return;
     }
 
-    if (hall < UI_TRACK_COUNT)
-    {
-        const uint32_t now = HAL_GetTick();
-        const uint32_t last_tap = g_ui_track_state.cfg_tap_ms[hall];
-        const uint8_t is_double_tap = ((last_tap != 0U)
-                                       && ((now - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
-        g_ui_track_state.cfg_tap_ms[hall] = now;
+}
 
-        ui_core_set_active_track(hall);
-        if (is_double_tap != 0U)
-        {
-            ui_page_set(UI_PAGE_TEMPLATE_CFG);
-        }
+static void ui_core_handle_track_hall_action(uint8_t hall)
+{
+    if (hall >= UI_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_ui_track_state.hall_note_suppressed[hall] = 1U;
+
+    const uint32_t now = HAL_GetTick();
+    const uint32_t last_tap = g_ui_track_state.cfg_tap_ms[hall];
+    const uint8_t is_double_tap = ((last_tap != 0U)
+                                   && ((now - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+    g_ui_track_state.cfg_tap_ms[hall] = now;
+
+    ui_core_set_active_track(hall);
+    if (is_double_tap != 0U)
+    {
+        ui_page_set(UI_PAGE_TEMPLATE_CFG);
     }
 }
 
@@ -696,13 +710,23 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 1U;
-        g_ui_track_state.track_select_armed = 1U;
         return;
     }
 
     if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 0U;
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
+    {
+        g_ui_track_state.track_select_armed = 1U;
+        return;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_RELEASE) && (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
+    {
         g_ui_track_state.track_select_armed = 0U;
         return;
     }
@@ -744,6 +768,23 @@ static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t *out_track,
     return seq_edit_collect_held_steps(out_track, out_steps, max_steps, promote_pending);
 }
 
+static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
+{
+    if ((ev == 0)
+        || (g_ui_track_state.track_select_armed == 0U)
+        || (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN))
+    {
+        return 0U;
+    }
+
+    if ((ev->type != UI_EVENT_HALL_PRESS) && (ev->type != UI_EVENT_HALL_RELEASE))
+    {
+        return 0U;
+    }
+
+    return (ev->id < UI_TRACK_COUNT) ? 1U : 0U;
+}
+
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -774,7 +815,15 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
         && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
         && (g_ui_track_state.shift_down != 0U))
     {
-        ui_core_pattern_enter();
+        ui_core_pattern_enter(UI_PATTERN_MODE_RECALL);
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
+        && (g_ui_track_state.track_select_armed != 0U))
+    {
+        ui_core_pattern_enter(UI_PATTERN_MODE_STORE);
         return 1U;
     }
 
@@ -803,7 +852,8 @@ static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
     }
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
-        && (g_ui_track_state.shift_down != 0U))
+        && (((g_ui_track_state.shift_down != 0U) && (g_ui_track_state.pattern_mode == UI_PATTERN_MODE_RECALL))
+            || ((g_ui_track_state.track_select_armed != 0U) && (g_ui_track_state.pattern_mode == UI_PATTERN_MODE_STORE))))
     {
         ui_core_pattern_exit_to_previous_mode();
         return 1U;
@@ -821,14 +871,24 @@ static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
         return 1U;
     }
 
-    if (pattern_live_queue_slot(g_ui_track_state.pattern_selected_bank, ev->id) != 0U)
+    if (g_ui_track_state.pattern_mode == UI_PATTERN_MODE_STORE)
+    {
+        if (pattern_live_capture_to_slot(g_ui_track_state.pattern_selected_bank, ev->id) != 0U)
+        {
+            ui_core_set_feedback("PAT STORED");
+            ui_core_pattern_exit_to_previous_mode();
+            return 1U;
+        }
+    }
+    else if (pattern_live_queue_slot(g_ui_track_state.pattern_selected_bank, ev->id) != 0U)
     {
         ui_core_set_feedback("PAT QUEUED");
         ui_core_pattern_exit_to_previous_mode();
         return 1U;
     }
 
-    ui_core_set_feedback("PAT EMPTY");
+    ui_core_set_feedback("PAT FAIL");
+    ui_core_pattern_exit_to_previous_mode();
     return 1U;
 }
 
@@ -1006,6 +1066,7 @@ void ui_core_init(void)
 void ui_core_service_track_selection_inputs(void)
 {
     ui_core_update_shift_state(button_down(BTN_SHIFT));
+    ui_core_update_track_modifier_state(button_down(UI_TRACK_MOD_BUTTON));
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
@@ -1014,9 +1075,14 @@ void ui_core_service_track_selection_inputs(void)
 
         if ((was_pressed == 0U) && (pressed != 0U)
                 && (g_ui_track_state.shift_down != 0U)
-                && (g_ui_track_state.track_select_armed != 0U))
+                && (g_ui_track_state.track_select_armed == 0U))
         {
             ui_core_handle_shift_hall_action(hall);
+        }
+        else if ((was_pressed == 0U) && (pressed != 0U)
+                 && (g_ui_track_state.track_select_armed != 0U))
+        {
+            ui_core_handle_track_hall_action(hall);
         }
 
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
@@ -1062,6 +1128,11 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_core_is_track_hall_event_consumed(&ev) != 0U)
+        {
+            continue;
+        }
 
         if (ui_core_handle_transport_event(&ev) != 0U)
         {
@@ -1440,6 +1511,11 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
 
 const char *ui_get_hall_mode_short_label(void)
 {
+    if (g_ui_track_state.track_select_armed != 0U)
+    {
+        return "TRACK";
+    }
+
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
     {
         return "KBD";
@@ -1462,6 +1538,11 @@ const char *ui_get_hall_mode_suffix_label(void)
 {
     static char label[6];
 
+    if (g_ui_track_state.track_select_armed != 0U)
+    {
+        return "";
+    }
+
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_SEQ)
     {
         const uint8_t page = seq_edit_get_page(ui_get_active_track());
@@ -1471,7 +1552,7 @@ const char *ui_get_hall_mode_suffix_label(void)
 
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
     {
-        return "";
+        return (g_ui_track_state.pattern_mode == UI_PATTERN_MODE_STORE) ? "STR" : "RCL";
     }
 
     const int8_t octave_shift = keyboard_runtime_get_octave_shift();
@@ -1507,6 +1588,12 @@ void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
     out_state->queued_pattern = queued_pattern;
     out_state->substate = g_ui_track_state.pattern_substate;
     out_state->selected_bank = g_ui_track_state.pattern_selected_bank;
+    out_state->mode = g_ui_track_state.pattern_mode;
+}
+
+uint8_t ui_is_track_modifier_held(void)
+{
+    return g_ui_track_state.track_select_armed;
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)

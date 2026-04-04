@@ -8,7 +8,7 @@
  * - réduit le timeout diskio pour éviter les gels longs silencieux
  */
 #ifndef BRICK6_SD_DEV_SAFE_MODE
-#define BRICK6_SD_DEV_SAFE_MODE 0
+#define BRICK6_SD_DEV_SAFE_MODE 1
 #endif
 
 #if BRICK6_SD_DEV_SAFE_MODE

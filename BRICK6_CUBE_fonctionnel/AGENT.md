@@ -85,7 +85,7 @@ Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point
 ## 5. Hall modes : invariants à ne pas casser
 
 ### Track select
-- `SHIFT` maintenu
+- `TRACK` maintenu (`BTN_PARAM_8`)
 - puis `HALL 0..7`
 
 ### KEYBOARD
@@ -97,6 +97,10 @@ Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point
 - `SHIFT + HALL 10` (index 9)
   - simple tap => active `ARP`
   - double tap => ouvre l’UI `ARP`
+
+### PATTERN
+- `SHIFT + -` => mode `PATTERN RECALL`
+- `TRACK + -` => mode `PATTERN STORE`
 
 ### Règles
 - `SHIFT` doit être pressé avant le hall
@@ -137,6 +141,7 @@ Ensembles importants existants :
 - `BTN_PARAM_2` -> `TONE` (résolution contextuelle track-aware ; sur `Synth + DX7` ouvre l’UI DX7)
 - `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est `Synth`)
+- `BTN_PARAM_8` -> bouton spécial `TRACK` (pas un point d’entrée d’ensemble UI)
 - `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
 
 ### Halls
