@@ -812,12 +812,12 @@ void mixer_track_filter_all_notes_off(uint32_t track_id)
     filter->env_stage = (uint8_t)MIXER_FILTER_ENV_IDLE;
 }
 
-void mixer_external_inputs_clear(void)
+void __attribute__((used)) mixer_external_inputs_clear(void)
 {
     memset(g_external_track_enabled, 0, sizeof(g_external_track_enabled));
 }
 
-void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames)
+void __attribute__((used)) mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames)
 {
     if ((track_id >= MIXER_MAX_TRACKS) || (mono == NULL))
     {
