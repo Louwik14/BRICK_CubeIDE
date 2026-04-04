@@ -1596,6 +1596,7 @@ static void apply_seq_length(float v)
     const uint8_t track = ui_get_active_track();
     (void)undo_v1_capture_before_edit(0U);
     seq_model_set_track_length(track, (uint8_t)(v + 0.5f));
+    seq_runtime_on_track_length_changed(track);
 }
 
 static uint8_t seq_div_ui_to_runtime(float v)

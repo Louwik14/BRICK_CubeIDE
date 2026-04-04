@@ -21,6 +21,17 @@ typedef struct
     seq_value16_t base_value16;
 } seq_boundary_engine_step_lock_t;
 
+static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)
+{
+    uint8_t length = seq_model_get_track_length(track);
+    if ((length == 0U) || (length > SEQ_MAX_STEPS))
+    {
+        length = SEQ_MAX_STEPS;
+    }
+
+    return length;
+}
+
 static uint8_t seq_boundary_engine_lock_equals(const seq_runtime_active_lock_t *active,
                                                uint8_t set_id,
                                                seq_param8_t param8)
@@ -222,7 +233,13 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
     uint8_t hit_count = 0U;
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const seq_step_id_t current_step = state->play_step[track];
+        const uint8_t length = seq_boundary_engine_track_length(track);
+        seq_step_id_t current_step = state->play_step[track];
+        if (current_step >= length)
+        {
+            current_step = 0U;
+            state->play_step[track] = 0U;
+        }
 
         if ((state->prev_step_valid[track] == 0U)
             || (state->prev_step[track] != current_step))
@@ -254,8 +271,6 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         return;
     }
 
-    const seq_project_data_t *const project = seq_model_get_project();
-
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         uint8_t div = state->track_div[track];
@@ -275,11 +290,7 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
             continue;
         }
 
-        uint8_t length = project->tracks[track].length_steps;
-        if ((length == 0U) || (length > SEQ_MAX_STEPS))
-        {
-            length = SEQ_MAX_STEPS;
-        }
+        const uint8_t length = seq_boundary_engine_track_length(track);
 
         uint8_t next = (uint8_t)(state->play_step[track] + 1U);
         if (next >= length)

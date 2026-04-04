@@ -75,6 +75,13 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
+    {
+        return 0U;
+    }
+
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS) && (set_id != (uint8_t)SEQ_PLOCK_SET_COLORS))
     {
         return 0U;
