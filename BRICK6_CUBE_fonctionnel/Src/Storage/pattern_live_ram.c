@@ -10,6 +10,7 @@
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
+#include "Storage/pattern_sd_bank.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -34,33 +35,6 @@ static uint8_t g_apply_in_progress;
 static uint8_t g_last_playhead_valid;
 static uint8_t g_last_playhead_step;
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
-
-static uint8_t pattern_live_load_slot_into_next(uint8_t bank, uint8_t pattern)
-{
-    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
-    {
-        return 0U;
-    }
-
-    /*
-     * Backend SD non branché dans cette passe :
-     * - si le slot demandé est le pattern actif, on duplique le snapshot live courant
-     * - sinon on utilise le snapshot boot comme contenu de repli
-     *
-     * L'architecture reste alignée backend cible:
-     * slot persistent (SD) -> next_pattern RAM -> apply quantifié.
-     */
-    if ((bank == g_active_bank) && (pattern == g_active_pattern))
-    {
-        memcpy(&g_next_pattern, &g_current_pattern, sizeof(g_next_pattern));
-    }
-    else
-    {
-        memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
-    }
-
-    return 1U;
-}
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
@@ -376,6 +350,11 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
+    if (pattern_sd_bank_store_slot(bank, pattern, &g_current_pattern) == 0U)
+    {
+        return 0U;
+    }
+
     g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
     g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 1U;
 
@@ -395,10 +374,11 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if (pattern_live_load_slot_into_next(bank, pattern) == 0U)
+    if (pattern_sd_bank_load_slot(bank, pattern, &g_next_pattern) == 0U)
     {
         return 0U;
     }
+    g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
 
     if (seq_runtime_is_running() == 0U)
     {
@@ -472,14 +452,19 @@ void pattern_live_init(void)
     {
         memcpy(&g_current_pattern, &g_boot_pattern, sizeof(g_current_pattern));
         memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
+        pattern_sd_bank_init(&g_boot_pattern);
+    }
+    else
+    {
+        pattern_sd_bank_init(0);
+    }
 
-        for (uint8_t bank = 0U; bank < PATTERN_BANK_COUNT; ++bank)
+    for (uint8_t bank = 0U; bank < PATTERN_BANK_COUNT; ++bank)
+    {
+        for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
         {
-            for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
-            {
-                g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
-                g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 0U;
-            }
+            g_pattern_slot_meta[bank][pattern].has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
+            g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 0U;
         }
     }
 }
