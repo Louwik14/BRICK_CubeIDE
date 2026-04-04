@@ -38,8 +38,8 @@ static uint8_t buttons_hw_state[BTN_COUNT];
  * Measured hardware mapping:
  *   0: transpose_down,  1: transpose_up,
  *   2: page2,           3: page1,
- *   4: settings,        5: paste,
- *   6: copy,            7: shift,
+ *   4: settings,        5: copy,
+ *   6: paste,           7: shift,
  *   9: play,           10: rec,
  *  11: page3,          12: page4,
  *  16: param7,         17: param8,
@@ -56,8 +56,8 @@ static const uint8_t button_physical_to_logical[BTN_COUNT] = {
     [2]  = BTN_PAGE_2, /* page2 */
     [3]  = BTN_PAGE_1, /* page1 */
     [4]  = BTN_SETTINGS,
-    [5]  = BTN_PASTE,
-    [6]  = BTN_COPY,
+    [5]  = BTN_COPY,
+    [6]  = BTN_PASTE,
     [7]  = BTN_SHIFT,
     [8]  = BTN_UNUSED_5,
     [9]  = BTN_PLAY,
