@@ -17,6 +17,7 @@
 #include "App/Hall/hall_engine.h"
 #include "param_registry.h"
 #include "param_store.h"
+#include "Storage/undo_v1.h"
 
 #define SEQ_STEP_HOLD_THRESHOLD_TICKS 120U
 
@@ -46,6 +47,7 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
         return 0U;
     }
 
+    (void)undo_v1_capture_before_edit(0U);
     seq_model_toggle_trig(track, step);
     return 1U;
 }
@@ -119,6 +121,7 @@ void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index)
 
     if (seq_model_get_trig(track, step) == 0U)
     {
+        (void)undo_v1_capture_before_edit(0U);
         seq_model_set_trig(track, step, 1U);
         g_seq_hold_state.auto_note_pending[hall_index] = 1U;
         g_seq_hold_state.pending[hall_index] = 0U;
@@ -150,10 +153,12 @@ void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index)
 
     if ((was_pending != 0U) && (was_held == 0U))
     {
+        (void)undo_v1_capture_before_edit(0U);
         seq_model_toggle_trig(held_track, held_step);
     }
     else if (was_auto_note_pending != 0U)
     {
+        (void)undo_v1_capture_before_edit(0U);
         float note_value = 60.0f;
         if (param_registry_get_track_value(PARAM_SEQ_PLAY_V1_NOTE, held_track, &note_value) == 0U)
         {
@@ -187,6 +192,7 @@ void seq_edit_step_hold_update(void)
 
         if (hall_engine_is_pressed(hall) == 0U)
         {
+            (void)undo_v1_capture_before_edit(0U);
             seq_model_toggle_trig(g_seq_hold_state.track_id[hall],
                                   g_seq_hold_state.step_id[hall]);
             g_seq_hold_state.auto_note_pending[hall] = 0U;
@@ -296,6 +302,7 @@ seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
         }
     }
 
+    (void)undo_v1_capture_before_edit(0U);
     return seq_model_step_plock_upsert(track, step, set_id, param8, value16, flags);
 }
 
@@ -304,11 +311,13 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   uint8_t set_id,
                                                   seq_param8_t param8)
 {
+    (void)undo_v1_capture_before_edit(0U);
     return seq_model_step_plock_delete(track, step, set_id, param8);
 }
 
 void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
+    (void)undo_v1_capture_before_edit(0U);
     seq_model_step_plock_clear(track, step);
 }
 
@@ -337,6 +346,7 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
                              uint8_t dest_count,
                              seq_clipboard_paste_result_t *out_result)
 {
+    (void)undo_v1_capture_before_edit(0U);
     return seq_clipboard_paste(track, dest_steps, dest_count, out_result);
 }
 
@@ -349,6 +359,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
         return;
     }
 
+    (void)undo_v1_capture_before_edit(0U);
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         const seq_step_id_t step = steps[i];

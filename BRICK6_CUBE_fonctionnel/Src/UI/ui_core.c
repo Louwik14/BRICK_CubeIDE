@@ -53,6 +53,8 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Core/runtime_target.h"
+#include "Storage/pattern_live_ram.h"
+#include "Storage/undo_v1.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
@@ -83,11 +85,6 @@ typedef struct
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
     ui_pattern_substate_t pattern_substate;
     uint8_t pattern_selected_bank;
-    uint8_t pattern_active_bank;
-    uint8_t pattern_active_pattern;
-    uint8_t pattern_queued_valid;
-    uint8_t pattern_queued_bank;
-    uint8_t pattern_queued_pattern;
     ui_hall_mode_t pattern_prev_mode;
     uint8_t pattern_prev_mode_valid;
     char feedback_message[16];
@@ -122,11 +119,6 @@ static ui_track_state_t g_ui_track_state = {
     .hall_note_suppressed = { 0U },
     .pattern_substate = UI_PATTERN_SUBSTATE_BANK_SELECT,
     .pattern_selected_bank = 0U,
-    .pattern_active_bank = 0U,
-    .pattern_active_pattern = 0U,
-    .pattern_queued_valid = 0U,
-    .pattern_queued_bank = 0U,
-    .pattern_queued_pattern = 0U,
     .pattern_prev_mode = UI_HALL_MODE_SEQ,
     .pattern_prev_mode_valid = 0U,
     .feedback_message = { 0 },
@@ -150,12 +142,6 @@ static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
     { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
     { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
 };
-
-__attribute__((weak)) uint8_t undo_v1_restore(uint8_t resume_transport)
-{
-    (void)resume_transport;
-    return 0U;
-}
 
 static void ui_core_pattern_reset_selection_only(void)
 {
@@ -835,11 +821,14 @@ static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
         return 1U;
     }
 
-    g_ui_track_state.pattern_queued_bank = g_ui_track_state.pattern_selected_bank;
-    g_ui_track_state.pattern_queued_pattern = ev->id;
-    g_ui_track_state.pattern_queued_valid = 1U;
-    ui_core_set_feedback("PAT QUEUED");
-    ui_core_pattern_exit_to_previous_mode();
+    if (pattern_live_queue_slot(g_ui_track_state.pattern_selected_bank, ev->id) != 0U)
+    {
+        ui_core_set_feedback("PAT QUEUED");
+        ui_core_pattern_exit_to_previous_mode();
+        return 1U;
+    }
+
+    ui_core_set_feedback("PAT EMPTY");
     return 1U;
 }
 
@@ -1502,11 +1491,20 @@ void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
         return;
     }
 
-    out_state->active_bank = g_ui_track_state.pattern_active_bank;
-    out_state->active_pattern = g_ui_track_state.pattern_active_pattern;
-    out_state->queued_valid = g_ui_track_state.pattern_queued_valid;
-    out_state->queued_bank = g_ui_track_state.pattern_queued_bank;
-    out_state->queued_pattern = g_ui_track_state.pattern_queued_pattern;
+    uint8_t active_bank = 0U;
+    uint8_t active_pattern = 0U;
+    uint8_t queued_valid = 0U;
+    uint8_t queued_bank = 0U;
+    uint8_t queued_pattern = 0U;
+
+    (void)pattern_live_get_active(&active_bank, &active_pattern);
+    (void)pattern_live_get_queued(&queued_valid, &queued_bank, &queued_pattern);
+
+    out_state->active_bank = active_bank;
+    out_state->active_pattern = active_pattern;
+    out_state->queued_valid = queued_valid;
+    out_state->queued_bank = queued_bank;
+    out_state->queued_pattern = queued_pattern;
     out_state->substate = g_ui_track_state.pattern_substate;
     out_state->selected_bank = g_ui_track_state.pattern_selected_bank;
 }
