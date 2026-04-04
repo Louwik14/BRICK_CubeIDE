@@ -36,6 +36,8 @@
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/undo_v1.h"
+#include "Storage/sd_access_gate.h"
+#include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_loop.h"
 #include "App/Hall/hall_juno_midi.h"
@@ -72,7 +74,11 @@ void brick6_app_init(void)
 
     audio_tracks_init();
 
+    sd_access_gate_init();
+
+#if BRICK6_SD_ENABLE_BOOT_SAMPLE_LOAD
     brick6_sampler_bootstrap_load_pool();
+#endif
 
     brick6_recorder_runtime_boot_init(&g_live_recorder,
                                       g_live_recorder_buffer,

@@ -27,6 +27,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Storage/wav_parser.h"
+#include "Storage/sd_access_gate.h"
 
 #include "ff.h"
 
@@ -383,11 +384,22 @@ bool sample_pool_load(uint16_t id, const char *path)
     }
 
 #if SAMPLE_POOL_HAS_FATFS
+    uint8_t sd_gate_held = 0U;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_BOOT) == 0U)
+    {
+        g_sample_slot_in_use[(uint32_t)slot] = 0U;
+        return false;
+    }
+    sd_gate_held = 1U;
+
     if(g_sample_pool_fs_mounted == 0U)
     {
+        sd_access_trace_begin("sample_pool_f_mount");
         const FRESULT mount_fr = f_mount(&g_sample_pool_fs, "0:", 1U);
+        sd_access_trace_end("sample_pool_f_mount", (int)mount_fr, 0U);
         if(mount_fr != FR_OK)
         {
+            sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_BOOT);
             g_sample_slot_in_use[(uint32_t)slot] = 0U;
             return false;
         }
@@ -396,8 +408,12 @@ bool sample_pool_load(uint16_t id, const char *path)
     }
 
     FIL fp;
-    if(f_open(&fp, desc->path, FA_READ) != FR_OK)
+    sd_access_trace_begin("sample_pool_f_open");
+    const FRESULT open_fr = f_open(&fp, desc->path, FA_READ);
+    sd_access_trace_end("sample_pool_f_open", (int)open_fr, 0U);
+    if(open_fr != FR_OK)
     {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_BOOT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
@@ -408,6 +424,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     if(!wav_parser_parse_info(&fp, &info))
     {
         (void)f_close(&fp);
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_BOOT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
@@ -420,6 +437,7 @@ bool sample_pool_load(uint16_t id, const char *path)
        (info.byte_rate != (info.sample_rate * info.block_align)))
     {
         (void)f_close(&fp);
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_BOOT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
@@ -437,6 +455,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     if(!sample_pool_load_full_data(&fp, (uint16_t)slot, &info, data_size_aligned, desc))
     {
         (void)f_close(&fp);
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_BOOT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
@@ -444,6 +463,10 @@ bool sample_pool_load(uint16_t id, const char *path)
     desc->valid = 1U;
     g_sample_slot_by_sample[id] = slot;
     (void)f_close(&fp);
+    if (sd_gate_held != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_BOOT);
+    }
 
     SAMPLE_POOL_LOG("[SAMPLE_POOL] loaded id=%u slot=%d path=%s frames=%lu\n",
                     (unsigned)id,
