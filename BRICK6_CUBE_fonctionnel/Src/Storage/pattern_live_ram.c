@@ -373,11 +373,17 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if (pattern_sd_bank_load_slot(bank, pattern, &g_next_pattern) == 0U)
+    const uint8_t has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
+    g_pattern_slot_meta[bank][pattern].has_snapshot = has_snapshot;
+
+    if (has_snapshot == 0U)
+    {
+        memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
+    }
+    else if (pattern_sd_bank_load_slot(bank, pattern, &g_next_pattern) == 0U)
     {
         return 0U;
     }
-    g_pattern_slot_meta[bank][pattern].has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
 
     if (seq_runtime_is_running() == 0U)
     {
@@ -395,6 +401,18 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
     g_queued_bank = bank;
     g_queued_pattern = pattern;
     g_queued_valid = 1U;
+    return 1U;
+}
+
+uint8_t pattern_live_capture_boot_snapshot(void)
+{
+    PatternSaveV1 captured;
+    if (pattern_live_capture_current(&captured) == 0U)
+    {
+        return 0U;
+    }
+
+    memcpy(&g_boot_pattern, &captured, sizeof(g_boot_pattern));
     return 1U;
 }
 

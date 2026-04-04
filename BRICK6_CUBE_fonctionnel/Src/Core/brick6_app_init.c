@@ -110,6 +110,7 @@ void brick6_app_init(void)
     undo_v1_init();
     param_store_init();
     brick6_boot_apply_param_defaults();
+    (void)pattern_live_capture_boot_snapshot();
     control_event_init();
 
     hall_loop_init();

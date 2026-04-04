@@ -70,6 +70,7 @@ typedef struct
 } PatternSaveV1;
 
 void pattern_live_init(void);
+uint8_t pattern_live_capture_boot_snapshot(void);
 void pattern_live_service(void);
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern);
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern);
