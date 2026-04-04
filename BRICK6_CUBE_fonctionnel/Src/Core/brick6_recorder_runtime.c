@@ -17,6 +17,7 @@
 #include "Audio/live_recorder.h"
 #include "Audio/recorder_transport.h"
 #include "Audio/sd_multitrack_recorder.h"
+#include "Core/brick6_sd_config.h"
 
 void brick6_recorder_runtime_boot_init(live_recorder_t *rec,
                                        float *buffer,
@@ -31,7 +32,9 @@ void brick6_recorder_runtime_boot_init(live_recorder_t *rec,
     live_recorder_start_play(rec);
 
     recorder_transport_init();
+#if BRICK6_SD_ENABLE_RECORDER
     sd_recorder_init();
+#endif
 }
 
 void brick6_recorder_runtime_process_transport(live_recorder_t *rec)
@@ -51,13 +54,17 @@ void brick6_recorder_runtime_process_transport(live_recorder_t *rec)
            (last_transport_recording == 0U))
         {
             live_recorder_start_record(rec);
+#if BRICK6_SD_ENABLE_RECORDER
             (void)sd_recorder_request_start();
+#endif
         }
         else if((transport_recording == 0U) &&
                 (last_transport_recording != 0U))
         {
             live_recorder_stop_record(rec);
+#if BRICK6_SD_ENABLE_RECORDER
             (void)sd_recorder_request_stop();
+#endif
         }
 
         last_transport_recording = transport_recording;
@@ -66,5 +73,7 @@ void brick6_recorder_runtime_process_transport(live_recorder_t *rec)
 
 void brick6_recorder_runtime_service_writer(void)
 {
+#if BRICK6_SD_ENABLE_RECORDER
     sd_recorder_writer_service();
+#endif
 }
