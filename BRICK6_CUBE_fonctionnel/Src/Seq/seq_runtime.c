@@ -260,6 +260,16 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
 
+static uint8_t seq_runtime_clamp_track_length(uint8_t length)
+{
+    if ((length == 0U) || (length > SEQ_MAX_STEPS))
+    {
+        return SEQ_MAX_STEPS;
+    }
+
+    return length;
+}
+
 static void seq_runtime_process_step_boundaries(void)
 {
     if (seq_transport_fsm_allow_schedule_play(&g_seq_transport_fsm) == 0U)
@@ -678,9 +688,15 @@ void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
 {
-    if ((seq_runtime_track_is_valid(track) == 0U) || (step >= SEQ_MAX_STEPS))
+    if (seq_runtime_track_is_valid(track) == 0U)
     {
         return 0U;
+    }
+
+    const uint8_t length = seq_runtime_clamp_track_length(seq_model_get_track_length(track));
+    if (step >= length)
+    {
+        step = 0U;
     }
 
     g_seq_runtime.play_step[track] = step;
@@ -701,6 +717,27 @@ uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_s
 
     *out_step = g_seq_runtime.play_step[track];
     return 1U;
+}
+
+void seq_runtime_on_track_length_changed(seq_track_id_t track)
+{
+    if (seq_runtime_track_is_valid(track) == 0U)
+    {
+        return;
+    }
+
+    const uint8_t length = seq_runtime_clamp_track_length(seq_model_get_track_length(track));
+    if (g_seq_runtime.play_step[track] >= length)
+    {
+        g_seq_runtime.play_step[track] = 0U;
+    }
+    if (g_seq_runtime.prev_step[track] >= length)
+    {
+        g_seq_runtime.prev_step[track] = g_seq_runtime.play_step[track];
+    }
+
+    g_seq_runtime.prev_step_valid[track] = 0U;
+    g_seq_runtime.track_div_phase[track] = 0U;
 }
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
