@@ -79,7 +79,10 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
                            const seq_step_id_t *steps,
                            uint8_t step_count)
 {
-    if ((seq_clipboard_track_is_valid(track) == 0U) || (steps == 0) || (step_count == 0U) || (step_count > SEQ_MAX_STEPS))
+    if ((seq_clipboard_track_is_valid(track) == 0U)
+        || (steps == 0)
+        || (step_count == 0U)
+        || (step_count > seq_model_get_editable_step_capacity()))
     {
         return 0U;
     }
@@ -98,7 +101,7 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         const seq_step_id_t step = steps[i];
-        if (step >= SEQ_MAX_STEPS)
+        if (seq_model_is_step_editable_index(step) == 0U)
         {
             continue;
         }
@@ -177,8 +180,8 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
             continue;
         }
 
-        const uint8_t target_step = (uint8_t)(dest_anchor + src->offset);
-        if (target_step >= SEQ_MAX_STEPS)
+        const seq_step_id_t target_step = (seq_step_id_t)(dest_anchor + src->offset);
+        if (seq_model_is_step_editable_index(target_step) == 0U)
         {
             result.trunc = 1U;
             continue;

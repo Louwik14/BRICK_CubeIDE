@@ -23,13 +23,7 @@ typedef struct
 
 static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)
 {
-    uint8_t length = seq_model_get_track_length(track);
-    if ((length == 0U) || (length > SEQ_MAX_STEPS))
-    {
-        length = SEQ_MAX_STEPS;
-    }
-
-    return length;
+    return seq_model_get_track_playback_length(track);
 }
 
 static uint8_t seq_boundary_engine_lock_equals(const seq_runtime_active_lock_t *active,
@@ -65,7 +59,10 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
                                                       seq_boundary_engine_step_lock_t *out_locks,
                                                       uint8_t *out_count)
 {
-    if ((out_locks == 0) || (out_count == 0) || (track >= SEQ_TRACK_COUNT) || (step >= SEQ_MAX_STEPS))
+    if ((out_locks == 0)
+        || (out_count == 0)
+        || (track >= SEQ_TRACK_COUNT)
+        || (seq_model_is_step_editable_index(step) == 0U))
     {
         return 0U;
     }

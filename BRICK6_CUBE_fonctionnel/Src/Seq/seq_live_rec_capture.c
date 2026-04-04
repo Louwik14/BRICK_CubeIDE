@@ -227,11 +227,7 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
             micro = -24;
         }
 
-        uint8_t length = seq_model_get_track_length(track);
-        if ((length == 0U) || (length > SEQ_MAX_STEPS))
-        {
-            length = SEQ_MAX_STEPS;
-        }
+        const uint8_t length = seq_model_get_track_playback_length(track);
 
         uint8_t next = (uint8_t)(*io_step + 1U);
         if (next >= length)
@@ -250,11 +246,7 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
         return;
     }
 
-    uint8_t length = seq_model_get_track_length(track);
-    if ((length == 0U) || (length > SEQ_MAX_STEPS))
-    {
-        length = SEQ_MAX_STEPS;
-    }
+    const uint8_t length = seq_model_get_track_playback_length(track);
 
     uint8_t next = (uint8_t)(*io_step + 1U);
     if (next >= length)

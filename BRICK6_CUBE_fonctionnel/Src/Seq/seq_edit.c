@@ -90,7 +90,7 @@ uint8_t seq_edit_map_hall_to_step(seq_track_id_t track, uint8_t hall_index, seq_
     const uint8_t page = seq_model_get_track_page(track);
     const uint8_t step = (uint8_t)(page * SEQ_STEPS_PER_PAGE + hall_index);
 
-    if (step >= SEQ_MAX_STEPS)
+    if (seq_model_is_step_editable_index(step) == 0U)
     {
         return 0U;
     }
@@ -363,7 +363,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         const seq_step_id_t step = steps[i];
-        if (step >= SEQ_MAX_STEPS)
+        if (seq_model_is_step_editable_index(step) == 0U)
         {
             continue;
         }
