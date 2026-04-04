@@ -169,13 +169,6 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         return 0U;
     }
 
-    const seq_project_data_t *const project = seq_model_get_project();
-    uint8_t target_len = project->tracks[target_track].length_steps;
-    if ((target_len == 0U) || (target_len > SEQ_MAX_STEPS))
-    {
-        target_len = SEQ_MAX_STEPS;
-    }
-
     for (uint8_t i = 0U; i < g_seq_clipboard.step_count; ++i)
     {
         const seq_clipboard_step_t *const src = &g_seq_clipboard.steps[i];
@@ -185,7 +178,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         }
 
         const uint8_t target_step = (uint8_t)(dest_anchor + src->offset);
-        if (target_step >= target_len)
+        if (target_step >= SEQ_MAX_STEPS)
         {
             result.trunc = 1U;
             continue;
