@@ -39,8 +39,26 @@ typedef enum
     UI_HALL_MODE_SEQ = 0,
     UI_HALL_MODE_KEYBOARD,
     UI_HALL_MODE_ARP,
+    UI_HALL_MODE_PATTERN,
     UI_HALL_MODE_COUNT
 } ui_hall_mode_t;
+
+typedef enum
+{
+    UI_PATTERN_SUBSTATE_BANK_SELECT = 0,
+    UI_PATTERN_SUBSTATE_PATTERN_SELECT
+} ui_pattern_substate_t;
+
+typedef struct
+{
+    uint8_t active_bank;
+    uint8_t active_pattern;
+    uint8_t queued_valid;
+    uint8_t queued_bank;
+    uint8_t queued_pattern;
+    ui_pattern_substate_t substate;
+    uint8_t selected_bank;
+} ui_pattern_stub_state_t;
 
 typedef enum
 {
@@ -83,6 +101,8 @@ ui_hall_mode_t ui_get_hall_mode(void);
 void ui_set_hall_mode(ui_hall_mode_t mode);
 const char *ui_get_hall_mode_short_label(void);
 const char *ui_get_hall_mode_suffix_label(void);
+void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
+uint8_t ui_core_request_undo(void);
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
 void ui_core_clear_hall_note_suppression(uint8_t hall);
 

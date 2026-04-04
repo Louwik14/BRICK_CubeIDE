@@ -199,6 +199,46 @@ static void led_apply_keyboard_hall_scene(uint8_t hall)
     led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
 }
 
+static void led_apply_pattern_hall_scene(uint8_t hall)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    ui_pattern_stub_state_t state = { 0 };
+    ui_get_pattern_stub_state(&state);
+
+    uint8_t r = 0U;
+    uint8_t g = 0U;
+    uint8_t b = 0U;
+
+    if (state.substate == UI_PATTERN_SUBSTATE_BANK_SELECT)
+    {
+        r = LED_FIXED_DARK_BLUE_R;
+        g = LED_FIXED_DARK_BLUE_G;
+        b = LED_FIXED_DARK_BLUE_B;
+
+        if (hall == state.active_bank)
+        {
+            r = LED_FIXED_RED_R;
+            g = LED_FIXED_RED_G;
+            b = LED_FIXED_RED_B;
+        }
+    }
+    else
+    {
+        r = LED_FIXED_LIGHT_BLUE_R;
+        g = LED_FIXED_LIGHT_BLUE_G;
+        b = LED_FIXED_LIGHT_BLUE_B;
+
+        if ((state.active_bank == state.selected_bank) && (hall == state.active_pattern))
+        {
+            r = LED_FIXED_RED_R;
+            g = LED_FIXED_RED_G;
+            b = LED_FIXED_RED_B;
+        }
+    }
+
+    led_layer_set(LED_LAYER_UI, led, r, g, b);
+}
+
 static bool led_hall_mode_uses_keyboard_scene(void)
 {
     const ui_hall_mode_t mode = ui_get_hall_mode();
@@ -218,7 +258,11 @@ static void led_apply_fixed_scene(void)
     {
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
-            if (led_hall_mode_uses_keyboard_scene())
+            if (ui_get_hall_mode() == UI_HALL_MODE_PATTERN)
+            {
+                led_apply_pattern_hall_scene(hall);
+            }
+            else if (led_hall_mode_uses_keyboard_scene())
             {
                 led_apply_keyboard_hall_scene(hall);
             }
