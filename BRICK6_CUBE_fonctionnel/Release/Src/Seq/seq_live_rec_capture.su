@@ -1,5 +1,5 @@
-../Src/Seq/seq_live_rec_capture.c:349:6:seq_live_rec_capture_init	0	static
-../Src/Seq/seq_live_rec_capture.c:354:6:seq_live_rec_capture_reset	0	static
-../Src/Seq/seq_live_rec_capture.c:359:6:seq_live_rec_capture_flush	64	static
-../Src/Seq/seq_live_rec_capture.c:367:6:seq_live_rec_capture_note_on	120	static
-../Src/Seq/seq_live_rec_capture.c:484:6:seq_live_rec_capture_note_off	80	static
+../Src/Seq/seq_live_rec_capture.c:341:6:seq_live_rec_capture_init	0	static
+../Src/Seq/seq_live_rec_capture.c:346:6:seq_live_rec_capture_reset	0	static
+../Src/Seq/seq_live_rec_capture.c:351:6:seq_live_rec_capture_flush	64	static
+../Src/Seq/seq_live_rec_capture.c:359:6:seq_live_rec_capture_note_on	120	static
+../Src/Seq/seq_live_rec_capture.c:476:6:seq_live_rec_capture_note_off	80	static

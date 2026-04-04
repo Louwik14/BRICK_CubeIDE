@@ -1,2 +1,2 @@
-../Src/Core/brick6_audio_runtime.c:176:6:brick6_audio_runtime_init	1
-../Src/Core/brick6_audio_runtime.c:182:6:brick6_audio_runtime_dsp	45
+../Src/Core/brick6_audio_runtime.c:181:6:brick6_audio_runtime_init	1
+../Src/Core/brick6_audio_runtime.c:187:6:brick6_audio_runtime_dsp	31

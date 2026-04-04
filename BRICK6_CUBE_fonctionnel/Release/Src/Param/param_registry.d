@@ -45,7 +45,7 @@ Src/Param/param_registry.o: ../Src/Param/param_registry.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  ../Inc/Seq/seq_runtime.h ../Inc/Seq/seq_types.h ../Inc/Seq/seq_model.h \
  ../Inc/Core/runtime_target.h ../Inc/Core/track_runtime.h \
- ../Inc/Storage/memory_layout.h
+ ../Inc/Storage/memory_layout.h ../Inc/Storage/undo_v1.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_store.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/audio_float.h:
@@ -99,3 +99,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui
 ../Inc/Core/runtime_target.h:
 ../Inc/Core/track_runtime.h:
 ../Inc/Storage/memory_layout.h:
+../Inc/Storage/undo_v1.h:
