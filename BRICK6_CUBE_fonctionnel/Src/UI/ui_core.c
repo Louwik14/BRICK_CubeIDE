@@ -53,6 +53,8 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Core/runtime_target.h"
+#include "Storage/pattern_live_ram.h"
+#include "Storage/undo_v1.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
@@ -81,6 +83,10 @@ typedef struct
     uint8_t track_midi_source[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
+    ui_pattern_substate_t pattern_substate;
+    uint8_t pattern_selected_bank;
+    ui_hall_mode_t pattern_prev_mode;
+    uint8_t pattern_prev_mode_valid;
     char feedback_message[16];
     uint32_t feedback_until_ms;
 } ui_track_state_t;
@@ -111,6 +117,10 @@ static ui_track_state_t g_ui_track_state = {
     },
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
+    .pattern_substate = UI_PATTERN_SUBSTATE_BANK_SELECT,
+    .pattern_selected_bank = 0U,
+    .pattern_prev_mode = UI_HALL_MODE_SEQ,
+    .pattern_prev_mode_valid = 0U,
     .feedback_message = { 0 },
     .feedback_until_ms = 0U,
 };
@@ -132,6 +142,35 @@ static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
     { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
     { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
 };
+
+static void ui_core_pattern_reset_selection_only(void)
+{
+    g_ui_track_state.pattern_substate = UI_PATTERN_SUBSTATE_BANK_SELECT;
+    g_ui_track_state.pattern_selected_bank = 0U;
+}
+
+static void ui_core_pattern_abort_internal(void)
+{
+    ui_core_pattern_reset_selection_only();
+    g_ui_track_state.pattern_prev_mode_valid = 0U;
+}
+
+static void ui_core_pattern_enter(void)
+{
+    g_ui_track_state.pattern_prev_mode = ui_get_hall_mode();
+    g_ui_track_state.pattern_prev_mode_valid = (g_ui_track_state.pattern_prev_mode != UI_HALL_MODE_PATTERN) ? 1U : 0U;
+    ui_core_pattern_reset_selection_only();
+    ui_set_hall_mode(UI_HALL_MODE_PATTERN);
+}
+
+static void ui_core_pattern_exit_to_previous_mode(void)
+{
+    const ui_hall_mode_t target = (g_ui_track_state.pattern_prev_mode_valid != 0U)
+            ? g_ui_track_state.pattern_prev_mode
+            : UI_HALL_MODE_SEQ;
+    g_ui_track_state.pattern_prev_mode_valid = 0U;
+    ui_set_hall_mode(target);
+}
 
 
 static ui_track_config_t ui_core_get_default_track_config(void)
@@ -731,6 +770,83 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
         return 1U;
     }
 
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
+        && (g_ui_track_state.shift_down != 0U))
+    {
+        ui_core_pattern_enter();
+        return 1U;
+    }
+
+    return 0U;
+}
+
+uint8_t ui_core_request_undo(void)
+{
+    const uint8_t ok = undo_v1_restore(0U);
+    if (ok != 0U)
+    {
+        ui_core_set_feedback("UNDO");
+    }
+    else
+    {
+        ui_core_set_feedback("UNDO N/A");
+    }
+    return ok;
+}
+
+static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ui_get_hall_mode() != UI_HALL_MODE_PATTERN))
+    {
+        return 0U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
+        && (g_ui_track_state.shift_down != 0U))
+    {
+        ui_core_pattern_exit_to_previous_mode();
+        return 1U;
+    }
+
+    if ((ev->type != UI_EVENT_HALL_PRESS) || (ev->id >= HALL_KEY_COUNT))
+    {
+        return 0U;
+    }
+
+    if (g_ui_track_state.pattern_substate == UI_PATTERN_SUBSTATE_BANK_SELECT)
+    {
+        g_ui_track_state.pattern_selected_bank = ev->id;
+        g_ui_track_state.pattern_substate = UI_PATTERN_SUBSTATE_PATTERN_SELECT;
+        return 1U;
+    }
+
+    if (pattern_live_queue_slot(g_ui_track_state.pattern_selected_bank, ev->id) != 0U)
+    {
+        ui_core_set_feedback("PAT QUEUED");
+        ui_core_pattern_exit_to_previous_mode();
+        return 1U;
+    }
+
+    ui_core_set_feedback("PAT EMPTY");
+    return 1U;
+}
+
+static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_COPY)
+        && (g_ui_track_state.shift_down != 0U))
+    {
+        (void)ui_core_request_undo();
+        return 1U;
+    }
+
     return 0U;
 }
 
@@ -948,6 +1064,16 @@ void ui_core_tick(void)
         ui_core_handle_track_selection_event(&ev);
 
         if (ui_core_handle_transport_event(&ev) != 0U)
+        {
+            continue;
+        }
+
+        if (ui_core_handle_global_shortcuts(&ev) != 0U)
+        {
+            continue;
+        }
+
+        if (ui_core_handle_pattern_mode_event(&ev) != 0U)
         {
             continue;
         }
@@ -1302,6 +1428,12 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
         return;
     }
 
+    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
+        && (mode != UI_HALL_MODE_PATTERN))
+    {
+        ui_core_pattern_abort_internal();
+    }
+
     keyboard_runtime_on_hall_mode_changed(g_ui_track_state.hall_mode, mode);
     g_ui_track_state.hall_mode = mode;
 }
@@ -1318,6 +1450,11 @@ const char *ui_get_hall_mode_short_label(void)
         return "ARP";
     }
 
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
+    {
+        return "PAT";
+    }
+
     return "SEQ";
 }
 
@@ -1332,6 +1469,11 @@ const char *ui_get_hall_mode_suffix_label(void)
         return label;
     }
 
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
+    {
+        return "";
+    }
+
     const int8_t octave_shift = keyboard_runtime_get_octave_shift();
     if (octave_shift == 0)
     {
@@ -1340,6 +1482,31 @@ const char *ui_get_hall_mode_suffix_label(void)
 
     (void)snprintf(label, sizeof(label), "%+d", (int)octave_shift);
     return label;
+}
+
+void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
+{
+    if (out_state == 0)
+    {
+        return;
+    }
+
+    uint8_t active_bank = 0U;
+    uint8_t active_pattern = 0U;
+    uint8_t queued_valid = 0U;
+    uint8_t queued_bank = 0U;
+    uint8_t queued_pattern = 0U;
+
+    (void)pattern_live_get_active(&active_bank, &active_pattern);
+    (void)pattern_live_get_queued(&queued_valid, &queued_bank, &queued_pattern);
+
+    out_state->active_bank = active_bank;
+    out_state->active_pattern = active_pattern;
+    out_state->queued_valid = queued_valid;
+    out_state->queued_bank = queued_bank;
+    out_state->queued_pattern = queued_pattern;
+    out_state->substate = g_ui_track_state.pattern_substate;
+    out_state->selected_bank = g_ui_track_state.pattern_selected_bank;
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)

@@ -37,6 +37,7 @@
 #include "Core/runtime_target.h"
 #include "Core/track_runtime.h"
 #include "Storage/memory_layout.h"
+#include "Storage/undo_v1.h"
 #include <math.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -1593,6 +1594,7 @@ static void apply_cfg_rec_len(float v)
 static void apply_seq_length(float v)
 {
     const uint8_t track = ui_get_active_track();
+    (void)undo_v1_capture_before_edit(0U);
     seq_model_set_track_length(track, (uint8_t)(v + 0.5f));
 }
 
