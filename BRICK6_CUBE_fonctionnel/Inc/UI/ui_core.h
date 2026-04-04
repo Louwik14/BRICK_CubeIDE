@@ -110,6 +110,7 @@ const char *ui_get_hall_mode_short_label(void);
 const char *ui_get_hall_mode_suffix_label(void);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
 uint8_t ui_core_request_undo(void);
+uint8_t ui_is_track_modifier_held(void);
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
 void ui_core_clear_hall_note_suppression(uint8_t hall);
 

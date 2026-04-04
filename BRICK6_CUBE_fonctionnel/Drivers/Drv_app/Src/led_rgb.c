@@ -239,6 +239,32 @@ static void led_apply_pattern_hall_scene(uint8_t hall)
     led_layer_set(LED_LAYER_UI, led, r, g, b);
 }
 
+static void led_apply_track_select_hall_scene(uint8_t hall)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    uint8_t r = LED_FIXED_DARK_BLUE_R;
+    uint8_t g = LED_FIXED_DARK_BLUE_G;
+    uint8_t b = LED_FIXED_DARK_BLUE_B;
+
+    if (hall < UI_TRACK_COUNT)
+    {
+        if (hall == ui_get_active_track())
+        {
+            r = LED_FIXED_WHITE_R;
+            g = LED_FIXED_WHITE_G;
+            b = LED_FIXED_WHITE_B;
+        }
+        else if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
+        {
+            r = LED_FIXED_GREEN_R;
+            g = LED_FIXED_GREEN_G;
+            b = LED_FIXED_GREEN_B;
+        }
+    }
+
+    led_layer_set(LED_LAYER_UI, led, r, g, b);
+}
+
 static bool led_hall_mode_uses_keyboard_scene(void)
 {
     const ui_hall_mode_t mode = ui_get_hall_mode();
@@ -250,7 +276,14 @@ static void led_apply_fixed_scene(void)
     led_layer_clear_all();
     const uint8_t held_plock_sets = led_seq_collect_held_plock_set_mask();
 
-    if (ui_get_hall_mode() == UI_HALL_MODE_SEQ)
+    if (ui_is_track_modifier_held() != 0U)
+    {
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+        {
+            led_apply_track_select_hall_scene(hall);
+        }
+    }
+    else if (ui_get_hall_mode() == UI_HALL_MODE_SEQ)
     {
         seq_led_render_active_track_page();
     }

@@ -768,6 +768,23 @@ static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t *out_track,
     return seq_edit_collect_held_steps(out_track, out_steps, max_steps, promote_pending);
 }
 
+static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
+{
+    if ((ev == 0)
+        || (g_ui_track_state.track_select_armed == 0U)
+        || (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN))
+    {
+        return 0U;
+    }
+
+    if ((ev->type != UI_EVENT_HALL_PRESS) && (ev->type != UI_EVENT_HALL_RELEASE))
+    {
+        return 0U;
+    }
+
+    return (ev->id < UI_TRACK_COUNT) ? 1U : 0U;
+}
+
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -871,6 +888,7 @@ static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
     }
 
     ui_core_set_feedback("PAT FAIL");
+    ui_core_pattern_exit_to_previous_mode();
     return 1U;
 }
 
@@ -1110,6 +1128,11 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_core_is_track_hall_event_consumed(&ev) != 0U)
+        {
+            continue;
+        }
 
         if (ui_core_handle_transport_event(&ev) != 0U)
         {
@@ -1488,6 +1511,11 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
 
 const char *ui_get_hall_mode_short_label(void)
 {
+    if (g_ui_track_state.track_select_armed != 0U)
+    {
+        return "TRACK";
+    }
+
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
     {
         return "KBD";
@@ -1509,6 +1537,11 @@ const char *ui_get_hall_mode_short_label(void)
 const char *ui_get_hall_mode_suffix_label(void)
 {
     static char label[6];
+
+    if (g_ui_track_state.track_select_armed != 0U)
+    {
+        return "";
+    }
 
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_SEQ)
     {
@@ -1556,6 +1589,11 @@ void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
     out_state->substate = g_ui_track_state.pattern_substate;
     out_state->selected_bank = g_ui_track_state.pattern_selected_bank;
     out_state->mode = g_ui_track_state.pattern_mode;
+}
+
+uint8_t ui_is_track_modifier_held(void)
+{
+    return g_ui_track_state.track_select_armed;
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)
