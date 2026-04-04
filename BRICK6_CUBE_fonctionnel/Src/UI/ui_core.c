@@ -680,12 +680,17 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
 
 static void ui_core_handle_track_hall_action(uint8_t hall)
 {
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= HALL_KEY_COUNT)
     {
         return;
     }
 
     g_ui_track_state.hall_note_suppressed[hall] = 1U;
+
+    if (hall >= UI_TRACK_COUNT)
+    {
+        return;
+    }
 
     const uint32_t now = HAL_GetTick();
     const uint32_t last_tap = g_ui_track_state.cfg_tap_ms[hall];
@@ -782,7 +787,7 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
         return 0U;
     }
 
-    return (ev->id < UI_TRACK_COUNT) ? 1U : 0U;
+    return (ev->id < HALL_KEY_COUNT) ? 1U : 0U;
 }
 
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)

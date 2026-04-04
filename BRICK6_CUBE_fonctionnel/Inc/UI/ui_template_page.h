@@ -46,6 +46,7 @@ typedef struct
     const ui_template_family_t *family;
     ui_template_family_resolver_fn family_resolver;
     ui_template_widget_picker_fn widget_picker;
+    const ui_template_family_t *resolved_family;
     uint8_t active_subpage;
     uint8_t has_visited;
 } ui_template_page_state_t;

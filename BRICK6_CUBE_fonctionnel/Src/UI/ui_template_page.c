@@ -19,6 +19,21 @@ static ui_template_page_state_t *ui_template_page_get_active_state(void)
     return (ui_template_page_state_t *)page->context;
 }
 
+static void ui_template_page_sync_resolved_family(ui_template_page_state_t *state)
+{
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    if ((state == 0) || (family == 0))
+    {
+        return;
+    }
+
+    if (state->resolved_family != family)
+    {
+        state->resolved_family = family;
+        state->active_subpage = family->default_subpage % 4U;
+    }
+}
+
 const ui_template_family_t *ui_template_page_get_active_family(const ui_template_page_state_t *state)
 {
     if (state == 0)
@@ -91,6 +106,8 @@ const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_
 
 static void ui_template_page_apply_active_bank(ui_template_page_state_t *state)
 {
+    ui_template_page_sync_resolved_family(state);
+
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage == 0)
     {
@@ -133,6 +150,8 @@ void ui_template_page_enter(void)
         ui_param_set_bank(0);
         return;
     }
+
+    ui_template_page_sync_resolved_family(state);
 
     if ((state->has_visited == 0U) || (state->active_subpage >= 4U))
     {

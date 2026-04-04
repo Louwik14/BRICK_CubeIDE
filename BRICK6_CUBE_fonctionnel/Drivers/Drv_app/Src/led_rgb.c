@@ -38,6 +38,7 @@
 #include "Seq/seq_runtime.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
+#define LED_FIXED_DIM_WHITE       13U
 #define LED_FIXED_WHITE_R         LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_WHITE_G         LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_WHITE_B         LED_FIXED_HALF_BRIGHTNESS
@@ -242,9 +243,9 @@ static void led_apply_pattern_hall_scene(uint8_t hall)
 static void led_apply_track_select_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    uint8_t r = LED_FIXED_DARK_BLUE_R;
-    uint8_t g = LED_FIXED_DARK_BLUE_G;
-    uint8_t b = LED_FIXED_DARK_BLUE_B;
+    uint8_t r = 0U;
+    uint8_t g = 0U;
+    uint8_t b = 0U;
 
     if (hall < UI_TRACK_COUNT)
     {
@@ -256,9 +257,15 @@ static void led_apply_track_select_hall_scene(uint8_t hall)
         }
         else if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
         {
-            r = LED_FIXED_GREEN_R;
-            g = LED_FIXED_GREEN_G;
-            b = LED_FIXED_GREEN_B;
+            r = LED_FIXED_DIM_WHITE;
+            g = LED_FIXED_DIM_WHITE;
+            b = LED_FIXED_DIM_WHITE;
+        }
+        else
+        {
+            r = LED_FIXED_BLUE_R;
+            g = LED_FIXED_BLUE_G;
+            b = LED_FIXED_BLUE_B;
         }
     }
 
