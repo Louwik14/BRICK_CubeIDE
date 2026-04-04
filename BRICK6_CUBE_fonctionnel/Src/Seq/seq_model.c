@@ -21,9 +21,22 @@ static uint8_t seq_model_track_is_valid(seq_track_id_t track)
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
 
+static uint8_t seq_model_clamp_playback_length(uint8_t length_steps)
+{
+    if (length_steps == 0U)
+    {
+        return 1U;
+    }
+    if (length_steps > SEQ_MAX_STEPS)
+    {
+        return SEQ_MAX_STEPS;
+    }
+    return length_steps;
+}
+
 static uint8_t seq_model_step_is_valid(seq_step_id_t step)
 {
-    return (step < SEQ_MAX_STEPS) ? 1U : 0U;
+    return (step < seq_model_get_editable_step_capacity()) ? 1U : 0U;
 }
 
 static seq_step_t *seq_model_get_step_mut(seq_track_id_t track, seq_step_id_t step)
@@ -279,26 +292,42 @@ void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
         return;
     }
 
-    if (length_steps == 0U)
-    {
-        length_steps = 1U;
-    }
-    if (length_steps > SEQ_MAX_STEPS)
-    {
-        length_steps = SEQ_MAX_STEPS;
-    }
-
-    g_seq_project.tracks[track].length_steps = length_steps;
+    g_seq_project.tracks[track].length_steps = seq_model_clamp_playback_length(length_steps);
 }
 
 uint8_t seq_model_get_track_length(seq_track_id_t track)
+{
+    return seq_model_get_track_playback_length(track);
+}
+
+uint8_t seq_model_get_editable_step_capacity(void)
+{
+    return SEQ_MAX_STEPS;
+}
+
+uint8_t seq_model_is_step_editable_index(seq_step_id_t step)
+{
+    return (step < seq_model_get_editable_step_capacity()) ? 1U : 0U;
+}
+
+uint8_t seq_model_get_track_playback_length(seq_track_id_t track)
 {
     if (seq_model_track_is_valid(track) == 0U)
     {
         return SEQ_MAX_STEPS;
     }
 
-    return g_seq_project.tracks[track].length_steps;
+    return seq_model_clamp_playback_length(g_seq_project.tracks[track].length_steps);
+}
+
+uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_step_id_t step)
+{
+    if (seq_model_track_is_valid(track) == 0U)
+    {
+        return 0U;
+    }
+
+    return (step < seq_model_get_track_playback_length(track)) ? 1U : 0U;
 }
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,

@@ -63,6 +63,10 @@ uint8_t seq_model_get_track_page(seq_track_id_t track);
 void seq_model_set_track_page(seq_track_id_t track, uint8_t page);
 void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps);
 uint8_t seq_model_get_track_length(seq_track_id_t track);
+uint8_t seq_model_get_editable_step_capacity(void);
+uint8_t seq_model_is_step_editable_index(seq_step_id_t step);
+uint8_t seq_model_get_track_playback_length(seq_track_id_t track);
+uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_step_id_t step);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,

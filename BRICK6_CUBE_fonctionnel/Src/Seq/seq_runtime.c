@@ -188,12 +188,7 @@ static uint8_t seq_runtime_live_rec_is_active(void)
 
 static uint32_t seq_runtime_get_track_pattern_length_steps(seq_track_id_t track)
 {
-    uint32_t length = seq_model_get_track_length(track);
-    if ((length == 0U) || (length > SEQ_MAX_STEPS))
-    {
-        length = SEQ_MAX_STEPS;
-    }
-    return length;
+    return seq_model_get_track_playback_length(track);
 }
 
 static void seq_runtime_pattern_rec_start_now(void)
@@ -258,16 +253,6 @@ static void seq_runtime_pattern_rec_on_step_advanced(void)
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
-}
-
-static uint8_t seq_runtime_clamp_track_length(uint8_t length)
-{
-    if ((length == 0U) || (length > SEQ_MAX_STEPS))
-    {
-        return SEQ_MAX_STEPS;
-    }
-
-    return length;
 }
 
 static void seq_runtime_process_step_boundaries(void)
@@ -693,7 +678,7 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
         return 0U;
     }
 
-    const uint8_t length = seq_runtime_clamp_track_length(seq_model_get_track_length(track));
+    const uint8_t length = seq_model_get_track_playback_length(track);
     if (step >= length)
     {
         step = 0U;
@@ -726,7 +711,7 @@ void seq_runtime_on_track_length_changed(seq_track_id_t track)
         return;
     }
 
-    const uint8_t length = seq_runtime_clamp_track_length(seq_model_get_track_length(track));
+    const uint8_t length = seq_model_get_track_playback_length(track);
     if (g_seq_runtime.play_step[track] >= length)
     {
         g_seq_runtime.play_step[track] = 0U;
