@@ -14,8 +14,16 @@
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
 
-UI_SDRAM static PatternSaveV1 g_pattern_slots[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
-UI_SDRAM static uint8_t g_pattern_slot_used[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
+typedef struct
+{
+    uint8_t has_snapshot;
+    uint8_t dirty_pending_persist;
+} pattern_slot_meta_t;
+
+UI_SDRAM static PatternSaveV1 g_current_pattern;
+UI_SDRAM static PatternSaveV1 g_next_pattern;
+UI_SDRAM static PatternSaveV1 g_boot_pattern;
+static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
 static uint8_t g_active_bank;
 static uint8_t g_active_pattern;
@@ -25,6 +33,34 @@ static uint8_t g_queued_pattern;
 static uint8_t g_apply_in_progress;
 static uint8_t g_last_playhead_valid;
 static uint8_t g_last_playhead_step;
+static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
+
+static uint8_t pattern_live_load_slot_into_next(uint8_t bank, uint8_t pattern)
+{
+    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
+    {
+        return 0U;
+    }
+
+    /*
+     * Backend SD non branché dans cette passe :
+     * - si le slot demandé est le pattern actif, on duplique le snapshot live courant
+     * - sinon on utilise le snapshot boot comme contenu de repli
+     *
+     * L'architecture reste alignée backend cible:
+     * slot persistent (SD) -> next_pattern RAM -> apply quantifié.
+     */
+    if ((bank == g_active_bank) && (pattern == g_active_pattern))
+    {
+        memcpy(&g_next_pattern, &g_current_pattern, sizeof(g_next_pattern));
+    }
+    else
+    {
+        memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
+    }
+
+    return 1U;
+}
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
@@ -335,29 +371,42 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if (pattern_live_capture_current(&g_pattern_slots[bank][pattern]) == 0U)
+    if (pattern_live_capture_current(&g_current_pattern) == 0U)
     {
         return 0U;
     }
 
-    g_pattern_slot_used[bank][pattern] = 1U;
+    g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
+    g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 1U;
+
+    if ((bank == g_queued_bank) && (pattern == g_queued_pattern) && (g_queued_valid != 0U))
+    {
+        memcpy(&g_next_pattern, &g_current_pattern, sizeof(g_next_pattern));
+    }
+
     return 1U;
 }
 
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
 {
     if ((pattern_live_slot_is_valid(bank, pattern) == 0U)
-        || (g_pattern_slot_used[bank][pattern] == 0U))
+        || (g_pattern_slot_meta[bank][pattern].has_snapshot == 0U))
+    {
+        return 0U;
+    }
+
+    if (pattern_live_load_slot_into_next(bank, pattern) == 0U)
     {
         return 0U;
     }
 
     if (seq_runtime_is_running() == 0U)
     {
-        if (pattern_live_apply_snapshot(&g_pattern_slots[bank][pattern], 0U) == 0U)
+        if (pattern_live_apply_snapshot(&g_next_pattern, 0U) == 0U)
         {
             return 0U;
         }
+        memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
         g_active_bank = bank;
         g_active_pattern = pattern;
         g_queued_valid = 0U;
@@ -392,8 +441,9 @@ void pattern_live_service(void)
 
     if ((playhead == 0U) && (g_last_playhead_step != 0U))
     {
-        if (pattern_live_apply_snapshot(&g_pattern_slots[g_queued_bank][g_queued_pattern], 1U) != 0U)
+        if (pattern_live_apply_snapshot(&g_next_pattern, 1U) != 0U)
         {
+            memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
             g_active_bank = g_queued_bank;
             g_active_pattern = g_queued_pattern;
             g_queued_valid = 0U;
@@ -405,8 +455,10 @@ void pattern_live_service(void)
 
 void pattern_live_init(void)
 {
-    memset(&g_pattern_slots, 0, sizeof(g_pattern_slots));
-    memset(&g_pattern_slot_used, 0, sizeof(g_pattern_slot_used));
+    memset(&g_current_pattern, 0, sizeof(g_current_pattern));
+    memset(&g_next_pattern, 0, sizeof(g_next_pattern));
+    memset(&g_boot_pattern, 0, sizeof(g_boot_pattern));
+    memset(&g_pattern_slot_meta, 0, sizeof(g_pattern_slot_meta));
     g_active_bank = 0U;
     g_active_pattern = 0U;
     g_queued_valid = 0U;
@@ -416,15 +468,17 @@ void pattern_live_init(void)
     g_last_playhead_valid = 0U;
     g_last_playhead_step = 0U;
 
-    PatternSaveV1 boot_pattern;
-    if (pattern_live_capture_current(&boot_pattern) != 0U)
+    if (pattern_live_capture_current(&g_boot_pattern) != 0U)
     {
+        memcpy(&g_current_pattern, &g_boot_pattern, sizeof(g_current_pattern));
+        memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
+
         for (uint8_t bank = 0U; bank < PATTERN_BANK_COUNT; ++bank)
         {
             for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
             {
-                g_pattern_slots[bank][pattern] = boot_pattern;
-                g_pattern_slot_used[bank][pattern] = 1U;
+                g_pattern_slot_meta[bank][pattern].has_snapshot = 1U;
+                g_pattern_slot_meta[bank][pattern].dirty_pending_persist = 0U;
             }
         }
     }

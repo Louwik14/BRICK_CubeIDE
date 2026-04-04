@@ -29,6 +29,8 @@
 #include "sd_diskio.h"
 
 #include <string.h>
+#include "Core/brick6_sd_config.h"
+#include "Storage/sd_access_gate.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -38,7 +40,7 @@
  * in case of errors in either BSP_SD_ReadCpltCallback() or BSP_SD_WriteCpltCallback()
  * the value by default is as defined in the BSP platform driver otherwise 30 secs
  */
-#define SD_TIMEOUT 30 * 1000
+#define SD_TIMEOUT BRICK6_SD_TIMEOUT_MS
 
 #define SD_DEFAULT_BLOCK_SIZE 512
 
@@ -258,6 +260,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   uint32_t timeout;
+  uint32_t op_start = HAL_GetTick();
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret;
 #endif
@@ -265,12 +268,16 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   uint32_t alignedAddr;
 #endif
 
+  sd_access_trace_begin("diskio_read");
+
   /*
   * ensure the SDCard is ready for a new operation
   */
 
   if (SD_CheckStatusWithTimeout(SD_TIMEOUT) < 0)
   {
+    sd_access_trace_timeout("diskio_read_wait_card_ready_before_dma", HAL_GetTick() - op_start);
+    sd_access_trace_end("diskio_read", (int)res, HAL_GetTick() - op_start);
     return res;
   }
 
@@ -292,6 +299,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
       if (ReadStatus == 0)
       {
         res = RES_ERROR;
+        sd_access_trace_timeout("diskio_read_wait_dma_callback", HAL_GetTick() - timeout);
       }
       else
       {
@@ -314,6 +322,10 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
             break;
           }
         }
+        if (res != RES_OK)
+        {
+          sd_access_trace_timeout("diskio_read_wait_card_state_after_dma", HAL_GetTick() - timeout);
+        }
       }
     }
 #if defined(ENABLE_SCRATCH_BUFFER)
@@ -335,6 +347,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
           if (ReadStatus == 0)
           {
             res = RES_ERROR;
+            sd_access_trace_timeout("diskio_read_wait_dma_callback_scratch", HAL_GetTick() - timeout);
             break;
           }
           ReadStatus = 0;
@@ -360,6 +373,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     }
 #endif
 
+  sd_access_trace_end("diskio_read", (int)res, HAL_GetTick() - op_start);
   return res;
 }
 
@@ -396,6 +410,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   uint32_t timeout;
+  uint32_t op_start = HAL_GetTick();
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret;
   int i;
@@ -406,8 +421,12 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   uint32_t alignedAddr;
 #endif
 
+  sd_access_trace_begin("diskio_write");
+
   if (SD_CheckStatusWithTimeout(SD_TIMEOUT) < 0)
   {
+    sd_access_trace_timeout("diskio_write_wait_card_ready_before_dma", HAL_GetTick() - op_start);
+    sd_access_trace_end("diskio_write", (int)res, HAL_GetTick() - op_start);
     return res;
   }
 
@@ -439,6 +458,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
       if (WriteStatus == 0)
       {
         res = RES_ERROR;
+        sd_access_trace_timeout("diskio_write_wait_dma_callback", HAL_GetTick() - timeout);
       }
       else
       {
@@ -452,6 +472,10 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
             res = RES_OK;
             break;
           }
+        }
+        if (res != RES_OK)
+        {
+          sd_access_trace_timeout("diskio_write_wait_card_state_after_dma", HAL_GetTick() - timeout);
         }
       }
     }
@@ -483,6 +507,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
           }
           if (WriteStatus == 0)
           {
+            sd_access_trace_timeout("diskio_write_wait_dma_callback_scratch", HAL_GetTick() - timeout);
             break;
           }
 
@@ -496,6 +521,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         res = RES_OK;
     }
 #endif
+  sd_access_trace_end("diskio_write", (int)res, HAL_GetTick() - op_start);
   return res;
 }
 #endif /* _USE_WRITE == 1 */

@@ -26,6 +26,7 @@
 
 #include "audio_float.h"
 #include "Storage/memory_layout.h"
+#include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 
@@ -515,13 +516,22 @@ static void recorder_build_wav_header(recorder_wav_header_t *hdr,
  */
 static uint8_t recorder_mount_fs(void)
 {
+    const uint32_t t0 = HAL_GetTick();
+    sd_access_trace_begin("recorder_f_mount");
     if(g_rec.fs_mounted != 0U)
+    {
+        sd_access_trace_end("recorder_f_mount", 1, HAL_GetTick() - t0);
         return 1U;
+    }
 
     if(f_mount(&g_rec.fs, "0:", 1U) != FR_OK)
+    {
+        sd_access_trace_end("recorder_f_mount", 0, HAL_GetTick() - t0);
         return 0U;
+    }
 
     g_rec.fs_mounted = 1U;
+    sd_access_trace_end("recorder_f_mount", 1, HAL_GetTick() - t0);
     return 1U;
 }
 
@@ -618,9 +628,11 @@ static uint8_t recorder_prepare_files(void)
                        (unsigned long)g_rec.session_index,
                        (unsigned int)stem_id);
 
+        sd_access_trace_begin("recorder_f_open");
         const FRESULT fr_open = f_open(&stem->file,
                                        path,
                                        FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
+        sd_access_trace_end("recorder_f_open", (int)fr_open, 0U);
         if(fr_open != FR_OK)
         {
             stem->last_write_error = (uint32_t)fr_open;
@@ -634,7 +646,9 @@ static uint8_t recorder_prepare_files(void)
         recorder_build_wav_header(&hdr, (uint16_t)stem->cfg.channels, 0U);
 
         UINT bw = 0U;
+        sd_access_trace_begin("recorder_f_write_header");
         const FRESULT fr_wh = f_write(&stem->file, &hdr, sizeof(hdr), &bw);
+        sd_access_trace_end("recorder_f_write_header", (int)fr_wh, 0U);
         if((fr_wh != FR_OK) || (bw != sizeof(hdr)))
         {
             stem->last_write_error = (uint32_t)((fr_wh != FR_OK) ? fr_wh : FR_DISK_ERR);
@@ -790,14 +804,17 @@ static void recorder_try_periodic_sync(recorder_stem_t *stem)
         return;
     }
 
+    sd_access_trace_begin("recorder_f_sync_periodic");
     if(f_sync(&stem->file) == FR_OK)
     {
+        sd_access_trace_end("recorder_f_sync_periodic", 0, 0U);
         stem->bytes_since_last_sync = 0U;
         stem->last_sync_tick_ms = now;
         g_rec.fs_sync_count++;
     }
     else
     {
+        sd_access_trace_end("recorder_f_sync_periodic", -1, 0U);
         stem->last_write_error = FR_DISK_ERR;
         stem->io_failed = 1U;
         recorder_set_state(SD_RECORDER_STATE_FINALIZING);
@@ -876,7 +893,9 @@ static uint8_t recorder_drain_one_block(recorder_stem_t *stem, uint32_t *io_budg
     recorder_pcm24_pack(g_writer_float_block, words, g_writer_pcm24_block);
 
     UINT bw = 0U;
+    sd_access_trace_begin("recorder_f_write_audio");
     const FRESULT fr = f_write(&stem->file, g_writer_pcm24_block, bytes, &bw);
+    sd_access_trace_end("recorder_f_write_audio", (int)fr, 0U);
     stem->write_calls++;
 
     if((fr != FR_OK) || (bw != bytes))
@@ -1233,9 +1252,17 @@ void sd_recorder_writer_service(void)
 {
     g_rec.writer_calls++;
 
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
+    {
+        return;
+    }
+
     if((g_rec.state != SD_RECORDER_STATE_RECORDING) &&
        (g_rec.state != SD_RECORDER_STATE_FINALIZING))
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         return;
+    }
 
     if((g_rec.state == SD_RECORDER_STATE_RECORDING) && (g_rec.files_prepared == 0U))
     {
@@ -1247,6 +1274,7 @@ void sd_recorder_writer_service(void)
         {
             recorder_set_state(SD_RECORDER_STATE_ERROR);
             recorder_close_all_files();
+            sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
             return;
         }
     }
@@ -1317,6 +1345,8 @@ void sd_recorder_writer_service(void)
         RECORDER_DEBUG_LOG("sd recorder recovered from ERROR to IDLE");
         recorder_set_state(SD_RECORDER_STATE_IDLE);
     }
+
+    sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
 }
 
 
