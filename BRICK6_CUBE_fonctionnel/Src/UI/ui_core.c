@@ -54,6 +54,7 @@
 #include "Seq/seq_runtime.h"
 #include "Core/runtime_target.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/project_v1.h"
 #include "Storage/undo_v1.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
@@ -902,6 +903,40 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
     if (ev == 0)
     {
         return 0U;
+    }
+
+    /*
+     * TEMP DEBUG HACK (validation backend projet):
+     * - TRACK + SHIFT + SETTINGS => load project slot 0
+     * - TRACK + SETTINGS         => save project slot 0
+     * À retirer quand l'UI projet dédiée sera en place.
+     */
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_SETTINGS)
+        && (g_ui_track_state.track_select_armed != 0U))
+    {
+        if (g_ui_track_state.shift_down != 0U)
+        {
+            if (project_v1_load_slot(0U) != 0U)
+            {
+                ui_core_set_feedback("PRJ0 LOAD");
+            }
+            else
+            {
+                ui_core_set_feedback("PRJ0 FAIL");
+            }
+            return 1U;
+        }
+
+        if (project_v1_save_slot(0U) != 0U)
+        {
+            ui_core_set_feedback("PRJ0 SAVE");
+        }
+        else
+        {
+            ui_core_set_feedback("PRJ0 FAIL");
+        }
+        return 1U;
     }
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS)

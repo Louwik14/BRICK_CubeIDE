@@ -276,3 +276,35 @@ done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);
     return ok;
 }
+
+uint8_t pattern_sd_bank_delete_slot(uint8_t bank, uint8_t pattern)
+{
+    if (pattern_sd_slot_is_valid(bank, pattern) == 0U)
+    {
+        return 0U;
+    }
+
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATTERN) == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t ok = 0U;
+    char path[32];
+
+    if ((pattern_sd_mount_if_needed() == 0U) || (pattern_sd_make_slot_path(path, sizeof(path), bank, pattern) == 0U))
+    {
+        goto done;
+    }
+
+    const FRESULT fr = f_unlink(path);
+    if ((fr == FR_OK) || (fr == FR_NO_FILE) || (fr == FR_NO_PATH))
+    {
+        g_slot_has_data[bank][pattern] = 0U;
+        ok = 1U;
+    }
+
+done:
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);
+    return ok;
+}
