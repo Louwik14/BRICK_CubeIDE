@@ -8,11 +8,23 @@
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
+#include <stdio.h>
 
 UI_SDRAM static ProjectSaveV1 g_project_work;
 static uint8_t g_project_active_slot_valid;
 static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
+static project_v1_error_t g_project_last_error;
+static project_sd_bank_error_t g_project_last_sd_error;
+
+#ifndef PROJECT_PROFILE_ENABLED
+#define PROJECT_PROFILE_ENABLED 0
+#endif
+
+static void project_v1_set_error(project_v1_error_t err)
+{
+    g_project_last_error = err;
+}
 
 void project_v1_init(void)
 {
@@ -20,6 +32,8 @@ void project_v1_init(void)
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
 }
 
@@ -27,6 +41,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
 {
     if ((out_project == 0) || (__get_IPSR() != 0U))
     {
+        project_v1_set_error((out_project == 0) ? PROJECT_V1_ERR_INVALID_ARG : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
 
@@ -34,6 +49,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
 
     if (pattern_live_capture_current(&out_project->live) == 0U)
     {
+        project_v1_set_error(PROJECT_V1_ERR_CAPTURE_FAIL);
         return 0U;
     }
 
@@ -55,6 +71,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
         }
     }
 
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
     return 1U;
 }
 
@@ -62,6 +79,7 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 {
     if ((project == 0) || (__get_IPSR() != 0U))
     {
+        project_v1_set_error((project == 0) ? PROJECT_V1_ERR_INVALID_ARG : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
 
@@ -72,6 +90,7 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
     if (pattern_live_apply_snapshot(&project->live, 0U) == 0U)
     {
+        project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);
         return 0U;
     }
 
@@ -83,57 +102,102 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
     g_project_active_slot_valid = project->state.active_project_slot_valid;
     g_project_active_slot = project->state.active_project_slot;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
     return 1U;
 }
 
 uint8_t project_v1_save_slot(uint8_t project_slot)
 {
+    const uint32_t t_total = HAL_GetTick();
+    uint32_t t_capture_ms = 0U;
+    uint32_t t_store_ms = 0U;
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
+        project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
 
+    const uint32_t t_capture = HAL_GetTick();
     if (project_v1_capture_current(&g_project_work) == 0U)
     {
         return 0U;
     }
+    t_capture_ms = HAL_GetTick() - t_capture;
 
     g_project_work.state.active_project_slot_valid = 1U;
     g_project_work.state.active_project_slot = project_slot;
 
     const uint32_t next_counter = g_project_save_counter + 1U;
+    const uint32_t t_store = HAL_GetTick();
     if (project_sd_bank_store_slot(project_slot, &g_project_work, next_counter) == 0U)
     {
+        g_project_last_sd_error = project_sd_bank_get_last_error();
+        project_v1_set_error(PROJECT_V1_ERR_SD_STORE_FAIL);
         return 0U;
     }
+    t_store_ms = HAL_GetTick() - t_store;
 
     g_project_save_counter = next_counter;
     g_project_active_slot_valid = 1U;
     g_project_active_slot = project_slot;
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+#if PROJECT_PROFILE_ENABLED
+    printf("[PROJECT][PROFILE] SAVE_V1 total=%lums capture=%lums store=%lums\r\n",
+           (unsigned long)(HAL_GetTick() - t_total),
+           (unsigned long)t_capture_ms,
+           (unsigned long)t_store_ms);
+#else
+    (void)t_total;
+    (void)t_capture_ms;
+    (void)t_store_ms;
+#endif
     return 1U;
 }
 
 uint8_t project_v1_load_slot(uint8_t project_slot)
 {
+    const uint32_t t_total = HAL_GetTick();
+    uint32_t t_sd_load_ms = 0U;
+    uint32_t t_apply_live_ms = 0U;
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
+        project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
 
     uint32_t loaded_counter = 0U;
+    const uint32_t t_sd_load = HAL_GetTick();
     if (project_sd_bank_load_slot(project_slot, &g_project_work, &loaded_counter) == 0U)
     {
+        g_project_last_sd_error = project_sd_bank_get_last_error();
+        project_v1_set_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
         return 0U;
     }
+    t_sd_load_ms = HAL_GetTick() - t_sd_load;
 
+    const uint32_t t_apply_live = HAL_GetTick();
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {
         return 0U;
     }
+    t_apply_live_ms = HAL_GetTick() - t_apply_live;
 
     g_project_save_counter = loaded_counter;
     g_project_active_slot_valid = 1U;
     g_project_active_slot = project_slot;
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+#if PROJECT_PROFILE_ENABLED
+    printf("[PROJECT][PROFILE] LOAD_V1 total=%lums sd_load=%lums apply_live=%lums\r\n",
+           (unsigned long)(HAL_GetTick() - t_total),
+           (unsigned long)t_sd_load_ms,
+           (unsigned long)t_apply_live_ms);
+#else
+    (void)t_total;
+    (void)t_sd_load_ms;
+    (void)t_apply_live_ms;
+#endif
     return 1U;
 }
 
@@ -141,11 +205,14 @@ uint8_t project_v1_delete_slot(uint8_t project_slot)
 {
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
+        project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
 
     if (project_sd_bank_delete_slot(project_slot) == 0U)
     {
+        g_project_last_sd_error = project_sd_bank_get_last_error();
+        project_v1_set_error(PROJECT_V1_ERR_SD_DELETE_FAIL);
         return 0U;
     }
 
@@ -155,6 +222,8 @@ uint8_t project_v1_delete_slot(uint8_t project_slot)
         g_project_active_slot = 0U;
     }
 
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
     return 1U;
 }
 
@@ -162,11 +231,13 @@ uint8_t project_v1_get_active_slot(uint8_t *out_valid, uint8_t *out_slot)
 {
     if ((out_valid == 0) || (out_slot == 0))
     {
+        project_v1_set_error(PROJECT_V1_ERR_INVALID_ARG);
         return 0U;
     }
 
     *out_valid = g_project_active_slot_valid;
     *out_slot = g_project_active_slot;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
     return 1U;
 }
 
@@ -183,4 +254,31 @@ void project_v1_refresh_slots(void)
 uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots)
 {
     return project_sd_bank_list_slots(out_slots, max_slots);
+}
+
+project_v1_error_t project_v1_get_last_error(void)
+{
+    return g_project_last_error;
+}
+
+const char *project_v1_error_to_string(project_v1_error_t err)
+{
+    switch (err)
+    {
+        case PROJECT_V1_ERR_NONE: return "NONE";
+        case PROJECT_V1_ERR_INVALID_SLOT: return "INVALID_SLOT";
+        case PROJECT_V1_ERR_INVALID_ARG: return "INVALID_ARG";
+        case PROJECT_V1_ERR_ISR_CONTEXT: return "ISR_CONTEXT";
+        case PROJECT_V1_ERR_CAPTURE_FAIL: return "CAPTURE_FAIL";
+        case PROJECT_V1_ERR_APPLY_FAIL: return "APPLY_FAIL";
+        case PROJECT_V1_ERR_SD_LOAD_FAIL: return "SD_LOAD_FAIL";
+        case PROJECT_V1_ERR_SD_STORE_FAIL: return "SD_STORE_FAIL";
+        case PROJECT_V1_ERR_SD_DELETE_FAIL: return "SD_DELETE_FAIL";
+        default: return "UNKNOWN";
+    }
+}
+
+uint8_t project_v1_get_last_sd_error_code(void)
+{
+    return (uint8_t)g_project_last_sd_error;
 }
