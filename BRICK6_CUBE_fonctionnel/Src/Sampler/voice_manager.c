@@ -21,6 +21,7 @@
 
 #include "Sampler/voice_manager.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stddef.h>
 
@@ -176,6 +177,40 @@ void voice_manager_service(void)
 {
 }
 
+static uint8_t voice_has_valid_sample(uint32_t voice_index, const voice_t *voice, const sample_desc_t *sample_desc)
+{
+    (void)voice_index;
+
+    if((voice == NULL) || (sample_desc == NULL))
+        return 0U;
+
+    if(voice->sample_id >= SAMPLE_POOL_SIZE)
+        return 0U;
+
+    const sample_desc_t *pool_desc = sample_pool_get(voice->sample_id);
+    if((pool_desc == NULL) || (pool_desc != sample_desc))
+        return 0U;
+
+    if((sample_desc->valid == 0U) || (sample_desc->data == NULL) || (sample_desc->length_frames == 0U))
+        return 0U;
+
+    if(sample_desc->length_frames > (UINT32_MAX / 2U))
+        return 0U;
+
+    if(voice->loop_start_frame >= sample_desc->length_frames)
+        return 0U;
+
+    if(voice->loop_enabled != 0U)
+    {
+        if((voice->loop_end_frame == 0U) ||
+           (voice->loop_end_frame > sample_desc->length_frames) ||
+           (voice->loop_start_frame >= voice->loop_end_frame))
+            return 0U;
+    }
+
+    return 1U;
+}
+
 /**
  * @brief Point d'entrée voice_manager_process.
  *
@@ -204,12 +239,13 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
             continue;
 
         const sample_desc_t *sample_desc = voice->sample;
-        if((sample_desc->valid == 0U) || (sample_desc->data == NULL) || (sample_desc->length_frames == 0U))
+        if(voice_has_valid_sample(voice_index, voice, sample_desc) == 0U)
         {
             voice_clear(voice_index);
             continue;
         }
 
+        const uint32_t sample_data_len = sample_desc->length_frames * 2U;
         uint32_t position = voice->position;
 
         for(uint32_t frame = 0U; frame < frames; frame++)
@@ -226,6 +262,12 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
             }
 
             const uint32_t sample_index = position * 2U;
+            if((sample_index + 1U) >= sample_data_len)
+            {
+                voice_clear(voice_index);
+                break;
+            }
+
             const float sample_l = finite_or_zero(sample_desc->data[sample_index]);
             const float sample_r = finite_or_zero(sample_desc->data[sample_index + 1U]);
 
