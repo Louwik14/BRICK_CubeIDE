@@ -297,6 +297,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     }
 
     track_runtime_refresh_all();
+    param_registry_batch_begin();
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
     {
@@ -320,6 +321,8 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
             param_set(id, pattern->globals.global_values[id]);
         }
     }
+
+    param_registry_batch_end();
 
     seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_bpm_milli);
     seq_runtime_set_clock_source((seq_clock_src_t)pattern->globals.clock_src);

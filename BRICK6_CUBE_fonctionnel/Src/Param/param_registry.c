@@ -457,8 +457,25 @@ static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
 volatile uint32_t g_param_tb3_apply_seen = 0U;
 volatile uint32_t g_param_tb3_apply_last_id = 0U;
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
+static uint8_t g_param_registry_batch_depth = 0U;
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
 SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
+
+void param_registry_batch_begin(void)
+{
+    if (g_param_registry_batch_depth < 255U)
+    {
+        g_param_registry_batch_depth++;
+    }
+}
+
+void param_registry_batch_end(void)
+{
+    if (g_param_registry_batch_depth > 0U)
+    {
+        g_param_registry_batch_depth--;
+    }
+}
 
 static uint8_t param_runtime_cache_get(uint8_t track, param_id_t id, float *out_value)
 {
@@ -936,7 +953,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     return 0U;
                 }
 
-                track_runtime_refresh_track(track);
+                if (g_param_registry_batch_depth == 0U)
+                {
+                    track_runtime_refresh_track(track);
+                }
                 const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
                 if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
                 {
