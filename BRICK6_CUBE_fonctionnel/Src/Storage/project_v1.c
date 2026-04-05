@@ -3,12 +3,12 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Storage/boot_context_flash.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
-#include <stdio.h>
 
 UI_SDRAM static ProjectSaveV1 g_project_work;
 static uint8_t g_project_active_slot_valid;
@@ -16,10 +16,6 @@ static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
-
-#ifndef PROJECT_PROFILE_ENABLED
-#define PROJECT_PROFILE_ENABLED 0
-#endif
 
 static void project_v1_set_error(project_v1_error_t err)
 {
@@ -32,6 +28,20 @@ static void project_v1_set_sd_operation_error(project_v1_error_t err)
     project_v1_set_error(err);
 }
 
+static void project_boot_ctx_commit_current_state_if_valid(void)
+{
+    uint8_t active_bank = 0U;
+    uint8_t active_pattern = 0U;
+    if ((g_project_active_slot_valid == 0U)
+        || (pattern_live_get_active(&active_bank, &active_pattern) == 0U))
+    {
+        return;
+    }
+
+    (void)active_bank;
+    (void)boot_context_flash_commit(g_project_active_slot, active_pattern);
+}
+
 void project_v1_init(void)
 {
     memset(&g_project_work, 0, sizeof(g_project_work));
@@ -41,6 +51,7 @@ void project_v1_init(void)
     project_v1_set_error(PROJECT_V1_ERR_NONE);
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
+    boot_context_flash_init();
 }
 
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
@@ -114,21 +125,16 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
 uint8_t project_v1_save_slot(uint8_t project_slot)
 {
-    const uint32_t t_total = HAL_GetTick();
-    uint32_t t_capture_ms = 0U;
-    uint32_t t_store_ms = 0U;
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
 
-    const uint32_t t_capture = HAL_GetTick();
     if (project_v1_capture_current(&g_project_work) == 0U)
     {
         return 0U;
     }
-    t_capture_ms = HAL_GetTick() - t_capture;
 
     g_project_work.state.active_project_slot_valid = 1U;
     g_project_work.state.active_project_slot = project_slot;
@@ -139,34 +145,14 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
         g_project_active_slot = project_slot;
         g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
         project_v1_set_error(PROJECT_V1_ERR_NONE);
-#if PROJECT_PROFILE_ENABLED
-        printf("[PROJECT][PROFILE] SAVE_V1 total=%lums capture=%lums store=%lums (skipped: equivalent slot)\r\n",
-               (unsigned long)(HAL_GetTick() - t_total),
-               (unsigned long)t_capture_ms,
-               0UL);
-#else
-        (void)t_total;
-        (void)t_capture_ms;
-#endif
+        project_boot_ctx_commit_current_state_if_valid();
         return 1U;
     }
 
-    const uint32_t t_store = HAL_GetTick();
     if (project_v1_store_snapshot_to_slot(project_slot, &g_project_work, 1U) == 0U)
     {
         return 0U;
     }
-    t_store_ms = HAL_GetTick() - t_store;
-#if PROJECT_PROFILE_ENABLED
-    printf("[PROJECT][PROFILE] SAVE_V1 total=%lums capture=%lums store=%lums\r\n",
-           (unsigned long)(HAL_GetTick() - t_total),
-           (unsigned long)t_capture_ms,
-           (unsigned long)t_store_ms);
-#else
-    (void)t_total;
-    (void)t_capture_ms;
-    (void)t_store_ms;
-#endif
     return 1U;
 }
 
@@ -197,14 +183,12 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
     }
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
+    project_boot_ctx_commit_current_state_if_valid();
     return 1U;
 }
 
 uint8_t project_v1_load_slot(uint8_t project_slot)
 {
-    const uint32_t t_total = HAL_GetTick();
-    uint32_t t_sd_load_ms = 0U;
-    uint32_t t_apply_live_ms = 0U;
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
@@ -212,36 +196,23 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     }
 
     uint32_t loaded_counter = 0U;
-    const uint32_t t_sd_load = HAL_GetTick();
     if (project_sd_bank_load_slot(project_slot, &g_project_work, &loaded_counter) == 0U)
     {
         project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
         return 0U;
     }
-    t_sd_load_ms = HAL_GetTick() - t_sd_load;
 
-    const uint32_t t_apply_live = HAL_GetTick();
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {
         return 0U;
     }
-    t_apply_live_ms = HAL_GetTick() - t_apply_live;
 
     g_project_save_counter = loaded_counter;
     g_project_active_slot_valid = 1U;
     g_project_active_slot = project_slot;
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
-#if PROJECT_PROFILE_ENABLED
-    printf("[PROJECT][PROFILE] LOAD_V1 total=%lums sd_load=%lums apply_live=%lums\r\n",
-           (unsigned long)(HAL_GetTick() - t_total),
-           (unsigned long)t_sd_load_ms,
-           (unsigned long)t_apply_live_ms);
-#else
-    (void)t_total;
-    (void)t_sd_load_ms;
-    (void)t_apply_live_ms;
-#endif
+    project_boot_ctx_commit_current_state_if_valid();
     return 1U;
 }
 
@@ -263,6 +234,7 @@ uint8_t project_v1_delete_slot(uint8_t project_slot)
     {
         g_project_active_slot_valid = 0U;
         g_project_active_slot = 0U;
+        boot_context_flash_clear();
     }
 
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
@@ -358,4 +330,46 @@ const char *project_v1_error_to_string(project_v1_error_t err)
 uint8_t project_v1_get_last_sd_error_code(void)
 {
     return (uint8_t)g_project_last_sd_error;
+}
+
+uint8_t project_v1_restore_boot_context(void)
+{
+    boot_context_flash_data_t ctx;
+
+    if (boot_context_flash_load(&ctx) == 0U)
+    {
+        return 0U;
+    }
+
+    if ((ctx.active_project_slot >= PROJECT_V1_SLOT_COUNT) || (ctx.active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
+    {
+        return 0U;
+    }
+
+    if (project_v1_load_slot(ctx.active_project_slot) == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t active_bank = 0U;
+    uint8_t active_pattern = 0U;
+    if ((pattern_live_get_active(&active_bank, &active_pattern) != 0U)
+        && (active_pattern != ctx.active_pattern_index))
+    {
+        if (pattern_live_queue_slot(active_bank, ctx.active_pattern_index) == 0U)
+        {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
+void project_v1_on_active_pattern_changed(uint8_t active_pattern_index)
+{
+    if ((g_project_active_slot_valid == 0U) || (active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
+    {
+        return;
+    }
+
+    (void)boot_context_flash_commit(g_project_active_slot, active_pattern_index);
 }

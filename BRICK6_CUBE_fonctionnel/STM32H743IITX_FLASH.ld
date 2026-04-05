@@ -43,7 +43,10 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-  FLASH (rx)     : ORIGIN = 0x08000000, LENGTH = 2048K
+  /* Application firmware area (bank1 + bank2 sectors 0..6) */
+  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1920K
+  /* Dedicated bank2 sector7 for minimal boot context persistence */
+  BOOT_CTX_FLASH (rx) : ORIGIN = 0x081E0000, LENGTH = 128K
   DTCMRAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
   RAM_D1 (xrw)   : ORIGIN = 0x24000000, LENGTH = 512K
   RAM_D2 (xrw)   : ORIGIN = 0x30000000, LENGTH = 288K
@@ -51,6 +54,10 @@ MEMORY
   SDRAM (xrw)    : ORIGIN = 0xC0000000, LENGTH = 32M
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
+
+/* Exported symbols for boot context backend */
+__boot_context_flash_start__ = ORIGIN(BOOT_CTX_FLASH);
+__boot_context_flash_end__ = ORIGIN(BOOT_CTX_FLASH) + LENGTH(BOOT_CTX_FLASH);
 
 /* Define output sections */
 SECTIONS
@@ -122,6 +129,13 @@ SECTIONS
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
   } >FLASH
+
+  /* Reserved persistent flash area for minimal boot context only (no C data linked here) */
+  .boot_context_flash (NOLOAD) :
+  {
+    . = ALIGN(32);
+    . = ALIGN(32);
+  } >BOOT_CTX_FLASH
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);

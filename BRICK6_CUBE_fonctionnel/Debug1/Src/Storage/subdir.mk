@@ -5,6 +5,7 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Src/Storage/boot_context_flash.c \
 ../Src/Storage/pattern_live_ram.c \
 ../Src/Storage/pattern_sd_bank.c \
 ../Src/Storage/project_sd_bank.c \
@@ -15,6 +16,7 @@ C_SRCS += \
 ../Src/Storage/wav_parser.c 
 
 C_DEPS += \
+./Src/Storage/boot_context_flash.d \
 ./Src/Storage/pattern_live_ram.d \
 ./Src/Storage/pattern_sd_bank.d \
 ./Src/Storage/project_sd_bank.d \
@@ -25,6 +27,7 @@ C_DEPS += \
 ./Src/Storage/wav_parser.d 
 
 OBJS += \
+./Src/Storage/boot_context_flash.o \
 ./Src/Storage/pattern_live_ram.o \
 ./Src/Storage/pattern_sd_bank.o \
 ./Src/Storage/project_sd_bank.o \
@@ -43,5 +46,6 @@ clean: clean-Src-2f-Storage
 
 clean-Src-2f-Storage:
 	-$(RM) ./Src/Storage/pattern_live_ram.cyclo ./Src/Storage/pattern_live_ram.d ./Src/Storage/pattern_live_ram.o ./Src/Storage/pattern_live_ram.su ./Src/Storage/pattern_sd_bank.cyclo ./Src/Storage/pattern_sd_bank.d ./Src/Storage/pattern_sd_bank.o ./Src/Storage/pattern_sd_bank.su ./Src/Storage/project_sd_bank.cyclo ./Src/Storage/project_sd_bank.d ./Src/Storage/project_sd_bank.o ./Src/Storage/project_sd_bank.su ./Src/Storage/project_v1.cyclo ./Src/Storage/project_v1.d ./Src/Storage/project_v1.o ./Src/Storage/project_v1.su ./Src/Storage/sd_access_gate.cyclo ./Src/Storage/sd_access_gate.d ./Src/Storage/sd_access_gate.o ./Src/Storage/sd_access_gate.su ./Src/Storage/undo_v1.cyclo ./Src/Storage/undo_v1.d ./Src/Storage/undo_v1.o ./Src/Storage/undo_v1.su ./Src/Storage/wav_loader.cyclo ./Src/Storage/wav_loader.d ./Src/Storage/wav_loader.o ./Src/Storage/wav_loader.su ./Src/Storage/wav_parser.cyclo ./Src/Storage/wav_parser.d ./Src/Storage/wav_parser.o ./Src/Storage/wav_parser.su
+	-$(RM) ./Src/Storage/boot_context_flash.cyclo ./Src/Storage/boot_context_flash.d ./Src/Storage/boot_context_flash.o ./Src/Storage/boot_context_flash.su
 
 .PHONY: clean-Src-2f-Storage
