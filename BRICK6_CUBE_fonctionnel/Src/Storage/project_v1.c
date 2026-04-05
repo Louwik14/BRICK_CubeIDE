@@ -48,6 +48,8 @@ void project_v1_init(void)
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
+    memset(&g_project_boot_ctx_cache, 0, sizeof(g_project_boot_ctx_cache));
+    g_project_boot_ctx_cache_valid = 0U;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
