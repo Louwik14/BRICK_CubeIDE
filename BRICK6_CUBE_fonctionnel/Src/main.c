@@ -48,6 +48,7 @@
 #include "led_ids.h"
 #include "display_flush_service.h"
 #include "ui_renderer_oled.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -135,6 +136,9 @@ int main(void)
   MX_TIM5_Init();
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
+#if PHASE0_DEBUG_LOG
+  printf("[BOOT] UART debug log active\r\n");
+#endif
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);

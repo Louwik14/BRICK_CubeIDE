@@ -11,6 +11,19 @@
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
 #define PROJECT_V1_FILE_VERSION    1U
 
+typedef enum
+{
+    PROJECT_V1_ERR_NONE = 0,
+    PROJECT_V1_ERR_INVALID_SLOT,
+    PROJECT_V1_ERR_INVALID_ARG,
+    PROJECT_V1_ERR_ISR_CONTEXT,
+    PROJECT_V1_ERR_CAPTURE_FAIL,
+    PROJECT_V1_ERR_APPLY_FAIL,
+    PROJECT_V1_ERR_SD_LOAD_FAIL,
+    PROJECT_V1_ERR_SD_STORE_FAIL,
+    PROJECT_V1_ERR_SD_DELETE_FAIL
+} project_v1_error_t;
+
 typedef struct
 {
     uint8_t active_pattern_bank;
@@ -65,5 +78,8 @@ uint8_t project_v1_get_active_slot(uint8_t *out_valid, uint8_t *out_slot);
 uint8_t project_v1_slot_has_data(uint8_t project_slot);
 void project_v1_refresh_slots(void);
 uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots);
+project_v1_error_t project_v1_get_last_error(void);
+const char *project_v1_error_to_string(project_v1_error_t err);
+uint8_t project_v1_get_last_sd_error_code(void);
 
 #endif
