@@ -481,6 +481,8 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
 
     (void)f_close(&fp);
 
+    (void)f_close(&fp);
+
     if (out_save_counter != 0)
     {
         *out_save_counter = hdr.save_counter;
