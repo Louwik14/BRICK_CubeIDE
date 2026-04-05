@@ -35,6 +35,7 @@
 #include "brick6_recorder_runtime.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/project_v1.h"
 #include "Storage/undo_v1.h"
 #include "Storage/sd_access_gate.h"
 #include "Core/brick6_sd_config.h"
@@ -107,6 +108,7 @@ void brick6_app_init(void)
     engine_tasklet_init(48000);
     seq_runtime_init();
     pattern_live_init();
+    project_v1_init();
     undo_v1_init();
     param_store_init();
     brick6_boot_apply_param_defaults();
