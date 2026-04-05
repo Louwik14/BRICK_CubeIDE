@@ -127,6 +127,24 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
     g_project_work.state.active_project_slot_valid = 1U;
     g_project_work.state.active_project_slot = project_slot;
 
+    if (project_sd_bank_is_slot_equivalent_to_live(project_slot) != 0U)
+    {
+        g_project_active_slot_valid = 1U;
+        g_project_active_slot = project_slot;
+        g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+        project_v1_set_error(PROJECT_V1_ERR_NONE);
+#if PROJECT_PROFILE_ENABLED
+        printf("[PROJECT][PROFILE] SAVE_V1 total=%lums capture=%lums store=%lums (skipped: equivalent slot)\r\n",
+               (unsigned long)(HAL_GetTick() - t_total),
+               (unsigned long)t_capture_ms,
+               0UL);
+#else
+        (void)t_total;
+        (void)t_capture_ms;
+#endif
+        return 1U;
+    }
+
     const uint32_t next_counter = g_project_save_counter + 1U;
     const uint32_t t_store = HAL_GetTick();
     if (project_sd_bank_store_slot(project_slot, &g_project_work, next_counter) == 0U)
