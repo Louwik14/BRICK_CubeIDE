@@ -254,13 +254,14 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
 
             if (rec.has_data != 0U)
             {
-                if (pattern_sd_bank_store_slot(bank, pattern, &g_project_slot_buffer) == 0U)
+                if (pattern_sd_bank_store_slot_nosync(bank, pattern, &g_project_slot_buffer) == 0U)
                 {
                     (void)f_close(&fp);
                     goto done;
                 }
             }
-            else if (pattern_sd_bank_delete_slot(bank, pattern) == 0U)
+            else if ((pattern_sd_bank_slot_has_data(bank, pattern) != 0U)
+                     && (pattern_sd_bank_delete_slot(bank, pattern) == 0U))
             {
                 (void)f_close(&fp);
                 goto done;

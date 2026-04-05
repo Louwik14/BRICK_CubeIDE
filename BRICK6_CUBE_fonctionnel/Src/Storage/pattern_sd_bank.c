@@ -30,6 +30,11 @@ static uint8_t pattern_sd_slot_is_valid(uint8_t bank, uint8_t pattern)
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
 }
 
+static uint8_t pattern_sd_bank_store_slot_internal(uint8_t bank,
+                                                   uint8_t pattern,
+                                                   const PatternSaveV1 *pattern_data,
+                                                   uint8_t do_sync);
+
 static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
 {
     uint32_t crc = 5381UL;
@@ -206,6 +211,19 @@ done:
 
 uint8_t pattern_sd_bank_store_slot(uint8_t bank, uint8_t pattern, const PatternSaveV1 *pattern_data)
 {
+    return pattern_sd_bank_store_slot_internal(bank, pattern, pattern_data, 1U);
+}
+
+uint8_t pattern_sd_bank_store_slot_nosync(uint8_t bank, uint8_t pattern, const PatternSaveV1 *pattern_data)
+{
+    return pattern_sd_bank_store_slot_internal(bank, pattern, pattern_data, 0U);
+}
+
+static uint8_t pattern_sd_bank_store_slot_internal(uint8_t bank,
+                                                   uint8_t pattern,
+                                                   const PatternSaveV1 *pattern_data,
+                                                   uint8_t do_sync)
+{
     if ((pattern_sd_slot_is_valid(bank, pattern) == 0U) || (pattern_data == 0))
     {
         return 0U;
@@ -260,14 +278,19 @@ uint8_t pattern_sd_bank_store_slot(uint8_t bank, uint8_t pattern, const PatternS
         goto done;
     }
 
-    sd_access_trace_begin("pattern_f_sync");
-    const FRESULT fr_sync = f_sync(&fp);
-    sd_access_trace_end("pattern_f_sync", (int)fr_sync, 0U);
-    (void)f_close(&fp);
-    if (fr_sync != FR_OK)
+    if (do_sync != 0U)
     {
-        goto done;
+        sd_access_trace_begin("pattern_f_sync");
+        const FRESULT fr_sync = f_sync(&fp);
+        sd_access_trace_end("pattern_f_sync", (int)fr_sync, 0U);
+        if (fr_sync != FR_OK)
+        {
+            (void)f_close(&fp);
+            goto done;
+        }
     }
+
+    (void)f_close(&fp);
 
     g_slot_has_data[bank][pattern] = 1U;
     ok = 1U;
