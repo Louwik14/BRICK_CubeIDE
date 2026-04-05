@@ -511,6 +511,30 @@ uint8_t pattern_live_get_queued(uint8_t *out_valid, uint8_t *out_bank, uint8_t *
     return 1U;
 }
 
+void pattern_live_set_active_state(uint8_t active_bank,
+                                   uint8_t active_pattern,
+                                   uint8_t queued_valid,
+                                   uint8_t queued_bank,
+                                   uint8_t queued_pattern)
+{
+    if (pattern_live_slot_is_valid(active_bank, active_pattern) != 0U)
+    {
+        g_active_bank = active_bank;
+        g_active_pattern = active_pattern;
+    }
+
+    if ((queued_valid != 0U) && (pattern_live_slot_is_valid(queued_bank, queued_pattern) != 0U))
+    {
+        g_queued_valid = 1U;
+        g_queued_bank = queued_bank;
+        g_queued_pattern = queued_pattern;
+    }
+    else
+    {
+        g_queued_valid = 0U;
+    }
+}
+
 uint8_t pattern_live_is_apply_in_progress(void)
 {
     return g_apply_in_progress;

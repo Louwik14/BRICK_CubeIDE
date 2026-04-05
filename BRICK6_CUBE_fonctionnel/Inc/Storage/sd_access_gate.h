@@ -8,7 +8,8 @@ typedef enum
     SD_ACCESS_CLIENT_NONE = 0,
     SD_ACCESS_CLIENT_RECORDER = 1,
     SD_ACCESS_CLIENT_SAMPLE_BOOT = 2,
-    SD_ACCESS_CLIENT_PATTERN = 3
+    SD_ACCESS_CLIENT_PATTERN = 3,
+    SD_ACCESS_CLIENT_PROJECT = 4
 } sd_access_client_t;
 
 void sd_access_gate_init(void);
