@@ -126,6 +126,19 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
             {
                 if (rec.has_data != 0U)
                 {
+                    uint8_t slot_has_data = 0U;
+                    uint32_t slot_checksum = 0U;
+                    if (pattern_sd_bank_get_slot_checksum(bank, pattern, &slot_has_data, &slot_checksum) == 0U)
+                    {
+                        project_sd_set_error(PROJECT_SD_BANK_ERR_PATTERN_READ_FAIL);
+                        return 0U;
+                    }
+
+                    if ((slot_has_data != 0U) && (slot_checksum == rec.checksum))
+                    {
+                        continue;
+                    }
+
                     if (pattern_sd_bank_store_slot_nosync(bank, pattern, &g_project_slot_buffer) == 0U)
                     {
                         project_sd_set_error(PROJECT_SD_BANK_ERR_PATTERN_STORE_FAIL);

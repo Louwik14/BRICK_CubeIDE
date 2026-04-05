@@ -140,6 +140,67 @@ uint8_t pattern_sd_bank_slot_has_data(uint8_t bank, uint8_t pattern)
     return g_slot_has_data[bank][pattern];
 }
 
+uint8_t pattern_sd_bank_get_slot_checksum(uint8_t bank,
+                                          uint8_t pattern,
+                                          uint8_t *out_has_data,
+                                          uint32_t *out_checksum)
+{
+    if ((pattern_sd_slot_is_valid(bank, pattern) == 0U) || (out_has_data == 0) || (out_checksum == 0))
+    {
+        return 0U;
+    }
+
+    if (g_slot_has_data[bank][pattern] == 0U)
+    {
+        *out_has_data = 0U;
+        *out_checksum = 0U;
+        return 1U;
+    }
+
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATTERN) == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t ok = 0U;
+    FIL fp;
+    UINT br = 0U;
+    pattern_sd_slot_header_t hdr;
+    char path[32];
+
+    if ((pattern_sd_mount_if_needed() == 0U) || (pattern_sd_make_slot_path(path, sizeof(path), bank, pattern) == 0U))
+    {
+        goto done;
+    }
+
+    const FRESULT fr_open = f_open(&fp, path, FA_READ);
+    if (fr_open != FR_OK)
+    {
+        goto done;
+    }
+
+    if ((f_read(&fp, &hdr, sizeof(hdr), &br) != FR_OK) || (br != sizeof(hdr)))
+    {
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    (void)f_close(&fp);
+
+    if ((hdr.magic != PATTERN_MAGIC) || (hdr.version != PATTERN_VERSION) || (hdr.payload_size != sizeof(PatternSaveV1)))
+    {
+        goto done;
+    }
+
+    *out_has_data = 1U;
+    *out_checksum = hdr.checksum;
+    ok = 1U;
+
+done:
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);
+    return ok;
+}
+
 uint8_t pattern_sd_bank_load_slot(uint8_t bank, uint8_t pattern, PatternSaveV1 *out_pattern)
 {
     if ((pattern_sd_slot_is_valid(bank, pattern) == 0U) || (out_pattern == 0))
