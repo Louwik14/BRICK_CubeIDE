@@ -586,6 +586,93 @@ bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
     return true;
 }
 
+bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
+                                  const uint8_t type[UI_TRACK_COUNT],
+                                  const uint8_t midi_channel[UI_TRACK_COUNT],
+                                  const uint8_t midi_source[UI_TRACK_COUNT])
+{
+    if ((family == 0) || (type == 0) || (midi_channel == 0) || (midi_source == 0))
+    {
+        return false;
+    }
+
+    uint8_t input_family_count[(uint8_t)UI_TRACK_FAMILY_COUNT] = { 0U };
+    uint8_t dx7_count = 0U;
+    uint8_t tb3_count = 0U;
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const ui_track_family_t fam = (ui_track_family_t)family[track];
+        const ui_track_type_t typ = (ui_track_type_t)type[track];
+        const ui_track_midi_source_t src = (ui_track_midi_source_t)midi_source[track];
+
+        if (((uint8_t)fam >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+                || ((uint8_t)src >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
+        {
+            return false;
+        }
+
+        if (fam == UI_TRACK_FAMILY_OFF)
+        {
+            continue;
+        }
+
+        if (!ui_track_type_is_valid_for_family(fam, typ))
+        {
+            return false;
+        }
+
+        if (ui_track_family_is_input(fam))
+        {
+            input_family_count[(uint8_t)fam]++;
+            if (input_family_count[(uint8_t)fam] > 1U)
+            {
+                return false;
+            }
+        }
+
+        if ((fam == UI_TRACK_FAMILY_SYNTH) && (typ == UI_TRACK_TYPE_DX7))
+        {
+            dx7_count++;
+            if (dx7_count > 1U)
+            {
+                return false;
+            }
+        }
+
+        if ((fam == UI_TRACK_FAMILY_SYNTH) && (typ == UI_TRACK_TYPE_TB3))
+        {
+            tb3_count++;
+            if (tb3_count > 1U)
+            {
+                return false;
+            }
+        }
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const ui_track_family_t fam = (ui_track_family_t)family[track];
+        const ui_track_type_t requested_type = (ui_track_type_t)type[track];
+
+        g_ui_track_state.track_configs[track].family = fam;
+        g_ui_track_state.track_configs[track].type = (fam == UI_TRACK_FAMILY_OFF)
+            ? UI_TRACK_TYPE_AUDIO
+            : requested_type;
+
+        const uint8_t midi_ch = (midi_channel[track] < 1U)
+            ? 1U
+            : ((midi_channel[track] > 16U) ? 16U : midi_channel[track]);
+        g_ui_track_state.track_midi_channel[track] = midi_ch;
+        g_ui_track_state.track_midi_source[track] = midi_source[track];
+    }
+
+    ui_core_sync_audio_runtime_enables();
+    keyboard_runtime_on_active_track_changed();
+    ui_core_sync_active_track_cfg_params();
+    return true;
+}
+
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16)
 {
     if ((track >= UI_TRACK_COUNT) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
