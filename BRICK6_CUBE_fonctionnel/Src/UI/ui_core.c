@@ -1501,20 +1501,6 @@ ui_hall_mode_t ui_get_hall_mode(void)
     return g_ui_track_state.hall_mode;
 }
 
-static const char *ui_format_transposed_hall_mode_short_label(const char *base_label)
-{
-    static char label[8];
-    const int8_t octave_shift = keyboard_runtime_get_octave_shift();
-
-    if ((base_label == 0) || (octave_shift == 0))
-    {
-        return base_label;
-    }
-
-    (void)snprintf(label, sizeof(label), "%s%+d", base_label, (int)octave_shift);
-    return label;
-}
-
 void ui_set_hall_mode(ui_hall_mode_t mode)
 {
     if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)

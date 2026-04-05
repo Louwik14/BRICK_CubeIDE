@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "buttons_ids.h"
 #include "Storage/project_v1.h"
 #include "drv_display.h"
 #include "ui_page_manager.h"
