@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "stm32h7xx_hal.h"
 #include "buttons_ids.h"
 #include "Storage/project_v1.h"
 #include "drv_display.h"
@@ -36,6 +37,9 @@ typedef struct
 } ui_settings_menu_level_t;
 
 #define UI_SETTINGS_MAX_LEVELS 6U
+#define UI_SETTINGS_STATUS_DURATION_MS 1000U
+#define UI_SETTINGS_ENCODER_DIVIDER 4
+#define UI_SETTINGS_ENCODER_COUNT 4U
 
 typedef struct
 {
@@ -44,6 +48,8 @@ typedef struct
     uint8_t selected_slot;
     uint8_t return_page_id;
     char status_line[20];
+    uint32_t status_until_ms;
+    int16_t encoder_accum[UI_SETTINGS_ENCODER_COUNT];
 } ui_settings_state_t;
 
 static ui_settings_state_t g_ui_settings;
@@ -140,6 +146,7 @@ static void ui_page_settings_status(const char *status)
     if (status == 0)
     {
         g_ui_settings.status_line[0] = '\0';
+        g_ui_settings.status_until_ms = 0U;
         return;
     }
 
@@ -147,6 +154,7 @@ static void ui_page_settings_status(const char *status)
                    sizeof(g_ui_settings.status_line),
                    "%s",
                    status);
+    g_ui_settings.status_until_ms = HAL_GetTick() + UI_SETTINGS_STATUS_DURATION_MS;
 }
 
 static void ui_page_settings_close(void)
@@ -275,6 +283,10 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
+    for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
+    {
+        g_ui_settings.encoder_accum[i] = 0;
+    }
     ui_page_settings_status(0);
     ui_page_settings_push(UI_SETTINGS_VIEW_ROOT);
 }
@@ -284,27 +296,36 @@ static void ui_page_settings_leave(void)
     g_ui_settings.depth = 0U;
 }
 
-static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
+static uint8_t ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
     {
-        return;
+        return 0U;
     }
 
     if (ev->id == (uint8_t)BTN_COPY)
     {
         ui_page_settings_apply_action();
-        return;
+        return 1U;
     }
 
     if ((ev->id == (uint8_t)BTN_PASTE) || (ev->id == (uint8_t)BTN_SETTINGS))
     {
         ui_page_settings_back();
-        return;
+        return 1U;
     }
+
+    return 0U;
 }
 
-static void ui_page_settings_tick(void) {}
+static void ui_page_settings_tick(void)
+{
+    if ((g_ui_settings.status_line[0] != '\0')
+        && ((int32_t)(g_ui_settings.status_until_ms - HAL_GetTick()) <= 0))
+    {
+        ui_page_settings_status(0);
+    }
+}
 
 static void ui_page_settings_render(void)
 {
@@ -382,10 +403,10 @@ uint8_t ui_page_settings_is_open(void)
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;
 }
 
-void ui_page_settings_handle_encoder(int16_t delta)
+void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
-    if ((level == 0) || (delta == 0))
+    if ((level == 0) || (delta == 0) || (encoder >= UI_SETTINGS_ENCODER_COUNT))
     {
         return;
     }
@@ -397,17 +418,23 @@ void ui_page_settings_handle_encoder(int16_t delta)
         return;
     }
 
-    int32_t index = level->selected_index;
-    index += delta;
-
-    while (index < 0)
+    g_ui_settings.encoder_accum[encoder] = (int16_t)(g_ui_settings.encoder_accum[encoder] + delta);
+    const int16_t step = (int16_t)(g_ui_settings.encoder_accum[encoder] / UI_SETTINGS_ENCODER_DIVIDER);
+    g_ui_settings.encoder_accum[encoder] = (int16_t)(g_ui_settings.encoder_accum[encoder] - (step * UI_SETTINGS_ENCODER_DIVIDER));
+    if (step == 0)
     {
-        index += count;
+        return;
     }
 
-    while (index >= count)
+    int32_t index = level->selected_index;
+    index += step;
+    if (index < 0)
     {
-        index -= count;
+        index = 0;
+    }
+    else if (index >= count)
+    {
+        index = (int32_t)count - 1;
     }
 
     level->selected_index = (uint8_t)index;
@@ -420,6 +447,5 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
         return 0U;
     }
 
-    ui_page_settings_handle_event_internal(ev);
-    return 1U;
+    return ui_page_settings_handle_event_internal(ev);
 }
