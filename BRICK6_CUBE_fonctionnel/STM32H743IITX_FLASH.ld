@@ -46,7 +46,7 @@ MEMORY
   /* Application firmware area (bank1 + bank2 sectors 0..6) */
   FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1920K
   /* Dedicated bank2 sector7 for minimal boot context persistence */
-  BOOT_CTX_FLASH (r)  : ORIGIN = 0x081E0000, LENGTH = 128K
+  BOOT_CTX_FLASH (rx) : ORIGIN = 0x081E0000, LENGTH = 128K
   DTCMRAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
   RAM_D1 (xrw)   : ORIGIN = 0x24000000, LENGTH = 512K
   RAM_D2 (xrw)   : ORIGIN = 0x30000000, LENGTH = 288K
@@ -130,11 +130,10 @@ SECTIONS
     PROVIDE_HIDDEN (__fini_array_end = .);
   } >FLASH
 
-  /* Reserved persistent flash area for minimal boot context only */
+  /* Reserved persistent flash area for minimal boot context only (no C data linked here) */
   .boot_context_flash (NOLOAD) :
   {
     . = ALIGN(32);
-    KEEP(*(.boot_context_flash*))
     . = ALIGN(32);
   } >BOOT_CTX_FLASH
 
