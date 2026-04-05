@@ -80,6 +80,48 @@ static void project_sd_scan_slots(void)
     }
 }
 
+void project_sd_bank_refresh_slots(void)
+{
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    {
+        return;
+    }
+
+    if (project_sd_mount_if_needed() != 0U)
+    {
+        project_sd_scan_slots();
+    }
+
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+}
+
+uint8_t project_sd_bank_list_slots(uint8_t *out_slots, uint8_t max_slots)
+{
+    uint8_t count = 0U;
+    if ((out_slots == 0) || (max_slots == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t slot = 0U; slot < PROJECT_V1_SLOT_COUNT; ++slot)
+    {
+        if (g_project_slot_has_data[slot] == 0U)
+        {
+            continue;
+        }
+
+        if (count >= max_slots)
+        {
+            break;
+        }
+
+        out_slots[count] = slot;
+        count++;
+    }
+
+    return count;
+}
+
 void project_sd_bank_init(void)
 {
     memset(&g_project_fs, 0, sizeof(g_project_fs));
@@ -317,14 +359,13 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
     {
         for (uint8_t pattern = 0U; pattern < PROJECT_V1_PATTERN_COUNT; ++pattern)
         {
-            const uint8_t has_data = pattern_sd_bank_slot_has_data(bank, pattern);
+            uint8_t has_data = pattern_sd_bank_slot_has_data(bank, pattern);
             project_v1_slot_record_t rec;
 
             if ((has_data != 0U)
                 && (pattern_sd_bank_load_slot(bank, pattern, &g_project_slot_buffer) == 0U))
             {
-                (void)f_close(&fp);
-                goto done;
+                has_data = 0U;
             }
 
             if (has_data == 0U)

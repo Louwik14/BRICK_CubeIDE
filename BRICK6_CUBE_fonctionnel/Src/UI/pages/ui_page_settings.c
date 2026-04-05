@@ -46,6 +46,8 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
+    uint8_t project_slots[PROJECT_V1_SLOT_COUNT];
+    uint8_t project_slot_count;
     uint8_t return_page_id;
     char status_line[20];
     uint32_t status_until_ms;
@@ -53,6 +55,12 @@ typedef struct
 } ui_settings_state_t;
 
 static ui_settings_state_t g_ui_settings;
+
+static void ui_page_settings_refresh_project_slots(void)
+{
+    project_v1_refresh_slots();
+    g_ui_settings.project_slot_count = project_v1_list_slots(g_ui_settings.project_slots, PROJECT_V1_SLOT_COUNT);
+}
 
 static const char *ui_page_settings_view_title(ui_settings_view_t view)
 {
@@ -84,8 +92,9 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_PROJECT:
             return 3U;
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
-        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
+            return g_ui_settings.project_slot_count;
+        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
             return PROJECT_V1_SLOT_COUNT;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
@@ -112,9 +121,22 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             }
             return "MANAGE";
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
-        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
-            (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)index);
+            if (index >= g_ui_settings.project_slot_count)
+            {
+                return "-";
+            }
+            (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)g_ui_settings.project_slots[index]);
+            return out;
+        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
+            if (project_v1_slot_has_data(index) != 0U)
+            {
+                (void)snprintf(out, out_size, "PROJECT %02u *", (unsigned)index);
+            }
+            else
+            {
+                (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)index);
+            }
             return out;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             if (index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
@@ -202,6 +224,12 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT:
             if (level->selected_index == 0U)
             {
+                ui_page_settings_refresh_project_slots();
+                if (g_ui_settings.project_slot_count == 0U)
+                {
+                    ui_page_settings_status("NO PROJECT");
+                    break;
+                }
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_LOAD);
             }
             else if (level->selected_index == 1U)
@@ -210,12 +238,19 @@ static void ui_page_settings_apply_action(void)
             }
             else
             {
+                ui_page_settings_refresh_project_slots();
+                if (g_ui_settings.project_slot_count == 0U)
+                {
+                    ui_page_settings_status("NO PROJECT");
+                    break;
+                }
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_MANAGE);
             }
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
-            if (project_v1_load_slot(level->selected_index) != 0U)
+            if ((level->selected_index < g_ui_settings.project_slot_count)
+                && (project_v1_load_slot(g_ui_settings.project_slots[level->selected_index]) != 0U))
             {
                 ui_page_settings_status("LOAD OK");
             }
@@ -228,6 +263,7 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
             if (project_v1_save_slot(level->selected_index) != 0U)
             {
+                ui_page_settings_refresh_project_slots();
                 ui_page_settings_status("SAVE OK");
             }
             else
@@ -237,8 +273,11 @@ static void ui_page_settings_apply_action(void)
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
-            g_ui_settings.selected_slot = level->selected_index;
-            ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT);
+            if (level->selected_index < g_ui_settings.project_slot_count)
+            {
+                g_ui_settings.selected_slot = g_ui_settings.project_slots[level->selected_index];
+                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT);
+            }
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
@@ -266,6 +305,8 @@ static void ui_page_settings_apply_action(void)
             }
             else if (project_v1_delete_slot(g_ui_settings.selected_slot) != 0U)
             {
+                ui_page_settings_refresh_project_slots();
+                ui_page_settings_back();
                 ui_page_settings_status("DELETE OK");
             }
             else
@@ -283,10 +324,12 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
+    g_ui_settings.project_slot_count = 0U;
     for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
     {
         g_ui_settings.encoder_accum[i] = 0;
     }
+    ui_page_settings_refresh_project_slots();
     ui_page_settings_status(0);
     ui_page_settings_push(UI_SETTINGS_VIEW_ROOT);
 }
