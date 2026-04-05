@@ -66,6 +66,34 @@ static uint8_t project_sd_slot_is_valid(uint8_t project_slot)
     return (project_slot < PROJECT_V1_SLOT_COUNT) ? 1U : 0U;
 }
 
+static uint8_t project_sd_header_is_valid(const project_v1_file_header_t *hdr, uint8_t project_slot)
+{
+    if (hdr == 0)
+    {
+        return 0U;
+    }
+
+    return ((hdr->magic == PROJECT_V1_FILE_MAGIC)
+            && (hdr->version == PROJECT_V1_FILE_VERSION)
+            && (hdr->header_size == sizeof(project_v1_file_header_t))
+            && (hdr->payload_size == sizeof(ProjectSaveV1))
+            && (hdr->bank_count == PROJECT_V1_BANK_COUNT)
+            && (hdr->pattern_count == PROJECT_V1_PATTERN_COUNT)
+            && (hdr->slot_record_size == sizeof(project_v1_slot_record_t))
+            && (hdr->pattern_payload_size == sizeof(PatternSaveV1))
+            && (hdr->project_slot == (uint32_t)project_slot))
+               ? 1U
+               : 0U;
+}
+
+static void project_sd_mark_slot_validity(uint8_t project_slot, uint8_t has_data)
+{
+    if (project_slot < PROJECT_V1_SLOT_COUNT)
+    {
+        g_project_slot_has_data[project_slot] = (has_data != 0U) ? 1U : 0U;
+    }
+}
+
 static uint32_t project_sd_checksum_accumulate(uint32_t seed, const uint8_t *data, uint32_t len)
 {
     uint32_t crc = (seed == 0U) ? 5381UL : seed;
@@ -289,7 +317,9 @@ static void project_sd_scan_slots(void)
     for (uint8_t slot = 0U; slot < PROJECT_V1_SLOT_COUNT; ++slot)
     {
         char path[32];
-        FILINFO info;
+        FIL fp;
+        UINT br = 0U;
+        project_v1_file_header_t hdr;
         g_project_slot_has_data[slot] = 0U;
 
         if (project_sd_make_slot_path(path, sizeof(path), slot) == 0U)
@@ -297,10 +327,19 @@ static void project_sd_scan_slots(void)
             continue;
         }
 
-        if (f_stat(path, &info) == FR_OK)
+        if (f_open(&fp, path, FA_READ) != FR_OK)
+        {
+            continue;
+        }
+
+        if ((f_read(&fp, &hdr, sizeof(hdr), &br) == FR_OK)
+            && (br == sizeof(hdr))
+            && (project_sd_header_is_valid(&hdr, slot) != 0U))
         {
             g_project_slot_has_data[slot] = 1U;
         }
+
+        (void)f_close(&fp);
     }
 }
 
@@ -433,6 +472,10 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     sd_access_trace_end("project_f_open_read", (int)fr_open, 0U);
     if (fr_open != FR_OK)
     {
+        if ((fr_open == FR_NO_FILE) || (fr_open == FR_NO_PATH))
+        {
+            project_sd_mark_slot_validity(project_slot, 0U);
+        }
         project_sd_set_error(PROJECT_SD_BANK_ERR_OPEN_FAIL);
         goto done;
     }
@@ -444,16 +487,9 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
         goto done;
     }
 
-    if ((hdr.magic != PROJECT_V1_FILE_MAGIC)
-        || (hdr.version != PROJECT_V1_FILE_VERSION)
-        || (hdr.header_size != sizeof(project_v1_file_header_t))
-        || (hdr.payload_size != sizeof(ProjectSaveV1))
-        || (hdr.bank_count != PROJECT_V1_BANK_COUNT)
-        || (hdr.pattern_count != PROJECT_V1_PATTERN_COUNT)
-        || (hdr.slot_record_size != sizeof(project_v1_slot_record_t))
-        || (hdr.pattern_payload_size != sizeof(PatternSaveV1))
-        || (hdr.project_slot != (uint32_t)project_slot))
+    if (project_sd_header_is_valid(&hdr, project_slot) == 0U)
     {
+        project_sd_mark_slot_validity(project_slot, 0U);
         project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_HEADER);
         (void)f_close(&fp);
         goto done;
@@ -482,6 +518,7 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
 
     if (checksum != hdr.checksum)
     {
+        project_sd_mark_slot_validity(project_slot, 0U);
         project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
         goto done;
     }
@@ -541,7 +578,7 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
         *out_save_counter = hdr.save_counter;
     }
 
-    g_project_slot_has_data[project_slot] = 1U;
+    project_sd_mark_slot_validity(project_slot, 1U);
     project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
     ok = 1U;
 
@@ -731,7 +768,7 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
         goto done;
     }
 
-    g_project_slot_has_data[project_slot] = 1U;
+    project_sd_mark_slot_validity(project_slot, 1U);
     project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
     ok = 1U;
 
@@ -776,6 +813,10 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
     const FRESULT fr_open = f_open(&fp, path, FA_READ);
     if (fr_open != FR_OK)
     {
+        if ((fr_open == FR_NO_FILE) || (fr_open == FR_NO_PATH))
+        {
+            project_sd_mark_slot_validity(project_slot, 0U);
+        }
         project_sd_set_error(PROJECT_SD_BANK_ERR_OPEN_FAIL);
         goto done;
     }
@@ -787,16 +828,9 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
         goto done;
     }
 
-    if ((hdr.magic != PROJECT_V1_FILE_MAGIC)
-        || (hdr.version != PROJECT_V1_FILE_VERSION)
-        || (hdr.header_size != sizeof(project_v1_file_header_t))
-        || (hdr.payload_size != sizeof(ProjectSaveV1))
-        || (hdr.bank_count != PROJECT_V1_BANK_COUNT)
-        || (hdr.pattern_count != PROJECT_V1_PATTERN_COUNT)
-        || (hdr.slot_record_size != sizeof(project_v1_slot_record_t))
-        || (hdr.pattern_payload_size != sizeof(PatternSaveV1))
-        || (hdr.project_slot != (uint32_t)project_slot))
+    if (project_sd_header_is_valid(&hdr, project_slot) == 0U)
     {
+        project_sd_mark_slot_validity(project_slot, 0U);
         project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_HEADER);
         (void)f_close(&fp);
         goto done;
@@ -821,11 +855,13 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
 
     if (checksum != hdr.checksum)
     {
+        project_sd_mark_slot_validity(project_slot, 0U);
         project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
         goto done;
     }
 
     is_equivalent = (has_pattern_changes == 0U) ? 1U : 0U;
+    project_sd_mark_slot_validity(project_slot, 1U);
     project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
 
 done:
@@ -867,7 +903,7 @@ uint8_t project_sd_bank_delete_slot(uint8_t project_slot)
         goto done;
     }
 
-    g_project_slot_has_data[project_slot] = 0U;
+    project_sd_mark_slot_validity(project_slot, 0U);
     project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
     ok = 1U;
 

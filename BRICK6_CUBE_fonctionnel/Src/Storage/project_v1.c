@@ -26,6 +26,12 @@ static void project_v1_set_error(project_v1_error_t err)
     g_project_last_error = err;
 }
 
+static void project_v1_set_sd_operation_error(project_v1_error_t err)
+{
+    g_project_last_sd_error = project_sd_bank_get_last_error();
+    project_v1_set_error(err);
+}
+
 void project_v1_init(void)
 {
     memset(&g_project_work, 0, sizeof(g_project_work));
@@ -145,21 +151,12 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
         return 1U;
     }
 
-    const uint32_t next_counter = g_project_save_counter + 1U;
     const uint32_t t_store = HAL_GetTick();
-    if (project_sd_bank_store_slot(project_slot, &g_project_work, next_counter) == 0U)
+    if (project_v1_store_snapshot_to_slot(project_slot, &g_project_work, 1U) == 0U)
     {
-        g_project_last_sd_error = project_sd_bank_get_last_error();
-        project_v1_set_error(PROJECT_V1_ERR_SD_STORE_FAIL);
         return 0U;
     }
     t_store_ms = HAL_GetTick() - t_store;
-
-    g_project_save_counter = next_counter;
-    g_project_active_slot_valid = 1U;
-    g_project_active_slot = project_slot;
-    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
-    project_v1_set_error(PROJECT_V1_ERR_NONE);
 #if PROJECT_PROFILE_ENABLED
     printf("[PROJECT][PROFILE] SAVE_V1 total=%lums capture=%lums store=%lums\r\n",
            (unsigned long)(HAL_GetTick() - t_total),
@@ -170,6 +167,36 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
     (void)t_capture_ms;
     (void)t_store_ms;
 #endif
+    return 1U;
+}
+
+uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
+                                          const ProjectSaveV1 *project,
+                                          uint8_t mark_active_slot)
+{
+    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (project == 0) || (__get_IPSR() != 0U))
+    {
+        project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT
+                                                                      : ((project == 0) ? PROJECT_V1_ERR_INVALID_ARG
+                                                                                        : PROJECT_V1_ERR_ISR_CONTEXT));
+        return 0U;
+    }
+
+    const uint32_t next_counter = g_project_save_counter + 1U;
+    if (project_sd_bank_store_slot(project_slot, project, next_counter) == 0U)
+    {
+        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_STORE_FAIL);
+        return 0U;
+    }
+
+    g_project_save_counter = next_counter;
+    if (mark_active_slot != 0U)
+    {
+        g_project_active_slot_valid = 1U;
+        g_project_active_slot = project_slot;
+    }
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
     return 1U;
 }
 
@@ -188,8 +215,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     const uint32_t t_sd_load = HAL_GetTick();
     if (project_sd_bank_load_slot(project_slot, &g_project_work, &loaded_counter) == 0U)
     {
-        g_project_last_sd_error = project_sd_bank_get_last_error();
-        project_v1_set_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
+        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
         return 0U;
     }
     t_sd_load_ms = HAL_GetTick() - t_sd_load;
@@ -229,8 +255,7 @@ uint8_t project_v1_delete_slot(uint8_t project_slot)
 
     if (project_sd_bank_delete_slot(project_slot) == 0U)
     {
-        g_project_last_sd_error = project_sd_bank_get_last_error();
-        project_v1_set_error(PROJECT_V1_ERR_SD_DELETE_FAIL);
+        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_DELETE_FAIL);
         return 0U;
     }
 
@@ -261,17 +286,51 @@ uint8_t project_v1_get_active_slot(uint8_t *out_valid, uint8_t *out_slot)
 
 uint8_t project_v1_slot_has_data(uint8_t project_slot)
 {
-    return project_sd_bank_slot_has_data(project_slot);
+    if (project_slot >= PROJECT_V1_SLOT_COUNT)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_INVALID_SLOT);
+        return 0U;
+    }
+
+    const uint8_t has_data = project_sd_bank_slot_has_data(project_slot);
+    g_project_last_sd_error = project_sd_bank_get_last_error();
+    if (g_project_last_sd_error != PROJECT_SD_BANK_ERR_NONE)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
+        return 0U;
+    }
+
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+    return has_data;
 }
 
 void project_v1_refresh_slots(void)
 {
     project_sd_bank_refresh_slots();
+    g_project_last_sd_error = project_sd_bank_get_last_error();
+    if (g_project_last_sd_error != PROJECT_SD_BANK_ERR_NONE)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
+        return;
+    }
+
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
 }
 
 uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots)
 {
-    return project_sd_bank_list_slots(out_slots, max_slots);
+    const uint8_t count = project_sd_bank_list_slots(out_slots, max_slots);
+    g_project_last_sd_error = project_sd_bank_get_last_error();
+    if (g_project_last_sd_error != PROJECT_SD_BANK_ERR_NONE)
+    {
+        project_v1_set_error((g_project_last_sd_error == PROJECT_SD_BANK_ERR_INVALID_ARG)
+                                 ? PROJECT_V1_ERR_INVALID_ARG
+                                 : PROJECT_V1_ERR_SD_LOAD_FAIL);
+        return 0U;
+    }
+
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+    return count;
 }
 
 project_v1_error_t project_v1_get_last_error(void)
