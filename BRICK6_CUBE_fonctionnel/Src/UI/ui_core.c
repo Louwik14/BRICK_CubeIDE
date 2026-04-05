@@ -71,6 +71,10 @@
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_FEEDBACK_DURATION_MS 1000U
 #define UI_TRACK_MOD_BUTTON BTN_PARAM_8
+/* TEMP TEST FLAG: set to 1U to run one direct backend project call outside UI shortcut path. */
+#define UI_TEMP_DIRECT_PROJECT_BACKEND_TEST_ENABLE 0U
+/* TEMP TEST FLAG: 0U => save slot 0, 1U => load slot 0 (used only when ENABLE == 1U). */
+#define UI_TEMP_DIRECT_PROJECT_BACKEND_TEST_LOAD 0U
 
 typedef struct
 {
@@ -146,6 +150,31 @@ static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
     { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
     { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
 };
+
+static void ui_core_run_temp_direct_project_backend_test_once(void)
+{
+#if (UI_TEMP_DIRECT_PROJECT_BACKEND_TEST_ENABLE != 0U)
+    static uint8_t s_temp_project_backend_test_done = 0U;
+    if (s_temp_project_backend_test_done != 0U)
+    {
+        return;
+    }
+    s_temp_project_backend_test_done = 1U;
+
+    if (UI_TEMP_DIRECT_PROJECT_BACKEND_TEST_LOAD != 0U)
+    {
+        printf("[UI][PRJ][DIRECT_TEST] before project_v1_load_slot(0)\r\n");
+        const uint8_t rc = project_v1_load_slot(0U);
+        printf("[UI][PRJ][DIRECT_TEST] after project_v1_load_slot(0) rc=%u\r\n", (unsigned)rc);
+    }
+    else
+    {
+        printf("[UI][PRJ][DIRECT_TEST] before project_v1_save_slot(0)\r\n");
+        const uint8_t rc = project_v1_save_slot(0U);
+        printf("[UI][PRJ][DIRECT_TEST] after project_v1_save_slot(0) rc=%u\r\n", (unsigned)rc);
+    }
+#endif
+}
 
 static void ui_core_pattern_reset_selection_only(void)
 {
@@ -911,13 +940,24 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
      * - TRACK + SETTINGS         => save project slot 0
      * À retirer quand l'UI projet dédiée sera en place.
      */
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_SETTINGS)
-        && (g_ui_track_state.track_select_armed != 0U))
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SETTINGS))
     {
+        printf("[UI][PRJ][SHORTCUT] settings_press track_armed=%u shift=%u\r\n",
+               (unsigned)g_ui_track_state.track_select_armed,
+               (unsigned)g_ui_track_state.shift_down);
+
+        if (g_ui_track_state.track_select_armed == 0U)
+        {
+            printf("[UI][PRJ][SHORTCUT] bypassed: track_select_armed=0\r\n");
+            return 0U;
+        }
+
         if (g_ui_track_state.shift_down != 0U)
         {
-            if (project_v1_load_slot(0U) != 0U)
+            printf("[UI][PRJ][SHORTCUT] before project_v1_load_slot(0)\r\n");
+            const uint8_t rc = project_v1_load_slot(0U);
+            printf("[UI][PRJ][SHORTCUT] after project_v1_load_slot(0) rc=%u\r\n", (unsigned)rc);
+            if (rc != 0U)
             {
                 ui_core_set_feedback("PRJ0 LOAD");
             }
@@ -928,7 +968,10 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
             return 1U;
         }
 
-        if (project_v1_save_slot(0U) != 0U)
+        printf("[UI][PRJ][SHORTCUT] before project_v1_save_slot(0)\r\n");
+        const uint8_t rc = project_v1_save_slot(0U);
+        printf("[UI][PRJ][SHORTCUT] after project_v1_save_slot(0) rc=%u\r\n", (unsigned)rc);
+        if (rc != 0U)
         {
             ui_core_set_feedback("PRJ0 SAVE");
         }
@@ -1155,6 +1198,7 @@ void ui_core_service_track_selection_inputs(void)
 void ui_core_tick(void)
 {
     ui_event_t ev;
+    ui_core_run_temp_direct_project_backend_test_once();
 
     for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
     {
