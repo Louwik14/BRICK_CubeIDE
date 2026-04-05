@@ -51,20 +51,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
     {
         for (uint8_t pattern = 0U; pattern < PROJECT_V1_PATTERN_COUNT; ++pattern)
         {
-            const uint8_t has_data = pattern_sd_bank_slot_has_data(bank, pattern);
-            out_project->state.bank_has_data[bank][pattern] = has_data;
-
-            if ((has_data != 0U)
-                && (pattern_sd_bank_load_slot(bank, pattern, &out_project->bank[bank][pattern]) == 0U))
-            {
-                return 0U;
-            }
-
-            if ((has_data == 0U)
-                && (pattern_sd_bank_load_slot(bank, pattern, &out_project->bank[bank][pattern]) == 0U))
-            {
-                memset(&out_project->bank[bank][pattern], 0, sizeof(out_project->bank[bank][pattern]));
-            }
+            out_project->state.bank_has_data[bank][pattern] = pattern_sd_bank_slot_has_data(bank, pattern);
         }
     }
 
@@ -82,28 +69,6 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
     seq_runtime_stop();
     seq_output_guard_panic(1U);
-
-    for (uint8_t bank = 0U; bank < PROJECT_V1_BANK_COUNT; ++bank)
-    {
-        for (uint8_t pattern = 0U; pattern < PROJECT_V1_PATTERN_COUNT; ++pattern)
-        {
-            uint8_t ok = 0U;
-
-            if (project->state.bank_has_data[bank][pattern] != 0U)
-            {
-                ok = pattern_sd_bank_store_slot(bank, pattern, &project->bank[bank][pattern]);
-            }
-            else
-            {
-                ok = pattern_sd_bank_delete_slot(bank, pattern);
-            }
-
-            if (ok == 0U)
-            {
-                return 0U;
-            }
-        }
-    }
 
     if (pattern_live_apply_snapshot(&project->live, 0U) == 0U)
     {

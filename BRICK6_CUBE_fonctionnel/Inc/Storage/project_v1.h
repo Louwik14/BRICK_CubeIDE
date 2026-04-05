@@ -28,7 +28,6 @@ typedef struct
 {
     project_v1_state_block_t state;
     PatternSaveV1 live;
-    PatternSaveV1 bank[PROJECT_V1_BANK_COUNT][PROJECT_V1_PATTERN_COUNT];
 } ProjectSaveV1;
 
 typedef struct __attribute__((packed))
@@ -37,10 +36,24 @@ typedef struct __attribute__((packed))
     uint16_t version;
     uint16_t header_size;
     uint32_t payload_size;
+    uint16_t bank_count;
+    uint16_t pattern_count;
+    uint32_t slot_record_size;
+    uint32_t pattern_payload_size;
     uint32_t project_slot;
     uint32_t save_counter;
     uint32_t checksum;
 } project_v1_file_header_t;
+
+typedef struct __attribute__((packed))
+{
+    uint8_t bank;
+    uint8_t pattern;
+    uint8_t has_data;
+    uint8_t reserved;
+    uint32_t payload_size;
+    uint32_t checksum;
+} project_v1_slot_record_t;
 
 void project_v1_init(void);
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project);

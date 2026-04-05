@@ -19,6 +19,13 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     }
 
     __disable_irq();
+    if (((g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PROJECT) && (client == SD_ACCESS_CLIENT_PATTERN))
+        || ((g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATTERN) && (client == SD_ACCESS_CLIENT_PROJECT)))
+    {
+        __enable_irq();
+        return 1U;
+    }
+
     if ((g_sd_access_owner != (uint8_t)SD_ACCESS_CLIENT_NONE)
         && (g_sd_access_owner != (uint8_t)client))
     {
