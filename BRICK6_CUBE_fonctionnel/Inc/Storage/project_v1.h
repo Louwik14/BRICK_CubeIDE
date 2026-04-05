@@ -81,6 +81,8 @@ uint8_t project_v1_get_active_slot(uint8_t *out_valid, uint8_t *out_slot);
 uint8_t project_v1_slot_has_data(uint8_t project_slot);
 void project_v1_refresh_slots(void);
 uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots);
+uint8_t project_v1_restore_boot_context(void);
+void project_v1_on_active_pattern_changed(uint8_t active_pattern_index);
 project_v1_error_t project_v1_get_last_error(void);
 const char *project_v1_error_to_string(project_v1_error_t err);
 uint8_t project_v1_get_last_sd_error_code(void);

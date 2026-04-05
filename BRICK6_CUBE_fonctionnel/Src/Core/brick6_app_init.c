@@ -107,6 +107,7 @@ void brick6_app_init(void)
     seq_runtime_init();
     pattern_live_init();
     project_v1_init();
+    (void)project_v1_restore_boot_context();
     undo_v1_init();
     param_store_init();
     brick6_boot_apply_param_defaults();
