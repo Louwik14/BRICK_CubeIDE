@@ -52,10 +52,9 @@ Src/UI/ui_core.o: ../Src/UI/ui_core.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/buttons.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/buttons_ids.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/encoders.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_main.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_param_test.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_event.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_param_test.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_debug_hall.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page_manager.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page.h \
@@ -66,6 +65,7 @@ Src/UI/ui_core.o: ../Src/UI/ui_core.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_keyboard.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_arp.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_seq.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_mix.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_play.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_event.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_navigation.h \
@@ -82,7 +82,8 @@ Src/UI/ui_core.o: ../Src/UI/ui_core.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/audio_float.h \
  ../Inc/Seq/seq_edit.h ../Inc/Seq/seq_types.h ../Inc/Seq/seq_model.h \
  ../Inc/Seq/seq_clipboard.h ../Inc/Seq/seq_runtime.h \
- ../Inc/Core/runtime_target.h
+ ../Inc/Core/runtime_target.h ../Inc/Storage/pattern_live_ram.h \
+ ../Inc/Storage/undo_v1.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Inc/stm32h7xx_hal_conf.h:
@@ -136,10 +137,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/buttons.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/buttons_ids.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/encoders.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_main.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_param_test.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_event.h:
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_param_test.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_debug_hall.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page_manager.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_page.h:
@@ -150,6 +150,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pa
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_keyboard.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_arp.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_seq.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_mix.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/pages/ui_page_template_play.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_event.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_navigation.h:
@@ -173,3 +174,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio
 ../Inc/Seq/seq_clipboard.h:
 ../Inc/Seq/seq_runtime.h:
 ../Inc/Core/runtime_target.h:
+../Inc/Storage/pattern_live_ram.h:
+../Inc/Storage/undo_v1.h:

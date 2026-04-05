@@ -1,7 +1,7 @@
 ../Src/Audio/monob_synth.c:57:16:monob_synth_select_instance	2
 ../Src/Audio/monob_synth.c:69:14:monob_synth_clampf	3
-../Src/Audio/monob_synth.c:95:14:monob_synth_step_linear	5
-../Src/Audio/monob_synth.c:113:14:monob_synth_step_with_delta	4
+../Src/Audio/monob_synth.c:95:14:monob_synth_step_linear	3
+../Src/Audio/monob_synth.c:113:14:monob_synth_step_with_delta	2
 ../Src/Audio/monob_synth.c:125:14:monob_synth_process_filter_env	11
 ../Src/Audio/monob_synth.c:84:14:monob_synth_midi_note_to_hz	1
 ../Src/Audio/monob_synth.c:89:14:monob_synth_filter_keytrack_multiplier	1

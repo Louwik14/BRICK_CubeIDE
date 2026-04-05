@@ -1,3 +1,2 @@
-../Src/Audio/audio_io.c:101:23:f2s24_fast	0	static
 ../Src/Audio/audio_io.c:159:6:audio_io_unpack	72	static
-../Src/Audio/audio_io.c:257:6:audio_io_pack	48	static
+../Src/Audio/audio_io.c:257:6:audio_io_pack	16	static

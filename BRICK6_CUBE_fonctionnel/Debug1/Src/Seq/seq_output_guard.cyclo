@@ -2,5 +2,6 @@
 ../Src/Seq/seq_output_guard.c:30:6:seq_output_guard_reset	1
 ../Src/Seq/seq_output_guard.c:35:6:seq_output_guard_note_on_seen	3
 ../Src/Seq/seq_output_guard.c:48:6:seq_output_guard_note_off_seen	3
-../Src/Seq/seq_output_guard.c:61:9:seq_output_guard_is_note_active_on_channel	6
-../Src/Seq/seq_output_guard.c:86:6:seq_output_guard_panic	16
+../Src/Seq/seq_output_guard.c:61:9:seq_output_guard_is_note_active_on_track	3
+../Src/Seq/seq_output_guard.c:71:9:seq_output_guard_is_note_active_on_channel	6
+../Src/Seq/seq_output_guard.c:96:6:seq_output_guard_panic	16

@@ -1,7 +1,7 @@
 ../Src/Audio/fx_filter_ladder_moog.c:13:14:fx_filter_ladder_moog_clampf	3
 ../Src/Audio/fx_filter_ladder_moog.c:28:6:fx_filter_ladder_moog_reset	2
 ../Src/Audio/fx_filter_ladder_moog.c:53:6:fx_filter_ladder_moog_set_cutoff	2
-../Src/Audio/fx_filter_ladder_moog.c:40:6:fx_filter_ladder_moog_set_sample_rate	3
+../Src/Audio/fx_filter_ladder_moog.c:40:6:fx_filter_ladder_moog_set_sample_rate	2
 ../Src/Audio/fx_filter_ladder_moog.c:70:6:fx_filter_ladder_moog_set_resonance	2
 ../Src/Audio/fx_filter_ladder_moog.c:80:6:fx_filter_ladder_moog_set_drive	3
 ../Src/Audio/fx_filter_ladder_moog.c:90:6:fx_filter_ladder_moog_init	2

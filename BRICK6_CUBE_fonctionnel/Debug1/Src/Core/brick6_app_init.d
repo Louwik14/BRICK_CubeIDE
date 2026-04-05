@@ -111,8 +111,10 @@ Src/Core/brick6_app_init.o: ../Src/Core/brick6_app_init.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_master_control.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_recorder_runtime.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_sampler_bootstrap.h \
- ../Inc/App/Hall/hall_loop.h ../Inc/App/Hall/hall_juno_midi.h \
- ../Inc/Seq/seq_runtime.h
+ ../Inc/Storage/pattern_live_ram.h ../Inc/Seq/seq_model.h \
+ ../Inc/Storage/undo_v1.h ../Inc/Storage/sd_access_gate.h \
+ ../Inc/Core/brick6_sd_config.h ../Inc/App/Hall/hall_loop.h \
+ ../Inc/App/Hall/hall_juno_midi.h ../Inc/Seq/seq_runtime.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_app_init.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/engine_tasklet.h:
@@ -229,6 +231,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_master_control.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_recorder_runtime.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_sampler_bootstrap.h:
+../Inc/Storage/pattern_live_ram.h:
+../Inc/Seq/seq_model.h:
+../Inc/Storage/undo_v1.h:
+../Inc/Storage/sd_access_gate.h:
+../Inc/Core/brick6_sd_config.h:
 ../Inc/App/Hall/hall_loop.h:
 ../Inc/App/Hall/hall_juno_midi.h:
 ../Inc/Seq/seq_runtime.h:

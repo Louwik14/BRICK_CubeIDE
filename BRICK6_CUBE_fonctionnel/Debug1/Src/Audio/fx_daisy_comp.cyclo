@@ -15,7 +15,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_daisy_comp.h:8:8:fx_daisy_comp_t::fx_daisy_comp_t()	1
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_daisy_comp.h:8:8:fx_daisy_comp_t::~fx_daisy_comp_t()	1
 ../Src/Audio/fx_daisy_comp.cpp:17:28:void __tcf_0()	1
-../Src/Audio/fx_daisy_comp.cpp:15:18:fx_daisy_comp_t* fx_daisy_comp_get_instance()	3
+../Src/Audio/fx_daisy_comp.cpp:15:18:fx_daisy_comp_t* fx_daisy_comp_get_instance()	2
 ../Src/Audio/fx_daisy_comp.cpp:21:6:void fx_daisy_comp_init(fx_daisy_comp_t*, float)	3
 ../Src/Audio/fx_daisy_comp.cpp:39:6:void fx_daisy_comp_set_threshold_db(fx_daisy_comp_t*, float)	2
 ../Src/Audio/fx_daisy_comp.cpp:47:6:void fx_daisy_comp_set_ratio(fx_daisy_comp_t*, float)	2

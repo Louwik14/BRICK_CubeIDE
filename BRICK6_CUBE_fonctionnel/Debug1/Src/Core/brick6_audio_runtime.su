@@ -1,8 +1,4 @@
-../Src/Core/brick6_audio_runtime.c:97:13:brick6_synth_bus_accumulate	4	static
-../Src/Core/brick6_audio_runtime.c:92:13:brick6_synth_bus_clear	8	static
 ../Src/Core/brick6_audio_runtime.c:55:13:brick6_collect_runtime_synth_usage	24	static
-../Src/Core/brick6_audio_runtime.c:105:16:brick6_render_monob_instances	24	static
-../Src/Core/brick6_audio_runtime.c:153:16:brick6_render_tb3_instances	24	static
-../Src/Core/brick6_audio_runtime.c:128:16:brick6_render_dx7_instances	24	static
-../Src/Core/brick6_audio_runtime.c:176:6:brick6_audio_runtime_init	0	static
-../Src/Core/brick6_audio_runtime.c:182:6:brick6_audio_runtime_dsp	48	static
+../Src/Core/brick6_audio_runtime.c:92:13:brick6_render_synth_tracks	56	static
+../Src/Core/brick6_audio_runtime.c:181:6:brick6_audio_runtime_init	0	static
+../Src/Core/brick6_audio_runtime.c:187:6:brick6_audio_runtime_dsp	40	static

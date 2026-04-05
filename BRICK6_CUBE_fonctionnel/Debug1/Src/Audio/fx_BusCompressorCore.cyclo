@@ -12,7 +12,7 @@
 ../Src/Audio/fx_BusCompressorCore.cpp:121:6:void EmbeddedPort::TransformerEmulationCore::reset()	2
 ../Src/Audio/fx_BusCompressorCore.cpp:133:6:void EmbeddedPort::TransformerEmulationCore::setProfile(const EmbeddedPort::TransformerProfile&)	1
 ../Src/Audio/fx_BusCompressorCore.cpp:141:6:void EmbeddedPort::TransformerEmulationCore::setEnabled(bool)	3
-../Src/Audio/fx_BusCompressorCore.cpp:146:6:void EmbeddedPort::TransformerEmulationCore::updateDCBlocker(float)	2
+../Src/Audio/fx_BusCompressorCore.cpp:146:6:void EmbeddedPort::TransformerEmulationCore::updateDCBlocker(float)	1
 ../Src/Audio/fx_BusCompressorCore.cpp:152:6:void EmbeddedPort::TransformerEmulationCore::updateHFRolloff(float)	2
 ../Src/Audio/fx_BusCompressorCore.cpp:166:7:float EmbeddedPort::TransformerEmulationCore::estimateHighFrequencyContent(float, int)	1
 ../Src/Audio/fx_BusCompressorCore.cpp:174:7:float EmbeddedPort::TransformerEmulationCore::applyTransformerSaturation(float)	1
@@ -23,9 +23,9 @@
 ../Src/Audio/fx_BusCompressorCore.cpp:227:1:EmbeddedPort::BusCompressorCore::BusCompressorCore()	2
 ../Src/Audio/fx_BusCompressorCore.cpp:240:7:static float EmbeddedPort::BusCompressorCore::clampFloat(float, float, float)	3
 ../Src/Audio/fx_BusCompressorCore.cpp:245:5:static int EmbeddedPort::BusCompressorCore::clampInt(int, int, int)	3
-../Src/Audio/fx_BusCompressorCore.cpp:250:7:static float EmbeddedPort::BusCompressorCore::absFloat(float)	2
+../Src/Audio/fx_BusCompressorCore.cpp:250:7:static float EmbeddedPort::BusCompressorCore::absFloat(float)	1
 ../Src/Audio/fx_BusCompressorCore.cpp:255:14:float EmbeddedPort::fastDbToGain(float)	1
 ../Src/Audio/fx_BusCompressorCore.cpp:260:14:float EmbeddedPort::fastGainToDb(float)	2
 ../Src/Audio/fx_BusCompressorCore.cpp:267:6:void EmbeddedPort::BusCompressorCore::prepare(double, int, int)	5
-../Src/Audio/fx_BusCompressorCore.cpp:291:7:float EmbeddedPort::BusCompressorCore::process(float, int, float, float, int, int, float, float, float, bool, float, bool)	15
+../Src/Audio/fx_BusCompressorCore.cpp:291:7:float EmbeddedPort::BusCompressorCore::process(float, int, float, float, int, int, float, float, float, bool, float, bool)	14
 ../Src/Audio/fx_BusCompressorCore.cpp:399:7:float EmbeddedPort::BusCompressorCore::getGainReduction(int) const	3

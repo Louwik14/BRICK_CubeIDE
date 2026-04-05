@@ -53,7 +53,8 @@ Src/Sampler/sample_pool.o: ../Src/Sampler/sample_pool.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
- C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/bsp_driver_sd.h
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/bsp_driver_sd.h \
+ ../Inc/Storage/sd_access_gate.h
 ../Inc/Sampler/sample_pool.h:
 ../Inc/Storage/memory_layout.h:
 ../Inc/Storage/wav_parser.h:
@@ -111,3 +112,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/ff
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/bsp_driver_sd.h:
+../Inc/Storage/sd_access_gate.h:
