@@ -13,7 +13,7 @@ void sd_access_gate_init(void)
 
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 {
-    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_PATTERN))
+    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_PROJECT))
     {
         return 0U;
     }
