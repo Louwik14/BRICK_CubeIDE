@@ -49,82 +49,12 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if ((uint8_t)track_cfg->family[track] >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-        {
-            return 0U;
-        }
-
-        if ((uint8_t)track_cfg->type[track] >= (uint8_t)UI_TRACK_TYPE_COUNT)
-        {
-            return 0U;
-        }
-
-        if ((uint8_t)track_cfg->midi_source[track] >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT)
-        {
-            return 0U;
-        }
-    }
-
-    /* Pass 1: neutralize all tracks to release uniqueness constraints (inputs, DX7/TB3). */
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if (ui_set_track_family(track, UI_TRACK_FAMILY_OFF) == false)
-        {
-            return 0U;
-        }
-    }
-
-    /* Pass 2: restore target families. */
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if (ui_set_track_family(track, (ui_track_family_t)track_cfg->family[track]) == false)
-        {
-            return 0U;
-        }
-    }
-
-    /* Pass 3: move all synth tracks to a non-limited type, then restore exact target types. */
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if ((ui_track_family_t)track_cfg->family[track] != UI_TRACK_FAMILY_SYNTH)
-        {
-            continue;
-        }
-
-        if (ui_set_track_type(track, UI_TRACK_TYPE_MONOB) == false)
-        {
-            return 0U;
-        }
-    }
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if (ui_set_track_type(track, (ui_track_type_t)track_cfg->type[track]) == false)
-        {
-            return 0U;
-        }
-    }
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        const uint8_t midi_ch = (track_cfg->midi_channel[track] < 1U)
-            ? 1U
-            : ((track_cfg->midi_channel[track] > 16U) ? 16U : track_cfg->midi_channel[track]);
-
-        if (ui_set_track_midi_channel(track, midi_ch) == false)
-        {
-            return 0U;
-        }
-
-        if (ui_set_track_midi_source(track, (ui_track_midi_source_t)track_cfg->midi_source[track]) == false)
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
+    return (ui_restore_track_config_bulk(track_cfg->family,
+                                         track_cfg->type,
+                                         track_cfg->midi_channel,
+                                         track_cfg->midi_source) != false)
+        ? 1U
+        : 0U;
 }
 
 static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
@@ -367,6 +297,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     }
 
     track_runtime_refresh_all();
+    param_registry_batch_begin();
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
     {
@@ -390,6 +321,8 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
             param_set(id, pattern->globals.global_values[id]);
         }
     }
+
+    param_registry_batch_end();
 
     seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_bpm_milli);
     seq_runtime_set_clock_source((seq_clock_src_t)pattern->globals.clock_src);
