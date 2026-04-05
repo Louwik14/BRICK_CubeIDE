@@ -13,6 +13,70 @@ static uint8_t g_project_fs_mounted;
 static uint8_t g_project_slot_has_data[PROJECT_V1_SLOT_COUNT];
 UI_SDRAM static PatternSaveV1 g_project_slot_buffer;
 
+typedef enum
+{
+    PROJECT_SD_STATUS_OK = 0,
+    PROJECT_SD_STATUS_INVALID_ARGS,
+    PROJECT_SD_STATUS_GATE_DENIED,
+    PROJECT_SD_STATUS_MOUNT_FAIL,
+    PROJECT_SD_STATUS_PATH_BUILD_FAIL,
+    PROJECT_SD_STATUS_DIR_FAIL,
+    PROJECT_SD_STATUS_FILE_NOT_FOUND,
+    PROJECT_SD_STATUS_OPEN_FAIL,
+    PROJECT_SD_STATUS_READ_HEADER_FAIL,
+    PROJECT_SD_STATUS_HEADER_INVALID,
+    PROJECT_SD_STATUS_READ_PAYLOAD_FAIL,
+    PROJECT_SD_STATUS_RECORD_READ_FAIL,
+    PROJECT_SD_STATUS_RECORD_INVALID,
+    PROJECT_SD_STATUS_RECORD_PAYLOAD_READ_FAIL,
+    PROJECT_SD_STATUS_RECORD_CHECKSUM_FAIL,
+    PROJECT_SD_STATUS_PATTERN_STORE_FAIL,
+    PROJECT_SD_STATUS_PATTERN_DELETE_FAIL,
+    PROJECT_SD_STATUS_FILE_CHECKSUM_FAIL,
+    PROJECT_SD_STATUS_WRITE_HEADER_FAIL,
+    PROJECT_SD_STATUS_WRITE_PAYLOAD_FAIL,
+    PROJECT_SD_STATUS_PATTERN_LOAD_FAIL,
+    PROJECT_SD_STATUS_WRITE_RECORD_FAIL,
+    PROJECT_SD_STATUS_WRITE_RECORD_PAYLOAD_FAIL,
+    PROJECT_SD_STATUS_SEEK_REWRITE_FAIL,
+    PROJECT_SD_STATUS_REWRITE_HEADER_FAIL,
+    PROJECT_SD_STATUS_SYNC_FAIL
+} project_sd_status_t;
+
+static const char *project_sd_status_str(project_sd_status_t status)
+{
+    switch (status)
+    {
+        case PROJECT_SD_STATUS_OK: return "OK";
+        case PROJECT_SD_STATUS_INVALID_ARGS: return "INVALID_ARGS";
+        case PROJECT_SD_STATUS_GATE_DENIED: return "GATE_DENIED";
+        case PROJECT_SD_STATUS_MOUNT_FAIL: return "MOUNT_FAIL";
+        case PROJECT_SD_STATUS_PATH_BUILD_FAIL: return "PATH_BUILD_FAIL";
+        case PROJECT_SD_STATUS_DIR_FAIL: return "DIR_FAIL";
+        case PROJECT_SD_STATUS_FILE_NOT_FOUND: return "FILE_NOT_FOUND";
+        case PROJECT_SD_STATUS_OPEN_FAIL: return "OPEN_FAIL";
+        case PROJECT_SD_STATUS_READ_HEADER_FAIL: return "READ_HEADER_FAIL";
+        case PROJECT_SD_STATUS_HEADER_INVALID: return "HEADER_INVALID";
+        case PROJECT_SD_STATUS_READ_PAYLOAD_FAIL: return "READ_PAYLOAD_FAIL";
+        case PROJECT_SD_STATUS_RECORD_READ_FAIL: return "RECORD_READ_FAIL";
+        case PROJECT_SD_STATUS_RECORD_INVALID: return "RECORD_INVALID";
+        case PROJECT_SD_STATUS_RECORD_PAYLOAD_READ_FAIL: return "RECORD_PAYLOAD_READ_FAIL";
+        case PROJECT_SD_STATUS_RECORD_CHECKSUM_FAIL: return "RECORD_CHECKSUM_FAIL";
+        case PROJECT_SD_STATUS_PATTERN_STORE_FAIL: return "PATTERN_STORE_FAIL";
+        case PROJECT_SD_STATUS_PATTERN_DELETE_FAIL: return "PATTERN_DELETE_FAIL";
+        case PROJECT_SD_STATUS_FILE_CHECKSUM_FAIL: return "FILE_CHECKSUM_FAIL";
+        case PROJECT_SD_STATUS_WRITE_HEADER_FAIL: return "WRITE_HEADER_FAIL";
+        case PROJECT_SD_STATUS_WRITE_PAYLOAD_FAIL: return "WRITE_PAYLOAD_FAIL";
+        case PROJECT_SD_STATUS_PATTERN_LOAD_FAIL: return "PATTERN_LOAD_FAIL";
+        case PROJECT_SD_STATUS_WRITE_RECORD_FAIL: return "WRITE_RECORD_FAIL";
+        case PROJECT_SD_STATUS_WRITE_RECORD_PAYLOAD_FAIL: return "WRITE_RECORD_PAYLOAD_FAIL";
+        case PROJECT_SD_STATUS_SEEK_REWRITE_FAIL: return "SEEK_REWRITE_FAIL";
+        case PROJECT_SD_STATUS_REWRITE_HEADER_FAIL: return "REWRITE_HEADER_FAIL";
+        case PROJECT_SD_STATUS_SYNC_FAIL: return "SYNC_FAIL";
+        default: return "UNKNOWN";
+    }
+}
+
 static uint8_t project_sd_slot_is_valid(uint8_t project_slot)
 {
     return (project_slot < PROJECT_V1_SLOT_COUNT) ? 1U : 0U;
@@ -58,9 +122,21 @@ static uint8_t project_sd_make_slot_path(char *out_path, uint32_t out_size, uint
     return (n > 0) && ((uint32_t)n < out_size);
 }
 
+static uint8_t project_sd_ensure_project_dir(void)
+{
+    sd_access_trace_begin("project_f_mkdir");
+    const FRESULT fr_mkdir = f_mkdir("0:/PROJECT");
+    sd_access_trace_end("project_f_mkdir", (int)fr_mkdir, 0U);
+    if ((fr_mkdir != FR_OK) && (fr_mkdir != FR_EXIST))
+    {
+        return 0U;
+    }
+    return 1U;
+}
+
 static void project_sd_scan_slots(void)
 {
-    (void)f_mkdir("0:/PROJECT");
+    (void)project_sd_ensure_project_dir();
 
     for (uint8_t slot = 0U; slot < PROJECT_V1_SLOT_COUNT; ++slot)
     {
@@ -111,15 +187,26 @@ uint8_t project_sd_bank_slot_has_data(uint8_t project_slot)
 
 uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_project, uint32_t *out_save_counter)
 {
+    project_sd_status_t status = PROJECT_SD_STATUS_OK;
+    FRESULT fr_diag = FR_OK;
+
+    printf("[PRJ][SD][LOAD] enter slot=%u\r\n", (unsigned)project_slot);
     if ((project_sd_slot_is_valid(project_slot) == 0U) || (out_project == 0))
     {
+        status = PROJECT_SD_STATUS_INVALID_ARGS;
+        printf("[PRJ][SD][LOAD] fail invalid args slot=%u out_project=%p\r\n",
+               (unsigned)project_slot,
+               (void *)out_project);
         return 0U;
     }
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
     {
+        status = PROJECT_SD_STATUS_GATE_DENIED;
+        printf("[PRJ][SD][LOAD] gate denied\r\n");
         return 0U;
     }
+    printf("[PRJ][SD][LOAD] gate acquired\r\n");
 
     uint8_t ok = 0U;
     FIL fp;
@@ -131,6 +218,18 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     if ((project_sd_mount_if_needed() == 0U)
         || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
     {
+        status = (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+                     ? PROJECT_SD_STATUS_PATH_BUILD_FAIL
+                     : PROJECT_SD_STATUS_MOUNT_FAIL;
+        goto done;
+    }
+
+    FILINFO info;
+    fr_diag = f_stat(path, &info);
+    printf("[PRJ][SD][LOAD] f_stat path=%s fr=%d\r\n", path, (int)fr_diag);
+    if (fr_diag != FR_OK)
+    {
+        status = (fr_diag == FR_NO_FILE) ? PROJECT_SD_STATUS_FILE_NOT_FOUND : PROJECT_SD_STATUS_OPEN_FAIL;
         goto done;
     }
 
@@ -139,14 +238,17 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     sd_access_trace_end("project_f_open_read", (int)fr_open, 0U);
     if (fr_open != FR_OK)
     {
+        status = (fr_open == FR_NO_FILE) ? PROJECT_SD_STATUS_FILE_NOT_FOUND : PROJECT_SD_STATUS_OPEN_FAIL;
         goto done;
     }
 
     if ((f_read(&fp, &hdr, sizeof(hdr), &br) != FR_OK) || (br != sizeof(hdr)))
     {
+        status = PROJECT_SD_STATUS_READ_HEADER_FAIL;
         (void)f_close(&fp);
         goto done;
     }
+    printf("[PRJ][SD][LOAD] read header ok\r\n");
 
     if ((hdr.magic != PROJECT_V1_FILE_MAGIC)
         || (hdr.version != PROJECT_V1_FILE_VERSION)
@@ -158,15 +260,19 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
         || (hdr.pattern_payload_size != sizeof(PatternSaveV1))
         || (hdr.project_slot != (uint32_t)project_slot))
     {
+        status = PROJECT_SD_STATUS_HEADER_INVALID;
         (void)f_close(&fp);
         goto done;
     }
+    printf("[PRJ][SD][LOAD] header validation ok\r\n");
 
     if ((f_read(&fp, out_project, sizeof(*out_project), &br) != FR_OK) || (br != sizeof(*out_project)))
     {
+        status = PROJECT_SD_STATUS_READ_PAYLOAD_FAIL;
         (void)f_close(&fp);
         goto done;
     }
+    printf("[PRJ][SD][LOAD] read payload ok\r\n");
 
     checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)out_project, sizeof(*out_project));
 
@@ -177,12 +283,14 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
             project_v1_slot_record_t rec;
             if ((f_read(&fp, &rec, sizeof(rec), &br) != FR_OK) || (br != sizeof(rec)))
             {
+                status = PROJECT_SD_STATUS_RECORD_READ_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
 
             if ((rec.bank != bank) || (rec.pattern != pattern) || (rec.payload_size != sizeof(PatternSaveV1)))
             {
+                status = PROJECT_SD_STATUS_RECORD_INVALID;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -190,6 +298,7 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
             if ((f_read(&fp, &g_project_slot_buffer, sizeof(g_project_slot_buffer), &br) != FR_OK)
                 || (br != sizeof(g_project_slot_buffer)))
             {
+                status = PROJECT_SD_STATUS_RECORD_PAYLOAD_READ_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -199,6 +308,7 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
                                                sizeof(g_project_slot_buffer))
                 != rec.checksum)
             {
+                status = PROJECT_SD_STATUS_RECORD_CHECKSUM_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -214,12 +324,14 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
             {
                 if (pattern_sd_bank_store_slot(bank, pattern, &g_project_slot_buffer) == 0U)
                 {
+                    status = PROJECT_SD_STATUS_PATTERN_STORE_FAIL;
                     (void)f_close(&fp);
                     goto done;
                 }
             }
             else if (pattern_sd_bank_delete_slot(bank, pattern) == 0U)
             {
+                status = PROJECT_SD_STATUS_PATTERN_DELETE_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -230,8 +342,10 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
 
     if (checksum != hdr.checksum)
     {
+        status = PROJECT_SD_STATUS_FILE_CHECKSUM_FAIL;
         goto done;
     }
+    printf("[PRJ][SD][LOAD] checksum validation ok\r\n");
 
     if (out_save_counter != 0)
     {
@@ -240,23 +354,41 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
 
     g_project_slot_has_data[project_slot] = 1U;
     ok = 1U;
+    status = PROJECT_SD_STATUS_OK;
 
 done:
+    printf("[PRJ][SD][LOAD] final slot=%u ok=%u status=%s(%d)\r\n",
+           (unsigned)project_slot,
+           (unsigned)ok,
+           project_sd_status_str(status),
+           (int)status);
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    printf("[PRJ][SD][LOAD] gate released\r\n");
     return ok;
 }
 
 uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *project, uint32_t save_counter)
 {
+    project_sd_status_t status = PROJECT_SD_STATUS_OK;
+    printf("[PRJ][SD][SAVE] enter slot=%u counter=%lu\r\n",
+           (unsigned)project_slot,
+           (unsigned long)save_counter);
     if ((project_sd_slot_is_valid(project_slot) == 0U) || (project == 0))
     {
+        status = PROJECT_SD_STATUS_INVALID_ARGS;
+        printf("[PRJ][SD][SAVE] fail invalid args slot=%u project=%p\r\n",
+               (unsigned)project_slot,
+               (const void *)project);
         return 0U;
     }
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
     {
+        status = PROJECT_SD_STATUS_GATE_DENIED;
+        printf("[PRJ][SD][SAVE] gate denied\r\n");
         return 0U;
     }
+    printf("[PRJ][SD][SAVE] gate acquired\r\n");
 
     uint8_t ok = 0U;
     FIL fp;
@@ -268,18 +400,28 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
     if ((project_sd_mount_if_needed() == 0U)
         || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
     {
+        status = (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+                     ? PROJECT_SD_STATUS_PATH_BUILD_FAIL
+                     : PROJECT_SD_STATUS_MOUNT_FAIL;
         goto done;
     }
 
-    (void)f_mkdir("0:/PROJECT");
+    if (project_sd_ensure_project_dir() == 0U)
+    {
+        status = PROJECT_SD_STATUS_DIR_FAIL;
+        goto done;
+    }
+    printf("[PRJ][SD][SAVE] dir ready\r\n");
 
     sd_access_trace_begin("project_f_open_write");
     const FRESULT fr_open = f_open(&fp, path, FA_CREATE_ALWAYS | FA_WRITE);
     sd_access_trace_end("project_f_open_write", (int)fr_open, 0U);
     if (fr_open != FR_OK)
     {
+        status = PROJECT_SD_STATUS_OPEN_FAIL;
         goto done;
     }
+    printf("[PRJ][SD][SAVE] open/create ok path=%s\r\n", path);
 
     hdr.magic = PROJECT_V1_FILE_MAGIC;
     hdr.version = PROJECT_V1_FILE_VERSION;
@@ -298,18 +440,22 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
     sd_access_trace_end("project_f_write", (int)fr_wh, 0U);
     if ((fr_wh != FR_OK) || (bw != sizeof(hdr)))
     {
+        status = PROJECT_SD_STATUS_WRITE_HEADER_FAIL;
         (void)f_close(&fp);
         goto done;
     }
+    printf("[PRJ][SD][SAVE] write header ok\r\n");
 
     sd_access_trace_begin("project_f_write");
     const FRESULT fr_wp = f_write(&fp, project, sizeof(*project), &bw);
     sd_access_trace_end("project_f_write", (int)fr_wp, 0U);
     if ((fr_wp != FR_OK) || (bw != sizeof(*project)))
     {
+        status = PROJECT_SD_STATUS_WRITE_PAYLOAD_FAIL;
         (void)f_close(&fp);
         goto done;
     }
+    printf("[PRJ][SD][SAVE] write payload ok\r\n");
 
     checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)project, sizeof(*project));
 
@@ -323,6 +469,7 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
             if ((has_data != 0U)
                 && (pattern_sd_bank_load_slot(bank, pattern, &g_project_slot_buffer) == 0U))
             {
+                status = PROJECT_SD_STATUS_PATTERN_LOAD_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -346,6 +493,7 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
             sd_access_trace_end("project_f_write", (int)fr_wr, 0U);
             if ((fr_wr != FR_OK) || (bw != sizeof(rec)))
             {
+                status = PROJECT_SD_STATUS_WRITE_RECORD_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -355,6 +503,7 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
             sd_access_trace_end("project_f_write", (int)fr_wd, 0U);
             if ((fr_wd != FR_OK) || (bw != sizeof(g_project_slot_buffer)))
             {
+                status = PROJECT_SD_STATUS_WRITE_RECORD_PAYLOAD_FAIL;
                 (void)f_close(&fp);
                 goto done;
             }
@@ -370,6 +519,7 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
 
     if (f_lseek(&fp, 0U) != FR_OK)
     {
+        status = PROJECT_SD_STATUS_SEEK_REWRITE_FAIL;
         (void)f_close(&fp);
         goto done;
     }
@@ -379,6 +529,7 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
     sd_access_trace_end("project_f_write", (int)fr_rewrite, 0U);
     if ((fr_rewrite != FR_OK) || (bw != sizeof(hdr)))
     {
+        status = PROJECT_SD_STATUS_REWRITE_HEADER_FAIL;
         (void)f_close(&fp);
         goto done;
     }
@@ -389,13 +540,21 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
     (void)f_close(&fp);
     if (fr_sync != FR_OK)
     {
+        status = PROJECT_SD_STATUS_SYNC_FAIL;
         goto done;
     }
 
     g_project_slot_has_data[project_slot] = 1U;
     ok = 1U;
+    status = PROJECT_SD_STATUS_OK;
 
 done:
+    printf("[PRJ][SD][SAVE] final slot=%u ok=%u status=%s(%d)\r\n",
+           (unsigned)project_slot,
+           (unsigned)ok,
+           project_sd_status_str(status),
+           (int)status);
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    printf("[PRJ][SD][SAVE] gate released\r\n");
     return ok;
 }

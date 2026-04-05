@@ -1,5 +1,6 @@
 #include "Storage/project_v1.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "Storage/memory_layout.h"
@@ -88,13 +89,18 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
 uint8_t project_v1_save_slot(uint8_t project_slot)
 {
+    printf("[PRJ][SAVE] enter slot=%u\r\n", (unsigned)project_slot);
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
+        printf("[PRJ][SAVE] reject invalid_slot_or_isr slot=%u ipsr=%lu\r\n",
+               (unsigned)project_slot,
+               (unsigned long)__get_IPSR());
         return 0U;
     }
 
     if (project_v1_capture_current(&g_project_work) == 0U)
     {
+        printf("[PRJ][SAVE] fail capture_current\r\n");
         return 0U;
     }
 
@@ -104,36 +110,51 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
     const uint32_t next_counter = g_project_save_counter + 1U;
     if (project_sd_bank_store_slot(project_slot, &g_project_work, next_counter) == 0U)
     {
+        printf("[PRJ][SAVE] fail store_slot slot=%u save_counter=%lu\r\n",
+               (unsigned)project_slot,
+               (unsigned long)next_counter);
         return 0U;
     }
 
     g_project_save_counter = next_counter;
     g_project_active_slot_valid = 1U;
     g_project_active_slot = project_slot;
+    printf("[PRJ][SAVE] ok slot=%u save_counter=%lu\r\n",
+           (unsigned)project_slot,
+           (unsigned long)g_project_save_counter);
     return 1U;
 }
 
 uint8_t project_v1_load_slot(uint8_t project_slot)
 {
+    printf("[PRJ][LOAD] enter slot=%u\r\n", (unsigned)project_slot);
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
+        printf("[PRJ][LOAD] reject invalid_slot_or_isr slot=%u ipsr=%lu\r\n",
+               (unsigned)project_slot,
+               (unsigned long)__get_IPSR());
         return 0U;
     }
 
     uint32_t loaded_counter = 0U;
     if (project_sd_bank_load_slot(project_slot, &g_project_work, &loaded_counter) == 0U)
     {
+        printf("[PRJ][LOAD] fail load_slot slot=%u\r\n", (unsigned)project_slot);
         return 0U;
     }
 
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {
+        printf("[PRJ][LOAD] fail apply_snapshot slot=%u\r\n", (unsigned)project_slot);
         return 0U;
     }
 
     g_project_save_counter = loaded_counter;
     g_project_active_slot_valid = 1U;
     g_project_active_slot = project_slot;
+    printf("[PRJ][LOAD] ok slot=%u save_counter=%lu\r\n",
+           (unsigned)project_slot,
+           (unsigned long)g_project_save_counter);
     return 1U;
 }
 
