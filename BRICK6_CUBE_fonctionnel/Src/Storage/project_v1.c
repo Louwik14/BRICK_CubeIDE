@@ -174,3 +174,13 @@ uint8_t project_v1_slot_has_data(uint8_t project_slot)
 {
     return project_sd_bank_slot_has_data(project_slot);
 }
+
+void project_v1_refresh_slots(void)
+{
+    project_sd_bank_refresh_slots();
+}
+
+uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots)
+{
+    return project_sd_bank_list_slots(out_slots, max_slots);
+}

@@ -63,5 +63,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot);
 uint8_t project_v1_delete_slot(uint8_t project_slot);
 uint8_t project_v1_get_active_slot(uint8_t *out_valid, uint8_t *out_slot);
 uint8_t project_v1_slot_has_data(uint8_t project_slot);
+void project_v1_refresh_slots(void);
+uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots);
 
 #endif
