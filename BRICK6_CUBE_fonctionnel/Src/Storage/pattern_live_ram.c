@@ -11,6 +11,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
 #include "Storage/pattern_sd_bank.h"
+#include "Storage/project_v1.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -412,6 +413,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         g_active_bank = bank;
         g_active_pattern = pattern;
         g_queued_valid = 0U;
+        project_v1_on_active_pattern_changed(g_active_pattern);
         return 1U;
     }
 
@@ -461,6 +463,7 @@ void pattern_live_service(void)
             g_active_bank = g_queued_bank;
             g_active_pattern = g_queued_pattern;
             g_queued_valid = 0U;
+            project_v1_on_active_pattern_changed(g_active_pattern);
         }
     }
 

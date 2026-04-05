@@ -17,6 +17,23 @@ static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
 
+#define PROJECT_BOOT_CTX_VERSION      1U
+#define PROJECT_BOOT_CTX_FLASH_ADDR   0x081E0000UL
+#define PROJECT_BOOT_CTX_FLASH_BANK   FLASH_BANK_2
+#define PROJECT_BOOT_CTX_FLASH_SECTOR FLASH_SECTOR_7
+
+typedef struct __attribute__((packed))
+{
+    uint8_t version;
+    uint8_t valid;
+    uint32_t crc;
+    uint8_t active_project_slot;
+    uint8_t active_pattern_index;
+} project_boot_context_t;
+
+static project_boot_context_t g_project_boot_ctx_cache;
+static uint8_t g_project_boot_ctx_cache_valid;
+
 #ifndef PROJECT_PROFILE_ENABLED
 #define PROJECT_PROFILE_ENABLED 0
 #endif
@@ -32,15 +49,182 @@ static void project_v1_set_sd_operation_error(project_v1_error_t err)
     project_v1_set_error(err);
 }
 
+static uint32_t project_boot_ctx_crc32(const project_boot_context_t *ctx)
+{
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    uint32_t crc = 0xFFFFFFFFUL;
+    const uint8_t payload[] = {
+        ctx->version,
+        ctx->valid,
+        ctx->active_project_slot,
+        ctx->active_pattern_index
+    };
+
+    for (uint32_t i = 0U; i < sizeof(payload); ++i)
+    {
+        crc ^= payload[i];
+        for (uint8_t bit = 0U; bit < 8U; ++bit)
+        {
+            if ((crc & 1UL) != 0UL)
+            {
+                crc = (crc >> 1) ^ 0xEDB88320UL;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return ~crc;
+}
+
+static uint8_t project_boot_ctx_is_valid(const project_boot_context_t *ctx)
+{
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    if ((ctx->version != PROJECT_BOOT_CTX_VERSION)
+        || (ctx->valid == 0U)
+        || (ctx->active_project_slot >= PROJECT_V1_SLOT_COUNT)
+        || (ctx->active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
+    {
+        return 0U;
+    }
+
+    return (ctx->crc == project_boot_ctx_crc32(ctx)) ? 1U : 0U;
+}
+
+static uint8_t project_boot_ctx_read(project_boot_context_t *out_ctx)
+{
+    if (out_ctx == 0)
+    {
+        return 0U;
+    }
+
+    memcpy(out_ctx, (const void *)PROJECT_BOOT_CTX_FLASH_ADDR, sizeof(*out_ctx));
+    return project_boot_ctx_is_valid(out_ctx);
+}
+
+static uint8_t project_boot_ctx_write(const project_boot_context_t *ctx)
+{
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    FLASH_EraseInitTypeDef erase;
+    uint32_t erase_error = 0U;
+    uint8_t flash_word[32];
+    HAL_StatusTypeDef st = HAL_ERROR;
+
+    memset(&erase, 0, sizeof(erase));
+    erase.TypeErase = FLASH_TYPEERASE_SECTORS;
+    erase.Banks = PROJECT_BOOT_CTX_FLASH_BANK;
+    erase.Sector = PROJECT_BOOT_CTX_FLASH_SECTOR;
+    erase.NbSectors = 1U;
+    erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+    memset(flash_word, 0xFF, sizeof(flash_word));
+    memcpy(flash_word, ctx, sizeof(*ctx));
+
+    HAL_FLASH_Unlock();
+    if (HAL_FLASHEx_Erase(&erase, &erase_error) == HAL_OK)
+    {
+        st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD,
+                               PROJECT_BOOT_CTX_FLASH_ADDR,
+                               (uint32_t)flash_word);
+    }
+    HAL_FLASH_Lock();
+
+    return (st == HAL_OK) ? 1U : 0U;
+}
+
+static uint8_t project_boot_ctx_commit(uint8_t active_project_slot, uint8_t active_pattern_index)
+{
+    project_boot_context_t next_ctx;
+
+    if ((active_project_slot >= PROJECT_V1_SLOT_COUNT) || (active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
+    {
+        return 0U;
+    }
+
+    next_ctx.version = PROJECT_BOOT_CTX_VERSION;
+    next_ctx.valid = 1U;
+    next_ctx.active_project_slot = active_project_slot;
+    next_ctx.active_pattern_index = active_pattern_index;
+    next_ctx.crc = project_boot_ctx_crc32(&next_ctx);
+
+    if ((g_project_boot_ctx_cache_valid != 0U)
+        && (memcmp(&g_project_boot_ctx_cache, &next_ctx, sizeof(next_ctx)) == 0))
+    {
+        return 1U;
+    }
+
+    if (project_boot_ctx_write(&next_ctx) == 0U)
+    {
+        printf("[PROJECT][BOOTCTX] write failed\r\n");
+        return 0U;
+    }
+
+    memcpy(&g_project_boot_ctx_cache, &next_ctx, sizeof(next_ctx));
+    g_project_boot_ctx_cache_valid = 1U;
+    return 1U;
+}
+
+static void project_boot_ctx_clear(void)
+{
+    project_boot_context_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.version = PROJECT_BOOT_CTX_VERSION;
+    ctx.valid = 0U;
+    ctx.active_project_slot = 0U;
+    ctx.active_pattern_index = 0U;
+    ctx.crc = project_boot_ctx_crc32(&ctx);
+
+    if (project_boot_ctx_write(&ctx) != 0U)
+    {
+        memset(&g_project_boot_ctx_cache, 0, sizeof(g_project_boot_ctx_cache));
+        g_project_boot_ctx_cache_valid = 0U;
+    }
+}
+
+static void project_boot_ctx_commit_current_state_if_valid(void)
+{
+    uint8_t active_bank = 0U;
+    uint8_t active_pattern = 0U;
+    if ((g_project_active_slot_valid == 0U)
+        || (pattern_live_get_active(&active_bank, &active_pattern) == 0U))
+    {
+        return;
+    }
+
+    (void)active_bank;
+    (void)project_boot_ctx_commit(g_project_active_slot, active_pattern);
+}
+
 void project_v1_init(void)
 {
     memset(&g_project_work, 0, sizeof(g_project_work));
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
+    memset(&g_project_boot_ctx_cache, 0, sizeof(g_project_boot_ctx_cache));
+    g_project_boot_ctx_cache_valid = 0U;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
+
+    if (project_boot_ctx_read(&g_project_boot_ctx_cache) != 0U)
+    {
+        g_project_boot_ctx_cache_valid = 1U;
+    }
 }
 
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
@@ -139,6 +323,7 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
         g_project_active_slot = project_slot;
         g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
         project_v1_set_error(PROJECT_V1_ERR_NONE);
+        project_boot_ctx_commit_current_state_if_valid();
 #if PROJECT_PROFILE_ENABLED
         printf("[PROJECT][PROFILE] SAVE_V1 total=%lums capture=%lums store=%lums (skipped: equivalent slot)\r\n",
                (unsigned long)(HAL_GetTick() - t_total),
@@ -197,6 +382,7 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
     }
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
+    project_boot_ctx_commit_current_state_if_valid();
     return 1U;
 }
 
@@ -232,6 +418,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     g_project_active_slot = project_slot;
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
+    project_boot_ctx_commit_current_state_if_valid();
 #if PROJECT_PROFILE_ENABLED
     printf("[PROJECT][PROFILE] LOAD_V1 total=%lums sd_load=%lums apply_live=%lums\r\n",
            (unsigned long)(HAL_GetTick() - t_total),
@@ -263,6 +450,7 @@ uint8_t project_v1_delete_slot(uint8_t project_slot)
     {
         g_project_active_slot_valid = 0U;
         g_project_active_slot = 0U;
+        project_boot_ctx_clear();
     }
 
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
@@ -358,4 +546,48 @@ const char *project_v1_error_to_string(project_v1_error_t err)
 uint8_t project_v1_get_last_sd_error_code(void)
 {
     return (uint8_t)g_project_last_sd_error;
+}
+
+uint8_t project_v1_restore_boot_context(void)
+{
+    project_boot_context_t ctx;
+
+    if (project_boot_ctx_read(&ctx) == 0U)
+    {
+        printf("[PROJECT][BOOTCTX] invalid -> fallback defaults\r\n");
+        return 0U;
+    }
+
+    if (project_v1_load_slot(ctx.active_project_slot) == 0U)
+    {
+        printf("[PROJECT][BOOTCTX] restore slot %u failed\r\n", (unsigned)ctx.active_project_slot);
+        return 0U;
+    }
+
+    uint8_t active_bank = 0U;
+    uint8_t active_pattern = 0U;
+    if ((pattern_live_get_active(&active_bank, &active_pattern) != 0U)
+        && (active_pattern != ctx.active_pattern_index))
+    {
+        if (pattern_live_queue_slot(active_bank, ctx.active_pattern_index) == 0U)
+        {
+            printf("[PROJECT][BOOTCTX] restore pattern %u failed\r\n", (unsigned)ctx.active_pattern_index);
+            return 0U;
+        }
+    }
+
+    printf("[PROJECT][BOOTCTX] restored slot=%u pattern=%u\r\n",
+           (unsigned)ctx.active_project_slot,
+           (unsigned)ctx.active_pattern_index);
+    return 1U;
+}
+
+void project_v1_on_active_pattern_changed(uint8_t active_pattern_index)
+{
+    if ((g_project_active_slot_valid == 0U) || (active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
+    {
+        return;
+    }
+
+    (void)project_boot_ctx_commit(g_project_active_slot, active_pattern_index);
 }
