@@ -1137,7 +1137,7 @@ void ui_core_tick(void)
         const int16_t delta = encoder_consume_delta(encoder);
         if (ui_page_settings_is_open() != 0U)
         {
-            ui_page_settings_handle_encoder(delta);
+            ui_page_settings_handle_encoder(encoder, delta);
         }
         else
         {
