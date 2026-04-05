@@ -399,3 +399,40 @@ done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     return ok;
 }
+
+uint8_t project_sd_bank_delete_slot(uint8_t project_slot)
+{
+    if (project_sd_slot_is_valid(project_slot) == 0U)
+    {
+        return 0U;
+    }
+
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t ok = 0U;
+    char path[32];
+
+    if ((project_sd_mount_if_needed() == 0U)
+        || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
+    {
+        goto done;
+    }
+
+    sd_access_trace_begin("project_f_unlink");
+    const FRESULT fr_unlink = f_unlink(path);
+    sd_access_trace_end("project_f_unlink", (int)fr_unlink, 0U);
+    if ((fr_unlink != FR_OK) && (fr_unlink != FR_NO_FILE))
+    {
+        goto done;
+    }
+
+    g_project_slot_has_data[project_slot] = 0U;
+    ok = 1U;
+
+done:
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    return ok;
+}
