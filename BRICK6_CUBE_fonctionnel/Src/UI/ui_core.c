@@ -39,6 +39,7 @@
 #include "pages/ui_page_template_seq.h"
 #include "pages/ui_page_template_mix.h"
 #include "pages/ui_page_template_play.h"
+#include "pages/ui_page_settings.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -54,7 +55,6 @@
 #include "Seq/seq_runtime.h"
 #include "Core/runtime_target.h"
 #include "Storage/pattern_live_ram.h"
-#include "Storage/project_v1.h"
 #include "Storage/undo_v1.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
@@ -905,36 +905,11 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
         return 0U;
     }
 
-    /*
-     * TEMP DEBUG HACK (validation backend projet):
-     * - TRACK + SHIFT + SETTINGS => load project slot 0
-     * - TRACK + SETTINGS         => save project slot 0
-     * À retirer quand l'UI projet dédiée sera en place.
-     */
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_SETTINGS)
-        && (g_ui_track_state.track_select_armed != 0U))
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SETTINGS))
     {
-        if (g_ui_track_state.shift_down != 0U)
+        if (ui_page_settings_is_open() == 0U)
         {
-            if (project_v1_load_slot(0U) != 0U)
-            {
-                ui_core_set_feedback("PRJ0 LOAD");
-            }
-            else
-            {
-                ui_core_set_feedback("PRJ0 FAIL");
-            }
-            return 1U;
-        }
-
-        if (project_v1_save_slot(0U) != 0U)
-        {
-            ui_core_set_feedback("PRJ0 SAVE");
-        }
-        else
-        {
-            ui_core_set_feedback("PRJ0 FAIL");
+            ui_page_settings_open(ui_page_get_id());
         }
         return 1U;
     }
@@ -1092,6 +1067,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_seq);
     ui_page_manager_register(&g_ui_page_template_mix);
     ui_page_manager_register(&g_ui_page_template_play);
+    ui_page_manager_register(&g_ui_page_settings);
 
     if (hall_calibration_load() != 0U)
     {
@@ -1159,7 +1135,14 @@ void ui_core_tick(void)
     for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
     {
         const int16_t delta = encoder_consume_delta(encoder);
-        ui_param_handle_encoder(encoder, delta);
+        if (ui_page_settings_is_open() != 0U)
+        {
+            ui_page_settings_handle_encoder(delta);
+        }
+        else
+        {
+            ui_param_handle_encoder(encoder, delta);
+        }
     }
 
     ui_event_from_inputs();
@@ -1175,6 +1158,11 @@ void ui_core_tick(void)
         }
 
         if (ui_core_handle_transport_event(&ev) != 0U)
+        {
+            continue;
+        }
+
+        if (ui_page_settings_handle_event(&ev) != 0U)
         {
             continue;
         }
@@ -1511,20 +1499,6 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
 ui_hall_mode_t ui_get_hall_mode(void)
 {
     return g_ui_track_state.hall_mode;
-}
-
-static const char *ui_format_transposed_hall_mode_short_label(const char *base_label)
-{
-    static char label[8];
-    const int8_t octave_shift = keyboard_runtime_get_octave_shift();
-
-    if ((base_label == 0) || (octave_shift == 0))
-    {
-        return base_label;
-    }
-
-    (void)snprintf(label, sizeof(label), "%s%+d", base_label, (int)octave_shift);
-    return label;
 }
 
 void ui_set_hall_mode(ui_hall_mode_t mode)
