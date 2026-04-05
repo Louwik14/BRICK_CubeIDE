@@ -11,6 +11,21 @@ _Date: 2026-04-05_
 - `param_registry_apply_track_value`
 - chemin UI `SETTINGS > PROJECT`
 
+## Addendum implémenté — boot context minimal (MCU flash locale)
+- Le contenu projet lourd reste **autorité unique SD** (`project_sd_bank` + `pattern_sd_bank`), sans duplication backend.
+- Un mini contexte de reprise local MCU est ajouté en flash interne (secteur dédié) avec **5 champs uniquement** :
+  - `version`
+  - `valid`
+  - `crc`
+  - `active_project_slot`
+  - `active_pattern_index`
+- Écriture uniquement sur changement réel :
+  1. après `project_v1_load_slot()` réussi (slot actif),
+  2. après `project_v1_save_slot()` réussi (slot de save devient actif),
+  3. après changement effectif de pattern active (`pattern_live_queue_slot` immédiat ou commuté sur boundary).
+- Au boot: validation `version/valid/crc`, puis restore strict `project slot` -> `active pattern index`, sinon fallback silencieux sans bloquer la machine.
+- La zone flash est réservée explicitement dans le linker (`BOOT_CTX_FLASH`, secteur bank2/sector7), séparée de la zone firmware applicative.
+
 ---
 
 ## 1) Ce qui est sain et doit être gardé
@@ -235,4 +250,3 @@ Si mémoire limitée: journal minimal “manifest + progression” pour pouvoir 
 
 ### Améliorations souhaitables plus tard
 - Étapes 7 et 8.
-
