@@ -137,6 +137,27 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     return 1U;
 }
 
+uint8_t project_v1_delete_slot(uint8_t project_slot)
+{
+    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
+    {
+        return 0U;
+    }
+
+    if (project_sd_bank_delete_slot(project_slot) == 0U)
+    {
+        return 0U;
+    }
+
+    if ((g_project_active_slot_valid != 0U) && (g_project_active_slot == project_slot))
+    {
+        g_project_active_slot_valid = 0U;
+        g_project_active_slot = 0U;
+    }
+
+    return 1U;
+}
+
 uint8_t project_v1_get_active_slot(uint8_t *out_valid, uint8_t *out_slot)
 {
     if ((out_valid == 0) || (out_slot == 0))
