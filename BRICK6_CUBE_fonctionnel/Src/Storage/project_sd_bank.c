@@ -64,6 +64,87 @@ static uint8_t project_sd_make_slot_path(char *out_path, uint32_t out_size, uint
     return (n > 0) && ((uint32_t)n < out_size);
 }
 
+static uint8_t project_sd_walk_pattern_records(FIL *fp,
+                                               uint8_t apply_to_pattern_bank,
+                                               ProjectSaveV1 *project_state,
+                                               uint32_t *io_checksum)
+{
+    if (fp == 0)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_ARG);
+        return 0U;
+    }
+
+    UINT br = 0U;
+    for (uint8_t bank = 0U; bank < PROJECT_V1_BANK_COUNT; ++bank)
+    {
+        for (uint8_t pattern = 0U; pattern < PROJECT_V1_PATTERN_COUNT; ++pattern)
+        {
+            project_v1_slot_record_t rec;
+            if ((f_read(fp, &rec, sizeof(rec), &br) != FR_OK) || (br != sizeof(rec)))
+            {
+                project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+                return 0U;
+            }
+
+            if ((rec.bank != bank) || (rec.pattern != pattern) || (rec.payload_size != sizeof(PatternSaveV1)))
+            {
+                project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_SIZE);
+                return 0U;
+            }
+
+            if ((f_read(fp, &g_project_slot_buffer, sizeof(g_project_slot_buffer), &br) != FR_OK)
+                || (br != sizeof(g_project_slot_buffer)))
+            {
+                project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+                return 0U;
+            }
+
+            if (project_sd_checksum_accumulate(0U,
+                                               (const uint8_t *)&g_project_slot_buffer,
+                                               sizeof(g_project_slot_buffer))
+                != rec.checksum)
+            {
+                project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
+                return 0U;
+            }
+
+            if (io_checksum != 0)
+            {
+                *io_checksum = project_sd_checksum_accumulate(*io_checksum, (const uint8_t *)&rec, sizeof(rec));
+                *io_checksum = project_sd_checksum_accumulate(*io_checksum,
+                                                              (const uint8_t *)&g_project_slot_buffer,
+                                                              sizeof(g_project_slot_buffer));
+            }
+
+            if (project_state != 0)
+            {
+                project_state->state.bank_has_data[bank][pattern] = (rec.has_data != 0U) ? 1U : 0U;
+            }
+
+            if (apply_to_pattern_bank != 0U)
+            {
+                if (rec.has_data != 0U)
+                {
+                    if (pattern_sd_bank_store_slot_nosync(bank, pattern, &g_project_slot_buffer) == 0U)
+                    {
+                        project_sd_set_error(PROJECT_SD_BANK_ERR_PATTERN_STORE_FAIL);
+                        return 0U;
+                    }
+                }
+                else if ((pattern_sd_bank_slot_has_data(bank, pattern) != 0U)
+                         && (pattern_sd_bank_delete_slot(bank, pattern) == 0U))
+                {
+                    project_sd_set_error(PROJECT_SD_BANK_ERR_PATTERN_DELETE_FAIL);
+                    return 0U;
+                }
+            }
+        }
+    }
+
+    return 1U;
+}
+
 static void project_sd_scan_slots(void)
 {
     (void)f_mkdir("0:/PROJECT");
@@ -194,6 +275,7 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     FIL fp;
     UINT br = 0U;
     project_v1_file_header_t hdr;
+    project_v1_file_header_t commit_hdr;
     char path[32];
     uint32_t checksum = 0U;
 
@@ -244,68 +326,10 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     }
 
     checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)out_project, sizeof(*out_project));
-
-    for (uint8_t bank = 0U; bank < PROJECT_V1_BANK_COUNT; ++bank)
+    if (project_sd_walk_pattern_records(&fp, 0U, out_project, &checksum) == 0U)
     {
-        for (uint8_t pattern = 0U; pattern < PROJECT_V1_PATTERN_COUNT; ++pattern)
-        {
-            project_v1_slot_record_t rec;
-            if ((f_read(&fp, &rec, sizeof(rec), &br) != FR_OK) || (br != sizeof(rec)))
-            {
-                project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
-                (void)f_close(&fp);
-                goto done;
-            }
-
-            if ((rec.bank != bank) || (rec.pattern != pattern) || (rec.payload_size != sizeof(PatternSaveV1)))
-            {
-                project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_SIZE);
-                (void)f_close(&fp);
-                goto done;
-            }
-
-            if ((f_read(&fp, &g_project_slot_buffer, sizeof(g_project_slot_buffer), &br) != FR_OK)
-                || (br != sizeof(g_project_slot_buffer)))
-            {
-                project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
-                (void)f_close(&fp);
-                goto done;
-            }
-
-            if (project_sd_checksum_accumulate(0U,
-                                               (const uint8_t *)&g_project_slot_buffer,
-                                               sizeof(g_project_slot_buffer))
-                != rec.checksum)
-            {
-                project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
-                (void)f_close(&fp);
-                goto done;
-            }
-
-            checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)&rec, sizeof(rec));
-            checksum = project_sd_checksum_accumulate(checksum,
-                                                      (const uint8_t *)&g_project_slot_buffer,
-                                                      sizeof(g_project_slot_buffer));
-
-            out_project->state.bank_has_data[bank][pattern] = (rec.has_data != 0U) ? 1U : 0U;
-
-            if (rec.has_data != 0U)
-            {
-                if (pattern_sd_bank_store_slot_nosync(bank, pattern, &g_project_slot_buffer) == 0U)
-                {
-                    project_sd_set_error(PROJECT_SD_BANK_ERR_PATTERN_STORE_FAIL);
-                    (void)f_close(&fp);
-                    goto done;
-                }
-            }
-            else if ((pattern_sd_bank_slot_has_data(bank, pattern) != 0U)
-                     && (pattern_sd_bank_delete_slot(bank, pattern) == 0U))
-            {
-                project_sd_set_error(PROJECT_SD_BANK_ERR_PATTERN_DELETE_FAIL);
-                (void)f_close(&fp);
-                goto done;
-            }
-        }
+        (void)f_close(&fp);
+        goto done;
     }
 
     (void)f_close(&fp);
@@ -315,6 +339,49 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
         project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
         goto done;
     }
+
+    /* Commit phase: only reached after full project validation succeeds. */
+    sd_access_trace_begin("project_f_open_read_commit");
+    const FRESULT fr_reopen = f_open(&fp, path, FA_READ);
+    sd_access_trace_end("project_f_open_read_commit", (int)fr_reopen, 0U);
+    if (fr_reopen != FR_OK)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_OPEN_FAIL);
+        goto done;
+    }
+
+    if ((f_read(&fp, &commit_hdr, sizeof(commit_hdr), &br) != FR_OK) || (br != sizeof(commit_hdr)))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if ((commit_hdr.magic != hdr.magic)
+        || (commit_hdr.version != hdr.version)
+        || (commit_hdr.project_slot != hdr.project_slot)
+        || (commit_hdr.save_counter != hdr.save_counter)
+        || (commit_hdr.checksum != hdr.checksum))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_HEADER);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if (f_lseek(&fp, sizeof(commit_hdr) + sizeof(ProjectSaveV1)) != FR_OK)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_SEEK_FAIL);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if (project_sd_walk_pattern_records(&fp, 1U, 0, 0) == 0U)
+    {
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    (void)f_close(&fp);
 
     if (out_save_counter != 0)
     {
