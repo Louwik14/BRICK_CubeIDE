@@ -77,9 +77,7 @@ void brick6_app_init(void)
 
     sd_access_gate_init();
 
-#if BRICK6_SD_ENABLE_BOOT_SAMPLE_LOAD
     brick6_sampler_bootstrap_load_pool();
-#endif
 
     brick6_recorder_runtime_boot_init(&g_live_recorder,
                                       g_live_recorder_buffer,
