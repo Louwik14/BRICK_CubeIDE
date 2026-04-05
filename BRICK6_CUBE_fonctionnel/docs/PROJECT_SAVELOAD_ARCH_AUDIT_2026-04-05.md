@@ -24,6 +24,7 @@ _Date: 2026-04-05_
   2. après `project_v1_save_slot()` réussi (slot de save devient actif),
   3. après changement effectif de pattern active (`pattern_live_queue_slot` immédiat ou commuté sur boundary).
 - Au boot: validation `version/valid/crc`, puis restore strict `project slot` -> `active pattern index`, sinon fallback silencieux sans bloquer la machine.
+- La zone flash est réservée explicitement dans le linker (`BOOT_CTX_FLASH`, secteur bank2/sector7), séparée de la zone firmware applicative.
 
 ---
 
