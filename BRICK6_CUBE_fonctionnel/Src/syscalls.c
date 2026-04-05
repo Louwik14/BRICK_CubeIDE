@@ -29,6 +29,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include "usart.h"
 
 
 /* Variables */
@@ -173,4 +174,38 @@ int _execve(char *name, char **argv, char **env)
   (void)env;
   errno = ENOMEM;
   return -1;
+}
+
+__attribute__((weak)) int __io_putchar(int ch)
+{
+  if (huart1.Instance == 0)
+  {
+    return ch;
+  }
+
+  uint8_t c = (uint8_t)ch;
+  if (c == '\n')
+  {
+    const uint8_t cr = '\r';
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)&cr, 1U, 10U);
+  }
+
+  (void)HAL_UART_Transmit(&huart1, &c, 1U, 10U);
+  return ch;
+}
+
+__attribute__((weak)) int __io_getchar(void)
+{
+  if (huart1.Instance == 0)
+  {
+    return -1;
+  }
+
+  uint8_t c = 0U;
+  if (HAL_UART_Receive(&huart1, &c, 1U, HAL_MAX_DELAY) != HAL_OK)
+  {
+    return -1;
+  }
+
+  return (int)c;
 }
