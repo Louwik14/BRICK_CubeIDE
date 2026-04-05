@@ -18,6 +18,23 @@ static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
 
+#define PROJECT_BOOT_CTX_VERSION      1U
+#define PROJECT_BOOT_CTX_FLASH_ADDR   0x081E0000UL
+#define PROJECT_BOOT_CTX_FLASH_BANK   FLASH_BANK_2
+#define PROJECT_BOOT_CTX_FLASH_SECTOR FLASH_SECTOR_7
+
+typedef struct __attribute__((packed))
+{
+    uint8_t version;
+    uint8_t valid;
+    uint32_t crc;
+    uint8_t active_project_slot;
+    uint8_t active_pattern_index;
+} project_boot_context_t;
+
+static project_boot_context_t g_project_boot_ctx_cache;
+static uint8_t g_project_boot_ctx_cache_valid;
+
 #ifndef PROJECT_PROFILE_ENABLED
 #define PROJECT_PROFILE_ENABLED 0
 #endif
@@ -56,6 +73,8 @@ void project_v1_init(void)
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
+    memset(&g_project_boot_ctx_cache, 0, sizeof(g_project_boot_ctx_cache));
+    g_project_boot_ctx_cache_valid = 0U;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
