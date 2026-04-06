@@ -104,13 +104,13 @@ void brick6_app_init(void)
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
+    param_store_init();
+    brick6_boot_apply_param_defaults();
     seq_runtime_init();
     pattern_live_init();
     project_v1_init();
     (void)project_v1_restore_boot_context();
     undo_v1_init();
-    param_store_init();
-    brick6_boot_apply_param_defaults();
     (void)pattern_live_capture_boot_snapshot();
     control_event_init();
 

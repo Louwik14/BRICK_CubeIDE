@@ -9,7 +9,8 @@
 #define PROJECT_V1_PATTERN_COUNT   16U
 #define PROJECT_V1_SLOT_COUNT      16U
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    1U
+#define PROJECT_V1_FILE_VERSION    2U
+#define PROJECT_V1_FILE_VERSION_1  1U
 
 typedef enum
 {
@@ -33,7 +34,7 @@ typedef struct
     uint8_t queued_pattern_slot;
     uint8_t active_project_slot_valid;
     uint8_t active_project_slot;
-    uint8_t reserved0;
+    uint8_t active_pattern_index;
     uint8_t bank_has_data[PROJECT_V1_BANK_COUNT][PROJECT_V1_PATTERN_COUNT];
 } project_v1_state_block_t;
 
@@ -82,7 +83,6 @@ uint8_t project_v1_slot_has_data(uint8_t project_slot);
 void project_v1_refresh_slots(void);
 uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots);
 uint8_t project_v1_restore_boot_context(void);
-void project_v1_on_active_pattern_changed(uint8_t active_pattern_index);
 project_v1_error_t project_v1_get_last_error(void);
 const char *project_v1_error_to_string(project_v1_error_t err);
 uint8_t project_v1_get_last_sd_error_code(void);
