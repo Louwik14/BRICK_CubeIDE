@@ -6,7 +6,7 @@
 
 #define BOOT_CONTEXT_FLASH_VERSION 1U
 #define BOOT_CONTEXT_FLASH_BANK    FLASH_BANK_2
-#define BOOT_CONTEXT_FLASH_SECTOR  FLASH_SECTOR_7
+#define BOOT_CONTEXT_FLASH_SECTOR  FLASH_SECTOR_6
 
 extern const uint8_t __boot_context_flash_start__[];
 
