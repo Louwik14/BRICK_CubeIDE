@@ -73,8 +73,11 @@ static uint8_t project_sd_header_is_valid(const project_v1_file_header_t *hdr, u
         return 0U;
     }
 
+    const uint8_t version_is_supported =
+        (hdr->version == PROJECT_V1_FILE_VERSION) || (hdr->version == PROJECT_V1_FILE_VERSION_1);
+
     return ((hdr->magic == PROJECT_V1_FILE_MAGIC)
-            && (hdr->version == PROJECT_V1_FILE_VERSION)
+            && (version_is_supported != 0U)
             && (hdr->header_size == sizeof(project_v1_file_header_t))
             && (hdr->payload_size == sizeof(ProjectSaveV1))
             && (hdr->bank_count == PROJECT_V1_BANK_COUNT)
@@ -521,6 +524,11 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
         project_sd_mark_slot_validity(project_slot, 0U);
         project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
         goto done;
+    }
+
+    if (hdr.version == PROJECT_V1_FILE_VERSION_1)
+    {
+        out_project->state.active_pattern_index = out_project->state.active_pattern_slot;
     }
 
     if (has_pattern_changes != 0U)

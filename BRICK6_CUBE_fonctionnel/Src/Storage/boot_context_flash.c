@@ -24,8 +24,7 @@ static uint32_t boot_context_flash_crc32(const boot_context_flash_data_t *ctx)
     const uint8_t payload[] = {
         ctx->version,
         ctx->valid,
-        ctx->active_project_slot,
-        ctx->active_pattern_index
+        ctx->active_project_slot
     };
 
     for (uint32_t i = 0U; i < sizeof(payload); ++i)
@@ -144,14 +143,13 @@ uint8_t boot_context_flash_load(boot_context_flash_data_t *out_ctx)
     return 1U;
 }
 
-uint8_t boot_context_flash_commit(uint8_t active_project_slot, uint8_t active_pattern_index)
+uint8_t boot_context_flash_commit(uint8_t active_project_slot)
 {
     boot_context_flash_data_t next_ctx;
 
     next_ctx.version = BOOT_CONTEXT_FLASH_VERSION;
     next_ctx.valid = 1U;
     next_ctx.active_project_slot = active_project_slot;
-    next_ctx.active_pattern_index = active_pattern_index;
     next_ctx.crc = boot_context_flash_crc32(&next_ctx);
 
     if ((g_boot_ctx_cache_valid != 0U)
@@ -177,7 +175,6 @@ void boot_context_flash_clear(void)
     ctx.version = BOOT_CONTEXT_FLASH_VERSION;
     ctx.valid = 0U;
     ctx.active_project_slot = 0U;
-    ctx.active_pattern_index = 0U;
     ctx.crc = boot_context_flash_crc32(&ctx);
 
     if (boot_context_flash_write_raw(&ctx) != 0U)

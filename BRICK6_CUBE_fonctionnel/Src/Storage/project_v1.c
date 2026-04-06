@@ -30,16 +30,12 @@ static void project_v1_set_sd_operation_error(project_v1_error_t err)
 
 static void project_boot_ctx_commit_current_state_if_valid(void)
 {
-    uint8_t active_bank = 0U;
-    uint8_t active_pattern = 0U;
-    if ((g_project_active_slot_valid == 0U)
-        || (pattern_live_get_active(&active_bank, &active_pattern) == 0U))
+    if (g_project_active_slot_valid == 0U)
     {
         return;
     }
 
-    (void)active_bank;
-    (void)boot_context_flash_commit(g_project_active_slot, active_pattern);
+    (void)boot_context_flash_commit(g_project_active_slot);
 }
 
 void project_v1_init(void)
@@ -72,6 +68,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
 
     (void)pattern_live_get_active(&out_project->state.active_pattern_bank,
                                   &out_project->state.active_pattern_slot);
+    out_project->state.active_pattern_index = out_project->state.active_pattern_slot;
 
     (void)pattern_live_get_queued(&out_project->state.queued_pattern_valid,
                                   &out_project->state.queued_pattern_bank,
@@ -111,8 +108,14 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
         return 0U;
     }
 
+    uint8_t restored_active_pattern = project->state.active_pattern_index;
+    if (restored_active_pattern >= PROJECT_V1_PATTERN_COUNT)
+    {
+        restored_active_pattern = project->state.active_pattern_slot;
+    }
+
     pattern_live_set_active_state(project->state.active_pattern_bank,
-                                  project->state.active_pattern_slot,
+                                  restored_active_pattern,
                                   project->state.queued_pattern_valid,
                                   project->state.queued_pattern_bank,
                                   project->state.queued_pattern_slot);
@@ -341,7 +344,7 @@ uint8_t project_v1_restore_boot_context(void)
         return 0U;
     }
 
-    if ((ctx.active_project_slot >= PROJECT_V1_SLOT_COUNT) || (ctx.active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
+    if (ctx.active_project_slot >= PROJECT_V1_SLOT_COUNT)
     {
         return 0U;
     }
@@ -351,25 +354,5 @@ uint8_t project_v1_restore_boot_context(void)
         return 0U;
     }
 
-    uint8_t active_bank = 0U;
-    uint8_t active_pattern = 0U;
-    if ((pattern_live_get_active(&active_bank, &active_pattern) != 0U)
-        && (active_pattern != ctx.active_pattern_index))
-    {
-        if (pattern_live_queue_slot(active_bank, ctx.active_pattern_index) == 0U)
-        {
-            return 0U;
-        }
-    }
     return 1U;
-}
-
-void project_v1_on_active_pattern_changed(uint8_t active_pattern_index)
-{
-    if ((g_project_active_slot_valid == 0U) || (active_pattern_index >= PROJECT_V1_PATTERN_COUNT))
-    {
-        return;
-    }
-
-    (void)boot_context_flash_commit(g_project_active_slot, active_pattern_index);
 }
