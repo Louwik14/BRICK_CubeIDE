@@ -8,7 +8,7 @@
 #define BOOT_CONTEXT_FLASH_BANK    FLASH_BANK_2
 #define BOOT_CONTEXT_FLASH_SECTOR  FLASH_SECTOR_7
 
-extern const uint32_t __boot_context_flash_start__;
+extern const uint8_t __boot_context_flash_start__[];
 
 static boot_context_flash_data_t g_boot_ctx_cache;
 static uint8_t g_boot_ctx_cache_valid;
@@ -69,7 +69,7 @@ static uint8_t boot_context_flash_read_raw(boot_context_flash_data_t *out_ctx)
         return 0U;
     }
 
-    memcpy(out_ctx, (const void *)&__boot_context_flash_start__, sizeof(*out_ctx));
+    memcpy(out_ctx, (const void *)__boot_context_flash_start__, sizeof(*out_ctx));
     return 1U;
 }
 
@@ -99,7 +99,7 @@ static uint8_t boot_context_flash_write_raw(const boot_context_flash_data_t *ctx
     if (HAL_FLASHEx_Erase(&erase, &erase_error) == HAL_OK)
     {
         st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD,
-                               (uint32_t)(uintptr_t)&__boot_context_flash_start__,
+                               (uint32_t)(uintptr_t)__boot_context_flash_start__,
                                (uint32_t)(uintptr_t)flash_word);
     }
     HAL_FLASH_Lock();
