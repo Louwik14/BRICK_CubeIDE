@@ -59,6 +59,7 @@ void param_registry_batch_begin(void);
 void param_registry_batch_end(void);
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value);
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
+uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value);
 
 float param_get(param_id_t id);
 void param_set(param_id_t id, float value);
