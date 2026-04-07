@@ -34,6 +34,10 @@ void mod_lfo_v1_reset_runtime(void);
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value);
 
+uint16_t mod_lfo_v1_dest_count(uint8_t track);
+uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t *out_param);
+uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len);
+
 void mod_lfo_v1_process_sample_all(void);
 
 #ifdef __cplusplus

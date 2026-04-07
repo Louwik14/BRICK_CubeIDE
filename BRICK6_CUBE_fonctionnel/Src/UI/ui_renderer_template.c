@@ -12,6 +12,7 @@
 #include "ui_widgets.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime.h"
+#include "Mod/mod_lfo_v1.h"
 
 #define UI_TEMPLATE_FRAME_W          31
 #define UI_TEMPLATE_FRAME_H          37
@@ -51,6 +52,14 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         const uint8_t duplicate = ui_track_midi_channel_used_by_other(ui_get_active_track(), channel);
         (void)snprintf(out, out_len, "%u%s", (unsigned int)channel, (duplicate != 0U) ? "*" : "");
         return;
+    }
+
+    if ((id == PARAM_LFO1_DEST) || (id == PARAM_LFO2_DEST))
+    {
+        if (mod_lfo_v1_dest_label(ui_get_active_track(), (uint16_t)(value + 0.5f), out, out_len) != 0U)
+        {
+            return;
+        }
     }
 
     if ((id == PARAM_SEQ_PLAY_V1_VEL) || (id == PARAM_SEQ_PLAY_V2_VEL) || (id == PARAM_SEQ_PLAY_V3_VEL) || (id == PARAM_SEQ_PLAY_V4_VEL))
