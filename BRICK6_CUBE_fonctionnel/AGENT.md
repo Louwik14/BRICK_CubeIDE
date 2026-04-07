@@ -128,6 +128,12 @@ Ensembles importants existants :
 - `KEYBOARD`
 - `ARP`
 
+### MOD : résolution des destinations LFO (invariant)
+- Les destinations LFO doivent venir d’une liste explicite validée runtime.
+- Autorisés uniquement : domaines `COLORS` et `TONE` réellement valides pour la track.
+- Interdit : domaine `PLAY` (ni affiché, ni sélectionnable, ni applicable).
+- Le filtrage doit rester strictement track-aware (family/type/runtime effectif), sans fallback cross-engine.
+
 ---
 
 ## 7. LEDs : règles simples

@@ -211,6 +211,12 @@ Contraintes :
 - `CALIBRATION` et `POTS DEBUG` restent des pages/runtime existants mais ne sont pas exposés par boutons parameter.
 - `FM DX7` n’est pas un point d’entrée bouton séparé : sur `Synth + DX7`, `TONE` résout vers le contenu UI DX7.
 
+### 7.4 Invariant MOD (destinations LFO)
+- La résolution `Dest` de `MOD` est explicitement track-aware et basée sur les autorités runtime (`track_runtime` + contexte family/type actif).
+- Les destinations valides sont limitées aux domaines runtime `COLORS` et `TONE` réellement applicables à la track courante.
+- Le domaine `PLAY` est exclu structurellement des destinations LFO (pas seulement masqué UI).
+- Le paramètre `Rate` en `MOD` est discret (labels musicaux) et n’affiche plus d’index brut.
+
 ---
 
 ## 8. Ensemble CFG
