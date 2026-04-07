@@ -1,0 +1,41 @@
+#pragma once
+
+#include <stdint.h>
+
+#include "Param/param_store.h"
+#include "Seq/seq_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum
+{
+    MOD_LFO_SHAPE_SINE = 0,
+    MOD_LFO_SHAPE_TRIANGLE,
+    MOD_LFO_SHAPE_SAW,
+    MOD_LFO_SHAPE_SQUARE,
+    MOD_LFO_SHAPE_RANDOM_SH,
+    MOD_LFO_SHAPE_COUNT
+} mod_lfo_shape_t;
+
+typedef enum
+{
+    MOD_LFO_PARAM_DEST = 0,
+    MOD_LFO_PARAM_RATE,
+    MOD_LFO_PARAM_DEPTH,
+    MOD_LFO_PARAM_SHAPE,
+    MOD_LFO_PARAM_COUNT
+} mod_lfo_param_t;
+
+void mod_lfo_v1_init(void);
+void mod_lfo_v1_reset_runtime(void);
+
+uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
+uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value);
+
+void mod_lfo_v1_process_sample_all(void);
+
+#ifdef __cplusplus
+}
+#endif
