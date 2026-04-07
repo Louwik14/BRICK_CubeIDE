@@ -8,10 +8,15 @@
 #include "ui_core.h"
 
 #define MOD_LFO_COUNT_PER_TRACK 2U
-#define MOD_LFO_RATE_MAX_HZ 1280.0f
+#define MOD_LFO_RATE_STEP_COUNT 7U
 #define MOD_LFO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_TWO_PI 6.28318530718f
 #define MOD_LFO_DEST_NONE ((param_id_t)PARAM_COUNT)
+
+
+static const uint16_t g_mod_lfo_rate_note_divisors[MOD_LFO_RATE_STEP_COUNT] = {
+    2U, 4U, 8U, 16U, 32U, 64U, 128U
+};
 
 typedef struct
 {
@@ -65,6 +70,54 @@ static uint8_t mod_lfo_is_internal_param(param_id_t id)
     }
 }
 
+static uint8_t mod_lfo_param_matches_track_context(uint8_t track, param_id_t dest, track_runtime_param_domain_t domain)
+{
+    const ui_track_family_t family = ui_get_track_family(track);
+    const ui_track_type_t type = ui_get_track_type(track);
+
+    if (domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    {
+        if ((family != UI_TRACK_FAMILY_SYNTH) || (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID))
+        {
+            return 0U;
+        }
+
+        if (type == UI_TRACK_TYPE_DX7)
+        {
+            return ((dest >= PARAM_DX7_ALGORITHM) && (dest <= PARAM_DX7_OPERATOR_4_LEVEL)) ? 1U : 0U;
+        }
+
+        if (type == UI_TRACK_TYPE_MONOB)
+        {
+            return ((dest >= PARAM_MONOB_OSC1_WAVE) && (dest <= PARAM_MONOB_SUB_MIX)) ? 1U : 0U;
+        }
+
+        if (type == UI_TRACK_TYPE_TB3)
+        {
+            return ((dest >= PARAM_TB3_WAVEFORM) && (dest <= PARAM_TB3_SLIDE_TIME)) ? 1U : 0U;
+        }
+
+        return 0U;
+    }
+
+    if (domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    {
+        if (type == UI_TRACK_TYPE_MONOB)
+        {
+            return ((dest >= PARAM_MONOB_FILTER_TYPE) && (dest <= PARAM_MONOB_FILTER_ENVDLY)) ? 1U : 0U;
+        }
+
+        if (type == UI_TRACK_TYPE_TB3)
+        {
+            return ((dest >= PARAM_TB3_CUTOFF) && (dest <= PARAM_TB3_DECAY)) ? 1U : 0U;
+        }
+
+        return ((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_DRIVE)) ? 1U : 0U;
+    }
+
+    return 0U;
+}
+
 static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
 {
     if ((track >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT) || (mod_lfo_is_internal_param(dest) != 0U))
@@ -74,40 +127,14 @@ static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(dest);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE))
     {
         return 0U;
     }
 
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    if (mod_lfo_param_matches_track_context(track, dest, rule.domain) == 0U)
     {
-        const ui_track_type_t type = ui_get_track_type(track);
-        if (type == UI_TRACK_TYPE_DX7)
-        {
-            if ((dest < PARAM_DX7_ALGORITHM) || (dest > PARAM_DX7_OPERATOR_4_LEVEL))
-            {
-                return 0U;
-            }
-        }
-        else if (type == UI_TRACK_TYPE_MONOB)
-        {
-            if ((dest < PARAM_MONOB_OSC1_WAVE) || (dest > PARAM_MONOB_SUB_MIX))
-            {
-                return 0U;
-            }
-        }
-        else if (type == UI_TRACK_TYPE_TB3)
-        {
-            if ((dest < PARAM_TB3_WAVEFORM) || (dest > PARAM_TB3_SLIDE_TIME))
-            {
-                return 0U;
-            }
-        }
-        else
-        {
-            return 0U;
-        }
+        return 0U;
     }
 
     const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, dest);
@@ -273,7 +300,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         }
 
         case MOD_LFO_PARAM_RATE:
-            s->rate = (uint8_t)mod_lfo_clampf(value, 0.0f, 127.0f);
+            s->rate = (uint8_t)mod_lfo_clampf(value, 0.0f, (float)(MOD_LFO_RATE_STEP_COUNT - 1U));
             return 1U;
 
         case MOD_LFO_PARAM_DEPTH:
@@ -352,7 +379,8 @@ void mod_lfo_v1_process_sample_all(void)
                 rt->last_dest = s->dest;
             }
 
-            const float hz = ((float)s->rate / 127.0f) * MOD_LFO_RATE_MAX_HZ;
+            const uint8_t rate_index = (s->rate < MOD_LFO_RATE_STEP_COUNT) ? s->rate : (MOD_LFO_RATE_STEP_COUNT - 1U);
+            const float hz = 0.5f * (float)g_mod_lfo_rate_note_divisors[rate_index];
             const float phase_inc = hz / MOD_LFO_SAMPLE_RATE;
             const float old_phase = rt->phase;
             float phase = old_phase + phase_inc;
