@@ -229,10 +229,7 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         }
     }
 
-    for (uint32_t sample = 0U; sample < frames; ++sample)
-    {
-        mod_lfo_v1_process_sample_all();
-    }
+    mod_lfo_v1_process_block(frames);
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {

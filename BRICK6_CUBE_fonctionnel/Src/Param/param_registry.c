@@ -954,6 +954,36 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     return 0U;
 }
 
+
+uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value)
+{
+    if (id >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const param_desc_t *const desc = &param_registry[id];
+    const float clamped = clamp_value(value, desc->min, desc->max);
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE) || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+    {
+        return param_runtime_apply_track(track, id, clamped);
+    }
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    {
+        const uint8_t applied = param_runtime_apply_colors_track(track, id, clamped);
+        if (applied != 0U)
+        {
+            param_runtime_cache_set(track, id, clamped);
+        }
+        return applied;
+    }
+
+    return 0U;
+}
+
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
     if (id >= PARAM_COUNT)
@@ -1960,7 +1990,7 @@ static const char *const g_arp_strum_labels[] = {"Off", "Up", "Down", "Alt", "Rn
 static const char *const g_arp_dir_labels[] = {"Normal", "PingPong", "RndWalk", NULL};
 static const char *const g_arp_sync_labels[] = {"Int", "Clock", "Free", NULL};
 static const char *const g_lfo_shape_labels[] = {"Sine", "Triangle", "Saw", "Square", "Random S&H", NULL};
-static const char *const g_lfo_rate_labels[] = {"1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", NULL};
+static const char *const g_lfo_rate_labels[] = {"128", "64", "32", "16", "8", "4", "2", "1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -2185,11 +2215,11 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_TB3_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_decay),
 
     PARAM_DESC_EX(PARAM_LFO1_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_dest),
-    PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 6.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo1_rate),
+    PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 14.0f, 1.0f, 7.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo1_rate),
     PARAM_DESC_EX(PARAM_LFO1_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_depth),
     PARAM_DESC_EX(PARAM_LFO1_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo1_shape),
     PARAM_DESC_EX(PARAM_LFO2_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_dest),
-    PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 6.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo2_rate),
+    PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 14.0f, 1.0f, 7.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo2_rate),
     PARAM_DESC_EX(PARAM_LFO2_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_depth),
     PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
 };
