@@ -36,6 +36,7 @@
 #include "Seq/seq_model.h"
 #include "Core/runtime_target.h"
 #include "Core/track_runtime.h"
+#include "Mod/mod_lfo_v1.h"
 #include "Storage/memory_layout.h"
 #include "Storage/undo_v1.h"
 #include <math.h>
@@ -504,6 +505,52 @@ static void param_runtime_cache_set(uint8_t track, param_id_t id, float value)
     g_param_runtime_track_valid[track][id] = 1U;
 }
 
+static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_param_t *out_lfo_param)
+{
+    if ((out_lfo_index == NULL) || (out_lfo_param == NULL))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_LFO1_DEST:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_DEST;
+            return 1U;
+        case PARAM_LFO1_RATE:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_RATE;
+            return 1U;
+        case PARAM_LFO1_DEPTH:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_DEPTH;
+            return 1U;
+        case PARAM_LFO1_SHAPE:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_SHAPE;
+            return 1U;
+        case PARAM_LFO2_DEST:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_DEST;
+            return 1U;
+        case PARAM_LFO2_RATE:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_RATE;
+            return 1U;
+        case PARAM_LFO2_DEPTH:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_DEPTH;
+            return 1U;
+        case PARAM_LFO2_SHAPE:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_SHAPE;
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_is_filter_ui_param(param_id_t id)
 {
     switch (id)
@@ -815,6 +862,15 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return 0U;
     }
 
+    {
+        uint8_t lfo_index = 0U;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+        if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+        {
+            return mod_lfo_v1_get_track_param(track, lfo_index, lfo_param, out_value);
+        }
+    }
+
     uint32_t target_track = 0U;
     filter_ui_state_t *state = NULL;
     switch (id)
@@ -907,6 +963,15 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
+
+    {
+        uint8_t lfo_index = 0U;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+        if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+        {
+            return mod_lfo_v1_set_track_param(track, lfo_index, lfo_param, clamped);
+        }
+    }
 
     uint32_t target_track = 0U;
     filter_ui_state_t *state = NULL;
@@ -1468,6 +1533,14 @@ static void apply_tb3_decay(float v) { apply_tone_live_track(PARAM_TB3_DECAY, v)
 static void apply_tb3_accent(float v) { apply_tone_live_track(PARAM_TB3_ACCENT, v); }
 static void apply_tb3_volume(float v) { apply_tone_live_track(PARAM_TB3_VOLUME, v); }
 static void apply_tb3_slide_time(float v) { apply_tone_live_track(PARAM_TB3_SLIDE_TIME, v); }
+static void apply_lfo1_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEST, v); }
+static void apply_lfo1_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_RATE, v); }
+static void apply_lfo1_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEPTH, v); }
+static void apply_lfo1_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_SHAPE, v); }
+static void apply_lfo2_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEST, v); }
+static void apply_lfo2_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_RATE, v); }
+static void apply_lfo2_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEPTH, v); }
+static void apply_lfo2_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_SHAPE, v); }
 
 static void param_registry_push_track_defaults_to_runtime(uint8_t track)
 {
@@ -1886,6 +1959,7 @@ static const char *const g_arp_accent_labels[] = {"Off", "1st", "Alt", "Rnd", NU
 static const char *const g_arp_strum_labels[] = {"Off", "Up", "Down", "Alt", "Rnd", NULL};
 static const char *const g_arp_dir_labels[] = {"Normal", "PingPong", "RndWalk", NULL};
 static const char *const g_arp_sync_labels[] = {"Int", "Clock", "Free", NULL};
+static const char *const g_lfo_shape_labels[] = {"Sine", "Triangle", "Saw", "Square", "Random S&H", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -2108,6 +2182,15 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_TB3_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_resonance),
     PARAM_DESC_EX(PARAM_TB3_ENV_MOD, "Env Mod", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_env_mod),
     PARAM_DESC_EX(PARAM_TB3_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_decay),
+
+    PARAM_DESC_EX(PARAM_LFO1_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_dest),
+    PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_rate),
+    PARAM_DESC_EX(PARAM_LFO1_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_depth),
+    PARAM_DESC_EX(PARAM_LFO1_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo1_shape),
+    PARAM_DESC_EX(PARAM_LFO2_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_dest),
+    PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_rate),
+    PARAM_DESC_EX(PARAM_LFO2_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_depth),
+    PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
 };
 
 /**
@@ -2124,6 +2207,7 @@ void param_registry_init(void)
 {
     /* Registry is static metadata; runtime values are in param_store. */
     filter_ui_state_init_defaults();
+    mod_lfo_v1_init();
     memset(&g_param_runtime_track_values, 0, sizeof(g_param_runtime_track_values));
     memset(&g_param_runtime_track_valid, 0, sizeof(g_param_runtime_track_valid));
 }

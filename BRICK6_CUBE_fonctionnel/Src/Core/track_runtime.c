@@ -366,6 +366,14 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SEQ_PLAY_V4_VEL:
         case PARAM_SEQ_PLAY_V4_LEN:
         case PARAM_SEQ_PLAY_V4_MICTIM:
+        case PARAM_LFO1_DEST:
+        case PARAM_LFO1_RATE:
+        case PARAM_LFO1_DEPTH:
+        case PARAM_LFO1_SHAPE:
+        case PARAM_LFO2_DEST:
+        case PARAM_LFO2_RATE:
+        case PARAM_LFO2_DEPTH:
+        case PARAM_LFO2_SHAPE:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_PLAY;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

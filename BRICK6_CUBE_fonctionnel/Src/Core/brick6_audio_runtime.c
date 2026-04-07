@@ -26,6 +26,7 @@
 #include "mixer.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
+#include "Mod/mod_lfo_v1.h"
 
 #define HALFPI_F 1.57079632679489661923f
 #ifndef SEQ_DEBUG_TRACK_BINDING
@@ -226,6 +227,11 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
             g_runtime_last_dx7_tracks = dx7_tracks;
             g_runtime_last_ui_active_track = ui_get_active_track();
         }
+    }
+
+    for (uint32_t sample = 0U; sample < frames; ++sample)
+    {
+        mod_lfo_v1_process_sample_all();
     }
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))

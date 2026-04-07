@@ -49,6 +49,25 @@ typedef struct
 
 typedef struct
 {
+    uint16_t dest;
+    uint8_t rate;
+    uint8_t depth;
+    uint8_t shape;
+} pattern_v1_lfo_lane_t;
+
+typedef struct
+{
+    pattern_v1_lfo_lane_t lfo1;
+    pattern_v1_lfo_lane_t lfo2;
+} pattern_v1_track_mod_t;
+
+typedef struct
+{
+    pattern_v1_track_mod_t tracks[SEQ_TRACK_COUNT];
+} pattern_v1_mod_block_t;
+
+typedef struct
+{
     float global_values[PARAM_COUNT];
     uint8_t global_valid[PARAM_COUNT];
     uint32_t tempo_bpm_milli;
@@ -66,6 +85,7 @@ typedef struct
     pattern_v1_track_cfg_block_t track_cfg;
     pattern_v1_track_param_block_t sound;
     pattern_v1_track_param_block_t mix;
+    pattern_v1_mod_block_t mod;
     pattern_v1_globals_block_t globals;
 } PatternSaveV1;
 

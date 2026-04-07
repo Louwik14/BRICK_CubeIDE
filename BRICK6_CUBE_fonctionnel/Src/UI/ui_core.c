@@ -33,6 +33,7 @@
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_template_filter.h"
 #include "pages/ui_page_template_dx7.h"
+#include "pages/ui_page_template_mod.h"
 #include "pages/ui_page_template_cfg.h"
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_arp.h"
@@ -1127,6 +1128,7 @@ void ui_core_init(void)
     ui_page_template_colors_register_families();
     ui_page_template_cfg_register_families();
     ui_page_template_dx7_register_families();
+    ui_page_template_mod_register_families();
     ui_page_template_keyboard_register_families();
     ui_page_template_arp_register_families();
     ui_page_template_seq_register_families();
@@ -1147,6 +1149,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_cfg);
     ui_page_manager_register(&g_ui_page_template_rec_cfg);
     ui_page_manager_register(&g_ui_page_template_dx7);
+    ui_page_manager_register(&g_ui_page_template_mod);
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
     ui_page_manager_register(&g_ui_page_template_seq);

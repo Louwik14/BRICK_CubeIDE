@@ -180,6 +180,7 @@ Au minimum, l’architecture s’appuie aujourd’hui sur :
 - `CFG`
 - `COLORS`
 - `TONE`
+- `MOD`
 - `MIX`
 - `KEYBOARD`
 - `ARP`
@@ -201,6 +202,7 @@ Le mapping parameter button doit rester centralisé dans une table unique.
 État courant :
 - `BTN_PARAM_1` -> `COLORS`
 - `BTN_PARAM_2` -> `TONE`
+- `BTN_PARAM_3` -> `MOD` (pages `LFO1` / `LFO2`)
 - `BTN_PARAM_4` -> `MIX` (disponible sur tracks `Input` et `Synth`)
 - `BTN_PARAM_5` -> `PLAY` (disponible seulement si la track active est de family `Synth`)
 - `BTN_PARAM_8` -> bouton spécial `TRACK` (modificateur, pas un ensemble UI)
