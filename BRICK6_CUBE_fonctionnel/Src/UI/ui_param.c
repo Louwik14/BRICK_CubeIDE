@@ -27,6 +27,7 @@
 #include "Seq/seq_edit.h"
 #include "Core/track_runtime.h"
 #include "param_store.h"
+#include "Mod/mod_lfo_v1.h"
 
 typedef struct
 {
@@ -397,6 +398,11 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
         const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
         const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
         max_value = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
+    }
+    else if ((param == PARAM_LFO1_DEST) || (param == PARAM_LFO2_DEST))
+    {
+        const uint16_t count = mod_lfo_v1_dest_count(ui_get_active_track());
+        max_value = (count > 0U) ? (float)(count - 1U) : 0.0f;
     }
 
     if (ui_param_try_apply_seq_plock(param, desc, delta, min_value, max_value) != 0U)

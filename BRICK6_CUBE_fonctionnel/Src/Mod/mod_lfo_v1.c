@@ -5,6 +5,7 @@
 
 #include "Core/track_runtime.h"
 #include "Param/param_registry.h"
+#include "ui_core.h"
 
 #define MOD_LFO_COUNT_PER_TRACK 2U
 #define MOD_LFO_RATE_MAX_HZ 1280.0f
@@ -79,8 +80,113 @@ static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
         return 0U;
     }
 
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    {
+        const ui_track_type_t type = ui_get_track_type(track);
+        if (type == UI_TRACK_TYPE_DX7)
+        {
+            if ((dest < PARAM_DX7_ALGORITHM) || (dest > PARAM_DX7_OPERATOR_4_LEVEL))
+            {
+                return 0U;
+            }
+        }
+        else if (type == UI_TRACK_TYPE_MONOB)
+        {
+            if ((dest < PARAM_MONOB_OSC1_WAVE) || (dest > PARAM_MONOB_SUB_MIX))
+            {
+                return 0U;
+            }
+        }
+        else if (type == UI_TRACK_TYPE_TB3)
+        {
+            if ((dest < PARAM_TB3_WAVEFORM) || (dest > PARAM_TB3_SLIDE_TIME))
+            {
+                return 0U;
+            }
+        }
+        else
+        {
+            return 0U;
+        }
+    }
+
     const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, dest);
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
+}
+
+static uint16_t mod_lfo_dest_count_supported(uint8_t track)
+{
+    uint16_t count = 1U; /* index 0 = None */
+
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return count;
+    }
+
+    for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
+    {
+        const param_id_t param = (param_id_t)raw;
+        if (mod_lfo_dest_supported(track, param) != 0U)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+static param_id_t mod_lfo_dest_from_index(uint8_t track, uint16_t dest_index)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (dest_index == 0U))
+    {
+        return MOD_LFO_DEST_NONE;
+    }
+
+    uint16_t current = 1U;
+    for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
+    {
+        const param_id_t param = (param_id_t)raw;
+        if (mod_lfo_dest_supported(track, param) == 0U)
+        {
+            continue;
+        }
+
+        if (current == dest_index)
+        {
+            return param;
+        }
+
+        ++current;
+    }
+
+    return MOD_LFO_DEST_NONE;
+}
+
+static uint16_t mod_lfo_dest_to_index(uint8_t track, param_id_t dest)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    uint16_t index = 1U;
+    for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
+    {
+        const param_id_t param = (param_id_t)raw;
+        if (mod_lfo_dest_supported(track, param) == 0U)
+        {
+            continue;
+        }
+
+        if (param == dest)
+        {
+            return index;
+        }
+
+        ++index;
+    }
+
+    return 0U;
 }
 
 static float mod_lfo_wave(mod_lfo_shape_t shape, float phase, mod_lfo_runtime_state_t *state)
@@ -158,8 +264,9 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     {
         case MOD_LFO_PARAM_DEST:
         {
-            uint16_t dest = (uint16_t)mod_lfo_clampf(value, 0.0f, (float)PARAM_COUNT);
-            s->dest = dest;
+            const uint16_t max_index = (uint16_t)(mod_lfo_dest_count_supported(track) - 1U);
+            const uint16_t dest_index = (uint16_t)mod_lfo_clampf(value, 0.0f, (float)max_index);
+            s->dest = (uint16_t)mod_lfo_dest_from_index(track, dest_index);
             rt->base_valid = 0U;
             rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             return 1U;
@@ -195,7 +302,7 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     switch (param)
     {
         case MOD_LFO_PARAM_DEST:
-            *out_value = (float)s->dest;
+            *out_value = (float)mod_lfo_dest_to_index(track, (param_id_t)s->dest);
             return 1U;
 
         case MOD_LFO_PARAM_RATE:
@@ -272,4 +379,63 @@ void mod_lfo_v1_process_sample_all(void)
             (void)param_registry_apply_track_value(dest, track, modulated);
         }
     }
+}
+
+uint16_t mod_lfo_v1_dest_count(uint8_t track)
+{
+    return mod_lfo_dest_count_supported(track);
+}
+
+uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t *out_param)
+{
+    if (out_param == NULL)
+    {
+        return 0U;
+    }
+
+    *out_param = mod_lfo_dest_from_index(track, dest_index);
+    return 1U;
+}
+
+uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return 0U;
+    }
+
+    const param_id_t dest = mod_lfo_dest_from_index(track, dest_index);
+    if (dest == MOD_LFO_DEST_NONE)
+    {
+        out[0] = 'N';
+        out[1] = 'o';
+        out[2] = 'n';
+        out[3] = 'e';
+        out[4] = '\0';
+        return 1U;
+    }
+
+    if (dest >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const char *name = param_registry[dest].name;
+    if (name == NULL)
+    {
+        return 0U;
+    }
+
+    uint32_t i = 0U;
+    for (; (i + 1U) < out_len; ++i)
+    {
+        const char c = name[i];
+        out[i] = c;
+        if (c == '\0')
+        {
+            return 1U;
+        }
+    }
+    out[i] = '\0';
+    return 1U;
 }
