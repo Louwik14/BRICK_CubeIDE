@@ -280,7 +280,12 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
 
 #if defined(ENABLE_SCRATCH_BUFFER)
-  if (!((uint32_t)buff & 0x3))
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  if ((((uint32_t)buff & 0x3U) == 0U) &&
+      (((uint32_t)buff & (DCACHE_LINE_SIZE_BYTES - 1U)) == 0U))
+#else
+  if (((uint32_t)buff & 0x3U) == 0U)
+#endif
   {
 #endif
     ReadStatus = 0;
@@ -422,7 +427,12 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   }
 
 #if defined(ENABLE_SCRATCH_BUFFER)
-  if (!((uint32_t)buff & 0x3))
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  if ((((uint32_t)buff & 0x3U) == 0U) &&
+      (((uint32_t)buff & (DCACHE_LINE_SIZE_BYTES - 1U)) == 0U))
+#else
+  if (((uint32_t)buff & 0x3U) == 0U)
+#endif
   {
 #endif
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
