@@ -79,6 +79,13 @@ Le DSP applicatif alimente ensuite le mixeur principal.
   chaque track synth active injecte sa contribution sur sa cible mix runtime,
   et c’est le `mixer` qui applique ensuite `Level / Pan / Send1 / Send2` par track.
 
+
+### 4.2 Cardinalités locales (MIX)
+
+- `PARAM_MIX_TRACKx_*` est un chemin legacy encore utile pour compat/storage, mais il cible explicitement les **tracks physiques mixer** (`MAX_TRACKS = 4`).
+- `PARAM_MIX_*` (Level/Pan/Send1/Send2) est le chemin runtime track-aware et cible les **tracks logiques** via `track_runtime` (`UI_TRACK_COUNT`/`SEQ_TRACK_COUNT`).
+- Les deux chemins coexistent, mais la règle de cardinalité doit rester explicite dans le code touché pour éviter les confusions 4 vs 8.
+
 Le pipeline est déjà modulaire et doit être conservé.
 Les optimisations CPU doivent privilégier :
 - bypass évidents
