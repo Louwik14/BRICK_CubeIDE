@@ -8,8 +8,6 @@
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 
-static FATFS g_project_fs;
-static uint8_t g_project_fs_mounted;
 static uint8_t g_project_slot_has_data[PROJECT_V1_SLOT_COUNT];
 UI_SDRAM static PatternSaveV1 g_project_slot_buffer;
 static project_sd_bank_error_t g_project_sd_last_error;
@@ -109,21 +107,7 @@ static uint32_t project_sd_checksum_accumulate(uint32_t seed, const uint8_t *dat
 
 static uint8_t project_sd_mount_if_needed(void)
 {
-    if (g_project_fs_mounted != 0U)
-    {
-        return 1U;
-    }
-
-    sd_access_trace_begin("project_f_mount");
-    const FRESULT fr = f_mount(&g_project_fs, "0:", 1U);
-    sd_access_trace_end("project_f_mount", (int)fr, 0U);
-    if (fr != FR_OK)
-    {
-        return 0U;
-    }
-
-    g_project_fs_mounted = 1U;
-    return 1U;
+    return sd_access_fs_mount_if_needed();
 }
 
 static uint8_t project_sd_make_slot_path(char *out_path, uint32_t out_size, uint8_t project_slot)
@@ -398,9 +382,7 @@ uint8_t project_sd_bank_list_slots(uint8_t *out_slots, uint8_t max_slots)
 
 void project_sd_bank_init(void)
 {
-    memset(&g_project_fs, 0, sizeof(g_project_fs));
     memset(&g_project_slot_has_data, 0, sizeof(g_project_slot_has_data));
-    g_project_fs_mounted = 0U;
     project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
@@ -460,11 +442,15 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     char path[32];
     uint32_t checksum = 0U;
 
-    if ((project_sd_mount_if_needed() == 0U)
-        || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
+    if (project_sd_mount_if_needed() == 0U)
     {
-        project_sd_set_error((g_project_fs_mounted == 0U) ? PROJECT_SD_BANK_ERR_MOUNT_FAIL
-                                                          : PROJECT_SD_BANK_ERR_PATH_FAIL);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_MOUNT_FAIL);
+        goto done;
+    }
+
+    if (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_PATH_FAIL);
         goto done;
     }
 
@@ -622,11 +608,15 @@ uint8_t project_sd_bank_store_slot(uint8_t project_slot, const ProjectSaveV1 *pr
     char path[32];
     uint32_t checksum = 0U;
 
-    if ((project_sd_mount_if_needed() == 0U)
-        || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
+    if (project_sd_mount_if_needed() == 0U)
     {
-        project_sd_set_error((g_project_fs_mounted == 0U) ? PROJECT_SD_BANK_ERR_MOUNT_FAIL
-                                                          : PROJECT_SD_BANK_ERR_PATH_FAIL);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_MOUNT_FAIL);
+        goto done;
+    }
+
+    if (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_PATH_FAIL);
         goto done;
     }
 
@@ -810,11 +800,15 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
     uint32_t checksum = 0U;
     uint8_t has_pattern_changes = 1U;
 
-    if ((project_sd_mount_if_needed() == 0U)
-        || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
+    if (project_sd_mount_if_needed() == 0U)
     {
-        project_sd_set_error((g_project_fs_mounted == 0U) ? PROJECT_SD_BANK_ERR_MOUNT_FAIL
-                                                          : PROJECT_SD_BANK_ERR_PATH_FAIL);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_MOUNT_FAIL);
+        goto done;
+    }
+
+    if (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_PATH_FAIL);
         goto done;
     }
 
@@ -894,11 +888,15 @@ uint8_t project_sd_bank_delete_slot(uint8_t project_slot)
     uint8_t ok = 0U;
     char path[32];
 
-    if ((project_sd_mount_if_needed() == 0U)
-        || (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U))
+    if (project_sd_mount_if_needed() == 0U)
     {
-        project_sd_set_error((g_project_fs_mounted == 0U) ? PROJECT_SD_BANK_ERR_MOUNT_FAIL
-                                                          : PROJECT_SD_BANK_ERR_PATH_FAIL);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_MOUNT_FAIL);
+        goto done;
+    }
+
+    if (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_PATH_FAIL);
         goto done;
     }
 

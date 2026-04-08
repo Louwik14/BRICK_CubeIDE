@@ -19,8 +19,6 @@ typedef struct __attribute__((packed))
     uint32_t checksum;
 } pattern_sd_slot_header_t;
 
-static FATFS g_pattern_fs;
-static uint8_t g_pattern_fs_mounted;
 static uint8_t g_slot_has_data[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static PatternSaveV1 g_boot_pattern;
 static uint8_t g_boot_pattern_valid;
@@ -47,21 +45,7 @@ static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
 
 static uint8_t pattern_sd_mount_if_needed(void)
 {
-    if (g_pattern_fs_mounted != 0U)
-    {
-        return 1U;
-    }
-
-    sd_access_trace_begin("pattern_f_mount");
-    const FRESULT fr = f_mount(&g_pattern_fs, "0:", 1U);
-    sd_access_trace_end("pattern_f_mount", (int)fr, 0U);
-    if (fr != FR_OK)
-    {
-        return 0U;
-    }
-
-    g_pattern_fs_mounted = 1U;
-    return 1U;
+    return sd_access_fs_mount_if_needed();
 }
 
 static uint8_t pattern_sd_make_slot_path(char *out_path, uint32_t out_size, uint8_t bank, uint8_t pattern)
@@ -107,9 +91,7 @@ static uint8_t pattern_sd_scan_slots(void)
 
 void pattern_sd_bank_init(const PatternSaveV1 *boot_pattern)
 {
-    memset(&g_pattern_fs, 0, sizeof(g_pattern_fs));
     memset(&g_slot_has_data, 0, sizeof(g_slot_has_data));
-    g_pattern_fs_mounted = 0U;
     g_boot_pattern_valid = 0U;
 
     if (boot_pattern != 0)

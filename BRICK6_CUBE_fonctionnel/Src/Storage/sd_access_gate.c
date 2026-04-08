@@ -5,10 +5,32 @@
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;
+static FATFS g_sd_fs;
+static uint8_t g_sd_fs_mounted;
 
 void sd_access_gate_init(void)
 {
     g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
+    g_sd_fs_mounted = 0U;
+}
+
+uint8_t sd_access_fs_mount_if_needed(void)
+{
+    if (g_sd_fs_mounted != 0U)
+    {
+        return 1U;
+    }
+
+    sd_access_trace_begin("shared_f_mount");
+    const FRESULT fr = f_mount(&g_sd_fs, "0:", 1U);
+    sd_access_trace_end("shared_f_mount", (int)fr, 0U);
+    if (fr != FR_OK)
+    {
+        return 0U;
+    }
+
+    g_sd_fs_mounted = 1U;
+    return 1U;
 }
 
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
