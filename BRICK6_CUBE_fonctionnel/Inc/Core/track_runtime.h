@@ -105,6 +105,7 @@ typedef struct
 } track_runtime_param_rule_t;
 
 void track_runtime_init(void);
+void track_runtime_invalidate_all(void);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);

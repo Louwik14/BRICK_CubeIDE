@@ -812,7 +812,9 @@ static void filter_ui_state_init_defaults(void)
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 {
     uint8_t track_id = 0U;
-    if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_get_active_track(), &track_id) == 0U))
+    const uint8_t ui_track = ui_get_active_track();
+    track_runtime_refresh_track(ui_track);
+    if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_track, &track_id) == 0U))
     {
         return 0U;
     }
@@ -824,6 +826,7 @@ static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
 {
     uint8_t track_id = 0U;
+    track_runtime_refresh_track(ui_track);
     if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_track, &track_id) == 0U))
     {
         return 0U;

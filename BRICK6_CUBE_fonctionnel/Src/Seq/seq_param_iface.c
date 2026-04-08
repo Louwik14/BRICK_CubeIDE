@@ -95,6 +95,7 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
         return 0U;
     }
 
+    track_runtime_refresh_track(track);
     const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, param);
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }

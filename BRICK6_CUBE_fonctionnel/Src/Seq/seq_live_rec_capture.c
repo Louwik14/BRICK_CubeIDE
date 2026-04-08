@@ -381,6 +381,7 @@ void seq_live_rec_capture_note_on(uint8_t active,
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        track_runtime_refresh_track(track);
         const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
         const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
         if (track_ch != channel_zero_based)
