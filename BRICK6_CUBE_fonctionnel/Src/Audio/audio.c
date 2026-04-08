@@ -23,6 +23,7 @@
 #include "engine_tasklet.h"
 #include "cpu_load.h"
 #include "memory_layout.h"
+#include "cache_maintenance.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -56,11 +57,13 @@
  * - RX: DMA écrit, CPU lit
  * - TX: CPU écrit, DMA lit
  *
- * Politique visée pour activation D-cache future:
- * - conserver non-cacheable via section DMA_BUFFER (stratégie la plus sûre).
+ * Politique de cette passe (test audio uniquement):
+ * - RX/TX audio restent en D2 mais en section cacheable
+ * - cohérence CPU/DMA assurée par maintenance D-cache explicite en IRQ
+ * - les autres buffers DMA critiques conservent la section DMA_BUFFER non-cacheable
  */
-static DMA_BUFFER int32_t rx_buffer[AUDIO_BUFFER_WORDS];
-static DMA_BUFFER int32_t tx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_CACHEABLE int32_t rx_buffer[AUDIO_BUFFER_WORDS];
+static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 /* ============================================================
    SAI HANDLES
@@ -99,14 +102,23 @@ static SAI_HandleTypeDef *sai_rx = NULL;
  */
 static void process_half(uint32_t half_index)
 {
-    uint32_t offset =
+    const uint32_t offset =
         half_index * AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
+    const size_t half_bytes = (size_t)AUDIO_FRAMES_PER_HALF
+                            * (size_t)AUDIO_WORDS_PER_FRAME
+                            * sizeof(int32_t);
 
     int32_t *rx = &rx_buffer[offset];
     int32_t *tx = &tx_buffer[offset];
 
+    /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traité. */
+    dcache_invalidate_by_addr_aligned(rx, half_bytes);
+
     /* Frontière moteur float (un bloc fixe par IRQ). */
     audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);
+
+    /* CPU -> TX DMA: clean après écriture CPU et avant lecture DMA. */
+    dcache_clean_by_addr_aligned(tx, half_bytes);
 }
 
 /* ============================================================
@@ -142,6 +154,9 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
+
+    /* Le TX peut être consommé par DMA avant le 1er callback: pousser les zéros en RAM. */
+    dcache_clean_by_addr_aligned(tx_buffer, sizeof(tx_buffer));
 
     /* Init mesure charge CPU audio (utilisée ensuite en IRQ). */
     cpu_load_init();
