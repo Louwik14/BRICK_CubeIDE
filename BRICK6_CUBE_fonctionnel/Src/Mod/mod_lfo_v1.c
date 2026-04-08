@@ -368,6 +368,80 @@ static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime
     }
 }
 
+static uint8_t mod_lfo_is_effectively_active(uint8_t track,
+                                              uint8_t lfo_index,
+                                              ui_track_family_t family,
+                                              ui_track_type_t type,
+                                              const track_runtime_ctx_t *ctx)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return 0U;
+    }
+
+    const mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo_index];
+    const param_id_t dest = (param_id_t)s->dest;
+    if ((dest == MOD_LFO_DEST_NONE) || (s->depth == 0U))
+    {
+        return 0U;
+    }
+
+    return mod_lfo_dest_supported_fast(track, dest, family, type, ctx);
+}
+
+static void mod_lfo_release_last_destination(uint8_t track,
+                                             uint8_t lfo_index,
+                                             ui_track_family_t family,
+                                             ui_track_type_t type,
+                                             const track_runtime_ctx_t *ctx)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return;
+    }
+
+    mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+    const param_id_t previous_dest = (param_id_t)rt->last_dest;
+
+    if ((previous_dest >= PARAM_COUNT) || (rt->base_valid == 0U))
+    {
+        rt->base_valid = 0U;
+        rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
+        rt->calib_valid = 0U;
+        rt->depth_scale = 0.0f;
+        return;
+    }
+
+    uint8_t other_active_same_dest = 0U;
+    for (uint8_t other = 0U; other < MOD_LFO_COUNT_PER_TRACK; ++other)
+    {
+        if (other == lfo_index)
+        {
+            continue;
+        }
+        if (mod_lfo_is_effectively_active(track, other, family, type, ctx) == 0U)
+        {
+            continue;
+        }
+        if ((param_id_t)g_mod_lfo_settings[track][other].dest == previous_dest)
+        {
+            other_active_same_dest = 1U;
+            break;
+        }
+    }
+
+    if ((other_active_same_dest == 0U)
+            && (mod_lfo_dest_supported_fast(track, previous_dest, family, type, ctx) != 0U))
+    {
+        (void)param_registry_apply_track_value_rt_fast(previous_dest, track, rt->base_value);
+    }
+
+    rt->base_valid = 0U;
+    rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
+    rt->calib_valid = 0U;
+    rt->depth_scale = 0.0f;
+}
+
 static void mod_lfo_process_control_tick(void)
 {
     const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
@@ -384,18 +458,24 @@ static void mod_lfo_process_control_tick(void)
             mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
             const param_id_t dest = (param_id_t)s->dest;
 
-            if ((dest == MOD_LFO_DEST_NONE) || (s->depth == 0U))
+            if ((rt->last_dest != (uint16_t)MOD_LFO_DEST_NONE) && (rt->last_dest != s->dest))
             {
-                continue;
+                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
             }
 
-            if (mod_lfo_dest_supported_fast(track, dest, family, type, ctx) == 0U)
+            if ((dest == MOD_LFO_DEST_NONE) || (s->depth == 0U)
+                    || (mod_lfo_dest_supported_fast(track, dest, family, type, ctx) == 0U))
             {
+                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
                 continue;
             }
 
             if ((rt->base_valid == 0U) || (rt->last_dest != s->dest))
             {
+                if (param_registry_get_track_value(dest, track, &rt->base_value) == 0U)
+                {
+                    continue;
+                }
                 rt->last_dest = s->dest;
                 rt->base_valid = 1U;
             }
@@ -410,11 +490,6 @@ static void mod_lfo_process_control_tick(void)
             }
 
             rt->current = mod_lfo_wave((mod_lfo_shape_t)s->shape, phase_prev, rt);
-
-            if (param_registry_get_track_value(dest, track, &rt->base_value) == 0U)
-            {
-                continue;
-            }
             if ((rt->calib_valid == 0U) || (rt->last_dest != s->dest))
             {
                 const param_desc_t *const desc = &param_registry[dest];
@@ -492,6 +567,8 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     {
         case MOD_LFO_PARAM_DEST:
         {
+            track_runtime_refresh_track(track);
+            mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
             const uint16_t max_index = (uint16_t)(mod_lfo_dest_count_supported(track) - 1U);
             const uint16_t dest_index = (uint16_t)mod_lfo_clampf(value, 0.0f, (float)max_index);
             s->dest = (uint16_t)mod_lfo_dest_from_index(track, dest_index);
@@ -509,6 +586,11 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
 
         case MOD_LFO_PARAM_DEPTH:
             s->depth = (uint8_t)mod_lfo_clampf(value, 0.0f, 127.0f);
+            if (s->depth == 0U)
+            {
+                track_runtime_refresh_track(track);
+                mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
+            }
             return 1U;
 
         case MOD_LFO_PARAM_SHAPE:
