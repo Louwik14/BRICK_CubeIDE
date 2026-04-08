@@ -28,6 +28,8 @@ typedef struct
  * This header is intentionally kept for compatibility with older experiments
  * and out-of-tree tooling. Do not use it as an operational source of truth for
  * cardinality or binding rules.
+ *
+ * In-tree operational callers should use `track_runtime` directly.
  */
 
 #ifndef SEQ_DEBUG_TRACK_BINDING

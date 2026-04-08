@@ -457,6 +457,10 @@ static uint8_t ui_core_has_track_family(ui_track_family_t family)
 
 static void ui_core_sync_audio_runtime_enables(void)
 {
+#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > UI_AUDIO_INPUT_RESOURCE_COUNT
+#error "UI proto wired input count cannot exceed product input resource count"
+#endif
+
     /*
      * Physical DSP ingress lanes (MAX_TRACKS=4) are currently mapped as:
      *  - lane 0 <- Input1

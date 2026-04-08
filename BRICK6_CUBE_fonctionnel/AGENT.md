@@ -63,6 +63,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité de la trac
 - pour `Synth`
   - `DX7`
   - `MonoB`
+  - `TB3`
 
 ### Notes
 - `Off` = vraie désactivation runtime
@@ -72,6 +73,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité de la trac
 - `Input4` reste une ressource physique valide (réservée/future tant que la 4e entrée n’est pas câblée sur la proto)
 - `Hybrid` = track audio + chemin note/midi amené à évoluer
 - une vraie family `MIDI` viendra plus tard
+- `runtime_target` est un shim legacy de compat (hors chemin opérationnel in-tree)
 
 ---
 

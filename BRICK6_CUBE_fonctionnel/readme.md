@@ -73,7 +73,7 @@ Priority order:
 * DSP ingress frontier today: 4 lanes total (`MAX_TRACKS`), with lane 3 used as internal source path
 * Each track:
 
-  * Input (from ADC / TDM)
+  * Input source (ADC / TDM for `InputX`, internal render for `Synth`)
   * Gain (main + cue)
   * Sends (to FX buses)
   * Insert FX chain (fixed slots)

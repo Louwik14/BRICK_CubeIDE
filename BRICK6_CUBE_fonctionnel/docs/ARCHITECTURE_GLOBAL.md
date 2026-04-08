@@ -158,6 +158,7 @@ Le paramètre `CFG > Track` expose actuellement :
 #### Pour Synth
 - `DX7`
 - `MonoB`
+- `TB3`
 
 ### 5.5 Sens de Hybrid
 `Hybrid` doit être compris comme :
