@@ -614,8 +614,6 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
     }
 
     uint8_t input_family_count[(uint8_t)UI_TRACK_FAMILY_COUNT] = { 0U };
-    uint8_t dx7_count = 0U;
-    uint8_t tb3_count = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -648,29 +646,47 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
             }
         }
 
-        if ((fam == UI_TRACK_FAMILY_SYNTH) && (typ == UI_TRACK_TYPE_DX7))
-        {
-            dx7_count++;
-            if (dx7_count > 1U)
-            {
-                return false;
-            }
-        }
-
-        if ((fam == UI_TRACK_FAMILY_SYNTH) && (typ == UI_TRACK_TYPE_TB3))
-        {
-            tb3_count++;
-            if (tb3_count > 1U)
-            {
-                return false;
-            }
-        }
     }
+
+    /*
+     * Compat: historical snapshots may contain several DX7/TB3 tracks.
+     * Current runtime allows at most one instance for each.
+     * Preserve the first requested slot and gracefully fold extras to MONOB
+     * instead of rejecting the full snapshot load.
+     */
+    uint8_t dx7_kept = 0U;
+    uint8_t tb3_kept = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_family_t fam = (ui_track_family_t)family[track];
-        const ui_track_type_t requested_type = (ui_track_type_t)type[track];
+        ui_track_type_t requested_type = (ui_track_type_t)type[track];
+
+        if (fam == UI_TRACK_FAMILY_SYNTH)
+        {
+            if (requested_type == UI_TRACK_TYPE_DX7)
+            {
+                if (dx7_kept == 0U)
+                {
+                    dx7_kept = 1U;
+                }
+                else
+                {
+                    requested_type = UI_TRACK_TYPE_MONOB;
+                }
+            }
+            else if (requested_type == UI_TRACK_TYPE_TB3)
+            {
+                if (tb3_kept == 0U)
+                {
+                    tb3_kept = 1U;
+                }
+                else
+                {
+                    requested_type = UI_TRACK_TYPE_MONOB;
+                }
+            }
+        }
 
         g_ui_track_state.track_configs[track].family = fam;
         g_ui_track_state.track_configs[track].type = (fam == UI_TRACK_FAMILY_OFF)
