@@ -193,3 +193,29 @@ Propriétés:
 - `sd_diskio.c` n’utilise plus les appels SCB bruts: il passe par les wrappers unifiés.
 - Le hook de politique reste `ENABLE_SD_DMA_CACHE_MAINTENANCE` (toujours désactivé volontairement).
 - Prochaine passe: activer ce flag au moment de l’activation D-cache + validation I/O sous charge.
+
+## 10) Mise en place effective — Passe 2 (activation D-cache prudente)
+
+Date: 2026-04-08
+
+### 10.1 Stratégie appliquée
+
+- **D-cache activé globalement** au boot, en conservant l’I-cache déjà actif.
+- **`.ram_d2_dma` protégé en non-cacheable via MPU** pour la passe audio/ADC/LED.
+- **SDMMC**: maintenance cache explicite conservée mais toujours **non activée** (`ENABLE_SD_DMA_CACHE_MAINTENANCE` inchangé), conformément au phasage.
+
+### 10.2 Détails MPU retenus pour `.ram_d2_dma`
+
+- Région MPU D2 DMA configurée à `0x30000000`, taille `32KB`, avec sous-régions pour couvrir **12KB** utiles (`SubRegionDisable = 0xF8`).
+- Attributs: accès complet, exécution interdite, shareable, **non-cacheable**, non-bufferable.
+- Les symboles linker `__ram_d2_dma_start__` / `__ram_d2_dma_end__` bornent la section réelle; un garde-fou boot stoppe via `Error_Handler()` si la section dépasse la fenêtre MPU dédiée.
+
+### 10.3 Ordonnancement boot cache/MPU
+
+Ordre appliqué:
+1. vérifier bornes `.ram_d2_dma`;
+2. configurer et activer MPU;
+3. activer I-cache puis D-cache;
+4. exécuter `HAL_Init()` et init périphériques.
+
+Cet ordre garantit que les attributs mémoire DMA sont en place avant activation D-cache.

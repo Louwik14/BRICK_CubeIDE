@@ -198,9 +198,11 @@ SECTIONS
   .ram_d2_dma (NOLOAD) :
   {
     . = ALIGN(32);
+    __ram_d2_dma_start__ = .;
     *(.ram_d2_dma)
     *(.ram_d2_dma*)
     . = ALIGN(32);
+    __ram_d2_dma_end__ = .;
   } >RAM_D2
 
   .ram_d2_lut (NOLOAD) :
