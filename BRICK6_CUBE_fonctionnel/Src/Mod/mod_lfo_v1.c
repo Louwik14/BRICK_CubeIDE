@@ -44,7 +44,11 @@ typedef struct
     float sh_value;
     uint16_t last_dest;
     float base_value;
+    float dest_min;
+    float dest_max;
+    float depth_scale;
     uint8_t base_valid;
+    uint8_t calib_valid;
 } mod_lfo_runtime_state_t;
 
 static mod_lfo_track_settings_t g_mod_lfo_settings[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
@@ -82,11 +86,11 @@ static uint8_t mod_lfo_is_internal_param(param_id_t id)
     }
 }
 
-static uint8_t mod_lfo_param_matches_track_context(uint8_t track, param_id_t dest, track_runtime_param_domain_t domain)
+static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
+                                                   ui_track_type_t type,
+                                                   param_id_t dest,
+                                                   track_runtime_param_domain_t domain)
 {
-    const ui_track_family_t family = ui_get_track_family(track);
-    const ui_track_type_t type = ui_get_track_type(track);
-
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
         if ((family != UI_TRACK_FAMILY_SYNTH) || (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID))
@@ -130,7 +134,48 @@ static uint8_t mod_lfo_param_matches_track_context(uint8_t track, param_id_t des
     return 0U;
 }
 
-static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
+static track_runtime_param_status_t mod_lfo_effective_status_from_ctx(const track_runtime_ctx_t *ctx,
+                                                                      track_runtime_resource_t resource)
+{
+    if (ctx == NULL)
+    {
+        return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+    }
+
+    switch (resource)
+    {
+        case TRACK_RUNTIME_RESOURCE_NONE:
+            return TRACK_RUNTIME_PARAM_ALLOWED;
+
+        case TRACK_RUNTIME_RESOURCE_FILTER:
+            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND) || ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) == 0U))
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            return TRACK_RUNTIME_PARAM_ALLOWED;
+
+        case TRACK_RUNTIME_RESOURCE_SYNTH:
+            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND) || ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) == 0U))
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            return TRACK_RUNTIME_PARAM_ALLOWED;
+
+        case TRACK_RUNTIME_RESOURCE_PLAY:
+            return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
+                    ? TRACK_RUNTIME_PARAM_ALLOWED
+                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+
+        default:
+            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+    }
+}
+
+static uint8_t mod_lfo_dest_supported_fast(uint8_t track,
+                                           param_id_t dest,
+                                           ui_track_family_t family,
+                                           ui_track_type_t type,
+                                           const track_runtime_ctx_t *ctx)
 {
     if ((track >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT) || (mod_lfo_is_internal_param(dest) != 0U))
     {
@@ -144,13 +189,22 @@ static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
         return 0U;
     }
 
-    if (mod_lfo_param_matches_track_context(track, dest, rule.domain) == 0U)
+    if (mod_lfo_param_matches_track_context(family, type, dest, rule.domain) == 0U)
     {
         return 0U;
     }
 
-    const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, dest);
+    const track_runtime_param_status_t status = mod_lfo_effective_status_from_ctx(ctx, rule.resource);
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
+}
+
+static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
+{
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const ui_track_family_t family = ui_get_track_family(track);
+    const ui_track_type_t type = ui_get_track_type(track);
+    return mod_lfo_dest_supported_fast(track, dest, family, type, ctx);
 }
 
 static uint16_t mod_lfo_dest_count_supported(uint8_t track)
@@ -228,10 +282,10 @@ static uint16_t mod_lfo_dest_to_index(uint8_t track, param_id_t dest)
     return 0U;
 }
 
-static uint32_t mod_lfo_phase_inc_from_rate(uint8_t rate_index)
+static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(uint8_t rate_index, uint32_t bpm_milli)
 {
     const uint8_t idx = (rate_index < MOD_LFO_RATE_STEP_COUNT) ? rate_index : (MOD_LFO_RATE_STEP_COUNT - 1U);
-    const float bpm = (float)seq_runtime_get_tempo_bpm_milli() * 0.001f;
+    const float bpm = (float)bpm_milli * 0.001f;
     const float bars_per_cycle = g_mod_lfo_rate_bars_per_cycle[idx];
     const float seconds_per_cycle = bars_per_cycle * (240.0f / mod_lfo_clampf(bpm, 40.0f, 300.0f));
     const float hz = 1.0f / mod_lfo_clampf(seconds_per_cycle, 0.0005f, 60.0f);
@@ -245,6 +299,32 @@ static uint32_t mod_lfo_phase_inc_from_rate(uint8_t rate_index)
         return 0xFFFFFFFFU;
     }
     return (uint32_t)(phase_f + 0.5);
+}
+
+static uint32_t mod_lfo_phase_inc_from_rate(uint8_t rate_index)
+{
+    return mod_lfo_phase_inc_from_rate_with_bpm(rate_index, seq_runtime_get_tempo_bpm_milli());
+}
+
+static uint32_t mod_lfo_xorshift32(uint32_t x)
+{
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return x;
+}
+
+static float mod_lfo_sh_next_value(uint32_t *state)
+{
+    uint32_t s = mod_lfo_xorshift32(*state);
+    const uint32_t a = s;
+    s = mod_lfo_xorshift32(s);
+    const uint32_t b = s;
+    *state = s;
+
+    const float ua = (float)(a >> 8) * (1.0f / 16777215.0f);
+    const float ub = (float)(b >> 8) * (1.0f / 16777215.0f);
+    return (ua + ub) - 1.0f;
 }
 
 static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime_state_t *state)
@@ -282,8 +362,14 @@ static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime
 
 static void mod_lfo_process_control_tick(void)
 {
+    const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        track_runtime_refresh_track(track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        const ui_track_family_t family = ui_get_track_family(track);
+        const ui_track_type_t type = ui_get_track_type(track);
+
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
             mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo];
@@ -295,7 +381,7 @@ static void mod_lfo_process_control_tick(void)
                 continue;
             }
 
-            if (mod_lfo_dest_supported(track, dest) == 0U)
+            if (mod_lfo_dest_supported_fast(track, dest, family, type, ctx) == 0U)
             {
                 continue;
             }
@@ -306,27 +392,30 @@ static void mod_lfo_process_control_tick(void)
                 rt->base_valid = 1U;
             }
 
-            rt->phase_inc = mod_lfo_phase_inc_from_rate(s->rate);
+            rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(s->rate, bpm_milli);
             const uint32_t phase_prev = rt->phase;
             rt->phase += rt->phase_inc;
 
             if (((mod_lfo_shape_t)s->shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_prev))
             {
-                rt->rng_state = (rt->rng_state * 1664525U) + 1013904223U;
-                const uint32_t u = (rt->rng_state >> 8) & 0x00FFFFFFU;
-                rt->sh_value = ((float)u / 8388607.5f) - 1.0f;
+                rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
             }
 
             rt->current = mod_lfo_wave((mod_lfo_shape_t)s->shape, phase_prev, rt);
 
-            const param_desc_t *const desc = &param_registry[dest];
             if (param_registry_get_track_value(dest, track, &rt->base_value) == 0U)
             {
                 continue;
             }
-            const float span = desc->max - desc->min;
-            const float depth = ((float)s->depth / 127.0f) * span;
-            const float modulated = mod_lfo_clampf(rt->base_value + (rt->current * depth), desc->min, desc->max);
+            if ((rt->calib_valid == 0U) || (rt->last_dest != s->dest))
+            {
+                const param_desc_t *const desc = &param_registry[dest];
+                rt->dest_min = desc->min;
+                rt->dest_max = desc->max;
+                rt->calib_valid = 1U;
+            }
+            rt->depth_scale = ((float)s->depth / 127.0f) * (rt->dest_max - rt->dest_min);
+            const float modulated = mod_lfo_clampf(rt->base_value + (rt->current * rt->depth_scale), rt->dest_min, rt->dest_max);
             (void)param_registry_apply_track_value_rt_fast(dest, track, modulated);
         }
     }
@@ -355,6 +444,10 @@ void mod_lfo_v1_init(void)
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].base_value = 0.0f;
+            g_mod_lfo_runtime[track][lfo].dest_min = 0.0f;
+            g_mod_lfo_runtime[track][lfo].dest_max = 127.0f;
+            g_mod_lfo_runtime[track][lfo].depth_scale = 0.0f;
+            g_mod_lfo_runtime[track][lfo].calib_valid = 0U;
         }
     }
 }
@@ -371,6 +464,8 @@ void mod_lfo_v1_reset_runtime(void)
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
+            g_mod_lfo_runtime[track][lfo].depth_scale = 0.0f;
+            g_mod_lfo_runtime[track][lfo].calib_valid = 0U;
         }
     }
 }
@@ -394,6 +489,8 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             s->dest = (uint16_t)mod_lfo_dest_from_index(track, dest_index);
             rt->base_valid = 0U;
             rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
+            rt->calib_valid = 0U;
+            rt->depth_scale = 0.0f;
             return 1U;
         }
 
