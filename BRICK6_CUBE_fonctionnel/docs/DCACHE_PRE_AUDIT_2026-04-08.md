@@ -247,3 +247,15 @@ Date: 2026-04-08
 - Ajustement clé: en chemin écriture scratch, la maintenance est désormais un **clean après memcpy vers scratch** (et avant lancement DMA).
 - L’ancien `invalidate` pré-écriture scratch a été retiré sur ce chemin car il ne garantissait pas la visibilité DMA des données CPU fraîchement copiées.
 - Effet recherché: éviter les corruptions intermittentes lors d’écritures SD avec buffers appelants non alignés.
+
+## 12) Passe audio cacheable ciblée (RX/TX uniquement)
+
+Date: 2026-04-08
+
+- `rx_buffer` et `tx_buffer` audio ont été sortis de `DMA_BUFFER` (`.ram_d2_dma` non-cacheable MPU) pour un test en **cacheable** via `.ram_d2_lut`.
+- Le chemin IRQ audio applique désormais une maintenance explicite:
+  - `dcache_invalidate_by_addr_aligned(rx_half, half_bytes)` avant lecture CPU du half-buffer RX;
+  - `dcache_clean_by_addr_aligned(tx_half, half_bytes)` après production CPU du half-buffer TX.
+- Le reste est inchangé pour cette passe:
+  - ADC DMA et LED DMA restent dans `.ram_d2_dma` non-cacheable;
+  - SD conserve sa politique actuelle (maintenance explicite déjà en place).
