@@ -62,7 +62,7 @@
  * Notice: This is applicable only for cortex M7 based platform.
  */
 /* USER CODE BEGIN enableSDDmaCacheMaintenance */
-#define ENABLE_SD_DMA_CACHE_MAINTENANCE  1
+#define ENABLE_SD_DMA_CACHE_MAINTENANCE  BRICK6_SD_ENABLE_DMA_CACHE_MAINTENANCE
 /* USER CODE END enableSDDmaCacheMaintenance */
 
 /*
@@ -351,15 +351,30 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
           }
           ReadStatus = 0;
 
+          timeout = HAL_GetTick();
+          while((HAL_GetTick() - timeout) < SD_TIMEOUT)
+          {
+            if (BSP_SD_GetCardState() == SD_TRANSFER_OK)
+            {
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
-          /*
-          *
-          * invalidate the scratch buffer before the next read to get the actual data instead of the cached one
-          */
-          dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
+              /*
+              *
+              * invalidate the scratch buffer before the next read to get the actual data instead of the cached one
+              */
+              dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
 #endif
-          memcpy(buff, scratch, BLOCKSIZE);
-          buff += BLOCKSIZE;
+              memcpy(buff, scratch, BLOCKSIZE);
+              buff += BLOCKSIZE;
+              break;
+            }
+          }
+
+          if ((HAL_GetTick() - timeout) >= SD_TIMEOUT)
+          {
+            res = RES_ERROR;
+            sd_access_trace_timeout("diskio_read_wait_card_state_after_dma_scratch", HAL_GetTick() - timeout);
+            break;
+          }
         }
         else
         {
@@ -503,6 +518,21 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
           if (WriteStatus == 0)
           {
             sd_access_trace_timeout("diskio_write_wait_dma_callback_scratch", HAL_GetTick() - timeout);
+            break;
+          }
+
+          WriteStatus = 0;
+          timeout = HAL_GetTick();
+          while((HAL_GetTick() - timeout) < SD_TIMEOUT)
+          {
+            if (BSP_SD_GetCardState() == SD_TRANSFER_OK)
+            {
+              break;
+            }
+          }
+          if ((HAL_GetTick() - timeout) >= SD_TIMEOUT)
+          {
+            sd_access_trace_timeout("diskio_write_wait_card_state_after_dma_scratch", HAL_GetTick() - timeout);
             break;
           }
 
