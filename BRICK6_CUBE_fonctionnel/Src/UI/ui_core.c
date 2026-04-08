@@ -1293,6 +1293,7 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
+    track_runtime_refresh_track(ui_get_active_track());
     return (track_runtime_resolve_filter_target_track(ui_get_active_track(), out_track_id) != 0U) ? true : false;
 }
 
@@ -1355,6 +1356,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     }
 
     ui_core_sync_audio_runtime_enables();
+    track_runtime_invalidate_all();
 
     if (track == g_ui_track_state.active_track)
     {
@@ -1398,6 +1400,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     }
 
     config->type = type;
+    track_runtime_invalidate_all();
     g_ui_tb3_type_switch_stage = 4U;
 
     if (track == g_ui_track_state.active_track)

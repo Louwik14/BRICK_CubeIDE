@@ -119,3 +119,9 @@ Sans ces prérequis, le passage à 16 augmentera surtout la complexité/couplage
 
 - 2026-04-08: le chemin opérationnel `runtime_target` pour la résolution filter target a été retiré des paths UI/param; la résolution passe désormais par `track_runtime` (avec maintien de la règle legacy “synth filter target seulement si une seule track synth”).
 - `runtime_target.h` reste présent comme legacy passif/non utilisé, pour éviter une suppression large hors périmètre de cette passe.
+
+## Note de suivi (passe ciblée étape 2)
+
+- 2026-04-08: suppression des refresh implicites dans les getters/checks runtime (`track_runtime_get_effective_param_status`, `track_runtime_resolve_filter_target_track`), avec refresh explicites déplacés dans les call-sites (UI/param/seq/mod).
+- `track_runtime_refresh_track()` ne déclenche plus systématiquement un full refresh: il n’exécute `refresh_all` que si le runtime a été invalidé explicitement.
+- nouvelle invalidation explicite `track_runtime_invalidate_all()` appelée lors des changements de config track (family/type), afin de garder un modèle plus local/prévisible sans refonte globale.

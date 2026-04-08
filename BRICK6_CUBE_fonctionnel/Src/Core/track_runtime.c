@@ -19,6 +19,7 @@ static const uint8_t g_track_to_mix_track[] = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U }
 volatile uint32_t g_track_runtime_tb3_bind_seen = 0U;
 volatile uint32_t g_track_runtime_tb3_bind_track = 0U;
 volatile uint32_t g_track_runtime_tb3_bind_instance = 0U;
+static volatile uint8_t g_track_runtime_refresh_needed = 1U;
 
 typedef struct
 {
@@ -193,7 +194,13 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 void track_runtime_init(void)
 {
     memset(&g_track_runtime_ctx, 0, sizeof(g_track_runtime_ctx));
+    g_track_runtime_refresh_needed = 1U;
     track_runtime_refresh_all();
+}
+
+void track_runtime_invalidate_all(void)
+{
+    g_track_runtime_refresh_needed = 1U;
 }
 
 void track_runtime_refresh_all(void)
@@ -225,6 +232,8 @@ void track_runtime_refresh_all(void)
 
         track_runtime_bind_ctx(ctx, &allocator);
     }
+
+    g_track_runtime_refresh_needed = 0U;
 }
 
 void track_runtime_refresh_track(uint8_t track)
@@ -234,8 +243,11 @@ void track_runtime_refresh_track(uint8_t track)
         return;
     }
 
-    /* Quotas are global to all tracks, so one-track refresh recomputes a full pass. */
-    track_runtime_refresh_all();
+    if (g_track_runtime_refresh_needed != 0U)
+    {
+        /* Quotas are global to all tracks, so refresh remains a full pass when dirty. */
+        track_runtime_refresh_all();
+    }
 }
 
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track)
@@ -270,8 +282,6 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     {
         return 0U;
     }
-
-    track_runtime_refresh_track(ui_track);
 
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(ui_track);
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
@@ -431,8 +441,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
     {
         return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
-
-    track_runtime_refresh_track(track);
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)

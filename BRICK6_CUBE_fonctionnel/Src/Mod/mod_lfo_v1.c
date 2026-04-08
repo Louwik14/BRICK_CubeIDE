@@ -200,15 +200,6 @@ static uint8_t mod_lfo_dest_supported_fast(uint8_t track,
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
-static uint8_t mod_lfo_dest_supported(uint8_t track, param_id_t dest)
-{
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    const ui_track_family_t family = ui_get_track_family(track);
-    const ui_track_type_t type = ui_get_track_type(track);
-    return mod_lfo_dest_supported_fast(track, dest, family, type, ctx);
-}
-
 static uint16_t mod_lfo_dest_count_supported(uint8_t track)
 {
     uint16_t count = 1U;
@@ -218,10 +209,15 @@ static uint16_t mod_lfo_dest_count_supported(uint8_t track)
         return count;
     }
 
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const ui_track_family_t family = ui_get_track_family(track);
+    const ui_track_type_t type = ui_get_track_type(track);
+
     for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
     {
         const param_id_t param = (param_id_t)raw;
-        if (mod_lfo_dest_supported(track, param) != 0U)
+        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) != 0U)
         {
             ++count;
         }
@@ -237,11 +233,16 @@ static param_id_t mod_lfo_dest_from_index(uint8_t track, uint16_t dest_index)
         return MOD_LFO_DEST_NONE;
     }
 
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const ui_track_family_t family = ui_get_track_family(track);
+    const ui_track_type_t type = ui_get_track_type(track);
+
     uint16_t current = 1U;
     for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
     {
         const param_id_t param = (param_id_t)raw;
-        if (mod_lfo_dest_supported(track, param) == 0U)
+        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) == 0U)
         {
             continue;
         }
@@ -264,11 +265,16 @@ static uint16_t mod_lfo_dest_to_index(uint8_t track, param_id_t dest)
         return 0U;
     }
 
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    const ui_track_family_t family = ui_get_track_family(track);
+    const ui_track_type_t type = ui_get_track_type(track);
+
     uint16_t index = 1U;
     for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
     {
         const param_id_t param = (param_id_t)raw;
-        if (mod_lfo_dest_supported(track, param) == 0U)
+        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) == 0U)
         {
             continue;
         }

@@ -203,6 +203,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         return;
     }
 
+    track_runtime_refresh_track(track);
     const track_runtime_param_status_t play_status =
             track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
