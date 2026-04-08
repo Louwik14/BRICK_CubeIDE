@@ -1782,7 +1782,6 @@ static void apply_arp_dir(float v) { keyboard_runtime_set_arp_dir((uint8_t)(clam
 static void apply_arp_sync(float v) { keyboard_runtime_set_arp_sync((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f)); }
 
 /*
-/*
  * Master gain authority is hardware Pot 5 (see brick6_update_master_from_pot5).
  * Keep PARAM_MASTER_GAIN inert to avoid any parallel control path rewriting
  * the final output gain after Pot 5 updates.
