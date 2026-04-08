@@ -37,6 +37,8 @@ extern "C" {
 /*
  * DSP engine exposes 4 stereo tracks. Tracks 0..2 come from TDM slots
  * (0/1, 2/3, 4/5) and track 3 is reserved for internal sources.
+ * Product target keeps Input1..Input4 as physical stereo resources, but the
+ * current devboard proto wiring only feeds 3 stereo input pairs to this layer.
  */
 #define MAX_TRACKS       4U
 

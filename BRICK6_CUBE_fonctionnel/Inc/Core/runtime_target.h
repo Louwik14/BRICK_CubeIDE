@@ -19,6 +19,19 @@ typedef struct
     uint8_t midi_channel;
 } runtime_target_t;
 
+/*
+ * Legacy compatibility shim.
+ *
+ * Authoritative runtime routing is now owned by `track_runtime` and call sites
+ * should resolve mix/filter targets there.
+ *
+ * This header is intentionally kept for compatibility with older experiments
+ * and out-of-tree tooling. Do not use it as an operational source of truth for
+ * cardinality or binding rules.
+ *
+ * In-tree operational callers should use `track_runtime` directly.
+ */
+
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
 #endif
@@ -70,6 +83,15 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
                 out_target->has_filter_target = 1U;
                 out_target->filter_target_track = 3U;
             }
+            break;
+
+        case UI_TRACK_FAMILY_INPUT4:
+            /*
+             * Product model keeps Input4 as a real physical stereo input
+             * resource, but current proto wiring does not expose a dedicated
+             * filter target lane yet in this legacy shim.
+             * (Authoritative path: track_runtime.)
+             */
             break;
 
         default:

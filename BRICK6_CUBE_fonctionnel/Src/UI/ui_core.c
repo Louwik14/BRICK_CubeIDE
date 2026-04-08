@@ -457,6 +457,22 @@ static uint8_t ui_core_has_track_family(ui_track_family_t family)
 
 static void ui_core_sync_audio_runtime_enables(void)
 {
+#if UI_AUDIO_INPUT_PROTO_WIRED_COUNT > UI_AUDIO_INPUT_RESOURCE_COUNT
+#error "UI proto wired input count cannot exceed product input resource count"
+#endif
+
+    /*
+     * Physical DSP ingress lanes (MAX_TRACKS=4) are currently mapped as:
+     *  - lane 0 <- Input1
+     *  - lane 1 <- Input2
+     *  - lane 2 <- Input3
+     *  - lane 3 <- internal synth bus
+     *
+     * Product target remains Input1..Input4 as physical stereo resources.
+     * On the current devboard proto, Input4 is not yet wired to a dedicated
+     * ingress lane, so no track_enable slot is toggled here for Input4.
+     * Input4 still remains a valid logical/runtime family for future hardware.
+     */
     track_enable(0U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT1));
     track_enable(1U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT2));
     track_enable(2U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT3));
