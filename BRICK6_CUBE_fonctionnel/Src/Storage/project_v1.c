@@ -142,16 +142,6 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
     g_project_work.state.active_project_slot_valid = 1U;
     g_project_work.state.active_project_slot = project_slot;
 
-    if (project_sd_bank_is_slot_equivalent_to_live(project_slot) != 0U)
-    {
-        g_project_active_slot_valid = 1U;
-        g_project_active_slot = project_slot;
-        g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
-        project_v1_set_error(PROJECT_V1_ERR_NONE);
-        project_boot_ctx_commit_current_state_if_valid();
-        return 1U;
-    }
-
     if (project_v1_store_snapshot_to_slot(project_slot, &g_project_work, 1U) == 0U)
     {
         return 0U;
