@@ -125,3 +125,10 @@ Sans ces prérequis, le passage à 16 augmentera surtout la complexité/couplage
 - 2026-04-08: suppression des refresh implicites dans les getters/checks runtime (`track_runtime_get_effective_param_status`, `track_runtime_resolve_filter_target_track`), avec refresh explicites déplacés dans les call-sites (UI/param/seq/mod).
 - `track_runtime_refresh_track()` ne déclenche plus systématiquement un full refresh: il n’exécute `refresh_all` que si le runtime a été invalidé explicitement.
 - nouvelle invalidation explicite `track_runtime_invalidate_all()` appelée lors des changements de config track (family/type), afin de garder un modèle plus local/prévisible sans refonte globale.
+
+
+## Note de suivi (passe ciblée étape 3)
+
+- 2026-04-08: retrait des handlers opérationnels hardcodés `apply_mix_track0..3_*` dans `param_registry`; les params legacy `PARAM_MIX_TRACKx_*` sont désormais appliqués via un dispatch indexé par `param_id` (chemin génératif local).
+- Clarification locale de cardinalité dans le code touché: `PARAM_MIX_TRACKx_*` = chemin mixer **physique** (4 tracks / `MAX_TRACKS`), `PARAM_MIX_*` = chemin runtime **logique** track-aware.
+- Les éléments legacy non-opérationnels (ex: symboles/docs historiques `track0`) sont laissés en place hors périmètre pour limiter le risque de régression.

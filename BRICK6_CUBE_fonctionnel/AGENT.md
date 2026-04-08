@@ -224,3 +224,12 @@ Si une passe modifie :
 alors mettre à jour dans la même passe :
 - `AGENT.md`
 - `ARCHITECTURE_GLOBAL.md`
+
+
+---
+
+## 11. Cardinalités track (règle locale MIX legacy)
+
+- Les paramètres legacy `PARAM_MIX_TRACKx_*` sont un chemin **physique audio** et restent limités à `MAX_TRACKS` (4).
+- Les paramètres `PARAM_MIX_*` (sans suffixe track) suivent la track **logique/runtime** active (jusqu’à `UI_TRACK_COUNT`/`SEQ_TRACK_COUNT`).
+- Dans `param_registry`, privilégier un dispatch indexé/table-driven pour les paramètres legacy trackés (pas de handlers hardcodés `track0..3` opérationnels).
