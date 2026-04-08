@@ -51,7 +51,14 @@
    DMA BUFFERS
    ============================================================ */
 
-/* Buffers statiques ping-pong RX/TX (aucune allocation dynamique). */
+/*
+ * Buffers ping-pong partagés CPU/DMA:
+ * - RX: DMA écrit, CPU lit
+ * - TX: CPU écrit, DMA lit
+ *
+ * Politique visée pour activation D-cache future:
+ * - conserver non-cacheable via section DMA_BUFFER (stratégie la plus sûre).
+ */
 static DMA_BUFFER int32_t rx_buffer[AUDIO_BUFFER_WORDS];
 static DMA_BUFFER int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 

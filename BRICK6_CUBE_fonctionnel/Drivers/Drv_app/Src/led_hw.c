@@ -21,6 +21,8 @@
 
 #include "led_hw.h"
 
+#include "Storage/cache_maintenance.h"
+#include "Storage/memory_layout.h"
 #include "tim.h"
 
 #include <stddef.h>
@@ -34,7 +36,13 @@
 
 #define LED_HW_BUFFER_SIZE ((LED_HW_COUNT * LED_HW_BITS_PER_LED) + LED_HW_RESET_SLOTS)
 
-static uint32_t pwm_buffer[LED_HW_BUFFER_SIZE] __attribute__((section(".ram_d2_dma"), aligned(32)));
+/*
+ * Shared CPU/DMA emission buffer:
+ * - CPU writes PWM symbols
+ * - TIM2 DMA reads payload
+ * Kept in DMA section and 32B aligned for future D-cache enablement.
+ */
+static DMA_BUFFER uint32_t pwm_buffer[LED_HW_BUFFER_SIZE];
 static volatile uint8_t dma_busy = 0U;
 
 /**
@@ -161,12 +169,7 @@ void led_hw_send(const uint8_t *rgb, uint32_t count)
 
     led_hw_encode(rgb, count);
 
-#if (__DCACHE_PRESENT == 1U)
-    if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U)
-    {
-        SCB_CleanDCache_by_Addr((uint32_t *)pwm_buffer, (int32_t)sizeof(pwm_buffer));
-    }
-#endif
+    dcache_clean_by_addr_aligned(pwm_buffer, sizeof(pwm_buffer));
 
     dma_busy = 1U;
 
