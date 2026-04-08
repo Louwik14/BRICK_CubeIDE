@@ -113,3 +113,9 @@ Pré-requis indispensables avant tentative 16:
 5. Plan explicite pour frontière audio réelle (>4 tracks) et budget CPU/mémoire par bloc.
 
 Sans ces prérequis, le passage à 16 augmentera surtout la complexité/couplage/coût, avec risque élevé de régression temps réel.
+
+
+## Note de suivi (passe ciblée étape 1)
+
+- 2026-04-08: le chemin opérationnel `runtime_target` pour la résolution filter target a été retiré des paths UI/param; la résolution passe désormais par `track_runtime` (avec maintien de la règle legacy “synth filter target seulement si une seule track synth”).
+- `runtime_target.h` reste présent comme legacy passif/non utilisé, pour éviter une suppression large hors périmètre de cette passe.

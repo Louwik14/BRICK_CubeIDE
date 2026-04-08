@@ -264,6 +264,41 @@ uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track
     return 1U;
 }
 
+uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track)
+{
+    if ((out_filter_track == NULL) || (ui_track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    track_runtime_refresh_track(ui_track);
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(ui_track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) == 0U)
+    {
+        return 0U;
+    }
+
+    /* Legacy compat: synth filter target is exposed only when one synth track is active. */
+    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+            && (ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH) != 1U))
+    {
+        return 0U;
+    }
+
+    if (track_runtime_get_mix_target_track(ui_track, out_filter_track) == 0U)
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
 {
     track_runtime_param_rule_t rule = {

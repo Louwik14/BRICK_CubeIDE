@@ -54,7 +54,7 @@
 #include "audio_float.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
-#include "Core/runtime_target.h"
+#include "Core/track_runtime.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/undo_v1.h"
 
@@ -1293,7 +1293,7 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
-    return (runtime_target_resolve_filter_for_ui_track(ui_get_active_track(), out_track_id) != 0U) ? true : false;
+    return (track_runtime_resolve_filter_target_track(ui_get_active_track(), out_track_id) != 0U) ? true : false;
 }
 
 ui_track_config_t ui_get_track_config(uint8_t track)

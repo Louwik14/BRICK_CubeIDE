@@ -34,7 +34,6 @@
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_model.h"
-#include "Core/runtime_target.h"
 #include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Storage/memory_layout.h"
@@ -813,7 +812,7 @@ static void filter_ui_state_init_defaults(void)
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 {
     uint8_t track_id = 0U;
-    if ((out_track_id == NULL) || (runtime_target_resolve_filter_for_ui_track(ui_get_active_track(), &track_id) == 0U))
+    if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_get_active_track(), &track_id) == 0U))
     {
         return 0U;
     }
@@ -825,7 +824,7 @@ static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
 {
     uint8_t track_id = 0U;
-    if ((out_track_id == NULL) || (runtime_target_resolve_filter_for_ui_track(ui_track, &track_id) == 0U))
+    if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_track, &track_id) == 0U))
     {
         return 0U;
     }
