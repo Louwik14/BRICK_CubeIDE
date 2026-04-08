@@ -219,3 +219,31 @@ Ordre appliqué:
 4. exécuter `HAL_Init()` et init périphériques.
 
 Cet ordre garantit que les attributs mémoire DMA sont en place avant activation D-cache.
+
+## 11) Mise en place effective — Passe 3 (SD DMA + cohérence cache)
+
+Date: 2026-04-08
+
+### 11.1 Chemin SD DMA confirmé dans le code
+
+- Fichier: `Src/SD/sd_diskio.c`.
+- Lecture DMA:
+  - chemin direct: `BSP_SD_ReadBlocks_DMA((uint32_t*)buff, sector, count)`;
+  - chemin scratch (si `buff` non aligné 4): lecture bloc par bloc dans `scratch`, puis `memcpy` vers `buff`.
+- Écriture DMA:
+  - chemin direct: `BSP_SD_WriteBlocks_DMA((uint32_t*)buff, sector, count)`;
+  - chemin scratch (si `buff` non aligné 4): `memcpy` vers `scratch`, puis écriture DMA bloc par bloc.
+- `scratch` reste un tampon d’appoint pour la contrainte d’alignement **4 octets** du DMA SD.
+
+### 11.2 Politique cache SD activée
+
+- Activation effective: `ENABLE_SD_DMA_CACHE_MAINTENANCE` défini à `1` dans `sd_diskio.c`.
+- Wrappers unifiés utilisés:
+  - `dcache_invalidate_by_addr_aligned(...)` après **lecture DMA** réussie (chemin direct et scratch);
+  - `dcache_clean_by_addr_aligned(...)` avant **écriture DMA** (chemin direct et scratch).
+
+### 11.3 Correctif de sûreté appliqué sur écriture scratch
+
+- Ajustement clé: en chemin écriture scratch, la maintenance est désormais un **clean après memcpy vers scratch** (et avant lancement DMA).
+- L’ancien `invalidate` pré-écriture scratch a été retiré sur ce chemin car il ne garantissait pas la visibilité DMA des données CPU fraîchement copiées.
+- Effet recherché: éviter les corruptions intermittentes lors d’écritures SD avec buffers appelants non alignés.

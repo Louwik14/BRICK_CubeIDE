@@ -62,7 +62,7 @@
  * Notice: This is applicable only for cortex M7 based platform.
  */
 /* USER CODE BEGIN enableSDDmaCacheMaintenance */
-/* #define ENABLE_SD_DMA_CACHE_MAINTENANCE  1 */
+#define ENABLE_SD_DMA_CACHE_MAINTENANCE  1
 /* USER CODE END enableSDDmaCacheMaintenance */
 
 /*
@@ -280,7 +280,12 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
 
 #if defined(ENABLE_SCRATCH_BUFFER)
-  if (!((uint32_t)buff & 0x3))
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  if ((((uint32_t)buff & 0x3U) == 0U) &&
+      (((uint32_t)buff & (DCACHE_LINE_SIZE_BYTES - 1U)) == 0U))
+#else
+  if (((uint32_t)buff & 0x3U) == 0U)
+#endif
   {
 #endif
     ReadStatus = 0;
@@ -422,7 +427,12 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   }
 
 #if defined(ENABLE_SCRATCH_BUFFER)
-  if (!((uint32_t)buff & 0x3))
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  if ((((uint32_t)buff & 0x3U) == 0U) &&
+      (((uint32_t)buff & (DCACHE_LINE_SIZE_BYTES - 1U)) == 0U))
+#else
+  if (((uint32_t)buff & 0x3U) == 0U)
+#endif
   {
 #endif
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
@@ -469,19 +479,19 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
     else
     {
       /* Slow path, fetch each sector a part and memcpy to destination buffer */
-#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
-      /*
-      * invalidate the scratch buffer before the next write to get the actual data instead of the cached one
-      */
-      dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
-#endif
-
       for (i = 0; i < count; i++)
       {
         WriteStatus = 0;
 
         memcpy((void *)scratch, (void *)buff, BLOCKSIZE);
         buff += BLOCKSIZE;
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+        /*
+         * scratch is the DMA source on unaligned caller buffers:
+         * clean after memcpy so SDMMC DMA sees the latest bytes.
+         */
+        dcache_clean_by_addr_aligned(scratch, BLOCKSIZE);
+#endif
 
         ret = BSP_SD_WriteBlocks_DMA((uint32_t*)scratch, (uint32_t)sector++, 1);
         if (ret == MSD_OK) {
