@@ -18,6 +18,8 @@
  * Notes:
  * - Mapping entrée: tracks 0..2 sur slots (0/1, 2/3, 4/5).
  * - Track 3 est une source interne et n'est pas alimentée par l'entrée TDM.
+ * - Cible produit: Input1..Input4 (4 entrées stéréo physiques). Sur la
+ *   devboard proto actuelle, seules 3 entrées stéréo sont câblées ici.
  * - Mapping sortie: MAIN->0/1, CUE->2/3, slots 4..7 à 0.
  */
 

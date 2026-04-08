@@ -67,7 +67,10 @@ Priority order:
 
 ### Tracks
 
-* 4 stereo tracks (currently 3)
+* 8 logical tracks (UI / sequencer / runtime / mixer targets)
+* Product audio inputs: `Input1..Input4` = 4 physical stereo resources
+* Current devboard proto wiring: 3 physical stereo inputs effectively fed to DSP ingress
+* DSP ingress frontier today: 4 lanes total (`MAX_TRACKS`), with lane 3 used as internal source path
 * Each track:
 
   * Input (from ADC / TDM)

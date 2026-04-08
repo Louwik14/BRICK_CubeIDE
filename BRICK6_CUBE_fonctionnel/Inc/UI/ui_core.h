@@ -5,7 +5,13 @@
 #include <stdint.h>
 
 #define UI_TRACK_COUNT 8U
+/*
+ * Product model: 4 physical stereo input resources (Input1..Input4).
+ * Devboard proto currently wires only 3 stereo inputs in the audio front-end.
+ * Keep Input4 as a valid future physical resource at UI/runtime level.
+ */
 #define UI_AUDIO_INPUT_RESOURCE_COUNT 4U
+#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT 3U
 
 typedef enum
 {

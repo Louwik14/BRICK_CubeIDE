@@ -86,6 +86,13 @@ Le DSP applicatif alimente ensuite le mixeur principal.
 - `PARAM_MIX_*` (Level/Pan/Send1/Send2) est le chemin runtime track-aware et cible les **tracks logiques** via `track_runtime` (`UI_TRACK_COUNT`/`SEQ_TRACK_COUNT`).
 - Les deux chemins coexistent, mais la règle de cardinalité doit rester explicite dans le code touché pour éviter les confusions 4 vs 8.
 
+### 4.3 Cardinalité produit vs proto (audio physique)
+
+- Modèle produit: `Input1..Input4` représentent **4 entrées stéréo physiques**.
+- État devboard proto actuel: **3 entrées stéréo** sont réellement alimentées au front-end DSP.
+- Le cœur DSP garde `MAX_TRACKS = 4` lanes: 3 lanes d’entrée physiques actuellement câblées + 1 lane interne (sources synth).
+- Le plan cible reste d’alimenter la 4e entrée physique (`Input4`) sur hardware produit, sans remettre en cause les 8 tracks logiques.
+
 Le pipeline est déjà modulaire et doit être conservé.
 Les optimisations CPU doivent privilégier :
 - bypass évidents
@@ -136,6 +143,7 @@ Le paramètre `CFG > Track` expose actuellement :
 - représentent des ressources physiques explicites
 - ces ressources sont exclusives entre tracks
 - une même ressource `InputX` ne doit pas être affectée à plusieurs tracks en même temps
+- `Input4` est une ressource physique produit valide, même quand le hardware proto courant ne l’alimente pas encore
 
 #### Synth
 - family des moteurs de synthèse internes
