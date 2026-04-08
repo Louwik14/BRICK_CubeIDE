@@ -148,21 +148,23 @@ static track_runtime_param_status_t mod_lfo_effective_status_from_ctx(const trac
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_FILTER:
-            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND) || ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) == 0U))
+            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_SYNTH:
-            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND) || ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) == 0U))
+            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                    || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
-            return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
+            return (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
