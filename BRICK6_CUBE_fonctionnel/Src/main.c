@@ -74,6 +74,7 @@
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
+static void MPU_Config(void);
 void MX_USB_HOST_Process(void);
 void MX_USB_HOST_Init(void);
 void MX_USB_DEVICE_Init(void);
@@ -81,6 +82,34 @@ void MX_USB_DEVICE_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+extern uint32_t __ram_d2_dma_start__;
+extern uint32_t __ram_d2_dma_end__;
+
+#define RAM_D2_DMA_MPU_BASE               (0x30000000UL)
+#define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
+#define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
+
+static void MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+  HAL_MPU_Disable();
+
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+  MPU_InitStruct.BaseAddress = RAM_D2_DMA_MPU_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_32KB;
+  MPU_InitStruct.SubRegionDisable = RAM_D2_DMA_MPU_SUBREGION_DISABLE;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
 /* USER CODE END 0 */
 
 /**
@@ -91,13 +120,24 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  const uintptr_t dma_start = (uintptr_t)&__ram_d2_dma_start__;
+  const uintptr_t dma_end = (uintptr_t)&__ram_d2_dma_end__;
 
+  if ((dma_start < RAM_D2_DMA_MPU_BASE) ||
+      (dma_end > (RAM_D2_DMA_MPU_BASE + RAM_D2_DMA_MPU_COVERED_BYTES)))
+  {
+    Error_Handler();
+  }
+
+  MPU_Config();
   /* USER CODE END 1 */
 
   /* Enable the CPU Cache */
 
   /* Enable I-Cache---------------------------------------------------------*/
   SCB_EnableICache();
+  /* Enable D-Cache---------------------------------------------------------*/
+  SCB_EnableDCache();
 
   /* MCU Configuration--------------------------------------------------------*/
 
