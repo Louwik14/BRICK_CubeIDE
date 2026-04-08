@@ -22,7 +22,11 @@
 /* WARM: block DSP state not directly DMA-owned */
 #define AUDIO_WARM SEC_ATTR(".ram_d1_audio")
 
-/* DMA-owned buffers (SAI/SDMMC/other DMA) */
+/*
+ * DMA/shared buffers:
+ * - Any CPU<->DMA shared payload should live here.
+ * - Section is intended to become MPU non-cacheable during D-cache rollout.
+ */
 #define DMA_BUFFER SEC_ATTR(".ram_d2_dma") ALIGN32
 
 /* Read-mostly audio LUTs moved out of D1 without using SDRAM. */

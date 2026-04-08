@@ -30,6 +30,7 @@
 
 #include <string.h>
 #include "Core/brick6_sd_config.h"
+#include "Storage/cache_maintenance.h"
 #include "Storage/sd_access_gate.h"
 
 /* Private typedef -----------------------------------------------------------*/
@@ -264,9 +265,6 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret;
 #endif
-#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
-  uint32_t alignedAddr;
-#endif
 
   sd_access_trace_begin("diskio_read");
 
@@ -312,12 +310,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
           {
             res = RES_OK;
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
-            /*
-            the SCB_InvalidateDCache_by_Addr() requires a 32-Byte aligned address,
-            adjust the address and the D-Cache size to invalidate accordingly.
-            */
-            alignedAddr = (uint32_t)buff & ~0x1F;
-            SCB_InvalidateDCache_by_Addr((uint32_t*)alignedAddr, count*BLOCKSIZE + ((uint32_t)buff - alignedAddr));
+            dcache_invalidate_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
 #endif
             break;
           }
@@ -358,7 +351,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
           *
           * invalidate the scratch buffer before the next read to get the actual data instead of the cached one
           */
-          SCB_InvalidateDCache_by_Addr((uint32_t*)scratch, BLOCKSIZE);
+          dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
 #endif
           memcpy(buff, scratch, BLOCKSIZE);
           buff += BLOCKSIZE;
@@ -418,9 +411,6 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 #endif
 
    WriteStatus = 0;
-#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
-  uint32_t alignedAddr;
-#endif
 
   sd_access_trace_begin("diskio_write");
 
@@ -436,13 +426,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   {
 #endif
 #if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
-
-    /*
-    the SCB_CleanDCache_by_Addr() requires a 32-Byte aligned address
-    adjust the address and the D-Cache size to clean accordingly.
-    */
-    alignedAddr = (uint32_t)buff &  ~0x1F;
-    SCB_CleanDCache_by_Addr((uint32_t*)alignedAddr, count*BLOCKSIZE + ((uint32_t)buff - alignedAddr));
+    dcache_clean_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
 #endif
 
     if(BSP_SD_WriteBlocks_DMA((uint32_t*)buff,
@@ -489,7 +473,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
       /*
       * invalidate the scratch buffer before the next write to get the actual data instead of the cached one
       */
-      SCB_InvalidateDCache_by_Addr((uint32_t*)scratch, BLOCKSIZE);
+      dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
 #endif
 
       for (i = 0; i < count; i++)

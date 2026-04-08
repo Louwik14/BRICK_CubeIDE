@@ -2,14 +2,22 @@
 
 #include "adc.h"
 #include "main.h"
+#include "Storage/memory_layout.h"
 #include "tim.h"
 
 #define HALL_MUX_COUNT         8U
 #define HALL_SAMPLE_FIFO_SIZE  512U
 #define HALL_SAMPLE_FIFO_MASK  (HALL_SAMPLE_FIFO_SIZE - 1U)
 
-static volatile uint16_t adc1_dma;
-static volatile uint16_t adc2_dma;
+/*
+ * ADC DMA mailboxes (1 sample per stream):
+ * - DMA writes (ADC1/ADC2 circular, length 1)
+ * - CPU reads in hall_adc_process_pair()
+ *
+ * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
+ */
+static DMA_BUFFER volatile uint16_t adc1_dma;
+static DMA_BUFFER volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
 static volatile uint32_t hall_sample_count[HALL_KEY_COUNT];

@@ -134,3 +134,62 @@ Symptômes à surveiller:
 - potentiel de gain CPU observable via `cpu_load`
 
 Risque principal n’est pas la perf, mais la cohérence DMA. Donc activation progressive + isolation DMA est la stratégie recommandée.
+
+---
+
+## 9) Mise en place effective — Passe 1 (préparation, sans activation D-cache)
+
+### 9.1 Cartographie DMA vérifiée dans le code
+
+- **Audio SAI DMA ping/pong** (`Src/Audio/audio.c`)
+  - `rx_buffer` (`DMA_BUFFER`): **DMA écrit**, **CPU lit** (callbacks RX half/full).
+  - `tx_buffer` (`DMA_BUFFER`): **CPU écrit**, **DMA lit** (SAI TX).
+  - Sens des données:
+    - RX: périphérique SAI -> DMA -> mémoire -> CPU.
+    - TX: CPU -> mémoire -> DMA -> périphérique SAI.
+- **Hall ADC DMA** (`Src/App/Hall/hall_adc.c`)
+  - `adc1_dma` et `adc2_dma` maintenant en `DMA_BUFFER`.
+  - **DMA écrit** (ADC circular len=1), **CPU lit** dans `hall_adc_process_pair()`.
+  - Sens: ADC -> DMA -> mémoire -> CPU.
+- **LED TIM2 PWM DMA** (`Drivers/Drv_app/Src/led_hw.c`)
+  - `pwm_buffer` en `DMA_BUFFER`.
+  - **CPU écrit**, **DMA lit** avant `HAL_TIM_PWM_Start_DMA`.
+  - Sens: CPU -> mémoire -> DMA -> TIM2 CCR.
+- **SDMMC DMA** (`Src/SD/sd_diskio.c`)
+  - Buffer principal: `buff` fourni par l’appelant FatFs.
+  - Buffer scratch: `scratch[BLOCKSIZE]` (aligné 32 si maintenance activée).
+  - Lecture: **DMA écrit**, **CPU lit**.
+  - Écriture: **CPU écrit**, **DMA lit**.
+  - Sens:
+    - read: SDMMC -> DMA -> mémoire -> CPU.
+    - write: CPU -> mémoire -> DMA -> SDMMC.
+
+### 9.2 Politique retenue par buffer (passe 1)
+
+- `rx_buffer` / `tx_buffer` audio: **non-cacheable (cible MPU)**.
+- `adc1_dma` / `adc2_dma`: **non-cacheable (cible MPU)**.
+- `pwm_buffer` LED: **cacheable + clean explicite avant start DMA** (déjà fait et conservé via wrapper unifié).
+- SDMMC (`buff`, `scratch`): **cacheable + maintenance explicite** (wrappers prêts, toujours derrière `ENABLE_SD_DMA_CACHE_MAINTENANCE`, non activé dans cette passe).
+
+### 9.3 Wrappers unifiés ajoutés
+
+Nouveau header `Inc/Storage/cache_maintenance.h`:
+- `dcache_clean_by_addr_aligned(const void *addr, size_t size)`
+- `dcache_invalidate_by_addr_aligned(const void *addr, size_t size)`
+
+Propriétés:
+- alignement automatique 32B (down/up) interne;
+- no-op sûr si D-cache absent ou désactivé;
+- API centralisée réutilisable par drivers DMA.
+
+### 9.4 Conventions clarifiées
+
+- `DMA_BUFFER` est explicitement documenté comme section des buffers **partagés CPU/DMA**.
+- commentaires ciblés ajoutés dans audio/hall/LED pour préciser les sens DMA et la politique future.
+- **Aucune activation D-cache** ni changement MPU dans cette passe.
+
+### 9.5 Préparation SD pour passe suivante
+
+- `sd_diskio.c` n’utilise plus les appels SCB bruts: il passe par les wrappers unifiés.
+- Le hook de politique reste `ENABLE_SD_DMA_CACHE_MAINTENANCE` (toujours désactivé volontairement).
+- Prochaine passe: activer ce flag au moment de l’activation D-cache + validation I/O sous charge.
