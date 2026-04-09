@@ -248,6 +248,15 @@ Date: 2026-04-08
 - L’ancien `invalidate` pré-écriture scratch a été retiré sur ce chemin car il ne garantissait pas la visibilité DMA des données CPU fraîchement copiées.
 - Effet recherché: éviter les corruptions intermittentes lors d’écritures SD avec buffers appelants non alignés.
 
+### 11.4 Correctif final de robustesse (lecture DMA)
+
+- Problème résiduel identifié: en lecture DMA (`SD read`), l’invalidation n’était faite qu’**après** transfert.
+- Risque: si le buffer destination contient des lignes D-cache sales avant démarrage DMA, une éviction pendant le transfert peut réécrire de vieilles données en RAM et corrompre la lecture.
+- Correctif appliqué:
+  - chemin direct: `dcache_invalidate_by_addr_aligned(buff, count * BLOCKSIZE)` **avant** `BSP_SD_ReadBlocks_DMA(...)`, puis invalidate post-DMA conservé;
+  - chemin scratch: `dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE)` **avant** chaque lecture DMA bloc, puis invalidate post-DMA conservé.
+- Résultat visé: cohérence robuste du sens **DMA->RAM->CPU** sans dépendre d’un état cache « chanceux ».
+
 ## 12) Passe audio cacheable ciblée (RX/TX uniquement)
 
 Date: 2026-04-08

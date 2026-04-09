@@ -289,6 +289,14 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   {
 #endif
     ReadStatus = 0;
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+    /*
+     * RX DMA target safety:
+     * invalidate destination before DMA start so no dirty line can be evicted
+     * over freshly received SD data during the transfer.
+     */
+    dcache_invalidate_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
+#endif
     if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
                              (uint32_t) (sector),
                              count) == MSD_OK)
@@ -335,6 +343,13 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
       for (i = 0; i < count; i++) {
         ReadStatus = 0;
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+        /*
+         * scratch can retain dirty lines from prior CPU writes (e.g. write path).
+         * Invalidate before DMA reception to prevent dirty eviction corruption.
+         */
+        dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE);
+#endif
         ret = BSP_SD_ReadBlocks_DMA((uint32_t*)scratch, (uint32_t)sector++, 1);
         if (ret == MSD_OK) {
           /* wait until the read is successful or a timeout occurs */
