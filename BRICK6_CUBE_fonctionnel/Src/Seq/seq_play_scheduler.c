@@ -13,6 +13,7 @@
 #include "Core/track_runtime.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
+#include "Audio/drum_synth.h"
 #include "Audio/tb3_synth.h"
 #include "param_registry.h"
 #include "midi.h"
@@ -159,6 +160,17 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             tb3_synth_note_off_for_instance(ctx->instance_id, note);
+        }
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    {
+        if (is_note_on != 0U)
+        {
+            drum_synth_note_on_for_instance(ctx->instance_id, note, velocity);
+        }
+        else
+        {
+            drum_synth_note_off_for_instance(ctx->instance_id, note);
         }
     }
 }

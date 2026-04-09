@@ -1,8 +1,13 @@
 // FmClapModel.cpp
 #include "FmClapModel.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 #include <cmath>
+#if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
+#endif
 
 constexpr float PI = 3.14159265f;
 constexpr float TWO_PI = 2.0f * PI;
@@ -71,6 +76,8 @@ float FmClapModel::Process() {
 }
 
 void FmClapModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     CustomControls::ParameterSlider("f_b (Base Freq)", &f_b, 100.0f, 1200.0f);
     CustomControls::ParameterSlider("f_m (Mod Freq)", &f_m, 100.0f, 3000.0f);
     CustomControls::ParameterSlider("bm (Mod Feedback)", &bm, 0.0f, 1.0f);
@@ -81,4 +88,8 @@ void FmClapModel::RenderControls() {
     CustomControls::ParameterSliderInt("clap_count", &clap_count, 1, 6);
     CustomControls::ParameterSlider("clap_interval (s)", &clap_interval, 0.005f, 0.05f);
     CustomControls::ParameterSlider("fhp (HPF Cutoff)", &fhp, 20.0f, 2000.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
