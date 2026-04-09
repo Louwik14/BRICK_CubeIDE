@@ -70,9 +70,52 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
 
         case UI_TRACK_TYPE_TB3:
             return TRACK_RUNTIME_TYPE_TB3;
+        case UI_TRACK_TYPE_DRUM_TRX_BD:
+            return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
+        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+            return TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES;
+        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+            return TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT;
+        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+            return TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE;
+        case UI_TRACK_TYPE_DRUM_FM_KICK:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_KICK;
+        case UI_TRACK_TYPE_DRUM_FM_SNARE:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_SNARE;
+        case UI_TRACK_TYPE_DRUM_FM_TOM:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_TOM;
+        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT;
+        case UI_TRACK_TYPE_DRUM_FM_CLAP:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_CLAP;
+        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL;
+        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+            return TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
+    }
+}
+
+static uint8_t track_runtime_type_is_drum_model(track_runtime_type_t type)
+{
+    switch (type)
+    {
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+            return 1U;
+        default:
+            return 0U;
     }
 }
 
@@ -116,6 +159,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_TB3:
+        case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return TRACK_RUNTIME_VOICE_MODE_MONO;
     }
@@ -206,6 +250,18 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
     if ((family != TRACK_RUNTIME_FAMILY_SYNTH) && (family != TRACK_RUNTIME_FAMILY_DRUM))
     {
         track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
+        return;
+    }
+
+    if (family == TRACK_RUNTIME_FAMILY_DRUM)
+    {
+        if (track_runtime_type_is_drum_model(type) == 0U)
+        {
+            track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
+            return;
+        }
+
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, ctx->track_id);
         return;
     }
 

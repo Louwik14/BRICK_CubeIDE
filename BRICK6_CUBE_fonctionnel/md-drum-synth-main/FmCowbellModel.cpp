@@ -1,8 +1,13 @@
 // FmCowbellModel.cpp
 #include "FmCowbellModel.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 #include <cmath>
+#if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
+#endif
 
 constexpr float PI = 3.14159265f;
 constexpr float TWO_PI = 2.0f * PI;
@@ -59,6 +64,8 @@ float FmCowbellModel::Process() {
 }
 
 void FmCowbellModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     CustomControls::ParameterSlider("fbA (Base Freq)", &fbA, 200.0f, 1000.0f);
     CustomControls::ParameterSlider("d_b1 (Decay A)", &d_b1, 0.005f, 0.2f);
     CustomControls::ParameterSlider("db2 (Decay B)", &db2, 0.01f, 1.0f);
@@ -67,4 +74,8 @@ void FmCowbellModel::RenderControls() {
     CustomControls::ParameterSlider("dm (Mod Decay)", &dm, 0.01f, 1.0f);
     CustomControls::ParameterSlider("bm (Mod Feedback)", &bm, 0.0f, 1.0f);
     CustomControls::ParameterSlider("Ab1 (Envelope Mix A)", &Ab1, 0.0f, 1.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }

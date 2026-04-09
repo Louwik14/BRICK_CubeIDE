@@ -38,23 +38,25 @@ static ui_template_page_state_t g_ui_template_play_state = {
 
 void ui_page_template_play_register_families(void)
 {
-    const ui_track_family_t engine_families[] = {
-        UI_TRACK_FAMILY_SYNTH,
-        UI_TRACK_FAMILY_DRUM
-    };
-    const ui_track_type_t engine_types[] = {
-        UI_TRACK_TYPE_DX7,
-        UI_TRACK_TYPE_MONOB,
-        UI_TRACK_TYPE_TB3
-    };
-
-    for (uint8_t family = 0U; family < (uint8_t)(sizeof(engine_families) / sizeof(engine_families[0])); ++family)
+    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
     {
-        for (uint8_t type = 0U; type < (uint8_t)(sizeof(engine_types) / sizeof(engine_types[0])); ++type)
+        const ui_track_family_t track_family = (ui_track_family_t)family;
+        if (ui_track_family_is_engine(track_family) == 0U)
         {
+            continue;
+        }
+
+        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        {
+            const ui_track_type_t track_type = (ui_track_type_t)type;
+            if (!ui_track_type_is_valid_for_family(track_family, track_type))
+            {
+                continue;
+            }
+
             ui_template_family_register(UI_TEMPLATE_FAMILY_PLAY,
-                                        engine_families[family],
-                                        engine_types[type],
+                                        track_family,
+                                        track_type,
                                         &g_ui_template_play_family);
         }
     }

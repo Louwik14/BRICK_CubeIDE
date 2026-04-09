@@ -1,10 +1,15 @@
 // FmSnareModel.cpp
 #include "FmSnareModel.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 #include "mi/operator.h"
 #include <cmath>
 #include <cstdlib>
+#if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
+#endif
 
 constexpr float SAMPLE_RATE = 48000.0f;
 constexpr float PI = 3.14159265f;
@@ -80,6 +85,8 @@ float FmSnareModel::Process() {
 }
 
 void FmSnareModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     CustomControls::ParameterSlider("f_b (Tone Freq)", &f_b, 100.0f, 400.0f);
     CustomControls::ParameterSlider("d_b (Tone Decay)", &d_b, 0.01f, 1.0f);
     CustomControls::ParameterSlider("f_m (Mod Freq)", &f_m, 500.0f, 3000.0f);
@@ -88,4 +95,8 @@ void FmSnareModel::RenderControls() {
     CustomControls::ParameterSlider("Abrus (Noise Level)", &Abrus, 0.0f, 1.0f);
     CustomControls::ParameterSlider("dbrus (Noise Decay)", &dbrus, 0.01f, 1.0f);
     CustomControls::ParameterSlider("fhp (HPF Cutoff)", &fhp, 20.0f, 2000.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
