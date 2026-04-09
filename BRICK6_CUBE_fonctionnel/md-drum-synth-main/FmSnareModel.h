@@ -16,6 +16,20 @@ public:
         is >> f_b >> d_b >> f_m >> I >> d_m >> Abrus >> dbrus >> fhp;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: f_b = value; return true;
+            case 1U: d_b = value; return true;
+            case 2U: f_m = value; return true;
+            case 3U: I = value; return true;
+            case 4U: d_m = value; return true;
+            case 5U: Abrus = value; return true;
+            case 6U: dbrus = value; return true;
+            case 7U: fhp = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     // FM parameters
     float f_b = 200.0f;     // Carrier frequency

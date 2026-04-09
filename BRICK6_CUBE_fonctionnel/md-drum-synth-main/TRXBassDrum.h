@@ -17,6 +17,20 @@ public:
         is >> pitch >> decay >> ramp >> rampDecay >> start >> noise >> harmonics >> clip;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: pitch = value; return true;
+            case 1U: decay = value; return true;
+            case 2U: ramp = value; return true;
+            case 3U: rampDecay = value; return true;
+            case 4U: start = value; return true;
+            case 5U: noise = value; return true;
+            case 6U: harmonics = value; return true;
+            case 7U: clip = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     // User parameters
     float pitch = 50.0f;       // Base pitch in Hz
