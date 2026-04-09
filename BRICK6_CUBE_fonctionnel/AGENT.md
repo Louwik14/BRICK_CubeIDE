@@ -66,7 +66,17 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité de la trac
   - `MonoB`
   - `TB3`
 - pour `Drum`
-  - aucun type exposé produit pour l’instant (family réservée en attente des engines drum dédiés)
+  - `TRX BD`
+  - `TRX Claves`
+  - `TRX HiHat`
+  - `TRX Snare`
+  - `FM Kick`
+  - `FM Snare`
+  - `FM Tom`
+  - `FM Rimshot`
+  - `FM Clap`
+  - `FM Cowbell`
+  - `FM Cymbal`
 
 ### Notes
 - `Off` = vraie désactivation runtime
@@ -192,7 +202,7 @@ toujours utiliser des tables explicites.
 ### Drum (branche runtime)
 - family runtime distincte de `Synth` pour classer les futurs engines drum
 - `Drum` n’est pas un alias de `Synth` et ne doit pas recycler les types `DX7`/`MonoB`/`TB3`
-- family actuellement en attente d’engines drum dédiés (pas d’exposition type moteur produit dans cette phase)
+- engines drum hébergés au runtime via un catalogue type dédié `Drum`
 - les engines drum futurs doivent déclarer leur capacité mono/poly dans l’autorité runtime centrale
 
 Ne pas mélanger :

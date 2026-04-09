@@ -1,6 +1,6 @@
 #pragma once
 
-#include <iosfwd>
+#include <iostream>
 #include "DrumUiAbstraction.h"
 
 class DrumModel {
