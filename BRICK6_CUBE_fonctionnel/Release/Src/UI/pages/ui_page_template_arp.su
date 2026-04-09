@@ -1,2 +1,0 @@
-../Src/UI/pages/ui_page_template_arp.c:29:36:ui_page_template_arp_resolve_family	0	static
-../Src/UI/pages/ui_page_template_arp.c:41:6:ui_page_template_arp_register_families	24	static

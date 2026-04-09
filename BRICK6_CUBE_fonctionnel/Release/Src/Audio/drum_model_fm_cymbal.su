@@ -1,8 +1,0 @@
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.cpp:23:6:virtual void FmCymbalModel::Init()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.cpp:66:6:virtual void FmCymbalModel::RenderControls()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.h:5:7:FmCymbalModel::~FmCymbalModel()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.cpp:36:7:virtual float FmCymbalModel::Process()	88	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.h:17:10:virtual void FmCymbalModel::loadParameters(std::istream&)	8	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.h:5:7:virtual FmCymbalModel::~FmCymbalModel()	8	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.cpp:32:6:virtual void FmCymbalModel::Trigger()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCymbalModel.h:12:10:virtual void FmCymbalModel::saveParameters(std::ostream&) const	24	static

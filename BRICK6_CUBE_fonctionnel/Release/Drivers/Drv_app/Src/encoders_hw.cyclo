@@ -1,5 +1,0 @@
-../Drivers/Drv_app/Src/encoders_hw.c:102:6:encoders_hw_init	1
-../Drivers/Drv_app/Src/encoders_hw.c:121:6:encoders_fast_poll_init	2
-../Drivers/Drv_app/Src/encoders_hw.c:154:6:encoders_hw_read	9
-../Drivers/Drv_app/Src/encoders_hw.c:139:6:encoders_fast_poll_irq	1
-../Drivers/Drv_app/Src/encoders_hw.c:193:8:encoders_hw_get_delta	2

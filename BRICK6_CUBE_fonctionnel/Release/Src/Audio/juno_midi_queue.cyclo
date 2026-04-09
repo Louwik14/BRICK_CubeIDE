@@ -1,5 +1,0 @@
-../Src/Audio/juno_midi_queue.c:43:6:juno_midi_queue_init	1
-../Src/Audio/juno_midi_queue.c:48:6:juno_midi_queue_clear	1
-../Src/Audio/juno_midi_queue.c:57:9:juno_midi_queue_push	3
-../Src/Audio/juno_midi_queue.c:79:9:juno_midi_queue_pop	3
-../Src/Audio/juno_midi_queue.c:100:10:juno_midi_queue_drop_count	1

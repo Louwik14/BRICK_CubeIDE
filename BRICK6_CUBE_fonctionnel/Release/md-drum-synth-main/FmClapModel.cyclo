@@ -1,8 +1,0 @@
-../md-drum-synth-main/FmClapModel.cpp:26:6:virtual void FmClapModel::Init()	1
-../md-drum-synth-main/FmClapModel.cpp:78:6:virtual void FmClapModel::RenderControls()	1
-../md-drum-synth-main/FmClapModel.h:5:7:FmClapModel::~FmClapModel()	1
-../md-drum-synth-main/FmClapModel.h:18:10:virtual void FmClapModel::loadParameters(std::istream&)	1
-../md-drum-synth-main/FmClapModel.h:5:7:virtual FmClapModel::~FmClapModel()	1
-../md-drum-synth-main/FmClapModel.cpp:40:7:virtual float FmClapModel::Process()	12
-../md-drum-synth-main/FmClapModel.cpp:36:6:virtual void FmClapModel::Trigger()	2
-../md-drum-synth-main/FmClapModel.h:12:10:virtual void FmClapModel::saveParameters(std::ostream&) const	11
