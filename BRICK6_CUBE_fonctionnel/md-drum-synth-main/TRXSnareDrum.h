@@ -17,6 +17,20 @@ public:
         is >> pitch >> decay >> snap >> noise >> tone >> tune >> bump >> clip;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: pitch = value; return true;
+            case 1U: decay = value; return true;
+            case 2U: snap = value; return true;
+            case 3U: noise = value; return true;
+            case 4U: tone = value; return true;
+            case 5U: tune = value; return true;
+            case 6U: bump = value; return true;
+            case 7U: clip = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     // Parameters
     float pitch = 180.0f;      // Base pitch (Hz)
