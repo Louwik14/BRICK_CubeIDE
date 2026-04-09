@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <iostream>
 #include "DrumUiAbstraction.h"
 
@@ -26,5 +27,12 @@ public:
     }
     virtual void loadParameters(std::istream& is) {
         (void)is;
+    }
+
+    // Runtime direct parameter mutation path (real-time safe, no text serialization).
+    virtual bool SetParamByIndex(uint8_t index, float value) {
+        (void)index;
+        (void)value;
+        return false;
     }
 };

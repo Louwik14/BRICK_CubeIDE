@@ -20,6 +20,18 @@ public:
         is >> gap >> decay >> lpfFreq >> hpfFreq >> peak >> metal;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: gap = value; return true;
+            case 1U: decay = value; return true;
+            case 2U: lpfFreq = value; return true;
+            case 3U: hpfFreq = value; return true;
+            case 4U: peak = value; return true;
+            case 5U: metal = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     // Parameters
     float gap = 0.5f;

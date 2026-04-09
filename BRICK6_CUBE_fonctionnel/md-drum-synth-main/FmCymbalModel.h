@@ -18,6 +18,20 @@ public:
         is >> fb >> fm >> d_b >> I >> d_m >> bb >> sustain >> f_hp;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: fb = value; return true;
+            case 1U: fm = value; return true;
+            case 2U: d_b = value; return true;
+            case 3U: I = value; return true;
+            case 4U: d_m = value; return true;
+            case 5U: bb = value; return true;
+            case 6U: sustain = value; return true;
+            case 7U: f_hp = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     static constexpr int NUM_PAIRS = 4;
     float fb = 400.0f;     // base carrier frequency
