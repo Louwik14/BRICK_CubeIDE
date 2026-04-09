@@ -1,6 +1,7 @@
 #pragma once
 #include "DrumModel.h"
 #include "plaits/dsp/fm/operator.h"
+#include <cmath>
 
 class FmKickModel : public DrumModel {
 public:
@@ -25,9 +26,13 @@ public:
             case 5U: b_m = value; return true;
             case 6U: A_f = value; return true;
             case 7U: d_f = value; return true;
-            case 8U: use_ratio_mode = (value != 0.0f); return true;
-            case 9U: ratio_index = static_cast<int>(value); return true;
-            case 10U: mod_env_sync = (value != 0.0f); return true;
+            case 8U: use_ratio_mode = (value >= 0.5f); return true;
+            case 9U: {
+                const int idx = static_cast<int>(std::lround(value));
+                ratio_index = (idx < 0) ? 0 : ((idx >= num_ratios) ? (num_ratios - 1) : idx);
+                return true;
+            }
+            case 10U: mod_env_sync = (value >= 0.5f); return true;
             default: return false;
         }
     }

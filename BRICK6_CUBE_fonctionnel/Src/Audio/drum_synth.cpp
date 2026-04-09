@@ -227,6 +227,8 @@ static uint8_t drum_synth_set_direct_param(DrumModel *model,
                                            uint8_t param_count,
                                            float value)
 {
+    // Runtime drum parameter path must remain direct and RT-safe:
+    // no saveParameters/loadParameters text mutation here.
     if ((model == nullptr) || (param_index >= param_count))
     {
         return 0U;

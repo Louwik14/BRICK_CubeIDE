@@ -27,7 +27,11 @@ public:
             case 3U: d_m = value; return true;
             case 4U: d1 = value; return true;
             case 5U: d2 = value; return true;
-            case 6U: clap_count = static_cast<int>(value); return true;
+            case 6U: {
+                const int count = static_cast<int>(value + ((value >= 0.0f) ? 0.5f : -0.5f));
+                clap_count = (count < 1) ? 1 : ((count > 6) ? 6 : count);
+                return true;
+            }
             case 7U: clap_interval = value; return true;
             case 8U: fhp = value; return true;
             case 9U: bm = value; return true;
