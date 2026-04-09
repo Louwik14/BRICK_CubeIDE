@@ -29,7 +29,10 @@ public:
             case 4U: I = value; return true;
             case 5U: dm = value; return true;
             case 6U: bm = value; return true;
-            case 7U: Ab1 = value; Ab2 = 1.0f - Ab1; return true;
+            case 7U:
+                Ab1 = (value < 0.0f) ? 0.0f : ((value > 1.0f) ? 1.0f : value);
+                Ab2 = 1.0f - Ab1;
+                return true;
             default: return false;
         }
     }
