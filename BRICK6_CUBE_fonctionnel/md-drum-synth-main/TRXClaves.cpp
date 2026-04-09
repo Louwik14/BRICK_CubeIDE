@@ -1,6 +1,8 @@
 #include "TRXClaves.h"
 #include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "imgui.h"
+#endif
 #include <cmath>
 #include <algorithm>
 

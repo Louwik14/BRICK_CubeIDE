@@ -1,6 +1,8 @@
 #include "TRXHiHat.h"
 #include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "imgui.h"
+#endif
 #include <cmath>
 
 constexpr float kSampleRate = 48000.0f; // Adjust to match your engine

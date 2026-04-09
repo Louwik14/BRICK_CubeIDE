@@ -20,7 +20,7 @@ static float WrapPhase(float phase) {
 }
 
 static float ExpDecay(float t, float decay_time) {
-    return std::expf(-t / decay_time);
+    return std::exp(-t / decay_time);
 }
 
 void FmCowbellModel::Init() {
