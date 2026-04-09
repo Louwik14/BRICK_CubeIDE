@@ -23,5 +23,5 @@
 ../Src/Audio/audio_float.c:507:6:audio_float_set_master_gain	1
 ../Src/Audio/audio_float.c:519:7:audio_float_get_master_gain	1
 ../Src/Audio/audio_float.c:562:6:audio_process_block_int32	3
-../Src/Audio/audio_float.c:606:10:audio_get_frame_counter	1
-../Src/Audio/audio_float.c:622:6:audio_debug_get_stats	2
+../Src/Audio/audio_float.c:609:10:audio_get_frame_counter	1
+../Src/Audio/audio_float.c:625:6:audio_debug_get_stats	2

@@ -8,4 +8,4 @@
 ../Src/Core/track_runtime.c:382:9:track_runtime_get_mix_target_track	0	static
 ../Src/Core/track_runtime.c:398:9:track_runtime_resolve_filter_target_track	32	static
 ../Src/Core/track_runtime.c:434:28:track_runtime_get_param_rule	8	static
-../Src/Core/track_runtime.c:560:30:track_runtime_get_effective_param_status	0	static
+../Src/Core/track_runtime.c:649:30:track_runtime_get_effective_param_status	0	static

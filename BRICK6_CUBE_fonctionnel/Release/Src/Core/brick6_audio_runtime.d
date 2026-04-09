@@ -4,7 +4,7 @@ Src/Core/brick6_audio_runtime.o: ../Src/Core/brick6_audio_runtime.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/audio_float.h \
  ../Inc/Audio/microdexed_synth.h ../Inc/Audio/monob_synth.h \
  ../Inc/Audio/drum_synth.h ../Inc/Audio/drum_model_ids.h \
- ../Inc/Audio/tb3_synth.h ../Inc/Param/param_store.h \
+ ../Inc/Param/param_store.h ../Inc/Audio/tb3_synth.h \
  ../Inc/Audio/sd_multitrack_recorder.h ../Inc/Sampler/voice_manager.h \
  ../Inc/Sampler/sample_pool.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/mixer.h \
@@ -51,8 +51,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio
 ../Inc/Audio/monob_synth.h:
 ../Inc/Audio/drum_synth.h:
 ../Inc/Audio/drum_model_ids.h:
-../Inc/Audio/tb3_synth.h:
 ../Inc/Param/param_store.h:
+../Inc/Audio/tb3_synth.h:
 ../Inc/Audio/sd_multitrack_recorder.h:
 ../Inc/Sampler/voice_manager.h:
 ../Inc/Sampler/sample_pool.h:

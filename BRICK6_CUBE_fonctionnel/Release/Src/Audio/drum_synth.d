@@ -1,5 +1,6 @@
 Src/Audio/drum_synth.o: ../Src/Audio/drum_synth.cpp \
  ../Inc/Audio/drum_synth.h ../Inc/Audio/drum_model_ids.h \
+ ../Inc/Param/param_store.h \
  ../Src/Audio/../../md-drum-synth-main/TRXBassDrum.h \
  ../Src/Audio/../../md-drum-synth-main/DrumModel.h \
  ../Src/Audio/../../md-drum-synth-main/DrumUiAbstraction.h \
@@ -22,6 +23,7 @@ Src/Audio/drum_synth.o: ../Src/Audio/drum_synth.cpp \
  ../Src/Audio/../../md-drum-synth-main/FmCymbalModel.h
 ../Inc/Audio/drum_synth.h:
 ../Inc/Audio/drum_model_ids.h:
+../Inc/Param/param_store.h:
 ../Src/Audio/../../md-drum-synth-main/TRXBassDrum.h:
 ../Src/Audio/../../md-drum-synth-main/DrumModel.h:
 ../Src/Audio/../../md-drum-synth-main/DrumUiAbstraction.h:
