@@ -78,6 +78,14 @@ Priority order:
   * Sends (to FX buses)
   * Insert FX chain (fixed slots)
 
+### Track families / engine families (runtime policy)
+
+* `Synth` and `Drum` are two distinct engine families (track-aware routing authority remains `track_runtime`).
+* `Drum` is **not** an alias of `Synth`.
+* `DX7`, `MonoB`, `TB3` remain synth-engine types in the `Synth` family.
+* `Drum` is currently a reserved family awaiting dedicated drum engines in the product runtime.
+* Mono/poly behavior for `PLAY` remains centralized by runtime capability declarations (no conceptual merge between `Synth` and `Drum`).
+
 ---
 
 ### Buses

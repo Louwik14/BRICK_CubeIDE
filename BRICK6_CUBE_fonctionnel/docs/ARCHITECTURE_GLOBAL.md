@@ -153,7 +153,8 @@ Le paramètre `CFG > Track` expose actuellement :
 #### Drum
 - family runtime dédiée pour classer les engines DSP drum
 - branche distincte de `Synth` côté classification produit
-- comportement runtime/UI aligné sur la branche moteur `Synth` tant qu’aucune divergence n’est nécessaire
+- `Drum` n’est pas un alias de `Synth`
+- family actuellement réservée (engines drum dédiés en attente d’intégration produit)
 
 ### 5.4 Types actuels
 
@@ -161,10 +162,13 @@ Le paramètre `CFG > Track` expose actuellement :
 - `Audio`
 - `Hybrid`
 
-#### Pour Synth / Drum
+#### Pour Synth
 - `DX7`
 - `MonoB`
 - `TB3`
+
+#### Pour Drum
+- aucun type moteur produit exposé à ce stade (family réservée en attente des engines drum)
 
 ### 5.5 Sens de Hybrid
 `Hybrid` doit être compris comme :
@@ -263,7 +267,7 @@ Le contenu du `Type` dépend du `Track`.
 Exemples :
 - `Track = Input1` -> `Type = Audio` ou `Hybrid`
 - `Track = Synth` -> `Type = DX7` / `MonoB` / `TB3`
-- `Track = Drum` -> `Type = DX7` / `MonoB` / `TB3` (phase transitoire de pré-intégration drum)
+- `Track = Drum` -> pas de type moteur produit exposé à ce stade (family réservée drum)
 
 ---
 
