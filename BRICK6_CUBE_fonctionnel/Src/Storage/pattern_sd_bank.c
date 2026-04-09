@@ -20,6 +20,8 @@ typedef struct __attribute__((packed))
 } pattern_sd_slot_header_t;
 
 static uint8_t g_slot_has_data[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
+static uint8_t g_slot_meta_cache_valid[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
+static uint32_t g_slot_checksum_cache[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static PatternSaveV1 g_boot_pattern;
 static uint8_t g_boot_pattern_valid;
 
@@ -45,6 +47,28 @@ static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
         crc = ((crc << 5) + crc) ^ data[i];
     }
     return crc;
+}
+
+static void pattern_sd_meta_cache_invalidate(uint8_t bank, uint8_t pattern)
+{
+    if (pattern_sd_slot_is_valid(bank, pattern) == 0U)
+    {
+        return;
+    }
+
+    g_slot_meta_cache_valid[bank][pattern] = 0U;
+}
+
+static void pattern_sd_meta_cache_store(uint8_t bank, uint8_t pattern, uint8_t has_data, uint32_t checksum)
+{
+    if (pattern_sd_slot_is_valid(bank, pattern) == 0U)
+    {
+        return;
+    }
+
+    g_slot_has_data[bank][pattern] = (has_data != 0U) ? 1U : 0U;
+    g_slot_checksum_cache[bank][pattern] = (has_data != 0U) ? checksum : 0U;
+    g_slot_meta_cache_valid[bank][pattern] = 1U;
 }
 
 static uint8_t pattern_sd_mount_if_needed(void)
@@ -75,10 +99,17 @@ static uint8_t pattern_sd_scan_slots(void)
         for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
         {
             g_slot_has_data[bank][pattern] = 0U;
+            g_slot_meta_cache_valid[bank][pattern] = 0U;
+            g_slot_checksum_cache[bank][pattern] = 0U;
 
-            if (pattern_sd_read_valid_slot_header(bank, pattern, 0, 0) != 0U)
+            pattern_sd_slot_header_t hdr;
+            if (pattern_sd_read_valid_slot_header(bank, pattern, &hdr, 0) != 0U)
             {
-                g_slot_has_data[bank][pattern] = 1U;
+                pattern_sd_meta_cache_store(bank, pattern, 1U, hdr.checksum);
+            }
+            else
+            {
+                pattern_sd_meta_cache_store(bank, pattern, 0U, 0U);
             }
         }
     }
@@ -89,6 +120,8 @@ static uint8_t pattern_sd_scan_slots(void)
 void pattern_sd_bank_init(const PatternSaveV1 *boot_pattern)
 {
     memset(&g_slot_has_data, 0, sizeof(g_slot_has_data));
+    memset(&g_slot_meta_cache_valid, 0, sizeof(g_slot_meta_cache_valid));
+    memset(&g_slot_checksum_cache, 0, sizeof(g_slot_checksum_cache));
     g_boot_pattern_valid = 0U;
 
     if (boot_pattern != 0)
@@ -131,8 +164,16 @@ uint8_t pattern_sd_bank_get_slot_checksum(uint8_t bank,
 
     if (g_slot_has_data[bank][pattern] == 0U)
     {
+        pattern_sd_meta_cache_store(bank, pattern, 0U, 0U);
         *out_has_data = 0U;
         *out_checksum = 0U;
+        return 1U;
+    }
+
+    if (g_slot_meta_cache_valid[bank][pattern] != 0U)
+    {
+        *out_has_data = g_slot_has_data[bank][pattern];
+        *out_checksum = (g_slot_has_data[bank][pattern] != 0U) ? g_slot_checksum_cache[bank][pattern] : 0U;
         return 1U;
     }
 
@@ -147,6 +188,7 @@ uint8_t pattern_sd_bank_get_slot_checksum(uint8_t bank,
 
     if (pattern_sd_mount_if_needed() == 0U)
     {
+        pattern_sd_meta_cache_invalidate(bank, pattern);
         goto done;
     }
 
@@ -154,14 +196,19 @@ uint8_t pattern_sd_bank_get_slot_checksum(uint8_t bank,
     {
         if (missing != 0U)
         {
-            g_slot_has_data[bank][pattern] = 0U;
+            pattern_sd_meta_cache_store(bank, pattern, 0U, 0U);
             *out_has_data = 0U;
             *out_checksum = 0U;
             ok = 1U;
         }
+        else
+        {
+            pattern_sd_meta_cache_invalidate(bank, pattern);
+        }
         goto done;
     }
 
+    pattern_sd_meta_cache_store(bank, pattern, 1U, hdr.checksum);
     *out_has_data = 1U;
     *out_checksum = hdr.checksum;
     ok = 1U;
@@ -282,7 +329,7 @@ uint8_t pattern_sd_bank_load_slot(uint8_t bank, uint8_t pattern, PatternSaveV1 *
         goto done;
     }
 
-    g_slot_has_data[bank][pattern] = 1U;
+    pattern_sd_meta_cache_store(bank, pattern, 1U, hdr.checksum);
     ok = 1U;
 
 done:
@@ -373,7 +420,7 @@ static uint8_t pattern_sd_bank_store_slot_internal(uint8_t bank,
 
     (void)f_close(&fp);
 
-    g_slot_has_data[bank][pattern] = 1U;
+    pattern_sd_meta_cache_store(bank, pattern, 1U, hdr.checksum);
     ok = 1U;
 
 done:
@@ -404,7 +451,7 @@ uint8_t pattern_sd_bank_delete_slot(uint8_t bank, uint8_t pattern)
     const FRESULT fr = f_unlink(path);
     if ((fr == FR_OK) || (fr == FR_NO_FILE) || (fr == FR_NO_PATH))
     {
-        g_slot_has_data[bank][pattern] = 0U;
+        pattern_sd_meta_cache_store(bank, pattern, 0U, 0U);
         ok = 1U;
     }
 
