@@ -1,5 +1,10 @@
-../Src/Storage/pattern_sd_bank.c:73:16:pattern_sd_scan_slots.isra	4
-../Src/Storage/pattern_sd_bank.c:103:6:pattern_sd_bank_init	5
-../Src/Storage/pattern_sd_bank.c:129:9:pattern_sd_bank_slot_has_data	2
-../Src/Storage/pattern_sd_bank.c:138:9:pattern_sd_bank_load_slot	17
-../Src/Storage/pattern_sd_bank.c:207:9:pattern_sd_bank_store_slot	13
+../Src/Storage/pattern_sd_bank.c:221:16:pattern_sd_read_valid_slot_header.constprop	7
+../Src/Storage/pattern_sd_bank.c:221:16:pattern_sd_read_valid_slot_header	10
+../Src/Storage/pattern_sd_bank.c:350:16:pattern_sd_bank_store_slot_internal.part.0	10
+../Src/Storage/pattern_sd_bank.c:120:6:pattern_sd_bank_init	8
+../Src/Storage/pattern_sd_bank.c:146:9:pattern_sd_bank_slot_has_data	2
+../Src/Storage/pattern_sd_bank.c:155:9:pattern_sd_bank_get_slot_checksum	10
+../Src/Storage/pattern_sd_bank.c:271:9:pattern_sd_bank_load_slot	16
+../Src/Storage/pattern_sd_bank.c:340:9:pattern_sd_bank_store_slot	4
+../Src/Storage/pattern_sd_bank.c:345:9:pattern_sd_bank_store_slot_nosync	4
+../Src/Storage/pattern_sd_bank.c:431:9:pattern_sd_bank_delete_slot	6

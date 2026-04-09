@@ -1,7 +1,9 @@
-../Src/Core/track_runtime.c:199:6:track_runtime_refresh_all	56	static
-../Src/Core/track_runtime.c:193:6:track_runtime_init	8	static
-../Src/Core/track_runtime.c:230:6:track_runtime_refresh_track	0	static
-../Src/Core/track_runtime.c:241:28:track_runtime_get_ctx	0	static
-../Src/Core/track_runtime.c:251:9:track_runtime_get_mix_target_track	0	static
-../Src/Core/track_runtime.c:267:28:track_runtime_get_param_rule	8	static
-../Src/Core/track_runtime.c:385:30:track_runtime_get_effective_param_status	16	static
+../Src/Core/track_runtime.c:201:6:track_runtime_invalidate_all	0	static
+../Src/Core/track_runtime.c:206:6:track_runtime_refresh_all	56	static
+../Src/Core/track_runtime.c:194:6:track_runtime_init	8	static
+../Src/Core/track_runtime.c:239:6:track_runtime_refresh_track	0	static
+../Src/Core/track_runtime.c:253:28:track_runtime_get_ctx	0	static
+../Src/Core/track_runtime.c:263:9:track_runtime_get_mix_target_track	0	static
+../Src/Core/track_runtime.c:279:9:track_runtime_resolve_filter_target_track	32	static
+../Src/Core/track_runtime.c:312:28:track_runtime_get_param_rule	8	static
+../Src/Core/track_runtime.c:438:30:track_runtime_get_effective_param_status	0	static

@@ -1,6 +1,7 @@
-../Src/Storage/sd_access_gate.c:9:6:sd_access_gate_init	0	static
-../Src/Storage/sd_access_gate.c:14:9:sd_access_gate_try_acquire	0	static,ignoring_inline_asm
-../Src/Storage/sd_access_gate.c:34:6:sd_access_gate_release	0	static,ignoring_inline_asm
-../Src/Storage/sd_access_gate.c:44:6:sd_access_trace_begin	0	static
-../Src/Storage/sd_access_gate.c:52:6:sd_access_trace_end	0	static
-../Src/Storage/sd_access_gate.c:63:6:sd_access_trace_timeout	0	static
+../Src/Storage/sd_access_gate.c:13:6:sd_access_gate_init	4	static
+../Src/Storage/sd_access_gate.c:24:9:sd_access_fs_mount_if_needed	16	static
+../Src/Storage/sd_access_gate.c:43:9:sd_access_gate_try_acquire	0	static,ignoring_inline_asm
+../Src/Storage/sd_access_gate.c:80:6:sd_access_gate_release	0	static,ignoring_inline_asm
+../Src/Storage/sd_access_gate.c:98:6:sd_access_trace_begin	0	static
+../Src/Storage/sd_access_gate.c:110:6:sd_access_trace_end	0	static
+../Src/Storage/sd_access_gate.c:127:6:sd_access_trace_timeout	0	static

@@ -8,12 +8,14 @@ C_SRCS += \
 ../Src/UI/pages/ui_page_calibration.c \
 ../Src/UI/pages/ui_page_debug_hall.c \
 ../Src/UI/pages/ui_page_param_test.c \
+../Src/UI/pages/ui_page_settings.c \
 ../Src/UI/pages/ui_page_template_arp.c \
 ../Src/UI/pages/ui_page_template_cfg.c \
 ../Src/UI/pages/ui_page_template_dx7.c \
 ../Src/UI/pages/ui_page_template_filter.c \
 ../Src/UI/pages/ui_page_template_keyboard.c \
 ../Src/UI/pages/ui_page_template_mix.c \
+../Src/UI/pages/ui_page_template_mod.c \
 ../Src/UI/pages/ui_page_template_play.c \
 ../Src/UI/pages/ui_page_template_seq.c 
 
@@ -21,12 +23,14 @@ C_DEPS += \
 ./Src/UI/pages/ui_page_calibration.d \
 ./Src/UI/pages/ui_page_debug_hall.d \
 ./Src/UI/pages/ui_page_param_test.d \
+./Src/UI/pages/ui_page_settings.d \
 ./Src/UI/pages/ui_page_template_arp.d \
 ./Src/UI/pages/ui_page_template_cfg.d \
 ./Src/UI/pages/ui_page_template_dx7.d \
 ./Src/UI/pages/ui_page_template_filter.d \
 ./Src/UI/pages/ui_page_template_keyboard.d \
 ./Src/UI/pages/ui_page_template_mix.d \
+./Src/UI/pages/ui_page_template_mod.d \
 ./Src/UI/pages/ui_page_template_play.d \
 ./Src/UI/pages/ui_page_template_seq.d 
 
@@ -34,12 +38,14 @@ OBJS += \
 ./Src/UI/pages/ui_page_calibration.o \
 ./Src/UI/pages/ui_page_debug_hall.o \
 ./Src/UI/pages/ui_page_param_test.o \
+./Src/UI/pages/ui_page_settings.o \
 ./Src/UI/pages/ui_page_template_arp.o \
 ./Src/UI/pages/ui_page_template_cfg.o \
 ./Src/UI/pages/ui_page_template_dx7.o \
 ./Src/UI/pages/ui_page_template_filter.o \
 ./Src/UI/pages/ui_page_template_keyboard.o \
 ./Src/UI/pages/ui_page_template_mix.o \
+./Src/UI/pages/ui_page_template_mod.o \
 ./Src/UI/pages/ui_page_template_play.o \
 ./Src/UI/pages/ui_page_template_seq.o 
 
@@ -51,7 +57,7 @@ Src/UI/pages/%.o Src/UI/pages/%.su Src/UI/pages/%.cyclo: ../Src/UI/pages/%.c Src
 clean: clean-Src-2f-UI-2f-pages
 
 clean-Src-2f-UI-2f-pages:
-	-$(RM) ./Src/UI/pages/ui_page_calibration.cyclo ./Src/UI/pages/ui_page_calibration.d ./Src/UI/pages/ui_page_calibration.o ./Src/UI/pages/ui_page_calibration.su ./Src/UI/pages/ui_page_debug_hall.cyclo ./Src/UI/pages/ui_page_debug_hall.d ./Src/UI/pages/ui_page_debug_hall.o ./Src/UI/pages/ui_page_debug_hall.su ./Src/UI/pages/ui_page_param_test.cyclo ./Src/UI/pages/ui_page_param_test.d ./Src/UI/pages/ui_page_param_test.o ./Src/UI/pages/ui_page_param_test.su ./Src/UI/pages/ui_page_template_arp.cyclo ./Src/UI/pages/ui_page_template_arp.d ./Src/UI/pages/ui_page_template_arp.o ./Src/UI/pages/ui_page_template_arp.su ./Src/UI/pages/ui_page_template_cfg.cyclo ./Src/UI/pages/ui_page_template_cfg.d ./Src/UI/pages/ui_page_template_cfg.o ./Src/UI/pages/ui_page_template_cfg.su ./Src/UI/pages/ui_page_template_dx7.cyclo ./Src/UI/pages/ui_page_template_dx7.d ./Src/UI/pages/ui_page_template_dx7.o ./Src/UI/pages/ui_page_template_dx7.su ./Src/UI/pages/ui_page_template_filter.cyclo ./Src/UI/pages/ui_page_template_filter.d ./Src/UI/pages/ui_page_template_filter.o ./Src/UI/pages/ui_page_template_filter.su ./Src/UI/pages/ui_page_template_keyboard.cyclo ./Src/UI/pages/ui_page_template_keyboard.d ./Src/UI/pages/ui_page_template_keyboard.o ./Src/UI/pages/ui_page_template_keyboard.su ./Src/UI/pages/ui_page_template_mix.cyclo ./Src/UI/pages/ui_page_template_mix.d ./Src/UI/pages/ui_page_template_mix.o ./Src/UI/pages/ui_page_template_mix.su ./Src/UI/pages/ui_page_template_play.cyclo ./Src/UI/pages/ui_page_template_play.d ./Src/UI/pages/ui_page_template_play.o ./Src/UI/pages/ui_page_template_play.su ./Src/UI/pages/ui_page_template_seq.cyclo ./Src/UI/pages/ui_page_template_seq.d ./Src/UI/pages/ui_page_template_seq.o ./Src/UI/pages/ui_page_template_seq.su
+	-$(RM) ./Src/UI/pages/ui_page_calibration.cyclo ./Src/UI/pages/ui_page_calibration.d ./Src/UI/pages/ui_page_calibration.o ./Src/UI/pages/ui_page_calibration.su ./Src/UI/pages/ui_page_debug_hall.cyclo ./Src/UI/pages/ui_page_debug_hall.d ./Src/UI/pages/ui_page_debug_hall.o ./Src/UI/pages/ui_page_debug_hall.su ./Src/UI/pages/ui_page_param_test.cyclo ./Src/UI/pages/ui_page_param_test.d ./Src/UI/pages/ui_page_param_test.o ./Src/UI/pages/ui_page_param_test.su ./Src/UI/pages/ui_page_settings.cyclo ./Src/UI/pages/ui_page_settings.d ./Src/UI/pages/ui_page_settings.o ./Src/UI/pages/ui_page_settings.su ./Src/UI/pages/ui_page_template_arp.cyclo ./Src/UI/pages/ui_page_template_arp.d ./Src/UI/pages/ui_page_template_arp.o ./Src/UI/pages/ui_page_template_arp.su ./Src/UI/pages/ui_page_template_cfg.cyclo ./Src/UI/pages/ui_page_template_cfg.d ./Src/UI/pages/ui_page_template_cfg.o ./Src/UI/pages/ui_page_template_cfg.su ./Src/UI/pages/ui_page_template_dx7.cyclo ./Src/UI/pages/ui_page_template_dx7.d ./Src/UI/pages/ui_page_template_dx7.o ./Src/UI/pages/ui_page_template_dx7.su ./Src/UI/pages/ui_page_template_filter.cyclo ./Src/UI/pages/ui_page_template_filter.d ./Src/UI/pages/ui_page_template_filter.o ./Src/UI/pages/ui_page_template_filter.su ./Src/UI/pages/ui_page_template_keyboard.cyclo ./Src/UI/pages/ui_page_template_keyboard.d ./Src/UI/pages/ui_page_template_keyboard.o ./Src/UI/pages/ui_page_template_keyboard.su ./Src/UI/pages/ui_page_template_mix.cyclo ./Src/UI/pages/ui_page_template_mix.d ./Src/UI/pages/ui_page_template_mix.o ./Src/UI/pages/ui_page_template_mix.su ./Src/UI/pages/ui_page_template_mod.cyclo ./Src/UI/pages/ui_page_template_mod.d ./Src/UI/pages/ui_page_template_mod.o ./Src/UI/pages/ui_page_template_mod.su ./Src/UI/pages/ui_page_template_play.cyclo ./Src/UI/pages/ui_page_template_play.d ./Src/UI/pages/ui_page_template_play.o ./Src/UI/pages/ui_page_template_play.su ./Src/UI/pages/ui_page_template_seq.cyclo ./Src/UI/pages/ui_page_template_seq.d ./Src/UI/pages/ui_page_template_seq.o ./Src/UI/pages/ui_page_template_seq.su
 
 .PHONY: clean-Src-2f-UI-2f-pages
 

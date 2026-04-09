@@ -63,7 +63,7 @@ Src/UI/ui_renderer_template.o: ../Src/UI/ui_renderer_template.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_widgets.h \
  ../Inc/Core/track_runtime.h ../Inc/Seq/seq_types.h \
- ../Inc/Seq/seq_runtime.h
+ ../Inc/Seq/seq_runtime.h ../Inc/Mod/mod_lfo_v1.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_renderer_template.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_template_page.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h:
@@ -131,3 +131,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui
 ../Inc/Core/track_runtime.h:
 ../Inc/Seq/seq_types.h:
 ../Inc/Seq/seq_runtime.h:
+../Inc/Mod/mod_lfo_v1.h:

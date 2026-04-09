@@ -62,6 +62,7 @@ Src/Audio \
 Src/Core \
 Src/Keyboard \
 Src/MIDI \
+Src/Mod \
 Src/Param \
 Src/SD \
 Src/Sampler \

@@ -1,5 +1,6 @@
 Drivers/Drv_app/Src/led_hw.o: ../Drivers/Drv_app/Src/led_hw.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/led_hw.h \
+ ../Inc/Storage/cache_maintenance.h ../Inc/Storage/memory_layout.h \
  ../Inc/tim.h ../Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Inc/stm32h7xx_hal_conf.h \
@@ -51,6 +52,8 @@ Drivers/Drv_app/Src/led_hw.o: ../Drivers/Drv_app/Src/led_hw.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Drv_app/Inc/led_hw.h:
+../Inc/Storage/cache_maintenance.h:
+../Inc/Storage/memory_layout.h:
 ../Inc/tim.h:
 ../Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:

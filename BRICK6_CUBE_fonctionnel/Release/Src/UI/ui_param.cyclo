@@ -1,4 +1,4 @@
-../Src/UI/ui_param.c:241:13:ui_param_set_active_track_value	5
-../Src/UI/ui_param.c:168:6:ui_param_set_bank	6
-../Src/UI/ui_param.c:321:9:ui_param_try_get_seq_plock_feedback	23
-../Src/UI/ui_param.c:374:6:ui_param_handle_encoder	28
+../Src/UI/ui_param.c:242:13:ui_param_set_active_track_value	5
+../Src/UI/ui_param.c:169:6:ui_param_set_bank	6
+../Src/UI/ui_param.c:322:9:ui_param_try_get_seq_plock_feedback	23
+../Src/UI/ui_param.c:375:6:ui_param_handle_encoder	31

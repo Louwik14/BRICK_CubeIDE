@@ -22,6 +22,7 @@ RM := rm -rf
 -include Src/Sampler/subdir.mk
 -include Src/SD/subdir.mk
 -include Src/Param/subdir.mk
+-include Src/Mod/subdir.mk
 -include Src/MIDI/subdir.mk
 -include Src/Keyboard/subdir.mk
 -include Src/Core/subdir.mk

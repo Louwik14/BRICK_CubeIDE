@@ -49,7 +49,7 @@ Src/App/Hall/hall_adc.o: ../Src/App/Hall/hall_adc.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usb.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h ../Inc/main.h \
- ../Inc/tim.h
+ ../Inc/Storage/memory_layout.h ../Inc/tim.h
 ../Inc/App/Hall/hall_adc.h:
 ../Inc/App/Hall/hall_engine.h:
 ../Inc/adc.h:
@@ -104,4 +104,5 @@ Src/App/Hall/hall_adc.o: ../Src/App/Hall/hall_adc.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pcd_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h:
 ../Inc/main.h:
+../Inc/Storage/memory_layout.h:
 ../Inc/tim.h:

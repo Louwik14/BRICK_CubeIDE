@@ -1,0 +1,13 @@
+../Src/Mod/mod_lfo_v1.c:176:16:mod_lfo_dest_supported_fast	25
+../Src/Mod/mod_lfo_v1.c:392:13:mod_lfo_release_last_destination.part.0	13
+../Src/Mod/mod_lfo_v1.c:445:13:mod_lfo_process_control_tick	23
+../Src/Mod/mod_lfo_v1.c:229:19:mod_lfo_dest_from_index	38
+../Src/Mod/mod_lfo_v1.c:507:6:mod_lfo_v1_init	1
+../Src/Mod/mod_lfo_v1.c:538:6:mod_lfo_v1_reset_runtime	6
+../Src/Mod/mod_lfo_v1.c:556:9:mod_lfo_v1_set_track_param	44
+../Src/Mod/mod_lfo_v1.c:605:9:mod_lfo_v1_get_track_param	44
+../Src/Mod/mod_lfo_v1.c:638:6:mod_lfo_v1_process_sample_all	3
+../Src/Mod/mod_lfo_v1.c:643:6:mod_lfo_v1_process_block	4
+../Src/Mod/mod_lfo_v1.c:658:10:mod_lfo_v1_dest_count	36
+../Src/Mod/mod_lfo_v1.c:663:9:mod_lfo_v1_dest_param_at	39
+../Src/Mod/mod_lfo_v1.c:674:9:mod_lfo_v1_dest_label	8

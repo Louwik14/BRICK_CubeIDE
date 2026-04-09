@@ -42,7 +42,7 @@ Src/Core/brick6_audio_runtime.o: ../Src/Core/brick6_audio_runtime.c \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui_core.h \
  ../Inc/Core/track_runtime.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h \
- ../Inc/Seq/seq_types.h
+ ../Inc/Seq/seq_types.h ../Inc/Mod/mod_lfo_v1.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Core/brick6_audio_runtime.h:
 ../Inc/Audio/live_recorder.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/audio_float.h:
@@ -90,3 +90,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/UI/ui
 ../Inc/Core/track_runtime.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Param/param_registry.h:
 ../Inc/Seq/seq_types.h:
+../Inc/Mod/mod_lfo_v1.h:

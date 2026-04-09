@@ -55,7 +55,9 @@ Src/SD/sd_diskio.o: ../Src/SD/sd_diskio.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_hcd.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/bsp_driver_sd.h \
  C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/sd_diskio.h \
- ../Inc/Core/brick6_sd_config.h ../Inc/Storage/sd_access_gate.h
+ ../Inc/Core/brick6_sd_config.h ../Inc/Storage/cache_maintenance.h \
+ ../Inc/Storage/sd_access_gate.h \
+ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/Third_Party/FatFs/src/ff.h
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/Third_Party/FatFs/src/ff_gen_drv.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/Third_Party/FatFs/src/diskio.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/Third_Party/FatFs/src/integer.h:
@@ -114,4 +116,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/ff
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/bsp_driver_sd.h:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/SD/sd_diskio.h:
 ../Inc/Core/brick6_sd_config.h:
+../Inc/Storage/cache_maintenance.h:
 ../Inc/Storage/sd_access_gate.h:
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/App/Middlewares/Third_Party/FatFs/src/ff.h:

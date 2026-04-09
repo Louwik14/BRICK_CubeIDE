@@ -1,0 +1,9 @@
+../Src/Storage/project_sd_bank.c:16:16:project_sd_slot_is_valid	2
+../Src/Storage/project_sd_bank.c:21:17:project_sd_checksum_accumulate	3
+../Src/Storage/project_sd_bank.c:31:16:project_sd_mount_if_needed	3
+../Src/Storage/project_sd_bank.c:50:16:project_sd_make_slot_path	2
+../Src/Storage/project_sd_bank.c:61:13:project_sd_scan_slots	4
+../Src/Storage/project_sd_bank.c:83:6:project_sd_bank_init	3
+../Src/Storage/project_sd_bank.c:102:9:project_sd_bank_slot_has_data	2
+../Src/Storage/project_sd_bank.c:112:9:project_sd_bank_load_slot	36
+../Src/Storage/project_sd_bank.c:249:9:project_sd_bank_store_slot	23
