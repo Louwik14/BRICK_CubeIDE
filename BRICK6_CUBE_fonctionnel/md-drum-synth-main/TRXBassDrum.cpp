@@ -7,52 +7,61 @@
 #include <algorithm>
 
 constexpr float kSampleRate = 48000.0f;
+constexpr uint16_t kNoiseAttackSamples = 479U;
 
 void TRXBassDrum::Init() {
-    phase = t = env = rampEnv = 0.0f;
+    phase = env = rampEnv = 0.0f;
     prevSample = 0.0f;
+    attackSamplesRemaining = 0U;
+    UpdateDerived();
 }
 
 void TRXBassDrum::Trigger() {
-    t = 0.0f;
     env = 1.0f;
     rampEnv = 1.0f;
     phase = 0.0f;
+    attackSamplesRemaining = kNoiseAttackSamples;
+    UpdateDerived();
 }
 
 float TRXBassDrum::Process() {
     if (env <= 0.0001f) return 0.0f;
 
-    t += 1.0f / kSampleRate;
-
     // Envelope decay
-    env *= std::exp(-1.0f / (decay * kSampleRate));
-    rampEnv *= std::exp(-1.0f / (rampDecay * kSampleRate));
+    env *= envDecayCoef;
+    rampEnv *= rampDecayCoef;
 
     // Frequency modulation
-    float freq = pitch + ramp * rampEnv * 1000.0f;
-    phase += freq / kSampleRate;
+    phase += pitchPhaseInc + (rampPhaseIncScale * rampEnv);
     if (phase > 1.0f) phase -= 1.0f;
 
     float sineOut = sine(phase * 2.0f * M_PI);
     float value = sineOut * env * start;
 
-    // Add harmonic distortion
-    if (harmonics > 0.0f) {
-        value += harmonics * std::tanh(sineOut * 3.0f) * env;
-    }
-
     // Add noise burst
-    if (noise > 0.0f && t < 0.01f) {
+    if (noise > 0.0f && attackSamplesRemaining > 0U) {
         value += noise * ((rand() / (float)RAND_MAX) * 2.0f - 1.0f) * env;
+        --attackSamplesRemaining;
     }
 
     // Soft clip
     if (clip > 0.0f) {
-        value = std::tanh(value * (1.0f + clip * 5.0f));
+        value = std::tanh(value * driveGain);
     }
 
     return value;
+}
+
+void TRXBassDrum::UpdateDerived() {
+    const float safeDecay = std::max(decay, 0.0001f);
+    const float safeRampDecay = std::max(rampDecay, 0.0001f);
+    envDecayCoef = std::exp(-1.0f / (safeDecay * kSampleRate));
+    rampDecayCoef = std::exp(-1.0f / (safeRampDecay * kSampleRate));
+
+    pitchPhaseInc = pitch / kSampleRate;
+    rampPhaseIncScale = (ramp * 1000.0f) / kSampleRate;
+    const float harmonicDrive = harmonics * 2.0f;
+    driveGain = 1.0f + (clip * 5.0f) + harmonicDrive;
 }
 
 void TRXBassDrum::RenderControls() {

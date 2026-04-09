@@ -1,5 +1,6 @@
 #pragma once
 #include "DrumModel.h"
+#include <cstdint>
 
 class TRXBassDrum : public DrumModel {
 public:
@@ -19,14 +20,14 @@ public:
 
     bool SetParamByIndex(uint8_t index, float value) override {
         switch (index) {
-            case 0U: pitch = value; return true;
-            case 1U: decay = value; return true;
-            case 2U: ramp = value; return true;
-            case 3U: rampDecay = value; return true;
-            case 4U: start = value; return true;
-            case 5U: noise = value; return true;
-            case 6U: harmonics = value; return true;
-            case 7U: clip = value; return true;
+            case 0U: pitch = value; UpdateDerived(); return true;
+            case 1U: decay = value; UpdateDerived(); return true;
+            case 2U: ramp = value; UpdateDerived(); return true;
+            case 3U: rampDecay = value; UpdateDerived(); return true;
+            case 4U: start = value; UpdateDerived(); return true;
+            case 5U: noise = value; UpdateDerived(); return true;
+            case 6U: harmonics = value; UpdateDerived(); return true;
+            case 7U: clip = value; UpdateDerived(); return true;
             default: return false;
         }
     }
@@ -39,16 +40,24 @@ private:
     float rampDecay = 0.1f;    // Ramp decay time
     float start = 1.0f;        // Start amplitude multiplier
     float noise = 0.0f;        // Noise at attack
-    float harmonics = 0.0f;    // Adds clipped harmonic content
+    float harmonics = 0.0f;    // Adds extra drive contribution
     float clip = 0.0f;         // Soft clipping amount
 
     // Internal state
     float phase = 0.0f;
-    float t = 0.0f;
     float env = 0.0f;
     float rampEnv = 0.0f;
     float prevSample = 0.0f;
+    uint16_t attackSamplesRemaining = 0U;
+
+    // Precomputed derivatives (updated on trigger / parameter change)
+    float envDecayCoef = 1.0f;
+    float rampDecayCoef = 1.0f;
+    float pitchPhaseInc = 0.0f;
+    float rampPhaseIncScale = 0.0f;
+    float driveGain = 1.0f;
 
     // Helpers
+    void UpdateDerived();
     float sine(float x);
 };
