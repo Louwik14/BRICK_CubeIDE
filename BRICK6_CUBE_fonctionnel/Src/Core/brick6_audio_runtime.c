@@ -207,8 +207,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
-            const ui_track_type_t drum_model = brick6_drum_runtime_type_to_ui_type((track_runtime_type_t)ctx->type);
-            if (drum_synth_set_model_for_instance(ctx->instance_id, drum_model) == 0U)
+            if (drum_synth_set_model_for_instance(ctx->instance_id, ctx->type) == 0U)
             {
                 continue;
             }
