@@ -1,2 +1,0 @@
-../Src/UI/pages/ui_page_template_mix.c:29:36:ui_page_template_mix_resolve_family	8	static
-../Src/UI/pages/ui_page_template_mix.c:41:6:ui_page_template_mix_register_families	16	static

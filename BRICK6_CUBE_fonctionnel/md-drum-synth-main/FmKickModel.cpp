@@ -12,7 +12,7 @@ constexpr float PI = 3.14159265f;
 constexpr float TWO_PI = 2.0f * PI;
 constexpr float SAMPLE_RATE = 48000.0f;
 
-constexpr float FmKickModel::ratios[FmKickModel::num_ratios][2] = {
+const float FmKickModel::ratios[FmKickModel::num_ratios][2] = {
     // Integer multiples 2:1 to 40:1
     {2.0f, 1.0f}, {3.0f, 1.0f}, {4.0f, 1.0f}, {5.0f, 1.0f}, {6.0f, 1.0f}, {7.0f, 1.0f}, {8.0f, 1.0f}, {9.0f, 1.0f},
     {10.0f, 1.0f}, {11.0f, 1.0f}, {12.0f, 1.0f}, {13.0f, 1.0f}, {14.0f, 1.0f}, {15.0f, 1.0f}, {16.0f, 1.0f}, {17.0f, 1.0f},

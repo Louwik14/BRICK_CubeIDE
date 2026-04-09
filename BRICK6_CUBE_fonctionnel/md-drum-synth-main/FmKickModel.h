@@ -23,7 +23,7 @@ private:
     bool use_ratio_mode = false;
     int ratio_index = 0; // Index into ratio array
     static constexpr int num_ratios = 64;
-    static constexpr float ratios[num_ratios][2];
+    static const float ratios[num_ratios][2];
 
     // Iterative decay state
     float amp_env = 1.0f, mod_env = 1.0f, freq_env = 1.0f;

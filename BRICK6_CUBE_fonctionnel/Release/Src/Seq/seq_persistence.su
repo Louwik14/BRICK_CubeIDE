@@ -1,0 +1,2 @@
+../Src/Seq/seq_persistence.c:86:9:seq_persistence_load	135840	static
+../Src/Seq/seq_persistence.c:157:9:seq_persistence_save	632	static

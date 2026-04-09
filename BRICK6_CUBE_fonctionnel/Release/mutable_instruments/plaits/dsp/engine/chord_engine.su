@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/chord_engine.h:48:16:virtual void plaits::ChordEngine::LoadUserData(const uint8_t*)	0	static
+../mutable_instruments/plaits/dsp/engine/chord_engine.cc:40:6:virtual void plaits::ChordEngine::Init(stmlib::BufferAllocator*)	16	static
+../mutable_instruments/plaits/dsp/engine/chord_engine.cc:51:6:virtual void plaits::ChordEngine::Reset()	0	static
+../mutable_instruments/plaits/dsp/engine/chord_engine.cc:104:6:virtual void plaits::ChordEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	240	static
+../mutable_instruments/plaits/dsp/engine/chord_engine.cc:71:6:void plaits::ChordEngine::ComputeRegistration(float, float*)	0	static

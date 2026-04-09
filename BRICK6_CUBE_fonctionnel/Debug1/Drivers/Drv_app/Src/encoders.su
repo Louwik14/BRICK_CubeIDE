@@ -1,6 +1,0 @@
-../Drivers/Drv_app/Src/encoders.c:43:16:encoder_clamp_step	0	static
-../Drivers/Drv_app/Src/encoders.c:72:16:encoder_accumulate_saturating	0	static
-../Drivers/Drv_app/Src/encoders.c:98:6:encoders_init	8	static
-../Drivers/Drv_app/Src/encoders.c:120:6:encoders_update	16	static
-../Drivers/Drv_app/Src/encoders.c:151:9:encoder_get_delta	0	static
-../Drivers/Drv_app/Src/encoders.c:174:9:encoder_consume_delta	0	static

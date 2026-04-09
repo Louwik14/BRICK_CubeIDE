@@ -1,6 +1,0 @@
-../Micro_Dexed/pitchenv.cpp:22:6:static void PitchEnv::init(float)	1
-../Micro_Dexed/pitchenv.cpp:45:6:void PitchEnv::set(const int*, const int*)	2
-../Micro_Dexed/pitchenv.cpp:55:9:int32_t PitchEnv::getsample()	7
-../Micro_Dexed/pitchenv.cpp:74:6:void PitchEnv::keydown(bool)	3
-../Micro_Dexed/pitchenv.cpp:81:6:void PitchEnv::advance(int)	2
-../Micro_Dexed/pitchenv.cpp:91:6:void PitchEnv::getPosition(char*)	1

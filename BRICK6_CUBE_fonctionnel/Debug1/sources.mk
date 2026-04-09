@@ -62,6 +62,7 @@ Src/Audio \
 Src/Core \
 Src/Keyboard \
 Src/MIDI \
+Src/Mod \
 Src/Param \
 Src/SD \
 Src/Sampler \
@@ -74,6 +75,13 @@ Startup \
 mutable_instruments/clouds \
 mutable_instruments/clouds/dsp \
 mutable_instruments/clouds/dsp/pvoc \
+mutable_instruments/plaits/dsp/chords \
+mutable_instruments/plaits/dsp/engine \
+mutable_instruments/plaits/dsp/engine2 \
+mutable_instruments/plaits/dsp/fm \
+mutable_instruments/plaits/dsp/physical_modelling \
+mutable_instruments/plaits/dsp/speech \
+mutable_instruments/plaits \
 mutable_instruments/stmlib/dsp \
 mutable_instruments/stmlib/utils \
 

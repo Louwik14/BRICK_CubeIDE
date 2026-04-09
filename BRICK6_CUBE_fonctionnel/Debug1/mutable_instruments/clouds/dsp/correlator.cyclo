@@ -1,3 +1,0 @@
-../mutable_instruments/clouds/dsp/correlator.cpp:37:6:void clouds::Correlator::Init(uint32_t*, uint32_t*)	1
-../mutable_instruments/clouds/dsp/correlator.cpp:45:6:void clouds::Correlator::EvaluateNextCandidate()	4
-../mutable_instruments/clouds/dsp/correlator.cpp:75:6:void clouds::Correlator::StartSearch(int32_t, int32_t, int32_t)	1

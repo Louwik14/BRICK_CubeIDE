@@ -1,0 +1,6 @@
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:113:6:void plaits::LPCSpeechSynthWordBank::Init(const plaits::LPCSpeechSynthWordBankData*, int, stmlib::BufferAllocator*)	3
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:125:6:void plaits::LPCSpeechSynthWordBank::Reset()	1
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:134:8:size_t plaits::LPCSpeechSynthWordBank::LoadNextWord(const uint8_t*)	22
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:183:6:bool plaits::LPCSpeechSynthWordBank::Load(int)	5
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:207:6:void plaits::LPCSpeechSynthController::Init(plaits::LPCSpeechSynthWordBank*)	1
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:223:6:void plaits::LPCSpeechSynthController::Render(bool, bool, int, float, float, float, float, float, float, float*, float*, size_t)	23

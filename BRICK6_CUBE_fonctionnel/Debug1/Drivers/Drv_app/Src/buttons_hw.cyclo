@@ -1,3 +1,0 @@
-../Drivers/Drv_app/Src/buttons_hw.c:171:6:buttons_hw_init	2
-../Drivers/Drv_app/Src/buttons_hw.c:192:6:buttons_hw_read	6
-../Drivers/Drv_app/Src/buttons_hw.c:243:9:buttons_hw_get	2

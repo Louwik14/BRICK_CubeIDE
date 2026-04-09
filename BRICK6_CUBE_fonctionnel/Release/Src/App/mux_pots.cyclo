@@ -1,0 +1,4 @@
+../Src/App/mux_pots.c:34:6:mux_pots_init	1
+../Src/App/mux_pots.c:49:6:mux_pots_scan	16
+../Src/App/mux_pots.c:118:10:mux_pots_get	2
+../Src/App/mux_pots.c:128:9:mux_pots_is_valid	2

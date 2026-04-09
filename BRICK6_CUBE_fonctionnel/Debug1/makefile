@@ -11,6 +11,13 @@ RM := rm -rf
 -include sources.mk
 -include mutable_instruments/stmlib/utils/subdir.mk
 -include mutable_instruments/stmlib/dsp/subdir.mk
+-include mutable_instruments/plaits/dsp/speech/subdir.mk
+-include mutable_instruments/plaits/dsp/physical_modelling/subdir.mk
+-include mutable_instruments/plaits/dsp/fm/subdir.mk
+-include mutable_instruments/plaits/dsp/engine2/subdir.mk
+-include mutable_instruments/plaits/dsp/engine/subdir.mk
+-include mutable_instruments/plaits/dsp/chords/subdir.mk
+-include mutable_instruments/plaits/subdir.mk
 -include mutable_instruments/clouds/dsp/pvoc/subdir.mk
 -include mutable_instruments/clouds/dsp/subdir.mk
 -include mutable_instruments/clouds/subdir.mk
@@ -22,6 +29,7 @@ RM := rm -rf
 -include Src/Sampler/subdir.mk
 -include Src/SD/subdir.mk
 -include Src/Param/subdir.mk
+-include Src/Mod/subdir.mk
 -include Src/MIDI/subdir.mk
 -include Src/Keyboard/subdir.mk
 -include Src/Core/subdir.mk

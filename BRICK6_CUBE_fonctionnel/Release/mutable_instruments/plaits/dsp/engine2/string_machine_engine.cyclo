@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine2/string_machine_engine.h:46:16:virtual void plaits::StringMachineEngine::LoadUserData(const uint8_t*)	1
+../mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:40:6:virtual void plaits::StringMachineEngine::Init(stmlib::BufferAllocator*)	2
+../mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:52:6:virtual void plaits::StringMachineEngine::Reset()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/fx/ensemble.h:59:8:void plaits::Ensemble::Process(float*, float*, size_t)	5
+../mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:85:6:virtual void plaits::StringMachineEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	25
+../mutable_instruments/plaits/dsp/engine2/string_machine_engine.cc:72:6:void plaits::StringMachineEngine::ComputeRegistration(float, float*)	1

@@ -1,0 +1,4 @@
+../Micro_Dexed/PluginFx.cpp:56:1:PluginFx::PluginFx()	1
+../Micro_Dexed/PluginFx.cpp:62:6:void PluginFx::init(int)	1
+../Micro_Dexed/PluginFx.cpp:108:6:void PluginFx::process(float*, int)	10
+../Micro_Dexed/PluginFx.cpp:233:7:float PluginFx::getGain()	1

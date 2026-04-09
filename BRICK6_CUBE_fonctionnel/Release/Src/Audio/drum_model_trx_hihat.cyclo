@@ -1,0 +1,10 @@
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.cpp:17:6:virtual void TRXHiHat::Trigger()	1
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.cpp:64:6:virtual void TRXHiHat::RenderControls()	1
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.h:6:7:TRXHiHat::~TRXHiHat()	1
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.h:6:7:virtual TRXHiHat::~TRXHiHat()	1
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.h:19:10:virtual void TRXHiHat::loadParameters(std::istream&)	1
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.cpp:10:6:virtual void TRXHiHat::Init()	2
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.h:14:10:virtual void TRXHiHat::saveParameters(std::ostream&) const	7
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.cpp:22:7:float TRXHiHat::get_value(float)	1
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.cpp:80:7:float TRXHiHat::generateMetallicNoise()	8
+../Src/Audio/../../md-drum-synth-main/TRXHiHat.cpp:26:7:virtual float TRXHiHat::Process()	4

@@ -1,8 +1,0 @@
-../Micro_Dexed/exp2.h:36:9:static int32_t Exp2::lookup(int32_t)	1
-../Micro_Dexed/fm_core.h:50:13:FmCore::~FmCore()	1
-../Micro_Dexed/fm_core.h:50:13:virtual FmCore::~FmCore()	1
-../Micro_Dexed/fm_core.cpp:64:5:int n_out(const FmAlgorithm&)	3
-../Micro_Dexed/fm_core.cpp:72:9:uint8_t FmCore::get_carrier_operators(uint8_t)	3
-../Micro_Dexed/fm_core.cpp:86:6:static void FmCore::dump()	1
-../Micro_Dexed/fm_core.cpp:107:6:virtual void FmCore::render(int32_t*, FmOpParams*, int, int32_t*, int)	11
-../Micro_Dexed/aligned_buf.h:29:8:T* AlignedBuf<T, size, alignment>::get() [with T = long int; unsigned int size = 64; unsigned int alignment = 16]	1

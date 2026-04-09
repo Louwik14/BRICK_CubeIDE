@@ -1,4 +1,0 @@
-../Src/Core/brick6_audio_runtime.c:55:13:brick6_collect_runtime_synth_usage	8
-../Src/Core/brick6_audio_runtime.c:92:13:brick6_render_synth_tracks	18
-../Src/Core/brick6_audio_runtime.c:181:6:brick6_audio_runtime_init	1
-../Src/Core/brick6_audio_runtime.c:187:6:brick6_audio_runtime_dsp	16

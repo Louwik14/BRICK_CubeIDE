@@ -1,0 +1,8 @@
+../Src/UI/ui_widgets.c:55:6:uiw_draw_knob	3
+../Src/UI/ui_widgets.c:97:6:uiw_draw_switch	3
+../Src/UI/ui_widgets.c:117:6:uiw_draw_wave_icon	31
+../Src/UI/ui_widgets.c:152:6:uiw_draw_filter_icon	31
+../Src/UI/ui_widgets.c:176:6:uiw_draw_enum_text	6
+../Src/UI/ui_widgets.c:210:6:uiw_draw_jack_icon	2
+../Src/UI/ui_widgets.c:226:6:uiw_draw_keyboard_icon	2
+../Src/UI/ui_widgets.c:248:19:uiw_pick_widget_type	89

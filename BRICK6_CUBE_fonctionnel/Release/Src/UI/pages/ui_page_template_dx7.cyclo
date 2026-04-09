@@ -1,0 +1,2 @@
+../Src/UI/pages/ui_page_template_dx7.c:78:36:ui_page_template_dx7_resolve_family	1
+../Src/UI/pages/ui_page_template_dx7.c:90:6:ui_page_template_dx7_register_families	8

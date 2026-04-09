@@ -29,6 +29,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include <stddef.h>
 #include "usart.h"
 
 
@@ -192,6 +193,14 @@ __attribute__((weak)) int __io_putchar(int ch)
 
   (void)HAL_UART_Transmit(&huart1, &c, 1U, 10U);
   return ch;
+}
+
+int _getentropy(void *buffer, size_t length)
+{
+  (void)buffer;
+  (void)length;
+  errno = ENOSYS;
+  return -1;
 }
 
 __attribute__((weak)) int __io_getchar(void)
