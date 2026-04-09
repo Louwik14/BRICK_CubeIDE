@@ -94,10 +94,6 @@ void ui_page_template_colors_register_families(void)
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; family++)
     {
         const ui_track_family_t track_family = (ui_track_family_t)family;
-        if (track_family == UI_TRACK_FAMILY_DRUM)
-        {
-            continue;
-        }
         for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; type++)
         {
             const ui_track_type_t track_type = (ui_track_type_t)type;
@@ -165,6 +161,133 @@ static void ui_page_template_colors_sync_family(void)
         family->subpages[3].param_bank.params[1] = PARAM_COUNT;
         family->subpages[3].param_bank.params[2] = PARAM_COUNT;
         family->subpages[3].param_bank.params[3] = PARAM_COUNT;
+        return;
+    }
+    if (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_DRUM)
+    {
+        family->nav_labels[0] = "MAIN";
+        family->nav_labels[1] = "TONE";
+        family->nav_labels[2] = "-";
+        family->nav_labels[3] = "-";
+
+        family->subpages[0].title = "MAIN";
+        family->subpages[1].title = "TONE";
+        family->subpages[2].title = "-";
+        family->subpages[3].title = "-";
+        family->subpages[2].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[3] = PARAM_COUNT;
+
+        switch (ui_get_track_type(ui_get_active_track()))
+        {
+            case UI_TRACK_TYPE_DRUM_TRX_BD:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_TRX_BD_NOISE;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_TRX_BD_HARMONICS;
+                family->subpages[0].param_bank.params[2] = PARAM_DRUM_TRX_BD_DRIVE;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_TRX_CLAVES_BALANCE;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_TRX_CLAVES_DRIVE;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_TRX_HIHAT_METAL;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_TRX_HIHAT_HP_TONE;
+                family->subpages[0].param_bank.params[2] = PARAM_DRUM_TRX_HIHAT_LP_TONE;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_TRX_SNARE_SNAP;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_TRX_SNARE_NOISE;
+                family->subpages[0].param_bank.params[2] = PARAM_DRUM_TRX_SNARE_TONE_MIX;
+                family->subpages[0].param_bank.params[3] = PARAM_DRUM_TRX_SNARE_DRIVE;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_FM_KICK:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_FM_KICK_FEEDBACK;
+                family->subpages[0].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_FM_SNARE:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_FM_SNARE_NOISE;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_FM_SNARE_HP_TONE;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_FM_RIMSHOT_BODY_MIX;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_FM_RIMSHOT_HP_TONE;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_FM_CLAP:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_FM_CLAP_HP_TONE;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_FM_CLAP_FEEDBACK;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_FM_COWBELL_FEEDBACK;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_FM_COWBELL_ENV_MIX;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+                family->subpages[0].param_bank.params[0] = PARAM_DRUM_FM_CYMBAL_HP_TONE;
+                family->subpages[0].param_bank.params[1] = PARAM_DRUM_FM_CYMBAL_FEEDBACK;
+                family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+                family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+                break;
+            default:
+                break;
+        }
         return;
     }
     if (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_TB3)

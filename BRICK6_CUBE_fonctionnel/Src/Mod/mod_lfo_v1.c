@@ -98,6 +98,11 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
             return 0U;
         }
 
+        if (family == UI_TRACK_FAMILY_DRUM)
+        {
+            return ((dest >= PARAM_DRUM_TRX_BD_PITCH) && (dest <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY)) ? 1U : 0U;
+        }
+
         if (type == UI_TRACK_TYPE_DX7)
         {
             return ((dest >= PARAM_DX7_ALGORITHM) && (dest <= PARAM_DX7_OPERATOR_4_LEVEL)) ? 1U : 0U;
@@ -118,6 +123,11 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
 
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
     {
+        if (family == UI_TRACK_FAMILY_DRUM)
+        {
+            return ((dest >= PARAM_DRUM_TRX_BD_PITCH) && (dest <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY)) ? 1U : 0U;
+        }
+
         if (type == UI_TRACK_TYPE_MONOB)
         {
             return ((dest >= PARAM_MONOB_FILTER_TYPE) && (dest <= PARAM_MONOB_FILTER_ENVDLY)) ? 1U : 0U;
