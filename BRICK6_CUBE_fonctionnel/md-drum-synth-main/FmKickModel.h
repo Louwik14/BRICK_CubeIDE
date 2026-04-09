@@ -1,6 +1,6 @@
 #pragma once
 #include "DrumModel.h"
-#include "plaits/dsp/fm/operator.h"
+#include "core/DrumFm2OpCore.h"
 
 class FmKickModel : public DrumModel {
 public:
@@ -42,14 +42,7 @@ private:
     static constexpr int num_ratios = 64;
     static const float ratios[num_ratios][2];
 
-    // Iterative decay state
-    float amp_env = 1.0f, mod_env = 1.0f, freq_env = 1.0f;
-    float amp_decay_const = 0.0f, mod_decay_const = 0.0f, freq_decay_const = 0.0f;
-
-    // Plaits FM operator state
-    plaits::fm::Operator ops[2]; // [0]=modulator, [1]=carrier
-    float fb_state[2] = {0.0f, 0.0f};
-    float t = 0.0f;
+    DrumFm2OpCore core_;
 
     bool mod_env_sync = false; // New: sync modulator freq envelope to carrier
 };
