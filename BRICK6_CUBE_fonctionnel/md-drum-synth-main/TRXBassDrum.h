@@ -11,11 +11,11 @@ public:
 
     void saveParameters(std::ostream& os) const override {
         os << pitch << ' ' << decay << ' ' << ramp << ' ' << rampDecay << ' '
-           << attack << ' ' << noise << ' ' << harmonics << ' ' << clip << '\n';
+           << attack << ' ' << tick << ' ' << harmonics << ' ' << clip << '\n';
     }
 
     void loadParameters(std::istream& is) override {
-        is >> pitch >> decay >> ramp >> rampDecay >> attack >> noise >> harmonics >> clip;
+        is >> pitch >> decay >> ramp >> rampDecay >> attack >> tick >> harmonics >> clip;
     }
 
     bool SetParamByIndex(uint8_t index, float value) override {
@@ -25,7 +25,7 @@ public:
             case 2U: ramp = value; UpdateDerived(); return true;
             case 3U: rampDecay = value; UpdateDerived(); return true;
             case 4U: attack = value; UpdateDerived(); return true;
-            case 5U: noise = value; UpdateDerived(); return true;
+            case 5U: tick = value; UpdateDerived(); return true;
             case 6U: harmonics = value; UpdateDerived(); return true;
             case 7U: clip = value; UpdateDerived(); return true;
             default: return false;
@@ -39,7 +39,7 @@ private:
     float ramp = 0.3f;         // Frequency ramp amount
     float rampDecay = 0.1f;    // Ramp decay time
     float attack = 1.0f;       // Attack control (mapped to attack time)
-    float noise = 0.0f;        // Noise at attack
+    float tick = 0.5f;         // Natural attack tick level (0=smooth, 1=accented)
     float harmonics = 0.0f;    // Adds clipped harmonic content
     float clip = 0.0f;         // Soft clipping amount
 
@@ -49,10 +49,7 @@ private:
     float rampEnv = 0.0f;
     float attackEnv = 0.0f;
     float prevSample = 0.0f;
-    uint16_t attackSamplesRemaining = 0U;
-    uint8_t noiseHoldCounter = 0U;
-    float noiseSample = 0.0f;
-    float prevNoiseSample = 0.0f;
+    float tickTransient = 0.0f;
 
     // Precomputed derivatives (updated on trigger / parameter change)
     float envDecayCoef = 1.0f;
@@ -61,6 +58,7 @@ private:
     float pitchPhaseInc = 0.0f;
     float rampPhaseIncScale = 0.0f;
     float driveGain = 1.0f;
+    float tickTransientDecayCoef = 1.0f;
 
     // Helpers
     void UpdateDerived();

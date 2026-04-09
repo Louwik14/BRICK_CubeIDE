@@ -5,37 +5,34 @@
 #endif
 #include <cmath>
 #include <algorithm>
-#include <cstdlib>
 
 constexpr float kSampleRate = 48000.0f;
-constexpr uint16_t kNoiseAttackSamples = 479U;
-constexpr uint8_t kNoiseHoldSamples = 6U;
 constexpr float kSweepPitchRatio = 6.0f;
+constexpr float kTickTransientTime = 0.00025f;
 
 void TRXBassDrum::Init() {
     phase = env = rampEnv = attackEnv = 0.0f;
     prevSample = 0.0f;
-    attackSamplesRemaining = 0U;
-    noiseHoldCounter = 0U;
-    noiseSample = 0.0f;
-    prevNoiseSample = 0.0f;
+    tickTransient = 0.0f;
     UpdateDerived();
 }
 
 void TRXBassDrum::Trigger() {
+    const float preTriggerSample = prevSample;
     env = 1.0f;
     rampEnv = 1.0f;
     attackEnv = 0.0f;
     phase = 0.0f;
-    attackSamplesRemaining = kNoiseAttackSamples;
-    noiseHoldCounter = 0U;
-    noiseSample = 0.0f;
-    prevNoiseSample = 0.0f;
+    const float tickGain = std::clamp(tick, 0.0f, 1.0f) * 2.0f;
+    tickTransient = (-preTriggerSample) * (1.0f - tickGain);
     UpdateDerived();
 }
 
 float TRXBassDrum::Process() {
-    if (env <= 0.0001f) return 0.0f;
+    if (env <= 0.0001f) {
+        prevSample = 0.0f;
+        return 0.0f;
+    }
 
     // Envelope decay
     env *= envDecayCoef;
@@ -55,24 +52,16 @@ float TRXBassDrum::Process() {
         value += harmonics * std::tanh(sineOut * 3.0f) * tonalEnv;
     }
 
-    // Add noise burst
-    if (noise > 0.0f && attackSamplesRemaining > 0U) {
-        if (noiseHoldCounter == 0U) {
-            noiseSample = ((rand() / (float)RAND_MAX) * 2.0f - 1.0f);
-            noiseHoldCounter = kNoiseHoldSamples;
-        }
-        --noiseHoldCounter;
-        const float shapedNoise = noiseSample - prevNoiseSample;
-        prevNoiseSample = noiseSample;
-        value += noise * shapedNoise * env;
-        --attackSamplesRemaining;
-    }
+    // Control natural trigger discontinuity (no white-noise burst).
+    value += tickTransient;
+    tickTransient *= tickTransientDecayCoef;
 
     // Soft clip
     if (clip > 0.0f) {
         value = std::tanh(value * driveGain);
     }
 
+    prevSample = value;
     return value;
 }
 
@@ -87,6 +76,7 @@ void TRXBassDrum::UpdateDerived() {
     pitchPhaseInc = pitch / kSampleRate;
     rampPhaseIncScale = (ramp * pitch * kSweepPitchRatio) / kSampleRate;
     driveGain = 1.0f + (clip * 5.0f);
+    tickTransientDecayCoef = std::exp(-1.0f / (kTickTransientTime * kSampleRate));
 }
 
 void TRXBassDrum::RenderControls() {
@@ -97,7 +87,7 @@ void TRXBassDrum::RenderControls() {
     ImGui::SliderFloat("Ramp", &ramp, 0.0f, 1.0f);
     ImGui::SliderFloat("Ramp Decay", &rampDecay, 0.01f, 1.0f);
     ImGui::SliderFloat("Attack", &attack, 0.0f, 2.0f);
-    ImGui::SliderFloat("Noise", &noise, 0.0f, 1.0f);
+    ImGui::SliderFloat("Tick", &tick, 0.0f, 1.0f);
     ImGui::SliderFloat("Harmonics", &harmonics, 0.0f, 1.0f);
     ImGui::SliderFloat("Clip", &clip, 0.0f, 1.0f);
 
