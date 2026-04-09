@@ -202,6 +202,37 @@ bool ui_track_family_is_engine(ui_track_family_t family)
     return (family == UI_TRACK_FAMILY_SYNTH) || (family == UI_TRACK_FAMILY_DRUM);
 }
 
+static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_family_t family, uint8_t *out_count)
+{
+    static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
+
+    if (out_count == NULL)
+    {
+        return NULL;
+    }
+
+    switch (family)
+    {
+        case UI_TRACK_FAMILY_INPUT1:
+        case UI_TRACK_FAMILY_INPUT2:
+        case UI_TRACK_FAMILY_INPUT3:
+        case UI_TRACK_FAMILY_INPUT4:
+            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
+            return k_input_types;
+
+        case UI_TRACK_FAMILY_SYNTH:
+            *out_count = (uint8_t)(sizeof(k_synth_types) / sizeof(k_synth_types[0]));
+            return k_synth_types;
+
+        case UI_TRACK_FAMILY_DRUM:
+        case UI_TRACK_FAMILY_OFF:
+        default:
+            *out_count = 0U;
+            return NULL;
+    }
+}
+
 bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type)
 {
     if (((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
@@ -210,19 +241,19 @@ bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t
         return false;
     }
 
-    if (ui_track_family_is_input(family))
-    {
-        return (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID);
-    }
-
-    if (family == UI_TRACK_FAMILY_OFF)
+    uint8_t type_count = 0U;
+    const ui_track_type_t *const catalog = ui_core_get_catalog_types_for_family(family, &type_count);
+    if ((catalog == NULL) || (type_count == 0U))
     {
         return false;
     }
 
-    if (ui_track_family_is_engine(family))
+    for (uint8_t i = 0U; i < type_count; ++i)
     {
-        return (type == UI_TRACK_TYPE_DX7) || (type == UI_TRACK_TYPE_MONOB) || (type == UI_TRACK_TYPE_TB3);
+        if (catalog[i] == type)
+        {
+            return true;
+        }
     }
 
     return false;
@@ -236,7 +267,7 @@ static uint8_t ui_core_track_uses_synth_type(uint8_t track, ui_track_type_t type
     }
 
     const ui_track_config_t *const config = &g_ui_track_state.track_configs[track];
-    return (uint8_t)(ui_track_family_is_engine(config->family) && (config->type == type));
+    return (uint8_t)((config->family == UI_TRACK_FAMILY_SYNTH) && (config->type == type));
 }
 
 bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type)
@@ -246,7 +277,7 @@ bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_trac
         return false;
     }
 
-    if (!ui_track_family_is_engine(family))
+    if (family != UI_TRACK_FAMILY_SYNTH)
     {
         return true;
     }
@@ -284,37 +315,39 @@ static uint8_t ui_core_get_track_type_count_for_family_and_track(ui_track_family
         return 0U;
     }
 
-    if (ui_track_family_is_engine(family))
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_core_get_catalog_types_for_family(family, &catalog_count);
+    if ((catalog == NULL) || (catalog_count == 0U))
     {
-        uint8_t count = 0U;
-        const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
-        for (uint8_t i = 0U; i < (uint8_t)(sizeof(synth_types) / sizeof(synth_types[0])); ++i)
-        {
-            if (ui_track_type_is_available(track, family, synth_types[i]))
-            {
-                ++count;
-            }
-        }
-        return count;
+        return 0U;
     }
 
-    return 2U;
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        if (ui_track_type_is_available(track, family, catalog[i]))
+        {
+            ++count;
+        }
+    }
+    return count;
 }
 
 static ui_track_type_t ui_core_get_first_available_track_type(ui_track_family_t family, uint8_t track)
 {
-    if (ui_track_family_is_engine(family))
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_core_get_catalog_types_for_family(family, &catalog_count);
+    if ((catalog == NULL) || (catalog_count == 0U))
     {
-        const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
-        for (uint8_t i = 0U; i < (uint8_t)(sizeof(synth_types) / sizeof(synth_types[0])); ++i)
-        {
-            if (ui_track_type_is_available(track, family, synth_types[i]))
-            {
-                return synth_types[i];
-            }
-        }
+        return UI_TRACK_TYPE_AUDIO;
+    }
 
-        return UI_TRACK_TYPE_DX7;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        if (ui_track_type_is_available(track, family, catalog[i]))
+        {
+            return catalog[i];
+        }
     }
 
     return UI_TRACK_TYPE_AUDIO;
@@ -322,9 +355,11 @@ static ui_track_type_t ui_core_get_first_available_track_type(ui_track_family_t 
 
 ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family)
 {
-    if (ui_track_family_is_engine(family))
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_core_get_catalog_types_for_family(family, &catalog_count);
+    if ((catalog != NULL) && (catalog_count > 0U))
     {
-        return UI_TRACK_TYPE_DX7;
+        return catalog[0];
     }
 
     return UI_TRACK_TYPE_AUDIO;
@@ -343,30 +378,31 @@ uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_ty
         return 0U;
     }
 
-    if (ui_track_family_is_engine(family))
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_core_get_catalog_types_for_family(family, &catalog_count);
+    if ((catalog == NULL) || (catalog_count == 0U))
     {
-        uint8_t index = 0U;
-        const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
-        for (uint8_t i = 0U; i < (uint8_t)(sizeof(synth_types) / sizeof(synth_types[0])); ++i)
-        {
-            const ui_track_type_t candidate = synth_types[i];
-            if (!ui_track_type_is_available(track, family, candidate))
-            {
-                continue;
-            }
-
-            if (candidate == type)
-            {
-                return index;
-            }
-
-            ++index;
-        }
-
         return 0U;
     }
 
-    return (type == UI_TRACK_TYPE_HYBRID) ? 1U : 0U;
+    uint8_t index = 0U;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        const ui_track_type_t candidate = catalog[i];
+        if (!ui_track_type_is_available(track, family, candidate))
+        {
+            continue;
+        }
+
+        if (candidate == type)
+        {
+            return index;
+        }
+
+        ++index;
+    }
+
+    return 0U;
 }
 
 ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, uint8_t index)
@@ -383,30 +419,31 @@ ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, ui
         return UI_TRACK_TYPE_AUDIO;
     }
 
-    if (ui_track_family_is_engine(family))
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_core_get_catalog_types_for_family(family, &catalog_count);
+    if ((catalog == NULL) || (catalog_count == 0U))
     {
-        const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
-        uint8_t current = 0U;
-        for (uint8_t i = 0U; i < (uint8_t)(sizeof(synth_types) / sizeof(synth_types[0])); ++i)
-        {
-            const ui_track_type_t candidate = synth_types[i];
-            if (!ui_track_type_is_available(track, family, candidate))
-            {
-                continue;
-            }
-
-            if (current == index)
-            {
-                return candidate;
-            }
-
-            ++current;
-        }
-
         return ui_get_default_track_type_for_family(family);
     }
 
-    return (index == 0U) ? UI_TRACK_TYPE_AUDIO : UI_TRACK_TYPE_HYBRID;
+    uint8_t current = 0U;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        const ui_track_type_t candidate = catalog[i];
+        if (!ui_track_type_is_available(track, family, candidate))
+        {
+            continue;
+        }
+
+        if (current == index)
+        {
+            return candidate;
+        }
+
+        ++current;
+    }
+
+    return ui_get_default_track_type_for_family(family);
 }
 
 static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t family)
@@ -669,7 +706,7 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         const ui_track_family_t fam = (ui_track_family_t)family[track];
         ui_track_type_t requested_type = (ui_track_type_t)type[track];
 
-        if (ui_track_family_is_engine(fam))
+        if (fam == UI_TRACK_FAMILY_SYNTH)
         {
             if (requested_type == UI_TRACK_TYPE_DX7)
             {
