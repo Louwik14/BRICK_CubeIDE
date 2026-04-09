@@ -72,9 +72,18 @@ Src/UI \
 Src/UI/pages \
 Src \
 Startup \
+md-drum-synth-main \
 mutable_instruments/clouds \
 mutable_instruments/clouds/dsp \
 mutable_instruments/clouds/dsp/pvoc \
+mutable_instruments/plaits/dsp/chords \
+mutable_instruments/plaits/dsp/engine \
+mutable_instruments/plaits/dsp/engine2 \
+mutable_instruments/plaits/dsp/fm \
+mutable_instruments/plaits/dsp/physical_modelling \
+mutable_instruments/plaits/dsp/speech \
+mutable_instruments/plaits \
 mutable_instruments/stmlib/dsp \
 mutable_instruments/stmlib/utils \
+md-drum-synth-main/mi \
 

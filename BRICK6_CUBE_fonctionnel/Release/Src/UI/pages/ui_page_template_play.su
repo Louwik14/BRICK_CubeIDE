@@ -1,2 +1,3 @@
-../Src/UI/pages/ui_page_template_play.c:17:36:ui_page_template_play_resolve_family	0	static
-../Src/UI/pages/ui_page_template_play.c:29:6:ui_page_template_play_register_families	8	static
+../Src/UI/pages/ui_page_template_play.c:23:16:ui_page_template_play_subpage_enabled	16	static
+../Src/UI/pages/ui_page_template_play.c:18:36:ui_page_template_play_resolve_family	0	static
+../Src/UI/pages/ui_page_template_play.c:39:6:ui_page_template_play_register_families	32	static

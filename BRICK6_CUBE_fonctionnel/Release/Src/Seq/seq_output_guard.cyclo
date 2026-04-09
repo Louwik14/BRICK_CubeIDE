@@ -1,7 +1,7 @@
-../Src/Seq/seq_output_guard.c:25:6:seq_output_guard_init	1
-../Src/Seq/seq_output_guard.c:30:6:seq_output_guard_reset	1
-../Src/Seq/seq_output_guard.c:35:6:seq_output_guard_note_on_seen	4
-../Src/Seq/seq_output_guard.c:48:6:seq_output_guard_note_off_seen	4
-../Src/Seq/seq_output_guard.c:61:9:seq_output_guard_is_note_active_on_track	3
-../Src/Seq/seq_output_guard.c:71:9:seq_output_guard_is_note_active_on_channel	7
-../Src/Seq/seq_output_guard.c:96:6:seq_output_guard_panic	16
+../Src/Seq/seq_output_guard.c:26:6:seq_output_guard_init	1
+../Src/Seq/seq_output_guard.c:31:6:seq_output_guard_reset	1
+../Src/Seq/seq_output_guard.c:36:6:seq_output_guard_note_on_seen	4
+../Src/Seq/seq_output_guard.c:49:6:seq_output_guard_note_off_seen	4
+../Src/Seq/seq_output_guard.c:62:9:seq_output_guard_is_note_active_on_track	3
+../Src/Seq/seq_output_guard.c:72:9:seq_output_guard_is_note_active_on_channel	7
+../Src/Seq/seq_output_guard.c:97:6:seq_output_guard_panic	19

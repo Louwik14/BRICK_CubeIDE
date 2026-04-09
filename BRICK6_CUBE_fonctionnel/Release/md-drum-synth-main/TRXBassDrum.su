@@ -1,0 +1,9 @@
+../md-drum-synth-main/TRXBassDrum.cpp:11:6:virtual void TRXBassDrum::Init()	0	static
+../md-drum-synth-main/TRXBassDrum.cpp:16:6:virtual void TRXBassDrum::Trigger()	0	static
+../md-drum-synth-main/TRXBassDrum.cpp:58:6:virtual void TRXBassDrum::RenderControls()	0	static
+../md-drum-synth-main/TRXBassDrum.h:4:7:TRXBassDrum::~TRXBassDrum()	0	static
+../md-drum-synth-main/TRXBassDrum.cpp:23:7:virtual float TRXBassDrum::Process()	32	static
+../md-drum-synth-main/TRXBassDrum.h:16:10:virtual void TRXBassDrum::loadParameters(std::istream&)	8	static
+../md-drum-synth-main/TRXBassDrum.h:4:7:virtual TRXBassDrum::~TRXBassDrum()	8	static
+../md-drum-synth-main/TRXBassDrum.h:11:10:virtual void TRXBassDrum::saveParameters(std::ostream&) const	24	static
+../md-drum-synth-main/TRXBassDrum.cpp:76:7:float TRXBassDrum::sine(float)	0	static

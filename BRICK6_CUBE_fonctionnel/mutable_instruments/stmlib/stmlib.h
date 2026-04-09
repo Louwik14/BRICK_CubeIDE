@@ -22,8 +22,6 @@
 // 
 // See http://creativecommons.org/licenses/MIT/ for more information.
 
-#pragma GCC diagnostic ignored "-Wunused-local-typedefs" /* don't show warnings about set but unused typedefs */
-
 #ifndef STMLIB_STMLIB_H_
 #define STMLIB_STMLIB_H_
 
