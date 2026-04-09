@@ -1,431 +1,321 @@
-# Portage DSP Drum (`md-drum-synth-main`) vers firmware STM32H743
+# Audit de preuve technique — dépendances réelles du rendu sonore (`md-drum-synth-main`)
 
-## Contexte et périmètre de cette passe
+## 0) Méthode de preuve utilisée (dans cette base exacte)
 
-Ce document définit un **plan de portage minimal, structuré et track-aware** des moteurs drum DSP présents dans `md-drum-synth-main`, sans redesign global et sans mélange prématuré runtime/UI.
+Audit réalisé sur les fichiers présents dans `BRICK6_CUBE_fonctionnel/md-drum-synth-main` avec:
 
-Objectifs de cette passe:
-- isoler le périmètre DSP réellement portable;
-- qualifier les paramètres moteur par moteur;
-- proposer une première normalisation UX (`TONE` / `COLORS`);
-- séquencer une intégration incrémentale compatible hard real-time STM32H743 (pas d’allocation dynamique dans le thread audio).
+- inspection des includes réels (`rg '^#include' -n ...`);
+- lecture des chemins d’appel `Process()/Trigger()/Init()`;
+- vérification des symboles réellement appelés (fonctions, constantes, types);
+- distinction stricte:
+  - **A = requis compilation**,
+  - **B = requis fidélité sonore**,
+  - **C = non requis pour ces moteurs**.
 
----
-
-## 1) Fichiers à conserver pour un portage DSP minimal
-
-### 1.1 Noyau d’interface (à adapter côté firmware)
-
-- `md-drum-synth-main/DrumModel.h`
-
-> Remarque: `RenderControls()` + sérialisation `std::iostream` ne sont pas adaptées telles quelles à l’embarqué; conserver l’idée d’interface `Init/Trigger/Process`, mais découpler UI/sérialisation.
-
-### 1.2 Moteurs DSP drum (cœur audio)
-
-- `TRXBassDrum.cpp/.h`
-- `TRXClaves.cpp/.h`
-- `TRXHiHat.cpp/.h`
-- `TRXSnareDrum.cpp/.h`
-- `FmKickModel.cpp/.h`
-- `FmSnareModel.cpp/.h`
-- `FmTomModel.cpp/.h`
-- `FmRimshotModel.cpp/.h`
-- `FmClapModel.cpp/.h`
-- `FmCowbellModel.cpp/.h`
-- `FmCymbalModel.cpp/.h`
-
-### 1.3 Dépendances utilitaires potentiellement réutilisables
-
-Ces fichiers sont utiles **uniquement** pour les moteurs FM qui utilisent `plaits::fm::Operator`:
-- `mi/operator.h`
-- `mi/sine_oscillator.h`
-- `mi/dsp.h`
-- `mi/stmlib.h`
-
-> Les autres fichiers `mi/*` (DX voice/patch/resources/lfo...) ne sont pas requis pour ce portage drum minimal.
-
-### 1.4 Périmètre minimal recommandé (v1)
-
-- 1 interface drum runtime interne (sans UI desktop):
-  - `init(sample_rate)`
-  - `trigger(velocity)`
-  - `process()` mono sample
-  - `set_param(id, value_norm)`
-- 1 premier moteur simple pour valider la chaîne (voir stratégie étape 2).
-- 1 mapping param -> `TONE`/`COLORS` limité aux paramètres musicaux.
+> Important: ce document répond à “ce qui est prouvé dans cette copie”. Il ne généralise pas à tout Plaits/DX en dehors des chemins effectivement utilisés ici.
 
 ---
 
-## 2) Fichiers à exclure du portage embarqué (hors moteur sonore)
+## 1) Tableau global de preuve des dépendances
 
-### 2.1 UI desktop / OpenGL / audio PC
+Légende colonnes:
+- **Direct** = inclus directement par un moteur drum (`*.cpp/*.h`) ou `DrumModel.h`.
+- **Indirect** = traversé via chaîne d’inclusion depuis les moteurs.
+- **Req. comp.** = requis pour compiler les moteurs présents (dans leur état actuel).
+- **Req. fidélité** = requis pour préserver le comportement sonore réel observé dans ces moteurs.
+- **Excluable sans impact sonore prouvé** = oui/non, avec justification.
 
-- `main.cpp`
-- `CustomControls.cpp/.h`
-- `glad.c`, `glad.h`, `khrplatform.h`
-- `stb_image.h`
-- `CMakeLists.txt`
-
-### 2.2 Ressources démo / média
-
-- `resources/background.png`
-- `resources/background_png.h`
-- `resources/drum_params.txt`
-- `resources/README.md`
-- `md-drum-synth.jpg`
-- `md-drum-synth-examples.mp3`
-
-### 2.3 Dépendances MI non nécessaires au drum minimal
-
-- `mi/algorithms.*`
-- `mi/dx_units.*`
-- `mi/envelope.h`
-- `mi/lfo.h`
-- `mi/parameter_interpolator.h`
-- `mi/patch.h`
-- `mi/resources.*`
-- `mi/rsqrt.h`
-- `mi/voice.h`
-
----
-
-## 3) Analyse moteur par moteur: paramètres utiles vs techniques
-
-## 3.1 TRXBassDrum
-
-Paramètres source: `pitch`, `decay`, `ramp`, `rampDecay`, `start`, `noise`, `harmonics`, `clip`.
-
-- **Essentiels (utilisateur)**
-  - `pitch` (accord/taille de kick)
-  - `decay` (longueur)
-  - `ramp` (attaque/punch de pitch)
-- **Secondaires intéressants**
-  - `noise` (click/attaque)
-  - `harmonics` (corps/grit)
-  - `clip` (drive)
-- **À cacher en v1**
-  - `rampDecay` (fin mais redondant avec `ramp`+`decay`)
-  - `start` (gain d’attaque interne, risque de confusion avec volume/velocity)
-
-## 3.2 TRXClaves
-
-Paramètres source: `pitch`, `interval`, `decay`, `balance`, `clip`.
-
-- **Essentiels**
-  - `pitch`
-  - `decay`
-  - `interval` (identité harmonique du timbre)
-- **Secondaires**
-  - `balance` (couleur entre les 2 oscillateurs)
-  - `clip`
-- **À cacher v1**
-  - aucun obligatoire (moteur déjà compact)
-
-## 3.3 TRXHiHat
-
-Paramètres source: `gap`, `decay`, `lpfFreq`, `hpfFreq`, `peak`, `metal`.
-
-- **Essentiels**
-  - `decay`
-  - `metal` (bruit blanc vs composante métallique)
-  - `hpfFreq` (brillance)
-- **Secondaires**
-  - `lpfFreq`
-  - `gap` (comportement type open/closed simplifié)
-- **À cacher v1**
-  - `peak` (actuellement non exploité dans le DSP: paramètre trompeur)
-
-## 3.4 TRXSnareDrum
-
-Paramètres source: `pitch`, `decay`, `snap`, `noise`, `tone`, `tune`, `bump`, `clip`.
-
-- **Essentiels**
-  - `pitch`
-  - `decay`
-  - `snap`
-  - `noise`
-- **Secondaires**
-  - `tone` (balance entre 2 osc)
-  - `clip`
-- **À cacher v1**
-  - `tune` (intervalle secondaire, peu évident)
-  - `bump` (micro-transitoire technique)
-
-## 3.5 FmKickModel
-
-Paramètres source: `f_b`, `d_b`, `f_m`, `I`, `d_m`, `b_m`, `A_f`, `d_f`, `use_ratio_mode`, `ratio_index`, `mod_env_sync`.
-
-- **Essentiels**
-  - `f_b` (pitch)
-  - `d_b` (decay)
-  - `I` (attaque FM)
-  - `A_f` (pitch sweep)
-- **Secondaires**
-  - `d_f`
-  - `f_m` (ou ratio verrouillé)
-  - `d_m`
-  - `b_m` (feedback/roughness)
-- **À cacher v1**
-  - `use_ratio_mode`, `ratio_index` (UI experte)
-  - `mod_env_sync` (technique)
-
-## 3.6 FmSnareModel
-
-Paramètres source: `f_b`, `d_b`, `f_m`, `I`, `d_m`, `Abrus`, `dbrus`, `fhp`.
-
-- **Essentiels**
-  - `f_b`
-  - `d_b`
-  - `Abrus` (niveau de bruit)
-  - `fhp` (teinte du bruit)
-- **Secondaires**
-  - `I`
-  - `f_m`
-  - `d_m`
-  - `dbrus`
-- **À cacher v1**
-  - aucun strictement, mais `f_m`+`d_m` peuvent être groupés en macro “FM attack”.
-
-## 3.7 FmTomModel
-
-Paramètres source: `f_b`, `d_b`, `f_m`, `I`, `d_m`, `A_f`, `d_f`, `start_phase`.
-
-- **Essentiels**
-  - `f_b`
-  - `d_b`
-  - `A_f`
-- **Secondaires**
-  - `I`, `f_m`, `d_m`, `d_f`
-- **À cacher v1**
-  - `start_phase` (calibration de transitoire, peu musical en façade)
-
-## 3.8 FmRimshotModel
-
-Paramètres source: `f_bB`, `d_bB`, `I_B`, `f_bA`, `d_bA`, `I_A`, `A_A`, `d_m`, `f_hp`.
-
-- **Essentiels**
-  - `f_bB` (rim principal)
-  - `d_bB`
-  - `A_A` (mix body)
-- **Secondaires**
-  - `f_bA`, `d_bA`
-  - `I_B`, `I_A`
-  - `f_hp`
-- **À cacher v1**
-  - `d_m` (second ordre)
-
-## 3.9 FmClapModel
-
-Paramètres source: `f_b`, `f_m`, `I`, `d_m`, `d1`, `d2`, `clap_count`, `clap_interval`, `fhp`, `bm`.
-
-- **Essentiels**
-  - `clap_count`
-  - `clap_interval`
-  - `d2` (tail)
-  - `fhp`
-- **Secondaires**
-  - `d1`
-  - `I`, `f_m`, `bm`
-- **À cacher v1**
-  - `f_b` (peu déterminant musicalement comparé aux paramètres de pattern de claps)
-  - `d_m` (technique FM interne)
-
-## 3.10 FmCowbellModel
-
-Paramètres source: `fbA`, `d_b1`, `db2`, `fm`, `I`, `dm`, `bm`, `Ab1`.
-
-- **Essentiels**
-  - `fbA` (pitch de base)
-  - `d_b1` / `db2` (double décroissance caractéristique)
-  - `I`
-- **Secondaires**
-  - `fm`, `bm`, `Ab1`
-- **À cacher v1**
-  - `dm` (détail FM)
-
-## 3.11 FmCymbalModel
-
-Paramètres source: `fb`, `fm`, `d_b`, `I`, `d_m`, `bb`, `sustain`, `f_hp`.
-
-- **Essentiels**
-  - `d_b`
-  - `sustain`
-  - `f_hp`
-  - `I`
-- **Secondaires**
-  - `fb`, `fm`, `d_m`, `bb`
-- **À cacher v1**
-  - aucun obligatoire
+| Fichier | Direct | Indirect | Req. comp. | Req. fidélité | Excluable sans impact sonore prouvé | Justification de preuve |
+|---|---:|---:|---:|---:|---:|---|
+| `DrumModel.h` | Oui | Non | Oui | Partiel | Non (tant que classes héritent) | Base virtuelle héritée par tous les moteurs (`Init/Trigger/Process/RenderControls`, save/load). |
+| `TRXBassDrum.cpp/.h` | Oui | Non | Oui | Oui | Non | `Process()` calcule le signal (env, sine, noise, clip). |
+| `TRXClaves.cpp/.h` | Oui | Non | Oui | Oui | Non | `Process()` = 2 osc + env + clip. |
+| `TRXHiHat.cpp/.h` | Oui | Non | Oui | Oui | Non | `Process()` = bruit métallique + LP/HP + env/gap. |
+| `TRXSnareDrum.cpp/.h` | Oui | Non | Oui | Oui | Non | `Process()` = 2 osc + noise HP + snap + clip. |
+| `FmKickModel.cpp/.h` | Oui | Non | Oui | Oui | Non | `Process()` appelle `plaits::fm::RenderOperators`. |
+| `FmSnareModel.cpp/.h` | Oui | Non | Oui | Oui | Non | `Process()` appelle `RenderOperators` + bruit + HPF. |
+| `FmTomModel.cpp/.h` | Oui | Non | Oui | Oui | Non | FM sinus direct + enveloppes expo dans `Process()`. |
+| `FmRimshotModel.cpp/.h` | Oui | Non | Oui | Oui | Non | FM manuel + mix + HPF dans `Process()`. |
+| `FmClapModel.cpp/.h` | Oui | Non | Oui | Oui | Non | séquence clap + FM + HPF dans `Process()`. |
+| `FmCowbellModel.cpp/.h` | Oui | Non | Oui | Oui | Non | FM manuel 2 carriers + double decay. |
+| `FmCymbalModel.cpp/.h` | Oui | Non | Oui | Oui | Non | 4 paires FM + HPF + sustain/decay. |
+| `mi/operator.h` | Oui (`FmKick/FmSnare`) | Non | Oui (pour ces 2 moteurs) | Oui | Non | `RenderOperators` appelé directement depuis `Process()`. |
+| `mi/sine_oscillator.h` | Non | Oui (via `operator.h`) | Oui | Oui | Non | `RenderOperators` utilise `SinePM`, défini ici. |
+| `mi/dsp.h` | Non | Oui (via `operator.h`/`sine_oscillator.h`) | Oui | Oui | Non | `SinePM`/interpolation utilisent fonctions `Interpolate*`. |
+| `mi/parameter_interpolator.h` | Non | Oui (via `sine_oscillator.h`) | Oui (header path) | Non prouvé (chemin courant) | Incertain | Utilisé par classes `SineOscillator/FastSineOscillator`; `RenderOperators(size=1)` n’appelle pas ces méthodes ici. |
+| `mi/resources.h` | Non | Oui (via `sine_oscillator.h`) | Oui | Oui | Non | `lut_sine` utilisée par `SinePM` appelée par `RenderOperators`. |
+| `mi/rsqrt.h` | Non | Oui (via `sine_oscillator.h`) | Oui (header path) | Non prouvé (chemin courant) | Incertain | Sert `FastSineOscillator`; ce chemin n’est pas appelé dans les moteurs audités. |
+| `mi/stmlib.h` | Non | Oui (via `dsp.h` et autres) | Oui | Oui indirect | Non | Définitions types/macros requises dans la chaîne DSP MI. |
+| `mi/resources.cc` | Non | Non | Non (dans cet usage) | Non | Oui | Aucun moteur n’appelle symboles nécessitant ce TU; `lut_sine` est déjà dans `resources.h`. |
+| `mi/algorithms.h/.cc` | Non | Non | Non | Non | Oui | Pas d’include depuis moteurs/chaîne utilisée par moteurs. |
+| `mi/dx_units.h/.cc` | Non | Non (pour ces moteurs) | Non | Non | Oui | Aucun include actif depuis moteurs actuels. |
+| `mi/envelope.h` | Non | Non | Non | Non | Oui | Non référencé dans chaînes actives. |
+| `mi/lfo.h` | Non | Non | Non | Non | Oui | Non référencé dans chaînes actives. |
+| `mi/patch.h` | Non | Non | Non | Non | Oui | Non référencé dans chaînes actives. |
+| `mi/voice.h` | Non | Non | Non | Non | Oui | Non référencé par moteurs actuels. |
+| `CustomControls.h/.cpp` | Oui (dans `Fm* .cpp`) | Non | Oui (état actuel) | Non | Oui (si découplage UI) | Utilisé seulement dans `RenderControls()`, pas dans `Process()`. |
+| `imgui.h` | Oui (`RenderControls`) | Non | Oui (état actuel) | Non | Oui (si découplage UI) | Aucun appel ImGui dans chemins audio `Process()`. |
+| `main.cpp` | Non (moteurs) | Non | Non pour compiler classes moteur seules | Non | Oui | Hôte desktop (OpenGL/RtAudio/UI), pas nécessaire au DSP pur. |
+| `glad.*`, `khrplatform.h`, `stb_image.h`, `resources/background*`, médias | Non | Non | Non | Non | Oui | Dépendances visuelles/demo uniquement. |
 
 ---
 
-## 4) Proposition de classement des paramètres entre `TONE` et `COLORS`
+## 2) Preuve moteur par moteur
 
-Règle retenue:
-- `TONE` = identité de génération (pitch, ratio FM, index FM, structure de clap, intervalles osc)
-- `COLORS` = teinte/filtrage/shaping (HPF/LPF, noise balance, clip/drive, feedback timbral)
+## 2.1 `TRXBassDrum.cpp/.h`
 
-## 4.1 Mapping générique (normalisation)
+- **Dépendances directes**
+  - `TRXBassDrum.h`, `imgui.h`, `<cmath>`, `<algorithm>`.
+  - header: `DrumModel.h`.
+- **Dépendances indirectes réellement traversées**
+  - `DrumModel.h` -> `<iostream>`.
+- **Fonctions/symboles critiques pour le son (preuve)**
+  - `std::exp` (décroissance `env`, `rampEnv`),
+  - `std::sin` via `sine()`,
+  - `std::tanh` (harmonics + clip),
+  - `rand()/RAND_MAX` (burst bruit),
+  - `kSampleRate=48000`.
+- **Dépendances purement UI/desktop**
+  - `imgui.h` (uniquement `RenderControls`).
+- **Remplaçables seulement avec validation audio**
+  - RNG, `exp/sin/tanh`, valeur SR.
+- **Verdict fidélité sonore**
+  - A: `TRXBassDrum.*`, `<cmath>`, `DrumModel.h`.
+  - B: `exp/sin/tanh/rand` + ordre de calcul.
+  - C: `imgui.h`, `<algorithm>` (pas de symbole utilisé ici).
 
-- Renommages UX conseillés:
-  - `f_b` / `fb` / `fbA` -> `Pitch`
-  - `d_b` / `decay` -> `Decay`
-  - `I` -> `FM Amount`
-  - `A_f` -> `Pitch Sweep`
-  - `d_f` -> `Sweep Decay`
-  - `Abrus` -> `Noise`
-  - `fhp` / `f_hp` -> `HP Tone`
-  - `clip` -> `Drive`
-  - `bm` / `bb` / `b_m` -> `Feedback`
+## 2.2 `TRXClaves.cpp/.h`
 
-## 4.2 Mapping par moteur (v1)
+- **Dépendances directes**: `TRXClaves.h`, `imgui.h`, `<cmath>`, `<algorithm>`; header -> `DrumModel.h`.
+- **Indirectes**: `<iostream>` via `DrumModel.h`.
+- **Critiques son**: `std::exp`, `std::sin`, `std::tanh`, `kSampleRate`.
+- **UI**: ImGui uniquement.
+- **Remplaçables avec validation**: trig/exp/clip approx.
+- **Verdict**
+  - A: fichiers moteur + `<cmath>` + `DrumModel.h`.
+  - B: équation mix 2 osc, env, clip.
+  - C: `imgui.h`, `<algorithm>` non utilisé.
 
-- **TRXBassDrum**
-  - `TONE`: `Pitch`, `Decay`, `Pitch Sweep`
-  - `COLORS`: `Noise`, `Harmonics`, `Drive`
-  - hors v1: `Ramp Decay`, `Start`
+## 2.3 `TRXHiHat.cpp/.h`
 
-- **TRXClaves**
-  - `TONE`: `Pitch`, `Interval`, `Decay`
-  - `COLORS`: `Balance`, `Drive`
+- **Dépendances directes**: `TRXHiHat.h`, `imgui.h`, `<cmath>`; header: `DrumModel.h`, `<array>`, `<random>`.
+- **Indirectes**: `<iostream>` via `DrumModel.h`.
+- **Critiques son**
+  - `std::default_random_engine`, `std::uniform_real_distribution<float>`,
+  - `std::exp` (LPF/HPF coeffs + env),
+  - phases statiques `phase[6]`, fréquences fixes `[306,512,551,743,826,900]`,
+  - logique `gap` + `fadeTime`.
+- **UI**: ImGui (`RenderControls`).
+- **Remplaçables avec validation**: RNG/seed policy, filtres, expo.
+- **Verdict**
+  - A: moteur + `<random>` + `<cmath>` + `DrumModel.h`.
+  - B: RNG/filtres/enveloppe/gap.
+  - C: `imgui.h`, `<array>` non utilisé explicitement.
 
-- **TRXHiHat**
-  - `TONE`: `Decay`, `Metal`
-  - `COLORS`: `HP Tone`, `LP Tone`
-  - hors v1: `Gap` (peut devenir contrôle contextuel “Open/Close”), `Peak` (non utilisé)
+## 2.4 `TRXSnareDrum.cpp/.h`
 
-- **TRXSnareDrum**
-  - `TONE`: `Pitch`, `Decay`, `Snap`
-  - `COLORS`: `Noise`, `Tone Mix`, `Drive`
-  - hors v1: `Tune Interval`, `Bump`
+- **Dépendances directes**: `TRXSnareDrum.h`, `imgui.h`, `<cmath>`, `<algorithm>`; header -> `DrumModel.h`.
+- **Indirectes**: `<iostream>`.
+- **Critiques son**
+  - `std::exp` (amp/snap env),
+  - `std::sin`, `std::tanh`,
+  - `rand()` pour `snapNoise` et `rawNoise`,
+  - HPF discret (`hp_a`, états `hp_x/hp_y`).
+- **UI**: ImGui.
+- **Remplaçables avec validation**: RNG, expo/trig, HPF formule.
+- **Verdict**: A moteur+cmath; B chemin tonal+noise+HP+clip; C imgui, algorithm non utilisé.
 
-- **FmKickModel**
-  - `TONE`: `Pitch`, `Decay`, `FM Amount`, `Pitch Sweep`
-  - `COLORS`: `Feedback`
-  - hors v1: `Ratio mode/index`, `mod_env_sync`, `Mod Decay`, `Sweep Decay`
+## 2.5 `FmKickModel.cpp/.h`
 
-- **FmSnareModel**
-  - `TONE`: `Pitch`, `Decay`, `FM Amount`
-  - `COLORS`: `Noise`, `HP Tone`
-  - secondaire: `Mod Freq`, `Mod Decay`, `Noise Decay`
+- **Dépendances directes**
+  - header: `DrumModel.h`, `mi/operator.h`.
+  - cpp: `<cmath>`, `<imgui.h>`, `CustomControls.h`.
+- **Indirectes réellement traversées**
+  - `mi/operator.h` -> `mi/sine_oscillator.h` -> `mi/dsp.h`, `mi/parameter_interpolator.h`, `mi/rsqrt.h`, `mi/resources.h` -> `mi/stmlib.h`.
+- **Critiques son (preuve d’appel)**
+  - `plaits::fm::RenderOperators<2,...>` appelé dans `Process()`;
+  - `Operator::Reset`, états `fb_state`, enveloppes itératives `amp_env/mod_env/freq_env`.
+  - `ratio_index`/`ratios` impactent directement `mod_freq`.
+- **UI/desktop**
+  - ImGui + `CustomControls` seulement dans `RenderControls()`.
+- **Remplaçables avec validation**
+  - toute réimplémentation de `RenderOperators`/`SinePM`/`lut_sine`, quantification feedback.
+- **Verdict**
+  - A: moteur + chaîne `mi` active + `<cmath>` + UI headers (état actuel).
+  - B: chaîne FM MI active et constantes/ratios.
+  - C: `CustomControls`/ImGui non sonores.
 
-- **FmTomModel**
-  - `TONE`: `Pitch`, `Decay`, `Pitch Sweep`, `FM Amount`
-  - `COLORS`: (optionnel) `Attack Character` (macro interne via `f_m/d_m`)
-  - hors v1: `Start Phase`
+## 2.6 `FmSnareModel.cpp/.h`
 
-- **FmRimshotModel**
-  - `TONE`: `Rim Pitch`, `Rim Decay`, `Body Mix`
-  - `COLORS`: `HP Tone`
-  - hors v1: exposer séparément tous les indices A/B (trop bas niveau)
+- **Dépendances directes**: `DrumModel.h`, `mi/operator.h`, `CustomControls.h`, `<cmath>`, `<cstdlib>`, `<imgui.h>`.
+- **Indirectes**: même chaîne MI que `FmKickModel`.
+- **Critiques son**
+  - 2 appels `RenderOperators` (mod puis carrier externe),
+  - `rand()` bruit blanc,
+  - HPF discret (`alpha`, `x_prev/y_prev`),
+  - enveloppes itératives.
+- **UI**: `CustomControls`/ImGui seulement `RenderControls()`.
+- **Remplaçables avec validation**: FM MI, RNG, HPF, expo implicite par constantes de decay.
+- **Verdict**: A chaîne MI+cmath+cstdlib; B FM+RNG+HPF; C UI.
 
-- **FmClapModel**
-  - `TONE`: `Clap Count`, `Clap Spacing`, `Tail Decay`
-  - `COLORS`: `HP Tone`, `Feedback`, `FM Amount`
-  - hors v1: `Base Freq`, `Mod Decay`
+## 2.7 `FmTomModel.cpp/.h`
 
-- **FmCowbellModel**
-  - `TONE`: `Pitch`, `Decay Short`, `Decay Long`, `FM Amount`
-  - `COLORS`: `Feedback`, `Env Mix`
-  - hors v1: `Mod Decay`
+- **Directes**: `DrumModel.h`, `CustomControls.h`, `<cmath>`, `<imgui.h>`.
+- **Indirectes**: `<iostream>` via `DrumModel.h`.
+- **Critiques son**
+  - `std::expf` (3 enveloppes),
+  - `std::sin`, `WrapPhase`, `start_phase`.
+- **UI**: `CustomControls`/ImGui.
+- **Remplaçables avec validation**: expf/sin approximés, wrap.
+- **Verdict**: A moteur+cmath; B enveloppes/FM/phase; C UI.
 
-- **FmCymbalModel**
-  - `TONE`: `Decay`, `Sustain`, `FM Amount`
-  - `COLORS`: `HP Tone`, `Feedback`
-  - secondaire: `Base Carrier`, `Base Mod`
+## 2.8 `FmRimshotModel.cpp/.h`
 
-### 4.3 Paramètres qui ne rentrent pas proprement `TONE/COLORS`
+- **Directes**: `DrumModel.h`, `CustomControls.h`, `<cmath>`.
+- **Indirectes**: `<iostream>`.
+- **Critiques son**
+  - `std::expf`, `std::sin`, modulateur fixe 1000Hz,
+  - HPF (`alpha`, états).
+- **UI**: `CustomControls` seulement.
+- **Remplaçables avec validation**: expf/sin/HPF.
+- **Verdict**: A moteur+cmath; B mod fixe+double carrier+HP; C UI.
 
-- `clap_count`, `clap_interval`: ce sont des paramètres de **structure temporelle** (presque “PLAY/SEQ”), mais gardables temporairement en `TONE` pour éviter d’ouvrir un 3e domaine.
-- `use_ratio_mode`, `ratio_index`: paramètres d’édition experte (quasi “advanced”), à cacher en v1.
-- `start_phase`, `start`: plutôt calibration/attack-shape interne.
+## 2.9 `FmClapModel.cpp/.h`
+
+- **Directes**: `DrumModel.h`, `CustomControls.h`, `<cmath>`, `<imgui.h>`.
+- **Indirectes**: `<iostream>`.
+- **Critiques son**
+  - `std::expf`, `std::sin`, feedback `bm`,
+  - logique `clap_count/clap_interval/clap_stage/clap_timer` (timing structurel),
+  - HPF.
+- **UI**: `CustomControls`/ImGui.
+- **Remplaçables avec validation**: scheduler clap, expf/sin, HPF.
+- **Verdict**: A moteur+cmath; B structure temporelle + FM + HPF; C UI.
+
+## 2.10 `FmCowbellModel.cpp/.h`
+
+- **Directes**: `DrumModel.h`, `CustomControls.h`, `<cmath>`, `<imgui.h>`.
+- **Indirectes**: `<iostream>`.
+- **Critiques son**
+  - `std::expf`, `std::sin`,
+  - ratio fixe `fbB = fbA * 1.48f`,
+  - mix enveloppes `Ab1/Ab2`.
+- **UI**: `CustomControls`/ImGui.
+- **Remplaçables avec validation**: expf/sin, ratio policy.
+- **Verdict**: A moteur+cmath; B ratio+enveloppes+FM; C UI.
+
+## 2.11 `FmCymbalModel.cpp/.h`
+
+- **Directes**: `DrumModel.h`, `CustomControls.h`, `<cmath>`.
+- **Indirectes**: `<iostream>`.
+- **Critiques son**
+  - `std::expf`, `std::sin`,
+  - ratios fixes `{1.0,1.411,1.8,2.7}`,
+  - somme 4 paires, HPF, sustain bias.
+- **UI**: `CustomControls`.
+- **Remplaçables avec validation**: expf/sin, HPF, ordre d’accumulation float.
+- **Verdict**: A moteur+cmath; B multi-FM+HP; C UI.
+
+## 2.12 `DrumModel.h`
+
+- **Directes**: `<iostream>`.
+- **Critiques son**
+  - contrat de cycle de vie (`Init/Trigger/Process`) structurellement critique.
+- **Non sonore**
+  - `RenderControls()`;
+  - `saveParameters/loadParameters` (persistence, pas calcul audio direct).
+- **Verdict**
+  - A: requis compilation tant que tous moteurs héritent exactement cette interface.
+  - B: partiel (seulement via contrat runtime `Init/Trigger/Process`).
+  - C: `iostream` non sonore mais requis ici pour signatures.
 
 ---
 
-## 5) Bases communes et couplages desktop à signaler
+## 3) Focus spécifique `mi/*` (preuve détaillée)
 
-## 5.1 Bases communes entre moteurs
+## 3.1 Chaîne prouvée depuis `Process()` FM
 
-- Tous les moteurs partagent le pattern runtime `Init / Trigger / Process`.
-- Les moteurs FM (`Fm*`) partagent:
-  - enveloppes de décroissance;
-  - logique opérateur FM;
-  - feedback FM;
-  - formes de filtre HP simples.
-- `FmKickModel` et `FmSnareModel` utilisent `plaits::fm::Operator` (`mi/operator.h`).
-- `FmTomModel`, `FmRimshotModel`, `FmClapModel`, `FmCowbellModel`, `FmCymbalModel` utilisent un FM sinus “manuel” (pas `plaits::fm::Operator`).
+Chemin prouvé:
+1. `FmKickModel::Process()` / `FmSnareModel::Process()` appelle `plaits::fm::RenderOperators`.
+2. `RenderOperators` est défini dans `mi/operator.h`.
+3. `RenderOperators` appelle `SinePM(...)`.
+4. `SinePM` est défini dans `mi/sine_oscillator.h`.
+5. `SinePM` lit `lut_sine[]` provenant de `mi/resources.h`.
+6. Interpolation/indexing dépend de types et utilitaires (`mi/dsp.h`, `mi/stmlib.h`).
 
-## 5.2 Couplages desktop à neutraliser explicitement
+=> Cette chaîne est **B (fidélité)** pour `FmKickModel` et `FmSnareModel`.
 
-- Tous les `.cpp` moteur incluent soit `imgui.h`, soit `CustomControls.h` via `RenderControls()`.
-- `DrumModel.h` impose `RenderControls()` et sérialisation `iostream`.
-- `TRXHiHat` utilise `std::default_random_engine` + `std::random_device` pour le seed (non déterministe et peu contrôlable en embarqué).
+## 3.2 Matrice `mi/*` demandée (oui/non)
 
-Portage recommandé:
-- conserver le DSP pur dans une couche runtime sans dépendances UI;
-- remplacer le bruit aléatoire par PRNG embarqué déterministe, stateful par instance track.
+| Fichier `mi/*` | Utilisé direct | Utilisé indirect | Requis compilation | Requis comportement sonore réel (moteurs présents) | Excluable sans impact sonore | Justification de preuve |
+|---|---:|---:|---:|---:|---:|---|
+| `operator.h` | Oui | Non | Oui | Oui | Non | Appel explicite `RenderOperators` dans `Process()` FM. |
+| `sine_oscillator.h` | Non | Oui | Oui | Oui | Non | `RenderOperators` -> `SinePM`. |
+| `dsp.h` | Non | Oui | Oui | Oui | Non | Utilitaires interpolation employés par chaîne sine/FM. |
+| `parameter_interpolator.h` | Non | Oui | Oui (header chain) | Non prouvé ici | Incertain | Référencé par classes oscillator non appelées dans chemins actuels FM sample-by-sample. |
+| `resources.h` | Non | Oui | Oui | Oui | Non | `lut_sine` consommée dans `SinePM`. |
+| `resources.cc` | Non | Non | Non | Non | Oui | Pas de symbole requis par chemins moteur observés. |
+| `rsqrt.h` | Non | Oui | Oui (header chain) | Non prouvé ici | Incertain | Utilisé par `FastSineOscillator` non appelé dans moteurs audités. |
+| `stmlib.h` | Non | Oui | Oui | Oui indirect | Non | Base types/macros traversée par chaîne active. |
+| `algorithms.h/.cc` | Non | Non | Non | Non | Oui | Absence de référence/include depuis moteurs. |
+| `dx_units.h/.cc` | Non | Non | Non | Non | Oui | Absence de référence/include depuis moteurs. |
+| `envelope.h` | Non | Non | Non | Non | Oui | Non référencé. |
+| `lfo.h` | Non | Non | Non | Non | Oui | Non référencé. |
+| `patch.h` | Non | Non | Non | Non | Oui | Non référencé. |
+| `voice.h` | Non | Non | Non | Non | Oui | Non référencé. |
 
----
+## 3.3 Cas prudents (incertains mais balisés)
 
-## 6) Stratégie de portage incrémentale (5 étapes)
-
-## Étape 1 — Socle commun minimal (hébergement drum)
-
-- Ajouter une interface runtime drum **interne au firmware** (pas celle desktop) avec:
-  - cycle de vie: `init(sr)`, `note_on/trigger`, `process_sample`;
-  - param API normalisée (IDs fixes, valeurs normalisées 0..1);
-  - état sans allocation dynamique dans audio thread.
-- Créer une table de capacité moteur (mono/poly futur, nb params exposés, pages `TONE/COLORS`).
-- Connecter la résolution track-aware (`family/type -> runtime engine`) sans casser l’autorité `track_runtime`.
-
-## Étape 2 — Premier moteur preuve de portage
-
-Moteur conseillé: **TRXBassDrum**.
-
-Pourquoi:
-- simple, lisible, faible dépendance;
-- bon signal de validation de trigger/enveloppe/pitch sweep;
-- permet d’éprouver immédiatement le mapping `TONE/COLORS`.
-
-Exposition v1 recommandée:
-- `TONE`: `Pitch`, `Decay`, `Pitch Sweep`
-- `COLORS`: `Noise`, `Drive`
-
-## Étape 3 — Généralisation aux autres moteurs
-
-Ordre recommandé:
-1. `TRXSnareDrum` (complète kick/snare de base)
-2. `TRXHiHat` (ajoute bruit+filtrage)
-3. `TRXClaves` (percussif tonal)
-4. bloc FM (`FmKick`, `FmSnare`, puis autres)
-
-Pour chaque ajout:
-- garder un preset par défaut “musical”;
-- limiter d’abord l’UI à 4–6 paramètres max.
-
-## Étape 4 — Harmonisation param/UI
-
-- Unifier noms et plages (Pitch/Decay/Noise/Drive/HP Tone/FM Amount...).
-- Éviter les doublons de sens entre moteurs (ex. plusieurs “decay” non comparables -> normalisation perceptive).
-- Définir clairement ce qui est caché (advanced/calibration).
-
-## Étape 5 — Optimisation STM32H743
-
-- Remplacer `std::exp` fréquent dans `Process()` par décays itératifs pré-calculés au `Trigger` quand possible.
-- Réduire coût trigonométrique (`sinf`) si nécessaire (LUT/approx ciblées, uniquement après mesure).
-- Vérifier clipping interne/headroom fixe pour éviter saturations non contrôlées.
-- Vérifier coût CPU par moteur et budget poly/voices en conditions réelles.
-- Valider déterminisme temporel (pas d’aléa système ni allocations).
+- `parameter_interpolator.h` et `rsqrt.h`:
+  - **prouvé compilation**: oui (inclusion via `sine_oscillator.h`).
+  - **prouvé impact sonore dans chemins actuels**: non démontré.
+  - **prudence**: ne pas les retirer tant que la chaîne MI n’est pas refactorisée proprement/testée.
 
 ---
 
-## 7) Première passe de code minimale (recommandation)
+## 4) Classement final demandé
 
-Pour cette passe, **ne pas intégrer tout de suite tous les moteurs**.
+## 4.1 À conserver absolument (preuve forte A+B)
 
-Minimum structurant suggéré:
-1. créer un adaptateur d’interface drum runtime firmware (abstraction DSP pure);
-2. porter uniquement `TRXBassDrum` (sans `RenderControls`, sans iostream);
-3. brancher 5 paramètres max (`Pitch`, `Decay`, `Pitch Sweep`, `Noise`, `Drive`) dans `TONE/COLORS`.
+- Tous les moteurs et leurs équations DSP:
+  - `TRX*`, `Fm*`, `DrumModel.h` (au moins contrat `Init/Trigger/Process`).
+- Chaîne MI réellement appelée:
+  - `mi/operator.h`, `mi/sine_oscillator.h`, `mi/resources.h`, `mi/dsp.h`, `mi/stmlib.h`.
+- Dépendances math/RNG réellement invoquées dans `Process()`.
 
-Cette approche valide l’architecture sans dette UI prématurée et sans casser la cohérence existante (`DX7`, `MonoB`, `TB3`, tracks input).
+## 4.2 À conserver tant qu’aucun remplacement validé n’existe
+
+- RNG (`rand`, `default_random_engine`) et policy seed.
+- `sin/exp/tanh` exacts utilisés actuellement.
+- filtres discrets (formes HP/LP) et ordre des opérations.
+- `mi/parameter_interpolator.h`, `mi/rsqrt.h` tant que chaîne include MI inchangée.
+
+## 4.3 Excluable sans impact sonore prouvé (catégorie C)
+
+- UI desktop: `imgui.h`, `CustomControls.*`, `RenderControls` path.
+- hôte/build/assets desktop: `main.cpp`, `glad.*`, `khrplatform.h`, `stb_image.h`, ressources images/audio.
+- `mi` non référencé par chemins moteurs actuels:
+  - `algorithms.*`, `dx_units.*`, `envelope.h`, `lfo.h`, `patch.h`, `voice.h`, `resources.cc`.
+
+## 4.4 Incertain / à vérifier explicitement
+
+- Impact sonore concret de retirer `parameter_interpolator.h` et `rsqrt.h` **sans toucher API** (actuellement dépendances de chaîne, pas de preuve d’appel runtime dans ces moteurs).
+- Effet exact de tout changement RNG/approx math sur la fidélité perçue.
+
+Vérification recommandée pour lever incertitudes:
+1. instrumenter build pour tracer symboles réellement instanciés (`nm`, map linker);
+2. snapshot WAV A/B par moteur avant/après modification ciblée;
+3. comparer enveloppes + spectres + écoute ABX.
+
+---
+
+## 5) Conclusion courte
+
+### Déjà prouvé
+- Les chemins audio des 11 moteurs sont identifiés et localisés dans `Process()`.
+- La chaîne MI réellement impliquée dans le son (`FmKick/FmSnare`) est prouvée jusqu’à `SinePM` et `lut_sine`.
+- Les dépendances UI/build non sonores sont isolées.
+
+### Reste à confirmer dans cette base exacte
+- Si `parameter_interpolator.h` et `rsqrt.h` peuvent être retirés sans refactor de `sine_oscillator.h` ni impact build/runtime.
+- Niveau de dérive sonore acceptable pour d’éventuels remplacements embarqués (RNG/trig/exp/filtres), à valider par protocole A/B.
