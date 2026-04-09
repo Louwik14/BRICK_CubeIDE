@@ -32,6 +32,10 @@ static uint8_t pattern_sd_bank_store_slot_internal(uint8_t bank,
                                                    uint8_t pattern,
                                                    const PatternSaveV1 *pattern_data,
                                                    uint8_t do_sync);
+static uint8_t pattern_sd_read_valid_slot_header(uint8_t bank,
+                                                 uint8_t pattern,
+                                                 pattern_sd_slot_header_t *out_hdr,
+                                                 uint8_t *out_missing);
 
 static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
 {
@@ -70,16 +74,9 @@ static uint8_t pattern_sd_scan_slots(void)
     {
         for (uint8_t pattern = 0U; pattern < PATTERN_PER_BANK; ++pattern)
         {
-            char path[32];
-            FILINFO info;
             g_slot_has_data[bank][pattern] = 0U;
 
-            if (pattern_sd_make_slot_path(path, sizeof(path), bank, pattern) == 0U)
-            {
-                continue;
-            }
-
-            if (f_stat(path, &info) == FR_OK)
+            if (pattern_sd_read_valid_slot_header(bank, pattern, 0, 0) != 0U)
             {
                 g_slot_has_data[bank][pattern] = 1U;
             }
@@ -145,32 +142,23 @@ uint8_t pattern_sd_bank_get_slot_checksum(uint8_t bank,
     }
 
     uint8_t ok = 0U;
-    FIL fp;
-    UINT br = 0U;
     pattern_sd_slot_header_t hdr;
-    char path[32];
+    uint8_t missing = 0U;
 
-    if ((pattern_sd_mount_if_needed() == 0U) || (pattern_sd_make_slot_path(path, sizeof(path), bank, pattern) == 0U))
+    if (pattern_sd_mount_if_needed() == 0U)
     {
         goto done;
     }
 
-    const FRESULT fr_open = f_open(&fp, path, FA_READ);
-    if (fr_open != FR_OK)
+    if (pattern_sd_read_valid_slot_header(bank, pattern, &hdr, &missing) == 0U)
     {
-        goto done;
-    }
-
-    if ((f_read(&fp, &hdr, sizeof(hdr), &br) != FR_OK) || (br != sizeof(hdr)))
-    {
-        (void)f_close(&fp);
-        goto done;
-    }
-
-    (void)f_close(&fp);
-
-    if ((hdr.magic != PATTERN_MAGIC) || (hdr.version != PATTERN_VERSION) || (hdr.payload_size != sizeof(PatternSaveV1)))
-    {
+        if (missing != 0U)
+        {
+            g_slot_has_data[bank][pattern] = 0U;
+            *out_has_data = 0U;
+            *out_checksum = 0U;
+            ok = 1U;
+        }
         goto done;
     }
 
@@ -181,6 +169,56 @@ uint8_t pattern_sd_bank_get_slot_checksum(uint8_t bank,
 done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);
     return ok;
+}
+
+static uint8_t pattern_sd_read_valid_slot_header(uint8_t bank,
+                                                 uint8_t pattern,
+                                                 pattern_sd_slot_header_t *out_hdr,
+                                                 uint8_t *out_missing)
+{
+    FIL fp;
+    UINT br = 0U;
+    pattern_sd_slot_header_t hdr;
+    char path[32];
+
+    if (out_missing != 0)
+    {
+        *out_missing = 0U;
+    }
+
+    if (pattern_sd_make_slot_path(path, sizeof(path), bank, pattern) == 0U)
+    {
+        return 0U;
+    }
+
+    const FRESULT fr_open = f_open(&fp, path, FA_READ);
+    if (fr_open != FR_OK)
+    {
+        if ((out_missing != 0) && ((fr_open == FR_NO_FILE) || (fr_open == FR_NO_PATH)))
+        {
+            *out_missing = 1U;
+        }
+        return 0U;
+    }
+
+    if ((f_read(&fp, &hdr, sizeof(hdr), &br) != FR_OK) || (br != sizeof(hdr)))
+    {
+        (void)f_close(&fp);
+        return 0U;
+    }
+
+    (void)f_close(&fp);
+
+    if ((hdr.magic != PATTERN_MAGIC) || (hdr.version != PATTERN_VERSION) || (hdr.payload_size != sizeof(PatternSaveV1)))
+    {
+        return 0U;
+    }
+
+    if (out_hdr != 0)
+    {
+        *out_hdr = hdr;
+    }
+    return 1U;
 }
 
 uint8_t pattern_sd_bank_load_slot(uint8_t bank, uint8_t pattern, PatternSaveV1 *out_pattern)
