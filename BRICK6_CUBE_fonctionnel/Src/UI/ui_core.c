@@ -206,6 +206,19 @@ static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_fami
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
     static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
+    static const ui_track_type_t k_drum_types[] = {
+        UI_TRACK_TYPE_DRUM_TRX_BD,
+        UI_TRACK_TYPE_DRUM_TRX_CLAVES,
+        UI_TRACK_TYPE_DRUM_TRX_HIHAT,
+        UI_TRACK_TYPE_DRUM_TRX_SNARE,
+        UI_TRACK_TYPE_DRUM_FM_KICK,
+        UI_TRACK_TYPE_DRUM_FM_SNARE,
+        UI_TRACK_TYPE_DRUM_FM_TOM,
+        UI_TRACK_TYPE_DRUM_FM_RIMSHOT,
+        UI_TRACK_TYPE_DRUM_FM_CLAP,
+        UI_TRACK_TYPE_DRUM_FM_COWBELL,
+        UI_TRACK_TYPE_DRUM_FM_CYMBAL
+    };
 
     if (out_count == NULL)
     {
@@ -226,6 +239,9 @@ static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_fami
             return k_synth_types;
 
         case UI_TRACK_FAMILY_DRUM:
+            *out_count = (uint8_t)(sizeof(k_drum_types) / sizeof(k_drum_types[0]));
+            return k_drum_types;
+
         case UI_TRACK_FAMILY_OFF:
         default:
             *out_count = 0U;
@@ -1592,6 +1608,28 @@ const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_ty
 
         case UI_TRACK_TYPE_TB3:
             return "TB-3";
+        case UI_TRACK_TYPE_DRUM_TRX_BD:
+            return "TRX BD";
+        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+            return "TRX Claves";
+        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+            return "TRX HiHat";
+        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+            return "TRX Snare";
+        case UI_TRACK_TYPE_DRUM_FM_KICK:
+            return "FM Kick";
+        case UI_TRACK_TYPE_DRUM_FM_SNARE:
+            return "FM Snare";
+        case UI_TRACK_TYPE_DRUM_FM_TOM:
+            return "FM Tom";
+        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+            return "FM Rim";
+        case UI_TRACK_TYPE_DRUM_FM_CLAP:
+            return "FM Clap";
+        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+            return "FM Cow";
+        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+            return "FM Cym";
 
         default:
             return "-";
@@ -1621,6 +1659,28 @@ const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type
 
         case UI_TRACK_TYPE_TB3:
             return "TB3";
+        case UI_TRACK_TYPE_DRUM_TRX_BD:
+            return "TBD";
+        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+            return "TCL";
+        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+            return "THH";
+        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+            return "TSN";
+        case UI_TRACK_TYPE_DRUM_FM_KICK:
+            return "FMK";
+        case UI_TRACK_TYPE_DRUM_FM_SNARE:
+            return "FMS";
+        case UI_TRACK_TYPE_DRUM_FM_TOM:
+            return "FMT";
+        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+            return "FMR";
+        case UI_TRACK_TYPE_DRUM_FM_CLAP:
+            return "FMC";
+        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+            return "FMW";
+        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+            return "FMY";
 
         default:
             return "---";

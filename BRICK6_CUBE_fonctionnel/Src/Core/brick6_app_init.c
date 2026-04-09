@@ -21,6 +21,7 @@
 #include "cpu_load.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
+#include "Audio/drum_synth.h"
 #include "Audio/tb3_synth.h"
 #include "ui_core.h"
 
@@ -86,6 +87,7 @@ void brick6_app_init(void)
     microdexed_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
     microdexed_synth_set_enabled(1U);
     monob_synth_init(48000.0f);
+    drum_synth_init(48000.0f);
     tb3_synth_init(48000.0f);
     hall_juno_midi_init();
 

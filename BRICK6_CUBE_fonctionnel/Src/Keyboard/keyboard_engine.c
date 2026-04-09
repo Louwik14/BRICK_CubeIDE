@@ -17,6 +17,7 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/mixer.h"
 #include "Audio/monob_synth.h"
+#include "Audio/drum_synth.h"
 #include "Audio/tb3_synth.h"
 #include "MIDI/midi.h"
 #include "ui_core.h"
@@ -24,10 +25,11 @@
 #include "Seq/seq_runtime.h"
 #include <string.h>
 
-static ui_track_type_t g_keyboard_engine_sounding_type = UI_TRACK_TYPE_DX7;
 static bool g_keyboard_engine_sounding_active = false;
+static uint8_t g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
 static uint8_t g_keyboard_engine_sounding_monob_instance = 0U;
 static uint8_t g_keyboard_engine_sounding_tb3_instance = 0U;
+static uint8_t g_keyboard_engine_sounding_drum_instance = 0U;
 
 #define KBD_REC_NOTE_STACK_DEPTH 8U
 static uint8_t g_kbd_rec_note_stack_ch[128U][KBD_REC_NOTE_STACK_DEPTH];
@@ -49,11 +51,6 @@ static bool keyboard_engine_active_track_accepts_internal_source(void)
 {
     const ui_track_midi_source_t source = ui_get_track_midi_source(ui_get_active_track());
     return (source == UI_TRACK_MIDI_SRC_INT) || (source == UI_TRACK_MIDI_SRC_ALL);
-}
-
-static ui_track_type_t keyboard_engine_get_active_synth_type(void)
-{
-    return ui_get_track_type(ui_get_active_track());
 }
 
 static uint8_t keyboard_engine_get_filter_target_track(void)
@@ -169,21 +166,33 @@ void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
         return;
     }
 
-    const ui_track_type_t synth_type = keyboard_engine_get_active_synth_type();
-    g_keyboard_engine_sounding_type = synth_type;
-    g_keyboard_engine_sounding_active = true;
+    const uint8_t active_track = ui_get_active_track();
+    track_runtime_refresh_track(active_track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return;
+    }
 
-    if (synth_type == UI_TRACK_TYPE_MONOB)
+    g_keyboard_engine_sounding_active = true;
+    g_keyboard_engine_sounding_engine = ctx->engine;
+
+    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
     {
         g_keyboard_engine_sounding_monob_instance = keyboard_engine_get_active_monob_instance();
         monob_synth_note_on_for_instance(g_keyboard_engine_sounding_monob_instance, note, velocity);
     }
-    else if (synth_type == UI_TRACK_TYPE_TB3)
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
     {
         g_keyboard_engine_sounding_tb3_instance = keyboard_engine_get_active_tb3_instance();
         tb3_synth_note_on_for_instance(g_keyboard_engine_sounding_tb3_instance, note, velocity);
     }
-    else
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    {
+        g_keyboard_engine_sounding_drum_instance = ctx->instance_id;
+        drum_synth_note_on_for_instance(g_keyboard_engine_sounding_drum_instance, note, velocity);
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
     {
         microdexed_synth_note_on(note, velocity);
     }
@@ -211,17 +220,37 @@ void keyboard_engine_note_off(uint8_t note)
         return;
     }
 
-    const ui_track_type_t synth_type = g_keyboard_engine_sounding_active
-                                     ? g_keyboard_engine_sounding_type
-                                     : keyboard_engine_get_active_synth_type();
+    uint8_t sounding_engine = g_keyboard_engine_sounding_active
+                            ? g_keyboard_engine_sounding_engine
+                            : (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
+    uint8_t sounding_instance = 0U;
+    if (g_keyboard_engine_sounding_active)
+    {
+        sounding_instance = g_keyboard_engine_sounding_drum_instance;
+    }
+    else
+    {
+        const uint8_t active_track = ui_get_active_track();
+        track_runtime_refresh_track(active_track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+        {
+            sounding_engine = ctx->engine;
+            sounding_instance = ctx->instance_id;
+        }
+    }
 
-    if (synth_type == UI_TRACK_TYPE_MONOB)
+    if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
     {
         monob_synth_note_off_for_instance(g_keyboard_engine_sounding_monob_instance, note);
     }
-    else if (synth_type == UI_TRACK_TYPE_TB3)
+    else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
     {
         tb3_synth_note_off_for_instance(g_keyboard_engine_sounding_tb3_instance, note);
+    }
+    else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    {
+        drum_synth_note_off_for_instance(sounding_instance, note);
     }
     else
     {
@@ -234,6 +263,7 @@ void keyboard_engine_all_notes_off(void)
     microdexed_synth_all_notes_off();
     monob_synth_all_notes_off_all();
     tb3_synth_all_notes_off_all();
+    drum_synth_all_notes_off_all();
 
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
     if (filter_track != 0xFFU)
@@ -247,8 +277,10 @@ void keyboard_engine_all_notes_off(void)
     }
 
     g_keyboard_engine_sounding_active = false;
+    g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
     g_keyboard_engine_sounding_monob_instance = 0U;
     g_keyboard_engine_sounding_tb3_instance = 0U;
+    g_keyboard_engine_sounding_drum_instance = 0U;
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
 }
 
@@ -352,6 +384,21 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             else if (is_all_notes_off != 0U)
             {
                 dx7_panic_hit = 1U;
+            }
+        }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        {
+            if (is_note_on != 0U)
+            {
+                drum_synth_note_on_for_instance(ctx->instance_id, note, velocity);
+            }
+            else if (is_note_off != 0U)
+            {
+                drum_synth_note_off_for_instance(ctx->instance_id, note);
+            }
+            else if (is_all_notes_off != 0U)
+            {
+                drum_synth_all_notes_off_for_instance(ctx->instance_id);
             }
         }
     }

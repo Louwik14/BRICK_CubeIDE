@@ -1,7 +1,12 @@
 #include "FmKickModel.h"
+#include "DrumUiAbstraction.h"
 #include <cmath>
+#if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
+#endif
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 
 constexpr float PI = 3.14159265f;
 constexpr float TWO_PI = 2.0f * PI;
@@ -76,6 +81,8 @@ float FmKickModel::Process() {
 }
 
 void FmKickModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     // Info window
     if (ImGui::CollapsingHeader("FM Kick Model Info", ImGuiTreeNodeFlags_None)) {
         ImGui::TextWrapped(
@@ -125,4 +132,8 @@ void FmKickModel::RenderControls() {
 
     // Frequency envelope decay (how fast pitch sweep drops)
     CustomControls::ParameterSlider("d_f (Freq Sweep Decay)", &d_f, 0.001f, 2.0f, 0.001f, 0.01f  );
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
