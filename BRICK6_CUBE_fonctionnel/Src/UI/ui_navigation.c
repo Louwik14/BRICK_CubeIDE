@@ -19,12 +19,12 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
 {
     if (page_id == UI_PAGE_TEMPLATE_PLAY)
     {
-        return (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_SYNTH) ? 1U : 0U;
+        return (ui_track_family_is_engine(ui_get_track_family(ui_get_active_track())) != 0U) ? 1U : 0U;
     }
     if (page_id == UI_PAGE_TEMPLATE_MIX)
     {
         const ui_track_family_t family = ui_get_track_family(ui_get_active_track());
-        return (ui_track_family_is_input(family) || (family == UI_TRACK_FAMILY_SYNTH)) ? 1U : 0U;
+        return (ui_track_family_is_input(family) || ui_track_family_is_engine(family)) ? 1U : 0U;
     }
 
     return 1U;

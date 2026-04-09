@@ -21,6 +21,7 @@ typedef enum
     UI_TRACK_FAMILY_INPUT3,
     UI_TRACK_FAMILY_INPUT4,
     UI_TRACK_FAMILY_SYNTH,
+    UI_TRACK_FAMILY_DRUM,
     UI_TRACK_FAMILY_COUNT
 } ui_track_family_t;
 
@@ -93,6 +94,7 @@ ui_track_type_t ui_get_track_type(uint8_t track);
 bool ui_set_track_family(uint8_t track, ui_track_family_t family);
 bool ui_set_track_type(uint8_t track, ui_track_type_t type);
 bool ui_track_family_is_input(ui_track_family_t family);
+bool ui_track_family_is_engine(ui_track_family_t family);
 bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type);
 bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type);
 ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family);

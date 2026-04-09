@@ -33,6 +33,12 @@ typedef enum
     TRACK_RUNTIME_ENGINE_TB3
 } track_runtime_engine_t;
 
+typedef enum
+{
+    TRACK_RUNTIME_VOICE_MODE_MONO = 0,
+    TRACK_RUNTIME_VOICE_MODE_POLY
+} track_runtime_voice_mode_t;
+
 typedef struct
 {
     uint8_t track_id;
@@ -51,6 +57,7 @@ typedef enum
     TRACK_RUNTIME_FAMILY_OFF = 0,
     TRACK_RUNTIME_FAMILY_INPUT,
     TRACK_RUNTIME_FAMILY_SYNTH,
+    TRACK_RUNTIME_FAMILY_DRUM,
     TRACK_RUNTIME_FAMILY_OTHER
 } track_runtime_family_t;
 
@@ -113,6 +120,8 @@ uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
+track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
+uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
 
 #ifdef __cplusplus
 }

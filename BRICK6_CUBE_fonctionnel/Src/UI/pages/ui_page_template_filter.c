@@ -103,11 +103,11 @@ void ui_page_template_colors_register_families(void)
             }
 
             const ui_template_family_t *family_template = &g_ui_template_filter_family_audio;
-            if ((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_MONOB))
+            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
             {
                 family_template = &g_ui_template_filter_family_monob;
             }
-            else if ((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_TB3))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_TB3))
             {
                 family_template = &g_ui_template_filter_family_tb3;
             }

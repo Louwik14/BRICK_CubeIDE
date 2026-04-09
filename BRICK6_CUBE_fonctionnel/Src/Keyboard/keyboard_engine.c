@@ -35,14 +35,14 @@ static uint8_t g_kbd_rec_note_stack_count[128U];
 
 static bool keyboard_engine_active_track_is_synth(void)
 {
-    return (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_SYNTH);
+    return (ui_track_family_is_engine(ui_get_track_family(ui_get_active_track())) != 0);
 }
 
 static bool keyboard_engine_active_track_has_midi_note_path(void)
 {
     const uint8_t active_track = ui_get_active_track();
     const ui_track_config_t config = ui_get_track_config(active_track);
-    return (config.family == UI_TRACK_FAMILY_SYNTH) || (config.type == UI_TRACK_TYPE_HYBRID);
+    return (ui_track_family_is_engine(config.family) != 0) || (config.type == UI_TRACK_TYPE_HYBRID);
 }
 
 static bool keyboard_engine_active_track_accepts_internal_source(void)
@@ -293,7 +293,7 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (ui_get_track_family(track) != UI_TRACK_FAMILY_SYNTH)
+        if (ui_track_family_is_engine(ui_get_track_family(track)) == 0)
         {
             continue;
         }

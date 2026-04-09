@@ -197,6 +197,11 @@ bool ui_track_family_is_input(ui_track_family_t family)
             || (family == UI_TRACK_FAMILY_INPUT4);
 }
 
+bool ui_track_family_is_engine(ui_track_family_t family)
+{
+    return (family == UI_TRACK_FAMILY_SYNTH) || (family == UI_TRACK_FAMILY_DRUM);
+}
+
 bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type)
 {
     if (((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
@@ -215,7 +220,7 @@ bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t
         return false;
     }
 
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(family))
     {
         return (type == UI_TRACK_TYPE_DX7) || (type == UI_TRACK_TYPE_MONOB) || (type == UI_TRACK_TYPE_TB3);
     }
@@ -231,7 +236,7 @@ static uint8_t ui_core_track_uses_synth_type(uint8_t track, ui_track_type_t type
     }
 
     const ui_track_config_t *const config = &g_ui_track_state.track_configs[track];
-    return (uint8_t)((config->family == UI_TRACK_FAMILY_SYNTH) && (config->type == type));
+    return (uint8_t)(ui_track_family_is_engine(config->family) && (config->type == type));
 }
 
 bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type)
@@ -241,7 +246,7 @@ bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_trac
         return false;
     }
 
-    if (family != UI_TRACK_FAMILY_SYNTH)
+    if (!ui_track_family_is_engine(family))
     {
         return true;
     }
@@ -279,7 +284,7 @@ static uint8_t ui_core_get_track_type_count_for_family_and_track(ui_track_family
         return 0U;
     }
 
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(family))
     {
         uint8_t count = 0U;
         const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
@@ -298,7 +303,7 @@ static uint8_t ui_core_get_track_type_count_for_family_and_track(ui_track_family
 
 static ui_track_type_t ui_core_get_first_available_track_type(ui_track_family_t family, uint8_t track)
 {
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(family))
     {
         const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
         for (uint8_t i = 0U; i < (uint8_t)(sizeof(synth_types) / sizeof(synth_types[0])); ++i)
@@ -317,7 +322,7 @@ static ui_track_type_t ui_core_get_first_available_track_type(ui_track_family_t 
 
 ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family)
 {
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(family))
     {
         return UI_TRACK_TYPE_DX7;
     }
@@ -338,7 +343,7 @@ uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_ty
         return 0U;
     }
 
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(family))
     {
         uint8_t index = 0U;
         const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
@@ -378,7 +383,7 @@ ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, ui
         return UI_TRACK_TYPE_AUDIO;
     }
 
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(family))
     {
         const ui_track_type_t synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
         uint8_t current = 0U;
@@ -476,7 +481,9 @@ static void ui_core_sync_audio_runtime_enables(void)
     track_enable(0U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT1));
     track_enable(1U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT2));
     track_enable(2U, ui_core_has_track_family(UI_TRACK_FAMILY_INPUT3));
-    track_enable(3U, ui_core_has_track_family(UI_TRACK_FAMILY_SYNTH));
+    const uint8_t has_engine_track = (uint8_t)(ui_core_has_track_family(UI_TRACK_FAMILY_SYNTH)
+            || ui_core_has_track_family(UI_TRACK_FAMILY_DRUM));
+    track_enable(3U, has_engine_track);
 }
 
 static void ui_core_sync_active_track_cfg_params(void)
@@ -662,7 +669,7 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         const ui_track_family_t fam = (ui_track_family_t)family[track];
         ui_track_type_t requested_type = (ui_track_type_t)type[track];
 
-        if (fam == UI_TRACK_FAMILY_SYNTH)
+        if (ui_track_family_is_engine(fam))
         {
             if (requested_type == UI_TRACK_TYPE_DX7)
             {
@@ -1488,6 +1495,8 @@ const char *ui_get_track_family_display_name(ui_track_family_t family)
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Synth";
+        case UI_TRACK_FAMILY_DRUM:
+            return "Drum";
 
         default:
             return "Track";
@@ -1515,6 +1524,8 @@ const char *ui_get_track_family_short_name(ui_track_family_t family)
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Syn";
+        case UI_TRACK_FAMILY_DRUM:
+            return "Drm";
 
         default:
             return "---";
@@ -1602,7 +1613,7 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
         return;
     }
 
-    if (config.family == UI_TRACK_FAMILY_SYNTH)
+    if (ui_track_family_is_engine(config.family))
     {
         (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(config.family, config.type));
         return;

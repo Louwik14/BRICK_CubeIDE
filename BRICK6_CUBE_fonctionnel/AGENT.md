@@ -55,12 +55,13 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité de la trac
 - `Input3`
 - `Input4`
 - `Synth`
+- `Drum`
 
 ### Types
 - pour `InputX`
   - `Audio`
   - `Hybrid`
-- pour `Synth`
+- pour `Synth` et `Drum`
   - `DX7`
   - `MonoB`
   - `TB3`
@@ -155,7 +156,7 @@ Ensembles importants existants :
 - `BTN_PARAM_2` -> `TONE` (résolution contextuelle track-aware ; sur `Synth + DX7` ouvre l’UI DX7)
 - `BTN_PARAM_3` -> `MOD`
 - `BTN_PARAM_4` -> `MIX`
-- `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est `Synth`)
+- `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est une family moteur `Synth` ou `Drum`)
 - `BTN_PARAM_8` -> bouton spécial `TRACK` (pas un point d’entrée d’ensemble UI)
 - `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
 
@@ -177,12 +178,19 @@ toujours utiliser des tables explicites.
 
 ### DX7
 - moteur `Synth` stable
+- classe de polyphonie runtime: **polyphonique** (4 pages `PLAY`)
 
 ### MonoB
 - moteur `Synth` stable
 - monophonique mono
 - `TONE` dédié
 - `COLORS` dédié
+- classe de polyphonie runtime: **monophonique** (page 1 `PLAY` uniquement)
+
+### Drum (branche runtime)
+- family runtime distincte de `Synth` pour classer les futurs engines drum
+- chemin runtime/UI aligné sur `Synth` tant qu’aucune divergence n’est requise
+- les engines drum futurs doivent déclarer leur capacité mono/poly dans l’autorité runtime centrale
 
 Ne pas mélanger :
 - filtres audio des tracks input

@@ -76,9 +76,11 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
             break;
 
         case UI_TRACK_FAMILY_SYNTH:
+        case UI_TRACK_FAMILY_DRUM:
             out_target->has_synth_target = 1U;
             out_target->synth_target_id = 0U; /* moteur synth global actuel */
-            if (ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH) == 1U)
+            if ((uint8_t)(ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH)
+                    + ui_count_tracks_with_family(UI_TRACK_FAMILY_DRUM)) == 1U)
             {
                 out_target->has_filter_target = 1U;
                 out_target->filter_target_track = 3U;

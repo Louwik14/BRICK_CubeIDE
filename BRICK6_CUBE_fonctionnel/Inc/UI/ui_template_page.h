@@ -41,12 +41,14 @@ typedef uiw_widget_type_t (*ui_template_widget_picker_fn)(uint8_t slot,
                                                          param_id_t id,
                                                          const char *value_label,
                                                          uiw_widget_type_t suggested_widget);
+typedef uint8_t (*ui_template_subpage_enabled_fn)(uint8_t subpage_index);
 
 typedef struct
 {
     const ui_template_family_t *family;
     ui_template_family_resolver_fn family_resolver;
     ui_template_widget_picker_fn widget_picker;
+    ui_template_subpage_enabled_fn subpage_enabled;
     const ui_template_family_t *resolved_family;
     uint8_t active_subpage;
     uint8_t has_visited;
