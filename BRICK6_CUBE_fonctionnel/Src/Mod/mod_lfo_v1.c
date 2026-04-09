@@ -93,7 +93,7 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
 {
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
-        if ((family != UI_TRACK_FAMILY_SYNTH) || (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID))
+        if ((ui_track_family_is_engine(family) == 0) || (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID))
         {
             return 0U;
         }
@@ -157,14 +157,16 @@ static track_runtime_param_status_t mod_lfo_effective_status_from_ctx(const trac
 
         case TRACK_RUNTIME_RESOURCE_SYNTH:
             if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                    || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH))
+                    || ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+                        && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
-            return (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+            return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 

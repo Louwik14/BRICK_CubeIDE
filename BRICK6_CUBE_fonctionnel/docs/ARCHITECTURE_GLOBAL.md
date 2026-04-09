@@ -128,6 +128,7 @@ Le paramètre `CFG > Track` expose actuellement :
 - `Input3`
 - `Input4`
 - `Synth`
+- `Drum`
 
 À terme :
 - une vraie family `MIDI` sera ajoutée quand la partie séquenceur / MIDI track sera intégrée
@@ -149,13 +150,18 @@ Le paramètre `CFG > Track` expose actuellement :
 - family des moteurs de synthèse internes
 - partageable selon la logique runtime existante
 
+#### Drum
+- family runtime dédiée pour classer les engines DSP drum
+- branche distincte de `Synth` côté classification produit
+- comportement runtime/UI aligné sur la branche moteur `Synth` tant qu’aucune divergence n’est nécessaire
+
 ### 5.4 Types actuels
 
 #### Pour InputX
 - `Audio`
 - `Hybrid`
 
-#### Pour Synth
+#### Pour Synth / Drum
 - `DX7`
 - `MonoB`
 - `TB3`
@@ -221,8 +227,8 @@ Le mapping parameter button doit rester centralisé dans une table unique.
 - `BTN_PARAM_1` -> `COLORS`
 - `BTN_PARAM_2` -> `TONE`
 - `BTN_PARAM_3` -> `MOD` (pages `LFO1` / `LFO2`)
-- `BTN_PARAM_4` -> `MIX` (disponible sur tracks `Input` et `Synth`)
-- `BTN_PARAM_5` -> `PLAY` (disponible seulement si la track active est de family `Synth`)
+- `BTN_PARAM_4` -> `MIX` (disponible sur tracks `Input` et families moteur `Synth`/`Drum`)
+- `BTN_PARAM_5` -> `PLAY` (disponible seulement si la track active est de family moteur `Synth` ou `Drum`)
 - `BTN_PARAM_8` -> bouton spécial `TRACK` (modificateur, pas un ensemble UI)
 
 Contraintes :
@@ -256,7 +262,8 @@ Le contenu du `Type` dépend du `Track`.
 
 Exemples :
 - `Track = Input1` -> `Type = Audio` ou `Hybrid`
-- `Track = Synth` -> `Type = DX7` ou `MonoB`
+- `Track = Synth` -> `Type = DX7` / `MonoB` / `TB3`
+- `Track = Drum` -> `Type = DX7` / `MonoB` / `TB3` (phase transitoire de pré-intégration drum)
 
 ---
 
@@ -511,6 +518,7 @@ Il n’a pas de logique LED hall spécifique propre à ce stade.
 ### 15.1 DX7
 `DX7` est un moteur stable côté type `Synth`.
 Il reste présent comme moteur synth valide.
+Capacité runtime PLAY: **polyphonique** (4 pages voix).
 
 ### 15.2 MonoB
 `MonoB` est un synthé monophonique mono, inspiré des synthés analogiques type Moog.
@@ -527,6 +535,15 @@ Caractéristiques principales :
 - oscillateurs simplifiés
 - bypass runtime quand possible
 - filtrage dédié plus léger que les premières versions
+
+Capacité runtime PLAY: **monophonique** (page voix 1 uniquement).
+
+### 15.3 Capacité moteur PLAY (autorité runtime)
+- La disponibilité des pages `PLAY` dépend de la capacité runtime moteur (mono/poly), pas d’un masque UI local.
+- Règle produit actuelle :
+  - moteur polyphonique => pages `PLAY` 1..4
+  - moteur monophonique => page `PLAY` 1 uniquement
+- Le runtime (statut param + navigation template) doit bloquer toute sélection/exécution des pages voix interdites.
 
 ---
 

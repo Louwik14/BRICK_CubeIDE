@@ -39,6 +39,10 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
     {
         return TRACK_RUNTIME_FAMILY_SYNTH;
     }
+    if (family == UI_TRACK_FAMILY_DRUM)
+    {
+        return TRACK_RUNTIME_FAMILY_DRUM;
+    }
 
     if (ui_track_family_is_input(family) != 0)
     {
@@ -82,7 +86,7 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
         flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
     }
 
-    if (family == TRACK_RUNTIME_FAMILY_SYNTH)
+    if ((family == TRACK_RUNTIME_FAMILY_SYNTH) || (family == TRACK_RUNTIME_FAMILY_DRUM))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_SYNTH;
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
@@ -94,6 +98,65 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     }
 
     return flags;
+}
+
+track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx)
+{
+    if (ctx == NULL)
+    {
+        return TRACK_RUNTIME_VOICE_MODE_MONO;
+    }
+
+    switch ((track_runtime_engine_t)ctx->engine)
+    {
+        case TRACK_RUNTIME_ENGINE_DX7:
+            return TRACK_RUNTIME_VOICE_MODE_POLY;
+
+        case TRACK_RUNTIME_ENGINE_MONOB:
+        case TRACK_RUNTIME_ENGINE_NONE:
+        case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
+        case TRACK_RUNTIME_ENGINE_TB3:
+        default:
+            return TRACK_RUNTIME_VOICE_MODE_MONO;
+    }
+}
+
+uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
+{
+    return (track_runtime_get_voice_mode(ctx) == TRACK_RUNTIME_VOICE_MODE_POLY) ? 4U : 1U;
+}
+
+static uint8_t track_runtime_param_play_voice_index(param_id_t param)
+{
+    switch (param)
+    {
+        case PARAM_SEQ_PLAY_V1_NOTE:
+        case PARAM_SEQ_PLAY_V1_VEL:
+        case PARAM_SEQ_PLAY_V1_LEN:
+        case PARAM_SEQ_PLAY_V1_MICTIM:
+            return 0U;
+
+        case PARAM_SEQ_PLAY_V2_NOTE:
+        case PARAM_SEQ_PLAY_V2_VEL:
+        case PARAM_SEQ_PLAY_V2_LEN:
+        case PARAM_SEQ_PLAY_V2_MICTIM:
+            return 1U;
+
+        case PARAM_SEQ_PLAY_V3_NOTE:
+        case PARAM_SEQ_PLAY_V3_VEL:
+        case PARAM_SEQ_PLAY_V3_LEN:
+        case PARAM_SEQ_PLAY_V3_MICTIM:
+            return 2U;
+
+        case PARAM_SEQ_PLAY_V4_NOTE:
+        case PARAM_SEQ_PLAY_V4_VEL:
+        case PARAM_SEQ_PLAY_V4_LEN:
+        case PARAM_SEQ_PLAY_V4_MICTIM:
+            return 3U;
+
+        default:
+            return 0xFFU;
+    }
 }
 
 static void track_runtime_set_unbound(track_runtime_ctx_t *ctx, track_runtime_bind_reason_t reason)
@@ -140,7 +203,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if (family != TRACK_RUNTIME_FAMILY_SYNTH)
+    if ((family != TRACK_RUNTIME_FAMILY_SYNTH) && (family != TRACK_RUNTIME_FAMILY_DRUM))
     {
         track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
         return;
@@ -295,8 +358,11 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     }
 
     /* Legacy compat: synth filter target is exposed only when one synth track is active. */
-    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            && (ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH) != 1U))
+    const uint8_t engine_family_count = (uint8_t)(ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH)
+            + ui_count_tracks_with_family(UI_TRACK_FAMILY_DRUM));
+    if (((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))
+            && (engine_family_count != 1U))
     {
         return 0U;
     }
@@ -486,9 +552,18 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
-            return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
-                    ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) == 0U)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            {
+                const uint8_t voice = track_runtime_param_play_voice_index(param);
+                if ((voice != 0xFFU) && (voice >= track_runtime_get_play_voice_count(ctx)))
+                {
+                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                }
+            }
+            return TRACK_RUNTIME_PARAM_ALLOWED;
 
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

@@ -220,6 +220,10 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         const param_id_t vel_id = seq_play_scheduler_param_vel(voice);
         const param_id_t len_id = seq_play_scheduler_param_len(voice);
         const param_id_t mictim_id = seq_play_scheduler_param_mictim(voice);
+        if (track_runtime_get_effective_param_status(track, note_id) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
+        {
+            continue;
+        }
 
         const float vel_f = seq_param_iface_decode_param_value(vel_id,
                                                                seq_play_scheduler_get_locked_or_default(track, step, vel_id));
