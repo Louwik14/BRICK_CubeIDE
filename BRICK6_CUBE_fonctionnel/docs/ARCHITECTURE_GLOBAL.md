@@ -659,3 +659,10 @@ Exemples :
 - `ARP` doit rester un sous-mode du keyboard, pas casser `KEYBOARD`
 
 ---
+
+## Addendum Passe 3 Drum (paramètres dédiés)
+
+- Les moteurs `Drum` utilisent désormais un bloc d’IDs dédié `PARAM_DRUM_*` dans le registre de paramètres (aucun recyclage des IDs `DX7`/`MonoB`/`TB3`).
+- La résolution `TONE`/`COLORS` pour `Drum` est assurée par templates UI track-aware, avec mapping par type drum.
+- Le flux d’application est: `ui_param` -> `param_registry_apply_track_value()` -> `track_runtime` -> `drum_synth_set_param_for_instance()` -> moteur actif.
+- `PLAY` reste inchangé: `Drum` mono via `track_runtime_get_voice_mode()`.
