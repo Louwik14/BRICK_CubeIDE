@@ -38,6 +38,7 @@ typedef struct
     uint8_t active_type;
     uint8_t ever_triggered;
     float note_pitch_factor;
+    float velocity_gain;
     float ui_param_cache[PARAM_COUNT];
     uint8_t ui_param_valid[PARAM_COUNT];
 } drum_synth_instance_t;
@@ -57,6 +58,7 @@ static void drum_synth_reset_runtime_state(drum_synth_instance_t *instance)
     instance->active_type = (uint8_t)DRUM_MODEL_ID_COUNT;
     instance->ever_triggered = 0U;
     instance->note_pitch_factor = 1.0f;
+    instance->velocity_gain = 1.0f;
     std::memset(instance->ui_param_cache, 0, sizeof(instance->ui_param_cache));
     std::memset(instance->ui_param_valid, 0, sizeof(instance->ui_param_valid));
 }
@@ -139,6 +141,13 @@ static float drum_synth_note_pitch_factor(uint8_t midi_note)
 {
     const float semitones = (float)((int32_t)midi_note - 60);
     return powf(2.0f, semitones / 12.0f);
+}
+
+static float drum_synth_velocity_to_gain(uint8_t velocity)
+{
+    const float normalized = (float)((velocity == 0U) ? 1U : velocity) / 127.0f;
+    const float curved = powf(normalized, 1.6f);
+    return 0.12f + (0.88f * curved);
 }
 
 static float drum_synth_map_ui_to_dsp(param_id_t param, float ui_value, float note_pitch_factor)
@@ -285,6 +294,7 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t m
     instance->active_type = model_type;
     instance->ever_triggered = 0U;
     instance->note_pitch_factor = 1.0f;
+    instance->velocity_gain = 1.0f;
     if (instance->active_model != nullptr)
     {
         instance->active_model->Init();
@@ -305,8 +315,6 @@ drum_model_id_t drum_synth_get_model_for_instance(uint8_t instance_id)
 
 void drum_synth_note_on_for_instance(uint8_t instance_id, uint8_t midi_note, uint8_t velocity)
 {
-    (void)velocity;
-
     if (instance_id >= DRUM_SYNTH_INSTANCE_COUNT)
     {
         return;
@@ -372,6 +380,7 @@ void drum_synth_note_on_for_instance(uint8_t instance_id, uint8_t midi_note, uin
         }
     }
 
+    instance->velocity_gain = drum_synth_velocity_to_gain(velocity);
     instance->active_model->Trigger();
     instance->ever_triggered = 1U;
 }
@@ -395,6 +404,7 @@ void drum_synth_all_notes_off_for_instance(uint8_t instance_id)
         instance->active_model->Init();
     }
     instance->ever_triggered = 0U;
+    instance->velocity_gain = 1.0f;
 }
 
 void drum_synth_process_block_for_instance(uint8_t instance_id, float *mono_out, uint32_t frames)
@@ -413,7 +423,7 @@ void drum_synth_process_block_for_instance(uint8_t instance_id, float *mono_out,
 
     for (uint32_t i = 0U; i < frames; ++i)
     {
-        mono_out[i] = instance->active_model->Process();
+        mono_out[i] = instance->active_model->Process() * instance->velocity_gain;
     }
 }
 
