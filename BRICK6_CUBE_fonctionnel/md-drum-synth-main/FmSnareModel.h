@@ -1,7 +1,7 @@
 // FmSnareModel.h
 #pragma once
 #include "DrumModel.h"
-#include "mi/operator.h"
+#include "plaits/dsp/fm/operator.h"
 
 class FmSnareModel : public DrumModel {
 public:

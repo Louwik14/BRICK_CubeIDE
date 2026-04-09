@@ -4,7 +4,6 @@
 #if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
 #endif
-#include "mi/operator.h"
 #include <cmath>
 #include <cstdlib>
 #if MD_DRUM_HAS_DESKTOP_UI
