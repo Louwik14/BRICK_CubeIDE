@@ -39,6 +39,20 @@ typedef struct
 
 static drum_synth_instance_t g_drum_instances[DRUM_SYNTH_INSTANCE_COUNT];
 
+static void drum_synth_reset_runtime_state(drum_synth_instance_t *instance)
+{
+    if (instance == nullptr)
+    {
+        return;
+    }
+
+    // IMPORTANT: do not memset() drum_synth_instance_t.
+    // It contains polymorphic C++ engine objects whose vptr must remain valid.
+    instance->active_model = nullptr;
+    instance->active_type = (uint8_t)DRUM_MODEL_ID_COUNT;
+    instance->ever_triggered = 0U;
+}
+
 static uint8_t drum_synth_model_is_drum(drum_model_id_t type)
 {
     switch (type)
@@ -95,9 +109,9 @@ void drum_synth_init(float sample_rate)
 {
     (void)sample_rate;
 
-    std::memset(g_drum_instances, 0, sizeof(g_drum_instances));
     for (uint8_t instance = 0U; instance < DRUM_SYNTH_INSTANCE_COUNT; ++instance)
     {
+        drum_synth_reset_runtime_state(&g_drum_instances[instance]);
         (void)drum_synth_set_model_for_instance(instance, DRUM_MODEL_ID_TRX_BD);
     }
 }
