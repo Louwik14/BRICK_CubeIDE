@@ -1,5 +1,8 @@
 #include "TRXClaves.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "imgui.h"
+#endif
 #include <cmath>
 #include <algorithm>
 
@@ -41,12 +44,19 @@ float TRXClaves::Process() {
 }
 
 void TRXClaves::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     ImGui::SliderFloat("Pitch", &pitch, 200.0f, 4000.0f);
     ImGui::SliderFloat("Interval", &interval, 0.0f, 400.0f);
     ImGui::SliderFloat("Decay", &decay, 0.01f, 0.5f);
     ImGui::SliderFloat("Balance", &balance, 0.0f, 1.0f);
     ImGui::SliderFloat("Clip", &clip, 0.0f, 1.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
+
 
 float TRXClaves::sine(float x) {
     return std::sin(x);

@@ -1,5 +1,8 @@
 #include "TRXHiHat.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "imgui.h"
+#endif
 #include <cmath>
 
 constexpr float kSampleRate = 48000.0f; // Adjust to match your engine
@@ -59,13 +62,20 @@ float TRXHiHat::Process() {
 
 
 void TRXHiHat::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     ImGui::SliderFloat("Gap", &gap, 0.0f, 1.0f);
     ImGui::SliderFloat("Decay", &decay, 0.01f, 1.0f);
     ImGui::SliderFloat("LPF Freq", &lpfFreq, 1000.0f, 12000.0f);
     ImGui::SliderFloat("HPF Freq", &hpfFreq, 100.0f, 10000.0f);
     ImGui::SliderFloat("Peak", &peak, 0.0f, 1.0f);
     ImGui::SliderFloat("Metal", &metal, 0.0f, 1.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
+
 
 float TRXHiHat::generateMetallicNoise() {
     // Square wave harmonic mix — crude but efficient

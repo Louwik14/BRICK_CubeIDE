@@ -1,5 +1,8 @@
 #include "TRXSnareDrum.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "imgui.h"
+#endif
 #include <cmath>
 #include <algorithm>
 
@@ -65,6 +68,8 @@ float TRXSnareDrum::Process() {
 }
 
 void TRXSnareDrum::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     ImGui::SliderFloat("Pitch", &pitch, 60.0f, 400.0f);
     ImGui::SliderFloat("Decay", &decay, 0.05f, 1.0f);
     ImGui::SliderFloat("Snap", &snap, 0.0f, 1.0f);
@@ -73,7 +78,12 @@ void TRXSnareDrum::RenderControls() {
     ImGui::SliderFloat("Tune Interval", &tune, 0.0f, 400.0f);
     ImGui::SliderFloat("Bump", &bump, 0.0f, 1.0f);
     ImGui::SliderFloat("Clip", &clip, 0.0f, 1.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
+
 
 float TRXSnareDrum::sine(float x) {
     return std::sin(x);

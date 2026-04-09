@@ -1,6 +1,9 @@
 // FmRimshotModel.cpp
 #include "FmRimshotModel.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 #include <cmath>
 
 constexpr float SAMPLE_RATE = 48000.0f;
@@ -14,7 +17,7 @@ float WrapPhase(float phase) {
 }
 
 float ExpDecay(float t, float decay_time) {
-    return std::expf(-t / decay_time);
+    return std::exp(-t / decay_time);
 }
 
 void FmRimshotModel::Init() {
@@ -55,6 +58,8 @@ float FmRimshotModel::Process() {
 }
 
 void FmRimshotModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     CustomControls::ParameterSlider("f_bB (rim freq)", &f_bB, 200.0f, 1000.0f);
     CustomControls::ParameterSlider("d_bB (rim decay)", &d_bB, 0.01f, 0.5f);
     CustomControls::ParameterSlider("I_B (rim mod index)", &I_B, 0.0f, 50.0f);
@@ -66,4 +71,8 @@ void FmRimshotModel::RenderControls() {
     CustomControls::ParameterSlider("A_A (body mix)", &A_A, 0.0f, 1.0f);
     CustomControls::ParameterSlider("d_m (mod env decay)", &d_m, 0.01f, 0.5f);
     CustomControls::ParameterSlider("f_hp (HPF cutoff)", &f_hp, 100.0f, 2000.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }

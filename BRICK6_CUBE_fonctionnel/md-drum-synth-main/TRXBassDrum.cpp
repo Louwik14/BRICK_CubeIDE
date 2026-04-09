@@ -1,5 +1,8 @@
 #include "TRXBassDrum.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "imgui.h"
+#endif
 #include <cmath>
 #include <algorithm>
 
@@ -53,6 +56,8 @@ float TRXBassDrum::Process() {
 }
 
 void TRXBassDrum::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     ImGui::SliderFloat("Pitch", &pitch, 20.0f, 120.0f);
     ImGui::SliderFloat("Decay", &decay, 0.01f, 2.0f);
     ImGui::SliderFloat("Ramp", &ramp, 0.0f, 1.0f);
@@ -61,7 +66,12 @@ void TRXBassDrum::RenderControls() {
     ImGui::SliderFloat("Noise", &noise, 0.0f, 1.0f);
     ImGui::SliderFloat("Harmonics", &harmonics, 0.0f, 1.0f);
     ImGui::SliderFloat("Clip", &clip, 0.0f, 1.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
+
 
 float TRXBassDrum::sine(float x) {
     return std::sin(x); // Replace with lookup if performance becomes a concern

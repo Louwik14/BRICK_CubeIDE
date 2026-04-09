@@ -1,6 +1,9 @@
 // FmCymbalModel.cpp
 #include "FmCymbalModel.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 #include <cmath>
 
 constexpr float PI = 3.14159265f;
@@ -14,7 +17,7 @@ static float WrapPhase(float phase) {
 }
 
 static float ExpDecay(float t, float decay_time) {
-    return std::expf(-t / decay_time);
+    return std::exp(-t / decay_time);
 }
 
 void FmCymbalModel::Init() {
@@ -61,6 +64,8 @@ float FmCymbalModel::Process() {
 }
 
 void FmCymbalModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     CustomControls::ParameterSlider("fb (Base Carrier)", &fb, 100.0f, 1000.0f);
     CustomControls::ParameterSlider("fm (Base Mod)", &fm, 200.0f, 2000.0f);
     CustomControls::ParameterSlider("d_b (Amp Decay)", &d_b, 0.05f, 4.0f);
@@ -69,4 +74,8 @@ void FmCymbalModel::RenderControls() {
     CustomControls::ParameterSlider("bb (Mod Feedback)", &bb, 0.0f, 1.0f);
     CustomControls::ParameterSlider("sustain", &sustain, 0.0f, 1.0f);
     CustomControls::ParameterSlider("f_hp (HPF Cutoff)", &f_hp, 100.0f, 2000.0f);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }

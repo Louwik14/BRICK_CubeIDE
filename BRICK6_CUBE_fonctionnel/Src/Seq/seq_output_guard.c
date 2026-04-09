@@ -12,6 +12,7 @@
 #include "Core/track_runtime.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
+#include "Audio/drum_synth.h"
 #include "midi.h"
 #include "ui_core.h"
 
@@ -129,6 +130,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
     }
 
     uint8_t monob_killed[8U] = { 0U };
+    uint8_t drum_killed[UI_TRACK_COUNT] = { 0U };
     uint8_t dx7_killed = 0U;
     track_runtime_refresh_all();
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -151,6 +153,14 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         {
             dx7_killed = 1U;
             microdexed_synth_all_notes_off();
+        }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        {
+            if ((ctx->instance_id < UI_TRACK_COUNT) && (drum_killed[ctx->instance_id] == 0U))
+            {
+                drum_killed[ctx->instance_id] = 1U;
+                drum_synth_all_notes_off_for_instance(ctx->instance_id);
+            }
         }
     }
 }

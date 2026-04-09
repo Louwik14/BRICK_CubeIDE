@@ -1,8 +1,13 @@
 // FmTomModel.cpp
 #include "FmTomModel.h"
+#include "DrumUiAbstraction.h"
+#if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
+#endif
 #include <cmath>
+#if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
+#endif
 
 constexpr float SAMPLE_RATE = 48000.0f;
 constexpr float PI = 3.14159265f;
@@ -15,7 +20,7 @@ static float WrapPhase(float phase) {
 }
 
 static float ExpDecay(float t, float decay_time) {
-    return std::expf(-t / decay_time);
+    return std::exp(-t / decay_time);
 }
 
 void FmTomModel::Init() {
@@ -47,6 +52,8 @@ float FmTomModel::Process() {
 }
 
 void FmTomModel::RenderControls() {
+#if MD_DRUM_HAS_DESKTOP_UI
+
     CustomControls::ParameterSlider("f_b (Base Frequency)", &f_b, 80.0f, 400.0f);
     CustomControls::ParameterSlider("d_b (Amp Decay)", &d_b, 0.01f, 2.0f);
     CustomControls::ParameterSlider("f_m (Modulator Freq)", &f_m, 100.0f, 2000.0f);
@@ -55,4 +62,8 @@ void FmTomModel::RenderControls() {
     CustomControls::ParameterSlider("A_f (Freq Sweep Amt)", &A_f, 0.0f, 100.0f);
     CustomControls::ParameterSlider("d_f (Freq Sweep Decay)", &d_f, 0.01f, 1.0f);
     CustomControls::ParameterSlider("Start Phase", &start_phase, 0.0f, PI);
+
+#else
+    /* Desktop UI disabled in embedded DSP builds. */
+#endif
 }
