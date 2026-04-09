@@ -19,6 +19,21 @@ public:
         is >> f_bB >> d_bB >> I_B >> f_bA >> d_bA >> I_A >> A_A >> d_m >> f_hp;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: f_bB = value; return true;
+            case 1U: d_bB = value; return true;
+            case 2U: I_B = value; return true;
+            case 3U: f_bA = value; return true;
+            case 4U: d_bA = value; return true;
+            case 5U: I_A = value; return true;
+            case 6U: A_A = value; return true;
+            case 7U: d_m = value; return true;
+            case 8U: f_hp = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     float f_bB = 600.0f, d_bB = 0.05f, I_B = 15.0f;
     float f_bA = 200.0f, d_bA = 0.25f, I_A = 10.0f;

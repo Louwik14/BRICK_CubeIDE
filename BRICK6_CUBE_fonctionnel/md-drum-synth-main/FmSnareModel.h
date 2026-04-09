@@ -1,7 +1,7 @@
 // FmSnareModel.h
 #pragma once
 #include "DrumModel.h"
-#include "plaits/dsp/fm/operator.h"
+#include "core/DrumFm2OpCore.h"
 
 class FmSnareModel : public DrumModel {
 public:
@@ -14,6 +14,20 @@ public:
     }
     void loadParameters(std::istream& is) override {
         is >> f_b >> d_b >> f_m >> I >> d_m >> Abrus >> dbrus >> fhp;
+    }
+
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: f_b = value; return true;
+            case 1U: d_b = value; return true;
+            case 2U: f_m = value; return true;
+            case 3U: I = value; return true;
+            case 4U: d_m = value; return true;
+            case 5U: Abrus = value; return true;
+            case 6U: dbrus = value; return true;
+            case 7U: fhp = value; return true;
+            default: return false;
+        }
     }
 
 private:
@@ -29,20 +43,5 @@ private:
     float dbrus = 0.3f;     // Noise envelope decay
     float fhp = 400.0f;     // High-pass filter cutoff (Hz)
 
-    // Internal state
-    float t = 0.0f;
-    float y_prev = 0.0f, x_prev = 0.0f; // HPF state
-
-    // Envelope states and decay constants
-    float amp_env = 1.0f;
-    float mod_env = 1.0f;
-    float noise_env = 1.0f;
-    float amp_decay_const = 0.0f;
-    float mod_decay_const = 0.0f;
-    float noise_decay_const = 0.0f;
-
-    // Mutable Instruments FM operators
-    plaits::fm::Operator modulator_;
-    plaits::fm::Operator carrier_;
-    float fb_state_[2] = {0.0f, 0.0f};
+    DrumFm2OpCore core_;
 };

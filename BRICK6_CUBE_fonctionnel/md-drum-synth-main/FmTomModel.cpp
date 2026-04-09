@@ -4,51 +4,34 @@
 #if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
 #endif
-#include <cmath>
 #if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
 #endif
 
-constexpr float SAMPLE_RATE = 48000.0f;
 constexpr float PI = 3.14159265f;
-constexpr float TWO_PI = 2.0f * PI;
-
-static float WrapPhase(float phase) {
-    while (phase >= TWO_PI) phase -= TWO_PI;
-    while (phase < 0.0f) phase += TWO_PI;
-    return phase;
-}
-
-static float ExpDecay(float t, float decay_time) {
-    return std::exp(-t / decay_time);
-}
 
 void FmTomModel::Init() {
-    t = 0.0f;
-    mod_phase = car_phase = start_phase;
-    prev_mod = 0.0f;
+    core_.Init();
 }
 
 void FmTomModel::Trigger() {
-    Init();
+    DrumFm2OpCore::TriggerConfig trig;
+    trig.amp_decay_s = d_b;
+    trig.mod_decay_s = d_m;
+    trig.freq_decay_s = d_f;
+    trig.set_initial_phase = true;
+    trig.initial_phase_radians = start_phase;
+    core_.Trigger(trig);
 }
 
 float FmTomModel::Process() {
-    float dt = 1.0f / SAMPLE_RATE;
-    float amp_env = ExpDecay(t, d_b);
-    float mod_env = ExpDecay(t, d_m);
-    float freq_env = A_f * ExpDecay(t, d_f);
-
-    float mod_feedback = 1.0f * prev_mod;
-    mod_phase = WrapPhase(mod_phase + TWO_PI * f_m * dt + mod_feedback);
-    float mod_out = std::sin(mod_phase);
-    prev_mod = mod_out;
-
-    car_phase = WrapPhase(car_phase + TWO_PI * (f_b + freq_env) * dt + I * mod_env * mod_out);
-    float out = std::sin(car_phase) * amp_env;
-
-    t += dt;
-    return out;
+    DrumFm2OpCore::FrameConfig cfg;
+    cfg.carrier_freq_hz = f_b;
+    cfg.mod_freq_hz = f_m;
+    cfg.mod_index = I;
+    cfg.feedback_amount = 1.0f;
+    cfg.pitch_sweep_hz = A_f;
+    return core_.ProcessSample(cfg);
 }
 
 void FmTomModel::RenderControls() {

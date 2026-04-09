@@ -17,6 +17,17 @@ public:
         is >> pitch >> interval >> decay >> balance >> clip;
     }
 
+    bool SetParamByIndex(uint8_t index, float value) override {
+        switch (index) {
+            case 0U: pitch = value; return true;
+            case 1U: interval = value; return true;
+            case 2U: decay = value; return true;
+            case 3U: balance = value; return true;
+            case 4U: clip = value; return true;
+            default: return false;
+        }
+    }
+
 private:
     float pitch = 600.0f;     // Base pitch (Hz)
     float interval = 200.0f;  // Interval between the two oscillators

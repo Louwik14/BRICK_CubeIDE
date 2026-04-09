@@ -1,16 +1,11 @@
 #include "FmKickModel.h"
 #include "DrumUiAbstraction.h"
-#include <cmath>
 #if MD_DRUM_HAS_DESKTOP_UI
 #include <imgui.h>
 #endif
 #if MD_DRUM_HAS_DESKTOP_UI
 #include "CustomControls.h"
 #endif
-
-constexpr float PI = 3.14159265f;
-constexpr float TWO_PI = 2.0f * PI;
-constexpr float SAMPLE_RATE = 48000.0f;
 
 const float FmKickModel::ratios[FmKickModel::num_ratios][2] = {
     // Integer multiples 2:1 to 40:1
@@ -26,72 +21,29 @@ const float FmKickModel::ratios[FmKickModel::num_ratios][2] = {
     {16.0f, 5.0f}
 };
 
-static float WrapPhase(float phase) {
-    while (phase >= TWO_PI) phase -= TWO_PI;
-    while (phase < 0.0f) phase += TWO_PI;
-    return phase;
-}
-
 void FmKickModel::Init() {
-    t = 0.0f;
-    // Reset iterative decays
-    amp_env = 1.0f;
-    mod_env = 1.0f;
-    freq_env = 1.0f;
-    // Reset Plaits operator state
-    ops[0].Reset();
-    ops[1].Reset();
-    fb_state[0] = 0.0f;
-    fb_state[1] = 0.0f;
+    core_.Init();
 }
 
 void FmKickModel::Trigger() {
-    Init();
-    // Calculate decay constants for iterative envelopes WITHOUT std::expf
-    float dt = 1.0f / SAMPLE_RATE;
-    // For small x, exp(-x) ≈ 1 - x
-    amp_decay_const = 1.0f - (dt / d_b);
-    mod_decay_const = 1.0f - (dt / d_m);
-    freq_decay_const = 1.0f - (dt / d_f);
-    // Clamp to [0,1] to avoid negative decay in pathological cases
-    if (amp_decay_const < 0.0f) amp_decay_const = 0.0f;
-    if (mod_decay_const < 0.0f) mod_decay_const = 0.0f;
-    if (freq_decay_const < 0.0f) freq_decay_const = 0.0f;
+    core_.Trigger(d_b, d_m, d_f);
 }
 
 float FmKickModel::Process() {
-    float dt = 1.0f / SAMPLE_RATE;
-    t += dt;
-    // Iterative decay
-    amp_env *= amp_decay_const;
-    mod_env *= mod_decay_const;
-    freq_env *= freq_decay_const;
-    float freq_env_scaled = A_f * freq_env;
-
-    // Prepare Plaits FM operator parameters
-    float f[2];
-    float a[2];
-    // Modulator frequency selection
     float mod_freq = f_m;
     if (use_ratio_mode) {
         mod_freq = f_b * (ratios[ratio_index][0] / ratios[ratio_index][1]);
     }
-    // Sync modulator freq envelope to carrier if enabled
-    if (mod_env_sync) {
-        mod_freq += freq_env_scaled;
-    }
-    f[0] = mod_freq / SAMPLE_RATE; // modulator frequency (normalized)
-    f[1] = (f_b + freq_env_scaled) / SAMPLE_RATE; // carrier frequency (normalized)
-    a[0] = I * mod_env; // modulator amplitude (mod index)
-    a[1] = amp_env;     // carrier amplitude
 
-    float out = 0.0f;
-    // Feedback amount for modulator (0-7)
-    int fb_amt = static_cast<int>(b_m);
-    // Render a single sample using Plaits FM operator (2-op, modulator feeds carrier)
-    plaits::fm::RenderOperators<2, 0, false>(
-        ops, f, a, fb_state, fb_amt, nullptr, &out, 1);
-    return out;
+    DrumFm2OpCore::FrameConfig cfg;
+    cfg.carrier_freq_hz = f_b;
+    cfg.mod_freq_hz = mod_freq;
+    cfg.mod_index = I;
+    cfg.feedback_amount = b_m;
+    cfg.pitch_sweep_hz = A_f;
+    cfg.mod_freq_tracks_pitch_sweep = mod_env_sync;
+
+    return core_.ProcessSample(cfg);
 }
 
 void FmKickModel::RenderControls() {
