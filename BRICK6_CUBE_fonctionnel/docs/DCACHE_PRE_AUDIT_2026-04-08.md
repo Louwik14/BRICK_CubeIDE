@@ -257,6 +257,13 @@ Date: 2026-04-08
   - chemin scratch: `dcache_invalidate_by_addr_aligned(scratch, BLOCKSIZE)` **avant** chaque lecture DMA bloc, puis invalidate post-DMA conservé.
 - Résultat visé: cohérence robuste du sens **DMA->RAM->CPU** sans dépendre d’un état cache « chanceux ».
 
+### 11.5 Point mount/init explicitement confirmé
+
+- `f_mount()` appelle `find_volume()` puis `check_fs()` / `move_window()`, qui font un `disk_read(fs->drv, fs->win, sector, 1)` pour lire MBR/VBR (boot sector/BPB).
+- Le buffer cible de ce read pendant mount est `FATFS::win` (work area FatFs), buffer **cacheable** côté CPU.
+- Donc avec D-cache actif, si la maintenance SD est coupée, le mount est exposé aux incohérences DMA->RAM->CPU (données stale du secteur de boot) et peut tomber en `mount_fail` (`FR_DISK_ERR` / `FR_NO_FILESYSTEM` selon le contenu vu).
+- Décision finale: `BRICK6_SD_ENABLE_DMA_CACHE_MAINTENANCE` est remis par défaut à `1` pour garder le chemin mount/init/read bas niveau cohérent sous D-cache.
+
 ## 12) Passe audio cacheable ciblée (RX/TX uniquement)
 
 Date: 2026-04-08
