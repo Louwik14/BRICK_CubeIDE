@@ -99,6 +99,37 @@ static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
     }
 }
 
+static ui_track_type_t brick6_drum_runtime_type_to_ui_type(track_runtime_type_t type)
+{
+    switch (type)
+    {
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
+            return UI_TRACK_TYPE_DRUM_TRX_BD;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
+            return UI_TRACK_TYPE_DRUM_TRX_CLAVES;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
+            return UI_TRACK_TYPE_DRUM_TRX_HIHAT;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
+            return UI_TRACK_TYPE_DRUM_TRX_SNARE;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
+            return UI_TRACK_TYPE_DRUM_FM_KICK;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
+            return UI_TRACK_TYPE_DRUM_FM_SNARE;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
+            return UI_TRACK_TYPE_DRUM_FM_TOM;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
+            return UI_TRACK_TYPE_DRUM_FM_RIMSHOT;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
+            return UI_TRACK_TYPE_DRUM_FM_CLAP;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
+            return UI_TRACK_TYPE_DRUM_FM_COWBELL;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+            return UI_TRACK_TYPE_DRUM_FM_CYMBAL;
+        default:
+            return UI_TRACK_TYPE_AUDIO;
+    }
+}
+
 static void brick6_render_synth_tracks(uint32_t frames,
                                        uint8_t *out_monob_tracks,
                                        uint8_t *out_tb3_tracks,
