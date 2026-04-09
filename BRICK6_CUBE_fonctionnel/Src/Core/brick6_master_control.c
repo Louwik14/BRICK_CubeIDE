@@ -24,7 +24,7 @@ void brick6_master_control_process(void)
         POT_MASTER_INDEX = 4U,
         POT_RAW_MAX = 65535U,
         POT_MUTE_THRESHOLD = 1024U,
-        POT_MASTER_STEPS = 128U
+        POT_MASTER_STEPS = 512U
     };
 
     static uint8_t initialized = 0U;
@@ -59,7 +59,7 @@ void brick6_master_control_process(void)
     }
 
     if ((initialized != 0U) &&
-        (((step > last_step) ? (step - last_step) : (last_step - step)) < 2U))
+        (((step > last_step) ? (step - last_step) : (last_step - step)) < 1U))
     {
         return;
     }

@@ -42,6 +42,7 @@ typedef struct {
 
     int8_t insert_slot[MIXER_INSERTS_PER_TRACK];
     float send_level[MIXER_NUM_SENDS];
+    float send_level_current[MIXER_NUM_SENDS];
 } mixer_track_t;
 
 typedef struct {
@@ -49,7 +50,9 @@ typedef struct {
     fx_dj_eq3_t eq3;
     float sample_rate;
     float cutoff_hz;
+    float cutoff_target_hz;
     float resonance;
+    float resonance_target;
     /* First pass: stored for future envelope modulation, not applied yet. */
     float eg_amount;
     float attack_s;
@@ -61,8 +64,11 @@ typedef struct {
     float env_delay_remaining_s;
     float env_level;
     float eq_low_db;
+    float eq_low_target_db;
     float eq_mid_db;
+    float eq_mid_target_db;
     float eq_high_db;
+    float eq_high_target_db;
     uint8_t env_reset;
     uint8_t note_active;
     uint8_t current_note;
@@ -89,6 +95,7 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 #define MIXER_FILTER_ENV_DELAY_MAX_S 5.0f
 #define MIXER_FILTER_NOTE_REF_MIDI 60U
 #define MIXER_FILTER_UPDATE_PERIOD 8U
+#define MIXER_FILTER_BLOCK_SMOOTH 0.25f
 
 typedef enum
 {
@@ -107,6 +114,11 @@ static float clampf_local(float v, float lo, float hi)
     if(v > hi)
         return hi;
     return v;
+}
+
+static float mixer_smooth_block(float current, float target, float alpha)
+{
+    return current + ((target - current) * alpha);
 }
 
 static uint8_t mixer_track_filter_type_is_biquad(mixer_track_filter_type_t type)
@@ -267,7 +279,9 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
 
     filter->sample_rate = (sample_rate > 0.0f) ? sample_rate : MIXER_FILTER_SAMPLE_RATE_DEFAULT;
     filter->cutoff_hz = MIXER_FILTER_CUTOFF_MAX_HZ;
+    filter->cutoff_target_hz = MIXER_FILTER_CUTOFF_MAX_HZ;
     filter->resonance = 0.0f;
+    filter->resonance_target = 0.0f;
     filter->eg_amount = 0.0f;
     filter->attack_s = 0.01f;
     filter->decay_s = 0.10f;
@@ -276,8 +290,11 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->env_reset = 1U;
     filter->eq_low_db = 0.0f;
+    filter->eq_low_target_db = 0.0f;
     filter->eq_mid_db = 0.0f;
+    filter->eq_mid_target_db = 0.0f;
     filter->eq_high_db = 0.0f;
+    filter->eq_high_target_db = 0.0f;
     filter->type = (uint8_t)MIXER_TRACK_FILTER_OFF;
 
     mixer_track_filter_reset_dsp(filter);
@@ -293,6 +310,16 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
 
     if(filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
         return;
+
+    filter->cutoff_hz = mixer_smooth_block(filter->cutoff_hz, filter->cutoff_target_hz, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->resonance = mixer_smooth_block(filter->resonance, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->eq_low_db = mixer_smooth_block(filter->eq_low_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->eq_mid_db = mixer_smooth_block(filter->eq_mid_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->eq_high_db = mixer_smooth_block(filter->eq_high_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+    fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+    fx_dj_eq3_set_low_db(&filter->eq3, filter->eq_low_db);
+    fx_dj_eq3_set_mid_db(&filter->eq3, filter->eq_mid_db);
+    fx_dj_eq3_set_high_db(&filter->eq3, filter->eq_high_db);
 
     switch((mixer_track_filter_type_t)filter->type)
     {
@@ -403,7 +430,10 @@ void mixer_init(void)
             g_tracks[t].insert_slot[i] = -1;
 
         for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+        {
             g_tracks[t].send_level[s] = 0.0f;
+            g_tracks[t].send_level_current[s] = 0.0f;
+        }
 
         mixer_track_filter_init(&g_track_filters[t], MIXER_FILTER_SAMPLE_RATE_DEFAULT);
 
@@ -648,8 +678,7 @@ void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    filter->cutoff_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
-    fx_biquad_filter_set_cutoff(&filter->biquad, filter->cutoff_hz);
+    filter->cutoff_target_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
 }
 
 void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
@@ -658,8 +687,7 @@ void mixer_set_track_filter_resonance(uint32_t track_id, float resonance)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    filter->resonance = clampf_local(resonance, 0.0f, 1.0f);
-    fx_biquad_filter_set_q(&filter->biquad, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+    filter->resonance_target = clampf_local(resonance, 0.0f, 1.0f);
 }
 
 void mixer_set_track_filter_eg_amount(uint32_t track_id, float eg_amount)
@@ -745,8 +773,7 @@ void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    filter->eq_low_db = gain_db;
-    fx_dj_eq3_set_low_db(&filter->eq3, filter->eq_low_db);
+    filter->eq_low_target_db = gain_db;
 }
 
 void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db)
@@ -755,8 +782,7 @@ void mixer_set_track_filter_eq_mid(uint32_t track_id, float gain_db)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    filter->eq_mid_db = gain_db;
-    fx_dj_eq3_set_mid_db(&filter->eq3, filter->eq_mid_db);
+    filter->eq_mid_target_db = gain_db;
 }
 
 void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db)
@@ -765,8 +791,7 @@ void mixer_set_track_filter_eq_high(uint32_t track_id, float gain_db)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    filter->eq_high_db = gain_db;
-    fx_dj_eq3_set_high_db(&filter->eq3, filter->eq_high_db);
+    filter->eq_high_target_db = gain_db;
 }
 
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
@@ -975,20 +1000,30 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         if(send_fx_active != 0U)
         {
+            float send_cur[MIXER_NUM_SENDS];
+            float send_step[MIXER_NUM_SENDS];
+            for(uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+            {
+                send_cur[s] = mt->send_level_current[s];
+                send_step[s] = (mt->send_level[s] - send_cur[s]) * ((frames > 0U) ? (1.0f / (float)frames) : 0.0f);
+            }
+
             for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
             {
                 if(g_send_fx_slot[s] >= 0)
                 {
-                    const float send_g = mt->send_level[s];
-                    if(send_g <= 0.0f)
+                    if((send_cur[s] <= 0.0f) && (mt->send_level[s] <= 0.0f))
                         continue;
 
                     for(uint32_t i = 0; i < frames; i++)
                     {
-                        send_l[s][i] += L[i] * send_g;
-                        send_r[s][i] += R[i] * send_g;
+                        send_l[s][i] += L[i] * send_cur[s];
+                        send_r[s][i] += R[i] * send_cur[s];
+                        send_cur[s] += send_step[s];
                     }
                 }
+
+                mt->send_level_current[s] = mt->send_level[s];
             }
         }
 
