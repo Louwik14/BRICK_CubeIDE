@@ -2,8 +2,6 @@
 
 #include <cstring>
 
-#include "Core/track_runtime.h"
-
 #include "../../md-drum-synth-main/TRXBassDrum.h"
 #include "../../md-drum-synth-main/TRXClaves.h"
 #include "../../md-drum-synth-main/TRXHiHat.h"
@@ -17,7 +15,7 @@
 #include "../../md-drum-synth-main/FmCymbalModel.h"
 
 #ifndef DRUM_SYNTH_INSTANCE_COUNT
-#define DRUM_SYNTH_INSTANCE_COUNT SEQ_TRACK_COUNT
+#define DRUM_SYNTH_INSTANCE_COUNT 8U
 #endif
 
 typedef struct
@@ -41,52 +39,52 @@ typedef struct
 
 static drum_synth_instance_t g_drum_instances[DRUM_SYNTH_INSTANCE_COUNT];
 
-static uint8_t drum_synth_model_is_drum(uint8_t type)
+static uint8_t drum_synth_model_is_drum(drum_model_id_t type)
 {
     switch (type)
     {
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+        case DRUM_MODEL_ID_TRX_BD:
+        case DRUM_MODEL_ID_TRX_CLAVES:
+        case DRUM_MODEL_ID_TRX_HIHAT:
+        case DRUM_MODEL_ID_TRX_SNARE:
+        case DRUM_MODEL_ID_FM_KICK:
+        case DRUM_MODEL_ID_FM_SNARE:
+        case DRUM_MODEL_ID_FM_TOM:
+        case DRUM_MODEL_ID_FM_RIMSHOT:
+        case DRUM_MODEL_ID_FM_CLAP:
+        case DRUM_MODEL_ID_FM_COWBELL:
+        case DRUM_MODEL_ID_FM_CYMBAL:
             return 1U;
         default:
             return 0U;
     }
 }
 
-static DrumModel *drum_synth_resolve_model(drum_synth_instance_t *instance, uint8_t type)
+static DrumModel *drum_synth_resolve_model(drum_synth_instance_t *instance, drum_model_id_t type)
 {
     switch (type)
     {
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
+        case DRUM_MODEL_ID_TRX_BD:
             return &instance->trx_bass_drum;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
+        case DRUM_MODEL_ID_TRX_CLAVES:
             return &instance->trx_claves;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
+        case DRUM_MODEL_ID_TRX_HIHAT:
             return &instance->trx_hihat;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
+        case DRUM_MODEL_ID_TRX_SNARE:
             return &instance->trx_snare;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
+        case DRUM_MODEL_ID_FM_KICK:
             return &instance->fm_kick;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
+        case DRUM_MODEL_ID_FM_SNARE:
             return &instance->fm_snare;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
+        case DRUM_MODEL_ID_FM_TOM:
             return &instance->fm_tom;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
+        case DRUM_MODEL_ID_FM_RIMSHOT:
             return &instance->fm_rimshot;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
+        case DRUM_MODEL_ID_FM_CLAP:
             return &instance->fm_clap;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
+        case DRUM_MODEL_ID_FM_COWBELL:
             return &instance->fm_cowbell;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+        case DRUM_MODEL_ID_FM_CYMBAL:
             return &instance->fm_cymbal;
         default:
             return nullptr;
@@ -100,11 +98,11 @@ void drum_synth_init(float sample_rate)
     std::memset(g_drum_instances, 0, sizeof(g_drum_instances));
     for (uint8_t instance = 0U; instance < DRUM_SYNTH_INSTANCE_COUNT; ++instance)
     {
-        (void)drum_synth_set_model_for_instance(instance, (uint8_t)TRACK_RUNTIME_TYPE_DRUM_TRX_BD);
+        (void)drum_synth_set_model_for_instance(instance, DRUM_MODEL_ID_TRX_BD);
     }
 }
 
-uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, uint8_t model_type)
+uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t model_type)
 {
     if ((instance_id >= DRUM_SYNTH_INSTANCE_COUNT) || (drum_synth_model_is_drum(model_type) == 0U))
     {
@@ -128,14 +126,14 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, uint8_t model_typ
     return (instance->active_model != nullptr) ? 1U : 0U;
 }
 
-uint8_t drum_synth_get_model_for_instance(uint8_t instance_id)
+drum_model_id_t drum_synth_get_model_for_instance(uint8_t instance_id)
 {
     if (instance_id >= DRUM_SYNTH_INSTANCE_COUNT)
     {
-        return (uint8_t)TRACK_RUNTIME_TYPE_OTHER;
+        return DRUM_MODEL_ID_COUNT;
     }
 
-    return g_drum_instances[instance_id].active_type;
+    return (drum_model_id_t)g_drum_instances[instance_id].active_type;
 }
 
 void drum_synth_note_on_for_instance(uint8_t instance_id, uint8_t midi_note, uint8_t velocity)

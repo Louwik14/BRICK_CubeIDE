@@ -99,34 +99,34 @@ static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
     }
 }
 
-static ui_track_type_t brick6_drum_runtime_type_to_ui_type(track_runtime_type_t type)
+static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
-    switch (type)
+    switch ((track_runtime_type_t)runtime_type)
     {
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
-            return UI_TRACK_TYPE_DRUM_TRX_BD;
+            return DRUM_MODEL_ID_TRX_BD;
         case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
-            return UI_TRACK_TYPE_DRUM_TRX_CLAVES;
+            return DRUM_MODEL_ID_TRX_CLAVES;
         case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
-            return UI_TRACK_TYPE_DRUM_TRX_HIHAT;
+            return DRUM_MODEL_ID_TRX_HIHAT;
         case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
-            return UI_TRACK_TYPE_DRUM_TRX_SNARE;
+            return DRUM_MODEL_ID_TRX_SNARE;
         case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
-            return UI_TRACK_TYPE_DRUM_FM_KICK;
+            return DRUM_MODEL_ID_FM_KICK;
         case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
-            return UI_TRACK_TYPE_DRUM_FM_SNARE;
+            return DRUM_MODEL_ID_FM_SNARE;
         case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
-            return UI_TRACK_TYPE_DRUM_FM_TOM;
+            return DRUM_MODEL_ID_FM_TOM;
         case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
-            return UI_TRACK_TYPE_DRUM_FM_RIMSHOT;
+            return DRUM_MODEL_ID_FM_RIMSHOT;
         case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
-            return UI_TRACK_TYPE_DRUM_FM_CLAP;
+            return DRUM_MODEL_ID_FM_CLAP;
         case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
-            return UI_TRACK_TYPE_DRUM_FM_COWBELL;
+            return DRUM_MODEL_ID_FM_COWBELL;
         case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
-            return UI_TRACK_TYPE_DRUM_FM_CYMBAL;
+            return DRUM_MODEL_ID_FM_CYMBAL;
         default:
-            return UI_TRACK_TYPE_AUDIO;
+            return DRUM_MODEL_ID_COUNT;
     }
 }
 
@@ -207,7 +207,13 @@ static void brick6_render_synth_tracks(uint32_t frames,
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
-            if (drum_synth_set_model_for_instance(ctx->instance_id, ctx->type) == 0U)
+            const drum_model_id_t model_id = brick6_map_runtime_type_to_drum_model(ctx->type);
+            if (model_id == DRUM_MODEL_ID_COUNT)
+            {
+                continue;
+            }
+
+            if (drum_synth_set_model_for_instance(ctx->instance_id, model_id) == 0U)
             {
                 continue;
             }

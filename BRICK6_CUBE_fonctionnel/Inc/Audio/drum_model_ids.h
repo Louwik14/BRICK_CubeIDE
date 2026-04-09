@@ -1,0 +1,20 @@
+#pragma once
+
+#include <stdint.h>
+
+typedef enum
+{
+    DRUM_MODEL_ID_TRX_BD = 0,
+    DRUM_MODEL_ID_TRX_CLAVES,
+    DRUM_MODEL_ID_TRX_HIHAT,
+    DRUM_MODEL_ID_TRX_SNARE,
+    DRUM_MODEL_ID_FM_KICK,
+    DRUM_MODEL_ID_FM_SNARE,
+    DRUM_MODEL_ID_FM_TOM,
+    DRUM_MODEL_ID_FM_RIMSHOT,
+    DRUM_MODEL_ID_FM_CLAP,
+    DRUM_MODEL_ID_FM_COWBELL,
+    DRUM_MODEL_ID_FM_CYMBAL,
+    DRUM_MODEL_ID_COUNT
+} drum_model_id_t;
+
