@@ -51,3 +51,24 @@ void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
                    const float *AUDIO_RESTRICT bus_cue_r,
                    uint32_t frames,
                    float out_gain);
+
+/**
+ * @brief Repaquette MAIN/CUE float vers buffer TX TDM avec gain rampé.
+ *
+ * @param tx Buffer TX int32 destination.
+ * @param bus_main_l Bus MAIN gauche.
+ * @param bus_main_r Bus MAIN droit.
+ * @param bus_cue_l Bus CUE gauche.
+ * @param bus_cue_r Bus CUE droit.
+ * @param frames Nombre de frames.
+ * @param out_gain_start Gain global de sortie en début de bloc.
+ * @param out_gain_end Gain global de sortie en fin de bloc.
+ */
+void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
+                          const float *AUDIO_RESTRICT bus_main_l,
+                          const float *AUDIO_RESTRICT bus_main_r,
+                          const float *AUDIO_RESTRICT bus_cue_l,
+                          const float *AUDIO_RESTRICT bus_cue_r,
+                          uint32_t frames,
+                          float out_gain_start,
+                          float out_gain_end);

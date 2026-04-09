@@ -277,18 +277,39 @@ void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
                    uint32_t frames,
                    float out_gain)
 {
+    audio_io_pack_ramped(tx,
+                         bus_main_l,
+                         bus_main_r,
+                         bus_cue_l,
+                         bus_cue_r,
+                         frames,
+                         out_gain,
+                         out_gain);
+}
+
+void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
+                          const float *AUDIO_RESTRICT bus_main_l,
+                          const float *AUDIO_RESTRICT bus_main_r,
+                          const float *AUDIO_RESTRICT bus_cue_l,
+                          const float *AUDIO_RESTRICT bus_cue_r,
+                          uint32_t frames,
+                          float out_gain_start,
+                          float out_gain_end)
+{
     if(frames == 0U)
     {
         return;
     }
 
-    if(out_gain == 0.0f)
+    const float gain_step = (out_gain_end - out_gain_start) / (float)frames;
+    if ((out_gain_start == 0.0f) && (out_gain_end == 0.0f))
     {
         memset(tx, 0, frames * AUDIO_TDM_SLOTS * sizeof(int32_t));
         return;
     }
 
     int32_t *AUDIO_RESTRICT ptx = tx;
+    float out_gain = out_gain_start;
 
     for(uint32_t n = 0; n < frames; n++)
     {
@@ -313,5 +334,6 @@ void audio_io_pack(int32_t *AUDIO_RESTRICT tx,
         ptx[6] = 0;
         ptx[7] = 0;
         ptx += AUDIO_TDM_SLOTS;
+        out_gain += gain_step;
     }
 }

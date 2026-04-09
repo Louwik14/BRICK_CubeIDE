@@ -132,7 +132,7 @@ void track_set_gain(uint32_t track_id, float gain);
 /**
  * @brief Configure le gain master appliqué après somme des tracks.
  *
- * @param gain Gain linéaire (clamp interne 0.0 .. 2.0).
+ * @param gain Gain linéaire (clamp interne 0.0 .. 1.0, unity max).
  */
 void audio_float_set_master_gain(float gain);
 

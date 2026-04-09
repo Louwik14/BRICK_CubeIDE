@@ -508,8 +508,8 @@ void audio_float_set_master_gain(float gain)
 {
     if(gain < 0.0f)
         gain = 0.0f;
-    if(gain > 2.0f)
-        gain = 2.0f;
+    if(gain > 1.0f)
+        gain = 1.0f;
 
     master_gain = gain;
     master_gain_target = gain;
@@ -578,17 +578,20 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
     sd_recorder_audio_block_begin(frames);
 
-    master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.1f;
+    const float out_gain_start = output_adjust * master_gain_smoothed;
+    master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.25f;
+    const float out_gain_end = output_adjust * master_gain_smoothed;
 
     audio_io_unpack(rx, tracks, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
-    audio_io_pack(tx,
-                  tracks[0].L,
-                  tracks[0].R,
-                  tracks[1].L,
-                  tracks[1].R,
-                  frames,
-                  output_adjust * master_gain_smoothed);
+    audio_io_pack_ramped(tx,
+                         tracks[0].L,
+                         tracks[0].R,
+                         tracks[1].L,
+                         tracks[1].R,
+                         frames,
+                         out_gain_start,
+                         out_gain_end);
 }
 
 /**
