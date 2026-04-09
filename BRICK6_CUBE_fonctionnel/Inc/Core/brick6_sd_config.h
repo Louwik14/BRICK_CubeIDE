@@ -12,11 +12,12 @@
 #endif
 
 /*
- * Interrupteur de debug ciblé: neutralise temporairement la maintenance D-cache
- * sur le chemin SD/FatFs pour isoler les causes save/load sans toucher au D-cache global.
+ * La maintenance D-cache SD doit rester active dès que le D-cache CPU est actif:
+ * FatFs (dont f_mount) lit le boot sector via disk_read -> SD DMA vers des buffers
+ * cacheables (work area FATFS), donc sans maintenance le mount peut échouer.
  */
 #ifndef BRICK6_SD_ENABLE_DMA_CACHE_MAINTENANCE
-#define BRICK6_SD_ENABLE_DMA_CACHE_MAINTENANCE 0
+#define BRICK6_SD_ENABLE_DMA_CACHE_MAINTENANCE 1
 #endif
 
 #if BRICK6_SD_DEV_SAFE_MODE
