@@ -308,6 +308,11 @@ static void apply_mix_level(float v) { apply_mix_live_track(PARAM_MIX_LEVEL, v);
 static void apply_mix_pan(float v) { apply_mix_live_track(PARAM_MIX_PAN, v); }
 static void apply_mix_send1(float v) { apply_mix_live_track(PARAM_MIX_SEND1, v); }
 static void apply_mix_send2(float v) { apply_mix_live_track(PARAM_MIX_SEND2, v); }
+static void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_vca_attack(float v) { apply_mix_live_track(PARAM_VCA_ATTACK, v); }
 static void apply_vca_decay(float v) { apply_mix_live_track(PARAM_VCA_DECAY, v); }
 static void apply_vca_sustain(float v) { apply_mix_live_track(PARAM_VCA_SUSTAIN, v); }
@@ -2415,6 +2420,12 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 14.0f, 1.0f, 7.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo2_rate),
     PARAM_DESC_EX(PARAM_LFO2_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_depth),
     PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
+
+    PARAM_DESC_EX(PARAM_MIX_REVERB_WET, "Wet", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_wet),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_SIZE, "Size", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_size),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.2f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_decay),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_PRED, "PreD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_pred),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_SURR, "Surr", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_surr),
 };
 
 /**

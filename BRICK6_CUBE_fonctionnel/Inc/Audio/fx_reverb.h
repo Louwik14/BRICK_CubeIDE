@@ -27,6 +27,7 @@ void fx_reverb_process_block(fx_reverb_t *rev,
 void fx_reverb_set_wet(fx_reverb_t *rev, float wet);
 void fx_reverb_set_room_size(fx_reverb_t *rev, float room);
 void fx_reverb_set_damping(fx_reverb_t *rev, float damp);
+void fx_reverb_set_width(fx_reverb_t *rev, float width);
 void fx_reverb_set_bypass(fx_reverb_t *rev, uint8_t bypass);
 
 fx_reverb_t *fx_reverb_get_instance(void);

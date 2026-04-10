@@ -91,6 +91,14 @@ void fx_reverb_set_damping(fx_reverb_t *rev, float damp)
     rev->model.setdamp(fx_reverb_clamp01(damp));
 }
 
+void fx_reverb_set_width(fx_reverb_t *rev, float width)
+{
+    if(rev == 0)
+        return;
+
+    rev->model.setwidth(fx_reverb_clamp01(width));
+}
+
 void fx_reverb_set_bypass(fx_reverb_t *rev, uint8_t bypass)
 {
     if(rev == 0)
