@@ -1486,6 +1486,40 @@ static uint8_t ui_core_clipboard_collect_active_page_params(param_id_t *out_ids,
     return (count > 0U) ? 1U : 0U;
 }
 
+static uint8_t ui_core_clipboard_get_active_page_button(button_id_t *out_button)
+{
+    if (out_button == 0)
+    {
+        return 0U;
+    }
+
+    const ui_page_t *const page = ui_page_get();
+    if ((page == 0) || (page->context == 0))
+    {
+        return 0U;
+    }
+
+    const ui_template_page_state_t *const state = (const ui_template_page_state_t *)page->context;
+    if (state->active_subpage >= 4U)
+    {
+        return 0U;
+    }
+
+    *out_button = (button_id_t)((uint8_t)BTN_PAGE_1 + state->active_subpage);
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_is_active_page_button_held(void)
+{
+    button_id_t active_page_button = BTN_COUNT;
+    if (ui_core_clipboard_get_active_page_button(&active_page_button) == 0U)
+    {
+        return 0U;
+    }
+
+    return (button_down(active_page_button) != 0U) ? 1U : 0U;
+}
+
 static uint8_t ui_core_clipboard_apply_param_list(uint8_t track,
                                                   const param_id_t *params,
                                                   const float *values,
@@ -1962,6 +1996,11 @@ static uint8_t ui_core_handle_page_clipboard_event(const ui_event_t *ev)
         return 0U;
     }
 
+    if (ui_core_clipboard_is_active_page_button_held() == 0U)
+    {
+        return 0U;
+    }
+
     param_id_t params[PARAM_COUNT];
     uint8_t count = 0U;
     if (ui_core_clipboard_collect_active_page_params(params, &count) == 0U)
@@ -2012,6 +2051,111 @@ static uint8_t ui_core_handle_page_clipboard_event(const ui_event_t *ev)
     {
         ui_core_set_feedback("PAGE PASTED");
     }
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_collect_track_sequence_steps(seq_track_id_t track,
+                                                              seq_step_id_t *out_steps,
+                                                              uint8_t max_steps,
+                                                              uint8_t *out_count)
+{
+    if ((out_steps == 0) || (out_count == 0) || (track >= (seq_track_id_t)SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    const uint8_t capacity = seq_model_get_editable_step_capacity();
+    const uint8_t limit = (capacity < max_steps) ? capacity : max_steps;
+
+    for (uint8_t i = 0U; i < limit; ++i)
+    {
+        out_steps[i] = (seq_step_id_t)i;
+    }
+
+    *out_count = limit;
+    return (limit > 0U) ? 1U : 0U;
+}
+
+static uint8_t ui_core_handle_seq_track_clipboard_event(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
+    {
+        return 0U;
+    }
+
+    if ((ev->id != (uint8_t)BTN_COPY) && (ev->id != (uint8_t)BTN_PASTE))
+    {
+        return 0U;
+    }
+
+    if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
+    {
+        return 0U;
+    }
+
+    if (g_ui_track_state.track_select_armed != 0U)
+    {
+        return 0U;
+    }
+
+    button_id_t held_param_button = BTN_COUNT;
+    if (ui_core_clipboard_get_held_param_button(&held_param_button) != 0U)
+    {
+        return 0U;
+    }
+
+    if (ui_core_clipboard_is_active_page_button_held() != 0U)
+    {
+        return 0U;
+    }
+
+    const seq_track_id_t track = (seq_track_id_t)ui_get_active_track();
+    seq_step_id_t steps[SEQ_MAX_STEPS];
+    uint8_t step_count = 0U;
+    if (ui_core_clipboard_collect_track_sequence_steps(track,
+                                                       steps,
+                                                       (uint8_t)SEQ_MAX_STEPS,
+                                                       &step_count) == 0U)
+    {
+        return 1U;
+    }
+
+    if (ev->id == (uint8_t)BTN_COPY)
+    {
+        if (seq_edit_copy_steps(track, steps, step_count) != 0U)
+        {
+            ui_core_set_feedback("SEQ COPIED");
+        }
+        return 1U;
+    }
+
+    if (g_ui_track_state.shift_down != 0U)
+    {
+        seq_edit_clear_steps(track, steps, step_count);
+        ui_core_set_feedback("SEQ CLEARED");
+        return 1U;
+    }
+
+    seq_clipboard_paste_result_t paste_result = { 0U, 0U, 0U };
+    if (seq_edit_paste_steps(track, steps, step_count, &paste_result) == 0U)
+    {
+        ui_core_set_feedback("SEQ INCOMP");
+        return 1U;
+    }
+
+    if (paste_result.trunc != 0U)
+    {
+        ui_core_set_feedback("PASTE TRUNC");
+    }
+    else if (paste_result.partial != 0U)
+    {
+        ui_core_set_feedback("PASTE PARTIAL");
+    }
+    else
+    {
+        ui_core_set_feedback("SEQ PASTED");
+    }
+
     return 1U;
 }
 
@@ -2081,6 +2225,11 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
     }
 
     if (ui_core_handle_page_clipboard_event(ev) != 0U)
+    {
+        return 1U;
+    }
+
+    if (ui_core_handle_seq_track_clipboard_event(ev) != 0U)
     {
         return 1U;
     }
