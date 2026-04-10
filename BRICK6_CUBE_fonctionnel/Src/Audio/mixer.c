@@ -23,7 +23,7 @@
 
 #include "env_adsr.h"
 #include "fx_biquad_filter.h"
-#include "fx_reverb.h"
+#include "fx_reverb_drumboy.h"
 
 #include <math.h>
 #include <string.h>
@@ -93,11 +93,12 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 #define MIXER_FILTER_UPDATE_PERIOD 8U
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
 #define MIXER_REVERB_SEND_INDEX 0U
-#define MIXER_REVERB_WET_CEILING 0.35f
+#define MIXER_REVERB_PREDELAY_MAX_S 0.090f
+#define MIXER_REVERB_SURROUND_MAX_S 0.018f
 
 typedef struct
 {
-    fx_reverb_t *instance;
+    fx_reverb_drumboy_t *instance;
     float wet;
     float size;
     float decay;
@@ -113,6 +114,18 @@ static mixer_reverb_state_t g_reverb = {
     .pre_delay = 0.0f,
     .surround = 1.0f,
 };
+
+static float mixer_reverb_predelay_ui_to_seconds(float v)
+{
+    const float clamped = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
+    return clamped * MIXER_REVERB_PREDELAY_MAX_S;
+}
+
+static float mixer_reverb_surround_ui_to_seconds(float v)
+{
+    const float clamped = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
+    return clamped * MIXER_REVERB_SURROUND_MAX_S;
+}
 
 static float clampf_local(float v, float lo, float hi)
 {
@@ -374,14 +387,15 @@ static float clamp_pan(float pan)
  */
 void mixer_init(void)
 {
-    g_reverb.instance = fx_reverb_get_instance();
+    g_reverb.instance = fx_reverb_drumboy_get_instance();
     if(g_reverb.instance != NULL)
     {
-        fx_reverb_init(g_reverb.instance, MIXER_FILTER_SAMPLE_RATE_DEFAULT);
-        fx_reverb_set_wet(g_reverb.instance, g_reverb.wet * MIXER_REVERB_WET_CEILING);
-        fx_reverb_set_room_size(g_reverb.instance, g_reverb.size);
-        fx_reverb_set_damping(g_reverb.instance, g_reverb.decay);
-        fx_reverb_set_width(g_reverb.instance, g_reverb.surround);
+        fx_reverb_drumboy_init(g_reverb.instance, MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+        fx_reverb_drumboy_set_wet(g_reverb.instance, g_reverb.wet);
+        fx_reverb_drumboy_set_size(g_reverb.instance, g_reverb.size);
+        fx_reverb_drumboy_set_decay(g_reverb.instance, g_reverb.decay);
+        fx_reverb_drumboy_set_predelay(g_reverb.instance, mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
+        fx_reverb_drumboy_set_surround(g_reverb.instance, mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
     }
 
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
@@ -632,33 +646,35 @@ void mixer_set_reverb_wet(float wet)
 {
     g_reverb.wet = clamp01(wet);
     if(g_reverb.instance != NULL)
-        fx_reverb_set_wet(g_reverb.instance, g_reverb.wet * MIXER_REVERB_WET_CEILING);
+        fx_reverb_drumboy_set_wet(g_reverb.instance, g_reverb.wet);
 }
 
 void mixer_set_reverb_size(float size)
 {
     g_reverb.size = clamp01(size);
     if(g_reverb.instance != NULL)
-        fx_reverb_set_room_size(g_reverb.instance, g_reverb.size);
+        fx_reverb_drumboy_set_size(g_reverb.instance, g_reverb.size);
 }
 
 void mixer_set_reverb_decay(float decay)
 {
     g_reverb.decay = clamp01(decay);
     if(g_reverb.instance != NULL)
-        fx_reverb_set_damping(g_reverb.instance, g_reverb.decay);
+        fx_reverb_drumboy_set_decay(g_reverb.instance, g_reverb.decay);
 }
 
 void mixer_set_reverb_pre_delay(float pre_delay)
 {
     g_reverb.pre_delay = clamp01(pre_delay);
+    if(g_reverb.instance != NULL)
+        fx_reverb_drumboy_set_predelay(g_reverb.instance, mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
 }
 
 void mixer_set_reverb_surround(float surround)
 {
     g_reverb.surround = clamp01(surround);
     if(g_reverb.instance != NULL)
-        fx_reverb_set_width(g_reverb.instance, g_reverb.surround);
+        fx_reverb_drumboy_set_surround(g_reverb.instance, mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
 }
 
 void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type)
@@ -1145,12 +1161,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         if(reverb_active != 0U)
         {
-            fx_reverb_process_block(g_reverb.instance,
-                                    send_l[MIXER_REVERB_SEND_INDEX],
-                                    send_r[MIXER_REVERB_SEND_INDEX],
-                                    reverb_return_l,
-                                    reverb_return_r,
-                                    frames);
+            fx_reverb_drumboy_process_block(g_reverb.instance,
+                                            send_l[MIXER_REVERB_SEND_INDEX],
+                                            send_r[MIXER_REVERB_SEND_INDEX],
+                                            reverb_return_l,
+                                            reverb_return_r,
+                                            frames);
             for(uint32_t i = 0; i < frames; i++)
             {
                 bus_main_l[i] += reverb_return_l[i];
