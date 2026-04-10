@@ -1334,26 +1334,13 @@ static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipbo
                      && ((cb->config.type == UI_TRACK_TYPE_DX7) || (cb->config.type == UI_TRACK_TYPE_TB3)));
 }
 
+static ui_track_family_t ui_core_clipboard_find_free_input_family(void);
+
 static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboard_t *cb)
 {
     if (cb == 0)
     {
-        if (ui_core_clipboard_track_is_simple_exclusive(cb) != 0U)
-        {
-            clear_source_after_success = 1U;
-        }
-        else if (ui_core_clipboard_track_is_input_exclusive(cb) != 0U)
-        {
-            const ui_track_family_t free_input = ui_core_clipboard_find_free_input_family();
-            if (free_input != UI_TRACK_FAMILY_COUNT)
-            {
-                target_family = free_input;
-            }
-            else
-            {
-                clear_source_after_success = 1U;
-            }
-        }
+        return 0U;
     }
 
     return (uint8_t)ui_track_family_is_input(cb->config.family);
@@ -1379,21 +1366,7 @@ static uint8_t ui_core_clipboard_move_exclusive_track_config(uint8_t source_trac
 {
     if ((source_track >= UI_TRACK_COUNT) || (target_track >= UI_TRACK_COUNT))
     {
-        if (ui_core_clipboard_move_exclusive_track_config(source_track, track, target_family, cb->config.type) == 0U)
-        {
-            return 0U;
-        }
-    }
-    else
-    {
-        if (ui_set_track_family(track, target_family) == false)
-        {
-            return 0U;
-        }
-        if (ui_set_track_type(track, cb->config.type) == false)
-        {
-            return 0U;
-        }
+        return 0U;
     }
 
     uint8_t family[UI_TRACK_COUNT];
