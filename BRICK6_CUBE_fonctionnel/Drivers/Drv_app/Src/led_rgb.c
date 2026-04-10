@@ -272,6 +272,43 @@ static void led_apply_track_select_hall_scene(uint8_t hall)
     led_layer_set(LED_LAYER_UI, led, r, g, b);
 }
 
+static uint8_t led_apply_mute_hall_scene(uint8_t hall)
+{
+    ui_mute_hall_led_t mute_led = { 0 };
+    if (ui_get_mute_hall_led(hall, &mute_led) == 0U)
+    {
+        return 0U;
+    }
+
+    const led_id_t led = led_remap_led_for_hall(hall);
+    if (mute_led.visible == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return 1U;
+    }
+
+    uint8_t led_on = 1U;
+    if (mute_led.blink != 0U)
+    {
+        led_on = (((HAL_GetTick() / 200U) & 0x1U) != 0U) ? 1U : 0U;
+    }
+
+    if (led_on == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+    }
+    else if (mute_led.muted != 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_RED_G, LED_FIXED_RED_B);
+    }
+    else
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
+    }
+
+    return 1U;
+}
+
 static bool led_hall_mode_uses_keyboard_scene(void)
 {
     const ui_hall_mode_t mode = ui_get_hall_mode();
@@ -298,6 +335,10 @@ static void led_apply_fixed_scene(void)
     {
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
+            if (led_apply_mute_hall_scene(hall) != 0U)
+            {
+                continue;
+            }
             if (ui_get_hall_mode() == UI_HALL_MODE_PATTERN)
             {
                 led_apply_pattern_hall_scene(hall);

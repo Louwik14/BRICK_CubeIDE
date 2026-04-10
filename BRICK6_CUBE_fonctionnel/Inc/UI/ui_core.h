@@ -58,8 +58,29 @@ typedef enum
     UI_HALL_MODE_KEYBOARD,
     UI_HALL_MODE_ARP,
     UI_HALL_MODE_PATTERN,
+    UI_HALL_MODE_MUTE,
     UI_HALL_MODE_COUNT
 } ui_hall_mode_t;
+
+typedef enum
+{
+    UI_MUTE_SUBMODE_NONE = 0,
+    UI_MUTE_SUBMODE_QUICK,
+    UI_MUTE_SUBMODE_PREPARE
+} ui_mute_submode_t;
+
+typedef struct
+{
+    uint8_t active;
+    ui_mute_submode_t submode;
+} ui_mute_state_t;
+
+typedef struct
+{
+    uint8_t visible;
+    uint8_t blink;
+    uint8_t muted;
+} ui_mute_hall_led_t;
 
 typedef enum
 {
@@ -131,6 +152,8 @@ ui_hall_mode_t ui_get_hall_mode(void);
 void ui_set_hall_mode(ui_hall_mode_t mode);
 const char *ui_get_hall_mode_short_label(void);
 const char *ui_get_hall_mode_suffix_label(void);
+ui_mute_state_t ui_get_mute_state(void);
+uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
 uint8_t ui_core_request_undo(void);
 uint8_t ui_is_track_modifier_held(void);

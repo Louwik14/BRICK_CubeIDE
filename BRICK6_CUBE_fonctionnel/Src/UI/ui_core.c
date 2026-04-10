@@ -72,6 +72,7 @@
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_FEEDBACK_DURATION_MS 1000U
 #define UI_TRACK_MOD_BUTTON BTN_PARAM_8
+#define UI_MUTE_TRACK_PARAM_COUNT 4U
 
 typedef struct
 {
@@ -93,6 +94,12 @@ typedef struct
     uint8_t pattern_prev_mode_valid;
     char feedback_message[16];
     uint32_t feedback_until_ms;
+    uint8_t mute_active;
+    ui_mute_submode_t mute_submode;
+    ui_hall_mode_t mute_prev_mode;
+    uint8_t mute_prev_mode_valid;
+    uint8_t mute_initial_state[UI_TRACK_COUNT];
+    uint8_t mute_prepared_state[UI_TRACK_COUNT];
 } ui_track_state_t;
 
 typedef enum
@@ -171,6 +178,12 @@ static ui_track_state_t g_ui_track_state = {
     .pattern_prev_mode_valid = 0U,
     .feedback_message = { 0 },
     .feedback_until_ms = 0U,
+    .mute_active = 0U,
+    .mute_submode = UI_MUTE_SUBMODE_NONE,
+    .mute_prev_mode = UI_HALL_MODE_SEQ,
+    .mute_prev_mode_valid = 0U,
+    .mute_initial_state = { 0U },
+    .mute_prepared_state = { 0U },
 };
 
 static ui_clipboard_state_t g_ui_clipboard;
@@ -221,6 +234,250 @@ static void ui_core_pattern_exit_to_previous_mode(void)
             : UI_HALL_MODE_SEQ;
     g_ui_track_state.pattern_prev_mode_valid = 0U;
     ui_set_hall_mode(target);
+}
+
+static uint8_t ui_core_track_param_from_mix_track(uint8_t mix_track, param_id_t *out_id)
+{
+    if ((out_id == NULL) || (mix_track >= UI_MUTE_TRACK_PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_id = (param_id_t)((uint16_t)PARAM_MIX_TRACK0_MUTE + mix_track);
+    return 1U;
+}
+
+static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted, uint8_t *out_available)
+{
+    if ((out_muted == NULL) || (out_available == NULL) || (track >= UI_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_muted = 0U;
+    *out_available = 0U;
+
+    if (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF)
+    {
+        return 1U;
+    }
+
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 1U;
+    }
+
+    param_id_t mute_param = PARAM_MIX_TRACK0_MUTE;
+    if (ui_core_track_param_from_mix_track(ctx->mix_track_id, &mute_param) == 0U)
+    {
+        return 1U;
+    }
+
+    *out_muted = (param_get(mute_param) >= 0.5f) ? 1U : 0U;
+    *out_available = 1U;
+    return 1U;
+}
+
+static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    param_id_t mute_param = PARAM_MIX_TRACK0_MUTE;
+    if (ui_core_track_param_from_mix_track(ctx->mix_track_id, &mute_param) == 0U)
+    {
+        return 0U;
+    }
+
+    param_set(mute_param, (muted != 0U) ? 1.0f : 0.0f);
+    return 1U;
+}
+
+static void ui_core_mute_clear_state(void)
+{
+    g_ui_track_state.mute_active = 0U;
+    g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_NONE;
+    g_ui_track_state.mute_prev_mode_valid = 0U;
+    memset(g_ui_track_state.mute_initial_state, 0, sizeof(g_ui_track_state.mute_initial_state));
+    memset(g_ui_track_state.mute_prepared_state, 0, sizeof(g_ui_track_state.mute_prepared_state));
+}
+
+static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
+{
+    if (dst == NULL)
+    {
+        return;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        uint8_t muted = 0U;
+        uint8_t available = 0U;
+        (void)ui_core_get_track_runtime_mute(track, &muted, &available);
+        dst[track] = (available != 0U) ? muted : 0U;
+    }
+}
+
+static void ui_core_mute_exit_to_previous_mode(void)
+{
+    const ui_hall_mode_t target = (g_ui_track_state.mute_prev_mode_valid != 0U)
+            ? g_ui_track_state.mute_prev_mode
+            : UI_HALL_MODE_SEQ;
+    ui_core_mute_clear_state();
+    g_ui_track_state.hall_mode = target;
+}
+
+static void ui_core_mute_enter_quick(void)
+{
+    if (g_ui_track_state.mute_active == 0U)
+    {
+        const ui_hall_mode_t current_mode = ui_get_hall_mode();
+        g_ui_track_state.mute_prev_mode = (current_mode == UI_HALL_MODE_MUTE) ? UI_HALL_MODE_SEQ : current_mode;
+        g_ui_track_state.mute_prev_mode_valid = 1U;
+    }
+
+    g_ui_track_state.mute_active = 1U;
+    g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_QUICK;
+    g_ui_track_state.hall_mode = UI_HALL_MODE_MUTE;
+}
+
+static void ui_core_mute_enter_prepare(void)
+{
+    if (g_ui_track_state.mute_active == 0U)
+    {
+        return;
+    }
+
+    ui_core_mute_capture_current_to_buffer(g_ui_track_state.mute_initial_state);
+    memcpy(g_ui_track_state.mute_prepared_state,
+           g_ui_track_state.mute_initial_state,
+           sizeof(g_ui_track_state.mute_prepared_state));
+    g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_PREPARE;
+    g_ui_track_state.hall_mode = UI_HALL_MODE_MUTE;
+}
+
+static void ui_core_mute_apply_prepared_and_exit(void)
+{
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF)
+        {
+            continue;
+        }
+        (void)ui_core_apply_track_runtime_mute(track, g_ui_track_state.mute_prepared_state[track]);
+    }
+
+    ui_core_mute_exit_to_previous_mode();
+}
+
+static void ui_core_mute_toggle_quick_track(uint8_t track)
+{
+    uint8_t muted = 0U;
+    uint8_t available = 0U;
+    if ((ui_core_get_track_runtime_mute(track, &muted, &available) == 0U) || (available == 0U))
+    {
+        return;
+    }
+
+    (void)ui_core_apply_track_runtime_mute(track, (muted == 0U) ? 1U : 0U);
+}
+
+static void ui_core_mute_toggle_prepared_track(uint8_t track)
+{
+    if ((track >= UI_TRACK_COUNT) || (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF))
+    {
+        return;
+    }
+
+    g_ui_track_state.mute_prepared_state[track] ^= 1U;
+}
+
+static uint8_t ui_core_mute_handle_event(const ui_event_t *ev)
+{
+    if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if ((g_ui_track_state.mute_active == 0U)
+        && (ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+        && (g_ui_track_state.shift_down != 0U)
+        && (g_ui_track_state.track_select_armed == 0U))
+    {
+        ui_core_mute_enter_quick();
+        return 1U;
+    }
+
+    if (g_ui_track_state.mute_active == 0U)
+    {
+        return 0U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_RELEASE)
+        && (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+        && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK))
+    {
+        ui_core_mute_exit_to_previous_mode();
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_SHIFT)
+        && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK)
+        && (button_down(BTN_TRANSPOSE_UP) != 0U))
+    {
+        ui_core_mute_enter_prepare();
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+        && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE))
+    {
+        ui_core_mute_apply_prepared_and_exit();
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < UI_TRACK_COUNT))
+    {
+        g_ui_track_state.hall_note_suppressed[ev->id] = 1U;
+        if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK)
+        {
+            ui_core_mute_toggle_quick_track(ev->id);
+        }
+        else if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE)
+        {
+            ui_core_mute_toggle_prepared_track(ev->id);
+        }
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < UI_TRACK_COUNT))
+    {
+        return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) || (ev->type == UI_EVENT_BUTTON_RELEASE))
+    {
+        if ((ev->id == (uint8_t)BTN_TRANSPOSE_DOWN) || (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
 }
 
 
@@ -938,6 +1195,11 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
         return;
     }
 
+    if (g_ui_track_state.mute_active != 0U)
+    {
+        return;
+    }
+
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SHIFT))
     {
         g_ui_track_state.shift_down = 1U;
@@ -1002,6 +1264,7 @@ static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t *out_track,
 static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
 {
     if ((ev == 0)
+        || (g_ui_track_state.mute_active != 0U)
         || (g_ui_track_state.track_select_armed == 0U)
         || (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN))
     {
@@ -1019,6 +1282,11 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 {
     if (ev == 0)
+    {
+        return 0U;
+    }
+
+    if (g_ui_track_state.mute_active != 0U)
     {
         return 0U;
     }
@@ -1935,6 +2203,7 @@ void ui_core_init(void)
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
+    ui_core_mute_clear_state();
     ui_core_set_feedback(0);
     for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
     {
@@ -1994,6 +2263,11 @@ void ui_core_init(void)
 
 void ui_core_service_track_selection_inputs(void)
 {
+    if (g_ui_track_state.mute_active != 0U)
+    {
+        return;
+    }
+
     ui_core_update_shift_state(button_down(BTN_SHIFT));
     ui_core_update_track_modifier_state(button_down(UI_TRACK_MOD_BUTTON));
 
@@ -2066,6 +2340,11 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_core_mute_handle_event(&ev) != 0U)
+        {
+            continue;
+        }
 
         if (ui_core_is_track_hall_event_consumed(&ev) != 0U)
         {
@@ -2479,6 +2758,12 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
         return;
     }
 
+    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_MUTE)
+        && (mode != UI_HALL_MODE_MUTE))
+    {
+        ui_core_mute_clear_state();
+    }
+
     if ((g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
         && (mode != UI_HALL_MODE_PATTERN))
     {
@@ -2511,6 +2796,11 @@ const char *ui_get_hall_mode_short_label(void)
         return "PAT";
     }
 
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_MUTE)
+    {
+        return "MUTE";
+    }
+
     return "SEQ";
 }
 
@@ -2533,6 +2823,11 @@ const char *ui_get_hall_mode_suffix_label(void)
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
     {
         return (g_ui_track_state.pattern_mode == UI_PATTERN_MODE_STORE) ? "STR" : "RCL";
+    }
+
+    if (g_ui_track_state.hall_mode == UI_HALL_MODE_MUTE)
+    {
+        return (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE) ? "PRE" : "";
     }
 
     const int8_t octave_shift = keyboard_runtime_get_octave_shift();
@@ -2569,6 +2864,64 @@ void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
     out_state->substate = g_ui_track_state.pattern_substate;
     out_state->selected_bank = g_ui_track_state.pattern_selected_bank;
     out_state->mode = g_ui_track_state.pattern_mode;
+}
+
+ui_mute_state_t ui_get_mute_state(void)
+{
+    ui_mute_state_t state = {
+        .active = g_ui_track_state.mute_active,
+        .submode = g_ui_track_state.mute_submode
+    };
+    return state;
+}
+
+uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
+{
+    if ((out_led == NULL) || (hall >= HALL_KEY_COUNT))
+    {
+        return 0U;
+    }
+
+    out_led->visible = 0U;
+    out_led->blink = 0U;
+    out_led->muted = 0U;
+
+    if ((g_ui_track_state.mute_active == 0U) || (hall >= UI_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
+    {
+        return 1U;
+    }
+
+    uint8_t available = 0U;
+    if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE)
+    {
+        out_led->muted = g_ui_track_state.mute_prepared_state[hall];
+        available = 1U;
+    }
+    else
+    {
+        uint8_t muted = 0U;
+        (void)ui_core_get_track_runtime_mute(hall, &muted, &available);
+        out_led->muted = muted;
+    }
+
+    if (available == 0U)
+    {
+        return 1U;
+    }
+
+    out_led->visible = 1U;
+    if ((g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE)
+        && (g_ui_track_state.mute_prepared_state[hall] != g_ui_track_state.mute_initial_state[hall]))
+    {
+        out_led->blink = 1U;
+    }
+
+    return 1U;
 }
 
 uint8_t ui_is_track_modifier_held(void)
