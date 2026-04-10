@@ -117,6 +117,7 @@ typedef struct
 typedef struct
 {
     uint8_t valid;
+    uint8_t source_track;
     ui_track_config_t config;
     uint8_t midi_channel;
     ui_track_midi_source_t midi_source;
@@ -1258,6 +1259,7 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
     ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
     memset(cb, 0, sizeof(*cb));
 
+    cb->source_track = track;
     cb->config = ui_get_track_config(track);
     cb->midi_channel = ui_get_track_midi_channel(track);
     cb->midi_source = ui_get_track_midi_source(track);
@@ -1321,6 +1323,71 @@ static uint8_t ui_core_clipboard_clear_track(uint8_t track)
     return 1U;
 }
 
+static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipboard_t *cb)
+{
+    if (cb == 0)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((cb->config.family == UI_TRACK_FAMILY_SYNTH)
+                     && ((cb->config.type == UI_TRACK_TYPE_DX7) || (cb->config.type == UI_TRACK_TYPE_TB3)));
+}
+
+static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboard_t *cb)
+{
+    if (cb == 0)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)ui_track_family_is_input(cb->config.family);
+}
+
+static ui_track_family_t ui_core_clipboard_find_free_input_family(void)
+{
+    for (ui_track_family_t family = UI_TRACK_FAMILY_INPUT1; family <= UI_TRACK_FAMILY_INPUT4; ++family)
+    {
+        if (ui_core_has_track_family(family) == 0U)
+        {
+            return family;
+        }
+    }
+
+    return UI_TRACK_FAMILY_COUNT;
+}
+
+static uint8_t ui_core_clipboard_move_exclusive_track_config(uint8_t source_track,
+                                                             uint8_t target_track,
+                                                             ui_track_family_t target_family,
+                                                             ui_track_type_t target_type)
+{
+    if ((source_track >= UI_TRACK_COUNT) || (target_track >= UI_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    uint8_t family[UI_TRACK_COUNT];
+    uint8_t type[UI_TRACK_COUNT];
+    uint8_t midi_channel[UI_TRACK_COUNT];
+    uint8_t midi_source[UI_TRACK_COUNT];
+
+    for (uint8_t i = 0U; i < UI_TRACK_COUNT; ++i)
+    {
+        family[i] = (uint8_t)g_ui_track_state.track_configs[i].family;
+        type[i] = (uint8_t)g_ui_track_state.track_configs[i].type;
+        midi_channel[i] = g_ui_track_state.track_midi_channel[i];
+        midi_source[i] = g_ui_track_state.track_midi_source[i];
+    }
+
+    family[source_track] = (uint8_t)UI_TRACK_FAMILY_OFF;
+    type[source_track] = (uint8_t)UI_TRACK_TYPE_AUDIO;
+    family[target_track] = (uint8_t)target_family;
+    type[target_track] = (uint8_t)target_type;
+
+    return (uint8_t)(ui_restore_track_config_bulk(family, type, midi_channel, midi_source) ? 1U : 0U);
+}
+
 static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 {
     const ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
@@ -1329,13 +1396,50 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
         return 0U;
     }
 
-    if (ui_set_track_family(track, cb->config.family) == false)
+    const uint8_t source_track = cb->source_track;
+    const uint8_t source_track_valid = (source_track < UI_TRACK_COUNT) ? 1U : 0U;
+    const uint8_t source_equals_target = (uint8_t)((source_track_valid != 0U) && (source_track == track));
+
+    ui_track_family_t target_family = cb->config.family;
+    uint8_t clear_source_after_success = 0U;
+
+    if ((source_equals_target == 0U) && (source_track_valid != 0U))
     {
-        return 0U;
+        if (ui_core_clipboard_track_is_simple_exclusive(cb) != 0U)
+        {
+            clear_source_after_success = 1U;
+        }
+        else if (ui_core_clipboard_track_is_input_exclusive(cb) != 0U)
+        {
+            const ui_track_family_t free_input = ui_core_clipboard_find_free_input_family();
+            if (free_input != UI_TRACK_FAMILY_COUNT)
+            {
+                target_family = free_input;
+            }
+            else
+            {
+                clear_source_after_success = 1U;
+            }
+        }
     }
-    if (ui_set_track_type(track, cb->config.type) == false)
+
+    if ((clear_source_after_success != 0U) && (source_equals_target == 0U))
     {
-        return 0U;
+        if (ui_core_clipboard_move_exclusive_track_config(source_track, track, target_family, cb->config.type) == 0U)
+        {
+            return 0U;
+        }
+    }
+    else
+    {
+        if (ui_set_track_family(track, target_family) == false)
+        {
+            return 0U;
+        }
+        if (ui_set_track_type(track, cb->config.type) == false)
+        {
+            return 0U;
+        }
     }
 
     (void)ui_set_track_midi_channel(track, cb->midi_channel);
@@ -1350,6 +1454,14 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
     if ((cb->param_count > 0U) && (applied == 0U))
     {
         return 0U;
+    }
+
+    if ((clear_source_after_success != 0U) && (source_equals_target == 0U))
+    {
+        if (ui_core_clipboard_clear_track(source_track) == 0U)
+        {
+            return 0U;
+        }
     }
 
     param_registry_sync_ui_for_active_track();
