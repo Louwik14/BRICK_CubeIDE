@@ -122,6 +122,18 @@ Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point
 - `SHIFT + -` => mode `PATTERN RECALL`
 - `TRACK + -` => mode `PATTERN STORE`
 
+### MUTE
+- mode hall `MUTE` existe (`UI_HALL_MODE_MUTE`)
+- entrée quick mute: `SHIFT` maintenu puis `+` maintenu
+- quick mute:
+  - toggle mute immédiat par hall track
+  - relâcher `+` => sortie vers mode hall précédent
+- prepare mute:
+  - depuis quick mute, réappui `SHIFT` pendant `+` maintenu
+  - capture snapshot initiale des mutes
+  - édition préparée uniquement
+  - validation par `+` (apply + sortie)
+
 ### Règles
 - `SHIFT` doit être pressé avant le hall
 - `ARP` est un sous-mode du `KEYBOARD`
@@ -153,6 +165,17 @@ Ensembles importants existants :
 - Autorisés uniquement : domaines `COLORS` et `TONE` réellement valides pour la track.
 - Interdit : domaine `PLAY` (ni affiché, ni sélectionnable, ni applicable).
 - Le filtrage doit rester strictement track-aware (family/type/runtime effectif), sans fallback cross-engine.
+
+### Clipboard UI (invariants)
+- `TRACK + COPY` copie la track active sans steps séquenceur.
+- `TRACK + PASTE` colle la track copiée ; `TRACK + SHIFT + PASTE` clear la track active.
+- `PARAM btn` maintenu + `COPY/PASTE` = scope ensemble ; bouton page active maintenu + `COPY/PASTE` = scope page.
+- En scope ensemble/page, la compatibilité de paste est par intersection des `param_id` communs (pas de matching strict des layouts).
+- `SHIFT + PASTE` en scope ensemble/page clear les paramètres ciblés vers leur minimum.
+- Ressources exclusives en paste track :
+  - `DX7` / `TB3` : move-on-paste.
+  - `Input1..4` : priorité à un input libre, sinon move-on-paste.
+  - après move réussi, le clipboard reste chaînable (source mise à jour vers la target).
 
 ---
 
