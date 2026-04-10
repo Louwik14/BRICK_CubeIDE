@@ -413,6 +413,18 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
         return 0U;
     }
 
+    /*
+     * Mixer BI/EQ filter target is valid only for track contexts that actually
+     * use mixer COLORS filtering. Synth engines with dedicated filter paths
+     * (MonoB/TB3) must not keep a mixer filter target alive.
+     */
+    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+            && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MONOB)
+                || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_TB3)))
+    {
+        return 0U;
+    }
+
     /* Legacy compat: synth filter target is exposed only when one synth track is active. */
     const uint8_t engine_family_count = (uint8_t)(ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH)
             + ui_count_tracks_with_family(UI_TRACK_FAMILY_DRUM));
