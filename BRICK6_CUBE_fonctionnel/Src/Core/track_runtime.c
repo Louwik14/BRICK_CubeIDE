@@ -416,8 +416,7 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     /* Legacy compat: synth filter target is exposed only when one synth track is active. */
     const uint8_t engine_family_count = (uint8_t)(ui_count_tracks_with_family(UI_TRACK_FAMILY_SYNTH)
             + ui_count_tracks_with_family(UI_TRACK_FAMILY_DRUM));
-    if (((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))
+    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
             && (engine_family_count != 1U))
     {
         return 0U;

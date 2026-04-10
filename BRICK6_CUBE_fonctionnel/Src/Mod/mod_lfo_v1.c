@@ -91,44 +91,39 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
                                                    param_id_t dest,
                                                    track_runtime_param_domain_t domain)
 {
-    if (family == UI_TRACK_FAMILY_DRUM)
-    {
-        if (domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-        {
-            return 0U;
-        }
-
-        switch (type)
-        {
-            case UI_TRACK_TYPE_DRUM_TRX_BD:
-                return ((dest >= PARAM_DRUM_TRX_BD_PITCH) && (dest <= PARAM_DRUM_TRX_BD_DRIVE)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
-                return ((dest >= PARAM_DRUM_TRX_CLAVES_PITCH) && (dest <= PARAM_DRUM_TRX_CLAVES_DRIVE)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
-                return ((dest >= PARAM_DRUM_TRX_HIHAT_DECAY) && (dest <= PARAM_DRUM_TRX_HIHAT_PEAK)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_TRX_SNARE:
-                return ((dest >= PARAM_DRUM_TRX_SNARE_PITCH) && (dest <= PARAM_DRUM_TRX_SNARE_BUMP)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_KICK:
-                return ((dest >= PARAM_DRUM_FM_KICK_PITCH) && (dest <= PARAM_DRUM_FM_KICK_MOD_ENV_SYNC)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_SNARE:
-                return ((dest >= PARAM_DRUM_FM_SNARE_PITCH) && (dest <= PARAM_DRUM_FM_SNARE_NOISE_DECAY)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_TOM:
-                return ((dest >= PARAM_DRUM_FM_TOM_PITCH) && (dest <= PARAM_DRUM_FM_TOM_START_PHASE)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
-                return ((dest >= PARAM_DRUM_FM_RIMSHOT_RIM_PITCH) && (dest <= PARAM_DRUM_FM_RIMSHOT_MOD_DECAY)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_CLAP:
-                return ((dest >= PARAM_DRUM_FM_CLAP_CLAP_COUNT) && (dest <= PARAM_DRUM_FM_CLAP_CLAP_DECAY)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_COWBELL:
-                return ((dest >= PARAM_DRUM_FM_COWBELL_PITCH) && (dest <= PARAM_DRUM_FM_COWBELL_MOD_FREQ)) ? 1U : 0U;
-            case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
-                return ((dest >= PARAM_DRUM_FM_CYMBAL_DECAY) && (dest <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY)) ? 1U : 0U;
-            default:
-                return 0U;
-        }
-    }
-
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
+        if (family == UI_TRACK_FAMILY_DRUM)
+        {
+            switch (type)
+            {
+                case UI_TRACK_TYPE_DRUM_TRX_BD:
+                    return ((dest >= PARAM_DRUM_TRX_BD_PITCH) && (dest <= PARAM_DRUM_TRX_BD_DRIVE)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+                    return ((dest >= PARAM_DRUM_TRX_CLAVES_PITCH) && (dest <= PARAM_DRUM_TRX_CLAVES_DRIVE)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+                    return ((dest >= PARAM_DRUM_TRX_HIHAT_DECAY) && (dest <= PARAM_DRUM_TRX_HIHAT_PEAK)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+                    return ((dest >= PARAM_DRUM_TRX_SNARE_PITCH) && (dest <= PARAM_DRUM_TRX_SNARE_BUMP)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_KICK:
+                    return ((dest >= PARAM_DRUM_FM_KICK_PITCH) && (dest <= PARAM_DRUM_FM_KICK_MOD_ENV_SYNC)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_SNARE:
+                    return ((dest >= PARAM_DRUM_FM_SNARE_PITCH) && (dest <= PARAM_DRUM_FM_SNARE_NOISE_DECAY)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_TOM:
+                    return ((dest >= PARAM_DRUM_FM_TOM_PITCH) && (dest <= PARAM_DRUM_FM_TOM_START_PHASE)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+                    return ((dest >= PARAM_DRUM_FM_RIMSHOT_RIM_PITCH) && (dest <= PARAM_DRUM_FM_RIMSHOT_MOD_DECAY)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_CLAP:
+                    return ((dest >= PARAM_DRUM_FM_CLAP_CLAP_COUNT) && (dest <= PARAM_DRUM_FM_CLAP_CLAP_DECAY)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+                    return ((dest >= PARAM_DRUM_FM_COWBELL_PITCH) && (dest <= PARAM_DRUM_FM_COWBELL_MOD_FREQ)) ? 1U : 0U;
+                case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+                    return ((dest >= PARAM_DRUM_FM_CYMBAL_DECAY) && (dest <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY)) ? 1U : 0U;
+                default:
+                    return 0U;
+            }
+        }
+
         if ((ui_track_family_is_engine(family) == 0) || (type == UI_TRACK_TYPE_AUDIO) || (type == UI_TRACK_TYPE_HYBRID))
         {
             return 0U;

@@ -163,35 +163,6 @@ static void ui_page_template_colors_sync_family(void)
         family->subpages[3].param_bank.params[3] = PARAM_COUNT;
         return;
     }
-    if (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_DRUM)
-    {
-        family->nav_labels[0] = "-";
-        family->nav_labels[1] = "-";
-        family->nav_labels[2] = "-";
-        family->nav_labels[3] = "-";
-
-        family->subpages[0].title = "N/A";
-        family->subpages[1].title = "-";
-        family->subpages[2].title = "-";
-        family->subpages[3].title = "-";
-        family->subpages[0].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[0].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[0].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[0].param_bank.params[3] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[3] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[3] = PARAM_COUNT;
-        return;
-    }
     if (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_TB3)
     {
         if (g_ui_template_filter_state.active_subpage != 0U)
