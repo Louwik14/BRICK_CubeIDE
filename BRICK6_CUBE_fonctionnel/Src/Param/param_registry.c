@@ -1322,7 +1322,7 @@ void param_registry_sync_ui_for_active_track(void)
 
 /*
  * Variante FILTER audio:
- * - le runtime audio n'expose plus que Off / EQ3 / biquad CMSIS.
+ * - le runtime audio n'expose plus que Off / EQ3 / SVF Peaks multimode.
  * - le système de paramètres conserve un jeu global `PARAM_FILTER_*`.
  * - la cible DSP est résolue dynamiquement depuis le contexte UI actif.
  */
@@ -2069,7 +2069,7 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison", NULL};
 static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
-static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP BI", "HP BI", "BP BI", NULL};
+static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
 static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
 static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
