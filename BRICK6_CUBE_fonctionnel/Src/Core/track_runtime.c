@@ -467,30 +467,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_TB3_RESONANCE:
         case PARAM_TB3_ENV_MOD:
         case PARAM_TB3_DECAY:
-        case PARAM_DRUM_TRX_BD_NOISE:
-        case PARAM_DRUM_TRX_BD_HARMONICS:
-        case PARAM_DRUM_TRX_BD_DRIVE:
-        case PARAM_DRUM_TRX_CLAVES_BALANCE:
-        case PARAM_DRUM_TRX_CLAVES_DRIVE:
-        case PARAM_DRUM_TRX_HIHAT_METAL:
-        case PARAM_DRUM_TRX_HIHAT_HP_TONE:
-        case PARAM_DRUM_TRX_HIHAT_LP_TONE:
-        case PARAM_DRUM_TRX_HIHAT_PEAK:
-        case PARAM_DRUM_TRX_SNARE_SNAP:
-        case PARAM_DRUM_TRX_SNARE_NOISE:
-        case PARAM_DRUM_TRX_SNARE_TONE_MIX:
-        case PARAM_DRUM_TRX_SNARE_DRIVE:
-        case PARAM_DRUM_FM_KICK_FEEDBACK:
-        case PARAM_DRUM_FM_SNARE_NOISE:
-        case PARAM_DRUM_FM_SNARE_HP_TONE:
-        case PARAM_DRUM_FM_RIMSHOT_BODY_MIX:
-        case PARAM_DRUM_FM_RIMSHOT_HP_TONE:
-        case PARAM_DRUM_FM_CLAP_HP_TONE:
-        case PARAM_DRUM_FM_CLAP_FEEDBACK:
-        case PARAM_DRUM_FM_COWBELL_FEEDBACK:
-        case PARAM_DRUM_FM_COWBELL_ENV_MIX:
-        case PARAM_DRUM_FM_CYMBAL_HP_TONE:
-        case PARAM_DRUM_FM_CYMBAL_FEEDBACK:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_COLORS;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
             return rule;
@@ -534,19 +510,33 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
         case PARAM_DRUM_TRX_BD_SWEEP_DECAY:
         case PARAM_DRUM_TRX_BD_ATTACK:
+        case PARAM_DRUM_TRX_BD_NOISE:
+        case PARAM_DRUM_TRX_BD_HARMONICS:
+        case PARAM_DRUM_TRX_BD_DRIVE:
         case PARAM_DRUM_TRX_CLAVES_PITCH:
         case PARAM_DRUM_TRX_CLAVES_INTERVAL:
         case PARAM_DRUM_TRX_CLAVES_DECAY:
+        case PARAM_DRUM_TRX_CLAVES_BALANCE:
+        case PARAM_DRUM_TRX_CLAVES_DRIVE:
         case PARAM_DRUM_TRX_HIHAT_DECAY:
+        case PARAM_DRUM_TRX_HIHAT_METAL:
+        case PARAM_DRUM_TRX_HIHAT_HP_TONE:
+        case PARAM_DRUM_TRX_HIHAT_LP_TONE:
         case PARAM_DRUM_TRX_HIHAT_GAP:
+        case PARAM_DRUM_TRX_HIHAT_PEAK:
         case PARAM_DRUM_TRX_SNARE_PITCH:
         case PARAM_DRUM_TRX_SNARE_DECAY:
+        case PARAM_DRUM_TRX_SNARE_SNAP:
+        case PARAM_DRUM_TRX_SNARE_NOISE:
+        case PARAM_DRUM_TRX_SNARE_TONE_MIX:
+        case PARAM_DRUM_TRX_SNARE_DRIVE:
         case PARAM_DRUM_TRX_SNARE_TUNE_INTERVAL:
         case PARAM_DRUM_TRX_SNARE_BUMP:
         case PARAM_DRUM_FM_KICK_PITCH:
         case PARAM_DRUM_FM_KICK_DECAY:
         case PARAM_DRUM_FM_KICK_FM_AMOUNT:
         case PARAM_DRUM_FM_KICK_PITCH_SWEEP:
+        case PARAM_DRUM_FM_KICK_FEEDBACK:
         case PARAM_DRUM_FM_KICK_MOD_FREQ:
         case PARAM_DRUM_FM_KICK_MOD_DECAY:
         case PARAM_DRUM_FM_KICK_SWEEP_DECAY:
@@ -556,6 +546,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_FM_SNARE_PITCH:
         case PARAM_DRUM_FM_SNARE_DECAY:
         case PARAM_DRUM_FM_SNARE_FM_AMOUNT:
+        case PARAM_DRUM_FM_SNARE_NOISE:
+        case PARAM_DRUM_FM_SNARE_HP_TONE:
         case PARAM_DRUM_FM_SNARE_MOD_FREQ:
         case PARAM_DRUM_FM_SNARE_MOD_DECAY:
         case PARAM_DRUM_FM_SNARE_NOISE_DECAY:
@@ -569,6 +561,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_FM_TOM_START_PHASE:
         case PARAM_DRUM_FM_RIMSHOT_RIM_PITCH:
         case PARAM_DRUM_FM_RIMSHOT_RIM_DECAY:
+        case PARAM_DRUM_FM_RIMSHOT_BODY_MIX:
+        case PARAM_DRUM_FM_RIMSHOT_HP_TONE:
         case PARAM_DRUM_FM_RIMSHOT_RIM_FM_AMOUNT:
         case PARAM_DRUM_FM_RIMSHOT_BODY_PITCH:
         case PARAM_DRUM_FM_RIMSHOT_BODY_DECAY:
@@ -577,6 +571,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_FM_CLAP_CLAP_COUNT:
         case PARAM_DRUM_FM_CLAP_CLAP_SPACING:
         case PARAM_DRUM_FM_CLAP_TAIL_DECAY:
+        case PARAM_DRUM_FM_CLAP_HP_TONE:
+        case PARAM_DRUM_FM_CLAP_FEEDBACK:
         case PARAM_DRUM_FM_CLAP_FM_AMOUNT:
         case PARAM_DRUM_FM_CLAP_BASE_FREQ:
         case PARAM_DRUM_FM_CLAP_MOD_FREQ:
@@ -586,11 +582,15 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_FM_COWBELL_DECAY_SHORT:
         case PARAM_DRUM_FM_COWBELL_DECAY_LONG:
         case PARAM_DRUM_FM_COWBELL_FM_AMOUNT:
+        case PARAM_DRUM_FM_COWBELL_FEEDBACK:
+        case PARAM_DRUM_FM_COWBELL_ENV_MIX:
         case PARAM_DRUM_FM_COWBELL_MOD_DECAY:
         case PARAM_DRUM_FM_COWBELL_MOD_FREQ:
         case PARAM_DRUM_FM_CYMBAL_DECAY:
         case PARAM_DRUM_FM_CYMBAL_SUSTAIN:
         case PARAM_DRUM_FM_CYMBAL_FM_AMOUNT:
+        case PARAM_DRUM_FM_CYMBAL_HP_TONE:
+        case PARAM_DRUM_FM_CYMBAL_FEEDBACK:
         case PARAM_DRUM_FM_CYMBAL_BASE_CARRIER:
         case PARAM_DRUM_FM_CYMBAL_BASE_MOD:
         case PARAM_DRUM_FM_CYMBAL_MOD_DECAY:
