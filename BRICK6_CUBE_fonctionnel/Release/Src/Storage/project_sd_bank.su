@@ -8,7 +8,7 @@
 ../Src/Storage/project_sd_bank.c:381:9:project_sd_bank_list_slots	4	static
 ../Src/Storage/project_sd_bank.c:410:6:project_sd_bank_init	8	static
 ../Src/Storage/project_sd_bank.c:434:9:project_sd_bank_slot_has_data	0	static
-../Src/Storage/project_sd_bank.c:844:9:project_sd_bank_is_slot_equivalent_to_live	109088	static
+../Src/Storage/project_sd_bank.c:844:9:project_sd_bank_is_slot_equivalent_to_live	109432	static
 ../Src/Storage/project_sd_bank.c:938:9:project_sd_bank_delete_slot	48	static
 ../Src/Storage/project_sd_bank.c:985:25:project_sd_bank_get_last_error	0	static
 ../Src/Storage/project_sd_bank.c:990:13:project_sd_bank_error_to_string	0	static
