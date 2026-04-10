@@ -1,10 +1,10 @@
 ../Src/Keyboard/keyboard_params.c:38:13:keyboard_params_apply	8	static
-../Src/Keyboard/keyboard_params.c:48:6:keyboard_params_init	0	static
-../Src/Keyboard/keyboard_params.c:53:6:keyboard_params_set_root	0	static
-../Src/Keyboard/keyboard_params.c:59:6:keyboard_params_set_scale	0	static
-../Src/Keyboard/keyboard_params.c:70:6:keyboard_params_set_omnichord	0	static
-../Src/Keyboard/keyboard_params.c:76:6:keyboard_params_set_note_order	0	static
-../Src/Keyboard/keyboard_params.c:82:6:keyboard_params_set_chord_override	0	static
+../Src/Keyboard/keyboard_params.c:48:6:keyboard_params_init	8	static
+../Src/Keyboard/keyboard_params.c:53:6:keyboard_params_set_root	8	static
+../Src/Keyboard/keyboard_params.c:59:6:keyboard_params_set_scale	8	static
+../Src/Keyboard/keyboard_params.c:70:6:keyboard_params_set_omnichord	8	static
+../Src/Keyboard/keyboard_params.c:76:6:keyboard_params_set_note_order	8	static
+../Src/Keyboard/keyboard_params.c:82:6:keyboard_params_set_chord_override	8	static
 ../Src/Keyboard/keyboard_params.c:88:9:keyboard_params_get_root_index	0	static
 ../Src/Keyboard/keyboard_params.c:93:9:keyboard_params_get_scale_index	0	static
 ../Src/Keyboard/keyboard_params.c:98:6:keyboard_params_get_omnichord	0	static

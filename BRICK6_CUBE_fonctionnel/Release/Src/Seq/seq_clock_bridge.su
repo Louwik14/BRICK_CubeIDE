@@ -1,12 +1,13 @@
-../Src/Seq/seq_clock_bridge.c:52:6:seq_clock_bridge_init	24	static
+../Src/Seq/seq_clock_bridge.c:30:13:seq_clock_bridge_internal_step_period_recompute	24	static
 ../Src/Seq/seq_clock_bridge.c:66:9:seq_clock_bridge_is_external_source	0	static
 ../Src/Seq/seq_clock_bridge.c:71:6:seq_clock_bridge_reset_external_tempo	0	static
+../Src/Seq/seq_clock_bridge.c:52:6:seq_clock_bridge_init	16	static
 ../Src/Seq/seq_clock_bridge.c:85:6:seq_clock_bridge_on_process	0	static
-../Src/Seq/seq_clock_bridge.c:104:6:seq_clock_bridge_set_source	24	static
 ../Src/Seq/seq_clock_bridge.c:125:6:seq_clock_bridge_prepare_internal_run	0	static
+../Src/Seq/seq_clock_bridge.c:104:6:seq_clock_bridge_set_source	16	static
 ../Src/Seq/seq_clock_bridge.c:135:9:seq_clock_bridge_consume_internal_step_due	4	static
 ../Src/Seq/seq_clock_bridge.c:166:9:seq_clock_bridge_on_external_clock_pulse	16	static
-../Src/Seq/seq_clock_bridge.c:225:6:seq_clock_bridge_set_internal_tempo	24	static
+../Src/Seq/seq_clock_bridge.c:225:6:seq_clock_bridge_set_internal_tempo	8	static
 ../Src/Seq/seq_clock_bridge.c:239:10:seq_clock_bridge_get_internal_tempo_bpm_milli	0	static
 ../Src/Seq/seq_clock_bridge.c:244:9:seq_clock_bridge_is_external_tempo_valid	0	static
 ../Src/Seq/seq_clock_bridge.c:249:10:seq_clock_bridge_get_external_tempo_bpm_milli	0	static

@@ -1,6 +1,6 @@
-../Src/Seq/seq_play_scheduler.c:178:22:seq_play_scheduler_get_locked_or_default	40	static
-../Src/Seq/seq_play_scheduler.c:120:13:seq_play_scheduler_emit_engine_note	24	static
-../Src/Seq/seq_play_scheduler.c:198:6:seq_play_scheduler_init	0	static
-../Src/Seq/seq_play_scheduler.c:203:6:seq_play_scheduler_clear	0	static
-../Src/Seq/seq_play_scheduler.c:208:6:seq_play_scheduler_schedule_step	72	static
-../Src/Seq/seq_play_scheduler.c:310:6:seq_play_scheduler_service	48	static
+../Src/Seq/seq_play_scheduler.c:192:22:seq_play_scheduler_get_locked_or_default	40	static
+../Src/Seq/seq_play_scheduler.c:121:13:seq_play_scheduler_emit_engine_note	32	static
+../Src/Seq/seq_play_scheduler.c:212:6:seq_play_scheduler_init	0	static
+../Src/Seq/seq_play_scheduler.c:217:6:seq_play_scheduler_clear	0	static
+../Src/Seq/seq_play_scheduler.c:222:6:seq_play_scheduler_schedule_step	72	static
+../Src/Seq/seq_play_scheduler.c:324:6:seq_play_scheduler_service	48	static

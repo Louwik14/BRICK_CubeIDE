@@ -1,5 +1,5 @@
-../Src/Seq/seq_transport_fsm.c:25:6:seq_transport_fsm_init	0	static
 ../Src/Seq/seq_transport_fsm.c:30:6:seq_transport_fsm_reset	0	static
+../Src/Seq/seq_transport_fsm.c:25:6:seq_transport_fsm_init	8	static
 ../Src/Seq/seq_transport_fsm.c:41:9:seq_transport_fsm_request_start	0	static
 ../Src/Seq/seq_transport_fsm.c:69:9:seq_transport_fsm_request_stop	0	static
 ../Src/Seq/seq_transport_fsm.c:86:9:seq_transport_fsm_request_continue	0	static
@@ -10,6 +10,6 @@
 ../Src/Seq/seq_transport_fsm.c:152:9:seq_transport_fsm_is_start_pending	0	static
 ../Src/Seq/seq_transport_fsm.c:157:9:seq_transport_fsm_is_running	0	static
 ../Src/Seq/seq_transport_fsm.c:162:10:seq_transport_fsm_get_rec_count_in_remaining_steps	0	static
-../Src/Seq/seq_transport_fsm.c:167:9:seq_transport_fsm_allow_advance	0	static
-../Src/Seq/seq_transport_fsm.c:172:9:seq_transport_fsm_allow_schedule_play	0	static
-../Src/Seq/seq_transport_fsm.c:177:9:seq_transport_fsm_allow_live_rec	0	static
+../Src/Seq/seq_transport_fsm.c:167:9:seq_transport_fsm_allow_advance	8	static
+../Src/Seq/seq_transport_fsm.c:172:9:seq_transport_fsm_allow_schedule_play	8	static
+../Src/Seq/seq_transport_fsm.c:177:9:seq_transport_fsm_allow_live_rec	8	static

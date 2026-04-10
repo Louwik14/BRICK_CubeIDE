@@ -5,7 +5,7 @@
 ../Src/SD/bsp_driver_sd.c:255:16:BSP_SD_WriteBlocks_DMA	24	static
 ../Src/SD/bsp_driver_sd.c:294:16:BSP_SD_Erase	8	static
 ../Src/SD/bsp_driver_sd.c:330:16:BSP_SD_GetCardState	8	static
-../Src/SD/bsp_driver_sd.c:351:13:BSP_SD_GetCardInfo	0	static
+../Src/SD/bsp_driver_sd.c:351:13:BSP_SD_GetCardInfo	8	static
 ../Src/SD/bsp_driver_sd.c:439:13:BSP_SD_AbortCallback	0	static
 ../Src/SD/bsp_driver_sd.c:376:6:HAL_SD_AbortCallback	8	static
 ../Src/SD/bsp_driver_sd.c:459:13:BSP_SD_WriteCpltCallback	0	static

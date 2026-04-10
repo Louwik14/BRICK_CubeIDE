@@ -1,4 +1,4 @@
-../Src/UI/pages/ui_page_template_dx7.c:54:36:ui_page_template_dx7_resolve_family	0	static
+../Src/UI/pages/ui_page_template_dx7.c:54:36:ui_page_template_dx7_resolve_family	8	static
 ../Src/UI/pages/ui_page_template_dx7.c:75:13:ui_page_template_tone_sync_drum_family	8	static
 ../Src/UI/pages/ui_page_template_dx7.c:220:13:ui_page_template_tone_render	8	static
 ../Src/UI/pages/ui_page_template_dx7.c:214:13:ui_page_template_tone_tick	8	static

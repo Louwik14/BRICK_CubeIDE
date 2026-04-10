@@ -1,9 +1,10 @@
 ../Src/Seq/seq_live_rec_capture.c:261:16:seq_live_rec_capture_upsert_play_param	2
+../Src/Seq/seq_live_rec_capture.c:313:13:seq_live_rec_capture_finalize_pending	6
+../Src/Seq/seq_live_rec_capture.c:184:16:seq_live_rec_capture_track_accepts_source	2
 ../Src/Seq/seq_live_rec_capture.c:298:16:seq_live_rec_capture_has_play_param	2
-../Src/Seq/seq_live_rec_capture.c:313:13:seq_live_rec_capture_finalize_pending.part.0	4
-../Src/Seq/seq_live_rec_capture.c:283:16:seq_live_rec_capture_delete_play_param.isra	2
+../Src/Seq/seq_live_rec_capture.c:283:16:seq_live_rec_capture_delete_play_param	2
 ../Src/Seq/seq_live_rec_capture.c:341:6:seq_live_rec_capture_init	1
 ../Src/Seq/seq_live_rec_capture.c:346:6:seq_live_rec_capture_reset	1
-../Src/Seq/seq_live_rec_capture.c:351:6:seq_live_rec_capture_flush	3
-../Src/Seq/seq_live_rec_capture.c:359:6:seq_live_rec_capture_note_on	36
-../Src/Seq/seq_live_rec_capture.c:477:6:seq_live_rec_capture_note_off	21
+../Src/Seq/seq_live_rec_capture.c:351:6:seq_live_rec_capture_flush	2
+../Src/Seq/seq_live_rec_capture.c:359:6:seq_live_rec_capture_note_on	34
+../Src/Seq/seq_live_rec_capture.c:477:6:seq_live_rec_capture_note_off	18

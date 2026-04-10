@@ -1,4 +1,5 @@
-../Src/App/mux_pots.c:34:6:mux_pots_init	16	static
-../Src/App/mux_pots.c:49:6:mux_pots_scan	16	static
+../Src/App/mux_pots.c:24:13:mux_pots_select_channel	16	static
+../Src/App/mux_pots.c:34:6:mux_pots_init	8	static
+../Src/App/mux_pots.c:49:6:mux_pots_scan	8	static
 ../Src/App/mux_pots.c:118:10:mux_pots_get	0	static
 ../Src/App/mux_pots.c:128:9:mux_pots_is_valid	0	static

@@ -1,3 +1,4 @@
+../Src/App/Hall/hall_note_midi.c:5:13:hall_note_midi_emit_note	16	static
 ../Src/App/Hall/hall_note_midi.c:24:6:hall_note_midi_init	0	static
 ../Src/App/Hall/hall_note_midi.c:34:9:hall_note_midi_note_for_sensor	0	static
 ../Src/App/Hall/hall_note_midi.c:44:6:hall_note_midi_reset	40	static

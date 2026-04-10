@@ -1,8 +1,8 @@
 ../Src/Seq/seq_edit.c:36:6:seq_edit_init	1
-../Src/Seq/seq_edit.c:42:9:seq_edit_toggle_hall_step	3
 ../Src/Seq/seq_edit.c:55:6:seq_edit_change_page	5
 ../Src/Seq/seq_edit.c:77:9:seq_edit_get_page	1
 ../Src/Seq/seq_edit.c:82:9:seq_edit_map_hall_to_step	4
+../Src/Seq/seq_edit.c:42:9:seq_edit_toggle_hall_step	2
 ../Src/Seq/seq_edit.c:106:6:seq_edit_step_press	4
 ../Src/Seq/seq_edit.c:139:6:seq_edit_step_release	6
 ../Src/Seq/seq_edit.c:182:6:seq_edit_step_hold_update	5
