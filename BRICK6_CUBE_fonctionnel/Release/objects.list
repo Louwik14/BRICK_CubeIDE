@@ -567,6 +567,7 @@
 "./Src/Audio/fx_filter_ladder_moog.o"
 "./Src/Audio/fx_granular.o"
 "./Src/Audio/fx_onepole.o"
+"./Src/Audio/fx_peaks_svf_lut.o"
 "./Src/Audio/fx_pool.o"
 "./Src/Audio/fx_reverb.o"
 "./Src/Audio/fx_saturation.o"

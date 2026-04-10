@@ -1,9 +1,9 @@
 ../Src/UI/pages/ui_page_template_filter.c:80:36:ui_page_template_colors_resolve_family	8	static
 ../Src/UI/pages/ui_page_template_filter.c:109:36:ui_page_template_vca_resolve_family	8	static
 ../Src/UI/pages/ui_page_template_filter.c:185:13:ui_page_template_colors_sync_family	32	static
-../Src/UI/pages/ui_page_template_filter.c:354:13:ui_page_template_colors_render	8	static
-../Src/UI/pages/ui_page_template_filter.c:347:13:ui_page_template_colors_tick	8	static
-../Src/UI/pages/ui_page_template_filter.c:339:13:ui_page_template_colors_handle_event	8	static
-../Src/UI/pages/ui_page_template_filter.c:333:13:ui_page_template_colors_enter	8	static
+../Src/UI/pages/ui_page_template_filter.c:369:13:ui_page_template_colors_render	8	static
+../Src/UI/pages/ui_page_template_filter.c:362:13:ui_page_template_colors_tick	8	static
+../Src/UI/pages/ui_page_template_filter.c:354:13:ui_page_template_colors_handle_event	8	static
+../Src/UI/pages/ui_page_template_filter.c:348:13:ui_page_template_colors_enter	8	static
 ../Src/UI/pages/ui_page_template_filter.c:128:6:ui_page_template_colors_register_families	32	static
 ../Src/UI/pages/ui_page_template_filter.c:156:6:ui_page_template_vca_register_families	24	static
