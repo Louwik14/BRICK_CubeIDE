@@ -1217,17 +1217,22 @@ static uint8_t ui_core_clipboard_collect_active_page_params(param_id_t *out_ids,
     return (count > 0U) ? 1U : 0U;
 }
 
-static void ui_core_clipboard_apply_param_list(uint8_t track,
-                                               const param_id_t *params,
-                                               const float *values,
-                                               uint8_t count)
+static uint8_t ui_core_clipboard_apply_param_list(uint8_t track,
+                                                  const param_id_t *params,
+                                                  const float *values,
+                                                  uint8_t count)
 {
+    uint8_t applied = 0U;
     param_registry_batch_begin();
     for (uint8_t i = 0U; i < count; ++i)
     {
-        (void)param_registry_apply_track_value(params[i], track, values[i]);
+        if (param_registry_apply_track_value(params[i], track, values[i]) != 0U)
+        {
+            ++applied;
+        }
     }
     param_registry_batch_end();
+    return applied;
 }
 
 static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
@@ -1341,7 +1346,13 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
     seq_runtime_set_track_quant(track, cb->seq_quant);
     seq_runtime_set_track_swing(track, cb->seq_swing);
 
-    ui_core_clipboard_apply_param_list(track, cb->params, cb->values, cb->param_count);
+    const uint8_t applied = ui_core_clipboard_apply_param_list(track, cb->params, cb->values, cb->param_count);
+    if ((cb->param_count > 0U) && (applied == 0U))
+    {
+        return 0U;
+    }
+
+    param_registry_sync_ui_for_active_track();
     return 1U;
 }
 
@@ -1379,29 +1390,53 @@ static uint8_t ui_core_clipboard_copy_param_scope(ui_param_clipboard_t *clipboar
     return 1U;
 }
 
-static uint8_t ui_core_clipboard_signature_matches(const ui_param_clipboard_t *clipboard,
-                                                   const param_id_t *target_params,
-                                                   uint8_t target_count)
+static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
+                                                    const ui_param_clipboard_t *clipboard,
+                                                    const param_id_t *target_params,
+                                                    uint8_t target_count,
+                                                    uint8_t *out_common_count)
 {
-    if ((clipboard == 0) || (target_params == 0) || (clipboard->valid == 0U))
+    if ((clipboard == 0) || (target_params == 0) || (clipboard->valid == 0U) || (out_common_count == 0))
     {
         return 0U;
     }
 
-    if (clipboard->param_count != target_count)
-    {
-        return 0U;
-    }
+    uint8_t applied = 0U;
+    uint8_t common = 0U;
+    param_registry_batch_begin();
 
     for (uint8_t i = 0U; i < target_count; ++i)
     {
-        if (clipboard->params[i] != target_params[i])
+        const param_id_t target = target_params[i];
+        uint8_t found = 0U;
+        float value = 0.0f;
+
+        for (uint8_t src = 0U; src < clipboard->param_count; ++src)
         {
-            return 0U;
+            if (clipboard->params[src] == target)
+            {
+                value = clipboard->values[src];
+                found = 1U;
+                break;
+            }
+        }
+
+        if (found == 0U)
+        {
+            continue;
+        }
+
+        ++common;
+        if (param_registry_apply_track_value(target, track, value) != 0U)
+        {
+            ++applied;
         }
     }
+    param_registry_batch_end();
 
-    return 1U;
+    *out_common_count = common;
+
+    return applied;
 }
 
 static uint8_t ui_core_handle_track_clipboard_event(const ui_event_t *ev)
@@ -1496,21 +1531,32 @@ static uint8_t ui_core_handle_ensemble_clipboard_event(const ui_event_t *ev)
     if (g_ui_track_state.shift_down != 0U)
     {
         ui_core_clipboard_clear_param_list_to_min(track, params, count);
+        param_registry_sync_ui_for_active_track();
         ui_core_set_feedback("ENS CLEARED");
         return 1U;
     }
 
-    if (ui_core_clipboard_signature_matches(&g_ui_clipboard.ensemble, params, count) == 0U)
+    uint8_t common_count = 0U;
+    const uint8_t applied = ui_core_clipboard_apply_intersection(track,
+                                                                 &g_ui_clipboard.ensemble,
+                                                                 params,
+                                                                 count,
+                                                                 &common_count);
+    if ((common_count == 0U) || (applied == 0U))
     {
         ui_core_set_feedback("ENS INCOMP");
         return 1U;
     }
 
-    ui_core_clipboard_apply_param_list(track,
-                                       g_ui_clipboard.ensemble.params,
-                                       g_ui_clipboard.ensemble.values,
-                                       g_ui_clipboard.ensemble.param_count);
-    ui_core_set_feedback("ENS PASTED");
+    param_registry_sync_ui_for_active_track();
+    if ((applied < common_count) || (common_count < g_ui_clipboard.ensemble.param_count))
+    {
+        ui_core_set_feedback("ENS PARTIAL");
+    }
+    else
+    {
+        ui_core_set_feedback("ENS PASTED");
+    }
     return 1U;
 }
 
@@ -1550,21 +1596,32 @@ static uint8_t ui_core_handle_page_clipboard_event(const ui_event_t *ev)
     if (g_ui_track_state.shift_down != 0U)
     {
         ui_core_clipboard_clear_param_list_to_min(track, params, count);
+        param_registry_sync_ui_for_active_track();
         ui_core_set_feedback("PAGE CLEARED");
         return 1U;
     }
 
-    if (ui_core_clipboard_signature_matches(&g_ui_clipboard.page, params, count) == 0U)
+    uint8_t common_count = 0U;
+    const uint8_t applied = ui_core_clipboard_apply_intersection(track,
+                                                                 &g_ui_clipboard.page,
+                                                                 params,
+                                                                 count,
+                                                                 &common_count);
+    if ((common_count == 0U) || (applied == 0U))
     {
         ui_core_set_feedback("PAGE INCOMP");
         return 1U;
     }
 
-    ui_core_clipboard_apply_param_list(track,
-                                       g_ui_clipboard.page.params,
-                                       g_ui_clipboard.page.values,
-                                       g_ui_clipboard.page.param_count);
-    ui_core_set_feedback("PAGE PASTED");
+    param_registry_sync_ui_for_active_track();
+    if ((applied < common_count) || (common_count < g_ui_clipboard.page.param_count))
+    {
+        ui_core_set_feedback("PAGE PARTIAL");
+    }
+    else
+    {
+        ui_core_set_feedback("PAGE PASTED");
+    }
     return 1U;
 }
 
