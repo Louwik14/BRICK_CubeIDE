@@ -1631,6 +1631,31 @@ static void param_registry_push_track_defaults_to_runtime(uint8_t track)
     }
 }
 
+static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
+{
+    uint8_t filter_track = 0U;
+    uint8_t mix_track = 0U;
+
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    track_runtime_refresh_track(track);
+    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+    {
+        return;
+    }
+
+    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
+    {
+        return;
+    }
+
+    mixer_set_track_filter_type((uint32_t)mix_track, MIXER_TRACK_FILTER_OFF);
+    mixer_track_filter_all_notes_off((uint32_t)mix_track);
+}
+
 static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -1645,6 +1670,7 @@ static void apply_cfg_track(float v)
 
     param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+    param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_push_track_defaults_to_runtime(active_track);
 }
 
@@ -1665,6 +1691,7 @@ static void apply_cfg_track_type(float v)
     }
 
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+    param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_push_track_defaults_to_runtime(active_track);
     g_param_cfg_track_type_apply_stage = 4U;
 }
