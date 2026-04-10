@@ -95,6 +95,48 @@ typedef struct
     uint32_t feedback_until_ms;
 } ui_track_state_t;
 
+typedef enum
+{
+    UI_CLIPBOARD_SCOPE_NONE = 0,
+    UI_CLIPBOARD_SCOPE_TRACK,
+    UI_CLIPBOARD_SCOPE_ENSEMBLE,
+    UI_CLIPBOARD_SCOPE_PAGE
+} ui_clipboard_scope_t;
+
+typedef struct
+{
+    uint8_t valid;
+    ui_clipboard_scope_t scope;
+    ui_track_family_t source_family;
+    ui_track_type_t source_type;
+    uint8_t param_count;
+    param_id_t params[PARAM_COUNT];
+    float values[PARAM_COUNT];
+} ui_param_clipboard_t;
+
+typedef struct
+{
+    uint8_t valid;
+    ui_track_config_t config;
+    uint8_t midi_channel;
+    ui_track_midi_source_t midi_source;
+    uint8_t seq_page;
+    uint8_t seq_length;
+    uint8_t seq_div;
+    uint8_t seq_quant;
+    uint8_t seq_swing;
+    uint8_t param_count;
+    param_id_t params[PARAM_COUNT];
+    float values[PARAM_COUNT];
+} ui_track_clipboard_t;
+
+typedef struct
+{
+    ui_track_clipboard_t track;
+    ui_param_clipboard_t ensemble;
+    ui_param_clipboard_t page;
+} ui_clipboard_state_t;
+
 static ui_track_state_t g_ui_track_state = {
     .active_track = 0U,
     .shift_down = 0U,
@@ -129,6 +171,8 @@ static ui_track_state_t g_ui_track_state = {
     .feedback_message = { 0 },
     .feedback_until_ms = 0U,
 };
+
+static ui_clipboard_state_t g_ui_clipboard;
 
 volatile uint32_t g_ui_tb3_type_switch_stage = 0U;
 volatile uint32_t g_ui_tb3_type_switch_track = 0U;
@@ -1030,6 +1074,557 @@ uint8_t ui_core_request_undo(void)
     return ok;
 }
 
+static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_subpage_t *subpage,
+                                                             param_id_t *out_ids,
+                                                             uint8_t *io_count)
+{
+    if ((subpage == 0) || (out_ids == 0) || (io_count == 0))
+    {
+        return 0U;
+    }
+
+    uint8_t count = *io_count;
+    for (uint8_t slot = 0U; slot < 4U; ++slot)
+    {
+        const param_id_t id = subpage->param_bank.params[slot];
+        if (id >= PARAM_COUNT)
+        {
+            continue;
+        }
+
+        uint8_t duplicate = 0U;
+        for (uint8_t i = 0U; i < count; ++i)
+        {
+            if (out_ids[i] == id)
+            {
+                duplicate = 1U;
+                break;
+            }
+        }
+        if (duplicate != 0U)
+        {
+            continue;
+        }
+
+        if (count >= (uint8_t)PARAM_COUNT)
+        {
+            return 0U;
+        }
+        out_ids[count++] = id;
+    }
+
+    *io_count = count;
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_get_held_param_button(button_id_t *out_button)
+{
+    if (out_button == 0)
+    {
+        return 0U;
+    }
+
+    for (button_id_t button = BTN_PARAM_1; button <= BTN_PARAM_5; ++button)
+    {
+        if (button_down(button) != 0U)
+        {
+            *out_button = button;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_core_clipboard_resolve_template_family_from_button(button_id_t button,
+                                                                     ui_template_family_id_t *out_family_id)
+{
+    if (out_family_id == 0)
+    {
+        return 0U;
+    }
+
+    switch (button)
+    {
+        case BTN_PARAM_1: *out_family_id = UI_TEMPLATE_FAMILY_COLORS; return 1U;
+        case BTN_PARAM_2: *out_family_id = UI_TEMPLATE_FAMILY_TONE; return 1U;
+        case BTN_PARAM_3: *out_family_id = UI_TEMPLATE_FAMILY_MOD; return 1U;
+        case BTN_PARAM_4: *out_family_id = UI_TEMPLATE_FAMILY_MIX; return 1U;
+        case BTN_PARAM_5: *out_family_id = UI_TEMPLATE_FAMILY_PLAY; return 1U;
+        default: break;
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_core_clipboard_collect_ensemble_params(ui_template_family_id_t family_id,
+                                                         param_id_t *out_ids,
+                                                         uint8_t *out_count)
+{
+    if ((out_ids == 0) || (out_count == 0))
+    {
+        return 0U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+    const ui_track_config_t config = ui_get_track_config(track);
+    const ui_template_family_t *family = ui_template_family_resolve(family_id, track, config.family, config.type);
+    if (family == 0)
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    for (uint8_t sp = 0U; sp < 4U; ++sp)
+    {
+        if (ui_core_clipboard_collect_params_from_subpage(&family->subpages[sp], out_ids, &count) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    *out_count = count;
+    return (count > 0U) ? 1U : 0U;
+}
+
+static uint8_t ui_core_clipboard_collect_active_page_params(param_id_t *out_ids, uint8_t *out_count)
+{
+    if ((out_ids == 0) || (out_count == 0))
+    {
+        return 0U;
+    }
+
+    const ui_page_t *const page = ui_page_get();
+    if ((page == 0) || (page->context == 0))
+    {
+        return 0U;
+    }
+
+    const ui_template_page_state_t *const state = (const ui_template_page_state_t *)page->context;
+    const ui_template_subpage_t *const subpage = ui_template_page_get_active_subpage(state);
+    if (subpage == 0)
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    if (ui_core_clipboard_collect_params_from_subpage(subpage, out_ids, &count) == 0U)
+    {
+        return 0U;
+    }
+
+    *out_count = count;
+    return (count > 0U) ? 1U : 0U;
+}
+
+static uint8_t ui_core_clipboard_apply_param_list(uint8_t track,
+                                                  const param_id_t *params,
+                                                  const float *values,
+                                                  uint8_t count)
+{
+    uint8_t applied = 0U;
+    param_registry_batch_begin();
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        if (param_registry_apply_track_value(params[i], track, values[i]) != 0U)
+        {
+            ++applied;
+        }
+    }
+    param_registry_batch_end();
+    return applied;
+}
+
+static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
+                                                      const param_id_t *params,
+                                                      uint8_t count)
+{
+    param_registry_batch_begin();
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        const param_id_t id = params[i];
+        if (id >= PARAM_COUNT)
+        {
+            continue;
+        }
+
+        (void)param_registry_apply_track_value(id, track, param_registry[id].min);
+    }
+    param_registry_batch_end();
+}
+
+static uint8_t ui_core_clipboard_copy_track(uint8_t track)
+{
+    ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
+    memset(cb, 0, sizeof(*cb));
+
+    cb->config = ui_get_track_config(track);
+    cb->midi_channel = ui_get_track_midi_channel(track);
+    cb->midi_source = ui_get_track_midi_source(track);
+    cb->seq_page = seq_model_get_track_page(track);
+    cb->seq_length = seq_model_get_track_length(track);
+    (void)seq_runtime_get_track_div(track, &cb->seq_div);
+    (void)seq_runtime_get_track_quant(track, &cb->seq_quant);
+    (void)seq_runtime_get_track_swing(track, &cb->seq_swing);
+
+    uint8_t count = 0U;
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, id);
+        if ((status != TRACK_RUNTIME_PARAM_ALLOWED) && (status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+        {
+            continue;
+        }
+
+        float value = param_registry[id].default_value;
+        if (param_registry_get_track_value(id, track, &value) == 0U)
+        {
+            continue;
+        }
+
+        cb->params[count] = id;
+        cb->values[count] = value;
+        ++count;
+    }
+
+    cb->param_count = count;
+    cb->valid = 1U;
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_clear_track(uint8_t track)
+{
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        (void)param_registry_apply_track_value(id, track, param_registry[id].default_value);
+    }
+
+    for (seq_step_id_t step = 0U; step < (seq_step_id_t)SEQ_MAX_STEPS; ++step)
+    {
+        seq_model_set_trig(track, step, 0U);
+        seq_model_step_plock_clear(track, step);
+    }
+
+    seq_model_set_track_page(track, 0U);
+    seq_model_set_track_length(track, (uint8_t)SEQ_MAX_STEPS);
+    seq_runtime_set_track_div(track, 1U);
+    seq_runtime_set_track_quant(track, 1U);
+    seq_runtime_set_track_swing(track, 0U);
+    (void)seq_runtime_set_playhead_step(track, 0U);
+
+    (void)ui_set_track_midi_channel(track, (uint8_t)((track < 16U) ? (track + 1U) : 16U));
+    (void)ui_set_track_midi_source(track, UI_TRACK_MIDI_SRC_ALL);
+    (void)ui_set_track_family(track, UI_TRACK_FAMILY_OFF);
+    (void)ui_set_track_type(track, UI_TRACK_TYPE_AUDIO);
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_paste_track(uint8_t track)
+{
+    const ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
+    if (cb->valid == 0U)
+    {
+        return 0U;
+    }
+
+    if (ui_set_track_family(track, cb->config.family) == false)
+    {
+        return 0U;
+    }
+    if (ui_set_track_type(track, cb->config.type) == false)
+    {
+        return 0U;
+    }
+
+    (void)ui_set_track_midi_channel(track, cb->midi_channel);
+    (void)ui_set_track_midi_source(track, cb->midi_source);
+    seq_model_set_track_page(track, cb->seq_page);
+    seq_model_set_track_length(track, cb->seq_length);
+    seq_runtime_set_track_div(track, cb->seq_div);
+    seq_runtime_set_track_quant(track, cb->seq_quant);
+    seq_runtime_set_track_swing(track, cb->seq_swing);
+
+    const uint8_t applied = ui_core_clipboard_apply_param_list(track, cb->params, cb->values, cb->param_count);
+    if ((cb->param_count > 0U) && (applied == 0U))
+    {
+        return 0U;
+    }
+
+    param_registry_sync_ui_for_active_track();
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_copy_param_scope(ui_param_clipboard_t *clipboard,
+                                                  ui_clipboard_scope_t scope,
+                                                  const param_id_t *params,
+                                                  uint8_t count,
+                                                  uint8_t track)
+{
+    if ((clipboard == 0) || (params == 0) || (count == 0U))
+    {
+        return 0U;
+    }
+
+    memset(clipboard, 0, sizeof(*clipboard));
+    clipboard->scope = scope;
+    clipboard->source_family = ui_get_track_family(track);
+    clipboard->source_type = ui_get_track_type(track);
+
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        const param_id_t id = params[i];
+        float value = 0.0f;
+        if ((id >= PARAM_COUNT) || (param_registry_get_track_value(id, track, &value) == 0U))
+        {
+            return 0U;
+        }
+
+        clipboard->params[i] = id;
+        clipboard->values[i] = value;
+    }
+
+    clipboard->param_count = count;
+    clipboard->valid = 1U;
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
+                                                    const ui_param_clipboard_t *clipboard,
+                                                    const param_id_t *target_params,
+                                                    uint8_t target_count,
+                                                    uint8_t *out_common_count)
+{
+    if ((clipboard == 0) || (target_params == 0) || (clipboard->valid == 0U) || (out_common_count == 0))
+    {
+        return 0U;
+    }
+
+    uint8_t applied = 0U;
+    uint8_t common = 0U;
+    param_registry_batch_begin();
+
+    for (uint8_t i = 0U; i < target_count; ++i)
+    {
+        const param_id_t target = target_params[i];
+        uint8_t found = 0U;
+        float value = 0.0f;
+
+        for (uint8_t src = 0U; src < clipboard->param_count; ++src)
+        {
+            if (clipboard->params[src] == target)
+            {
+                value = clipboard->values[src];
+                found = 1U;
+                break;
+            }
+        }
+
+        if (found == 0U)
+        {
+            continue;
+        }
+
+        ++common;
+        if (param_registry_apply_track_value(target, track, value) != 0U)
+        {
+            ++applied;
+        }
+    }
+    param_registry_batch_end();
+
+    *out_common_count = common;
+
+    return applied;
+}
+
+static uint8_t ui_core_handle_track_clipboard_event(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
+    {
+        return 0U;
+    }
+
+    if ((g_ui_track_state.track_select_armed == 0U)
+        || ((ev->id != (uint8_t)BTN_COPY) && (ev->id != (uint8_t)BTN_PASTE)))
+    {
+        return 0U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+    if (ev->id == (uint8_t)BTN_COPY)
+    {
+        if (ui_core_clipboard_copy_track(track) != 0U)
+        {
+            ui_core_set_feedback("TRACK COPIED");
+        }
+        return 1U;
+    }
+
+    if (g_ui_track_state.shift_down != 0U)
+    {
+        if (ui_core_clipboard_clear_track(track) != 0U)
+        {
+            ui_core_set_feedback("TRACK CLEARED");
+        }
+        return 1U;
+    }
+
+    if (ui_core_clipboard_paste_track(track) != 0U)
+    {
+        ui_core_set_feedback("TRACK PASTED");
+    }
+    else
+    {
+        ui_core_set_feedback("TRACK INCOMP");
+    }
+    return 1U;
+}
+
+static uint8_t ui_core_handle_ensemble_clipboard_event(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
+    {
+        return 0U;
+    }
+
+    if ((ev->id != (uint8_t)BTN_COPY) && (ev->id != (uint8_t)BTN_PASTE))
+    {
+        return 0U;
+    }
+
+    button_id_t held_button = BTN_COUNT;
+    if (ui_core_clipboard_get_held_param_button(&held_button) == 0U)
+    {
+        return 0U;
+    }
+
+    ui_template_family_id_t family_id = UI_TEMPLATE_FAMILY_COUNT;
+    if (ui_core_clipboard_resolve_template_family_from_button(held_button, &family_id) == 0U)
+    {
+        return 0U;
+    }
+
+    param_id_t params[PARAM_COUNT];
+    uint8_t count = 0U;
+    if (ui_core_clipboard_collect_ensemble_params(family_id, params, &count) == 0U)
+    {
+        ui_core_set_feedback("ENS N/A");
+        return 1U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+    if (ev->id == (uint8_t)BTN_COPY)
+    {
+        if (ui_core_clipboard_copy_param_scope(&g_ui_clipboard.ensemble,
+                                               UI_CLIPBOARD_SCOPE_ENSEMBLE,
+                                               params,
+                                               count,
+                                               track) != 0U)
+        {
+            ui_core_set_feedback("ENS COPIED");
+        }
+        return 1U;
+    }
+
+    if (g_ui_track_state.shift_down != 0U)
+    {
+        ui_core_clipboard_clear_param_list_to_min(track, params, count);
+        param_registry_sync_ui_for_active_track();
+        ui_core_set_feedback("ENS CLEARED");
+        return 1U;
+    }
+
+    uint8_t common_count = 0U;
+    const uint8_t applied = ui_core_clipboard_apply_intersection(track,
+                                                                 &g_ui_clipboard.ensemble,
+                                                                 params,
+                                                                 count,
+                                                                 &common_count);
+    if ((common_count == 0U) || (applied == 0U))
+    {
+        ui_core_set_feedback("ENS INCOMP");
+        return 1U;
+    }
+
+    param_registry_sync_ui_for_active_track();
+    if ((applied < common_count) || (common_count < g_ui_clipboard.ensemble.param_count))
+    {
+        ui_core_set_feedback("ENS PARTIAL");
+    }
+    else
+    {
+        ui_core_set_feedback("ENS PASTED");
+    }
+    return 1U;
+}
+
+static uint8_t ui_core_handle_page_clipboard_event(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
+    {
+        return 0U;
+    }
+
+    if ((ev->id != (uint8_t)BTN_COPY) && (ev->id != (uint8_t)BTN_PASTE))
+    {
+        return 0U;
+    }
+
+    param_id_t params[PARAM_COUNT];
+    uint8_t count = 0U;
+    if (ui_core_clipboard_collect_active_page_params(params, &count) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint8_t track = ui_get_active_track();
+    if (ev->id == (uint8_t)BTN_COPY)
+    {
+        if (ui_core_clipboard_copy_param_scope(&g_ui_clipboard.page,
+                                               UI_CLIPBOARD_SCOPE_PAGE,
+                                               params,
+                                               count,
+                                               track) != 0U)
+        {
+            ui_core_set_feedback("PAGE COPIED");
+        }
+        return 1U;
+    }
+
+    if (g_ui_track_state.shift_down != 0U)
+    {
+        ui_core_clipboard_clear_param_list_to_min(track, params, count);
+        param_registry_sync_ui_for_active_track();
+        ui_core_set_feedback("PAGE CLEARED");
+        return 1U;
+    }
+
+    uint8_t common_count = 0U;
+    const uint8_t applied = ui_core_clipboard_apply_intersection(track,
+                                                                 &g_ui_clipboard.page,
+                                                                 params,
+                                                                 count,
+                                                                 &common_count);
+    if ((common_count == 0U) || (applied == 0U))
+    {
+        ui_core_set_feedback("PAGE INCOMP");
+        return 1U;
+    }
+
+    param_registry_sync_ui_for_active_track();
+    if ((applied < common_count) || (common_count < g_ui_clipboard.page.param_count))
+    {
+        ui_core_set_feedback("PAGE PARTIAL");
+    }
+    else
+    {
+        ui_core_set_feedback("PAGE PASTED");
+    }
+    return 1U;
+}
+
 static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
 {
     if ((ev == 0) || (ui_get_hall_mode() != UI_HALL_MODE_PATTERN))
@@ -1083,6 +1678,21 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
     if (ev == 0)
     {
         return 0U;
+    }
+
+    if (ui_core_handle_track_clipboard_event(ev) != 0U)
+    {
+        return 1U;
+    }
+
+    if (ui_core_handle_ensemble_clipboard_event(ev) != 0U)
+    {
+        return 1U;
+    }
+
+    if (ui_core_handle_page_clipboard_event(ev) != 0U)
+    {
+        return 1U;
     }
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_SETTINGS))
@@ -1198,6 +1808,7 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 
 void ui_core_init(void)
 {
+    memset(&g_ui_clipboard, 0, sizeof(g_ui_clipboard));
     g_ui_track_state.active_track = 0U;
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
