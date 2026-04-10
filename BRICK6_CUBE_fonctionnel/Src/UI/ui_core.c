@@ -2886,9 +2886,14 @@ uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
     out_led->blink = 0U;
     out_led->muted = 0U;
 
-    if ((g_ui_track_state.mute_active == 0U) || (hall >= UI_TRACK_COUNT))
+    if (g_ui_track_state.mute_active == 0U)
     {
         return 0U;
+    }
+
+    if (hall >= UI_TRACK_COUNT)
+    {
+        return 1U;
     }
 
     if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
