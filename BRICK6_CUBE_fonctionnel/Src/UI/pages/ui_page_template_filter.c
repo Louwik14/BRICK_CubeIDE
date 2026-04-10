@@ -11,7 +11,7 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
     .subpages = {
         {
             .title = "MAIN",
-            .param_bank = { .params = { PARAM_FILTER_TYPE, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_FILTER_TYPE, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_FILTER_EG_AMT } },
         },
         {
             .title = "ADSR",
@@ -249,7 +249,7 @@ static void ui_page_template_colors_sync_family(void)
     family->subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
     family->subpages[0].param_bank.params[1] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_LOW : PARAM_FILTER_CUTOFF;
     family->subpages[0].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_MID : PARAM_FILTER_RESONANCE;
-    family->subpages[0].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_HIGH : PARAM_COUNT;
+    family->subpages[0].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_HIGH : ((has_adsr_page != 0U) ? PARAM_FILTER_EG_AMT : PARAM_COUNT);
 
     family->subpages[1].title = (has_adsr_page != 0U) ? "ADSR" : "-";
     family->subpages[1].param_bank.params[0] = (has_adsr_page != 0U) ? PARAM_FILTER_ATTACK : PARAM_COUNT;
