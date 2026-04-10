@@ -1,3 +1,0 @@
-../Src/UI/ui_navigation.c:19:16:ui_navigation_is_page_available	8	static
-../Src/UI/ui_navigation.c:38:6:ui_navigation_handle_event	24	static
-../Src/UI/ui_navigation.c:64:13:ui_navigation_get_button_for_page	8	static

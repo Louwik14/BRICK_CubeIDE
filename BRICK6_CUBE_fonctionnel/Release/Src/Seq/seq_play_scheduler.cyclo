@@ -1,6 +1,0 @@
-../Src/Seq/seq_play_scheduler.c:204:22:seq_play_scheduler_get_locked_or_default	3
-../Src/Seq/seq_play_scheduler.c:121:13:seq_play_scheduler_emit_engine_note	17
-../Src/Seq/seq_play_scheduler.c:224:6:seq_play_scheduler_init	1
-../Src/Seq/seq_play_scheduler.c:229:6:seq_play_scheduler_clear	1
-../Src/Seq/seq_play_scheduler.c:234:6:seq_play_scheduler_schedule_step	12
-../Src/Seq/seq_play_scheduler.c:336:6:seq_play_scheduler_service	23

@@ -1,4 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/modal_engine.h:44:16:virtual void plaits::ModalEngine::LoadUserData(const uint8_t*)	0	static
-../mutable_instruments/plaits/dsp/engine/modal_engine.cc:44:6:virtual void plaits::ModalEngine::Reset()	0	static
-../mutable_instruments/plaits/dsp/engine/modal_engine.cc:48:6:virtual void plaits::ModalEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	48	static
-../mutable_instruments/plaits/dsp/engine/modal_engine.cc:38:6:virtual void plaits::ModalEngine::Init(stmlib::BufferAllocator*)	4	static

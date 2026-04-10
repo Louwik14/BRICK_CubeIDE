@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine2/phase_distortion_engine.h:45:16:virtual void plaits::PhaseDistortionEngine::LoadUserData(const uint8_t*)	1
-../mutable_instruments/plaits/dsp/engine2/phase_distortion_engine.cc:44:6:virtual void plaits::PhaseDistortionEngine::Init(stmlib::BufferAllocator*)	2
-../mutable_instruments/plaits/dsp/engine2/phase_distortion_engine.cc:50:6:virtual void plaits::PhaseDistortionEngine::Reset()	1
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/variable_shape_oscillator.h:92:8:void plaits::VariableShapeOscillator::Render(float, float, float, float, float, float*, size_t) [with bool enable_sync = true; bool output_phase = true]	19
-../mutable_instruments/plaits/dsp/engine2/phase_distortion_engine.cc:54:6:virtual void plaits::PhaseDistortionEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	17

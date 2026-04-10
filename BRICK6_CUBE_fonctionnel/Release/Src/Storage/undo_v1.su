@@ -1,4 +1,0 @@
-../Src/Storage/undo_v1.c:18:6:undo_v1_init	8	static
-../Src/Storage/undo_v1.c:24:9:undo_v1_capture_before_edit	16	static,ignoring_inline_asm
-../Src/Storage/undo_v1.c:43:9:undo_v1_restore	8	static,ignoring_inline_asm
-../Src/Storage/undo_v1.c:57:9:undo_v1_is_available	0	static

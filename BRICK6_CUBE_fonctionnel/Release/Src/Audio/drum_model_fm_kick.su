@@ -1,9 +1,0 @@
-../Src/Audio/../../md-drum-synth-main/FmKickModel.cpp:35:6:virtual void FmKickModel::Init()	0	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.cpp:97:6:virtual void FmKickModel::RenderControls()	0	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.h:6:7:FmKickModel::~FmKickModel()	0	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.h:19:10:virtual bool FmKickModel::SetParamByIndex(uint8_t, float)	0	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.h:15:10:virtual void FmKickModel::loadParameters(std::istream&)	8	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.h:6:7:virtual FmKickModel::~FmKickModel()	8	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.cpp:62:7:virtual float FmKickModel::Process()	8	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.cpp:48:6:virtual void FmKickModel::Trigger()	8	static
-../Src/Audio/../../md-drum-synth-main/FmKickModel.h:12:10:virtual void FmKickModel::saveParameters(std::ostream&) const	24	static

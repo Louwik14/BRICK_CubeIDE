@@ -1,2 +1,0 @@
-../Src/Core/brick6_audio_runtime.c:248:6:brick6_audio_runtime_init	0	static
-../Src/Core/brick6_audio_runtime.c:254:6:brick6_audio_runtime_dsp	72	static

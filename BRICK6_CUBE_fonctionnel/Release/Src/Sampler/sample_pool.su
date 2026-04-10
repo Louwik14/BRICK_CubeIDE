@@ -1,4 +1,0 @@
-../Src/Sampler/sample_pool.c:70:14:sample_pool_pcm24_to_float	0	static
-../Src/Sampler/sample_pool.c:312:6:sample_pool_init	32	static
-../Src/Sampler/sample_pool.c:341:6:sample_pool_load	4816	static
-../Src/Sampler/sample_pool.c:486:22:sample_pool_get	0	static

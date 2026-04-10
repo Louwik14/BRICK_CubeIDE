@@ -1,2 +1,0 @@
-../mutable_instruments/plaits/dsp/speech/naive_speech_synth.cc:84:6:void plaits::NaiveSpeechSynth::Init()	1
-../mutable_instruments/plaits/dsp/speech/naive_speech_synth.cc:96:6:void plaits::NaiveSpeechSynth::Render(bool, float, float, float, float*, float*, float*, size_t)	16
