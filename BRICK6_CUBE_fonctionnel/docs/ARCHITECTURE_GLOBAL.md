@@ -220,6 +220,7 @@ Au minimum, l’architecture s’appuie aujourd’hui sur :
 - `TONE`
 - `MOD`
 - `MIX`
+- `VCA`
 - `KEYBOARD`
 - `ARP`
 
@@ -243,6 +244,7 @@ Le mapping parameter button doit rester centralisé dans une table unique.
 - `BTN_PARAM_3` -> `MOD` (pages `LFO1` / `LFO2`)
 - `BTN_PARAM_4` -> `MIX` (disponible sur tracks `Input` et families moteur `Synth`/`Drum`)
 - `BTN_PARAM_5` -> `PLAY` (disponible seulement si la track active est de family moteur `Synth` ou `Drum`)
+- `BTN_PARAM_6` -> `VCA` (disponible seulement si la track active est de family moteur `Synth` ou `Drum`)
 - `BTN_PARAM_8` -> bouton spécial `TRACK` (modificateur, pas un ensemble UI)
 
 Contraintes :

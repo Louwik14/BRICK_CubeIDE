@@ -63,6 +63,18 @@ static uint8_t keyboard_engine_get_filter_target_track(void)
     return 0xFFU;
 }
 
+static uint8_t keyboard_engine_get_active_mix_target_track(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    uint8_t mix_track = 0U;
+    track_runtime_refresh_track(active_track);
+    if (track_runtime_get_mix_target_track(active_track, &mix_track) != 0U)
+    {
+        return mix_track;
+    }
+    return 0xFFU;
+}
+
 static uint8_t keyboard_engine_get_active_monob_instance(void)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -146,9 +158,14 @@ void keyboard_engine_note_on(uint8_t note, uint8_t velocity)
     seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, active_channel, note, velocity);
 
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
+    const uint8_t mix_track = keyboard_engine_get_active_mix_target_track();
     if (filter_track != 0xFFU)
     {
         mixer_track_filter_note_on(filter_track, note, velocity);
+    }
+    if (mix_track != 0xFFU)
+    {
+        mixer_track_vca_note_on(mix_track, note, velocity);
     }
 
     if (keyboard_engine_active_track_has_midi_note_path())
@@ -205,9 +222,14 @@ void keyboard_engine_note_off(uint8_t note)
     seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL, note_on_channel, note);
 
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
+    const uint8_t mix_track = keyboard_engine_get_active_mix_target_track();
     if (filter_track != 0xFFU)
     {
         mixer_track_filter_note_off(filter_track, note);
+    }
+    if (mix_track != 0xFFU)
+    {
+        mixer_track_vca_note_off(mix_track, note);
     }
 
     if (keyboard_engine_active_track_has_midi_note_path())
@@ -266,9 +288,14 @@ void keyboard_engine_all_notes_off(void)
     drum_synth_all_notes_off_all();
 
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
+    const uint8_t mix_track = keyboard_engine_get_active_mix_target_track();
     if (filter_track != 0xFFU)
     {
         mixer_track_filter_all_notes_off(filter_track);
+    }
+    if (mix_track != 0xFFU)
+    {
+        mixer_track_vca_all_notes_off(mix_track);
     }
 
     if (keyboard_engine_active_track_has_midi_note_path())
@@ -346,6 +373,7 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         }
 
         uint8_t filter_track = 0U;
+        uint8_t mix_track = 0U;
         if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
         {
             if (is_note_on != 0U)
@@ -359,6 +387,21 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             else if (is_all_notes_off != 0U)
             {
                 mixer_track_filter_all_notes_off(filter_track);
+            }
+        }
+        if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
+        {
+            if (is_note_on != 0U)
+            {
+                mixer_track_vca_note_on(mix_track, note, velocity);
+            }
+            else if (is_note_off != 0U)
+            {
+                mixer_track_vca_note_off(mix_track, note);
+            }
+            else if (is_all_notes_off != 0U)
+            {
+                mixer_track_vca_all_notes_off(mix_track);
             }
         }
 

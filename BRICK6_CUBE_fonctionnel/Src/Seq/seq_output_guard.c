@@ -13,6 +13,7 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
+#include "Audio/mixer.h"
 #include "midi.h"
 #include "ui_core.h"
 
@@ -139,6 +140,11 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
         {
             continue;
+        }
+
+        if (ctx->mix_track_id < MIXER_MAX_TRACKS)
+        {
+            mixer_track_vca_all_notes_off(ctx->mix_track_id);
         }
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
