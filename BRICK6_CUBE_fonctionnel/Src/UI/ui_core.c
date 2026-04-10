@@ -1338,7 +1338,22 @@ static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboa
 {
     if (cb == 0)
     {
-        return 0U;
+        if (ui_core_clipboard_track_is_simple_exclusive(cb) != 0U)
+        {
+            clear_source_after_success = 1U;
+        }
+        else if (ui_core_clipboard_track_is_input_exclusive(cb) != 0U)
+        {
+            const ui_track_family_t free_input = ui_core_clipboard_find_free_input_family();
+            if (free_input != UI_TRACK_FAMILY_COUNT)
+            {
+                target_family = free_input;
+            }
+            else
+            {
+                clear_source_after_success = 1U;
+            }
+        }
     }
 
     return (uint8_t)ui_track_family_is_input(cb->config.family);
@@ -1364,7 +1379,21 @@ static uint8_t ui_core_clipboard_move_exclusive_track_config(uint8_t source_trac
 {
     if ((source_track >= UI_TRACK_COUNT) || (target_track >= UI_TRACK_COUNT))
     {
-        return 0U;
+        if (ui_core_clipboard_move_exclusive_track_config(source_track, track, target_family, cb->config.type) == 0U)
+        {
+            return 0U;
+        }
+    }
+    else
+    {
+        if (ui_set_track_family(track, target_family) == false)
+        {
+            return 0U;
+        }
+        if (ui_set_track_type(track, cb->config.type) == false)
+        {
+            return 0U;
+        }
     }
 
     uint8_t family[UI_TRACK_COUNT];
@@ -1390,7 +1419,8 @@ static uint8_t ui_core_clipboard_move_exclusive_track_config(uint8_t source_trac
 
 static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 {
-    const ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
+    ui_track_clipboard_t *const cb_mut = &g_ui_clipboard.track;
+    const ui_track_clipboard_t *const cb = cb_mut;
     if (cb->valid == 0U)
     {
         return 0U;
@@ -1462,6 +1492,13 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
         {
             return 0U;
         }
+
+        /*
+         * Keep clipboard autonomous across chained move-pastes:
+         * after a successful move, the effective live source becomes
+         * the just-pasted target track.
+         */
+        cb_mut->source_track = track;
     }
 
     param_registry_sync_ui_for_active_track();
