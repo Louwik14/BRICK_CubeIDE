@@ -1,7 +1,6 @@
 #pragma once
 
 #include <stdint.h>
-#include "arm_math.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,17 +14,19 @@ typedef enum
 } fx_biquad_filter_mode_t;
 
 typedef struct {
-    arm_biquad_casd_df1_inst_f32 inst_l;
-    arm_biquad_casd_df1_inst_f32 inst_r;
-
-    __attribute__((aligned(32))) float coeffs[5U];
-    float coeffs_pending[5U];
-    __attribute__((aligned(32))) float state_l[4U];
-    __attribute__((aligned(32))) float state_r[4U];
-
     float sample_rate;
     float cutoff_hz;
     float q;
+
+    int16_t frequency_q15;
+    int16_t resonance_q15;
+    int32_t f_q15;
+    int32_t damp_q15;
+
+    int32_t lp_l;
+    int32_t bp_l;
+    int32_t lp_r;
+    int32_t bp_r;
 
     uint8_t mode;
     uint8_t bypass;
