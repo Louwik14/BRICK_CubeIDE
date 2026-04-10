@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
     fx_biquad_filter_t biquad;
     env_adsr_t filter_env;
+    env_adsr_t vca_env;
     fx_dj_eq3_t eq3;
     float sample_rate;
     float cutoff_hz;
@@ -65,6 +66,9 @@ typedef struct {
     float eq_high_target_db;
     uint8_t note_active;
     uint8_t current_note;
+    uint8_t vca_enabled;
+    uint8_t vca_note_active;
+    uint8_t vca_current_note;
     uint8_t type;
 } mixer_track_filter_t;
 
@@ -214,12 +218,21 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->eq_high_target_db = 0.0f;
     filter->type = (uint8_t)MIXER_TRACK_FILTER_OFF;
     filter->note_active = 0U;
+    filter->vca_enabled = 0U;
+    filter->vca_note_active = 0U;
+    filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
 
     env_adsr_init(&filter->filter_env, filter->sample_rate);
     env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f));
     env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f));
     env_adsr_set_sustain(&filter->filter_env, mixer_track_filter_sustain_to_peaks(1.0f));
     env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f));
+    env_adsr_init(&filter->vca_env, filter->sample_rate);
+    env_adsr_set_attack(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f));
+    env_adsr_set_decay(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f));
+    env_adsr_set_sustain(&filter->vca_env, mixer_track_filter_sustain_to_peaks(1.0f));
+    env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f));
+    env_adsr_reset(&filter->vca_env);
 
     mixer_track_filter_reset_dsp(filter);
 }
@@ -722,6 +735,88 @@ void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t ve
     env_adsr_retrigger(&filter->filter_env, true);
 }
 
+void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    env_adsr_set_attack(&g_track_filters[track_id].vca_env,
+                        mixer_track_filter_time_s_to_peaks(attack_s));
+}
+
+void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    env_adsr_set_decay(&g_track_filters[track_id].vca_env,
+                       mixer_track_filter_time_s_to_peaks(decay_s));
+}
+
+void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    env_adsr_set_sustain(&g_track_filters[track_id].vca_env,
+                         mixer_track_filter_sustain_to_peaks(sustain));
+}
+
+void mixer_set_track_vca_release(uint32_t track_id, float release_s)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    env_adsr_set_release(&g_track_filters[track_id].vca_env,
+                         mixer_track_filter_time_s_to_peaks(release_s));
+}
+
+void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    g_track_filters[track_id].vca_enabled = (enabled != 0U) ? 1U : 0U;
+}
+
+void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
+{
+    (void)velocity;
+
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->vca_enabled = 1U;
+    filter->vca_current_note = midi_note;
+    filter->vca_note_active = 1U;
+    env_adsr_retrigger(&filter->vca_env, true);
+}
+
+void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    if((filter->vca_enabled == 0U) || (filter->vca_note_active == 0U) || (filter->vca_current_note != midi_note))
+        return;
+
+    filter->vca_note_active = 0U;
+    env_adsr_gate_off(&filter->vca_env);
+}
+
+void mixer_track_vca_all_notes_off(uint32_t track_id)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    filter->vca_note_active = 0U;
+    filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
+    env_adsr_reset(&filter->vca_env);
+}
+
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -890,8 +985,11 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 const float pan_r = (pan_for_mix >= 0.0f) ? 1.0f : (1.0f + pan_for_mix);
                 const float gain_l = gain_cur * pan_l;
                 const float gain_r = gain_cur * pan_r;
-                L[i] *= gain_l;
-                R[i] *= gain_r;
+                const float vca_gain = (g_track_filters[t].vca_enabled != 0U)
+                        ? ((float)env_adsr_process_step(&g_track_filters[t].vca_env) * (1.0f / 32767.0f))
+                        : 1.0f;
+                L[i] *= (gain_l * vca_gain);
+                R[i] *= (gain_r * vca_gain);
 
                 gain_cur += gain_step;
                 pan_cur += pan_step;

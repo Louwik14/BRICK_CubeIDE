@@ -33,6 +33,7 @@ typedef enum
     UI_TEMPLATE_FAMILY_SEQ,
     UI_TEMPLATE_FAMILY_MIX,
     UI_TEMPLATE_FAMILY_PLAY,
+    UI_TEMPLATE_FAMILY_VCA,
     UI_TEMPLATE_FAMILY_COUNT
 } ui_template_family_id_t;
 

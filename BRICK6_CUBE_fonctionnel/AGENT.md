@@ -157,6 +157,7 @@ Ensembles importants existants :
 - `TONE`
 - `MOD`
 - `MIX`
+- `VCA`
 - `KEYBOARD`
 - `ARP`
 
@@ -192,6 +193,7 @@ Ensembles importants existants :
 - `BTN_PARAM_3` -> `MOD`
 - `BTN_PARAM_4` -> `MIX`
 - `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est une family moteur `Synth` ou `Drum`)
+- `BTN_PARAM_6` -> `VCA` (uniquement quand la track active est une family moteur `Synth` ou `Drum`)
 - `BTN_PARAM_8` -> bouton spécial `TRACK` (pas un point d’entrée d’ensemble UI)
 - `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
 
