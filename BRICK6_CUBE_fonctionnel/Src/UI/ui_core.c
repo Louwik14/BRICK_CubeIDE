@@ -2044,7 +2044,9 @@ void ui_core_service_track_selection_inputs(void)
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 
-    if (((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD) || (ui_get_hall_mode() == UI_HALL_MODE_ARP)) && (g_ui_track_state.shift_down == 0U))
+    if (((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD) || (ui_get_hall_mode() == UI_HALL_MODE_ARP))
+        && (g_ui_track_state.shift_down == 0U)
+        && (g_ui_track_state.track_select_armed == 0U))
     {
         if (button_pressed(BTN_TRANSPOSE_UP) != 0U)
         {
