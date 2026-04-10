@@ -15,11 +15,15 @@ static uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi)
 
 static uint32_t phase_increment_from_time(const env_adsr_peaks_t *env, uint16_t time)
 {
-    const uint32_t x = (uint32_t)time;
-    const uint32_t x2 = (x * x) >> 16;
-    const uint32_t x3 = (x2 * x) >> 16;
-    const uint32_t duration_samples = 1u + (uint32_t)(((uint64_t)x3 * (uint64_t)env->max_segment_samples) >> 16);
-    uint32_t increment = (uint32_t)(((uint64_t)ENV_ADSR_PHASE_MAX + 1ull) / (uint64_t)duration_samples);
+    const uint64_t x = (uint64_t)time;
+    const uint64_t x3 = x * x * x;
+    const uint32_t duration_samples = 1u
+            + (uint32_t)((x3 * (uint64_t)env->max_segment_samples) >> 48);
+
+    if(duration_samples <= 1u)
+        return ENV_ADSR_PHASE_MAX;
+
+    uint32_t increment = (uint32_t)(((uint64_t)1u << 32) / (uint64_t)duration_samples);
     if(increment == 0u)
         increment = 1u;
     return increment;

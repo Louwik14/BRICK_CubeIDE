@@ -308,6 +308,10 @@ static void apply_mix_level(float v) { apply_mix_live_track(PARAM_MIX_LEVEL, v);
 static void apply_mix_pan(float v) { apply_mix_live_track(PARAM_MIX_PAN, v); }
 static void apply_mix_send1(float v) { apply_mix_live_track(PARAM_MIX_SEND1, v); }
 static void apply_mix_send2(float v) { apply_mix_live_track(PARAM_MIX_SEND2, v); }
+static void apply_vca_attack(float v) { apply_mix_live_track(PARAM_VCA_ATTACK, v); }
+static void apply_vca_decay(float v) { apply_mix_live_track(PARAM_VCA_DECAY, v); }
+static void apply_vca_sustain(float v) { apply_mix_live_track(PARAM_VCA_SUSTAIN, v); }
+static void apply_vca_release(float v) { apply_mix_live_track(PARAM_VCA_RELEASE, v); }
 
 static void apply_tone_live_track(param_id_t id, float value)
 {
@@ -700,6 +704,18 @@ static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float
 
         case PARAM_MIX_SEND2:
             mixer_set_track_send_level(ctx->mix_track_id, 1U, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_VCA_ATTACK:
+            mixer_set_track_vca_attack(ctx->mix_track_id, filter_ui127_to_attack_s(value));
+            return 1U;
+        case PARAM_VCA_DECAY:
+            mixer_set_track_vca_decay(ctx->mix_track_id, filter_ui127_to_decay_s(value));
+            return 1U;
+        case PARAM_VCA_SUSTAIN:
+            mixer_set_track_vca_sustain(ctx->mix_track_id, filter_ui127_to_sustain(value));
+            return 1U;
+        case PARAM_VCA_RELEASE:
+            mixer_set_track_vca_release(ctx->mix_track_id, filter_ui127_to_release_s(value));
             return 1U;
 
         default:
@@ -1656,6 +1672,34 @@ static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
     mixer_track_filter_all_notes_off((uint32_t)mix_track);
 }
 
+static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
+{
+    uint8_t mix_track = 0U;
+
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx != NULL)
+            && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+                || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
+    {
+        return;
+    }
+
+    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
+    {
+        return;
+    }
+
+    mixer_track_vca_all_notes_off((uint32_t)mix_track);
+    mixer_set_track_vca_enabled((uint32_t)mix_track, 0U);
+}
+
 static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -1671,6 +1715,7 @@ static void apply_cfg_track(float v)
     param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
+    param_registry_neutralize_vca_runtime_if_invalid(active_track);
     param_registry_push_track_defaults_to_runtime(active_track);
 }
 
@@ -1692,6 +1737,7 @@ static void apply_cfg_track_type(float v)
 
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
+    param_registry_neutralize_vca_runtime_if_invalid(active_track);
     param_registry_push_track_defaults_to_runtime(active_track);
     g_param_cfg_track_type_apply_stage = 4U;
 }
@@ -2142,6 +2188,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_EQ_MID, "Mid", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_mid),
     PARAM_DESC_EX(PARAM_FILTER_EQ_HIGH, "High", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_eq_high),
     PARAM_DESC_EX(PARAM_FILTER_DRIVE, "Drive", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_drive),
+    PARAM_DESC_EX(PARAM_VCA_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_attack),
+    PARAM_DESC_EX(PARAM_VCA_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_decay),
+    PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_sustain),
+    PARAM_DESC_EX(PARAM_VCA_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_release),
 
     PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 6.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),

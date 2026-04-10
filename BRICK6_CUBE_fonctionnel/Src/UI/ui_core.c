@@ -1393,7 +1393,7 @@ static uint8_t ui_core_clipboard_get_held_param_button(button_id_t *out_button)
         return 0U;
     }
 
-    for (button_id_t button = BTN_PARAM_1; button <= BTN_PARAM_5; ++button)
+    for (button_id_t button = BTN_PARAM_1; button <= BTN_PARAM_6; ++button)
     {
         if (button_down(button) != 0U)
         {
@@ -1420,6 +1420,7 @@ static uint8_t ui_core_clipboard_resolve_template_family_from_button(button_id_t
         case BTN_PARAM_3: *out_family_id = UI_TEMPLATE_FAMILY_MOD; return 1U;
         case BTN_PARAM_4: *out_family_id = UI_TEMPLATE_FAMILY_MIX; return 1U;
         case BTN_PARAM_5: *out_family_id = UI_TEMPLATE_FAMILY_PLAY; return 1U;
+        case BTN_PARAM_6: *out_family_id = UI_TEMPLATE_FAMILY_VCA; return 1U;
         default: break;
     }
 
@@ -2377,6 +2378,7 @@ void ui_core_init(void)
     ui_page_template_seq_register_families();
     ui_page_template_mix_register_families();
     ui_page_template_play_register_families();
+    ui_page_template_vca_register_families();
 
     ui_page_manager_init();
 
@@ -2398,6 +2400,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_seq);
     ui_page_manager_register(&g_ui_page_template_mix);
     ui_page_manager_register(&g_ui_page_template_play);
+    ui_page_manager_register(&g_ui_page_template_vca);
     ui_page_manager_register(&g_ui_page_settings);
 
     if (hall_calibration_load() != 0U)

@@ -124,6 +124,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
                                                 uint8_t is_note_on)
 {
     uint8_t filter_track = 0U;
+    uint8_t mix_track = 0U;
     if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
     {
         if (is_note_on != 0U)
@@ -133,6 +134,17 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             mixer_track_filter_note_off(filter_track, note);
+        }
+    }
+    if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
+    {
+        if (is_note_on != 0U)
+        {
+            mixer_track_vca_note_on(mix_track, note, velocity);
+        }
+        else
+        {
+            mixer_track_vca_note_off(mix_track, note);
         }
     }
 
