@@ -93,6 +93,7 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 #define MIXER_FILTER_UPDATE_PERIOD 8U
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
 #define MIXER_REVERB_SEND_INDEX 0U
+#define MIXER_REVERB_WET_CEILING 0.35f
 
 typedef struct
 {
@@ -377,7 +378,7 @@ void mixer_init(void)
     if(g_reverb.instance != NULL)
     {
         fx_reverb_init(g_reverb.instance, MIXER_FILTER_SAMPLE_RATE_DEFAULT);
-        fx_reverb_set_wet(g_reverb.instance, g_reverb.wet);
+        fx_reverb_set_wet(g_reverb.instance, g_reverb.wet * MIXER_REVERB_WET_CEILING);
         fx_reverb_set_room_size(g_reverb.instance, g_reverb.size);
         fx_reverb_set_damping(g_reverb.instance, g_reverb.decay);
         fx_reverb_set_width(g_reverb.instance, g_reverb.surround);
@@ -631,7 +632,7 @@ void mixer_set_reverb_wet(float wet)
 {
     g_reverb.wet = clamp01(wet);
     if(g_reverb.instance != NULL)
-        fx_reverb_set_wet(g_reverb.instance, g_reverb.wet);
+        fx_reverb_set_wet(g_reverb.instance, g_reverb.wet * MIXER_REVERB_WET_CEILING);
 }
 
 void mixer_set_reverb_size(float size)
