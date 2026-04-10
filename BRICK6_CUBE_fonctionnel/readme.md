@@ -86,6 +86,19 @@ Priority order:
 * `Drum` has its own runtime model catalog (`TRX` + `FM` drum models) and does not reuse `Synth` types.
 * Mono/poly behavior for `PLAY` remains centralized by runtime capability declarations (no conceptual merge between `Synth` and `Drum`).
 
+### UI families actually exposed (track-aware)
+
+* `TONE`:
+  * `Synth` types keep dedicated tone pages (`DX7`, `MonoB`, `TB3`).
+  * `Drum` has a dedicated dynamic `TONE` catalog per active drum type (TRX/FM variants).
+* `COLORS`:
+  * Shared audio domain for active tracks.
+  * On engine tracks (including `Drum`), `COLORS` exposes standard audio processing pages (`MAIN` with filter/EQ depending on filter mode, optional `MOD`, `CRUNCH` drive).
+* `MOD`:
+  * LFO destinations are filtered by **active track family+type+runtime status**.
+  * Only valid `TONE` / `COLORS` parameters are selectable for the active track context.
+  * No cross-engine fallback list.
+
 ---
 
 ### Buses
@@ -252,6 +265,45 @@ Avoids:
 * Branch reduction
 * Buffer layout (interleaved vs split)
 * Avoid unnecessary clears/memset
+
+---
+
+## 🎛️ Current performance controls (implemented behavior)
+
+### Hall modes / quick access
+
+* `SHIFT + -` → `PATTERN RECALL`
+* `TRACK + -` → `PATTERN STORE`
+* `SHIFT + +` (hold `SHIFT`, press/hold `+`) → temporary `MUTE` hall mode:
+  * active tracks visible on halls
+  * muted tracks shown as muted state
+  * `Off` tracks stay dark
+  * hall press toggles mute immediately in quick mode
+  * releasing `+` exits to previous hall mode
+* While still holding `+` in quick mute, pressing `SHIFT` enters `MUTE PREPARE`:
+  * initial mute snapshot is captured
+  * hall presses edit prepared states only
+  * prepared differences vs snapshot are marked as blinking states
+  * pressing `+` validates prepared mutes and exits to previous mode
+
+### Clipboard / copy-paste / clear
+
+* `TRACK + COPY`:
+  * copies active track config + runtime-allowed params
+  * does **not** copy sequencer steps
+* `TRACK + PASTE`:
+  * pastes last copied track
+* `TRACK + SHIFT + PASTE`:
+  * clears active track to defaults (family `Off`, default params, empty sequence)
+* Parameter scopes (same keys, context-sensitive):
+  * hold a `PARAM` button + `COPY/PASTE` → copy/paste full ensemble
+  * hold active `PAGE` button + `COPY/PASTE` → copy/paste active page
+  * `SHIFT + PASTE` in these scopes clears all targeted params to each param minimum
+* Ensemble/page paste compatibility is by intersection of common `param_id` (not strict identical layout matching).
+* Exclusive-source paste policy:
+  * `DX7` / `TB3` synth instances are move-on-paste when pasting to another track
+  * `Input1..4`: paste uses a free input family first; otherwise move-on-paste
+  * clipboard source is updated after move, enabling chained pastes from the same clipboard object
 
 ### Not Prioritized (yet)
 
