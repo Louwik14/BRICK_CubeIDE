@@ -4,19 +4,19 @@
 
 static const ui_template_family_t g_ui_template_mix_family = {
     .family_title = "MIX",
-    .nav_labels = { "MIX", "-", "-", "-" },
+    .nav_labels = { "MIX", "REV1", "REV2", "-" },
     .subpages = {
         {
             .title = "MIX",
             .param_bank = { .params = { PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_MIX_SEND1, PARAM_MIX_SEND2 } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "REVB",
+            .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "REVB",
+            .param_bank = { .params = { PARAM_MIX_REVERB_SURR, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -28,7 +28,7 @@ static const ui_template_family_t g_ui_template_mix_family = {
 
 static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 {
-    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MIX);
+    return &g_ui_template_mix_family;
 }
 
 static ui_template_page_state_t g_ui_template_mix_state = {
