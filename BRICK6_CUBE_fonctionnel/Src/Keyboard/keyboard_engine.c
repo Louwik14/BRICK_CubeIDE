@@ -345,6 +345,23 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             continue;
         }
 
+        uint8_t filter_track = 0U;
+        if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+        {
+            if (is_note_on != 0U)
+            {
+                mixer_track_filter_note_on(filter_track, note, velocity);
+            }
+            else if (is_note_off != 0U)
+            {
+                mixer_track_filter_note_off(filter_track, note);
+            }
+            else if (is_all_notes_off != 0U)
+            {
+                mixer_track_filter_all_notes_off(filter_track);
+            }
+        }
+
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
         {
             if (is_note_on != 0U)
