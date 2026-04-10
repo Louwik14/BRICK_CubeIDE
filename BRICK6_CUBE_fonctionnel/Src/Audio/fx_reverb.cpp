@@ -47,16 +47,7 @@ void fx_reverb_process_block(fx_reverb_t *rev,
         return;
     }
 
-    for(uint32_t n = 0; n < frames; n++)
-    {
-        float il = in_l[n];
-        float ir = in_r[n];
-        float ol = 0.0f;
-        float orr = 0.0f;
-        rev->model.processreplace(&il, &ir, &ol, &orr, 1, 1);
-        out_l[n] = ol;
-        out_r[n] = orr;
-    }
+    rev->model.processreplace(in_l, in_r, out_l, out_r, (long)frames, 1);
 }
 
 void fx_reverb_set_wet_ui(fx_reverb_t *rev, uint8_t wet_ui)
@@ -98,6 +89,14 @@ void fx_reverb_set_damping(fx_reverb_t *rev, float damp)
         return;
 
     rev->model.setdamp(fx_reverb_clamp01(damp));
+}
+
+void fx_reverb_set_width(fx_reverb_t *rev, float width)
+{
+    if(rev == 0)
+        return;
+
+    rev->model.setwidth(fx_reverb_clamp01(width));
 }
 
 void fx_reverb_set_bypass(fx_reverb_t *rev, uint8_t bypass)
