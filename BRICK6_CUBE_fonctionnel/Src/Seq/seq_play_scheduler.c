@@ -15,6 +15,7 @@
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Audio/tb3_synth.h"
+#include "Audio/mixer.h"
 #include "param_registry.h"
 #include "midi.h"
 #include "ui_core.h"
@@ -122,6 +123,19 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
                                                 uint8_t velocity,
                                                 uint8_t is_note_on)
 {
+    uint8_t filter_track = 0U;
+    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+    {
+        if (is_note_on != 0U)
+        {
+            mixer_track_filter_note_on(filter_track, note, velocity);
+        }
+        else
+        {
+            mixer_track_filter_note_off(filter_track, note);
+        }
+    }
+
     track_runtime_refresh_track(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
