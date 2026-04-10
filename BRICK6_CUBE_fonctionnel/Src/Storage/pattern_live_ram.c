@@ -480,13 +480,11 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
 
 uint8_t pattern_live_capture_boot_snapshot(void)
 {
-    PatternSaveV1 captured;
-    if (pattern_live_capture_current(&captured) == 0U)
+    if (pattern_live_capture_current(&g_boot_pattern) == 0U)
     {
         return 0U;
     }
 
-    memcpy(&g_boot_pattern, &captured, sizeof(g_boot_pattern));
     return 1U;
 }
 
