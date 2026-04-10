@@ -186,12 +186,15 @@ static void ui_page_template_colors_sync_family(void)
 {
     ui_template_family_t *family = ui_page_template_colors_get_audio_family();
     uint8_t filter_target_track = 0U;
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t active_family = ui_get_track_family(active_track);
+    const ui_track_type_t active_type = ui_get_track_type(active_track);
     if (family == 0)
     {
         return;
     }
 
-    if (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_MONOB)
+    if (active_type == UI_TRACK_TYPE_MONOB)
     {
         family->nav_labels[0] = "MAIN";
         family->nav_labels[1] = "ENV";
@@ -223,7 +226,7 @@ static void ui_page_template_colors_sync_family(void)
         family->subpages[3].param_bank.params[3] = PARAM_COUNT;
         return;
     }
-    if (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_TB3)
+    if (active_type == UI_TRACK_TYPE_TB3)
     {
         if (g_ui_template_filter_state.active_subpage != 0U)
         {
@@ -263,35 +266,47 @@ static void ui_page_template_colors_sync_family(void)
 
     if (!ui_resolve_filter_target_track(&filter_target_track))
     {
-        family->nav_labels[0] = "-";
-        family->nav_labels[1] = "-";
-        family->nav_labels[2] = "-";
-        family->nav_labels[3] = "-";
+        const uint8_t allow_dx7_colors_without_filter_target = ((active_family == UI_TRACK_FAMILY_SYNTH)
+                                                              && (active_type == UI_TRACK_TYPE_DX7)) ? 1U : 0U;
+        if (allow_dx7_colors_without_filter_target != 0U)
+        {
+            /*
+             * DX7 keeps COLORS pages even when mixer filter target resolution is
+             * temporarily unavailable in runtime binding (track-aware fallback).
+             */
+        }
+        else
+        {
+            family->nav_labels[0] = "-";
+            family->nav_labels[1] = "-";
+            family->nav_labels[2] = "-";
+            family->nav_labels[3] = "-";
 
-        family->subpages[0].title = "N/A";
-        family->subpages[0].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[0].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[0].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+            family->subpages[0].title = "N/A";
+            family->subpages[0].param_bank.params[0] = PARAM_COUNT;
+            family->subpages[0].param_bank.params[1] = PARAM_COUNT;
+            family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+            family->subpages[0].param_bank.params[3] = PARAM_COUNT;
 
-        family->subpages[1].title = "-";
-        family->subpages[1].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+            family->subpages[1].title = "-";
+            family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+            family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+            family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+            family->subpages[1].param_bank.params[3] = PARAM_COUNT;
 
-        family->subpages[2].title = "-";
-        family->subpages[2].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+            family->subpages[2].title = "-";
+            family->subpages[2].param_bank.params[0] = PARAM_COUNT;
+            family->subpages[2].param_bank.params[1] = PARAM_COUNT;
+            family->subpages[2].param_bank.params[2] = PARAM_COUNT;
+            family->subpages[2].param_bank.params[3] = PARAM_COUNT;
 
-        family->subpages[3].title = "-";
-        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[3] = PARAM_COUNT;
-        return;
+            family->subpages[3].title = "-";
+            family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+            family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+            family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+            family->subpages[3].param_bank.params[3] = PARAM_COUNT;
+            return;
+        }
     }
 
     const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
