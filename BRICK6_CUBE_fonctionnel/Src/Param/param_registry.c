@@ -1195,11 +1195,9 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             state->keytrack = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_ENVRST:
-            mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(clamped));
             state->env_reset = filter_ui127_to_bool(clamped) ? 1.0f : 0.0f;
             return 1U;
         case PARAM_FILTER_ENVDLY:
-            mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(clamped));
             state->env_delay = filter_ui127_clamp(clamped);
             return 1U;
         case PARAM_FILTER_EQ_LOW:
@@ -1464,12 +1462,10 @@ static void apply_filter_env_reset(float v)
     }
     if (filter_mod_locked_for_active_track() != 0U)
     {
-        mixer_set_track_filter_env_reset(target_track, false);
         param_store_set_active(PARAM_FILTER_ENVRST, 0.0f);
         return;
     }
 
-    mixer_set_track_filter_env_reset(target_track, filter_ui127_to_bool(v));
     filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
     {
@@ -1486,12 +1482,10 @@ static void apply_filter_env_delay(float v)
     }
     if (filter_mod_locked_for_active_track() != 0U)
     {
-        mixer_set_track_filter_env_delay(target_track, 0.0f);
         param_store_set_active(PARAM_FILTER_ENVDLY, 0.0f);
         return;
     }
 
-    mixer_set_track_filter_env_delay(target_track, filter_ui127_to_env_delay_s(v));
     filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
     {
@@ -2110,8 +2104,8 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_cutoff),
     PARAM_DESC_EX(PARAM_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_resonance),
     PARAM_DESC_EX(PARAM_FILTER_EG_AMT, "EG Amt", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_eg_amount),
-    PARAM_DESC_EX(PARAM_FILTER_ATTACK, "Attack", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 34.3f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_attack),
-    PARAM_DESC_EX(PARAM_FILTER_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_decay),
+    PARAM_DESC_EX(PARAM_FILTER_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 34.3f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_attack),
+    PARAM_DESC_EX(PARAM_FILTER_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_decay),
     PARAM_DESC_EX(PARAM_FILTER_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_sustain),
     PARAM_DESC_EX(PARAM_FILTER_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_release),
     PARAM_DESC_EX(PARAM_FILTER_KEYTRK, "KeyTrk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_filter_keytrack),

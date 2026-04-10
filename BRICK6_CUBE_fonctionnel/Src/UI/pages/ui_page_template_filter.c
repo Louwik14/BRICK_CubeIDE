@@ -7,15 +7,15 @@
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "COLORS",
-    .nav_labels = { "MAIN", "-", "MOD", "CRUNCH" },
+    .nav_labels = { "MAIN", "ADSR", "-", "CRUNCH" },
     .subpages = {
         {
             .title = "MAIN",
             .param_bank = { .params = { PARAM_FILTER_TYPE, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE, PARAM_COUNT } },
         },
         {
-            .title = "MOD",
-            .param_bank = { .params = { PARAM_FILTER_KEYTRK, PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_COUNT } },
+            .title = "ADSR",
+            .param_bank = { .params = { PARAM_FILTER_ATTACK, PARAM_FILTER_DECAY, PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE } },
         },
         {
             .title = "-",
@@ -236,15 +236,13 @@ static void ui_page_template_colors_sync_family(void)
 
     const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));
     const uint8_t is_eq3 = (filter_type == MIXER_TRACK_FILTER_EQ3) ? 1U : 0U;
-    const uint8_t is_input_audio = (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_AUDIO) ? 1U : 0U;
-    const uint8_t has_mod_page = (((filter_type == MIXER_TRACK_FILTER_LP_BI)
+    const uint8_t has_adsr_page = ((filter_type == MIXER_TRACK_FILTER_LP_BI)
                                 || (filter_type == MIXER_TRACK_FILTER_HP_BI)
-                                || (filter_type == MIXER_TRACK_FILTER_BP_BI))
-                                && (is_input_audio == 0U)) ? 1U : 0U;
+                                || (filter_type == MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
 
     family->nav_labels[0] = "MAIN";
-    family->nav_labels[1] = "-";
-    family->nav_labels[2] = (has_mod_page != 0U) ? "MOD" : "-";
+    family->nav_labels[1] = (has_adsr_page != 0U) ? "ADSR" : "-";
+    family->nav_labels[2] = "-";
     family->nav_labels[3] = "CRUNCH";
 
     family->subpages[0].title = "MAIN";
@@ -253,16 +251,16 @@ static void ui_page_template_colors_sync_family(void)
     family->subpages[0].param_bank.params[2] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_MID : PARAM_FILTER_RESONANCE;
     family->subpages[0].param_bank.params[3] = (is_eq3 != 0U) ? PARAM_FILTER_EQ_HIGH : PARAM_COUNT;
 
-    family->subpages[1].title = "-";
-    family->subpages[1].param_bank.params[0] = PARAM_COUNT;
-    family->subpages[1].param_bank.params[1] = PARAM_COUNT;
-    family->subpages[1].param_bank.params[2] = PARAM_COUNT;
-    family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+    family->subpages[1].title = (has_adsr_page != 0U) ? "ADSR" : "-";
+    family->subpages[1].param_bank.params[0] = (has_adsr_page != 0U) ? PARAM_FILTER_ATTACK : PARAM_COUNT;
+    family->subpages[1].param_bank.params[1] = (has_adsr_page != 0U) ? PARAM_FILTER_DECAY : PARAM_COUNT;
+    family->subpages[1].param_bank.params[2] = (has_adsr_page != 0U) ? PARAM_FILTER_SUSTAIN : PARAM_COUNT;
+    family->subpages[1].param_bank.params[3] = (has_adsr_page != 0U) ? PARAM_FILTER_RELEASE : PARAM_COUNT;
 
-    family->subpages[2].title = (has_mod_page != 0U) ? "MOD" : "-";
-    family->subpages[2].param_bank.params[0] = (has_mod_page != 0U) ? PARAM_FILTER_KEYTRK : PARAM_COUNT;
-    family->subpages[2].param_bank.params[1] = (has_mod_page != 0U) ? PARAM_FILTER_ENVRST : PARAM_COUNT;
-    family->subpages[2].param_bank.params[2] = (has_mod_page != 0U) ? PARAM_FILTER_ENVDLY : PARAM_COUNT;
+    family->subpages[2].title = "-";
+    family->subpages[2].param_bank.params[0] = PARAM_COUNT;
+    family->subpages[2].param_bank.params[1] = PARAM_COUNT;
+    family->subpages[2].param_bank.params[2] = PARAM_COUNT;
     family->subpages[2].param_bank.params[3] = PARAM_COUNT;
 
     family->subpages[3].title = "CRUNCH";

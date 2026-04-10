@@ -21,6 +21,7 @@
 
 #include "mixer.h"
 
+#include "env_adsr.h"
 #include "fx_biquad_filter.h"
 
 #include <math.h>
@@ -47,32 +48,23 @@ typedef struct {
 
 typedef struct {
     fx_biquad_filter_t biquad;
+    env_adsr_t filter_env;
     fx_dj_eq3_t eq3;
     float sample_rate;
     float cutoff_hz;
     float cutoff_target_hz;
     float resonance;
     float resonance_target;
-    /* First pass: stored for future envelope modulation, not applied yet. */
     float eg_amount;
-    float attack_s;
-    float decay_s;
-    float sustain;
-    float release_s;
     float keytrack;
-    float env_delay_s;
-    float env_delay_remaining_s;
-    float env_level;
     float eq_low_db;
     float eq_low_target_db;
     float eq_mid_db;
     float eq_mid_target_db;
     float eq_high_db;
     float eq_high_target_db;
-    uint8_t env_reset;
     uint8_t note_active;
     uint8_t current_note;
-    uint8_t env_stage;
     uint8_t type;
 } mixer_track_filter_t;
 
@@ -92,20 +84,9 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 #define MIXER_FILTER_DECAY_MAX_S 5.0f
 #define MIXER_FILTER_RELEASE_MIN_S 0.001f
 #define MIXER_FILTER_RELEASE_MAX_S 5.0f
-#define MIXER_FILTER_ENV_DELAY_MAX_S 5.0f
 #define MIXER_FILTER_NOTE_REF_MIDI 60U
 #define MIXER_FILTER_UPDATE_PERIOD 8U
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
-
-typedef enum
-{
-    MIXER_FILTER_ENV_IDLE = 0,
-    MIXER_FILTER_ENV_DELAY,
-    MIXER_FILTER_ENV_ATTACK,
-    MIXER_FILTER_ENV_DECAY,
-    MIXER_FILTER_ENV_SUSTAIN,
-    MIXER_FILTER_ENV_RELEASE
-} mixer_filter_env_stage_t;
 
 static float clampf_local(float v, float lo, float hi)
 {
@@ -150,85 +131,26 @@ static float mixer_track_filter_resonance_to_biquad_q(float resonance)
     return 0.70710678f + (clamped * 11.29289322f);
 }
 
-static float mixer_track_filter_step_linear(float current, float target, float time_s, float sample_rate)
+static uint16_t mixer_track_filter_time_s_to_peaks(float time_s)
 {
-    if(time_s <= 0.0f || sample_rate <= 0.0f)
-        return target;
-
-    const float delta = 1.0f / (time_s * sample_rate);
-    if(current < target)
-    {
-        current += delta;
-        return (current > target) ? target : current;
-    }
-
-    current -= delta;
-    return (current < target) ? target : current;
+    const float clamped = clampf_local(time_s, MIXER_FILTER_ATTACK_MIN_S, MIXER_FILTER_ATTACK_MAX_S);
+    const float min_s = MIXER_FILTER_ATTACK_MIN_S;
+    const float max_s = MIXER_FILTER_ATTACK_MAX_S;
+    const float ratio = max_s / min_s;
+    const float t = logf(clamped / min_s) / logf(ratio);
+    const float scaled = clampf_local(t, 0.0f, 1.0f) * 65535.0f;
+    return (uint16_t)(scaled + 0.5f);
 }
 
-static float mixer_track_filter_process_env(mixer_track_filter_t *filter)
+static uint16_t mixer_track_filter_sustain_to_peaks(float sustain)
 {
-    switch((mixer_filter_env_stage_t)filter->env_stage)
-    {
-        case MIXER_FILTER_ENV_DELAY:
-            if(filter->env_delay_remaining_s > 0.0f)
-                filter->env_delay_remaining_s -= (1.0f / filter->sample_rate);
-            if(filter->env_delay_remaining_s <= 0.0f)
-            {
-                filter->env_delay_remaining_s = 0.0f;
-                filter->env_stage = (uint8_t)MIXER_FILTER_ENV_ATTACK;
-            }
-            break;
-
-        case MIXER_FILTER_ENV_ATTACK:
-            filter->env_level = mixer_track_filter_step_linear(filter->env_level, 1.0f, filter->attack_s, filter->sample_rate);
-            if(filter->env_level >= 0.9999f)
-            {
-                filter->env_level = 1.0f;
-                filter->env_stage = (uint8_t)MIXER_FILTER_ENV_DECAY;
-            }
-            break;
-
-        case MIXER_FILTER_ENV_DECAY:
-            filter->env_level = mixer_track_filter_step_linear(filter->env_level, filter->sustain, filter->decay_s, filter->sample_rate);
-            if(fabsf(filter->env_level - filter->sustain) <= 0.0005f)
-            {
-                filter->env_level = filter->sustain;
-                filter->env_stage = (uint8_t)MIXER_FILTER_ENV_SUSTAIN;
-            }
-            break;
-
-        case MIXER_FILTER_ENV_SUSTAIN:
-            filter->env_level = filter->sustain;
-            break;
-
-        case MIXER_FILTER_ENV_RELEASE:
-            filter->env_level = mixer_track_filter_step_linear(filter->env_level, 0.0f, filter->release_s, filter->sample_rate);
-            if(filter->env_level <= 0.0001f)
-            {
-                filter->env_level = 0.0f;
-                filter->env_stage = (uint8_t)MIXER_FILTER_ENV_IDLE;
-            }
-            break;
-
-        case MIXER_FILTER_ENV_IDLE:
-        default:
-            filter->env_level = 0.0f;
-            break;
-    }
-
-    return filter->env_level;
-}
-
-static float mixer_track_filter_keytrack_multiplier(const mixer_track_filter_t *filter)
-{
-    const float semitone_delta = (float)((int32_t)filter->current_note - (int32_t)MIXER_FILTER_NOTE_REF_MIDI);
-    return powf(2.0f, (semitone_delta * filter->keytrack) / 12.0f);
+    const float clamped = clampf_local(sustain, 0.0f, 1.0f);
+    return (uint16_t)(clamped * 32767.0f + 0.5f);
 }
 
 static float mixer_track_filter_compute_modulated_cutoff(const mixer_track_filter_t *filter, float env)
 {
-    float cutoff_hz = filter->cutoff_hz * mixer_track_filter_keytrack_multiplier(filter);
+    float cutoff_hz = filter->cutoff_hz;
     cutoff_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
 
     if(filter->eg_amount >= 0.0f)
@@ -283,12 +205,7 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->resonance = 0.0f;
     filter->resonance_target = 0.0f;
     filter->eg_amount = 0.0f;
-    filter->attack_s = 0.01f;
-    filter->decay_s = 0.10f;
-    filter->sustain = 1.0f;
-    filter->release_s = 0.10f;
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
-    filter->env_reset = 1U;
     filter->eq_low_db = 0.0f;
     filter->eq_low_target_db = 0.0f;
     filter->eq_mid_db = 0.0f;
@@ -296,6 +213,13 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->eq_high_db = 0.0f;
     filter->eq_high_target_db = 0.0f;
     filter->type = (uint8_t)MIXER_TRACK_FILTER_OFF;
+    filter->note_active = 0U;
+
+    env_adsr_init(&filter->filter_env, filter->sample_rate);
+    env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f));
+    env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f));
+    env_adsr_set_sustain(&filter->filter_env, mixer_track_filter_sustain_to_peaks(1.0f));
+    env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f));
 
     mixer_track_filter_reset_dsp(filter);
 }
@@ -334,7 +258,7 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
                 uint32_t cutoff_update_countdown = 0U;
                 for(uint32_t i = 0U; i < frames; ++i)
                 {
-                    const float env = mixer_track_filter_process_env(filter);
+                    const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
                     if(cutoff_update_countdown == 0U)
                     {
                         fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
@@ -703,9 +627,8 @@ void mixer_set_track_filter_attack(uint32_t track_id, float attack_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    g_track_filters[track_id].attack_s = clampf_local(attack_s,
-                                                      MIXER_FILTER_ATTACK_MIN_S,
-                                                      MIXER_FILTER_ATTACK_MAX_S);
+    env_adsr_set_attack(&g_track_filters[track_id].filter_env,
+                        mixer_track_filter_time_s_to_peaks(attack_s));
 }
 
 void mixer_set_track_filter_decay(uint32_t track_id, float decay_s)
@@ -713,9 +636,8 @@ void mixer_set_track_filter_decay(uint32_t track_id, float decay_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    g_track_filters[track_id].decay_s = clampf_local(decay_s,
-                                                     MIXER_FILTER_DECAY_MIN_S,
-                                                     MIXER_FILTER_DECAY_MAX_S);
+    env_adsr_set_decay(&g_track_filters[track_id].filter_env,
+                       mixer_track_filter_time_s_to_peaks(decay_s));
 }
 
 void mixer_set_track_filter_sustain(uint32_t track_id, float sustain)
@@ -723,7 +645,8 @@ void mixer_set_track_filter_sustain(uint32_t track_id, float sustain)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    g_track_filters[track_id].sustain = clamp01(sustain);
+    env_adsr_set_sustain(&g_track_filters[track_id].filter_env,
+                         mixer_track_filter_sustain_to_peaks(sustain));
 }
 
 void mixer_set_track_filter_release(uint32_t track_id, float release_s)
@@ -731,9 +654,8 @@ void mixer_set_track_filter_release(uint32_t track_id, float release_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    g_track_filters[track_id].release_s = clampf_local(release_s,
-                                                       MIXER_FILTER_RELEASE_MIN_S,
-                                                       MIXER_FILTER_RELEASE_MAX_S);
+    env_adsr_set_release(&g_track_filters[track_id].filter_env,
+                         mixer_track_filter_time_s_to_peaks(release_s));
 }
 
 void mixer_set_track_filter_keytrack(uint32_t track_id, float amount)
@@ -749,7 +671,7 @@ void mixer_set_track_filter_env_reset(uint32_t track_id, uint8_t enabled)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    g_track_filters[track_id].env_reset = (enabled != 0U) ? 1U : 0U;
+    (void)enabled;
 }
 
 void mixer_set_track_filter_env_delay(uint32_t track_id, float delay_s)
@@ -757,14 +679,7 @@ void mixer_set_track_filter_env_delay(uint32_t track_id, float delay_s)
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
-    mixer_track_filter_t *filter = &g_track_filters[track_id];
-    filter->env_delay_s = clampf_local(delay_s, 0.0f, MIXER_FILTER_ENV_DELAY_MAX_S);
-    if(filter->env_stage != (uint8_t)MIXER_FILTER_ENV_DELAY)
-        return;
-
-    filter->env_delay_remaining_s = filter->env_delay_s;
-    if(filter->env_delay_s <= 0.0f)
-        filter->env_stage = (uint8_t)MIXER_FILTER_ENV_ATTACK;
+    (void)delay_s;
 }
 
 void mixer_set_track_filter_eq_low(uint32_t track_id, float gain_db)
@@ -804,11 +719,7 @@ void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t ve
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->current_note = midi_note;
     filter->note_active = 1U;
-    if(filter->env_reset != 0U)
-        filter->env_level = 0.0f;
-    filter->env_delay_remaining_s = filter->env_delay_s;
-    filter->env_stage = (filter->env_delay_s > 0.0f) ? (uint8_t)MIXER_FILTER_ENV_DELAY
-                                                      : (uint8_t)MIXER_FILTER_ENV_ATTACK;
+    env_adsr_retrigger(&filter->filter_env, true);
 }
 
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note)
@@ -821,7 +732,7 @@ void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note)
         return;
 
     filter->note_active = 0U;
-    filter->env_stage = (uint8_t)MIXER_FILTER_ENV_RELEASE;
+    env_adsr_gate_off(&filter->filter_env);
 }
 
 void mixer_track_filter_all_notes_off(uint32_t track_id)
@@ -832,9 +743,7 @@ void mixer_track_filter_all_notes_off(uint32_t track_id)
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->note_active = 0U;
     filter->current_note = MIXER_FILTER_NOTE_REF_MIDI;
-    filter->env_level = 0.0f;
-    filter->env_delay_remaining_s = 0.0f;
-    filter->env_stage = (uint8_t)MIXER_FILTER_ENV_IDLE;
+    env_adsr_reset(&filter->filter_env);
 }
 
 void __attribute__((used)) mixer_external_inputs_clear(void)
