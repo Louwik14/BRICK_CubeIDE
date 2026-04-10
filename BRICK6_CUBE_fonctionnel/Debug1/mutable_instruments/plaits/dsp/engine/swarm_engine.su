@@ -1,0 +1,36 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/polyblep.h:37:14:float stmlib::ThisBlepSample(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/polyblep.h:41:14:float stmlib::NextBlepSample(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/dsp.h:68:14:float stmlib::InterpolateWrap(const float*, float, float)	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/utils/random.h:38:26:static uint32_t stmlib::Random::state()	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/utils/random.h:44:26:static uint32_t stmlib::Random::GetWord()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/utils/random.h:53:23:static float stmlib::Random::GetFloat()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:39:3:stmlib::ParameterInterpolator::ParameterInterpolator(float*, float, size_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:49:3:stmlib::ParameterInterpolator::~ParameterInterpolator()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:53:15:void stmlib::ParameterInterpolator::Init(float*, float, size_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:59:16:float stmlib::ParameterInterpolator::Next()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/rsqrt.h:52:21:float stmlib::fast_rsqrt_carmack(float)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:48:14:float plaits::Sine(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:163:8:void plaits::FastSineOscillator::Init()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:176:23:static float plaits::FastSineOscillator::Fast2Sin(float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:191:8:void plaits::FastSineOscillator::Render(float, float, float*, size_t)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:51:8:void plaits::GrainEnvelope::Init()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:61:15:void plaits::GrainEnvelope::Step(float, bool, bool)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:87:16:float plaits::GrainEnvelope::frequency(float) const	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:98:16:float plaits::GrainEnvelope::amplitude(float)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:134:15:void plaits::AdditiveSawOscillator::Init()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:141:15:void plaits::AdditiveSawOscillator::Render(float, float, float*, size_t)	88	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:194:8:void plaits::SwarmVoice::Init(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:201:8:void plaits::SwarmVoice::Render(float, float, bool, bool, float, float, float*, float*, size_t)	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/swarm_engine.h:241:16:virtual void plaits::SwarmEngine::LoadUserData(const uint8_t*)	16	static
+../mutable_instruments/plaits/dsp/engine/swarm_engine.cc:38:6:virtual void plaits::SwarmEngine::Init(stmlib::BufferAllocator*)	16	static
+../mutable_instruments/plaits/dsp/engine/swarm_engine.cc:42:6:virtual void plaits::SwarmEngine::Reset()	32	static
+../mutable_instruments/plaits/dsp/engine/swarm_engine.cc:50:6:virtual void plaits::SwarmEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	72	static
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\stl_algobase.h:1000:5:void std::fill(_ForwardIterator, _ForwardIterator, const _Tp&) [with _ForwardIterator = float*; _Tp = float]	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/rsqrt.h:45:4:To stmlib::unsafe_bit_cast(From) [with To = long unsigned int; From = float]	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/rsqrt.h:45:4:To stmlib::unsafe_bit_cast(From) [with To = float; From = long unsigned int]	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:202:8:void plaits::FastSineOscillator::RenderInternal(float, float, float*, float*, size_t) [with Mode mode = plaits::FastSineOscillator::ADDITIVE]	88	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/utils/buffer_allocator.h:57:13:T* stmlib::BufferAllocator::Allocate(size_t) [with T = plaits::SwarmVoice]	24	static
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\stl_algobase.h:976:5:void std::__fill_a(_FIte, _FIte, const _Tp&) [with _FIte = float*; _Tp = float]	24	static
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\arm-none-eabi\include\c++\13.3.1\bits\stl_algobase.h:926:5:typename __gnu_cxx::__enable_if<std::__is_scalar<_Tp>::__value, void>::__type std::__fill_a1(_ForwardIterator, _ForwardIterator, const _Tp&) [with _ForwardIterator = float*; _Tp = float]	32	static

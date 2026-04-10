@@ -1,8 +1,0 @@
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.cpp:17:6:virtual void FmSnareModel::Init()	0	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.cpp:86:6:virtual void FmSnareModel::RenderControls()	0	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.h:6:7:FmSnareModel::~FmSnareModel()	0	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.h:15:10:virtual void FmSnareModel::loadParameters(std::istream&)	8	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.h:6:7:virtual FmSnareModel::~FmSnareModel()	8	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.cpp:40:7:virtual float FmSnareModel::Process()	16	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.cpp:36:6:virtual void FmSnareModel::Trigger()	0	static
-../Src/Audio/../../md-drum-synth-main/FmSnareModel.h:12:10:virtual void FmSnareModel::saveParameters(std::ostream&) const	24	static

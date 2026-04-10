@@ -1,0 +1,4 @@
+../Src/Storage/wav_parser.c:38:17:le16	0	static
+../Src/Storage/wav_parser.c:56:17:le32	0	static
+../Src/Storage/wav_parser.c:64:13:wav_find_chunks	96	static
+../Src/Storage/wav_parser.c:181:6:wav_parser_parse_info	64	static

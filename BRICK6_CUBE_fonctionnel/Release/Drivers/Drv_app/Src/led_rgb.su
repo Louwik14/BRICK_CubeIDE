@@ -1,7 +1,0 @@
-../Drivers/Drv_app/Src/led_rgb.c:281:13:led_apply_fixed_scene	72	static
-../Drivers/Drv_app/Src/led_rgb.c:383:6:led_init	8	static
-../Drivers/Drv_app/Src/led_rgb.c:406:6:led_set	0	static
-../Drivers/Drv_app/Src/led_rgb.c:424:6:led_fill	0	static
-../Drivers/Drv_app/Src/led_rgb.c:439:6:led_clear	0	static
-../Drivers/Drv_app/Src/led_rgb.c:454:6:led_show	0	static
-../Drivers/Drv_app/Src/led_rgb.c:470:6:led_service	8	static

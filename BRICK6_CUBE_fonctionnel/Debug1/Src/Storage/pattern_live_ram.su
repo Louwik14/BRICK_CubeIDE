@@ -1,0 +1,17 @@
+../Src/Storage/pattern_live_ram.c:41:16:pattern_live_slot_is_valid	0	static
+../Src/Storage/pattern_live_ram.c:75:16:pattern_live_is_global_param_useful	16	static
+../Src/Storage/pattern_live_ram.c:61:16:pattern_live_is_param_in_sound_domain	16	static
+../Src/Storage/pattern_live_ram.c:69:16:pattern_live_is_param_in_mix_domain	16	static
+../Src/Storage/pattern_live_ram.c:46:16:pattern_live_apply_track_config_block	8	static
+../Src/Storage/pattern_live_ram.c:276:16:pattern_live_apply_seq_block	40	static
+../Src/Storage/pattern_live_ram.c:140:9:pattern_live_capture_current	48	static
+../Src/Storage/pattern_live_ram.c:316:9:pattern_live_apply_snapshot	64	static
+../Src/Storage/pattern_live_ram.c:415:9:pattern_live_capture_to_slot	16	static
+../Src/Storage/pattern_live_ram.c:443:9:pattern_live_queue_slot	16	static
+../Src/Storage/pattern_live_ram.c:481:9:pattern_live_capture_boot_snapshot	108120	static
+../Src/Storage/pattern_live_ram.c:493:6:pattern_live_service	16	static
+../Src/Storage/pattern_live_ram.c:527:6:pattern_live_init	16	static
+../Src/Storage/pattern_live_ram.c:563:9:pattern_live_get_active	0	static
+../Src/Storage/pattern_live_ram.c:575:9:pattern_live_get_queued	0	static
+../Src/Storage/pattern_live_ram.c:588:6:pattern_live_set_active_state	24	static
+../Src/Storage/pattern_live_ram.c:612:9:pattern_live_is_apply_in_progress	0	static

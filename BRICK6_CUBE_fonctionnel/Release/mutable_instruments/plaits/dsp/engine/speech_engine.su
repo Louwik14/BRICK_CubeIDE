@@ -1,4 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/speech_engine.h:48:16:virtual void plaits::SpeechEngine::LoadUserData(const uint8_t*)	0	static
-../mutable_instruments/plaits/dsp/engine/speech_engine.cc:38:6:virtual void plaits::SpeechEngine::Init(stmlib::BufferAllocator*)	16	static
-../mutable_instruments/plaits/dsp/engine/speech_engine.cc:55:6:virtual void plaits::SpeechEngine::Reset()	0	static
-../mutable_instruments/plaits/dsp/engine/speech_engine.cc:59:6:virtual void plaits::SpeechEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	48	static

@@ -1,0 +1,52 @@
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/std_abs.h:75:3:constexpr float std::abs(float)	1
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/cmath:2362:3:constexpr long int std::lrint(float)	1
+../Micro_Dexed/microdexed_compat.h:33:16:int32_t signed_saturate_rshift(int32_t, int, int)	1
+../Micro_Dexed/microdexed_compat.h:14:16:constexpr std::common_type_t<T, U, V> constrain(const T&, const U&, const V&) [with T = float; U = float; V = float]	3
+../Micro_Dexed/microdexed_compat.h:41:13:void arm_float_to_q15(const float*, int16_t*, uint32_t)	2
+../Micro_Dexed/controllers.h:44:5:FmMod::FmMod()	1
+../Micro_Dexed/controllers.h:53:10:void FmMod::setRange(uint8_t)	2
+../Micro_Dexed/controllers.h:58:10:void FmMod::setTarget(uint8_t)	2
+../Micro_Dexed/controllers.h:66:10:void FmMod::setMode(uint8_t)	2
+../Micro_Dexed/controllers.h:73:10:void Controllers::applyMod(int, FmMod&)	8
+../Micro_Dexed/controllers.h:124:5:Controllers::Controllers()	1
+../Micro_Dexed/controllers.h:130:10:void Controllers::refresh()	5
+../Micro_Dexed/fm_core.h:50:13:FmCore::~FmCore()	1
+../Micro_Dexed/fm_core.h:50:13:virtual FmCore::~FmCore()	1
+../Micro_Dexed/EngineMkI.h:29:7:EngineMkI::~EngineMkI()	1
+../Micro_Dexed/EngineMkI.h:29:7:virtual EngineMkI::~EngineMkI()	1
+../Micro_Dexed/dexed.cpp:43:1:Dexed::Dexed(int)	3
+../Micro_Dexed/dexed.cpp:87:1:Dexed::~Dexed()	2
+../Micro_Dexed/dexed.cpp:96:6:void Dexed::activate()	1
+../Micro_Dexed/dexed.cpp:102:6:void Dexed::deactivate()	1
+../Micro_Dexed/dexed.cpp:107:6:void Dexed::getSamples(uint16_t, int16_t*)	13
+../Micro_Dexed/dexed.cpp:184:6:void Dexed::keydown(int16_t, uint8_t)	25
+../Micro_Dexed/dexed.cpp:295:6:void Dexed::keyup(int16_t)	12
+../Micro_Dexed/dexed.cpp:339:6:void Dexed::doRefreshVoice()	1
+../Micro_Dexed/dexed.cpp:344:6:void Dexed::setOPs(uint8_t)	1
+../Micro_Dexed/dexed.cpp:349:9:uint8_t Dexed::getEngineType()	1
+../Micro_Dexed/dexed.cpp:353:6:void Dexed::setEngineType(uint8_t)	1
+../Micro_Dexed/dexed.cpp:361:6:bool Dexed::isMonoMode()	1
+../Micro_Dexed/dexed.cpp:365:6:void Dexed::setMonoMode(bool)	2
+../Micro_Dexed/dexed.cpp:374:6:void Dexed::setRefreshMode(bool)	1
+../Micro_Dexed/dexed.cpp:378:6:void Dexed::setSustain(bool)	2
+../Micro_Dexed/dexed.cpp:386:6:bool Dexed::getSustain()	1
+../Micro_Dexed/dexed.cpp:391:6:void Dexed::panic()	4
+../Micro_Dexed/dexed.cpp:408:6:void Dexed::resetControllers()	1
+../Micro_Dexed/dexed.cpp:424:6:void Dexed::notesOff()	3
+../Micro_Dexed/dexed.cpp:433:6:void Dexed::setMaxNotes(uint8_t)	2
+../Micro_Dexed/dexed.cpp:443:9:uint8_t Dexed::getMaxNotes()	1
+../Micro_Dexed/dexed.cpp:448:9:uint8_t Dexed::getNumNotesPlaying()	8
+../Micro_Dexed/dexed.cpp:493:6:bool Dexed::decodeVoice(uint8_t*, uint8_t*)	2
+../Micro_Dexed/dexed.cpp:566:6:bool Dexed::encodeVoice(uint8_t*)	2
+../Micro_Dexed/dexed.cpp:616:6:bool Dexed::getVoiceData(uint8_t*)	1
+../Micro_Dexed/dexed.cpp:622:6:bool Dexed::loadVoiceParameters(uint8_t*)	1
+../Micro_Dexed/microdexed_compat.h:14:16:constexpr std::common_type_t<T, U, V> constrain(const T&, const U&, const V&) [with T = unsigned char; U = int; V = int]	3
+../Micro_Dexed/dexed.cpp:640:6:void Dexed::setPBController(uint8_t, uint8_t)	1
+../Micro_Dexed/dexed.cpp:653:6:void Dexed::setMWController(uint8_t, uint8_t, uint8_t)	1
+../Micro_Dexed/dexed.cpp:668:6:void Dexed::setFCController(uint8_t, uint8_t, uint8_t)	1
+../Micro_Dexed/dexed.cpp:683:6:void Dexed::setBCController(uint8_t, uint8_t, uint8_t)	1
+../Micro_Dexed/dexed.cpp:697:6:void Dexed::setATController(uint8_t, uint8_t, uint8_t)	1
+../Micro_Dexed/dexed.cpp:712:6:void Dexed::setPortamentoMode(uint8_t, uint8_t, uint8_t)	2
+../Micro_Dexed/microdexed_compat.h:14:16:constexpr std::common_type_t<T, U, V> constrain(const T&, const U&, const V&) [with T = long int; U = long int; V = long int]	3
+../Micro_Dexed/synth.h:60:17:T max(const T&, const T&) [with T = unsigned char]	2
+../Micro_Dexed/aligned_buf.h:29:8:T* AlignedBuf<T, size, alignment>::get() [with T = long int; unsigned int size = 64; unsigned int alignment = 16]	1

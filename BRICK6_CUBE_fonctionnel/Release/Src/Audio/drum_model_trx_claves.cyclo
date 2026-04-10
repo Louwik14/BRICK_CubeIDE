@@ -1,9 +1,0 @@
-../Src/Audio/../../md-drum-synth-main/TRXClaves.cpp:11:6:virtual void TRXClaves::Init()	1
-../Src/Audio/../../md-drum-synth-main/TRXClaves.cpp:17:6:virtual void TRXClaves::Trigger()	1
-../Src/Audio/../../md-drum-synth-main/TRXClaves.cpp:46:6:virtual void TRXClaves::RenderControls()	1
-../Src/Audio/../../md-drum-synth-main/TRXClaves.h:4:7:TRXClaves::~TRXClaves()	1
-../Src/Audio/../../md-drum-synth-main/TRXClaves.cpp:23:7:virtual float TRXClaves::Process()	5
-../Src/Audio/../../md-drum-synth-main/TRXClaves.h:16:10:virtual void TRXClaves::loadParameters(std::istream&)	1
-../Src/Audio/../../md-drum-synth-main/TRXClaves.h:4:7:virtual TRXClaves::~TRXClaves()	1
-../Src/Audio/../../md-drum-synth-main/TRXClaves.h:11:10:virtual void TRXClaves::saveParameters(std::ostream&) const	6
-../Src/Audio/../../md-drum-synth-main/TRXClaves.cpp:61:7:float TRXClaves::sine(float)	1

@@ -1,0 +1,27 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:37:5:daisysp::Compressor::Compressor()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:38:5:daisysp::Compressor::~Compressor()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:62:11:float daisysp::Compressor::Apply(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:101:10:void daisysp::Compressor::SetRatio(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:113:10:void daisysp::Compressor::SetThreshold(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:125:10:void daisysp::Compressor::SetAttack(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:137:10:void daisysp::Compressor::SetRelease(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:149:10:void daisysp::Compressor::SetMakeup(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:154:10:void daisysp::Compressor::AutoMakeup(bool)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:183:10:void daisysp::Compressor::RecalculateRatio()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:188:10:void daisysp::Compressor::RecalculateAttack()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:196:10:void daisysp::Compressor::RecalculateRelease()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_Daisy_comp_core.h:198:10:void daisysp::Compressor::RecalculateMakeup()	2
+../Src/Audio/fx_daisy_comp.cpp:6:14:float {anonymous}::clampf(float, float, float)	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_daisy_comp.h:8:8:fx_daisy_comp_t::fx_daisy_comp_t()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Audio/fx_daisy_comp.h:8:8:fx_daisy_comp_t::~fx_daisy_comp_t()	1
+../Src/Audio/fx_daisy_comp.cpp:17:28:void __tcf_0()	1
+../Src/Audio/fx_daisy_comp.cpp:15:18:fx_daisy_comp_t* fx_daisy_comp_get_instance()	2
+../Src/Audio/fx_daisy_comp.cpp:21:6:void fx_daisy_comp_init(fx_daisy_comp_t*, float)	3
+../Src/Audio/fx_daisy_comp.cpp:39:6:void fx_daisy_comp_set_threshold_db(fx_daisy_comp_t*, float)	2
+../Src/Audio/fx_daisy_comp.cpp:47:6:void fx_daisy_comp_set_ratio(fx_daisy_comp_t*, float)	2
+../Src/Audio/fx_daisy_comp.cpp:55:6:void fx_daisy_comp_set_attack_s(fx_daisy_comp_t*, float)	2
+../Src/Audio/fx_daisy_comp.cpp:65:6:void fx_daisy_comp_set_release_s(fx_daisy_comp_t*, float)	2
+../Src/Audio/fx_daisy_comp.cpp:75:6:void fx_daisy_comp_set_makeup_db(fx_daisy_comp_t*, float)	3
+../Src/Audio/fx_daisy_comp.cpp:86:6:void fx_daisy_comp_set_auto_makeup(fx_daisy_comp_t*, uint8_t)	4
+../Src/Audio/fx_daisy_comp.cpp:100:6:void fx_daisy_comp_set_mix(fx_daisy_comp_t*, float)	2
+../Src/Audio/fx_daisy_comp.cpp:108:6:void fx_daisy_comp_process_block(fx_daisy_comp_t*, float*, float*, uint32_t)	5

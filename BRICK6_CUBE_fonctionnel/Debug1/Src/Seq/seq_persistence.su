@@ -1,0 +1,4 @@
+../Src/Seq/seq_persistence.c:35:17:seq_crc16_ccitt	4	static
+../Src/Seq/seq_persistence.c:63:16:seq_persistence_mount_if_needed	16	static
+../Src/Seq/seq_persistence.c:86:9:seq_persistence_load	135840	static
+../Src/Seq/seq_persistence.c:157:9:seq_persistence_save	632	static

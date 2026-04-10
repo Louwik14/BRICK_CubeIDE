@@ -1,0 +1,13 @@
+../Inc/Storage/cache_maintenance.h:21:20:dcache_clean_by_addr_aligned	0	static,ignoring_inline_asm
+../Inc/Storage/cache_maintenance.h:45:20:dcache_invalidate_by_addr_aligned	0	static,ignoring_inline_asm
+../Src/SD/sd_diskio.c:162:16:SD_CheckStatus	8	static
+../Src/SD/sd_diskio.c:192:9:SD_initialize	8	static
+../Src/SD/sd_diskio.c:227:9:SD_status	8	static
+../Src/SD/sd_diskio.c:134:12:SD_CheckStatusWithTimeout	16	static
+../Src/SD/sd_diskio.c:260:9:SD_read	48	static
+../Src/SD/sd_diskio.c:438:9:SD_write	40	static
+../Src/SD/sd_diskio.c:595:9:SD_ioctl	56	static
+../Src/SD/sd_diskio.c:660:6:BSP_SD_WriteCpltCallback	0	static
+../Src/SD/sd_diskio.c:681:6:BSP_SD_ReadCpltCallback	0	static
+../Src/SD/sd_diskio.c:703:6:BSP_SD_AbortCallback	0	static
+../Src/SD/sd_diskio.c:717:6:BSP_SD_ErrorCallback	0	static

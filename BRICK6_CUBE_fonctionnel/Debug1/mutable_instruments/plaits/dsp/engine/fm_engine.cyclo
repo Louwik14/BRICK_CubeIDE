@@ -1,0 +1,16 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/dsp.h:43:14:float stmlib::Interpolate(const float*, float, float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	3
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/fm_engine.h:43:16:virtual void plaits::FMEngine::LoadUserData(const uint8_t*)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:39:3:stmlib::ParameterInterpolator::ParameterInterpolator(float*, float, size_t)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:49:3:stmlib::ParameterInterpolator::~ParameterInterpolator()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:53:15:void stmlib::ParameterInterpolator::Init(float*, float, size_t)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/stmlib/dsp/parameter_interpolator.h:59:16:float stmlib::ParameterInterpolator::Next()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/sine_oscillator.h:58:14:float plaits::SinePM(uint32_t, float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/downsampler/4x_downsampler.h:42:3:plaits::Downsampler::Downsampler(float*)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/downsampler/4x_downsampler.h:47:3:plaits::Downsampler::~Downsampler()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/downsampler/4x_downsampler.h:50:15:void plaits::Downsampler::Accumulate(int, float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/downsampler/4x_downsampler.h:55:16:float plaits::Downsampler::Read()	1
+../mutable_instruments/plaits/dsp/engine/fm_engine.cc:40:6:virtual void plaits::FMEngine::Init(stmlib::BufferAllocator*)	1
+../mutable_instruments/plaits/dsp/engine/fm_engine.cc:52:6:virtual void plaits::FMEngine::Reset()	1
+../mutable_instruments/plaits/dsp/engine/fm_engine.cc:56:6:virtual void plaits::FMEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	9

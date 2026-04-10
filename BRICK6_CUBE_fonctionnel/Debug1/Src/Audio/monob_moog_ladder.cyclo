@@ -1,0 +1,20 @@
+../Inc/Audio/moogladder.h:52:9:infrasonic::MoogLadder::MoogLadder()	1
+../Inc/Audio/moogladder.h:53:9:infrasonic::MoogLadder::~MoogLadder()	1
+../Src/Audio/monob_moog_ladder.cpp:16:7:float {anonymous}::clampf_local(float, float, float)	3
+../Src/Audio/monob_moog_ladder.cpp:23:7:float {anonymous}::max_cutoff_hz(float)	1
+../Src/Audio/monob_moog_ladder.cpp:28:6:bool {anonymous}::instance_is_valid(uint8_t)	1
+../Src/Audio/monob_moog_ladder.cpp:33:6:void {anonymous}::apply_cached_settings(uint8_t)	1
+../Src/Audio/monob_moog_ladder.cpp:42:17:void monob_moog_ladder_init_for_instance(uint8_t, float)	3
+../Src/Audio/monob_moog_ladder.cpp:56:17:void monob_moog_ladder_init(float)	1
+../Src/Audio/monob_moog_ladder.cpp:61:17:void monob_moog_ladder_reset_for_instance(uint8_t)	2
+../Src/Audio/monob_moog_ladder.cpp:72:17:void monob_moog_ladder_reset()	1
+../Src/Audio/monob_moog_ladder.cpp:77:17:void monob_moog_ladder_set_cutoff_for_instance(uint8_t, float)	2
+../Src/Audio/monob_moog_ladder.cpp:90:17:void monob_moog_ladder_set_cutoff(float)	1
+../Src/Audio/monob_moog_ladder.cpp:95:17:void monob_moog_ladder_set_resonance_for_instance(uint8_t, float)	2
+../Src/Audio/monob_moog_ladder.cpp:106:17:void monob_moog_ladder_set_resonance(float)	1
+../Src/Audio/monob_moog_ladder.cpp:111:18:float monob_moog_ladder_process_sample_for_instance(uint8_t, float)	2
+../Src/Audio/monob_moog_ladder.cpp:121:18:float monob_moog_ladder_process_sample(float)	1
+../Src/Audio/monob_moog_ladder.cpp:124:1:void __static_initialization_and_destruction_0()	2
+../Src/Audio/monob_moog_ladder.cpp:124:1:void __static_initialization_and_destruction_1()	2
+../Src/Audio/monob_moog_ladder.cpp:124:1:cpp)	1
+../Src/Audio/monob_moog_ladder.cpp:124:1:cpp)	1

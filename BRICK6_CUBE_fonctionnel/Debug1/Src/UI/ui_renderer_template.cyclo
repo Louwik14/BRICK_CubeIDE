@@ -1,0 +1,13 @@
+../Src/UI/ui_renderer_template.c:31:16:ui_renderer_template_is_drum_pitch_offset_param	8
+../Src/UI/ui_renderer_template.c:199:12:ui_renderer_template_center_x	3
+../Src/UI/ui_renderer_template.c:180:13:ui_renderer_template_format_cpu_avg	3
+../Src/UI/ui_renderer_template.c:210:13:ui_renderer_template_draw_open_corner_frame	1
+../Src/UI/ui_renderer_template.c:227:13:ui_renderer_template_draw_note_icon	1
+../Src/UI/ui_renderer_template.c:237:13:ui_renderer_template_draw_inverted_label	1
+../Src/UI/ui_renderer_template.c:366:13:ui_renderer_template_draw_header	9
+../Src/UI/ui_renderer_template.c:263:14:ui_renderer_template_get_param_display_value	3
+../Src/UI/ui_renderer_template.c:50:13:ui_renderer_template_format_value	33
+../Src/UI/ui_renderer_template.c:246:26:ui_renderer_template_resolve_widget_type	3
+../Src/UI/ui_renderer_template.c:275:13:ui_renderer_template_draw_param_slot	15
+../Src/UI/ui_renderer_template.c:439:13:ui_renderer_template_draw_footer	7
+../Src/UI/ui_renderer_template.c:495:6:ui_renderer_template_draw	4

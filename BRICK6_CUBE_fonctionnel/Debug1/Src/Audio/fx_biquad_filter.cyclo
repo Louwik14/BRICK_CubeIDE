@@ -1,0 +1,10 @@
+../Src/Audio/fx_biquad_filter.c:46:13:fx_biquad_filter_compute_coeffs	9
+../Src/Audio/fx_biquad_filter.c:123:6:fx_biquad_filter_reset	2
+../Src/Audio/fx_biquad_filter.c:136:6:fx_biquad_filter_update_coeffs	2
+../Src/Audio/fx_biquad_filter.c:102:6:fx_biquad_filter_init	3
+../Src/Audio/fx_biquad_filter.c:147:6:fx_biquad_filter_set_sample_rate	3
+../Src/Audio/fx_biquad_filter.c:158:6:fx_biquad_filter_set_mode	2
+../Src/Audio/fx_biquad_filter.c:169:6:fx_biquad_filter_set_cutoff	4
+../Src/Audio/fx_biquad_filter.c:180:6:fx_biquad_filter_set_q	4
+../Src/Audio/fx_biquad_filter.c:191:6:fx_biquad_filter_set_bypass	3
+../Src/Audio/fx_biquad_filter.c:201:6:fx_biquad_filter_process_block	6

@@ -1,0 +1,8 @@
+../Src/Seq/seq_boundary_engine.c:29:16:seq_boundary_engine_lock_equals	0	static
+../Src/Seq/seq_boundary_engine.c:36:16:seq_boundary_engine_find_next_lock	8	static
+../Src/Seq/seq_boundary_engine.c:24:16:seq_boundary_engine_track_length	8	static
+../Src/Seq/seq_boundary_engine.c:57:16:seq_boundary_engine_collect_step_locks	40	static
+../Src/Seq/seq_boundary_engine.c:135:13:seq_boundary_engine_step_apply_restore	248	static
+../Src/Seq/seq_boundary_engine.c:107:6:seq_boundary_engine_restore_all_active_locks	24	static
+../Src/Seq/seq_boundary_engine.c:215:6:seq_boundary_engine_process	40	static
+../Src/Seq/seq_boundary_engine.c:264:6:seq_boundary_engine_advance_one_step	24	static

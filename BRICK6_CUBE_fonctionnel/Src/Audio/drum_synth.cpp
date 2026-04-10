@@ -260,17 +260,31 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t m
         return 1U;
     }
 
-    instance->active_model = drum_synth_resolve_model(instance, model_type);
-    instance->active_type = model_type;
+    DrumModel *const resolved_model = drum_synth_resolve_model(instance, model_type);
+    if (resolved_model == nullptr)
+    {
+        instance->active_model = nullptr;
+        instance->active_type = (uint8_t)DRUM_MODEL_ID_COUNT;
+        instance->ever_triggered = 0U;
+        instance->note_pitch_factor = 1.0f;
+        instance->velocity_gain = 1.0f;
+        return 0U;
+    }
+
+    /*
+     * Keep runtime calls safe while switching model type:
+     * temporarily expose no active model during reinitialization.
+     */
+    instance->active_model = nullptr;
+    instance->active_type = (uint8_t)DRUM_MODEL_ID_COUNT;
     instance->ever_triggered = 0U;
     instance->note_pitch_factor = 1.0f;
     instance->velocity_gain = 1.0f;
-    if (instance->active_model != nullptr)
-    {
-        instance->active_model->Init();
-    }
+    resolved_model->Init();
 
-    return (instance->active_model != nullptr) ? 1U : 0U;
+    instance->active_type = model_type;
+    instance->active_model = resolved_model;
+    return 1U;
 }
 
 drum_model_id_t drum_synth_get_model_for_instance(uint8_t instance_id)

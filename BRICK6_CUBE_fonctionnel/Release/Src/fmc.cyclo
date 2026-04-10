@@ -1,3 +1,0 @@
-../Src/fmc.c:31:6:MX_FMC_Init	2
-../Src/fmc.c:188:6:HAL_SDRAM_MspInit	2
-../Src/fmc.c:274:6:HAL_SDRAM_MspDeInit	2
