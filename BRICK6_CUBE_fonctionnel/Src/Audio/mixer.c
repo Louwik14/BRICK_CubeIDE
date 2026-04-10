@@ -148,15 +148,9 @@ static uint16_t mixer_track_filter_sustain_to_peaks(float sustain)
     return (uint16_t)(clamped * 32767.0f + 0.5f);
 }
 
-static float mixer_track_filter_keytrack_multiplier(const mixer_track_filter_t *filter)
-{
-    const float semitone_delta = (float)((int32_t)filter->current_note - (int32_t)MIXER_FILTER_NOTE_REF_MIDI);
-    return powf(2.0f, (semitone_delta * filter->keytrack) / 12.0f);
-}
-
 static float mixer_track_filter_compute_modulated_cutoff(const mixer_track_filter_t *filter, float env)
 {
-    float cutoff_hz = filter->cutoff_hz * mixer_track_filter_keytrack_multiplier(filter);
+    float cutoff_hz = filter->cutoff_hz;
     cutoff_hz = clampf_local(cutoff_hz, MIXER_FILTER_CUTOFF_MIN_HZ, MIXER_FILTER_CUTOFF_MAX_HZ);
 
     if(filter->eg_amount >= 0.0f)
