@@ -554,6 +554,8 @@
 "./Src/Audio/drum_model_trx_snare.o"
 "./Src/Audio/drum_synth.o"
 "./Src/Audio/dsp_engine.o"
+"./Src/Audio/env_adsr.o"
+"./Src/Audio/env_adsr_peaks.o"
 "./Src/Audio/fx_BusCompressorCore.o"
 "./Src/Audio/fx_Daisy_comp_core.o"
 "./Src/Audio/fx_biquad_filter.o"

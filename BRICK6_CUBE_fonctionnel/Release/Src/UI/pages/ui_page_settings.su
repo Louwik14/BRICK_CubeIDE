@@ -1,0 +1,9 @@
+../Src/UI/pages/ui_page_settings.c:370:13:ui_page_settings_leave	0	static
+../Src/UI/pages/ui_page_settings.c:406:13:ui_page_settings_render	72	static
+../Src/UI/pages/ui_page_settings.c:397:13:ui_page_settings_tick	16	static
+../Src/UI/pages/ui_page_settings.c:356:13:ui_page_settings_enter	16	static
+../Src/UI/pages/ui_page_settings.c:375:16:ui_page_settings_handle_event_internal	32	static
+../Src/UI/pages/ui_page_settings.c:471:6:ui_page_settings_open	0	static
+../Src/UI/pages/ui_page_settings.c:477:9:ui_page_settings_is_open	8	static
+../Src/UI/pages/ui_page_settings.c:482:6:ui_page_settings_handle_encoder	8	static
+../Src/UI/pages/ui_page_settings.c:519:9:ui_page_settings_handle_event	8	static

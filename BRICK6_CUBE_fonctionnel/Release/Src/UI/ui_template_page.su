@@ -1,0 +1,14 @@
+../Src/UI/ui_template_page.c:37:16:ui_template_page_get_first_enabled_subpage	24	static
+../Src/UI/ui_template_page.c:50:13:ui_template_page_sync_resolved_family	8	static
+../Src/UI/ui_template_page.c:65:29:ui_template_page_get_active_family	0	static
+../Src/UI/ui_template_page.c:80:6:ui_template_family_registry_init	8	static
+../Src/UI/ui_template_page.c:94:6:ui_template_family_register	24	static
+../Src/UI/ui_template_page.c:110:29:ui_template_family_resolve	16	static
+../Src/UI/ui_template_page.c:128:29:ui_template_family_resolve_active_track	24	static
+../Src/UI/ui_template_page.c:149:6:ui_template_page_select_subpage	16	static
+../Src/UI/ui_template_page.c:164:30:ui_template_page_get_active_subpage	8	static
+../Src/UI/ui_template_page.c:175:6:ui_template_page_enter	16	static
+../Src/UI/ui_template_page.c:200:6:ui_template_page_leave	0	static
+../Src/UI/ui_template_page.c:204:6:ui_template_page_handle_event	16	static
+../Src/UI/ui_template_page.c:240:6:ui_template_page_tick	0	static
+../Src/UI/ui_template_page.c:244:6:ui_template_page_render	8	static

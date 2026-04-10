@@ -1,0 +1,3 @@
+../Src/UI/ui_renderer_oled.c:42:6:ui_renderer_oled_draw	16	static
+../Src/UI/ui_renderer_oled.c:61:6:ui_renderer_oled_service_poll	24	static
+../Src/UI/ui_renderer_oled.c:75:9:ui_renderer_oled_is_rendering	0	static

@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/grain_engine.h:48:16:virtual void plaits::GrainEngine::LoadUserData(const uint8_t*)	0	static
+../mutable_instruments/plaits/dsp/engine/grain_engine.cc:38:6:virtual void plaits::GrainEngine::Init(stmlib::BufferAllocator*)	0	static
+../mutable_instruments/plaits/dsp/engine/grain_engine.cc:47:6:virtual void plaits::GrainEngine::Reset()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/grainlet_oscillator.h:58:8:void plaits::GrainletOscillator::Render(float, float, float, float, float*, size_t)	68	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/oscillator/z_oscillator.h:59:8:void plaits::ZOscillator::Render(float, float, float, float, float*, size_t)	72	static
+../mutable_instruments/plaits/dsp/engine/grain_engine.cc:51:6:virtual void plaits::GrainEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	56	static

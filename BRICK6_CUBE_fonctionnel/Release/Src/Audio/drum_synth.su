@@ -1,0 +1,11 @@
+../Src/Audio/drum_synth.cpp:152:14:float drum_synth_map_ui_to_dsp(param_id_t, float, float)	16	static
+../Src/Audio/drum_synth.cpp:239:6:void drum_synth_init(float)	24	static
+../Src/Audio/drum_synth.cpp:250:9:uint8_t drum_synth_set_model_for_instance(uint8_t, drum_model_id_t)	16	static
+../Src/Audio/drum_synth.cpp:290:17:drum_model_id_t drum_synth_get_model_for_instance(uint8_t)	0	static
+../Src/Audio/drum_synth.cpp:372:6:void drum_synth_note_off_for_instance(uint8_t, uint8_t)	0	static
+../Src/Audio/drum_synth.cpp:378:6:void drum_synth_all_notes_off_for_instance(uint8_t)	16	static
+../Src/Audio/drum_synth.cpp:394:6:void drum_synth_process_block_for_instance(uint8_t, float*, uint32_t)	24	static
+../Src/Audio/drum_synth.cpp:414:9:uint8_t drum_synth_set_param_for_instance(uint8_t, param_id_t, float)	8	static
+../Src/Audio/drum_synth.cpp:300:6:void drum_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	24	static
+../Src/Audio/drum_synth.cpp:583:6:void drum_synth_all_notes_off_all()	24	static
+../Src/Audio/drum_synth.cpp:589:1:cpp)	60	static

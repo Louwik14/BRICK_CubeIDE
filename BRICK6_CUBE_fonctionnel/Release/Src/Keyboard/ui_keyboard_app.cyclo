@@ -1,0 +1,16 @@
+../Src/Keyboard/ui_keyboard_app.c:103:16:kbd_quantize_to_current_scale	13
+../Src/Keyboard/ui_keyboard_app.c:357:13:kbd_refresh_sounding_state	53
+../Src/Keyboard/ui_keyboard_app.c:376:6:ui_keyboard_app_init	2
+../Src/Keyboard/ui_keyboard_app.c:390:6:ui_keyboard_app_set_params	6
+../Src/Keyboard/ui_keyboard_app.c:414:6:ui_keyboard_app_set_observer	1
+../Src/Keyboard/ui_keyboard_app.c:419:6:ui_keyboard_app_set_note_order	3
+../Src/Keyboard/ui_keyboard_app.c:433:6:ui_keyboard_app_set_chord_override	4
+../Src/Keyboard/ui_keyboard_app.c:447:6:ui_keyboard_app_set_velocity	1
+../Src/Keyboard/ui_keyboard_app.c:452:6:ui_keyboard_app_set_octave_shift	3
+../Src/Keyboard/ui_keyboard_app.c:474:8:ui_keyboard_app_get_octave_shift	1
+../Src/Keyboard/ui_keyboard_app.c:479:6:ui_keyboard_app_note_button	9
+../Src/Keyboard/ui_keyboard_app.c:522:6:ui_keyboard_app_chord_button	7
+../Src/Keyboard/ui_keyboard_app.c:549:6:ui_keyboard_app_all_notes_off	5
+../Src/Keyboard/ui_keyboard_app.c:559:6:ui_keyboard_app_clear_state_silent	1
+../Src/Keyboard/ui_keyboard_app.c:569:35:ui_keyboard_app_get_active_chord	1
+../Src/Keyboard/ui_keyboard_app.c:574:6:ui_keyboard_app_tick	1

@@ -1,0 +1,4 @@
+../Src/Seq/seq_clipboard.c:68:6:seq_clipboard_init	1
+../Src/Seq/seq_clipboard.c:73:9:seq_clipboard_is_valid	1
+../Src/Seq/seq_clipboard.c:78:9:seq_clipboard_copy	14
+../Src/Seq/seq_clipboard.c:148:9:seq_clipboard_paste	16

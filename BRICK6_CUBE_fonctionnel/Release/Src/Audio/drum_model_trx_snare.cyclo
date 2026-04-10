@@ -1,0 +1,10 @@
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.h:20:10:virtual bool TRXSnareDrum::SetParamByIndex(uint8_t, float)	9
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.cpp:11:6:virtual void TRXSnareDrum::Init()	1
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.cpp:17:6:virtual void TRXSnareDrum::Trigger()	1
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.cpp:70:6:virtual void TRXSnareDrum::RenderControls()	1
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.h:4:7:TRXSnareDrum::~TRXSnareDrum()	1
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.cpp:24:7:virtual float TRXSnareDrum::Process()	5
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.h:16:10:virtual void TRXSnareDrum::loadParameters(std::istream&)	1
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.h:4:7:virtual TRXSnareDrum::~TRXSnareDrum()	1
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.h:11:10:virtual void TRXSnareDrum::saveParameters(std::ostream&) const	9
+../Src/Audio/../../md-drum-synth-main/TRXSnareDrum.cpp:88:7:float TRXSnareDrum::sine(float)	1

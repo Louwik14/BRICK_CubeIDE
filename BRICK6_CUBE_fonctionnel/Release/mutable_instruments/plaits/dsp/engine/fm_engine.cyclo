@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/fm_engine.h:43:16:virtual void plaits::FMEngine::LoadUserData(const uint8_t*)	1
+../mutable_instruments/plaits/dsp/engine/fm_engine.cc:40:6:virtual void plaits::FMEngine::Init(stmlib::BufferAllocator*)	1
+../mutable_instruments/plaits/dsp/engine/fm_engine.cc:52:6:virtual void plaits::FMEngine::Reset()	1
+../mutable_instruments/plaits/dsp/engine/fm_engine.cc:56:6:virtual void plaits::FMEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	15

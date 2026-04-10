@@ -834,10 +834,9 @@
 						<entry excluding="dexed_sd.h|dexed_sd.cpp|doc|addon|third-party" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Micro_Dexed"/>
 						<entry excluding="Storage/sd_stream.c|midi_host.c|midi.c|usb_otg.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Src"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
-						<entry excluding="TRXSnareDrum.cpp|TRXHiHat.cpp|TRXClaves.cpp|TRXBassDrum.cpp|FmTomModel.cpp|FmSnareModel.cpp|FmRimshotModel.cpp|FmKickModel.cpp|FmCymbalModel.cpp|FmCowbellModel.cpp|FmClapModel.cpp" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="md-drum-synth-main"/>
+						<entry excluding="TRXSnareDrum.cpp|TRXHiHat.cpp|TRXClaves.cpp|TRXBassDrum.cpp|FmTomModel.cpp|FmSnareModel.cpp|FmRimshotModel.cpp|FmKickModel.cpp|FmCymbalModel.cpp|FmCowbellModel.cpp|FmClapModel.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="md-drum-synth-main"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="mutable_instruments/clouds"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="mutable_instruments/peaks"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="mutable_instruments/plaits"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="mutable_instruments/plaits"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="mutable_instruments/stmlib"/>
 					</sourceEntries>
 				</configuration>
@@ -1083,7 +1082,6 @@
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Startup"/>
 						<entry excluding="TRXSnareDrum.cpp|TRXHiHat.cpp|TRXClaves.cpp|TRXBassDrum.cpp|FmTomModel.cpp|FmSnareModel.cpp|FmRimshotModel.cpp|FmKickModel.cpp|FmCymbalModel.cpp|FmCowbellModel.cpp|FmClapModel.cpp" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="md-drum-synth-main"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="mutable_instruments/clouds"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="mutable_instruments/peaks"/>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="mutable_instruments/plaits"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="mutable_instruments/stmlib"/>
 					</sourceEntries>

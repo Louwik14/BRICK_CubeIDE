@@ -5,43 +5,13 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
-../md-drum-synth-main/FmClapModel.cpp \
-../md-drum-synth-main/FmCowbellModel.cpp \
-../md-drum-synth-main/FmCymbalModel.cpp \
-../md-drum-synth-main/FmKickModel.cpp \
-../md-drum-synth-main/FmRimshotModel.cpp \
-../md-drum-synth-main/FmSnareModel.cpp \
-../md-drum-synth-main/FmTomModel.cpp \
-../md-drum-synth-main/TRXBassDrum.cpp \
-../md-drum-synth-main/TRXClaves.cpp \
-../md-drum-synth-main/TRXHiHat.cpp \
-../md-drum-synth-main/TRXSnareDrum.cpp 
+../md-drum-synth-main/main.cpp 
 
 OBJS += \
-./md-drum-synth-main/FmClapModel.o \
-./md-drum-synth-main/FmCowbellModel.o \
-./md-drum-synth-main/FmCymbalModel.o \
-./md-drum-synth-main/FmKickModel.o \
-./md-drum-synth-main/FmRimshotModel.o \
-./md-drum-synth-main/FmSnareModel.o \
-./md-drum-synth-main/FmTomModel.o \
-./md-drum-synth-main/TRXBassDrum.o \
-./md-drum-synth-main/TRXClaves.o \
-./md-drum-synth-main/TRXHiHat.o \
-./md-drum-synth-main/TRXSnareDrum.o 
+./md-drum-synth-main/main.o 
 
 CPP_DEPS += \
-./md-drum-synth-main/FmClapModel.d \
-./md-drum-synth-main/FmCowbellModel.d \
-./md-drum-synth-main/FmCymbalModel.d \
-./md-drum-synth-main/FmKickModel.d \
-./md-drum-synth-main/FmRimshotModel.d \
-./md-drum-synth-main/FmSnareModel.d \
-./md-drum-synth-main/FmTomModel.d \
-./md-drum-synth-main/TRXBassDrum.d \
-./md-drum-synth-main/TRXClaves.d \
-./md-drum-synth-main/TRXHiHat.d \
-./md-drum-synth-main/TRXSnareDrum.d 
+./md-drum-synth-main/main.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -51,7 +21,7 @@ md-drum-synth-main/%.o md-drum-synth-main/%.su md-drum-synth-main/%.cyclo: ../md
 clean: clean-md-2d-drum-2d-synth-2d-main
 
 clean-md-2d-drum-2d-synth-2d-main:
-	-$(RM) ./md-drum-synth-main/FmClapModel.cyclo ./md-drum-synth-main/FmClapModel.d ./md-drum-synth-main/FmClapModel.o ./md-drum-synth-main/FmClapModel.su ./md-drum-synth-main/FmCowbellModel.cyclo ./md-drum-synth-main/FmCowbellModel.d ./md-drum-synth-main/FmCowbellModel.o ./md-drum-synth-main/FmCowbellModel.su ./md-drum-synth-main/FmCymbalModel.cyclo ./md-drum-synth-main/FmCymbalModel.d ./md-drum-synth-main/FmCymbalModel.o ./md-drum-synth-main/FmCymbalModel.su ./md-drum-synth-main/FmKickModel.cyclo ./md-drum-synth-main/FmKickModel.d ./md-drum-synth-main/FmKickModel.o ./md-drum-synth-main/FmKickModel.su ./md-drum-synth-main/FmRimshotModel.cyclo ./md-drum-synth-main/FmRimshotModel.d ./md-drum-synth-main/FmRimshotModel.o ./md-drum-synth-main/FmRimshotModel.su ./md-drum-synth-main/FmSnareModel.cyclo ./md-drum-synth-main/FmSnareModel.d ./md-drum-synth-main/FmSnareModel.o ./md-drum-synth-main/FmSnareModel.su ./md-drum-synth-main/FmTomModel.cyclo ./md-drum-synth-main/FmTomModel.d ./md-drum-synth-main/FmTomModel.o ./md-drum-synth-main/FmTomModel.su ./md-drum-synth-main/TRXBassDrum.cyclo ./md-drum-synth-main/TRXBassDrum.d ./md-drum-synth-main/TRXBassDrum.o ./md-drum-synth-main/TRXBassDrum.su ./md-drum-synth-main/TRXClaves.cyclo ./md-drum-synth-main/TRXClaves.d ./md-drum-synth-main/TRXClaves.o ./md-drum-synth-main/TRXClaves.su ./md-drum-synth-main/TRXHiHat.cyclo ./md-drum-synth-main/TRXHiHat.d ./md-drum-synth-main/TRXHiHat.o ./md-drum-synth-main/TRXHiHat.su ./md-drum-synth-main/TRXSnareDrum.cyclo ./md-drum-synth-main/TRXSnareDrum.d ./md-drum-synth-main/TRXSnareDrum.o ./md-drum-synth-main/TRXSnareDrum.su
+	-$(RM) ./md-drum-synth-main/main.cyclo ./md-drum-synth-main/main.d ./md-drum-synth-main/main.o ./md-drum-synth-main/main.su
 
 .PHONY: clean-md-2d-drum-2d-synth-2d-main
 
