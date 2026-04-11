@@ -1,0 +1,14 @@
+../Src/Audio/env_adsr.c:3:6:env_adsr_init	1
+../Src/Audio/env_adsr.c:8:6:env_adsr_reset	1
+../Src/Audio/env_adsr.c:13:6:env_adsr_set_attack	1
+../Src/Audio/env_adsr.c:18:6:env_adsr_set_decay	1
+../Src/Audio/env_adsr.c:23:6:env_adsr_set_sustain	1
+../Src/Audio/env_adsr.c:28:6:env_adsr_set_release	1
+../Src/Audio/env_adsr.c:33:6:env_adsr_gate_on	1
+../Src/Audio/env_adsr.c:38:6:env_adsr_gate_off	1
+../Src/Audio/env_adsr.c:43:6:env_adsr_retrigger	1
+../Src/Audio/env_adsr.c:48:9:env_adsr_process_step	1
+../Src/Audio/env_adsr.c:53:9:env_adsr_value	1
+../Src/Audio/env_adsr.c:58:24:env_adsr_stage	1
+../Src/Audio/env_adsr.c:63:6:env_adsr_bank_init	1
+../Src/Audio/env_adsr.c:69:6:env_adsr_bank_reset	1

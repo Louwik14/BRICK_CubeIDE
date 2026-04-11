@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine2/wave_terrain_engine.h:51:16:virtual void plaits::WaveTerrainEngine::LoadUserData(const uint8_t*)	1
+../mutable_instruments/plaits/dsp/engine2/wave_terrain_engine.cc:41:6:virtual void plaits::WaveTerrainEngine::Init(stmlib::BufferAllocator*)	2
+../mutable_instruments/plaits/dsp/engine2/wave_terrain_engine.cc:49:6:virtual void plaits::WaveTerrainEngine::Reset()	1
+../mutable_instruments/plaits/dsp/engine2/wave_terrain_engine.cc:128:14:float plaits::WaveTerrainEngine::Terrain(float, float, int)	8
+../mutable_instruments/plaits/dsp/engine2/wave_terrain_engine.cc:180:6:virtual void plaits::WaveTerrainEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	27

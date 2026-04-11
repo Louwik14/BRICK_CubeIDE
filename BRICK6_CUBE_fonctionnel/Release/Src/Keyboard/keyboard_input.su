@@ -1,0 +1,5 @@
+../Src/Keyboard/keyboard_input.c:46:13:keyboard_input_all_notes_off_sink	8	static
+../Src/Keyboard/keyboard_input.c:35:13:keyboard_input_note_off_sink	8	static
+../Src/Keyboard/keyboard_input.c:24:13:keyboard_input_note_on_sink	16	static
+../Src/Keyboard/keyboard_input.c:51:6:keyboard_input_init	24	static
+../Src/Keyboard/keyboard_input.c:64:6:keyboard_input_process_hall	16	static

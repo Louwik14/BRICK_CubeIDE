@@ -1,0 +1,8 @@
+../Src/Seq/seq_play_scheduler.c:237:22:seq_play_scheduler_get_locked_or_default	40	static
+../Src/Seq/seq_play_scheduler.c:68:13:seq_play_scheduler_push	12	static,ignoring_inline_asm
+../Src/Seq/seq_play_scheduler.c:257:6:seq_play_scheduler_init	0	static
+../Src/Seq/seq_play_scheduler.c:262:6:seq_play_scheduler_clear	0	static
+../Src/Seq/seq_play_scheduler.c:267:6:seq_play_scheduler_schedule_step	104	static
+../Src/Seq/seq_play_scheduler.c:386:6:seq_play_scheduler_service	0	static
+../Src/Seq/seq_play_scheduler.c:392:10:seq_play_scheduler_audio_collect_block_events	112	static,ignoring_inline_asm
+../Src/Seq/seq_play_scheduler.c:482:6:seq_play_scheduler_audio_apply_event	32	static

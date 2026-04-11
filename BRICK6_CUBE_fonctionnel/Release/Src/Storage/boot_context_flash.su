@@ -1,0 +1,6 @@
+../Src/Storage/boot_context_flash.c:16:17:boot_context_flash_crc32	16	static
+../Src/Storage/boot_context_flash.c:75:16:boot_context_flash_write_raw	64	static
+../Src/Storage/boot_context_flash.c:109:6:boot_context_flash_init	16	static
+../Src/Storage/boot_context_flash.c:127:9:boot_context_flash_load	24	static
+../Src/Storage/boot_context_flash.c:146:9:boot_context_flash_commit	16	static
+../Src/Storage/boot_context_flash.c:171:6:boot_context_flash_clear	16	static

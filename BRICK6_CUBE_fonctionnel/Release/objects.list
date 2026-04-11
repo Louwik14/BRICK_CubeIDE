@@ -570,6 +570,7 @@
 "./Src/Audio/fx_peaks_svf_lut.o"
 "./Src/Audio/fx_pool.o"
 "./Src/Audio/fx_reverb.o"
+"./Src/Audio/fx_reverb_drumboy.o"
 "./Src/Audio/fx_saturation.o"
 "./Src/Audio/fx_svf.o"
 "./Src/Audio/juno_midi_queue.o"
