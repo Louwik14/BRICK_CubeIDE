@@ -41,6 +41,10 @@
 #define SEQ_DEBUG_STOP 0
 #endif
 
+#ifndef SEQ_DEBUG_SAMPLE_DOMAIN_TRACE
+#define SEQ_DEBUG_SAMPLE_DOMAIN_TRACE 0
+#endif
+
 #if SEQ_DEBUG_TRACK_BINDING
 #define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
 #else
@@ -51,6 +55,12 @@
 #define SEQ_STOP_LOG(...) printf(__VA_ARGS__)
 #else
 #define SEQ_STOP_LOG(...) do { } while (0)
+#endif
+
+#if SEQ_DEBUG_SAMPLE_DOMAIN_TRACE
+#define SEQ_SAMPLE_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_SAMPLE_LOG(...) do { } while (0)
 #endif
 
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
@@ -675,6 +685,10 @@ uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_e
     const uint64_t block_start_sample = g_seq_runtime.audio_timeline_sample;
     g_seq_runtime.audio_block_start_sample = block_start_sample;
     g_seq_runtime.audio_timeline_sample = block_start_sample + (uint64_t)block_frames;
+    SEQ_SAMPLE_LOG("[SEQ][AUD][COLLECT] b0=%llu frames=%u max=%u\r\n",
+                   (unsigned long long)block_start_sample,
+                   (unsigned)block_frames,
+                   (unsigned)max_events);
     seq_runtime_midi_clock_audio_emit_for_block(block_start_sample, block_frames);
     while (total < max_events)
     {
@@ -695,6 +709,14 @@ uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_e
             out_events[total + i].note = scheduler_events[i].note;
             out_events[total + i].velocity = scheduler_events[i].velocity;
             out_events[total + i].sample_offset_in_block = scheduler_events[i].sample_offset_in_block;
+            SEQ_SAMPLE_LOG("[SEQ][AUD][EVT] i=%u ty=%u tr=%u n=%u vel=%u off=%u abs=%llu\r\n",
+                           (unsigned)(total + i),
+                           (unsigned)scheduler_events[i].type,
+                           (unsigned)scheduler_events[i].track,
+                           (unsigned)scheduler_events[i].note,
+                           (unsigned)scheduler_events[i].velocity,
+                           (unsigned)scheduler_events[i].sample_offset_in_block,
+                           (unsigned long long)(block_start_sample + scheduler_events[i].sample_offset_in_block));
         }
         total = (uint16_t)(total + count);
 
@@ -713,6 +735,14 @@ void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
     {
         return;
     }
+
+    SEQ_SAMPLE_LOG("[SEQ][AUD][APPLY] ty=%u tr=%u n=%u vel=%u off=%u abs=%llu\r\n",
+                   (unsigned)event->type,
+                   (unsigned)event->track,
+                   (unsigned)event->note,
+                   (unsigned)event->velocity,
+                   (unsigned)event->sample_offset_in_block,
+                   (unsigned long long)(g_seq_runtime.audio_block_start_sample + event->sample_offset_in_block));
 
     seq_play_scheduler_audio_event_t scheduler_event;
     scheduler_event.type = event->type;
@@ -1098,6 +1128,13 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t note,
                                   uint8_t velocity)
 {
+    SEQ_SAMPLE_LOG("[SEQ][LREC][RT-ON] src=%u ch=%u n=%u vel=%u now=%llu act=%u\r\n",
+                   (unsigned)source,
+                   (unsigned)channel_zero_based,
+                   (unsigned)note,
+                   (unsigned)velocity,
+                   (unsigned long long)seq_runtime_get_now_sample(),
+                   (unsigned)seq_runtime_live_rec_is_active());
     seq_live_rec_capture_note_on(seq_runtime_live_rec_is_active(),
                                  &g_seq_runtime,
                                  source,
@@ -1111,6 +1148,12 @@ void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                    uint8_t channel_zero_based,
                                    uint8_t note)
 {
+    SEQ_SAMPLE_LOG("[SEQ][LREC][RT-OFF] src=%u ch=%u n=%u now=%llu act=%u\r\n",
+                   (unsigned)source,
+                   (unsigned)channel_zero_based,
+                   (unsigned)note,
+                   (unsigned long long)seq_runtime_get_now_sample(),
+                   (unsigned)seq_runtime_live_rec_is_active());
     seq_live_rec_capture_note_off(seq_runtime_live_rec_is_active(),
                                   &g_seq_runtime,
                                   source,

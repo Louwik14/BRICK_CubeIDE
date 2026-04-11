@@ -8,6 +8,7 @@
 #include "Seq/seq_live_rec_capture.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Core/track_runtime.h"
 #include "ui_core.h"
@@ -18,6 +19,16 @@
 
 #define SEQ_LIVE_REC_CAPTURE_VOICE_COUNT 4U
 #define SEQ_LIVE_REC_CAPTURE_PENDING_CAP 64U
+
+#ifndef SEQ_DEBUG_LIVE_REC_TRACE
+#define SEQ_DEBUG_LIVE_REC_TRACE 0
+#endif
+
+#if SEQ_DEBUG_LIVE_REC_TRACE
+#define SEQ_LIVE_REC_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_LIVE_REC_LOG(...) do { } while (0)
+#endif
 
 typedef struct
 {
@@ -164,6 +175,26 @@ static int32_t seq_live_rec_capture_find_pending_for_note(seq_track_id_t track,
             || (g_seq_live_rec_pending[i].channel != channel_zero_based)
             || (g_seq_live_rec_pending[i].note != note)
             || (g_seq_live_rec_pending[i].source != (uint8_t)source))
+        {
+            continue;
+        }
+
+        return (int32_t)i;
+    }
+
+    return -1;
+}
+
+static int32_t seq_live_rec_capture_find_pending_for_note_any_source(seq_track_id_t track,
+                                                                      uint8_t channel_zero_based,
+                                                                      uint8_t note)
+{
+    for (uint8_t i = 0U; i < SEQ_LIVE_REC_CAPTURE_PENDING_CAP; ++i)
+    {
+        if ((g_seq_live_rec_pending[i].active == 0U)
+            || (g_seq_live_rec_pending[i].track != track)
+            || (g_seq_live_rec_pending[i].channel != channel_zero_based)
+            || (g_seq_live_rec_pending[i].note != note))
         {
             continue;
         }
@@ -336,6 +367,16 @@ static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_n
                                                   pending->step,
                                                   seq_live_rec_capture_play_param_len(pending->voice),
                                                   (float)len_steps);
+    SEQ_LIVE_REC_LOG("[SEQ][LREC][WR] tr=%u src=%u ch=%u n=%u st=%u v=%u t0=%llu t1=%llu len=%lu\r\n",
+                     pending->track,
+                     pending->source,
+                     pending->channel,
+                     pending->note,
+                     pending->step,
+                     pending->voice,
+                     (unsigned long long)pending->start_sample,
+                     (unsigned long long)stop_sample,
+                     (unsigned long)len_steps);
     pending->active = 0U;
 }
 
@@ -351,6 +392,9 @@ void seq_live_rec_capture_reset(void)
 
 void seq_live_rec_capture_flush(uint64_t stop_sample, uint32_t samples_per_step_q16)
 {
+    SEQ_LIVE_REC_LOG("[SEQ][LREC][FLUSH] stop=%llu sps_q16=%lu\r\n",
+                     (unsigned long long)stop_sample,
+                     (unsigned long)samples_per_step_q16);
     for (uint8_t i = 0U; i < SEQ_LIVE_REC_CAPTURE_PENDING_CAP; ++i)
     {
         seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[i], stop_sample, samples_per_step_q16);
@@ -365,6 +409,13 @@ void seq_live_rec_capture_note_on(uint8_t active,
                                   uint8_t velocity,
                                   uint64_t now_sample)
 {
+    SEQ_LIVE_REC_LOG("[SEQ][LREC][ON-IN] act=%u src=%u ch=%u n=%u vel=%u t=%llu\r\n",
+                     active,
+                     (unsigned)source,
+                     (unsigned)channel_zero_based,
+                     (unsigned)note,
+                     (unsigned)velocity,
+                     (unsigned long long)now_sample);
     if ((runtime_state == 0)
         || (active == 0U)
         || (velocity == 0U)
@@ -377,6 +428,10 @@ void seq_live_rec_capture_note_on(uint8_t active,
     if ((source == SEQ_LIVE_REC_SRC_EXTERNAL)
         && (seq_output_guard_is_note_active_on_channel(channel_zero_based, note) != 0U))
     {
+        SEQ_LIVE_REC_LOG("[SEQ][LREC][REJ] reason=guard src=%u ch=%u n=%u\r\n",
+                         (unsigned)source,
+                         (unsigned)channel_zero_based,
+                         (unsigned)note);
         return;
     }
 
@@ -415,6 +470,23 @@ void seq_live_rec_capture_note_on(uint8_t active,
                                                        channel_zero_based,
                                                        note) >= 0)
         {
+            SEQ_LIVE_REC_LOG("[SEQ][LREC][REJ] reason=dup-same-src tr=%u src=%u ch=%u n=%u\r\n",
+                             track,
+                             (unsigned)source,
+                             (unsigned)channel_zero_based,
+                             (unsigned)note);
+            continue;
+        }
+
+        if (seq_live_rec_capture_find_pending_for_note_any_source(track,
+                                                                   channel_zero_based,
+                                                                   note) >= 0)
+        {
+            SEQ_LIVE_REC_LOG("[SEQ][LREC][REJ] reason=dup-cross-src tr=%u src=%u ch=%u n=%u\r\n",
+                             track,
+                             (unsigned)source,
+                             (unsigned)channel_zero_based,
+                             (unsigned)note);
             continue;
         }
 
@@ -431,6 +503,11 @@ void seq_live_rec_capture_note_on(uint8_t active,
         const int32_t pending_slot = seq_live_rec_capture_alloc_pending_slot();
         if (pending_slot < 0)
         {
+            SEQ_LIVE_REC_LOG("[SEQ][LREC][REJ] reason=no-slot tr=%u src=%u ch=%u n=%u\r\n",
+                             track,
+                             (unsigned)source,
+                             (unsigned)channel_zero_based,
+                             (unsigned)note);
             continue;
         }
 
@@ -481,6 +558,15 @@ void seq_live_rec_capture_note_on(uint8_t active,
         g_seq_live_rec_pending[pending_slot].voice = (uint8_t)voice;
         g_seq_live_rec_pending[pending_slot].step = write_step;
         g_seq_live_rec_pending[pending_slot].start_sample = now_sample;
+        SEQ_LIVE_REC_LOG("[SEQ][LREC][PEND+] slot=%ld tr=%u src=%u ch=%u n=%u st=%u v=%ld t=%llu\r\n",
+                         (long)pending_slot,
+                         track,
+                         (unsigned)source,
+                         (unsigned)channel_zero_based,
+                         (unsigned)note,
+                         write_step,
+                         (long)voice,
+                         (unsigned long long)now_sample);
     }
 }
 
@@ -491,6 +577,12 @@ void seq_live_rec_capture_note_off(uint8_t active,
                                    uint8_t note,
                                    uint64_t now_sample)
 {
+    SEQ_LIVE_REC_LOG("[SEQ][LREC][OFF-IN] act=%u src=%u ch=%u n=%u t=%llu\r\n",
+                     active,
+                     (unsigned)source,
+                     (unsigned)channel_zero_based,
+                     (unsigned)note,
+                     (unsigned long long)now_sample);
     if ((runtime_state == 0)
         || (active == 0U)
         || (note >= 128U)
@@ -517,12 +609,42 @@ void seq_live_rec_capture_note_off(uint8_t active,
                                                                                  source,
                                                                                  channel_zero_based,
                                                                                  note);
-        if (pending_slot < 0)
+        int32_t slot_to_close = pending_slot;
+        if (slot_to_close < 0)
         {
+            slot_to_close = seq_live_rec_capture_find_pending_for_note_any_source(track,
+                                                                                   channel_zero_based,
+                                                                                   note);
+            if (slot_to_close >= 0)
+            {
+                SEQ_LIVE_REC_LOG("[SEQ][LREC][OFF-FB] tr=%u src=%u ch=%u n=%u slot=%ld pend_src=%u\r\n",
+                                 track,
+                                 (unsigned)source,
+                                 (unsigned)channel_zero_based,
+                                 (unsigned)note,
+                                 (long)slot_to_close,
+                                 (unsigned)g_seq_live_rec_pending[slot_to_close].source);
+            }
+        }
+
+        if (slot_to_close < 0)
+        {
+            SEQ_LIVE_REC_LOG("[SEQ][LREC][REJ] reason=off-no-pending tr=%u src=%u ch=%u n=%u\r\n",
+                             track,
+                             (unsigned)source,
+                             (unsigned)channel_zero_based,
+                             (unsigned)note);
             continue;
         }
 
-        seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[pending_slot],
+        SEQ_LIVE_REC_LOG("[SEQ][LREC][PEND-] slot=%ld tr=%u src=%u ch=%u n=%u t=%llu\r\n",
+                         (long)slot_to_close,
+                         track,
+                         (unsigned)source,
+                         (unsigned)channel_zero_based,
+                         (unsigned)note,
+                         (unsigned long long)now_sample);
+        seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[slot_to_close],
                                               now_sample,
                                               runtime_state->samples_per_step_q16);
     }
