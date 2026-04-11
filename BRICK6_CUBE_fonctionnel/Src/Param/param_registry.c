@@ -489,6 +489,7 @@ typedef struct
     float drive;
     float decimator_bits;
     float decimator_rate;
+    float decimator_rate2;
 } filter_ui_state_t;
 
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
@@ -609,6 +610,7 @@ static uint8_t param_is_filter_ui_param(param_id_t id)
         case PARAM_FILTER_DRIVE:
         case PARAM_FILTER_DECIMATOR_BITS:
         case PARAM_FILTER_DECIMATOR_RATE:
+        case PARAM_FILTER_DECIMATOR_RATE2:
             return 1U;
         default:
             return 0U;
@@ -866,6 +868,7 @@ static void filter_ui_state_init_defaults(void)
         g_filter_ui_state[i].drive = param_registry[PARAM_FILTER_DRIVE].default_value;
         g_filter_ui_state[i].decimator_bits = param_registry[PARAM_FILTER_DECIMATOR_BITS].default_value;
         g_filter_ui_state[i].decimator_rate = param_registry[PARAM_FILTER_DECIMATOR_RATE].default_value;
+        g_filter_ui_state[i].decimator_rate2 = param_registry[PARAM_FILTER_DECIMATOR_RATE2].default_value;
     }
 }
 
@@ -940,6 +943,12 @@ static void apply_filter_decimator_rate_runtime(uint32_t target_track, float rat
     audio_float_set_track_saturation_decimator_rate_ui(target_track, rate_0_127);
 }
 
+static void apply_filter_decimator_rate2_runtime(uint32_t target_track, float rate_ui)
+{
+    const uint8_t rate_0_127 = (uint8_t)(clamp_value(rate_ui, 0.0f, 127.0f) + 0.5f);
+    audio_float_set_track_saturation_decimator_rate2_ui(target_track, rate_0_127);
+}
+
 static void apply_filter_crunch_insert_runtime(uint32_t target_track, const filter_ui_state_t *state)
 {
     if ((state == NULL) || (target_track >= FILTER_TRACK_TARGET_COUNT))
@@ -950,7 +959,8 @@ static void apply_filter_crunch_insert_runtime(uint32_t target_track, const filt
     const uint8_t has_drive = (state->drive > 0.5f) ? 1U : 0U;
     const uint8_t has_bits = (state->decimator_bits > 0.5f) ? 1U : 0U;
     const uint8_t has_rate = (state->decimator_rate > 0.5f) ? 1U : 0U;
-    mixer_set_track_insert_slot(target_track, 1U, ((has_drive != 0U) || (has_bits != 0U) || (has_rate != 0U)) ? 1 : -1);
+    const uint8_t has_rate2 = (state->decimator_rate2 > 0.5f) ? 1U : 0U;
+    mixer_set_track_insert_slot(target_track, 1U, ((has_drive != 0U) || (has_bits != 0U) || (has_rate != 0U) || (has_rate2 != 0U)) ? 1 : -1);
 }
 
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
@@ -976,6 +986,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_DRIVE:
         case PARAM_FILTER_DECIMATOR_BITS:
         case PARAM_FILTER_DECIMATOR_RATE:
+        case PARAM_FILTER_DECIMATOR_RATE2:
             if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
             {
                 SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_drive_target ui_active=%u\r\n",
@@ -1065,6 +1076,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_DRIVE: *out_value = state->drive; return 1U;
         case PARAM_FILTER_DECIMATOR_BITS: *out_value = state->decimator_bits; return 1U;
         case PARAM_FILTER_DECIMATOR_RATE: *out_value = state->decimator_rate; return 1U;
+        case PARAM_FILTER_DECIMATOR_RATE2: *out_value = state->decimator_rate2; return 1U;
         default: break;
     }
 
@@ -1127,6 +1139,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_DRIVE:
         case PARAM_FILTER_DECIMATOR_BITS:
         case PARAM_FILTER_DECIMATOR_RATE:
+        case PARAM_FILTER_DECIMATOR_RATE2:
             if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
             {
                 SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_drive_target ui_active=%u\r\n",
@@ -1327,6 +1340,11 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
             state->decimator_rate = clamp_value(clamped, 0.0f, 127.0f);
             apply_filter_crunch_insert_runtime(target_track, state);
             return 1U;
+        case PARAM_FILTER_DECIMATOR_RATE2:
+            apply_filter_decimator_rate2_runtime(target_track, clamp_value(clamped, 0.0f, 127.0f));
+            state->decimator_rate2 = clamp_value(clamped, 0.0f, 127.0f);
+            apply_filter_crunch_insert_runtime(target_track, state);
+            return 1U;
         default:
             break;
     }
@@ -1351,6 +1369,7 @@ void param_registry_sync_filter_ui_for_active_track(void)
             param_store_set_active(PARAM_FILTER_DRIVE, drive_state->drive);
             param_store_set_active(PARAM_FILTER_DECIMATOR_BITS, drive_state->decimator_bits);
             param_store_set_active(PARAM_FILTER_DECIMATOR_RATE, drive_state->decimator_rate);
+            param_store_set_active(PARAM_FILTER_DECIMATOR_RATE2, drive_state->decimator_rate2);
         }
         return;
     }
@@ -1378,6 +1397,7 @@ void param_registry_sync_filter_ui_for_active_track(void)
     param_store_set_active(PARAM_FILTER_DRIVE, state->drive);
     param_store_set_active(PARAM_FILTER_DECIMATOR_BITS, state->decimator_bits);
     param_store_set_active(PARAM_FILTER_DECIMATOR_RATE, state->decimator_rate);
+    param_store_set_active(PARAM_FILTER_DECIMATOR_RATE2, state->decimator_rate2);
 
     if (filter_mod_locked_for_active_track() != 0U)
     {
@@ -1717,6 +1737,25 @@ static void apply_filter_decimator_rate(float v)
     if (state != NULL)
     {
         state->decimator_rate = rate_ui;
+        apply_filter_crunch_insert_runtime(target_track, state);
+    }
+}
+
+static void apply_filter_decimator_rate2(float v)
+{
+    uint32_t target_track = 0U;
+    if (!resolve_filter_drive_target_track_for_ui_track(ui_get_active_track(), &target_track))
+    {
+        return;
+    }
+
+    const float rate_ui = clamp_value(v, 0.0f, 127.0f);
+    apply_filter_decimator_rate2_runtime(target_track, rate_ui);
+
+    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
+    if (state != NULL)
+    {
+        state->decimator_rate2 = rate_ui;
         apply_filter_crunch_insert_runtime(target_track, state);
     }
 }
@@ -2340,6 +2379,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_DRIVE, "Drive", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_drive),
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_BITS, "Bits", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_bits),
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_RATE, "Rate", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_rate),
+    PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_RATE2, "Rate2", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_rate2),
     PARAM_DESC_EX(PARAM_VCA_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_attack),
     PARAM_DESC_EX(PARAM_VCA_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_decay),
     PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_sustain),

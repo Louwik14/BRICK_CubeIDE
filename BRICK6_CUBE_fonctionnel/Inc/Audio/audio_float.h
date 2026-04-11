@@ -178,6 +178,7 @@ void audio_float_set_saturation_drive_ui(uint8_t drive_0_127);
 void audio_float_set_track_saturation_drive_ui(uint32_t track_id, uint8_t drive_0_127);
 void audio_float_set_track_saturation_decimator_bits_ui(uint32_t track_id, uint8_t bits_0_127);
 void audio_float_set_track_saturation_decimator_rate_ui(uint32_t track_id, uint8_t rate_0_127);
+void audio_float_set_track_saturation_decimator_rate2_ui(uint32_t track_id, uint8_t rate_0_127);
 void audio_float_set_saturation_mix_ui(uint8_t mix_0_127);
 
 void audio_float_set_bus_comp_threshold_db(float threshold_db);
