@@ -205,6 +205,61 @@ static int32_t seq_live_rec_capture_find_pending_for_note_any_source(seq_track_i
     return -1;
 }
 
+static int32_t seq_live_rec_capture_find_pending_for_voice(seq_track_id_t track,
+                                                            seq_step_id_t step,
+                                                            uint8_t voice)
+{
+    for (uint8_t i = 0U; i < SEQ_LIVE_REC_CAPTURE_PENDING_CAP; ++i)
+    {
+        if ((g_seq_live_rec_pending[i].active == 0U)
+            || (g_seq_live_rec_pending[i].track != track)
+            || (g_seq_live_rec_pending[i].step != step)
+            || (g_seq_live_rec_pending[i].voice != voice))
+        {
+            continue;
+        }
+
+        return (int32_t)i;
+    }
+
+    return -1;
+}
+
+static uint8_t seq_live_rec_capture_voice_is_owned(seq_track_id_t track,
+                                                   seq_step_id_t step,
+                                                   uint8_t voice)
+{
+    return (seq_live_rec_capture_find_pending_for_voice(track, step, voice) >= 0) ? 1U : 0U;
+}
+
+static int32_t seq_live_rec_capture_select_voice_deterministic(seq_track_id_t track,
+                                                                seq_step_id_t step,
+                                                                uint8_t note)
+{
+    int32_t voice = seq_live_rec_capture_find_voice_with_note_lock(track, step, note);
+    if (voice >= 0)
+    {
+        return voice;
+    }
+
+    voice = seq_live_rec_capture_find_free_voice(track, step);
+    if (voice >= 0)
+    {
+        return voice;
+    }
+
+    for (uint8_t v = 0U; v < SEQ_LIVE_REC_CAPTURE_VOICE_COUNT; ++v)
+    {
+        if (seq_live_rec_capture_voice_is_owned(track, step, v) == 0U)
+        {
+            return (int32_t)v;
+        }
+    }
+
+    /* Fully occupied and owned: deterministic fallback slot. */
+    return 0;
+}
+
 static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
                                                           seq_live_rec_source_t source)
 {
@@ -324,10 +379,25 @@ static uint8_t seq_live_rec_capture_delete_play_param(seq_track_id_t track,
     return (st == SEQ_PLOCK_OP_DELETED) ? 1U : 0U;
 }
 
-static uint8_t seq_live_rec_capture_has_play_param(seq_track_id_t track,
-                                                    seq_step_id_t step,
-                                                    param_id_t param_id)
+typedef struct
 {
+    uint8_t present;
+    seq_value16_t value16;
+} seq_live_rec_capture_saved_param_t;
+
+static uint8_t seq_live_rec_capture_read_play_param(seq_track_id_t track,
+                                                    seq_step_id_t step,
+                                                    param_id_t param_id,
+                                                    seq_live_rec_capture_saved_param_t *out_saved)
+{
+    if (out_saved == 0)
+    {
+        return 0U;
+    }
+
+    out_saved->present = 0U;
+    out_saved->value16 = 0U;
+
     uint8_t set_id = 0U;
     seq_param8_t param8 = 0U;
     if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
@@ -336,7 +406,80 @@ static uint8_t seq_live_rec_capture_has_play_param(seq_track_id_t track,
     }
 
     seq_plock_entry_t entry;
-    return (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U) ? 1U : 0U;
+    if (seq_model_step_plock_find(track, step, set_id, param8, &entry) == 0U)
+    {
+        return 1U;
+    }
+
+    out_saved->present = 1U;
+    out_saved->value16 = entry.value16;
+    return 1U;
+}
+
+static uint8_t seq_live_rec_capture_restore_play_param(seq_track_id_t track,
+                                                       seq_step_id_t step,
+                                                       param_id_t param_id,
+                                                       const seq_live_rec_capture_saved_param_t *saved)
+{
+    if (saved == 0)
+    {
+        return 0U;
+    }
+
+    if (saved->present == 0U)
+    {
+        (void)seq_live_rec_capture_delete_play_param(track, step, param_id);
+        return 1U;
+    }
+
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
+                                                                  step,
+                                                                  set_id,
+                                                                  param8,
+                                                                  saved->value16,
+                                                                  0U);
+    return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
+}
+
+static void seq_live_rec_capture_clear_voice_play_params(seq_track_id_t track,
+                                                         seq_step_id_t step,
+                                                         uint8_t voice)
+{
+    const param_id_t note_param = seq_live_rec_capture_play_param_note(voice);
+    const param_id_t vel_param = seq_live_rec_capture_play_param_vel(voice);
+    const param_id_t len_param = seq_live_rec_capture_play_param_len(voice);
+    const param_id_t mictim_param = seq_live_rec_capture_play_param_mictim(voice);
+
+    (void)seq_live_rec_capture_delete_play_param(track, step, note_param);
+    (void)seq_live_rec_capture_delete_play_param(track, step, vel_param);
+    (void)seq_live_rec_capture_delete_play_param(track, step, len_param);
+    (void)seq_live_rec_capture_delete_play_param(track, step, mictim_param);
+}
+
+static void seq_live_rec_capture_normalize_step_for_write(seq_track_id_t track,
+                                                          seq_step_id_t step)
+{
+    /*
+     * Local step normalization (live-rec only):
+     * if step is detriggered, clear all voice play params so stale history
+     * does not pollute deterministic slot selection/rewrite.
+     */
+    if (seq_model_get_trig(track, step) != 0U)
+    {
+        return;
+    }
+
+    for (uint8_t voice = 0U; voice < SEQ_LIVE_REC_CAPTURE_VOICE_COUNT; ++voice)
+    {
+        seq_live_rec_capture_clear_voice_play_params(track, step, voice);
+    }
 }
 
 static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_note_t *pending,
@@ -378,6 +521,20 @@ static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_n
                      (unsigned long long)stop_sample,
                      (unsigned long)len_steps);
     pending->active = 0U;
+}
+
+static void seq_live_rec_capture_finalize_slot(int32_t slot,
+                                               uint64_t stop_sample,
+                                               uint32_t samples_per_step_q16)
+{
+    if ((slot < 0) || (slot >= (int32_t)SEQ_LIVE_REC_CAPTURE_PENDING_CAP))
+    {
+        return;
+    }
+
+    seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[(uint8_t)slot],
+                                          stop_sample,
+                                          samples_per_step_q16);
 }
 
 void seq_live_rec_capture_init(void)
@@ -465,17 +622,27 @@ void seq_live_rec_capture_note_on(uint8_t active,
                                                      runtime_state->step_sample_q16,
                                                      now_sample);
 
-        if (seq_live_rec_capture_find_pending_for_note(track,
-                                                       source,
-                                                       channel_zero_based,
-                                                       note) >= 0)
+        seq_live_rec_capture_normalize_step_for_write(track, write_step);
+
+        const int32_t same_source_pending = seq_live_rec_capture_find_pending_for_note(track,
+                                                                                        source,
+                                                                                        channel_zero_based,
+                                                                                        note);
+        if (same_source_pending >= 0)
         {
-            SEQ_LIVE_REC_LOG("[SEQ][LREC][REJ] reason=dup-same-src tr=%u src=%u ch=%u n=%u\r\n",
+            /*
+             * Explicit pending ownership for same source:
+             * close previous pending note and let current note-on re-own the slot.
+             */
+            SEQ_LIVE_REC_LOG("[SEQ][LREC][RETRIG] tr=%u src=%u ch=%u n=%u slot=%ld\r\n",
                              track,
                              (unsigned)source,
                              (unsigned)channel_zero_based,
-                             (unsigned)note);
-            continue;
+                             (unsigned)note,
+                             (long)same_source_pending);
+            seq_live_rec_capture_finalize_slot(same_source_pending,
+                                               now_sample,
+                                               runtime_state->samples_per_step_q16);
         }
 
         if (seq_live_rec_capture_find_pending_for_note_any_source(track,
@@ -490,14 +657,24 @@ void seq_live_rec_capture_note_on(uint8_t active,
             continue;
         }
 
-        int32_t voice = seq_live_rec_capture_find_voice_with_note_lock(track, write_step, note);
-        if (voice < 0)
-        {
-            voice = seq_live_rec_capture_find_free_voice(track, write_step);
-        }
+        int32_t voice = seq_live_rec_capture_select_voice_deterministic(track, write_step, note);
         if (voice < 0)
         {
             continue;
+        }
+
+        const int32_t owner_slot = seq_live_rec_capture_find_pending_for_voice(track,
+                                                                                write_step,
+                                                                                (uint8_t)voice);
+        if (owner_slot >= 0)
+        {
+            /*
+             * Deterministic overwrite policy:
+             * selected slot is forcibly released before reuse.
+             */
+            seq_live_rec_capture_finalize_slot(owner_slot,
+                                               now_sample,
+                                               runtime_state->samples_per_step_q16);
         }
 
         const int32_t pending_slot = seq_live_rec_capture_alloc_pending_slot();
@@ -513,11 +690,23 @@ void seq_live_rec_capture_note_on(uint8_t active,
 
         const param_id_t note_param = seq_live_rec_capture_play_param_note((uint8_t)voice);
         const param_id_t vel_param = seq_live_rec_capture_play_param_vel((uint8_t)voice);
+        const param_id_t len_param = seq_live_rec_capture_play_param_len((uint8_t)voice);
         const param_id_t mictim_param = seq_live_rec_capture_play_param_mictim((uint8_t)voice);
 
-        const uint8_t had_note_before = seq_live_rec_capture_has_play_param(track, write_step, note_param);
-        const uint8_t had_vel_before = seq_live_rec_capture_has_play_param(track, write_step, vel_param);
-        const uint8_t had_mictim_before = seq_live_rec_capture_has_play_param(track, write_step, mictim_param);
+        seq_live_rec_capture_saved_param_t saved_note;
+        seq_live_rec_capture_saved_param_t saved_vel;
+        seq_live_rec_capture_saved_param_t saved_len;
+        seq_live_rec_capture_saved_param_t saved_mictim;
+        (void)seq_live_rec_capture_read_play_param(track, write_step, note_param, &saved_note);
+        (void)seq_live_rec_capture_read_play_param(track, write_step, vel_param, &saved_vel);
+        (void)seq_live_rec_capture_read_play_param(track, write_step, len_param, &saved_len);
+        (void)seq_live_rec_capture_read_play_param(track, write_step, mictim_param, &saved_mictim);
+
+        /*
+         * Local cleanup of the targeted voice slot before live-rec rewrite.
+         * Keep cleanup strictly scoped to NOTE/VEL/LEN/MICTIM on this voice.
+         */
+        seq_live_rec_capture_clear_voice_play_params(track, write_step, (uint8_t)voice);
 
         const uint8_t note_ok = seq_live_rec_capture_upsert_play_param(track,
                                                                         write_step,
@@ -533,18 +722,10 @@ void seq_live_rec_capture_note_on(uint8_t active,
                                                                          (float)mictim);
         if ((note_ok == 0U) || (vel_ok == 0U) || (micro_ok == 0U))
         {
-            if ((note_ok != 0U) && (had_note_before == 0U))
-            {
-                (void)seq_live_rec_capture_delete_play_param(track, write_step, note_param);
-            }
-            if ((vel_ok != 0U) && (had_vel_before == 0U))
-            {
-                (void)seq_live_rec_capture_delete_play_param(track, write_step, vel_param);
-            }
-            if ((micro_ok != 0U) && (had_mictim_before == 0U))
-            {
-                (void)seq_live_rec_capture_delete_play_param(track, write_step, mictim_param);
-            }
+            (void)seq_live_rec_capture_restore_play_param(track, write_step, note_param, &saved_note);
+            (void)seq_live_rec_capture_restore_play_param(track, write_step, vel_param, &saved_vel);
+            (void)seq_live_rec_capture_restore_play_param(track, write_step, len_param, &saved_len);
+            (void)seq_live_rec_capture_restore_play_param(track, write_step, mictim_param, &saved_mictim);
             continue;
         }
 
@@ -609,23 +790,7 @@ void seq_live_rec_capture_note_off(uint8_t active,
                                                                                  source,
                                                                                  channel_zero_based,
                                                                                  note);
-        int32_t slot_to_close = pending_slot;
-        if (slot_to_close < 0)
-        {
-            slot_to_close = seq_live_rec_capture_find_pending_for_note_any_source(track,
-                                                                                   channel_zero_based,
-                                                                                   note);
-            if (slot_to_close >= 0)
-            {
-                SEQ_LIVE_REC_LOG("[SEQ][LREC][OFF-FB] tr=%u src=%u ch=%u n=%u slot=%ld pend_src=%u\r\n",
-                                 track,
-                                 (unsigned)source,
-                                 (unsigned)channel_zero_based,
-                                 (unsigned)note,
-                                 (long)slot_to_close,
-                                 (unsigned)g_seq_live_rec_pending[slot_to_close].source);
-            }
-        }
+        const int32_t slot_to_close = pending_slot;
 
         if (slot_to_close < 0)
         {
@@ -644,8 +809,8 @@ void seq_live_rec_capture_note_off(uint8_t active,
                          (unsigned)channel_zero_based,
                          (unsigned)note,
                          (unsigned long long)now_sample);
-        seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[slot_to_close],
-                                              now_sample,
-                                              runtime_state->samples_per_step_q16);
+        seq_live_rec_capture_finalize_slot(slot_to_close,
+                                           now_sample,
+                                           runtime_state->samples_per_step_q16);
     }
 }
