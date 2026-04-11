@@ -8,7 +8,7 @@ A standalone embedded audio machine inspired by Elektron Octatrack:
 * 🎛️ **Creative FX box** (DJ-style transitions, performance FX)
 * 🎚️ **Cue / Main routing** like a DJ mixer
 * 🎚️ **Crossfader with scenes (A/B morphing)**
-* 🎹 Future: **MIDI sequencer + parameter locks + modulation**
+* 🎹 Integrated **MIDI sequencer + parameter locks + modulation** baseline
 
 ---
 
@@ -315,7 +315,7 @@ Avoids:
 
 ## 🔮 Future Features
 
-* MIDI sequencer (multi-track)
+* Advanced sequencer pages/workflows
 * Arpeggiator
 * Parameter locks (per step)
 * LFO / modulation
