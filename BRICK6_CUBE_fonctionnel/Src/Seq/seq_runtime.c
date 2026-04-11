@@ -545,6 +545,66 @@ void seq_runtime_time_adapter_process_internal_from_irq(void)
     }
 }
 
+uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
+                                                uint16_t max_events,
+                                                uint16_t block_frames)
+{
+    seq_play_scheduler_audio_event_t scheduler_events[16];
+    if ((out_events == NULL) || (max_events == 0U))
+    {
+        return 0U;
+    }
+
+    uint16_t total = 0U;
+    uint8_t first_chunk = 1U;
+    while (total < max_events)
+    {
+        const uint16_t request = (uint16_t)(((max_events - total) > 16U) ? 16U : (max_events - total));
+        const uint16_t count = seq_play_scheduler_audio_collect_block_events(scheduler_events,
+                                                                             request,
+                                                                             block_frames,
+                                                                             first_chunk != 0U ? seq_runtime_get_now_tick() : 0U);
+        first_chunk = 0U;
+        if (count == 0U)
+        {
+            break;
+        }
+
+        for (uint16_t i = 0U; i < count; ++i)
+        {
+            out_events[total + i].type = scheduler_events[i].type;
+            out_events[total + i].track = scheduler_events[i].track;
+            out_events[total + i].note = scheduler_events[i].note;
+            out_events[total + i].velocity = scheduler_events[i].velocity;
+            out_events[total + i].sample_offset_in_block = scheduler_events[i].sample_offset_in_block;
+        }
+        total = (uint16_t)(total + count);
+
+        if (count < request)
+        {
+            break;
+        }
+    }
+
+    return total;
+}
+
+void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
+{
+    if (event == NULL)
+    {
+        return;
+    }
+
+    seq_play_scheduler_audio_event_t scheduler_event;
+    scheduler_event.type = event->type;
+    scheduler_event.track = event->track;
+    scheduler_event.note = event->note;
+    scheduler_event.velocity = event->velocity;
+    scheduler_event.sample_offset_in_block = event->sample_offset_in_block;
+    seq_play_scheduler_audio_apply_event(&scheduler_event);
+}
+
 void seq_runtime_set_clock_source(seq_clock_src_t src)
 {
     const uint32_t primask = seq_runtime_enter_critical();

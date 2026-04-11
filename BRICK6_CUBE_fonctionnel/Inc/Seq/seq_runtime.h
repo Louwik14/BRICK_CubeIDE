@@ -46,9 +46,22 @@ typedef enum
     SEQ_REC_LEN_MODE_PATTERN = 1
 } seq_rec_len_mode_t;
 
+typedef struct
+{
+    uint8_t type;
+    uint8_t track;
+    uint8_t note;
+    uint8_t velocity;
+    uint16_t sample_offset_in_block;
+} seq_runtime_audio_event_t;
+
 void seq_runtime_init(void);
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 void seq_runtime_time_adapter_process(void);
+uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
+                                                uint16_t max_events,
+                                                uint16_t block_frames);
+void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event);
 const seq_runtime_state_t *seq_runtime_get_state(void);
 
 void seq_runtime_start(void);
