@@ -28,6 +28,17 @@
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 64U
 
+#ifndef SEQ_PLAY_SCHEDULER_DEBUG_TRACE
+#define SEQ_PLAY_SCHEDULER_DEBUG_TRACE 0
+#endif
+
+#if SEQ_PLAY_SCHEDULER_DEBUG_TRACE
+#include <stdio.h>
+#define SEQ_PLAY_SCHED_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_PLAY_SCHED_LOG(...) do { } while (0)
+#endif
+
 typedef enum
 {
     SEQ_PLAY_SCHEDULER_EVT_NOTE_ON = 0,
@@ -42,10 +53,12 @@ typedef struct
     uint8_t velocity;
     uint8_t type;
     uint8_t audio_dispatched;
+    uint8_t generation;
 } seq_play_scheduler_evt_t;
 
 static seq_play_scheduler_evt_t g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP];
 static uint8_t g_seq_play_event_count;
+static uint8_t g_seq_play_generation;
 
 static uint32_t seq_play_scheduler_enter_critical(void)
 {
@@ -59,6 +72,15 @@ static void seq_play_scheduler_exit_critical(uint32_t primask)
     if (primask == 0U)
     {
         __enable_irq();
+    }
+}
+
+static void seq_play_scheduler_next_generation(void)
+{
+    g_seq_play_generation++;
+    if (g_seq_play_generation == 0U)
+    {
+        g_seq_play_generation = 1U;
     }
 }
 
@@ -83,6 +105,7 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
     evt->note = note;
     evt->velocity = velocity;
     evt->audio_dispatched = 0U;
+    evt->generation = g_seq_play_generation;
     seq_play_scheduler_exit_critical(primask);
 }
 
@@ -252,11 +275,21 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
 void seq_play_scheduler_init(void)
 {
     g_seq_play_event_count = 0U;
+    g_seq_play_generation = 1U;
 }
 
 void seq_play_scheduler_clear(void)
 {
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    const uint8_t cleared_count = g_seq_play_event_count;
     g_seq_play_event_count = 0U;
+    seq_play_scheduler_next_generation();
+    const uint8_t generation = g_seq_play_generation;
+    seq_play_scheduler_exit_critical(primask);
+
+    SEQ_PLAY_SCHED_LOG("[SEQ][SCHED][CLEAR] cleared=%u gen=%u\r\n",
+                       (unsigned)cleared_count,
+                       (unsigned)generation);
 }
 
 void seq_play_scheduler_schedule_step(seq_track_id_t track,
@@ -371,6 +404,8 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
     const uint32_t primask = seq_play_scheduler_enter_critical();
 
     uint16_t count = 0U;
+    uint16_t overdue_count = 0U;
+    uint16_t stale_generation_count = 0U;
     while (count < max_events)
     {
         uint8_t selected_index = 0xFFU;
@@ -383,8 +418,13 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
             {
                 continue;
             }
-            if ((candidate->due_sample_time < block_start_sample)
-                || (candidate->due_sample_time >= block_end_sample))
+            if (candidate->generation != g_seq_play_generation)
+            {
+                g_seq_play_events[i].audio_dispatched = 1U;
+                stale_generation_count++;
+                continue;
+            }
+            if (candidate->due_sample_time >= block_end_sample)
             {
                 continue;
             }
@@ -411,7 +451,15 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
         out_evt.track = evt.track;
         out_evt.note = evt.note;
         out_evt.velocity = evt.velocity;
-        out_evt.sample_offset_in_block = (uint16_t)(evt.due_sample_time - block_start_sample);
+        if (evt.due_sample_time < block_start_sample)
+        {
+            out_evt.sample_offset_in_block = 0U;
+            overdue_count++;
+        }
+        else
+        {
+            out_evt.sample_offset_in_block = (uint16_t)(evt.due_sample_time - block_start_sample);
+        }
         if (out_evt.sample_offset_in_block >= block_frames)
         {
             out_evt.sample_offset_in_block = (uint16_t)(block_frames - 1U);
@@ -436,7 +484,21 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
         write++;
     }
     g_seq_play_event_count = write;
+    const uint8_t remaining_count = g_seq_play_event_count;
+    const uint8_t generation = g_seq_play_generation;
     seq_play_scheduler_exit_critical(primask);
+
+    if ((count != 0U) || (overdue_count != 0U) || (stale_generation_count != 0U))
+    {
+        SEQ_PLAY_SCHED_LOG("[SEQ][SCHED][COLLECT] b0=%llu frames=%u out=%u overdue=%u stale=%u remain=%u gen=%u\r\n",
+                           (unsigned long long)block_start_sample,
+                           (unsigned)block_frames,
+                           (unsigned)count,
+                           (unsigned)overdue_count,
+                           (unsigned)stale_generation_count,
+                           (unsigned)remaining_count,
+                           (unsigned)generation);
+    }
 
     return count;
 }

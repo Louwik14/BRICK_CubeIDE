@@ -45,6 +45,10 @@
 #define SEQ_DEBUG_SAMPLE_DOMAIN_TRACE 0
 #endif
 
+#ifndef SEQ_DEBUG_RUN_GENERATION_TRACE
+#define SEQ_DEBUG_RUN_GENERATION_TRACE 0
+#endif
+
 #if SEQ_DEBUG_TRACK_BINDING
 #define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
 #else
@@ -61,6 +65,12 @@
 #define SEQ_SAMPLE_LOG(...) printf(__VA_ARGS__)
 #else
 #define SEQ_SAMPLE_LOG(...) do { } while (0)
+#endif
+
+#if SEQ_DEBUG_RUN_GENERATION_TRACE
+#define SEQ_RUN_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_RUN_LOG(...) do { } while (0)
 #endif
 
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
@@ -196,6 +206,22 @@ static void seq_runtime_begin_running_now(void)
                            : g_seq_clock_bridge.internal_next_step_ticks);
     g_seq_runtime.step_sample_q16 = (uint64_t)g_seq_runtime.audio_timeline_sample << 16;
 
+    SEQ_RUN_LOG("[SEQ][RUN][BEGIN] now_sample=%llu block_start=%llu step_sample=%llu sps_q16=%lu ticks=%u\r\n",
+                (unsigned long long)g_seq_runtime.audio_timeline_sample,
+                (unsigned long long)g_seq_runtime.audio_block_start_sample,
+                (unsigned long long)(g_seq_runtime.step_sample_q16 >> 16),
+                (unsigned long)g_seq_runtime.samples_per_step_q16,
+                (unsigned)g_seq_runtime.ticks_per_step);
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        SEQ_RUN_LOG("[SEQ][RUN][PHASE] tr=%u play=%u prev=%u prev_valid=%u div_phase=%u\r\n",
+                    (unsigned)track,
+                    (unsigned)g_seq_runtime.play_step[track],
+                    (unsigned)g_seq_runtime.prev_step[track],
+                    (unsigned)g_seq_runtime.prev_step_valid[track],
+                    (unsigned)g_seq_runtime.track_div_phase[track]);
+    }
+
     /*
      * Force deterministic initial boundary at RUN entry.
      * This guarantees step 0 scheduling exactly once at START/
@@ -326,6 +352,21 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
 {
     seq_runtime_live_rec_flush_and_reset();
     seq_runtime_pattern_rec_cancel();
+
+    SEQ_RUN_LOG("[SEQ][RUN][STOP] emit=%u now_sample=%llu block_start=%llu step_sample=%llu\r\n",
+                (unsigned)emit_transport_stop_and_panic,
+                (unsigned long long)g_seq_runtime.audio_timeline_sample,
+                (unsigned long long)g_seq_runtime.audio_block_start_sample,
+                (unsigned long long)(g_seq_runtime.step_sample_q16 >> 16));
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        SEQ_RUN_LOG("[SEQ][RUN][STOP-PHASE] tr=%u play=%u prev=%u prev_valid=%u div_phase=%u\r\n",
+                    (unsigned)track,
+                    (unsigned)g_seq_runtime.play_step[track],
+                    (unsigned)g_seq_runtime.prev_step[track],
+                    (unsigned)g_seq_runtime.prev_step_valid[track],
+                    (unsigned)g_seq_runtime.track_div_phase[track]);
+    }
 
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
