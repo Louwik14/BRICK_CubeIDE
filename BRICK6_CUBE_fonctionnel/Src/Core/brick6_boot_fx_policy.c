@@ -23,5 +23,8 @@ void brick6_boot_fx_policy_init(void)
     (void)fx_pool_activate_slot(1U, FX_SAT);
     (void)fx_pool_activate_slot(2U, FX_DAISY_COMP);
 
-    mixer_set_track_insert_slot(0U, 0U, 2);
+    /* Keep compressor slot available but do not insert it by default.
+     * A permanent default insert on track 0 colors transients/dynamics even
+     * with neutral user mix settings, which biases "flat/reference" listening. */
+    mixer_set_track_insert_slot(0U, 0U, -1);
 }
