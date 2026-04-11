@@ -57,6 +57,7 @@ float mixer_get_track_gain(uint32_t track_id);
 
 void mixer_set_track_pan(uint32_t track_id, float pan);
 void mixer_set_track_mute(uint32_t track_id, uint8_t mute);
+uint8_t mixer_get_track_mute(uint32_t track_id);
 void mixer_set_track_route(uint32_t track_id, mixer_route_t route);
 void mixer_set_track_insert_slot(uint32_t track_id, uint32_t insert_idx, int8_t slot);
 void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float level);

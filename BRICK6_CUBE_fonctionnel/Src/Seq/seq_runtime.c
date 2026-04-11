@@ -248,27 +248,34 @@ static uint8_t seq_runtime_live_rec_is_active(void)
     return seq_transport_fsm_allow_live_rec(&g_seq_transport_fsm, g_seq_rec_armed);
 }
 
-static uint32_t seq_runtime_get_track_pattern_length_steps(seq_track_id_t track)
+static uint8_t seq_runtime_get_track_pattern_length_steps(seq_track_id_t track)
 {
     return seq_model_get_track_playback_length(track);
+}
+
+static uint32_t seq_runtime_get_track_pattern_duration_steps(seq_track_id_t track)
+{
+    uint8_t div = 1U;
+    (void)seq_runtime_get_track_div(track, &div);
+    return (uint32_t)seq_runtime_get_track_pattern_length_steps(track) * (uint32_t)div;
 }
 
 static void seq_runtime_pattern_rec_start_now(void)
 {
     const uint8_t track = ui_get_active_track();
-    const uint32_t length = seq_runtime_get_track_pattern_length_steps(track);
+    const uint8_t length = seq_runtime_get_track_pattern_length_steps(track);
 
     g_seq_pattern_rec_track = track;
-    g_seq_pattern_rec_steps_remaining = length;
+    g_seq_pattern_rec_steps_remaining = seq_runtime_get_track_pattern_duration_steps(track);
     g_seq_pattern_rec_pending_start = 0U;
     g_seq_pattern_rec_active = 1U;
 
     seq_step_id_t steps[SEQ_MAX_STEPS];
-    for (uint32_t i = 0U; i < length; ++i)
+    for (uint8_t i = 0U; i < length; ++i)
     {
         steps[i] = (seq_step_id_t)i;
     }
-    seq_edit_clear_steps(track, steps, (uint8_t)length);
+    seq_edit_clear_steps(track, steps, length);
     seq_live_rec_capture_reset();
 }
 

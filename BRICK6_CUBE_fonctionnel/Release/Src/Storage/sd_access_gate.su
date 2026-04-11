@@ -1,7 +1,0 @@
-../Src/Storage/sd_access_gate.c:13:6:sd_access_gate_init	16	static
-../Src/Storage/sd_access_gate.c:24:9:sd_access_fs_mount_if_needed	16	static
-../Src/Storage/sd_access_gate.c:43:9:sd_access_gate_try_acquire	24	static,ignoring_inline_asm
-../Src/Storage/sd_access_gate.c:80:6:sd_access_gate_release	16	static,ignoring_inline_asm
-../Src/Storage/sd_access_gate.c:98:6:sd_access_trace_begin	16	static
-../Src/Storage/sd_access_gate.c:110:6:sd_access_trace_end	24	static
-../Src/Storage/sd_access_gate.c:127:6:sd_access_trace_timeout	16	static

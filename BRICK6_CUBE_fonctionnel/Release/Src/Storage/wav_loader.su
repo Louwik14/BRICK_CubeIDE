@@ -1,7 +1,0 @@
-../Src/Storage/wav_loader.c:45:14:pcm24_to_float	24	static
-../Src/Storage/wav_loader.c:66:14:pcm32_to_float	24	static
-../Src/Storage/wav_loader.c:75:14:wav_loader_get_interleaved_buffer	4	static
-../Src/Storage/wav_loader.c:92:10:wav_loader_get_capacity_frames	4	static
-../Src/Storage/wav_loader.c:115:12:wav_ext_is_wav	24	static
-../Src/Storage/wav_loader.c:148:6:wav_loader_find_first_wav	392	static
-../Src/Storage/wav_loader.c:236:6:wav_loader_load_to_sdram	4816	static

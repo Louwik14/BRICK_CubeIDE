@@ -1,9 +1,0 @@
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:23:10:virtual bool FmCowbellModel::SetParamByIndex(uint8_t, float)	0	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:26:6:virtual void FmCowbellModel::Init()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:66:6:virtual void FmCowbellModel::RenderControls()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:5:7:FmCowbellModel::~FmCowbellModel()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:39:7:virtual float FmCowbellModel::Process()	24	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:17:10:virtual void FmCowbellModel::loadParameters(std::istream&)	8	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:5:7:virtual FmCowbellModel::~FmCowbellModel()	8	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:35:6:virtual void FmCowbellModel::Trigger()	0	static
-../Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:12:10:virtual void FmCowbellModel::saveParameters(std::ostream&) const	24	static

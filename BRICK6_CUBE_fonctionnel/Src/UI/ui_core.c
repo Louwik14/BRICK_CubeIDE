@@ -52,6 +52,7 @@
 #include "param_registry.h"
 #include "param_store.h"
 #include "audio_float.h"
+#include "mixer.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Core/track_runtime.h"
@@ -247,6 +248,66 @@ static uint8_t ui_core_track_param_from_mix_track(uint8_t mix_track, param_id_t 
     return 1U;
 }
 
+static uint8_t ui_core_input_family_wired_mute_track(ui_track_family_t family, uint8_t *out_mix_track)
+{
+    uint8_t mix_track = 0U;
+
+    if (out_mix_track == NULL)
+    {
+        return 0U;
+    }
+
+    switch (family)
+    {
+        case UI_TRACK_FAMILY_INPUT1:
+            mix_track = 0U;
+            break;
+        case UI_TRACK_FAMILY_INPUT2:
+            mix_track = 1U;
+            break;
+        case UI_TRACK_FAMILY_INPUT3:
+            mix_track = 2U;
+            break;
+        case UI_TRACK_FAMILY_INPUT4:
+            mix_track = 3U;
+            break;
+        default:
+            return 0U;
+    }
+
+    /* Input4 is a product resource, but lane 3 is still the internal bus on this proto. */
+    if ((mix_track >= UI_AUDIO_INPUT_PROTO_WIRED_COUNT) || (mix_track >= MIXER_MAX_TRACKS))
+    {
+        return 0U;
+    }
+
+    *out_mix_track = mix_track;
+    return 1U;
+}
+
+static uint8_t ui_core_resolve_mute_mix_track(uint8_t track,
+                                              const track_runtime_ctx_t *ctx,
+                                              uint8_t *out_mix_track)
+{
+    if ((ctx == NULL) || (out_mix_track == NULL))
+    {
+        return 0U;
+    }
+
+    if (ui_core_input_family_wired_mute_track(ui_get_track_family(track), out_mix_track) != 0U)
+    {
+        return 1U;
+    }
+
+    if (ctx->mix_track_id >= MIXER_MAX_TRACKS)
+    {
+        return 0U;
+    }
+
+    *out_mix_track = ctx->mix_track_id;
+    return 1U;
+}
+
 static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted, uint8_t *out_available)
 {
     if ((out_muted == NULL) || (out_available == NULL) || (track >= UI_TRACK_COUNT))
@@ -269,13 +330,13 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
         return 1U;
     }
 
-    param_id_t mute_param = PARAM_MIX_TRACK0_MUTE;
-    if (ui_core_track_param_from_mix_track(ctx->mix_track_id, &mute_param) == 0U)
+    uint8_t mute_mix_track = 0U;
+    if (ui_core_resolve_mute_mix_track(track, ctx, &mute_mix_track) == 0U)
     {
         return 1U;
     }
 
-    *out_muted = (param_get(mute_param) >= 0.5f) ? 1U : 0U;
+    *out_muted = mixer_get_track_mute(mute_mix_track);
     *out_available = 1U;
     return 1U;
 }
@@ -294,13 +355,22 @@ static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
         return 0U;
     }
 
-    param_id_t mute_param = PARAM_MIX_TRACK0_MUTE;
-    if (ui_core_track_param_from_mix_track(ctx->mix_track_id, &mute_param) == 0U)
+    uint8_t mute_mix_track = 0U;
+    if (ui_core_resolve_mute_mix_track(track, ctx, &mute_mix_track) == 0U)
     {
         return 0U;
     }
 
-    param_set(mute_param, (muted != 0U) ? 1.0f : 0.0f);
+    param_id_t mute_param = PARAM_MIX_TRACK0_MUTE;
+    if (ui_core_track_param_from_mix_track(mute_mix_track, &mute_param) != 0U)
+    {
+        param_set(mute_param, (muted != 0U) ? 1.0f : 0.0f);
+    }
+    else
+    {
+        mixer_set_track_mute(mute_mix_track, muted);
+    }
+
     return 1U;
 }
 
@@ -2077,6 +2147,51 @@ static uint8_t ui_core_clipboard_collect_track_sequence_steps(seq_track_id_t tra
     return (limit > 0U) ? 1U : 0U;
 }
 
+typedef enum
+{
+    UI_SEQ_CLIPBOARD_SCOPE_NONE = 0,
+    UI_SEQ_CLIPBOARD_SCOPE_STEP,
+    UI_SEQ_CLIPBOARD_SCOPE_SEQ
+} ui_seq_clipboard_scope_t;
+
+static uint8_t ui_core_clipboard_resolve_seq_steps(seq_track_id_t *io_track,
+                                                   seq_step_id_t *out_steps,
+                                                   uint8_t max_steps,
+                                                   uint8_t *out_count,
+                                                   ui_seq_clipboard_scope_t *out_scope)
+{
+    if ((io_track == 0) || (out_steps == 0) || (out_count == 0) || (out_scope == 0))
+    {
+        return 0U;
+    }
+
+    *out_scope = UI_SEQ_CLIPBOARD_SCOPE_NONE;
+
+    seq_track_id_t held_track = 0U;
+    const uint8_t held_count = ui_core_collect_held_seq_steps(&held_track,
+                                                              out_steps,
+                                                              max_steps,
+                                                              0U);
+    if (held_count != 0U)
+    {
+        *io_track = held_track;
+        *out_count = held_count;
+        *out_scope = UI_SEQ_CLIPBOARD_SCOPE_STEP;
+        return 1U;
+    }
+
+    if (ui_core_clipboard_collect_track_sequence_steps(*io_track,
+                                                       out_steps,
+                                                       max_steps,
+                                                       out_count) == 0U)
+    {
+        return 0U;
+    }
+
+    *out_scope = UI_SEQ_CLIPBOARD_SCOPE_SEQ;
+    return 1U;
+}
+
 static uint8_t ui_core_handle_seq_track_clipboard_event(const ui_event_t *ev)
 {
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
@@ -2110,22 +2225,26 @@ static uint8_t ui_core_handle_seq_track_clipboard_event(const ui_event_t *ev)
         return 0U;
     }
 
-    const seq_track_id_t track = (seq_track_id_t)ui_get_active_track();
+    seq_track_id_t track = (seq_track_id_t)ui_get_active_track();
     seq_step_id_t steps[SEQ_MAX_STEPS];
     uint8_t step_count = 0U;
-    if (ui_core_clipboard_collect_track_sequence_steps(track,
-                                                       steps,
-                                                       (uint8_t)SEQ_MAX_STEPS,
-                                                       &step_count) == 0U)
+    ui_seq_clipboard_scope_t scope = UI_SEQ_CLIPBOARD_SCOPE_NONE;
+    if (ui_core_clipboard_resolve_seq_steps(&track,
+                                            steps,
+                                            (uint8_t)SEQ_MAX_STEPS,
+                                            &step_count,
+                                            &scope) == 0U)
     {
         return 1U;
     }
+
+    const uint8_t step_scope = (scope == UI_SEQ_CLIPBOARD_SCOPE_STEP) ? 1U : 0U;
 
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (seq_edit_copy_steps(track, steps, step_count) != 0U)
         {
-            ui_core_set_feedback("SEQ COPIED");
+            ui_core_set_feedback((step_scope != 0U) ? "STEP COPIED" : "SEQ COPIED");
         }
         return 1U;
     }
@@ -2133,28 +2252,28 @@ static uint8_t ui_core_handle_seq_track_clipboard_event(const ui_event_t *ev)
     if (g_ui_track_state.shift_down != 0U)
     {
         seq_edit_clear_steps(track, steps, step_count);
-        ui_core_set_feedback("SEQ CLEARED");
+        ui_core_set_feedback((step_scope != 0U) ? "STEP CLEARED" : "SEQ CLEARED");
         return 1U;
     }
 
     seq_clipboard_paste_result_t paste_result = { 0U, 0U, 0U };
     if (seq_edit_paste_steps(track, steps, step_count, &paste_result) == 0U)
     {
-        ui_core_set_feedback("SEQ INCOMP");
+        ui_core_set_feedback((step_scope != 0U) ? "STEP INCOMP" : "SEQ INCOMP");
         return 1U;
     }
 
     if (paste_result.trunc != 0U)
     {
-        ui_core_set_feedback("PASTE TRUNC");
+        ui_core_set_feedback((step_scope != 0U) ? "STEP TRUNC" : "SEQ TRUNC");
     }
     else if (paste_result.partial != 0U)
     {
-        ui_core_set_feedback("PASTE PARTIAL");
+        ui_core_set_feedback((step_scope != 0U) ? "STEP PARTIAL" : "SEQ PARTIAL");
     }
     else
     {
-        ui_core_set_feedback("SEQ PASTED");
+        ui_core_set_feedback((step_scope != 0U) ? "STEP PASTED" : "SEQ PASTED");
     }
 
     return 1U;
@@ -3053,24 +3172,20 @@ uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
         return 1U;
     }
 
-    uint8_t available = 0U;
     if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE)
     {
         out_led->muted = g_ui_track_state.mute_prepared_state[hall];
-        available = 1U;
     }
     else
     {
         uint8_t muted = 0U;
-        (void)ui_core_get_track_runtime_mute(hall, &muted, &available);
-        out_led->muted = muted;
+        uint8_t runtime_available = 0U;
+        (void)ui_core_get_track_runtime_mute(hall, &muted, &runtime_available);
+        if (runtime_available != 0U)
+        {
+            out_led->muted = muted;
+        }
     }
-
-    if (available == 0U)
-    {
-        return 1U;
-    }
-
     out_led->visible = 1U;
     if ((g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE)
         && (g_ui_track_state.mute_prepared_state[hall] != g_ui_track_state.mute_initial_state[hall]))

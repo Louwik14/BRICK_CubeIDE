@@ -1,3 +1,0 @@
-../mutable_instruments/plaits/dsp/speech/sam_speech_synth.cc:45:6:void plaits::SAMSpeechSynth::Init()	1
-../mutable_instruments/plaits/dsp/speech/sam_speech_synth.cc:88:6:void plaits::SAMSpeechSynth::InterpolatePhonemeData(float, float, uint32_t*, float*)	1
-../mutable_instruments/plaits/dsp/speech/sam_speech_synth.cc:112:6:void plaits::SAMSpeechSynth::Render(bool, float, float, float, float*, float*, size_t)	7

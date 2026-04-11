@@ -1,5 +1,0 @@
-../Src/Audio/fx_pool.c:57:6:fx_pool_init	2
-../Src/Audio/fx_pool.c:88:5:fx_pool_activate_slot	10
-../Src/Audio/fx_pool.c:158:6:fx_pool_deactivate_slot	3
-../Src/Audio/fx_pool.c:204:12:fx_pool_get_slot	2
-../Src/Audio/fx_pool.c:212:7:fx_pool_get_sat_state_for_track	2

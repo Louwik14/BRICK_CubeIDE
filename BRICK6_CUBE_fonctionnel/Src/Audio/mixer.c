@@ -556,6 +556,14 @@ void mixer_set_track_mute(uint32_t track_id, uint8_t mute)
     g_tracks[track_id].mute = mute ? 1U : 0U;
 }
 
+uint8_t mixer_get_track_mute(uint32_t track_id)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return 0U;
+
+    return g_tracks[track_id].mute;
+}
+
 /**
  * @brief Point d'entrée mixer_set_track_route.
  *
