@@ -1,5 +1,0 @@
-../Micro_Dexed/lfo.cpp:26:6:static void Lfo::init(float)	1
-../Micro_Dexed/lfo.cpp:31:6:void Lfo::reset(const uint8_t*)	4
-../Micro_Dexed/lfo.cpp:51:9:int32_t Lfo::getsample()	8
-../Micro_Dexed/lfo.cpp:78:9:int32_t Lfo::getdelay()	5
-../Micro_Dexed/lfo.cpp:92:6:void Lfo::keydown()	2

@@ -1,4 +1,0 @@
-../Src/UI/ui_renderer_template.c:199:12:ui_renderer_template_center_x	3
-../Src/UI/ui_renderer_template.c:210:13:ui_renderer_template_draw_open_corner_frame	1
-../Src/UI/ui_renderer_template.c:237:13:ui_renderer_template_draw_inverted_label	1
-../Src/UI/ui_renderer_template.c:495:6:ui_renderer_template_draw	68

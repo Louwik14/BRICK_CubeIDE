@@ -1,6 +1,0 @@
-../Src/Audio/moogladder.cpp:37:6:void infrasonic::MoogLadder::Init(float)	1
-../Src/Audio/moogladder.cpp:51:7:float infrasonic::MoogLadder::Process(float)	5
-../Src/Audio/moogladder.cpp:71:6:void infrasonic::MoogLadder::ProcessInPlace(float*, size_t)	7
-../Src/Audio/moogladder.cpp:93:6:void infrasonic::MoogLadder::SetFreq(float)	1
-../Src/Audio/moogladder.cpp:99:6:void infrasonic::MoogLadder::SetRes(float)	1
-../Src/Audio/moogladder.cpp:115:6:void infrasonic::MoogLadder::compute_coeffs(float)	1

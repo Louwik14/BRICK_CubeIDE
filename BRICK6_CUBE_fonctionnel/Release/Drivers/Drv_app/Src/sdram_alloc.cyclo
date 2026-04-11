@@ -1,3 +1,0 @@
-../Drivers/Drv_app/Src/sdram_alloc.c:50:6:SDRAM_Alloc_Init	1
-../Drivers/Drv_app/Src/sdram_alloc.c:67:6:SDRAM_Alloc_Reset	1
-../Drivers/Drv_app/Src/sdram_alloc.c:97:7:SDRAM_Alloc	3

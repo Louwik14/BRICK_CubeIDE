@@ -1,4 +1,0 @@
-../mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:48:6:virtual void plaits::WavetableEngine::Init(stmlib::BufferAllocator*)	2
-../mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:69:6:virtual void plaits::WavetableEngine::Reset()	1
-../mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:73:6:virtual void plaits::WavetableEngine::LoadUserData(const uint8_t*)	10
-../mutable_instruments/plaits/dsp/engine/wavetable_engine.cc:113:6:virtual void plaits::WavetableEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	13

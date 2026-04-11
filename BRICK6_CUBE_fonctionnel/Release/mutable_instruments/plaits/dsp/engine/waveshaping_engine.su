@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/waveshaping_engine.h:44:16:virtual void plaits::WaveshapingEngine::LoadUserData(const uint8_t*)	0	static
-../mutable_instruments/plaits/dsp/engine/waveshaping_engine.cc:44:6:virtual void plaits::WaveshapingEngine::Init(stmlib::BufferAllocator*)	0	static
-../mutable_instruments/plaits/dsp/engine/waveshaping_engine.cc:52:6:virtual void plaits::WaveshapingEngine::Reset()	0	static
-../mutable_instruments/plaits/dsp/engine/waveshaping_engine.cc:64:6:virtual void plaits::WaveshapingEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	96	static
-../mutable_instruments/plaits/dsp/engine/waveshaping_engine.cc:56:7:float plaits::Tame(float, float, float)	0	static

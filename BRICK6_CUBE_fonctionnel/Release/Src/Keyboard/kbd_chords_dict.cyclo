@@ -1,3 +1,0 @@
-../Src/Keyboard/kbd_chords_dict.c:106:13:kbd_add_components	12
-../Src/Keyboard/kbd_chords_dict.c:122:6:kbd_chords_dict_build	7
-../Src/Keyboard/kbd_chords_dict.c:165:8:kbd_scale_slot_semitone_offset	1

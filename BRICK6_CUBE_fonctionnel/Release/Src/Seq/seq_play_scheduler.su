@@ -1,7 +1,0 @@
-../Src/Seq/seq_play_scheduler.c:255:22:seq_play_scheduler_get_locked_or_default	40	static
-../Src/Seq/seq_play_scheduler.c:88:13:seq_play_scheduler_push	12	static,ignoring_inline_asm
-../Src/Seq/seq_play_scheduler.c:275:6:seq_play_scheduler_init	0	static
-../Src/Seq/seq_play_scheduler.c:281:6:seq_play_scheduler_clear	0	static,ignoring_inline_asm
-../Src/Seq/seq_play_scheduler.c:295:6:seq_play_scheduler_schedule_step	88	static
-../Src/Seq/seq_play_scheduler.c:388:10:seq_play_scheduler_audio_collect_block_events	88	static,ignoring_inline_asm
-../Src/Seq/seq_play_scheduler.c:506:6:seq_play_scheduler_audio_apply_event	32	static

@@ -1,7 +1,0 @@
-../Src/Seq/seq_output_guard.c:27:6:seq_output_guard_init	8	static
-../Src/Seq/seq_output_guard.c:32:6:seq_output_guard_reset	8	static
-../Src/Seq/seq_output_guard.c:37:6:seq_output_guard_note_on_seen	0	static
-../Src/Seq/seq_output_guard.c:50:6:seq_output_guard_note_off_seen	0	static
-../Src/Seq/seq_output_guard.c:63:9:seq_output_guard_is_note_active_on_track	0	static
-../Src/Seq/seq_output_guard.c:73:9:seq_output_guard_is_note_active_on_channel	16	static
-../Src/Seq/seq_output_guard.c:98:6:seq_output_guard_panic	72	static

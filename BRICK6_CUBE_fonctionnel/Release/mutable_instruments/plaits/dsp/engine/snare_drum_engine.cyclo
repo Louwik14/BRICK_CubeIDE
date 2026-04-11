@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/snare_drum_engine.h:45:16:virtual void plaits::SnareDrumEngine::LoadUserData(const uint8_t*)	1
-../mutable_instruments/plaits/dsp/engine/snare_drum_engine.cc:38:6:virtual void plaits::SnareDrumEngine::Init(stmlib::BufferAllocator*)	1
-../mutable_instruments/plaits/dsp/engine/snare_drum_engine.cc:43:6:virtual void plaits::SnareDrumEngine::Reset()	1
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/drums/analog_snare_drum.h:67:8:void plaits::AnalogSnareDrum::Render(bool, bool, float, float, float, float, float, float*, size_t)	26
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/drums/synthetic_snare_drum.h:70:8:void plaits::SyntheticSnareDrum::Render(bool, bool, float, float, float, float, float, float*, size_t)	30
-../mutable_instruments/plaits/dsp/engine/snare_drum_engine.cc:47:6:virtual void plaits::SnareDrumEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	3
