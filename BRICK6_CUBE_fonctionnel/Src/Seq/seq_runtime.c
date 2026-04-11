@@ -75,6 +75,7 @@ static void seq_runtime_live_rec_flush_and_reset(void);
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
+static uint64_t seq_runtime_get_now_sample(void);
 static uint32_t seq_runtime_enter_critical(void);
 static void seq_runtime_exit_critical(uint32_t primask);
 static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli);
@@ -132,6 +133,14 @@ static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
 static uint32_t seq_runtime_get_now_tick(void)
 {
     return seq_runtime_get_now_tick_for_source(g_seq_runtime.clock_src);
+}
+
+static uint64_t seq_runtime_get_now_sample(void)
+{
+    const uint32_t primask = seq_runtime_enter_critical();
+    const uint64_t now_sample = g_seq_runtime.audio_timeline_sample;
+    seq_runtime_exit_critical(primask);
+    return now_sample;
 }
 
 static uint32_t seq_runtime_enter_critical(void)
@@ -259,7 +268,7 @@ static void seq_runtime_pattern_rec_on_step_advanced(void)
 
     if (g_seq_pattern_rec_steps_remaining == 0U)
     {
-        seq_live_rec_capture_flush(seq_runtime_get_now_tick(), g_seq_runtime.ticks_per_step);
+        seq_live_rec_capture_flush(seq_runtime_get_now_sample(), g_seq_runtime.samples_per_step_q16);
         seq_live_rec_capture_reset();
         seq_runtime_pattern_rec_cancel();
         g_seq_rec_armed = 0U;
@@ -303,7 +312,7 @@ static void seq_runtime_dispatch_due_events(uint32_t now)
 
 static void seq_runtime_live_rec_flush_and_reset(void)
 {
-    seq_live_rec_capture_flush(seq_runtime_get_now_tick(), g_seq_runtime.ticks_per_step);
+    seq_live_rec_capture_flush(seq_runtime_get_now_sample(), g_seq_runtime.samples_per_step_q16);
     seq_live_rec_capture_reset();
 }
 
@@ -1095,7 +1104,7 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                  channel_zero_based,
                                  note,
                                  velocity,
-                                 seq_runtime_get_now_tick());
+                                 seq_runtime_get_now_sample());
 }
 
 void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
@@ -1107,5 +1116,5 @@ void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                   source,
                                   channel_zero_based,
                                   note,
-                                  seq_runtime_get_now_tick());
+                                  seq_runtime_get_now_sample());
 }

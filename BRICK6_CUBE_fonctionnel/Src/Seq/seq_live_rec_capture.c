@@ -28,7 +28,7 @@ typedef struct
     uint8_t source;
     uint8_t voice;
     uint8_t step;
-    uint32_t start_tick;
+    uint64_t start_sample;
 } seq_live_rec_capture_pending_note_t;
 
 static seq_live_rec_capture_pending_note_t g_seq_live_rec_pending[SEQ_LIVE_REC_CAPTURE_PENDING_CAP];
@@ -157,9 +157,6 @@ static int32_t seq_live_rec_capture_find_pending_for_note(seq_track_id_t track,
                                                            uint8_t channel_zero_based,
                                                            uint8_t note)
 {
-    int32_t best = -1;
-    uint32_t best_tick = 0U;
-
     for (uint8_t i = 0U; i < SEQ_LIVE_REC_CAPTURE_PENDING_CAP; ++i)
     {
         if ((g_seq_live_rec_pending[i].active == 0U)
@@ -171,14 +168,10 @@ static int32_t seq_live_rec_capture_find_pending_for_note(seq_track_id_t track,
             continue;
         }
 
-        if ((best < 0) || (g_seq_live_rec_pending[i].start_tick >= best_tick))
-        {
-            best = (int32_t)i;
-            best_tick = g_seq_live_rec_pending[i].start_tick;
-        }
+        return (int32_t)i;
     }
 
-    return best;
+    return -1;
 }
 
 static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
@@ -196,21 +189,26 @@ static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
 static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
                                                           seq_step_id_t *io_step,
                                                           int8_t *out_mictim,
-                                                          uint16_t ticks_per_step,
-                                                          uint32_t tick_accum)
+                                                          uint32_t samples_per_step_q16,
+                                                          uint64_t step_sample_q16,
+                                                          uint64_t now_sample)
 {
     if ((io_step == 0) || (out_mictim == 0))
     {
         return;
     }
 
-    const uint16_t tps = (ticks_per_step == 0U) ? 1U : ticks_per_step;
-    const uint32_t offset_ticks = tick_accum;
+    const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
+    const uint64_t now_q16 = now_sample << 16;
+    const uint64_t offset_q16 = (now_q16 >= step_sample_q16) ? (now_q16 - step_sample_q16) : 0U;
+    const uint32_t offset = (uint32_t)((offset_q16 % (uint64_t)sps_q16) >> 16);
+    const uint32_t step_span = (sps_q16 >> 16);
+    const uint32_t span = (step_span == 0U) ? 1U : step_span;
     int32_t micro = 0;
 
-    if (offset_ticks <= (uint32_t)(tps / 4U))
+    if (offset <= (span / 4U))
     {
-        micro = (int32_t)((offset_ticks * 96U) / tps);
+        micro = (int32_t)((offset * 96U) / span);
         if (micro > 24)
         {
             micro = 24;
@@ -219,9 +217,9 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
         return;
     }
 
-    if (offset_ticks >= (uint32_t)((3U * tps) / 4U))
+    if (offset >= (uint32_t)((3U * span) / 4U))
     {
-        micro = (int32_t)(((int32_t)offset_ticks - (int32_t)tps) * 96) / (int32_t)tps;
+        micro = (int32_t)(((int32_t)offset - (int32_t)span) * 96) / (int32_t)span;
         if (micro < -24)
         {
             micro = -24;
@@ -240,7 +238,7 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
         return;
     }
 
-    if (offset_ticks < (uint32_t)(tps / 2U))
+    if (offset < (uint32_t)(span / 2U))
     {
         *out_mictim = 24;
         return;
@@ -311,17 +309,20 @@ static uint8_t seq_live_rec_capture_has_play_param(seq_track_id_t track,
 }
 
 static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_note_t *pending,
-                                                  uint32_t stop_tick,
-                                                  uint16_t ticks_per_step)
+                                                  uint64_t stop_sample,
+                                                  uint32_t samples_per_step_q16)
 {
     if ((pending == 0) || (pending->active == 0U))
     {
         return;
     }
 
-    const uint32_t duration_ticks = (stop_tick >= pending->start_tick) ? (stop_tick - pending->start_tick) : 0U;
-    const uint16_t tps = (ticks_per_step == 0U) ? 1U : ticks_per_step;
-    uint32_t len_steps = (duration_ticks + (uint32_t)tps - 1U) / (uint32_t)tps;
+    const uint64_t duration_samples = (stop_sample >= pending->start_sample)
+                                            ? (stop_sample - pending->start_sample)
+                                            : 0U;
+    const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
+    const uint64_t duration_q16 = duration_samples << 16;
+    uint32_t len_steps = (uint32_t)((duration_q16 + (uint64_t)sps_q16 - 1U) / (uint64_t)sps_q16);
     if (len_steps < 1U)
     {
         len_steps = 1U;
@@ -348,11 +349,11 @@ void seq_live_rec_capture_reset(void)
     memset(g_seq_live_rec_pending, 0, sizeof(g_seq_live_rec_pending));
 }
 
-void seq_live_rec_capture_flush(uint32_t stop_tick, uint16_t ticks_per_step)
+void seq_live_rec_capture_flush(uint64_t stop_sample, uint32_t samples_per_step_q16)
 {
     for (uint8_t i = 0U; i < SEQ_LIVE_REC_CAPTURE_PENDING_CAP; ++i)
     {
-        seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[i], stop_tick, ticks_per_step);
+        seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[i], stop_sample, samples_per_step_q16);
     }
 }
 
@@ -362,7 +363,7 @@ void seq_live_rec_capture_note_on(uint8_t active,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
                                   uint8_t velocity,
-                                  uint32_t now_tick)
+                                  uint64_t now_sample)
 {
     if ((runtime_state == 0)
         || (active == 0U)
@@ -405,8 +406,17 @@ void seq_live_rec_capture_note_on(uint8_t active,
         seq_live_rec_capture_compute_step_and_mictim(track,
                                                      &write_step,
                                                      &mictim,
-                                                     runtime_state->ticks_per_step,
-                                                     runtime_state->tick_accum);
+                                                     runtime_state->samples_per_step_q16,
+                                                     runtime_state->step_sample_q16,
+                                                     now_sample);
+
+        if (seq_live_rec_capture_find_pending_for_note(track,
+                                                       source,
+                                                       channel_zero_based,
+                                                       note) >= 0)
+        {
+            continue;
+        }
 
         int32_t voice = seq_live_rec_capture_find_voice_with_note_lock(track, write_step, note);
         if (voice < 0)
@@ -470,7 +480,7 @@ void seq_live_rec_capture_note_on(uint8_t active,
         g_seq_live_rec_pending[pending_slot].source = (uint8_t)source;
         g_seq_live_rec_pending[pending_slot].voice = (uint8_t)voice;
         g_seq_live_rec_pending[pending_slot].step = write_step;
-        g_seq_live_rec_pending[pending_slot].start_tick = now_tick;
+        g_seq_live_rec_pending[pending_slot].start_sample = now_sample;
     }
 }
 
@@ -479,7 +489,7 @@ void seq_live_rec_capture_note_off(uint8_t active,
                                    seq_live_rec_source_t source,
                                    uint8_t channel_zero_based,
                                    uint8_t note,
-                                   uint32_t now_tick)
+                                   uint64_t now_sample)
 {
     if ((runtime_state == 0)
         || (active == 0U)
@@ -513,7 +523,7 @@ void seq_live_rec_capture_note_off(uint8_t active,
         }
 
         seq_live_rec_capture_finalize_pending(&g_seq_live_rec_pending[pending_slot],
-                                              now_tick,
-                                              runtime_state->ticks_per_step);
+                                              now_sample,
+                                              runtime_state->samples_per_step_q16);
     }
 }
