@@ -92,6 +92,13 @@ static void seq_runtime_update_samples_per_step_from_tempo(void);
 static void seq_runtime_update_midi_clock_period_from_step_period(void);
 static void seq_runtime_midi_clock_audio_rebase(uint64_t start_sample);
 static void seq_runtime_midi_clock_audio_emit_for_block(uint64_t block_start_sample, uint16_t block_frames);
+static void seq_runtime_send_transport_realtime(uint8_t status);
+
+static void seq_runtime_send_transport_realtime(uint8_t status)
+{
+    const uint8_t msg[1] = { status };
+    midi_send_raw(MIDI_DEST_BOTH, msg, sizeof(msg));
+}
 
 static void seq_runtime_send_transport_start(void)
 {
@@ -110,8 +117,8 @@ static void seq_runtime_send_transport_start(void)
      * sequencer tempo is sourced from a dedicated BPM parameter.
      */
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
-    midi_start(MIDI_DEST_BOTH);
     midi_clock_set_running(false);
+    seq_runtime_send_transport_realtime(0xFAU);
     g_seq_midi_clock_audio_enabled = 1U;
     seq_runtime_midi_clock_audio_rebase(g_seq_runtime.audio_timeline_sample);
 }
@@ -122,11 +129,6 @@ static void seq_runtime_send_transport_stop_and_panic(void)
     g_seq_midi_clock_audio_enabled = 0U;
     seq_output_guard_panic((seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) == 0U) ? 1U : 0U);
     SEQ_STOP_LOG("[SEQ][STOP] end\r\n");
-}
-
-static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
-{
-    (void)elapsed_ticks;
 }
 
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
@@ -626,8 +628,6 @@ static void seq_runtime_process_core(void)
     const uint32_t elapsed = current_tick - g_seq_runtime.last_tick_count;
     g_seq_runtime.last_tick_count = current_tick;
     g_seq_runtime.tick_accum += elapsed;
-    seq_runtime_send_internal_clock(elapsed);
-
     while (seq_clock_bridge_consume_internal_step_due(&g_seq_clock_bridge, &g_seq_runtime.tick_accum) != 0U)
     {
         g_seq_runtime.ticks_per_step =
@@ -759,17 +759,18 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         g_seq_internal_time_tick = 0U;
     }
     g_seq_midi_clock_tick_accum = 0U;
-    seq_transport_fsm_on_clock_source_change(&g_seq_transport_fsm);
     seq_play_scheduler_clear();
     seq_runtime_update_samples_per_step_from_tempo();
 
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
         g_seq_midi_clock_audio_enabled = 0U;
+        midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_SLAVE);
     }
     else
     {
+        midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
         seq_runtime_midi_clock_audio_rebase(g_seq_runtime.audio_timeline_sample);
@@ -780,11 +781,6 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
 seq_clock_src_t seq_runtime_get_clock_source(void)
 {
     return g_seq_runtime.clock_src;
-}
-
-void seq_runtime_midi_clock(void)
-{
-    seq_runtime_midi_clock_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
 }
 
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
@@ -815,11 +811,6 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
     seq_runtime_process_step_pulse(now);
 }
 
-void seq_runtime_midi_start(void)
-{
-    seq_runtime_midi_start_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
-}
-
 void seq_runtime_midi_start_from_source(seq_clock_src_t source)
 {
     if (g_seq_runtime.clock_src != source)
@@ -828,11 +819,6 @@ void seq_runtime_midi_start_from_source(seq_clock_src_t source)
     }
 
     seq_runtime_start();
-}
-
-void seq_runtime_midi_continue(void)
-{
-    seq_runtime_midi_continue_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
 }
 
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
@@ -856,11 +842,18 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
-}
 
-void seq_runtime_midi_stop(void)
-{
-    seq_runtime_midi_stop_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
+    if (seq_clock_bridge_is_external_source(source) != 0U)
+    {
+        g_seq_midi_clock_audio_enabled = 0U;
+        midi_clock_set_running(false);
+        return;
+    }
+
+    midi_clock_set_running(false);
+    seq_runtime_send_transport_realtime(0xFBU);
+    g_seq_midi_clock_audio_enabled = 1U;
+    seq_runtime_midi_clock_audio_rebase(g_seq_runtime.audio_timeline_sample);
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
