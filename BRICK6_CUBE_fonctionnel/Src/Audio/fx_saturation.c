@@ -23,6 +23,17 @@
 
 #define FX_SAT_MIN_K 1.0f
 #define FX_SAT_K_MAX 25.0f
+#define FX_DECIMATOR_BITS_MAX 15U
+
+static void fx_saturation_update_bypass(fx_saturation_t *fx)
+{
+    if (fx == 0)
+    {
+        return;
+    }
+
+    fx->bypass = ((fx->pre_gain <= 1.0f) && (fx->decimator_enabled == 0U)) ? 1U : 0U;
+}
 
 /**
  * @brief Point d'entrée fx_softclip.
@@ -93,6 +104,14 @@ void fx_saturation_init(fx_saturation_t *fx)
     fx->prev_l = 0.0f;
     fx->prev_r = 0.0f;
 
+    fx->decimator_rate = 1.0f;
+    fx->decimator_bits_to_crush = 0U;
+    fx->decimator_inc_l = 0U;
+    fx->decimator_inc_r = 0U;
+    fx->decimator_threshold = 0U;
+    fx->decimator_downsampled_l = 0.0f;
+    fx->decimator_downsampled_r = 0.0f;
+    fx->decimator_enabled = 0U;
     fx->bypass = 1U;
 }
 
@@ -115,9 +134,9 @@ void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
 
     if(drive_0_127 == 0U)
     {
-        fx->bypass = 1U;
         fx->pre_gain = 1.0f;
         fx->post_gain = 1.0f;
+        fx_saturation_update_bypass(fx);
         return;
     }
 
@@ -155,7 +174,32 @@ void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
 
     fx->post_gain = 1.0f / shaped_ref;
 
-    fx->bypass = 0U;
+    fx_saturation_update_bypass(fx);
+}
+
+void fx_saturation_set_decimator_bits_ui(fx_saturation_t *fx, uint8_t bits_0_127)
+{
+    if (fx == 0)
+    {
+        return;
+    }
+
+    fx->decimator_bits_to_crush = (uint8_t)(((uint32_t)bits_0_127 * (uint32_t)FX_DECIMATOR_BITS_MAX) / 127U);
+    fx->decimator_enabled = ((fx->decimator_bits_to_crush > 0U) || (fx->decimator_threshold > 0U)) ? 1U : 0U;
+    fx_saturation_update_bypass(fx);
+}
+
+void fx_saturation_set_decimator_rate_ui(fx_saturation_t *fx, uint8_t rate_0_127)
+{
+    if (fx == 0)
+    {
+        return;
+    }
+
+    fx->decimator_rate = (float)rate_0_127 * (1.0f / 127.0f);
+    fx->decimator_threshold = (uint8_t)((fx->decimator_rate * fx->decimator_rate) * 96.0f);
+    fx->decimator_enabled = ((fx->decimator_bits_to_crush > 0U) || (fx->decimator_threshold > 0U)) ? 1U : 0U;
+    fx_saturation_update_bypass(fx);
 }
 
 /**
@@ -251,6 +295,13 @@ void fx_saturation_process_block(fx_saturation_t *fx,
 
     float prev_l = fx->prev_l;
     float prev_r = fx->prev_r;
+    uint8_t decimator_inc_l = fx->decimator_inc_l;
+    uint8_t decimator_inc_r = fx->decimator_inc_r;
+    float decimator_downsampled_l = fx->decimator_downsampled_l;
+    float decimator_downsampled_r = fx->decimator_downsampled_r;
+    const uint8_t decimator_threshold = fx->decimator_threshold;
+    const uint8_t decimator_bits = fx->decimator_bits_to_crush;
+    const uint8_t decimator_enabled = fx->decimator_enabled;
 
     float *l = inout_l;
     float *r = inout_r;
@@ -302,10 +353,45 @@ void fx_saturation_process_block(fx_saturation_t *fx,
         yl = fx_softclip(yl);
         yr = fx_softclip(yr);
 
+        if (decimator_enabled != 0U)
+        {
+            int32_t yl_i = 0;
+            int32_t yr_i = 0;
+
+            decimator_inc_l = (uint8_t)(decimator_inc_l + 1U);
+            if (decimator_inc_l > decimator_threshold)
+            {
+                decimator_inc_l = 0U;
+                decimator_downsampled_l = yl;
+            }
+
+            decimator_inc_r = (uint8_t)(decimator_inc_r + 1U);
+            if (decimator_inc_r > decimator_threshold)
+            {
+                decimator_inc_r = 0U;
+                decimator_downsampled_r = yr;
+            }
+
+            yl_i = (int32_t)(decimator_downsampled_l * 65536.0f);
+            yr_i = (int32_t)(decimator_downsampled_r * 65536.0f);
+
+            yl_i >>= decimator_bits;
+            yl_i <<= decimator_bits;
+            yr_i >>= decimator_bits;
+            yr_i <<= decimator_bits;
+
+            yl = (float)yl_i / 65536.0f;
+            yr = (float)yr_i / 65536.0f;
+        }
+
         l[n] = yl;
         r[n] = yr;
     }
 
     fx->prev_l = prev_l;
     fx->prev_r = prev_r;
+    fx->decimator_inc_l = decimator_inc_l;
+    fx->decimator_inc_r = decimator_inc_r;
+    fx->decimator_downsampled_l = decimator_downsampled_l;
+    fx->decimator_downsampled_r = decimator_downsampled_r;
 }

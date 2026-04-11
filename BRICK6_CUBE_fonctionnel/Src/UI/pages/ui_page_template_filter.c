@@ -23,7 +23,7 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
         },
         {
             .title = "CRUNCH",
-            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -47,7 +47,7 @@ static ui_template_family_t g_ui_template_filter_family_monob = {
         },
         {
             .title = "CRUNCH",
-            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -71,7 +71,7 @@ static ui_template_family_t g_ui_template_filter_family_tb3 = {
         },
         {
             .title = "CRUNCH",
-            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -221,8 +221,8 @@ static void ui_page_template_colors_sync_family(void)
 
         family->subpages[3].title = "CRUNCH";
         family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
-        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[1] = PARAM_FILTER_DECIMATOR_BITS;
+        family->subpages[3].param_bank.params[2] = PARAM_FILTER_DECIMATOR_RATE;
         family->subpages[3].param_bank.params[3] = PARAM_COUNT;
         return;
     }
@@ -253,8 +253,8 @@ static void ui_page_template_colors_sync_family(void)
 
         family->subpages[3].title = "CRUNCH";
         family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
-        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[1] = PARAM_FILTER_DECIMATOR_BITS;
+        family->subpages[3].param_bank.params[2] = PARAM_FILTER_DECIMATOR_RATE;
         family->subpages[3].param_bank.params[3] = PARAM_COUNT;
         return;
     }
@@ -335,8 +335,8 @@ static void ui_page_template_colors_sync_family(void)
 
     family->subpages[3].title = "CRUNCH";
     family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
-    family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-    family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+    family->subpages[3].param_bank.params[1] = PARAM_FILTER_DECIMATOR_BITS;
+    family->subpages[3].param_bank.params[2] = PARAM_FILTER_DECIMATOR_RATE;
     family->subpages[3].param_bank.params[3] = PARAM_COUNT;
 }
 
