@@ -124,11 +124,6 @@ static void seq_runtime_send_transport_stop_and_panic(void)
     SEQ_STOP_LOG("[SEQ][STOP] end\r\n");
 }
 
-static void seq_runtime_send_internal_clock(uint32_t elapsed_ticks)
-{
-    (void)elapsed_ticks;
-}
-
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
 {
     if (seq_clock_bridge_is_external_source(source) != 0U)
@@ -626,8 +621,6 @@ static void seq_runtime_process_core(void)
     const uint32_t elapsed = current_tick - g_seq_runtime.last_tick_count;
     g_seq_runtime.last_tick_count = current_tick;
     g_seq_runtime.tick_accum += elapsed;
-    seq_runtime_send_internal_clock(elapsed);
-
     while (seq_clock_bridge_consume_internal_step_due(&g_seq_clock_bridge, &g_seq_runtime.tick_accum) != 0U)
     {
         g_seq_runtime.ticks_per_step =
@@ -759,7 +752,6 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         g_seq_internal_time_tick = 0U;
     }
     g_seq_midi_clock_tick_accum = 0U;
-    seq_transport_fsm_on_clock_source_change(&g_seq_transport_fsm);
     seq_play_scheduler_clear();
     seq_runtime_update_samples_per_step_from_tempo();
 
@@ -780,11 +772,6 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
 seq_clock_src_t seq_runtime_get_clock_source(void)
 {
     return g_seq_runtime.clock_src;
-}
-
-void seq_runtime_midi_clock(void)
-{
-    seq_runtime_midi_clock_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
 }
 
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
@@ -815,11 +802,6 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
     seq_runtime_process_step_pulse(now);
 }
 
-void seq_runtime_midi_start(void)
-{
-    seq_runtime_midi_start_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
-}
-
 void seq_runtime_midi_start_from_source(seq_clock_src_t source)
 {
     if (g_seq_runtime.clock_src != source)
@@ -828,11 +810,6 @@ void seq_runtime_midi_start_from_source(seq_clock_src_t source)
     }
 
     seq_runtime_start();
-}
-
-void seq_runtime_midi_continue(void)
-{
-    seq_runtime_midi_continue_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
 }
 
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
@@ -856,11 +833,6 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
-}
-
-void seq_runtime_midi_stop(void)
-{
-    seq_runtime_midi_stop_from_source(SEQ_CLOCK_SRC_EXTERNAL_MIDI);
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)

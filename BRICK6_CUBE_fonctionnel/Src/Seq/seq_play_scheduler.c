@@ -1,9 +1,9 @@
 /*
  * Module: seq_play_scheduler
- * Role: Scheduler PLAY des événements note-on/note-off par tick moteur.
+ * Role: Scheduler PLAY des événements note-on/note-off en sample-domain.
  * Responsibilities: lire steps/plocks, dériver voix note/vel/len/mictim,
- * planifier et émettre les événements vers moteurs audio/MIDI avec output guard.
- * Integration: exécuté par seq_runtime à chaque step/tick; hors transport FSM/clock source.
+ * planifier des événements horodatés en samples et les appliquer via le chemin audio.
+ * Integration: scheduling déclenché par seq_runtime aux boundaries de step, collecte/apply en IRQ audio.
  */
 #define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
 #include "Seq/seq_play_scheduler.h"
