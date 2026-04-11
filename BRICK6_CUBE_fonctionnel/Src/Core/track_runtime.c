@@ -13,6 +13,7 @@
 #define TRACK_RUNTIME_DX7_MAX_INSTANCES 1U
 #define TRACK_RUNTIME_MONOB_MAX_INSTANCES 8U
 #define TRACK_RUNTIME_TB3_MAX_INSTANCES 1U
+#define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
 volatile uint32_t g_track_runtime_tb3_bind_seen = 0U;
@@ -390,7 +391,7 @@ void track_runtime_invalidate_all(void)
 void track_runtime_refresh_all(void)
 {
     track_runtime_allocator_state_t allocator = { 0U, 0U };
-    uint8_t mix_track_used[MIXER_MAX_TRACKS];
+    uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
 
