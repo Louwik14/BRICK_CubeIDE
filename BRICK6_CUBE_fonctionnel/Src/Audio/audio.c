@@ -24,6 +24,7 @@
 #include "cpu_load.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
+#include "Seq/seq_runtime.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -113,6 +114,9 @@ static void process_half(uint32_t half_index)
 
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traité. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
+
+    /* Boundary déterministe audio: appliquer les événements séquenceur dus au début du bloc. */
+    seq_runtime_audio_block_start();
 
     /* Frontière moteur float (un bloc fixe par IRQ). */
     audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);

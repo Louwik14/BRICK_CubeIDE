@@ -16,5 +16,6 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                       uint16_t ticks_per_step,
                                       uint32_t step_tick);
 void seq_play_scheduler_service(uint32_t now_tick, uint8_t running);
+void seq_play_scheduler_audio_consume_block_start(void);
 
 #endif /* SEQ_PLAY_SCHEDULER_H */
