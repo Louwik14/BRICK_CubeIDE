@@ -76,8 +76,15 @@ static const drum_ui_dsp_linear_map_t g_drum_ui_dsp_linear_maps[] = {
     { PARAM_DRUM_TRX_HIHAT_HP_TONE, 0.0f, 127.0f, 100.0f, 10000.0f },
     { PARAM_DRUM_TRX_HIHAT_LP_TONE, 0.0f, 127.0f, 1000.0f, 12000.0f },
     { PARAM_DRUM_TRX_SNARE_TUNE_INTERVAL, 0.0f, 127.0f, 0.0f, 400.0f },
+    { PARAM_DRUM_FM_KICK_PITCH_SWEEP, 0.0f, 127.0f, 0.0f, 1000.0f },
+    { PARAM_DRUM_FM_KICK_FEEDBACK, 0.0f, 127.0f, 0.0f, 16.0f },
+    { PARAM_DRUM_FM_SNARE_MOD_FREQ, 0.0f, 127.0f, 500.0f, 3000.0f },
+    { PARAM_DRUM_FM_SNARE_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 50.0f },
+    { PARAM_DRUM_FM_SNARE_HP_TONE, 0.0f, 127.0f, 20.0f, 2000.0f },
+    { PARAM_DRUM_FM_TOM_PITCH_SWEEP, 0.0f, 127.0f, 0.0f, 100.0f },
     { PARAM_DRUM_FM_TOM_MOD_FREQ, 0.0f, 127.0f, 100.0f, 2000.0f },
     { PARAM_DRUM_FM_TOM_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 50.0f },
+    { PARAM_DRUM_FM_TOM_START_PHASE, 0.0f, 2.0f, 0.0f, 3.14159f },
     { PARAM_DRUM_FM_RIMSHOT_HP_TONE, 0.0f, 127.0f, 100.0f, 2000.0f },
     { PARAM_DRUM_FM_RIMSHOT_RIM_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 50.0f },
     { PARAM_DRUM_FM_RIMSHOT_BODY_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 50.0f },
@@ -89,8 +96,11 @@ static const drum_ui_dsp_linear_map_t g_drum_ui_dsp_linear_maps[] = {
     { PARAM_DRUM_FM_COWBELL_DECAY_SHORT, 0.0f, 20.0f, 0.005f, 0.2f },
     { PARAM_DRUM_FM_COWBELL_MOD_FREQ, 0.0f, 127.0f, 500.0f, 3000.0f },
     { PARAM_DRUM_FM_COWBELL_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 100.0f },
+    { PARAM_DRUM_FM_CYMBAL_DECAY, 0.0f, 2.0f, 0.05f, 4.0f },
     { PARAM_DRUM_FM_CYMBAL_HP_TONE, 0.0f, 127.0f, 100.0f, 2000.0f },
-    { PARAM_DRUM_FM_CYMBAL_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 30.0f }
+    { PARAM_DRUM_FM_CYMBAL_FM_AMOUNT, 0.0f, 127.0f, 0.0f, 30.0f },
+    { PARAM_DRUM_FM_CYMBAL_BASE_CARRIER, 0.0f, 127.0f, 100.0f, 1000.0f },
+    { PARAM_DRUM_FM_CYMBAL_BASE_MOD, 0.0f, 127.0f, 200.0f, 2000.0f }
 };
 
 typedef struct
@@ -486,8 +496,8 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
                 case PARAM_DRUM_FM_KICK_MOD_FREQ: return drum_synth_set_direct_param(instance->active_model, 2U, 11U, value);
                 case PARAM_DRUM_FM_KICK_FM_AMOUNT: return drum_synth_set_direct_param(instance->active_model, 3U, 11U, value);
                 case PARAM_DRUM_FM_KICK_MOD_DECAY: return drum_synth_set_direct_param(instance->active_model, 4U, 11U, value);
-                case PARAM_DRUM_FM_KICK_FEEDBACK: return drum_synth_set_direct_param(instance->active_model, 5U, 11U, value);
-                case PARAM_DRUM_FM_KICK_PITCH_SWEEP: return drum_synth_set_direct_param(instance->active_model, 6U, 11U, value);
+                case PARAM_DRUM_FM_KICK_FEEDBACK: return drum_synth_set_direct_param(instance->active_model, 5U, 11U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
+                case PARAM_DRUM_FM_KICK_PITCH_SWEEP: return drum_synth_set_direct_param(instance->active_model, 6U, 11U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_KICK_SWEEP_DECAY: return drum_synth_set_direct_param(instance->active_model, 7U, 11U, value);
                 case PARAM_DRUM_FM_KICK_RATIO_MODE: return drum_synth_set_direct_param(instance->active_model, 8U, 11U, value);
                 case PARAM_DRUM_FM_KICK_RATIO_INDEX: return drum_synth_set_direct_param(instance->active_model, 9U, 11U, value);
@@ -499,12 +509,12 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
             {
                 case PARAM_DRUM_FM_SNARE_PITCH: return drum_synth_set_direct_param(instance->active_model, 0U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_SNARE_DECAY: return drum_synth_set_direct_param(instance->active_model, 1U, 8U, value);
-                case PARAM_DRUM_FM_SNARE_MOD_FREQ: return drum_synth_set_direct_param(instance->active_model, 2U, 8U, value);
-                case PARAM_DRUM_FM_SNARE_FM_AMOUNT: return drum_synth_set_direct_param(instance->active_model, 3U, 8U, value);
+                case PARAM_DRUM_FM_SNARE_MOD_FREQ: return drum_synth_set_direct_param(instance->active_model, 2U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
+                case PARAM_DRUM_FM_SNARE_FM_AMOUNT: return drum_synth_set_direct_param(instance->active_model, 3U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_SNARE_MOD_DECAY: return drum_synth_set_direct_param(instance->active_model, 4U, 8U, value);
                 case PARAM_DRUM_FM_SNARE_NOISE: return drum_synth_set_direct_param(instance->active_model, 5U, 8U, value);
                 case PARAM_DRUM_FM_SNARE_NOISE_DECAY: return drum_synth_set_direct_param(instance->active_model, 6U, 8U, value);
-                case PARAM_DRUM_FM_SNARE_HP_TONE: return drum_synth_set_direct_param(instance->active_model, 7U, 8U, value);
+                case PARAM_DRUM_FM_SNARE_HP_TONE: return drum_synth_set_direct_param(instance->active_model, 7U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 default: return 0U;
             }
         case DRUM_MODEL_ID_FM_TOM:
@@ -515,9 +525,9 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
                 case PARAM_DRUM_FM_TOM_MOD_FREQ: return drum_synth_set_direct_param(instance->active_model, 2U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_TOM_FM_AMOUNT: return drum_synth_set_direct_param(instance->active_model, 3U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_TOM_MOD_DECAY: return drum_synth_set_direct_param(instance->active_model, 4U, 8U, value);
-                case PARAM_DRUM_FM_TOM_PITCH_SWEEP: return drum_synth_set_direct_param(instance->active_model, 5U, 8U, value);
+                case PARAM_DRUM_FM_TOM_PITCH_SWEEP: return drum_synth_set_direct_param(instance->active_model, 5U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_TOM_SWEEP_DECAY: return drum_synth_set_direct_param(instance->active_model, 6U, 8U, value);
-                case PARAM_DRUM_FM_TOM_START_PHASE: return drum_synth_set_direct_param(instance->active_model, 7U, 8U, value);
+                case PARAM_DRUM_FM_TOM_START_PHASE: return drum_synth_set_direct_param(instance->active_model, 7U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 default: return 0U;
             }
         case DRUM_MODEL_ID_FM_RIMSHOT:
@@ -565,9 +575,9 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
         case DRUM_MODEL_ID_FM_CYMBAL:
             switch (param)
             {
-                case PARAM_DRUM_FM_CYMBAL_BASE_CARRIER: return drum_synth_set_direct_param(instance->active_model, 0U, 8U, value);
-                case PARAM_DRUM_FM_CYMBAL_BASE_MOD: return drum_synth_set_direct_param(instance->active_model, 1U, 8U, value);
-                case PARAM_DRUM_FM_CYMBAL_DECAY: return drum_synth_set_direct_param(instance->active_model, 2U, 8U, value);
+                case PARAM_DRUM_FM_CYMBAL_BASE_CARRIER: return drum_synth_set_direct_param(instance->active_model, 0U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
+                case PARAM_DRUM_FM_CYMBAL_BASE_MOD: return drum_synth_set_direct_param(instance->active_model, 1U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
+                case PARAM_DRUM_FM_CYMBAL_DECAY: return drum_synth_set_direct_param(instance->active_model, 2U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_CYMBAL_FM_AMOUNT: return drum_synth_set_direct_param(instance->active_model, 3U, 8U, drum_synth_map_ui_to_dsp(param, value, instance->note_pitch_factor));
                 case PARAM_DRUM_FM_CYMBAL_MOD_DECAY: return drum_synth_set_direct_param(instance->active_model, 4U, 8U, value);
                 case PARAM_DRUM_FM_CYMBAL_FEEDBACK: return drum_synth_set_direct_param(instance->active_model, 5U, 8U, value);
