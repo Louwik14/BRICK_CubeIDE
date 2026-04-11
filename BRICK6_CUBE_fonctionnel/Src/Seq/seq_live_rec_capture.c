@@ -39,7 +39,10 @@ typedef struct
     uint8_t source;
     uint8_t voice;
     uint8_t step;
+    uint8_t start_step;
+    int8_t start_mictim;
     uint64_t start_sample;
+    uint64_t start_sample_quantized;
 } seq_live_rec_capture_pending_note_t;
 
 static seq_live_rec_capture_pending_note_t g_seq_live_rec_pending[SEQ_LIVE_REC_CAPTURE_PENDING_CAP];
@@ -272,6 +275,34 @@ static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
     return ((track_source == UI_TRACK_MIDI_SRC_EXT) || (track_source == UI_TRACK_MIDI_SRC_ALL)) ? 1U : 0U;
 }
 
+static uint64_t seq_live_rec_capture_mictim_positive_offset_q16(int8_t mictim,
+                                                                uint32_t samples_per_step_q16)
+{
+    if ((mictim <= 0) || (samples_per_step_q16 == 0U))
+    {
+        return 0U;
+    }
+
+    return ((uint64_t)(uint32_t)mictim * (uint64_t)samples_per_step_q16) / 96ULL;
+}
+
+static uint64_t seq_live_rec_capture_compute_quantized_on_sample(seq_step_id_t current_step,
+                                                                  seq_step_id_t write_step,
+                                                                  int8_t mictim,
+                                                                  uint32_t samples_per_step_q16,
+                                                                  uint64_t step_sample_q16)
+{
+    const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
+    uint64_t write_step_sample_q16 = step_sample_q16;
+    if (write_step != current_step)
+    {
+        write_step_sample_q16 += (uint64_t)sps_q16;
+    }
+
+    write_step_sample_q16 += seq_live_rec_capture_mictim_positive_offset_q16(mictim, sps_q16);
+    return write_step_sample_q16 >> 16;
+}
+
 static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
                                                           seq_step_id_t *io_step,
                                                           int8_t *out_mictim,
@@ -287,14 +318,15 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
     const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
     const uint64_t now_q16 = now_sample << 16;
     const uint64_t offset_q16 = (now_q16 >= step_sample_q16) ? (now_q16 - step_sample_q16) : 0U;
-    const uint32_t offset = (uint32_t)((offset_q16 % (uint64_t)sps_q16) >> 16);
-    const uint32_t step_span = (sps_q16 >> 16);
-    const uint32_t span = (step_span == 0U) ? 1U : step_span;
+    const uint32_t offset_q16_mod = (uint32_t)(offset_q16 % (uint64_t)sps_q16);
+    const uint32_t half_q16 = sps_q16 / 2U;
+    const uint32_t quarter_q16 = sps_q16 / 4U;
+    const uint32_t three_quarter_q16 = quarter_q16 * 3U;
     int32_t micro = 0;
 
-    if (offset <= (span / 4U))
+    if (offset_q16_mod <= quarter_q16)
     {
-        micro = (int32_t)((offset * 96U) / span);
+        micro = (int32_t)(((uint64_t)offset_q16_mod * 96ULL) / (uint64_t)sps_q16);
         if (micro > 24)
         {
             micro = 24;
@@ -303,9 +335,9 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
         return;
     }
 
-    if (offset >= (uint32_t)((3U * span) / 4U))
+    if (offset_q16_mod >= three_quarter_q16)
     {
-        micro = (int32_t)(((int32_t)offset - (int32_t)span) * 96) / (int32_t)span;
+        micro = (int32_t)((((int64_t)offset_q16_mod - (int64_t)sps_q16) * 96LL) / (int64_t)sps_q16);
         if (micro < -24)
         {
             micro = -24;
@@ -324,7 +356,7 @@ static void seq_live_rec_capture_compute_step_and_mictim(seq_track_id_t track,
         return;
     }
 
-    if (offset < (uint32_t)(span / 2U))
+    if (offset_q16_mod < half_q16)
     {
         *out_mictim = 24;
         return;
@@ -491,8 +523,9 @@ static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_n
         return;
     }
 
-    const uint64_t duration_samples = (stop_sample >= pending->start_sample)
-                                            ? (stop_sample - pending->start_sample)
+    const uint64_t effective_start_sample = pending->start_sample_quantized;
+    const uint64_t duration_samples = (stop_sample >= effective_start_sample)
+                                            ? (stop_sample - effective_start_sample)
                                             : 0U;
     const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
     const uint64_t duration_q16 = duration_samples << 16;
@@ -510,7 +543,7 @@ static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_n
                                                   pending->step,
                                                   seq_live_rec_capture_play_param_len(pending->voice),
                                                   (float)len_steps);
-    SEQ_LIVE_REC_LOG("[SEQ][LREC][WR] tr=%u src=%u ch=%u n=%u st=%u v=%u t0=%llu t1=%llu len=%lu\r\n",
+    SEQ_LIVE_REC_LOG("[SEQ][LREC][WR] tr=%u src=%u ch=%u n=%u st=%u v=%u raw0=%llu q0=%llu t1=%llu len=%lu\r\n",
                      pending->track,
                      pending->source,
                      pending->channel,
@@ -518,6 +551,7 @@ static void seq_live_rec_capture_finalize_pending(seq_live_rec_capture_pending_n
                      pending->step,
                      pending->voice,
                      (unsigned long long)pending->start_sample,
+                     (unsigned long long)effective_start_sample,
                      (unsigned long long)stop_sample,
                      (unsigned long)len_steps);
     pending->active = 0U;
@@ -738,7 +772,15 @@ void seq_live_rec_capture_note_on(uint8_t active,
         g_seq_live_rec_pending[pending_slot].source = (uint8_t)source;
         g_seq_live_rec_pending[pending_slot].voice = (uint8_t)voice;
         g_seq_live_rec_pending[pending_slot].step = write_step;
+        g_seq_live_rec_pending[pending_slot].start_step = step;
+        g_seq_live_rec_pending[pending_slot].start_mictim = mictim;
         g_seq_live_rec_pending[pending_slot].start_sample = now_sample;
+        g_seq_live_rec_pending[pending_slot].start_sample_quantized =
+                seq_live_rec_capture_compute_quantized_on_sample(step,
+                                                                 write_step,
+                                                                 mictim,
+                                                                 runtime_state->samples_per_step_q16,
+                                                                 runtime_state->step_sample_q16);
         SEQ_LIVE_REC_LOG("[SEQ][LREC][PEND+] slot=%ld tr=%u src=%u ch=%u n=%u st=%u v=%ld t=%llu\r\n",
                          (long)pending_slot,
                          track,

@@ -36,7 +36,6 @@ typedef enum
 
 typedef struct
 {
-    uint32_t due_tick;
     uint64_t due_sample_time;
     uint8_t track;
     uint8_t note;
@@ -65,8 +64,7 @@ static void seq_play_scheduler_exit_critical(uint32_t primask)
 }
 
 
-static void seq_play_scheduler_push(uint32_t due_tick,
-                                    uint64_t due_sample_time,
+static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t type,
                                     seq_track_id_t track,
                                     uint8_t note,
@@ -80,7 +78,6 @@ static void seq_play_scheduler_push(uint32_t due_tick,
     }
 
     seq_play_scheduler_evt_t *const evt = &g_seq_play_events[g_seq_play_event_count++];
-    evt->due_tick = due_tick;
     evt->due_sample_time = due_sample_time;
     evt->type = type;
     evt->track = track;
@@ -271,6 +268,9 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                       uint64_t step_sample_time,
                                       uint32_t samples_per_step_q16)
 {
+    (void)ticks_per_step;
+    (void)step_tick;
+
     if (seq_model_get_trig(track, step) == 0U)
     {
         return;
@@ -285,7 +285,6 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         return;
     }
 
-    const float tps_f = (ticks_per_step == 0U) ? 1.0f : (float)ticks_per_step;
     const float samples_per_step_f = ((float)samples_per_step_q16) / 65536.0f;
 
     for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
@@ -326,21 +325,8 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         {
             len_steps_f = 64.0f;
         }
-        uint32_t len_ticks = (uint32_t)((len_steps_f * tps_f) + 0.5f);
-        if (len_ticks == 0U)
-        {
-            len_ticks = 1U;
-        }
-
         const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
                                                                   seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
-        int32_t on_tick = (int32_t)step_tick + (int32_t)((mictim_f * tps_f) / 96.0f);
-        if (on_tick < (int32_t)step_tick)
-        {
-            on_tick = (int32_t)step_tick;
-        }
-
-        uint32_t note_on_due_tick = (uint32_t)on_tick;
         int32_t microtiming_samples = (int32_t)((mictim_f * samples_per_step_f) / 96.0f);
         if (microtiming_samples < 0)
         {
@@ -348,19 +334,6 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         }
         uint64_t note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
 
-        /*
-         * Adjacent same-note retrigger guard:
-         * if a NOTE_OFF for the same MIDI key (channel+note) is already due
-         * on this exact tick, delay NOTE_ON by 1 tick to avoid zero-gap OFF/ON
-         * collapse on some sinks/engines.
-         */
-        (void)track;
-
-        uint32_t note_off_due_tick = note_on_due_tick + len_ticks;
-        if (note_off_due_tick <= note_on_due_tick)
-        {
-            note_off_due_tick = note_on_due_tick + 1U;
-        }
         uint64_t len_samples = (uint64_t)((len_steps_f * samples_per_step_f) + 0.5f);
         if (len_samples == 0U)
         {
@@ -368,25 +341,17 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         }
         uint64_t note_off_sample_time = note_on_sample_time + len_samples;
 
-        seq_play_scheduler_push(note_on_due_tick,
-                                note_on_sample_time,
+        seq_play_scheduler_push(note_on_sample_time,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
                                 track,
                                 note,
                                 vel);
-        seq_play_scheduler_push(note_off_due_tick,
-                                note_off_sample_time,
+        seq_play_scheduler_push(note_off_sample_time,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
                                 track,
                                 note,
                                 0U);
     }
-}
-
-void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
-{
-    (void)now_tick;
-    (void)running;
 }
 
 uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_event_t *out_events,

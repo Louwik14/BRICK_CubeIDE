@@ -26,7 +26,6 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                       uint32_t step_tick,
                                       uint64_t step_sample_time,
                                       uint32_t samples_per_step_q16);
-void seq_play_scheduler_service(uint32_t now_tick, uint8_t running);
 uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_event_t *out_events,
                                                        uint16_t max_events,
                                                        uint16_t block_frames,
