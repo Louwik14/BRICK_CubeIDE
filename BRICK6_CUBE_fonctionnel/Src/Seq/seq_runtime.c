@@ -304,8 +304,11 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
-    g_seq_runtime.audio_block_start_sample = 0U;
-    g_seq_runtime.audio_timeline_sample = 0U;
+    /*
+     * Keep audio_timeline_sample monotonic across STOP/START cycles:
+     * audio scheduling authority stays the absolute block timeline, while
+     * step_sample_q16 is re-anchored explicitly at RUN entry.
+     */
     g_seq_runtime.step_sample_q16 = 0U;
     seq_play_scheduler_clear();
 
@@ -441,8 +444,10 @@ void seq_runtime_start(void)
     seq_play_scheduler_clear();
     seq_output_guard_reset();
     seq_live_rec_capture_reset();
-    g_seq_runtime.audio_block_start_sample = 0U;
-    g_seq_runtime.audio_timeline_sample = 0U;
+    /*
+     * Do not rewind audio_timeline_sample here (audio IRQ keeps advancing it
+     * continuously). START will rebase step_sample_q16 in begin_running_now().
+     */
     g_seq_runtime.step_sample_q16 = 0U;
     seq_runtime_update_samples_per_step_from_tempo();
 
