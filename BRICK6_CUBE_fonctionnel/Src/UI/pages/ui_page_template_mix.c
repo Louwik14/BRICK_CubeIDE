@@ -16,7 +16,7 @@ static const ui_template_family_t g_ui_template_mix_family = {
         },
         {
             .title = "REVB",
-            .param_bank = { .params = { PARAM_MIX_REVERB_SURR, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_MIX_REVERB_TYPE, PARAM_MIX_REVERB_SURR, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
