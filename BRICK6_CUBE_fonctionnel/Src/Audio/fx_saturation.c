@@ -24,6 +24,57 @@
 #define FX_SAT_MIN_K 1.0f
 #define FX_SAT_K_MAX 25.0f
 #define FX_DECIMATOR_BITS_MAX 15U
+#define FX_RATE2_FREQ_MIN 0.0f
+#define FX_RATE2_FREQ_MAX 1.0f
+
+static inline float fx_clampf(float v, float lo, float hi)
+{
+    if(v < lo)
+    {
+        return lo;
+    }
+    if(v > hi)
+    {
+        return hi;
+    }
+    return v;
+}
+
+static inline float fx_rate2_this_blep(float t)
+{
+    return (2.0f * t) - (t * t) - 1.0f;
+}
+
+static inline float fx_rate2_next_blep(float t)
+{
+    return t * t;
+}
+
+static inline float fx_saturation_rate2_process_sample(float in,
+                                                       float frequency,
+                                                       float *phase,
+                                                       float *sample,
+                                                       float *next_sample,
+                                                       float *previous_sample)
+{
+    float this_sample = *next_sample;
+    *next_sample = 0.0f;
+    *phase += frequency;
+    if(*phase >= 1.0f)
+    {
+        *phase -= 1.0f;
+        const float t = (frequency > 0.0f) ? (*phase / frequency) : 0.0f;
+        const float new_sample = *previous_sample + (in - *previous_sample) * (1.0f - t);
+        const float discontinuity = new_sample - *sample;
+        this_sample += discontinuity * fx_rate2_this_blep(t);
+        *next_sample = discontinuity * fx_rate2_next_blep(t);
+        *sample = new_sample;
+    }
+    *next_sample += *sample;
+    *previous_sample = in;
+
+    return this_sample;
+}
 
 static void fx_saturation_update_bypass(fx_saturation_t *fx)
 {
@@ -32,7 +83,7 @@ static void fx_saturation_update_bypass(fx_saturation_t *fx)
         return;
     }
 
-    fx->bypass = ((fx->pre_gain <= 1.0f) && (fx->decimator_enabled == 0U)) ? 1U : 0U;
+    fx->bypass = ((fx->pre_gain <= 1.0f) && (fx->decimator_enabled == 0U) && (fx->decimator_rate2_enabled == 0U)) ? 1U : 0U;
 }
 
 /**
@@ -112,6 +163,16 @@ void fx_saturation_init(fx_saturation_t *fx)
     fx->decimator_downsampled_l = 0.0f;
     fx->decimator_downsampled_r = 0.0f;
     fx->decimator_enabled = 0U;
+    fx->decimator_rate2_enabled = 0U;
+    fx->decimator_rate2_frequency = 0.0f;
+    fx->decimator_rate2_phase_l = 0.0f;
+    fx->decimator_rate2_sample_l = 0.0f;
+    fx->decimator_rate2_next_sample_l = 0.0f;
+    fx->decimator_rate2_previous_sample_l = 0.0f;
+    fx->decimator_rate2_phase_r = 0.0f;
+    fx->decimator_rate2_sample_r = 0.0f;
+    fx->decimator_rate2_next_sample_r = 0.0f;
+    fx->decimator_rate2_previous_sample_r = 0.0f;
     fx->bypass = 1U;
 }
 
@@ -199,6 +260,19 @@ void fx_saturation_set_decimator_rate_ui(fx_saturation_t *fx, uint8_t rate_0_127
     fx->decimator_rate = (float)rate_0_127 * (1.0f / 127.0f);
     fx->decimator_threshold = (uint8_t)((fx->decimator_rate * fx->decimator_rate) * 96.0f);
     fx->decimator_enabled = ((fx->decimator_bits_to_crush > 0U) || (fx->decimator_threshold > 0U)) ? 1U : 0U;
+    fx_saturation_update_bypass(fx);
+}
+
+void fx_saturation_set_decimator_rate2_ui(fx_saturation_t *fx, uint8_t rate_0_127)
+{
+    if(fx == 0)
+    {
+        return;
+    }
+
+    const float norm = (float)rate_0_127 * (1.0f / 127.0f);
+    fx->decimator_rate2_frequency = fx_clampf(norm * norm, FX_RATE2_FREQ_MIN, FX_RATE2_FREQ_MAX);
+    fx->decimator_rate2_enabled = (rate_0_127 > 0U) ? 1U : 0U;
     fx_saturation_update_bypass(fx);
 }
 
@@ -302,6 +376,16 @@ void fx_saturation_process_block(fx_saturation_t *fx,
     const uint8_t decimator_threshold = fx->decimator_threshold;
     const uint8_t decimator_bits = fx->decimator_bits_to_crush;
     const uint8_t decimator_enabled = fx->decimator_enabled;
+    const uint8_t decimator_rate2_enabled = fx->decimator_rate2_enabled;
+    const float decimator_rate2_frequency = fx->decimator_rate2_frequency;
+    float decimator_rate2_phase_l = fx->decimator_rate2_phase_l;
+    float decimator_rate2_sample_l = fx->decimator_rate2_sample_l;
+    float decimator_rate2_next_sample_l = fx->decimator_rate2_next_sample_l;
+    float decimator_rate2_previous_sample_l = fx->decimator_rate2_previous_sample_l;
+    float decimator_rate2_phase_r = fx->decimator_rate2_phase_r;
+    float decimator_rate2_sample_r = fx->decimator_rate2_sample_r;
+    float decimator_rate2_next_sample_r = fx->decimator_rate2_next_sample_r;
+    float decimator_rate2_previous_sample_r = fx->decimator_rate2_previous_sample_r;
 
     float *l = inout_l;
     float *r = inout_r;
@@ -384,6 +468,22 @@ void fx_saturation_process_block(fx_saturation_t *fx,
             yr = (float)yr_i / 65536.0f;
         }
 
+        if (decimator_rate2_enabled != 0U)
+        {
+            yl = fx_saturation_rate2_process_sample(yl,
+                                                    decimator_rate2_frequency,
+                                                    &decimator_rate2_phase_l,
+                                                    &decimator_rate2_sample_l,
+                                                    &decimator_rate2_next_sample_l,
+                                                    &decimator_rate2_previous_sample_l);
+            yr = fx_saturation_rate2_process_sample(yr,
+                                                    decimator_rate2_frequency,
+                                                    &decimator_rate2_phase_r,
+                                                    &decimator_rate2_sample_r,
+                                                    &decimator_rate2_next_sample_r,
+                                                    &decimator_rate2_previous_sample_r);
+        }
+
         l[n] = yl;
         r[n] = yr;
     }
@@ -394,4 +494,12 @@ void fx_saturation_process_block(fx_saturation_t *fx,
     fx->decimator_inc_r = decimator_inc_r;
     fx->decimator_downsampled_l = decimator_downsampled_l;
     fx->decimator_downsampled_r = decimator_downsampled_r;
+    fx->decimator_rate2_phase_l = decimator_rate2_phase_l;
+    fx->decimator_rate2_sample_l = decimator_rate2_sample_l;
+    fx->decimator_rate2_next_sample_l = decimator_rate2_next_sample_l;
+    fx->decimator_rate2_previous_sample_l = decimator_rate2_previous_sample_l;
+    fx->decimator_rate2_phase_r = decimator_rate2_phase_r;
+    fx->decimator_rate2_sample_r = decimator_rate2_sample_r;
+    fx->decimator_rate2_next_sample_r = decimator_rate2_next_sample_r;
+    fx->decimator_rate2_previous_sample_r = decimator_rate2_previous_sample_r;
 }

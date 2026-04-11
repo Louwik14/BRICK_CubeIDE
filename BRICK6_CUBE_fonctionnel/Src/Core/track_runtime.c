@@ -541,6 +541,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FILTER_DRIVE:
         case PARAM_FILTER_DECIMATOR_BITS:
         case PARAM_FILTER_DECIMATOR_RATE:
+        case PARAM_FILTER_DECIMATOR_RATE2:
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
