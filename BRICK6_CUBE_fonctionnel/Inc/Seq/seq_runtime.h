@@ -31,6 +31,10 @@ typedef struct
     uint16_t ticks_per_step;
     uint8_t ext_clock_tick_accum;
     uint8_t reserved;
+    uint64_t step_sample_q16;
+    uint32_t samples_per_step_q16;
+    uint64_t audio_block_start_sample;
+    uint64_t audio_timeline_sample;
     seq_runtime_active_lock_t active_locks[SEQ_TRACK_COUNT][SEQ_STEP_MAX_LOCKS];
 } seq_runtime_state_t;
 
