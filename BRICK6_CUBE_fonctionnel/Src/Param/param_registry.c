@@ -312,6 +312,7 @@ static void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 
 static void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
+static void apply_mix_reverb_type(float v) { mixer_set_reverb_type((uint8_t)clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_vca_attack(float v) { apply_mix_live_track(PARAM_VCA_ATTACK, v); }
 static void apply_vca_decay(float v) { apply_mix_live_track(PARAM_VCA_DECAY, v); }
@@ -2075,6 +2076,7 @@ static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison",
 static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
+static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
 static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
 static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
 static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
@@ -2425,6 +2427,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_REVERB_SIZE, "Size", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_size),
     PARAM_DESC_EX(PARAM_MIX_REVERB_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.2f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_decay),
     PARAM_DESC_EX(PARAM_MIX_REVERB_PRED, "PreD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_pred),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_type_labels, apply_mix_reverb_type),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SURR, "Surr", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_surr),
 };
 
