@@ -15,7 +15,6 @@
 #define TRACK_RUNTIME_TB3_MAX_INSTANCES 1U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
-static const uint8_t g_track_to_mix_track[] = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
 volatile uint32_t g_track_runtime_tb3_bind_seen = 0U;
 volatile uint32_t g_track_runtime_tb3_bind_track = 0U;
 volatile uint32_t g_track_runtime_tb3_bind_instance = 0U;
@@ -117,6 +116,72 @@ static uint8_t track_runtime_type_is_drum_model(track_runtime_type_t type)
         default:
             return 0U;
     }
+}
+
+static uint8_t track_runtime_input_family_mix_track(track_runtime_family_t family,
+                                                    ui_track_family_t ui_family,
+                                                    uint8_t *out_mix_track)
+{
+    if ((out_mix_track == NULL) || (family != TRACK_RUNTIME_FAMILY_INPUT))
+    {
+        return 0U;
+    }
+
+    switch (ui_family)
+    {
+        case UI_TRACK_FAMILY_INPUT1:
+            *out_mix_track = 0U;
+            return 1U;
+        case UI_TRACK_FAMILY_INPUT2:
+            *out_mix_track = 1U;
+            return 1U;
+        case UI_TRACK_FAMILY_INPUT3:
+            *out_mix_track = 2U;
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t track_runtime_mix_mark_used(uint8_t mix_track, uint8_t *used, uint8_t used_len)
+{
+    if ((used == NULL) || (mix_track >= used_len))
+    {
+        return 0U;
+    }
+    used[mix_track] = 1U;
+    return 1U;
+}
+
+static uint8_t track_runtime_mix_reserve_track(track_runtime_ctx_t *ctx,
+                                               uint8_t preferred_mix_track,
+                                               uint8_t *used,
+                                               uint8_t used_len)
+{
+    if ((ctx == NULL) || (used == NULL) || (used_len == 0U))
+    {
+        return 0U;
+    }
+
+    if ((preferred_mix_track < used_len) && (used[preferred_mix_track] == 0U))
+    {
+        ctx->mix_track_id = preferred_mix_track;
+        used[preferred_mix_track] = 1U;
+        return 1U;
+    }
+
+    for (uint8_t i = 0U; i < used_len; ++i)
+    {
+        if (used[i] == 0U)
+        {
+            ctx->mix_track_id = i;
+            used[i] = 1U;
+            return 1U;
+        }
+    }
+
+    ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
+    return 0U;
 }
 
 static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
@@ -325,6 +390,9 @@ void track_runtime_invalidate_all(void)
 void track_runtime_refresh_all(void)
 {
     track_runtime_allocator_state_t allocator = { 0U, 0U };
+    uint8_t mix_track_used[MIXER_MAX_TRACKS];
+
+    memset(mix_track_used, 0, sizeof(mix_track_used));
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -344,9 +412,28 @@ void track_runtime_refresh_all(void)
         ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
         ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
         ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
-        if (track < (uint8_t)(sizeof(g_track_to_mix_track) / sizeof(g_track_to_mix_track[0])))
+
+        uint8_t input_mix_track = TRACK_RUNTIME_MIX_TRACK_NONE;
+        if (track_runtime_input_family_mix_track(family, ui_family, &input_mix_track) != 0U)
         {
-            ctx->mix_track_id = g_track_to_mix_track[track];
+            if (track_runtime_mix_mark_used(input_mix_track,
+                                            mix_track_used,
+                                            (uint8_t)sizeof(mix_track_used)) != 0U)
+            {
+                ctx->mix_track_id = input_mix_track;
+            }
+        }
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        if (ctx->mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE)
+        {
+            (void)track_runtime_mix_reserve_track(ctx,
+                                                  track,
+                                                  mix_track_used,
+                                                  (uint8_t)sizeof(mix_track_used));
         }
 
         track_runtime_bind_ctx(ctx, &allocator);
