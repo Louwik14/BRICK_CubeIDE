@@ -29,6 +29,8 @@
 #include "main.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
+#define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
+#define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 
 #ifndef SEQ_DEBUG_TRACK_BINDING
 #define SEQ_DEBUG_TRACK_BINDING 0
@@ -71,6 +73,8 @@ static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
 static uint32_t seq_runtime_enter_critical(void);
 static void seq_runtime_exit_critical(uint32_t primask);
+static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli);
+static void seq_runtime_update_samples_per_step_from_tempo(void);
 
 static void seq_runtime_send_transport_start(void)
 {
@@ -159,6 +163,7 @@ static void seq_runtime_begin_running_now(void)
             (uint16_t)((g_seq_clock_bridge.internal_next_step_ticks == 0U)
                            ? 1U
                            : g_seq_clock_bridge.internal_next_step_ticks);
+    g_seq_runtime.step_sample_q16 = (uint64_t)g_seq_runtime.audio_timeline_sample << 16;
 
     /*
      * Force deterministic initial boundary at RUN entry.
@@ -274,7 +279,9 @@ static void seq_runtime_process_step_boundaries(void)
         seq_play_scheduler_schedule_step(hits[i].track,
                                          hits[i].step,
                                          g_seq_runtime.ticks_per_step,
-                                         seq_runtime_get_now_tick());
+                                         seq_runtime_get_now_tick(),
+                                         (g_seq_runtime.step_sample_q16 >> 16),
+                                         g_seq_runtime.samples_per_step_q16);
     }
 }
 
@@ -297,6 +304,9 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     g_seq_runtime.running = 0U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
+    g_seq_runtime.audio_block_start_sample = 0U;
+    g_seq_runtime.audio_timeline_sample = 0U;
+    g_seq_runtime.step_sample_q16 = 0U;
     seq_play_scheduler_clear();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -341,7 +351,36 @@ static void seq_runtime_process_step_pulse(uint32_t now)
         seq_runtime_pattern_rec_on_step_advanced();
     }
 
+    g_seq_runtime.step_sample_q16 += (uint64_t)g_seq_runtime.samples_per_step_q16;
     seq_runtime_process_step_boundaries();
+}
+
+static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli)
+{
+    if (bpm_milli == 0U)
+    {
+        bpm_milli = SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI;
+    }
+
+    const uint64_t num = ((uint64_t)SEQ_RUNTIME_AUDIO_SAMPLE_RATE * 60ULL * 1000ULL) << 16;
+    const uint64_t den = (uint64_t)bpm_milli * (uint64_t)SEQ_RUNTIME_STEPS_PER_QUARTER;
+    uint32_t q16 = (uint32_t)(num / den);
+    if (q16 == 0U)
+    {
+        q16 = 1U;
+    }
+    return q16;
+}
+
+static void seq_runtime_update_samples_per_step_from_tempo(void)
+{
+    uint32_t bpm_milli = seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge);
+    if ((seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) != 0U)
+        && (seq_clock_bridge_is_external_tempo_valid(&g_seq_clock_bridge) != 0U))
+    {
+        bpm_milli = seq_clock_bridge_get_external_tempo_bpm_milli(&g_seq_clock_bridge);
+    }
+    g_seq_runtime.samples_per_step_q16 = seq_runtime_compute_samples_per_step_q16(bpm_milli);
 }
 
 void seq_runtime_init(void)
@@ -369,6 +408,10 @@ void seq_runtime_init(void)
     seq_clock_bridge_init(&g_seq_clock_bridge,
                           &g_seq_runtime,
                           SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI);
+    g_seq_runtime.audio_block_start_sample = 0U;
+    g_seq_runtime.audio_timeline_sample = 0U;
+    g_seq_runtime.step_sample_q16 = 0U;
+    seq_runtime_update_samples_per_step_from_tempo();
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
 
@@ -398,6 +441,10 @@ void seq_runtime_start(void)
     seq_play_scheduler_clear();
     seq_output_guard_reset();
     seq_live_rec_capture_reset();
+    g_seq_runtime.audio_block_start_sample = 0U;
+    g_seq_runtime.audio_timeline_sample = 0U;
+    g_seq_runtime.step_sample_q16 = 0U;
+    seq_runtime_update_samples_per_step_from_tempo();
 
     if (seq_transport_fsm_request_start(&g_seq_transport_fsm,
                                         g_seq_rec_armed,
@@ -556,15 +603,16 @@ uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_e
     }
 
     uint16_t total = 0U;
-    uint8_t first_chunk = 1U;
+    const uint64_t block_start_sample = g_seq_runtime.audio_timeline_sample;
+    g_seq_runtime.audio_block_start_sample = block_start_sample;
+    g_seq_runtime.audio_timeline_sample = block_start_sample + (uint64_t)block_frames;
     while (total < max_events)
     {
         const uint16_t request = (uint16_t)(((max_events - total) > 16U) ? 16U : (max_events - total));
         const uint16_t count = seq_play_scheduler_audio_collect_block_events(scheduler_events,
                                                                              request,
                                                                              block_frames,
-                                                                             first_chunk != 0U ? seq_runtime_get_now_tick() : 0U);
-        first_chunk = 0U;
+                                                                             block_start_sample);
         if (count == 0U)
         {
             break;
@@ -622,6 +670,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     g_seq_midi_clock_tick_accum = 0U;
     seq_transport_fsm_on_clock_source_change(&g_seq_transport_fsm);
     seq_play_scheduler_clear();
+    seq_runtime_update_samples_per_step_from_tempo();
 
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
@@ -669,6 +718,7 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
         return;
     }
 
+    seq_runtime_update_samples_per_step_from_tempo();
     seq_runtime_process_step_pulse(now);
     seq_runtime_dispatch_due_events(now);
 }
@@ -954,6 +1004,7 @@ uint32_t seq_runtime_get_tempo_bpm_milli(void)
 void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli)
 {
     seq_clock_bridge_set_internal_tempo(&g_seq_clock_bridge, &g_seq_runtime, bpm_milli);
+    seq_runtime_update_samples_per_step_from_tempo();
     if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) == 0U)
     {
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
