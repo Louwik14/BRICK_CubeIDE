@@ -9,6 +9,8 @@
 #include "Seq/seq_play_scheduler.h"
 
 #include <stdint.h>
+#include <string.h>
+#include "stm32h7xx_hal.h"
 
 #include "Core/track_runtime.h"
 #include "Audio/microdexed_synth.h"
@@ -27,6 +29,7 @@
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 64U
+#define SEQ_PLAY_AUDIO_EVENT_CAP 128U
 
 typedef enum
 {
@@ -45,6 +48,92 @@ typedef struct
 
 static seq_play_scheduler_evt_t g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP];
 static uint8_t g_seq_play_event_count;
+
+typedef struct
+{
+    uint8_t type;
+    uint8_t track;
+    uint8_t note;
+    uint8_t velocity;
+    uint16_t sample_offset_in_block;
+} seq_play_audio_evt_t;
+
+static seq_play_audio_evt_t g_seq_play_audio_events[SEQ_PLAY_AUDIO_EVENT_CAP];
+static uint16_t g_seq_play_audio_event_head;
+static uint16_t g_seq_play_audio_event_tail;
+static uint16_t g_seq_play_audio_event_count;
+
+static uint32_t seq_play_scheduler_enter_critical(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+static void seq_play_scheduler_exit_critical(uint32_t primask)
+{
+    if (primask == 0U)
+    {
+        __enable_irq();
+    }
+}
+
+static void seq_play_scheduler_audio_queue_clear(void)
+{
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    g_seq_play_audio_event_head = 0U;
+    g_seq_play_audio_event_tail = 0U;
+    g_seq_play_audio_event_count = 0U;
+    (void)memset(g_seq_play_audio_events, 0, sizeof(g_seq_play_audio_events));
+    seq_play_scheduler_exit_critical(primask);
+}
+
+static uint8_t seq_play_scheduler_audio_queue_push(uint8_t type,
+                                                   seq_track_id_t track,
+                                                   uint8_t note,
+                                                   uint8_t velocity,
+                                                   uint16_t sample_offset_in_block)
+{
+    uint8_t pushed = 0U;
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    if (g_seq_play_audio_event_count < SEQ_PLAY_AUDIO_EVENT_CAP)
+    {
+        seq_play_audio_evt_t *const evt = &g_seq_play_audio_events[g_seq_play_audio_event_head];
+        evt->type = type;
+        evt->track = track;
+        evt->note = note;
+        evt->velocity = velocity;
+        evt->sample_offset_in_block = sample_offset_in_block;
+
+        g_seq_play_audio_event_head = (uint16_t)((g_seq_play_audio_event_head + 1U) % SEQ_PLAY_AUDIO_EVENT_CAP);
+        g_seq_play_audio_event_count++;
+        pushed = 1U;
+    }
+    seq_play_scheduler_exit_critical(primask);
+
+    return pushed;
+}
+
+static uint8_t seq_play_scheduler_audio_queue_pop(seq_play_audio_evt_t *out_evt)
+{
+    if (out_evt == NULL)
+    {
+        return 0U;
+    }
+
+    uint8_t popped = 0U;
+    const uint32_t primask = seq_play_scheduler_enter_critical();
+    if (g_seq_play_audio_event_count > 0U)
+    {
+        *out_evt = g_seq_play_audio_events[g_seq_play_audio_event_tail];
+        g_seq_play_audio_event_tail = (uint16_t)((g_seq_play_audio_event_tail + 1U) % SEQ_PLAY_AUDIO_EVENT_CAP);
+        g_seq_play_audio_event_count--;
+        popped = 1U;
+    }
+    seq_play_scheduler_exit_critical(primask);
+
+    return popped;
+}
 
 static void seq_play_scheduler_push(uint32_t due_tick,
                                     uint8_t type,
@@ -224,11 +313,13 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
 void seq_play_scheduler_init(void)
 {
     g_seq_play_event_count = 0U;
+    seq_play_scheduler_audio_queue_clear();
 }
 
 void seq_play_scheduler_clear(void)
 {
     g_seq_play_event_count = 0U;
+    seq_play_scheduler_audio_queue_clear();
 }
 
 void seq_play_scheduler_schedule_step(seq_track_id_t track,
@@ -394,18 +485,30 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
             {
                 midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
                 seq_output_guard_note_off_seen(evt->track, evt->note);
-                seq_play_scheduler_emit_engine_note(evt->track, evt->note, 0U, 0U);
+                (void)seq_play_scheduler_audio_queue_push((uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+                                                          evt->track,
+                                                          evt->note,
+                                                          0U,
+                                                          0U);
             }
 
             midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
             seq_output_guard_note_on_seen(evt->track, evt->note);
-            seq_play_scheduler_emit_engine_note(evt->track, evt->note, evt->velocity, 1U);
+            (void)seq_play_scheduler_audio_queue_push((uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
+                                                      evt->track,
+                                                      evt->note,
+                                                      evt->velocity,
+                                                      0U);
         }
         else if (emit_note_off != 0U)
         {
             midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
             seq_output_guard_note_off_seen(evt->track, evt->note);
-            seq_play_scheduler_emit_engine_note(evt->track, evt->note, 0U, 0U);
+            (void)seq_play_scheduler_audio_queue_push((uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+                                                      evt->track,
+                                                      evt->note,
+                                                      0U,
+                                                      0U);
         }
         else
         {
@@ -417,5 +520,18 @@ void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
             g_seq_play_events[j - 1U] = g_seq_play_events[j];
         }
         g_seq_play_event_count--;
+    }
+}
+
+void seq_play_scheduler_audio_consume_block_start(void)
+{
+    seq_play_audio_evt_t evt;
+    while (seq_play_scheduler_audio_queue_pop(&evt) != 0U)
+    {
+        const uint8_t is_note_on = (evt.type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
+        seq_play_scheduler_emit_engine_note((seq_track_id_t)evt.track,
+                                            evt.note,
+                                            evt.velocity,
+                                            is_note_on);
     }
 }

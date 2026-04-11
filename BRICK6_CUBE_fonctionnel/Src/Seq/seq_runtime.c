@@ -545,6 +545,11 @@ void seq_runtime_time_adapter_process_internal_from_irq(void)
     }
 }
 
+void seq_runtime_audio_block_start(void)
+{
+    seq_play_scheduler_audio_consume_block_start();
+}
+
 void seq_runtime_set_clock_source(seq_clock_src_t src)
 {
     const uint32_t primask = seq_runtime_enter_critical();

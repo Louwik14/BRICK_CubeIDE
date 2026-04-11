@@ -49,6 +49,7 @@ typedef enum
 void seq_runtime_init(void);
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 void seq_runtime_time_adapter_process(void);
+void seq_runtime_audio_block_start(void);
 const seq_runtime_state_t *seq_runtime_get_state(void);
 
 void seq_runtime_start(void);
