@@ -123,29 +123,6 @@ static param_id_t seq_play_scheduler_param_mictim(uint8_t voice)
     return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
 }
 
-static uint8_t seq_play_scheduler_has_note_off_due_at(uint32_t due_tick,
-                                                      uint64_t due_sample_time,
-                                                      seq_track_id_t track,
-                                                      uint8_t note)
-{
-    for (uint8_t i = 0U; i < g_seq_play_event_count; ++i)
-    {
-        const seq_play_scheduler_evt_t *const evt = &g_seq_play_events[i];
-        if ((evt->type != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
-            || (evt->due_tick != due_tick)
-            || (evt->due_sample_time != due_sample_time)
-            || (evt->note != note)
-            || (evt->track != track))
-        {
-            continue;
-        }
-
-        return 1U;
-    }
-
-    return 0U;
-}
-
 static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
                                                 uint8_t note,
                                                 uint8_t velocity,
@@ -227,6 +204,34 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             drum_synth_note_off_for_instance(ctx->instance_id, note);
         }
     }
+}
+
+static void seq_play_scheduler_emit_midi_note(const seq_play_scheduler_audio_event_t *event)
+{
+    if (event == NULL)
+    {
+        return;
+    }
+
+    const uint8_t channel_1_16 = ui_get_track_midi_channel(event->track);
+    const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+    const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
+
+    if (is_note_on != 0U)
+    {
+        if (seq_output_guard_is_note_active_on_track(event->track, event->note) != 0U)
+        {
+            midi_note_off(MIDI_DEST_BOTH, channel, event->note, 0U);
+            seq_output_guard_note_off_seen(event->track, event->note);
+        }
+
+        midi_note_on(MIDI_DEST_BOTH, channel, event->note, event->velocity);
+        seq_output_guard_note_on_seen(event->track, event->note);
+        return;
+    }
+
+    midi_note_off(MIDI_DEST_BOTH, channel, event->note, 0U);
+    seq_output_guard_note_off_seen(event->track, event->note);
 }
 
 static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t track,
@@ -380,88 +385,8 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
 
 void seq_play_scheduler_service(uint32_t now_tick, uint8_t running)
 {
-    while (g_seq_play_event_count > 0U)
-    {
-        uint8_t selected_index = 0xFFU;
-        uint32_t selected_due_tick = 0U;
-
-        for (uint8_t i = 0U; i < g_seq_play_event_count; ++i)
-        {
-            const seq_play_scheduler_evt_t *const candidate = &g_seq_play_events[i];
-            if ((int32_t)(now_tick - candidate->due_tick) < 0)
-            {
-                continue;
-            }
-            if (candidate->midi_dispatched != 0U)
-            {
-                continue;
-            }
-
-            if (selected_index == 0xFFU)
-            {
-                selected_index = i;
-                selected_due_tick = candidate->due_tick;
-                continue;
-            }
-
-            const seq_play_scheduler_evt_t *const selected = &g_seq_play_events[selected_index];
-            if (candidate->due_tick < selected_due_tick)
-            {
-                selected_index = i;
-                selected_due_tick = candidate->due_tick;
-                continue;
-            }
-
-            if ((candidate->due_tick == selected_due_tick)
-                && (candidate->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
-                && (selected->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON))
-            {
-                selected_index = i;
-            }
-        }
-
-        if (selected_index == 0xFFU)
-        {
-            break;
-        }
-
-        seq_play_scheduler_evt_t *const evt = &g_seq_play_events[selected_index];
-        const uint8_t channel_1_16 = ui_get_track_midi_channel(evt->track);
-        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
-        const uint8_t emit_note_on = ((evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) && (running != 0U)) ? 1U : 0U;
-        const uint8_t emit_note_off = (evt->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF) ? 1U : 0U;
-
-        if (emit_note_on != 0U)
-        {
-            /*
-             * Retrigger correctness for long notes across pattern wrap:
-             * if this track still owns the same note at NOTE_ON time, force
-             * a NOTE_OFF first (unless one is already due at this exact tick).
-             */
-            if ((seq_output_guard_is_note_active_on_track(evt->track, evt->note) != 0U)
-                && (seq_play_scheduler_has_note_off_due_at(evt->due_tick,
-                                                           evt->due_sample_time,
-                                                           evt->track,
-                                                           evt->note) == 0U))
-            {
-                midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
-                seq_output_guard_note_off_seen(evt->track, evt->note);
-            }
-
-            midi_note_on(MIDI_DEST_BOTH, channel, evt->note, evt->velocity);
-            seq_output_guard_note_on_seen(evt->track, evt->note);
-        }
-        else if (emit_note_off != 0U)
-        {
-            midi_note_off(MIDI_DEST_BOTH, channel, evt->note, 0U);
-            seq_output_guard_note_off_seen(evt->track, evt->note);
-        }
-        else
-        {
-            /* STOP guard: drop NOTE ON when transport is stopped. */
-        }
-        evt->midi_dispatched = 1U;
-    }
+    (void)now_tick;
+    (void)running;
 }
 
 uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_event_t *out_events,
@@ -531,6 +456,7 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
         out_events[count++] = out_evt;
 
         g_seq_play_events[selected_index].audio_dispatched = 1U;
+        g_seq_play_events[selected_index].midi_dispatched = 1U;
     }
 
     uint8_t write = 0U;
@@ -561,6 +487,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
     }
 
     const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
+    seq_play_scheduler_emit_midi_note(event);
     seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
                                         event->note,
                                         event->velocity,
