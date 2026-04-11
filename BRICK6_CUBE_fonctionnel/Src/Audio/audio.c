@@ -48,6 +48,7 @@
 
 /* Taille totale des buffers DMA (en int32) */
 #define AUDIO_BUFFER_WORDS       (AUDIO_FRAMES_TOTAL * AUDIO_WORDS_PER_FRAME)
+#define AUDIO_SEQ_MAX_BLOCK_EVENTS 32U
 
 /* ============================================================
    DMA BUFFERS
@@ -115,11 +116,44 @@ static void process_half(uint32_t half_index)
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traité. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
 
-    /* Boundary déterministe audio: appliquer les événements séquenceur dus au début du bloc. */
-    seq_runtime_audio_block_start();
+    seq_runtime_audio_event_t block_events[AUDIO_SEQ_MAX_BLOCK_EVENTS];
+    const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
+                                                                        AUDIO_SEQ_MAX_BLOCK_EVENTS,
+                                                                        AUDIO_FRAMES_PER_HALF);
 
-    /* Frontière moteur float (un bloc fixe par IRQ). */
-    audio_process_block_int32(rx, tx, AUDIO_FRAMES_PER_HALF);
+    uint32_t cursor = 0U;
+    uint16_t event_index = 0U;
+    while (event_index < event_count)
+    {
+        uint16_t event_offset = block_events[event_index].sample_offset_in_block;
+        if (event_offset > AUDIO_FRAMES_PER_HALF)
+        {
+            event_offset = AUDIO_FRAMES_PER_HALF;
+        }
+
+        if ((uint32_t)event_offset > cursor)
+        {
+            const uint32_t segment_frames = (uint32_t)event_offset - cursor;
+            audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                      segment_frames);
+            cursor = (uint32_t)event_offset;
+        }
+
+        while ((event_index < event_count)
+               && (block_events[event_index].sample_offset_in_block == event_offset))
+        {
+            seq_runtime_audio_apply_event(&block_events[event_index]);
+            event_index++;
+        }
+    }
+
+    if (cursor < AUDIO_FRAMES_PER_HALF)
+    {
+        audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  AUDIO_FRAMES_PER_HALF - cursor);
+    }
 
     /* CPU -> TX DMA: clean après écriture CPU et avant lecture DMA. */
     dcache_clean_by_addr_aligned(tx, half_bytes);
