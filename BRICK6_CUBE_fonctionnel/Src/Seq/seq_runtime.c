@@ -80,7 +80,6 @@ SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
 static void seq_runtime_pattern_rec_start_now(void);
 static void seq_runtime_process_step_boundaries(void);
-static void seq_runtime_dispatch_due_events(uint32_t now);
 static void seq_runtime_live_rec_flush_and_reset(void);
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
@@ -313,11 +312,6 @@ static void seq_runtime_process_step_boundaries(void)
                                          (g_seq_runtime.step_sample_q16 >> 16),
                                          g_seq_runtime.samples_per_step_q16);
     }
-}
-
-static void seq_runtime_dispatch_due_events(uint32_t now)
-{
-    seq_play_scheduler_service(now, g_seq_runtime.running);
 }
 
 static void seq_runtime_live_rec_flush_and_reset(void)
@@ -588,7 +582,6 @@ static void seq_runtime_process_core(void)
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
     {
         g_seq_runtime.last_tick_count = now_tick;
-        seq_runtime_dispatch_due_events(now_tick);
         return;
     }
 
@@ -621,7 +614,6 @@ static void seq_runtime_process_core(void)
     if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) != 0U)
     {
         seq_runtime_process_step_boundaries();
-        seq_runtime_dispatch_due_events(now_tick);
         return;
     }
 
@@ -646,7 +638,6 @@ static void seq_runtime_process_core(void)
         seq_runtime_process_step_pulse(current_tick);
     }
 
-    seq_runtime_dispatch_due_events(now_tick);
 }
 
 void seq_runtime_time_adapter_process(void)
@@ -822,7 +813,6 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
 
     seq_runtime_update_samples_per_step_from_tempo();
     seq_runtime_process_step_pulse(now);
-    seq_runtime_dispatch_due_events(now);
 }
 
 void seq_runtime_midi_start(void)
