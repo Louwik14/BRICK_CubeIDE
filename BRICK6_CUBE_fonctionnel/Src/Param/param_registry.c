@@ -890,6 +890,23 @@ static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32
     return 1U;
 }
 
+static uint8_t resolve_filter_drive_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
+{
+    uint8_t track_id = 0U;
+    track_runtime_refresh_track(ui_track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(ui_track);
+    if ((out_track_id == NULL)
+            || (ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (track_runtime_get_mix_target_track(ui_track, &track_id) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_track_id = (uint32_t)track_id;
+    return 1U;
+}
+
 static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
 {
     if (target_track >= FILTER_TRACK_TARGET_COUNT)
@@ -903,12 +920,7 @@ static void apply_filter_drive_runtime(uint32_t target_track, float drive_ui)
 {
     const uint8_t drive_0_127 = (uint8_t)(clamp_value(drive_ui, 0.0f, 127.0f) + 0.5f);
     audio_float_set_saturation_drive_ui(drive_0_127);
-
-    for (uint32_t track = 0U; track < FILTER_TRACK_TARGET_COUNT; ++track)
-    {
-        const int8_t sat_slot = ((track == target_track) && (drive_0_127 > 0U)) ? 1 : -1;
-        mixer_set_track_insert_slot(track, 1U, sat_slot);
-    }
+    mixer_set_track_insert_slot(target_track, 1U, (drive_0_127 > 0U) ? 1 : -1);
 }
 
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
@@ -931,6 +943,22 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     filter_ui_state_t *state = NULL;
     switch (id)
     {
+        case PARAM_FILTER_DRIVE:
+            if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
+            {
+                SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_drive_target ui_active=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ui_get_active_track());
+                return 0U;
+            }
+            state = resolve_filter_ui_state(target_track);
+            if (state == NULL)
+            {
+                return 0U;
+            }
+            break;
+
         case PARAM_FILTER_TYPE:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
@@ -945,7 +973,6 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
-        case PARAM_FILTER_DRIVE:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
             {
                 SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_target ui_active=%u\r\n",
@@ -1063,6 +1090,22 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     filter_ui_state_t *state = NULL;
     switch (id)
     {
+        case PARAM_FILTER_DRIVE:
+            if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
+            {
+                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_drive_target ui_active=%u\r\n",
+                             (unsigned)track,
+                             (unsigned)id,
+                             (unsigned)ui_get_active_track());
+                return 0U;
+            }
+            state = resolve_filter_ui_state(target_track);
+            if (state == NULL)
+            {
+                return 0U;
+            }
+            break;
+
         case PARAM_FILTER_TYPE:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
@@ -1077,7 +1120,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
-        case PARAM_FILTER_DRIVE:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
             {
                 SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_target ui_active=%u\r\n",
@@ -1250,6 +1292,17 @@ void param_registry_sync_filter_ui_for_active_track(void)
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
+        const uint8_t active_track = ui_get_active_track();
+        if (!resolve_filter_drive_target_track_for_ui_track(active_track, &target_track))
+        {
+            return;
+        }
+
+        filter_ui_state_t *drive_state = resolve_filter_ui_state(target_track);
+        if (drive_state != NULL)
+        {
+            param_store_set_active(PARAM_FILTER_DRIVE, drive_state->drive);
+        }
         return;
     }
 
@@ -1563,7 +1616,7 @@ static void apply_filter_eq_high(float v)
 static void apply_filter_drive(float v)
 {
     uint32_t target_track = 0U;
-    if (!resolve_filter_target_track(&target_track))
+    if (!resolve_filter_drive_target_track_for_ui_track(ui_get_active_track(), &target_track))
     {
         return;
     }

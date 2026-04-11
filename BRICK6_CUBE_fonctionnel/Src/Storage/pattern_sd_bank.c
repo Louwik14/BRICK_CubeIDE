@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 
@@ -10,6 +11,7 @@
 #define PATTERN_PER_BANK   16U
 #define PATTERN_MAGIC      0x31544150UL /* PAT1 */
 #define PATTERN_VERSION    1U
+#define PATTERN_WRITE_CHUNK_BYTES (512U * 8U)
 
 typedef struct __attribute__((packed))
 {
@@ -24,6 +26,7 @@ static uint8_t g_slot_meta_cache_valid[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static uint32_t g_slot_checksum_cache[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static PatternSaveV1 g_boot_pattern;
 static uint8_t g_boot_pattern_valid;
+static DMA_BUFFER uint8_t g_pattern_write_chunk[PATTERN_WRITE_CHUNK_BYTES];
 
 static uint8_t pattern_sd_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
@@ -38,6 +41,7 @@ static uint8_t pattern_sd_read_valid_slot_header(uint8_t bank,
                                                  uint8_t pattern,
                                                  pattern_sd_slot_header_t *out_hdr,
                                                  uint8_t *out_missing);
+static uint8_t pattern_sd_write_payload_chunked(FIL *fp, const PatternSaveV1 *pattern_data);
 
 static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
 {
@@ -347,6 +351,40 @@ uint8_t pattern_sd_bank_store_slot_nosync(uint8_t bank, uint8_t pattern, const P
     return pattern_sd_bank_store_slot_internal(bank, pattern, pattern_data, 0U);
 }
 
+static uint8_t pattern_sd_write_payload_chunked(FIL *fp, const PatternSaveV1 *pattern_data)
+{
+    if ((fp == 0) || (pattern_data == 0))
+    {
+        return 0U;
+    }
+
+    const uint8_t *cursor = (const uint8_t *)pattern_data;
+    uint32_t remaining = sizeof(*pattern_data);
+
+    while (remaining != 0U)
+    {
+        const UINT chunk = (remaining > PATTERN_WRITE_CHUNK_BYTES)
+            ? (UINT)PATTERN_WRITE_CHUNK_BYTES
+            : (UINT)remaining;
+        UINT bw = 0U;
+
+        memcpy(g_pattern_write_chunk, cursor, chunk);
+
+        sd_access_trace_begin("pattern_f_write_payload");
+        const FRESULT fr = f_write(fp, g_pattern_write_chunk, chunk, &bw);
+        sd_access_trace_end("pattern_f_write_payload", (int)fr, 0U);
+        if ((fr != FR_OK) || (bw != chunk))
+        {
+            return 0U;
+        }
+
+        cursor += chunk;
+        remaining -= (uint32_t)chunk;
+    }
+
+    return 1U;
+}
+
 static uint8_t pattern_sd_bank_store_slot_internal(uint8_t bank,
                                                    uint8_t pattern,
                                                    const PatternSaveV1 *pattern_data,
@@ -397,10 +435,7 @@ static uint8_t pattern_sd_bank_store_slot_internal(uint8_t bank,
         goto done;
     }
 
-    sd_access_trace_begin("pattern_f_write");
-    const FRESULT fr_wp = f_write(&fp, pattern_data, sizeof(*pattern_data), &bw);
-    sd_access_trace_end("pattern_f_write", (int)fr_wp, 0U);
-    if ((fr_wp != FR_OK) || (bw != sizeof(*pattern_data)))
+    if (pattern_sd_write_payload_chunked(&fp, pattern_data) == 0U)
     {
         (void)f_close(&fp);
         goto done;

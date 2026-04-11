@@ -5,282 +5,161 @@
 Ce fichier guide Codex pour travailler efficacement dans ce repo.
 
 Objectif :
-- comprendre la logique structurante du projet
-- modifier proprement sans casser les invariants
-- brancher les nouvelles features au bon endroit
-- garder `AGENT.md` et `ARCHITECTURE_GLOBAL.md` à jour si la structure du projet évolue
+- comprendre vite les contraintes utiles
+- faire des passes locales, ciblées, vérifiables
+- éviter les refontes inutiles
+- ne pas casser le runtime audio
 
-Ce fichier n’est pas une doc complète d’architecture.
-La doc détaillée vit dans `ARCHITECTURE_GLOBAL.md`.
+Ce fichier n’est pas la doc produit complète.
+Pour le contexte global, lire aussi :
+- `readme.md`
 
 ---
 
-## 1. Philosophie de travail
+## 1. Lecture minimale obligatoire
+
+Lire d’abord :
+- `AGENT.md`
+- `readme.md`
+
+Puis lire uniquement les fichiers directement concernés par la passe.
+
+Si l’utilisateur a déjà donné :
+- une cause probable
+- une zone probable
+- un fichier probable
+- une ancienne cause déjà identifiée
+
+alors commencer par ça.
+Ne pas lancer une exploration large du repo tant que cette piste n’a pas été auditée.
+
+---
+
+## 2. Règles de travail
 
 - Étendre l’existant plutôt que redessiner.
-- Réutiliser un sous-système existant avant d’en créer un nouveau.
-- Garder les modifications locales quand c’est possible.
-- Éviter les doubles autorités sur un même état runtime.
-- Ne pas supposer que logique = physique : utiliser des remaps explicites.
+- Réutiliser avant de créer.
+- Garder les modifications locales.
+- Préserver le comportement existant hors zone corrigée.
+- Ne pas introduire de seconde autorité pour un état déjà piloté ailleurs.
+- Ne pas créer de chemin parallèle caché UI/runtime.
+- Pas d’allocation dynamique.
+- Pas de changement gratuit dans les zones sensibles audio/runtime.
 
 ---
 
-## 2. Invariant principal
+## 3. Invariants projet
 
-Le projet est **track-aware**.
+- Le projet est **track-aware**.
+- Toujours raisonner avec :
+  - track active
+  - family
+  - type
+  - runtime associé
+- Ne pas ajouter une logique “globale” si elle dépend en réalité de la track active.
+- L’autorité de binding runtime reste `track_runtime`.
+- Les remaps logique/physique doivent rester explicites.
+- Ne pas casser le hard real-time audio.
 
-Toujours raisonner avec :
-- track active
-- family de track
-- type de track
-- runtime associé
-
-Ne pas ajouter une feature “globale” si elle dépend en réalité de la track active.
-
-### Routing mix structurant (runtime)
-- L’autorité de binding reste `track_runtime`.
-- Le mapping `UI track -> mix target runtime` est explicite et unique (pas de mapping parallèle caché).
-- La résolution `UI track -> filter target runtime` doit aussi passer par `track_runtime` (pas de chemin opérationnel `runtime_target`).
-- Les contributions `Synth` doivent rester séparées par track jusqu’au `mixer` (pas de somme précoce globale).
-- Les getters/checks runtime ne doivent pas déclencher de refresh implicite : l’invalidation est explicite (`track_runtime_invalidate_all`) et le refresh est demandé explicitement par les appelants autorisés.
-
----
-
-## 3. Families et types actuels
-
-### Families
-- `Off`
-- `Input1`
-- `Input2`
-- `Input3`
-- `Input4`
-- `Synth`
-- `Drum`
-
-### Types
-- pour `InputX`
-  - `Audio`
-  - `Hybrid`
-- pour `Synth`
-  - `DX7`
-  - `MonoB`
-  - `TB3`
-- pour `Drum`
-  - `TRX BD`
-  - `TRX Claves`
-  - `TRX HiHat`
-  - `TRX Snare`
-  - `FM Kick`
-  - `FM Snare`
-  - `FM Tom`
-  - `FM Rimshot`
-  - `FM Clap`
-  - `FM Cowbell`
-  - `FM Cymbal`
-
-### Notes
-- `Off` = vraie désactivation runtime
-- `Input1..4` = ressources physiques exclusives
-- modèle produit: 4 entrées stéréo physiques visées (`Input1..4`)
-- devboard proto actuelle: 3 entrées stéréo réellement câblées côté front-end DSP
-- `Input4` reste une ressource physique valide (réservée/future tant que la 4e entrée n’est pas câblée sur la proto)
-- `Hybrid` = track audio + chemin note/midi amené à évoluer
-- une vraie family `MIDI` viendra plus tard
-- `runtime_target` est un shim legacy de compat (hors chemin opérationnel in-tree)
+Quand une passe touche un état structurant, identifier d’abord :
+- l’autorité réelle
+- qui lit cet état
+- qui l’écrit
+- s’il existe une autorité parasite
 
 ---
 
-## 4. Où brancher les choses
+## 4. Portée des passes
 
-- choix family/type d’une track : `CFG`
-- paramètres filtre / couleur audio : `COLORS`
-- paramètres moteur sonore / oscillateurs : `TONE`
-- jeu clavier : `KEYBOARD`
-- arpégiateur : `ARP`
-
-Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point d’entrée.
+- Une passe = un bug cohérent ou une correction cohérente.
+- Faire la plus petite passe locale possible.
+- Ne pas mélanger plusieurs bugs non liés.
+- Ne pas partir en refonte si une correction locale suffit.
+- Si une ancienne cause connue est fournie, la revalider d’abord dans l’état actuel du repo.
 
 ---
 
-## 5. Hall modes : invariants à ne pas casser
+## 5. Build et validation
 
-### Track select
-- `TRACK` maintenu (`BTN_PARAM_8`)
-- puis `HALL 0..7`
+- Cible de travail par défaut : `Release`.
+- Ne jamais lancer `Debug` ou `Debug1` sauf demande explicite.
+- Ne pas lancer de build global par réflexe.
+- Pour une passe locale, préférer d’abord :
+  - lecture ciblée
+  - recherche ciblée
+  - diff minimal
+  - vérification logique locale
+- Ne lancer un build complet que si cela apporte une validation réellement utile à la passe.
+- Si le système de build est déjà cassé hors zone touchée :
+  - le constater une fois
+  - le signaler clairement
+  - arrêter les tentatives de build non utiles
 
-### KEYBOARD
-- `SHIFT + HALL 9` (index 8)
-  - simple tap => active `KEYBOARD`
-  - double tap => ouvre l’UI `KEYBOARD`
-
-### ARP
-- `SHIFT + HALL 10` (index 9)
-  - simple tap => active `ARP`
-  - double tap => ouvre l’UI `ARP`
-
-### PATTERN
-- `SHIFT + -` => mode `PATTERN RECALL`
-- `TRACK + -` => mode `PATTERN STORE`
-
-### MUTE
-- mode hall `MUTE` existe (`UI_HALL_MODE_MUTE`)
-- entrée quick mute: `SHIFT` maintenu puis `+` maintenu
-- quick mute:
-  - toggle mute immédiat par hall track
-  - relâcher `+` => sortie vers mode hall précédent
-- prepare mute:
-  - depuis quick mute, réappui `SHIFT` pendant `+` maintenu
-  - capture snapshot initiale des mutes
-  - édition préparée uniquement
-  - validation par `+` (apply + sortie)
-
-### Règles
-- `SHIFT` doit être pressé avant le hall
-- `ARP` est un sous-mode du `KEYBOARD`
-- `ARP` ne doit jamais casser l’activation explicite de `KEYBOARD`
+Ne pas multiplier les contournements si l’échec est externe au patch.
 
 ---
 
-## 6. UI : règle de résolution
+## 6. Modification des fichiers
 
-L’UI se résout par contexte, pas page par page isolée.
-
-Toujours penser :
-- ensemble demandé
-- track active
-- family
-- type
-
-Ensembles importants existants :
-- `CFG`
-- `COLORS`
-- `TONE`
-- `MOD`
-- `MIX`
-- `VCA`
-- `KEYBOARD`
-- `ARP`
-
-### MOD : résolution des destinations LFO (invariant)
-- Les destinations LFO doivent venir d’une liste explicite validée runtime.
-- Autorisés uniquement : domaines `COLORS` et `TONE` réellement valides pour la track.
-- Interdit : domaine `PLAY` (ni affiché, ni sélectionnable, ni applicable).
-- Le filtrage doit rester strictement track-aware (family/type/runtime effectif), sans fallback cross-engine.
-
-### Clipboard UI (invariants)
-- `TRACK + COPY` copie la track active sans steps séquenceur.
-- `TRACK + PASTE` colle la track copiée ; `TRACK + SHIFT + PASTE` clear la track active.
-- `PARAM btn` maintenu + `COPY/PASTE` = scope ensemble ; bouton page active maintenu + `COPY/PASTE` = scope page.
-- En scope ensemble/page, la compatibilité de paste est par intersection des `param_id` communs (pas de matching strict des layouts).
-- `SHIFT + PASTE` en scope ensemble/page clear les paramètres ciblés vers leur minimum.
-- Ressources exclusives en paste track :
-  - `DX7` / `TB3` : move-on-paste.
-  - `Input1..4` : priorité à un input libre, sinon move-on-paste.
-  - après move réussi, le clipboard reste chaînable (source mise à jour vers la target).
+- Utiliser le moyen d’édition le plus simple et le plus fiable.
+- Si `apply_patch` échoue, faire un remplacement local strictement ciblé puis relire le diff.
+- Après modification, vérifier que seules les lignes attendues ont bougé.
+- Ne pas nettoyer, restaurer ou regénérer massivement les dossiers de build sans nécessité directe.
+- Éviter les commandes à effets de bord inutiles.
 
 ---
 
-## 7. LEDs : règles simples
+## 7. Sortie attendue en fin de passe
 
-### Boutons param
-- toutes vertes
-- sauf le bouton de l’ensemble UI actif : blanc
-- si l’ensemble actif n’a pas de bouton param associé : toutes vertes
+Toujours fournir :
+- la cause racine exacte
+- quelle hypothèse était correcte ou non
+- les fichiers modifiés
+- la correction exacte appliquée
+- ce qui a été vérifié
+- ce qui n’a pas pu l’être
 
-### Mapping boutons param (autorité unique)
-- `BTN_PARAM_1` -> `COLORS`
-- `BTN_PARAM_2` -> `TONE` (résolution contextuelle track-aware ; sur `Synth + DX7` ouvre l’UI DX7)
-- `BTN_PARAM_3` -> `MOD`
-- `BTN_PARAM_4` -> `MIX`
-- `BTN_PARAM_5` -> `PLAY` (uniquement quand la track active est une family moteur `Synth` ou `Drum`)
-- `BTN_PARAM_6` -> `VCA` (uniquement quand la track active est une family moteur `Synth` ou `Drum`)
-- `BTN_PARAM_8` -> bouton spécial `TRACK` (pas un point d’entrée d’ensemble UI)
-- `CALIBRATION` et `POTS DEBUG` ne sont pas exposés via les boutons param
-
-### Halls
-- `ARP` réutilise la scène LED du `KEYBOARD`
-- ne pas dupliquer une scène si la même logique peut être partagée
-
-### Remaps
-Pour tout mapping logique/physique :
-- boutons
-- halls
-- leds
-
-toujours utiliser des tables explicites.
+Ne pas présenter comme validé ce qui ne l’est pas.
 
 ---
 
-## 8. Synth engines actuels
+## 8. Définition de “done”
 
-### DX7
-- moteur `Synth` stable
-- classe de polyphonie runtime: **polyphonique** (4 pages `PLAY`)
-
-### MonoB
-- moteur `Synth` stable
-- monophonique mono
-- `TONE` dédié
-- `COLORS` dédié
-- classe de polyphonie runtime: **monophonique** (page 1 `PLAY` uniquement)
-
-### Drum (branche runtime)
-- family runtime distincte de `Synth` pour classer les futurs engines drum
-- `Drum` n’est pas un alias de `Synth` et ne doit pas recycler les types `DX7`/`MonoB`/`TB3`
-- engines drum hébergés au runtime via un catalogue type dédié `Drum`
-- les engines drum futurs doivent déclarer leur capacité mono/poly dans l’autorité runtime centrale
-
-Ne pas mélanger :
-- filtres audio des tracks input
-- filtre dédié d’un moteur synth comme `MonoB`
-
-### COLORS : règles runtime UI/audio
-- l’ensemble UI historique `FILTER` est renommé produit en `COLORS`
-- pour `InputX + Audio` :
-  - page `MOD` non exposée
-  - runtime forcé : `KeyTrack = 0`, `EnvRst = Off`, `EnvDly = 0`
-- pour `InputX + Hybrid` :
-  - page `MOD` conservée
-- page 4 `CRUNCH` :
-  - paramètre unique `Drive`
-  - `Drive = Off` => saturation bypass (hors traitement effectif)
-  - `Drive > 0` => saturation active et pilotée par `Drive`
+Une passe est “done” seulement si :
+- la cause traitée est identifiée clairement
+- la correction est locale et cohérente
+- le diff est propre
+- la validation pertinente pour la passe a été faite
+- aucune zone non liée n’a été modifiée inutilement
 
 ---
 
-## 9. Règles Codex
+## 9. Plans longs
 
-Quand tu modifies le projet :
+Pour une passe longue, ambiguë, ou de refonte réelle :
+- faire d’abord un plan écrit
+- ne pas coder avant d’avoir clarifié :
+  - objectif
+  - zone touchée
+  - contraintes
+  - risques de régression
+  - validation attendue
 
-1. réutilise avant de créer  
-2. garde une seule autorité par état structurant  
-3. garde les remaps explicites  
-4. respecte la logique track-aware  
-5. ne casse pas `SHIFT before HALL`  
-6. ne casse pas `KEYBOARD` / `ARP`  
-7. ne fais pas de redesign gratuit  
+Si un `PLANS.md` existe dans le repo, l’utiliser pour ce type de travail.
+Sinon, garder un plan court dans la réponse avant implémentation.
 
 ---
 
-## 10. Mise à jour de la doc
+## 10. Doc
 
-Si une passe modifie :
-- families/types
-- hall modes
-- ensembles UI
-- routing structurant
-- logique runtime majeure
-- architecture d’un sous-système
+Mettre à jour la doc dans la même passe uniquement si la correction modifie réellement :
+- une autorité runtime structurante
+- un flux majeur UI/runtime
+- une règle d’intégration importante
+- l’architecture d’un sous-système
 
-alors mettre à jour dans la même passe :
+Dans ce cas, mettre à jour :
 - `AGENT.md`
-- `ARCHITECTURE_GLOBAL.md`
+- `readme.md`
 
-
----
-
-## 11. Cardinalités track (règle locale MIX legacy)
-
-- Les paramètres legacy `PARAM_MIX_TRACKx_*` sont un chemin **physique audio** et restent limités à `MAX_TRACKS` (4).
-- Les paramètres `PARAM_MIX_*` (sans suffixe track) suivent la track **logique/runtime** active (jusqu’à `UI_TRACK_COUNT`/`SEQ_TRACK_COUNT`).
-- Dans `param_registry`, privilégier un dispatch indexé/table-driven pour les paramètres legacy trackés (pas de handlers hardcodés `track0..3` opérationnels).
+Ne pas mettre à jour la doc pour une micro-correction locale sans impact structurel.

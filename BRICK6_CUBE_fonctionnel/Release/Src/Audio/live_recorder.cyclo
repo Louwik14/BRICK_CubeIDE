@@ -1,0 +1,9 @@
+../Src/Audio/live_recorder.c:40:6:live_recorder_init	2
+../Src/Audio/live_recorder.c:69:6:live_recorder_set_buffer	5
+../Src/Audio/live_recorder.c:101:6:live_recorder_set_loop_length	5
+../Src/Audio/live_recorder.c:130:6:live_recorder_start_record	2
+../Src/Audio/live_recorder.c:149:6:live_recorder_stop_record	2
+../Src/Audio/live_recorder.c:168:6:live_recorder_start_play	2
+../Src/Audio/live_recorder.c:187:6:live_recorder_stop_play	2
+../Src/Audio/live_recorder.c:209:6:live_recorder_write	8
+../Src/Audio/live_recorder.c:253:6:live_recorder_read	13

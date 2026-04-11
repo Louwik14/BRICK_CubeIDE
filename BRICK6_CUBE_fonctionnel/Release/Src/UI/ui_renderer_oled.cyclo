@@ -1,0 +1,3 @@
+../Src/UI/ui_renderer_oled.c:42:6:ui_renderer_oled_draw	3
+../Src/UI/ui_renderer_oled.c:61:6:ui_renderer_oled_service_poll	2
+../Src/UI/ui_renderer_oled.c:75:9:ui_renderer_oled_is_rendering	1

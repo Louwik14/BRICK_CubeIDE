@@ -228,11 +228,6 @@ static void ui_page_template_colors_sync_family(void)
     }
     if (active_type == UI_TRACK_TYPE_TB3)
     {
-        if (g_ui_template_filter_state.active_subpage != 0U)
-        {
-            g_ui_template_filter_state.active_subpage = 0U;
-        }
-
         family->nav_labels[0] = "MAIN";
         family->nav_labels[1] = "-";
         family->nav_labels[2] = "-";

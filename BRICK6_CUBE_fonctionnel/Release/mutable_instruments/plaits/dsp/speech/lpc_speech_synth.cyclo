@@ -1,0 +1,3 @@
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth.cc:43:6:void plaits::LPCSpeechSynth::Init()	1
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth.cc:56:6:void plaits::LPCSpeechSynth::Render(float, float, float*, float*, size_t)	7
+../mutable_instruments/plaits/dsp/speech/lpc_speech_synth.cc:132:6:void plaits::LPCSpeechSynth::PlayFrame(const Frame&, const Frame&, float)	4

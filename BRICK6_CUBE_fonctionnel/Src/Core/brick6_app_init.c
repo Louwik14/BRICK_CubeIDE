@@ -113,7 +113,6 @@ void brick6_app_init(void)
     project_v1_init();
     (void)project_v1_restore_boot_context();
     undo_v1_init();
-    (void)pattern_live_capture_boot_snapshot();
     control_event_init();
 
     hall_loop_init();

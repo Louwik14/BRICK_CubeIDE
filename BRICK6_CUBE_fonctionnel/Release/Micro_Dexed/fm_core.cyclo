@@ -1,0 +1,6 @@
+../Micro_Dexed/fm_core.h:50:13:FmCore::~FmCore()	1
+../Micro_Dexed/fm_core.cpp:107:6:virtual void FmCore::render(int32_t*, FmOpParams*, int, int32_t*, int)	11
+../Micro_Dexed/fm_core.h:50:13:virtual FmCore::~FmCore()	1
+../Micro_Dexed/fm_core.cpp:64:5:int n_out(const FmAlgorithm&)	6
+../Micro_Dexed/fm_core.cpp:72:9:uint8_t FmCore::get_carrier_operators(uint8_t)	6
+../Micro_Dexed/fm_core.cpp:86:6:static void FmCore::dump()	1

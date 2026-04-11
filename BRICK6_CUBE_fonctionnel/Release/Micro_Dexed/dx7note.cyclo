@@ -1,0 +1,18 @@
+../Micro_Dexed/dx7note.cpp:52:9:int32_t osc_freq(int, int, int, int, int)	2
+../Micro_Dexed/dx7note.cpp:30:9:int32_t midinote_to_logfreq(int)	1
+../Micro_Dexed/dx7note.cpp:37:9:int32_t logfreq_round2semi(int)	1
+../Micro_Dexed/dx7note.cpp:52:9:int32_t osc_freq(int, int, int, int, int)	4
+../Micro_Dexed/dx7note.cpp:89:5:int ScaleVelocity(int, int)	1
+../Micro_Dexed/dx7note.cpp:96:5:int ScaleRate(int, int)	1
+../Micro_Dexed/dx7note.cpp:115:5:int ScaleCurve(int, int, int)	5
+../Micro_Dexed/dx7note.cpp:132:5:int ScaleLevel(int, int, int, int, int, int)	8
+../Micro_Dexed/dx7note.cpp:151:1:Dx7Note::Dx7Note()	1
+../Micro_Dexed/dx7note.cpp:159:6:void Dx7Note::init(const uint8_t*, int, int, int, int, const Controllers*)	9
+../Micro_Dexed/dx7note.cpp:208:6:void Dx7Note::compute(int32_t*, int32_t, int32_t, const Controllers*)	17
+../Micro_Dexed/dx7note.cpp:302:6:void Dx7Note::keyup()	2
+../Micro_Dexed/dx7note.cpp:309:6:void Dx7Note::update(const uint8_t*, int, int, int, const Controllers*)	5
+../Micro_Dexed/dx7note.cpp:351:6:void Dx7Note::peekVoiceStatus(VoiceStatus&)	2
+../Micro_Dexed/dx7note.cpp:362:6:void Dx7Note::transferState(Dx7Note&)	2
+../Micro_Dexed/dx7note.cpp:370:6:void Dx7Note::transferSignal(Dx7Note&)	1
+../Micro_Dexed/dx7note.cpp:377:6:void Dx7Note::transferPortamento(Dx7Note&)	1
+../Micro_Dexed/dx7note.cpp:383:6:void Dx7Note::oscSync()	1

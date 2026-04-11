@@ -1,0 +1,2 @@
+../Src/Audio/oscillator.cpp:7:7:float daisysp::Oscillator::Process()	22
+../Src/Audio/oscillator.cpp:61:7:float daisysp::Oscillator::CalcPhaseInc(float)	1

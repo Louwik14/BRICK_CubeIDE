@@ -1,0 +1,47 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/allpass.cpp:9:1:allpass::allpass()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/allpass.cpp:14:6:void allpass::setbuffer(float*, int)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/allpass.cpp:20:6:void allpass::mute()	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/allpass.cpp:26:6:void allpass::setfeedback(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/allpass.cpp:31:7:float allpass::getfeedback()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:9:1:comb::comb()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:15:6:void comb::setbuffer(float*, int)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:21:6:void comb::mute()	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:27:6:void comb::setdamp(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:33:7:float comb::getdamp()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:38:6:void comb::setfeedback(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/comb.cpp:43:7:float comb::getfeedback()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:57:6:void revmodel::mute()	12
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:9:1:revmodel::revmodel()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:76:6:void revmodel::processreplace(float*, float*, float*, float*, long int, int)	16
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:111:6:void revmodel::processmix(float*, float*, float*, float*, long int, int)	16
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:145:6:void revmodel::update()	2
+../Src/Audio/fx_reverb.cpp:147:13:void fx_reverb_global_apply_params()	4
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:185:6:void revmodel::setroomsize(float)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:191:7:float revmodel::getroomsize()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:196:6:void revmodel::setdamp(float)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:202:7:float revmodel::getdamp()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:207:6:void revmodel::setwet(float)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:213:7:float revmodel::getwet()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:218:6:void revmodel::setdry(float)	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:223:7:float revmodel::getdry()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:228:6:void revmodel::setwidth(float)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:234:7:float revmodel::getwidth()	1
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:239:6:void revmodel::setmode(float)	2
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/../freeverb-main/Components/revmodel.cpp:245:7:float revmodel::getmode()	1
+../Src/Audio/fx_reverb.cpp:19:6:void fx_reverb_init(fx_reverb_t*, float)	3
+../Src/Audio/fx_reverb.cpp:33:6:void fx_reverb_process_block(fx_reverb_t*, float*, float*, float*, float*, uint32_t)	25
+../Src/Audio/fx_reverb.cpp:56:6:void fx_reverb_set_wet_ui(fx_reverb_t*, uint8_t)	4
+../Src/Audio/fx_reverb.cpp:71:6:void fx_reverb_set_wet(fx_reverb_t*, float)	4
+../Src/Audio/fx_reverb.cpp:81:6:void fx_reverb_set_room_size(fx_reverb_t*, float)	3
+../Src/Audio/fx_reverb.cpp:89:6:void fx_reverb_set_damping(fx_reverb_t*, float)	3
+../Src/Audio/fx_reverb.cpp:97:6:void fx_reverb_set_width(fx_reverb_t*, float)	3
+../Src/Audio/fx_reverb.cpp:105:6:void fx_reverb_set_bypass(fx_reverb_t*, uint8_t)	2
+../Src/Audio/fx_reverb.cpp:195:6:void fx_reverb_global_init(float)	5
+../Src/Audio/fx_reverb.cpp:203:6:void fx_reverb_global_set_type(fx_reverb_global_type_t)	4
+../Src/Audio/fx_reverb.cpp:218:6:void fx_reverb_global_set_wet(float)	4
+../Src/Audio/fx_reverb.cpp:224:6:void fx_reverb_global_set_size(float)	4
+../Src/Audio/fx_reverb.cpp:230:6:void fx_reverb_global_set_decay(float)	4
+../Src/Audio/fx_reverb.cpp:236:6:void fx_reverb_global_set_predelay(float)	4
+../Src/Audio/fx_reverb.cpp:242:6:void fx_reverb_global_set_surround(float)	4
+../Src/Audio/fx_reverb.cpp:248:9:uint8_t fx_reverb_global_is_active()	1
+../Src/Audio/fx_reverb.cpp:253:6:void fx_reverb_global_process_block(float*, float*, float*, float*, uint32_t)	21

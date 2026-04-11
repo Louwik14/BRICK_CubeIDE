@@ -1,0 +1,8 @@
+../Drivers/Drv_app/Src/buttons_hw.c:92:20:sr_pl_low	1
+../Drivers/Drv_app/Src/buttons_hw.c:107:20:sr_pl_high	1
+../Drivers/Drv_app/Src/buttons_hw.c:122:20:sr_sck_low	1
+../Drivers/Drv_app/Src/buttons_hw.c:137:20:sr_sck_high	1
+../Drivers/Drv_app/Src/buttons_hw.c:154:24:sr_data_read	2
+../Drivers/Drv_app/Src/buttons_hw.c:171:6:buttons_hw_init	2
+../Drivers/Drv_app/Src/buttons_hw.c:192:6:buttons_hw_read	4
+../Drivers/Drv_app/Src/buttons_hw.c:243:9:buttons_hw_get	2

@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/additive_engine.h:48:16:virtual void plaits::AdditiveEngine::LoadUserData(const uint8_t*)	1
+../mutable_instruments/plaits/dsp/engine/additive_engine.cc:41:6:virtual void plaits::AdditiveEngine::Init(stmlib::BufferAllocator*)	2
+../mutable_instruments/plaits/dsp/engine/additive_engine.cc:48:6:virtual void plaits::AdditiveEngine::Reset()	1
+../mutable_instruments/plaits/dsp/engine/additive_engine.cc:117:6:virtual void plaits::AdditiveEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	14
+../mutable_instruments/plaits/dsp/engine/additive_engine.cc:55:6:void plaits::AdditiveEngine::UpdateAmplitudes(float, float, float, float*, const int*, size_t)	4

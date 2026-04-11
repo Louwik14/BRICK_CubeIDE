@@ -1,0 +1,10 @@
+../Src/Audio/fx_reverb_drumboy.cpp:53:6:0(fx_reverb_drumboy_t*)	2
+../Src/Audio/fx_reverb_drumboy.cpp:53:6:void fx_reverb_drumboy_reset(fx_reverb_drumboy_t*)	2
+../Src/Audio/fx_reverb_drumboy.cpp:90:6:void fx_reverb_drumboy_init(fx_reverb_drumboy_t*, float)	3
+../Src/Audio/fx_reverb_drumboy.cpp:109:6:void fx_reverb_drumboy_set_size(fx_reverb_drumboy_t*, float)	2
+../Src/Audio/fx_reverb_drumboy.cpp:118:6:void fx_reverb_drumboy_set_decay(fx_reverb_drumboy_t*, float)	2
+../Src/Audio/fx_reverb_drumboy.cpp:128:6:void fx_reverb_drumboy_set_predelay(fx_reverb_drumboy_t*, float)	4
+../Src/Audio/fx_reverb_drumboy.cpp:141:6:void fx_reverb_drumboy_set_surround(fx_reverb_drumboy_t*, float)	4
+../Src/Audio/fx_reverb_drumboy.cpp:154:6:void fx_reverb_drumboy_set_wet(fx_reverb_drumboy_t*, float)	2
+../Src/Audio/fx_reverb_drumboy.cpp:162:6:void fx_reverb_drumboy_set_bypass(fx_reverb_drumboy_t*, uint8_t)	2
+../Src/Audio/fx_reverb_drumboy.cpp:170:6:void fx_reverb_drumboy_process_block(fx_reverb_drumboy_t*, const float*, const float*, float*, float*, uint32_t)	8

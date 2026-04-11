@@ -22,6 +22,21 @@
 #define UI_TEMPLATE_NOTE_X           101
 #define UI_TEMPLATE_NOTE_Y           1
 
+static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    ui_pattern_stub_state_t pattern_state;
+    memset(&pattern_state, 0, sizeof(pattern_state));
+    ui_get_pattern_stub_state(&pattern_state);
+
+    const char bank = (char)('A' + (pattern_state.active_bank & 0x0FU));
+    (void)snprintf(out, out_len, "%c-%02u", bank, (unsigned int)(pattern_state.active_pattern + 1U));
+}
+
 static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 65U, 97U};
 static const uint8_t g_ui_template_footer_w[4] = {31U, 31U, 31U, 31U};
@@ -433,7 +448,9 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
             drv_display_draw_text(109U, 1U, bpm_label);
         }
     }
-    drv_display_draw_text(113U, 9U, "A-12");
+    char pattern_label[6];
+    ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
+    drv_display_draw_text(113U, 9U, pattern_label);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
