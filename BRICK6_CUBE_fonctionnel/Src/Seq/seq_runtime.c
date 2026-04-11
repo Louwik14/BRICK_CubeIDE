@@ -92,6 +92,13 @@ static void seq_runtime_update_samples_per_step_from_tempo(void);
 static void seq_runtime_update_midi_clock_period_from_step_period(void);
 static void seq_runtime_midi_clock_audio_rebase(uint64_t start_sample);
 static void seq_runtime_midi_clock_audio_emit_for_block(uint64_t block_start_sample, uint16_t block_frames);
+static void seq_runtime_send_transport_realtime(uint8_t status);
+
+static void seq_runtime_send_transport_realtime(uint8_t status)
+{
+    const uint8_t msg[1] = { status };
+    midi_send_raw(MIDI_DEST_BOTH, msg, sizeof(msg));
+}
 
 static void seq_runtime_send_transport_start(void)
 {
@@ -110,8 +117,8 @@ static void seq_runtime_send_transport_start(void)
      * sequencer tempo is sourced from a dedicated BPM parameter.
      */
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
-    midi_start(MIDI_DEST_BOTH);
     midi_clock_set_running(false);
+    seq_runtime_send_transport_realtime(0xFAU);
     g_seq_midi_clock_audio_enabled = 1U;
     seq_runtime_midi_clock_audio_rebase(g_seq_runtime.audio_timeline_sample);
 }
@@ -758,10 +765,12 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
         g_seq_midi_clock_audio_enabled = 0U;
+        midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_SLAVE);
     }
     else
     {
+        midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
         seq_runtime_midi_clock_audio_rebase(g_seq_runtime.audio_timeline_sample);
@@ -833,6 +842,18 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
+
+    if (seq_clock_bridge_is_external_source(source) != 0U)
+    {
+        g_seq_midi_clock_audio_enabled = 0U;
+        midi_clock_set_running(false);
+        return;
+    }
+
+    midi_clock_set_running(false);
+    seq_runtime_send_transport_realtime(0xFBU);
+    g_seq_midi_clock_audio_enabled = 1U;
+    seq_runtime_midi_clock_audio_rebase(g_seq_runtime.audio_timeline_sample);
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
