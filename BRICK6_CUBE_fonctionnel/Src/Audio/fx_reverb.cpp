@@ -5,6 +5,7 @@
 #include "../freeverb-main/Components/comb.cpp"
 #include "../freeverb-main/Components/revmodel.cpp"
 #include <string.h>
+#include <new>
 
 static inline float fx_reverb_clamp01(float v)
 {
@@ -119,6 +120,7 @@ typedef struct
 {
     fx_reverb_global_storage_t storage;
     fx_reverb_global_type_t type;
+    uint8_t active_valid;
     float sample_rate;
     float wet;
     float size;
@@ -129,6 +131,7 @@ typedef struct
 
 static fx_reverb_global_state_t g_reverb_global = {
     .type = FX_REVERB_GLOBAL_TYPE_MONO,
+    .active_valid = 0U,
     .sample_rate = 48000.0f,
     .wet = 0.0f,
     .size = 0.70f,
@@ -161,7 +164,7 @@ static void fx_reverb_global_apply_params(void)
 void fx_reverb_global_init(float sample_rate)
 {
     g_reverb_global.sample_rate = (sample_rate > 0.0f) ? sample_rate : 48000.0f;
-    memset(&g_reverb_global.storage, 0, sizeof(g_reverb_global.storage));
+    g_reverb_global.active_valid = 0U;
     fx_reverb_global_set_type(g_reverb_global.type);
 }
 
@@ -170,13 +173,24 @@ void fx_reverb_global_set_type(fx_reverb_global_type_t type)
     if(type != FX_REVERB_GLOBAL_TYPE_STEREO)
         type = FX_REVERB_GLOBAL_TYPE_MONO;
 
-    g_reverb_global.type = type;
-    memset(&g_reverb_global.storage, 0, sizeof(g_reverb_global.storage));
-    if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_STEREO)
-        fx_reverb_init(&g_reverb_global.storage.freeverb, g_reverb_global.sample_rate);
-    else
-        fx_reverb_drumboy_init(&g_reverb_global.storage.drumboy, g_reverb_global.sample_rate);
+    if((g_reverb_global.active_valid != 0U) && (g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_STEREO))
+    {
+        g_reverb_global.storage.freeverb.~fx_reverb_t();
+    }
 
+    g_reverb_global.type = type;
+    if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_STEREO)
+    {
+        new (&g_reverb_global.storage.freeverb) fx_reverb_t();
+        fx_reverb_init(&g_reverb_global.storage.freeverb, g_reverb_global.sample_rate);
+    }
+    else
+    {
+        memset(&g_reverb_global.storage.drumboy, 0, sizeof(g_reverb_global.storage.drumboy));
+        fx_reverb_drumboy_init(&g_reverb_global.storage.drumboy, g_reverb_global.sample_rate);
+    }
+
+    g_reverb_global.active_valid = 1U;
     fx_reverb_global_apply_params();
 }
 
