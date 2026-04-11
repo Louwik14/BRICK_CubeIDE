@@ -21,12 +21,22 @@ typedef struct
     float prev_l;
     float prev_r;
 
+    float decimator_rate;
+    uint8_t decimator_bits_to_crush;
+    uint8_t decimator_inc_l;
+    uint8_t decimator_inc_r;
+    uint8_t decimator_threshold;
+    float decimator_downsampled_l;
+    float decimator_downsampled_r;
+    uint8_t decimator_enabled;
     uint8_t bypass;
 
 } fx_saturation_t;
 
 void fx_saturation_init(fx_saturation_t *fx);
 void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127);
+void fx_saturation_set_decimator_bits_ui(fx_saturation_t *fx, uint8_t bits_0_127);
+void fx_saturation_set_decimator_rate_ui(fx_saturation_t *fx, uint8_t rate_0_127);
 void fx_saturation_set_mix_ui(fx_saturation_t *fx, uint8_t mix_0_127);
 void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127);
 void fx_saturation_set_bias_ui(fx_saturation_t *fx, uint8_t bias_0_127);
