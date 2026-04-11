@@ -23,7 +23,7 @@
 
 #include "env_adsr.h"
 #include "fx_biquad_filter.h"
-#include "fx_reverb_drumboy.h"
+#include "fx_reverb.h"
 
 #include <math.h>
 #include <string.h>
@@ -98,7 +98,7 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 
 typedef struct
 {
-    fx_reverb_drumboy_t *instance;
+    fx_reverb_global_type_t type;
     float wet;
     float size;
     float decay;
@@ -107,7 +107,7 @@ typedef struct
 } mixer_reverb_state_t;
 
 static mixer_reverb_state_t g_reverb = {
-    .instance = NULL,
+    .type = FX_REVERB_GLOBAL_TYPE_MONO,
     .wet = 0.0f,
     .size = 0.70f,
     .decay = 0.20f,
@@ -387,16 +387,13 @@ static float clamp_pan(float pan)
  */
 void mixer_init(void)
 {
-    g_reverb.instance = fx_reverb_drumboy_get_instance();
-    if(g_reverb.instance != NULL)
-    {
-        fx_reverb_drumboy_init(g_reverb.instance, MIXER_FILTER_SAMPLE_RATE_DEFAULT);
-        fx_reverb_drumboy_set_wet(g_reverb.instance, g_reverb.wet);
-        fx_reverb_drumboy_set_size(g_reverb.instance, g_reverb.size);
-        fx_reverb_drumboy_set_decay(g_reverb.instance, g_reverb.decay);
-        fx_reverb_drumboy_set_predelay(g_reverb.instance, mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
-        fx_reverb_drumboy_set_surround(g_reverb.instance, mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
-    }
+    fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+    fx_reverb_global_set_type(g_reverb.type);
+    fx_reverb_global_set_wet(g_reverb.wet);
+    fx_reverb_global_set_size(g_reverb.size);
+    fx_reverb_global_set_decay(g_reverb.decay);
+    fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
+    fx_reverb_global_set_surround(mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
 
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
@@ -645,36 +642,37 @@ void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
 void mixer_set_reverb_wet(float wet)
 {
     g_reverb.wet = clamp01(wet);
-    if(g_reverb.instance != NULL)
-        fx_reverb_drumboy_set_wet(g_reverb.instance, g_reverb.wet);
+    fx_reverb_global_set_wet(g_reverb.wet);
 }
 
 void mixer_set_reverb_size(float size)
 {
     g_reverb.size = clamp01(size);
-    if(g_reverb.instance != NULL)
-        fx_reverb_drumboy_set_size(g_reverb.instance, g_reverb.size);
+    fx_reverb_global_set_size(g_reverb.size);
 }
 
 void mixer_set_reverb_decay(float decay)
 {
     g_reverb.decay = clamp01(decay);
-    if(g_reverb.instance != NULL)
-        fx_reverb_drumboy_set_decay(g_reverb.instance, g_reverb.decay);
+    fx_reverb_global_set_decay(g_reverb.decay);
 }
 
 void mixer_set_reverb_pre_delay(float pre_delay)
 {
     g_reverb.pre_delay = clamp01(pre_delay);
-    if(g_reverb.instance != NULL)
-        fx_reverb_drumboy_set_predelay(g_reverb.instance, mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
+    fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
 }
 
 void mixer_set_reverb_surround(float surround)
 {
     g_reverb.surround = clamp01(surround);
-    if(g_reverb.instance != NULL)
-        fx_reverb_drumboy_set_surround(g_reverb.instance, mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
+    fx_reverb_global_set_surround(mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
+}
+
+void mixer_set_reverb_type(uint8_t type)
+{
+    g_reverb.type = (type == (uint8_t)FX_REVERB_GLOBAL_TYPE_STEREO) ? FX_REVERB_GLOBAL_TYPE_STEREO : FX_REVERB_GLOBAL_TYPE_MONO;
+    fx_reverb_global_set_type(g_reverb.type);
 }
 
 void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type)
@@ -994,7 +992,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             break;
         }
     }
-    const uint8_t reverb_active = ((g_reverb.instance != NULL) && (g_reverb.wet > 0.0f)) ? 1U : 0U;
+    const uint8_t reverb_active = fx_reverb_global_is_active();
     const uint8_t send_bus_active = ((send_fx_active != 0U) || (reverb_active != 0U)) ? 1U : 0U;
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
@@ -1161,12 +1159,11 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         if(reverb_active != 0U)
         {
-            fx_reverb_drumboy_process_block(g_reverb.instance,
-                                            send_l[MIXER_REVERB_SEND_INDEX],
-                                            send_r[MIXER_REVERB_SEND_INDEX],
-                                            reverb_return_l,
-                                            reverb_return_r,
-                                            frames);
+            fx_reverb_global_process_block(send_l[MIXER_REVERB_SEND_INDEX],
+                                           send_r[MIXER_REVERB_SEND_INDEX],
+                                           reverb_return_l,
+                                           reverb_return_r,
+                                           frames);
             for(uint32_t i = 0; i < frames; i++)
             {
                 bus_main_l[i] += reverb_return_l[i];

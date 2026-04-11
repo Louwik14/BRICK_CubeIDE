@@ -66,6 +66,7 @@ void mixer_set_reverb_size(float size);
 void mixer_set_reverb_decay(float decay);
 void mixer_set_reverb_pre_delay(float pre_delay);
 void mixer_set_reverb_surround(float surround);
+void mixer_set_reverb_type(uint8_t type);
 void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type);
 void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz);
 void mixer_set_track_filter_resonance(uint32_t track_id, float resonance);
