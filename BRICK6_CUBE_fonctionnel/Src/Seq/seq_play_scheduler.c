@@ -41,7 +41,6 @@ typedef struct
     uint8_t note;
     uint8_t velocity;
     uint8_t type;
-    uint8_t midi_dispatched;
     uint8_t audio_dispatched;
 } seq_play_scheduler_evt_t;
 
@@ -83,7 +82,6 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
     evt->track = track;
     evt->note = note;
     evt->velocity = velocity;
-    evt->midi_dispatched = 0U;
     evt->audio_dispatched = 0U;
     seq_play_scheduler_exit_critical(primask);
 }
@@ -421,14 +419,13 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
         out_events[count++] = out_evt;
 
         g_seq_play_events[selected_index].audio_dispatched = 1U;
-        g_seq_play_events[selected_index].midi_dispatched = 1U;
     }
 
     uint8_t write = 0U;
     for (uint8_t read = 0U; read < g_seq_play_event_count; ++read)
     {
         const seq_play_scheduler_evt_t evt = g_seq_play_events[read];
-        if ((evt.audio_dispatched != 0U) && (evt.midi_dispatched != 0U))
+        if (evt.audio_dispatched != 0U)
         {
             continue;
         }
