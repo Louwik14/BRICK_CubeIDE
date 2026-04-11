@@ -823,6 +823,8 @@ void seq_runtime_midi_start_from_source(seq_clock_src_t source)
 
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
 {
+    const uint8_t was_stopped = seq_transport_fsm_is_stopped(&g_seq_transport_fsm);
+
     if (g_seq_runtime.clock_src != source)
     {
         return;
@@ -842,6 +844,17 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
+    if (was_stopped != 0U)
+    {
+        /*
+         * CONTINUE after STOP must re-anchor the musical timeline to the
+         * absolute audio sample timeline, exactly like START path does.
+         * Without this rebase, step_sample_q16 can remain at 0 while
+         * audio_timeline_sample is monotonic, causing boundary misalignment.
+         */
+        g_seq_runtime.step_sample_q16 = (uint64_t)g_seq_runtime.audio_timeline_sample << 16;
+        seq_runtime_process_step_boundaries();
+    }
 
     if (seq_clock_bridge_is_external_source(source) != 0U)
     {
