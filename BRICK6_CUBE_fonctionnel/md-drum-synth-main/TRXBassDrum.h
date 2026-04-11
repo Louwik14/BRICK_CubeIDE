@@ -49,6 +49,8 @@ private:
     float rampEnv = 0.0f;
     float attackEnv = 0.0f;
     float prevSample = 0.0f;
+    float retrigStartSample = 0.0f;
+    uint8_t retrigBlendSamplesRemaining = 0U;
     uint16_t attackSamplesRemaining = 0U;
     uint8_t noiseHoldCounter = 0U;
     float noiseSample = 0.0f;

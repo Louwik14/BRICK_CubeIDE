@@ -10,11 +10,14 @@
 constexpr float kSampleRate = 48000.0f;
 constexpr uint16_t kNoiseAttackSamples = 479U;
 constexpr uint8_t kNoiseHoldSamples = 6U;
+constexpr uint8_t kRetrigBlendSamples = 16U;
 constexpr float kSweepPitchRatio = 6.0f;
 
 void TRXBassDrum::Init() {
     phase = env = rampEnv = attackEnv = 0.0f;
     prevSample = 0.0f;
+    retrigStartSample = 0.0f;
+    retrigBlendSamplesRemaining = 0U;
     attackSamplesRemaining = 0U;
     noiseHoldCounter = 0U;
     noiseSample = 0.0f;
@@ -23,6 +26,10 @@ void TRXBassDrum::Init() {
 }
 
 void TRXBassDrum::Trigger() {
+    const uint8_t wasActive = (env > 0.0001f) ? 1U : 0U;
+    retrigStartSample = prevSample;
+    retrigBlendSamplesRemaining = wasActive ? kRetrigBlendSamples : 0U;
+
     env = 1.0f;
     rampEnv = 1.0f;
     attackEnv = 0.0f;
@@ -35,7 +42,10 @@ void TRXBassDrum::Trigger() {
 }
 
 float TRXBassDrum::Process() {
-    if (env <= 0.0001f) return 0.0f;
+    if (env <= 0.0001f) {
+        prevSample = 0.0f;
+        return 0.0f;
+    }
 
     // Envelope decay
     env *= envDecayCoef;
@@ -73,6 +83,14 @@ float TRXBassDrum::Process() {
         value = std::tanh(value * driveGain);
     }
 
+    if (retrigBlendSamplesRemaining > 0U) {
+        const float blend = static_cast<float>(retrigBlendSamplesRemaining) /
+                            static_cast<float>(kRetrigBlendSamples);
+        value += (retrigStartSample - value) * blend;
+        --retrigBlendSamplesRemaining;
+    }
+
+    prevSample = value;
     return value;
 }
 
