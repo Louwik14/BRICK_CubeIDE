@@ -118,11 +118,6 @@ void seq_transport_fsm_abort_pending(seq_transport_fsm_t *fsm)
     }
 }
 
-void seq_transport_fsm_on_clock_source_change(seq_transport_fsm_t *fsm)
-{
-    (void)fsm;
-}
-
 uint8_t seq_transport_fsm_on_step_pulse(seq_transport_fsm_t *fsm)
 {
     if ((fsm == 0) || (fsm->state != SEQ_TRANSPORT_FSM_START_PENDING))
