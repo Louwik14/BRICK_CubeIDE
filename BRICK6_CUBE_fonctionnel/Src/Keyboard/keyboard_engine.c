@@ -152,6 +152,12 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             continue;
         }
 
+        const uint8_t track_supports_vca_gate =
+            ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
+             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)) ? 1U : 0U;
+
         uint8_t filter_track = 0U;
         uint8_t mix_track = 0U;
         if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
@@ -165,7 +171,8 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                 mixer_track_filter_note_off(filter_track, note);
             }
         }
-        if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
+        if ((track_supports_vca_gate != 0U)
+                && (track_runtime_get_mix_target_track(track, &mix_track) != 0U))
         {
             if (is_note_on != 0U)
             {
