@@ -919,7 +919,7 @@ static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
 static void apply_filter_drive_runtime(uint32_t target_track, float drive_ui)
 {
     const uint8_t drive_0_127 = (uint8_t)(clamp_value(drive_ui, 0.0f, 127.0f) + 0.5f);
-    audio_float_set_saturation_drive_ui(drive_0_127);
+    audio_float_set_track_saturation_drive_ui(target_track, drive_0_127);
     mixer_set_track_insert_slot(target_track, 1U, (drive_0_127 > 0U) ? 1 : -1);
 }
 

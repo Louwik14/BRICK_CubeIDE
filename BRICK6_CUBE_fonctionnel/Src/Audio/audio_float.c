@@ -301,6 +301,12 @@ void audio_float_set_saturation_drive_ui(uint8_t drive_0_127)
     if(sat) fx_saturation_set_drive_ui(sat, drive_0_127);
 }
 
+void audio_float_set_track_saturation_drive_ui(uint32_t track_id, uint8_t drive_0_127)
+{
+    fx_saturation_t *sat = (fx_saturation_t *)fx_pool_get_sat_state_for_track(track_id);
+    if(sat) fx_saturation_set_drive_ui(sat, drive_0_127);
+}
+
 /**
  * @brief Point d'entrée audio_float_set_saturation_mix_ui.
  *

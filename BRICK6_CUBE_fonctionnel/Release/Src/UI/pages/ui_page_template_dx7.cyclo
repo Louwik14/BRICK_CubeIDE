@@ -4,5 +4,5 @@
 ../Src/UI/pages/ui_page_template_dx7.c:170:6:ui_page_template_dx7_register_families	9
 ../Src/UI/pages/ui_page_template_dx7.c:202:13:ui_page_template_tone_enter	1
 ../Src/UI/pages/ui_page_template_dx7.c:208:13:ui_page_template_tone_handle_event	1
-../Src/UI/pages/ui_page_template_dx7.c:214:13:ui_page_template_tone_tick	1
-../Src/UI/pages/ui_page_template_dx7.c:220:13:ui_page_template_tone_render	1
+../Src/UI/pages/ui_page_template_dx7.c:216:13:ui_page_template_tone_tick	1
+../Src/UI/pages/ui_page_template_dx7.c:223:13:ui_page_template_tone_render	1

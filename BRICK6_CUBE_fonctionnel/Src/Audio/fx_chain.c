@@ -145,3 +145,18 @@ void fx_chain_process_slot(uint32_t slot, float* L, float* R, uint32_t frames)
 {
     fx_chain_process_fx_slot(fx_pool_get_slot(slot), L, R, frames);
 }
+
+void fx_chain_process_slot_for_track(uint32_t track, uint32_t slot, float* L, float* R, uint32_t frames)
+{
+    fx_slot_t* s = fx_pool_get_slot(slot);
+    if (!s || !s->active)
+        return;
+
+    if (s->type == FX_SAT)
+    {
+        fx_saturation_process_block((fx_saturation_t*)fx_pool_get_sat_state_for_track(track), L, R, frames);
+        return;
+    }
+
+    fx_chain_process_fx_slot(s, L, R, frames);
+}

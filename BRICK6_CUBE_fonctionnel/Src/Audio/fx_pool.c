@@ -29,11 +29,13 @@
 #include "stm32h7xx.h"
 
 #define FX_POOL_SIZE 3u
+#define FX_POOL_TRACK_SAT_COUNT 8u
 
 static fx_slot_t g_slots[FX_POOL_SIZE];
 
 AUDIO_HOT static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
+AUDIO_HOT static fx_saturation_t g_track_sat[FX_POOL_TRACK_SAT_COUNT];
 
 /* Large granular history buffers: keep out of D1 to free fast internal RAM. */
 AUDIO_COLD_SDRAM ALIGN32 static float grain_buffer_l[48000];
@@ -62,6 +64,11 @@ void fx_pool_init(void)
     }
 
     g_granular_in_use = 0u;
+
+    for (uint32_t track = 0u; track < FX_POOL_TRACK_SAT_COUNT; ++track)
+    {
+        fx_saturation_init(&g_track_sat[track]);
+    }
 }
 
 /**
@@ -96,6 +103,11 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
 
         case FX_SAT:
             slot->state = &g_sat;
+            fx_saturation_init(&g_sat);
+            for (uint32_t track = 0u; track < FX_POOL_TRACK_SAT_COUNT; ++track)
+            {
+                fx_saturation_init(&g_track_sat[track]);
+            }
             break;
 
         case FX_GRANULAR:
@@ -195,4 +207,12 @@ fx_slot_t* fx_pool_get_slot(uint32_t index)
         return 0;
 
     return &g_slots[index];
+}
+
+void* fx_pool_get_sat_state_for_track(uint32_t track)
+{
+    if (track >= FX_POOL_TRACK_SAT_COUNT)
+        return 0;
+
+    return &g_track_sat[track];
 }

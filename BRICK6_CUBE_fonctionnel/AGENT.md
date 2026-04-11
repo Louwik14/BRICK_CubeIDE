@@ -31,6 +31,7 @@ Si l’utilisateur a déjà donné :
 - une ancienne cause déjà identifiée
 
 alors commencer par ça.
+
 Ne pas lancer une exploration large du repo tant que cette piste n’a pas été auditée.
 
 ---
@@ -45,6 +46,9 @@ Ne pas lancer une exploration large du repo tant que cette piste n’a pas été
 - Ne pas créer de chemin parallèle caché UI/runtime.
 - Pas d’allocation dynamique.
 - Pas de changement gratuit dans les zones sensibles audio/runtime.
+- Une passe = un bug cohérent ou une correction cohérente.
+- Ne pas mélanger plusieurs bugs non liés.
+- Si une ancienne cause connue est fournie, la revalider d’abord dans l’état actuel du repo.
 
 ---
 
@@ -71,11 +75,11 @@ Quand une passe touche un état structurant, identifier d’abord :
 
 ## 4. Portée des passes
 
-- Une passe = un bug cohérent ou une correction cohérente.
 - Faire la plus petite passe locale possible.
-- Ne pas mélanger plusieurs bugs non liés.
 - Ne pas partir en refonte si une correction locale suffit.
-- Si une ancienne cause connue est fournie, la revalider d’abord dans l’état actuel du repo.
+- Ne pas élargir la passe sans nécessité démontrée.
+- Si l’utilisateur demande une passe précise, rester strictement dans ce périmètre.
+- Ne pas ramener du contexte d’anciennes passes sans lien direct avec la passe en cours.
 
 ---
 
@@ -94,15 +98,24 @@ Quand une passe touche un état structurant, identifier d’abord :
   - le constater une fois
   - le signaler clairement
   - arrêter les tentatives de build non utiles
-
-Ne pas multiplier les contournements si l’échec est externe au patch.
+- Si `make -C Release ...` échoue à cause du flag toolchain connu `-fcyclomatic-complexity`, ne pas insister.
+- Dans ce cas :
+  - signaler une seule fois que l’échec vient du build system/toolchain local et non du patch
+  - faire `git diff --check`
+  - faire une vérification syntaxique ciblée du ou des fichiers modifiés
+  - ne pas répéter longuement la même explication à chaque passe
+- Ne pas multiplier les contournements si l’échec est externe au patch.
 
 ---
 
 ## 6. Modification des fichiers
 
 - Utiliser le moyen d’édition le plus simple et le plus fiable.
-- Si `apply_patch` échoue, faire un remplacement local strictement ciblé puis relire le diff.
+- Si `apply_patch` échoue 2 fois sur le même fichier :
+  - arrêter les retries
+  - faire un remplacement local strictement ciblé
+  - relire le diff
+  - continuer
 - Après modification, vérifier que seules les lignes attendues ont bougé.
 - Ne pas nettoyer, restaurer ou regénérer massivement les dossiers de build sans nécessité directe.
 - Éviter les commandes à effets de bord inutiles.
