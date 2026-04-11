@@ -45,6 +45,10 @@
 #define SEQ_DEBUG_SAMPLE_DOMAIN_TRACE 0
 #endif
 
+#ifndef SEQ_DEBUG_STOP_PLAY_TRACE
+#define SEQ_DEBUG_STOP_PLAY_TRACE 0
+#endif
+
 #if SEQ_DEBUG_TRACK_BINDING
 #define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
 #else
@@ -61,6 +65,12 @@
 #define SEQ_SAMPLE_LOG(...) printf(__VA_ARGS__)
 #else
 #define SEQ_SAMPLE_LOG(...) do { } while (0)
+#endif
+
+#if SEQ_DEBUG_STOP_PLAY_TRACE
+#define SEQ_SP_LOG(...) printf(__VA_ARGS__)
+#else
+#define SEQ_SP_LOG(...) do { } while (0)
 #endif
 
 SEQ_STATE_D2 static seq_runtime_state_t g_seq_runtime;
@@ -534,6 +544,10 @@ void seq_runtime_start(void)
     {
         seq_runtime_begin_running_now();
     }
+    SEQ_SP_LOG("[SEQ][SP] START run=%u atl=%llu stepq16=%llu\r\n",
+               (unsigned)g_seq_runtime.running,
+               (unsigned long long)g_seq_runtime.audio_timeline_sample,
+               (unsigned long long)g_seq_runtime.step_sample_q16);
     seq_runtime_exit_critical(primask);
 }
 
@@ -556,6 +570,9 @@ void seq_runtime_stop(void)
 
     (void)seq_transport_fsm_request_stop(&g_seq_transport_fsm);
     seq_runtime_stop_lifecycle_apply(1U);
+    SEQ_SP_LOG("[SEQ][SP] STOP atl=%llu blk0=%llu\r\n",
+               (unsigned long long)g_seq_runtime.audio_timeline_sample,
+               (unsigned long long)g_seq_runtime.audio_block_start_sample);
     seq_runtime_exit_critical(primask);
 }
 
@@ -727,6 +744,21 @@ void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
         return;
     }
 
+    /*
+     * Stop->Play race guard:
+     * if STOP happens after collect() but before apply() inside the same
+     * audio block, stale events from the previous run must not be emitted.
+     */
+    if (seq_transport_fsm_allow_schedule_play(&g_seq_transport_fsm) == 0U)
+    {
+        SEQ_SP_LOG("[SEQ][SP] DROP evt ty=%u tr=%u n=%u off=%u run=0\r\n",
+                   (unsigned)event->type,
+                   (unsigned)event->track,
+                   (unsigned)event->note,
+                   (unsigned)event->sample_offset_in_block);
+        return;
+    }
+
     SEQ_SAMPLE_LOG("[SEQ][AUD][APPLY] ty=%u tr=%u n=%u vel=%u off=%u abs=%llu\r\n",
                    (unsigned)event->type,
                    (unsigned)event->track,
@@ -823,6 +855,8 @@ void seq_runtime_midi_start_from_source(seq_clock_src_t source)
 
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
 {
+    const uint8_t was_stopped = seq_transport_fsm_is_stopped(&g_seq_transport_fsm);
+
     if (g_seq_runtime.clock_src != source)
     {
         return;
@@ -842,6 +876,17 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
+    if (was_stopped != 0U)
+    {
+        /*
+         * CONTINUE after STOP must re-anchor the musical timeline to the
+         * absolute audio sample timeline, exactly like START path does.
+         * Without this rebase, step_sample_q16 can remain at 0 while
+         * audio_timeline_sample is monotonic, causing boundary misalignment.
+         */
+        g_seq_runtime.step_sample_q16 = (uint64_t)g_seq_runtime.audio_timeline_sample << 16;
+        seq_runtime_process_step_boundaries();
+    }
 
     if (seq_clock_bridge_is_external_source(source) != 0U)
     {
