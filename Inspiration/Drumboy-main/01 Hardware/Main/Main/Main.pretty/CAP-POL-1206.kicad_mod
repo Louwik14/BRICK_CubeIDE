@@ -1,0 +1,123 @@
+(footprint "CAP-POL-1206"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at -3.016 0 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "8ee5dcd8-6996-4ba9-8cc1-71a5afc6501b")
+		(effects
+			(font
+				(size 0.45 0.45)
+				(thickness 0.05)
+			)
+			(justify right)
+		)
+	)
+	(property "Value" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "db7ae619-c6f4-472a-9c26-1e6e09bf9446")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "30857502-79d6-4ccc-bec6-1c464ebec4a1")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "7e172179-5ebb-4861-b852-1477269a247b")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(fp_line
+		(start -0.65 -0.8)
+		(end -0.65 0.8)
+		(stroke
+			(width 0.1778)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "02aa2aff-5ce4-400f-b30d-24487bc073d7")
+	)
+	(fp_line
+		(start -2.5 -1.25)
+		(end -2.5 1.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "39158dc5-e6f3-4ceb-b823-626b60c57780")
+	)
+	(fp_line
+		(start -2.5 1.25)
+		(end 2.5 1.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "0c8a89b2-81e5-4da8-b88c-da363d0bf648")
+	)
+	(fp_line
+		(start 2.5 -1.25)
+		(end -2.5 -1.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "bbed89ed-f830-41ac-b8c1-ae0b91287bbd")
+	)
+	(fp_line
+		(start 2.5 1.25)
+		(end 2.5 -1.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "434589cb-abdc-4d8d-a8dd-41194acd47a2")
+	)
+	(pad "P$1" smd rect
+		(at -1.5 0)
+		(size 1 1.6)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(solder_mask_margin 0.0508)
+		(solder_paste_margin 0)
+		(thermal_bridge_angle 0)
+		(uuid "19613496-a005-4d52-892b-c47c6a73a535")
+	)
+	(pad "P$2" smd rect
+		(at 1.5 0)
+		(size 1 1.6)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(solder_mask_margin 0.0508)
+		(solder_paste_margin 0)
+		(thermal_bridge_angle 0)
+		(uuid "7204a915-0d92-4465-aef4-fad25a7b50ce")
+	)
+	(embedded_fonts no)
+)

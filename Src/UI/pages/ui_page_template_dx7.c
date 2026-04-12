@@ -1,0 +1,221 @@
+#include "pages/ui_page_template_dx7.h"
+
+#include "ui_core.h"
+#include "ui_template_page.h"
+
+static const ui_template_family_t g_ui_template_dx7_family = {
+    .family_title = "TONE",
+    .nav_labels = { "PLAY", "MOT", "CTRL", "COL" },
+    .subpages = {
+        { .title = "PLAY", .param_bank = { .params = { PARAM_DX7_ALGORITHM, PARAM_DX7_FEEDBACK, PARAM_MIX_TRACK3_GAIN, PARAM_DX7_TRANSPOSE } } },
+        { .title = "MOTION", .param_bank = { .params = { PARAM_DX7_LFO_SPEED, PARAM_DX7_LFO_DELAY, PARAM_DX7_LFO_PITCH_MOD_DEPTH, PARAM_DX7_LFO_AMP_MOD_DEPTH } } },
+        { .title = "CTRL", .param_bank = { .params = { PARAM_DX7_PITCH_BEND_RANGE, PARAM_DX7_PORTAMENTO_TIME, PARAM_DX7_MONO_MODE, PARAM_DX7_OPERATOR_MASK } } },
+        { .title = "COLOR", .param_bank = { .params = { PARAM_DX7_OPERATOR_1_LEVEL, PARAM_DX7_OPERATOR_2_LEVEL, PARAM_DX7_OPERATOR_3_LEVEL, PARAM_DX7_OPERATOR_4_LEVEL } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_monob = {
+    .family_title = "TONE",
+    .nav_labels = { "OSC", "RNG", "DET", "MIX" },
+    .subpages = {
+        { .title = "OSC", .param_bank = { .params = { PARAM_MONOB_OSC1_WAVE, PARAM_MONOB_OSC2_WAVE, PARAM_MONOB_OSC3_WAVE, PARAM_MONOB_SUB_WAVE } } },
+        { .title = "RANGE", .param_bank = { .params = { PARAM_MONOB_OSC1_RANGE, PARAM_MONOB_OSC2_RANGE, PARAM_MONOB_OSC3_RANGE, PARAM_MONOB_SUB_OCTAVE } } },
+        { .title = "DETUNE", .param_bank = { .params = { PARAM_MONOB_OSC1_DETUNE, PARAM_MONOB_OSC2_DETUNE, PARAM_MONOB_OSC3_DETUNE, PARAM_COUNT } } },
+        { .title = "MIX", .param_bank = { .params = { PARAM_MONOB_OSC1_MIX, PARAM_MONOB_OSC2_MIX, PARAM_MONOB_OSC3_MIX, PARAM_MONOB_SUB_MIX } } },
+    },
+    .default_subpage = 0U,
+};
+
+
+static ui_template_family_t g_ui_template_tone_family_drum = {
+    .family_title = "TONE",
+    .nav_labels = { "MAIN", "-", "-", "-" },
+    .subpages = {
+        { .title = "MAIN", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t *ui_page_template_dx7_resolve_family(void)
+{
+    return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
+}
+
+static ui_template_page_state_t g_ui_template_dx7_state = {
+    .family = 0,
+    .family_resolver = ui_page_template_dx7_resolve_family,
+    .active_subpage = 0U,
+    .has_visited = 0U,
+};
+
+static void ui_page_template_tone_set_subpage(uint8_t idx, const char *title, param_id_t p0, param_id_t p1, param_id_t p2, param_id_t p3)
+{
+    g_ui_template_tone_family_drum.subpages[idx].title = title;
+    g_ui_template_tone_family_drum.subpages[idx].param_bank.params[0] = p0;
+    g_ui_template_tone_family_drum.subpages[idx].param_bank.params[1] = p1;
+    g_ui_template_tone_family_drum.subpages[idx].param_bank.params[2] = p2;
+    g_ui_template_tone_family_drum.subpages[idx].param_bank.params[3] = p3;
+}
+
+static void ui_page_template_tone_sync_drum_family(void)
+{
+    const ui_track_type_t type = ui_get_track_type(ui_get_active_track());
+    g_ui_template_tone_family_drum.nav_labels[0] = "MAIN";
+    g_ui_template_tone_family_drum.nav_labels[1] = "-";
+    g_ui_template_tone_family_drum.nav_labels[2] = "-";
+    g_ui_template_tone_family_drum.nav_labels[3] = "-";
+    ui_page_template_tone_set_subpage(0U, "MAIN", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+    ui_page_template_tone_set_subpage(1U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+    ui_page_template_tone_set_subpage(2U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+    ui_page_template_tone_set_subpage(3U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+
+    switch (type)
+    {
+        case UI_TRACK_TYPE_DRUM_TRX_BD:
+            g_ui_template_tone_family_drum.nav_labels[0] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[1] = "SWEEP";
+            ui_page_template_tone_set_subpage(0U, "BODY", PARAM_DRUM_TRX_BD_PITCH, PARAM_DRUM_TRX_BD_DECAY, PARAM_DRUM_TRX_BD_ATTACK, PARAM_DRUM_TRX_BD_HARMONICS);
+            ui_page_template_tone_set_subpage(1U, "SWEEP", PARAM_DRUM_TRX_BD_PITCH_SWEEP, PARAM_DRUM_TRX_BD_SWEEP_DECAY, PARAM_DRUM_TRX_BD_NOISE, PARAM_DRUM_TRX_BD_DRIVE);
+            break;
+        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+            g_ui_template_tone_family_drum.nav_labels[0] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[1] = "COLOR";
+            ui_page_template_tone_set_subpage(0U, "BODY", PARAM_DRUM_TRX_CLAVES_PITCH, PARAM_DRUM_TRX_CLAVES_INTERVAL, PARAM_DRUM_TRX_CLAVES_DECAY, PARAM_DRUM_TRX_CLAVES_BALANCE);
+            ui_page_template_tone_set_subpage(1U, "COLOR", PARAM_DRUM_TRX_CLAVES_DRIVE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+            g_ui_template_tone_family_drum.nav_labels[0] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[1] = "TONE";
+            ui_page_template_tone_set_subpage(0U, "BODY", PARAM_DRUM_TRX_HIHAT_DECAY, PARAM_DRUM_TRX_HIHAT_GAP, PARAM_DRUM_TRX_HIHAT_PEAK, PARAM_DRUM_TRX_HIHAT_METAL);
+            ui_page_template_tone_set_subpage(1U, "TONE", PARAM_DRUM_TRX_HIHAT_HP_TONE, PARAM_DRUM_TRX_HIHAT_LP_TONE, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+            g_ui_template_tone_family_drum.nav_labels[0] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[1] = "NOISE";
+            ui_page_template_tone_set_subpage(0U, "BODY", PARAM_DRUM_TRX_SNARE_PITCH, PARAM_DRUM_TRX_SNARE_DECAY, PARAM_DRUM_TRX_SNARE_TUNE_INTERVAL, PARAM_DRUM_TRX_SNARE_BUMP);
+            ui_page_template_tone_set_subpage(1U, "NOISE", PARAM_DRUM_TRX_SNARE_SNAP, PARAM_DRUM_TRX_SNARE_NOISE, PARAM_DRUM_TRX_SNARE_TONE_MIX, PARAM_DRUM_TRX_SNARE_DRIVE);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_KICK:
+            g_ui_template_tone_family_drum.nav_labels[0] = "OSC";
+            g_ui_template_tone_family_drum.nav_labels[1] = "SWEEP";
+            g_ui_template_tone_family_drum.nav_labels[2] = "RATIO";
+            g_ui_template_tone_family_drum.nav_labels[3] = "COLOR";
+            ui_page_template_tone_set_subpage(0U, "OSC", PARAM_DRUM_FM_KICK_PITCH, PARAM_DRUM_FM_KICK_DECAY, PARAM_DRUM_FM_KICK_MOD_FREQ, PARAM_DRUM_FM_KICK_FM_AMOUNT);
+            ui_page_template_tone_set_subpage(1U, "SWEEP", PARAM_DRUM_FM_KICK_PITCH_SWEEP, PARAM_DRUM_FM_KICK_SWEEP_DECAY, PARAM_DRUM_FM_KICK_MOD_DECAY, PARAM_COUNT);
+            ui_page_template_tone_set_subpage(2U, "RATIO", PARAM_DRUM_FM_KICK_RATIO_MODE, PARAM_DRUM_FM_KICK_RATIO_INDEX, PARAM_DRUM_FM_KICK_MOD_ENV_SYNC, PARAM_COUNT);
+            ui_page_template_tone_set_subpage(3U, "COLOR", PARAM_DRUM_FM_KICK_FEEDBACK, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_SNARE:
+            g_ui_template_tone_family_drum.nav_labels[0] = "OSC";
+            g_ui_template_tone_family_drum.nav_labels[1] = "NOISE";
+            g_ui_template_tone_family_drum.nav_labels[2] = "MOD";
+            ui_page_template_tone_set_subpage(0U, "OSC", PARAM_DRUM_FM_SNARE_PITCH, PARAM_DRUM_FM_SNARE_DECAY, PARAM_DRUM_FM_SNARE_MOD_FREQ, PARAM_DRUM_FM_SNARE_FM_AMOUNT);
+            ui_page_template_tone_set_subpage(1U, "NOISE", PARAM_DRUM_FM_SNARE_NOISE, PARAM_DRUM_FM_SNARE_NOISE_DECAY, PARAM_DRUM_FM_SNARE_HP_TONE, PARAM_COUNT);
+            ui_page_template_tone_set_subpage(2U, "MOD", PARAM_DRUM_FM_SNARE_MOD_DECAY, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_TOM:
+            g_ui_template_tone_family_drum.nav_labels[0] = "OSC";
+            g_ui_template_tone_family_drum.nav_labels[1] = "SWEEP";
+            ui_page_template_tone_set_subpage(0U, "OSC", PARAM_DRUM_FM_TOM_PITCH, PARAM_DRUM_FM_TOM_DECAY, PARAM_DRUM_FM_TOM_MOD_FREQ, PARAM_DRUM_FM_TOM_FM_AMOUNT);
+            ui_page_template_tone_set_subpage(1U, "SWEEP", PARAM_DRUM_FM_TOM_PITCH_SWEEP, PARAM_DRUM_FM_TOM_SWEEP_DECAY, PARAM_DRUM_FM_TOM_MOD_DECAY, PARAM_DRUM_FM_TOM_START_PHASE);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+            g_ui_template_tone_family_drum.nav_labels[0] = "RIM";
+            g_ui_template_tone_family_drum.nav_labels[1] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[2] = "TONE";
+            ui_page_template_tone_set_subpage(0U, "RIM", PARAM_DRUM_FM_RIMSHOT_RIM_PITCH, PARAM_DRUM_FM_RIMSHOT_RIM_DECAY, PARAM_DRUM_FM_RIMSHOT_RIM_FM_AMOUNT, PARAM_COUNT);
+            ui_page_template_tone_set_subpage(1U, "BODY", PARAM_DRUM_FM_RIMSHOT_BODY_PITCH, PARAM_DRUM_FM_RIMSHOT_BODY_DECAY, PARAM_DRUM_FM_RIMSHOT_BODY_FM_AMOUNT, PARAM_DRUM_FM_RIMSHOT_BODY_MIX);
+            ui_page_template_tone_set_subpage(2U, "TONE", PARAM_DRUM_FM_RIMSHOT_HP_TONE, PARAM_DRUM_FM_RIMSHOT_MOD_DECAY, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_CLAP:
+            g_ui_template_tone_family_drum.nav_labels[0] = "TIME";
+            g_ui_template_tone_family_drum.nav_labels[1] = "TONE";
+            g_ui_template_tone_family_drum.nav_labels[2] = "COLOR";
+            ui_page_template_tone_set_subpage(0U, "TIME", PARAM_DRUM_FM_CLAP_CLAP_COUNT, PARAM_DRUM_FM_CLAP_CLAP_SPACING, PARAM_DRUM_FM_CLAP_CLAP_DECAY, PARAM_DRUM_FM_CLAP_TAIL_DECAY);
+            ui_page_template_tone_set_subpage(1U, "TONE", PARAM_DRUM_FM_CLAP_BASE_FREQ, PARAM_DRUM_FM_CLAP_MOD_FREQ, PARAM_DRUM_FM_CLAP_FM_AMOUNT, PARAM_DRUM_FM_CLAP_MOD_DECAY);
+            ui_page_template_tone_set_subpage(2U, "COLOR", PARAM_DRUM_FM_CLAP_HP_TONE, PARAM_DRUM_FM_CLAP_FEEDBACK, PARAM_COUNT, PARAM_COUNT);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+            g_ui_template_tone_family_drum.nav_labels[0] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[1] = "MOD";
+            ui_page_template_tone_set_subpage(0U, "BODY", PARAM_DRUM_FM_COWBELL_PITCH, PARAM_DRUM_FM_COWBELL_DECAY_SHORT, PARAM_DRUM_FM_COWBELL_DECAY_LONG, PARAM_DRUM_FM_COWBELL_ENV_MIX);
+            ui_page_template_tone_set_subpage(1U, "MOD", PARAM_DRUM_FM_COWBELL_MOD_FREQ, PARAM_DRUM_FM_COWBELL_FM_AMOUNT, PARAM_DRUM_FM_COWBELL_MOD_DECAY, PARAM_DRUM_FM_COWBELL_FEEDBACK);
+            break;
+        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+            g_ui_template_tone_family_drum.nav_labels[0] = "BODY";
+            g_ui_template_tone_family_drum.nav_labels[1] = "MOD";
+            ui_page_template_tone_set_subpage(0U, "BODY", PARAM_DRUM_FM_CYMBAL_DECAY, PARAM_DRUM_FM_CYMBAL_SUSTAIN, PARAM_DRUM_FM_CYMBAL_BASE_CARRIER, PARAM_DRUM_FM_CYMBAL_BASE_MOD);
+            ui_page_template_tone_set_subpage(1U, "MOD", PARAM_DRUM_FM_CYMBAL_FM_AMOUNT, PARAM_DRUM_FM_CYMBAL_MOD_DECAY, PARAM_DRUM_FM_CYMBAL_HP_TONE, PARAM_DRUM_FM_CYMBAL_FEEDBACK);
+            break;
+        default:
+            break;
+    }
+}
+
+void ui_page_template_dx7_register_families(void)
+{
+    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
+    {
+        const ui_track_family_t track_family = (ui_track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        {
+            const ui_track_type_t track_type = (ui_track_type_t)type;
+            if (!ui_track_type_is_valid_for_family(track_family, track_type))
+            {
+                continue;
+            }
+
+            const ui_template_family_t *family_template = &g_ui_template_dx7_family;
+            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
+            {
+                family_template = &g_ui_template_tone_family_monob;
+            }
+            else if (track_family == UI_TRACK_FAMILY_DRUM)
+            {
+                family_template = &g_ui_template_tone_family_drum;
+            }
+
+            ui_template_family_register(UI_TEMPLATE_FAMILY_TONE, track_family, track_type, family_template);
+        }
+    }
+}
+
+static void ui_page_template_tone_enter(void)
+{
+    ui_page_template_tone_sync_drum_family();
+    ui_template_page_enter();
+}
+
+static void ui_page_template_tone_handle_event(const ui_event_t *ev)
+{
+    ui_page_template_tone_sync_drum_family();
+    ui_template_page_handle_event(ev);
+    ui_page_template_tone_sync_drum_family();
+    ui_template_page_select_subpage(&g_ui_template_dx7_state, g_ui_template_dx7_state.active_subpage);
+}
+
+static void ui_page_template_tone_tick(void)
+{
+    ui_page_template_tone_sync_drum_family();
+    ui_template_page_select_subpage(&g_ui_template_dx7_state, g_ui_template_dx7_state.active_subpage);
+    ui_template_page_tick();
+}
+
+static void ui_page_template_tone_render(void)
+{
+    ui_page_template_tone_sync_drum_family();
+    ui_template_page_render();
+}
+
+const ui_page_t g_ui_page_template_dx7 = {
+    .enter = ui_page_template_tone_enter,
+    .leave = ui_template_page_leave,
+    .handle_event = ui_page_template_tone_handle_event,
+    .tick = ui_page_template_tone_tick,
+    .render = ui_page_template_tone_render,
+    .context = &g_ui_template_dx7_state,
+};
