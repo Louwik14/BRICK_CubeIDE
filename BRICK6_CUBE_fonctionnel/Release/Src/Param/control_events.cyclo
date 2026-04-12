@@ -1,3 +1,0 @@
-../Src/Param/control_events.c:51:6:control_event_init	1
-../Src/Param/control_events.c:83:6:control_event_push	3
-../Src/Param/control_events.c:121:6:control_event_pop	3

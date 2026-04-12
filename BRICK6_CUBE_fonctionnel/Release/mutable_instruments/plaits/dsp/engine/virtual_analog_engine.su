@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/virtual_analog_engine.h:47:16:virtual void plaits::VirtualAnalogEngine::LoadUserData(const uint8_t*)	0	static
-../mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:40:6:virtual void plaits::VirtualAnalogEngine::Init(stmlib::BufferAllocator*)	8	static
-../mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:53:6:virtual void plaits::VirtualAnalogEngine::Reset()	0	static
-../mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:78:6:virtual void plaits::VirtualAnalogEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	144	static
-../mutable_instruments/plaits/dsp/engine/virtual_analog_engine.cc:65:7:float plaits::VirtualAnalogEngine::ComputeDetuning(float) const	0	static
