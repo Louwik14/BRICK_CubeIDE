@@ -30,7 +30,7 @@
 
 
 // FUTURE_CONST_FLASH: filled once by Exp2::init(), then used as a read-only LUT.
-AUDIO_LUT_D2 int32_t exp2tab[EXP2_N_SAMPLES << 1];
+AUDIO_HOT int32_t exp2tab[EXP2_N_SAMPLES << 1];
 
 void Exp2::init() {
   FRAC_NUM inc = exp2(1.0 / EXP2_N_SAMPLES);
@@ -46,7 +46,7 @@ void Exp2::init() {
 }
 
 // FUTURE_CONST_FLASH: filled once by Tanh::init(), then used as a read-only LUT.
-AUDIO_LUT_D2 int32_t tanhtab[TANH_N_SAMPLES << 1];
+AUDIO_HOT int32_t tanhtab[TANH_N_SAMPLES << 1];
 
 static FRAC_NUM dtanh(FRAC_NUM y) {
   return 1 - y * y;

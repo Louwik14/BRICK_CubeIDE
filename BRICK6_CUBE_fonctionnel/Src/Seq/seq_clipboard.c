@@ -38,7 +38,7 @@ typedef struct
     seq_clipboard_step_t steps[SEQ_MAX_STEPS];
 } seq_clipboard_state_t;
 
-SEQ_STATE_D2 static seq_clipboard_state_t g_seq_clipboard;
+UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
 
 static uint8_t seq_clipboard_track_is_valid(seq_track_id_t track)
 {

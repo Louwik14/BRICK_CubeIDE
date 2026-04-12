@@ -244,7 +244,7 @@
 									<listOptionValue builtIn="false" value="-fsingle-precision-constant"/>
 								</option>
 								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.fstackusage.1790005162" name="Enable stack usage analysis (-fstack-usage)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.fstackusage" useByScannerDiscovery="false" value="true" valueType="boolean"/>
-								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.cyclomaticcomplexity.1343712872" name="Cyclomatic Complexity (-fcyclomatic-complexity)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.cyclomaticcomplexity" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.cyclomaticcomplexity.1343712872" name="Cyclomatic Complexity (-fcyclomatic-complexity)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.cyclomaticcomplexity" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.443687394" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
 							</tool>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.608904847" name="MCU/MPU G++ Compiler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler">
@@ -281,6 +281,7 @@
 									<listOptionValue builtIn="false" value="-ffast-math"/>
 								</option>
 								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.nothreadsafestatics.1768321969" name="Disable thread-safe initialization of local static objects (-fno-threadsafe-statics)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.nothreadsafestatics" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.cyclomaticcomplexity.23522707" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.option.cyclomaticcomplexity" value="false" valueType="boolean"/>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.input.cpp.1746447719" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.input.cpp"/>
 							</tool>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.408812532" name="MCU/MPU GCC Linker" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker">

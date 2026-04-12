@@ -1,0 +1,6 @@
+../Src/Seq/seq_clipboard.c:43:16:seq_clipboard_track_is_valid	16	static
+../Src/Seq/seq_clipboard.c:48:16:seq_clipboard_find_min_step	32	static
+../Src/Seq/seq_clipboard.c:68:6:seq_clipboard_init	8	static
+../Src/Seq/seq_clipboard.c:73:9:seq_clipboard_is_valid	4	static
+../Src/Seq/seq_clipboard.c:78:9:seq_clipboard_copy	48	static
+../Src/Seq/seq_clipboard.c:148:9:seq_clipboard_paste	64	static

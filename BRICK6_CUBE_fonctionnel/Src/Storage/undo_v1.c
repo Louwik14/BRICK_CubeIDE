@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "Storage/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
 #include "main.h"
 
@@ -12,7 +13,7 @@ typedef struct
     PatternSaveV1 snapshot;
 } undo_snapshot_v1_t;
 
-static undo_snapshot_v1_t g_undo_v1;
+UI_SDRAM static undo_snapshot_v1_t g_undo_v1;
 static uint8_t g_undo_capture_suspended;
 
 void undo_v1_init(void)

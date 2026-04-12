@@ -32,7 +32,7 @@
 #define MAX_LOGFREQ_INT 20
 
 // FUTURE_CONST_FLASH: filled once by Freqlut::init(), then used as a read-only LUT.
-AUDIO_LUT_D2 int32_t lut[N_SAMPLES + 1];
+AUDIO_HOT int32_t lut[N_SAMPLES + 1];
 
 void Freqlut::init(FRAC_NUM sample_rate) {
   FRAC_NUM y = (1LL << (24 + MAX_LOGFREQ_INT)) / sample_rate;

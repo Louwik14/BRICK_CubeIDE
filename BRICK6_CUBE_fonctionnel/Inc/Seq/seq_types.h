@@ -8,11 +8,13 @@
 #define SEQ_PAGE_COUNT         4U
 #define SEQ_MAX_STEPS         (SEQ_STEPS_PER_PAGE * SEQ_PAGE_COUNT)
 
-/* V1 fixed product limit: per-step lock cap. */
+/* Local per-step product rule: one step can carry up to 32 p-locks. */
 #define SEQ_STEP_MAX_LOCKS    32U
 
-/* Memory capacity materialization (not a separate product rule). */
-#define SEQ_PLOCK_POOL_CAP    (SEQ_TRACK_COUNT * SEQ_MAX_STEPS * SEQ_STEP_MAX_LOCKS)
+/* Global per-track memory budget: shared by all steps of the track. */
+#define SEQ_PLOCK_BUDGET_PER_TRACK 1024U
+#define SEQ_PLOCK_POOL_CAP_PER_TRACK SEQ_PLOCK_BUDGET_PER_TRACK
+#define SEQ_PLOCK_POOL_CAP    (SEQ_TRACK_COUNT * SEQ_PLOCK_POOL_CAP_PER_TRACK)
 
 typedef uint8_t seq_track_id_t;
 typedef uint8_t seq_step_id_t;

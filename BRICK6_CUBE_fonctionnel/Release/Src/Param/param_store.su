@@ -1,0 +1,7 @@
+../Src/Param/param_store.c:34:6:param_store_init	16	static
+../Src/Param/param_store.c:62:6:param_store_set_staging	16	static
+../Src/Param/param_store.c:83:6:param_store_set_active	16	static
+../Src/Param/param_store.c:104:6:param_store_commit_if_block_advanced	16	static,ignoring_inline_asm
+../Src/Param/param_store.c:145:7:param_store_get_active	16	static
+../Src/Param/param_store.c:165:10:param_store_get_commit_count	4	static
+../Src/Param/param_store.c:182:10:param_store_get_last_commit_block	4	static

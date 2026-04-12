@@ -35,9 +35,9 @@ typedef struct
 typedef struct
 {
     seq_track_data_t tracks[SEQ_TRACK_COUNT];
-    seq_plock_entry_t pool[SEQ_PLOCK_POOL_CAP];
-    uint16_t free_head;
-    uint16_t free_count;
+    seq_plock_entry_t pool[SEQ_TRACK_COUNT][SEQ_PLOCK_POOL_CAP_PER_TRACK];
+    uint16_t free_head[SEQ_TRACK_COUNT];
+    uint16_t free_count[SEQ_TRACK_COUNT];
 } seq_project_data_t;
 
 typedef enum

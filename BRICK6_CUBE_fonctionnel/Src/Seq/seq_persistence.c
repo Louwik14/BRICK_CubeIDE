@@ -16,7 +16,7 @@
 #include "Seq/seq_model.h"
 
 #define SEQ_FILE_MAGIC        0x42534551UL /* 'BSEQ' */
-#define SEQ_FILE_VERSION      1U
+#define SEQ_FILE_VERSION      2U
 #define SEQ_FILE_PATH         "0:/BRICK6/seq_v1.bin"
 #define SEQ_STORAGE_DIR       "0:/BRICK6"
 

@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/engine/hi_hat_engine.h:45:16:virtual void plaits::HiHatEngine::LoadUserData(const uint8_t*)	0	static
+../mutable_instruments/plaits/dsp/engine/hi_hat_engine.cc:42:6:virtual void plaits::HiHatEngine::Reset()	0	static
+../mutable_instruments/plaits/dsp/engine/hi_hat_engine.cc:36:6:virtual void plaits::HiHatEngine::Init(stmlib::BufferAllocator*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/mutable_instruments/plaits/dsp/drums/hi_hat.h:184:8:void plaits::HiHat<MetallicNoiseSource, VCA, resonance, two_stage_envelope>::Render(bool, bool, float, float, float, float, float, float*, float*, float*, size_t) [with MetallicNoiseSource = plaits::RingModNoise; VCA = plaits::LinearVCA; bool resonance = false; bool two_stage_envelope = true]	104	static
+../mutable_instruments/plaits/dsp/engine/hi_hat_engine.cc:46:6:virtual void plaits::HiHatEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	184	static

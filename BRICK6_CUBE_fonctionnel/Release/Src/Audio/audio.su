@@ -1,0 +1,5 @@
+../Src/Audio/audio.c:116:13:process_half	224	static,ignoring_inline_asm
+../Src/Audio/audio.c:219:6:audio_init	8	static,ignoring_inline_asm
+../Src/Audio/audio.c:251:6:audio_start	8	static
+../Src/Audio/audio.c:293:6:HAL_SAI_RxHalfCpltCallback	8	static
+../Src/Audio/audio.c:331:6:HAL_SAI_RxCpltCallback	8	static

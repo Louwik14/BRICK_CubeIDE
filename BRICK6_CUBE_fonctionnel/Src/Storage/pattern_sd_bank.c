@@ -24,7 +24,7 @@ typedef struct __attribute__((packed))
 static uint8_t g_slot_has_data[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static uint8_t g_slot_meta_cache_valid[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 static uint32_t g_slot_checksum_cache[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
-static PatternSaveV1 g_boot_pattern;
+UI_SDRAM static PatternSaveV1 g_boot_pattern;
 static uint8_t g_boot_pattern_valid;
 static DMA_BUFFER uint8_t g_pattern_write_chunk[PATTERN_WRITE_CHUNK_BYTES];
 

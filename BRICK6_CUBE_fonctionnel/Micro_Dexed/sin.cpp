@@ -24,10 +24,10 @@
 #define R (1 << 29)
 
 #ifdef SIN_DELTA
-AUDIO_LUT_D2 int32_t sintab[SIN_N_SAMPLES << 1];
+AUDIO_HOT int32_t sintab[SIN_N_SAMPLES << 1];
 #else
 // FUTURE_CONST_FLASH: filled once by Sin::init(), then used as a read-only LUT.
-AUDIO_LUT_D2 int32_t sintab[SIN_N_SAMPLES + 1];
+AUDIO_HOT int32_t sintab[SIN_N_SAMPLES + 1];
 #endif
 
 void Sin::init() {

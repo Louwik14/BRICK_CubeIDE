@@ -1,0 +1,5 @@
+../Src/UI/ui_page_manager.c:47:6:ui_page_manager_init	16	static
+../Src/UI/ui_page_manager.c:69:6:ui_page_manager_register	16	static
+../Src/UI/ui_page_manager.c:91:6:ui_page_set	24	static
+../Src/UI/ui_page_manager.c:115:18:ui_page_get	4	static
+../Src/UI/ui_page_manager.c:137:9:ui_page_get_id	4	static

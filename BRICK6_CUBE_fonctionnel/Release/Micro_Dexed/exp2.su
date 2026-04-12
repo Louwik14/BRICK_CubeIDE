@@ -1,0 +1,2 @@
+../Micro_Dexed/exp2.cpp:35:6:static void Exp2::init()	4	static
+../Micro_Dexed/exp2.cpp:55:6:static void Tanh::init()	20	static

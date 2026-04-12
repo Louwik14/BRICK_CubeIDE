@@ -56,12 +56,12 @@ static const uint16_t ENV_BITDEPTH = 14;
 static const uint16_t SINLOG_BITDEPTH = 10;
 static const uint16_t SINLOG_TABLESIZE = 1 << SINLOG_BITDEPTH;
 // FUTURE_CONST_FLASH: init once in EngineMkI::EngineMkI(), then read-only in steady state.
-AUDIO_LUT_D2 static uint16_t sinLogTable[SINLOG_TABLESIZE];
+AUDIO_HOT static uint16_t sinLogTable[SINLOG_TABLESIZE];
 
 static const uint16_t SINEXP_BITDEPTH = 10;
 static const uint16_t SINEXP_TABLESIZE = 1 << SINEXP_BITDEPTH;
 // FUTURE_CONST_FLASH: init once in EngineMkI::EngineMkI(), then read-only in steady state.
-AUDIO_LUT_D2 static uint16_t sinExpTable[SINEXP_TABLESIZE];
+AUDIO_HOT static uint16_t sinExpTable[SINEXP_TABLESIZE];
 
 const uint16_t ENV_MAX = 1 << ENV_BITDEPTH;
 

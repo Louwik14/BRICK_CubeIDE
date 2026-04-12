@@ -33,4 +33,4 @@ void Porta::init_sr(double sampleRate)
   }
 }
 
-AUDIO_LUT_D2 int32_t Porta::rates[128];
+AUDIO_HOT int32_t Porta::rates[128];
