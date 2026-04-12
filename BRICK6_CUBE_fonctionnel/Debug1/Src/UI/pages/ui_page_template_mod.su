@@ -1,2 +1,0 @@
-../Src/UI/pages/ui_page_template_mod.c:30:36:ui_page_template_mod_resolve_family	8	static
-../Src/UI/pages/ui_page_template_mod.c:42:6:ui_page_template_mod_register_families	16	static

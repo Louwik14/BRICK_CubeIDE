@@ -1,4 +1,0 @@
-../Src/drv_encoders.c:55:6:drv_encoders_init	12	static
-../Src/drv_encoders.c:66:6:drv_encoders_poll	0	static
-../Src/drv_encoders.c:94:9:drv_encoder_get_delta	0	static
-../Src/drv_encoders.c:106:6:drv_encoder_reset	0	static

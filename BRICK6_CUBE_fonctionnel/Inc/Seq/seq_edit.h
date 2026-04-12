@@ -32,6 +32,10 @@ seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
                                                   seq_param8_t param8,
                                                   seq_value16_t value16,
                                                   uint8_t flags);
+void seq_edit_step_plock_commit(seq_track_id_t track,
+                                seq_step_id_t step,
+                                uint8_t set_id,
+                                seq_param8_t param8);
 seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   seq_step_id_t step,
                                                   uint8_t set_id,
@@ -55,3 +59,4 @@ void seq_edit_clear_steps(seq_track_id_t track,
                           uint8_t step_count);
 
 #endif /* SEQ_EDIT_H */
+

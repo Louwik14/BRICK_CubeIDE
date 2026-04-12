@@ -1,5 +1,0 @@
-../Src/fx_biquad.c:38:6:fx_biquad_reset	2
-../Src/fx_biquad.c:47:6:fx_biquad_set_identity	2
-../Src/fx_biquad.c:59:6:fx_biquad_set_low_shelf	9
-../Src/fx_biquad.c:94:6:fx_biquad_set_peaking	8
-../Src/fx_biquad.c:126:6:fx_biquad_set_high_shelf	9

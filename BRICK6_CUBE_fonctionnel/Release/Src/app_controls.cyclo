@@ -1,4 +1,0 @@
-../Src/app_controls.c:47:6:clouds_control_update	10
-../Src/app_controls.c:113:6:app_controls_init	1
-../Src/app_controls.c:121:6:app_controls_process	18
-../Src/app_controls.c:220:6:app_controls_render	4

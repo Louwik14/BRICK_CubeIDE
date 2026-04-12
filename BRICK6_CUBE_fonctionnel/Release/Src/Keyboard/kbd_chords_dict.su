@@ -1,6 +1,0 @@
-../Src/Keyboard/kbd_chords_dict.c:50:13:kbd_add_unique	32	static
-../Src/Keyboard/kbd_chords_dict.c:69:13:kbd_add_all	32	static
-../Src/Keyboard/kbd_chords_dict.c:86:13:kbd_isort_u8	24	static
-../Src/Keyboard/kbd_chords_dict.c:106:13:kbd_add_components	40	static
-../Src/Keyboard/kbd_chords_dict.c:122:6:kbd_chords_dict_build	40	static
-../Src/Keyboard/kbd_chords_dict.c:165:8:kbd_scale_slot_semitone_offset	24	static

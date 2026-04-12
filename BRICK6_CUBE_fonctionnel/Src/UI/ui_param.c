@@ -292,28 +292,67 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
 
     const float delta_value = (float)delta * desc->step;
     const float base_track_value = ui_param_get_active_track_value(param);
+    seq_plock_entry_t prior_entries[SEQ_STEPS_PER_PAGE];
+    seq_value16_t target_values[SEQ_STEPS_PER_PAGE];
+    uint8_t had_prior_entry[SEQ_STEPS_PER_PAGE];
 
     for (uint8_t i = 0U; i < held_count; ++i)
     {
         const seq_step_id_t step = held_steps[i];
 
         float source_value = base_track_value;
-        seq_plock_entry_t existing;
-        if (seq_edit_step_plock_find(held_track, step, set_id, param8, &existing) != 0U)
+        had_prior_entry[i] = seq_edit_step_plock_find(held_track, step, set_id, param8, &prior_entries[i]);
+        if (had_prior_entry[i] != 0U)
         {
-            source_value = seq_param_iface_decode_param_value(param, existing.value16);
+            source_value = seq_param_iface_decode_param_value(param, prior_entries[i].value16);
         }
 
         float next_value = source_value + delta_value;
         next_value = ui_param_clamp(next_value, min_value, max_value);
+        target_values[i] = seq_param_iface_encode_param_value(param, next_value);
+    }
 
-        const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
-        (void)seq_edit_step_plock_upsert(held_track,
-                                         step,
-                                         set_id,
-                                         param8,
-                                         encoded,
-                                         0U);
+    uint8_t applied_count = 0U;
+    for (; applied_count < held_count; ++applied_count)
+    {
+        const seq_plock_op_status_t status = seq_edit_step_plock_upsert(held_track,
+                                                                        held_steps[applied_count],
+                                                                        set_id,
+                                                                        param8,
+                                                                        target_values[applied_count],
+                                                                        0U);
+        if ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED))
+        {
+            continue;
+        }
+
+        while (applied_count > 0U)
+        {
+            applied_count--;
+            if (had_prior_entry[applied_count] != 0U)
+            {
+                (void)seq_model_step_plock_upsert(held_track,
+                                                  held_steps[applied_count],
+                                                  set_id,
+                                                  param8,
+                                                  prior_entries[applied_count].value16,
+                                                  prior_entries[applied_count].flags);
+            }
+            else
+            {
+                (void)seq_model_step_plock_delete(held_track,
+                                                  held_steps[applied_count],
+                                                  set_id,
+                                                  param8);
+            }
+        }
+
+        return 1U;
+    }
+
+    for (uint8_t i = 0U; i < held_count; ++i)
+    {
+        seq_edit_step_plock_commit(held_track, held_steps[i], set_id, param8);
     }
 
     return 1U;
@@ -431,3 +470,4 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
 
     ui_param_set_active_track_value(param, value);
 }
+

@@ -1,2 +1,0 @@
-../Src/MIDI/juno_midi_input.c:4:13:juno_midi_push_event	1
-../Src/MIDI/juno_midi_input.c:23:6:juno_midi_input_receive	14

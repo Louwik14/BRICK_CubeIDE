@@ -1,5 +1,6 @@
 #include "Storage/pattern_live_ram.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "Storage/memory_layout.h"
@@ -37,6 +38,10 @@ static uint8_t g_last_playhead_valid;
 static uint8_t g_last_playhead_step;
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
+static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step);
+static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
+                                                            uint8_t *out_track,
+                                                            uint16_t *out_required);
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
@@ -135,6 +140,85 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         default:
             return 0U;
     }
+}
+
+static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step)
+{
+    if (step == 0)
+    {
+        return 0U;
+    }
+
+    const uint8_t lock_count = (step->lock_count > SEQ_STEP_MAX_LOCKS)
+        ? SEQ_STEP_MAX_LOCKS
+        : step->lock_count;
+    uint8_t unique_count = 0U;
+
+    for (uint8_t i = 0U; i < lock_count; ++i)
+    {
+        const pattern_v1_plock_t *const current = &step->locks[i];
+        uint8_t seen = 0U;
+
+        for (uint8_t j = 0U; j < i; ++j)
+        {
+            const pattern_v1_plock_t *const prior = &step->locks[j];
+            if ((prior->set_id == current->set_id) && (prior->param8 == current->param8))
+            {
+                seen = 1U;
+                break;
+            }
+        }
+
+        if (seen == 0U)
+        {
+            unique_count++;
+        }
+    }
+
+    return unique_count;
+}
+
+static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
+                                                            uint8_t *out_track,
+                                                            uint16_t *out_required)
+{
+    if (seq == 0)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        uint16_t required = 0U;
+
+        for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
+        {
+            required = (uint16_t)(required + pattern_live_step_required_lock_count(&seq->tracks[track].steps[step]));
+            if (required > (uint16_t)SEQ_PLOCK_BUDGET_PER_TRACK)
+            {
+                if (out_track != 0)
+                {
+                    *out_track = track;
+                }
+                if (out_required != 0)
+                {
+                    *out_required = required;
+                }
+                return 0U;
+            }
+        }
+    }
+
+    if (out_track != 0)
+    {
+        *out_track = 0U;
+    }
+    if (out_required != 0)
+    {
+        *out_required = 0U;
+    }
+
+    return 1U;
 }
 
 uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
@@ -280,6 +364,17 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
         return 0U;
     }
 
+    uint8_t overflow_track = 0U;
+    uint16_t overflow_required = 0U;
+    if (pattern_live_seq_block_validate_plock_budget(seq, &overflow_track, &overflow_required) == 0U)
+    {
+        printf("[PATTERN][LIVE] seq apply rejected: track=%u required=%u budget=%u\r\n",
+               (unsigned)(overflow_track + 1U),
+               (unsigned)overflow_required,
+               (unsigned)SEQ_PLOCK_BUDGET_PER_TRACK);
+        return 0U;
+    }
+
     seq_model_init_defaults();
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -300,12 +395,20 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
             for (uint8_t i = 0U; i < lock_count; ++i)
             {
                 const pattern_v1_plock_t *const pl = &in_step->locks[i];
-                (void)seq_model_step_plock_upsert(track,
-                                                  step,
-                                                  pl->set_id,
-                                                  pl->param8,
-                                                  pl->value16,
-                                                  pl->flags);
+                const seq_plock_op_status_t status = seq_model_step_plock_upsert(track,
+                                                                                 step,
+                                                                                 pl->set_id,
+                                                                                 pl->param8,
+                                                                                 pl->value16,
+                                                                                 pl->flags);
+                if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
+                {
+                    printf("[PATTERN][LIVE] seq apply aborted: track=%u step=%u status=%u\r\n",
+                           (unsigned)(track + 1U),
+                           (unsigned)(step + 1U),
+                           (unsigned)status);
+                    return 0U;
+                }
             }
         }
     }
@@ -317,6 +420,12 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 {
     if ((pattern == 0) || (g_apply_in_progress != 0U))
     {
+        return 0U;
+    }
+
+    if (pattern_live_seq_block_validate_plock_budget(&pattern->seq, 0, 0) == 0U)
+    {
+        (void)pattern_live_apply_seq_block(&pattern->seq);
         return 0U;
     }
 
@@ -393,7 +502,11 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         seq_runtime_set_track_swing(track, pattern->globals.track_swing[track]);
     }
 
-    (void)pattern_live_apply_seq_block(&pattern->seq);
+    if (pattern_live_apply_seq_block(&pattern->seq) == 0U)
+    {
+        g_apply_in_progress = 0U;
+        return 0U;
+    }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {

@@ -1,5 +1,0 @@
-../Src/UI/pages/ui_page_hall_velocity.c:42:13:ui_page_hall_velocity_enter	1
-../Src/UI/pages/ui_page_hall_velocity.c:91:13:ui_page_hall_velocity_render	3
-../Src/UI/pages/ui_page_hall_velocity.c:46:13:ui_page_hall_velocity_handle_event	6
-../Src/UI/pages/ui_page_hall_velocity.c:89:13:ui_page_hall_velocity_tick	1
-../Src/UI/pages/ui_page_hall_velocity.c:44:13:ui_page_hall_velocity_leave	1

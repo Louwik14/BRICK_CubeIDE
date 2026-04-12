@@ -1,5 +1,0 @@
-../Src/Audio/recorder_transport.c:38:16:recorder_transport_is_supported_step_length	0	static
-../Src/Audio/recorder_transport.c:56:6:recorder_transport_init	0	static
-../Src/Audio/recorder_transport.c:77:6:recorder_transport_start_record	8	static
-../Src/Audio/recorder_transport.c:101:6:recorder_transport_process	0	static
-../Src/Audio/recorder_transport.c:146:9:recorder_transport_is_recording	0	static

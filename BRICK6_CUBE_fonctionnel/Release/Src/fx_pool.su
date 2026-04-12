@@ -1,2 +1,0 @@
-../Src/fx_pool.c:49:6:fx_pool_init	0	static
-../Src/fx_pool.c:77:12:fx_pool_get_slot	0	static

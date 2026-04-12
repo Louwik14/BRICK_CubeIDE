@@ -1,6 +1,0 @@
-../Drivers/Drv_app/Src/led_anim.c:42:25:find_slot	24	static
-../Drivers/Drv_app/Src/led_anim.c:73:6:led_anim_init	8	static
-../Drivers/Drv_app/Src/led_anim.c:88:6:led_anim_stop_all	16	static
-../Drivers/Drv_app/Src/led_anim.c:111:6:led_anim_stop	32	static
-../Drivers/Drv_app/Src/led_anim.c:140:6:led_anim_blink	32	static
-../Drivers/Drv_app/Src/led_anim.c:170:6:led_anim_tick	40	static

@@ -1,3 +1,0 @@
-../Drivers/U8g2/u8x8_debounce.c:63:16:u8x8_find_first_diff	3
-../Drivers/U8g2/u8x8_debounce.c:40:16:u8x8_read_pin_state	2
-../Drivers/U8g2/u8x8_debounce.c:142:9:u8x8_GetMenuEvent	10

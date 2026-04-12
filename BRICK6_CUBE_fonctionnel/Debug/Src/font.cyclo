@@ -1,4 +1,0 @@
-../Src/font.c:37:16:get_col_5x7	3
-../Src/font.c:55:16:get_col_5x8_elektron	3
-../Src/font.c:66:13:expand_font4x6	6
-../Src/font.c:92:16:get_col_4x6	4

@@ -1,3 +1,0 @@
-../Src/control_events.c:41:6:control_event_init	0	static
-../Src/control_events.c:60:6:control_event_push	4	static,ignoring_inline_asm
-../Src/control_events.c:85:6:control_event_pop	4	static

@@ -1,5 +1,0 @@
-../Src/Core/brick6_audio_runtime.c:56:13:brick6_collect_runtime_synth_usage	24	static
-../Src/Core/brick6_audio_runtime.c:93:24:brick6_map_runtime_type_to_drum_model	16	static
-../Src/Core/brick6_audio_runtime.c:124:13:brick6_render_synth_tracks	48	static
-../Src/Core/brick6_audio_runtime.c:225:6:brick6_audio_runtime_init	16	static
-../Src/Core/brick6_audio_runtime.c:231:6:brick6_audio_runtime_dsp	64	static

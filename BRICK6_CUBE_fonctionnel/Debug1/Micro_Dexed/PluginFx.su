@@ -1,5 +1,0 @@
-../Micro_Dexed/PluginFx.cpp:52:14:float logsc(float, float, float, float)	24	static
-../Micro_Dexed/PluginFx.cpp:56:1:PluginFx::PluginFx()	16	static
-../Micro_Dexed/PluginFx.cpp:62:6:void PluginFx::init(int)	24	static
-../Micro_Dexed/PluginFx.cpp:108:6:void PluginFx::process(float*, int)	40	static
-../Micro_Dexed/PluginFx.cpp:233:7:float PluginFx::getGain()	16	static

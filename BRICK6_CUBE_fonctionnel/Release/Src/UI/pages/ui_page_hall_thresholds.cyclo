@@ -1,5 +1,0 @@
-../Src/UI/pages/ui_page_hall_thresholds.c:23:13:ui_page_hall_thresholds_enter	1
-../Src/UI/pages/ui_page_hall_thresholds.c:62:13:ui_page_hall_thresholds_render	1
-../Src/UI/pages/ui_page_hall_thresholds.c:27:13:ui_page_hall_thresholds_handle_event	16
-../Src/UI/pages/ui_page_hall_thresholds.c:60:13:ui_page_hall_thresholds_tick	1
-../Src/UI/pages/ui_page_hall_thresholds.c:25:13:ui_page_hall_thresholds_leave	1

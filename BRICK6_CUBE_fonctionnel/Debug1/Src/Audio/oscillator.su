@@ -1,4 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Drivers/Daisy_SP/dsp.h:100:14:float daisysp::fastmod1f(float)	16	static
-../Src/Audio/oscillator.cpp:7:7:float daisysp::Oscillator::Process()	32	static
-../Src/Audio/oscillator.cpp:61:7:float daisysp::Oscillator::CalcPhaseInc(float)	16	static
-../Src/Audio/oscillator.cpp:66:14:float Polyblep(float, float)	24	static

@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/cache_maintenance.h:21:20:dcache_clean_by_addr_aligned	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel/Inc/Storage/cache_maintenance.h:45:20:dcache_invalidate_by_addr_aligned	0	static,ignoring_inline_asm
-../Src/Audio/audio.c:103:13:process_half	16	static
-../Src/Audio/audio.c:149:6:audio_init	16	static
-../Src/Audio/audio.c:181:6:audio_start	8	static
-../Src/Audio/audio.c:223:6:HAL_SAI_RxHalfCpltCallback	8	static
-../Src/Audio/audio.c:261:6:HAL_SAI_RxCpltCallback	8	static

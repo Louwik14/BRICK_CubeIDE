@@ -1,2 +1,0 @@
-../Micro_Dexed/freqlut.cpp:37:6:static void Freqlut::init(float)	2
-../Micro_Dexed/freqlut.cpp:48:9:static int32_t Freqlut::lookup(int32_t)	1

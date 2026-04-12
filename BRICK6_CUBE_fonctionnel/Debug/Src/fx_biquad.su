@@ -1,7 +1,0 @@
-../Src/fx_biquad.c:7:14:fx_biquad_clamp_freq	0	static
-../Src/fx_biquad.c:19:13:fx_biquad_normalize	0	static
-../Src/fx_biquad.c:38:6:fx_biquad_reset	0	static
-../Src/fx_biquad.c:47:6:fx_biquad_set_identity	0	static
-../Src/fx_biquad.c:59:6:fx_biquad_set_low_shelf	32	static
-../Src/fx_biquad.c:94:6:fx_biquad_set_peaking	32	static
-../Src/fx_biquad.c:126:6:fx_biquad_set_high_shelf	32	static

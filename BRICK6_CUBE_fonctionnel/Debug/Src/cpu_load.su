@@ -1,7 +1,0 @@
-../Src/cpu_load.c:35:6:cpu_load_init	16	static
-../Src/cpu_load.c:63:6:cpu_load_block_start_irq	0	static
-../Src/cpu_load.c:68:6:cpu_load_block_end_irq	8	static
-../Src/cpu_load.c:86:10:cpu_load_get_permille	0	static
-../Src/cpu_load.c:91:10:cpu_load_get_max_permille	0	static
-../Src/cpu_load.c:96:10:cpu_load_get_overruns	0	static
-../Src/cpu_load.c:101:6:cpu_load_reset_max	0	static

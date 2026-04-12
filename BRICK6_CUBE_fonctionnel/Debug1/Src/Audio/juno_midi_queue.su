@@ -1,5 +1,0 @@
-../Src/Audio/juno_midi_queue.c:43:6:juno_midi_queue_init	8	static
-../Src/Audio/juno_midi_queue.c:48:6:juno_midi_queue_clear	0	static,ignoring_inline_asm
-../Src/Audio/juno_midi_queue.c:57:9:juno_midi_queue_push	4	static,ignoring_inline_asm
-../Src/Audio/juno_midi_queue.c:79:9:juno_midi_queue_pop	0	static,ignoring_inline_asm
-../Src/Audio/juno_midi_queue.c:100:10:juno_midi_queue_drop_count	0	static

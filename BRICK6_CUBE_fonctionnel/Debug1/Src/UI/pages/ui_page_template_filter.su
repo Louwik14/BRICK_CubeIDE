@@ -1,8 +1,0 @@
-../Src/UI/pages/ui_page_template_filter.c:80:36:ui_page_template_colors_resolve_family	8	static
-../Src/UI/pages/ui_page_template_filter.c:120:30:ui_page_template_colors_get_audio_family	8	static
-../Src/UI/pages/ui_page_template_filter.c:125:13:ui_page_template_colors_sync_family	32	static
-../Src/UI/pages/ui_page_template_filter.c:423:13:ui_page_template_colors_render	8	static
-../Src/UI/pages/ui_page_template_filter.c:416:13:ui_page_template_colors_tick	8	static
-../Src/UI/pages/ui_page_template_filter.c:408:13:ui_page_template_colors_handle_event	8	static
-../Src/UI/pages/ui_page_template_filter.c:402:13:ui_page_template_colors_enter	8	static
-../Src/UI/pages/ui_page_template_filter.c:92:6:ui_page_template_colors_register_families	16	static
