@@ -149,7 +149,7 @@ clean:
 	-@echo ' '
 
 post-build:
-	py -3 "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel\tools\report_mem.py" --map "BRICK6_CUBE.map"
+	py -3 "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6_CUBE_fonctionnel\tools\report_mem.py" --map "BRICK6_CUBE.map" --csv ram.csv
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)

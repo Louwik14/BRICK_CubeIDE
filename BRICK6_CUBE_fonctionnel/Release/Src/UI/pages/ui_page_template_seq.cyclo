@@ -1,0 +1,2 @@
+../Src/UI/pages/ui_page_template_seq.c:17:36:ui_page_template_seq_resolve_family	1
+../Src/UI/pages/ui_page_template_seq.c:29:6:ui_page_template_seq_register_families	4

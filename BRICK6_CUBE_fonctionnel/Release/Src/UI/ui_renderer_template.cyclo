@@ -1,0 +1,14 @@
+../Src/UI/ui_renderer_template.c:25:13:ui_renderer_template_format_active_pattern_label	3
+../Src/UI/ui_renderer_template.c:46:16:ui_renderer_template_is_drum_pitch_offset_param	9
+../Src/UI/ui_renderer_template.c:65:13:ui_renderer_template_format_value	38
+../Src/UI/ui_renderer_template.c:195:13:ui_renderer_template_format_cpu_avg	4
+../Src/UI/ui_renderer_template.c:214:12:ui_renderer_template_center_x	3
+../Src/UI/ui_renderer_template.c:225:13:ui_renderer_template_draw_open_corner_frame	1
+../Src/UI/ui_renderer_template.c:242:13:ui_renderer_template_draw_note_icon	1
+../Src/UI/ui_renderer_template.c:252:13:ui_renderer_template_draw_inverted_label	1
+../Src/UI/ui_renderer_template.c:261:26:ui_renderer_template_resolve_widget_type	3
+../Src/UI/ui_renderer_template.c:278:14:ui_renderer_template_get_param_display_value	3
+../Src/UI/ui_renderer_template.c:290:13:ui_renderer_template_draw_param_slot	15
+../Src/UI/ui_renderer_template.c:381:13:ui_renderer_template_draw_header	10
+../Src/UI/ui_renderer_template.c:456:13:ui_renderer_template_draw_footer	8
+../Src/UI/ui_renderer_template.c:512:6:ui_renderer_template_draw	5

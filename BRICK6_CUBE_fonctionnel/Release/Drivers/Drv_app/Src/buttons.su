@@ -1,0 +1,6 @@
+../Drivers/Drv_app/Src/buttons.c:61:13:buttons_debug_log_press	40	static
+../Drivers/Drv_app/Src/buttons.c:99:6:buttons_init	16	static
+../Drivers/Drv_app/Src/buttons.c:125:6:buttons_update	32	static
+../Drivers/Drv_app/Src/buttons.c:182:9:button_pressed	24	static
+../Drivers/Drv_app/Src/buttons.c:207:9:button_released	24	static
+../Drivers/Drv_app/Src/buttons.c:231:9:button_down	16	static

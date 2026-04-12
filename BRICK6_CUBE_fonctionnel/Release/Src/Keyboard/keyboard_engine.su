@@ -1,0 +1,15 @@
+../Src/Keyboard/keyboard_engine.c:38:13:keyboard_engine_active_track_is_synth	8	static
+../Src/Keyboard/keyboard_engine.c:43:13:keyboard_engine_active_track_has_midi_note_path	16	static
+../Src/Keyboard/keyboard_engine.c:50:13:keyboard_engine_active_track_accepts_internal_source	16	static
+../Src/Keyboard/keyboard_engine.c:56:16:keyboard_engine_get_filter_target_track	16	static
+../Src/Keyboard/keyboard_engine.c:66:16:keyboard_engine_get_active_mix_target_track	16	static
+../Src/Keyboard/keyboard_engine.c:78:16:keyboard_engine_get_active_monob_instance	16	static
+../Src/Keyboard/keyboard_engine.c:93:16:keyboard_engine_get_active_tb3_instance	16	static
+../Src/Keyboard/keyboard_engine.c:108:16:keyboard_engine_get_track_midi_channel_zero_based	24	static
+../Src/Keyboard/keyboard_engine.c:114:13:keyboard_engine_dispatch_note_to_matching_tracks	40	static
+../Src/Keyboard/keyboard_engine.c:234:13:keyboard_engine_live_rec_push_internal_channel	24	static
+../Src/Keyboard/keyboard_engine.c:255:16:keyboard_engine_live_rec_pop_internal_channel	24	static
+../Src/Keyboard/keyboard_engine.c:274:6:keyboard_engine_note_on	32	static
+../Src/Keyboard/keyboard_engine.c:349:6:keyboard_engine_note_off	40	static
+../Src/Keyboard/keyboard_engine.c:420:6:keyboard_engine_all_notes_off	16	static
+../Src/Keyboard/keyboard_engine.c:451:6:keyboard_engine_midi_receive	48	static

@@ -1,0 +1,8 @@
+../Src/UI/pages/ui_page_template_dx7.c:54:36:ui_page_template_dx7_resolve_family	1
+../Src/UI/pages/ui_page_template_dx7.c:66:13:ui_page_template_tone_set_subpage	1
+../Src/UI/pages/ui_page_template_dx7.c:75:13:ui_page_template_tone_sync_drum_family	12
+../Src/UI/pages/ui_page_template_dx7.c:170:6:ui_page_template_dx7_register_families	9
+../Src/UI/pages/ui_page_template_dx7.c:202:13:ui_page_template_tone_enter	1
+../Src/UI/pages/ui_page_template_dx7.c:208:13:ui_page_template_tone_handle_event	1
+../Src/UI/pages/ui_page_template_dx7.c:216:13:ui_page_template_tone_tick	1
+../Src/UI/pages/ui_page_template_dx7.c:223:13:ui_page_template_tone_render	1

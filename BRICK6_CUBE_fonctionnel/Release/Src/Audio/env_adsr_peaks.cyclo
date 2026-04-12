@@ -1,0 +1,12 @@
+../Src/Audio/env_adsr_peaks.c:76:6:env_adsr_peaks_init	5
+../Src/Audio/env_adsr_peaks.c:93:6:env_adsr_peaks_reset	1
+../Src/Audio/env_adsr_peaks.c:104:6:env_adsr_peaks_set_attack	2
+../Src/Audio/env_adsr_peaks.c:110:6:env_adsr_peaks_set_decay	2
+../Src/Audio/env_adsr_peaks.c:116:6:env_adsr_peaks_set_sustain	1
+../Src/Audio/env_adsr_peaks.c:121:6:env_adsr_peaks_set_release	2
+../Src/Audio/env_adsr_peaks.c:127:6:env_adsr_peaks_gate_on	3
+../Src/Audio/env_adsr_peaks.c:133:6:env_adsr_peaks_gate_off	2
+../Src/Audio/env_adsr_peaks.c:146:6:env_adsr_peaks_retrigger	3
+../Src/Audio/env_adsr_peaks.c:153:9:env_adsr_peaks_process_step	10
+../Src/Audio/env_adsr_peaks.c:217:9:env_adsr_peaks_value	1
+../Src/Audio/env_adsr_peaks.c:222:24:env_adsr_peaks_stage	1
