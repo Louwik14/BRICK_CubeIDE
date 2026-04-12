@@ -30,7 +30,7 @@ typedef enum
     TRACK_RUNTIME_ENGINE_AUDIO_TRACK,
     TRACK_RUNTIME_ENGINE_DX7,
     TRACK_RUNTIME_ENGINE_MONOB,
-    TRACK_RUNTIME_ENGINE_TB3,
+    TRACK_RUNTIME_ENGINE_TB3, /* legacy engine id retained; not bound anymore */
     TRACK_RUNTIME_ENGINE_DRUM
 } track_runtime_engine_t;
 
@@ -68,7 +68,7 @@ typedef enum
     TRACK_RUNTIME_TYPE_HYBRID,
     TRACK_RUNTIME_TYPE_DX7,
     TRACK_RUNTIME_TYPE_MONOB,
-    TRACK_RUNTIME_TYPE_TB3,
+    TRACK_RUNTIME_TYPE_TB3, /* legacy runtime type retained; not bound anymore */
     TRACK_RUNTIME_TYPE_DRUM_TRX_BD,
     TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES,
     TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT,

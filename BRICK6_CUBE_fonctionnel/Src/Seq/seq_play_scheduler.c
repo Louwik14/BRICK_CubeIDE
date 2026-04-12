@@ -14,7 +14,6 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
-#include "Audio/tb3_synth.h"
 #include "Audio/mixer.h"
 #include "param_registry.h"
 #include "midi.h"
@@ -156,7 +155,6 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     const uint8_t track_supports_vca_gate =
         ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
          || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-         || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
          || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)) ? 1U : 0U;
 
     uint8_t filter_track = 0U;
@@ -205,17 +203,6 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             microdexed_synth_note_off(note);
-        }
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
-    {
-        if (is_note_on != 0U)
-        {
-            tb3_synth_note_on_for_instance(ctx->instance_id, note, velocity);
-        }
-        else
-        {
-            tb3_synth_note_off_for_instance(ctx->instance_id, note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)

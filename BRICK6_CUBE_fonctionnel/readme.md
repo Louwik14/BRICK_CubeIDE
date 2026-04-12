@@ -82,14 +82,14 @@ Priority order:
 
 * `Synth` and `Drum` are two distinct engine families (track-aware routing authority remains `track_runtime`).
 * `Drum` is **not** an alias of `Synth`.
-* `DX7`, `MonoB`, `TB3` remain synth-engine types in the `Synth` family.
+* `DX7` and `MonoB` remain synth-engine types in the `Synth` family.
 * `Drum` has its own runtime model catalog (`TRX` + `FM` drum models) and does not reuse `Synth` types.
 * Mono/poly behavior for `PLAY` remains centralized by runtime capability declarations (no conceptual merge between `Synth` and `Drum`).
 
 ### UI families actually exposed (track-aware)
 
 * `TONE`:
-  * `Synth` types keep dedicated tone pages (`DX7`, `MonoB`, `TB3`).
+  * `Synth` types keep dedicated tone pages (`DX7`, `MonoB`).
   * `Drum` has a dedicated dynamic `TONE` catalog per active drum type (TRX/FM variants).
 * `COLORS`:
   * Shared audio domain for active tracks.
@@ -301,7 +301,7 @@ Avoids:
   * `SHIFT + PASTE` in these scopes clears all targeted params to each param minimum
 * Ensemble/page paste compatibility is by intersection of common `param_id` (not strict identical layout matching).
 * Exclusive-source paste policy:
-  * `DX7` / `TB3` synth instances are move-on-paste when pasting to another track
+  * `DX7` synth instances are move-on-paste when pasting to another track
   * `Input1..4`: paste uses a free input family first; otherwise move-on-paste
   * clipboard source is updated after move, enabling chained pastes from the same clipboard object
 

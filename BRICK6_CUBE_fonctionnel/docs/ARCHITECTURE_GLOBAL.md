@@ -165,7 +165,6 @@ Le paramètre `CFG > Track` expose actuellement :
 #### Pour Synth
 - `DX7`
 - `MonoB`
-- `TB3`
 
 #### Pour Drum
 - `TRX BD`
@@ -278,7 +277,7 @@ Le contenu du `Type` dépend du `Track`.
 
 Exemples :
 - `Track = Input1` -> `Type = Audio` ou `Hybrid`
-- `Track = Synth` -> `Type = DX7` / `MonoB` / `TB3`
+- `Track = Synth` -> `Type = DX7` / `MonoB`
 - `Track = Drum` -> `Type = TRX*` / `FM*` selon le catalogue drum dédié
 
 ---
@@ -664,7 +663,7 @@ Exemples :
 
 ## Addendum Passe 3 Drum (paramètres dédiés)
 
-- Les moteurs `Drum` utilisent désormais un bloc d’IDs dédié `PARAM_DRUM_*` dans le registre de paramètres (aucun recyclage des IDs `DX7`/`MonoB`/`TB3`).
+- Les moteurs `Drum` utilisent désormais un bloc d’IDs dédié `PARAM_DRUM_*` dans le registre de paramètres (aucun recyclage des IDs `DX7`/`MonoB`).
 - La résolution `TONE`/`COLORS` pour `Drum` est assurée par templates UI track-aware, avec mapping par type drum.
 - Le flux d’application est: `ui_param` -> `param_registry_apply_track_value()` -> `track_runtime` -> `drum_synth_set_param_for_instance()` -> moteur actif.
 - `PLAY` reste inchangé: `Drum` mono via `track_runtime_get_voice_mode()`.

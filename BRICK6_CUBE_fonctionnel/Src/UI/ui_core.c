@@ -189,10 +189,6 @@ static ui_track_state_t g_ui_track_state = {
 
 static ui_clipboard_state_t g_ui_clipboard;
 
-volatile uint32_t g_ui_tb3_type_switch_stage = 0U;
-volatile uint32_t g_ui_tb3_type_switch_track = 0U;
-volatile uint32_t g_ui_tb3_type_switch_type = 0U;
-volatile uint32_t g_ui_tb3_cfg_sync_seen = 0U;
 
 typedef struct
 {
@@ -577,7 +573,7 @@ bool ui_track_family_is_engine(ui_track_family_t family)
 static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_TB3 };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_TRX_BD,
         UI_TRACK_TYPE_DRUM_TRX_CLAVES,
@@ -670,7 +666,7 @@ bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_trac
         return true;
     }
 
-    if ((type != UI_TRACK_TYPE_DX7) && (type != UI_TRACK_TYPE_TB3))
+    if (type != UI_TRACK_TYPE_DX7)
     {
         return true;
     }
@@ -941,10 +937,6 @@ static void ui_core_sync_active_track_cfg_params(void)
     }
     param_store_set_active(UI_CFG_REC_LEN_PARAM, (float)seq_runtime_get_rec_len_mode());
     param_registry_sync_ui_for_active_track();
-    if (active_config->type == UI_TRACK_TYPE_TB3)
-    {
-        g_ui_tb3_cfg_sync_seen++;
-    }
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -1081,13 +1073,12 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
     }
 
     /*
-     * Compat: historical snapshots may contain several DX7/TB3 tracks.
-     * Current runtime allows at most one instance for each.
+     * Compat: historical snapshots may contain several DX7 tracks.
+     * Current runtime allows at most one instance.
      * Preserve the first requested slot and gracefully fold extras to MONOB
      * instead of rejecting the full snapshot load.
      */
     uint8_t dx7_kept = 0U;
-    uint8_t tb3_kept = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -1101,17 +1092,6 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                 if (dx7_kept == 0U)
                 {
                     dx7_kept = 1U;
-                }
-                else
-                {
-                    requested_type = UI_TRACK_TYPE_MONOB;
-                }
-            }
-            else if (requested_type == UI_TRACK_TYPE_TB3)
-            {
-                if (tb3_kept == 0U)
-                {
-                    tb3_kept = 1U;
                 }
                 else
                 {
@@ -1704,7 +1684,7 @@ static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipbo
     }
 
     return (uint8_t)((cb->config.family == UI_TRACK_FAMILY_SYNTH)
-                     && ((cb->config.type == UI_TRACK_TYPE_DX7) || (cb->config.type == UI_TRACK_TYPE_TB3)));
+                     && (cb->config.type == UI_TRACK_TYPE_DX7));
 }
 
 static ui_track_family_t ui_core_clipboard_find_free_input_family(void);
@@ -2746,20 +2726,14 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
 bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 {
-    g_ui_tb3_type_switch_stage = 1U;
-    g_ui_tb3_type_switch_track = track;
-    g_ui_tb3_type_switch_type = (uint32_t)type;
-
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
     {
-        g_ui_tb3_type_switch_stage = 2U;
         return false;
     }
 
     ui_track_config_t *config = &g_ui_track_state.track_configs[track];
     if (!ui_track_type_is_valid_for_family(config->family, type))
     {
-        g_ui_tb3_type_switch_stage = 3U;
         if (track == g_ui_track_state.active_track)
         {
             ui_core_sync_active_track_cfg_params();
@@ -2778,17 +2752,13 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 
     config->type = type;
     track_runtime_invalidate_all();
-    g_ui_tb3_type_switch_stage = 4U;
 
     if (track == g_ui_track_state.active_track)
     {
         keyboard_runtime_on_active_track_changed();
-        g_ui_tb3_type_switch_stage = 5U;
         ui_core_sync_active_track_cfg_params();
-        g_ui_tb3_type_switch_stage = 6U;
     }
 
-    g_ui_tb3_type_switch_stage = 7U;
     return true;
 }
 
@@ -2891,8 +2861,6 @@ const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_ty
         case UI_TRACK_TYPE_MONOB:
             return "MonoB";
 
-        case UI_TRACK_TYPE_TB3:
-            return "TB-3";
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TRX BD";
         case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
@@ -2942,8 +2910,6 @@ const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type
         case UI_TRACK_TYPE_MONOB:
             return "MB";
 
-        case UI_TRACK_TYPE_TB3:
-            return "TB3";
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TBD";
         case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
