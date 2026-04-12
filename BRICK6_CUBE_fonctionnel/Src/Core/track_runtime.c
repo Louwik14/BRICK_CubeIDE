@@ -12,20 +12,15 @@
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DX7_MAX_INSTANCES 1U
 #define TRACK_RUNTIME_MONOB_MAX_INSTANCES 8U
-#define TRACK_RUNTIME_TB3_MAX_INSTANCES 1U
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
-volatile uint32_t g_track_runtime_tb3_bind_seen = 0U;
-volatile uint32_t g_track_runtime_tb3_bind_track = 0U;
-volatile uint32_t g_track_runtime_tb3_bind_instance = 0U;
 static volatile uint8_t g_track_runtime_refresh_needed = 1U;
 
 typedef struct
 {
     uint8_t dx7_used;
     uint8_t monob_used;
-    uint8_t tb3_used;
 } track_runtime_allocator_state_t;
 
 static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
@@ -68,8 +63,6 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         case UI_TRACK_TYPE_MONOB:
             return TRACK_RUNTIME_TYPE_MONOB;
 
-        case UI_TRACK_TYPE_TB3:
-            return TRACK_RUNTIME_TYPE_TB3;
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
         case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
@@ -224,7 +217,6 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
         case TRACK_RUNTIME_ENGINE_MONOB:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
-        case TRACK_RUNTIME_ENGINE_TB3:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return TRACK_RUNTIME_VOICE_MODE_MONO;
@@ -357,21 +349,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if (type == TRACK_RUNTIME_TYPE_TB3)
-    {
-        if (allocator->tb3_used >= TRACK_RUNTIME_TB3_MAX_INSTANCES)
-        {
-            track_runtime_set_quota_blocked(ctx);
-            return;
-        }
-
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_TB3, allocator->tb3_used);
-        g_track_runtime_tb3_bind_seen++;
-        g_track_runtime_tb3_bind_track = ctx->track_id;
-        g_track_runtime_tb3_bind_instance = allocator->tb3_used;
-        allocator->tb3_used++;
-        return;
-    }
 
     track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
 }
@@ -504,11 +481,10 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     /*
      * Mixer BI/EQ filter target is valid only for track contexts that actually
      * use mixer COLORS filtering. Synth engines with dedicated filter paths
-     * (MonoB/TB3) must not keep a mixer filter target alive.
+     * (MonoB) must not keep a mixer filter target alive.
      */
     if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MONOB)
-                || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_TB3)))
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MONOB))
     {
         return 0U;
     }
@@ -556,10 +532,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MONOB_FILTER_KEYTRK:
         case PARAM_MONOB_FILTER_ENVRST:
         case PARAM_MONOB_FILTER_ENVDLY:
-        case PARAM_TB3_CUTOFF:
-        case PARAM_TB3_RESONANCE:
-        case PARAM_TB3_ENV_MOD:
-        case PARAM_TB3_DECAY:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_COLORS;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
             return rule;
@@ -594,10 +566,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MONOB_OSC2_MIX:
         case PARAM_MONOB_OSC3_MIX:
         case PARAM_MONOB_SUB_MIX:
-        case PARAM_TB3_WAVEFORM:
-        case PARAM_TB3_VOLUME:
-        case PARAM_TB3_ACCENT:
-        case PARAM_TB3_SLIDE_TIME:
         case PARAM_DRUM_TRX_BD_PITCH:
         case PARAM_DRUM_TRX_BD_DECAY:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:

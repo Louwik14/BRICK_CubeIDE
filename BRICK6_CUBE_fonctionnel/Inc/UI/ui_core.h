@@ -31,7 +31,7 @@ typedef enum
     UI_TRACK_TYPE_HYBRID,
     UI_TRACK_TYPE_DX7,
     UI_TRACK_TYPE_MONOB,
-    UI_TRACK_TYPE_TB3,
+    UI_TRACK_TYPE_TB3, /* legacy type kept for snapshot compatibility; no active routing */
     UI_TRACK_TYPE_DRUM_TRX_BD,
     UI_TRACK_TYPE_DRUM_TRX_CLAVES,
     UI_TRACK_TYPE_DRUM_TRX_HIHAT,

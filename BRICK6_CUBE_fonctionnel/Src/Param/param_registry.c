@@ -25,7 +25,6 @@
 #include "Audio/juno_synth.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
-#include "Audio/tb3_synth.h"
 #include "Audio/drum_synth.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
@@ -493,8 +492,6 @@ typedef struct
 } filter_ui_state_t;
 
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
-volatile uint32_t g_param_tb3_apply_seen = 0U;
-volatile uint32_t g_param_tb3_apply_last_id = 0U;
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 static uint8_t g_param_registry_batch_depth = 0U;
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
@@ -668,30 +665,6 @@ static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id
     }
 }
 
-static uint8_t param_runtime_apply_tb3(uint8_t instance_id, param_id_t id, float value)
-{
-    g_param_tb3_apply_seen++;
-    g_param_tb3_apply_last_id = (uint32_t)id;
-
-    switch (id)
-    {
-        case PARAM_TB3_WAVEFORM:
-            tb3_synth_set_param_for_instance(instance_id, id, clamp_value(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_TB3_CUTOFF:
-        case PARAM_TB3_RESONANCE:
-        case PARAM_TB3_ENV_MOD:
-        case PARAM_TB3_DECAY:
-        case PARAM_TB3_ACCENT:
-        case PARAM_TB3_VOLUME:
-        case PARAM_TB3_SLIDE_TIME:
-            tb3_synth_set_param_for_instance(instance_id, id, clamp_value(value, 0.0f, 127.0f));
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
 static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float value)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -763,10 +736,6 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     {
         applied = param_runtime_apply_tone_monob(ctx->instance_id, id, value);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB3)
-    {
-        applied = param_runtime_apply_tb3(ctx->instance_id, id, value);
-    }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         applied = drum_synth_set_param_for_instance(ctx->instance_id, id, value);
@@ -829,8 +798,6 @@ static uint8_t param_runtime_apply_colors_track(uint8_t track, param_id_t id, fl
                 default:
                     return 0U;
             }
-        case (uint8_t)TRACK_RUNTIME_ENGINE_TB3:
-            return param_runtime_apply_tb3(ctx->instance_id, id, value);
         case (uint8_t)TRACK_RUNTIME_ENGINE_DRUM:
             return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
         default:
@@ -1787,14 +1754,6 @@ static void apply_monob_osc1_mix(float v) { apply_tone_live_track(PARAM_MONOB_OS
 static void apply_monob_osc2_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_MIX, v); }
 static void apply_monob_osc3_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_MIX, v); }
 static void apply_monob_sub_mix(float v) { apply_tone_live_track(PARAM_MONOB_SUB_MIX, v); }
-static void apply_tb3_waveform(float v) { apply_tone_live_track(PARAM_TB3_WAVEFORM, v); }
-static void apply_tb3_cutoff(float v) { apply_tone_live_track(PARAM_TB3_CUTOFF, v); }
-static void apply_tb3_resonance(float v) { apply_tone_live_track(PARAM_TB3_RESONANCE, v); }
-static void apply_tb3_env_mod(float v) { apply_tone_live_track(PARAM_TB3_ENV_MOD, v); }
-static void apply_tb3_decay(float v) { apply_tone_live_track(PARAM_TB3_DECAY, v); }
-static void apply_tb3_accent(float v) { apply_tone_live_track(PARAM_TB3_ACCENT, v); }
-static void apply_tb3_volume(float v) { apply_tone_live_track(PARAM_TB3_VOLUME, v); }
-static void apply_tb3_slide_time(float v) { apply_tone_live_track(PARAM_TB3_SLIDE_TIME, v); }
 static void apply_lfo1_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEST, v); }
 static void apply_lfo1_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_RATE, v); }
 static void apply_lfo1_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEPTH, v); }
@@ -2501,14 +2460,14 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MONOB_OSC2_MIX, "O2 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.6f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc2_mix),
     PARAM_DESC_EX(PARAM_MONOB_OSC3_MIX, "O3 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.45f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc3_mix),
     PARAM_DESC_EX(PARAM_MONOB_SUB_MIX, "SubMix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.35f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_sub_mix),
-    PARAM_DESC_EX(PARAM_TB3_WAVEFORM, "Wave", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_tb3_waveform),
-    PARAM_DESC_EX(PARAM_TB3_VOLUME, "Vol", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_volume),
-    PARAM_DESC_EX(PARAM_TB3_ACCENT, "Accent", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_accent),
-    PARAM_DESC_EX(PARAM_TB3_SLIDE_TIME, "Slide", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_slide_time),
-    PARAM_DESC_EX(PARAM_TB3_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_cutoff),
-    PARAM_DESC_EX(PARAM_TB3_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_resonance),
-    PARAM_DESC_EX(PARAM_TB3_ENV_MOD, "Env Mod", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_env_mod),
-    PARAM_DESC_EX(PARAM_TB3_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_tb3_decay),
+    PARAM_DESC_EX(PARAM_TB3_WAVEFORM, "TB3 OFF", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_VOLUME, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_ACCENT, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_SLIDE_TIME, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_CUTOFF, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_RESONANCE, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_ENV_MOD, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_TB3_DECAY, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_PITCH, "Pitch", PARAM_TYPE_BIPOLAR, -48.0f, 24.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.01f, 2.0f, 0.01f, 0.4f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_PITCH_SWEEP, "Sweep", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.3f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),

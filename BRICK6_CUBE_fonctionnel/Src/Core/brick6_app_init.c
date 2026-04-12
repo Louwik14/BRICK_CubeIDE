@@ -22,7 +22,6 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
-#include "Audio/tb3_synth.h"
 #include "ui_core.h"
 
 #include "Sampler/voice_manager.h"
@@ -88,7 +87,6 @@ void brick6_app_init(void)
     microdexed_synth_set_enabled(1U);
     monob_synth_init(48000.0f);
     drum_synth_init(48000.0f);
-    tb3_synth_init(48000.0f);
     hall_juno_midi_init();
 
     brick6_sampler_bootstrap_init_voices();
