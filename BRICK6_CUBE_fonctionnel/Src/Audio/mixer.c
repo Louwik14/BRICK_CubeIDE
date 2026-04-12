@@ -1045,14 +1045,14 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             }
         }
 
-        mixer_track_filter_process_block(&g_track_filters[t], L, R, frames);
-
         for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
         {
             const int8_t slot = mt->insert_slot[i];
             if(slot >= 0)
                 fx_chain_process_slot_for_track(t, (uint32_t)slot, L, R, frames);
         }
+
+        mixer_track_filter_process_block(&g_track_filters[t], L, R, frames);
 
         sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
                                       t,
