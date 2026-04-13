@@ -285,6 +285,15 @@ uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
             && (type == UI_TRACK_TYPE_AUDIO)) ? 1U : 0U;
 }
 
+uint8_t keyboard_runtime_active_track_is_input_hybrid(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t family = ui_get_track_family(active_track);
+    const ui_track_type_t type = ui_get_track_type(active_track);
+    return ((ui_track_family_is_input(family) != 0U)
+            && (type == UI_TRACK_TYPE_HYBRID)) ? 1U : 0U;
+}
+
 void keyboard_runtime_on_active_track_changed(void)
 {
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();
