@@ -614,12 +614,12 @@ uint8_t hall_calibration_load(void)
 
 void hall_calibration_save(void)
 {
-    hall_calibration_storage_blob_t blob = {
+        hall_calibration_storage_blob_t blob = {
         .magic = HALL_CAL_STORAGE_MAGIC,
         .version = HALL_CAL_STORAGE_VERSION,
         .size = sizeof(hall_calibration_storage_blob_t),
         .hall = { {0}, {0} },
-        .user = {0}
+        .user = {{0}}
     };
 
     if (hall_calibration_blob_is_valid(&g_cal_blob) == 0U)

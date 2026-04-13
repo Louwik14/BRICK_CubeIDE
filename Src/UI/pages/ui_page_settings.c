@@ -372,26 +372,24 @@ static void ui_page_settings_leave(void)
     g_ui_settings.depth = 0U;
 }
 
-static uint8_t ui_page_settings_handle_event_internal(const ui_event_t *ev)
+static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
     {
-        return 0U;
+        return;
     }
 
     if (ev->id == (uint8_t)BTN_COPY)
     {
         ui_page_settings_apply_action();
-        return 1U;
+        return;
     }
 
     if ((ev->id == (uint8_t)BTN_PASTE) || (ev->id == (uint8_t)BTN_SETTINGS))
     {
         ui_page_settings_back();
-        return 1U;
+        return;
     }
-
-    return 0U;
 }
 
 static void ui_page_settings_tick(void)
@@ -523,5 +521,6 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
         return 0U;
     }
 
-    return ui_page_settings_handle_event_internal(ev);
+    ui_page_settings_handle_event_internal(ev);
+    return 1U;
 }

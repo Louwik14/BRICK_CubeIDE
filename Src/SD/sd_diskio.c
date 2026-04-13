@@ -263,8 +263,8 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   uint32_t timeout;
   uint32_t op_start = HAL_GetTick();
 #if defined(ENABLE_SCRATCH_BUFFER)
-  uint8_t ret;
-#endif
+  uint8_t ret = MSD_ERROR;
+  #endif
 
   sd_access_trace_begin("diskio_read");
 
@@ -441,8 +441,8 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   uint32_t timeout;
   uint32_t op_start = HAL_GetTick();
 #if defined(ENABLE_SCRATCH_BUFFER)
-  uint8_t ret;
-  int i;
+  uint8_t ret = MSD_ERROR;
+    int i;
 #endif
 
    WriteStatus = 0;

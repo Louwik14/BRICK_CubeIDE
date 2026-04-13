@@ -957,20 +957,6 @@ static void ui_core_set_active_track(uint8_t track)
     ui_core_sync_active_track_cfg_params();
 }
 
-static void ui_core_reset_track_configs(void)
-{
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; track++)
-    {
-        g_ui_track_state.track_configs[track].family = UI_TRACK_FAMILY_OFF;
-        g_ui_track_state.track_configs[track].type = UI_TRACK_TYPE_AUDIO;
-
-        g_ui_track_state.track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
-        g_ui_track_state.track_midi_source[track] = (uint8_t)UI_TRACK_MIDI_SRC_ALL;
-    }
-
-    ui_core_sync_audio_runtime_enables();
-}
-
 uint8_t ui_get_track_midi_channel(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)

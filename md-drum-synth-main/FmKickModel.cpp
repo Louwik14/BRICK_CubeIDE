@@ -26,11 +26,7 @@ const float FmKickModel::ratios[FmKickModel::num_ratios][2] = {
     {16.0f, 5.0f}
 };
 
-static float WrapPhase(float phase) {
-    while (phase >= TWO_PI) phase -= TWO_PI;
-    while (phase < 0.0f) phase += TWO_PI;
-    return phase;
-}
+
 
 void FmKickModel::Init() {
     t = 0.0f;

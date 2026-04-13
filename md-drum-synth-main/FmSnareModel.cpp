@@ -51,7 +51,6 @@ float FmSnareModel::Process() {
     float car_amp = amp_env;
 
     float mod_out = 0.0f;
-    float car_out = 0.0f;
     // Render modulator (no feedback, no external modulation)
     plaits::fm::Operator* mod_ops[1] = { &modulator_ };
     float mod_f[1] = { mod_freq };
