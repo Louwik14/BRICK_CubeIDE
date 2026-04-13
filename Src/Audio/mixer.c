@@ -30,6 +30,7 @@
 
 #include "fx_chain.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/track_runtime.h"
 #include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
 
@@ -1098,7 +1099,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                       L,
                                       R,
                                       frames);
-        brick6_master_buffer_submit_track_post_fader(t, L, R, frames);
+        uint8_t source_track = (uint8_t)t;
+        if (track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track) == 0U)
+        {
+            source_track = (uint8_t)t;
+        }
+        brick6_master_buffer_submit_track_post_fader(source_track, L, R, frames);
 
         if(send_bus_active != 0U)
         {

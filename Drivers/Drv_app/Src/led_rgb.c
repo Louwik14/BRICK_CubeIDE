@@ -364,10 +364,7 @@ static uint8_t led_apply_master_buffer_rec_scene(led_id_t led)
 {
     const brick6_master_buffer_state_t buffer_state = brick6_master_buffer_get_state();
     const uint8_t normal_rec_armed = (seq_runtime_rec_is_armed() != 0U) ? 1U : 0U;
-    const uint8_t waiting = ((seq_runtime_is_start_pending() != 0U)
-                             || (seq_runtime_rec_is_pattern_pending_start() != 0U)
-                             || (seq_runtime_get_rec_count_in_remaining_steps() > 0U)
-                             || (seq_runtime_is_running() != 0U)) ? 1U : 0U;
+    const uint8_t waiting = brick6_master_buffer_is_waiting_start();
     const uint8_t use_violet = (normal_rec_armed != 0U) ? 1U : 0U;
     uint8_t blink = 0U;
 
