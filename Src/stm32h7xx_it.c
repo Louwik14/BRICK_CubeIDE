@@ -390,14 +390,8 @@ void hardfault_c(uint32_t *sp)
 {
   __disable_irq();
 
-  uint32_t r0  = sp[0];
-  uint32_t r1  = sp[1];
-  uint32_t r2  = sp[2];
-  uint32_t r3  = sp[3];
-  uint32_t r12 = sp[4];
-  uint32_t lr  = sp[5];
-  uint32_t pc  = sp[6];
-  uint32_t psr = sp[7];
+  uint32_t lr = sp[5];
+  uint32_t pc = sp[6];
 
   uart_log("\r\nHardFault\r\n");
 
@@ -409,9 +403,7 @@ void hardfault_c(uint32_t *sp)
   uart_log_hex("BFAR=", SCB->BFAR);
 
   while (1);
-}
-
-void OTG_HS_IRQHandler(void)
+}void OTG_HS_IRQHandler(void)
 {
   HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
 }
