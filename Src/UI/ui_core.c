@@ -1397,18 +1397,32 @@ static uint8_t ui_core_handle_master_buffer_routing_event(const ui_event_t *ev)
     return 1U;
 }
 
-static uint8_t ui_core_has_master_buffer_track(void)
+static uint8_t ui_core_find_unique_master_buffer_track(uint8_t *out_track)
 {
+    if (out_track == 0)
+    {
+        return 0U;
+    }
+
+    uint8_t found = 0U;
+    uint8_t found_track = 0U;
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         if ((ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER)
                 && (ui_get_track_type(track) == UI_TRACK_TYPE_BUFFER))
         {
-            return 1U;
+            found++;
+            found_track = track;
         }
     }
 
-    return 0U;
+    if (found != 1U)
+    {
+        return 0U;
+    }
+
+    *out_track = found_track;
+    return 1U;
 }
 
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
@@ -1431,7 +1445,9 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_REC))
     {
-        const uint8_t has_master_buffer = ui_core_has_master_buffer_track();
+        uint8_t master_buffer_track = 0U;
+        const uint8_t has_master_buffer = ui_core_find_unique_master_buffer_track(&master_buffer_track);
+        (void)master_buffer_track;
 
         if ((g_ui_track_state.track_select_armed != 0U) && (has_master_buffer != 0U))
         {

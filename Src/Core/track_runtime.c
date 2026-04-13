@@ -499,6 +499,35 @@ uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track
     return 1U;
 }
 
+uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t *out_track)
+{
+    if ((out_track == NULL) || (mix_track >= MIXER_MAX_TRACKS))
+    {
+        return 0U;
+    }
+
+    if (g_track_runtime_refresh_needed != 0U)
+    {
+        track_runtime_refresh_all();
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL)
+                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (ctx->mix_track_id != mix_track))
+        {
+            continue;
+        }
+
+        *out_track = track;
+        return 1U;
+    }
+
+    return 0U;
+}
+
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track)
 {
     if ((out_filter_track == NULL) || (ui_track >= SEQ_TRACK_COUNT))
