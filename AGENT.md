@@ -6,7 +6,6 @@ Ce fichier guide Codex pour travailler efficacement dans ce repo.
 
 Objectif :
 - comprendre vite les contraintes utiles
-- faire des passes locales, ciblées, vérifiables
 - éviter les refontes inutiles
 - ne pas casser le runtime audio
 
@@ -40,7 +39,6 @@ Ne pas lancer une exploration large du repo tant que cette piste n’a pas été
 
 - Étendre l’existant plutôt que redessiner.
 - Réutiliser avant de créer.
-- Garder les modifications locales.
 - Préserver le comportement existant hors zone corrigée.
 - Ne pas introduire de seconde autorité pour un état déjà piloté ailleurs.
 - Ne pas créer de chemin parallèle caché UI/runtime.
@@ -75,32 +73,15 @@ Quand une passe touche un état structurant, identifier d’abord :
 
 ## 4. Portée des passes
 
-- Faire la plus petite passe locale possible.
 - Ne pas partir en refonte si une correction locale suffit.
 - Ne pas élargir la passe sans nécessité démontrée.
-- Si l’utilisateur demande une passe précise, rester strictement dans ce périmètre.
-- Ne pas ramener du contexte d’anciennes passes sans lien direct avec la passe en cours.
+
 
 ---
 
 ## 5. Build et validation
 
 - Cible de travail par défaut : `Release`.
-- Ne jamais lancer `Debug` ou `Debug1` sauf demande explicite.
-- Ne pas lancer de build global par réflexe.
-- Pour une passe locale, préférer d’abord :
-  - lecture ciblée
-  - recherche ciblée
-  - diff minimal
-  - vérification logique locale
-- Ne lancer un build complet que si cela apporte une validation réellement utile à la passe.
-- Si le système de build est déjà cassé hors zone touchée :
-  - le constater une fois
-  - le signaler clairement
-  - arrêter les tentatives de build non utiles
-- Si `make -C Release ...` échoue à cause du flag toolchain connu `-fcyclomatic-complexity`, ne pas insister.
-- Dans ce cas :
-  - signaler une seule fois que l’échec vient du build system/toolchain local et non du patch
   - faire `git diff --check`
   - faire une vérification syntaxique ciblée du ou des fichiers modifiés
   - ne pas répéter longuement la même explication à chaque passe

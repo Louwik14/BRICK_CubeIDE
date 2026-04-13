@@ -40,6 +40,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Core/brick6_sd_config.h"
 
+#include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
 
@@ -86,6 +87,7 @@ void brick6_app_init(void)
     microdexed_synth_set_enabled(1U);
     monob_synth_init(48000.0f);
     drum_synth_init(48000.0f);
+    hall_keyboard_bridge_init();
 
     brick6_sampler_bootstrap_init_voices();
 
@@ -144,6 +146,7 @@ void brick6_app_process(void)
 
     hall_loop_process();
     ui_core_service_track_selection_inputs();
+    hall_keyboard_bridge_process();
 
     brick6_recorder_runtime_process_transport(&g_live_recorder);
 

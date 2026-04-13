@@ -89,6 +89,10 @@ file(GLOB SRC_APP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/*.cpp"
 )
 
+list(APPEND SRC_APP_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Hall/hall_keyboard_bridge.c"
+)
+
 file(GLOB SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.cpp"
