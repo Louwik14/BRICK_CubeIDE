@@ -69,7 +69,7 @@ static void brick6_master_buffer_apply_loop_length(void)
 
 static uint8_t brick6_master_buffer_is_boundary_reached(void)
 {
-    uint32_t longest_length = 0U;
+    uint32_t longest_duration = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -78,14 +78,16 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
             continue;
         }
 
-        const uint32_t length = (uint32_t)seq_model_get_track_playback_length(track);
-        if (length > longest_length)
+        uint8_t div = 1U;
+        (void)seq_runtime_get_track_div(track, &div);
+        const uint32_t duration = (uint32_t)seq_model_get_track_playback_length(track) * (uint32_t)div;
+        if (duration > longest_duration)
         {
-            longest_length = length;
+            longest_duration = duration;
         }
     }
 
-    if (longest_length == 0U)
+    if (longest_duration == 0U)
     {
         return 1U;
     }
@@ -97,7 +99,10 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
             continue;
         }
 
-        if ((uint32_t)seq_model_get_track_playback_length(track) != longest_length)
+        uint8_t div = 1U;
+        (void)seq_runtime_get_track_div(track, &div);
+        const uint32_t duration = (uint32_t)seq_model_get_track_playback_length(track) * (uint32_t)div;
+        if (duration != longest_duration)
         {
             continue;
         }
@@ -360,6 +365,17 @@ uint8_t brick6_master_buffer_is_recording(void)
 uint8_t brick6_master_buffer_is_armed(void)
 {
     return g_record_armed;
+}
+
+uint8_t brick6_master_buffer_is_waiting_start(void)
+{
+    if ((g_record_armed == 0U) || (g_recording != 0U))
+    {
+        return 0U;
+    }
+
+    return ((g_record_waiting_boundary != 0U)
+            || (brick6_master_buffer_is_preroll_active() != 0U)) ? 1U : 0U;
 }
 
 void brick6_master_buffer_begin_block(uint32_t frames)
