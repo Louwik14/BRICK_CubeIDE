@@ -22,7 +22,6 @@
 #include "param_registry.h"
 
 #include "audio_float.h"
-#include "Audio/juno_synth.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
@@ -2039,22 +2038,6 @@ static void apply_master_gain(float v) { (void)v; }
 static void apply_post_gain(float v) { audio_float_set_postgain(v); }
 static void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
 
-static void apply_juno_saw(float v) { juno_synth_set_param(JUNO_PARAM_SAW, v); }
-static void apply_juno_pulse(float v) { juno_synth_set_param(JUNO_PARAM_PULSE, v); }
-static void apply_juno_sub(float v) { juno_synth_set_param(JUNO_PARAM_SUB, v); }
-static void apply_juno_pwm(float v) { juno_synth_set_param(JUNO_PARAM_PWM, v); }
-static void apply_juno_vcf_freq(float v) { juno_synth_set_param(JUNO_PARAM_VCF_FREQ, v); }
-static void apply_juno_vcf_res(float v) { juno_synth_set_param(JUNO_PARAM_VCF_RES, v); }
-static void apply_juno_vcf_env(float v) { juno_synth_set_param(JUNO_PARAM_VCF_ENV, v); }
-static void apply_juno_vcf_lfo(float v) { juno_synth_set_param(JUNO_PARAM_VCF_LFO, v); }
-static void apply_juno_attack(float v) { juno_synth_set_param(JUNO_PARAM_ATTACK, v); }
-static void apply_juno_decay(float v) { juno_synth_set_param(JUNO_PARAM_DECAY, v); }
-static void apply_juno_sustain(float v) { juno_synth_set_param(JUNO_PARAM_SUSTAIN, v); }
-static void apply_juno_release(float v) { juno_synth_set_param(JUNO_PARAM_RELEASE, v); }
-static void apply_juno_lfo_rate(float v) { juno_synth_set_param(JUNO_PARAM_LFO_RATE, v); }
-static void apply_juno_hpf(float v) { juno_synth_set_param(JUNO_PARAM_HPF, v); }
-static void apply_juno_porta(float v) { juno_synth_set_param(JUNO_PARAM_PORTA, v); }
-static void apply_juno_mode(float v) { juno_synth_set_param(JUNO_PARAM_MODE, v); }
 
 static void apply_bus_comp_threshold(float v) { audio_float_set_bus_comp_threshold_db(v); }
 static void apply_bus_comp_ratio(float v) { audio_float_set_bus_comp_ratio(v); }
@@ -2213,8 +2196,6 @@ static void apply_daisy_mix(float v)
                   (_apply))
 
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
-static const char *const g_juno_mode_labels[] = {"Poly", "Poly+Porta", "Unison", NULL};
-static const char *const g_juno_hpf_labels[] = {"0", "1", "2", "3", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
@@ -2400,23 +2381,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_POST_GAIN, "Post Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_post_gain),
     PARAM_DESC_EX(PARAM_OUTPUT_COMP, "Output Comp", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_output_comp),
 
-    PARAM_DESC_EX(PARAM_JUNO_SAW, "SAW", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.05f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_saw),
-    PARAM_DESC_EX(PARAM_JUNO_PULSE, "PULSE", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.05f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_pulse),
-    PARAM_DESC_EX(PARAM_JUNO_SUB, "SUB", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.05f, 0.32f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_sub),
-    PARAM_DESC_EX(PARAM_JUNO_PWM, "PWM", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.38f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_pwm),
-    PARAM_DESC_EX(PARAM_JUNO_VCF_FREQ, "VCF FREQ", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.58f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_vcf_freq),
-    PARAM_DESC_EX(PARAM_JUNO_VCF_RES, "VCF RES", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.18f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_vcf_res),
-    PARAM_DESC_EX(PARAM_JUNO_VCF_ENV, "VCF ENV", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.42f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_vcf_env),
-    PARAM_DESC_EX(PARAM_JUNO_VCF_LFO, "VCF LFO", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.06f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_vcf_lfo),
-    PARAM_DESC_EX(PARAM_JUNO_ATTACK, "ATTACK", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.22f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_attack),
-    PARAM_DESC_EX(PARAM_JUNO_DECAY, "DECAY", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.44f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_decay),
-    PARAM_DESC_EX(PARAM_JUNO_SUSTAIN, "SUSTAIN", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.68f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_sustain),
-    PARAM_DESC_EX(PARAM_JUNO_RELEASE, "RELEASE", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.46f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_release),
-    PARAM_DESC_EX(PARAM_JUNO_LFO_RATE, "LFO RATE", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.18f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_lfo_rate),
-    PARAM_DESC_EX(PARAM_JUNO_HPF, "HPF", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_juno_hpf_labels, apply_juno_hpf),
-    PARAM_DESC_EX(PARAM_JUNO_PORTA, "PORTA", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.22f, PARAM_DISPLAY_PERCENT, "", NULL, apply_juno_porta),
-    PARAM_DESC_EX(PARAM_JUNO_MODE, "MODE", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_juno_mode_labels, apply_juno_mode),
-
+   
     PARAM_DESC(PARAM_DX7_ALGORITHM, "ALGO", PARAM_TYPE_INT, 0.0f, 31.0f, 1.0f, 4.0f, "", apply_dx7_algorithm),
     PARAM_DESC(PARAM_DX7_FEEDBACK, "FDBK", PARAM_TYPE_INT, 0.0f, 7.0f, 1.0f, 6.0f, "", apply_dx7_feedback),
     PARAM_DESC(PARAM_DX7_TRANSPOSE, "TRANS", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, "st", apply_dx7_transpose),

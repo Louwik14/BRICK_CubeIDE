@@ -41,7 +41,6 @@
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_loop.h"
-#include "App/Hall/hall_juno_midi.h"
 #include "Seq/seq_runtime.h"
 
 static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
@@ -87,7 +86,6 @@ void brick6_app_init(void)
     microdexed_synth_set_enabled(1U);
     monob_synth_init(48000.0f);
     drum_synth_init(48000.0f);
-    hall_juno_midi_init();
 
     brick6_sampler_bootstrap_init_voices();
 
@@ -146,7 +144,6 @@ void brick6_app_process(void)
 
     hall_loop_process();
     ui_core_service_track_selection_inputs();
-    hall_juno_midi_process();
 
     brick6_recorder_runtime_process_transport(&g_live_recorder);
 

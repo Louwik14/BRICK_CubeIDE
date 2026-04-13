@@ -61,8 +61,9 @@ file(GLOB FATFS_SRC
 )
 
 # Drivers
-file(GLOB_RECURSE CMSIS_DSP_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/*.c"
+set(CMSIS_DSP_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_f32.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_init_f32.c"
 )
 
 file(GLOB DRV_APP_SRC
@@ -305,7 +306,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
     ${CMAKE_CURRENT_SOURCE_DIR}/Micro_Dexed
-    ${CMAKE_CURRENT_SOURCE_DIR}/Juno
     ${CMAKE_CURRENT_SOURCE_DIR}/freeverb-main/Components
     ${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb
