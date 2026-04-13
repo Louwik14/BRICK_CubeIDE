@@ -386,7 +386,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     char track_label[4];
     char runtime_label[12];
     char cpu_avg_label[16];
-    char bpm_label[8];
+    char bpm_label[12];
 
     (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)(active_track + 1U));
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));

@@ -1,9 +1,11 @@
 #ifndef BRICK_KEYBOARD_RUNTIME_H
 #define BRICK_KEYBOARD_RUNTIME_H
 
+#include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Seq/seq_types.h"
 #include "Keyboard/ui_keyboard_app.h"
 #include "UI/ui_core.h"
 
@@ -33,6 +35,7 @@ void keyboard_runtime_set_arp_spread(uint8_t value);
 void keyboard_runtime_set_arp_dir(uint8_t value);
 void keyboard_runtime_set_arp_sync(uint8_t value);
 void keyboard_runtime_step_octave(int8_t delta);
+void keyboard_runtime_process_midi(const uint8_t *msg, size_t len, seq_clock_src_t source);
 void keyboard_runtime_process_hall(uint8_t hall_index, bool pressed, uint8_t velocity);
 void keyboard_runtime_all_notes_off(void);
 void keyboard_runtime_on_active_track_changed(void);

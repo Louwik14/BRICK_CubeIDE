@@ -31,7 +31,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "usbd_midi.h"
-#include "Keyboard/keyboard_engine.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
 #include <string.h>
 #include <stdio.h>
@@ -899,7 +899,7 @@ void midi_internal_receive_with_source(const uint8_t *msg, size_t len, seq_clock
       seq_runtime_midi_stop_from_source(source);
       break;
     default:
-      keyboard_engine_midi_receive(msg, len);
+      keyboard_runtime_process_midi(msg, len, source);
       break;
   }
 }

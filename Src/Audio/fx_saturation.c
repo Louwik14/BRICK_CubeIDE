@@ -20,6 +20,7 @@
  */
 
 #include "fx_saturation.h"
+#include "memory_layout.h"
 
 #define FX_SAT_MIN_K 1.0f
 #define FX_SAT_K_MAX 25.0f
@@ -351,10 +352,10 @@ void fx_saturation_set_bias_ui(fx_saturation_t *fx, uint8_t bias_0_127)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void fx_saturation_process_block(fx_saturation_t *fx,
-                                 float *inout_l,
-                                 float *inout_r,
-                                 uint32_t frames)
+void AUDIO_ITCM fx_saturation_process_block(fx_saturation_t *fx,
+                                            float *inout_l,
+                                            float *inout_r,
+                                            uint32_t frames)
 {
     if((fx == 0) || (inout_l == 0) || (inout_r == 0) || (frames == 0U) || (fx->bypass != 0U))
         return;

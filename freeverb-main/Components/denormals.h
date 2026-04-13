@@ -8,7 +8,18 @@
 #ifndef _denormals_
 #define _denormals_
 
-#define undenormalise(sample) if(((*(unsigned int*)&sample)&0x7f800000)==0) sample=0.0f
+#include <cstdint>
+#include <cstring>
+
+static inline void undenormalise(float &sample)
+{
+	uint32_t bits = 0U;
+	std::memcpy(&bits, &sample, sizeof(bits));
+	if ((bits & 0x7f800000U) == 0U)
+	{
+		sample = 0.0f;
+	}
+}
 
 #endif//_denormals_
 

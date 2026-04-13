@@ -35,7 +35,7 @@ private:
 
 inline float comb::process(float input)
 {
-	float output;
+	float output = 0.0f;
 
 	output = buffer[bufidx];
 	undenormalise(output);

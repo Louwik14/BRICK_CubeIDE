@@ -81,6 +81,24 @@ LoopCopyDataInit:
   adds r4, r0, r3
   cmp r4, r1
   bcc CopyDataInit
+
+/* Copy hot executable ITCM code from flash to ITCMRAM. */
+  ldr r0, =__itcm_audio_start__
+  ldr r1, =__itcm_audio_end__
+  ldr r2, =__itcm_audio_load_start__
+  movs r3, #0
+  b LoopCopyItcmAudioInit
+
+CopyItcmAudioInit:
+  ldr r4, [r2, r3]
+  str r4, [r0, r3]
+  adds r3, r3, #4
+
+LoopCopyItcmAudioInit:
+  adds r4, r0, r3
+  cmp r4, r1
+  bcc CopyItcmAudioInit
+
 /* Zero fill the bss segment. */
   ldr r2, =_sbss
   ldr r4, =_ebss

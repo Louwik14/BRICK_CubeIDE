@@ -29,8 +29,8 @@ public:
 
 inline float allpass::process(float input)
 {
-	float output;
-	float bufout;
+	float output = 0.0f;
+	float bufout = 0.0f;
 	
 	bufout = buffer[bufidx];
 	undenormalise(bufout);

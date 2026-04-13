@@ -137,6 +137,18 @@ SECTIONS
     . = ALIGN(32);
   } >BOOT_CTX_FLASH
 
+  .itcm_audio :
+  {
+    . = ALIGN(4);
+    __itcm_audio_start__ = .;
+    *(.itcm_audio)
+    *(.itcm_audio*)
+    . = ALIGN(4);
+    __itcm_audio_end__ = .;
+  } >ITCMRAM AT> FLASH
+
+  __itcm_audio_load_start__ = LOADADDR(.itcm_audio);
+
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 

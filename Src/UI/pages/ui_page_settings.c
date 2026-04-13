@@ -392,6 +392,11 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
     }
 }
 
+static void ui_page_settings_handle_event_page(const ui_event_t *ev)
+{
+    (void)ui_page_settings_handle_event(ev);
+}
+
 static void ui_page_settings_tick(void)
 {
     if ((g_ui_settings.status_line[0] != '\0')
@@ -461,7 +466,7 @@ static void ui_page_settings_render(void)
 const ui_page_t g_ui_page_settings = {
     .enter = ui_page_settings_enter,
     .leave = ui_page_settings_leave,
-    .handle_event = ui_page_settings_handle_event_internal,
+    .handle_event = ui_page_settings_handle_event_page,
     .tick = ui_page_settings_tick,
     .render = ui_page_settings_render,
 };
