@@ -4,8 +4,6 @@
  */
 
 #include "fx_biquad_filter.h"
-#include "memory_layout.h"
-
 #include <math.h>
 #include <string.h>
 
@@ -130,10 +128,10 @@ void fx_biquad_filter_set_bypass(fx_biquad_filter_t *filter, uint8_t bypass)
     filter->bypass = (bypass != 0U) ? 1U : 0U;
 }
 
-void AUDIO_ITCM fx_biquad_filter_process_block(fx_biquad_filter_t *filter,
-                                               float *inout_l,
-                                               float *inout_r,
-                                               uint32_t block_size)
+void fx_biquad_filter_process_block(fx_biquad_filter_t *filter,
+                                    float *inout_l,
+                                    float *inout_r,
+                                    uint32_t block_size)
 {
     if((filter == NULL) || (inout_l == NULL) || (inout_r == NULL) || (block_size == 0U) || (filter->bypass != 0U))
     {

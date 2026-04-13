@@ -22,9 +22,6 @@
 /* WARM: block DSP state not directly DMA-owned */
 #define AUDIO_WARM SEC_ATTR(".ram_d1_audio")
 
-/* Executable hot code for the tightest audio kernels. */
-#define AUDIO_ITCM SEC_ATTR(".itcm_audio")
-
 /*
  * DMA/shared buffers:
  * - Any CPU<->DMA shared payload should live here.
