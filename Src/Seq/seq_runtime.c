@@ -624,6 +624,11 @@ uint8_t seq_runtime_is_running(void)
     return g_seq_runtime.running;
 }
 
+uint8_t seq_runtime_is_start_pending(void)
+{
+    return seq_transport_fsm_is_start_pending(&g_seq_transport_fsm);
+}
+
 static void seq_runtime_process_core(void)
 {
     const uint32_t now_tick = seq_runtime_get_now_tick();

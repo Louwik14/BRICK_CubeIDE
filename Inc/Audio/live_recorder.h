@@ -20,11 +20,14 @@ typedef struct
 
     uint32_t write_pos;
     uint32_t read_pos;
+    uint32_t read_pos_q16;
+    uint32_t read_step_q16;
 
     uint8_t recording;
     uint8_t playing;
 
     uint32_t latency_offset_frames;
+    float play_rate;
 
     uint8_t tap_mode;
 } live_recorder_t;
@@ -40,9 +43,11 @@ void live_recorder_set_loop_length(live_recorder_t *rec,
 
 void live_recorder_start_record(live_recorder_t *rec);
 void live_recorder_stop_record(live_recorder_t *rec);
+void live_recorder_clear(live_recorder_t *rec);
 
 void live_recorder_start_play(live_recorder_t *rec);
 void live_recorder_stop_play(live_recorder_t *rec);
+void live_recorder_set_play_rate(live_recorder_t *rec, float rate);
 
 void live_recorder_write(live_recorder_t *rec,
                          const float *L,

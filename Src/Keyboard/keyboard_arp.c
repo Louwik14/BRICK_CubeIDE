@@ -910,3 +910,20 @@ void keyboard_arp_on_mode_leave_silent(void)
     g_keyboard_arp.arp_pending_on_count = 0U;
     g_keyboard_arp.arp_last_played_count = 0U;
 }
+
+void keyboard_arp_clear_state_silent(void)
+{
+    g_keyboard_arp.arp_phys_count = 0U;
+    g_keyboard_arp.arp_latched_count = 0U;
+    g_keyboard_arp.arp_latched_active = false;
+    g_keyboard_arp.arp_pattern_count = 0U;
+    g_keyboard_arp.arp_active_count = 0U;
+    g_keyboard_arp.arp_pending_on_count = 0U;
+    g_keyboard_arp.arp_last_played_count = 0U;
+    g_keyboard_arp.arp_step_index = 0U;
+    g_keyboard_arp.arp_pingpong_dir = 1;
+    g_keyboard_arp.arp_strum_flip = false;
+    g_keyboard_arp.arp_clock_pulse_count = 0U;
+    g_keyboard_arp.arp_next_event_ms = HAL_GetTick();
+    g_keyboard_arp.arp_last_step_ms = g_keyboard_arp.arp_next_event_ms;
+}

@@ -58,6 +58,7 @@
 #include "Core/track_runtime.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/undo_v1.h"
+#include "Core/brick6_master_buffer.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
@@ -586,6 +587,7 @@ static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_fami
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
     static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB };
+    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_TRX_BD,
         UI_TRACK_TYPE_DRUM_TRX_CLAVES,
@@ -621,6 +623,10 @@ static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_fami
         case UI_TRACK_FAMILY_DRUM:
             *out_count = (uint8_t)(sizeof(k_drum_types) / sizeof(k_drum_types[0]));
             return k_drum_types;
+
+        case UI_TRACK_FAMILY_MASTER:
+            *out_count = (uint8_t)(sizeof(k_master_types) / sizeof(k_master_types[0]));
+            return k_master_types;
 
         case UI_TRACK_FAMILY_OFF:
         default:
@@ -666,6 +672,17 @@ static uint8_t ui_core_track_uses_synth_type(uint8_t track, ui_track_type_t type
     return (uint8_t)((config->family == UI_TRACK_FAMILY_SYNTH) && (config->type == type));
 }
 
+static uint8_t ui_core_track_uses_master_type(uint8_t track, ui_track_type_t type)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    const ui_track_config_t *const config = &g_ui_track_state.track_configs[track];
+    return (uint8_t)((config->family == UI_TRACK_FAMILY_MASTER) && (config->type == type));
+}
+
 bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type)
 {
     if ((track >= UI_TRACK_COUNT) || !ui_track_type_is_valid_for_family(family, type))
@@ -673,12 +690,17 @@ bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_trac
         return false;
     }
 
-    if (family != UI_TRACK_FAMILY_SYNTH)
+    if ((family != UI_TRACK_FAMILY_SYNTH) && (family != UI_TRACK_FAMILY_MASTER))
     {
         return true;
     }
 
-    if (type != UI_TRACK_TYPE_DX7)
+    if ((family == UI_TRACK_FAMILY_SYNTH) && (type != UI_TRACK_TYPE_DX7))
+    {
+        return true;
+    }
+
+    if ((family == UI_TRACK_FAMILY_MASTER) && (type != UI_TRACK_TYPE_BUFFER))
     {
         return true;
     }
@@ -690,7 +712,14 @@ bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_trac
             continue;
         }
 
-        if (ui_core_track_uses_synth_type(other_track, type) != 0U)
+        if ((family == UI_TRACK_FAMILY_SYNTH)
+                && (ui_core_track_uses_synth_type(other_track, type) != 0U))
+        {
+            return false;
+        }
+
+        if ((family == UI_TRACK_FAMILY_MASTER)
+                && (ui_core_track_uses_master_type(other_track, type) != 0U))
         {
             return false;
         }
@@ -852,6 +881,11 @@ static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t f
     if (family == UI_TRACK_FAMILY_OFF)
     {
         return true;
+    }
+
+    if (family == UI_TRACK_FAMILY_MASTER)
+    {
+        return (uint8_t)((ui_count_tracks_with_family(family) == 0U) ? 1U : 0U);
     }
 
     if (!ui_track_family_is_input(family))
@@ -1036,6 +1070,7 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
     }
 
     uint8_t input_family_count[(uint8_t)UI_TRACK_FAMILY_COUNT] = { 0U };
+    uint8_t master_family_count = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -1063,6 +1098,15 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         {
             input_family_count[(uint8_t)fam]++;
             if (input_family_count[(uint8_t)fam] > 1U)
+            {
+                return false;
+            }
+        }
+
+        if (fam == UI_TRACK_FAMILY_MASTER)
+        {
+            master_family_count++;
+            if (master_family_count > 1U)
             {
                 return false;
             }
@@ -1110,6 +1154,7 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         g_ui_track_state.track_midi_source[track] = midi_source[track];
     }
 
+    track_runtime_invalidate_all();
     ui_core_sync_audio_runtime_enables();
     keyboard_runtime_on_active_track_changed();
     ui_core_sync_active_track_cfg_params();
@@ -1327,6 +1372,31 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
     return (ev->id < HALL_KEY_COUNT) ? 1U : 0U;
 }
 
+static uint8_t ui_core_handle_master_buffer_routing_event(const ui_event_t *ev)
+{
+    const uint8_t active_track = ui_get_active_track();
+    const uint8_t is_master_buffer = ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
+                                      && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER))
+                                     ? 1U
+                                     : 0U;
+
+    if ((ev == 0)
+            || (is_master_buffer == 0U)
+            || (ui_get_hall_mode() != UI_HALL_MODE_ARP)
+            || (g_ui_track_state.track_select_armed != 0U)
+            || (ev->type != UI_EVENT_HALL_PRESS)
+            || (ev->id >= UI_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    const uint8_t hall = (uint8_t)ev->id;
+    const uint8_t enabled = brick6_master_buffer_get_source_enabled(hall);
+    brick6_master_buffer_set_source_enabled(hall, (enabled == 0U) ? 1U : 0U);
+    g_ui_track_state.hall_note_suppressed[hall] = 1U;
+    return 1U;
+}
+
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 {
     if (ev == 0)
@@ -1347,6 +1417,36 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_REC))
     {
+        const uint8_t active_track = ui_get_active_track();
+        const uint8_t is_master_buffer = (ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
+                && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER);
+
+        if ((g_ui_track_state.track_select_armed != 0U) && (is_master_buffer != 0U))
+        {
+            if (g_ui_track_state.shift_down != 0U)
+            {
+                brick6_master_buffer_request_clear();
+                ui_core_set_feedback("BUF CLR");
+            }
+            else
+            {
+                brick6_master_buffer_request_record();
+                if (brick6_master_buffer_is_recording() != 0U)
+                {
+                    ui_core_set_feedback("BUF REC");
+                }
+                else if (brick6_master_buffer_is_armed() != 0U)
+                {
+                    ui_core_set_feedback("BUF ARM");
+                }
+                else
+                {
+                    ui_core_set_feedback("BUF STOP");
+                }
+            }
+            return 1U;
+        }
+
         if (g_ui_track_state.shift_down != 0U)
         {
             ui_page_template_rec_cfg_open_main();
@@ -1682,7 +1782,9 @@ static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipbo
     }
 
     return (uint8_t)((cb->config.family == UI_TRACK_FAMILY_SYNTH)
-                     && (cb->config.type == UI_TRACK_TYPE_DX7));
+                     && (cb->config.type == UI_TRACK_TYPE_DX7))
+            || (uint8_t)((cb->config.family == UI_TRACK_FAMILY_MASTER)
+                         && (cb->config.type == UI_TRACK_TYPE_BUFFER));
 }
 
 static ui_track_family_t ui_core_clipboard_find_free_input_family(void);
@@ -2547,7 +2649,10 @@ void ui_core_service_track_selection_inputs(void)
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 
-    if (((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD) || (ui_get_hall_mode() == UI_HALL_MODE_ARP))
+    if (((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
+            || ((ui_get_hall_mode() == UI_HALL_MODE_ARP)
+                && ((ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_MASTER)
+                    || (ui_get_track_type(ui_get_active_track()) != UI_TRACK_TYPE_BUFFER))))
         && (g_ui_track_state.shift_down == 0U)
         && (g_ui_track_state.track_select_armed == 0U))
     {
@@ -2603,6 +2708,11 @@ void ui_core_tick(void)
         }
 
         if (ui_core_is_track_hall_event_consumed(&ev) != 0U)
+        {
+            continue;
+        }
+
+        if (ui_core_handle_master_buffer_routing_event(&ev) != 0U)
         {
             continue;
         }
@@ -2711,6 +2821,16 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return true;
     }
 
+    if ((family != UI_TRACK_FAMILY_OFF)
+            && (ui_core_get_track_type_count_for_family_and_track(family, track) == 0U))
+    {
+        if (track == g_ui_track_state.active_track)
+        {
+            ui_core_sync_active_track_cfg_params();
+        }
+        return false;
+    }
+
     config->family = family;
     if (!ui_track_type_is_available(track, config->family, config->type))
     {
@@ -2810,6 +2930,8 @@ const char *ui_get_track_family_display_name(ui_track_family_t family)
             return "Synth";
         case UI_TRACK_FAMILY_DRUM:
             return "Drum";
+        case UI_TRACK_FAMILY_MASTER:
+            return "Master";
 
         default:
             return "Track";
@@ -2839,6 +2961,8 @@ const char *ui_get_track_family_short_name(ui_track_family_t family)
             return "Syn";
         case UI_TRACK_FAMILY_DRUM:
             return "Drm";
+        case UI_TRACK_FAMILY_MASTER:
+            return "Mst";
 
         default:
             return "---";
@@ -2865,6 +2989,9 @@ const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_ty
 
         case UI_TRACK_TYPE_MONOB:
             return "MonoB";
+
+        case UI_TRACK_TYPE_BUFFER:
+            return "Buffer";
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TRX BD";
@@ -2915,6 +3042,9 @@ const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type
         case UI_TRACK_TYPE_MONOB:
             return "MB";
 
+        case UI_TRACK_TYPE_BUFFER:
+            return "Buf";
+
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TBD";
         case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
@@ -2963,6 +3093,12 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
     if (config.family == UI_TRACK_FAMILY_OFF)
     {
         (void)snprintf(out, out_len, "Off");
+        return;
+    }
+
+    if ((config.family == UI_TRACK_FAMILY_MASTER) && (config.type == UI_TRACK_TYPE_BUFFER))
+    {
+        (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(config.family, config.type));
         return;
     }
 
@@ -3018,6 +3154,8 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
 
 const char *ui_get_hall_mode_short_label(void)
 {
+    const uint8_t active_track = ui_get_active_track();
+
     if (g_ui_track_state.track_select_armed != 0U)
     {
         return "TRACK";
@@ -3030,6 +3168,11 @@ const char *ui_get_hall_mode_short_label(void)
 
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)
     {
+        if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
+                && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER))
+        {
+            return "ROUT";
+        }
         return "ARP";
     }
 
@@ -3049,6 +3192,7 @@ const char *ui_get_hall_mode_short_label(void)
 const char *ui_get_hall_mode_suffix_label(void)
 {
     static char label[6];
+    const uint8_t active_track = ui_get_active_track();
 
     if (g_ui_track_state.track_select_armed != 0U)
     {
@@ -3070,6 +3214,13 @@ const char *ui_get_hall_mode_suffix_label(void)
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_MUTE)
     {
         return (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE) ? "PRE" : "";
+    }
+
+    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)
+            && (ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER))
+    {
+        return "";
     }
 
     const int8_t octave_shift = keyboard_runtime_get_octave_shift();

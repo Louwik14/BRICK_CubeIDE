@@ -28,6 +28,7 @@
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
 #include "Storage/memory_layout.h"
+#include "Core/brick6_master_buffer.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
@@ -82,6 +83,9 @@ void brick6_app_init(void)
     brick6_recorder_runtime_boot_init(&g_live_recorder,
                                       g_live_recorder_buffer,
                                       LIVE_RECORDER_MAX_FRAMES);
+    brick6_master_buffer_init(&g_live_recorder,
+                              g_live_recorder_buffer,
+                              LIVE_RECORDER_MAX_FRAMES);
 
     microdexed_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
     microdexed_synth_set_enabled(1U);
@@ -92,11 +96,6 @@ void brick6_app_init(void)
     brick6_sampler_bootstrap_init_voices();
 
     mixer_set_master(0.0f);
-
-    track_enable(0, 1U);
-    track_enable(1, 1U);
-    track_enable(2, 1U);
-    track_enable(3, 1U);
 
     brick6_audio_runtime_init(&g_live_recorder);
 

@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include "fx_chain.h"
+#include "Core/brick6_master_buffer.h"
 #include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
 
@@ -991,6 +992,8 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
+    brick6_master_buffer_begin_block(frames);
+
     uint8_t send_fx_active = 0U;
     for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
     {
@@ -1095,6 +1098,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                       L,
                                       R,
                                       frames);
+        brick6_master_buffer_submit_track_post_fader(t, L, R, frames);
 
         if(send_bus_active != 0U)
         {
@@ -1161,6 +1165,7 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         }
     }
 
+    brick6_master_buffer_commit_block(frames);
     mixer_external_inputs_clear();
 
     if(send_bus_active != 0U)

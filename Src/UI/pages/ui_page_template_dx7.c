@@ -27,6 +27,18 @@ static const ui_template_family_t g_ui_template_tone_family_monob = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_buffer = {
+    .family_title = "TONE",
+    .nav_labels = { "REC", "FADE", "-", "-" },
+    .subpages = {
+        { .title = "REC", .param_bank = { .params = { PARAM_BUFFER_REC_LEN, PARAM_BUFFER_Q_REC, PARAM_BUFFER_Q_PLAY, PARAM_BUFFER_RATE } } },
+        { .title = "FADE", .param_bank = { .params = { PARAM_BUFFER_FADE_IN, PARAM_BUFFER_FADE_OUT, PARAM_BUFFER_XFADE, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 
 static ui_template_family_t g_ui_template_tone_family_drum = {
     .family_title = "TONE",
@@ -173,6 +185,10 @@ void ui_page_template_dx7_register_families(void)
             if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
             {
                 family_template = &g_ui_template_tone_family_monob;
+            }
+            else if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
+            {
+                family_template = &g_ui_template_tone_family_buffer;
             }
             else if (track_family == UI_TRACK_FAMILY_DRUM)
             {

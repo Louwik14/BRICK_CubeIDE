@@ -38,6 +38,11 @@ static ui_template_page_state_t g_ui_template_keyboard_state = {
     .has_visited = 0U,
 };
 
+static void ui_page_template_keyboard_handle_event(const ui_event_t *ev)
+{
+    ui_template_page_handle_event(ev);
+}
+
 void ui_page_template_keyboard_register_families(void)
 {
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
@@ -62,7 +67,7 @@ void ui_page_template_keyboard_register_families(void)
 const ui_page_t g_ui_page_template_keyboard = {
     .enter = ui_template_page_enter,
     .leave = ui_template_page_leave,
-    .handle_event = ui_template_page_handle_event,
+    .handle_event = ui_page_template_keyboard_handle_event,
     .tick = ui_template_page_tick,
     .render = ui_template_page_render,
     .context = &g_ui_template_keyboard_state,

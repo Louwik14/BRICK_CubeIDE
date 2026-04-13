@@ -15,26 +15,32 @@ void hall_keyboard_bridge_process(void)
     {
         const uint8_t note_on_pending = hall_engine_consume_note_on(key);
         const uint8_t note_off_pending = hall_engine_consume_note_off(key);
+        const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+        uint8_t velocity = hall_engine_get_velocity(key);
+        if ((hall_engine_get_velocity_valid(key) == 0U) || (velocity == 0U))
+        {
+            velocity = 100U;
+        }
 
         if (ui_core_hall_note_is_suppressed(key) != 0U)
         {
             if (note_off_pending != 0U)
             {
+                if ((hall_mode == UI_HALL_MODE_KEYBOARD)
+                        && (keyboard_runtime_active_track_is_plain_input_audio() != 0U))
+                {
+                    keyboard_runtime_process_hall(key, false, velocity);
+                }
                 ui_core_clear_hall_note_suppression(key);
             }
             continue;
         }
 
-        const ui_hall_mode_t hall_mode = ui_get_hall_mode();
-        if ((hall_mode != UI_HALL_MODE_KEYBOARD) && (hall_mode != UI_HALL_MODE_ARP))
+        if ((hall_mode != UI_HALL_MODE_KEYBOARD)
+                && ((hall_mode != UI_HALL_MODE_ARP)
+                    || (keyboard_runtime_is_master_buffer_route_context() != 0U)))
         {
             continue;
-        }
-
-        uint8_t velocity = hall_engine_get_velocity(key);
-        if ((hall_engine_get_velocity_valid(key) == 0U) || (velocity == 0U))
-        {
-            velocity = 100U;
         }
 
         if (note_on_pending != 0U)

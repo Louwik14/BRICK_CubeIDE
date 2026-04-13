@@ -53,7 +53,6 @@ void brick6_recorder_runtime_process_transport(live_recorder_t *rec)
         if((transport_recording != 0U) &&
            (last_transport_recording == 0U))
         {
-            live_recorder_start_record(rec);
 #if BRICK6_SD_ENABLE_RECORDER
             (void)sd_recorder_request_start();
 #endif
@@ -61,7 +60,6 @@ void brick6_recorder_runtime_process_transport(live_recorder_t *rec)
         else if((transport_recording == 0U) &&
                 (last_transport_recording != 0U))
         {
-            live_recorder_stop_record(rec);
 #if BRICK6_SD_ENABLE_RECORDER
             (void)sd_recorder_request_stop();
 #endif

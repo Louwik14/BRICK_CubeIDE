@@ -72,6 +72,7 @@ void seq_runtime_start(void);
 void seq_runtime_stop(void);
 void seq_runtime_toggle_play_stop(void);
 uint8_t seq_runtime_is_running(void);
+uint8_t seq_runtime_is_start_pending(void);
 
 void seq_runtime_set_clock_source(seq_clock_src_t src);
 seq_clock_src_t seq_runtime_get_clock_source(void);

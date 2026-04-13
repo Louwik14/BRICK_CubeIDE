@@ -21,6 +21,7 @@
 
 #include "Audio/live_recorder.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -50,6 +51,9 @@ void live_recorder_init(live_recorder_t *rec)
     rec->recording = 0U;
     rec->playing = 0U;
     rec->latency_offset_frames = 0U;
+    rec->read_pos_q16 = 0U;
+    rec->read_step_q16 = (uint32_t)(1.0f * 65536.0f);
+    rec->play_rate = 1.0f;
     rec->tap_mode = (uint8_t)LIVE_RECORDER_TAP_POST_MIX;
 }
 
@@ -133,6 +137,9 @@ void live_recorder_start_record(live_recorder_t *rec)
         return;
 
     rec->recording = 1U;
+    rec->write_pos = 0U;
+    rec->read_pos = 0U;
+    rec->read_pos_q16 = 0U;
 }
 
 /**
@@ -155,6 +162,28 @@ void live_recorder_stop_record(live_recorder_t *rec)
 }
 
 /**
+ * @brief Point d'entrée live_recorder_clear.
+ *
+ * Rôle:
+ * - Effacer l'état et le contenu bufferisé.
+ */
+void live_recorder_clear(live_recorder_t *rec)
+{
+    if(rec == NULL)
+        return;
+
+    rec->recording = 0U;
+    rec->write_pos = 0U;
+    rec->read_pos = 0U;
+    rec->read_pos_q16 = 0U;
+
+    if((rec->buffer != NULL) && (rec->max_frames != 0U))
+    {
+        memset(rec->buffer, 0, sizeof(float) * rec->max_frames * 2U);
+    }
+}
+
+/**
  * @brief Point d'entrée live_recorder_start_play.
  *
  * Rôle:
@@ -171,6 +200,8 @@ void live_recorder_start_play(live_recorder_t *rec)
         return;
 
     rec->playing = 1U;
+    rec->read_pos = 0U;
+    rec->read_pos_q16 = 0U;
 }
 
 /**
@@ -190,6 +221,30 @@ void live_recorder_stop_play(live_recorder_t *rec)
         return;
 
     rec->playing = 0U;
+}
+
+/**
+ * @brief Point d'entrée live_recorder_set_play_rate.
+ *
+ * Rôle:
+ * - Régler la vitesse de lecture.
+ */
+void live_recorder_set_play_rate(live_recorder_t *rec, float rate)
+{
+    if(rec == NULL)
+        return;
+
+    if(rate < 0.25f)
+        rate = 0.25f;
+    if(rate > 4.0f)
+        rate = 4.0f;
+
+    rec->play_rate = rate;
+    rec->read_step_q16 = (uint32_t)(rate * 65536.0f + 0.5f);
+    if(rec->read_step_q16 == 0U)
+    {
+        rec->read_step_q16 = 1U;
+    }
 }
 
 /**
@@ -268,10 +323,13 @@ void live_recorder_read(live_recorder_t *rec,
     const float *buffer = rec->buffer;
     const uint32_t loop_frames = rec->loop_frames;
     const uint32_t write_pos = rec->write_pos;
-    uint32_t read_pos = rec->read_pos;
+    uint32_t read_pos_q16 = rec->read_pos_q16;
+    const uint32_t read_step_q16 = (rec->read_step_q16 == 0U) ? (1U << 16) : rec->read_step_q16;
+    const uint32_t loop_q16 = loop_frames << 16;
 
     for(uint32_t i = 0U; i < frames; i++)
     {
+        const uint32_t read_pos = (read_pos_q16 >> 16);
         uint32_t distance;
         if(write_pos >= read_pos)
             distance = write_pos - read_pos;
@@ -286,14 +344,19 @@ void live_recorder_read(live_recorder_t *rec,
         else
         {
             const uint32_t idx = read_pos * 2U;
-            outL[i] = buffer[idx];
-            outR[i] = buffer[idx + 1U];
+            const uint32_t next_pos = (read_pos + 1U) % loop_frames;
+            const uint32_t next_idx = next_pos * 2U;
+            const float frac = (float)(read_pos_q16 & 0xFFFFU) * (1.0f / 65536.0f);
+            const float one_minus_frac = 1.0f - frac;
+            outL[i] = (buffer[idx] * one_minus_frac) + (buffer[next_idx] * frac);
+            outR[i] = (buffer[idx + 1U] * one_minus_frac) + (buffer[next_idx + 1U] * frac);
         }
 
-        read_pos++;
-        if(read_pos >= loop_frames)
-            read_pos = 0U;
+        read_pos_q16 += read_step_q16;
+        while(read_pos_q16 >= loop_q16)
+            read_pos_q16 -= loop_q16;
     }
 
-    rec->read_pos = read_pos;
+    rec->read_pos_q16 = read_pos_q16;
+    rec->read_pos = (read_pos_q16 >> 16);
 }

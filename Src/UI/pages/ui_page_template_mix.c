@@ -74,7 +74,9 @@ void ui_page_template_mix_register_families(void)
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
     {
         const ui_track_family_t track_family = (ui_track_family_t)family;
-        if (!ui_track_family_is_input(track_family) && (ui_track_family_is_engine(track_family) == 0))
+        if (!ui_track_family_is_input(track_family)
+                && (ui_track_family_is_engine(track_family) == 0)
+                && (track_family != UI_TRACK_FAMILY_MASTER))
         {
             continue;
         }

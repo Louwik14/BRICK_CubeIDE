@@ -26,6 +26,26 @@ static const ui_template_family_t g_ui_template_arp_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_arp_family_buffer = {
+    .family_title = "ROUT",
+    .nav_labels = { "ROUT", "-", "-", "-" },
+    .subpages = {
+        {
+            .title = "ROUT",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t *ui_page_template_arp_resolve_family(void)
 {
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ARP);
@@ -37,6 +57,11 @@ static ui_template_page_state_t g_ui_template_arp_state = {
     .active_subpage = 0U,
     .has_visited = 0U,
 };
+
+static void ui_page_template_arp_handle_event(const ui_event_t *ev)
+{
+    ui_template_page_handle_event(ev);
+}
 
 void ui_page_template_arp_register_families(void)
 {
@@ -51,10 +76,16 @@ void ui_page_template_arp_register_families(void)
                 continue;
             }
 
+            const ui_template_family_t *family_template = &g_ui_template_arp_family;
+            if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
+            {
+                family_template = &g_ui_template_arp_family_buffer;
+            }
+
             ui_template_family_register(UI_TEMPLATE_FAMILY_ARP,
                                         track_family,
                                         track_type,
-                                        &g_ui_template_arp_family);
+                                        family_template);
         }
     }
 }
@@ -62,7 +93,7 @@ void ui_page_template_arp_register_families(void)
 const ui_page_t g_ui_page_template_arp = {
     .enter = ui_template_page_enter,
     .leave = ui_template_page_leave,
-    .handle_event = ui_template_page_handle_event,
+    .handle_event = ui_page_template_arp_handle_event,
     .tick = ui_template_page_tick,
     .render = ui_template_page_render,
     .context = &g_ui_template_arp_state,

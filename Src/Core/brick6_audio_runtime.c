@@ -22,6 +22,7 @@
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Audio/sd_multitrack_recorder.h"
+#include "Core/brick6_master_buffer.h"
 #include "Sampler/voice_manager.h"
 #include "mixer.h"
 #include "ui_core.h"
@@ -39,12 +40,12 @@
 #define BRICK6_RT_LOG(...) do { } while (0)
 #endif
 
-static live_recorder_t *g_live_recorder = NULL;
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_monob_processed = 0xFFU;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
 static uint8_t g_runtime_last_dx7_tracks = 0xFFU;
 static uint8_t g_runtime_last_ui_active_track = 0xFFU;
+static float g_buffer_xfade_smoothed = 0.0f;
 
 typedef struct
 {
@@ -224,8 +225,25 @@ static void brick6_render_synth_tracks(uint32_t frames,
 
 void brick6_audio_runtime_init(live_recorder_t *live_recorder)
 {
-    g_live_recorder = live_recorder;
+    (void)live_recorder;
     g_runtime_track_enabled = 1U;
+    g_buffer_xfade_smoothed = 0.0f;
+}
+
+static float brick6_audio_runtime_get_buffer_xfade(void)
+{
+    const float target = brick6_master_buffer_get_xfade();
+    g_buffer_xfade_smoothed += (target - g_buffer_xfade_smoothed) * 0.25f;
+    if (g_buffer_xfade_smoothed < 0.0f)
+    {
+        g_buffer_xfade_smoothed = 0.0f;
+    }
+    else if (g_buffer_xfade_smoothed > 1.0f)
+    {
+        g_buffer_xfade_smoothed = 1.0f;
+    }
+
+    return g_buffer_xfade_smoothed;
 }
 
 void brick6_audio_runtime_dsp(StereoTrack *tracks,
@@ -288,6 +306,24 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
     mixer_process(tracks, track_count, frames);
 
+    const float xfade = brick6_audio_runtime_get_buffer_xfade();
+    if((xfade > 0.0f) && (track_count > 0U))
+    {
+        static float recL[AUDIO_BLOCK_SIZE];
+        static float recR[AUDIO_BLOCK_SIZE];
+
+        const float gain_rec  = sinf(xfade * HALFPI_F);
+        const float gain_live = cosf(xfade * HALFPI_F);
+
+        brick6_master_buffer_read_playback(recL, recR, frames);
+
+        for(uint32_t i = 0U; i < frames; i++)
+        {
+            tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
+            tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
+        }
+    }
+
     if(track_count > 0U)
     {
         sd_recorder_capture_tap_block(
@@ -296,31 +332,5 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
             tracks[0].L,
             tracks[0].R,
             frames);
-    }
-
-    if(g_live_recorder != NULL)
-    {
-        live_recorder_write(g_live_recorder,
-                            tracks[0].L,
-                            tracks[0].R,
-                            frames);
-    }
-
-    const float xfade = 0.0f;
-    if((xfade > 0.0f) && (g_live_recorder != NULL))
-    {
-        static float recL[AUDIO_BLOCK_SIZE];
-        static float recR[AUDIO_BLOCK_SIZE];
-
-        const float gain_rec  = sinf(xfade * HALFPI_F);
-        const float gain_live = cosf(xfade * HALFPI_F);
-
-        live_recorder_read(g_live_recorder, recL, recR, frames);
-
-        for(uint32_t i = 0U; i < frames; i++)
-        {
-            tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
-            tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
-        }
     }
 }

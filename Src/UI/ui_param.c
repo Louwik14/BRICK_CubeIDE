@@ -94,7 +94,10 @@ static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family)
 
     if (!ui_track_family_is_input(family))
     {
-        return 1U;
+        if (family != UI_TRACK_FAMILY_MASTER)
+        {
+            return 1U;
+        }
     }
 
     if (family == ui_get_track_family(ui_get_active_track()))
@@ -470,4 +473,3 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
 
     ui_param_set_active_track_value(param, value);
 }
-

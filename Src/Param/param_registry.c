@@ -25,6 +25,7 @@
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
+#include "Core/brick6_master_buffer.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
 #include "fx_granular.h"
@@ -664,6 +665,53 @@ static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id
     }
 }
 
+static uint8_t param_runtime_apply_buffer_track(uint8_t track, param_id_t id, float value)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_BUFFER))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_BUFFER_REC_LEN:
+            brick6_master_buffer_set_record_len((uint32_t)(clamp_value(value, 1.0f, 128.0f) + 0.5f));
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        case PARAM_BUFFER_Q_REC:
+            brick6_master_buffer_set_quantize_record((value >= 0.5f) ? 1U : 0U);
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        case PARAM_BUFFER_Q_PLAY:
+            brick6_master_buffer_set_quantize_play((value >= 0.5f) ? 1U : 0U);
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        case PARAM_BUFFER_RATE:
+            brick6_master_buffer_set_rate(value);
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        case PARAM_BUFFER_FADE_IN:
+            brick6_master_buffer_set_fade_in((uint32_t)(clamp_value(value, 0.0f, 127.0f) + 0.5f));
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        case PARAM_BUFFER_FADE_OUT:
+            brick6_master_buffer_set_fade_out((uint32_t)(clamp_value(value, 0.0f, 127.0f) + 0.5f));
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        case PARAM_BUFFER_XFADE:
+            brick6_master_buffer_set_xfade(clamp_value(value, 0.0f, 1.0f));
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float value)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -726,6 +774,10 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
     {
         applied = param_runtime_apply_mix_track(track, id, value);
+    }
+    else if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
+    {
+        applied = param_runtime_apply_buffer_track(track, id, value);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
     {
@@ -1071,6 +1123,11 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
         return param_runtime_apply_track(track, id, clamped);
     }
 
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)
+    {
+        return param_runtime_apply_buffer_track(track, id, clamped);
+    }
+
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
     {
         const uint8_t applied = param_runtime_apply_colors_track(track, id, clamped);
@@ -1209,6 +1266,18 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 {
                     (void)param_runtime_apply_colors_track(track, id, clamped);
                     param_runtime_cache_set(track, id, clamped);
+                }
+                else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)
+                {
+                    if (param_runtime_apply_buffer_track(track, id, clamped) == 0U)
+                    {
+                        SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u buffer_unsupported engine=%u inst=%u\r\n",
+                                     (unsigned)track,
+                                     (unsigned)id,
+                                     (unsigned)ctx->engine,
+                                     (unsigned)ctx->instance_id);
+                        return 0U;
+                    }
                 }
                 else
                 {
@@ -1783,7 +1852,8 @@ static void param_registry_push_track_defaults_to_runtime(uint8_t track)
         if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
                 || ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                     && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
-                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)))
+                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)))
         {
             continue;
         }
@@ -2218,7 +2288,7 @@ static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
 static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
 static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
 static const char *const g_monob_sub_octave_labels[] = {"-1", "-2", "-3", "-4", NULL};
-static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", NULL};
+static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
@@ -2340,7 +2410,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_sustain),
     PARAM_DESC_EX(PARAM_VCA_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_release),
 
-    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 6.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
+    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
@@ -2348,6 +2418,13 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
     PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
     PARAM_DESC_EX(PARAM_CFG_REC_LEN, "Len", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_len_labels, apply_cfg_rec_len),
+    PARAM_DESC_EX(PARAM_BUFFER_REC_LEN, "Rec Len", PARAM_TYPE_INT, 1.0f, 128.0f, 1.0f, 16.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_Q_REC, "Q Rec", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_Q_PLAY, "Q Play", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_RATE, "Rate", PARAM_TYPE_FLOAT, 0.25f, 4.0f, 0.01f, 1.0f, PARAM_DISPLAY_RATIO, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_FADE_IN, "Fade In", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_FADE_OUT, "Fade Out", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_XFADE, "XFade", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
     PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_seq_div_labels, apply_seq_div),

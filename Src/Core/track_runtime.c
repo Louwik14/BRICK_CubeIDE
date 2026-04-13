@@ -39,6 +39,10 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
     {
         return TRACK_RUNTIME_FAMILY_DRUM;
     }
+    if (family == UI_TRACK_FAMILY_MASTER)
+    {
+        return TRACK_RUNTIME_FAMILY_MASTER;
+    }
 
     if (ui_track_family_is_input(family) != 0)
     {
@@ -63,6 +67,9 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
 
         case UI_TRACK_TYPE_MONOB:
             return TRACK_RUNTIME_TYPE_MONOB;
+
+        case UI_TRACK_TYPE_BUFFER:
+            return TRACK_RUNTIME_TYPE_BUFFER;
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
@@ -306,7 +313,9 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if ((family != TRACK_RUNTIME_FAMILY_SYNTH) && (family != TRACK_RUNTIME_FAMILY_DRUM))
+    if ((family != TRACK_RUNTIME_FAMILY_SYNTH)
+            && (family != TRACK_RUNTIME_FAMILY_DRUM)
+            && (family != TRACK_RUNTIME_FAMILY_MASTER))
     {
         track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
         return;
@@ -321,6 +330,18 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         }
 
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, ctx->track_id);
+        return;
+    }
+
+    if (family == TRACK_RUNTIME_FAMILY_MASTER)
+    {
+        if (type != TRACK_RUNTIME_TYPE_BUFFER)
+        {
+            track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
+            return;
+        }
+
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_MASTER_BUFFER, ctx->track_id);
         return;
     }
 
@@ -689,6 +710,17 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
             return rule;
 
+        case PARAM_BUFFER_REC_LEN:
+        case PARAM_BUFFER_Q_REC:
+        case PARAM_BUFFER_Q_PLAY:
+        case PARAM_BUFFER_RATE:
+        case PARAM_BUFFER_FADE_IN:
+        case PARAM_BUFFER_FADE_OUT:
+        case PARAM_BUFFER_XFADE:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_BUFFER;
+            rule.resource = TRACK_RUNTIME_RESOURCE_BUFFER;
+            return rule;
+
         case PARAM_SEQ_PLAY_V1_NOTE:
         case PARAM_SEQ_PLAY_V1_VEL:
         case PARAM_SEQ_PLAY_V1_LEN:
@@ -801,6 +833,15 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return (track_runtime_is_audio_routable(track) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+
+        case TRACK_RUNTIME_RESOURCE_BUFFER:
+            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                    || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+                    || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_BUFFER))
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            return TRACK_RUNTIME_PARAM_ALLOWED;
 
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

@@ -18,6 +18,7 @@
 #include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "Keyboard/ui_keyboard_app.h"
 #include "ui_core.h"
 
@@ -25,6 +26,11 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 {
     if (ui_get_hall_mode() == UI_HALL_MODE_ARP)
     {
+        if (keyboard_runtime_is_master_buffer_route_context() != 0U)
+        {
+            return;
+        }
+
         keyboard_arp_note_on(note, velocity);
         return;
     }
@@ -36,6 +42,11 @@ static void keyboard_input_note_off_sink(uint8_t note)
 {
     if (ui_get_hall_mode() == UI_HALL_MODE_ARP)
     {
+        if (keyboard_runtime_is_master_buffer_route_context() != 0U)
+        {
+            return;
+        }
+
         keyboard_arp_note_off(note);
         return;
     }
@@ -45,7 +56,10 @@ static void keyboard_input_note_off_sink(uint8_t note)
 
 static void keyboard_input_all_notes_off_sink(void)
 {
-    keyboard_arp_all_notes_off();
+    if (keyboard_runtime_is_master_buffer_route_context() == 0U)
+    {
+        keyboard_arp_all_notes_off();
+    }
 }
 
 void keyboard_input_init(void)
