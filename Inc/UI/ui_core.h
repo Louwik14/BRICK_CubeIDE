@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define UI_TRACK_COUNT 8U
+#define UI_TRACK_COUNT 14U
 /*
  * Product model: 4 physical stereo input resources (Input1..Input4).
  * Devboard proto currently wires only 3 stereo inputs in the audio front-end.

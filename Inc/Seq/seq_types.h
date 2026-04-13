@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define SEQ_TRACK_COUNT        8U
+#define SEQ_TRACK_COUNT        14U
 #define SEQ_STEPS_PER_PAGE    16U
 #define SEQ_PAGE_COUNT         4U
 #define SEQ_MAX_STEPS         (SEQ_STEPS_PER_PAGE * SEQ_PAGE_COUNT)

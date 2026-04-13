@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "audio_float.h"
+#include "Seq/seq_types.h"
 #include "fx_dj_eq3_cmsis.h"
 
 /**
@@ -22,12 +23,10 @@
  */
 
 /*
- * Mixer runtime is prepared for up to 8 tracks so per-track processors can own
- * an independent state per track. The current audio path still exposes 4 DSP
- * tracks (`MAX_TRACKS` in audio_float.h), but the storage is deliberately
- * sized for future expansion.
+ * Mixer runtime owns one logical lane per sequencer track. This is distinct
+ * from the 4 physical DSP ingress tracks exposed by audio_float.h.
  */
-#define MIXER_MAX_TRACKS 8U
+#define MIXER_MAX_TRACKS SEQ_TRACK_COUNT
 #define MIXER_NUM_SENDS 2U
 #define MIXER_INSERTS_PER_TRACK 2U
 

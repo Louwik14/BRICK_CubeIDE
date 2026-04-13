@@ -141,7 +141,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
         if ((active_ctx != NULL)
                 && (active_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
                 && (active_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-                && (active_ctx->mix_track_id < MIXER_MAX_TRACKS))
+                && (track_runtime_is_audio_routable(active_track) != 0U))
         {
             dx7_mix_track = active_ctx->mix_track_id;
         }
@@ -152,7 +152,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+                || (track_runtime_is_audio_routable(track) == 0U))
         {
             continue;
         }
@@ -168,7 +168,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
         {
-            if ((dx7_mix_track == 0xFFU) && (ctx->mix_track_id < MIXER_MAX_TRACKS))
+            if ((dx7_mix_track == 0xFFU) && (track_runtime_is_audio_routable(track) != 0U))
             {
                 dx7_mix_track = ctx->mix_track_id;
             }

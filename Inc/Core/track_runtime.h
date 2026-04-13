@@ -128,6 +128,7 @@ void track_runtime_invalidate_all(void);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
+uint8_t track_runtime_is_audio_routable(uint8_t track);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);

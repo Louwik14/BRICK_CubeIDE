@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Audio/mixer.h"
 #include "ui_core.h"
 
 #define TRACK_RUNTIME_FLAG_CAN_FILTER  (1U << 0)
@@ -444,10 +445,27 @@ const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track)
     return &g_track_runtime_ctx[track];
 }
 
+uint8_t track_runtime_is_audio_routable(uint8_t track)
+{
+    /* Logical track can exist without any physical mixer lane. */
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    return (ctx->mix_track_id < MIXER_MAX_TRACKS) ? 1U : 0U;
+}
+
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL) || (ctx->mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE))
+    {
+        return 0U;
+    }
+
+    if (track_runtime_is_audio_routable(track) == 0U)
     {
         return 0U;
     }
@@ -774,6 +792,15 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 }
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
+
+        case TRACK_RUNTIME_RESOURCE_MIX:
+            if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            return (track_runtime_is_audio_routable(track) != 0U)
+                    ? TRACK_RUNTIME_PARAM_ALLOWED
+                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

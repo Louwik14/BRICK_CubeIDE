@@ -667,7 +667,7 @@ static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id
 static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float value)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL) || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+    if ((ctx == NULL) || (track_runtime_is_audio_routable(track) == 0U))
     {
         return 0U;
     }
@@ -873,7 +873,12 @@ static uint8_t resolve_filter_drive_target_track_for_ui_track(uint8_t ui_track, 
     if ((out_track_id == NULL)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (track_runtime_get_mix_target_track(ui_track, &track_id) == 0U))
+            || (track_runtime_is_audio_routable(ui_track) == 0U))
+    {
+        return 0U;
+    }
+
+    if (track_runtime_get_mix_target_track(ui_track, &track_id) == 0U)
     {
         return 0U;
     }
@@ -1809,6 +1814,11 @@ static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
         return;
     }
 
+    if (track_runtime_is_audio_routable(track) == 0U)
+    {
+        return;
+    }
+
     if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
     {
         return;
@@ -1833,6 +1843,11 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
             && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
             && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                 || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
+    {
+        return;
+    }
+
+    if (track_runtime_is_audio_routable(track) == 0U)
     {
         return;
     }

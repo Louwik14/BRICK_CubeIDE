@@ -1,5 +1,7 @@
 #include "pages/ui_page_template_mix.h"
 
+#include "Core/track_runtime.h"
+#include "ui_core.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_mix_family = {
@@ -26,8 +28,37 @@ static const ui_template_family_t g_ui_template_mix_family = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_mix_unavailable_family = {
+    .family_title = "MIX",
+    .nav_labels = { "MIX", "-", "-", "-" },
+    .subpages = {
+        {
+            .title = "N/A",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 {
+    if (track_runtime_is_audio_routable(ui_get_active_track()) == 0U)
+    {
+        return &g_ui_template_mix_unavailable_family;
+    }
+
     return &g_ui_template_mix_family;
 }
 

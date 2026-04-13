@@ -419,15 +419,16 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
-    drv_display_draw_text(9U, 1U, runtime_label);
+    const uint8_t track_label_shift = (active_track >= 9U) ? 4U : 0U;
+    drv_display_draw_text((uint8_t)(9U + track_label_shift), 1U, runtime_label);
 
     drv_display_set_font(&FONT_4X6);
     const char *hall_mode_label = ui_get_hall_mode_short_label();
     const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
-    drv_display_draw_text(9U, 9U, hall_mode_label);
+    drv_display_draw_text((uint8_t)(9U + track_label_shift), 9U, hall_mode_label);
     if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
     {
-        const uint8_t suffix_x = (uint8_t)(9U + drv_display_text_width(hall_mode_label) + 2U);
+        const uint8_t suffix_x = (uint8_t)(9U + track_label_shift + drv_display_text_width(hall_mode_label) + 2U);
         drv_display_draw_text(suffix_x, 9U, hall_mode_suffix);
     }
 

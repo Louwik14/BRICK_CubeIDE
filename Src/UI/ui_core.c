@@ -162,9 +162,21 @@ static ui_track_state_t g_ui_track_state = {
         { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
         { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
         { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
+        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
+        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
+        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
+        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
+        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
+        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
     },
-    .track_midi_channel = { 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U },
+    .track_midi_channel = {
+        1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
+        9U, 10U, 11U, 12U, 13U, 14U
+    },
     .track_midi_source = {
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
+        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
         (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
         (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
         (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
@@ -295,7 +307,7 @@ static uint8_t ui_core_resolve_mute_mix_track(uint8_t track,
         return 1U;
     }
 
-    if (ctx->mix_track_id >= MIXER_MAX_TRACKS)
+    if (track_runtime_is_audio_routable(track) == 0U)
     {
         return 0U;
     }
@@ -2440,6 +2452,13 @@ void ui_core_init(void)
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
     ui_core_mute_clear_state();
     ui_core_set_feedback(0);
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        g_ui_track_state.track_configs[track].family = UI_TRACK_FAMILY_OFF;
+        g_ui_track_state.track_configs[track].type = UI_TRACK_TYPE_AUDIO;
+        g_ui_track_state.track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
+        g_ui_track_state.track_midi_source[track] = (uint8_t)UI_TRACK_MIDI_SRC_ALL;
+    }
     for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
     {
         g_ui_track_state.mode_tap_ms[mode] = 0U;
