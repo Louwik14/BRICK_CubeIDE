@@ -20,6 +20,7 @@ static uint8_t g_source_enabled[BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS];
 static uint8_t g_record_armed = 0U;
 static uint8_t g_recording = 0U;
 static uint8_t g_record_waiting_boundary = 0U;
+static uint8_t g_play_waiting_boundary = 0U;
 static uint32_t g_record_frames_written = 0U;
 static uint32_t g_record_target_frames = 0U;
 static uint32_t g_record_len_steps = 16U;
@@ -62,13 +63,15 @@ static uint32_t brick6_master_buffer_steps_to_frames(uint32_t steps)
 
 static void brick6_master_buffer_apply_loop_length(void)
 {
+    const uint32_t target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
+    g_record_target_frames = target_frames;
+
     if (g_buffer_recorder == NULL)
     {
         return;
     }
 
-    g_record_target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
-    live_recorder_set_loop_length(g_buffer_recorder, g_record_target_frames);
+    live_recorder_set_loop_length(g_buffer_recorder, target_frames);
 }
 
 static uint8_t brick6_master_buffer_is_boundary_reached(void)
@@ -138,6 +141,7 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
+    g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
     g_record_len_steps = 16U;
@@ -174,6 +178,7 @@ void brick6_master_buffer_reset(void)
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
+    g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
     g_quantize_record = 1U;
@@ -199,6 +204,7 @@ void brick6_master_buffer_clear(void)
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
+    g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
     memset(g_capture_l, 0, sizeof(g_capture_l));
@@ -306,16 +312,28 @@ void brick6_master_buffer_request_record(void)
         if (g_buffer_recorder != NULL)
         {
             live_recorder_stop_record(g_buffer_recorder);
-            if ((g_quantize_play != 0U) && (g_buffer_recorder->recorded_frames >= 2U))
+            if (g_buffer_recorder->recorded_frames >= 2U)
             {
-                live_recorder_start_play(g_buffer_recorder);
+                if ((g_quantize_play != 0U) && (seq_runtime_is_running() != 0U))
+                {
+                    g_play_waiting_boundary = 1U;
+                }
+                else
+                {
+                    live_recorder_start_play(g_buffer_recorder);
+                    g_play_waiting_boundary = 0U;
+                }
+            }
+            else
+            {
+                g_play_waiting_boundary = 0U;
             }
         }
         g_recording = 0U;
         g_record_armed = 0U;
         g_record_waiting_boundary = 0U;
         g_record_frames_written = 0U;
-        g_record_target_frames = g_buffer_recorder != NULL ? g_buffer_recorder->recorded_frames : 0U;
+        brick6_master_buffer_apply_loop_length();
         return;
     }
 
@@ -402,12 +420,23 @@ void brick6_master_buffer_begin_block(uint32_t frames)
         {
             brick6_master_buffer_apply_loop_length();
             live_recorder_stop_play(g_buffer_recorder);
+            g_play_waiting_boundary = 0U;
             live_recorder_start_record(g_buffer_recorder);
             g_recording = 1U;
             g_record_armed = 0U;
             g_record_waiting_boundary = 0U;
             g_record_frames_written = 0U;
         }
+    }
+
+    if ((g_play_waiting_boundary != 0U)
+            && (g_buffer_recorder != NULL)
+            && (seq_runtime_is_running() != 0U)
+            && (brick6_master_buffer_is_boundary_reached() != 0U)
+            && (g_buffer_recorder->recorded_frames >= 2U))
+    {
+        live_recorder_start_play(g_buffer_recorder);
+        g_play_waiting_boundary = 0U;
     }
 }
 
@@ -454,15 +483,27 @@ void brick6_master_buffer_commit_block(uint32_t frames)
     if ((g_record_target_frames != 0U) && (g_record_frames_written >= g_record_target_frames))
     {
         live_recorder_stop_record(g_buffer_recorder);
-        if ((g_quantize_play != 0U) && (g_buffer_recorder->recorded_frames >= 2U))
+        if (g_buffer_recorder->recorded_frames >= 2U)
         {
-            live_recorder_start_play(g_buffer_recorder);
+            if ((g_quantize_play != 0U) && (seq_runtime_is_running() != 0U))
+            {
+                g_play_waiting_boundary = 1U;
+            }
+            else
+            {
+                live_recorder_start_play(g_buffer_recorder);
+                g_play_waiting_boundary = 0U;
+            }
+        }
+        else
+        {
+            g_play_waiting_boundary = 0U;
         }
         g_recording = 0U;
         g_record_armed = 0U;
         g_record_waiting_boundary = 0U;
         g_record_frames_written = 0U;
-        g_record_target_frames = g_buffer_recorder->recorded_frames;
+        brick6_master_buffer_apply_loop_length();
     }
 }
 
