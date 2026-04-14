@@ -73,6 +73,32 @@ static uint8_t keyboard_engine_get_active_mix_target_track(void)
     return 0xFFU;
 }
 
+static uint8_t keyboard_engine_track_supports_vca_gate(const track_runtime_ctx_t *ctx)
+{
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
+    {
+        return 1U;
+    }
+
+    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+}
+
+static uint8_t keyboard_engine_active_track_supports_vca_gate(void)
+{
+    const uint8_t active_track = ui_get_active_track();
+    track_runtime_refresh_track(active_track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+    return keyboard_engine_track_supports_vca_gate(ctx);
+}
+
 static uint8_t keyboard_engine_get_active_monob_instance(void)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -135,10 +161,7 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             continue;
         }
 
-        const uint8_t track_supports_vca_gate =
-            ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)) ? 1U : 0U;
+        const uint8_t track_supports_vca_gate = keyboard_engine_track_supports_vca_gate(ctx);
 
         uint8_t filter_track = 0U;
         uint8_t mix_track = 0U;
@@ -256,7 +279,7 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
     {
         mixer_track_filter_note_on(filter_track, note, velocity);
     }
-    if (mix_track != 0xFFU)
+    if ((mix_track != 0xFFU) && (keyboard_engine_active_track_supports_vca_gate() != 0U))
     {
         mixer_track_vca_note_on(mix_track, note, velocity);
     }
@@ -329,7 +352,7 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
     {
         mixer_track_filter_note_off(filter_track, note);
     }
-    if (mix_track != 0xFFU)
+    if ((mix_track != 0xFFU) && (keyboard_engine_active_track_supports_vca_gate() != 0U))
     {
         mixer_track_vca_note_off(mix_track, note);
     }
@@ -425,7 +448,7 @@ void keyboard_engine_all_notes_off(void)
     {
         mixer_track_filter_all_notes_off(filter_track);
     }
-    if (mix_track != 0xFFU)
+    if ((mix_track != 0xFFU) && (keyboard_engine_active_track_supports_vca_gate() != 0U))
     {
         mixer_track_vca_all_notes_off(mix_track);
     }

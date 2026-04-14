@@ -70,18 +70,15 @@ static uint32_t brick6_master_buffer_refresh_record_target(void)
 
 static void brick6_master_buffer_apply_record_target_to_recorder(void)
 {
-    const uint32_t target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
-    g_record_target_frames = target_frames;
+    const uint32_t target_frames = brick6_master_buffer_refresh_record_target();
 
     if (g_buffer_recorder == NULL)
     {
         return;
     }
 
-    const uint32_t target_frames = brick6_master_buffer_refresh_record_target();
     live_recorder_set_loop_length(g_buffer_recorder, target_frames);
 }
-
 static uint8_t brick6_master_buffer_is_boundary_reached(void)
 {
     uint32_t longest_duration = 0U;

@@ -18,18 +18,22 @@ static const ui_nav_rule_t g_ui_nav_rules[] = {
 
 static uint8_t ui_navigation_is_page_available(uint8_t page_id)
 {
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t family = ui_get_track_family(active_track);
+    const ui_track_type_t type = ui_get_track_type(active_track);
+
     if (page_id == UI_PAGE_TEMPLATE_PLAY)
     {
-        return (ui_track_family_is_engine(ui_get_track_family(ui_get_active_track())) != 0U) ? 1U : 0U;
+        return (ui_track_family_is_engine(family) != 0U) ? 1U : 0U;
     }
     if (page_id == UI_PAGE_TEMPLATE_MIX)
     {
-        const ui_track_family_t family = ui_get_track_family(ui_get_active_track());
         return (ui_track_family_is_input(family) || ui_track_family_is_engine(family)) ? 1U : 0U;
     }
     if (page_id == UI_PAGE_TEMPLATE_VCA)
     {
-        return (ui_track_family_is_engine(ui_get_track_family(ui_get_active_track())) != 0U) ? 1U : 0U;
+        return ((ui_track_family_is_engine(family) != 0U)
+                || ((ui_track_family_is_input(family) != 0U) && (type == UI_TRACK_TYPE_HYBRID))) ? 1U : 0U;
     }
 
     return 1U;

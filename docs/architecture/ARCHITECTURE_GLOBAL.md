@@ -1,0 +1,141 @@
+# ARCHITECTURE_GLOBAL.md
+
+## 1. Rôle
+
+Ce document est une carte d’orientation.
+
+Il ne détaille pas l’architecture locale.
+Il sert uniquement à :
+- identifier la bonne zone
+- comprendre les dépendances principales entre zones
+- savoir quels documents lire avant de modifier le code
+
+Le détail réel vit dans :
+- `docs/architecture/z0_plateforme_cadence.md`
+- `docs/architecture/z1_audio_hard_rt_mix.md`
+- `docs/architecture/z2_track_runtime_authority.md`
+- `docs/architecture/z3_param_modulation_control.md`
+- `docs/architecture/z4_seq_clock_scheduler.md`
+- `docs/architecture/z5_ui_navigation_interaction.md`
+- `docs/architecture/z6_state_persistence_patterns_projects.md`
+
+---
+
+## 2. Zones d’architecture
+
+## Z0 — Plateforme / Cadence
+Lit ce document si le sujet touche :
+- boot
+- init système
+- ordre d’initialisation
+- superloop
+- tasklets / cadence hors audio IRQ
+
+Doc :
+- `docs/architecture/z0_plateforme_cadence.md`
+
+## Z1 — Audio Hard-RT / Mix
+Lit ce document si le sujet touche :
+- DMA / IRQ audio
+- blocs audio
+- conversion I/O audio
+- callback DSP
+- mixage
+- taps recorder / buffer dans le pipeline audio
+
+Doc :
+- `docs/architecture/z1_audio_hard_rt_mix.md`
+
+## Z2 — Track Runtime Authority
+Lit ce document si le sujet touche :
+- family / type effectifs
+- binding runtime
+- mix target runtime
+- capacités runtime
+- statut effectif d’un domaine param
+- logique track-aware centrale
+
+Doc :
+- `docs/architecture/z2_track_runtime_authority.md`
+
+## Z3 — Param / Modulation / Control
+Lit ce document si le sujet touche :
+- écriture param
+- clamp / dispatch / apply
+- staging / commit
+- modulation LFO
+- coexistence global / track-aware / legacy
+
+Doc :
+- `docs/architecture/z3_param_modulation_control.md`
+
+## Z4 — Seq / Clock / Scheduler
+Lit ce document si le sujet touche :
+- transport
+- tempo / clock
+- progression musicale
+- boundaries
+- scheduling sample-accurate
+- live-rec lié au transport
+
+Doc :
+- `docs/architecture/z4_seq_clock_scheduler.md`
+
+## Z5 — UI / Navigation / Interaction
+Lit ce document si le sujet touche :
+- état UI
+- navigation
+- hall modes
+- track select
+- résolution contextuelle des pages
+- raccourcis
+- clipboard UI
+
+Doc :
+- `docs/architecture/z5_ui_navigation_interaction.md`
+
+## Z6 — State / Persistence / Patterns / Projects
+Lit ce document si le sujet touche :
+- snapshot live
+- queue/apply pattern
+- save/load pattern
+- save/load project
+- boot context
+- restore global d’état
+
+Doc :
+- `docs/architecture/z6_state_persistence_patterns_projects.md`
+
+---
+
+## 3. Dépendances principales entre zones
+
+- Z0 initialise et cadence tout le reste
+- Z1 consomme surtout Z2, Z3 et Z4
+- Z2 fournit la vérité runtime aux autres zones
+- Z3 applique des valeurs en s’appuyant sur Z2
+- Z4 produit les événements temporels consommés par Z1
+- Z5 pilote Z2, Z3, Z4 et Z6 via l’interaction utilisateur
+- Z6 capture/restaure de l’état qui réimpacte Z2, Z3, Z4 et Z5
+
+---
+
+## 4. Comment choisir quoi lire
+
+### Si le prompt parle de :
+- **boot / ordre d’init / boucle principale** → Z0
+- **IRQ audio / mix / buffer audio / DMA** → Z1
+- **family / type / mix target / runtime bind** → Z2
+- **paramètres / LFO / apply / staging** → Z3
+- **transport / tempo / scheduler / live rec séquenceur** → Z4
+- **UI / halls / navigation / pages / clipboard** → Z5
+- **save/load / patterns / projects / restore** → Z6
+
+### Cas transverses fréquents
+- **Input Audio vs Hybrid** → Z2 + Z3 + Z5
+- **Master/Buffer** → Z1 + Z2 + Z3 + Z4 + Z5
+- **bug track-aware transversal** → commencer par Z2
+- **bug après load/restore** → Z6 puis Z2/Z3/Z4/Z5 selon symptôme
+
+---
+
