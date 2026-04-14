@@ -70,6 +70,9 @@ static uint32_t brick6_master_buffer_refresh_record_target(void)
 
 static void brick6_master_buffer_apply_record_target_to_recorder(void)
 {
+    const uint32_t target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
+    g_record_target_frames = target_frames;
+
     if (g_buffer_recorder == NULL)
     {
         return;
@@ -419,9 +422,13 @@ void brick6_master_buffer_begin_block(uint32_t frames)
 
     if ((g_record_armed != 0U) && (g_recording == 0U) && (g_buffer_recorder != NULL))
     {
-        if ((seq_runtime_is_running() != 0U)
-                && ((g_record_waiting_boundary == 0U)
-                    || (brick6_master_buffer_is_boundary_reached() != 0U)))
+        const uint8_t seq_running = (seq_runtime_is_running() != 0U) ? 1U : 0U;
+        const uint8_t should_start_now = ((g_record_waiting_boundary == 0U)
+                                          || ((seq_running != 0U)
+                                              && (brick6_master_buffer_is_boundary_reached() != 0U)))
+                                                 ? 1U
+                                                 : 0U;
+        if (should_start_now != 0U)
         {
             brick6_master_buffer_apply_record_target_to_recorder();
             live_recorder_stop_play(g_buffer_recorder);
