@@ -344,9 +344,7 @@ void live_recorder_read(live_recorder_t *rec,
     }
 
     const float *buffer = rec->buffer;
-    const uint32_t loop_frames = (rec->recorded_frames < rec->loop_frames)
-            ? rec->recorded_frames
-            : rec->loop_frames;
+    const uint32_t loop_frames = rec->recorded_frames;
     const uint32_t write_pos = rec->write_pos;
     uint32_t read_pos_q16 = rec->read_pos_q16;
     const uint32_t read_step_q16 = (rec->read_step_q16 == 0U) ? (1U << 16) : rec->read_step_q16;
