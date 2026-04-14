@@ -1,4 +1,5 @@
 #include "Audio/drum_synth.h"
+#include "Seq/seq_types.h"
 
 #include <cstring>
 #include <cmath>
@@ -16,7 +17,7 @@
 #include "../../md-drum-synth-main/FmCymbalModel.h"
 
 #ifndef DRUM_SYNTH_INSTANCE_COUNT
-#define DRUM_SYNTH_INSTANCE_COUNT 8U
+#define DRUM_SYNTH_INSTANCE_COUNT SEQ_TRACK_COUNT
 #endif
 
 typedef struct

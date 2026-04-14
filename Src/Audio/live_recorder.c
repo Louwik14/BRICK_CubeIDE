@@ -50,6 +50,7 @@ void live_recorder_init(live_recorder_t *rec)
     rec->read_pos = 0U;
     rec->recording = 0U;
     rec->playing = 0U;
+    rec->recorded_frames = 0U;
     rec->latency_offset_frames = 0U;
     rec->read_pos_q16 = 0U;
     rec->read_step_q16 = (uint32_t)(1.0f * 65536.0f);
@@ -140,6 +141,7 @@ void live_recorder_start_record(live_recorder_t *rec)
     rec->write_pos = 0U;
     rec->read_pos = 0U;
     rec->read_pos_q16 = 0U;
+    rec->recorded_frames = 0U;
 }
 
 /**
@@ -173,6 +175,8 @@ void live_recorder_clear(live_recorder_t *rec)
         return;
 
     rec->recording = 0U;
+    rec->playing = 0U;
+    rec->recorded_frames = 0U;
     rec->write_pos = 0U;
     rec->read_pos = 0U;
     rec->read_pos_q16 = 0U;
@@ -288,6 +292,18 @@ void live_recorder_write(live_recorder_t *rec,
     }
 
     rec->write_pos = write_pos;
+    if (rec->recorded_frames < loop_frames)
+    {
+        const uint32_t remaining = loop_frames - rec->recorded_frames;
+        if (frames >= remaining)
+        {
+            rec->recorded_frames = loop_frames;
+        }
+        else
+        {
+            rec->recorded_frames += frames;
+        }
+    }
 }
 
 
@@ -320,8 +336,17 @@ void live_recorder_read(live_recorder_t *rec,
         return;
     }
 
+    if (rec->recorded_frames < 2U)
+    {
+        memset(outL, 0, sizeof(float) * frames);
+        memset(outR, 0, sizeof(float) * frames);
+        return;
+    }
+
     const float *buffer = rec->buffer;
-    const uint32_t loop_frames = rec->loop_frames;
+    const uint32_t loop_frames = (rec->recorded_frames < rec->loop_frames)
+            ? rec->recorded_frames
+            : rec->loop_frames;
     const uint32_t write_pos = rec->write_pos;
     uint32_t read_pos_q16 = rec->read_pos_q16;
     const uint32_t read_step_q16 = (rec->read_step_q16 == 0U) ? (1U << 16) : rec->read_step_q16;
@@ -336,7 +361,7 @@ void live_recorder_read(live_recorder_t *rec,
         else
             distance = loop_frames - (read_pos - write_pos);
 
-        if(distance < LIVE_RECORDER_READ_SAFETY_MARGIN_FRAMES)
+        if ((rec->recording != 0U) && (distance < LIVE_RECORDER_READ_SAFETY_MARGIN_FRAMES))
         {
             outL[i] = 0.0f;
             outR[i] = 0.0f;

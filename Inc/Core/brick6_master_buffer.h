@@ -42,6 +42,8 @@ brick6_master_buffer_state_t brick6_master_buffer_get_state(void);
 uint8_t brick6_master_buffer_is_recording(void);
 uint8_t brick6_master_buffer_is_armed(void);
 uint8_t brick6_master_buffer_is_waiting_start(void);
+uint32_t brick6_master_buffer_get_recorded_frames(void);
+uint32_t brick6_master_buffer_get_record_target_frames(void);
 
 void brick6_master_buffer_begin_block(uint32_t frames);
 void brick6_master_buffer_submit_track_post_fader(uint32_t track_id,
