@@ -46,6 +46,7 @@ static uint8_t g_runtime_last_drum_processed = 0xFFU;
 static uint8_t g_runtime_last_dx7_tracks = 0xFFU;
 static uint8_t g_runtime_last_ui_active_track = 0xFFU;
 static float g_buffer_xfade_smoothed = 0.0f;
+static float g_buffer_xfade_prev = 0.0f;
 
 typedef struct
 {
@@ -228,12 +229,14 @@ void brick6_audio_runtime_init(live_recorder_t *live_recorder)
     (void)live_recorder;
     g_runtime_track_enabled = 1U;
     g_buffer_xfade_smoothed = 0.0f;
+        g_buffer_xfade_prev = 0.0f;
 }
 
 static float brick6_audio_runtime_get_buffer_xfade(void)
 {
     const float target = brick6_master_buffer_get_xfade();
     g_buffer_xfade_smoothed += (target - g_buffer_xfade_smoothed) * 0.25f;
+
     if (g_buffer_xfade_smoothed < 0.0f)
     {
         g_buffer_xfade_smoothed = 0.0f;
@@ -306,22 +309,49 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
     mixer_process(tracks, track_count, frames);
 
-    const float xfade = brick6_audio_runtime_get_buffer_xfade();
-    if((xfade > 0.0f) && (track_count > 0U))
+    const float xfade_end = brick6_audio_runtime_get_buffer_xfade();
+    if ((track_count > 0U) && ((g_buffer_xfade_prev > 0.0f) || (xfade_end > 0.0f)))
     {
         static float recL[AUDIO_BLOCK_SIZE];
         static float recR[AUDIO_BLOCK_SIZE];
 
-        const float gain_rec  = sinf(xfade * HALFPI_F);
-        const float gain_live = cosf(xfade * HALFPI_F);
+        const float xfade_start = g_buffer_xfade_prev;
+        g_buffer_xfade_prev = xfade_end;
 
         brick6_master_buffer_read_playback(recL, recR, frames);
 
-        for(uint32_t i = 0U; i < frames; i++)
+        for (uint32_t i = 0U; i < frames; i++)
         {
+            float xfade;
+            if (frames > 1U)
+            {
+                const float t = (float)i / (float)(frames - 1U);
+                xfade = xfade_start + ((xfade_end - xfade_start) * t);
+            }
+            else
+            {
+                xfade = xfade_end;
+            }
+
+            if (xfade < 0.0f)
+            {
+                xfade = 0.0f;
+            }
+            else if (xfade > 1.0f)
+            {
+                xfade = 1.0f;
+            }
+
+            const float gain_live = 1.0f - xfade;
+            const float gain_rec  = xfade;
+
             tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
             tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
         }
+    }
+    else
+    {
+        g_buffer_xfade_prev = xfade_end;
     }
 
     if(track_count > 0U)

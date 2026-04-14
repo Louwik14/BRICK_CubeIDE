@@ -346,13 +346,17 @@ void live_recorder_read(live_recorder_t *rec,
     const float *buffer = rec->buffer;
     const uint32_t loop_frames = rec->recorded_frames;
     const uint32_t write_pos = rec->write_pos;
-    uint32_t read_pos_q16 = rec->read_pos_q16;
+    uint32_t read_pos = rec->read_pos;
+    uint32_t read_frac_q16 = rec->read_pos_q16 & 0xFFFFU;
     const uint32_t read_step_q16 = (rec->read_step_q16 == 0U) ? (1U << 16) : rec->read_step_q16;
-    const uint32_t loop_q16 = loop_frames << 16;
+
+    if (read_pos >= loop_frames)
+    {
+        read_pos %= loop_frames;
+    }
 
     for(uint32_t i = 0U; i < frames; i++)
     {
-        const uint32_t read_pos = (read_pos_q16 >> 16);
         uint32_t distance;
         if(write_pos >= read_pos)
             distance = write_pos - read_pos;
@@ -369,17 +373,19 @@ void live_recorder_read(live_recorder_t *rec,
             const uint32_t idx = read_pos * 2U;
             const uint32_t next_pos = (read_pos + 1U) % loop_frames;
             const uint32_t next_idx = next_pos * 2U;
-            const float frac = (float)(read_pos_q16 & 0xFFFFU) * (1.0f / 65536.0f);
+            const float frac = (float)read_frac_q16 * (1.0f / 65536.0f);
             const float one_minus_frac = 1.0f - frac;
             outL[i] = (buffer[idx] * one_minus_frac) + (buffer[next_idx] * frac);
             outR[i] = (buffer[idx + 1U] * one_minus_frac) + (buffer[next_idx + 1U] * frac);
         }
 
-        read_pos_q16 += read_step_q16;
-        while(read_pos_q16 >= loop_q16)
-            read_pos_q16 -= loop_q16;
+        read_frac_q16 += read_step_q16;
+        read_pos += (read_frac_q16 >> 16);
+        read_frac_q16 &= 0xFFFFU;
+        while(read_pos >= loop_frames)
+            read_pos -= loop_frames;
     }
 
-    rec->read_pos_q16 = read_pos_q16;
-    rec->read_pos = (read_pos_q16 >> 16);
+    rec->read_pos = read_pos;
+    rec->read_pos_q16 = read_frac_q16;
 }

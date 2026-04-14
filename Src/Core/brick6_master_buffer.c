@@ -13,6 +13,10 @@
 #define BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS UI_TRACK_COUNT
 #endif
 
+#ifndef BRICK6_MASTER_BUFFER_MAX_RECORD_LEN_STEPS
+#define BRICK6_MASTER_BUFFER_MAX_RECORD_LEN_STEPS 64U
+#endif
+
 static live_recorder_t *g_buffer_recorder = NULL;
 static float *g_buffer_storage = NULL;
 static uint32_t g_buffer_max_frames = 0U;
@@ -227,6 +231,10 @@ void brick6_master_buffer_set_record_len(uint32_t steps)
     if (steps == 0U)
     {
         steps = 1U;
+    }
+    else if (steps > BRICK6_MASTER_BUFFER_MAX_RECORD_LEN_STEPS)
+    {
+        steps = BRICK6_MASTER_BUFFER_MAX_RECORD_LEN_STEPS;
     }
 
     g_record_len_steps = steps;
@@ -530,7 +538,8 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
         memset(right, 0, sizeof(float) * frames);
         return;
     }
-    const uint32_t start_pos_q16 = g_buffer_recorder->read_pos_q16;
+    uint32_t sample_pos = g_buffer_recorder->read_pos;
+    uint32_t sample_frac_q16 = g_buffer_recorder->read_pos_q16 & 0xFFFFU;
     const uint32_t read_step_q16 = (g_buffer_recorder->read_step_q16 == 0U) ? (1U << 16) : g_buffer_recorder->read_step_q16;
     live_recorder_read(g_buffer_recorder, left, right, frames);
 
@@ -543,10 +552,13 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
 
     if ((loop_frames != 0U) && ((fade_in_frames != 0U) || (fade_out_frames != 0U)))
     {
-        uint32_t pos_q16 = start_pos_q16;
+        if (sample_pos >= loop_frames)
+        {
+            sample_pos %= loop_frames;
+        }
         for (uint32_t i = 0U; i < frames; ++i)
         {
-            const uint32_t sample_index = ((pos_q16 >> 16) % loop_frames);
+            const uint32_t sample_index = sample_pos;
             float gain = 1.0f;
 
             if (fade_in_frames != 0U)
@@ -582,7 +594,13 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
             left[i] *= gain;
             right[i] *= gain;
 
-            pos_q16 += read_step_q16;
+            sample_frac_q16 += read_step_q16;
+            sample_pos += (sample_frac_q16 >> 16);
+            sample_frac_q16 &= 0xFFFFU;
+            while (sample_pos >= loop_frames)
+            {
+                sample_pos -= loop_frames;
+            }
         }
     }
 }

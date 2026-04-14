@@ -679,7 +679,7 @@ static uint8_t param_runtime_apply_buffer_track(uint8_t track, param_id_t id, fl
     switch (id)
     {
         case PARAM_BUFFER_REC_LEN:
-            brick6_master_buffer_set_record_len((uint32_t)(clamp_value(value, 1.0f, 128.0f) + 0.5f));
+            brick6_master_buffer_set_record_len((uint32_t)(clamp_value(value, 1.0f, 64.0f) + 0.5f));
             param_runtime_cache_set(track, id, value);
             return 1U;
         case PARAM_BUFFER_Q_REC:
@@ -2418,7 +2418,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
     PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
     PARAM_DESC_EX(PARAM_CFG_REC_LEN, "Len", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_len_labels, apply_cfg_rec_len),
-    PARAM_DESC_EX(PARAM_BUFFER_REC_LEN, "Rec Len", PARAM_TYPE_INT, 1.0f, 128.0f, 1.0f, 16.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_REC_LEN, "Rec Len", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 16.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_BUFFER_Q_REC, "Q Rec", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_BUFFER_Q_PLAY, "Q Play", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_BUFFER_RATE, "Rate", PARAM_TYPE_FLOAT, 0.25f, 4.0f, 0.01f, 1.0f, PARAM_DISPLAY_RATIO, "", NULL, NULL),
