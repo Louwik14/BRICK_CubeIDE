@@ -25,6 +25,7 @@ typedef struct
 
     uint8_t recording;
     uint8_t playing;
+    uint32_t recorded_frames;
 
     uint32_t latency_offset_frames;
     float play_rate;
