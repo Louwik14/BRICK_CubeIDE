@@ -45,10 +45,16 @@ Autorite page/ensemble actif:
 
 Autorite track select:
 - `ui_core_service_track_selection_inputs` + `ui_core_handle_track_hall_action` + `ui_core_set_active_track`.
+- Changement track actif explicite localement:
+  - `ui_core_set_active_track`: same-track => resync only.
+  - changement reel => `keyboard_runtime_on_active_track_changed` -> mutation `active_track` -> sync systeme (`ui_core_apply_active_track_change` / `ui_core_sync_system_after_active_track_change`).
 
 Autorite hall modes:
-- `ui_set_hall_mode` (validation transition + side effects mute/pattern cleanup + notification keyboard runtime).
+- Chemin central: `ui_set_hall_mode` (validation transition + forced clears mute/pattern + callback keyboard runtime + commit mode).
+- Exception historique explicitee en code: mute conserve un chemin local direct de mutation `hall_mode` (`ui_core_mute_enter_*` / `ui_core_mute_exit_to_previous_mode`), sans reroutage dans cette passe.
 - Triggers SHIFT+HALL dans `ui_core_handle_shift_hall_action`.
+- `KEYBOARD` reste un mode normal (pas de remap `Master/Buffer -> ROUT` sur ce mode).
+- `ARP` sur track `Master/Buffer` devient contextuellement `ROUT` (resolution page/label + gardes runtime).
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
@@ -73,11 +79,14 @@ Entrees directes:
 
 Entrees evenementielles:
 - `ui_event_from_inputs` (buttons + hall) alimente queue lue par `ui_core_tick`.
-- `ui_core_tick` enchaine handlers dans cet ordre: track-selection -> mute -> consommations hall track-select -> master-buffer routing -> transport -> settings -> global shortcuts -> pattern mode -> seq mode -> navigation -> page handler.
+- `ui_core_tick` materialise la politique des stages consommants via `k_event_stages[]` (ordre inchange): mute -> consommations hall track-select -> master-buffer routing -> transport -> settings -> global shortcuts -> pattern mode -> seq mode.
+- `track_selection` reste hors table et execute en amont.
+- `navigation` puis `active_page->handle_event` restent en fin de chaine.
 
 Contrats implicites d'ordre:
 - L'ordre `ui_core_service_track_selection_inputs()` puis `hall_keyboard_bridge_process()` (dans `brick6_app_process`) garantit que suppression hall est fixee avant emission notes clavier.
-- Dans `ui_core_tick`, les `continue` imposent priorite des couches de shortcuts/navigation.
+- Dans `ui_core_tick`, la table de stages + blocage aval (equivalent `continue`) impose la priorite de consommation.
+- Le contrat `Master/Buffer -> ROUT` repose aussi sur cette mise a jour mode/track avant bridge (etat lu dans le meme tour par `hall_keyboard_bridge_process`).
 
 ## 4. API sortantes
 
@@ -136,17 +145,32 @@ Flux nominal prouve:
 
 3. Mutation etat UI
 - Mutations de `g_ui_track_state` (hall_mode, track_select_armed, active_track, pattern/mute/feedback/clipboard states).
+- Restore bulk track config:
+  - validation snapshot all-or-nothing,
+  - ecriture `g_ui_track_state.*`,
+  - pipeline post-apply localise: `ui_core_restore_post_apply_sync_and_notify()`
+    (`track_runtime_invalidate_all` -> `ui_core_sync_audio_runtime_enables` -> `keyboard_runtime_on_active_track_changed` -> `ui_core_sync_active_track_cfg_params`).
 
 4. Resolution contextuelle page/ensemble
 - `ui_navigation_handle_event` mappe boutons param -> page cible selon disponibilite track-family/type.
 - `ui_template_page` resout family/subpage active et banque param associee.
+- Resolution contextuelle `Master/Buffer -> ROUT` (propre):
+  - page ARP: `ui_page_template_arp_register_families` associe `MASTER+BUFFER` a une famille template `ROUT`,
+  - label mode hall: `ui_get_hall_mode_short_label` affiche `ROUT` en `hall_mode==ARP` sur `MASTER+BUFFER`.
 
 5. Appels vers param/runtime/seq/storage
 - Selon handler: apply params, track config, seq edits, pattern queue/store, undo, settings, master buffer routing/record.
+- Cas speciaux locaux `ui_core` (non resolver):
+  - `ui_core_handle_master_buffer_routing_event`: en `ARP` + `MASTER/BUFFER`, les `HALL_PRESS` togglent `brick6_master_buffer_set_source_enabled` et sont consommes,
+  - `ui_core_handle_transport_event`: shortcut REC/CLEAR buffer sous conditions (`track_select_armed` + track buffer unique).
 
 6. Feedback / consommation aval
 - Feedback texte via `ui_core_set_feedback` visible dans header track.
 - `hall_keyboard_bridge` consomme hall mode + flags suppression pour autoriser/bloquer emission note hall.
+- Gardes runtime explicites en contexte `ROUT`:
+  - `hall_keyboard_bridge_process` bloque l'injection hall->keyboard en `ARP` si `keyboard_runtime_is_master_buffer_route_context()!=0`,
+  - `keyboard_runtime_tick` n'active pas l'arp engine via `keyboard_runtime_hall_mode_uses_arp_engine` sur `MASTER/BUFFER`,
+  - `keyboard_input_note_on/off/all_notes_off` neutralisent les sinks ARP en route context.
 
 ## 7. Contraintes RT/CPU/memoire
 
@@ -165,9 +189,17 @@ Invariants prouves:
 - Autorite unique etat UI courant: `g_ui_track_state` centralise dans `ui_core.c`.
 - Resolution contextuelle track-aware: disponibilite pages/types depend de family/type de la track active (`ui_navigation_is_page_available`, `ui_template_family_resolve_active_track`).
 - Priorite SHIFT/HALL sur track-select en service input: condition explicite `shift_down !=0` et `track_select_armed==0` avant trigger mode hall.
-- Changement hall mode passe par `ui_set_hall_mode` avec nettoyage mute/pattern en sortie de mode.
+- Changement hall mode:
+  - chemin central via `ui_set_hall_mode` avec side effects explicites,
+  - chemin direct mute historique maintenu et documente localement (pas de changement de logique).
+- Contrat d'ordre `ui_core_tick` explicite en code: `track_selection` amont, stages consommants ordonnes, puis `navigation` -> `active_page->handle_event`.
 - Navigation et logique runtime ne sont pas separees strictement: `ui_core` appelle directement seq/param/track_runtime/storage.
 - Cohabitation hall modes / ensembles UI maintenue par resolver family/subpage et label suffix selon mode.
+- Deviation `Master/Buffer` en ARP est fonctionnellement coherente mais distribuee:
+  - resolution contextuelle propre (page/label/template),
+  - cas speciaux locaux UI (`ui_core`),
+  - gardes runtime explicites (`hall_keyboard_bridge` / `keyboard_runtime` / `keyboard_input`).
+- Contrat d'ordre utile confirme: `ui_core_service_track_selection_inputs` precede `hall_keyboard_bridge_process`; sur les cas frontiere audites, pas de fuite hall/note/arp prouvee.
 
 ## 9. Dependances inter-zones
 
@@ -189,6 +221,10 @@ Points factuels:
 - Couplage fort a `track_runtime`, `param_registry`, `seq_*`, `pattern_live_*` depuis Z5.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
 - Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC), transverse mais restant dans frontiere Z5 comme logique d'interaction.
+- Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` sur `MASTER/BUFFER`, renforcee par des gardes locaux.
+- Fragilites restantes prouvees:
+  - mute garde une mutation directe de `hall_mode` hors chemin central,
+  - priorites de consommation toujours tres centralisees dans `ui_core_tick` (desormais explicites via table locale).
 
 ## 11. Impact eventuel sur la cartographie globale
 

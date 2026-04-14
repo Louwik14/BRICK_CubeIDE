@@ -463,7 +463,6 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
     FIL fp;
     UINT br = 0U;
     project_v1_file_header_t hdr;
-    project_v1_file_header_t commit_hdr;
     char path[32];
     uint32_t checksum = 0U;
 
@@ -548,63 +547,6 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
         goto done;
     }
 
-    if (has_pattern_changes != 0U)
-    {
-        project_sd_diag_log("load", "commit_needed", project_slot, 1, 1U);
-        /* Commit phase: only reached after full project validation succeeds. */
-        sd_access_trace_begin("project_f_open_read_commit");
-        const uint32_t t_open_read_commit = HAL_GetTick();
-        const FRESULT fr_reopen = f_open(&fp, path, FA_READ);
-        prof.open_read_ms += (HAL_GetTick() - t_open_read_commit);
-        sd_access_trace_end("project_f_open_read_commit", (int)fr_reopen, 0U);
-        if (fr_reopen != FR_OK)
-        {
-            project_sd_set_error(PROJECT_SD_BANK_ERR_OPEN_FAIL);
-            project_sd_diag_log("load", "commit_open_fail", project_slot, (int)fr_reopen, 0U);
-            goto done;
-        }
-
-        if ((f_read(&fp, &commit_hdr, sizeof(commit_hdr), &br) != FR_OK) || (br != sizeof(commit_hdr)))
-        {
-            project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
-            project_sd_diag_log("load", "commit_read_header_fail", project_slot, (int)br, 0U);
-            (void)f_close(&fp);
-            goto done;
-        }
-
-        if ((commit_hdr.magic != hdr.magic)
-            || (commit_hdr.version != hdr.version)
-            || (commit_hdr.project_slot != hdr.project_slot)
-            || (commit_hdr.save_counter != hdr.save_counter)
-            || (commit_hdr.checksum != hdr.checksum))
-        {
-            project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_HEADER);
-            project_sd_diag_log("load", "commit_header_mismatch", project_slot, 0, 0U);
-            (void)f_close(&fp);
-            goto done;
-        }
-
-        if (f_lseek(&fp, sizeof(commit_hdr) + sizeof(ProjectSaveV1)) != FR_OK)
-        {
-            project_sd_set_error(PROJECT_SD_BANK_ERR_SEEK_FAIL);
-            project_sd_diag_log("load", "commit_seek_fail", project_slot, 0, 0U);
-            (void)f_close(&fp);
-            goto done;
-        }
-
-        const uint32_t t_commit_patterns = HAL_GetTick();
-        if (project_sd_walk_pattern_records(&fp, 1U, 0, 0, 0) == 0U)
-        {
-            project_sd_diag_log("load", "commit_records_fail", project_slot, 0, 0U);
-            (void)f_close(&fp);
-            goto done;
-        }
-        project_sd_diag_log("load", "commit_records_ok", project_slot, 0, 1U);
-        prof.commit_patterns_ms += (HAL_GetTick() - t_commit_patterns);
-
-        (void)f_close(&fp);
-    }
-
     if (out_save_counter != 0)
     {
         *out_save_counter = hdr.save_counter;
@@ -618,6 +560,157 @@ uint8_t project_sd_bank_load_slot(uint8_t project_slot, ProjectSaveV1 *out_proje
 done:
     prof.total_ms = HAL_GetTick() - t_load_start;
     project_sd_profile_print("LOAD", &prof);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    return ok;
+}
+
+uint8_t project_sd_bank_commit_slot_patterns(uint8_t project_slot)
+{
+    project_sd_diag_log("commit", "enter", project_slot, 0, 1U);
+    if (project_sd_slot_is_valid(project_slot) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_SLOT);
+        return 0U;
+    }
+
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_GATE_BUSY);
+        return 0U;
+    }
+
+    uint8_t ok = 0U;
+    FIL fp;
+    UINT br = 0U;
+    project_v1_file_header_t hdr;
+    project_v1_file_header_t commit_hdr;
+    char path[32];
+    uint32_t checksum = 0U;
+    uint8_t has_pattern_changes = 0U;
+    ProjectSaveV1 project_state;
+
+    if (project_sd_mount_if_needed() == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_MOUNT_FAIL);
+        project_sd_diag_log("commit", "mount_fail", project_slot, 0, 0U);
+        goto done;
+    }
+
+    if (project_sd_make_slot_path(path, sizeof(path), project_slot) == 0U)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_PATH_FAIL);
+        project_sd_diag_log("commit", "path_fail", project_slot, 0, 0U);
+        goto done;
+    }
+
+    if (f_open(&fp, path, FA_READ) != FR_OK)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_OPEN_FAIL);
+        project_sd_diag_log("commit", "open_fail", project_slot, 0, 0U);
+        goto done;
+    }
+
+    if ((f_read(&fp, &hdr, sizeof(hdr), &br) != FR_OK) || (br != sizeof(hdr)))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+        project_sd_diag_log("commit", "read_header_fail", project_slot, (int)br, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if (project_sd_header_is_valid(&hdr, project_slot) == 0U)
+    {
+        project_sd_mark_slot_validity(project_slot, 0U);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_HEADER);
+        project_sd_diag_log("commit", "header_invalid", project_slot, (int)hdr.version, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if ((f_read(&fp, &project_state, sizeof(project_state), &br) != FR_OK) || (br != sizeof(project_state)))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+        project_sd_diag_log("commit", "read_payload_fail", project_slot, (int)br, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)&project_state, sizeof(project_state));
+    if (project_sd_walk_pattern_records(&fp, 0U, 0, &checksum, &has_pattern_changes) == 0U)
+    {
+        project_sd_diag_log("commit", "validate_records_fail", project_slot, 0, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    (void)f_close(&fp);
+
+    if (checksum != hdr.checksum)
+    {
+        project_sd_mark_slot_validity(project_slot, 0U);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
+        project_sd_diag_log("commit", "checksum_fail", project_slot, 0, 0U);
+        goto done;
+    }
+
+    if (has_pattern_changes == 0U)
+    {
+        project_sd_mark_slot_validity(project_slot, 1U);
+        project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
+        project_sd_diag_log("commit", "no_changes", project_slot, 0, 1U);
+        ok = 1U;
+        goto done;
+    }
+
+    if (f_open(&fp, path, FA_READ) != FR_OK)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_OPEN_FAIL);
+        project_sd_diag_log("commit", "reopen_fail", project_slot, 0, 0U);
+        goto done;
+    }
+
+    if ((f_read(&fp, &commit_hdr, sizeof(commit_hdr), &br) != FR_OK) || (br != sizeof(commit_hdr)))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
+        project_sd_diag_log("commit", "commit_read_header_fail", project_slot, (int)br, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if ((commit_hdr.magic != hdr.magic)
+        || (commit_hdr.version != hdr.version)
+        || (commit_hdr.project_slot != hdr.project_slot)
+        || (commit_hdr.save_counter != hdr.save_counter)
+        || (commit_hdr.checksum != hdr.checksum))
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_HEADER);
+        project_sd_diag_log("commit", "commit_header_mismatch", project_slot, 0, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if (f_lseek(&fp, sizeof(commit_hdr) + sizeof(ProjectSaveV1)) != FR_OK)
+    {
+        project_sd_set_error(PROJECT_SD_BANK_ERR_SEEK_FAIL);
+        project_sd_diag_log("commit", "commit_seek_fail", project_slot, 0, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    if (project_sd_walk_pattern_records(&fp, 1U, 0, 0, 0) == 0U)
+    {
+        project_sd_diag_log("commit", "commit_records_fail", project_slot, 0, 0U);
+        (void)f_close(&fp);
+        goto done;
+    }
+
+    (void)f_close(&fp);
+    project_sd_mark_slot_validity(project_slot, 1U);
+    project_sd_set_error(PROJECT_SD_BANK_ERR_NONE);
+    project_sd_diag_log("commit", "done", project_slot, 1, 1U);
+    ok = 1U;
+
+done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     return ok;
 }

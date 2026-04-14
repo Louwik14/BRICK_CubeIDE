@@ -665,6 +665,30 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
     }
 }
 
+void mod_lfo_v1_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    {
+        return;
+    }
+
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        const mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo];
+        mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
+        if ((param_id_t)s->dest != id)
+        {
+            continue;
+        }
+        if (((param_id_t)rt->last_dest != id) || (rt->base_valid == 0U))
+        {
+            continue;
+        }
+
+        rt->base_value = value;
+    }
+}
+
 void mod_lfo_v1_process_sample_all(void)
 {
     mod_lfo_v1_process_block(1U);

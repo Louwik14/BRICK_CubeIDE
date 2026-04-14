@@ -261,6 +261,7 @@ static void ui_param_set_active_track_value(param_id_t param, float value)
     }
 
     (void)param_registry_apply_track_value(param, ui_get_active_track(), clamped);
+    /* Track-scoped contract: active[] mirrors the UI edit context; runtime authority is apply_track_value(track,...). */
     param_store_set_active(param, clamped);
 }
 

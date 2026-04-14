@@ -119,12 +119,7 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
         return 0U;
     }
 
-    (void)resume_transport;
-
-    seq_runtime_stop();
-    seq_output_guard_panic(1U);
-
-    if (pattern_live_apply_snapshot(&project->live, 0U) == 0U)
+    if (pattern_live_apply_snapshot(&project->live, resume_transport) == 0U)
     {
         project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);
         return 0U;
@@ -232,6 +227,13 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {
         project_v1_diag_log("load_apply_fail", project_slot, 0U);
+        return 0U;
+    }
+
+    if (project_sd_bank_commit_slot_patterns(project_slot) == 0U)
+    {
+        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
+        project_v1_diag_log("load_commit_fail", project_slot, 0U);
         return 0U;
     }
 

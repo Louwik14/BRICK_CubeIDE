@@ -410,6 +410,13 @@ static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
 
 static void ui_core_mute_exit_to_previous_mode(void)
 {
+    /*
+     * Hall mode contract note:
+     * - Mute currently owns a legacy local direct transition path.
+     * - Exiting mute intentionally writes hall_mode directly (no ui_set_hall_mode call).
+     * - Coherence is preserved by clearing mute-local state here and by central forced
+     *   clears in ui_set_hall_mode() when leaving MUTE through the central path.
+     */
     const ui_hall_mode_t target = (g_ui_track_state.mute_prev_mode_valid != 0U)
             ? g_ui_track_state.mute_prev_mode
             : UI_HALL_MODE_SEQ;
@@ -428,6 +435,7 @@ static void ui_core_mute_enter_quick(void)
 
     g_ui_track_state.mute_active = 1U;
     g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_QUICK;
+    /* Legacy local mute-owned direct hall_mode transition (kept for behavior stability). */
     g_ui_track_state.hall_mode = UI_HALL_MODE_MUTE;
 }
 
@@ -985,6 +993,19 @@ static void ui_core_sync_active_track_cfg_params(void)
     param_registry_sync_ui_for_active_track();
 }
 
+static void ui_core_sync_system_after_active_track_change(void)
+{
+    ui_core_sync_active_track_cfg_params();
+}
+
+static void ui_core_apply_active_track_change(uint8_t track)
+{
+    /* Preserve observable order: callback first, then state pivot, then system sync. */
+    keyboard_runtime_on_active_track_changed();
+    g_ui_track_state.active_track = track;
+    ui_core_sync_system_after_active_track_change();
+}
+
 static void ui_core_set_active_track(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)
@@ -994,12 +1015,19 @@ static void ui_core_set_active_track(uint8_t track)
 
     if (g_ui_track_state.active_track == track)
     {
-        ui_core_sync_active_track_cfg_params();
+        /* Same-track contract: resync only, no keyboard callback. */
+        ui_core_sync_system_after_active_track_change();
         return;
     }
 
+    ui_core_apply_active_track_change(track);
+}
+
+static void ui_core_restore_post_apply_sync_and_notify(void)
+{
+    track_runtime_invalidate_all();
+    ui_core_sync_audio_runtime_enables();
     keyboard_runtime_on_active_track_changed();
-    g_ui_track_state.active_track = track;
     ui_core_sync_active_track_cfg_params();
 }
 
@@ -1154,10 +1182,7 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         g_ui_track_state.track_midi_source[track] = midi_source[track];
     }
 
-    track_runtime_invalidate_all();
-    ui_core_sync_audio_runtime_enables();
-    keyboard_runtime_on_active_track_changed();
-    ui_core_sync_active_track_cfg_params();
+    ui_core_restore_post_apply_sync_and_notify();
     return true;
 }
 
@@ -2708,6 +2733,25 @@ void ui_core_service_track_selection_inputs(void)
  */
 void ui_core_tick(void)
 {
+    typedef uint8_t (*ui_core_tick_stage_fn_t)(const ui_event_t *ev);
+    typedef struct
+    {
+        ui_core_tick_stage_fn_t handler;
+        uint8_t consumes_event;
+        uint8_t blocks_downstream;
+    } ui_core_tick_stage_t;
+
+    static const ui_core_tick_stage_t k_event_stages[] = {
+        { ui_core_mute_handle_event, 1U, 1U },
+        { ui_core_is_track_hall_event_consumed, 1U, 1U },
+        { ui_core_handle_master_buffer_routing_event, 1U, 1U },
+        { ui_core_handle_transport_event, 1U, 1U },
+        { ui_page_settings_handle_event, 1U, 1U },
+        { ui_core_handle_global_shortcuts, 1U, 1U },
+        { ui_core_handle_pattern_mode_event, 1U, 1U },
+        { ui_core_handle_seq_mode_event, 1U, 1U },
+    };
+
     ui_event_t ev;
 
     for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
@@ -2728,48 +2772,21 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
+        /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
 
-        if (ui_core_mute_handle_event(&ev) != 0U)
+        for (uint8_t stage = 0U; stage < (uint8_t)(sizeof(k_event_stages) / sizeof(k_event_stages[0])); ++stage)
         {
-            continue;
+            const ui_core_tick_stage_t *const s = &k_event_stages[stage];
+            if ((s->consumes_event != 0U)
+                    && (s->blocks_downstream != 0U)
+                    && (s->handler(&ev) != 0U))
+            {
+                goto next_event;
+            }
         }
 
-        if (ui_core_is_track_hall_event_consumed(&ev) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_core_handle_master_buffer_routing_event(&ev) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_core_handle_transport_event(&ev) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_page_settings_handle_event(&ev) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_core_handle_global_shortcuts(&ev) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_core_handle_pattern_mode_event(&ev) != 0U)
-        {
-            continue;
-        }
-
-        if (ui_core_handle_seq_mode_event(&ev) != 0U)
-        {
-            continue;
-        }
-
+        /* Must stay here: event can switch page, then dispatch to the (possibly new) active page. */
         ui_navigation_handle_event(&ev);
 
         const ui_page_t *active_page = ui_page_get();
@@ -2777,6 +2794,9 @@ void ui_core_tick(void)
         {
             active_page->handle_event(&ev);
         }
+
+next_event:
+        ;
     }
 
     const ui_page_t *active_page = ui_page_get();
@@ -3154,6 +3174,19 @@ ui_hall_mode_t ui_get_hall_mode(void)
 
 void ui_set_hall_mode(ui_hall_mode_t mode)
 {
+    /*
+     * Hall mode contract reference:
+     * - This is the central transition path for hall_mode.
+     * - It owns cross-mode side effects/hooks:
+     *   1) forced mute clear when leaving MUTE
+     *   2) forced pattern abort when leaving PATTERN
+     *   3) keyboard runtime transition callback
+     *   4) hall_mode state commit
+     *
+     * Note: mute still uses a historical local direct path for enter/exit
+     * (ui_core_mute_enter_* / ui_core_mute_exit_to_previous_mode). That path must
+     * stay coherent with the forced clears handled here; no reroute is done in this pass.
+     */
     if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)
     {
         return;

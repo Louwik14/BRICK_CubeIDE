@@ -1290,6 +1290,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                              (unsigned)rule.domain,
                              (unsigned)ctx->engine,
                              (unsigned)ctx->instance_id);
+                mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
                 return 1U;
             }
 
@@ -1314,76 +1315,94 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_TYPE:
             mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(clamped, 0.0f, 4.0f) + 0.5f)));
             state->type = clamp_value(clamped, 0.0f, 4.0f);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_CUTOFF:
             mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(clamped));
             state->cutoff = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_RESONANCE:
             mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(clamped));
             state->resonance = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_EG_AMT:
             mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(clamped));
             state->eg_amount = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_ATTACK:
             mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(clamped));
             state->attack = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_DECAY:
             mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(clamped));
             state->decay = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_SUSTAIN:
             mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(clamped));
             state->sustain = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_RELEASE:
             mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(clamped));
             state->release = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_KEYTRK:
             mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(clamped));
             state->keytrack = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_ENVRST:
             state->env_reset = filter_ui127_to_bool(clamped) ? 1.0f : 0.0f;
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_ENVDLY:
             state->env_delay = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_EQ_LOW:
             mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(clamped));
             state->eq_low = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_EQ_MID:
             mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(clamped));
             state->eq_mid = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_EQ_HIGH:
             mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(clamped));
             state->eq_high = filter_ui127_clamp(clamped);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_DRIVE:
             apply_filter_drive_runtime(target_track, clamp_value(clamped, 0.0f, 127.0f));
             state->drive = clamp_value(clamped, 0.0f, 127.0f);
             apply_filter_crunch_insert_runtime(target_track, state);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_DECIMATOR_BITS:
             apply_filter_decimator_bits_runtime(target_track, clamp_value(clamped, 0.0f, 127.0f));
             state->decimator_bits = clamp_value(clamped, 0.0f, 127.0f);
             apply_filter_crunch_insert_runtime(target_track, state);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_DECIMATOR_RATE:
             apply_filter_decimator_rate_runtime(target_track, clamp_value(clamped, 0.0f, 127.0f));
             state->decimator_rate = clamp_value(clamped, 0.0f, 127.0f);
             apply_filter_crunch_insert_runtime(target_track, state);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         case PARAM_FILTER_DECIMATOR_RATE2:
             apply_filter_decimator_rate2_runtime(target_track, clamp_value(clamped, 0.0f, 127.0f));
             state->decimator_rate2 = clamp_value(clamped, 0.0f, 127.0f);
             apply_filter_crunch_insert_runtime(target_track, state);
+            mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
             return 1U;
         default:
             break;

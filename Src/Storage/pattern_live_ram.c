@@ -426,7 +426,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
     if (pattern_live_seq_block_validate_plock_budget(&pattern->seq, 0, 0) == 0U)
     {
-        (void)pattern_live_apply_seq_block(&pattern->seq);
         return 0U;
     }
 
@@ -443,6 +442,13 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     }
 
     track_runtime_refresh_all();
+
+    if (pattern_live_apply_seq_block(&pattern->seq) == 0U)
+    {
+        g_apply_in_progress = 0U;
+        return 0U;
+    }
+
     param_registry_batch_begin();
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
@@ -472,6 +478,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        /* LFO restore authority: config is restored only via mod_lfo_v1_set_track_param. */
         (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEST, (float)pattern->mod.tracks[track].lfo1.dest);
         (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_RATE, (float)pattern->mod.tracks[track].lfo1.rate);
         (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEPTH, (float)pattern->mod.tracks[track].lfo1.depth);
@@ -480,15 +487,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_RATE, (float)pattern->mod.tracks[track].lfo2.rate);
         (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEPTH, (float)pattern->mod.tracks[track].lfo2.depth);
         (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_SHAPE, (float)pattern->mod.tracks[track].lfo2.shape);
-
-        (void)param_registry_apply_track_value(PARAM_LFO1_DEST, track, (float)pattern->mod.tracks[track].lfo1.dest);
-        (void)param_registry_apply_track_value(PARAM_LFO1_RATE, track, (float)pattern->mod.tracks[track].lfo1.rate);
-        (void)param_registry_apply_track_value(PARAM_LFO1_DEPTH, track, (float)pattern->mod.tracks[track].lfo1.depth);
-        (void)param_registry_apply_track_value(PARAM_LFO1_SHAPE, track, (float)pattern->mod.tracks[track].lfo1.shape);
-        (void)param_registry_apply_track_value(PARAM_LFO2_DEST, track, (float)pattern->mod.tracks[track].lfo2.dest);
-        (void)param_registry_apply_track_value(PARAM_LFO2_RATE, track, (float)pattern->mod.tracks[track].lfo2.rate);
-        (void)param_registry_apply_track_value(PARAM_LFO2_DEPTH, track, (float)pattern->mod.tracks[track].lfo2.depth);
-        (void)param_registry_apply_track_value(PARAM_LFO2_SHAPE, track, (float)pattern->mod.tracks[track].lfo2.shape);
     }
 
     seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_bpm_milli);
@@ -501,12 +499,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         seq_runtime_set_track_div(track, pattern->globals.track_div[track]);
         seq_runtime_set_track_quant(track, pattern->globals.track_quant[track]);
         seq_runtime_set_track_swing(track, pattern->globals.track_swing[track]);
-    }
-
-    if (pattern_live_apply_seq_block(&pattern->seq) == 0U)
-    {
-        g_apply_in_progress = 0U;
-        return 0U;
     }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)

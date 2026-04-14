@@ -42,6 +42,7 @@ Autorite snapshot live (pattern):
 - Capture: `pattern_live_capture_current()`.
 - Apply: `pattern_live_apply_snapshot()`.
 - Selection pattern active/queued: `pattern_live_queue_slot()`, `pattern_live_service()`, `pattern_live_set_active_state()`.
+- Restore LFO en apply live: une seule voie d'autorite (`mod_lfo_v1_set_track_param` depuis `pattern_live_apply_snapshot`).
 
 Autorite persistence pattern bank SD:
 - `pattern_sd_bank_store_slot[_nosync]()`, `pattern_sd_bank_load_slot()`, `pattern_sd_bank_delete_slot()`, `pattern_sd_bank_get_slot_checksum()`.
@@ -78,7 +79,7 @@ Entrees depuis undo:
 Contrats implicites observes:
 - APIs `project_v1_*` mutantes et `undo_v1_*` refusent contexte ISR via `__get_IPSR()`.
 - `pattern_live_service()` suppose appel periodique hors IRQ audio, avec seq runtime deja actif si queue presente.
-- L'ordre stop/panic/apply est impose avant restore live/projet (`seq_runtime_stop`, `seq_output_guard_panic`).
+- L'autorite stop/panic/reprise transport du restore live est centralisee dans `pattern_live_apply_snapshot()`.
 - `pattern_live_queue_slot()` applique immediatement si transport stoppe, sinon differe au boundary.
 
 Getters non-mutants:
@@ -106,7 +107,7 @@ Z6 appelle les zones suivantes:
 Contrats timing:
 - SD/flash operations sont hors hard-RT et potentiellement longues.
 - Apply snapshot/projet stoppe transport avant mutation d'etat globale.
-- Commit pattern-bank depuis fichier projet est en 2 phases (validation complete puis commit).
+- Load projet est separe en 3 phases: load+validation, live apply, puis commit pattern-bank SD.
 
 ## 5. Etats structurants possedes
 
@@ -170,10 +171,11 @@ Points de lecture principaux:
   - stop transport + panic,
   - restore track config UI,
   - `track_runtime_refresh_all()`,
+  - apply seq block (plus tot),
   - batch apply params + globals,
   - restore LFO,
   - restore tempo/clock/rec/div/quant/swing,
-  - restore seq block, reset playheads, sync UI param,
+  - reset playheads, sync UI param,
   - restart transport si autorise.
 
 3. Save pattern:
@@ -202,8 +204,9 @@ Points de lecture principaux:
 
 7. Load project:
 - `project_v1_load_slot()`:
-  - charge depuis SD via `project_sd_bank_load_slot` (validation header/checksum + records),
+  - charge depuis SD via `project_sd_bank_load_slot` (lecture + validation header/checksum + records, sans commit pattern-bank),
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
+  - commit ensuite le pattern-bank SD via `project_sd_bank_commit_slot_patterns`,
   - met a jour slot actif/counter,
   - commit boot context.
 
@@ -213,9 +216,8 @@ Points de lecture principaux:
   - valide slot, puis appelle `project_v1_load_slot(slot)`.
 
 9. Flux interne project SD (important):
-- Load projet en 2 phases:
-  - phase validation: lecture complete + checksum global + detection deltas pattern bank,
-  - phase commit: re-open et application des deltas patterns vers `pattern_sd_bank_*` seulement si validation a reussi.
+- `project_sd_bank_load_slot`: phase de lecture/validation uniquement (payload projet + records + checksum global).
+- `project_sd_bank_commit_slot_patterns`: phase de commit pattern-bank (revalidation puis application des deltas vers `pattern_sd_bank_*`).
 
 Effets aval:
 - Z5: UI track config et sync param active track sont mis a jour.
@@ -237,8 +239,9 @@ Effets aval:
 - Separation explicite:
   - live RAM (`pattern_live_*`) vs persistence pattern SD (`pattern_sd_bank_*`) vs persistence project SD (`project_sd_bank_*`) vs boot pointer flash (`boot_context_flash_*`).
 - Apply snapshot/projet impose stop transport avant mutation et reset playhead apres apply.
+- Ordre durci de restore live: stop/panic -> track config -> `track_runtime_refresh_all` -> seq block -> params/LFO/runtime globals.
 - Queue pattern appliquee uniquement sur boundary detecte (wrap playhead) quand transport tourne.
-- `project_sd_bank_load_slot` ne commit pas les deltas pattern tant que fichier complet n'est pas valide (header + checksum + records).
+- `project_v1_load_slot` ne commit le pattern-bank SD qu'apres succes du live apply.
 - Getters de statut actif/queued et erreurs ne mutent pas l'etat metier (hors eventual set error pour API invalides cote project_v1).
 
 ## 9. Dependances inter-zones
@@ -255,7 +258,7 @@ Effets aval:
 - Dependance implicite a l'ordre d'appel superloop pour `pattern_live_service` (si non appele, queue pattern ne commute pas).
 - `dirty_pending_persist` est ecrit mais non exploite dans le flux observe (meta partiellement orpheline).
 - Parametres mix legacy `PARAM_MIX_TRACK0..3_*` encore whitelistes en global dans `pattern_live_is_global_param_useful` alors que l'architecture est track-aware 14 pistes.
-- `project_v1_apply_snapshot` ignore l'argument `resume_transport` (`(void)resume_transport`), ce qui rend le contrat asymetrique avec `pattern_live_apply_snapshot`.
+- `project_v1_apply_snapshot` est un orchestrateur mince: delegation du live apply a `pattern_live_apply_snapshot` + restauration etat actif/queued/slot projet.
 - Couplage UI implicite dans la condition de boundary (`seq_runtime_get_playhead_step(ui_get_active_track(), ...)`) au lieu d'une reference transport neutre.
 
 Aucune double autorite complete concurrente de save/load projet n'est observee.
