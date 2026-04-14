@@ -13,7 +13,9 @@
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DX7_MAX_INSTANCES 1U
 #define TRACK_RUNTIME_MONOB_MAX_INSTANCES 8U
+#define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
+#define TRACK_RUNTIME_INPUT_RESERVED_MIX_TRACKS 3U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
 static volatile uint8_t g_track_runtime_refresh_needed = 1U;
@@ -22,6 +24,7 @@ typedef struct
 {
     uint8_t dx7_used;
     uint8_t monob_used;
+    uint8_t drum_used;
 } track_runtime_allocator_state_t;
 
 static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
@@ -143,16 +146,6 @@ static uint8_t track_runtime_input_family_mix_track(track_runtime_family_t famil
         default:
             return 0U;
     }
-}
-
-static uint8_t track_runtime_mix_mark_used(uint8_t mix_track, uint8_t *used, uint8_t used_len)
-{
-    if ((used == NULL) || (mix_track >= used_len))
-    {
-        return 0U;
-    }
-    used[mix_track] = 1U;
-    return 1U;
 }
 
 static uint8_t track_runtime_mix_reserve_track(track_runtime_ctx_t *ctx,
@@ -329,7 +322,14 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
             return;
         }
 
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, ctx->track_id);
+        if (allocator->drum_used >= TRACK_RUNTIME_DRUM_MAX_INSTANCES)
+        {
+            track_runtime_set_quota_blocked(ctx);
+            return;
+        }
+
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, allocator->drum_used);
+        allocator->drum_used++;
         return;
     }
 
@@ -389,10 +389,16 @@ void track_runtime_invalidate_all(void)
 
 void track_runtime_refresh_all(void)
 {
-    track_runtime_allocator_state_t allocator = { 0U, 0U };
+    track_runtime_allocator_state_t allocator = { 0U, 0U, 0U };
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
+    for (uint8_t mix_track = 0U;
+         (mix_track < TRACK_RUNTIME_INPUT_RESERVED_MIX_TRACKS) && (mix_track < TRACK_RUNTIME_MIX_TRACK_COUNT);
+         ++mix_track)
+    {
+        mix_track_used[mix_track] = 1U;
+    }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -416,9 +422,7 @@ void track_runtime_refresh_all(void)
         uint8_t input_mix_track = TRACK_RUNTIME_MIX_TRACK_NONE;
         if (track_runtime_input_family_mix_track(family, ui_family, &input_mix_track) != 0U)
         {
-            if (track_runtime_mix_mark_used(input_mix_track,
-                                            mix_track_used,
-                                            (uint8_t)sizeof(mix_track_used)) != 0U)
+            if (input_mix_track < TRACK_RUNTIME_MIX_TRACK_COUNT)
             {
                 ctx->mix_track_id = input_mix_track;
             }

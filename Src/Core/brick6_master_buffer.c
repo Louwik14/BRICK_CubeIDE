@@ -27,8 +27,8 @@ static uint8_t g_quantize_record = 1U;
 static uint8_t g_quantize_play = 1U;
 static float g_rate = 1.0f;
 static float g_xfade = 0.0f;
-static uint32_t g_fade_in_frames = 0U;
-static uint32_t g_fade_out_frames = 0U;
+static uint32_t g_fade_in_amount = 0U;
+static uint32_t g_fade_out_amount = 0U;
 static ALIGN32 float g_capture_l[AUDIO_BLOCK_SIZE];
 static ALIGN32 float g_capture_r[AUDIO_BLOCK_SIZE];
 
@@ -145,8 +145,8 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     g_quantize_play = 1U;
     g_rate = 1.0f;
     g_xfade = 0.0f;
-    g_fade_in_frames = 0U;
-    g_fade_out_frames = 0U;
+    g_fade_in_amount = 0U;
+    g_fade_out_amount = 0U;
     memset(g_source_enabled, 0, sizeof(g_source_enabled));
     for (uint8_t track = 0U; track < BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS; ++track)
     {
@@ -180,8 +180,8 @@ void brick6_master_buffer_reset(void)
     g_quantize_play = 1U;
     g_rate = 1.0f;
     g_xfade = 0.0f;
-    g_fade_in_frames = 0U;
-    g_fade_out_frames = 0U;
+    g_fade_in_amount = 0U;
+    g_fade_out_amount = 0U;
     memset(g_source_enabled, 0, sizeof(g_source_enabled));
     for (uint8_t track = 0U; track < BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS; ++track)
     {
@@ -262,12 +262,12 @@ float brick6_master_buffer_get_xfade(void)
 
 void brick6_master_buffer_set_fade_in(uint32_t frames)
 {
-    g_fade_in_frames = frames;
+    g_fade_in_amount = frames;
 }
 
 void brick6_master_buffer_set_fade_out(uint32_t frames)
 {
-    g_fade_out_frames = frames;
+    g_fade_out_amount = frames;
 }
 
 void brick6_master_buffer_set_source_enabled(uint8_t track, uint8_t enabled)
@@ -484,7 +484,14 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
     const uint32_t read_step_q16 = (g_buffer_recorder->read_step_q16 == 0U) ? (1U << 16) : g_buffer_recorder->read_step_q16;
     live_recorder_read(g_buffer_recorder, left, right, frames);
 
-    if ((loop_frames != 0U) && ((g_fade_in_frames != 0U) || (g_fade_out_frames != 0U)))
+    const uint32_t fade_in_frames = (g_fade_in_amount == 0U)
+            ? 0U
+            : (uint32_t)(((uint64_t)loop_frames * (uint64_t)g_fade_in_amount) / 127U);
+    const uint32_t fade_out_frames = (g_fade_out_amount == 0U)
+            ? 0U
+            : (uint32_t)(((uint64_t)loop_frames * (uint64_t)g_fade_out_amount) / 127U);
+
+    if ((loop_frames != 0U) && ((fade_in_frames != 0U) || (fade_out_frames != 0U)))
     {
         uint32_t pos_q16 = start_pos_q16;
         for (uint32_t i = 0U; i < frames; ++i)
@@ -492,23 +499,23 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
             const uint32_t sample_index = ((pos_q16 >> 16) % loop_frames);
             float gain = 1.0f;
 
-            if (g_fade_in_frames != 0U)
+            if (fade_in_frames != 0U)
             {
-                if (sample_index < g_fade_in_frames)
+                if (sample_index < fade_in_frames)
                 {
-                    gain *= ((float)sample_index) / (float)g_fade_in_frames;
+                    gain *= ((float)sample_index) / (float)fade_in_frames;
                 }
             }
 
-            if (g_fade_out_frames != 0U)
+            if (fade_out_frames != 0U)
             {
-                if (g_fade_out_frames < loop_frames)
+                if (fade_out_frames < loop_frames)
                 {
-                    const uint32_t fade_out_start = loop_frames - g_fade_out_frames;
+                    const uint32_t fade_out_start = loop_frames - fade_out_frames;
                     if (sample_index >= fade_out_start)
                     {
                         const uint32_t remaining = loop_frames - sample_index;
-                        gain *= ((float)remaining) / (float)g_fade_out_frames;
+                        gain *= ((float)remaining) / (float)fade_out_frames;
                     }
                 }
             }

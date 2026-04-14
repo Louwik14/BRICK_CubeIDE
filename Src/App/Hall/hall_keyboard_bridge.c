@@ -26,8 +26,7 @@ void hall_keyboard_bridge_process(void)
         {
             if (note_off_pending != 0U)
             {
-                if ((hall_mode == UI_HALL_MODE_KEYBOARD)
-                        && (keyboard_runtime_active_track_is_input_hybrid() != 0U))
+                if (hall_mode == UI_HALL_MODE_KEYBOARD)
                 {
                     keyboard_runtime_process_hall(key, false, velocity);
                 }
