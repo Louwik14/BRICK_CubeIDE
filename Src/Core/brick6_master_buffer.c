@@ -62,13 +62,15 @@ static uint32_t brick6_master_buffer_steps_to_frames(uint32_t steps)
 
 static void brick6_master_buffer_apply_loop_length(void)
 {
+    const uint32_t target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
+    g_record_target_frames = target_frames;
+
     if (g_buffer_recorder == NULL)
     {
         return;
     }
 
-    g_record_target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
-    live_recorder_set_loop_length(g_buffer_recorder, g_record_target_frames);
+    live_recorder_set_loop_length(g_buffer_recorder, target_frames);
 }
 
 static uint8_t brick6_master_buffer_is_boundary_reached(void)
@@ -315,7 +317,7 @@ void brick6_master_buffer_request_record(void)
         g_record_armed = 0U;
         g_record_waiting_boundary = 0U;
         g_record_frames_written = 0U;
-        g_record_target_frames = g_buffer_recorder != NULL ? g_buffer_recorder->recorded_frames : 0U;
+        brick6_master_buffer_apply_loop_length();
         return;
     }
 
@@ -396,9 +398,13 @@ void brick6_master_buffer_begin_block(uint32_t frames)
 
     if ((g_record_armed != 0U) && (g_recording == 0U) && (g_buffer_recorder != NULL))
     {
-        if ((seq_runtime_is_running() != 0U)
-                && ((g_record_waiting_boundary == 0U)
-                    || (brick6_master_buffer_is_boundary_reached() != 0U)))
+        const uint8_t seq_running = (seq_runtime_is_running() != 0U) ? 1U : 0U;
+        const uint8_t should_start_now = ((g_record_waiting_boundary == 0U)
+                                          || ((seq_running != 0U)
+                                              && (brick6_master_buffer_is_boundary_reached() != 0U)))
+                                                 ? 1U
+                                                 : 0U;
+        if (should_start_now != 0U)
         {
             brick6_master_buffer_apply_loop_length();
             live_recorder_stop_play(g_buffer_recorder);
@@ -462,7 +468,7 @@ void brick6_master_buffer_commit_block(uint32_t frames)
         g_record_armed = 0U;
         g_record_waiting_boundary = 0U;
         g_record_frames_written = 0U;
-        g_record_target_frames = g_buffer_recorder->recorded_frames;
+        brick6_master_buffer_apply_loop_length();
     }
 }
 
