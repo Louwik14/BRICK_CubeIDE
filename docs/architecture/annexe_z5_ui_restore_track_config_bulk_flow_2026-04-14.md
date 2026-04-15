@@ -1,4 +1,7 @@
-﻿# ui_restore_track_config_bulk flow (targeted pass)
+# ui_restore_track_config_bulk flow (targeted pass)
+Statut documentaire: Annexe utile (non canonique de zone).
+Autorite: le document canonique de zone reste la source de verite.
+
 
 Date: 2026-04-14
 Scope: `ui_restore_track_config_bulk` and helpers called directly from this flow in `Src/UI/ui_core.c`.
@@ -53,3 +56,4 @@ Why this is the smallest safe cut:
 - no cross-module change
 - preserves strict observable order
 - isolates the mixed "runtime/system sync + notification" nucleus from snapshot validation/apply logic.
+

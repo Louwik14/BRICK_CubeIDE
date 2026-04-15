@@ -72,7 +72,7 @@ Z2 dépend de la config UI pour construire son état effectif.
 
 - g_track_runtime_refresh_needed (dirty flag global)
   - Écriture: init/invalidate_all/refresh_all.
-  - Lecture: refresh_track et get_logical_track_for_mix_track.
+  - Lecture: refresh_track uniquement.
 
 ## 6. Flux runtime
 1) Source config:
@@ -84,6 +84,7 @@ Z2 dépend de la config UI pour construire son état effectif.
 3) Refresh:
 - refresh_track(track) fait full refresh si dirty.
 - refresh_all recalcule toutes les tracks.
+- Les helpers/getters de lecture ne déclenchent pas de refresh implicite.
 
 4) Binding:
 - map UI family/type -> runtime family/type
@@ -102,7 +103,8 @@ Z2 dépend de la config UI pour construire son état effectif.
 ## 7. Invariants à ne pas casser
 - Unicité d’autorité de binding: uniquement track_runtime.
 - Séparation track logique vs lane physique mixer.
-- Invalidation explicite; pas de refresh implicite généralisé.
+- Invalidation explicite; refresh explicite par les call sites avant lecture runtime.
+- Interdiction de refresh implicite dans les wrappers de convenance (UI/Param/Seq/Audio): la discipline reste centralisee au call site appelant.
 - Résolution strictement track-aware.
 - Master/Buffer reste un bind runtime dédié (family master/type buffer).
 
@@ -119,9 +121,7 @@ Sorties de Z2:
 
 ## 9. Dette technique observée
 - Couplage direct à UI comme fournisseur de vérité family/type.
-- Discipline refresh non homogène:
-  - get_ctx/get_effective_param_status ne refresh pas.
-  - get_logical_track_for_mix_track refresh implicitement si dirty.
+- Discipline refresh: explicite côté call sites (refresh_track/refresh_all), sans auto-refresh dans les getters/helpers.
 - Présence d’un shim legacy runtime_target potentiellement confus en doc, bien que hors chemin opérationnel.
 
 ## 10. Impact éventuel sur la cartographie globale

@@ -1,4 +1,7 @@
-﻿# z5_mode_transition_contracts
+# z5_mode_transition_contracts
+Statut documentaire: Annexe utile (non canonique de zone).
+Autorite: le document canonique de zone reste la source de verite.
+
 
 Date: 2026-04-14
 Scope: `ui_set_hall_mode`, `ui_core_handle_shift_hall_action`, `ui_core_handle_pattern_mode_event`, `ui_core_handle_seq_mode_event`, `ui_core_mute_handle_event` + helpers d'entree/sortie immediats.
@@ -13,26 +16,27 @@ Scope: `ui_set_hall_mode`, `ui_core_handle_shift_hall_action`, `ui_core_handle_p
 ## Table: transition -> declencheur -> side effects -> ordre critique -> fragilite
 | Transition | Declencheur | Side effects imposes | Ordre critique (handlers/priority) | Fragilite |
 |---|---|---|---|---|
-| `X -> MUTE (quick)` | `BTN_TRANSPOSE_UP` press avec `shift_down=1`, `track_select_armed=0`, mute inactif (`ui_core_mute_handle_event`) | Capture `mute_prev_mode`, `mute_active=1`, `mute_submode=QUICK`, `hall_mode=MUTE` (assign direct) | `mute` est premier stage consommant dans `ui_core_tick`; l'event est exclusif ensuite | Entree mute n'utilise pas `ui_set_hall_mode` (bypass des hooks/callback hall-mode) |
-| `MUTE(QUICK) -> prev/SEQ` | release `BTN_TRANSPOSE_UP` | `ui_core_mute_exit_to_previous_mode`: clear mute state puis assign direct `hall_mode=target` | Reste dans `mute` prioritaire; sortie consomme l'event | Sortie mute bypass `ui_set_hall_mode`; risque de divergence de contrats mode globaux |
+| `X -> MUTE (quick)` | `BTN_TRANSPOSE_UP` press avec `shift_down=1`, `track_select_armed=0`, mute inactif (`ui_core_mute_handle_event`) | Capture `mute_prev_mode`, `mute_active=1`, `mute_submode=QUICK`, transition `hall_mode=MUTE` via `ui_set_hall_mode` | `mute` est premier stage consommant dans `ui_core_tick`; l'event est exclusif ensuite | Entree mute passe par l'autorite centrale (hooks mode globaux conserves) |
+| `MUTE(QUICK) -> prev/SEQ` | release `BTN_TRANSPOSE_UP` | `ui_core_mute_exit_to_previous_mode` -> `ui_set_hall_mode(target)` (clear mute via hook central) | Reste dans `mute` prioritaire; sortie consomme l'event | Contrat aligne sur transition centrale |
 | `MUTE(QUICK) -> MUTE(PREPARE)` | press `BTN_SHIFT` pendant `BTN_TRANSPOSE_UP` maintenu | Snapshot mutes runtime -> buffers prepared, `mute_submode=PREPARE`, `hall_mode=MUTE` | Toujours absorbe par `mute` | Transition interne explicite, mais couplage fort avec runtime mute |
-| `MUTE(PREPARE) -> prev/SEQ` | press `BTN_TRANSPOSE_UP` | Apply prepared mutes track par track, puis exit (clear + `hall_mode=target`) | `mute` masque tous handlers aval pendant l'etat | Meme bypass `ui_set_hall_mode` en sortie |
+| `MUTE(PREPARE) -> prev/SEQ` | press `BTN_TRANSPOSE_UP` | Apply prepared mutes track par track, puis exit via `ui_set_hall_mode(target)` | `mute` masque tous handlers aval pendant l'etat | Contrat aligne sur transition centrale |
 | `any -> PATTERN(RECALL)` | `BTN_TRANSPOSE_DOWN` press + `shift_down=1` (`ui_core_handle_transport_event`) | `ui_core_pattern_enter(RECALL)`: sauvegarde `pattern_prev_mode`, reset selection, `hall_mode=PATTERN` via `ui_set_hall_mode` | `transport` execute avant `pattern`/`seq`; consomme l'event | Dependance d'ordre forte: si transport bouge, contrat d'entree pattern change |
 | `any -> PATTERN(STORE)` | `BTN_TRANSPOSE_DOWN` press + `track_select_armed=1` (`transport`) | idem avec `pattern_mode=STORE` | idem | idem |
 | `PATTERN -> prev/SEQ` (cancel) | `BTN_TRANSPOSE_DOWN` press avec combo coherent (`shift`+recall ou `track_select`+store) dans `ui_core_handle_pattern_mode_event` | `ui_core_pattern_exit_to_previous_mode` -> `ui_set_hall_mode(target)` | `global_shortcuts` passe avant `pattern`; si shortcut consomme, ce cancel ne passe pas | Sortie explicite, mais depend d'un pipeline prioritaire externe |
 | `PATTERN -> prev/SEQ` (success/fail) | `HALL_PRESS` en phase pattern-select | queue/capture pattern, feedback, puis `ui_core_pattern_exit_to_previous_mode`; en echec: feedback+exit aussi | `pattern` stage avant `seq/navigation/page` quand actif | Contrat fort: pattern monopolise les halls tant qu'actif |
 | `X -> KEYBOARD/ARP/SEQ` | SHIFT+HALL trigger via `ui_core_handle_shift_hall_action` -> `ui_core_activate_hall_mode_trigger` | `hall_note_suppressed[hall]=1`; `ui_set_hall_mode(target)`; double-tap: `ui_page_set(target_page)` | Flux hors queue (`ui_core_service_track_selection_inputs`) avant tick et avant bridge clavier hall | Entree mode dual-path (hors queue vs dans queue), donc transitions dispersees |
 | `PATTERN -> non-PATTERN` (forced) | tout `ui_set_hall_mode(mode!=PATTERN)` | `ui_core_pattern_abort_internal` (reset selection + invalidate prev_mode) + callback `keyboard_runtime_on_hall_mode_changed` | Hook central de sortie pattern | Contrat explicite et centralise ici |
-| `MUTE -> non-MUTE` (forced) | tout `ui_set_hall_mode(mode!=MUTE)` | `ui_core_mute_clear_state` + callback `keyboard_runtime_on_hall_mode_changed` | Hook central de sortie mute | Mais incoherence: mute normalement entre/sort sans `ui_set_hall_mode` |
-| `SEQ handler active/inactive` | gate `hall_mode==SEQ` dans `ui_core_handle_seq_mode_event` | Aucun changement mode, seulement edition seq | Passe apres `pattern` et apres `global_shortcuts` | SEQ est un "mode de traitement" implicite, pas une sous-machine explicite |
+| `MUTE -> non-MUTE` (forced) | tout `ui_set_hall_mode(mode!=MUTE)` | `ui_core_mute_clear_state` + callback `keyboard_runtime_on_hall_mode_changed` | Hook central de sortie mute | Aligne avec les transitions mute explicites (plus de bypass local) |
+| `SEQ handler active/inactive` | gate `hall_mode==SEQ` (helper local `ui_core_is_seq_mode_gate_open`) dans `ui_core_handle_seq_mode_event` | Aucun changement mode, seulement edition seq | Passe apres `pattern` et apres `global_shortcuts` | SEQ est un "mode de traitement" gate, pas une sous-machine explicite |
 
 ## Verification explicite demandee
-- Entree/sortie mute: reelle et mostly locale via assigns directs sur `hall_mode`; pas centralisee via `ui_set_hall_mode`.
+- Entree/sortie mute: alignee sur `ui_set_hall_mode` (plus d'assign direct de `hall_mode` dans les transitions mute).
 - Entree/sortie pattern: entree via transport->`pattern_enter`; sorties via `pattern_exit` (cancel/success/fail) ou abort force dans `ui_set_hall_mode`.
 - Relation hall_mode <-> seq mode: `seq mode` est seulement un gate handler (`hall_mode==SEQ`), pas une machine d'etat dediee.
+- Priorite/masquage `global_shortcuts` vs `pattern/seq`: explicite et volontaire. Tout event consomme par `ui_core_handle_global_shortcuts` bloque `pattern`, `seq`, `navigation` et `page->handle_event` pour ce tour d'event.
 - Side effects `ui_set_hall_mode`: guards, clear mute si sortie MUTE, abort pattern si sortie PATTERN, callback keyboard runtime, puis mutation `hall_mode`.
 - Clears implicites entre modes: oui, via `ui_set_hall_mode`; mais mute a aussi ses clears propres hors `ui_set_hall_mode`.
-- Ecrasement de mode sans contrat explicite: oui, mute modifie `hall_mode` en direct (entree/sortie) et contourne les hooks centraux.
+- Ecrasement de mode sans contrat explicite: non pour mute (entree/sortie mute passent par `ui_set_hall_mode`).
 
 ## Vrais contrats vs reliquats
 ### Vrais contrats de transition
@@ -41,11 +45,8 @@ Scope: `ui_set_hall_mode`, `ui_core_handle_shift_hall_action`, `ui_core_handle_p
 - Entrees pattern par transport (combos transpose_down) sont contractuelles via ordre de stages.
 
 ### Reliquats / dette de structure
-- Mute entre/sort sans `ui_set_hall_mode` (chemin parallele historique), tout en partageant le meme `hall_mode`.
 - SEQ reste un mode implicite de handler, non encode comme sous-machine explicite.
 
 ## Plus petit point de clarification recommande
-- Clarifier localement (sans refactor large) le contrat "ownership de `hall_mode`" dans `ui_core.c`:
-  - une mini section de commentaire de reference (ou helper doc-only interne) listant les seuls chemins autorises de mutation `hall_mode` et leurs side effects attendus,
-  - en distinguant explicitement: chemin central `ui_set_hall_mode` vs chemin mute local direct.
-- C'est le plus petit levier utile avant extraction: il reduit l'ambiguite sans changer le comportement.
+- Garder la section de commentaire de reference dans `ui_set_hall_mode` comme source d'autorite unique de transition `hall_mode`.
+

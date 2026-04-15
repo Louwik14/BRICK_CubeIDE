@@ -21,8 +21,21 @@ Le `readme.md` reste la source produit à croiser avec le code réel.
 
 ## 1. Format de travail attendu
 
+Mode d’exécution:
 - ne pas expliquer en cours de passe ce qui est en train d’être fait
-- être productif, utiliser les tokens pour l’essentiel
+- ne pas annoncer les étapes, scans, lectures, vérifications ou intentions
+- ne pas produire de messages de progression, de plan, ni de commentaires intermédiaires
+- travailler silencieusement jusqu’au résultat final
+- réponse finale minimale uniquement:
+  1. verdict court
+  2. micro-patch ou absence de patch
+  3. docs mises à jour ou "aucune mise à jour doc requise"
+  4. dépendances hors zone touchées, si applicable, en une ligne
+- aucun commentaire intermédiaire
+- aucun “je vais”, “je vérifie”, “je poursuis”, “scan ciblé”, “lecture”, “audit en cours”
+- pas de narration de la passe
+- si tu n’as pas encore le résultat final, ne réponds pas
+
 - ne pas dupliquer dans la réponse le contenu d’un document qui vient d’être produit
 
 Si un document est produit, la réponse finale doit être minimale :

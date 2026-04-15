@@ -139,3 +139,21 @@ Doc :
 
 ---
 
+## 5. Annexes utiles (non canoniques)
+
+Regle de navigation: un seul document canonique par zone Z0..Z6 (listee en sections 1 et 2 ci-dessus).
+
+Annexes utiles conservees:
+- docs/architecture/annexe_z3_param_authority_matrix.md: matrice d'autorite d'ecriture param (detail Z3).
+- docs/architecture/annexe_z5_mode_transition_contracts.md: details de transitions de modes UI (detail Z5).
+- docs/architecture/annexe_z5_ui_core_tick_order_contracts.md: contrat d'ordre ui_core_tick et priorites de consommation (detail Z5).
+- docs/architecture/annexe_z5_ui_restore_track_config_bulk_flow_2026-04-14.md: flow detaille de restore bulk track config (detail Z5).
+- docs/architecture/annexe_z5_ui_system_sync_boundary_2026-04-15.md: frontiere et extraction du noyau de sync systeme UI (detail Z5).
+
+## 6. Historique / non autoritatif
+
+Documents conserves pour tracabilite uniquement:
+- docs/architecture/historique_z3_param_write_map_audit_2026-04-14.md (passe d'audit ciblee).
+- docs/architecture/historique_z4_quant_swing_runtime_contract_2026-04-14.md (note de chantier pre-consolidation).
+- docs/architecture/historique_z5_ui_orchestration_cartographie_2026-04-14.md (cartographie de passe initiale).
+

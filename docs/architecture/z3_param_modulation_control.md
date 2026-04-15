@@ -88,7 +88,29 @@ Familles d'autorite:
 - `param_registry.c` reste monolithique (metadata + dispatch + cache + filtres + bindings).
 - Ilot legacy `PARAM_MIX_TRACK0..3_*` toujours vivant (UI mute/restore/boot defaults), mais confine.
 
-## 7. Impact sur cartographie globale
+## 7. Carte courte de la dette reelle (audit code)
+
+- Concentration structurelle (reelle):
+  - `param_registry.c` cumule dans un seul TU: contrat public, table metadata complete, dispatch global, dispatch track-aware, cache runtime track, UI filter shadow-state, pont LFO, mappings legacy MIX, et sync UI.
+  - La fonction `param_registry_apply_track_value` concentre plusieurs autorites (global/track-aware/filter/LFO) avec branches longues et duplications de patterns.
+
+- Risques reels (encore actifs):
+  - Risque de divergence `get/apply` sur les params filtre (`PARAM_FILTER_*`) car logique miroir (resolution cible + shadow-state + conversions) dupliquee entre `param_registry_get_track_value` et `param_registry_apply_track_value`.
+  - Risque de regression silencieuse sur la sync base LFO: `mod_lfo_v1_resync_base_on_authoritative_write` est appelee sur de nombreux chemins manuels; un nouveau case oublie casserait la release vers la base.
+  - Risque de confusion d'autorite `param_store.active[]` (verite globale vs miroir UI track) toujours present si appelant hors contrat lit sans distinguer domaine.
+
+- Dette lisibilite (non urgente):
+  - Densite de helpers et mappings locaux (conversions UI127, apply wrappers, enums labels) elevee mais stable.
+  - `param_store.c` reste simple et contractuel; coupling vers `param_registry` pour defaults/apply est connu et borne.
+
+## 8. Plus petite prochaine passe utile
+
+- Passe recommandee: clarification de frontiere documentaire (pas de refonte, pas de deplacement d'autorite).
+- Action ciblee ensuite (micro-patch local possible, optionnelle):
+  - Introduire un helper local unique pour la post-application track-aware (`cache/resync/return`) et l'utiliser dans `param_registry_apply_track_value` sur les branches repetitives.
+  - Objectif: reduire le risque d'oubli de resync LFO sans changer le contrat `param_set` vs `param_registry_apply_track_value`, ni l'ilot legacy.
+
+## 9. Impact sur cartographie globale
 
 - Aucun changement necessaire dans `ARCHITECTURE_GLOBAL.md`.
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.

@@ -1,4 +1,7 @@
 # Z3 - Param authority matrix
+Statut documentaire: Annexe utile (non canonique de zone).
+Autorite: le document canonique de zone reste la source de verite.
+
 
 Date: 2026-04-14
 Scope: Z3 write authority only (from proven code paths in `param_registry`, `param_store`, `mod_lfo_v1`, `seq_param_iface`, `pattern_live_ram`, `ui_param`, `ui_core`, `control_router`).
@@ -79,3 +82,4 @@ Scope: Z3 write authority only (from proven code paths in `param_registry`, `par
 3. Add one short contract comment near `control_router_set_param` marking it as legacy/dormant until a real caller is reintroduced.
 
 No code patch applied in this pass.
+

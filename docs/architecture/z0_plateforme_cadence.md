@@ -64,7 +64,10 @@ Tasklets/timers periodiques observes:
 
 Seconde autorite concurrente:
 - Aucune seconde autorite concurrente complete pour la sequence boot/system init/superloop.
-- Cadence partiellement duale: adaptation temps seq est executee a la fois en IRQ TIM12 et dans `brick6_app_process()` (`seq_runtime_time_adapter_process()`), sans second orchestrateur de boot.
+- Cadence seq a deux chemins mais avec ownership exclusif par source clock:
+  - interne: IRQ TIM12 -> `seq_runtime_time_adapter_process_internal_from_irq()`
+  - externe: superloop -> `seq_runtime_time_adapter_process()`.
+  Ce n'est pas une double execution active simultanee pour une meme source.
 
 ## 3. API entrantes
 
@@ -186,7 +189,6 @@ Z0 appelle principalement:
 - `brick6_recorder_runtime_process_transport()`
 - `voice_manager_service()`
 - `midi_poll()`
-- `midi_host_poll()`
 - `brick6_recorder_runtime_service_writer()`.
 
 7. Points critiques periodiques hors superloop direct:
@@ -216,12 +218,14 @@ Z0 appelle principalement:
   - init dans `main` + `brick6_app_init`,
   - services periodiques dans `main while` + `brick6_app_process`.
 - Cadence UI alignee sur `engine_tick_count` (pas sur boucle brute).
+- Cadence seq split stricte: interne via IRQ TIM12 (`seq_runtime_time_adapter_process_internal_from_irq`), externe via superloop (`seq_runtime_time_adapter_process`), sans double avance simultanee pour une meme source clock.
+- Service MIDI host autoritatif unique: `midi_host_poll_bounded(8)` appele dans `main()`; `midi_host_poll()` reste un wrapper API sans second scheduler.
 - `brick6_recorder_runtime_service_writer()` reste hors IRQ.
 
 ## 9. Dependances inter-zones
 
 - Vers Z1: wiring callback DSP (`audio_set_float_callback(brick6_audio_runtime_dsp)`), start audio, source de ticks via IRQ audio->engine tasklet.
-- Vers Z4: init seq runtime + double service time adapter (superloop + TIM12 IRQ).
+- Vers Z4: init seq runtime + split d'adaptation temps (TIM12 IRQ pour clock interne, superloop pour clock externe).
 - Vers Z6: init pattern/project/undo et appel `pattern_live_service` en runtime.
 - Vers Z5: init/tick UI via `ui_tasklet_poll`, service selection inputs dans app process.
 - Vers Z3/Z2: init param defaults et effets indirects via init/runtime des autres zones.
@@ -230,11 +234,12 @@ Z0 appelle principalement:
 
 - Centralisation elevee dans `brick6_app_init()` (wiring de nombreuses zones dans une seule fonction).
 - Dependances d'ordre implicites fortes (pas de garde explicite de prerequis inter-modules).
-- Double appel potentiel MIDI host par boucle:
-  - `midi_host_poll()` dans `brick6_app_process`,
-  - `midi_host_poll_bounded(8)` dans `main`.
-- Adaptateur temps seq appele sur 2 chemins (IRQ TIM12 + superloop) augmentant la sensibilite au contrat interne de re-entrance.
-- API declaree non implementee: `brick6_app_get_stats()` presente dans header mais absente des sources.
+- Service MIDI host autoritatif unique en superloop `main()`:
+  - `midi_host_poll_bounded(8)` appele une fois par boucle,
+  - `midi_host_poll()` reste un wrapper API de `midi_host_poll_bounded(8)` (budget effectif inchange).
+- Contrat split seq a conserver: TIM12 IRQ (clock interne) vs superloop (clock externe). Un changement de ce gate peut creer une vraie double avance.
+- API `brick6_app_get_stats()` retiree de `brick6_app_init.h` (reliquat sans call site ni implementation).
+- Reliquat supprime et contrat fige: aucune API stats Z0 exposee tant qu'une autorite de metriques n'est pas definie.
 - Melange plateforme et logique produit dans `main.c`/`brick6_app_init.c` (timers HAL, USB host loop, UI cadence, orchestration metier).
 
 ## 11. Impact eventuel sur la cartographie globale
@@ -242,3 +247,4 @@ Z0 appelle principalement:
 - Z0 est confirme comme zone d'orchestration (boot + wiring + cadence non-RTOS), pas zone de logique metier.
 - Frontiere Z0/Z1 reste nette: Z0 demarre et cadence, Z1 execute hard-RT audio IRQ.
 - Z0 met en evidence une sous-frontiere "cadence" (engine tasklet + timers TIM12/TIM5 + superloop gating UI) utile pour maintenance future.
+

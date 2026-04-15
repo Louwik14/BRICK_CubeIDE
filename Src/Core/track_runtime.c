@@ -510,11 +510,6 @@ uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t
         return 0U;
     }
 
-    if (g_track_runtime_refresh_needed != 0U)
-    {
-        track_runtime_refresh_all();
-    }
-
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);

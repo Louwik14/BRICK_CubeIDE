@@ -54,6 +54,7 @@ static const ui_template_family_t g_ui_template_mix_unavailable_family = {
 
 static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 {
+    track_runtime_refresh_track(ui_get_active_track());
     if (track_runtime_is_audio_routable(ui_get_active_track()) == 0U)
     {
         return &g_ui_template_mix_unavailable_family;

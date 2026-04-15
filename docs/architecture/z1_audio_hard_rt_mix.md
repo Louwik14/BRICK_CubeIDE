@@ -261,8 +261,12 @@ Points factuels:
 - Ordre d'appel tres contraint:
   - `mixer_external_inputs_clear` appele a la fois dans runtime et mixer (redondance defensive).
   - Le blend master-buffer est applique apres `mixer_process`, donc hors logique de bus mixer.
-- Branche speciale Master/Buffer intrusive dans Z1:
-  - begin/submit/commit dans mixer + read/blend dans runtime DSP.
+- Branche speciale Master/Buffer presente dans Z1 mais bornee:
+  - capture: `mixer_process` (`brick6_master_buffer_begin_block` -> `brick6_master_buffer_submit_track_post_fader` -> `brick6_master_buffer_commit_block`).
+  - ownership runtime capture/playback: `brick6_master_buffer.c` (etat recorder, sources, quantize, loop/read).
+  - lecture playback + point de blend: `brick6_audio_runtime_dsp` apres `mixer_process` et avant `SD_RECORDER_TAP_MASTER`.
+  - autorite routage source capture: mapping `mix_track -> logical_track` via `track_runtime_get_logical_track_for_mix_track` dans `mixer_process`.
+  - aucun second backend recorder concurrent observe in-tree.
 - Cout CPU variable par bloc observe:
   - segmentation en sous-segments selon nombre d'evenements seq dans `process_half`.
   - render synth conditionnel selon nombre de tracks bindees.

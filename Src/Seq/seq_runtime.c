@@ -103,11 +103,75 @@ static void seq_runtime_update_midi_clock_period_from_step_period(void);
 static void seq_runtime_midi_clock_audio_rebase(uint64_t start_sample);
 static void seq_runtime_midi_clock_audio_emit_for_block(uint64_t block_start_sample, uint16_t block_frames);
 static void seq_runtime_send_transport_realtime(uint8_t status);
+static uint8_t seq_runtime_quant_to_step_grid(uint8_t quant);
+static uint64_t seq_runtime_compute_track_schedule_sample_time(seq_track_id_t track,
+                                                               seq_step_id_t step,
+                                                               uint64_t step_sample_time);
 
 static void seq_runtime_send_transport_realtime(uint8_t status)
 {
     const uint8_t msg[1] = { status };
     midi_send_raw(MIDI_DEST_BOTH, msg, sizeof(msg));
+}
+
+static uint8_t seq_runtime_quant_to_step_grid(uint8_t quant)
+{
+    switch (quant)
+    {
+        case 2U: return 4U;
+        case 1U: return 2U;
+        case 0U:
+        default: return 1U;
+    }
+}
+
+static uint8_t seq_runtime_sanitize_track_div(uint8_t div)
+{
+    if ((div == 1U) || (div == 2U) || (div == 4U) || (div == 8U))
+    {
+        return div;
+    }
+    return 1U;
+}
+
+static uint64_t seq_runtime_compute_track_schedule_sample_time(seq_track_id_t track,
+                                                               seq_step_id_t step,
+                                                               uint64_t step_sample_time)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return step_sample_time;
+    }
+
+    const uint64_t base_step_samples = ((uint64_t)g_seq_runtime.samples_per_step_q16 + 0x8000ULL) >> 16;
+    if (base_step_samples == 0U)
+    {
+        return step_sample_time;
+    }
+
+    const uint8_t div = seq_runtime_sanitize_track_div(g_seq_runtime.track_div[track]);
+    const uint64_t track_step_samples = base_step_samples * (uint64_t)div;
+    const uint8_t quant_grid_steps = seq_runtime_quant_to_step_grid(g_seq_runtime.track_quant[track]);
+    uint64_t quantized_sample_time = step_sample_time;
+    if (quant_grid_steps > 1U)
+    {
+        const uint8_t rem = (uint8_t)(step % quant_grid_steps);
+        if (rem != 0U)
+        {
+            const uint8_t delay_steps = (uint8_t)(quant_grid_steps - rem);
+            quantized_sample_time += (uint64_t)delay_steps * track_step_samples;
+        }
+    }
+
+    const uint8_t swing = g_seq_runtime.track_swing[track];
+    if ((swing == 0U) || ((step & 0x1U) == 0U))
+    {
+        return quantized_sample_time;
+    }
+
+    const uint64_t max_swing_offset = track_step_samples / 2ULL;
+    const uint64_t swing_offset = (max_swing_offset * (uint64_t)swing) / 100ULL;
+    return quantized_sample_time + swing_offset;
 }
 
 static void seq_runtime_send_transport_start(void)
@@ -340,11 +404,15 @@ static void seq_runtime_process_step_boundaries(void)
 
     for (uint8_t i = 0U; i < hit_count; ++i)
     {
+        const uint64_t scheduled_sample_time =
+                seq_runtime_compute_track_schedule_sample_time(hits[i].track,
+                                                               hits[i].step,
+                                                               (g_seq_runtime.step_sample_q16 >> 16));
         seq_play_scheduler_schedule_step(hits[i].track,
                                          hits[i].step,
                                          g_seq_runtime.ticks_per_step,
                                          seq_runtime_get_now_tick(),
-                                         (g_seq_runtime.step_sample_q16 >> 16),
+                                         scheduled_sample_time,
                                          g_seq_runtime.samples_per_step_q16);
     }
 }
@@ -697,7 +765,7 @@ void seq_runtime_time_adapter_process(void)
 {
     /*
      * Superloop adapter kept for external clock path only.
-     * Internal clock path is invoked directly from TIM5 cadence IRQ
+     * Internal clock path is invoked directly from TIM12 cadence IRQ
      * through seq_runtime_time_adapter_process_internal_from_irq().
      */
     if (seq_clock_bridge_is_external_source(g_seq_runtime.clock_src) != 0U)
@@ -1024,6 +1092,10 @@ void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
         return;
     }
 
+    if (quant > 2U)
+    {
+        quant = 2U;
+    }
     g_seq_runtime.track_quant[track] = quant;
 }
 

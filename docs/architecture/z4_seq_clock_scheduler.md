@@ -210,8 +210,11 @@ Invariants prouves par le code:
   - step scheduling en `due_sample_time` absolu.
   - conversion vers offset relatif au bloc lors de la collecte.
 
-Limites prouvees (pas d'invariant fort):
-- `track_quant` et `track_swing` sont stockes dans `g_seq_runtime` mais non utilises dans l'avance/scheduler observes.
+- Contrat quant/swing runtime:
+  - `track_quant`/`track_swing` sont appliques dans `seq_runtime_process_step_boundaries` avant `seq_play_scheduler_schedule_step`.
+  - `track_quant` borne la grille a `1/2/4` pas (`0..2`) et aligne par retard vers la prochaine grille.
+  - `track_swing` retarde les pas impairs uniquement, borne a 50% de la duree de pas track.
+  - Les offsets utilisent la duree effective de pas track (`global_step_samples * track_div` sanitize `1/2/4/8`).
 
 ## 9. Dependances inter-zones
 
@@ -240,11 +243,14 @@ Points factuels observes:
 - Double logique tempo interne/externe assumee mais pas concurrente active; bascule source explicite via `seq_runtime_set_clock_source`.
 - Indice de dette documente dans le code:
   - commentaire `TODO(clock-source)` dans `seq_runtime_init` sur branchement source clock globale/menu.
-- Parametres runtime non exploites dans le chemin observe:
-  - `track_quant`, `track_swing` exposes et stockes, sans effet visible dans `advance_one_step`/`schedule_step`.
+- Parametres runtime quant/swing actifs:
+  - l'avance du playhead reste sous autorite `seq_boundary_engine_advance_one_step`,
+  - quant/swing deplacent seulement l'horodatage sample-domain des events (pas la progression musicale).
 
 ## 11. Impact eventuel sur la cartographie globale
 
 - Z4 est confirmee comme zone coherente unique pour l'autorite temporelle sequencer (transport/clock/position/scheduler bloc).
 - Pas de justification code pour scinder transport et scheduler en deux zones separees a ce stade; les frontieres internes sont nettes mais l'orchestration est centralee dans `seq_runtime`.
 - Couplages UI (active track, MIDI channel) et audio-bloc doivent etre references explicitement dans la carte globale comme dependances entrantes critiques de Z4.
+
+

@@ -272,3 +272,29 @@ Aucune double autorite complete concurrente de save/load projet n'est observee.
 ## 12. Conclusion stricte
 
 `cause trouvee`
+
+## 13. Chantier Z6 cible - `pattern_live_apply_snapshot()`
+
+Carte courte du flux reel observe dans `Src/Storage/pattern_live_ram.c`:
+- Stop/panic/reprise transport:
+  - `pattern_live_apply_snapshot()` capture `was_running`, execute `seq_runtime_stop()` puis `seq_output_guard_panic(1U)` avant toute mutation.
+  - reprise uniquement en fin d'apply si `resume_transport != 0` et si transport etait running avant stop.
+- Restore params / modulation:
+  - `param_registry_batch_begin/end` encadre l'apply des blocs `sound` + `mix` par track puis des globals via `param_set`.
+  - modulation LFO restauree ensuite, uniquement via `mod_lfo_v1_set_track_param` (autorite unique).
+- Restore seq/model/playhead:
+  - validation budget plocks, puis `pattern_live_apply_seq_block()` (reset model + trigs/plocks/pages/length).
+  - reset playhead de toutes les tracks a 0 en fin d'apply.
+- Restore config UI / track runtime:
+  - restore bulk track config UI en premier (`ui_restore_track_config_bulk`), puis `track_runtime_refresh_all()` avant restore seq/params.
+- Boundary / apply queue:
+  - `pattern_live_queue_slot()` applique immediatement si transport stoppe, sinon queue.
+  - `pattern_live_service()` declenche l'apply queue sur wrap playhead `!=0 -> 0` lu via `seq_runtime_get_playhead_step(ui_get_active_track(), ...)`.
+
+Verdict couplage:
+- Couplage inter-zones eleve mais borne et coherent avec l'autorite Z6: une seule routine de restore live, ordre de restauration explicite, garde anti re-entrance (`g_apply_in_progress`), et point unique stop/panic/reprise.
+- Fragilite residuelle connue et circonscrite: le boundary de queue depend de `ui_get_active_track()` (dependance Z5 dans un trigger temporel Z4).
+
+Plus petite prochaine passe utile:
+- Pas de refonte ni de deplacement d'autorite.
+- Passe documentaire uniquement: contrat explicite conserve dans ce canonique; aucun micro-patch code requis tant que la politique boundary reste voulue.

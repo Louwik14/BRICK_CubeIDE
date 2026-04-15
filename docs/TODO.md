@@ -26,9 +26,8 @@
 - Créer le type de track Looper et son fonctionnement  
   Piste : garder les paramètres sonores universels comme `VCA`, `Mix`, `Colors`, mais remplacer `Tone` par un paramétrage propre au looper. Il faut aussi réfléchir à comment choisir quelles pistes vont dans le looper, avec un système intuitif et cohérent avec le workflow actuel.
 
-- Résoudre le bug `Rec Len` du rec buffer  
-  Piste : aujourd’hui le buffer rec semble bloqué à une valeur fixe. Reprendre l’audit déjà lancé sur la capacité, la target length, `recorded_frames`, `loop_frames`, la longueur réellement lue, et les conditions exactes de start/stop rec/play avant correction.
-
+-~~Résoudre le bug `Rec Len` du rec buffer~~
+  
 - Ajouter les paramètres de décalage de lecture pour le rec buffer afin de pouvoir caller la loop comme sur l’Octatrack  
   Piste : ajouter un offset de lecture cohérent avec la logique actuelle du buffer, sans casser l’alignement rec / loop / playback.
 
@@ -63,8 +62,8 @@
   Piste : s’inspirer des paramètres du time stretch de l’Octatrack, avec un mode drum et un mode tonal.
 
 ## 7. Séquenceur / performance
-- Mettre en place réellement le swing et le quantize du séquenceur  
-  Piste : reprendre l’écart déjà identifié entre l’intention UI/param et l’effet réel dans le chemin observé du séquenceur.
+- ~~Mettre en place réellement le swing et le quantize du séquenceur~~  
+
 
 - Trouver comment ajouter une fonction ratchet / roll pour le séquenceur, surtout trouver son workflow  
   Piste : aucune.

@@ -45,6 +45,7 @@
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
+#include "ui_system_sync_internal.h"
 #include "ui_template_page.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
@@ -410,18 +411,10 @@ static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
 
 static void ui_core_mute_exit_to_previous_mode(void)
 {
-    /*
-     * Hall mode contract note:
-     * - Mute currently owns a legacy local direct transition path.
-     * - Exiting mute intentionally writes hall_mode directly (no ui_set_hall_mode call).
-     * - Coherence is preserved by clearing mute-local state here and by central forced
-     *   clears in ui_set_hall_mode() when leaving MUTE through the central path.
-     */
     const ui_hall_mode_t target = (g_ui_track_state.mute_prev_mode_valid != 0U)
             ? g_ui_track_state.mute_prev_mode
             : UI_HALL_MODE_SEQ;
-    ui_core_mute_clear_state();
-    g_ui_track_state.hall_mode = target;
+    ui_set_hall_mode(target);
 }
 
 static void ui_core_mute_enter_quick(void)
@@ -435,8 +428,7 @@ static void ui_core_mute_enter_quick(void)
 
     g_ui_track_state.mute_active = 1U;
     g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_QUICK;
-    /* Legacy local mute-owned direct hall_mode transition (kept for behavior stability). */
-    g_ui_track_state.hall_mode = UI_HALL_MODE_MUTE;
+    ui_set_hall_mode(UI_HALL_MODE_MUTE);
 }
 
 static void ui_core_mute_enter_prepare(void)
@@ -451,7 +443,7 @@ static void ui_core_mute_enter_prepare(void)
            g_ui_track_state.mute_initial_state,
            sizeof(g_ui_track_state.mute_prepared_state));
     g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_PREPARE;
-    g_ui_track_state.hall_mode = UI_HALL_MODE_MUTE;
+    ui_set_hall_mode(UI_HALL_MODE_MUTE);
 }
 
 static void ui_core_mute_apply_prepared_and_exit(void)
@@ -993,18 +985,28 @@ static void ui_core_sync_active_track_cfg_params(void)
     param_registry_sync_ui_for_active_track();
 }
 
-static void ui_core_sync_system_after_active_track_change(void)
+static void ui_core_sync_adapter_notify_keyboard_active_track_changed(void)
 {
-    ui_core_sync_active_track_cfg_params();
+    keyboard_runtime_on_active_track_changed();
 }
 
-static void ui_core_apply_active_track_change(uint8_t track)
+static void ui_core_sync_adapter_commit_active_track(uint8_t next_track)
 {
-    /* Preserve observable order: callback first, then state pivot, then system sync. */
-    keyboard_runtime_on_active_track_changed();
-    g_ui_track_state.active_track = track;
-    ui_core_sync_system_after_active_track_change();
+    g_ui_track_state.active_track = next_track;
 }
+
+static void ui_core_sync_adapter_invalidate_runtime_all(void)
+{
+    track_runtime_invalidate_all();
+}
+
+static const ui_system_sync_adapter_t g_ui_core_system_sync_adapter = {
+    .notify_keyboard_active_track_changed = ui_core_sync_adapter_notify_keyboard_active_track_changed,
+    .commit_active_track = ui_core_sync_adapter_commit_active_track,
+    .invalidate_runtime_all = ui_core_sync_adapter_invalidate_runtime_all,
+    .sync_audio_runtime_enables = ui_core_sync_audio_runtime_enables,
+    .sync_active_track_cfg_params = ui_core_sync_active_track_cfg_params
+};
 
 static void ui_core_set_active_track(uint8_t track)
 {
@@ -1016,19 +1018,20 @@ static void ui_core_set_active_track(uint8_t track)
     if (g_ui_track_state.active_track == track)
     {
         /* Same-track contract: resync only, no keyboard callback. */
-        ui_core_sync_system_after_active_track_change();
+        const ui_system_sync_request_t request = ui_system_sync_make_request_active_track_resync_only();
+        ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
         return;
     }
 
-    ui_core_apply_active_track_change(track);
+    /* Preserve observable order: callback first, then state pivot, then system sync. */
+    const ui_system_sync_request_t request = ui_system_sync_make_request_active_track_change(track);
+    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
 }
 
 static void ui_core_restore_post_apply_sync_and_notify(void)
 {
-    track_runtime_invalidate_all();
-    ui_core_sync_audio_runtime_enables();
-    keyboard_runtime_on_active_track_changed();
-    ui_core_sync_active_track_cfg_params();
+    const ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
+    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
 }
 
 uint8_t ui_get_track_midi_channel(uint8_t track)
@@ -1306,8 +1309,44 @@ static void ui_core_handle_track_hall_action(uint8_t hall)
     }
 }
 
+typedef enum
+{
+    UI_HALL_DIRECT_ACTION_NONE = 0,
+    UI_HALL_DIRECT_ACTION_SHIFT_MODE,
+    UI_HALL_DIRECT_ACTION_TRACK_SELECT
+} ui_hall_direct_action_t;
+
+static ui_hall_direct_action_t ui_core_resolve_hall_direct_action(uint8_t was_pressed, uint8_t pressed)
+{
+    if ((was_pressed == 0U) && (pressed != 0U))
+    {
+        /*
+         * Priority contract: SHIFT+HALL wins over TRACK_MOD+HALL.
+         * Keep this ordering stable to preserve user-visible behavior.
+         */
+        if ((g_ui_track_state.shift_down != 0U) && (g_ui_track_state.track_select_armed == 0U))
+        {
+            return UI_HALL_DIRECT_ACTION_SHIFT_MODE;
+        }
+
+        if (g_ui_track_state.track_select_armed != 0U)
+        {
+            return UI_HALL_DIRECT_ACTION_TRACK_SELECT;
+        }
+    }
+
+    return UI_HALL_DIRECT_ACTION_NONE;
+}
+
 static void ui_core_handle_track_selection_event(const ui_event_t *ev)
 {
+    /*
+     * Modifier-mirror contract:
+     * - This queued path mirrors SHIFT/TRACK_MOD button events.
+     * - It intentionally coexists with out-of-queue mirror updates in
+     *   ui_core_service_track_selection_inputs() so both direct hall actions
+     *   and queued handlers observe fresh modifier state.
+     */
     if (ev == 0)
     {
         return;
@@ -1377,6 +1416,16 @@ static uint8_t ui_core_collect_held_seq_steps(seq_track_id_t *out_track,
                                               uint8_t promote_pending)
 {
     return seq_edit_collect_held_steps(out_track, out_steps, max_steps, promote_pending);
+}
+
+static uint8_t ui_core_is_seq_mode_gate_open(void)
+{
+    /*
+     * SEQ contract:
+     * - no dedicated SEQ sub-state exists in UI core
+     * - SEQ behavior is gated only by current hall_mode
+     */
+    return (ui_get_hall_mode() == UI_HALL_MODE_SEQ) ? 1U : 0U;
 }
 
 static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
@@ -1762,6 +1811,7 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
 {
     ui_track_clipboard_t *const cb = &g_ui_clipboard.track;
     memset(cb, 0, sizeof(*cb));
+    track_runtime_refresh_track(track);
 
     cb->source_track = track;
     cb->config = ui_get_track_config(track);
@@ -2337,7 +2387,7 @@ static uint8_t ui_core_handle_seq_track_clipboard_event(const ui_event_t *ev)
         return 0U;
     }
 
-    if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
+    if (ui_core_is_seq_mode_gate_open() == 0U)
     {
         return 0U;
     }
@@ -2462,6 +2512,12 @@ static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
 
 static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
 {
+    /*
+     * Priority/masking contract:
+     * - This stage runs before pattern/seq stages in ui_core_tick().
+     * - Any non-zero return here consumes the event and blocks downstream
+     *   pattern/seq/navigation/page handlers for the same event.
+     */
     if (ev == 0)
     {
         return 0U;
@@ -2509,12 +2565,17 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
 
 static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 {
+    /*
+     * SEQ is a gated handler stage, not a standalone state machine:
+     * it handles events only when hall_mode is SEQ and only if upstream
+     * stages did not already consume the same event.
+     */
     if (ev == 0)
     {
         return 0U;
     }
 
-    if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
+    if (ui_core_is_seq_mode_gate_open() == 0U)
     {
         return 0U;
     }
@@ -2674,8 +2735,19 @@ void ui_core_init(void)
 
 void ui_core_service_track_selection_inputs(void)
 {
+    /*
+     * Out-of-queue contract:
+     * - Runs in superloop before hall_keyboard_bridge_process() and before ui event
+     *   queue dispatch in ui_core_tick().
+     * - Owns direct edge-triggered hall actions for:
+     *   1) SHIFT+HALL mode triggers (hall_mode/page)
+     *   2) TRACK_MOD+HALL active-track selection
+     * - Keeps modifier mirrors (shift_down / track_select_armed) coherent with raw
+     *   button state, so downstream queued handlers read fresh flags.
+     */
     if (g_ui_track_state.mute_active != 0U)
     {
+        /* While mute is active, this path is fully suspended. */
         return;
     }
 
@@ -2686,15 +2758,14 @@ void ui_core_service_track_selection_inputs(void)
     {
         const uint8_t pressed = hall_engine_is_pressed(hall);
         const uint8_t was_pressed = g_ui_track_state.hall_prev_pressed[hall];
+        const ui_hall_direct_action_t action = ui_core_resolve_hall_direct_action(was_pressed, pressed);
 
-        if ((was_pressed == 0U) && (pressed != 0U)
-                && (g_ui_track_state.shift_down != 0U)
-                && (g_ui_track_state.track_select_armed == 0U))
+        /* Rising-edge only: prevent retrigger while a hall remains held. */
+        if (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
         {
             ui_core_handle_shift_hall_action(hall);
         }
-        else if ((was_pressed == 0U) && (pressed != 0U)
-                 && (g_ui_track_state.track_select_armed != 0U))
+        else if (action == UI_HALL_DIRECT_ACTION_TRACK_SELECT)
         {
             ui_core_handle_track_hall_action(hall);
         }
@@ -2747,6 +2818,7 @@ void ui_core_tick(void)
         { ui_core_handle_master_buffer_routing_event, 1U, 1U },
         { ui_core_handle_transport_event, 1U, 1U },
         { ui_page_settings_handle_event, 1U, 1U },
+        /* Intentionally before pattern/seq: global shortcuts can fully mask them. */
         { ui_core_handle_global_shortcuts, 1U, 1U },
         { ui_core_handle_pattern_mode_event, 1U, 1U },
         { ui_core_handle_seq_mode_event, 1U, 1U },
@@ -2786,13 +2858,18 @@ void ui_core_tick(void)
             }
         }
 
-        /* Must stay here: event can switch page, then dispatch to the (possibly new) active page. */
+        /*
+         * Navigation/page dispatch contract:
+         * - navigation may change current page through ui_page_set()
+         * - this same event is then dispatched to the page active after navigation
+         * - navigation is intentionally non-consuming in this pipeline
+         */
         ui_navigation_handle_event(&ev);
 
-        const ui_page_t *active_page = ui_page_get();
-        if ((active_page != 0) && (active_page->handle_event != 0))
+        const ui_page_t *dispatch_page = ui_page_get();
+        if ((dispatch_page != 0) && (dispatch_page->handle_event != 0))
         {
-            active_page->handle_event(&ev);
+            dispatch_page->handle_event(&ev);
         }
 
 next_event:
@@ -2885,14 +2962,9 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         config->type = ui_core_get_first_available_track_type(config->family, track);
     }
 
-    ui_core_sync_audio_runtime_enables();
-    track_runtime_invalidate_all();
-
-    if (track == g_ui_track_state.active_track)
-    {
-        keyboard_runtime_on_active_track_changed();
-        ui_core_sync_active_track_cfg_params();
-    }
+    const ui_system_sync_request_t request =
+        ui_system_sync_make_request_track_family_change((track == g_ui_track_state.active_track) ? 1U : 0U);
+    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
 
     return true;
 }
@@ -2924,13 +2996,9 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     }
 
     config->type = type;
-    track_runtime_invalidate_all();
-
-    if (track == g_ui_track_state.active_track)
-    {
-        keyboard_runtime_on_active_track_changed();
-        ui_core_sync_active_track_cfg_params();
-    }
+    const ui_system_sync_request_t request =
+        ui_system_sync_make_request_track_type_change((track == g_ui_track_state.active_track) ? 1U : 0U);
+    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
 
     return true;
 }
@@ -3176,16 +3244,12 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
 {
     /*
      * Hall mode contract reference:
-     * - This is the central transition path for hall_mode.
+     * - This is the single transition authority for hall_mode.
      * - It owns cross-mode side effects/hooks:
      *   1) forced mute clear when leaving MUTE
      *   2) forced pattern abort when leaving PATTERN
      *   3) keyboard runtime transition callback
      *   4) hall_mode state commit
-     *
-     * Note: mute still uses a historical local direct path for enter/exit
-     * (ui_core_mute_enter_* / ui_core_mute_exit_to_previous_mode). That path must
-     * stay coherent with the forced clears handled here; no reroute is done in this pass.
      */
     if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)
     {
