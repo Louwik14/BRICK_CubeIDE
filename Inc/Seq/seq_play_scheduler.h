@@ -31,5 +31,8 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
                                                        uint16_t block_frames,
                                                        uint64_t block_start_sample);
 void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t *event);
+void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value);
+void seq_play_scheduler_emit_midi_program_on_transport_start(void);
+void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track);
 
 #endif /* SEQ_PLAY_SCHEDULER_H */

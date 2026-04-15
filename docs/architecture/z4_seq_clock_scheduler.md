@@ -206,7 +206,7 @@ Invariants prouves par le code:
 - Conditions de boundary explicites:
   - boundary hit si `prev_step_valid==0` ou `prev_step != current_step`.
   - `seq_boundary_engine_process` fait apply/restore locks avant emission hit.
-- Cohérence bloc audio / temps musical:
+- CohÃ©rence bloc audio / temps musical:
   - step scheduling en `due_sample_time` absolu.
   - conversion vers offset relatif au bloc lors de la collecte.
 
@@ -253,4 +253,41 @@ Points factuels observes:
 - Pas de justification code pour scinder transport et scheduler en deux zones separees a ce stade; les frontieres internes sont nettes mais l'orchestration est centralee dans `seq_runtime`.
 - Couplages UI (active track, MIDI channel) et audio-bloc doivent etre references explicitement dans la carte globale comme dependances entrantes critiques de Z4.
 
+
+
+## 12. Contrat Program v1 (MIDI + Hybrid)
+
+- Perimetre Z4 actif:
+  - emission Program Change runtime depuis `seq_play_scheduler`/`seq_runtime`,
+  - concerne les tracks `MIDI` et `Input/Hybrid` (pas de backend audio supplementaire).
+- Semantique Program:
+  - `OFF` (`PARAM_MIDI_PROGRAM==0`) => aucune emission,
+  - changement live => emission immediate conditionnelle une fois,
+  - start transport => emission forcee une fois si Program != OFF,
+  - pattern change => emission forcee une fois,
+  - aucune reemission automatique a chaque loop.
+- Semantique p-lock Program:
+  - resolution plock/default au scheduling du step,
+  - emission planifiee avant note sur un meme step,
+  - emission seulement si Program differe du dernier Program effectivement envoye,
+  - pas de reemission a la loop si rien n'a change,
+  - reemission si un autre Program a ete envoye entre-temps.
+- Autorite d'etat minimale:
+  - memoire `dernier_program_envoye` par track concernee dans `seq_play_scheduler` (etat statique borne, sans allocation dynamique).
+- Limite explicite v1:
+  - le "pattern change" est detecte via reset playhead track a `0` en `RUNNING` (`seq_runtime_set_playhead_step`),
+  - donc un reset manuel playhead en `RUNNING` declenche aussi cette emission Program forcee.
+
+## 13. Contrat Hybrid Gate v1 (canonique)
+
+- `Input/Hybrid` participe au gate note cote scheduler (`seq_play_scheduler_emit_engine_note`).
+- Alignement clavier/sequenceur:
+  - scheduler et clavier appliquent le meme principe d'ouverture/fermeture du gate VCA pour `Input/Hybrid`.
+- Gate partage (cote mixer/VCA):
+  - premiere note active ouvre le gate,
+  - le gate reste ouvert tant qu'au moins une note est active,
+  - la derniere note relachee ferme le gate.
+- Contraintes explicites:
+  - pas de vraie polyphonie audio ajoutee (toujours un flux input unique gate),
+  - `panic` / `all notes off` referme proprement le gate (`mixer_track_vca_all_notes_off`).
 

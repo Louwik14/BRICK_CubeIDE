@@ -588,6 +588,7 @@ static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_fami
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
     static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
+    static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_TRX_BD,
         UI_TRACK_TYPE_DRUM_TRX_CLAVES,
@@ -627,6 +628,10 @@ static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_fami
         case UI_TRACK_FAMILY_MASTER:
             *out_count = (uint8_t)(sizeof(k_master_types) / sizeof(k_master_types[0]));
             return k_master_types;
+
+        case UI_TRACK_FAMILY_MIDI:
+            *out_count = (uint8_t)(sizeof(k_midi_types) / sizeof(k_midi_types[0]));
+            return k_midi_types;
 
         case UI_TRACK_FAMILY_OFF:
         default:
@@ -3048,6 +3053,8 @@ const char *ui_get_track_family_display_name(ui_track_family_t family)
             return "Drum";
         case UI_TRACK_FAMILY_MASTER:
             return "Master";
+        case UI_TRACK_FAMILY_MIDI:
+            return "MIDI";
 
         default:
             return "Track";
@@ -3079,6 +3086,8 @@ const char *ui_get_track_family_short_name(ui_track_family_t family)
             return "Drm";
         case UI_TRACK_FAMILY_MASTER:
             return "Mst";
+        case UI_TRACK_FAMILY_MIDI:
+            return "MID";
 
         default:
             return "---";
@@ -3131,6 +3140,8 @@ const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_ty
             return "FM Cow";
         case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
             return "FM Cym";
+        case UI_TRACK_TYPE_MIDI:
+            return "MIDI";
 
         default:
             return "-";
@@ -3183,6 +3194,8 @@ const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type
             return "FMW";
         case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
             return "FMY";
+        case UI_TRACK_TYPE_MIDI:
+            return "MID";
 
         default:
             return "---";

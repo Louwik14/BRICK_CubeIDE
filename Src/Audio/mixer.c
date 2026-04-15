@@ -71,6 +71,7 @@ typedef struct {
     uint8_t current_note;
     uint8_t vca_enabled;
     uint8_t vca_note_active;
+    uint8_t vca_note_count;
     uint8_t vca_current_note;
     uint8_t type;
 } mixer_track_filter_t;
@@ -257,6 +258,7 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->note_active = 0U;
     filter->vca_enabled = 0U;
     filter->vca_note_active = 0U;
+    filter->vca_note_count = 0U;
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
 
     env_adsr_init(&filter->filter_env, filter->sample_rate);
@@ -866,6 +868,13 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
         return;
 
     g_track_filters[track_id].vca_enabled = (enabled != 0U) ? 1U : 0U;
+    if (enabled == 0U)
+    {
+        g_track_filters[track_id].vca_note_active = 0U;
+        g_track_filters[track_id].vca_note_count = 0U;
+        g_track_filters[track_id].vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
+        env_adsr_reset(&g_track_filters[track_id].vca_env);
+    }
 }
 
 void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity)
@@ -878,21 +887,37 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->vca_enabled = 1U;
     filter->vca_current_note = midi_note;
-    filter->vca_note_active = 1U;
-    env_adsr_retrigger(&filter->vca_env, true);
+    if (filter->vca_note_count < 0xFFU)
+    {
+        filter->vca_note_count++;
+    }
+    if (filter->vca_note_active == 0U)
+    {
+        filter->vca_note_active = 1U;
+        env_adsr_retrigger(&filter->vca_env, true);
+    }
 }
 
 void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note)
 {
+    (void)midi_note;
+
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    if((filter->vca_enabled == 0U) || (filter->vca_note_active == 0U) || (filter->vca_current_note != midi_note))
+    if((filter->vca_enabled == 0U) || (filter->vca_note_active == 0U))
         return;
 
-    filter->vca_note_active = 0U;
-    env_adsr_gate_off(&filter->vca_env);
+    if (filter->vca_note_count > 0U)
+    {
+        filter->vca_note_count--;
+    }
+    if (filter->vca_note_count == 0U)
+    {
+        filter->vca_note_active = 0U;
+        env_adsr_gate_off(&filter->vca_env);
+    }
 }
 
 void mixer_track_vca_all_notes_off(uint32_t track_id)
@@ -902,6 +927,7 @@ void mixer_track_vca_all_notes_off(uint32_t track_id)
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
     filter->vca_note_active = 0U;
+    filter->vca_note_count = 0U;
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
     env_adsr_reset(&filter->vca_env);
 }

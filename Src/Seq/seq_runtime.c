@@ -294,6 +294,7 @@ static void seq_runtime_begin_running_now(void)
     seq_runtime_process_step_boundaries();
 
     seq_runtime_send_transport_start();
+    seq_play_scheduler_emit_midi_program_on_transport_start();
 
     if ((g_seq_rec_len_mode == (uint8_t)SEQ_REC_LEN_MODE_PATTERN)
         && (g_seq_rec_armed != 0U))
@@ -1014,6 +1015,10 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
     }
 
     g_seq_runtime.play_step[track] = step;
+    if ((g_seq_runtime.running != 0U) && (step == 0U))
+    {
+        seq_play_scheduler_notify_track_pattern_change(track);
+    }
     return 1U;
 }
 
@@ -1281,4 +1286,29 @@ void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                   channel_zero_based,
                                   note,
                                   seq_runtime_get_now_sample());
+}
+
+void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    seq_play_scheduler_live_midi_program_changed(track, program_value);
+}
+
+void seq_runtime_on_track_pattern_change(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    if (g_seq_runtime.running == 0U)
+    {
+        return;
+    }
+
+    seq_play_scheduler_notify_track_pattern_change(track);
 }

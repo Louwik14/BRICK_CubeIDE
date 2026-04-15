@@ -32,7 +32,8 @@
 typedef enum
 {
     SEQ_PLAY_SCHEDULER_EVT_NOTE_ON = 0,
-    SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF
+    SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+    SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE
 } seq_play_scheduler_evt_type_t;
 
 typedef struct
@@ -49,6 +50,13 @@ typedef struct
 static seq_play_scheduler_evt_t g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP];
 static uint8_t g_seq_play_event_count;
 static uint8_t g_seq_play_generation;
+static uint8_t g_seq_play_midi_program_valid[SEQ_TRACK_COUNT];
+static uint8_t g_seq_play_midi_program_last[SEQ_TRACK_COUNT];
+static void seq_play_scheduler_push(uint64_t due_sample_time,
+                                    uint8_t type,
+                                    seq_track_id_t track,
+                                    uint8_t note,
+                                    uint8_t velocity);
 
 static uint32_t seq_play_scheduler_enter_critical(void)
 {
@@ -72,6 +80,105 @@ static void seq_play_scheduler_next_generation(void)
     {
         g_seq_play_generation = 1U;
     }
+}
+
+static uint8_t seq_play_scheduler_program_value_decode(float value, uint8_t *out_program_0_127)
+{
+    const int32_t raw = (int32_t)(value + 0.5f);
+    if (raw <= 0)
+    {
+        return 0U;
+    }
+
+    uint8_t program = (uint8_t)(raw - 1);
+    if (program > 127U)
+    {
+        program = 127U;
+    }
+
+    if (out_program_0_127 != NULL)
+    {
+        *out_program_0_127 = program;
+    }
+    return 1U;
+}
+
+static uint8_t seq_play_scheduler_event_priority(uint8_t type)
+{
+    if (type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
+    {
+        return 0U;
+    }
+    if (type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE)
+    {
+        return 1U;
+    }
+    return 2U;
+}
+
+static void seq_play_scheduler_emit_midi_program(seq_track_id_t track, uint8_t program_0_127)
+{
+    const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
+    const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+    midi_program_change(MIDI_DEST_BOTH, channel, program_0_127);
+
+    if (track < SEQ_TRACK_COUNT)
+    {
+        g_seq_play_midi_program_valid[track] = 1U;
+        g_seq_play_midi_program_last[track] = program_0_127;
+    }
+}
+
+static void seq_play_scheduler_send_program_if_needed(seq_track_id_t track,
+                                                      float program_value,
+                                                      uint8_t force_send)
+{
+    uint8_t program_0_127 = 0U;
+    if (seq_play_scheduler_program_value_decode(program_value, &program_0_127) == 0U)
+    {
+        return;
+    }
+
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    if ((force_send == 0U)
+            && (g_seq_play_midi_program_valid[track] != 0U)
+            && (g_seq_play_midi_program_last[track] == program_0_127))
+    {
+        return;
+    }
+
+    seq_play_scheduler_emit_midi_program(track, program_0_127);
+}
+
+static void seq_play_scheduler_push_program_change(uint64_t due_sample_time,
+                                                   seq_track_id_t track,
+                                                   uint8_t program_0_127)
+{
+    seq_play_scheduler_push(due_sample_time,
+                            (uint8_t)SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE,
+                            track,
+                            program_0_127,
+                            0U);
+}
+
+static uint8_t seq_play_scheduler_track_supports_program_change(const track_runtime_ctx_t *ctx)
+{
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+    {
+        return 1U;
+    }
+
+    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
 }
 
 
@@ -146,7 +253,9 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     const uint8_t track_supports_vca_gate =
         ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
          || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-         || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)) ? 1U : 0U;
+         || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+         || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))) ? 1U : 0U;
 
     uint8_t filter_track = 0U;
     uint8_t mix_track = 0U;
@@ -261,6 +370,11 @@ void seq_play_scheduler_init(void)
 {
     g_seq_play_event_count = 0U;
     g_seq_play_generation = 1U;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        g_seq_play_midi_program_valid[track] = 0U;
+        g_seq_play_midi_program_last[track] = 0U;
+    }
 }
 
 void seq_play_scheduler_clear(void)
@@ -296,6 +410,8 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
 
     const float samples_per_step_f = ((float)samples_per_step_q16) / 65536.0f;
+    uint8_t has_first_note = 0U;
+    uint64_t first_note_sample_time = 0U;
 
     for (uint8_t voice = 0U; voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT; ++voice)
     {
@@ -343,6 +459,11 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
             microtiming_samples = 0;
         }
         uint64_t note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
+        if ((has_first_note == 0U) || (note_on_sample_time < first_note_sample_time))
+        {
+            has_first_note = 1U;
+            first_note_sample_time = note_on_sample_time;
+        }
 
         uint64_t len_samples = (uint64_t)((len_steps_f * samples_per_step_f) + 0.5f);
         if (len_samples == 0U)
@@ -361,6 +482,22 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                 track,
                                 note,
                                 0U);
+    }
+
+    if (has_first_note != 0U)
+    {
+        const float program_f = seq_param_iface_decode_param_value(PARAM_MIDI_PROGRAM,
+                                                                   seq_play_scheduler_get_locked_or_default(track, step, PARAM_MIDI_PROGRAM));
+        uint8_t program_0_127 = 0U;
+        if (seq_play_scheduler_program_value_decode(program_f, &program_0_127) != 0U)
+        {
+            if ((track < SEQ_TRACK_COUNT)
+                    && ((g_seq_play_midi_program_valid[track] == 0U)
+                        || (g_seq_play_midi_program_last[track] != program_0_127)))
+            {
+                seq_play_scheduler_push_program_change(first_note_sample_time, track, program_0_127);
+            }
+        }
     }
 }
 
@@ -411,8 +548,8 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
             if ((selected_index == 0xFFU)
                 || (candidate->due_sample_time < selected_sample)
                 || ((candidate->due_sample_time == selected_sample)
-                    && (candidate->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
-                    && (g_seq_play_events[selected_index].type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)))
+                    && (seq_play_scheduler_event_priority(candidate->type)
+                        < seq_play_scheduler_event_priority(g_seq_play_events[selected_index].type))))
             {
                 selected_index = i;
                 selected_sample = candidate->due_sample_time;
@@ -475,10 +612,67 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
         return;
     }
 
+    if (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE)
+    {
+        seq_play_scheduler_emit_midi_program((seq_track_id_t)event->track, event->note);
+        return;
+    }
+
     const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
     seq_play_scheduler_emit_midi_note(event);
     seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
                                         event->note,
                                         event->velocity,
                                         is_note_on);
+}
+
+void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)
+{
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (seq_play_scheduler_track_supports_program_change(ctx) == 0U)
+    {
+        return;
+    }
+
+    seq_play_scheduler_send_program_if_needed(track, program_value, 0U);
+}
+
+void seq_play_scheduler_emit_midi_program_on_transport_start(void)
+{
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        track_runtime_refresh_track(track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if (seq_play_scheduler_track_supports_program_change(ctx) == 0U)
+        {
+            continue;
+        }
+
+        float program_f = 0.0f;
+        if (param_registry_get_track_value(PARAM_MIDI_PROGRAM, track, &program_f) == 0U)
+        {
+            continue;
+        }
+
+        seq_play_scheduler_send_program_if_needed(track, program_f, 1U);
+    }
+}
+
+void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
+{
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (seq_play_scheduler_track_supports_program_change(ctx) == 0U)
+    {
+        return;
+    }
+
+    float program_f = 0.0f;
+    if (param_registry_get_track_value(PARAM_MIDI_PROGRAM, track, &program_f) == 0U)
+    {
+        return;
+    }
+
+    seq_play_scheduler_send_program_if_needed(track, program_f, 1U);
 }

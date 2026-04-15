@@ -111,5 +111,7 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
 void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                    uint8_t channel_zero_based,
                                    uint8_t note);
+void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
+void seq_runtime_on_track_pattern_change(uint8_t track);
 
 #endif /* SEQ_RUNTIME_H */

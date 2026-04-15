@@ -24,7 +24,13 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
 
     if (page_id == UI_PAGE_TEMPLATE_PLAY)
     {
-        return (ui_track_family_is_engine(family) != 0U) ? 1U : 0U;
+        return ((ui_track_family_is_engine(family) != 0U)
+                || (family == UI_TRACK_FAMILY_MIDI)
+                || ((ui_track_family_is_input(family) != 0U) && (type == UI_TRACK_TYPE_HYBRID))) ? 1U : 0U;
+    }
+    if (page_id == UI_PAGE_TEMPLATE_COLORS)
+    {
+        return (family != UI_TRACK_FAMILY_MIDI) ? 1U : 0U;
     }
     if (page_id == UI_PAGE_TEMPLATE_MIX)
     {

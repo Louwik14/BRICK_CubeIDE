@@ -27,6 +27,7 @@
 #include "Audio/drum_synth.h"
 #include "Core/brick6_master_buffer.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "midi.h"
 #include "fx_daisy_comp.h"
 #include "fx_granular.h"
 #include "fx_pool.h"
@@ -323,6 +324,37 @@ static void apply_tone_live_track(param_id_t id, float value)
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
 }
 
+static uint8_t param_is_midi_cc_id(param_id_t id)
+{
+    return ((id >= PARAM_MIDI_CC1_1) && (id <= PARAM_MIDI_CC3_4)) ? 1U : 0U;
+}
+
+static uint8_t param_midi_cc_number_from_id(param_id_t id)
+{
+    if (param_is_midi_cc_id(id) == 0U)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(16U + (uint8_t)(id - PARAM_MIDI_CC1_1));
+}
+
+static uint8_t param_track_supports_midi_tone(const track_runtime_ctx_t *ctx)
+{
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+    {
+        return 1U;
+    }
+
+    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+}
+
 static void apply_dx7_algorithm(float v) { apply_tone_live_track(PARAM_DX7_ALGORITHM, v); }
 static void apply_dx7_feedback(float v) { apply_tone_live_track(PARAM_DX7_FEEDBACK, v); }
 static void apply_dx7_transpose(float v) { apply_tone_live_track(PARAM_DX7_TRANSPOSE, v); }
@@ -338,6 +370,20 @@ static void apply_dx7_operator_1_level(float v) { apply_tone_live_track(PARAM_DX
 static void apply_dx7_operator_2_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_2_LEVEL, v); }
 static void apply_dx7_operator_3_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_3_LEVEL, v); }
 static void apply_dx7_operator_4_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_4_LEVEL, v); }
+static void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
+static void apply_hybrid_gate(float v) { apply_tone_live_track(PARAM_HYBRID_GATE, v); }
+static void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }
+static void apply_midi_cc1_2(float v) { apply_tone_live_track(PARAM_MIDI_CC1_2, v); }
+static void apply_midi_cc1_3(float v) { apply_tone_live_track(PARAM_MIDI_CC1_3, v); }
+static void apply_midi_cc1_4(float v) { apply_tone_live_track(PARAM_MIDI_CC1_4, v); }
+static void apply_midi_cc2_1(float v) { apply_tone_live_track(PARAM_MIDI_CC2_1, v); }
+static void apply_midi_cc2_2(float v) { apply_tone_live_track(PARAM_MIDI_CC2_2, v); }
+static void apply_midi_cc2_3(float v) { apply_tone_live_track(PARAM_MIDI_CC2_3, v); }
+static void apply_midi_cc2_4(float v) { apply_tone_live_track(PARAM_MIDI_CC2_4, v); }
+static void apply_midi_cc3_1(float v) { apply_tone_live_track(PARAM_MIDI_CC3_1, v); }
+static void apply_midi_cc3_2(float v) { apply_tone_live_track(PARAM_MIDI_CC3_2, v); }
+static void apply_midi_cc3_3(float v) { apply_tone_live_track(PARAM_MIDI_CC3_3, v); }
+static void apply_midi_cc3_4(float v) { apply_tone_live_track(PARAM_MIDI_CC3_4, v); }
 
 static fx_granular_state_t *get_active_granular_state(void)
 {
@@ -737,6 +783,18 @@ static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float
         case PARAM_MIX_SEND2:
             mixer_set_track_send_level(ctx->mix_track_id, 1U, clamp_value(value, 0.0f, 1.0f));
             return 1U;
+        case PARAM_HYBRID_GATE:
+            if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+                    || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))
+            {
+                return 0U;
+            }
+            mixer_set_track_vca_enabled(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
+            if (value < 0.5f)
+            {
+                mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
+            }
+            return 1U;
         case PARAM_VCA_ATTACK:
             mixer_set_track_vca_attack(ctx->mix_track_id, filter_ui127_to_attack_s(value));
             return 1U;
@@ -768,6 +826,26 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;
+    }
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (param_track_supports_midi_tone(ctx) != 0U))
+    {
+        if (param_is_midi_cc_id(id) != 0U)
+        {
+            const uint8_t cc_number = param_midi_cc_number_from_id(id);
+            const uint8_t cc_value = (uint8_t)(clamp_value(value, 0.0f, 127.0f) + 0.5f);
+            const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
+            const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+            midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
+            param_runtime_cache_set(track, id, value);
+            return 1U;
+        }
+
+        if (id == PARAM_MIDI_PROGRAM)
+        {
+            return 0U;
+        }
     }
 
     uint8_t applied = 0U;
@@ -1240,6 +1318,34 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
                 if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                 {
+                    if (id == PARAM_MIDI_PROGRAM)
+                    {
+                        if (param_track_supports_midi_tone(ctx) == 0U)
+                        {
+                            return 0U;
+                        }
+                        param_runtime_cache_set(track, id, clamped);
+                        mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
+                        seq_runtime_on_midi_program_live_change(track, clamped);
+                        return 1U;
+                    }
+
+                    if (param_is_midi_cc_id(id) != 0U)
+                    {
+                        if (param_track_supports_midi_tone(ctx) == 0U)
+                        {
+                            return 0U;
+                        }
+                        const uint8_t cc_number = param_midi_cc_number_from_id(id);
+                        const uint8_t cc_value = (uint8_t)(clamp_value(clamped, 0.0f, 127.0f) + 0.5f);
+                        const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
+                        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+                        midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
+                        param_runtime_cache_set(track, id, clamped);
+                        mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
+                        return 1U;
+                    }
+
                     if (param_runtime_apply_track(track, id, clamped) == 0U)
                     {
                         SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_unsupported engine=%u inst=%u\r\n",
@@ -2307,7 +2413,7 @@ static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
 static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
 static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
 static const char *const g_monob_sub_octave_labels[] = {"-1", "-2", "-3", "-4", NULL};
-static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", NULL};
+static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
 static const char *const g_cfg_sync_labels[] = {"INT", "MidiEXT", "UsbEXT", NULL};
@@ -2429,7 +2535,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_sustain),
     PARAM_DESC_EX(PARAM_VCA_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_release),
 
-    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, 7.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
+    PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U), 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
@@ -2649,6 +2755,21 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_REVERB_PRED, "PreD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_pred),
     PARAM_DESC_EX(PARAM_MIX_REVERB_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_type_labels, apply_mix_reverb_type),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SURR, "Surr", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_surr),
+
+    PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_hybrid_gate),
+    PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),
+    PARAM_DESC_EX(PARAM_MIDI_CC1_1, "CC16", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_1),
+    PARAM_DESC_EX(PARAM_MIDI_CC1_2, "CC17", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_2),
+    PARAM_DESC_EX(PARAM_MIDI_CC1_3, "CC18", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_3),
+    PARAM_DESC_EX(PARAM_MIDI_CC1_4, "CC19", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_4),
+    PARAM_DESC_EX(PARAM_MIDI_CC2_1, "CC20", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc2_1),
+    PARAM_DESC_EX(PARAM_MIDI_CC2_2, "CC21", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc2_2),
+    PARAM_DESC_EX(PARAM_MIDI_CC2_3, "CC22", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc2_3),
+    PARAM_DESC_EX(PARAM_MIDI_CC2_4, "CC23", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc2_4),
+    PARAM_DESC_EX(PARAM_MIDI_CC3_1, "CC24", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc3_1),
+    PARAM_DESC_EX(PARAM_MIDI_CC3_2, "CC25", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc3_2),
+    PARAM_DESC_EX(PARAM_MIDI_CC3_3, "CC26", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc3_3),
+    PARAM_DESC_EX(PARAM_MIDI_CC3_4, "CC27", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc3_4),
 };
 
 /**

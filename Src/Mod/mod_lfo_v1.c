@@ -93,6 +93,11 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
 {
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
+        if (family == UI_TRACK_FAMILY_MIDI)
+        {
+            return ((dest >= PARAM_MIDI_CC1_1) && (dest <= PARAM_MIDI_CC3_4)) ? 1U : 0U;
+        }
+
         if (family == UI_TRACK_FAMILY_DRUM)
         {
             switch (type)
@@ -145,6 +150,11 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
 
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
     {
+        if (family == UI_TRACK_FAMILY_MIDI)
+        {
+            return 0U;
+        }
+
         if (type == UI_TRACK_TYPE_MONOB)
         {
             return ((dest >= PARAM_MONOB_FILTER_TYPE) && (dest <= PARAM_MONOB_FILTER_ENVDLY)) ? 1U : 0U;
@@ -189,7 +199,8 @@ static track_runtime_param_status_t mod_lfo_effective_status_from_ctx(const trac
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
             return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 

@@ -1,4 +1,4 @@
-# Z5 - UI / Navigation / Interaction
+﻿# Z5 - UI / Navigation / Interaction
 
 ## 1. Perimetre
 
@@ -234,4 +234,28 @@ Points factuels:
 - Z5 est confirmee comme zone d'orchestration interactionnelle centrale, avec sous-composants internes: event queue, page manager, template resolver.
 - `ui_page_manager` et `ui_event` doivent etre rattaches explicitement a Z5 dans la carte globale (pas des utilitaires neutres).
 - Le cas Master/Buffer reste transverse Z5<->Z1/Z2/Z4 mais ne justifie pas une zone UI separee.
+
+
+## 12. Contrat MIDI UI v1 (canonique)
+- Nouvelle source UI explicite: `UI_TRACK_FAMILY_MIDI` + `UI_TRACK_TYPE_MIDI` dans `ui_core`.
+- Exposition navigation borne pour une track MIDI:
+  - exposes: `PLAY`, `MOD`, `TONE`, `CFG`,
+  - non exposes: `COLORS`, `MIX`, `VCA`.
+- `CFG` reste l'autorite UI pour le channel MIDI (`PARAM_CFG_MIDI_CH`) ; aucun deplacement vers `TONE`.
+- Resolution template contextuelle MIDI:
+  - `TONE` utilise une famille template MIDI dediee (`PROG`, `CC1`, `CC2`, `CC3`) sans fallback audio DX7/MonoB,
+  - page `PROG`: `PARAM_MIDI_PROGRAM`,
+  - pages `CCX`: `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4`.
+- Contrat runtime/UI associe:
+  - track MIDI non audio-routable (pas de cible mix/filter audio),
+  - Z5 reste source family/type; Z2 reste autorite unique du bind runtime.
+
+## 13. Contrat Hybrid UI v1 (borne)
+- `Hybrid` n'est pas une nouvelle family: `family=Input1..4`, `type=Hybrid`.
+- Exposition UI pour `Input/Hybrid`:
+  - exposes: `PLAY`, `MOD`, `TONE`, `VCA`, `COLORS`, `MIX`, `CFG`.
+- `TONE` Hybrid utilise une famille template dediee (pas fallback DX7):
+  - page `PROG`: `Gate` + `Program`,
+  - pages suivantes: `CC1`, `CC2`, `CC3`.
+- `PLAY` est explicitement navigable pour `Input/Hybrid`.
 

@@ -46,6 +46,10 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
     {
         return TRACK_RUNTIME_FAMILY_MASTER;
     }
+    if (family == UI_TRACK_FAMILY_MIDI)
+    {
+        return TRACK_RUNTIME_FAMILY_MIDI;
+    }
 
     if (ui_track_family_is_input(family) != 0)
     {
@@ -96,6 +100,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL;
         case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
             return TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL;
+        case UI_TRACK_TYPE_MIDI:
+            return TRACK_RUNTIME_TYPE_MIDI;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
@@ -184,7 +190,10 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
 {
     uint8_t flags = 0U;
 
-    if (family != TRACK_RUNTIME_FAMILY_OFF)
+    if ((family == TRACK_RUNTIME_FAMILY_INPUT)
+            || (family == TRACK_RUNTIME_FAMILY_SYNTH)
+            || (family == TRACK_RUNTIME_FAMILY_DRUM)
+            || (family == TRACK_RUNTIME_FAMILY_MASTER))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
     }
@@ -198,6 +207,12 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     if ((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
+        flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
+    }
+
+    if (family == TRACK_RUNTIME_FAMILY_MIDI)
+    {
+        flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
 
     return flags;
@@ -303,6 +318,12 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
     if (family == TRACK_RUNTIME_FAMILY_INPUT)
     {
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_AUDIO_TRACK, ctx->track_id);
+        return;
+    }
+
+    if (family == TRACK_RUNTIME_FAMILY_MIDI)
+    {
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_NONE, TRACK_RUNTIME_INSTANCE_NONE);
         return;
     }
 
@@ -432,7 +453,12 @@ void track_runtime_refresh_all(void)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
-        if (ctx->mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE)
+        if (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MIDI)
+                || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF))
+        {
+            ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
+        }
+        else if (ctx->mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE)
         {
             (void)track_runtime_mix_reserve_track(ctx,
                                                   track,
@@ -726,10 +752,28 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
             rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
             return rule;
 
+        case PARAM_MIDI_PROGRAM:
+        case PARAM_MIDI_CC1_1:
+        case PARAM_MIDI_CC1_2:
+        case PARAM_MIDI_CC1_3:
+        case PARAM_MIDI_CC1_4:
+        case PARAM_MIDI_CC2_1:
+        case PARAM_MIDI_CC2_2:
+        case PARAM_MIDI_CC2_3:
+        case PARAM_MIDI_CC2_4:
+        case PARAM_MIDI_CC3_1:
+        case PARAM_MIDI_CC3_2:
+        case PARAM_MIDI_CC3_3:
+        case PARAM_MIDI_CC3_4:
+            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
+            rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
+            return rule;
+
         case PARAM_MIX_LEVEL:
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_HYBRID_GATE:
         case PARAM_VCA_ATTACK:
         case PARAM_VCA_DECAY:
         case PARAM_VCA_SUSTAIN:
@@ -843,6 +887,17 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            if ((param >= PARAM_MIDI_PROGRAM) && (param <= PARAM_MIDI_CC3_4))
+            {
+                const uint8_t midi_track = (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI) ? 1U : 0U;
+                const uint8_t hybrid_input_track =
+                    ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+                if ((midi_track == 0U) && (hybrid_input_track == 0U))
+                {
+                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                }
             }
             {
                 const uint8_t voice = track_runtime_param_play_voice_index(param);

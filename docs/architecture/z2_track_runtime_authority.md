@@ -128,3 +128,25 @@ Sorties de Z2:
 - Z2 confirmé comme noyau d’autorité transversal.
 - Pas de split nécessaire.
 - Master/Buffer ne justifie pas une zone séparée: il consomme la politique de bind de Z2.
+
+## 11. Contrat MIDI (passe 2 bornee)
+- Source de verite inchangee: Z5 fournit `UI_TRACK_FAMILY_MIDI` + `UI_TRACK_TYPE_MIDI`.
+- Mapping runtime explicite: `TRACK_RUNTIME_FAMILY_MIDI` + `TRACK_RUNTIME_TYPE_MIDI`.
+- Binding runtime MIDI:
+  - `bind_state=BOUND`,
+  - `engine=TRACK_RUNTIME_ENGINE_NONE`,
+  - `mix_track_id=TRACK_RUNTIME_MIX_TRACK_NONE`.
+- Capacites runtime MIDI:
+  - `CAN_PLAY` autorise (PLAY/MOD),
+  - `CAN_FILTER` et `CAN_SYNTH` non autorises.
+- Effets fonctionnels:
+  - `track_runtime_is_audio_routable()==0`,
+  - `track_runtime_get_mix_target_track()==0`,
+  - `track_runtime_resolve_filter_target_track()==0`.
+- Invariants inchanges:
+  - invalidation explicite `track_runtime_invalidate_all`,
+  - refresh explicite `track_runtime_refresh_track/all`,
+  - pas de seconde autorite runtime.
+- Hors perimetre passe 2:
+  - emission Program Change (live/start transport/changement pattern/plock conditionnel) non implementee,
+  - dependance explicite a un chantier separe Z3/Z4 (parametres MIDI Program/CC + sequencing conditionnel).

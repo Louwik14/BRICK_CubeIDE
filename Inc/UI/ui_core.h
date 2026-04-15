@@ -23,6 +23,7 @@ typedef enum
     UI_TRACK_FAMILY_SYNTH,
     UI_TRACK_FAMILY_DRUM,
     UI_TRACK_FAMILY_MASTER,
+    UI_TRACK_FAMILY_MIDI,
     UI_TRACK_FAMILY_COUNT
 } ui_track_family_t;
 
@@ -45,6 +46,7 @@ typedef enum
     UI_TRACK_TYPE_DRUM_FM_CLAP,
     UI_TRACK_TYPE_DRUM_FM_COWBELL,
     UI_TRACK_TYPE_DRUM_FM_CYMBAL,
+    UI_TRACK_TYPE_MIDI,
     UI_TRACK_TYPE_COUNT
 } ui_track_type_t;
 

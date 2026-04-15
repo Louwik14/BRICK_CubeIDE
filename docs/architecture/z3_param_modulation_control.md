@@ -114,3 +114,40 @@ Familles d'autorite:
 
 - Aucun changement necessaire dans `ARCHITECTURE_GLOBAL.md`.
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.
+
+## 10. Contrat MIDI TONE (tranche fonctionnelle)
+
+- Nouveaux params track-aware TONE:
+  - `PARAM_MIDI_PROGRAM` (0=OFF, 1..128 => Program 0..127),
+  - `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` (CC16..CC27).
+- Autorite d'application:
+  - Z3 reste point d'entree `param_registry_apply_track_value`,
+  - emission MIDI live delegatee au runtime Z4 (`seq_runtime_on_midi_program_live_change`) pour Program,
+  - emission MIDI live directe `midi_cc` pour CC.
+- Garde runtime:
+  - ces params sont acceptes uniquement si la track effective est `TRACK_RUNTIME_FAMILY_MIDI`,
+  - aucun backend audio n'est active par ces params.
+- Cache/runtime:
+  - base track-aware stockee dans le cache runtime Z3 pour support plock/restore sans seconde autorite.
+
+## 11. Contrat LFO MIDI (borne)
+
+- Autorite de mapping destination LFO: `mod_lfo_v1` (selection des destinations supportees par track).
+- Pour une track MIDI:
+  - destinations LFO autorisees: `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` (TONE/CC),
+  - destinations LFO interdites: `PARAM_MIDI_PROGRAM`,
+  - destinations LFO interdites: tout domaine `COLORS`.
+- Application modulation runtime:
+  - chemin `param_registry_apply_track_value_rt_fast`,
+  - emission CC via `midi_cc` pour les destinations MIDI CC,
+  - aucun backend audio ajoute.
+
+## 12. Contrat Hybrid v1 (param/runtime borne)
+- `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input/Hybrid` uniquement.
+- `PARAM_HYBRID_GATE` pilote le gate VCA runtime du mix-track Hybrid:
+  - `OFF`: bypass gate (audio input libre),
+  - `ON`: gate actif pilote par activite note.
+- Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input/Hybrid` (en plus de `family MIDI`):
+  - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
+  - `CC`: emission directe `midi_cc`.
+- Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.

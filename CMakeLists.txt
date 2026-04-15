@@ -150,6 +150,10 @@ file(GLOB SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/*.cpp"
 )
 
+list(APPEND SRC_UI_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_system_sync_internal.c"
+)
+
 # Mutable Instruments
 file(GLOB MUTABLE_CLOUDS_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/clouds/*.c"

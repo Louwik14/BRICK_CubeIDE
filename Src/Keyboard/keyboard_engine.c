@@ -129,7 +129,9 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (ui_track_family_is_engine(ui_get_track_family(track)) == 0)
+        const ui_track_config_t cfg = ui_get_track_config(track);
+        if ((ui_track_family_is_engine(cfg.family) == 0)
+                && !(ui_track_family_is_input(cfg.family) && (cfg.type == UI_TRACK_TYPE_HYBRID)))
         {
             continue;
         }
@@ -506,7 +508,9 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (ui_track_family_is_engine(ui_get_track_family(track)) == 0)
+        const ui_track_config_t cfg = ui_get_track_config(track);
+        if ((ui_track_family_is_engine(cfg.family) == 0)
+                && !(ui_track_family_is_input(cfg.family) && (cfg.type == UI_TRACK_TYPE_HYBRID)))
         {
             continue;
         }
@@ -543,7 +547,8 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
                 mixer_track_filter_all_notes_off(filter_track);
             }
         }
-        if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
+        if ((keyboard_engine_track_supports_vca_gate(ctx) != 0U)
+                && (track_runtime_get_mix_target_track(track, &mix_track) != 0U))
         {
             if (is_note_on != 0U)
             {
