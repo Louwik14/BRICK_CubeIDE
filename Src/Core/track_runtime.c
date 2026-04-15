@@ -15,7 +15,6 @@
 #define TRACK_RUNTIME_MONOB_MAX_INSTANCES 8U
 #define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
-#define TRACK_RUNTIME_INPUT_RESERVED_MIX_TRACKS 3U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
 static volatile uint8_t g_track_runtime_refresh_needed = 1U;
@@ -183,6 +182,26 @@ static uint8_t track_runtime_mix_reserve_track(track_runtime_ctx_t *ctx,
 
     ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
     return 0U;
+}
+
+static uint8_t track_runtime_mix_try_reserve_exact(track_runtime_ctx_t *ctx,
+                                                   uint8_t mix_track,
+                                                   uint8_t *used,
+                                                   uint8_t used_len)
+{
+    if ((ctx == NULL) || (used == NULL) || (mix_track >= used_len))
+    {
+        return 0U;
+    }
+
+    if (used[mix_track] != 0U)
+    {
+        return 0U;
+    }
+
+    ctx->mix_track_id = mix_track;
+    used[mix_track] = 1U;
+    return 1U;
 }
 
 static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
@@ -412,13 +431,12 @@ void track_runtime_refresh_all(void)
 {
     track_runtime_allocator_state_t allocator = { 0U, 0U, 0U };
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
+    uint8_t previous_mix_track[SEQ_TRACK_COUNT];
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
-    for (uint8_t mix_track = 0U;
-         (mix_track < TRACK_RUNTIME_INPUT_RESERVED_MIX_TRACKS) && (mix_track < TRACK_RUNTIME_MIX_TRACK_COUNT);
-         ++mix_track)
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        mix_track_used[mix_track] = 1U;
+        previous_mix_track[track] = g_track_runtime_ctx[track].mix_track_id;
     }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -448,6 +466,31 @@ void track_runtime_refresh_all(void)
                 ctx->mix_track_id = input_mix_track;
             }
         }
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        if (ctx->mix_track_id < TRACK_RUNTIME_MIX_TRACK_COUNT)
+        {
+            mix_track_used[ctx->mix_track_id] = 1U;
+        }
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        if (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MIDI)
+                || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_OFF)
+                || (ctx->mix_track_id != TRACK_RUNTIME_MIX_TRACK_NONE))
+        {
+            continue;
+        }
+
+        (void)track_runtime_mix_try_reserve_exact(ctx,
+                                                  previous_mix_track[track],
+                                                  mix_track_used,
+                                                  (uint8_t)sizeof(mix_track_used));
     }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)

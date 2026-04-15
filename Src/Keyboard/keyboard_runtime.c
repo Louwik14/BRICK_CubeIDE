@@ -316,7 +316,7 @@ void keyboard_runtime_on_active_track_changed(void)
 
     if (keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
     {
-        keyboard_arp_on_mode_enter();
+        keyboard_arp_on_mode_enter_silent();
     }
 }
 

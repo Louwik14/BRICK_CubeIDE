@@ -57,6 +57,7 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     seq_track_id_t track,
                                     uint8_t note,
                                     uint8_t velocity);
+static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent);
 
 static uint32_t seq_play_scheduler_enter_critical(void)
 {
@@ -179,6 +180,23 @@ static uint8_t seq_play_scheduler_track_supports_program_change(const track_runt
 
     return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+}
+
+static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent)
+{
+    if (quant_percent == 0U)
+    {
+        return microtiming_samples;
+    }
+
+    if (quant_percent >= 100U)
+    {
+        return 0;
+    }
+
+    const int32_t remaining_percent = (int32_t)(100U - quant_percent);
+    const int64_t scaled = (int64_t)microtiming_samples * (int64_t)remaining_percent;
+    return (int32_t)((scaled + 50LL) / 100LL);
 }
 
 
@@ -410,6 +428,17 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
 
     const float samples_per_step_f = ((float)samples_per_step_q16) / 65536.0f;
+    uint8_t track_quant = 0U;
+    const seq_runtime_state_t *const runtime_state = seq_runtime_get_state();
+    if ((runtime_state != NULL) && (track < SEQ_TRACK_COUNT))
+    {
+        track_quant = runtime_state->track_quant[track];
+        if (track_quant > 100U)
+        {
+            track_quant = 100U;
+        }
+    }
+
     uint8_t has_first_note = 0U;
     uint64_t first_note_sample_time = 0U;
 
@@ -458,6 +487,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         {
             microtiming_samples = 0;
         }
+        microtiming_samples = seq_play_scheduler_apply_quant_percent(microtiming_samples, track_quant);
         uint64_t note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
         if ((has_first_note == 0U) || (note_on_sample_time < first_note_sample_time))
         {

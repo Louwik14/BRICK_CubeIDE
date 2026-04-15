@@ -139,6 +139,8 @@ Contrats timing sortants:
   - Ecriture: `mixer_set_track_filter_*`, note on/off VCA/filter.
   - Lecture/update: `mixer_track_filter_process_block`.
   - Role: etat filter/EQ/VCA par track.
+  - Contrat `mixer_set_track_filter_type`: idempotent sur type identique (no-op) et reconfiguration sans reset DSP brutal, pour eviter les transitoires audibles sur re-apply redondant.
+- Lors d'un rebind logique->lane, la migration du state lane-bound (`g_tracks` + `g_track_filters`) doit etre faite explicitement avant re-apply des params autoritatifs; sinon le state FILTER/VCA reste attache a l'ancienne lane.
 - `g_send_fx_slot[MIXER_NUM_SENDS]`, `g_reverb`
   - Ecriture: `mixer_set_send_fx_slot`, `mixer_set_reverb_*`.
   - Lecture: `mixer_process`.

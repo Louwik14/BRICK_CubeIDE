@@ -896,6 +896,11 @@ void keyboard_arp_on_mode_enter(void)
     keyboard_arp_reset_phrase(true);
 }
 
+void keyboard_arp_on_mode_enter_silent(void)
+{
+    keyboard_arp_reset_phrase(false);
+}
+
 void keyboard_arp_on_mode_leave(void)
 {
     keyboard_engine_all_notes_off();

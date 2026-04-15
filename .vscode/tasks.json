@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build",
+      "label": "Build Release",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -22,23 +22,7 @@
       ]
     },
     {
-      "label": "Clean",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "--preset",
-        "Release",
-        "--target",
-        "clean"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Flash DFU",
+      "label": "Flash Release",
       "type": "shell",
       "command": "STM32_Programmer_CLI.exe",
       "args": [
@@ -58,6 +42,76 @@
         "reveal": "always",
         "panel": "shared"
       },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "Release",
+        "--target",
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Configure Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--preset",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "Debug",
+        "--target",
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Debug",
+      "dependsOn": [
+        "Build Debug"
+      ],
+      "dependsOrder": "sequence",
       "problemMatcher": []
     }
   ]

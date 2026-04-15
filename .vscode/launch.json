@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug STM32H743 (OpenOCD + ST-Link)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Debug/BRICK6_CUBE.elf",
+      "device": "STM32H743IITx",
+      "interface": "swd",
+      "gdbPath": "C:/ChibiStudio/tools/GNU Tools ARM Embedded/11.3 2022.08/bin/arm-none-eabi-gdb.exe",
+      "serverpath": "C:/openocd/OpenOCD-20250710-0.12.0/bin/openocd.exe",
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/stm32h7x.cfg"
+      ],
+      "searchDir": [
+        "${workspaceFolder}"
+      ],
+      "preLaunchTask": "Debug",
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "raw",
+      "postLaunchCommands": [
+        "monitor reset halt"
+      ]
+    }
+  ]
+}

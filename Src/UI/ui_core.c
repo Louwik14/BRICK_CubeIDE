@@ -1871,7 +1871,7 @@ static uint8_t ui_core_clipboard_clear_track(uint8_t track)
     seq_model_set_track_page(track, 0U);
     seq_model_set_track_length(track, (uint8_t)SEQ_MAX_STEPS);
     seq_runtime_set_track_div(track, 1U);
-    seq_runtime_set_track_quant(track, 1U);
+    seq_runtime_set_track_quant(track, 0U);
     seq_runtime_set_track_swing(track, 0U);
     (void)seq_runtime_set_playhead_step(track, 0U);
 

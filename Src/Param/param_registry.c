@@ -513,7 +513,8 @@ static void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_f
 
 extern const param_desc_t param_registry[PARAM_COUNT];
 
-#define FILTER_TRACK_TARGET_COUNT 4U
+#define FILTER_TRACK_STATE_COUNT SEQ_TRACK_COUNT
+#define FILTER_RUNTIME_REBIND_NONE 0xFFU
 
 typedef struct
 {
@@ -537,7 +538,7 @@ typedef struct
     float decimator_rate2;
 } filter_ui_state_t;
 
-static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_TARGET_COUNT];
+static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_STATE_COUNT];
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 static uint8_t g_param_registry_batch_depth = 0U;
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
@@ -945,7 +946,7 @@ static uint8_t filter_mod_locked_for_active_track(void)
 
 static void filter_ui_state_init_defaults(void)
 {
-    for (uint32_t i = 0U; i < FILTER_TRACK_TARGET_COUNT; ++i)
+    for (uint32_t i = 0U; i < FILTER_TRACK_STATE_COUNT; ++i)
     {
         g_filter_ui_state[i].type = param_registry[PARAM_FILTER_TYPE].default_value;
         g_filter_ui_state[i].cutoff = param_registry[PARAM_FILTER_CUTOFF].default_value;
@@ -1017,13 +1018,13 @@ static uint8_t resolve_filter_drive_target_track_for_ui_track(uint8_t ui_track, 
     return 1U;
 }
 
-static filter_ui_state_t *resolve_filter_ui_state(uint32_t target_track)
+static filter_ui_state_t *resolve_filter_ui_state_for_track(uint8_t track)
 {
-    if (target_track >= FILTER_TRACK_TARGET_COUNT)
+    if (track >= FILTER_TRACK_STATE_COUNT)
     {
         return NULL;
     }
-    return &g_filter_ui_state[target_track];
+    return &g_filter_ui_state[track];
 }
 
 static void apply_filter_drive_runtime(uint32_t target_track, float drive_ui)
@@ -1052,7 +1053,7 @@ static void apply_filter_decimator_rate2_runtime(uint32_t target_track, float ra
 
 static void apply_filter_crunch_insert_runtime(uint32_t target_track, const filter_ui_state_t *state)
 {
-    if ((state == NULL) || (target_track >= FILTER_TRACK_TARGET_COUNT))
+    if ((state == NULL) || (target_track >= MIXER_MAX_TRACKS))
     {
         return;
     }
@@ -1080,7 +1081,6 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         }
     }
 
-    uint32_t target_track = 0U;
     filter_ui_state_t *state = NULL;
     switch (id)
     {
@@ -1088,15 +1088,11 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_DECIMATOR_BITS:
         case PARAM_FILTER_DECIMATOR_RATE:
         case PARAM_FILTER_DECIMATOR_RATE2:
-            if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
+            if (track >= SEQ_TRACK_COUNT)
             {
-                SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_drive_target ui_active=%u\r\n",
-                             (unsigned)track,
-                             (unsigned)id,
-                             (unsigned)ui_get_active_track());
                 return 0U;
             }
-            state = resolve_filter_ui_state(target_track);
+            state = resolve_filter_ui_state_for_track(track);
             if (state == NULL)
             {
                 return 0U;
@@ -1117,15 +1113,11 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
-            if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
+            if (track >= SEQ_TRACK_COUNT)
             {
-                SEQ_BIND_LOG("[SEQ][REG][GET] tr=%u param=%u no_target ui_active=%u\r\n",
-                             (unsigned)track,
-                             (unsigned)id,
-                             (unsigned)ui_get_active_track());
                 return 0U;
             }
-            state = resolve_filter_ui_state(target_track);
+            state = resolve_filter_ui_state_for_track(track);
             if (state == NULL)
             {
                 return 0U;
@@ -1196,6 +1188,112 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     const float clamped = clamp_value(value, desc->min, desc->max);
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
 
+    if (param_is_filter_ui_param(id) != 0U)
+    {
+        uint32_t target_track = 0U;
+        filter_ui_state_t *state = resolve_filter_ui_state_for_track(track);
+        filter_ui_state_t tmp_state;
+
+        if ((id == PARAM_FILTER_DRIVE)
+                || (id == PARAM_FILTER_DECIMATOR_BITS)
+                || (id == PARAM_FILTER_DECIMATOR_RATE)
+                || (id == PARAM_FILTER_DECIMATOR_RATE2))
+        {
+            if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
+            {
+                return 0U;
+            }
+        }
+        else
+        {
+            if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
+            {
+                return 0U;
+            }
+        }
+
+        switch (id)
+        {
+            case PARAM_FILTER_TYPE:
+                mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(clamped, 0.0f, 4.0f) + 0.5f)));
+                return 1U;
+            case PARAM_FILTER_CUTOFF:
+                mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(clamped));
+                return 1U;
+            case PARAM_FILTER_RESONANCE:
+                mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(clamped));
+                return 1U;
+            case PARAM_FILTER_EG_AMT:
+                mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(clamped));
+                return 1U;
+            case PARAM_FILTER_ATTACK:
+                mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(clamped));
+                return 1U;
+            case PARAM_FILTER_DECAY:
+                mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(clamped));
+                return 1U;
+            case PARAM_FILTER_SUSTAIN:
+                mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(clamped));
+                return 1U;
+            case PARAM_FILTER_RELEASE:
+                mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(clamped));
+                return 1U;
+            case PARAM_FILTER_KEYTRK:
+                mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(clamped));
+                return 1U;
+            case PARAM_FILTER_ENVRST:
+            case PARAM_FILTER_ENVDLY:
+                return 1U;
+            case PARAM_FILTER_EQ_LOW:
+                mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(clamped));
+                return 1U;
+            case PARAM_FILTER_EQ_MID:
+                mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(clamped));
+                return 1U;
+            case PARAM_FILTER_EQ_HIGH:
+                mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(clamped));
+                return 1U;
+            case PARAM_FILTER_DRIVE:
+                apply_filter_drive_runtime(target_track, clamped);
+                if (state != NULL)
+                {
+                    tmp_state = *state;
+                    tmp_state.drive = clamp_value(clamped, 0.0f, 127.0f);
+                    apply_filter_crunch_insert_runtime(target_track, &tmp_state);
+                }
+                return 1U;
+            case PARAM_FILTER_DECIMATOR_BITS:
+                apply_filter_decimator_bits_runtime(target_track, clamped);
+                if (state != NULL)
+                {
+                    tmp_state = *state;
+                    tmp_state.decimator_bits = clamp_value(clamped, 0.0f, 127.0f);
+                    apply_filter_crunch_insert_runtime(target_track, &tmp_state);
+                }
+                return 1U;
+            case PARAM_FILTER_DECIMATOR_RATE:
+                apply_filter_decimator_rate_runtime(target_track, clamped);
+                if (state != NULL)
+                {
+                    tmp_state = *state;
+                    tmp_state.decimator_rate = clamp_value(clamped, 0.0f, 127.0f);
+                    apply_filter_crunch_insert_runtime(target_track, &tmp_state);
+                }
+                return 1U;
+            case PARAM_FILTER_DECIMATOR_RATE2:
+                apply_filter_decimator_rate2_runtime(target_track, clamped);
+                if (state != NULL)
+                {
+                    tmp_state = *state;
+                    tmp_state.decimator_rate2 = clamp_value(clamped, 0.0f, 127.0f);
+                    apply_filter_crunch_insert_runtime(target_track, &tmp_state);
+                }
+                return 1U;
+            default:
+                return 0U;
+        }
+    }
+
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE) || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX))
     {
         return param_runtime_apply_track(track, id, clamped);
@@ -1219,6 +1317,90 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     return 0U;
 }
 
+static void param_registry_capture_mix_targets(uint8_t *out_mix_tracks)
+{
+    if (out_mix_tracks == NULL)
+    {
+        return;
+    }
+
+    track_runtime_refresh_all();
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        out_mix_tracks[track] = FILTER_RUNTIME_REBIND_NONE;
+
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL)
+                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
+        {
+            continue;
+        }
+
+        out_mix_tracks[track] = ctx->mix_track_id;
+    }
+}
+
+static void param_registry_reapply_lane_bound_runtime_for_all_tracks(void)
+{
+    static const param_id_t k_lane_bound_params[] = {
+        PARAM_FILTER_TYPE,
+        PARAM_FILTER_CUTOFF,
+        PARAM_FILTER_RESONANCE,
+        PARAM_FILTER_EG_AMT,
+        PARAM_FILTER_ATTACK,
+        PARAM_FILTER_DECAY,
+        PARAM_FILTER_SUSTAIN,
+        PARAM_FILTER_RELEASE,
+        PARAM_FILTER_KEYTRK,
+        PARAM_FILTER_ENVRST,
+        PARAM_FILTER_ENVDLY,
+        PARAM_FILTER_EQ_LOW,
+        PARAM_FILTER_EQ_MID,
+        PARAM_FILTER_EQ_HIGH,
+        PARAM_FILTER_DRIVE,
+        PARAM_FILTER_DECIMATOR_BITS,
+        PARAM_FILTER_DECIMATOR_RATE,
+        PARAM_FILTER_DECIMATOR_RATE2,
+        PARAM_MIX_LEVEL,
+        PARAM_MIX_PAN,
+        PARAM_MIX_SEND1,
+        PARAM_MIX_SEND2,
+        PARAM_HYBRID_GATE,
+        PARAM_VCA_ATTACK,
+        PARAM_VCA_DECAY,
+        PARAM_VCA_SUSTAIN,
+        PARAM_VCA_RELEASE
+    };
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
+        {
+            float value = 0.0f;
+            if (param_registry_get_track_value(k_lane_bound_params[i], track, &value) == 0U)
+            {
+                continue;
+            }
+
+            (void)param_registry_apply_track_value(k_lane_bound_params[i], track, value);
+        }
+    }
+}
+
+static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_tracks)
+{
+    uint8_t next_mix_tracks[SEQ_TRACK_COUNT];
+
+    if (previous_mix_tracks == NULL)
+    {
+        return;
+    }
+
+    param_registry_capture_mix_targets(next_mix_tracks);
+    mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
+}
+
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
     if (id >= PARAM_COUNT)
@@ -1239,7 +1421,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     }
 
     uint32_t target_track = 0U;
-    filter_ui_state_t *state = NULL;
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(track);
     switch (id)
     {
         case PARAM_FILTER_DRIVE:
@@ -1254,7 +1436,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                              (unsigned)ui_get_active_track());
                 return 0U;
             }
-            state = resolve_filter_ui_state(target_track);
             if (state == NULL)
             {
                 return 0U;
@@ -1283,7 +1464,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                              (unsigned)ui_get_active_track());
                 return 0U;
             }
-            state = resolve_filter_ui_state(target_track);
             if (state == NULL)
             {
                 return 0U;
@@ -1519,27 +1699,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
 void param_registry_sync_filter_ui_for_active_track(void)
 {
-    uint32_t target_track = 0U;
-    if (!resolve_filter_target_track(&target_track))
-    {
-        const uint8_t active_track = ui_get_active_track();
-        if (!resolve_filter_drive_target_track_for_ui_track(active_track, &target_track))
-        {
-            return;
-        }
-
-        filter_ui_state_t *drive_state = resolve_filter_ui_state(target_track);
-        if (drive_state != NULL)
-        {
-            param_store_set_active(PARAM_FILTER_DRIVE, drive_state->drive);
-            param_store_set_active(PARAM_FILTER_DECIMATOR_BITS, drive_state->decimator_bits);
-            param_store_set_active(PARAM_FILTER_DECIMATOR_RATE, drive_state->decimator_rate);
-            param_store_set_active(PARAM_FILTER_DECIMATOR_RATE2, drive_state->decimator_rate2);
-        }
-        return;
-    }
-
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
     if (state == NULL)
     {
         return;
@@ -1577,7 +1738,7 @@ void param_registry_sync_ui_for_active_track(void)
     const uint8_t active_track = ui_get_active_track();
     const float seq_length = (float)seq_model_get_track_length(active_track);
     uint8_t track_div = 1U;
-    uint8_t track_quant = 1U;
+    uint8_t track_quant = 0U;
     uint8_t track_swing = 0U;
 
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
@@ -1623,6 +1784,13 @@ void param_registry_sync_ui_for_active_track(void)
  */
 static void apply_filter_type(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->type = clamp_value(v, 0.0f, 4.0f);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
@@ -1630,120 +1798,130 @@ static void apply_filter_type(float v)
     }
 
     mixer_set_track_filter_type(target_track, (mixer_track_filter_type_t)((uint32_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->type = clamp_value(v, 0.0f, 4.0f);
-    }
 }
 
 static void apply_filter_cutoff(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->cutoff = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_cutoff(target_track, filter_ui127_to_cutoff_hz(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->cutoff = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_resonance(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->resonance = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_resonance(target_track, filter_ui127_to_resonance(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->resonance = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_eg_amount(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->eg_amount = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_eg_amount(target_track, filter_ui127_to_eg_amount(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->eg_amount = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_attack(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->attack = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_attack(target_track, filter_ui127_to_attack_s(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->attack = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_decay(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->decay = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_decay(target_track, filter_ui127_to_decay_s(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->decay = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_sustain(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->sustain = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_sustain(target_track, filter_ui127_to_sustain(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->sustain = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_release(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->release = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_release(target_track, filter_ui127_to_release_s(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->release = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_keytrack(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
@@ -1757,7 +1935,7 @@ static void apply_filter_keytrack(float v)
     }
 
     mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
     if (state != NULL)
     {
         state->keytrack = filter_ui127_clamp(v);
@@ -1766,18 +1944,13 @@ static void apply_filter_keytrack(float v)
 
 static void apply_filter_env_reset(float v)
 {
-    uint32_t target_track = 0U;
-    if (!resolve_filter_target_track(&target_track))
-    {
-        return;
-    }
     if (filter_mod_locked_for_active_track() != 0U)
     {
         param_store_set_active(PARAM_FILTER_ENVRST, 0.0f);
         return;
     }
 
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(ui_get_active_track());
     if (state != NULL)
     {
         state->env_reset = filter_ui127_to_bool(v) ? 1.0f : 0.0f;
@@ -1786,18 +1959,13 @@ static void apply_filter_env_reset(float v)
 
 static void apply_filter_env_delay(float v)
 {
-    uint32_t target_track = 0U;
-    if (!resolve_filter_target_track(&target_track))
-    {
-        return;
-    }
     if (filter_mod_locked_for_active_track() != 0U)
     {
         param_store_set_active(PARAM_FILTER_ENVDLY, 0.0f);
         return;
     }
 
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(ui_get_active_track());
     if (state != NULL)
     {
         state->env_delay = filter_ui127_clamp(v);
@@ -1806,121 +1974,143 @@ static void apply_filter_env_delay(float v)
 
 static void apply_filter_eq_low(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->eq_low = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_eq_low(target_track, filter_eq_ui127_to_db(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->eq_low = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_eq_mid(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->eq_mid = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_eq_mid(target_track, filter_eq_ui127_to_db(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->eq_mid = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_eq_high(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    if (state != NULL)
+    {
+        state->eq_high = filter_ui127_clamp(v);
+    }
+
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
     {
         return;
     }
     mixer_set_track_filter_eq_high(target_track, filter_eq_ui127_to_db(v));
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
-    if (state != NULL)
-    {
-        state->eq_high = filter_ui127_clamp(v);
-    }
 }
 
 static void apply_filter_drive(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    const float drive_ui = clamp_value(v, 0.0f, 127.0f);
+    if (state != NULL)
+    {
+        state->drive = drive_ui;
+    }
+
     uint32_t target_track = 0U;
-    if (!resolve_filter_drive_target_track_for_ui_track(ui_get_active_track(), &target_track))
+    if (!resolve_filter_drive_target_track_for_ui_track(active_track, &target_track))
     {
         return;
     }
 
-    const float drive_ui = clamp_value(v, 0.0f, 127.0f);
     apply_filter_drive_runtime(target_track, drive_ui);
-
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
     {
-        state->drive = drive_ui;
         apply_filter_crunch_insert_runtime(target_track, state);
     }
 }
 
 static void apply_filter_decimator_bits(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    const float bits_ui = clamp_value(v, 0.0f, 127.0f);
+    if (state != NULL)
+    {
+        state->decimator_bits = bits_ui;
+    }
+
     uint32_t target_track = 0U;
-    if (!resolve_filter_drive_target_track_for_ui_track(ui_get_active_track(), &target_track))
+    if (!resolve_filter_drive_target_track_for_ui_track(active_track, &target_track))
     {
         return;
     }
 
-    const float bits_ui = clamp_value(v, 0.0f, 127.0f);
     apply_filter_decimator_bits_runtime(target_track, bits_ui);
-
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
     {
-        state->decimator_bits = bits_ui;
         apply_filter_crunch_insert_runtime(target_track, state);
     }
 }
 
 static void apply_filter_decimator_rate(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    const float rate_ui = clamp_value(v, 0.0f, 127.0f);
+    if (state != NULL)
+    {
+        state->decimator_rate = rate_ui;
+    }
+
     uint32_t target_track = 0U;
-    if (!resolve_filter_drive_target_track_for_ui_track(ui_get_active_track(), &target_track))
+    if (!resolve_filter_drive_target_track_for_ui_track(active_track, &target_track))
     {
         return;
     }
 
-    const float rate_ui = clamp_value(v, 0.0f, 127.0f);
     apply_filter_decimator_rate_runtime(target_track, rate_ui);
-
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
     {
-        state->decimator_rate = rate_ui;
         apply_filter_crunch_insert_runtime(target_track, state);
     }
 }
 
 static void apply_filter_decimator_rate2(float v)
 {
+    const uint8_t active_track = ui_get_active_track();
+    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
+    const float rate_ui = clamp_value(v, 0.0f, 127.0f);
+    if (state != NULL)
+    {
+        state->decimator_rate2 = rate_ui;
+    }
+
     uint32_t target_track = 0U;
-    if (!resolve_filter_drive_target_track_for_ui_track(ui_get_active_track(), &target_track))
+    if (!resolve_filter_drive_target_track_for_ui_track(active_track, &target_track))
     {
         return;
     }
 
-    const float rate_ui = clamp_value(v, 0.0f, 127.0f);
     apply_filter_decimator_rate2_runtime(target_track, rate_ui);
-
-    filter_ui_state_t *state = resolve_filter_ui_state(target_track);
     if (state != NULL)
     {
-        state->decimator_rate2 = rate_ui;
         apply_filter_crunch_insert_runtime(target_track, state);
     }
 }
@@ -1960,38 +2150,6 @@ static void apply_lfo2_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_a
 static void apply_lfo2_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_RATE, v); }
 static void apply_lfo2_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEPTH, v); }
 static void apply_lfo2_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_SHAPE, v); }
-
-static void param_registry_push_track_defaults_to_runtime(uint8_t track)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    track_runtime_refresh_track(track);
-
-    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
-    {
-        const param_id_t id = (param_id_t)raw_id;
-        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-        if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-                || ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
-                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-                    && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)))
-        {
-            continue;
-        }
-
-        float value = 0.0f;
-        if (param_registry_get_track_value(id, track, &value) == 0U)
-        {
-            continue;
-        }
-
-        (void)param_registry_apply_track_value(id, track, value);
-    }
-}
 
 static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
 {
@@ -2059,7 +2217,10 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
 static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
+    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
     const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
+
+    param_registry_capture_mix_targets(previous_mix_tracks);
 
     if (ui_set_track_family(active_track, requested_family) == false)
     {
@@ -2070,18 +2231,22 @@ static void apply_cfg_track(float v)
 
     param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+    param_registry_rebind_lane_runtime(previous_mix_tracks);
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_neutralize_vca_runtime_if_invalid(active_track);
-    param_registry_push_track_defaults_to_runtime(active_track);
+    param_registry_reapply_lane_bound_runtime_for_all_tracks();
 }
 
 static void apply_cfg_track_type(float v)
 {
     g_param_cfg_track_type_apply_stage = 1U;
     const uint8_t active_track = ui_get_active_track();
+    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
     const ui_track_family_t active_family = ui_get_track_family(active_track);
     const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
     const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
+
+    param_registry_capture_mix_targets(previous_mix_tracks);
     g_param_cfg_track_type_apply_stage = 2U;
 
     if (ui_set_track_type(active_track, requested_type) == false)
@@ -2092,9 +2257,10 @@ static void apply_cfg_track_type(float v)
     }
 
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+    param_registry_rebind_lane_runtime(previous_mix_tracks);
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_neutralize_vca_runtime_if_invalid(active_track);
-    param_registry_push_track_defaults_to_runtime(active_track);
+    param_registry_reapply_lane_bound_runtime_for_all_tracks();
     g_param_cfg_track_type_apply_stage = 4U;
 }
 
@@ -2553,7 +2719,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
     PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_seq_div_labels, apply_seq_div),
-    PARAM_DESC_EX(PARAM_SEQ_QUANT, "QUANT", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_quant),
+    PARAM_DESC_EX(PARAM_SEQ_QUANT, "QUANT", PARAM_TYPE_INT, 0.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "%", NULL, apply_seq_quant),
     PARAM_DESC_EX(PARAM_SEQ_SWING, "SWING", PARAM_TYPE_INT, 0.0f, 100.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "%", NULL, apply_seq_swing),
 
     PARAM_DESC_EX(PARAM_SEQ_PLAY_V1_NOTE, "NOTE", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 60.0f, PARAM_DISPLAY_INT, "", NULL, NULL),

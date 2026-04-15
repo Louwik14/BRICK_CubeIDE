@@ -150,3 +150,9 @@ Sorties de Z2:
 - Hors perimetre passe 2:
   - emission Program Change (live/start transport/changement pattern/plock conditionnel) non implementee,
   - dependance explicite a un chantier separe Z3/Z4 (parametres MIDI Program/CC + sequencing conditionnel).
+
+## 12. Contrat de stabilite mix-target (runtime)
+- `track_runtime_refresh_all` preserve prioritairement le `mix_track_id` precedent de chaque track quand la lane reste disponible.
+- Les lanes fixes Input (`Input1..Input3`) restent prioritaires, mais la reallocation des autres tracks vise a minimiser les deplacements inutiles.
+- Objectif contractuel: limiter les rebinding de lane qui cassent la continuite runtime per-lane (MIX/VCA/sends/COLORS) lors des changements family/type.
+- Lorsqu'un rebind de lane reste necessaire, la migration/reconciliation du runtime per-lane est une etape explicite aval; Z2 ne garantit pas a lui seul la coherence du state DSP si cette passe n'est pas executee.

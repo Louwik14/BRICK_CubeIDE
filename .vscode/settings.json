@@ -1,3 +1,25 @@
 {
-  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Release/compile_commands.json"
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Release/compile_commands.json",
+  "VsCodeTaskButtons.tasks": [
+    {
+      "label": "$(gear) Build Release",
+      "task": "Build Release"
+    },
+    {
+      "label": "$(arrow-up) Flash Release",
+      "task": "Flash Release"
+    },
+    {
+      "label": "$(trash) Clean Release",
+      "task": "Clean Release"
+    },
+    {
+      "label": "$(tools) Configure Debug",
+      "task": "Configure Debug"
+    },
+    {
+      "label": "$(debug) Debug",
+      "task": "Debug"
+    }
+  ]
 }

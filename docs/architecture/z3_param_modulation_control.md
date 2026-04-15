@@ -77,6 +77,7 @@ Familles d'autorite:
 - `PARAM_LFO*` = params de config modulation, pas params runtime directs.
 - `param_registry_apply_track_value_rt_fast` reserve a la modulation RT.
 - Release LFO doit restaurer la base (et non la derniere valeur modulee).
+- Pour `PARAM_FILTER_TYPE`, un re-apply de la meme valeur effective ne doit pas provoquer de reset DSP audible: la cible runtime mixer est idempotente sur type identique.
 - `param_store.active[]`:
   - global-only: verite runtime.
   - track-scoped UI: miroir UI.
@@ -151,3 +152,9 @@ Familles d'autorite:
   - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
   - `CC`: emission directe `midi_cc`.
 - Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.
+
+## 13. Contrat LFO COLORS + rebind MIX (runtime)
+- `param_registry_apply_track_value_rt_fast` est autorite d'application pour LFO sur `PARAM_FILTER_*` (COLORS mixer), pas uniquement pour COLORS engine-specifiques.
+- Le chemin RT fast applique `PARAM_FILTER_*` sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
+- Le shadow-state `PARAM_FILTER_*` porte la base par track logique, jamais par lane mixer physique.
+- Lors d'un changement `CFG_TRACK`/`CFG_TRACK_TYPE`, Z3 migre d'abord le runtime per-lane (MIX/FILTER/VCA) selon le rebind des mix lanes, puis reapplique explicitement tous les params lane-bound track-aware (`FILTER_*`, `level/pan/sends/hybrid_gate/vca`) pour recoller le runtime a l'autorite logique.

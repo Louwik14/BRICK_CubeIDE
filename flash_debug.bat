@@ -16,8 +16,7 @@ set "OPENOCD=C:\openocd\OpenOCD-20250710-0.12.0\bin\openocd.exe"
 REM ------------------------------------------------------------
 REM  ELF CubeIDE
 REM ------------------------------------------------------------
-set "ELF=C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6_CUBE_fonctionnel\Debug1\BRICK6_CUBE.elf"
-
+set "ELF=C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\build\Debug\BRICK6_CUBE.elf"
 REM ------------------------------------------------------------
 REM  Flash
 REM ------------------------------------------------------------

@@ -72,6 +72,30 @@ static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY);
 }
 
+static void pattern_live_plock_set_value16(pattern_v1_plock_t *plock, seq_value16_t value16)
+{
+    if (plock == 0)
+    {
+        return;
+    }
+
+    uint8_t *const dst = (uint8_t *)&plock->value16;
+    dst[0] = (uint8_t)(value16 & 0xFFu);
+    dst[1] = (uint8_t)((value16 >> 8) & 0xFFu);
+}
+
+static seq_value16_t pattern_live_plock_get_value16(const pattern_v1_plock_t *plock)
+{
+    if (plock == 0)
+    {
+        return 0U;
+    }
+
+    const uint8_t *const src = (const uint8_t *)&plock->value16;
+    return (seq_value16_t)((seq_value16_t)src[0]
+                         | (seq_value16_t)((seq_value16_t)src[1] << 8));
+}
+
 static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -265,7 +289,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
 
                 out_step->locks[i].set_id = entry.set_id;
                 out_step->locks[i].param8 = entry.param8;
-                out_step->locks[i].value16 = entry.value16;
+                pattern_live_plock_set_value16(&out_step->locks[i], entry.value16);
                 out_step->locks[i].flags = entry.flags;
             }
         }
@@ -345,7 +369,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         uint8_t div = 1U;
-        uint8_t quant = 1U;
+        uint8_t quant = 0U;
         uint8_t swing = 0U;
         (void)seq_runtime_get_track_div(track, &div);
         (void)seq_runtime_get_track_quant(track, &quant);
@@ -400,7 +424,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
                                                                                  step,
                                                                                  pl->set_id,
                                                                                  pl->param8,
-                                                                                 pl->value16,
+                                                                                 pattern_live_plock_get_value16(pl),
                                                                                  pl->flags);
                 if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
                 {

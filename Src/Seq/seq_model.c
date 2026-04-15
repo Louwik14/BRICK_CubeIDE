@@ -9,12 +9,28 @@
 
 #include <string.h>
 
+#include "stm32h7xx_hal.h"
 #include "Storage/memory_layout.h"
 #include "Seq/seq_param_iface.h"
 
 #define SEQ_LOCK_NONE 0xFFFFU
 
 SEQ_STATE_D2 static seq_project_data_t g_seq_project;
+
+static uint32_t seq_model_enter_critical(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+static void seq_model_exit_critical(uint32_t primask)
+{
+    if (primask == 0U)
+    {
+        __enable_irq();
+    }
+}
 
 static uint8_t seq_model_track_is_valid(seq_track_id_t track)
 {
@@ -101,8 +117,14 @@ static uint16_t seq_model_find_lock_idx(seq_track_id_t track,
 
     uint16_t prev = SEQ_LOCK_NONE;
     uint16_t idx = step->lock_head;
+    uint16_t guard = 0U;
     while (idx != SEQ_LOCK_NONE)
     {
+        if (guard++ >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            break;
+        }
+
         if (idx >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
         {
             break;
@@ -130,8 +152,14 @@ static uint8_t seq_model_compute_step_mask(seq_track_id_t track, const seq_step_
     uint8_t mask = 0U;
 
     uint16_t idx = step->lock_head;
+    uint16_t guard = 0U;
     while (idx != SEQ_LOCK_NONE)
     {
+        if (guard++ >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            break;
+        }
+
         if (idx >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
         {
             break;
@@ -261,7 +289,9 @@ void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step)
     }
 
     seq_step_t *const s = &g_seq_project.tracks[track].steps[step];
+    const uint32_t primask = seq_model_enter_critical();
     s->trig = (s->trig == 0U) ? 1U : 0U;
+    seq_model_exit_critical(primask);
 }
 
 void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
@@ -271,7 +301,9 @@ void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
         return;
     }
 
+    const uint32_t primask = seq_model_enter_critical();
     g_seq_project.tracks[track].steps[step].trig = (trig != 0U) ? 1U : 0U;
+    seq_model_exit_critical(primask);
 }
 
 uint8_t seq_model_get_track_page(seq_track_id_t track)
@@ -384,22 +416,27 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         return SEQ_PLOCK_OP_SET_NOT_PLOCKABLE;
     }
 
+    const uint32_t primask = seq_model_enter_critical();
+
     const uint16_t existing_idx = seq_model_find_lock_idx(track, s, set_id, param8, 0);
     if (existing_idx != SEQ_LOCK_NONE)
     {
         g_seq_project.pool[track][existing_idx].value16 = value16;
         g_seq_project.pool[track][existing_idx].flags = flags;
+        seq_model_exit_critical(primask);
         return SEQ_PLOCK_OP_UPDATED;
     }
 
     if (s->lock_count >= SEQ_STEP_MAX_LOCKS)
     {
+        seq_model_exit_critical(primask);
         return SEQ_PLOCK_OP_STEP_FULL;
     }
 
     const uint16_t new_idx = seq_model_alloc_lock_node(track);
     if (new_idx == SEQ_LOCK_NONE)
     {
+        seq_model_exit_critical(primask);
         return SEQ_PLOCK_OP_POOL_EMPTY;
     }
 
@@ -415,6 +452,7 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     s->lock_count++;
     s->lock_set_mask |= seq_param_iface_set_to_mask(set_id);
 
+    seq_model_exit_critical(primask);
     return SEQ_PLOCK_OP_CREATED;
 }
 
@@ -429,10 +467,12 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
         return SEQ_PLOCK_OP_INVALID;
     }
 
+    const uint32_t primask = seq_model_enter_critical();
     uint16_t prev = SEQ_LOCK_NONE;
     const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param8, &prev);
     if (idx == SEQ_LOCK_NONE)
     {
+        seq_model_exit_critical(primask);
         return SEQ_PLOCK_OP_NOT_FOUND;
     }
 
@@ -454,6 +494,7 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
     s->lock_set_mask = seq_model_compute_step_mask(track, s);
     seq_model_free_lock_node(track, idx);
 
+    seq_model_exit_critical(primask);
     return SEQ_PLOCK_OP_DELETED;
 }
 
@@ -465,6 +506,7 @@ void seq_model_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
         return;
     }
 
+    const uint32_t primask = seq_model_enter_critical();
     uint16_t idx = s->lock_head;
     while (idx != SEQ_LOCK_NONE)
     {
@@ -481,6 +523,7 @@ void seq_model_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
     s->lock_head = SEQ_LOCK_NONE;
     s->lock_count = 0U;
     s->lock_set_mask = 0U;
+    seq_model_exit_critical(primask);
 }
 
 uint8_t seq_model_step_plock_count(seq_track_id_t track, seq_step_id_t step)
@@ -507,8 +550,14 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
 
     uint8_t index = 0U;
     uint16_t idx = s->lock_head;
+    uint16_t guard = 0U;
     while (idx != SEQ_LOCK_NONE)
     {
+        if (guard++ >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            return 0U;
+        }
+
         if (idx >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
         {
             return 0U;

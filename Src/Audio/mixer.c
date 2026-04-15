@@ -98,6 +98,7 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 #define MIXER_REVERB_SEND_INDEX 0U
 #define MIXER_REVERB_PREDELAY_MAX_S 0.090f
 #define MIXER_REVERB_SURROUND_MAX_S 0.018f
+#define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
 
 typedef struct
 {
@@ -173,14 +174,14 @@ static float mixer_track_filter_resonance_to_biquad_q(float resonance)
     return 0.70710678f + (clamped * 11.29289322f);
 }
 
-static uint16_t mixer_track_filter_time_s_to_peaks(float time_s)
+static uint16_t mixer_track_filter_time_s_to_peaks(float time_s, float sample_rate)
 {
     const float clamped = clampf_local(time_s, MIXER_FILTER_ATTACK_MIN_S, MIXER_FILTER_ATTACK_MAX_S);
-    const float min_s = MIXER_FILTER_ATTACK_MIN_S;
-    const float max_s = MIXER_FILTER_ATTACK_MAX_S;
-    const float ratio = max_s / min_s;
-    const float t = logf(clamped / min_s) / logf(ratio);
-    const float scaled = clampf_local(t, 0.0f, 1.0f) * 65535.0f;
+    const float sr = (sample_rate > 1.0f) ? sample_rate : MIXER_FILTER_SAMPLE_RATE_DEFAULT;
+    const float max_segment_samples = sr * MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS;
+    const float desired_samples = clampf_local(clamped * sr, 1.0f, max_segment_samples);
+    const float normalized = cbrtf((desired_samples - 1.0f) / max_segment_samples);
+    const float scaled = clampf_local(normalized, 0.0f, 1.0f) * 65535.0f;
     return (uint16_t)(scaled + 0.5f);
 }
 
@@ -262,18 +263,92 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
 
     env_adsr_init(&filter->filter_env, filter->sample_rate);
-    env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f));
-    env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f));
+    env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f, filter->sample_rate));
+    env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
     env_adsr_set_sustain(&filter->filter_env, mixer_track_filter_sustain_to_peaks(1.0f));
-    env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f));
+    env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
     env_adsr_init(&filter->vca_env, filter->sample_rate);
-    env_adsr_set_attack(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f));
-    env_adsr_set_decay(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f));
+    env_adsr_set_attack(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
+    env_adsr_set_decay(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
     env_adsr_set_sustain(&filter->vca_env, mixer_track_filter_sustain_to_peaks(1.0f));
-    env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f));
+    env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
     env_adsr_reset(&filter->vca_env);
 
     mixer_track_filter_reset_dsp(filter);
+}
+
+static void mixer_track_state_reset(mixer_track_t *track)
+{
+    if (track == NULL)
+    {
+        return;
+    }
+
+    track->gain = 1.0f;
+    track->pan = 0.0f;
+    track->gain_current = 1.0f;
+    track->pan_current = 0.0f;
+    track->mute = 0U;
+    track->route_master = 1U;
+    track->route_cue = 0U;
+
+    for (uint32_t i = 0U; i < MIXER_INSERTS_PER_TRACK; ++i)
+    {
+        track->insert_slot[i] = -1;
+    }
+
+    for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+    {
+        track->send_level[s] = 0.0f;
+        track->send_level_current[s] = 0.0f;
+    }
+}
+
+void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
+                               const uint8_t *next_mix_tracks,
+                               uint32_t track_count)
+{
+    static mixer_track_t previous_tracks[MIXER_MAX_TRACKS];
+    static mixer_track_filter_t previous_filters[MIXER_MAX_TRACKS];
+
+    if ((previous_mix_tracks == NULL) || (next_mix_tracks == NULL))
+    {
+        return;
+    }
+
+    if (track_count > MIXER_MAX_TRACKS)
+    {
+        track_count = MIXER_MAX_TRACKS;
+    }
+
+    memcpy(previous_tracks, g_tracks, sizeof(previous_tracks));
+    memcpy(previous_filters, g_track_filters, sizeof(previous_filters));
+
+    for (uint32_t lane = 0U; lane < MIXER_MAX_TRACKS; ++lane)
+    {
+        mixer_track_state_reset(&g_tracks[lane]);
+        mixer_track_filter_init(&g_track_filters[lane], previous_filters[lane].sample_rate);
+    }
+
+    for (uint32_t track = 0U; track < track_count; ++track)
+    {
+        const uint8_t next_mix = next_mix_tracks[track];
+        if (next_mix >= MIXER_MAX_TRACKS)
+        {
+            continue;
+        }
+
+        const uint8_t previous_mix = previous_mix_tracks[track];
+        if (previous_mix >= MIXER_MAX_TRACKS)
+        {
+            continue;
+        }
+
+        g_tracks[next_mix] = previous_tracks[previous_mix];
+        g_track_filters[next_mix] = previous_filters[previous_mix];
+    }
+
+    mixer_external_inputs_clear();
 }
 
 static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
@@ -695,9 +770,14 @@ void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t ty
     if(type > MIXER_TRACK_FILTER_BP_BI)
         type = MIXER_TRACK_FILTER_BP_BI;
 
-    g_track_filters[track_id].type = (uint8_t)type;
+    mixer_track_filter_t *filter = &g_track_filters[track_id];
+    if(filter->type == (uint8_t)type)
+    {
+        return;
+    }
 
-    mixer_track_filter_reset_dsp(&g_track_filters[track_id]);
+    filter->type = (uint8_t)type;
+    mixer_track_filter_apply_core_params(filter);
 }
 
 void mixer_set_track_filter_cutoff(uint32_t track_id, float cutoff_hz)
@@ -732,7 +812,7 @@ void mixer_set_track_filter_attack(uint32_t track_id, float attack_s)
         return;
 
     env_adsr_set_attack(&g_track_filters[track_id].filter_env,
-                        mixer_track_filter_time_s_to_peaks(attack_s));
+                        mixer_track_filter_time_s_to_peaks(attack_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_filter_decay(uint32_t track_id, float decay_s)
@@ -741,7 +821,7 @@ void mixer_set_track_filter_decay(uint32_t track_id, float decay_s)
         return;
 
     env_adsr_set_decay(&g_track_filters[track_id].filter_env,
-                       mixer_track_filter_time_s_to_peaks(decay_s));
+                       mixer_track_filter_time_s_to_peaks(decay_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_filter_sustain(uint32_t track_id, float sustain)
@@ -759,7 +839,7 @@ void mixer_set_track_filter_release(uint32_t track_id, float release_s)
         return;
 
     env_adsr_set_release(&g_track_filters[track_id].filter_env,
-                         mixer_track_filter_time_s_to_peaks(release_s));
+                         mixer_track_filter_time_s_to_peaks(release_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_filter_keytrack(uint32_t track_id, float amount)
@@ -832,7 +912,7 @@ void mixer_set_track_vca_attack(uint32_t track_id, float attack_s)
         return;
 
     env_adsr_set_attack(&g_track_filters[track_id].vca_env,
-                        mixer_track_filter_time_s_to_peaks(attack_s));
+                        mixer_track_filter_time_s_to_peaks(attack_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
@@ -841,7 +921,7 @@ void mixer_set_track_vca_decay(uint32_t track_id, float decay_s)
         return;
 
     env_adsr_set_decay(&g_track_filters[track_id].vca_env,
-                       mixer_track_filter_time_s_to_peaks(decay_s));
+                       mixer_track_filter_time_s_to_peaks(decay_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_vca_sustain(uint32_t track_id, float sustain)
@@ -859,7 +939,7 @@ void mixer_set_track_vca_release(uint32_t track_id, float release_s)
         return;
 
     env_adsr_set_release(&g_track_filters[track_id].vca_env,
-                         mixer_track_filter_time_s_to_peaks(release_s));
+                         mixer_track_filter_time_s_to_peaks(release_s, g_track_filters[track_id].sample_rate));
 }
 
 void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)

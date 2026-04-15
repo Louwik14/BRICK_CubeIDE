@@ -323,10 +323,13 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Defines
 # --------------------------------------------------------------------------
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    DEBUG
     USE_PWR_LDO_SUPPLY
     USE_HAL_DRIVER
     STM32H743xx
+)
+
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Debug>:DEBUG>
 )
 
 # --------------------------------------------------------------------------
@@ -342,18 +345,21 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wall
     --specs=nano.specs
 
-    $<$<COMPILE_LANGUAGE:C>:-O1>
-    $<$<COMPILE_LANGUAGE:C>:-fno-math-errno>
-    $<$<COMPILE_LANGUAGE:C>:-ffast-math>
-    $<$<COMPILE_LANGUAGE:C>:-fsingle-precision-constant>
+    $<$<CONFIG:Debug>:-Og>
+    $<$<CONFIG:Release>:-O2>
+
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-fno-math-errno>
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-ffast-math>
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-fsingle-precision-constant>
     $<$<COMPILE_LANGUAGE:C>:-fstack-usage>
 
-    $<$<COMPILE_LANGUAGE:CXX>:-O3>
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-fno-math-errno>
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-ffast-math>
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-fsingle-precision-constant>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-use-cxa-atexit>
-    $<$<COMPILE_LANGUAGE:CXX>:-ffast-math>
     $<$<COMPILE_LANGUAGE:CXX>:-fstack-usage>
 )
 # Audio en O3 : seulement les fichiers C du dossier Src/Audio
@@ -363,7 +369,7 @@ set(AUDIO_C_SOURCES
 
 list(FILTER AUDIO_C_SOURCES INCLUDE REGEX ".*\\.c$")
 
-set_source_files_properties(${AUDIO_C_SOURCES} PROPERTIES COMPILE_OPTIONS "-O3")
+set_source_files_properties(${AUDIO_C_SOURCES} PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>")
 # --------------------------------------------------------------------------
 # Link options aligned with CubeIDE
 # --------------------------------------------------------------------------
@@ -378,7 +384,6 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wl,-Map=${CMAKE_PROJECT_NAME}.map
     -Wl,--gc-sections
     -static
-    -flto
     -u
     _printf_float
     -Wl,--start-group
@@ -387,6 +392,10 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -lstdc++
     -lsupc++
     -Wl,--end-group
+)
+
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Release>:-flto>
 )
 
 # C++ linker because project contains cpp files

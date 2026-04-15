@@ -951,7 +951,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if ((htim != NULL) && (htim->Instance == TIM12)) {
-    /* Internal seq clock authority (TIM12 cadence path). */
+    /* Internal seq clock cadence tick source (runtime core runs in superloop). */
     seq_runtime_time_adapter_process_internal_from_irq();
   }
 }

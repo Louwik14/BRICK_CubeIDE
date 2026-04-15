@@ -17,8 +17,21 @@ static uint32_t phase_increment_from_time(const env_adsr_peaks_t *env, uint16_t 
 {
     const uint64_t x = (uint64_t)time;
     const uint64_t x3 = x * x * x;
-    const uint32_t duration_samples = 1u
-            + (uint32_t)((x3 * (uint64_t)env->max_segment_samples) >> 48);
+    uint32_t scaled = 0u;
+#if defined(__SIZEOF_INT128__)
+    const __uint128_t scaled_wide = ((__uint128_t)x3 * (__uint128_t)env->max_segment_samples) >> 48;
+    scaled = (scaled_wide > (__uint128_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)scaled_wide;
+#else
+    /* Fallback without 128-bit arithmetic: keep cubic law monotonic and overflow-safe. */
+    const double t = (double)time * (1.0 / 65535.0);
+    const double shaped = t * t * t;
+    const double wide = shaped * (double)env->max_segment_samples;
+    if(wide > (double)UINT32_MAX)
+        scaled = UINT32_MAX;
+    else if(wide > 0.0)
+        scaled = (uint32_t)wide;
+#endif
+    const uint32_t duration_samples = 1u + scaled;
 
     if(duration_samples <= 1u)
         return ENV_ADSR_PHASE_MAX;

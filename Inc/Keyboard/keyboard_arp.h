@@ -30,6 +30,7 @@ void keyboard_arp_set_dir(uint8_t value);
 void keyboard_arp_set_sync(uint8_t value);
 
 void keyboard_arp_on_mode_enter(void);
+void keyboard_arp_on_mode_enter_silent(void);
 void keyboard_arp_on_mode_leave(void);
 void keyboard_arp_on_mode_leave_silent(void);
 void keyboard_arp_clear_state_silent(void);

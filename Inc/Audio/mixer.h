@@ -92,6 +92,9 @@ void mixer_track_vca_all_notes_off(uint32_t track_id);
 void mixer_track_filter_note_on(uint32_t track_id, uint8_t midi_note, uint8_t velocity);
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note);
 void mixer_track_filter_all_notes_off(uint32_t track_id);
+void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
+                               const uint8_t *next_mix_tracks,
+                               uint32_t track_count);
 void mixer_external_inputs_clear(void);
 void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
 

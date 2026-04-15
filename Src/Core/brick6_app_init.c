@@ -140,9 +140,8 @@ void brick6_app_process(void)
 {
     engine_tasklet_poll();
     /*
-     * Seq time adapter is intentionally kept in superloop for EXTERNAL clock path.
-     * INTERNAL clock path is driven from TIM12 IRQ via
-     * seq_runtime_time_adapter_process_internal_from_irq() (see midi.c).
+     * Seq runtime core is serviced from superloop for both clock domains.
+     * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
     pattern_live_service();
