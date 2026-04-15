@@ -98,6 +98,10 @@ file(GLOB SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.cpp"
 )
 
+list(APPEND SRC_AUDIO_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
+)
+
 file(GLOB SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.cpp"
