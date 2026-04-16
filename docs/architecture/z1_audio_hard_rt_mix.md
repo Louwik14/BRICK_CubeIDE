@@ -11,6 +11,9 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_float.c` et `Inc/Audio/audio_float.h` : frontiere IRQ `int24 <-> float`, ownership des buffers track et callback DSP.
 - `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
+- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
+- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend mono minimal du Sampler branche sur le point d'insertion unique, en lecture depuis le pool resident.
+- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
 - `Src/Core/brick6_master_buffer.c` + `Inc/Core/brick6_master_buffer.h` : preuve du branchement bloc debut/fin et read playback dans pipeline.

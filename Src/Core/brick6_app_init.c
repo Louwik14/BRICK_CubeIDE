@@ -34,6 +34,7 @@
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
 #include "brick6_recorder_runtime.h"
+#include "brick6_sampler_runtime.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_v1.h"
@@ -45,7 +46,7 @@
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
 
-static AUDIO_COLD_SDRAM float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
+SDRAM_RECORDER static float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
 
 
@@ -94,6 +95,7 @@ void brick6_app_init(void)
     hall_keyboard_bridge_init();
 
     brick6_sampler_bootstrap_init_voices();
+    brick6_sampler_runtime_init();
 
     mixer_set_master(0.0f);
 

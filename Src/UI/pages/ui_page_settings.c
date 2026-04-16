@@ -6,6 +6,8 @@
 #include "stm32h7xx_hal.h"
 #include "buttons_ids.h"
 #include "Storage/project_v1.h"
+#include "Sampler/sample_pool.h"
+#include "Storage/wav_loader.h"
 #include "drv_display.h"
 #include "ui_page_manager.h"
 
@@ -33,6 +35,9 @@ typedef enum
 {
     UI_SETTINGS_VIEW_ROOT = 0,
     UI_SETTINGS_VIEW_PROJECT,
+    UI_SETTINGS_VIEW_SAMPLER,
+    UI_SETTINGS_VIEW_SAMPLER_SLOT,
+    UI_SETTINGS_VIEW_SAMPLER_CATALOG,
     UI_SETTINGS_VIEW_PROJECT_LOAD,
     UI_SETTINGS_VIEW_PROJECT_SAVE_AS,
     UI_SETTINGS_VIEW_PROJECT_MANAGE,
@@ -50,6 +55,13 @@ typedef enum
     UI_SETTINGS_MANAGE_ACTION_COUNT
 } ui_settings_manage_action_t;
 
+typedef enum
+{
+    UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE = 0,
+    UI_SETTINGS_SAMPLER_ACTION_CLEAR,
+    UI_SETTINGS_SAMPLER_ACTION_COUNT
+} ui_settings_sampler_action_t;
+
 typedef struct
 {
     ui_settings_view_t view;
@@ -66,6 +78,8 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
+    uint8_t sampler_slots[SAMPLE_POOL_SIZE];
+    uint8_t sampler_slot_count;
     uint8_t project_slots[PROJECT_V1_SLOT_COUNT];
     uint8_t project_slot_count;
     uint8_t return_page_id;
@@ -82,6 +96,15 @@ static void ui_page_settings_refresh_project_slots(void)
     g_ui_settings.project_slot_count = project_v1_list_slots(g_ui_settings.project_slots, PROJECT_V1_SLOT_COUNT);
 }
 
+static void ui_page_settings_refresh_sampler_slots(void)
+{
+    for (uint8_t i = 0U; i < SAMPLE_POOL_SIZE; ++i)
+    {
+        g_ui_settings.sampler_slots[i] = i;
+    }
+    g_ui_settings.sampler_slot_count = SAMPLE_POOL_SIZE;
+}
+
 static const char *ui_page_settings_view_title(ui_settings_view_t view)
 {
     switch (view)
@@ -90,6 +113,12 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "SETTINGS";
         case UI_SETTINGS_VIEW_PROJECT:
             return "PROJECT";
+        case UI_SETTINGS_VIEW_SAMPLER:
+            return "SAMPLER";
+        case UI_SETTINGS_VIEW_SAMPLER_SLOT:
+            return "SAMPLER > SLOT";
+        case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
+            return "SAMPLER > SD";
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
             return "PROJECT > LOAD";
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
@@ -108,9 +137,15 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return 1U;
+            return 2U;
         case UI_SETTINGS_VIEW_PROJECT:
             return 3U;
+        case UI_SETTINGS_VIEW_SAMPLER:
+            return g_ui_settings.sampler_slot_count;
+        case UI_SETTINGS_VIEW_SAMPLER_SLOT:
+            return (uint8_t)UI_SETTINGS_SAMPLER_ACTION_COUNT;
+        case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
+            return wav_loader_catalog_count();
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
             return g_ui_settings.project_slot_count;
@@ -129,7 +164,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return "PROJECT";
+            return (index == 0U) ? "PROJECT" : "SAMPLER";
         case UI_SETTINGS_VIEW_PROJECT:
             if (index == 0U)
             {
@@ -158,6 +193,44 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)index);
             }
             return out;
+        case UI_SETTINGS_VIEW_SAMPLER:
+            if (index >= g_ui_settings.sampler_slot_count)
+            {
+                return "-";
+            }
+            {
+                const sample_pool_slot_state_t state = sample_pool_get_state(g_ui_settings.sampler_slots[index]);
+                const char *state_label = "EMPTY";
+                if (state == SAMPLE_POOL_SLOT_LOADED)
+                {
+                    state_label = "LOADED";
+                }
+                else if (state == SAMPLE_POOL_SLOT_MISSING)
+                {
+                    state_label = "MISSING";
+                }
+                (void)snprintf(out, out_size, "SLOT %02u [%s]", (unsigned)g_ui_settings.sampler_slots[index], state_label);
+                return out;
+            }
+        case UI_SETTINGS_VIEW_SAMPLER_SLOT:
+            if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE)
+            {
+                return (sample_pool_get_state(g_ui_settings.selected_slot) == SAMPLE_POOL_SLOT_EMPTY) ? "LOAD FROM SD" : "REPLACE FROM SD";
+            }
+            if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
+            {
+                return "CLEAR";
+            }
+            return "-";
+        case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
+            {
+                const wav_loader_catalog_entry_t *entry = wav_loader_catalog_get(index);
+                if (entry == 0)
+                {
+                    return "-";
+                }
+                return entry->name;
+            }
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             if (index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
             {
@@ -238,7 +311,15 @@ static void ui_page_settings_apply_action(void)
     switch (level->view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
+            if (level->selected_index == 0U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
+            }
+            else
+            {
+                ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
+            }
             break;
 
         case UI_SETTINGS_VIEW_PROJECT:
@@ -348,6 +429,53 @@ static void ui_page_settings_apply_action(void)
             }
             break;
 
+        case UI_SETTINGS_VIEW_SAMPLER:
+            if (level->selected_index < g_ui_settings.sampler_slot_count)
+            {
+                g_ui_settings.selected_slot = g_ui_settings.sampler_slots[level->selected_index];
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER_SLOT);
+            }
+            break;
+
+        case UI_SETTINGS_VIEW_SAMPLER_SLOT:
+            if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE)
+            {
+                if (wav_loader_catalog_count() != 0U)
+                {
+                    ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER_CATALOG);
+                }
+                else
+                {
+                    ui_page_settings_status("NO WAV");
+                }
+            }
+            else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
+            {
+                sample_pool_clear(g_ui_settings.selected_slot);
+                ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_status("CLEAR OK");
+            }
+            break;
+
+        case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
+            if (level->selected_index < wav_loader_catalog_count())
+            {
+                const wav_loader_catalog_entry_t *entry = wav_loader_catalog_get(level->selected_index);
+                if ((entry != 0) && (entry->state == WAV_LOADER_CATALOG_READY))
+                {
+                    if (sample_pool_load(g_ui_settings.selected_slot, entry->path) != 0U)
+                    {
+                        ui_page_settings_refresh_sampler_slots();
+                        ui_page_settings_status("LOAD SD OK");
+                    }
+                    else
+                    {
+                        ui_page_settings_status("LOAD SD FAIL");
+                    }
+                }
+            }
+            break;
+
         default:
             break;
     }
@@ -357,12 +485,14 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
+    g_ui_settings.sampler_slot_count = 0U;
     g_ui_settings.project_slot_count = 0U;
     for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
     {
         g_ui_settings.encoder_accum[i] = 0;
     }
     ui_page_settings_refresh_project_slots();
+    ui_page_settings_refresh_sampler_slots();
     ui_page_settings_status(0);
     ui_page_settings_push(UI_SETTINGS_VIEW_ROOT);
 }
@@ -459,6 +589,28 @@ static void ui_page_settings_render(void)
     {
         char slot_line[24];
         (void)snprintf(slot_line, sizeof(slot_line), "SLOT %02u", (unsigned)g_ui_settings.selected_slot);
+        drv_display_draw_text(0U, 54U, slot_line);
+    }
+    else if (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT)
+    {
+        char slot_line[24];
+        const sample_pool_slot_state_t state = sample_pool_get_state(g_ui_settings.selected_slot);
+        const char *state_label = (state == SAMPLE_POOL_SLOT_LOADED) ? "LOADED"
+                                 : (state == SAMPLE_POOL_SLOT_MISSING) ? "MISSING"
+                                 : "EMPTY";
+        (void)snprintf(slot_line, sizeof(slot_line), "SLOT %02u %s",
+                       (unsigned)g_ui_settings.selected_slot,
+                       state_label);
+        drv_display_draw_text(0U, 54U, slot_line);
+        if (g_ui_settings.status_line[0] == '\0')
+        {
+            drv_display_draw_text(0U, 42U, "COPY = ACTION");
+        }
+    }
+    else if (level->view == UI_SETTINGS_VIEW_SAMPLER_CATALOG)
+    {
+        char slot_line[24];
+        (void)snprintf(slot_line, sizeof(slot_line), "CATALOG %u", (unsigned)wav_loader_catalog_count());
         drv_display_draw_text(0U, 54U, slot_line);
     }
 }

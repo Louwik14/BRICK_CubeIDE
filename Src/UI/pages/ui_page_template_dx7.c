@@ -39,6 +39,18 @@ static const ui_template_family_t g_ui_template_tone_family_buffer = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_sampler = {
+    .family_title = "TONE",
+    .nav_labels = { "PLAY", "FX", "SLICE", "-" },
+    .subpages = {
+        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_START, PARAM_SAMPLER_END } } },
+        { .title = "FX", .param_bank = { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } } },
+        { .title = "SLICE", .param_bank = { .params = { PARAM_SAMPLER_SLICE_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t g_ui_template_tone_family_midi = {
     .family_title = "TONE",
     .nav_labels = { "PROG", "CC1", "CC2", "CC3" },
@@ -213,6 +225,10 @@ void ui_page_template_dx7_register_families(void)
             else if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
             {
                 family_template = &g_ui_template_tone_family_buffer;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_SAMPLER))
+            {
+                family_template = &g_ui_template_tone_family_sampler;
             }
             else if ((track_family == UI_TRACK_FAMILY_MIDI) && (track_type == UI_TRACK_TYPE_MIDI))
             {

@@ -158,7 +158,7 @@ typedef struct
 
 static recorder_ctx_t g_rec;
 
-static AUDIO_COLD_SDRAM float g_rec_ring_storage[SD_RECORDER_MAX_STEMS][REC_RING_SLOT_COUNT][REC_RING_MAX_SLOT_WORDS];
+SDRAM_RECORDER static float g_rec_ring_storage[SD_RECORDER_MAX_STEMS][REC_RING_SLOT_COUNT][REC_RING_MAX_SLOT_WORDS];
 static ALIGN32 float g_writer_float_block[REC_RING_MAX_SLOT_WORDS];
 static ALIGN32 uint8_t g_writer_pcm24_block[REC_RING_MAX_SLOT_WORDS * 3U];
 

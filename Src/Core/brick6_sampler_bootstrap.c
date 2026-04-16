@@ -14,6 +14,7 @@
 
 #include "Sampler/sample_pool.h"
 #include "Sampler/voice_manager.h"
+#include "Storage/wav_loader.h"
 #include "Core/brick6_sd_config.h"
 
 void brick6_sampler_bootstrap_load_pool(void)
@@ -21,9 +22,18 @@ void brick6_sampler_bootstrap_load_pool(void)
     /* Toujours remettre le sample pool dans un état déterministe au boot. */
     sample_pool_init();
 
+    {
+        char wav_path[64];
+
+        if (wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
+        {
+            (void)sample_pool_load(0U, wav_path);
+        }
+    }
+
 #if BRICK6_SD_ENABLE_BOOT_SAMPLE_LOAD
-    sample_pool_load(0, "0:/Drum.wav");
-    sample_pool_load(1, "0:/La ritournelle.wav");
+    (void)sample_pool_load(1, "0:/Drum.wav");
+    (void)sample_pool_load(2, "0:/La ritournelle.wav");
 #endif
 }
 

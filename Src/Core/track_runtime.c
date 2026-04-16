@@ -74,6 +74,9 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         case UI_TRACK_TYPE_MONOB:
             return TRACK_RUNTIME_TYPE_MONOB;
 
+        case UI_TRACK_TYPE_SAMPLER:
+            return TRACK_RUNTIME_TYPE_SAMPLER;
+
         case UI_TRACK_TYPE_BUFFER:
             return TRACK_RUNTIME_TYPE_BUFFER;
 
@@ -210,22 +213,23 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     uint8_t flags = 0U;
 
     if ((family == TRACK_RUNTIME_FAMILY_INPUT)
-            || (family == TRACK_RUNTIME_FAMILY_SYNTH)
+            || ((family == TRACK_RUNTIME_FAMILY_SYNTH) && (type != TRACK_RUNTIME_TYPE_SAMPLER))
             || (family == TRACK_RUNTIME_FAMILY_DRUM)
             || (family == TRACK_RUNTIME_FAMILY_MASTER))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
     }
 
-    if ((family == TRACK_RUNTIME_FAMILY_SYNTH) || (family == TRACK_RUNTIME_FAMILY_DRUM))
+    if (((family == TRACK_RUNTIME_FAMILY_SYNTH) && (type != TRACK_RUNTIME_TYPE_SAMPLER))
+            || (family == TRACK_RUNTIME_FAMILY_DRUM))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_SYNTH;
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
 
-    if ((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
+    if (((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
+            || (type == TRACK_RUNTIME_TYPE_SAMPLER))
     {
-        flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
 
@@ -250,6 +254,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
             return TRACK_RUNTIME_VOICE_MODE_POLY;
 
         case TRACK_RUNTIME_ENGINE_MONOB:
+        case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -408,6 +413,12 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_MONOB, allocator->monob_used);
         allocator->monob_used++;
+        return;
+    }
+
+    if (type == TRACK_RUNTIME_TYPE_SAMPLER)
+    {
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_SAMPLER, ctx->track_id);
         return;
     }
 
@@ -808,6 +819,15 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIDI_CC3_2:
         case PARAM_MIDI_CC3_3:
         case PARAM_MIDI_CC3_4:
+        case PARAM_SAMPLER_SAMPLE:
+        case PARAM_SAMPLER_GAIN:
+        case PARAM_SAMPLER_START:
+        case PARAM_SAMPLER_END:
+        case PARAM_SAMPLER_MODE:
+        case PARAM_SAMPLER_TUNE:
+        case PARAM_SAMPLER_FADE_IN:
+        case PARAM_SAMPLER_FADE_OUT:
+        case PARAM_SAMPLER_SLICE_COUNT:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

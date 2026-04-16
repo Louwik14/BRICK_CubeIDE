@@ -119,6 +119,23 @@ Familles d'autorite:
   - En PLAY+REC actif: edition param track-aware routee vers Z4 (`seq_runtime_live_rec_param_write`) pour ecriture p-lock sequenceur.
   - Contrat d'autorite: pas de double write concurrent `param_registry_apply_track_value` + ecriture p-lock sur le meme edit live.
 
+## 10. Contrat Sampler Tone v0
+
+- Params track-aware exposes pour `UI_TRACK_TYPE_SAMPLER`:
+  - `Sample`, `Gain`, `Start`, `End`,
+  - `Mode`, `Tune`, `Fade In`, `Fade Out`,
+  - `Slice Count` visible en UI mais non p-lockable.
+- Autorite:
+  - `param_registry_apply_track_value` reste point d'entree unique.
+  - le backend Sampler track-aware est mis a jour sans pipeline parallele.
+- P-locks:
+  - `Slice Count` est explicitement hors p-lock;
+  - le reste des params Sampler de base reste p-lockable.
+- Invariants:
+  - sample absent -> silence,
+  - `Mode = Slice` active une lecture par grille réguliere,
+  - aucune allocation dynamique ni recalcul lourd dans l'IRQ audio.
+
 ## 10. Contrat MIDI TONE (tranche fonctionnelle)
 
 - Nouveaux params track-aware TONE:

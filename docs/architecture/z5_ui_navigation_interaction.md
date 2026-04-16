@@ -259,3 +259,15 @@ Points factuels:
   - pages suivantes: `CC1`, `CC2`, `CC3`.
 - `PLAY` est explicitement navigable pour `Input/Hybrid`.
 
+## 14. Contrat Sampler v0
+- `UI_TRACK_TYPE_SAMPLER` est reconnu comme type de track synth pour le socle d'integration.
+- Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
+  - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
+  - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
+- Un sous-onglet `SLICE` borne `Slice Count` sans editeur de slices.
+- Cette passe ne cree pas de nouvelle navigation produit ni d'editor Slice.
+- Invariants conserves:
+  - pas de seconde autorite UI,
+  - pas de refonte de page,
+  - pas de nouveau flux de navigation autonome.
+

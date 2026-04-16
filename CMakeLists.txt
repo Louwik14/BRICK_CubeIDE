@@ -107,6 +107,10 @@ file(GLOB SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.cpp"
 )
 
+list(APPEND SRC_CORE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
+)
+
 file(GLOB SRC_KEYBOARD_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/*.cpp"

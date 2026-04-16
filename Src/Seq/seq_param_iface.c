@@ -73,6 +73,10 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
     {
         return 0U;
     }
+    if (param == PARAM_SAMPLER_SLICE_COUNT)
+    {
+        return 0U;
+    }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
@@ -174,6 +178,10 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
 
     const param_id_t param = (param_id_t)param8;
     if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+    if (param == PARAM_SAMPLER_SLICE_COUNT)
     {
         return 0U;
     }

@@ -586,7 +586,7 @@ bool ui_track_family_is_engine(ui_track_family_t family)
 static const ui_track_type_t *ui_core_get_catalog_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_SAMPLER };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
@@ -3115,6 +3115,9 @@ const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_ty
         case UI_TRACK_TYPE_MONOB:
             return "MonoB";
 
+        case UI_TRACK_TYPE_SAMPLER:
+            return "Sampler";
+
         case UI_TRACK_TYPE_BUFFER:
             return "Buffer";
 
@@ -3168,6 +3171,9 @@ const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type
 
         case UI_TRACK_TYPE_MONOB:
             return "MB";
+
+        case UI_TRACK_TYPE_SAMPLER:
+            return "Smp";
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buf";

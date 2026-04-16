@@ -156,3 +156,18 @@ Sorties de Z2:
 - Les lanes fixes Input (`Input1..Input3`) restent prioritaires, mais la reallocation des autres tracks vise a minimiser les deplacements inutiles.
 - Objectif contractuel: limiter les rebinding de lane qui cassent la continuite runtime per-lane (MIX/VCA/sends/COLORS) lors des changements family/type.
 - Lorsqu'un rebind de lane reste necessaire, la migration/reconciliation du runtime per-lane est une etape explicite aval; Z2 ne garantit pas a lui seul la coherence du state DSP si cette passe n'est pas executee.
+
+## 13. Contrat Sampler v0
+- Nouvelle identite runtime branchee:
+  - `TRACK_RUNTIME_ENGINE_SAMPLER`,
+  - `TRACK_RUNTIME_TYPE_SAMPLER`.
+- Binding:
+  - autorite conservee dans `track_runtime`,
+  - backend mono initialement silencieux tant que le moteur Sampler final n'est pas branche.
+- Invariants conserves:
+  - pas de pipeline audio parallele,
+  - pas de seconde autorite runtime,
+  - le futur moteur Sampler reste track-aware et non global.
+- Slice v1:
+  - `Slice Count` est un parametre runtime local, non p-lockable,
+  - la grille de slices est reconstruite hors IRQ lors des changements de sample/compteur.

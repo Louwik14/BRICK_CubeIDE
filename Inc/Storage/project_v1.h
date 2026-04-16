@@ -9,7 +9,7 @@
 #define PROJECT_V1_PATTERN_COUNT   16U
 #define PROJECT_V1_SLOT_COUNT      16U
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    4U /* 14 tracks + buffer params payload */
+#define PROJECT_V1_FILE_VERSION    5U /* Sampler Tone/Slice params payload */
 
 typedef enum
 {

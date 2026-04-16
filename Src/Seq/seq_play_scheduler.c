@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "stm32h7xx_hal.h"
 #include "Core/track_runtime.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
@@ -338,6 +339,17 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             drum_synth_note_off_for_instance(ctx->instance_id, note);
+        }
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    {
+        if (is_note_on != 0U)
+        {
+            brick6_sampler_runtime_trigger_note(track, note);
+        }
+        else
+        {
+            brick6_sampler_runtime_stop(track);
         }
     }
 }

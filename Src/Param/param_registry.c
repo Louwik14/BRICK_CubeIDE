@@ -26,6 +26,7 @@
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 #include "fx_daisy_comp.h"
@@ -37,6 +38,7 @@
 #include "Seq/seq_model.h"
 #include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Sampler/sample_pool.h"
 #include "Storage/memory_layout.h"
 #include "Storage/undo_v1.h"
 #include <math.h>
@@ -372,6 +374,15 @@ static void apply_dx7_operator_3_level(float v) { apply_tone_live_track(PARAM_DX
 static void apply_dx7_operator_4_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_4_LEVEL, v); }
 static void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
 static void apply_hybrid_gate(float v) { apply_tone_live_track(PARAM_HYBRID_GATE, v); }
+static void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
+static void apply_sampler_gain(float v) { apply_tone_live_track(PARAM_SAMPLER_GAIN, v); }
+static void apply_sampler_start(float v) { apply_tone_live_track(PARAM_SAMPLER_START, v); }
+static void apply_sampler_end(float v) { apply_tone_live_track(PARAM_SAMPLER_END, v); }
+static void apply_sampler_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_MODE, v); }
+static void apply_sampler_tune(float v) { apply_tone_live_track(PARAM_SAMPLER_TUNE, v); }
+static void apply_sampler_fade_in(float v) { apply_tone_live_track(PARAM_SAMPLER_FADE_IN, v); }
+static void apply_sampler_fade_out(float v) { apply_tone_live_track(PARAM_SAMPLER_FADE_OUT, v); }
+static void apply_sampler_slice_count(float v) { apply_tone_live_track(PARAM_SAMPLER_SLICE_COUNT, v); }
 static void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }
 static void apply_midi_cc1_2(float v) { apply_tone_live_track(PARAM_MIDI_CC1_2, v); }
 static void apply_midi_cc1_3(float v) { apply_tone_live_track(PARAM_MIDI_CC1_3, v); }
@@ -712,6 +723,52 @@ static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id
     }
 }
 
+static uint8_t param_runtime_apply_tone_sampler(uint8_t track, param_id_t id, float value)
+{
+    switch (id)
+    {
+        case PARAM_SAMPLER_SAMPLE:
+            if (sample_pool_is_loaded((uint16_t)(clamp_value(value, 0.0f, 63.0f) + 0.5f)) == 0U)
+            {
+                brick6_sampler_runtime_stop(track);
+                return 0U;
+            }
+            brick6_sampler_runtime_set_sample(track, (uint16_t)(clamp_value(value, 0.0f, 63.0f) + 0.5f));
+            brick6_sampler_runtime_trigger(track);
+            return 1U;
+        case PARAM_SAMPLER_GAIN:
+            brick6_sampler_runtime_set_gain(track, clamp_value(value, 0.0f, 2.0f));
+            return 1U;
+        case PARAM_SAMPLER_START:
+            brick6_sampler_runtime_set_start(track, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_SAMPLER_END:
+            brick6_sampler_runtime_set_end(track, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_SAMPLER_MODE:
+            brick6_sampler_runtime_set_mode(track, (uint8_t)(clamp_value(value, 0.0f, 5.0f) + 0.5f));
+            return 1U;
+        case PARAM_SAMPLER_TUNE:
+            brick6_sampler_runtime_set_tune(track, clamp_value(value, -24.0f, 24.0f));
+            return 1U;
+        case PARAM_SAMPLER_FADE_IN:
+            brick6_sampler_runtime_set_fade_in(track, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_SAMPLER_FADE_OUT:
+            brick6_sampler_runtime_set_fade_out(track, clamp_value(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_SAMPLER_SLICE_COUNT:
+        {
+            static const uint8_t counts[] = {2U, 4U, 8U, 16U, 32U, 64U};
+            const uint8_t idx = (uint8_t)(clamp_value(value, 0.0f, 5.0f) + 0.5f);
+            brick6_sampler_runtime_set_slice_count(track, counts[idx]);
+            return 1U;
+        }
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_runtime_apply_buffer_track(uint8_t track, param_id_t id, float value)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
@@ -865,6 +922,10 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
     {
         applied = param_runtime_apply_tone_monob(ctx->instance_id, id, value);
+    }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    {
+        applied = param_runtime_apply_tone_sampler(track, id, value);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
@@ -2575,6 +2636,8 @@ static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
+static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "RevLoop", "Slice", "RevSlice", NULL};
+static const char *const g_sampler_slice_count_labels[] = {"2", "4", "8", "16", "32", "64", NULL};
 static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
 static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
 static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
@@ -2921,6 +2984,16 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_REVERB_PRED, "PreD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_pred),
     PARAM_DESC_EX(PARAM_MIX_REVERB_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_type_labels, apply_mix_reverb_type),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SURR, "Surr", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_surr),
+
+    PARAM_DESC_EX(PARAM_SAMPLER_SAMPLE, "Sample", PARAM_TYPE_ENUM, 0.0f, 63.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_sampler_sample),
+    PARAM_DESC_EX(PARAM_SAMPLER_GAIN, "Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_gain),
+    PARAM_DESC_EX(PARAM_SAMPLER_START, "Start", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.001f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_start),
+    PARAM_DESC_EX(PARAM_SAMPLER_END, "End", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.001f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_end),
+    PARAM_DESC_EX(PARAM_SAMPLER_MODE, "Mode", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_mode_labels, apply_sampler_mode),
+    PARAM_DESC_EX(PARAM_SAMPLER_TUNE, "Tune", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 0.1f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, apply_sampler_tune),
+    PARAM_DESC_EX(PARAM_SAMPLER_FADE_IN, "Fade In", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_in),
+    PARAM_DESC_EX(PARAM_SAMPLER_FADE_OUT, "Fade Out", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_out),
+    PARAM_DESC_EX(PARAM_SAMPLER_SLICE_COUNT, "Slice Count", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_slice_count_labels, apply_sampler_slice_count),
 
     PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_hybrid_gate),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),

@@ -49,6 +49,12 @@
 /* UI / non real-time bulk buffers */
 #define UI_SDRAM SEC_ATTR(".sdram_ui") ALIGN32
 
+/* Dedicated SDRAM arena for resident samples. */
+#define SDRAM_SAMPLES SEC_ATTR(".sdram_samples") ALIGN32
+
+/* Dedicated SDRAM arena for recorder/master-buffer history. */
+#define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
+
 /* Large cold audio history (delay/grain/reverb tails) */
 #define AUDIO_COLD_SDRAM SEC_ATTR(".sdram_audio_cold") ALIGN32
 

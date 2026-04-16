@@ -298,3 +298,12 @@ Verdict couplage:
 Plus petite prochaine passe utile:
 - Pas de refonte ni de deplacement d'autorite.
 - Passe documentaire uniquement: contrat explicite conserve dans ce canonique; aucun micro-patch code requis tant que la politique boundary reste voulue.
+
+## 14. Contrat Sampler v1
+
+- Le snapshot projet/pattern transporte les params Sampler via le flux param track-aware existant:
+  - `Sample`, `Gain`, `Start`, `End`, `Mode`, `Tune`, `Fade In`, `Fade Out`, `Slice Count`.
+- La grille Slice n'est jamais persistée:
+  - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
+- `Slice Count` reste hors p-lock.
+- `PROJECT_V1_FILE_VERSION` a ete incremente pour refléter le payload Sampler v1.

@@ -212,6 +212,22 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .sdram_samples (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_samples)
+    *(.sdram_samples*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_recorder (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_recorder)
+    *(.sdram_recorder*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram_audio_cold (NOLOAD) :
   {
     . = ALIGN(32);
