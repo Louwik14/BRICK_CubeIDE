@@ -147,8 +147,16 @@ static void wav_loader_catalog_add(const char *name)
     }
 
     wav_loader_catalog_entry_t *entry = &g_wav_catalog[g_wav_catalog_count];
-    (void)snprintf(entry->name, sizeof(entry->name), "%s", name);
-    (void)snprintf(entry->path, sizeof(entry->path), "0:/%s", name);
+    const int name_len = snprintf(entry->name, sizeof(entry->name), "%s", name);
+    const int path_len = snprintf(entry->path, sizeof(entry->path), "0:/%s", name);
+    if ((name_len < 0) || (path_len < 0)
+        || ((uint32_t)name_len >= sizeof(entry->name))
+        || ((uint32_t)path_len >= sizeof(entry->path)))
+    {
+        printf("[WAV] catalog skip long entry: %s\r\n", name);
+        memset(entry, 0, sizeof(*entry));
+        return;
+    }
     entry->state = WAV_LOADER_CATALOG_READY;
     g_wav_catalog_count++;
 }
