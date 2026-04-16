@@ -54,6 +54,12 @@ typedef void (*audio_process_fn)(int32_t *rx,
                                  int32_t *tx,
                                  uint32_t frames);
 
+typedef struct
+{
+    uint16_t max_events_collected_per_half;
+    uint16_t max_subsegments_per_half;
+} audio_seq_diag_t;
+
 /**
  * @brief Enregistre un callback de traitement bas niveau (API conservée).
  *
@@ -63,3 +69,5 @@ typedef void (*audio_process_fn)(int32_t *rx,
  *       audio_process_block_int32() côté audio_float.c.
  */
 void audio_set_process_callback(audio_process_fn cb);
+void audio_seq_diag_reset(void);
+void audio_seq_diag_snapshot(audio_seq_diag_t *out_diag);

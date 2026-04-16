@@ -65,9 +65,9 @@ Tasklets/timers periodiques observes:
 Seconde autorite concurrente:
 - Aucune seconde autorite concurrente complete pour la sequence boot/system init/superloop.
 - Cadence seq a deux chemins mais avec ownership exclusif par source clock:
-  - interne: IRQ TIM12 -> `seq_runtime_time_adapter_process_internal_from_irq()`
-  - externe: superloop -> `seq_runtime_time_adapter_process()`.
-  Ce n'est pas une double execution active simultanee pour une meme source.
+  - interne: Z1 audio bloc (`seq_runtime_audio_collect_block_events` -> drive internal steps).
+  - externe: superloop recoit les pulses MIDI puis les met en pending; la consommation d'avance step reste en Z1 audio bloc (`seq_runtime_audio_collect_block_events`).
+  TIM12 reste un ticker auxiliaire interne, non autorite d'avance step.
 
 ## 3. API entrantes
 
@@ -195,6 +195,7 @@ Z0 appelle principalement:
 - IRQ TIM12 appele en parallele de la superloop (adaptateur temps seq depuis IRQ).
 - IRQ TIM5 OC pour clock MIDI.
 - IRQ audio (Z1) alimente `engine_tasklet_notify_frames`; superloop consomme ensuite.
+- IRQ audio (Z1) porte aussi la progression step du sequencer (interne + consommation pulses externes) en domaine sample.
 
 ## 7. Contraintes RT/CPU/memoire
 
@@ -218,14 +219,17 @@ Z0 appelle principalement:
   - init dans `main` + `brick6_app_init`,
   - services periodiques dans `main while` + `brick6_app_process`.
 - Cadence UI alignee sur `engine_tick_count` (pas sur boucle brute).
-- Cadence seq split stricte: interne via IRQ TIM12 (`seq_runtime_time_adapter_process_internal_from_irq`), externe via superloop (`seq_runtime_time_adapter_process`), sans double avance simultanee pour une meme source clock.
+- Cadence seq split stricte:
+  - interne: drive step en domaine audio bloc (Z1),
+  - externe: pulses MIDI recueillies hors IRQ audio puis consommees en domaine audio bloc,
+  - TIM12: ticker auxiliaire interne uniquement.
 - Service MIDI host autoritatif unique: `midi_host_poll_bounded(8)` appele dans `main()`; `midi_host_poll()` reste un wrapper API sans second scheduler.
 - `brick6_recorder_runtime_service_writer()` reste hors IRQ.
 
 ## 9. Dependances inter-zones
 
 - Vers Z1: wiring callback DSP (`audio_set_float_callback(brick6_audio_runtime_dsp)`), start audio, source de ticks via IRQ audio->engine tasklet.
-- Vers Z4: init seq runtime + split d'adaptation temps (TIM12 IRQ pour clock interne, superloop pour clock externe).
+- Vers Z4: init seq runtime + service superloop transport/bridge; l'avance step (interne/externe) est consommee cote Z1 audio bloc.
 - Vers Z6: init pattern/project/undo et appel `pattern_live_service` en runtime.
 - Vers Z5: init/tick UI via `ui_tasklet_poll`, service selection inputs dans app process.
 - Vers Z3/Z2: init param defaults et effets indirects via init/runtime des autres zones.
@@ -237,7 +241,10 @@ Z0 appelle principalement:
 - Service MIDI host autoritatif unique en superloop `main()`:
   - `midi_host_poll_bounded(8)` appele une fois par boucle,
   - `midi_host_poll()` reste un wrapper API de `midi_host_poll_bounded(8)` (budget effectif inchange).
-- Contrat split seq a conserver: TIM12 IRQ (clock interne) vs superloop (clock externe). Un changement de ce gate peut creer une vraie double avance.
+- Contrat split seq mis a jour:
+  - progression step interne en domaine audio bloc (deterministe sample),
+  - progression step externe consommee en domaine audio bloc a partir de pulses MIDI pending,
+  - TIM12 conserve un role de ticker auxiliaire.
 - API `brick6_app_get_stats()` retiree de `brick6_app_init.h` (reliquat sans call site ni implementation).
 - Reliquat supprime et contrat fige: aucune API stats Z0 exposee tant qu'une autorite de metriques n'est pas definie.
 - Melange plateforme et logique produit dans `main.c`/`brick6_app_init.c` (timers HAL, USB host loop, UI cadence, orchestration metier).

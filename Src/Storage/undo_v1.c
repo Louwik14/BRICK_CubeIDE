@@ -10,6 +10,11 @@ typedef struct
 {
     uint8_t valid;
     uint8_t source_slot;
+    uint8_t active_bank;
+    uint8_t active_pattern;
+    uint8_t queued_valid;
+    uint8_t queued_bank;
+    uint8_t queued_pattern;
     PatternSaveV1 snapshot;
 } undo_snapshot_v1_t;
 
@@ -36,6 +41,11 @@ uint8_t undo_v1_capture_before_edit(uint8_t source_slot)
         return 0U;
     }
 
+    (void)pattern_live_get_active(&g_undo_v1.active_bank, &g_undo_v1.active_pattern);
+    (void)pattern_live_get_queued(&g_undo_v1.queued_valid,
+                                  &g_undo_v1.queued_bank,
+                                  &g_undo_v1.queued_pattern);
+
     g_undo_v1.valid = 1U;
     g_undo_v1.source_slot = source_slot;
     return 1U;
@@ -50,6 +60,14 @@ uint8_t undo_v1_restore(uint8_t resume_transport)
 
     g_undo_capture_suspended = 1U;
     const uint8_t ok = pattern_live_apply_snapshot(&g_undo_v1.snapshot, resume_transport);
+    if (ok != 0U)
+    {
+        pattern_live_set_active_state(g_undo_v1.active_bank,
+                                      g_undo_v1.active_pattern,
+                                      g_undo_v1.queued_valid,
+                                      g_undo_v1.queued_bank,
+                                      g_undo_v1.queued_pattern);
+    }
     g_undo_capture_suspended = 0U;
 
     return ok;

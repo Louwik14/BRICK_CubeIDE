@@ -25,6 +25,7 @@
 #include "ui_core.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
+#include "Seq/seq_runtime.h"
 #include "Core/track_runtime.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
@@ -362,6 +363,61 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
     return 1U;
 }
 
+static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
+                                                 const param_desc_t *desc,
+                                                 int16_t delta,
+                                                 float min_value,
+                                                 float max_value)
+{
+    if ((desc == 0) || (ui_param_is_track_scoped(param) == 0U))
+    {
+        return 0U;
+    }
+
+    seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
+    seq_track_id_t held_track = 0U;
+    if (seq_edit_collect_held_steps(&held_track,
+                                    held_steps,
+                                    (uint8_t)SEQ_STEPS_PER_PAGE,
+                                    1U) != 0U)
+    {
+        return 0U;
+    }
+
+    const seq_track_id_t track = ui_get_active_track();
+    seq_step_id_t step = 0U;
+    if ((track >= SEQ_TRACK_COUNT) || (seq_runtime_get_playhead_step(track, &step) == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    float source_value = ui_param_get_active_track_value(param);
+    seq_plock_entry_t existing;
+    if (seq_edit_step_plock_find(track, step, set_id, param8, &existing) != 0U)
+    {
+        source_value = seq_param_iface_decode_param_value(param, existing.value16);
+    }
+
+    float next_value = source_value + ((float)delta * desc->step);
+    next_value = ui_param_clamp(next_value, min_value, max_value);
+    const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
+
+    if (seq_runtime_live_rec_param_write(track, set_id, param8, encoded) == 0U)
+    {
+        return 0U;
+    }
+
+    param_store_set_active(param, next_value);
+    return 1U;
+}
+
 uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, uint8_t *out_inverted)
 {
     if (out_inverted != 0)
@@ -449,6 +505,11 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     }
 
     if (ui_param_try_apply_seq_plock(param, desc, delta, min_value, max_value) != 0U)
+    {
+        return;
+    }
+
+    if (ui_param_try_apply_live_rec_plock(param, desc, delta, min_value, max_value) != 0U)
     {
         return;
     }

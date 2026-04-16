@@ -16,16 +16,18 @@
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_engine.h"
 #include "param_registry.h"
-#include "param_store.h"
 #include "Storage/undo_v1.h"
 
-#define SEQ_STEP_HOLD_THRESHOLD_TICKS 120U
+#define SEQ_STEP_HOLD_THRESHOLD_TICKS 240U
 
 typedef struct
 {
     uint8_t pending[SEQ_STEPS_PER_PAGE];
     uint8_t held[SEQ_STEPS_PER_PAGE];
     uint8_t auto_note_pending[SEQ_STEPS_PER_PAGE];
+    uint8_t edited[SEQ_STEPS_PER_PAGE];
+    uint8_t pressed_active[SEQ_STEPS_PER_PAGE];
+    seq_step_content_t pressed_content[SEQ_STEPS_PER_PAGE];
     uint32_t press_tick[SEQ_STEPS_PER_PAGE];
     seq_step_id_t step_id[SEQ_STEPS_PER_PAGE];
     seq_track_id_t track_id[SEQ_STEPS_PER_PAGE];
@@ -38,11 +40,11 @@ static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status
     return ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
 
-static uint8_t seq_edit_should_clear_auto_note_pending(uint8_t set_id, seq_param8_t param8)
+static uint8_t seq_edit_is_play_note_param(uint8_t set_id, seq_param8_t param8)
 {
     if (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY)
     {
-        return 1U;
+        return 0U;
     }
 
     return ((param8 == (seq_param8_t)PARAM_SEQ_PLAY_V1_NOTE)
@@ -62,6 +64,83 @@ static void seq_edit_clear_auto_note_pending(seq_track_id_t track, seq_step_id_t
             g_seq_hold_state.auto_note_pending[hall] = 0U;
         }
     }
+}
+
+static void seq_edit_mark_step_edited(seq_track_id_t track, seq_step_id_t step)
+{
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if ((g_seq_hold_state.track_id[hall] == track)
+                && (g_seq_hold_state.step_id[hall] == step))
+        {
+            g_seq_hold_state.edited[hall] = 1U;
+        }
+    }
+}
+
+static void seq_edit_apply_short_action(uint8_t hall)
+{
+    if (hall >= SEQ_STEPS_PER_PAGE)
+    {
+        return;
+    }
+
+    if (g_seq_hold_state.edited[hall] != 0U)
+    {
+        return;
+    }
+
+    const seq_track_id_t track = g_seq_hold_state.track_id[hall];
+    const seq_step_id_t step = g_seq_hold_state.step_id[hall];
+    if ((g_seq_hold_state.pressed_active[hall] == 0U)
+            && (g_seq_hold_state.pressed_content[hall] == SEQ_STEP_CONTENT_EMPTY)
+            && (g_seq_hold_state.auto_note_pending[hall] != 0U)
+            && (seq_model_step_is_quick_note_eligible(track, step) != 0U))
+    {
+        (void)undo_v1_capture_before_edit(0U);
+        seq_model_set_trig(track, step, 1U);
+        float note_value = 60.0f;
+        if (param_registry_get_track_value(PARAM_SEQ_PLAY_V1_NOTE, track, &note_value) == 0U)
+        {
+            note_value = param_get(PARAM_SEQ_PLAY_V1_NOTE);
+        }
+
+        const seq_value16_t encoded = seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_V1_NOTE, note_value);
+        const seq_plock_op_status_t status = seq_model_step_plock_upsert(track,
+                                                                          step,
+                                                                          (uint8_t)SEQ_PLOCK_SET_PLAY,
+                                                                          (seq_param8_t)PARAM_SEQ_PLAY_V1_NOTE,
+                                                                          encoded,
+                                                                          0U);
+        if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
+        {
+            seq_model_set_trig(track, step, 0U);
+        }
+        return;
+    }
+
+    (void)undo_v1_capture_before_edit(0U);
+    if (seq_model_step_is_active(track, step) != 0U)
+    {
+        seq_model_set_trig(track, step, 0U);
+    }
+    else
+    {
+        seq_model_set_trig(track, step, 1U);
+    }
+}
+
+static void seq_edit_reset_hall_press_state(uint8_t hall)
+{
+    if (hall >= SEQ_STEPS_PER_PAGE)
+    {
+        return;
+    }
+
+    g_seq_hold_state.auto_note_pending[hall] = 0U;
+    g_seq_hold_state.edited[hall] = 0U;
+    g_seq_hold_state.pending[hall] = 0U;
+    g_seq_hold_state.held[hall] = 0U;
 }
 
 void seq_edit_init(void)
@@ -149,19 +228,10 @@ void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index)
 
     g_seq_hold_state.step_id[hall_index] = step;
     g_seq_hold_state.track_id[hall_index] = track;
-
-    if (seq_model_get_trig(track, step) == 0U)
-    {
-        (void)undo_v1_capture_before_edit(0U);
-        seq_model_set_trig(track, step, 1U);
-        g_seq_hold_state.auto_note_pending[hall_index] = 1U;
-        g_seq_hold_state.pending[hall_index] = 0U;
-        g_seq_hold_state.held[hall_index] = 1U;
-        g_seq_hold_state.press_tick[hall_index] = engine_tick_count;
-        return;
-    }
-
-    g_seq_hold_state.auto_note_pending[hall_index] = 0U;
+    g_seq_hold_state.pressed_active[hall_index] = seq_model_step_is_active(track, step);
+    g_seq_hold_state.pressed_content[hall_index] = seq_model_get_step_content(track, step);
+    g_seq_hold_state.auto_note_pending[hall_index] = seq_model_step_is_quick_note_eligible(track, step);
+    g_seq_hold_state.edited[hall_index] = 0U;
     g_seq_hold_state.pending[hall_index] = 1U;
     g_seq_hold_state.held[hall_index] = 0U;
     g_seq_hold_state.press_tick[hall_index] = engine_tick_count;
@@ -178,40 +248,17 @@ void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index)
 
     const uint8_t was_pending = g_seq_hold_state.pending[hall_index];
     const uint8_t was_held = g_seq_hold_state.held[hall_index];
-    const uint8_t was_auto_note_pending = g_seq_hold_state.auto_note_pending[hall_index];
-    const seq_track_id_t held_track = g_seq_hold_state.track_id[hall_index];
-    const seq_step_id_t held_step = g_seq_hold_state.step_id[hall_index];
 
     if ((was_pending != 0U) && (was_held == 0U))
     {
-        (void)undo_v1_capture_before_edit(0U);
-        seq_model_toggle_trig(held_track, held_step);
-    }
-    else if (was_auto_note_pending != 0U)
-    {
-        (void)undo_v1_capture_before_edit(0U);
-        float note_value = 60.0f;
-        if (param_registry_get_track_value(PARAM_SEQ_PLAY_V1_NOTE, held_track, &note_value) == 0U)
+        const uint32_t held_ticks = engine_tick_count - g_seq_hold_state.press_tick[hall_index];
+        if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)
         {
-            note_value = param_get(PARAM_SEQ_PLAY_V1_NOTE);
-        }
-
-        const seq_value16_t encoded = seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_V1_NOTE, note_value);
-        const seq_plock_op_status_t status = seq_model_step_plock_upsert(held_track,
-                                                                         held_step,
-                                                                         (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                                                         (seq_param8_t)PARAM_SEQ_PLAY_V1_NOTE,
-                                                                         encoded,
-                                                                         0U);
-        if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
-        {
-            seq_model_set_trig(held_track, held_step, 0U);
+            seq_edit_apply_short_action(hall_index);
         }
     }
 
-    g_seq_hold_state.auto_note_pending[hall_index] = 0U;
-    g_seq_hold_state.pending[hall_index] = 0U;
-    g_seq_hold_state.held[hall_index] = 0U;
+    seq_edit_reset_hall_press_state(hall_index);
 }
 
 void seq_edit_step_hold_update(void)
@@ -227,12 +274,12 @@ void seq_edit_step_hold_update(void)
 
         if (hall_engine_is_pressed(hall) == 0U)
         {
-            (void)undo_v1_capture_before_edit(0U);
-            seq_model_toggle_trig(g_seq_hold_state.track_id[hall],
-                                  g_seq_hold_state.step_id[hall]);
-            g_seq_hold_state.auto_note_pending[hall] = 0U;
-            g_seq_hold_state.pending[hall] = 0U;
-            g_seq_hold_state.held[hall] = 0U;
+            const uint32_t held_ticks = now_tick - g_seq_hold_state.press_tick[hall];
+            if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)
+            {
+                seq_edit_apply_short_action(hall);
+            }
+            seq_edit_reset_hall_press_state(hall);
             continue;
         }
 
@@ -318,11 +365,18 @@ void seq_edit_step_plock_commit(seq_track_id_t track,
                                 uint8_t set_id,
                                 seq_param8_t param8)
 {
-    if (seq_edit_should_clear_auto_note_pending(set_id, param8) == 0U)
+    if (seq_edit_is_play_note_param(set_id, param8) != 0U)
     {
-        return;
+        (void)undo_v1_capture_before_edit(0U);
+        seq_model_set_trig(track, step, 1U);
     }
 
+    seq_edit_mark_step_edited(track, step);
+    if (seq_model_step_is_active(track, step) == 0U)
+    {
+        (void)undo_v1_capture_before_edit(0U);
+        seq_model_set_trig(track, step, 1U);
+    }
     seq_edit_clear_auto_note_pending(track, step);
 }
 
@@ -392,4 +446,3 @@ void seq_edit_clear_steps(seq_track_id_t track,
         seq_model_step_plock_clear(track, step);
     }
 }
-

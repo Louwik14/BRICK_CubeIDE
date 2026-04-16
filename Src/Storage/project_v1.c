@@ -7,7 +7,6 @@
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
-#include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
 

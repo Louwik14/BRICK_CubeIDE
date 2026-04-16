@@ -11,6 +11,7 @@ typedef enum
     SEQ_PLOCK_SET_COLORS = 0,
     SEQ_PLOCK_SET_TONE,
     SEQ_PLOCK_SET_PLAY,
+    SEQ_PLOCK_SET_MOD,
     SEQ_PLOCK_SET_COUNT
 } seq_plock_set_id_t;
 

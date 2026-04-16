@@ -4,11 +4,9 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Core/engine_tasklet.h"
 #include "Core/track_runtime.h"
 #include "UI/ui_core.h"
 #include "Seq/seq_runtime.h"
-#include "Seq/seq_output_guard.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
 #include "Mod/mod_lfo_v1.h"
@@ -33,9 +31,9 @@ static uint8_t g_active_pattern;
 static uint8_t g_queued_valid;
 static uint8_t g_queued_bank;
 static uint8_t g_queued_pattern;
+static uint8_t g_queued_boundary_track;
+static uint32_t g_queued_boundary_generation;
 static uint8_t g_apply_in_progress;
-static uint8_t g_last_playhead_valid;
-static uint8_t g_last_playhead_step;
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
 static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step);
@@ -457,7 +455,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
     const uint8_t was_running = seq_runtime_is_running();
     seq_runtime_stop();
-    seq_output_guard_panic(1U);
 
     if (pattern_live_apply_track_config_block(&pattern->track_cfg) == 0U)
     {
@@ -537,7 +534,6 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         seq_runtime_start();
     }
 
-    g_last_playhead_valid = 0U;
     g_apply_in_progress = 0U;
     return 1U;
 }
@@ -599,12 +595,20 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         g_active_bank = bank;
         g_active_pattern = pattern;
         g_queued_valid = 0U;
+        g_queued_boundary_track = 0U;
+        g_queued_boundary_generation = 0U;
         return 1U;
     }
 
     g_queued_bank = bank;
     g_queued_pattern = pattern;
     g_queued_valid = 1U;
+    g_queued_boundary_track = ui_get_active_track();
+    if (g_queued_boundary_track >= SEQ_TRACK_COUNT)
+    {
+        g_queued_boundary_track = 0U;
+    }
+    (void)seq_runtime_get_track_loop_generation(g_queued_boundary_track, &g_queued_boundary_generation);
     return 1U;
 }
 
@@ -625,31 +629,26 @@ void pattern_live_service(void)
         return;
     }
 
-    seq_step_id_t playhead = 0U;
-    if (seq_runtime_get_playhead_step(ui_get_active_track(), &playhead) == 0U)
+    uint32_t current_generation = 0U;
+    if (seq_runtime_get_track_loop_generation(g_queued_boundary_track, &current_generation) == 0U)
     {
         return;
     }
 
-    if (g_last_playhead_valid == 0U)
+    if (current_generation == g_queued_boundary_generation)
     {
-        g_last_playhead_step = playhead;
-        g_last_playhead_valid = 1U;
         return;
     }
 
-    if ((playhead == 0U) && (g_last_playhead_step != 0U))
+    if (pattern_live_apply_snapshot(&g_next_pattern, 1U) != 0U)
     {
-        if (pattern_live_apply_snapshot(&g_next_pattern, 1U) != 0U)
-        {
-            memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
-            g_active_bank = g_queued_bank;
-            g_active_pattern = g_queued_pattern;
-            g_queued_valid = 0U;
-        }
+        memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
+        g_active_bank = g_queued_bank;
+        g_active_pattern = g_queued_pattern;
+        g_queued_valid = 0U;
+        g_queued_boundary_track = 0U;
+        g_queued_boundary_generation = 0U;
     }
-
-    g_last_playhead_step = playhead;
 }
 
 void pattern_live_init(void)
@@ -663,9 +662,9 @@ void pattern_live_init(void)
     g_queued_valid = 0U;
     g_queued_bank = 0U;
     g_queued_pattern = 0U;
+    g_queued_boundary_track = 0U;
+    g_queued_boundary_generation = 0U;
     g_apply_in_progress = 0U;
-    g_last_playhead_valid = 0U;
-    g_last_playhead_step = 0U;
 
     if (pattern_live_capture_current(&g_boot_pattern) != 0U)
     {
@@ -730,10 +729,18 @@ void pattern_live_set_active_state(uint8_t active_bank,
         g_queued_valid = 1U;
         g_queued_bank = queued_bank;
         g_queued_pattern = queued_pattern;
+        g_queued_boundary_track = ui_get_active_track();
+        if (g_queued_boundary_track >= SEQ_TRACK_COUNT)
+        {
+            g_queued_boundary_track = 0U;
+        }
+        (void)seq_runtime_get_track_loop_generation(g_queued_boundary_track, &g_queued_boundary_generation);
     }
     else
     {
         g_queued_valid = 0U;
+        g_queued_boundary_track = 0U;
+        g_queued_boundary_generation = 0U;
     }
 }
 

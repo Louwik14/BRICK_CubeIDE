@@ -49,7 +49,7 @@
 
 /* Taille totale des buffers DMA (en int32) */
 #define AUDIO_BUFFER_WORDS       (AUDIO_FRAMES_TOTAL * AUDIO_WORDS_PER_FRAME)
-#define AUDIO_SEQ_MAX_BLOCK_EVENTS 32U
+#define AUDIO_SEQ_MAX_BLOCK_EVENTS 128U
 
 #ifndef AUDIO_DEBUG_SEQ_BLOCK_TRACE
 #define AUDIO_DEBUG_SEQ_BLOCK_TRACE 0
@@ -84,6 +84,7 @@ static AUDIO_DMA_BUFFER_CACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 static SAI_HandleTypeDef *sai_tx = NULL;
 static SAI_HandleTypeDef *sai_rx = NULL;
+static audio_seq_diag_t g_audio_seq_diag;
 
 /* ============================================================
    INTERNAL PROCESSING
@@ -131,6 +132,10 @@ static void process_half(uint32_t half_index)
     const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
                                                                         AUDIO_SEQ_MAX_BLOCK_EVENTS,
                                                                         AUDIO_FRAMES_PER_HALF);
+    if (event_count > g_audio_seq_diag.max_events_collected_per_half)
+    {
+        g_audio_seq_diag.max_events_collected_per_half = event_count;
+    }
     AUDIO_SEQ_BLOCK_LOG("[AUD][BLK] half=%lu events=%u frames=%u\r\n",
                         (unsigned long)half_index,
                         (unsigned)event_count,
@@ -138,6 +143,7 @@ static void process_half(uint32_t half_index)
 
     uint32_t cursor = 0U;
     uint16_t event_index = 0U;
+    uint16_t segment_count = 0U;
     while (event_index < event_count)
     {
         uint16_t event_offset = block_events[event_index].sample_offset_in_block;
@@ -158,6 +164,7 @@ static void process_half(uint32_t half_index)
                                       &tx[cursor * AUDIO_WORDS_PER_FRAME],
                                       segment_frames);
             cursor = (uint32_t)event_offset;
+            segment_count++;
         }
 
         while ((event_index < event_count)
@@ -185,9 +192,15 @@ static void process_half(uint32_t half_index)
         audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
                                   &tx[cursor * AUDIO_WORDS_PER_FRAME],
                                   AUDIO_FRAMES_PER_HALF - cursor);
+        segment_count++;
     }
 
     /* CPU -> TX DMA: clean après écriture CPU et avant lecture DMA. */
+    if (segment_count > g_audio_seq_diag.max_subsegments_per_half)
+    {
+        g_audio_seq_diag.max_subsegments_per_half = segment_count;
+    }
+
     dcache_clean_by_addr_aligned(tx, half_bytes);
 }
 
@@ -224,6 +237,7 @@ void audio_init(SAI_HandleTypeDef *hsai_tx,
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
+    g_audio_seq_diag = (audio_seq_diag_t){0};
 
     /* Le TX peut être consommé par DMA avant le 1er callback: pousser les zéros en RAM. */
     dcache_clean_by_addr_aligned(tx_buffer, sizeof(tx_buffer));
@@ -261,6 +275,21 @@ void audio_start(void)
     HAL_SAI_Transmit_DMA(sai_tx,
                          (uint8_t *)tx_buffer,
                          AUDIO_BUFFER_WORDS);
+}
+
+void audio_seq_diag_reset(void)
+{
+    g_audio_seq_diag = (audio_seq_diag_t){0};
+}
+
+void audio_seq_diag_snapshot(audio_seq_diag_t *out_diag)
+{
+    if (out_diag == NULL)
+    {
+        return;
+    }
+
+    *out_diag = g_audio_seq_diag;
 }
 
 /* ============================================================

@@ -113,8 +113,11 @@ Familles d'autorite:
 
 ## 9. Impact sur cartographie globale
 
-- Aucun changement necessaire dans `ARCHITECTURE_GLOBAL.md`.
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.
+- Frontiere Z3/Z4 (live-rec param):
+  - Hors PLAY+REC actif: edition param track-aware -> `param_registry_apply_track_value` (autorite Z3).
+  - En PLAY+REC actif: edition param track-aware routee vers Z4 (`seq_runtime_live_rec_param_write`) pour ecriture p-lock sequenceur.
+  - Contrat d'autorite: pas de double write concurrent `param_registry_apply_track_value` + ecriture p-lock sur le meme edit live.
 
 ## 10. Contrat MIDI TONE (tranche fonctionnelle)
 

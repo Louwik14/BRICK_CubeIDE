@@ -18,6 +18,16 @@ typedef struct
     uint16_t sample_offset_in_block;
 } seq_play_scheduler_audio_event_t;
 
+typedef struct
+{
+    uint16_t queue_high_water;
+    uint16_t max_events_collected_per_call;
+    uint32_t queue_overflow_drop_count;
+    uint32_t overdue_event_count;
+    uint32_t offset_clamp_count;
+    uint32_t stale_generation_drop_count;
+} seq_play_scheduler_diag_t;
+
 void seq_play_scheduler_init(void);
 void seq_play_scheduler_clear(void);
 void seq_play_scheduler_schedule_step(seq_track_id_t track,
@@ -34,5 +44,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value);
 void seq_play_scheduler_emit_midi_program_on_transport_start(void);
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track);
+void seq_play_scheduler_diag_reset(void);
+void seq_play_scheduler_diag_snapshot(seq_play_scheduler_diag_t *out_diag);
 
 #endif /* SEQ_PLAY_SCHEDULER_H */

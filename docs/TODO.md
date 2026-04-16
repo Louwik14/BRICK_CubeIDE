@@ -1,12 +1,11 @@
 # TODO trié par dépendances
 
 ## 1. Base track / UI
-- Créer le type de track MIDI et son fonctionnement  
-  Piste : les ensembles sans lien avec le MIDI deviennent plus accessibles, par exemple `Mix`. Un ensemble logique comme `Tone` servirait autrement, par exemple pour envoyer des CC ou des Program Change. Il faut aussi réfléchir à comment gérer les 4 pages de cet ensemble.
+~~- Créer le type de track MIDI et son fonctionnement~~
+ 
 
-- Mettre en place la track Hybrid et son fonctionnement  
-  Piste : proche de la track MIDI, sauf qu’on garde les ensembles sonores. On part du principe que ça peut servir à gérer des synthés externes, donc l’enveloppe gate peut rester utile. Il y avait aussi le bug qui obligeait à jouer une note pour gater le son d’une track input ; sur une track input hybrid, ça peut devenir un paramètre activable ou non.
-
+~~- Mettre en place la track Hybrid et son fonctionnement~~  
+  
 - Retravailler l’UI et essayer d’avoir un ensemble plus joli, avec une vraie identité visuelle, en s’éloignant de celle d’Elektron  
   Piste : à traiter après stabilisation des ensembles et workflows principaux, pour éviter de remaquetter une UI encore mouvante.
 
@@ -41,11 +40,6 @@
   - réfléchir à la coexistence ou à la fusion entre mode DJ loop et mode slice
 
 ## 4. Infra sample
-- Arriver à faire du streaming SD multi-file pour les samples longs et gérer le possible conflit avec l’utilisation actuelle de la SD pour les pattern/projet  
-  Piste : aucune.
-
-- Arriver à gérer correctement sample court en SDRAM et sample long en streaming, avec une politique bornée  
-  Piste : aucune.
 
 ## 5. Tracks sample
 - Créer la track sampleur one shot et son fonctionnement  
@@ -53,13 +47,6 @@
 
 - Créer la track sampleur slice et son fonctionnement  
   Piste : même logique que la track sampleur one shot. On garde les ensembles sonores, et `Tone` sert aux paramètres propres à cette track.
-
-## 6. Fonctions avancées liées sample / looper
-- Essayer de créer un engine multi-sample 4 voix polyphonique à la Tangerine / 1010 Music  
-  Piste : aucune.
-
-- Essayer de mettre en place un système de time stretch pour les tracks looper et sample  
-  Piste : s’inspirer des paramètres du time stretch de l’Octatrack, avec un mode drum et un mode tonal.
 
 ## 7. Séquenceur / performance
 - ~~Mettre en place réellement le swing et le quantize du séquenceur~~  

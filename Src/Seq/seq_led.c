@@ -9,7 +9,6 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
-#include "Seq/seq_param_iface.h"
 #include "UI/ui_core.h"
 #include "led_layer.h"
 #include "led_remap.h"
@@ -28,36 +27,15 @@ void seq_led_render_active_track_page(void)
     {
         const led_id_t led = led_remap_led_for_hall(hall);
         const uint8_t step = (uint8_t)(base_step + hall);
-        const uint8_t trig_on = seq_model_get_trig(track, step);
+        const seq_step_visual_t visual = seq_model_get_step_visual(track, step);
 
-        if (trig_on != 0U)
+        if (visual == SEQ_STEP_VISUAL_BLUE)
         {
-            const uint8_t plock_count = seq_model_step_plock_count(track, step);
-            uint8_t has_play_plock = 0U;
-
-            for (uint8_t i = 0U; i < plock_count; ++i)
-            {
-                seq_plock_entry_t entry;
-                if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U)
-                {
-                    continue;
-                }
-
-                if (entry.set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
-                {
-                    has_play_plock = 1U;
-                    break;
-                }
-            }
-
-            if ((plock_count != 0U) && (has_play_plock == 0U))
-            {
-                led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, SEQ_LED_BLUE_B);
-            }
-            else
-            {
-                led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, SEQ_LED_GREEN_G, 0U);
-            }
+            led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, 0U, SEQ_LED_BLUE_B);
+        }
+        else if (visual == SEQ_STEP_VISUAL_GREEN)
+        {
+            led_layer_set(LED_LAYER_SEQ_STATE, led, 0U, SEQ_LED_GREEN_G, 0U);
         }
         else
         {

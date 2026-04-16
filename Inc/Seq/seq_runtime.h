@@ -59,6 +59,14 @@ typedef struct
     uint16_t sample_offset_in_block;
 } seq_runtime_audio_event_t;
 
+typedef struct
+{
+    uint32_t internal_irq_tick_count;
+    uint32_t internal_non_audio_step_pulse_count;
+    uint32_t internal_step_burst_block_count;
+    uint16_t max_internal_step_pulses_per_block;
+} seq_runtime_diag_t;
+
 void seq_runtime_init(void);
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 void seq_runtime_time_adapter_process(void);
@@ -83,6 +91,7 @@ void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step);
+uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
 void seq_runtime_on_track_length_changed(seq_track_id_t track);
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div);
@@ -104,6 +113,10 @@ uint32_t seq_runtime_get_tempo_bpm_milli(void);
 void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli);
 uint8_t seq_runtime_is_external_tempo_valid(void);
 uint32_t seq_runtime_get_external_tempo_bpm_milli(void);
+uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
+                                         uint8_t set_id,
+                                         seq_param8_t param8,
+                                         seq_value16_t value16);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
@@ -113,5 +126,7 @@ void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                    uint8_t note);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
+void seq_runtime_diag_reset(void);
+void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag);
 
 #endif /* SEQ_RUNTIME_H */

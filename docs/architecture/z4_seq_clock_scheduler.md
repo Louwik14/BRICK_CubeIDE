@@ -46,7 +46,8 @@ Autorite clock/tempo:
 - Source clock active: `seq_runtime_set_clock_source` (mutations sur `g_seq_runtime.clock_src` via `seq_clock_bridge_set_source`).
 - Tempo interne: `seq_runtime_set_tempo_bpm_milli` -> `seq_clock_bridge_set_internal_tempo`.
 - Tempo externe: `seq_clock_bridge_on_external_clock_pulse` (appele depuis `seq_runtime_midi_clock_from_source`).
-- Cadence interne: `seq_runtime_time_adapter_process_internal_from_irq` (IRQ TIM12 via `HAL_TIM_PeriodElapsedCallback` dans `midi.c`, increment tick interne uniquement).
+- Cadence interne effective (steps): `seq_runtime_audio_collect_block_events` -> `seq_runtime_audio_drive_internal_steps_for_block` (domaine audio sample, IRQ DMA).
+- Tick interne auxiliaire: `seq_runtime_time_adapter_process_internal_from_irq` (IRQ TIM12) conserve un compteur de temps, sans autorite d'avance step en clock interne.
 
 Autorite position musicale (step/boundary):
 - Avance step: `seq_boundary_engine_advance_one_step`.
@@ -76,11 +77,13 @@ Entrees directes de Z4:
 - Realtime MIDI clock transport: `seq_runtime_midi_clock_from_source`, `seq_runtime_midi_start_from_source`, `seq_runtime_midi_continue_from_source`, `seq_runtime_midi_stop_from_source` (depuis `midi_internal_receive_with_source` dans `midi.c`).
 - Configuration runtime: `seq_runtime_set_clock_source`, `seq_runtime_set_tempo_bpm_milli`, `seq_runtime_set_track_div/quant/swing`, `seq_runtime_on_track_length_changed`.
 - Live-rec entree notes: `seq_runtime_live_rec_note_on/off` (keyboard engine).
+- Live-rec entree param: `seq_runtime_live_rec_param_write` (edits param track-scoped en PLAY+REC).
 - Consommation audio: `seq_runtime_audio_collect_block_events`, `seq_runtime_audio_apply_event` (audio IRQ `process_half` dans `audio.c`).
 
 Contrats implicites d'entree:
-- En clock interne, la progression temporelle depend du tick TIM12 IRQ actif ET d'un appel regulier du service superloop `seq_runtime_time_adapter_process`.
-- En source externe, les pulses MIDI clock (0xF8) doivent arriver via `midi_internal_receive_with_source`; sans pulses, pas d'avance step.
+- En clock interne, la progression step ne depend plus du superloop: elle est drivee au debut de chaque bloc audio dans `seq_runtime_audio_collect_block_events`.
+- TIM12 reste un ticker auxiliaire (metriques/temps), non autorite d'avance step.
+- En source externe, les pulses MIDI clock (0xF8) arrivent via `midi_internal_receive_with_source` et sont convertis en pending step-pulses; leur consommation effective pour l'avance step se fait en debut de bloc audio dans `seq_runtime_audio_collect_block_events`.
 - `seq_runtime_audio_collect_block_events` est suppose appele une fois par bloc audio dans l'ordre de timeline; il incremente `audio_timeline_sample`.
 
 ## 4. API sortantes
@@ -89,6 +92,7 @@ Sorties vers autres zones:
 - Vers audio runtime: paquet d'evenements sequenceur sample-offset (`seq_runtime_audio_event_t`) via `seq_runtime_audio_collect_block_events`.
 - Vers moteurs/sorties note: `seq_play_scheduler_audio_apply_event` envoie MIDI (`midi_note_on/off`) et notes engines (`monob_synth_*`, `microdexed_*`, `drum_synth_*`), plus gate mixer (`mixer_track_filter_*`, `mixer_track_vca_*`).
 - Vers param domaine lock: `seq_boundary_engine_*` appelle `seq_param_iface_apply_lock`, `seq_param_iface_restore_base`.
+- Vers UI param (PLAY+REC): `ui_param` route l'edit track-scoped vers `seq_runtime_live_rec_param_write` (ecriture p-lock), sans write runtime direct concurrent.
 - Vers clock MIDI sortant: `seq_runtime_send_transport_realtime`, `midi_clock`, `midi_clock_set_*`.
 - Vers securite sortie: `seq_output_guard_*` (`panic`, note state).
 
@@ -142,7 +146,7 @@ Etat modele sequenceur (`seq_model.c`):
 
 Flux nominal prouve:
 1. Source tempo/clock
-- Interne: IRQ TIM12 -> `seq_runtime_time_adapter_process_internal_from_irq` -> `g_seq_internal_time_tick++`; puis superloop -> `seq_runtime_time_adapter_process` -> `seq_runtime_process_core`.
+- Interne: au debut de chaque bloc audio, `seq_runtime_audio_collect_block_events` appelle `seq_runtime_audio_drive_internal_steps_for_block`; les pulses de step sont derives de `audio_timeline_sample`/`samples_per_step_q16`.
 - Externe MIDI/USB: `midi_internal_receive_with_source` route 0xF8/0xFA/0xFB/0xFC vers `seq_runtime_midi_*_from_source`.
 
 2. Start/stop/continue transport
@@ -151,8 +155,9 @@ Flux nominal prouve:
 - `seq_runtime_midi_continue_from_source` reprend RUNNING sans reset complet du modele et rebase timeline musicale si reprise depuis STOP.
 
 3. Progression temporelle
-- `seq_runtime_process_core` consomme ticks et appelle `seq_clock_bridge_consume_internal_step_due` (interne) ou traite pulses externes via `seq_runtime_midi_clock_from_source`.
-- Chaque pulse de step appelle `seq_runtime_process_step_pulse`.
+- Interne: `seq_runtime_audio_drive_internal_steps_for_block` produit les pulses strictement dans la timeline audio absolue.
+- Externe: `seq_runtime_midi_clock_from_source` met en file des pending step-pulses; `seq_runtime_audio_drive_external_steps_for_block` les consomme dans le domaine audio bloc.
+- L'avance step (interne/externe) converge sur `seq_runtime_process_step_pulse_at_sample_q16`.
 
 4. Detection boundary / advance pattern
 - `seq_runtime_process_step_pulse`:
@@ -184,13 +189,14 @@ Contraintes RT observees:
 - Mutations du pool/listes p-lock (`seq_model_step_plock_upsert/delete/clear`) executees en section critique IRQ pour garantir la coherence avec la lecture boundary runtime en IRQ.
 - Chemin audio-bloc borne par capacites fixes:
   - scheduler collect par tranches de 16 events dans `seq_runtime_audio_collect_block_events`.
-  - queue globale capee a `SEQ_PLAY_SCHEDULER_EVENT_CAP` (64).
+  - queue globale capee a `SEQ_PLAY_SCHEDULER_EVENT_CAP` (256).
 
 Contraintes CPU/ordre:
 - Cohesion temporelle dependante de l'ordre:
   - progression `audio_timeline_sample` dans `seq_runtime_audio_collect_block_events`.
   - application des events dans le meme bloc audio en ordre d'offset.
-- `seq_runtime_process_core` doit etre appele regulierement depuis le superloop, quelle que soit la source clock.
+- `seq_runtime_process_core` reste requis pour transport, supervision bridge externe et etats transport.
+- En source interne comme externe, la regularite des steps depend de la cadence audio bloc (pas du jitter superloop).
 
 Memoire/statique:
 - Stockage modele/plocks et queues integralement statiques, sans allocation dynamique runtime.
@@ -214,15 +220,15 @@ Invariants prouves par le code:
   - conversion vers offset relatif au bloc lors de la collecte.
 
 - Contrat quant/swing runtime:
-  - `track_quant`/`track_swing` sont appliques avant scheduling audio des notes, sans modifier `play_step` ni boundaries.
+  - `track_quant` reste applique avant scheduling audio des notes, sans modifier `play_step` ni boundaries.
   - `track_quant` est un pourcentage `0..100` (0 = neutre) qui resserre progressivement le micro-timing des notes vers la grille (`mictim -> 0`).
-  - `track_swing` retarde les pas impairs uniquement, borne a 50% de la duree de pas track, et est strictement neutre a `0`.
-  - Les offsets utilisent la duree effective de pas track (`global_step_samples * track_div` sanitize `1/2/4/8`).
+  - `track_swing` est conserve pour compatibilite UI/persistence, mais n'a plus d'effet sur `due_sample_time`/offsets runtime.
 
 ## 9. Dependances inter-zones
 
 Entrees vers Z4:
 - Z5 UI/Interaction: commandes transport, track settings, active track/MIDI channel.
+- Z5 UI/Param: en PLAY+REC actif et sans hold-step manuel, les edits param track-scoped sont rediriges vers Z4 (`seq_runtime_live_rec_param_write`).
 - Z3 Param/Control: tempo/clock source/track div-quant-swing via `param_registry`.
 - Z1 Audio Hard-RT: rythme de collecte/apply des events au bloc.
 - MIDI I/O: source d'horloge externe et transport realtime.
@@ -238,18 +244,19 @@ Sorties de Z4:
 Points factuels observes:
 - Concentration de responsabilites dans `seq_runtime.c` (transport, clock, boundary orchestration, scheduler bridge, live-rec, MIDI clock audio TX) augmente le couplage interne.
 - Dependance forte a l'ordre d'appel:
-  - sans cadence `seq_runtime_time_adapter_process_internal_from_irq` (interne) ou pulses externes, la progression stoppe.
-  - sans service superloop `seq_runtime_time_adapter_process`, la progression stoppe aussi (meme en clock interne).
-  - coherence sample-domain depend d'un appel audio regulier a `seq_runtime_audio_collect_block_events`.
+  - sans pulses externes, la progression externe stoppe.
+  - la progression step (interne/externe) depend d'un appel audio regulier a `seq_runtime_audio_collect_block_events`.
+  - `seq_runtime_time_adapter_process` reste necessaire pour transport et supervision bridge externe, mais n'est plus autorite d'avance step.
 - Couplage implicite avec UI dans le coeur runtime:
   - `seq_runtime_pattern_rec_start_now` lit `ui_get_active_track`.
   - `seq_play_scheduler_emit_midi_note` lit `ui_get_track_midi_channel`.
 - Double logique tempo interne/externe assumee mais pas concurrente active; bascule source explicite via `seq_runtime_set_clock_source`.
 - Indice de dette documente dans le code:
   - commentaire `TODO(clock-source)` dans `seq_runtime_init` sur branchement source clock globale/menu.
-- Parametres runtime quant/swing actifs:
+- Parametres runtime quant/swing:
   - l'avance du playhead reste sous autorite `seq_boundary_engine_advance_one_step`,
-  - quant/swing deplacent seulement l'horodatage sample-domain des events (pas la progression musicale).
+  - seul `quant` deplace l'horodatage sample-domain des events (pas la progression musicale),
+  - `swing` reste stocke/expose pour compatibilite mais est inerte dans le scheduling runtime.
 
 ## 11. Impact eventuel sur la cartographie globale
 

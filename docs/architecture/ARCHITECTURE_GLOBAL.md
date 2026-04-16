@@ -112,8 +112,10 @@ Doc :
 
 - Z0 initialise et cadence tout le reste
 - Z1 consomme surtout Z2, Z3 et Z4
+- En clock interne/externe sequencer, Z1 fournit la consommation finale d'avance step de Z4 (domaine audio bloc)
 - Z2 fournit la vérité runtime aux autres zones
 - Z3 applique des valeurs en s’appuyant sur Z2
+- En PLAY+REC actif, les edits param track-aware sont rediriges vers Z4 (ecriture p-lock live), sans write runtime direct Z3 en parallele
 - Z4 produit les événements temporels consommés par Z1
 - Z5 pilote Z2, Z3, Z4 et Z6 via l’interaction utilisateur
 - Z6 capture/restaure de l’état qui réimpacte Z2, Z3, Z4 et Z5
@@ -126,7 +128,7 @@ Doc :
 - **boot / ordre d’init / boucle principale** → Z0
 - **IRQ audio / mix / buffer audio / DMA** → Z1
 - **family / type / mix target / runtime bind** → Z2
-- **paramètres / LFO / apply / staging** → Z3
+- **paramètres / LFO / apply / staging** → Z3 (hors redirection live-rec PLAY+REC)
 - **transport / tempo / scheduler / live rec séquenceur** → Z4
 - **UI / halls / navigation / pages / clipboard** → Z5
 - **save/load / patterns / projects / restore** → Z6
@@ -156,4 +158,5 @@ Documents conserves pour tracabilite uniquement:
 - docs/architecture/historique_z3_param_write_map_audit_2026-04-14.md (passe d'audit ciblee).
 - docs/architecture/historique_z4_quant_swing_runtime_contract_2026-04-14.md (note de chantier pre-consolidation).
 - docs/architecture/historique_z5_ui_orchestration_cartographie_2026-04-14.md (cartographie de passe initiale).
+
 

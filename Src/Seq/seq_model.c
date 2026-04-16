@@ -173,6 +173,64 @@ static uint8_t seq_model_compute_step_mask(seq_track_id_t track, const seq_step_
     return mask;
 }
 
+static void seq_model_step_scan_lock_sets(seq_track_id_t track,
+                                          const seq_step_t *step,
+                                          uint8_t *out_has_play_plock,
+                                          uint8_t *out_has_non_play_plock)
+{
+    uint8_t has_play_plock = 0U;
+    uint8_t has_non_play_plock = 0U;
+
+    if ((seq_model_track_is_valid(track) == 0U) || (step == 0))
+    {
+        if (out_has_play_plock != 0)
+        {
+            *out_has_play_plock = 0U;
+        }
+        if (out_has_non_play_plock != 0)
+        {
+            *out_has_non_play_plock = 0U;
+        }
+        return;
+    }
+
+    uint16_t idx = step->lock_head;
+    uint16_t guard = 0U;
+    while (idx != SEQ_LOCK_NONE)
+    {
+        if (guard++ >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            break;
+        }
+
+        if (idx >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            break;
+        }
+
+        const seq_plock_entry_t *entry = &g_seq_project.pool[track][idx];
+        if (entry->set_id == (uint8_t)SEQ_PLOCK_SET_PLAY)
+        {
+            has_play_plock = 1U;
+        }
+        else
+        {
+            has_non_play_plock = 1U;
+        }
+
+        idx = entry->next;
+    }
+
+    if (out_has_play_plock != 0)
+    {
+        *out_has_play_plock = has_play_plock;
+    }
+    if (out_has_non_play_plock != 0)
+    {
+        *out_has_non_play_plock = has_non_play_plock;
+    }
+}
+
 void seq_model_init_defaults(void)
 {
     memset(&g_seq_project, 0, sizeof(g_seq_project));
@@ -374,6 +432,122 @@ uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_ste
     }
 
     return (step < seq_model_get_track_playback_length(track)) ? 1U : 0U;
+}
+
+uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if (s == 0)
+    {
+        return 0U;
+    }
+
+    return (s->trig != 0U) ? 1U : 0U;
+}
+
+seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if (s == 0)
+    {
+        return SEQ_STEP_CONTENT_EMPTY;
+    }
+
+    uint8_t has_play_plock = 0U;
+    uint8_t has_non_play_plock = 0U;
+    seq_model_step_scan_lock_sets(track, s, &has_play_plock, &has_non_play_plock);
+
+    if ((has_play_plock == 0U) && (has_non_play_plock == 0U))
+    {
+        return SEQ_STEP_CONTENT_EMPTY;
+    }
+    if ((has_play_plock != 0U) && (has_non_play_plock != 0U))
+    {
+        return SEQ_STEP_CONTENT_PLAY_AND_NON_PLAY;
+    }
+    if (has_play_plock != 0U)
+    {
+        return SEQ_STEP_CONTENT_PLAY_ONLY;
+    }
+
+    return SEQ_STEP_CONTENT_NON_PLAY_ONLY;
+}
+
+seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t step)
+{
+    if (seq_model_step_is_active(track, step) == 0U)
+    {
+        return SEQ_STEP_VISUAL_OFF;
+    }
+
+    const seq_step_content_t content = seq_model_get_step_content(track, step);
+    if ((content == SEQ_STEP_CONTENT_PLAY_ONLY) || (content == SEQ_STEP_CONTENT_PLAY_AND_NON_PLAY))
+    {
+        return SEQ_STEP_VISUAL_GREEN;
+    }
+    if (content == SEQ_STEP_CONTENT_NON_PLAY_ONLY)
+    {
+        return SEQ_STEP_VISUAL_BLUE;
+    }
+
+    return SEQ_STEP_VISUAL_OFF;
+}
+
+seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t step)
+{
+    if (seq_model_step_is_active(track, step) == 0U)
+    {
+        return SEQ_STEP_STATE_EMPTY;
+    }
+
+    const seq_step_content_t content = seq_model_get_step_content(track, step);
+    if (content == SEQ_STEP_CONTENT_NON_PLAY_ONLY)
+    {
+        return SEQ_STEP_STATE_PARAM_LOCK_ONLY;
+    }
+    if (content == SEQ_STEP_CONTENT_PLAY_AND_NON_PLAY)
+    {
+        return SEQ_STEP_STATE_NOTE_WITH_PLOCKS;
+    }
+
+    return SEQ_STEP_STATE_NOTE;
+}
+
+uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if (s == 0)
+    {
+        return 0U;
+    }
+
+    uint8_t has_play_plock = 0U;
+    seq_model_step_scan_lock_sets(track, s, &has_play_plock, 0);
+    return has_play_plock;
+}
+
+uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if (s == 0)
+    {
+        return 0U;
+    }
+
+    uint8_t has_non_play_plock = 0U;
+    seq_model_step_scan_lock_sets(track, s, 0, &has_non_play_plock);
+    return has_non_play_plock;
+}
+
+uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step)
+{
+    return (seq_model_get_step_content(track, step) == SEQ_STEP_CONTENT_EMPTY) ? 1U : 0U;
+}
+
+uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step)
+{
+    return (uint8_t)((seq_model_step_is_active(track, step) == 0U)
+                     && (seq_model_step_is_empty(track, step) != 0U));
 }
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,

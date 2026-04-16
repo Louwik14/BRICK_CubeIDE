@@ -67,7 +67,7 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
         return 0U;
     }
 
-    if (seq_model_get_trig(track, step) == 0U)
+    if (seq_model_step_is_active(track, step) == 0U)
     {
         *out_count = 0U;
         return 1U;

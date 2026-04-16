@@ -77,6 +77,7 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
     {
         return 0U;
@@ -91,6 +92,10 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
         return 0U;
     }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) && (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) && (set_id != (uint8_t)SEQ_PLOCK_SET_MOD))
     {
         return 0U;
     }
@@ -250,6 +255,13 @@ uint8_t seq_param_iface_map_param(param_id_t param,
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
     {
         *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+        *out_param8 = (seq_param8_t)param;
+        return 1U;
+    }
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+    {
+        *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
         *out_param8 = (seq_param8_t)param;
         return 1U;
     }

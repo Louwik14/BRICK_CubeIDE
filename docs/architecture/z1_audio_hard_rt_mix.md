@@ -40,6 +40,7 @@ Autorite d'entree hard-RT (IRQ DMA):
 Autorite de decoupe demi-buffer/bloc:
 - `process_half()` dans `Src/Audio/audio.c`.
 - Segmente un half-buffer en sous-segments via `seq_runtime_audio_collect_block_events()` et offsets sample.
+- En clock interne/externe, ce point est l'autorite effective de consommation d'avance step sequencer (domaine audio bloc).
 
 Autorite de rendu DSP principal:
 - `audio_process_block_int32()` dans `Src/Audio/audio_float.c`.
@@ -168,6 +169,7 @@ Flux nominal prouve par code:
 2) Decoupe half/block
 - `process_half(half_index)` calcule offset half et invalidation D-cache RX.
 - Recupere evenements bloc via `seq_runtime_audio_collect_block_events`.
+- Ce call consomme aussi les pulses step du sequencer (interne + externes pending) en domaine sample avant extraction des events dus du bloc.
 - Coupe le half en sous-segments selon offsets events, appelle `audio_process_block_int32` par segment.
 
 3) Unpack / conversion

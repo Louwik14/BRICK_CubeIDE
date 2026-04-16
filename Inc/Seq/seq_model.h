@@ -52,6 +52,29 @@ typedef enum
     SEQ_PLOCK_OP_SET_NOT_PLOCKABLE
 } seq_plock_op_status_t;
 
+typedef enum
+{
+    SEQ_STEP_STATE_EMPTY = 0,
+    SEQ_STEP_STATE_NOTE,
+    SEQ_STEP_STATE_PARAM_LOCK_ONLY,
+    SEQ_STEP_STATE_NOTE_WITH_PLOCKS
+} seq_step_state_t;
+
+typedef enum
+{
+    SEQ_STEP_CONTENT_EMPTY = 0,
+    SEQ_STEP_CONTENT_PLAY_ONLY,
+    SEQ_STEP_CONTENT_NON_PLAY_ONLY,
+    SEQ_STEP_CONTENT_PLAY_AND_NON_PLAY
+} seq_step_content_t;
+
+typedef enum
+{
+    SEQ_STEP_VISUAL_OFF = 0,
+    SEQ_STEP_VISUAL_GREEN,
+    SEQ_STEP_VISUAL_BLUE
+} seq_step_visual_t;
+
 void seq_model_init_defaults(void);
 const seq_project_data_t *seq_model_get_project(void);
 uint8_t seq_model_load_project(const seq_project_data_t *project);
@@ -67,6 +90,14 @@ uint8_t seq_model_get_editable_step_capacity(void);
 uint8_t seq_model_is_step_editable_index(seq_step_id_t step);
 uint8_t seq_model_get_track_playback_length(seq_track_id_t track);
 uint8_t seq_model_is_step_in_track_playback_window(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_is_active(seq_track_id_t track, seq_step_id_t step);
+seq_step_content_t seq_model_get_step_content(seq_track_id_t track, seq_step_id_t step);
+seq_step_visual_t seq_model_get_step_visual(seq_track_id_t track, seq_step_id_t step);
+seq_step_state_t seq_model_get_step_state(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_has_play_plock(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_has_non_play_plock(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_is_empty(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_t step);
 
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,
