@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "stm32h7xx_hal.h"
+#include "buttons.h"
 #include "buttons_ids.h"
+#include "Storage/sd_preview.h"
 #include "Storage/project_v1.h"
 #include "Sampler/sample_pool.h"
 #include "Storage/wav_loader.h"
@@ -58,9 +60,23 @@ typedef enum
 typedef enum
 {
     UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE = 0,
+    UI_SETTINGS_SAMPLER_ACTION_PREVIEW_OR_STOP,
     UI_SETTINGS_SAMPLER_ACTION_CLEAR,
     UI_SETTINGS_SAMPLER_ACTION_COUNT
 } ui_settings_sampler_action_t;
+
+typedef enum
+{
+    UI_SETTINGS_SAMPLER_CATALOG_MODE_LOAD = 0,
+    UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW
+} ui_settings_sampler_catalog_mode_t;
+
+typedef enum
+{
+    UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE = 0,
+    UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER,
+    UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT
+} ui_settings_preview_stop_origin_t;
 
 typedef struct
 {
@@ -78,11 +94,14 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
+    ui_settings_sampler_catalog_mode_t sampler_catalog_mode;
     uint8_t sampler_slots[SAMPLE_POOL_SIZE];
     uint8_t sampler_slot_count;
     uint8_t project_slots[PROJECT_V1_SLOT_COUNT];
     uint8_t project_slot_count;
     uint8_t return_page_id;
+    uint8_t preview_was_active;
+    uint8_t preview_stop_origin;
     char status_line[20];
     uint32_t status_until_ms;
     int16_t encoder_accum[UI_SETTINGS_ENCODER_COUNT];
@@ -112,6 +131,32 @@ static const char *ui_page_settings_sampler_load_error_label(void)
             return "SD READ FAIL";
         default:
             return "LOAD SD FAIL";
+    }
+}
+
+static const char *ui_page_settings_preview_error_label(sd_preview_error_t error)
+{
+    switch (error)
+    {
+        case SD_PREVIEW_ERROR_NONE:
+            return "PREVIEW STOP";
+        case SD_PREVIEW_ERROR_INVALID_PATH:
+            return "BAD PATH";
+        case SD_PREVIEW_ERROR_BUSY:
+        case SD_PREVIEW_ERROR_GATE_REFUSED:
+            return "SD BUSY";
+        case SD_PREVIEW_ERROR_MOUNT_FAIL:
+            return "SD UNAVAILABLE";
+        case SD_PREVIEW_ERROR_OPEN_FAIL:
+            return "OPEN FAIL";
+        case SD_PREVIEW_ERROR_PARSE_FAIL:
+            return "WAV INVALID";
+        case SD_PREVIEW_ERROR_UNSUPPORTED_FORMAT:
+            return "WAV UNSUPP";
+        case SD_PREVIEW_ERROR_READ_FAIL:
+            return "SD READ FAIL";
+        default:
+            return "PREVIEW FAIL";
     }
 }
 
@@ -242,6 +287,10 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return (sample_pool_get_state(g_ui_settings.selected_slot) == SAMPLE_POOL_SLOT_EMPTY) ? "LOAD FROM SD" : "REPLACE FROM SD";
             }
+            if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_PREVIEW_OR_STOP)
+            {
+                return (sd_preview_is_active() != 0U) ? "STOP" : "PREVIEW";
+            }
             if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
                 return "CLEAR";
@@ -297,6 +346,40 @@ static void ui_page_settings_status(const char *status)
     g_ui_settings.status_until_ms = HAL_GetTick() + UI_SETTINGS_STATUS_DURATION_MS;
 }
 
+static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin)
+{
+    if (sd_preview_is_active() == 0U)
+    {
+        return;
+    }
+
+    sd_preview_stop();
+    g_ui_settings.preview_stop_origin = origin;
+}
+
+static void ui_page_settings_preview_apply_termination_status(void)
+{
+    const uint8_t active = sd_preview_is_active();
+
+    if ((g_ui_settings.preview_was_active != 0U) && (active == 0U))
+    {
+        if (g_ui_settings.preview_stop_origin == UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER)
+        {
+            ui_page_settings_status("PREVIEW STOP");
+        }
+        else if (g_ui_settings.preview_stop_origin == UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE)
+        {
+            const sd_preview_error_t error = sd_preview_get_last_error();
+            ui_page_settings_status((error == SD_PREVIEW_ERROR_NONE)
+                                        ? "PREVIEW END"
+                                        : ui_page_settings_preview_error_label(error));
+        }
+    }
+
+    g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
+    g_ui_settings.preview_was_active = active;
+}
+
 static void ui_page_settings_close(void)
 {
     ui_page_set(g_ui_settings.return_page_id);
@@ -316,6 +399,8 @@ static void ui_page_settings_push(ui_settings_view_t view)
 
 static void ui_page_settings_back(void)
 {
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+
     if (g_ui_settings.depth <= 1U)
     {
         ui_page_settings_close();
@@ -465,8 +550,26 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
             if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE)
             {
+                ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
                 if (wav_loader_catalog_count() != 0U)
                 {
+                    g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_LOAD;
+                    ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER_CATALOG);
+                }
+                else
+                {
+                    ui_page_settings_status("NO WAV");
+                }
+            }
+            else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_PREVIEW_OR_STOP)
+            {
+                if (sd_preview_is_active() != 0U)
+                {
+                    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
+                }
+                else if (wav_loader_catalog_count() != 0U)
+                {
+                    g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW;
                     ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER_CATALOG);
                 }
                 else
@@ -476,6 +579,7 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
+                ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
                 sample_pool_clear(g_ui_settings.selected_slot);
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_status("CLEAR OK");
@@ -488,7 +592,27 @@ static void ui_page_settings_apply_action(void)
                 const wav_loader_catalog_entry_t *entry = wav_loader_catalog_get(level->selected_index);
                 if ((entry != 0) && (entry->state == WAV_LOADER_CATALOG_READY))
                 {
-                    if (sample_pool_load(g_ui_settings.selected_slot, entry->path) != 0U)
+                    if (g_ui_settings.sampler_catalog_mode == UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW)
+                    {
+                        if ((sd_preview_is_active() != 0U)
+                            && (strcmp(sd_preview_get_path(), entry->path) == 0))
+                        {
+                            ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
+                            break;
+                        }
+
+                        if (sd_preview_begin(entry->path) != 0U)
+                        {
+                            g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
+                            g_ui_settings.preview_was_active = sd_preview_is_active();
+                            ui_page_settings_status("PREVIEW ON");
+                        }
+                        else
+                        {
+                            ui_page_settings_status(ui_page_settings_preview_error_label(sd_preview_get_last_error()));
+                        }
+                    }
+                    else if (sample_pool_load(g_ui_settings.selected_slot, entry->path) != 0U)
                     {
                         ui_page_settings_refresh_sampler_slots();
                         ui_page_settings_status("LOAD SD OK");
@@ -515,8 +639,11 @@ static void ui_page_settings_enter(void)
 {
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
+    g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_LOAD;
     g_ui_settings.sampler_slot_count = 0U;
     g_ui_settings.project_slot_count = 0U;
+    g_ui_settings.preview_was_active = 0U;
+    g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
     for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
     {
         g_ui_settings.encoder_accum[i] = 0;
@@ -529,6 +656,7 @@ static void ui_page_settings_enter(void)
 
 static void ui_page_settings_leave(void)
 {
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     g_ui_settings.depth = 0U;
 }
 
@@ -559,6 +687,8 @@ static void ui_page_settings_handle_event_page(const ui_event_t *ev)
 
 static void ui_page_settings_tick(void)
 {
+    ui_page_settings_preview_apply_termination_status();
+
     if ((g_ui_settings.status_line[0] != '\0')
         && ((int32_t)(g_ui_settings.status_until_ms - HAL_GetTick()) <= 0))
     {
@@ -642,6 +772,14 @@ static void ui_page_settings_render(void)
         char slot_line[24];
         (void)snprintf(slot_line, sizeof(slot_line), "CATALOG %u", (unsigned)wav_loader_catalog_count());
         drv_display_draw_text(0U, 54U, slot_line);
+        if (g_ui_settings.status_line[0] == '\0')
+        {
+            drv_display_draw_text(0U,
+                                  42U,
+                                  (g_ui_settings.sampler_catalog_mode == UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW)
+                                      ? "COPY = PREVIEW/STOP"
+                                      : "COPY = LOAD");
+        }
     }
 }
 
@@ -685,6 +823,12 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
     if (step == 0)
     {
         return;
+    }
+
+    if ((level->view == UI_SETTINGS_VIEW_SAMPLER_CATALOG)
+        && (g_ui_settings.sampler_catalog_mode == UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW))
+    {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     }
 
     int32_t index = level->selected_index;

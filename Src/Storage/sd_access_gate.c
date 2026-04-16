@@ -6,7 +6,7 @@
 
 static volatile uint8_t g_sd_access_owner;
 static volatile uint8_t g_sd_access_total_count;
-static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_PROJECT + 1U];
+static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_PREVIEW + 1U];
 static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
 
@@ -14,7 +14,7 @@ void sd_access_gate_init(void)
 {
     g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
     g_sd_access_total_count = 0U;
-    for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_PROJECT; ++i)
+    for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_PREVIEW; ++i)
     {
         g_sd_access_client_count[i] = 0U;
     }
@@ -42,7 +42,7 @@ uint8_t sd_access_fs_mount_if_needed(void)
 
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 {
-    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_PROJECT))
+    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_PREVIEW))
     {
         return 0U;
     }
@@ -54,6 +54,13 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     }
     else if (g_sd_access_owner != (uint8_t)client)
     {
+        if ((client == (uint8_t)SD_ACCESS_CLIENT_PREVIEW)
+            || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PREVIEW))
+        {
+            __enable_irq();
+            return 0U;
+        }
+
         const uint8_t owner_is_project_pattern =
             ((g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PROJECT)
              || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PATTERN))
@@ -80,7 +87,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 void sd_access_gate_release(sd_access_client_t client)
 {
     __disable_irq();
-    if (((uint8_t)client <= (uint8_t)SD_ACCESS_CLIENT_PROJECT)
+    if (((uint8_t)client <= (uint8_t)SD_ACCESS_CLIENT_PREVIEW)
         && (g_sd_access_client_count[(uint8_t)client] != 0U)
         && (g_sd_access_total_count != 0U))
     {

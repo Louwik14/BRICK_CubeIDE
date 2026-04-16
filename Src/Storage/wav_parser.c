@@ -22,6 +22,31 @@
 #define WAV_FMT_PCM        1
 #define WAV_FMT_EXTENSIBLE 65534
 
+static uint16_t le16(const uint8_t *p);
+static uint32_t le32(const uint8_t *p);
+
+static bool wav_is_pcm_format(uint16_t audio_format, const uint8_t *fmt, uint32_t chunk_size)
+{
+    static const uint8_t pcm_guid_le[16] = {
+        0x01U, 0x00U, 0x00U, 0x00U,
+        0x00U, 0x00U,
+        0x10U, 0x00U,
+        0x80U, 0x00U,
+        0x00U, 0xAAU, 0x00U, 0x38U, 0x9BU, 0x71U
+    };
+
+    if(audio_format == WAV_FMT_PCM)
+        return true;
+
+    if(audio_format != WAV_FMT_EXTENSIBLE)
+        return false;
+
+    if((fmt == 0) || (chunk_size < 40U))
+        return false;
+
+    return memcmp(&fmt[24], pcm_guid_le, sizeof(pcm_guid_le)) == 0;
+}
+
 /**
  * @brief Point d'entrée le16.
  *
@@ -74,6 +99,7 @@ static bool wav_find_chunks(FIL *fp,
 {
     uint8_t riff[12];
     UINT br;
+    bool pcm_format_ok = false;
 
     if((f_read(fp, riff, 12, &br) != FR_OK) || br != 12)
         return false;
@@ -123,6 +149,10 @@ static bool wav_find_chunks(FIL *fp,
                 if(f_lseek(fp, f_tell(fp) + (chunk_size - to_read)) != FR_OK)
                     return false;
             }
+
+            pcm_format_ok = wav_is_pcm_format(*audio_format, fmt, chunk_size);
+            if(!pcm_format_ok)
+                return false;
         }
         else if(memcmp(&hdr[0], "data", 4) == 0)
         {
@@ -160,8 +190,7 @@ static bool wav_find_chunks(FIL *fp,
         info->data_size       = *data_size;
     }
 
-    return (*audio_format == WAV_FMT_PCM ||
-            *audio_format == WAV_FMT_EXTENSIBLE);
+    return pcm_format_ok || (*audio_format == WAV_FMT_PCM);
 }
 
 /**

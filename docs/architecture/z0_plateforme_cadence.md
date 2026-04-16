@@ -14,6 +14,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/MIDI/midi.c`: callback IRQ TIM12 et callback TIM5 utilises par la cadence globale.
 - `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL.
 - `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
+- `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
 
 Sous-roles internes dans `brick6_app_init.c`:
 - Orchestrateur boot produit: initialisation ordered des sous-systemes applicatifs.
@@ -52,6 +53,8 @@ Autorite wiring global inter-zones:
   - `audio_init(&hsai_BlockA2, &hsai_BlockB2)`
   - `audio_set_float_callback(brick6_audio_runtime_dsp)`
   - ordre d'init runtime (param/seq/storage/undo/control/hall/etc.).
+- `brick6_audio_runtime_dsp()`:
+  - point d'injection MAIN pour la preview SD via le buffer de lecture pre-resample.
 
 Autorite cadence/service loop hors audio IRQ:
 - `while(1)` dans `main()` + `brick6_app_process()`.

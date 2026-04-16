@@ -22,6 +22,8 @@
 #include <string.h>
 
 #include "memory_layout.h"
+#include "Storage/wav_audio_codec.h"
+#include "Storage/wav_audio_stream.h"
 #include "wav_parser.h"
 
 #define WAV_BUFFER_FRAMES (48000U)
@@ -45,36 +47,6 @@ static uint8_t g_wav_catalog_ready;
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static float pcm24_to_float(const uint8_t *p)
-{
-    int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
-    if((v & 0x00800000L) != 0)
-        v |= (int32_t)0xFF000000L;
-    return (float)v * (1.0f / 8388608.0f);
-}
-
-/**
- * @brief Point d'entrée pcm32_to_float.
- *
- * Rôle:
- * - Exécuter le traitement associé à pcm32_to_float.
- *
- * @param p Paramètre d'entrée de l'API.
- *
- * @return Valeur de retour définie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-static float pcm32_to_float(const uint8_t *p)
-{
-    int32_t v = (int32_t)((uint32_t)p[0] |
-                          ((uint32_t)p[1] << 8) |
-                          ((uint32_t)p[2] << 16) |
-                          ((uint32_t)p[3] << 24));
-    return (float)v * (1.0f / 2147483648.0f);
-}
-
 const float *wav_loader_get_interleaved_buffer(void)
 {
     return g_wav_pcm;
@@ -255,11 +227,6 @@ const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint8_t index)
  */
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 {
-#if WAV_LOADER_HAS_FATFS
-    DIR dir;
-    FILINFO fno;
-    FRESULT fr;
-
     if((out_path == 0) || (max_len < 8U))
     {
         printf("[WAV] invalid output buffer\r\n");
@@ -282,12 +249,6 @@ bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 
     printf("[WAV] found file: %s\r\n", out_path);
     return true;
-#else
-    (void)out_path;
-    (void)max_len;
-    printf("[WAV] FatFs unavailable in this build\r\n");
-    return false;
-#endif
 }
 
 /**
@@ -307,27 +268,18 @@ bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 {
     uint32_t i;
+    wav_info_t local_info;
+    wav_info_t *const out_info = (info != 0) ? info : &local_info;
 
     for(i = 0U; i < WAV_BUFFER_SAMPLES; i++)
         g_wav_pcm[i] = 0.0f;
 
-    if(info != 0)
-        memset(info, 0, sizeof(*info));
+    memset(out_info, 0, sizeof(*out_info));
 
 #if WAV_LOADER_HAS_FATFS
     FIL fp;
     FRESULT fr;
-    uint16_t audio_format;
-    uint16_t channels;
-    uint32_t sample_rate;
-    uint16_t bits_per_sample;
-    uint32_t data_offset;
-    uint32_t data_size;
-    uint32_t bytes_per_frame;
-    uint32_t max_frames_from_file;
-    uint32_t frames_to_load;
     uint32_t frames_loaded = 0U;
-    uint8_t io_buf[4096];
 
     if(path == 0)
     {
@@ -353,119 +305,115 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
         return false;
     }
 
-    if(!wav_parser_parse_info(&fp, info))
+    if(!wav_parser_parse_info(&fp, out_info))
     {
         (void)f_close(&fp);
         printf("[WAV] invalid RIFF/WAVE or missing chunks\r\n");
         return false;
     }
 
-    audio_format = 1U;
-    channels = info->channels;
-    sample_rate = info->sample_rate;
-    bits_per_sample = info->bits_per_sample;
-    data_offset = info->data_offset;
-    data_size = info->data_size;
-
     printf("[WAV] fmt=%u ch=%u sr=%lu bits=%u data=%lu bytes off=%lu\r\n",
-           (unsigned)audio_format,
-           (unsigned)channels,
-           (unsigned long)sample_rate,
-           (unsigned)bits_per_sample,
-           (unsigned long)data_size,
-           (unsigned long)data_offset);
+           (unsigned)out_info->audio_format,
+           (unsigned)out_info->channels,
+           (unsigned long)out_info->sample_rate,
+           (unsigned)out_info->bits_per_sample,
+           (unsigned long)out_info->data_size,
+           (unsigned long)out_info->data_offset);
 
-    if(audio_format != 1U)
+    if(!((out_info->audio_format == 1U) || (out_info->audio_format == 65534U)))
     {
         (void)f_close(&fp);
         printf("[WAV ERROR] format unsupported\r\n");
         return false;
     }
 
-    if(sample_rate != 48000U)
+    if(!((out_info->channels == 1U) || (out_info->channels == 2U)))
     {
         (void)f_close(&fp);
-        printf("[WAV ERROR] bad sample rate\r\n");
+        printf("[WAV ERROR] unsupported channel count\r\n");
         return false;
     }
 
-    if(channels != 2U)
-    {
-        (void)f_close(&fp);
-        printf("[WAV ERROR] not stereo\r\n");
-        return false;
-    }
-
-    if(!((bits_per_sample == 24U) || (bits_per_sample == 32U)))
+    if(!((out_info->bits_per_sample == 16U) || (out_info->bits_per_sample == 24U) || (out_info->bits_per_sample == 32U)))
     {
         (void)f_close(&fp);
         printf("[WAV ERROR] format unsupported\r\n");
         return false;
     }
 
-    bytes_per_frame = (uint32_t)channels * ((uint32_t)bits_per_sample / 8U);
-    if(bytes_per_frame == 0U)
+    if((out_info->block_align == 0U) || (out_info->sample_rate == 0U))
     {
         (void)f_close(&fp);
+        printf("[WAV ERROR] invalid timing metadata\r\n");
         return false;
     }
 
-    max_frames_from_file = data_size / bytes_per_frame;
-    frames_to_load = (max_frames_from_file < WAV_BUFFER_FRAMES) ? max_frames_from_file : WAV_BUFFER_FRAMES;
-
-    if(f_lseek(&fp, data_offset) != FR_OK)
     {
-        (void)f_close(&fp);
-        printf("[WAV] f_lseek data failed\r\n");
-        return false;
-    }
+        const uint32_t source_frames = out_info->data_size / out_info->block_align;
+        const uint32_t target_rate = 48000U;
+        const uint32_t frames_to_load = (source_frames == 0U)
+            ? 0U
+            : (uint32_t)(((uint64_t)source_frames * (uint64_t)target_rate
+                          + (uint64_t)out_info->sample_rate - 1U)
+                         / (uint64_t)out_info->sample_rate);
 
-    while(frames_loaded < frames_to_load)
-    {
-        UINT br = 0U;
-        uint32_t frames_left = frames_to_load - frames_loaded;
-        uint32_t chunk_frames = (frames_left > 512U) ? 512U : frames_left;
-        uint32_t chunk_bytes = chunk_frames * bytes_per_frame;
-
-        if((f_read(&fp, io_buf, chunk_bytes, &br) != FR_OK) || (br == 0U))
-            break;
-
-        chunk_frames = br / bytes_per_frame;
-        for(i = 0U; i < chunk_frames; i++)
+        if (frames_to_load == 0U)
         {
-            const uint8_t *frame = &io_buf[i * bytes_per_frame];
-            float l;
-            float r;
-
-            if(bits_per_sample == 24U)
-            {
-                l = pcm24_to_float(&frame[0]);
-                r = pcm24_to_float(&frame[3]);
-            }
-            else
-            {
-                l = pcm32_to_float(&frame[0]);
-                r = pcm32_to_float(&frame[4]);
-            }
-
-            g_wav_pcm[(frames_loaded + i) * 2U + 0U] = l;
-            g_wav_pcm[(frames_loaded + i) * 2U + 1U] = r;
+            (void)f_close(&fp);
+            printf("[WAV ERROR] empty source\r\n");
+            return false;
         }
 
-        frames_loaded += chunk_frames;
+        wav_audio_stream_t stream;
+        wav_audio_stream_init(&stream, &fp, out_info, target_rate);
+        if (wav_audio_stream_start(&stream, out_info->data_offset) == 0U)
+        {
+            (void)f_close(&fp);
+            printf("[WAV] f_lseek data failed\r\n");
+            return false;
+        }
 
-        if(chunk_frames == 0U)
-            break;
+        while ((frames_loaded < frames_to_load) && (frames_loaded < WAV_BUFFER_FRAMES))
+        {
+            float left = 0.0f;
+            float right = 0.0f;
+            if (wav_audio_stream_next_frame(&stream, &left, &right) == 0U)
+            {
+                break;
+            }
+
+            g_wav_pcm[frames_loaded * 2U + 0U] = left;
+            g_wav_pcm[frames_loaded * 2U + 1U] = right;
+            frames_loaded++;
+        }
+
+        if ((frames_loaded == 0U) || (stream.io_error != 0U))
+        {
+            (void)f_close(&fp);
+            printf("[WAV] stream decode failed\r\n");
+            return false;
+        }
+
+        if (info != 0)
+        {
+            info->audio_format = 1U;
+            info->sample_rate = target_rate;
+            info->byte_rate = target_rate * 2U * sizeof(float);
+            info->channels = 2U;
+            info->block_align = 2U * sizeof(float);
+            info->bits_per_sample = 32U;
+            info->data_offset = 0U;
+            info->data_size = frames_loaded * (2U * sizeof(float));
+        }
+
+        (void)f_close(&fp);
+
+        printf("[WAV] loaded frames=%lu (capacity=%lu)\r\n",
+               (unsigned long)frames_loaded,
+               (unsigned long)WAV_BUFFER_FRAMES);
+
+        return true;
     }
-
-    (void)f_close(&fp);
-
-
-    printf("[WAV] loaded frames=%lu (capacity=%lu)\r\n",
-           (unsigned long)frames_loaded,
-           (unsigned long)WAV_BUFFER_FRAMES);
-
-    return (frames_loaded > 0U);
 #else
     (void)path;
     printf("[WAV] FatFs unavailable in this build\r\n");

@@ -213,7 +213,7 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     uint8_t flags = 0U;
 
     if ((family == TRACK_RUNTIME_FAMILY_INPUT)
-            || ((family == TRACK_RUNTIME_FAMILY_SYNTH) && (type != TRACK_RUNTIME_TYPE_SAMPLER))
+            || (family == TRACK_RUNTIME_FAMILY_SYNTH)
             || (family == TRACK_RUNTIME_FAMILY_DRUM)
             || (family == TRACK_RUNTIME_FAMILY_MASTER))
     {

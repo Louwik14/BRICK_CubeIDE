@@ -151,6 +151,12 @@ file(GLOB SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/*.cpp"
 )
 
+list(APPEND SRC_STORAGE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_preview.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
+)
+
 file(GLOB SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/*.cpp"

@@ -19,6 +19,7 @@
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "MIDI/midi.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime.h"
@@ -224,6 +225,17 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                 microdexed_synth_note_off(note);
             }
         }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        {
+            if (is_note_on != 0U)
+            {
+                brick6_sampler_runtime_trigger_note(ctx->track_id, note);
+            }
+            else
+            {
+                brick6_sampler_runtime_stop(ctx->track_id);
+            }
+        }
     }
 }
 
@@ -339,6 +351,10 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
     {
         microdexed_synth_note_on(note, velocity);
     }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    {
+        brick6_sampler_runtime_trigger_note(active_track, note);
+    }
 }
 
 static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
@@ -404,6 +420,10 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
     else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         drum_synth_note_off_for_instance(sounding_instance, note);
+    }
+    else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    {
+        brick6_sampler_runtime_stop(ui_get_active_track());
     }
     else
     {

@@ -25,6 +25,7 @@
 #include "Core/brick6_master_buffer.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/voice_manager.h"
+#include "Storage/sd_preview.h"
 #include "mixer.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
@@ -343,6 +344,10 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     }
 
     mixer_process(tracks, track_count, frames);
+    if (track_count > 0U)
+    {
+        (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
+    }
 
     const float xfade_end = brick6_audio_runtime_get_buffer_xfade();
     if ((track_count > 0U) && ((g_buffer_xfade_prev > 0.0f) || (xfade_end > 0.0f)))

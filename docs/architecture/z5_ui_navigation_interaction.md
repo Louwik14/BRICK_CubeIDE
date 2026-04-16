@@ -266,6 +266,9 @@ Points factuels:
   - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
 - Un sous-onglet `SLICE` borne `Slice Count` sans editeur de slices.
 - Cette passe ne cree pas de nouvelle navigation produit ni d'editor Slice.
+- `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.
+- La preecoute s'arrete au changement de selection, au retour/back, et avant `Load/Replace`.
+- `Load/Replace` reste l'autorite d'import vers le pool projet; la preview reste hors slots projet.
 - Invariants conserves:
   - pas de seconde autorite UI,
   - pas de refonte de page,

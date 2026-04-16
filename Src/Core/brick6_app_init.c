@@ -40,6 +40,7 @@
 #include "Storage/project_v1.h"
 #include "Storage/undo_v1.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/sd_preview.h"
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -78,6 +79,7 @@ void brick6_app_init(void)
     audio_tracks_init();
 
     sd_access_gate_init();
+    sd_preview_init();
 
     brick6_sampler_bootstrap_load_pool();
 
@@ -147,6 +149,7 @@ void brick6_app_process(void)
      */
     seq_runtime_time_adapter_process();
     pattern_live_service();
+    sd_preview_process();
     brick6_master_control_process();
 
     hall_loop_process();

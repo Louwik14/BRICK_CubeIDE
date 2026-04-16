@@ -26,6 +26,8 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Storage/wav_audio_codec.h"
+#include "Storage/wav_audio_stream.h"
 #include "Storage/wav_parser.h"
 #include "Storage/sd_access_gate.h"
 
@@ -48,11 +50,12 @@
 SDRAM_SAMPLES static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
 
 #define SAMPLE_POOL_RESIDENT_SLOTS (32U)
-#define SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE (65536U)
-SDRAM_SAMPLES static float g_sample_pool_data[SAMPLE_POOL_RESIDENT_SLOTS][SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE * 2U];
+#define SAMPLE_POOL_TOTAL_FRAMES (SAMPLE_POOL_RESIDENT_SLOTS * 65536U)
+SDRAM_SAMPLES static float g_sample_pool_data[SAMPLE_POOL_TOTAL_FRAMES * 2U];
 
 static CTRL_STATE int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
 static CTRL_STATE uint8_t g_sample_slot_in_use[SAMPLE_POOL_RESIDENT_SLOTS];
+static CTRL_STATE uint32_t g_sample_region_start[SAMPLE_POOL_SIZE];
 static CTRL_STATE sample_pool_load_error_t g_sample_pool_last_load_error = SAMPLE_POOL_LOAD_OK;
 static CTRL_STATE uint8_t g_sample_pool_last_sd_error_code;
 
@@ -75,36 +78,6 @@ static void sample_pool_set_error(sample_pool_load_error_t error, FRESULT fr)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static float sample_pool_pcm24_to_float(const uint8_t *p)
-{
-    int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
-    if((v & 0x00800000L) != 0)
-        v |= (int32_t)0xFF000000L;
-    return (float)v * (1.0f / 8388608.0f);
-}
-
-/**
- * @brief Point d'entrée sample_pool_pcm32_to_float.
- *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_pcm32_to_float.
- *
- * @param p Paramètre d'entrée de l'API.
- *
- * @return Valeur de retour définie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-static float sample_pool_pcm32_to_float(const uint8_t *p)
-{
-    int32_t v = (int32_t)((uint32_t)p[0] |
-                          ((uint32_t)p[1] << 8) |
-                          ((uint32_t)p[2] << 16) |
-                          ((uint32_t)p[3] << 24));
-    return (float)v * (1.0f / 2147483648.0f);
-}
-
 /**
  * @brief Point d'entrée sample_pool_release_slot.
  *
@@ -126,6 +99,7 @@ static void sample_pool_release_slot(uint16_t sample_id)
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
 
     g_sample_slot_by_sample[sample_id] = -1;
+    g_sample_region_start[sample_id] = 0U;
 }
 
 /**
@@ -154,6 +128,55 @@ static int16_t sample_pool_alloc_slot(void)
     return -1;
 }
 
+static uint32_t sample_pool_region_end(uint32_t sample_id)
+{
+    return g_sample_region_start[sample_id] + g_sample_pool[sample_id].length_frames;
+}
+
+static int16_t sample_pool_alloc_region(uint32_t frames, uint32_t *start_frame)
+{
+    uint32_t cursor = 0U;
+
+    if((frames == 0U) || (frames > SAMPLE_POOL_TOTAL_FRAMES) || (start_frame == NULL))
+        return -1;
+
+    while(cursor + frames <= SAMPLE_POOL_TOTAL_FRAMES)
+    {
+        uint32_t next_start = SAMPLE_POOL_TOTAL_FRAMES;
+        int16_t next_sample = -1;
+
+        for(uint32_t i = 0U; i < SAMPLE_POOL_SIZE; i++)
+        {
+            const sample_desc_t *const desc = &g_sample_pool[i];
+            if((g_sample_slot_by_sample[i] < 0) || (desc->valid == 0U) || (desc->data == NULL) || (desc->length_frames == 0U))
+                continue;
+
+            const uint32_t region_start = g_sample_region_start[i];
+            if((region_start >= cursor) && (region_start < next_start))
+            {
+                next_start = region_start;
+                next_sample = (int16_t)i;
+            }
+        }
+
+        if(next_sample < 0)
+        {
+            *start_frame = cursor;
+            return 0;
+        }
+
+        if(cursor + frames <= next_start)
+        {
+            *start_frame = cursor;
+            return 0;
+        }
+
+        cursor = sample_pool_region_end((uint32_t)next_sample);
+    }
+
+    return -1;
+}
+
 #if SAMPLE_POOL_HAS_FATFS
 /**
  * @brief Point d'entrée sample_pool_load_full_data.
@@ -174,29 +197,36 @@ static int16_t sample_pool_alloc_slot(void)
  */
 static bool sample_pool_load_full_data(FIL *fp,
                                        uint16_t slot,
+                                       uint16_t sample_id,
                                        const wav_info_t *info,
                                        uint32_t data_size_aligned,
                                        sample_desc_t *desc)
 {
-    uint8_t io_buf[512U * 8U];
-    const uint32_t bytes_per_frame = info->block_align;
-    const uint32_t total_frames = data_size_aligned / bytes_per_frame;
+    wav_audio_stream_t stream;
+    const uint32_t source_frames = data_size_aligned / info->block_align;
+    const uint32_t target_rate = 48000U;
+    const uint32_t total_frames = (uint32_t)(((uint64_t)source_frames * (uint64_t)target_rate
+                                              + (uint64_t)info->sample_rate - 1U)
+                                             / (uint64_t)info->sample_rate);
     uint32_t loaded_frames = 0U;
+    uint32_t start_frame = 0U;
 
-    if(total_frames == 0U)
+    if((source_frames == 0U) || (total_frames == 0U))
         return false;
 
-    if(total_frames > SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE)
+    if(sample_pool_alloc_region(total_frames, &start_frame) != 0)
     {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] sample too large slot=%u frames=%lu max=%u\n",
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] pool full sample=%u slot=%u frames=%lu total=%u\n",
+                        (unsigned)sample_id,
                         (unsigned)slot,
                         (unsigned long)total_frames,
-                        (unsigned)SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE);
+                        (unsigned)SAMPLE_POOL_TOTAL_FRAMES);
         sample_pool_set_error(SAMPLE_POOL_LOAD_MEMORY_LIMIT, FR_OK);
         return false;
     }
 
-    if(f_lseek(fp, info->data_offset) != FR_OK)
+    wav_audio_stream_init(&stream, fp, info, target_rate);
+    if (wav_audio_stream_start(&stream, info->data_offset) == 0U)
     {
         sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, FR_DISK_ERR);
         return false;
@@ -204,43 +234,20 @@ static bool sample_pool_load_full_data(FIL *fp,
 
     while(loaded_frames < total_frames)
     {
-        const uint32_t frames_left = total_frames - loaded_frames;
-        const uint32_t chunk_frames = (frames_left > 512U) ? 512U : frames_left;
-        const uint32_t chunk_bytes = chunk_frames * bytes_per_frame;
+        float left = 0.0f;
+        float right = 0.0f;
 
-        UINT br = 0U;
-        const FRESULT fr = f_read(fp, io_buf, chunk_bytes, &br);
-        if((fr != FR_OK) || (br == 0U))
+        if (wav_audio_stream_next_frame(&stream, &left, &right) == 0U)
         {
-            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, fr);
             break;
         }
 
-        const uint32_t ready_frames = br / bytes_per_frame;
-        for(uint32_t i = 0U; i < ready_frames; i++)
-        {
-            const uint8_t *frame = &io_buf[i * bytes_per_frame];
-            const uint32_t out = (loaded_frames + i) * 2U;
-
-            if(info->bits_per_sample == 24U)
-            {
-                g_sample_pool_data[slot][out] = sample_pool_pcm24_to_float(&frame[0]);
-                g_sample_pool_data[slot][out + 1U] = sample_pool_pcm24_to_float(&frame[3]);
-            }
-            else
-            {
-                g_sample_pool_data[slot][out] = sample_pool_pcm32_to_float(&frame[0]);
-                g_sample_pool_data[slot][out + 1U] = sample_pool_pcm32_to_float(&frame[4]);
-            }
-        }
-
-        loaded_frames += ready_frames;
-
-        if(ready_frames < chunk_frames)
-            break;
+        g_sample_pool_data[(start_frame + loaded_frames) * 2U] = left;
+        g_sample_pool_data[(start_frame + loaded_frames) * 2U + 1U] = right;
+        loaded_frames++;
     }
 
-    if(loaded_frames != total_frames)
+    if ((loaded_frames == 0U) || (stream.io_error != 0U))
     {
         if (g_sample_pool_last_load_error == SAMPLE_POOL_LOAD_OK)
         {
@@ -249,7 +256,14 @@ static bool sample_pool_load_full_data(FIL *fp,
         return false;
     }
 
-    desc->data = &g_sample_pool_data[slot][0];
+    g_sample_region_start[sample_id] = start_frame;
+    desc->data_start_frame = start_frame;
+    desc->data = &g_sample_pool_data[start_frame * 2U];
+    desc->length_frames = loaded_frames;
+    desc->sample_rate = target_rate;
+    desc->channels = 2U;
+    desc->bits_per_sample = 32U;
+    desc->bytes_per_frame = sizeof(float) * 2U;
     return true;
 }
 #endif
@@ -278,6 +292,7 @@ static void sample_pool_clear_entry(sample_desc_t *desc)
     memset(desc, 0, sizeof(*desc));
     desc->data = NULL;
     desc->valid = 0U;
+    desc->data_start_frame = 0U;
 }
 
 void sample_pool_clear(uint16_t id)
@@ -287,6 +302,7 @@ void sample_pool_clear(uint16_t id)
 
     sample_pool_release_slot(id);
     sample_pool_clear_entry(&g_sample_pool[id]);
+    g_sample_region_start[id] = 0U;
 }
 
 /**
@@ -346,6 +362,7 @@ void sample_pool_init(void)
     {
         sample_pool_clear_entry(&g_sample_pool[i]);
         g_sample_slot_by_sample[i] = -1;
+        g_sample_region_start[i] = 0U;
     }
 
     memset(g_sample_slot_in_use, 0, sizeof(g_sample_slot_in_use));
@@ -491,12 +508,11 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    if((info.audio_format != 1U) ||
-       (info.sample_rate != 48000U) ||
-       (info.channels != 2U) ||
-       ((info.bits_per_sample != 24U) && (info.bits_per_sample != 32U)) ||
+    if(!((info.audio_format == 1U) || (info.audio_format == 65534U)) ||
+       ((info.channels != 1U) && (info.channels != 2U)) ||
+       ((info.bits_per_sample != 16U) && (info.bits_per_sample != 24U) && (info.bits_per_sample != 32U)) ||
        (info.block_align == 0U) ||
-       (info.byte_rate != (info.sample_rate * info.block_align)))
+       (info.sample_rate == 0U))
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] wav unsupported id=%u path=%s fmt=%u sr=%lu ch=%u bits=%u align=%u br=%lu\n",
                         (unsigned)id,
@@ -518,13 +534,14 @@ bool sample_pool_load(uint16_t id, const char *path)
     const uint32_t data_size_aligned = info.data_size - (info.data_size % bytes_per_frame);
 
     desc->data_offset = info.data_offset;
-    desc->length_frames = data_size_aligned / bytes_per_frame;
-    desc->bytes_per_frame = bytes_per_frame;
-    desc->sample_rate = info.sample_rate;
-    desc->channels = info.channels;
-    desc->bits_per_sample = info.bits_per_sample;
+    desc->length_frames = 0U;
+    desc->bytes_per_frame = sizeof(float) * 2U;
+    desc->data_start_frame = 0U;
+    desc->sample_rate = 48000U;
+    desc->channels = 2U;
+    desc->bits_per_sample = 32U;
 
-    if(!sample_pool_load_full_data(&fp, (uint16_t)slot, &info, data_size_aligned, desc))
+    if(!sample_pool_load_full_data(&fp, (uint16_t)slot, id, &info, data_size_aligned, desc))
     {
         if (g_sample_pool_last_load_error == SAMPLE_POOL_LOAD_OK)
         {

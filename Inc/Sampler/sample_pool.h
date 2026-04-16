@@ -37,6 +37,7 @@ typedef struct
     uint32_t data_offset;
     uint32_t length_frames;
     uint32_t bytes_per_frame;
+    uint32_t data_start_frame;
 
     uint32_t sample_rate;
     uint16_t channels;

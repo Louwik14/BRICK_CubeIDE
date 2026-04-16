@@ -15,7 +15,9 @@ Perimetre operationnel de zone (appartient a Z6):
 - `Inc/Storage/boot_context_flash.h`
 
 Elargissements necessaires (preuve de contrats et frontieres):
-- `Src/Storage/sd_access_gate.c` + `Inc/Storage/sd_access_gate.h`: arbitrage d'acces SD entre clients PATTERN/PROJECT.
+- `Src/Storage/sd_access_gate.c` + `Inc/Storage/sd_access_gate.h`: arbitrage d'acces SD entre clients PATTERN/PROJECT/PREVIEW.
+- `Src/Storage/sd_preview.c` + `Inc/Storage/sd_preview.h`: facade preview SD dediee, separee de l'import projet.
+- `Src/Storage/wav_audio_codec.c` + `Inc/Storage/wav_audio_codec.h`: decode PCM partage pour import et preview.
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
 - `Src/UI/ui_core.c`: preuve des appels UI vers `pattern_live_capture_to_slot` et `pattern_live_queue_slot`.
 - `Src/UI/pages/ui_page_settings.c`: preuve des appels UI vers `project_v1_save_slot/load_slot/delete_slot`.
@@ -55,6 +57,10 @@ Autorite orchestration projet:
 
 Autorite persistence projet SD:
 - `project_sd_bank_store_slot()`, `project_sd_bank_load_slot()`, `project_sd_bank_delete_slot()`, `project_sd_bank_is_slot_equivalent_to_live()`.
+
+Autorite preview SD:
+- `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
+- Le service conserve une session SD exclusive et alimente un ring buffer audio pre-rendu hors IRQ.
 
 Autorite boot context flash:
 - `boot_context_flash_load()`, `boot_context_flash_commit()`, `boot_context_flash_clear()`.
@@ -231,7 +237,8 @@ Effets aval:
 - APIs projet mutantes protegent contre ISR (`__get_IPSR`).
 - `pattern_live_apply_snapshot` fait des boucles `PARAM_COUNT x SEQ_TRACK_COUNT` + seq full copy, cout variable mais hors IRQ audio.
 - Pas de malloc observe dans les fichiers Z6; buffers statiques (`UI_SDRAM`, `DMA_BUFFER`, globals).
-- Coordination SD via `sd_access_gate` evite collisions clients heterogenes (pattern/project vs autres clients non project-pattern).
+- Coordination SD via `sd_access_gate` evite collisions clients heterogenes (pattern/project/preview vs autres clients).
+- La preview SD lit les formats source WAV et ne touche jamais le pool projet 64 slots.
 
 ## 8. Invariants a ne pas casser
 

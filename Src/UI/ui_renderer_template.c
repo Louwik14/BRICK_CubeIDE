@@ -43,23 +43,16 @@ static const uint8_t g_ui_template_footer_w[4] = {31U, 31U, 31U, 31U};
 static const char *const g_ui_template_midi_note_names[12] = {"C", "C#", "D", "D#", "E", "F",
                                                                "F#", "G", "G#", "A", "A#", "B"};
 
-static uint8_t ui_renderer_template_is_drum_pitch_offset_param(param_id_t id)
+static void ui_renderer_template_format_semitones(float value, char *out, uint32_t out_len)
 {
-    switch (id)
+    const int32_t semitones = (int32_t)((value >= 0.0f) ? (value + 0.5f) : (value - 0.5f));
+    if (semitones == 0)
     {
-        case PARAM_DRUM_TRX_BD_PITCH:
-        case PARAM_DRUM_TRX_CLAVES_PITCH:
-        case PARAM_DRUM_TRX_SNARE_PITCH:
-        case PARAM_DRUM_FM_KICK_PITCH:
-        case PARAM_DRUM_FM_SNARE_PITCH:
-        case PARAM_DRUM_FM_TOM_PITCH:
-        case PARAM_DRUM_FM_RIMSHOT_RIM_PITCH:
-        case PARAM_DRUM_FM_RIMSHOT_BODY_PITCH:
-        case PARAM_DRUM_FM_COWBELL_PITCH:
-            return 1U;
-        default:
-            return 0U;
+        (void)snprintf(out, out_len, "0 st");
+        return;
     }
+
+    (void)snprintf(out, out_len, "%+ld st", (long)semitones);
 }
 
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
@@ -123,10 +116,11 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    if (ui_renderer_template_is_drum_pitch_offset_param(id) != 0U)
+    if ((desc->display_type == PARAM_DISPLAY_INT)
+            && (desc->unit != NULL)
+            && (strcmp(desc->unit, "st") == 0))
     {
-        const int32_t semitones = (int32_t)((value >= 0.0f) ? (value + 0.5f) : (value - 0.5f));
-        (void)snprintf(out, out_len, "%+ldst", (long)semitones);
+        ui_renderer_template_format_semitones(value, out, out_len);
         return;
     }
 
