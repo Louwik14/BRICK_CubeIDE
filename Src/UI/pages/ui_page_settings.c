@@ -90,6 +90,31 @@ typedef struct
 
 static ui_settings_state_t g_ui_settings;
 
+static const char *ui_page_settings_sampler_load_error_label(void)
+{
+    switch (sample_pool_get_last_load_error())
+    {
+        case SAMPLE_POOL_LOAD_SD_MOUNT_FAIL:
+            return "SD UNAVAILABLE";
+        case SAMPLE_POOL_LOAD_SD_GATE_REFUSED:
+            return "SD GATE REFUSED";
+        case SAMPLE_POOL_LOAD_SD_FILE_NOT_FOUND:
+            return "FILE NOT FOUND";
+        case SAMPLE_POOL_LOAD_SD_OPEN_FAIL:
+            return "OPEN FAIL";
+        case SAMPLE_POOL_LOAD_WAV_PARSE_FAIL:
+            return "WAV INVALID";
+        case SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT:
+            return "WAV UNSUPPORTED";
+        case SAMPLE_POOL_LOAD_MEMORY_LIMIT:
+            return "MEMORY FULL";
+        case SAMPLE_POOL_LOAD_SD_READ_FAIL:
+            return "SD READ FAIL";
+        default:
+            return "LOAD SD FAIL";
+    }
+}
+
 static void ui_page_settings_refresh_project_slots(void)
 {
     project_v1_refresh_slots();
@@ -470,7 +495,12 @@ static void ui_page_settings_apply_action(void)
                     }
                     else
                     {
-                        ui_page_settings_status("LOAD SD FAIL");
+                        printf("[SAMPLER][UI] load fail slot=%u err=%u sd_err=%u path=%s\r\n",
+                               (unsigned)g_ui_settings.selected_slot,
+                               (unsigned)sample_pool_get_last_load_error(),
+                               (unsigned)sample_pool_get_last_sd_error_code(),
+                               entry->path);
+                        ui_page_settings_status(ui_page_settings_sampler_load_error_label());
                     }
                 }
             }

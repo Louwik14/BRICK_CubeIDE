@@ -53,6 +53,14 @@ SDRAM_SAMPLES static float g_sample_pool_data[SAMPLE_POOL_RESIDENT_SLOTS][SAMPLE
 
 static CTRL_STATE int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
 static CTRL_STATE uint8_t g_sample_slot_in_use[SAMPLE_POOL_RESIDENT_SLOTS];
+static CTRL_STATE sample_pool_load_error_t g_sample_pool_last_load_error = SAMPLE_POOL_LOAD_OK;
+static CTRL_STATE uint8_t g_sample_pool_last_sd_error_code;
+
+static void sample_pool_set_error(sample_pool_load_error_t error, FRESULT fr)
+{
+    g_sample_pool_last_load_error = error;
+    g_sample_pool_last_sd_error_code = (uint8_t)fr;
+}
 
 /**
  * @brief Point d'entrée sample_pool_pcm24_to_float.
@@ -184,11 +192,15 @@ static bool sample_pool_load_full_data(FIL *fp,
                         (unsigned)slot,
                         (unsigned long)total_frames,
                         (unsigned)SAMPLE_POOL_MAX_FRAMES_PER_SAMPLE);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_MEMORY_LIMIT, FR_OK);
         return false;
     }
 
     if(f_lseek(fp, info->data_offset) != FR_OK)
+    {
+        sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, FR_DISK_ERR);
         return false;
+    }
 
     while(loaded_frames < total_frames)
     {
@@ -197,8 +209,12 @@ static bool sample_pool_load_full_data(FIL *fp,
         const uint32_t chunk_bytes = chunk_frames * bytes_per_frame;
 
         UINT br = 0U;
-        if((f_read(fp, io_buf, chunk_bytes, &br) != FR_OK) || (br == 0U))
+        const FRESULT fr = f_read(fp, io_buf, chunk_bytes, &br);
+        if((fr != FR_OK) || (br == 0U))
+        {
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, fr);
             break;
+        }
 
         const uint32_t ready_frames = br / bytes_per_frame;
         for(uint32_t i = 0U; i < ready_frames; i++)
@@ -225,7 +241,13 @@ static bool sample_pool_load_full_data(FIL *fp,
     }
 
     if(loaded_frames != total_frames)
+    {
+        if (g_sample_pool_last_load_error == SAMPLE_POOL_LOAD_OK)
+        {
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, FR_DISK_ERR);
+        }
         return false;
+    }
 
     desc->data = &g_sample_pool_data[slot][0];
     return true;
@@ -331,6 +353,7 @@ void sample_pool_init(void)
 #if SAMPLE_POOL_HAS_FATFS
     g_sample_pool_fs_mounted = 0U;
 #endif
+    sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 }
 
 /**
@@ -349,9 +372,12 @@ void sample_pool_init(void)
  */
 bool sample_pool_load(uint16_t id, const char *path)
 {
+    sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
+
     if(id >= SAMPLE_POOL_SIZE)
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] invalid id=%u\n", (unsigned)id);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_ID, FR_INVALID_PARAMETER);
         return false;
     }
 
@@ -362,6 +388,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     if((path == NULL) || (path[0] == '\0'))
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u invalid path\n", (unsigned)id);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
     }
 
@@ -372,6 +399,7 @@ bool sample_pool_load(uint16_t id, const char *path)
                         (unsigned)id,
                         (unsigned long)raw_path_len,
                         (unsigned)SAMPLE_POOL_PATH_MAX);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_PATH_TOO_LONG, FR_INVALID_NAME);
         return false;
     }
 
@@ -382,6 +410,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u path invalid/empty after trim\n",
                         (unsigned)id);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
     }
 
@@ -389,6 +418,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     if(slot < 0)
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] no free resident slots for id=%u\n", (unsigned)id);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_NO_FREE_SLOT, FR_NOT_ENOUGH_CORE);
         return false;
     }
 
@@ -396,6 +426,8 @@ bool sample_pool_load(uint16_t id, const char *path)
     uint8_t sd_gate_held = 0U;
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
     {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] sd gate refused for id=%u path=%s\n", (unsigned)id, desc->path);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_SD_GATE_REFUSED, FR_TIMEOUT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
@@ -408,6 +440,11 @@ bool sample_pool_load(uint16_t id, const char *path)
         sd_access_trace_end("sample_pool_f_mount", (int)mount_fr, 0U);
         if(mount_fr != FR_OK)
         {
+            SAMPLE_POOL_LOG("[SAMPLE_POOL] f_mount failed id=%u path=%s fr=%d\n",
+                            (unsigned)id,
+                            desc->path,
+                            (int)mount_fr);
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, mount_fr);
             sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
             g_sample_slot_in_use[(uint32_t)slot] = 0U;
             return false;
@@ -422,6 +459,18 @@ bool sample_pool_load(uint16_t id, const char *path)
     sd_access_trace_end("sample_pool_f_open", (int)open_fr, 0U);
     if(open_fr != FR_OK)
     {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] f_open failed id=%u path=%s fr=%d\n",
+                        (unsigned)id,
+                        desc->path,
+                        (int)open_fr);
+        if (open_fr == FR_NO_FILE)
+        {
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_FILE_NOT_FOUND, open_fr);
+        }
+        else
+        {
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_OPEN_FAIL, open_fr);
+        }
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
@@ -432,6 +481,10 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     if(!wav_parser_parse_info(&fp, &info))
     {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] wav parse failed id=%u path=%s\n",
+                        (unsigned)id,
+                        desc->path);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_PARSE_FAIL, FR_INVALID_OBJECT);
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
@@ -445,6 +498,16 @@ bool sample_pool_load(uint16_t id, const char *path)
        (info.block_align == 0U) ||
        (info.byte_rate != (info.sample_rate * info.block_align)))
     {
+        SAMPLE_POOL_LOG("[SAMPLE_POOL] wav unsupported id=%u path=%s fmt=%u sr=%lu ch=%u bits=%u align=%u br=%lu\n",
+                        (unsigned)id,
+                        desc->path,
+                        (unsigned)info.audio_format,
+                        (unsigned long)info.sample_rate,
+                        (unsigned)info.channels,
+                        (unsigned)info.bits_per_sample,
+                        (unsigned)info.block_align,
+                        (unsigned long)info.byte_rate);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
@@ -463,6 +526,10 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     if(!sample_pool_load_full_data(&fp, (uint16_t)slot, &info, data_size_aligned, desc))
     {
+        if (g_sample_pool_last_load_error == SAMPLE_POOL_LOAD_OK)
+        {
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, FR_DISK_ERR);
+        }
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
@@ -482,6 +549,7 @@ bool sample_pool_load(uint16_t id, const char *path)
                     (int)slot,
                     desc->path,
                     (unsigned long)desc->length_frames);
+    sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 
     return true;
 #else
@@ -520,4 +588,14 @@ sample_pool_slot_state_t sample_pool_get_state(uint16_t id)
     }
 
     return (desc->path[0] != '\0') ? SAMPLE_POOL_SLOT_MISSING : SAMPLE_POOL_SLOT_EMPTY;
+}
+
+sample_pool_load_error_t sample_pool_get_last_load_error(void)
+{
+    return g_sample_pool_last_load_error;
+}
+
+uint8_t sample_pool_get_last_sd_error_code(void)
+{
+    return g_sample_pool_last_sd_error_code;
 }
