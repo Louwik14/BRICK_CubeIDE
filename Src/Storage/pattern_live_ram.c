@@ -100,11 +100,6 @@ static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
     return (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX);
 }
 
-static uint8_t pattern_live_is_legacy_physical_mix_param(param_id_t id)
-{
-    return ((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1)) ? 1U : 0U;
-}
-
 static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
@@ -120,7 +115,7 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         return 0U;
     }
 
-    if (pattern_live_is_legacy_physical_mix_param(id) != 0U)
+    if (param_registry_is_legacy_physical_mix_param(id) != 0U)
     {
         return 0U;
     }
@@ -148,6 +143,66 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
 
         default:
             return 0U;
+    }
+}
+
+static uint8_t pattern_live_map_legacy_mix_global(param_id_t id, uint8_t *out_track, param_id_t *out_param)
+{
+    if ((out_track == 0) || (out_param == 0))
+    {
+        return 0U;
+    }
+
+    if ((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_GAIN))
+    {
+        *out_track = (uint8_t)(id - PARAM_MIX_TRACK0_GAIN);
+        *out_param = PARAM_MIX_LEVEL;
+        return 1U;
+    }
+
+    if ((id >= PARAM_MIX_TRACK0_PAN) && (id <= PARAM_MIX_TRACK3_PAN))
+    {
+        *out_track = (uint8_t)(id - PARAM_MIX_TRACK0_PAN);
+        *out_param = PARAM_MIX_PAN;
+        return 1U;
+    }
+
+    if ((id >= PARAM_MIX_TRACK0_MUTE) && (id <= PARAM_MIX_TRACK3_MUTE))
+    {
+        *out_track = (uint8_t)(id - PARAM_MIX_TRACK0_MUTE);
+        *out_param = PARAM_MIX_MUTE;
+        return 1U;
+    }
+
+    if ((id >= PARAM_MIX_TRACK0_SEND0) && (id <= PARAM_MIX_TRACK3_SEND1))
+    {
+        const uint8_t offset = (uint8_t)(id - PARAM_MIX_TRACK0_SEND0);
+        *out_track = (uint8_t)(offset / 2U);
+        *out_param = ((offset % 2U) == 0U) ? PARAM_MIX_SEND1 : PARAM_MIX_SEND2;
+        return 1U;
+    }
+
+    return 0U;
+}
+
+static void pattern_live_apply_legacy_mix_globals_as_track_values(const PatternSaveV1 *pattern)
+{
+    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
+    {
+        const param_id_t id = (param_id_t)id_raw;
+        uint8_t track = 0U;
+        param_id_t target = PARAM_COUNT;
+
+        if ((pattern->globals.global_valid[id] == 0U)
+            || (pattern_live_map_legacy_mix_global(id, &track, &target) == 0U)
+            || (track >= SEQ_TRACK_COUNT)
+            || (target >= PARAM_COUNT)
+            || (pattern->mix.track_valid[track][target] != 0U))
+        {
+            continue;
+        }
+
+        (void)param_registry_apply_track_value(target, track, pattern->globals.global_values[id]);
     }
 }
 
@@ -457,6 +512,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     }
 
     param_registry_batch_begin();
+    pattern_live_apply_legacy_mix_globals_as_track_values(pattern);
 
     for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
     {
@@ -477,7 +533,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
         if (pattern->globals.global_valid[id] != 0U)
         {
-            if ((pattern_live_is_legacy_physical_mix_param(id) != 0U)
+            if ((param_registry_is_legacy_physical_mix_param(id) != 0U)
                     || (pattern_live_is_track_scoped_param(id) != 0U))
             {
                 continue;

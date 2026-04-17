@@ -936,6 +936,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIX_PAN:
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
+        case PARAM_MIX_MUTE:
         case PARAM_HYBRID_GATE:
         case PARAM_VCA_ATTACK:
         case PARAM_VCA_DECAY:

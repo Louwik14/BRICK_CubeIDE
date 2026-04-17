@@ -16,6 +16,7 @@ enum {
     PARAM_GRAN_SPREAD,
     PARAM_GRAN_STEREO,
 
+    /* Legacy physical MIX tombstones kept to preserve PARAM_COUNT-indexed storage layout. */
     PARAM_MIX_TRACK0_GAIN,
     PARAM_MIX_TRACK1_GAIN,
     PARAM_MIX_TRACK2_GAIN,
@@ -354,6 +355,9 @@ enum {
 
     PARAM_COUNT
 };
+
+/* Normal track-aware MIX mute reuses the first legacy tombstone ID to avoid renumbering storage. */
+#define PARAM_MIX_MUTE PARAM_MIX_TRACK0_MUTE
 
 void param_store_init(void);
 void param_store_set_staging(param_id_t id, float v);

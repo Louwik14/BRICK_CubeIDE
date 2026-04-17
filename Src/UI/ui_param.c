@@ -29,7 +29,7 @@
 #include "Core/track_runtime.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
-
+#include "Storage/undo_v1.h"
 typedef struct
 {
     ui_param_bank_t bank;
@@ -84,6 +84,12 @@ static int8_t ui_param_signum(int16_t value)
     }
 
     return 0;
+}
+
+static uint8_t ui_param_value_is_same(float a, float b)
+{
+    const float diff = a - b;
+    return ((diff > -0.000001f) && (diff < 0.000001f)) ? 1U : 0U;
 }
 
 static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family)
@@ -251,13 +257,31 @@ static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
 {
     if (ui_param_is_track_scoped(param) == 0U)
     {
-        param_set(param, value);
+        const param_desc_t *const desc = &param_registry[param];
+        const float clamped = ui_param_clamp(value, desc->min, desc->max);
+        if (ui_param_value_is_same(param_get(param), clamped) != 0U)
+        {
+            return 1U;
+        }
+
+        (void)undo_v1_capture_before_edit(0U);
+        param_set(param, clamped);
         return 1U;
     }
 
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
     const uint8_t active_track = ui_get_active_track();
+    float current_value = 0.0f;
+
+    if ((param_registry_get_track_value(param, active_track, &current_value) != 0U)
+            && (ui_param_value_is_same(current_value, clamped) != 0U))
+    {
+        param_store_set_active(param, clamped);
+        return 1U;
+    }
+
+    (void)undo_v1_capture_before_edit(0U);
 
     if (param_registry_apply_track_value(param, active_track, clamped) == 0U)
     {
@@ -530,6 +554,10 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     if (param == PARAM_CFG_TRACK)
     {
         value = ui_param_step_cfg_track(value, ui_param_signum(delta));
+        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param)) != 0U)
+        {
+            return;
+        }
         ui_param_set_active_track_value(param, value);
         return;
     }
@@ -537,12 +565,24 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     if (param == PARAM_CFG_TRACK_TYPE)
     {
         value = ui_param_step_cfg_track_type(value, ui_param_signum(delta));
+        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param)) != 0U)
+        {
+            return;
+        }
         ui_param_set_active_track_value(param, value);
         return;
     }
 
-    value += (float)delta * desc->step;
-    value = ui_param_clamp(value, min_value, max_value);
+    {
+        const float current_value = value;
+        value += (float)delta * desc->step;
+        value = ui_param_clamp(value, min_value, max_value);
+
+        if (ui_param_value_is_same(value, current_value) != 0U)
+        {
+            return;
+        }
+    }
 
     ui_param_set_active_track_value(param, value);
 }

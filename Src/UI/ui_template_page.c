@@ -239,6 +239,14 @@ void ui_template_page_handle_event(const ui_event_t *ev)
 
 void ui_template_page_tick(void)
 {
+    ui_template_page_state_t *state = ui_template_page_get_active_state();
+    if (state == 0)
+    {
+        ui_param_set_bank(0);
+        return;
+    }
+
+    ui_template_page_apply_active_bank(state);
 }
 
 void ui_template_page_render(void)

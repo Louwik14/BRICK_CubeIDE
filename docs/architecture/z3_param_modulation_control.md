@@ -36,15 +36,15 @@ Familles d'autorite:
   - Release: restaure la base, jamais la derniere valeur modulee.
 
 - `legacy-physical` (`PARAM_MIX_TRACK0..3_*`):
-  - API: `param_set` -> `param_apply_legacy_mix_track_value`.
-  - Statut: legacy assume / compat minimale / ilot borne.
+  - Statut: tombstones de compat storage/load-only.
+  - Pas de write runtime normal; les flows utilisateur MIX passent par `PARAM_MIX_*` et `param_registry_apply_track_value`.
 
 ## 3. Statut des chemins sensibles
 
 - `control_router_set_param`:
-  - Statut: dormant legacy.
+  - Statut: dormant compat.
   - Aucun caller actif trouve dans `Src/`.
-  - Hors stabilisation immediate Z3.
+  - Les macros `CTRL_PARAM_MIX_TRACK0..3_*` ne sont pas exposees.
 
 - Restore LFO (Z6 via `pattern_live_apply_snapshot`):
   - Autorite unique: `mod_lfo_v1_set_track_param`.
@@ -81,13 +81,13 @@ Familles d'autorite:
 - `param_store.active[]`:
   - global-only: verite runtime.
   - track-scoped UI: miroir UI.
-- `PARAM_MIX_TRACK0..3_*` reste un ilot legacy physique borne.
+- `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 
 ## 6. Dette technique restante (bornee)
 
-- Coexistence maintenue `param_set` (global/legacy) vs `param_registry_apply_track_value` (track-aware).
+- Coexistence maintenue `param_set` (global) vs `param_registry_apply_track_value` (track-aware).
 - `param_registry.c` reste monolithique (metadata + dispatch + cache + filtres + bindings).
-- Ilot legacy `PARAM_MIX_TRACK0..3_*` toujours vivant (UI mute/restore/boot defaults), mais confine.
+- Ilot legacy `PARAM_MIX_TRACK0..3_*` conserve pour layout storage et migration load-only; UI mute, restore normal et boot defaults ne l'utilisent plus comme runtime physique.
 
 ## 7. Carte courte de la dette reelle (audit code)
 

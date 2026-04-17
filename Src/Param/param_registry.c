@@ -228,99 +228,30 @@ static float filter_eq_ui127_to_db(float v)
 }
 
 /*
- * Legacy MIX params (PARAM_MIX_TRACKx_*) still target physical audio mixer tracks.
- * Cardinality is intentionally tied to MAX_TRACKS (physical/audio), while
- * PARAM_MIX_* (without TRACKx) is resolved per logical runtime track (SEQ/UI).
+ * Legacy MIX params (PARAM_MIX_TRACKx_*) are storage tombstones/load-only compat.
+ * Normal MIX runtime writes use PARAM_MIX_* through param_registry_apply_track_value(track,...).
  */
 #define PARAM_MIX_LEGACY_TRACK_COUNT MAX_TRACKS
 #if PARAM_MIX_LEGACY_TRACK_COUNT != 4U
 #error "Legacy PARAM_MIX_TRACKx mapping assumes 4 physical tracks"
 #endif
 
-static uint8_t param_apply_legacy_mix_track_value(param_id_t id, float value)
+uint8_t param_registry_is_legacy_physical_mix_param(param_id_t id)
 {
-    uint8_t track = 0U;
-
-    if ((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_GAIN))
-    {
-        track = (uint8_t)(id - PARAM_MIX_TRACK0_GAIN);
-        mixer_set_track_gain(track, value);
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_PAN) && (id <= PARAM_MIX_TRACK3_PAN))
-    {
-        track = (uint8_t)(id - PARAM_MIX_TRACK0_PAN);
-        mixer_set_track_pan(track, value);
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_MUTE) && (id <= PARAM_MIX_TRACK3_MUTE))
-    {
-        track = (uint8_t)(id - PARAM_MIX_TRACK0_MUTE);
-        mixer_set_track_mute(track, (value >= 0.5f) ? 1U : 0U);
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_ROUTE) && (id <= PARAM_MIX_TRACK3_ROUTE))
-    {
-        track = (uint8_t)(id - PARAM_MIX_TRACK0_ROUTE);
-        mixer_set_track_route(track, (mixer_route_t)((uint32_t)value & 0x3U));
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_INSERT0) && (id <= PARAM_MIX_TRACK3_INSERT1))
-    {
-        const uint8_t offset = (uint8_t)(id - PARAM_MIX_TRACK0_INSERT0);
-        track = (uint8_t)(offset / 2U);
-        const uint8_t slot = (uint8_t)(offset % 2U);
-        mixer_set_track_insert_slot(track, slot, control_float_to_slot(value));
-        return 1U;
-    }
-
-    if ((id >= PARAM_MIX_TRACK0_SEND0) && (id <= PARAM_MIX_TRACK3_SEND1))
-    {
-        const uint8_t offset = (uint8_t)(id - PARAM_MIX_TRACK0_SEND0);
-        track = (uint8_t)(offset / 2U);
-        const uint8_t bus = (uint8_t)(offset % 2U);
-        mixer_set_track_send_level(track, bus, value);
-        return 1U;
-    }
-
-    return 0U;
+    return ((id >= PARAM_MIX_TRACK0_GAIN)
+            && (id <= PARAM_MIX_TRACK3_SEND1)
+            && (id != PARAM_MIX_MUTE)) ? 1U : 0U;
 }
 
 static void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
 static void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
 
-static void apply_mix_live_track(param_id_t id, float v)
-{
-    const uint8_t track = ui_get_active_track();
-    if (id >= PARAM_COUNT)
-    {
-        return;
-    }
-    const param_desc_t *const desc = &param_registry[id];
-    const float clamped = clamp_value(v, desc->min, desc->max);
-    (void)param_registry_apply_track_value(id, track, clamped);
-    param_store_set_active(id, clamped);
-}
-
-static void apply_mix_level(float v) { apply_mix_live_track(PARAM_MIX_LEVEL, v); }
-static void apply_mix_pan(float v) { apply_mix_live_track(PARAM_MIX_PAN, v); }
-static void apply_mix_send1(float v) { apply_mix_live_track(PARAM_MIX_SEND1, v); }
-static void apply_mix_send2(float v) { apply_mix_live_track(PARAM_MIX_SEND2, v); }
 static void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_type(float v) { mixer_set_reverb_type((uint8_t)clamp_value(v, 0.0f, 1.0f)); }
 static void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0.0f, 1.0f)); }
-static void apply_vca_attack(float v) { apply_mix_live_track(PARAM_VCA_ATTACK, v); }
-static void apply_vca_decay(float v) { apply_mix_live_track(PARAM_VCA_DECAY, v); }
-static void apply_vca_sustain(float v) { apply_mix_live_track(PARAM_VCA_SUSTAIN, v); }
-static void apply_vca_release(float v) { apply_mix_live_track(PARAM_VCA_RELEASE, v); }
-
 static void apply_tone_live_track(param_id_t id, float value)
 {
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
@@ -373,7 +304,6 @@ static void apply_dx7_operator_2_level(float v) { apply_tone_live_track(PARAM_DX
 static void apply_dx7_operator_3_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_3_LEVEL, v); }
 static void apply_dx7_operator_4_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_4_LEVEL, v); }
 static void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
-static void apply_hybrid_gate(float v) { apply_tone_live_track(PARAM_HYBRID_GATE, v); }
 static void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
 static void apply_sampler_gain(float v) { apply_tone_live_track(PARAM_SAMPLER_GAIN, v); }
 static void apply_sampler_start(float v) { apply_tone_live_track(PARAM_SAMPLER_START, v); }
@@ -840,6 +770,9 @@ static uint8_t param_runtime_apply_mix_track(uint8_t track, param_id_t id, float
         case PARAM_MIX_SEND2:
             mixer_set_track_send_level(ctx->mix_track_id, 1U, clamp_value(value, 0.0f, 1.0f));
             return 1U;
+        case PARAM_MIX_MUTE:
+            mixer_set_track_mute(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);
+            return 1U;
         case PARAM_HYBRID_GATE:
             if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
                     || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))
@@ -1201,7 +1134,6 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
                 }
 
                 *out_value = param_registry[id].default_value;
-                param_runtime_cache_set(track, id, *out_value);
                 return 1U;
             }
 
@@ -1406,7 +1338,7 @@ static void param_registry_mark_runtime_global_dirty(void)
     track_runtime_invalidate_all();
 }
 
-static void param_registry_reapply_lane_bound_runtime_for_all_tracks(void)
+static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const uint8_t *previous_mix_tracks)
 {
     static const param_id_t k_lane_bound_params[] = {
         PARAM_FILTER_TYPE,
@@ -1431,6 +1363,7 @@ static void param_registry_reapply_lane_bound_runtime_for_all_tracks(void)
         PARAM_MIX_PAN,
         PARAM_MIX_SEND1,
         PARAM_MIX_SEND2,
+        PARAM_MIX_MUTE,
         PARAM_HYBRID_GATE,
         PARAM_VCA_ATTACK,
         PARAM_VCA_DECAY,
@@ -1440,6 +1373,23 @@ static void param_registry_reapply_lane_bound_runtime_for_all_tracks(void)
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        if (previous_mix_tracks != NULL)
+        {
+            uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
+            const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+            if ((ctx != NULL)
+                    && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                    && (ctx->mix_track_id < MIXER_MAX_TRACKS))
+            {
+                mix_track = ctx->mix_track_id;
+            }
+
+            if (previous_mix_tracks[track] == mix_track)
+            {
+                continue;
+            }
+        }
+
         for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
         {
             float value = 0.0f;
@@ -1618,6 +1568,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         return 0U;
                     }
 
+                    param_runtime_cache_set(track, id, clamped);
                     track_runtime_invalidate_track(track);
                 }
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
@@ -2269,7 +2220,9 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
     if ((ctx != NULL)
             && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
             && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-                || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
+                || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
+                || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))))
     {
         return;
     }
@@ -2292,6 +2245,8 @@ static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
     uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
+    const ui_track_family_t previous_family = ui_get_track_family(active_track);
+    const ui_track_type_t previous_type = ui_get_track_type(active_track);
     const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
 
     param_registry_capture_mix_targets(previous_mix_tracks);
@@ -2305,10 +2260,16 @@ static void apply_cfg_track(float v)
 
     param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+    if ((ui_get_track_family(active_track) == previous_family)
+            && (ui_get_track_type(active_track) == previous_type))
+    {
+        return;
+    }
+
     param_registry_rebind_lane_runtime(previous_mix_tracks);
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_neutralize_vca_runtime_if_invalid(active_track);
-    param_registry_reapply_lane_bound_runtime_for_all_tracks();
+    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
     param_registry_mark_runtime_global_dirty();
 }
 
@@ -2318,6 +2279,7 @@ static void apply_cfg_track_type(float v)
     const uint8_t active_track = ui_get_active_track();
     uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
     const ui_track_family_t active_family = ui_get_track_family(active_track);
+    const ui_track_type_t previous_type = ui_get_track_type(active_track);
     const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
     const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
 
@@ -2332,10 +2294,16 @@ static void apply_cfg_track_type(float v)
     }
 
     param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+    if (ui_get_track_type(active_track) == previous_type)
+    {
+        g_param_cfg_track_type_apply_stage = 4U;
+        return;
+    }
+
     param_registry_rebind_lane_runtime(previous_mix_tracks);
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_neutralize_vca_runtime_if_invalid(active_track);
-    param_registry_reapply_lane_bound_runtime_for_all_tracks();
+    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
     param_registry_mark_runtime_global_dirty();
     g_param_cfg_track_type_apply_stage = 4U;
 }
@@ -2693,7 +2661,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC(PARAM_MIX_TRACK2_PAN, "T2 Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
     PARAM_DESC(PARAM_MIX_TRACK3_PAN, "T3 Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
 
-    PARAM_DESC_EX(PARAM_MIX_TRACK0_MUTE, "T0 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
+    PARAM_DESC_EX(PARAM_MIX_TRACK0_MUTE, "Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIX_TRACK1_MUTE, "T1 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIX_TRACK2_MUTE, "T2 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIX_TRACK3_MUTE, "T3 Mute", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
@@ -2723,10 +2691,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
 
     PARAM_DESC(PARAM_MIX_SEND0_FX, "Send0 FX", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", apply_mix_send0_fx),
     PARAM_DESC(PARAM_MIX_SEND1_FX, "Send1 FX", PARAM_TYPE_ENUM, -1.0f, 127.0f, 1.0f, -1.0f, "", apply_mix_send1_fx),
-    PARAM_DESC(PARAM_MIX_LEVEL, "Level", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", apply_mix_level),
-    PARAM_DESC(PARAM_MIX_PAN, "Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", apply_mix_pan),
-    PARAM_DESC(PARAM_MIX_SEND1, "Send1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", apply_mix_send1),
-    PARAM_DESC(PARAM_MIX_SEND2, "Send2", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", apply_mix_send2),
+    PARAM_DESC(PARAM_MIX_LEVEL, "Level", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, "", NULL),
+    PARAM_DESC(PARAM_MIX_PAN, "Pan", PARAM_TYPE_BIPOLAR, -1.0f, 1.0f, 0.01f, 0.0f, "", NULL),
+    PARAM_DESC(PARAM_MIX_SEND1, "Send1", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
+    PARAM_DESC(PARAM_MIX_SEND2, "Send2", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, "", NULL),
 
     PARAM_DESC_EX(PARAM_BUS_COMP_THRESHOLD_DB, "BusComp Threshold", PARAM_TYPE_FLOAT, -60.0f, 0.0f, 0.5f, -18.0f, PARAM_DISPLAY_DB, "dB", NULL, apply_bus_comp_threshold),
     PARAM_DESC_EX(PARAM_BUS_COMP_RATIO, "BusComp Ratio", PARAM_TYPE_FLOAT, 1.0f, 20.0f, 0.1f, 2.0f, PARAM_DISPLAY_RATIO, "", NULL, apply_bus_comp_ratio),
@@ -2774,10 +2742,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_BITS, "Bits", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_bits),
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_RATE, "Rate", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_rate),
     PARAM_DESC_EX(PARAM_FILTER_DECIMATOR_RATE2, "Rate2", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_filter_decimator_rate2),
-    PARAM_DESC_EX(PARAM_VCA_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_attack),
-    PARAM_DESC_EX(PARAM_VCA_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_decay),
-    PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_sustain),
-    PARAM_DESC_EX(PARAM_VCA_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_vca_release),
+    PARAM_DESC_EX(PARAM_VCA_ATTACK, "Atk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_VCA_DECAY, "Dec", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_VCA_SUSTAIN, "Sus", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_VCA_RELEASE, "Rel", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_CFG_TRACK, "Track", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U), 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_track_family_labels, apply_cfg_track),
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
@@ -3010,7 +2978,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_FADE_OUT, "Fade Out", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_out),
     PARAM_DESC_EX(PARAM_SAMPLER_SLICE_COUNT, "Slice Count", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_slice_count_labels, apply_sampler_slice_count),
 
-    PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_hybrid_gate),
+    PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),
     PARAM_DESC_EX(PARAM_MIDI_CC1_1, "CC16", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_1),
     PARAM_DESC_EX(PARAM_MIDI_CC1_2, "CC17", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_cc1_2),
@@ -3085,9 +3053,10 @@ void param_set(param_id_t id, float value)
 
     param_store_set_active(id, clamped);
 
-    if ((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1))
     {
-        if (param_apply_legacy_mix_track_value(id, clamped) != 0U)
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
         {
             return;
         }

@@ -16,7 +16,6 @@
 
 void brick6_boot_apply_param_defaults(void)
 {
-    param_reset(PARAM_MIX_TRACK3_GAIN);
     param_reset(PARAM_DX7_ALGORITHM);
     param_reset(PARAM_DX7_FEEDBACK);
     param_reset(PARAM_DX7_TRANSPOSE);

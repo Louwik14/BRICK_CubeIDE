@@ -266,7 +266,7 @@ Effets aval:
 - Couplage inter-zone eleve dans `pattern_live_apply_snapshot` (UI + Z2 + Z3 + Z4 dans une seule routine).
 - Dependance implicite a l'ordre d'appel superloop pour `pattern_live_service` (si non appele, queue pattern ne commute pas).
 - `dirty_pending_persist` est ecrit mais non exploite dans le flux observe (meta partiellement orpheline).
-- Parametres mix legacy `PARAM_MIX_TRACK0..3_*` encore whitelistes en global dans `pattern_live_is_global_param_useful` alors que l'architecture est track-aware 14 pistes.
+- Parametres mix legacy `PARAM_MIX_TRACK0..3_*` traites comme tombstones: non captures en globals normaux, et migres load-only vers les params MIX track-aware quand un ancien snapshot contient gain/pan/mute/send.
 - `project_v1_apply_snapshot` est un orchestrateur mince: delegation du live apply a `pattern_live_apply_snapshot` + restauration etat actif/queued/slot projet.
 - Couplage UI implicite dans la condition de boundary (`seq_runtime_get_playhead_step(ui_get_active_track(), ...)`) au lieu d'une reference transport neutre.
 

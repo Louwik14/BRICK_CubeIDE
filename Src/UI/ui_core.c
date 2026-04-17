@@ -74,7 +74,6 @@
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 #define UI_FEEDBACK_DURATION_MS 1000U
 #define UI_TRACK_MOD_BUTTON BTN_PARAM_8
-#define UI_MUTE_TRACK_PARAM_COUNT 4U
 
 typedef struct
 {
@@ -248,17 +247,6 @@ static void ui_core_pattern_exit_to_previous_mode(void)
     ui_set_hall_mode(target);
 }
 
-static uint8_t ui_core_track_param_from_mix_track(uint8_t mix_track, param_id_t *out_id)
-{
-    if ((out_id == NULL) || (mix_track >= UI_MUTE_TRACK_PARAM_COUNT))
-    {
-        return 0U;
-    }
-
-    *out_id = (param_id_t)((uint16_t)PARAM_MIX_TRACK0_MUTE + mix_track);
-    return 1U;
-}
-
 static uint8_t ui_core_input_family_wired_mute_track(ui_track_family_t family, uint8_t *out_mix_track)
 {
     uint8_t mix_track = 0U;
@@ -347,7 +335,15 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
         return 1U;
     }
 
-    *out_muted = mixer_get_track_mute(mute_mix_track);
+    float muted_value = 0.0f;
+    if (param_registry_get_track_value(PARAM_MIX_MUTE, track, &muted_value) != 0U)
+    {
+        *out_muted = (muted_value >= 0.5f) ? 1U : 0U;
+    }
+    else
+    {
+        *out_muted = mixer_get_track_mute(mute_mix_track);
+    }
     *out_available = 1U;
     return 1U;
 }
@@ -372,14 +368,9 @@ static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
         return 0U;
     }
 
-    param_id_t mute_param = PARAM_MIX_TRACK0_MUTE;
-    if (ui_core_track_param_from_mix_track(mute_mix_track, &mute_param) != 0U)
+    if (param_registry_apply_track_value(PARAM_MIX_MUTE, track, (muted != 0U) ? 1.0f : 0.0f) == 0U)
     {
-        param_set(mute_param, (muted != 0U) ? 1.0f : 0.0f);
-    }
-    else
-    {
-        mixer_set_track_mute(mute_mix_track, muted);
+        return 0U;
     }
 
     return 1U;
@@ -2589,6 +2580,16 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
         return 0U;
     }
 
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id == (uint8_t)BTN_COPY)
+        && (g_ui_track_state.shift_down != 0U)
+        && (g_ui_track_state.track_select_armed == 0U)
+        && (g_ui_track_state.mute_active == 0U))
+    {
+        (void)ui_core_request_undo();
+        return 1U;
+    }
+
     if (ui_core_handle_track_clipboard_event(ev) != 0U)
     {
         return 1U;
@@ -2615,14 +2616,6 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
         {
             ui_page_settings_open(ui_page_get_id());
         }
-        return 1U;
-    }
-
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_COPY)
-        && (g_ui_track_state.shift_down != 0U))
-    {
-        (void)ui_core_request_undo();
         return 1U;
     }
 
@@ -3052,6 +3045,15 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
             ui_core_sync_active_track_cfg_params();
         }
         return false;
+    }
+
+    if (config->type == type)
+    {
+        if (track == g_ui_track_state.active_track)
+        {
+            ui_core_sync_active_track_cfg_params();
+        }
+        return true;
     }
 
     config->type = type;

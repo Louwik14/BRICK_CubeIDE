@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "pages/ui_page_template_dx7.h"
 
 #include "ui_core.h"
@@ -217,8 +218,12 @@ void ui_page_template_dx7_register_families(void)
                 continue;
             }
 
-            const ui_template_family_t *family_template = &g_ui_template_dx7_family;
-            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
+            const ui_template_family_t *family_template = NULL;
+            if ((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_DX7))
+            {
+                family_template = &g_ui_template_dx7_family;
+            }
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
             {
                 family_template = &g_ui_template_tone_family_monob;
             }

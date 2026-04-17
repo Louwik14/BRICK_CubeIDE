@@ -324,11 +324,6 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
         return;
     }
 
-    if (track_count > MIXER_MAX_TRACKS)
-    {
-        track_count = MIXER_MAX_TRACKS;
-    }
-
     memcpy(previous_tracks, g_tracks, sizeof(previous_tracks));
     memcpy(previous_filters, g_track_filters, sizeof(previous_filters));
 

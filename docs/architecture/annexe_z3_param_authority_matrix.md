@@ -13,7 +13,7 @@ Scope: Z3 write authority only (from proven code paths in `param_registry`, `par
 | `global-only` | `param_set(id, value)` | `param_set` | `param_registry_apply_track_value` only when rule is `GLOBAL_ALLOWED` (falls back to `param_set`) |
 | `track-aware` | `param_registry_apply_track_value(id, track, value)` | `param_registry_apply_track_value` | `param_registry_apply_track_value_rt_fast` only for modulation ticks; UI may still mirror to `param_store.active[]` |
 | `LFO-owned` | `mod_lfo_v1_set_track_param(track, lfo, field, value)` for config + `param_registry_apply_track_value_rt_fast(dest, track, modulated)` for runtime write | Config: `mod_lfo_v1_set_track_param`; Runtime modulation: `param_registry_apply_track_value_rt_fast` | `param_registry_apply_track_value(PARAM_LFO*)` tolerated only as compatibility shim (it reroutes to `mod_lfo_v1_set_track_param`) |
-| `legacy-physical` | `param_set` + internal `param_apply_legacy_mix_track_value` for `PARAM_MIX_TRACK0..3_*` | keep `param_set` (no new authority) | None; this path is still alive in code and writes physical mixer tracks directly |
+| `legacy-physical` | Tombstones `PARAM_MIX_TRACK0..3_*` + load-only migration for old snapshots | keep IDs for storage layout only | No normal runtime write path; direct physical mixer writes removed |
 
 ## Operational rules per family
 
@@ -41,7 +41,7 @@ Scope: Z3 write authority only (from proven code paths in `param_registry`, `par
 - RT path allowed: yes, modulation only.
 
 ### `legacy-physical`
-- Authorized write API: `param_set` (legacy range handled in `param_apply_legacy_mix_track_value`).
+- Authorized write API: none for normal flows. Old storage values are mapped load-only to `PARAM_MIX_*` through `param_registry_apply_track_value(track, ...)`.
 - Temporarily tolerated API: none identified.
 - `active[]` role: global value mirror + source for subsequent reads; runtime is applied immediately to physical mixer tracks.
 - Z2 dependency: not required.
@@ -73,13 +73,13 @@ Scope: Z3 write authority only (from proven code paths in `param_registry`, `par
 
 - Exact long-term ownership of `param_store.active[]` for mixed global/track-scoped UI reads is still partially implicit; code shows dual use (global truth + track-scoped mirror).
 - Whether legacy-physical range should remain first-class or be folded later cannot be concluded from Z3-local evidence only.
-- If any caller exists outside current scanned `Src/` tree for `control_router_set_param`, that would change its status; not proven here.
+- If any caller exists outside current scanned `Src/` tree for `control_router_set_param`, it still must not use removed `CTRL_PARAM_MIX_TRACK0..3_*` macros as normal MIX control.
 
 ## Smallest structural patch recommended
 
 1. In `pattern_live_apply_snapshot`, remove the redundant second LFO write path (`param_registry_apply_track_value(PARAM_LFO*)`) and keep only `mod_lfo_v1_set_track_param` for restore config.
 2. Add one short contract comment near `ui_param_set_active_track_value` stating: `param_store_set_active` is a UI mirror for track-scoped params, not track runtime authority.
-3. Add one short contract comment near `control_router_set_param` marking it as legacy/dormant until a real caller is reintroduced.
+3. Keep `control_router_set_param` as compat/dormant only; do not reintroduce legacy physical MIX macros.
 
 No code patch applied in this pass.
 
