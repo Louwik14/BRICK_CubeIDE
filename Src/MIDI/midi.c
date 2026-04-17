@@ -430,6 +430,28 @@ static bool usb_tx_queue_push_front(const midi_usb_packet_t *packet) {
   return true;
 }
 
+static bool usb_tx_queue_push_front_realtime(const midi_usb_packet_t *packet) {
+  if (packet == NULL) {
+    return false;
+  }
+
+  uint32_t primask = midi_enter_critical();
+  if (midi_usb_tx_count >= MIDI_USB_TX_QUEUE_LEN) {
+    /* Preserve realtime delivery under pressure by dropping the oldest queued packet. */
+    midi_usb_tx_tail = (uint16_t)((midi_usb_tx_tail + 1U) % MIDI_USB_TX_QUEUE_LEN);
+    midi_usb_tx_count--;
+  }
+
+  midi_usb_tx_tail = (uint16_t)((midi_usb_tx_tail + MIDI_USB_TX_QUEUE_LEN - 1U) % MIDI_USB_TX_QUEUE_LEN);
+  midi_usb_tx_queue[midi_usb_tx_tail] = *packet;
+  midi_usb_tx_count++;
+  if (midi_usb_tx_count > midi_usb_tx_high_water) {
+    midi_usb_tx_high_water = midi_usb_tx_count;
+  }
+  midi_exit_critical(primask);
+  return true;
+}
+
 /**
  * @brief Point d'entrée usb_rx_queue_push.
  *
@@ -525,6 +547,19 @@ static void midi_usb_try_flush_internal(bool allow_in_isr) {
     while (packets < MIDI_USB_MAX_BURST) {
       midi_usb_packet_t packet;
       if (!usb_tx_queue_pop(&packet)) {
+        break;
+      }
+      memcpy(&buffer[packets * 4U], packet.bytes, 4U);
+      packets++;
+    }
+  } else {
+    while (packets < MIDI_USB_MAX_BURST) {
+      midi_usb_packet_t packet;
+      if (!usb_tx_queue_pop(&packet)) {
+        break;
+      }
+      if (!usb_packet_is_realtime_clock_transport(packet.bytes)) {
+        (void)usb_tx_queue_push_front(&packet);
         break;
       }
       memcpy(&buffer[packets * 4U], packet.bytes, 4U);
@@ -815,7 +850,7 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
 
   if (is_rt_clock_transport) {
     midi_usb_packet_t rt_packet = { .bytes = { packet[0], packet[1], packet[2], packet[3] } };
-    if (!usb_tx_queue_push_front(&rt_packet)) {
+    if (!usb_tx_queue_push_front_realtime(&rt_packet)) {
       midi_tx_stats.tx_mb_drops++;
 #if MIDI_CLOCK_TX_PROBE_ENABLE
       if (is_f8) {
