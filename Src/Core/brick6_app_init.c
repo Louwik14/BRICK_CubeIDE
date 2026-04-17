@@ -23,6 +23,7 @@
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "ui_core.h"
+#include "ui_page_manager.h"
 
 #include "Sampler/voice_manager.h"
 #include "Audio/live_recorder.h"
@@ -44,6 +45,7 @@
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
+#include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
 
@@ -110,6 +112,7 @@ void brick6_app_init(void)
     param_store_init();
     brick6_boot_apply_param_defaults();
     seq_runtime_init();
+    ui_core_init();
     pattern_live_init();
     project_v1_init();
     (void)project_v1_restore_boot_context();
@@ -117,6 +120,14 @@ void brick6_app_init(void)
     control_event_init();
 
     hall_loop_init();
+    if (hall_calibration_load() != 0U)
+    {
+        ui_page_set(UI_PAGE_TEMPLATE_COLORS);
+    }
+    else
+    {
+        ui_page_set(UI_PAGE_CALIBRATION);
+    }
 
     audio_start();
 

@@ -47,7 +47,6 @@
 #include "ui_param.h"
 #include "ui_system_sync_internal.h"
 #include "ui_template_page.h"
-#include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "param_registry.h"
@@ -2728,14 +2727,7 @@ void ui_core_init(void)
     ui_page_manager_register(&g_ui_page_template_vca);
     ui_page_manager_register(&g_ui_page_settings);
 
-    if (hall_calibration_load() != 0U)
-    {
-        ui_page_set(UI_PAGE_TEMPLATE_COLORS);
-    }
-    else
-    {
-        ui_page_set(UI_PAGE_CALIBRATION);
-    }
+    ui_page_set(UI_PAGE_CALIBRATION);
 }
 
 void ui_core_service_track_selection_inputs(void)

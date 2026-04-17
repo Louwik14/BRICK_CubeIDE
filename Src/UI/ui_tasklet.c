@@ -44,7 +44,6 @@ void ui_tasklet_poll(void)
     {
         g_ui_tasklet_init = 1U;
         drv_display_init();
-        ui_core_init();
     }
 
     ui_core_tick();
