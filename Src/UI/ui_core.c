@@ -1058,6 +1058,17 @@ static const ui_system_sync_adapter_t g_ui_core_system_sync_adapter = {
     .sync_active_track_cfg_params = ui_core_sync_active_track_cfg_params
 };
 
+static void ui_core_resync_active_page_param_context(void)
+{
+    ui_param_invalidate_bank();
+
+    const ui_page_t *const active_page = ui_page_get();
+    if ((active_page != 0) && (active_page->tick != 0))
+    {
+        active_page->tick();
+    }
+}
+
 static void ui_core_set_active_track(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)
@@ -1070,12 +1081,14 @@ static void ui_core_set_active_track(uint8_t track)
         /* Same-track contract: resync only, no keyboard callback. */
         const ui_system_sync_request_t request = ui_system_sync_make_request_active_track_resync_only();
         ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
+        ui_core_resync_active_page_param_context();
         return;
     }
 
     /* Preserve observable order: callback first, then state pivot, then system sync. */
     const ui_system_sync_request_t request = ui_system_sync_make_request_active_track_change(track);
     ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
+    ui_core_resync_active_page_param_context();
 }
 
 static void ui_core_restore_post_apply_sync_and_notify(void)
@@ -1827,6 +1840,7 @@ static uint8_t ui_core_clipboard_apply_param_list(uint8_t track,
                                                   uint8_t count)
 {
     uint8_t applied = 0U;
+    track_runtime_refresh_track(track);
     param_registry_batch_begin();
     for (uint8_t i = 0U; i < count; ++i)
     {
@@ -1843,6 +1857,7 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
                                                       const param_id_t *params,
                                                       uint8_t count)
 {
+    track_runtime_refresh_track(track);
     param_registry_batch_begin();
     for (uint8_t i = 0U; i < count; ++i)
     {
@@ -2131,6 +2146,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
 
     uint8_t applied = 0U;
     uint8_t common = 0U;
+    track_runtime_refresh_track(track);
     param_registry_batch_begin();
 
     for (uint8_t i = 0U; i < target_count; ++i)

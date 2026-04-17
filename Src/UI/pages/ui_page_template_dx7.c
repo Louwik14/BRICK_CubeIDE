@@ -7,7 +7,7 @@ static const ui_template_family_t g_ui_template_dx7_family = {
     .family_title = "TONE",
     .nav_labels = { "PLAY", "MOT", "CTRL", "COL" },
     .subpages = {
-        { .title = "PLAY", .param_bank = { .params = { PARAM_DX7_ALGORITHM, PARAM_DX7_FEEDBACK, PARAM_MIX_TRACK3_GAIN, PARAM_DX7_TRANSPOSE } } },
+        { .title = "PLAY", .param_bank = { .params = { PARAM_DX7_ALGORITHM, PARAM_DX7_FEEDBACK, PARAM_MIX_LEVEL, PARAM_DX7_TRANSPOSE } } },
         { .title = "MOTION", .param_bank = { .params = { PARAM_DX7_LFO_SPEED, PARAM_DX7_LFO_DELAY, PARAM_DX7_LFO_PITCH_MOD_DEPTH, PARAM_DX7_LFO_AMP_MOD_DEPTH } } },
         { .title = "CTRL", .param_bank = { .params = { PARAM_DX7_PITCH_BEND_RANGE, PARAM_DX7_PORTAMENTO_TIME, PARAM_DX7_MONO_MODE, PARAM_DX7_OPERATOR_MASK } } },
         { .title = "COLOR", .param_bank = { .params = { PARAM_DX7_OPERATOR_1_LEVEL, PARAM_DX7_OPERATOR_2_LEVEL, PARAM_DX7_OPERATOR_3_LEVEL, PARAM_DX7_OPERATOR_4_LEVEL } } },

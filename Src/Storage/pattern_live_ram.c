@@ -100,10 +100,32 @@ static uint8_t pattern_live_is_param_in_mix_domain(param_id_t id)
     return (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX);
 }
 
+static uint8_t pattern_live_is_legacy_physical_mix_param(param_id_t id)
+{
+    return ((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1)) ? 1U : 0U;
+}
+
+static uint8_t pattern_live_is_track_scoped_param(param_id_t id)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    return ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
+}
+
 static uint8_t pattern_live_is_global_param_useful(param_id_t id)
 {
     if ((id == PARAM_MASTER_GAIN) || (id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE)
         || (id == PARAM_CFG_MIDI_CH) || (id == PARAM_CFG_MIDI_SRC))
+    {
+        return 0U;
+    }
+
+    if (pattern_live_is_legacy_physical_mix_param(id) != 0U)
+    {
+        return 0U;
+    }
+
+    if (pattern_live_is_track_scoped_param(id) != 0U)
     {
         return 0U;
     }
@@ -120,44 +142,8 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_CFG_TEMPO:
         case PARAM_CFG_SYNC:
         case PARAM_CFG_REC_LEN:
-        case PARAM_MIX_TRACK0_GAIN:
-        case PARAM_MIX_TRACK1_GAIN:
-        case PARAM_MIX_TRACK2_GAIN:
-        case PARAM_MIX_TRACK3_GAIN:
-        case PARAM_MIX_TRACK0_PAN:
-        case PARAM_MIX_TRACK1_PAN:
-        case PARAM_MIX_TRACK2_PAN:
-        case PARAM_MIX_TRACK3_PAN:
-        case PARAM_MIX_TRACK0_MUTE:
-        case PARAM_MIX_TRACK1_MUTE:
-        case PARAM_MIX_TRACK2_MUTE:
-        case PARAM_MIX_TRACK3_MUTE:
-        case PARAM_MIX_TRACK0_ROUTE:
-        case PARAM_MIX_TRACK1_ROUTE:
-        case PARAM_MIX_TRACK2_ROUTE:
-        case PARAM_MIX_TRACK3_ROUTE:
-        case PARAM_MIX_TRACK0_INSERT0:
-        case PARAM_MIX_TRACK0_INSERT1:
-        case PARAM_MIX_TRACK1_INSERT0:
-        case PARAM_MIX_TRACK1_INSERT1:
-        case PARAM_MIX_TRACK2_INSERT0:
-        case PARAM_MIX_TRACK2_INSERT1:
-        case PARAM_MIX_TRACK3_INSERT0:
-        case PARAM_MIX_TRACK3_INSERT1:
-        case PARAM_MIX_TRACK0_SEND0:
-        case PARAM_MIX_TRACK0_SEND1:
-        case PARAM_MIX_TRACK1_SEND0:
-        case PARAM_MIX_TRACK1_SEND1:
-        case PARAM_MIX_TRACK2_SEND0:
-        case PARAM_MIX_TRACK2_SEND1:
-        case PARAM_MIX_TRACK3_SEND0:
-        case PARAM_MIX_TRACK3_SEND1:
         case PARAM_MIX_SEND0_FX:
         case PARAM_MIX_SEND1_FX:
-        case PARAM_MIX_LEVEL:
-        case PARAM_MIX_PAN:
-        case PARAM_MIX_SEND1:
-        case PARAM_MIX_SEND2:
             return 1U;
 
         default:
@@ -491,6 +477,12 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
         if (pattern->globals.global_valid[id] != 0U)
         {
+            if ((pattern_live_is_legacy_physical_mix_param(id) != 0U)
+                    || (pattern_live_is_track_scoped_param(id) != 0U))
+            {
+                continue;
+            }
+
             param_set(id, pattern->globals.global_values[id]);
         }
     }

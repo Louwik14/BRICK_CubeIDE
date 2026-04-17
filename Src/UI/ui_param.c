@@ -191,6 +191,10 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
     }
 }
 
+void ui_param_invalidate_bank(void)
+{
+    g_ui_param.valid = 0U;
+}
 
 static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,
                                              seq_step_id_t *out_ref_step,
@@ -243,27 +247,34 @@ static float ui_param_get_active_track_value(param_id_t param)
     return param_store_get_active(param);
 }
 
-static void ui_param_set_active_track_value(param_id_t param, float value)
+static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
 {
     if (ui_param_is_track_scoped(param) == 0U)
     {
         param_set(param, value);
-        return;
+        return 1U;
     }
 
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
+    const uint8_t active_track = ui_get_active_track();
+
+    if (param_registry_apply_track_value(param, active_track, clamped) == 0U)
+    {
+        return 0U;
+    }
+
     uint8_t set_id = 0U;
     seq_param8_t param8 = 0U;
     if (seq_param_iface_map_param(param, &set_id, &param8) != 0U)
     {
         const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
-        (void)seq_param_iface_set_base_value(ui_get_active_track(), set_id, param8, encoded);
+        (void)seq_param_iface_set_base_value(active_track, set_id, param8, encoded);
     }
 
-    (void)param_registry_apply_track_value(param, ui_get_active_track(), clamped);
     /* Track-scoped contract: active[] mirrors the UI edit context; runtime authority is apply_track_value(track,...). */
     param_store_set_active(param, clamped);
+    return 1U;
 }
 
 static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
