@@ -30,6 +30,7 @@
 #include "Storage/wav_audio_stream.h"
 #include "Storage/wav_parser.h"
 #include "Storage/sd_access_gate.h"
+#include "Audio/live_recorder_config.h"
 
 #include "ff.h"
 
@@ -50,7 +51,11 @@
 SDRAM_SAMPLES static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
 
 #define SAMPLE_POOL_RESIDENT_SLOTS (32U)
-#define SAMPLE_POOL_TOTAL_FRAMES (SAMPLE_POOL_RESIDENT_SLOTS * 65536U)
+/*
+ * Reuse the recorder buffer shrink directly in the resident sample arena.
+ * The pool keeps its slot topology and gains the recorder's freed frame budget.
+ */
+#define SAMPLE_POOL_TOTAL_FRAMES ((SAMPLE_POOL_RESIDENT_SLOTS * 65536U) + LIVE_RECORDER_MAX_FRAMES)
 SDRAM_SAMPLES static float g_sample_pool_data[SAMPLE_POOL_TOTAL_FRAMES * 2U];
 
 static CTRL_STATE int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
