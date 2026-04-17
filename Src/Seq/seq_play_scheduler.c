@@ -275,12 +275,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         return;
     }
 
-    const uint8_t track_supports_vca_gate =
-        ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-         || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-         || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-         || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))) ? 1U : 0U;
+    const uint8_t track_supports_vca_gate = track_runtime_supports_vca_gate(ctx);
 
     uint8_t filter_track = 0U;
     uint8_t mix_track = 0U;
@@ -347,7 +342,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         {
             brick6_sampler_runtime_trigger_note(track, note);
         }
-        else
+        else if (track_supports_vca_gate == 0U)
         {
             brick6_sampler_runtime_stop(track);
         }

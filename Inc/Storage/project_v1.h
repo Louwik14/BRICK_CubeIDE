@@ -4,12 +4,13 @@
 #include <stdint.h>
 
 #include "Storage/pattern_live_ram.h"
+#include "Sampler/sample_pool.h"
 
 #define PROJECT_V1_BANK_COUNT      16U
 #define PROJECT_V1_PATTERN_COUNT   16U
 #define PROJECT_V1_SLOT_COUNT      16U
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    5U /* Sampler Tone/Slice params payload */
+#define PROJECT_V1_FILE_VERSION    6U /* Sampler project pool + Tone/Slice params payload */
 
 typedef enum
 {
@@ -40,6 +41,7 @@ typedef struct
 typedef struct
 {
     project_v1_state_block_t state;
+    sample_pool_project_snapshot_t sample_pool;
     PatternSaveV1 live;
 } ProjectSaveV1;
 

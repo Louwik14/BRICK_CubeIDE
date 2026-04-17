@@ -90,7 +90,7 @@ Contrats implicites d'entree:
 
 Sorties vers autres zones:
 - Vers audio runtime: paquet d'evenements sequenceur sample-offset (`seq_runtime_audio_event_t`) via `seq_runtime_audio_collect_block_events`.
-- Vers moteurs/sorties note: `seq_play_scheduler_audio_apply_event` envoie MIDI (`midi_note_on/off`) et notes engines (`monob_synth_*`, `microdexed_*`, `drum_synth_*`), plus gate mixer (`mixer_track_filter_*`, `mixer_track_vca_*`).
+- Vers moteurs/sorties note: `seq_play_scheduler_audio_apply_event` envoie MIDI (`midi_note_on/off`) et notes engines (`monob_synth_*`, `microdexed_*`, `drum_synth_*`, `brick6_sampler_runtime_*`), plus gate mixer (`mixer_track_filter_*`, `mixer_track_vca_*`).
 - Vers param domaine lock: `seq_boundary_engine_*` appelle `seq_param_iface_apply_lock`, `seq_param_iface_restore_base`.
 - Vers UI param (PLAY+REC): `ui_param` route l'edit track-scoped vers `seq_runtime_live_rec_param_write` (ecriture p-lock), sans write runtime direct concurrent.
 - Vers clock MIDI sortant: `seq_runtime_send_transport_realtime`, `midi_clock`, `midi_clock_set_*`.
@@ -294,6 +294,7 @@ Points factuels observes:
 - `Input/Hybrid` participe au gate note cote scheduler (`seq_play_scheduler_emit_engine_note`).
 - Alignement clavier/sequenceur:
   - scheduler et clavier appliquent le meme principe d'ouverture/fermeture du gate VCA pour `Input/Hybrid`.
+- `Sampler` passe par le meme helper central de gate VCA (`track_runtime_supports_vca_gate`) pour ouvrir/fermer le mixer gate sur note-on/off.
 - Gate partage (cote mixer/VCA):
   - premiere note active ouvre le gate,
   - le gate reste ouvert tant qu'au moins une note est active,

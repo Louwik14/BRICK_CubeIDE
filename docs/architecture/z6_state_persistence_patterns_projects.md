@@ -142,7 +142,7 @@ Points de lecture principaux:
 - `g_pattern_write_chunk[4096]`: tampon chunk write pour payload pattern.
 
 ### `project_v1.c`
-- `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply.
+- `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet.
 - `g_project_active_slot_valid`, `g_project_active_slot`: slot projet actif logique.
 - `g_project_save_counter`: compteur de version save.
 - `g_project_last_error`, `g_project_last_sd_error`: etat erreur expose API.
@@ -203,6 +203,7 @@ Points de lecture principaux:
 6. Save project:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
+  - capture aussi le snapshot `sample_pool` courant du projet,
   - force active slot dans snapshot,
   - stocke via `project_v1_store_snapshot_to_slot` -> `project_sd_bank_store_slot`,
   - incremente save_counter,
@@ -211,6 +212,7 @@ Points de lecture principaux:
 7. Load project:
 - `project_v1_load_slot()`:
   - charge depuis SD via `project_sd_bank_load_slot` (lecture + validation header/checksum + records, sans commit pattern-bank),
+  - restaure le `sample_pool` du projet avant l'apply live,
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
   - commit ensuite le pattern-bank SD via `project_sd_bank_commit_slot_patterns`,
   - met a jour slot actif/counter,
@@ -314,3 +316,5 @@ Plus petite prochaine passe utile:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.
 - `PROJECT_V1_FILE_VERSION` a ete incremente pour refléter le payload Sampler v1.
+- Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
+- Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.

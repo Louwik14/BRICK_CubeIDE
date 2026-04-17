@@ -100,6 +100,7 @@ typedef struct
     ui_mute_submode_t mute_submode;
     ui_hall_mode_t mute_prev_mode;
     uint8_t mute_prev_mode_valid;
+    uint8_t mute_hold_quick_prepare_armed;
     uint8_t mute_initial_state[UI_TRACK_COUNT];
     uint8_t mute_prepared_state[UI_TRACK_COUNT];
 } ui_track_state_t;
@@ -196,6 +197,7 @@ static ui_track_state_t g_ui_track_state = {
     .mute_submode = UI_MUTE_SUBMODE_NONE,
     .mute_prev_mode = UI_HALL_MODE_SEQ,
     .mute_prev_mode_valid = 0U,
+    .mute_hold_quick_prepare_armed = 0U,
     .mute_initial_state = { 0U },
     .mute_prepared_state = { 0U },
 };
@@ -388,6 +390,7 @@ static void ui_core_mute_clear_state(void)
     g_ui_track_state.mute_active = 0U;
     g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_NONE;
     g_ui_track_state.mute_prev_mode_valid = 0U;
+    g_ui_track_state.mute_hold_quick_prepare_armed = 0U;
     memset(g_ui_track_state.mute_initial_state, 0, sizeof(g_ui_track_state.mute_initial_state));
     memset(g_ui_track_state.mute_prepared_state, 0, sizeof(g_ui_track_state.mute_prepared_state));
 }
@@ -427,6 +430,20 @@ static void ui_core_mute_enter_quick(void)
 
     g_ui_track_state.mute_active = 1U;
     g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_QUICK;
+    g_ui_track_state.mute_hold_quick_prepare_armed = 0U;
+    ui_set_hall_mode(UI_HALL_MODE_MUTE);
+}
+
+static void ui_core_mute_enter_hold_quick(void)
+{
+    if (g_ui_track_state.mute_active == 0U)
+    {
+        return;
+    }
+
+    g_ui_track_state.mute_active = 1U;
+    g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_HOLD_QUICK;
+    g_ui_track_state.mute_hold_quick_prepare_armed = 0U;
     ui_set_hall_mode(UI_HALL_MODE_MUTE);
 }
 
@@ -442,6 +459,7 @@ static void ui_core_mute_enter_prepare(void)
            g_ui_track_state.mute_initial_state,
            sizeof(g_ui_track_state.mute_prepared_state));
     g_ui_track_state.mute_submode = UI_MUTE_SUBMODE_PREPARE;
+    g_ui_track_state.mute_hold_quick_prepare_armed = 0U;
     ui_set_hall_mode(UI_HALL_MODE_MUTE);
 }
 
@@ -503,35 +521,71 @@ static uint8_t ui_core_mute_handle_event(const ui_event_t *ev)
         return 0U;
     }
 
-    if ((ev->type == UI_EVENT_BUTTON_RELEASE)
-        && (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
-        && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK))
+    if ((ev->type == UI_EVENT_BUTTON_PRESS) || (ev->type == UI_EVENT_BUTTON_RELEASE))
     {
-        ui_core_mute_exit_to_previous_mode();
-        return 1U;
-    }
+        if (ev->id == (uint8_t)BTN_SHIFT)
+        {
+            g_ui_track_state.shift_down = (ev->type == UI_EVENT_BUTTON_PRESS) ? 1U : 0U;
 
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_SHIFT)
-        && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK)
-        && (button_down(BTN_TRANSPOSE_UP) != 0U))
-    {
-        ui_core_mute_enter_prepare();
-        return 1U;
-    }
+            if ((ev->type == UI_EVENT_BUTTON_PRESS)
+                && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK)
+                && (button_down(BTN_TRANSPOSE_UP) != 0U))
+            {
+                ui_core_mute_enter_hold_quick();
+            }
+            else if ((ev->type == UI_EVENT_BUTTON_RELEASE)
+                     && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_HOLD_QUICK))
+            {
+                g_ui_track_state.mute_hold_quick_prepare_armed = 1U;
+            }
+            else if ((ev->type == UI_EVENT_BUTTON_PRESS)
+                     && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_HOLD_QUICK)
+                     && (g_ui_track_state.mute_hold_quick_prepare_armed != 0U))
+            {
+                if (button_down(BTN_TRANSPOSE_UP) != 0U)
+                {
+                    ui_core_mute_enter_prepare();
+                }
+            }
 
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
-        && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE))
-    {
-        ui_core_mute_apply_prepared_and_exit();
+            return 1U;
+        }
+
+        if (ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+        {
+            if ((ev->type == UI_EVENT_BUTTON_RELEASE)
+                && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK))
+            {
+                ui_core_mute_exit_to_previous_mode();
+            }
+            else if ((ev->type == UI_EVENT_BUTTON_PRESS)
+                     && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_HOLD_QUICK)
+                     && (g_ui_track_state.shift_down == 0U))
+            {
+                ui_core_mute_exit_to_previous_mode();
+            }
+            else if ((ev->type == UI_EVENT_BUTTON_PRESS)
+                     && (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE))
+            {
+                ui_core_mute_apply_prepared_and_exit();
+            }
+
+            return 1U;
+        }
+
+        if ((ev->id == (uint8_t)BTN_TRANSPOSE_DOWN) || (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
+        {
+            return 1U;
+        }
+
         return 1U;
     }
 
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < UI_TRACK_COUNT))
     {
         g_ui_track_state.hall_note_suppressed[ev->id] = 1U;
-        if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK)
+        if ((g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_QUICK)
+            || (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_HOLD_QUICK))
         {
             ui_core_mute_toggle_quick_track(ev->id);
         }
@@ -545,14 +599,6 @@ static uint8_t ui_core_mute_handle_event(const ui_event_t *ev)
     if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < UI_TRACK_COUNT))
     {
         return 1U;
-    }
-
-    if ((ev->type == UI_EVENT_BUTTON_PRESS) || (ev->type == UI_EVENT_BUTTON_RELEASE))
-    {
-        if ((ev->id == (uint8_t)BTN_TRANSPOSE_DOWN) || (ev->id == (uint8_t)UI_TRACK_MOD_BUTTON))
-        {
-            return 1U;
-        }
     }
 
     return 0U;
@@ -3349,7 +3395,17 @@ const char *ui_get_hall_mode_suffix_label(void)
 
     if (g_ui_track_state.hall_mode == UI_HALL_MODE_MUTE)
     {
-        return (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE) ? "PRE" : "";
+        if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_PREPARE)
+        {
+            return "PRE";
+        }
+
+        if (g_ui_track_state.mute_submode == UI_MUTE_SUBMODE_HOLD_QUICK)
+        {
+            return "HLD";
+        }
+
+        return "";
     }
 
     if ((g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)

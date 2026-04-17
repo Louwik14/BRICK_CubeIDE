@@ -734,7 +734,6 @@ static uint8_t param_runtime_apply_tone_sampler(uint8_t track, param_id_t id, fl
                 return 0U;
             }
             brick6_sampler_runtime_set_sample(track, (uint16_t)(clamp_value(value, 0.0f, 63.0f) + 0.5f));
-            brick6_sampler_runtime_trigger(track);
             return 1U;
         case PARAM_SAMPLER_GAIN:
             brick6_sampler_runtime_set_gain(track, clamp_value(value, 0.0f, 2.0f));

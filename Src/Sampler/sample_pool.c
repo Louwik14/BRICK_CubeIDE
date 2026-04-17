@@ -300,6 +300,23 @@ static void sample_pool_clear_entry(sample_desc_t *desc)
     desc->data_start_frame = 0U;
 }
 
+static void sample_pool_set_missing_entry(sample_desc_t *desc, const char *path)
+{
+    if (desc == NULL)
+    {
+        return;
+    }
+
+    memset(desc, 0, sizeof(*desc));
+
+    if ((path != NULL) && (path[0] != '\0'))
+    {
+        const size_t path_len = strlen(path);
+        memcpy(desc->path, path, path_len);
+        desc->path[path_len] = '\0';
+    }
+}
+
 void sample_pool_clear(uint16_t id)
 {
     if(id >= SAMPLE_POOL_SIZE)
@@ -378,6 +395,51 @@ void sample_pool_init(void)
     sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 }
 
+void sample_pool_capture_project_snapshot(sample_pool_project_snapshot_t *out_snapshot)
+{
+    if (out_snapshot == NULL)
+    {
+        return;
+    }
+
+    for (uint16_t id = 0U; id < SAMPLE_POOL_SIZE; ++id)
+    {
+        memset(out_snapshot->slots[id].path, 0, sizeof(out_snapshot->slots[id].path));
+        if (g_sample_pool[id].path[0] == '\0')
+        {
+            continue;
+        }
+
+        const size_t path_len = strlen(g_sample_pool[id].path);
+        memcpy(out_snapshot->slots[id].path, g_sample_pool[id].path, path_len);
+        out_snapshot->slots[id].path[path_len] = '\0';
+    }
+}
+
+void sample_pool_restore_project_snapshot(const sample_pool_project_snapshot_t *snapshot)
+{
+    if (snapshot == NULL)
+    {
+        return;
+    }
+
+    sample_pool_init();
+
+    for (uint16_t id = 0U; id < SAMPLE_POOL_SIZE; ++id)
+    {
+        const char *const path = snapshot->slots[id].path;
+
+        if ((path == NULL) || (path[0] == '\0'))
+        {
+            continue;
+        }
+
+        (void)sample_pool_load(id, path);
+    }
+
+    sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
+}
+
 /**
  * @brief Point d'entrée sample_pool_load.
  *
@@ -394,6 +456,9 @@ void sample_pool_init(void)
  */
 bool sample_pool_load(uint16_t id, const char *path)
 {
+    char trimmed_path[SAMPLE_POOL_PATH_MAX];
+    size_t path_len;
+
     sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 
     if(id >= SAMPLE_POOL_SIZE)
@@ -403,9 +468,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    sample_desc_t *desc = &g_sample_pool[id];
     sample_pool_release_slot(id);
-    sample_pool_clear_entry(desc);
 
     if((path == NULL) || (path[0] == '\0'))
     {
@@ -425,9 +488,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    const size_t path_len = sample_pool_trim_path_copy(desc->path,
-                                                       sizeof(desc->path),
-                                                       path);
+    path_len = sample_pool_trim_path_copy(trimmed_path, sizeof(trimmed_path), path);
     if(path_len == 0U)
     {
         SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u path invalid/empty after trim\n",
@@ -435,6 +496,9 @@ bool sample_pool_load(uint16_t id, const char *path)
         sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
     }
+
+    sample_desc_t *desc = &g_sample_pool[id];
+    sample_pool_set_missing_entry(desc, trimmed_path);
 
     const int16_t slot = sample_pool_alloc_slot();
     if(slot < 0)

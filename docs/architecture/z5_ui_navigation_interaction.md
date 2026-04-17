@@ -110,7 +110,7 @@ Getters non-mutants vs mutables:
 
 Etat global UI:
 - `g_ui_track_state` (`ui_track_state_t`) dans `ui_core.c`.
-- Champs structurants: active track, shift, track_select_armed, hall_mode, mode/cfg tap timers, track_configs[14], midi channel/source, hall suppression, pattern state, feedback, mute state/buffers.
+- Champs structurants: active track, shift, track_select_armed, hall_mode, mode/cfg tap timers, track_configs[14], midi channel/source, hall suppression, pattern state, feedback, mute state/buffers, armement prepare du hold quick mute.
 - Ecritures: init + handlers d'events/selection.
 - Lectures: getters UI, renderer template, hall keyboard bridge, logique shortcuts.
 
@@ -264,6 +264,7 @@ Points factuels:
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
   - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
   - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
+- La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
 - Un sous-onglet `SLICE` borne `Slice Count` sans editeur de slices.
 - Cette passe ne cree pas de nouvelle navigation produit ni d'editor Slice.
 - `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.

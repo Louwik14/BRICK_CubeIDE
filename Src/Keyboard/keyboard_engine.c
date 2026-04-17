@@ -74,30 +74,11 @@ static uint8_t keyboard_engine_get_active_mix_target_track(void)
     return 0xFFU;
 }
 
-static uint8_t keyboard_engine_track_supports_vca_gate(const track_runtime_ctx_t *ctx)
-{
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
-    {
-        return 0U;
-    }
-
-    if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
-    {
-        return 1U;
-    }
-
-    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
-}
-
 static uint8_t keyboard_engine_active_track_supports_vca_gate(void)
 {
     const uint8_t active_track = ui_get_active_track();
     track_runtime_refresh_track(active_track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
-    return keyboard_engine_track_supports_vca_gate(ctx);
+    return track_runtime_supports_vca_gate(track_runtime_get_ctx(active_track));
 }
 
 static uint8_t keyboard_engine_get_active_monob_instance(void)
@@ -164,7 +145,7 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             continue;
         }
 
-        const uint8_t track_supports_vca_gate = keyboard_engine_track_supports_vca_gate(ctx);
+        const uint8_t track_supports_vca_gate = track_runtime_supports_vca_gate(ctx);
 
         uint8_t filter_track = 0U;
         uint8_t mix_track = 0U;
@@ -423,7 +404,12 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
     }
     else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
-        brick6_sampler_runtime_stop(ui_get_active_track());
+        const uint8_t active_track = ui_get_active_track();
+        track_runtime_refresh_track(active_track);
+        if (track_runtime_supports_vca_gate(track_runtime_get_ctx(active_track)) == 0U)
+        {
+            brick6_sampler_runtime_stop(active_track);
+        }
     }
     else
     {
@@ -473,6 +459,16 @@ void keyboard_engine_all_notes_off(void)
     if ((mix_track != 0xFFU) && (keyboard_engine_active_track_supports_vca_gate() != 0U))
     {
         mixer_track_vca_all_notes_off(mix_track);
+    }
+
+    {
+        const uint8_t active_track = ui_get_active_track();
+        track_runtime_refresh_track(active_track);
+        if ((track_runtime_get_ctx(active_track) != NULL)
+                && (track_runtime_get_ctx(active_track)->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
+        {
+            brick6_sampler_runtime_stop(active_track);
+        }
     }
 
     if (keyboard_engine_active_track_has_midi_note_path())
@@ -567,7 +563,7 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
                 mixer_track_filter_all_notes_off(filter_track);
             }
         }
-        if ((keyboard_engine_track_supports_vca_gate(ctx) != 0U)
+        if ((track_runtime_supports_vca_gate(ctx) != 0U)
                 && (track_runtime_get_mix_target_track(track, &mix_track) != 0U))
         {
             if (is_note_on != 0U)
@@ -623,6 +619,24 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             else if (is_all_notes_off != 0U)
             {
                 drum_synth_all_notes_off_for_instance(ctx->instance_id);
+            }
+        }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        {
+            if (is_note_on != 0U)
+            {
+                brick6_sampler_runtime_trigger_note(track, note);
+            }
+            else if (is_note_off != 0U)
+            {
+                if (track_runtime_supports_vca_gate(ctx) == 0U)
+                {
+                    brick6_sampler_runtime_stop(track);
+                }
+            }
+            else if (is_all_notes_off != 0U)
+            {
+                brick6_sampler_runtime_stop(track);
             }
         }
     }

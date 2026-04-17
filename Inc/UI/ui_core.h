@@ -71,6 +71,7 @@ typedef enum
 {
     UI_MUTE_SUBMODE_NONE = 0,
     UI_MUTE_SUBMODE_QUICK,
+    UI_MUTE_SUBMODE_HOLD_QUICK,
     UI_MUTE_SUBMODE_PREPARE
 } ui_mute_submode_t;
 

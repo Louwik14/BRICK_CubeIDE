@@ -80,6 +80,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
     }
 
     memset(out_project, 0, sizeof(*out_project));
+    sample_pool_capture_project_snapshot(&out_project->sample_pool);
 
     if (pattern_live_capture_current(&out_project->live) == 0U)
     {
@@ -222,6 +223,8 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
         return 0U;
     }
     project_v1_diag_log("load_sd_ok", project_slot, 1U);
+
+    sample_pool_restore_project_snapshot(&g_project_work.sample_pool);
 
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {

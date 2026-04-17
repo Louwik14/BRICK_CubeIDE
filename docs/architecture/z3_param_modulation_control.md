@@ -128,6 +128,7 @@ Familles d'autorite:
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
   - le backend Sampler track-aware est mis a jour sans pipeline parallele.
+- `PARAM_SAMPLER_SAMPLE` met a jour la selection runtime sans retrigger automatique de preview.
 - P-locks:
   - les params Sampler de base restent p-lockables via le flux track-aware.
 - Invariants:

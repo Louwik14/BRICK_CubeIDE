@@ -115,8 +115,8 @@ Z0 appelle principalement:
   - Ecriture/lecture: modules recorder/master_buffer/audio runtime apres init.
   - Role: buffer global de recorder/master buffer branche au boot.
 - `g_sample_pool_data[...]` (SDRAM_SAMPLES float array):
-  - Ecriture: `sample_pool` lors du chargement WAV.
-  - Role: arena residante des samples projet, dimensionnee pour absorber le reste disponible de la SDRAM apres les reserves fixes.
+  - Ecriture: `sample_pool` lors du chargement WAV ou du restore projet.
+  - Role: arena residante des samples projet, dimensionnee pour absorber le reste disponible de la SDRAM apres les reserves fixes; le boot n'injecte plus de sample par defaut.
 - `g_rec_ring_storage[...]` + `g_live_recorder_buffer[...]` (SDRAM_RECORDER float arrays):
   - Ecriture/lecture: recorder/master buffer.
   - Role: historique/loop recorder partage.

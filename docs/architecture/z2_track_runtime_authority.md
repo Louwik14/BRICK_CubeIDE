@@ -164,6 +164,8 @@ Sorties de Z2:
 - Binding:
   - autorite conservee dans `track_runtime`,
   - backend mono initialement silencieux tant que le moteur Sampler final n'est pas branche.
+- Gate note/mix:
+  - le helper central `track_runtime_supports_vca_gate()` inclut le sampler, pour reutiliser le gate VCA mixer sans autorite parallele.
 - Invariants conserves:
   - pas de pipeline audio parallele,
   - pas de seconde autorite runtime,

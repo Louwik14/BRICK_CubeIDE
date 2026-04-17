@@ -272,6 +272,25 @@ uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
     return (track_runtime_get_voice_mode(ctx) == TRACK_RUNTIME_VOICE_MODE_POLY) ? 4U : 1U;
 }
 
+uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
+{
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
+    {
+        return 1U;
+    }
+
+    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+}
+
 static uint8_t track_runtime_param_play_voice_index(param_id_t param)
 {
     switch (param)

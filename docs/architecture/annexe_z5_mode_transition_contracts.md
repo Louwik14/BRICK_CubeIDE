@@ -17,8 +17,10 @@ Scope: `ui_set_hall_mode`, `ui_core_handle_shift_hall_action`, `ui_core_handle_p
 | Transition | Declencheur | Side effects imposes | Ordre critique (handlers/priority) | Fragilite |
 |---|---|---|---|---|
 | `X -> MUTE (quick)` | `BTN_TRANSPOSE_UP` press avec `shift_down=1`, `track_select_armed=0`, mute inactif (`ui_core_mute_handle_event`) | Capture `mute_prev_mode`, `mute_active=1`, `mute_submode=QUICK`, transition `hall_mode=MUTE` via `ui_set_hall_mode` | `mute` est premier stage consommant dans `ui_core_tick`; l'event est exclusif ensuite | Entree mute passe par l'autorite centrale (hooks mode globaux conserves) |
+| `MUTE(QUICK) -> MUTE(HOLD_QUICK)` | press `BTN_SHIFT` pendant `BTN_TRANSPOSE_UP` maintenu | `mute_submode=HOLD_QUICK`, `hall_mode=MUTE`, reset de la sequence shift latchee | Toujours absorbe par `mute`; le relache `SHIFT` arme la sequence prepare | L'ancien raccourci `prepare mute` est reinterprete ici |
+| `MUTE(HOLD_QUICK) -> MUTE(PREPARE)` | `SHIFT` relache puis nouveau `BTN_SHIFT` press pendant `BTN_TRANSPOSE_UP` maintenu | Snapshot mutes runtime -> buffers prepared, `mute_submode=PREPARE`, `hall_mode=MUTE` | Toujours absorbe par `mute`; l'armement est explicite dans le sous-ետat mute | Nouvelle sequence prepare explicite et latchee |
 | `MUTE(QUICK) -> prev/SEQ` | release `BTN_TRANSPOSE_UP` | `ui_core_mute_exit_to_previous_mode` -> `ui_set_hall_mode(target)` (clear mute via hook central) | Reste dans `mute` prioritaire; sortie consomme l'event | Contrat aligne sur transition centrale |
-| `MUTE(QUICK) -> MUTE(PREPARE)` | press `BTN_SHIFT` pendant `BTN_TRANSPOSE_UP` maintenu | Snapshot mutes runtime -> buffers prepared, `mute_submode=PREPARE`, `hall_mode=MUTE` | Toujours absorbe par `mute` | Transition interne explicite, mais couplage fort avec runtime mute |
+| `MUTE(HOLD_QUICK) -> prev/SEQ` | press `BTN_TRANSPOSE_UP` avec `shift_down=0` | `ui_core_mute_exit_to_previous_mode` -> `ui_set_hall_mode(target)` | Sortie explicite, distincte du momentary quick | Evite tout melange entre latched et momentary |
 | `MUTE(PREPARE) -> prev/SEQ` | press `BTN_TRANSPOSE_UP` | Apply prepared mutes track par track, puis exit via `ui_set_hall_mode(target)` | `mute` masque tous handlers aval pendant l'etat | Contrat aligne sur transition centrale |
 | `any -> PATTERN(RECALL)` | `BTN_TRANSPOSE_DOWN` press + `shift_down=1` (`ui_core_handle_transport_event`) | `ui_core_pattern_enter(RECALL)`: sauvegarde `pattern_prev_mode`, reset selection, `hall_mode=PATTERN` via `ui_set_hall_mode` | `transport` execute avant `pattern`/`seq`; consomme l'event | Dependance d'ordre forte: si transport bouge, contrat d'entree pattern change |
 | `any -> PATTERN(STORE)` | `BTN_TRANSPOSE_DOWN` press + `track_select_armed=1` (`transport`) | idem avec `pattern_mode=STORE` | idem | idem |
@@ -30,7 +32,7 @@ Scope: `ui_set_hall_mode`, `ui_core_handle_shift_hall_action`, `ui_core_handle_p
 | `SEQ handler active/inactive` | gate `hall_mode==SEQ` (helper local `ui_core_is_seq_mode_gate_open`) dans `ui_core_handle_seq_mode_event` | Aucun changement mode, seulement edition seq | Passe apres `pattern` et apres `global_shortcuts` | SEQ est un "mode de traitement" gate, pas une sous-machine explicite |
 
 ## Verification explicite demandee
-- Entree/sortie mute: alignee sur `ui_set_hall_mode` (plus d'assign direct de `hall_mode` dans les transitions mute).
+- Entree/sortie mute: alignee sur `ui_set_hall_mode` (plus d'assign direct de `hall_mode` dans les transitions mute), avec un sous-ensemble local `QUICK -> HOLD_QUICK -> PREPARE`.
 - Entree/sortie pattern: entree via transport->`pattern_enter`; sorties via `pattern_exit` (cancel/success/fail) ou abort force dans `ui_set_hall_mode`.
 - Relation hall_mode <-> seq mode: `seq mode` est seulement un gate handler (`hall_mode==SEQ`), pas une machine d'etat dediee.
 - Priorite/masquage `global_shortcuts` vs `pattern/seq`: explicite et volontaire. Tout event consomme par `ui_core_handle_global_shortcuts` bloque `pattern`, `seq`, `navigation` et `page->handle_event` pour ce tour d'event.

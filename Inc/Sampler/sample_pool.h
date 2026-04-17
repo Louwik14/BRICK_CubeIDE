@@ -48,6 +48,16 @@ typedef struct
     uint8_t valid;
 } sample_desc_t;
 
+typedef struct
+{
+    char path[SAMPLE_POOL_PATH_MAX];
+} sample_pool_entry_snapshot_t;
+
+typedef struct
+{
+    sample_pool_entry_snapshot_t slots[SAMPLE_POOL_SIZE];
+} sample_pool_project_snapshot_t;
+
 /*
  * Phase 1 scope:
  * - metadata-only sample catalog for 64 project samples.
@@ -62,5 +72,7 @@ void sample_pool_clear(uint16_t id);
 bool sample_pool_is_loaded(uint16_t id);
 sample_pool_slot_state_t sample_pool_get_state(uint16_t id);
 const sample_desc_t *sample_pool_get(uint16_t id);
+void sample_pool_capture_project_snapshot(sample_pool_project_snapshot_t *out_snapshot);
+void sample_pool_restore_project_snapshot(const sample_pool_project_snapshot_t *snapshot);
 sample_pool_load_error_t sample_pool_get_last_load_error(void);
 uint8_t sample_pool_get_last_sd_error_code(void);
