@@ -53,6 +53,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
+void midi_usb_tx_deferred_service_from_isr(void);
 
 /* USER CODE END PFP */
 
@@ -207,6 +208,7 @@ void DebugMon_Handler(void)
 void PendSV_Handler(void)
 {
   /* USER CODE BEGIN PendSV_IRQn 0 */
+  midi_usb_tx_deferred_service_from_isr();
 
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */

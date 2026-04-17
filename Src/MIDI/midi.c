@@ -220,7 +220,7 @@ static volatile uint16_t midi_usb_rx_tail = 0U;
 static volatile uint16_t midi_usb_rx_count = 0U;
 static volatile uint16_t midi_usb_rx_high_water = 0U;
 
-static volatile bool midi_usb_tx_kick = false;
+static volatile bool midi_usb_tx_deferred_pending = false;
 
 /**
  * @brief Point d'entrée midi_enter_critical.
@@ -598,6 +598,14 @@ static void midi_usb_try_flush(void) {
   midi_usb_try_flush_internal(false);
 }
 
+static inline void midi_usb_request_deferred_flush_from_isr(void) {
+  if (midi_usb_tx_deferred_pending) {
+    return;
+  }
+  midi_usb_tx_deferred_pending = true;
+  SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+}
+
 /* ====================================================================== */
 /*                        RÉCEPTION USB (DÉCODAGE)                        */
 /* ====================================================================== */
@@ -872,6 +880,11 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
     midi_clock_tx_probe.clock_f8_send_deferred_count++;
   }
 #endif
+  if (midi_in_isr()) {
+    midi_usb_request_deferred_flush_from_isr();
+    return;
+  }
+
   midi_usb_try_flush();
 }
 
@@ -971,9 +984,10 @@ void midi_init(void) {
   midi_usb_rx_high_water = 0U;
 
   midi_usb_rx_drops = 0U;
-  midi_usb_tx_kick = false;
+  midi_usb_tx_deferred_pending = false;
   midi_clock_recompute_period(MIDI_CLOCK_DEFAULT_BPM_MILLI);
   midi_clock_hw_stop();
+  HAL_NVIC_SetPriority(PendSV_IRQn, 15U, 0U);
 
   midi_stats_reset();
 }
@@ -1060,10 +1074,6 @@ midi_dest_t midi_get_rx_destination(void) {
 void midi_poll(void) {
   if (!midi_initialized) {
     return;
-  }
-
-  if (midi_usb_tx_kick) {
-    midi_usb_tx_kick = false;
   }
 
   midi_process_usb_rx();
@@ -1884,5 +1894,17 @@ void USBD_MIDI_OnPacketsSent(void) {
   }
 #endif
   midi_usb_try_flush_internal(true);
-  midi_usb_tx_kick = true;
+}
+
+void midi_usb_tx_deferred_service_from_isr(void) {
+  if (!midi_initialized) {
+    return;
+  }
+
+  if (!midi_usb_tx_deferred_pending) {
+    return;
+  }
+
+  midi_usb_tx_deferred_pending = false;
+  midi_usb_try_flush_internal(true);
 }

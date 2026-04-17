@@ -12,7 +12,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/UI/ui_tasklet.c` + `Inc/UI/ui_tasklet.h`: init lazy UI et tick UI dans superloop.
 - `Src/UI/display_flush_service.c`: service periodique display (16 ms) appele en superloop.
 - `Src/MIDI/midi.c`: callback IRQ TIM12 et callback TIM5 utilises par la cadence globale.
-- `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL.
+- `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
 - `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
 
@@ -64,6 +64,7 @@ Tasklets/timers periodiques observes:
 - TIM12 IRQ -> `HAL_TIM_PeriodElapsedCallback` (dans `midi.c`) -> `seq_runtime_time_adapter_process_internal_from_irq()`.
 - TIM5 OC IRQ -> `HAL_TIM_OC_DelayElapsedCallback` -> `midi_clock_on_timer_tick()`.
 - `engine_tasklet_notify_frames()` (alimente depuis IRQ audio Z1) -> `engine_tasklet_poll()` en superloop.
+- `PendSV` -> `midi_usb_tx_deferred_service_from_isr()` pour lancer un premier flush TX USB MIDI hors superloop apres enqueue ISR.
 
 Seconde autorite concurrente:
 - Aucune seconde autorite concurrente complete pour la sequence boot/system init/superloop.
@@ -205,6 +206,7 @@ Z0 appelle principalement:
 - IRQ TIM5 OC pour clock MIDI.
 - IRQ audio (Z1) alimente `engine_tasklet_notify_frames`; superloop consomme ensuite.
 - IRQ audio (Z1) porte aussi la progression step du sequencer (interne + consommation pulses externes) en domaine sample.
+- `PendSV` sert de contexte differe basse priorite pour demarrer le TX USB MIDI quand des messages sont enfiles depuis ISR.
 
 ## 7. Contraintes RT/CPU/memoire
 
