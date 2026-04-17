@@ -1402,6 +1402,11 @@ static void param_registry_capture_mix_targets(uint8_t *out_mix_tracks)
     }
 }
 
+static void param_registry_mark_runtime_global_dirty(void)
+{
+    track_runtime_invalidate_all();
+}
+
 static void param_registry_reapply_lane_bound_runtime_for_all_tracks(void)
 {
     static const param_id_t k_lane_bound_params[] = {
@@ -1460,6 +1465,7 @@ static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_track
 
     param_registry_capture_mix_targets(next_mix_tracks);
     mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
+    param_registry_mark_runtime_global_dirty();
 }
 
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
@@ -1568,6 +1574,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         param_runtime_cache_set(track, id, clamped);
                         mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
                         seq_runtime_on_midi_program_live_change(track, clamped);
+                        track_runtime_invalidate_track(track);
                         return 1U;
                     }
 
@@ -1584,6 +1591,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
                         param_runtime_cache_set(track, id, clamped);
                         mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
+                        track_runtime_invalidate_track(track);
                         return 1U;
                     }
 
@@ -1596,6 +1604,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                                      (unsigned)ctx->instance_id);
                         return 0U;
                     }
+
+                    track_runtime_invalidate_track(track);
                 }
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
                 {
@@ -1608,6 +1618,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                                      (unsigned)ctx->mix_track_id);
                         return 0U;
                     }
+
+                    track_runtime_invalidate_track(track);
                 }
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
                 {
@@ -1625,6 +1637,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                                      (unsigned)ctx->instance_id);
                         return 0U;
                     }
+
+                    track_runtime_invalidate_track(track);
                 }
                 else
                 {
@@ -2296,6 +2310,7 @@ static void apply_cfg_track(float v)
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_neutralize_vca_runtime_if_invalid(active_track);
     param_registry_reapply_lane_bound_runtime_for_all_tracks();
+    param_registry_mark_runtime_global_dirty();
 }
 
 static void apply_cfg_track_type(float v)
@@ -2322,6 +2337,7 @@ static void apply_cfg_track_type(float v)
     param_registry_neutralize_filter_runtime_if_invalid(active_track);
     param_registry_neutralize_vca_runtime_if_invalid(active_track);
     param_registry_reapply_lane_bound_runtime_for_all_tracks();
+    param_registry_mark_runtime_global_dirty();
     g_param_cfg_track_type_apply_stage = 4U;
 }
 

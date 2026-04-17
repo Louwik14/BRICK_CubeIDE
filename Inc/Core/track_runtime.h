@@ -133,10 +133,21 @@ typedef struct
     track_runtime_param_status_t status;
 } track_runtime_param_rule_t;
 
+typedef struct
+{
+    uint8_t monob_tracks;
+    uint8_t drum_tracks;
+    uint8_t dx7_tracks;
+} track_runtime_synth_usage_t;
+
 void track_runtime_init(void);
 void track_runtime_invalidate_all(void);
+void track_runtime_invalidate_track(uint8_t track);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
+void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage);
+uint32_t track_runtime_get_revision(void);
+uint32_t track_runtime_get_track_revision(uint8_t track);
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
 uint8_t track_runtime_is_audio_routable(uint8_t track);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);

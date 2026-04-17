@@ -50,50 +50,6 @@ static uint8_t g_runtime_last_ui_active_track = 0xFFU;
 static float g_buffer_xfade_smoothed = 0.0f;
 static float g_buffer_xfade_prev = 0.0f;
 
-typedef struct
-{
-    uint8_t monob_tracks;
-    uint8_t drum_tracks;
-    uint8_t dx7_tracks;
-} brick6_synth_usage_t;
-
-static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
-{
-    uint8_t monob_count = 0U;
-    uint8_t drum_count = 0U;
-    uint8_t dx7_tracks = 0U;
-
-    track_runtime_refresh_all();
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
-        {
-            continue;
-        }
-
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-        {
-            monob_count++;
-        }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-        {
-            drum_count++;
-        }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-        {
-            dx7_tracks++;
-        }
-    }
-
-    if (out_usage != NULL)
-    {
-        out_usage->monob_tracks = monob_count;
-        out_usage->drum_tracks = drum_count;
-        out_usage->dx7_tracks = dx7_tracks;
-    }
-}
-
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
     switch ((track_runtime_type_t)runtime_type)
@@ -283,8 +239,8 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
-    brick6_synth_usage_t synth_usage = { 0U, 0U, 0U };
-    brick6_collect_runtime_synth_usage(&synth_usage);
+    track_runtime_synth_usage_t synth_usage = { 0U, 0U, 0U };
+    track_runtime_get_cached_synth_usage(&synth_usage);
     const uint8_t synth_runtime_enabled = ((synth_usage.monob_tracks > 0U)
             || (synth_usage.drum_tracks > 0U)
             || (synth_usage.dx7_tracks > 0U)) ? 1U : 0U;

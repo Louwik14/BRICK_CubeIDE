@@ -17,7 +17,11 @@
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
-static volatile uint8_t g_track_runtime_refresh_needed = 1U;
+static volatile uint8_t g_track_runtime_global_dirty = 1U;
+static volatile uint8_t g_track_runtime_track_dirty[SEQ_TRACK_COUNT];
+static uint32_t g_track_runtime_revision = 0U;
+static uint32_t g_track_runtime_track_revision[SEQ_TRACK_COUNT];
+static track_runtime_synth_usage_t g_track_runtime_synth_usage;
 
 typedef struct
 {
@@ -429,13 +433,24 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 void track_runtime_init(void)
 {
     memset(&g_track_runtime_ctx, 0, sizeof(g_track_runtime_ctx));
-    g_track_runtime_refresh_needed = 1U;
+    memset((void *)g_track_runtime_track_dirty, 1, sizeof(g_track_runtime_track_dirty));
+    g_track_runtime_global_dirty = 1U;
     track_runtime_refresh_all();
 }
 
 void track_runtime_invalidate_all(void)
 {
-    g_track_runtime_refresh_needed = 1U;
+    g_track_runtime_global_dirty = 1U;
+}
+
+void track_runtime_invalidate_track(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_track_runtime_track_dirty[track] = 1U;
 }
 
 void track_runtime_refresh_all(void)
@@ -443,6 +458,9 @@ void track_runtime_refresh_all(void)
     track_runtime_allocator_state_t allocator = { 0U, 0U, 0U };
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
     uint8_t previous_mix_track[SEQ_TRACK_COUNT];
+    uint8_t monob_count = 0U;
+    uint8_t drum_count = 0U;
+    uint8_t dx7_tracks = 0U;
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -521,9 +539,34 @@ void track_runtime_refresh_all(void)
         }
 
         track_runtime_bind_ctx(ctx, &allocator);
+
+        if (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+        {
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
+            {
+                monob_count++;
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+            {
+                drum_count++;
+            }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
+            {
+                dx7_tracks++;
+            }
+        }
     }
 
-    g_track_runtime_refresh_needed = 0U;
+    g_track_runtime_synth_usage.monob_tracks = monob_count;
+    g_track_runtime_synth_usage.drum_tracks = drum_count;
+    g_track_runtime_synth_usage.dx7_tracks = dx7_tracks;
+    g_track_runtime_global_dirty = 0U;
+    ++g_track_runtime_revision;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        g_track_runtime_track_dirty[track] = 0U;
+        g_track_runtime_track_revision[track] = g_track_runtime_revision;
+    }
 }
 
 void track_runtime_refresh_track(uint8_t track)
@@ -533,11 +576,49 @@ void track_runtime_refresh_track(uint8_t track)
         return;
     }
 
-    if (g_track_runtime_refresh_needed != 0U)
+    if ((g_track_runtime_global_dirty != 0U) || (g_track_runtime_track_dirty[track] != 0U))
     {
-        /* Quotas are global to all tracks, so refresh remains a full pass when dirty. */
+        /* Quotas remain global for now, so a dirty refresh still performs a full pass. */
         track_runtime_refresh_all();
     }
+}
+
+void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage)
+{
+    if (g_track_runtime_global_dirty != 0U)
+    {
+        track_runtime_refresh_all();
+    }
+
+    if (out_usage != NULL)
+    {
+        *out_usage = g_track_runtime_synth_usage;
+    }
+}
+
+uint32_t track_runtime_get_revision(void)
+{
+    if (g_track_runtime_global_dirty != 0U)
+    {
+        track_runtime_refresh_all();
+    }
+
+    return g_track_runtime_revision;
+}
+
+uint32_t track_runtime_get_track_revision(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    if ((g_track_runtime_global_dirty != 0U) || (g_track_runtime_track_dirty[track] != 0U))
+    {
+        track_runtime_refresh_all();
+    }
+
+    return g_track_runtime_track_revision[track];
 }
 
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track)
