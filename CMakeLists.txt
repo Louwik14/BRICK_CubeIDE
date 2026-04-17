@@ -360,7 +360,7 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     --specs=nano.specs
 
     $<$<CONFIG:Debug>:-Og>
-    $<$<CONFIG:Release>:-O2>
+    $<$<CONFIG:Release>:-O1>
 
     $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-fno-math-errno>
     $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:C>>:-ffast-math>
@@ -376,11 +376,37 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-fno-use-cxa-atexit>
     $<$<COMPILE_LANGUAGE:CXX>:-fstack-usage>
 )
-# Audio en O3 : seulement les fichiers C du dossier Src/Audio
-set(AUDIO_C_SOURCES
-    ${SRC_AUDIO_SRC}
+
+# Tous les fichiers C++ en O2 en Release
+get_target_property(ALL_TARGET_SOURCES ${CMAKE_PROJECT_NAME} SOURCES)
+
+set(ALL_CPP_SOURCES ${ALL_TARGET_SOURCES})
+list(FILTER ALL_CPP_SOURCES INCLUDE REGEX ".*\\.(cpp|cc|cxx)$")
+
+set_source_files_properties(${ALL_CPP_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O2>"
 )
 
+# Audio en O2 : fichiers C et C++ du dossier Src/Audio
+set(AUDIO_ALL_SOURCES ${SRC_AUDIO_SRC})
+list(FILTER AUDIO_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+
+set_source_files_properties(${AUDIO_ALL_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O2>"
+)
+
+# Storage en O0 : fichiers C et C++ du dossier Src/Storage
+set(STORAGE_ALL_SOURCES ${SRC_STORAGE_SRC})
+list(FILTER STORAGE_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+
+set_source_files_properties(${STORAGE_ALL_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O0>"
+)
+
+# U8g2 en O0
+set_source_files_properties(${U8G2_SRC} PROPERTIES
+    COMPILE_OPTIONS "$<$<CONFIG:Release>:-O0>"
+)
 list(FILTER AUDIO_C_SOURCES INCLUDE REGEX ".*\\.c$")
 
 set_source_files_properties(${AUDIO_C_SOURCES} PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>")
