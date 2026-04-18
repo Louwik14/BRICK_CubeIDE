@@ -460,16 +460,13 @@ void track_runtime_init(void)
 void track_runtime_invalidate_all(void)
 {
     g_track_runtime_global_dirty = 1U;
+    memset((void *)g_track_runtime_track_dirty, 1, sizeof(g_track_runtime_track_dirty));
 }
 
 void track_runtime_invalidate_track(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    g_track_runtime_track_dirty[track] = 1U;
+    (void)track;
+    track_runtime_invalidate_all();
 }
 
 void track_runtime_refresh_all(void)
@@ -604,10 +601,7 @@ void track_runtime_refresh_track(uint8_t track)
 
 void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage)
 {
-    if (g_track_runtime_global_dirty != 0U)
-    {
-        track_runtime_refresh_all();
-    }
+    track_runtime_refresh_all();
 
     if (out_usage != NULL)
     {

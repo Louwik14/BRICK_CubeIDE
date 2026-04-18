@@ -617,7 +617,6 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             rt->calib_valid = 0U;
             rt->depth_scale = 0.0f;
-            track_runtime_invalidate_track(track);
             return 1U;
         }
 
@@ -633,7 +632,6 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
                 track_runtime_refresh_track(track);
                 mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
             }
-            track_runtime_invalidate_track(track);
             return 1U;
 
         case MOD_LFO_PARAM_SHAPE:
