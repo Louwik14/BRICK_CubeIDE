@@ -7,6 +7,7 @@
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
+#include "Storage/undo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
 
@@ -231,6 +232,8 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
         project_v1_diag_log("load_apply_fail", project_slot, 0U);
         return 0U;
     }
+
+    undo_v1_clear_history();
 
     if (project_sd_bank_commit_slot_patterns(project_slot) == 0U)
     {

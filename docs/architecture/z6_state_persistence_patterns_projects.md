@@ -21,7 +21,7 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
 - `Src/UI/ui_core.c`: preuve des appels UI vers `pattern_live_capture_to_slot` et `pattern_live_queue_slot`.
 - `Src/UI/pages/ui_page_settings.c`: preuve des appels UI vers `project_v1_save_slot/load_slot/delete_slot`.
-- `Src/Storage/undo_v1.c`: preuve de la sous-zone undo basee sur snapshot live.
+- `Src/Storage/undo_v1.c`: preuve de la sous-zone undo basee sur snapshots live multi-niveaux.
 
 Sous-roles internes identifies:
 - `pattern_live_ram.c`: capture/apply snapshot live + gestion active/queued pattern + service de bascule a boundary.
@@ -157,7 +157,8 @@ Points de lecture principaux:
 - `g_boot_ctx_cache_valid`: validite cache RAM.
 
 ### `undo_v1.c` (sous-zone dependante)
-- `g_undo_v1` (`undo_snapshot_v1_t {valid, source_slot, snapshot}`): snapshot undo.
+- `g_undo_v1` (`undo_snapshot_v1_history_t`): ring buffer de 10 snapshots undo.
+- `g_undo_capture_work`: buffer de capture temporaire.
 - `g_undo_capture_suspended`: garde anti-recursion pendant restore undo.
 
 ## 6. Flux runtime
@@ -260,6 +261,7 @@ Effets aval:
 - Depend de Z3 pour application/lecture parametres et modulation.
 - Depend de Z4 pour transport/tempo/clock/playhead et donnees sequenceur.
 - Expose a Z5/Z7 (settings/ops) les APIs projet/pattern de persistence.
+- `undo_v1` ne couvre pas les mutes, ROUT, navigation, copy, settings, load/save ou restore globaux; les resets d'historique sont poses sur `load project` et `load pattern`.
 
 ## 10. Dette technique observee
 

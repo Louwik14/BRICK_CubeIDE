@@ -40,6 +40,18 @@ static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status
     return ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
 
+static uint32_t seq_edit_make_undo_gesture_key(uint8_t op,
+                                               seq_track_id_t track,
+                                               seq_step_id_t step,
+                                               uint8_t extra)
+{
+    return (0x20000000UL
+        | ((uint32_t)op << 24)
+        | ((uint32_t)track << 16)
+        | ((uint32_t)step << 8)
+        | (uint32_t)extra);
+}
+
 static uint8_t seq_edit_is_play_note_param(uint8_t set_id, seq_param8_t param8)
 {
     if (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY)
@@ -92,6 +104,7 @@ static void seq_edit_apply_short_action(uint8_t hall)
 
     const seq_track_id_t track = g_seq_hold_state.track_id[hall];
     const seq_step_id_t step = g_seq_hold_state.step_id[hall];
+    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(0U, track, step, hall));
     if ((g_seq_hold_state.pressed_active[hall] == 0U)
             && (g_seq_hold_state.pressed_content[hall] == SEQ_STEP_CONTENT_EMPTY)
             && (g_seq_hold_state.auto_note_pending[hall] != 0U)
@@ -157,6 +170,7 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
         return 0U;
     }
 
+    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(1U, track, step, hall_index));
     (void)undo_v1_capture_before_edit(0U);
     seq_model_toggle_trig(track, step);
     return 1U;
@@ -385,12 +399,14 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   uint8_t set_id,
                                                   seq_param8_t param8)
 {
+    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(4U, track, step, (uint8_t)(set_id ^ param8)));
     (void)undo_v1_capture_before_edit(0U);
     return seq_model_step_plock_delete(track, step, set_id, param8);
 }
 
 void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
+    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(5U, track, step, 0U));
     (void)undo_v1_capture_before_edit(0U);
     seq_model_step_plock_clear(track, step);
 }
@@ -420,6 +436,12 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
                              uint8_t dest_count,
                              seq_clipboard_paste_result_t *out_result)
 {
+    seq_step_id_t first_step = 0U;
+    if ((dest_steps != 0) && (dest_count != 0U))
+    {
+        first_step = dest_steps[0];
+    }
+    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(6U, track, first_step, dest_count));
     (void)undo_v1_capture_before_edit(0U);
     return seq_clipboard_paste(track, dest_steps, dest_count, out_result);
 }
@@ -433,6 +455,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
         return;
     }
 
+    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(7U, track, steps[0], step_count));
     (void)undo_v1_capture_before_edit(0U);
     for (uint8_t i = 0U; i < step_count; ++i)
     {

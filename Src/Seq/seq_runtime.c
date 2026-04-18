@@ -25,6 +25,7 @@
 #include "Seq/seq_live_rec_capture.h"
 #include "Seq/seq_transport_fsm.h"
 #include "Seq/seq_clock_bridge.h"
+#include "Storage/undo_v1.h"
 #include "UI/ui_core.h"
 #include "main.h"
 
@@ -1370,6 +1371,11 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
         step = 0U;
     }
 
+    undo_v1_begin_gesture((0x40000000UL
+                           | ((uint32_t)8U << 24)
+                           | ((uint32_t)track << 16)
+                           | ((uint32_t)step << 8)
+                           | ((uint32_t)set_id ^ (uint32_t)param8)));
     const seq_plock_op_status_t status = seq_edit_step_plock_upsert(track,
                                                                      step,
                                                                      set_id,

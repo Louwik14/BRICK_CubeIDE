@@ -275,6 +275,17 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
             && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
+static uint32_t ui_param_make_gesture_key(uint8_t encoder, param_id_t param)
+{
+    const uint32_t hall_mode = (uint32_t)ui_get_hall_mode();
+    const uint32_t active_track = (uint32_t)ui_get_active_track();
+    return 0x10000000UL
+        | (hall_mode << 28)
+        | (active_track << 20)
+        | ((uint32_t)param << 4)
+        | (uint32_t)(encoder & 0x0FU);
+}
+
 static float ui_param_get_active_track_value(param_id_t param)
 {
     if (ui_param_is_track_scoped(param) == 0U)
@@ -550,6 +561,8 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     {
         return;
     }
+
+    undo_v1_begin_gesture(ui_param_make_gesture_key(encoder, param));
 
     const param_desc_t *desc = &param_registry[param];
     float min_value = desc->min;
