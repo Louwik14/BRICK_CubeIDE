@@ -510,7 +510,6 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
 
     if ((state == NULL) || (family == NULL))
     {
-        drv_display_draw_text(0U, 0U, "TEMPLATE N/A");
         return;
     }
 

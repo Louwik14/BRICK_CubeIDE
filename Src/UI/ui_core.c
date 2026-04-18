@@ -898,7 +898,7 @@ static void ui_core_handle_track_hall_action(uint8_t hall)
     ui_core_set_active_track(hall);
     if (is_double_tap != 0U)
     {
-        ui_page_set(UI_PAGE_TEMPLATE_CFG);
+        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_CFG);
     }
 }
 
