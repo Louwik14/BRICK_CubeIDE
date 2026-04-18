@@ -169,6 +169,11 @@ list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_edit_context_sync.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_active_track_sync.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_clipboard.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_feedback.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_mute.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_pattern.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_seq_transport.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_shortcuts.c"
 )
 
 # Mutable Instruments
