@@ -26,12 +26,6 @@ static uint8_t ui_system_sync_request_is_valid_against_adapter(const ui_system_s
         return 0U;
     }
 
-    if ((request->sync_active_track_ui_context != 0U)
-        && (adapter->sync_active_track_ui_context == 0))
-    {
-        return 0U;
-    }
-
     return 1U;
 }
 
@@ -42,7 +36,6 @@ ui_system_sync_request_t ui_system_sync_make_request_restore_bulk(void)
     request.sync_audio_enables = 1U;
     request.runtime_sync_order = UI_SYSTEM_SYNC_RUNTIME_ORDER_INVALIDATE_THEN_ENABLES;
     request.notify_keyboard_after_runtime_sync = 1U;
-    request.sync_active_track_ui_context = 1U;
     return request;
 }
 
@@ -53,7 +46,6 @@ ui_system_sync_request_t ui_system_sync_make_request_track_family_change(uint8_t
     request.sync_audio_enables = 1U;
     request.runtime_sync_order = UI_SYSTEM_SYNC_RUNTIME_ORDER_ENABLES_THEN_INVALIDATE;
     request.notify_keyboard_after_runtime_sync = active_track_touched;
-    request.sync_active_track_ui_context = active_track_touched;
     return request;
 }
 
@@ -63,7 +55,6 @@ ui_system_sync_request_t ui_system_sync_make_request_track_type_change(uint8_t a
     request.invalidate_runtime = 1U;
     request.runtime_sync_order = UI_SYSTEM_SYNC_RUNTIME_ORDER_INVALIDATE_THEN_ENABLES;
     request.notify_keyboard_after_runtime_sync = active_track_touched;
-    request.sync_active_track_ui_context = active_track_touched;
     return request;
 }
 
@@ -113,9 +104,4 @@ void ui_system_sync_apply_track_context_change(const ui_system_sync_request_t *r
         adapter->notify_keyboard_active_track_changed();
     }
 
-    if ((request->sync_active_track_ui_context != 0U)
-        && (adapter->sync_active_track_ui_context != 0))
-    {
-        adapter->sync_active_track_ui_context();
-    }
 }

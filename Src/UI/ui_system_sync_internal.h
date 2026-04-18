@@ -15,7 +15,6 @@ typedef struct
     uint8_t sync_audio_enables;
     ui_system_sync_runtime_order_t runtime_sync_order;
     uint8_t notify_keyboard_after_runtime_sync;
-    uint8_t sync_active_track_ui_context;
 } ui_system_sync_request_t;
 
 typedef struct
@@ -23,7 +22,6 @@ typedef struct
     void (*notify_keyboard_active_track_changed)(void);
     void (*invalidate_runtime_all)(void);
     void (*sync_audio_runtime_enables)(void);
-    void (*sync_active_track_ui_context)(void);
 } ui_system_sync_adapter_t;
 
 ui_system_sync_request_t ui_system_sync_make_request_restore_bulk(void);
