@@ -4,6 +4,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
+#include "UI/ui_active_track_sync.h"
 #include "Audio/mixer.h"
 #include "Core/track_runtime.h"
 #include "Param/param_registry.h"
@@ -110,6 +111,7 @@ uint8_t undo_v1_restore(uint8_t resume_transport)
                                       g_undo_v1.queued_valid,
                                       g_undo_v1.queued_bank,
                                       g_undo_v1.queued_pattern);
+        ui_active_track_sync_full_after_global_restore();
     }
     g_undo_capture_suspended = 0U;
 

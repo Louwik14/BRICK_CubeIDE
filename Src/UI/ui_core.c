@@ -43,6 +43,8 @@
 #include "pages/ui_page_settings.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
+#include "ui_active_track_sync.h"
+#include "ui_edit_context_sync.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_system_sync_internal.h"
@@ -50,7 +52,6 @@
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "param_registry.h"
-#include "param_store.h"
 #include "audio_float.h"
 #include "mixer.h"
 #include "Seq/seq_edit.h"
@@ -60,14 +61,6 @@
 #include "Storage/undo_v1.h"
 #include "Core/brick6_master_buffer.h"
 
-#define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
-#define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)
-#define UI_CFG_TRACK_MIDI_CH_PARAM ((param_id_t)PARAM_CFG_MIDI_CH)
-#define UI_CFG_TRACK_MIDI_SRC_PARAM ((param_id_t)PARAM_CFG_MIDI_SRC)
-#define UI_CFG_REC_PARAM ((param_id_t)PARAM_CFG_REC)
-#define UI_CFG_TEMPO_PARAM ((param_id_t)PARAM_CFG_TEMPO)
-#define UI_CFG_SYNC_PARAM ((param_id_t)PARAM_CFG_SYNC)
-#define UI_CFG_REC_LEN_PARAM ((param_id_t)PARAM_CFG_REC_LEN)
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
@@ -994,46 +987,31 @@ static void ui_core_sync_audio_runtime_enables(void)
     track_enable(3U, has_engine_track);
 }
 
-static void ui_core_sync_active_track_cfg_params(void)
+static void ui_core_sync_active_track_ui_context(uint8_t include_keyboard_focus_sync)
 {
-    const uint8_t active_track = g_ui_track_state.active_track;
-    const ui_track_config_t *active_config = &g_ui_track_state.track_configs[active_track];
+    ui_active_track_sync_mirror();
+    ui_edit_context_sync_active_track(include_keyboard_focus_sync);
+}
 
-    param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_config->family);
-    param_store_set_active(UI_CFG_TRACK_TYPE_PARAM, (float)ui_get_track_type_index_for_family(active_config->family, active_config->type));
-    param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)g_ui_track_state.track_midi_channel[active_track]);
-    param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)g_ui_track_state.track_midi_source[active_track]);
-    param_store_set_active(UI_CFG_REC_PARAM, (float)seq_runtime_get_rec_count_in_mode());
-    param_store_set_active(UI_CFG_TEMPO_PARAM, (float)seq_runtime_get_tempo_bpm_milli() / 1000.0f);
+static uint8_t ui_core_select_active_track(uint8_t track)
+{
+    if ((track >= UI_TRACK_COUNT) || (g_ui_track_state.active_track == track))
     {
-        float sync_value = 0.0f;
-        switch (seq_runtime_get_clock_source())
-        {
-            case SEQ_CLOCK_SRC_EXTERNAL_MIDI:
-                sync_value = 1.0f;
-                break;
-            case SEQ_CLOCK_SRC_EXTERNAL_USB:
-                sync_value = 2.0f;
-                break;
-            case SEQ_CLOCK_SRC_INTERNAL:
-            default:
-                sync_value = 0.0f;
-                break;
-        }
-        param_store_set_active(UI_CFG_SYNC_PARAM, sync_value);
+        return 0U;
     }
-    param_store_set_active(UI_CFG_REC_LEN_PARAM, (float)seq_runtime_get_rec_len_mode());
-    param_registry_sync_ui_for_active_track();
+
+    g_ui_track_state.active_track = track;
+    return 1U;
 }
 
 static void ui_core_sync_adapter_notify_keyboard_active_track_changed(void)
 {
-    keyboard_runtime_on_active_track_changed();
+    keyboard_runtime_sync_track_focus_context();
 }
 
-static void ui_core_sync_adapter_commit_active_track(uint8_t next_track)
+static void ui_core_sync_adapter_active_track_ui_context(void)
 {
-    g_ui_track_state.active_track = next_track;
+    /* Post-reconfigure UI sync is centralized in ui_core_reconfigure_track_runtime(). */
 }
 
 static void ui_core_sync_adapter_invalidate_runtime_all(void)
@@ -1043,21 +1021,20 @@ static void ui_core_sync_adapter_invalidate_runtime_all(void)
 
 static const ui_system_sync_adapter_t g_ui_core_system_sync_adapter = {
     .notify_keyboard_active_track_changed = ui_core_sync_adapter_notify_keyboard_active_track_changed,
-    .commit_active_track = ui_core_sync_adapter_commit_active_track,
     .invalidate_runtime_all = ui_core_sync_adapter_invalidate_runtime_all,
     .sync_audio_runtime_enables = ui_core_sync_audio_runtime_enables,
-    .sync_active_track_cfg_params = ui_core_sync_active_track_cfg_params
+    .sync_active_track_ui_context = ui_core_sync_adapter_active_track_ui_context
 };
 
-static void ui_core_resync_active_page_param_context(void)
+static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *request)
 {
-    ui_param_invalidate_bank();
-
-    const ui_page_t *const active_page = ui_page_get();
-    if ((active_page != 0) && (active_page->tick != 0))
+    if (request == 0)
     {
-        active_page->tick();
+        return;
     }
+
+    ui_system_sync_apply_track_context_change(request, &g_ui_core_system_sync_adapter);
+    ui_active_track_sync_after_track_structure_change(request->sync_active_track_ui_context);
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -1069,23 +1046,18 @@ static void ui_core_set_active_track(uint8_t track)
 
     if (g_ui_track_state.active_track == track)
     {
-        /* Same-track contract: resync only, no keyboard callback. */
-        const ui_system_sync_request_t request = ui_system_sync_make_request_active_track_resync_only();
-        ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
-        ui_core_resync_active_page_param_context();
+        ui_core_sync_active_track_ui_context(0U);
         return;
     }
 
-    /* Preserve observable order: callback first, then state pivot, then system sync. */
-    const ui_system_sync_request_t request = ui_system_sync_make_request_active_track_change(track);
-    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
-    ui_core_resync_active_page_param_context();
+    (void)ui_core_select_active_track(track);
+    ui_core_sync_active_track_ui_context(1U);
 }
 
 static void ui_core_restore_post_apply_sync_and_notify(void)
 {
     const ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
-    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
+    ui_core_reconfigure_track_runtime(&request);
 }
 
 uint8_t ui_get_track_midi_channel(uint8_t track)
@@ -1109,7 +1081,7 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
     g_ui_track_state.track_midi_channel[track] = channel_1_16;
     if (track == g_ui_track_state.active_track)
     {
-        param_store_set_active(UI_CFG_TRACK_MIDI_CH_PARAM, (float)channel_1_16);
+        ui_active_track_sync_mirror_cfg_midi_channel();
     }
     return true;
 }
@@ -1139,7 +1111,7 @@ bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
     g_ui_track_state.track_midi_source[track] = (uint8_t)source;
     if (track == g_ui_track_state.active_track)
     {
-        param_store_set_active(UI_CFG_TRACK_MIDI_SRC_PARAM, (float)source);
+        ui_active_track_sync_mirror_cfg_midi_source();
     }
     return true;
 }
@@ -2086,7 +2058,7 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
         cb_mut->source_track = track;
     }
 
-    param_registry_sync_ui_for_active_track();
+    ui_edit_context_sync_active_track(0U);
     return 1U;
 }
 
@@ -2266,7 +2238,7 @@ static uint8_t ui_core_handle_ensemble_clipboard_event(const ui_event_t *ev)
     if (g_ui_track_state.shift_down != 0U)
     {
         ui_core_clipboard_clear_param_list_to_min(track, params, count);
-        param_registry_sync_ui_for_active_track();
+        ui_edit_context_sync_active_track(0U);
         ui_core_set_feedback("ENS CLEARED");
         return 1U;
     }
@@ -2283,7 +2255,7 @@ static uint8_t ui_core_handle_ensemble_clipboard_event(const ui_event_t *ev)
         return 1U;
     }
 
-    param_registry_sync_ui_for_active_track();
+    ui_edit_context_sync_active_track(0U);
     if ((applied < common_count) || (common_count < g_ui_clipboard.ensemble.param_count))
     {
         ui_core_set_feedback("ENS PARTIAL");
@@ -2336,7 +2308,7 @@ static uint8_t ui_core_handle_page_clipboard_event(const ui_event_t *ev)
     if (g_ui_track_state.shift_down != 0U)
     {
         ui_core_clipboard_clear_param_list_to_min(track, params, count);
-        param_registry_sync_ui_for_active_track();
+        ui_edit_context_sync_active_track(0U);
         ui_core_set_feedback("PAGE CLEARED");
         return 1U;
     }
@@ -2353,7 +2325,7 @@ static uint8_t ui_core_handle_page_clipboard_event(const ui_event_t *ev)
         return 1U;
     }
 
-    param_registry_sync_ui_for_active_track();
+    ui_edit_context_sync_active_track(0U);
     if ((applied < common_count) || (common_count < g_ui_clipboard.page.param_count))
     {
         ui_core_set_feedback("PAGE PARTIAL");
@@ -2745,7 +2717,7 @@ void ui_core_init(void)
         g_ui_track_state.hall_note_suppressed[hall] = 0U;
     }
 
-    ui_core_sync_active_track_cfg_params();
+    ui_active_track_sync_mirror();
 
     ui_template_family_registry_init();
     ui_page_template_colors_register_families();
@@ -2977,7 +2949,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_sync_active_track_cfg_params();
+            ui_core_sync_active_track_ui_context(0U);
         }
         return false;
     }
@@ -2993,7 +2965,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_sync_active_track_cfg_params();
+            ui_core_sync_active_track_ui_context(0U);
         }
         return true;
     }
@@ -3003,7 +2975,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_sync_active_track_cfg_params();
+            ui_core_sync_active_track_ui_context(0U);
         }
         return false;
     }
@@ -3016,7 +2988,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_family_change((track == g_ui_track_state.active_track) ? 1U : 0U);
-    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
+    ui_core_reconfigure_track_runtime(&request);
 
     return true;
 }
@@ -3033,7 +3005,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_sync_active_track_cfg_params();
+            ui_core_sync_active_track_ui_context(0U);
         }
         return false;
     }
@@ -3042,7 +3014,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_sync_active_track_cfg_params();
+            ui_core_sync_active_track_ui_context(0U);
         }
         return false;
     }
@@ -3051,7 +3023,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_sync_active_track_cfg_params();
+            ui_core_sync_active_track_ui_context(0U);
         }
         return true;
     }
@@ -3059,7 +3031,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
     config->type = type;
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_type_change((track == g_ui_track_state.active_track) ? 1U : 0U);
-    ui_system_sync_apply_track_context_change(&request, &g_ui_core_system_sync_adapter);
+    ui_core_reconfigure_track_runtime(&request);
 
     return true;
 }

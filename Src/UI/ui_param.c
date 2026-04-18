@@ -41,6 +41,8 @@ static ui_param_state_t g_ui_param = {
     .valid = 0U,
 };
 
+static uint8_t ui_param_is_track_scoped(param_id_t param);
+
 /**
  * @brief Point d'entrée ui_param_clamp.
  *
@@ -200,6 +202,36 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
 void ui_param_invalidate_bank(void)
 {
     g_ui_param.valid = 0U;
+}
+
+void ui_param_sync_active_bank_values(void)
+{
+    if (g_ui_param.valid == 0U)
+    {
+        return;
+    }
+
+    const uint8_t active_track = ui_get_active_track();
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        const param_id_t id = g_ui_param.bank.params[i];
+        if (id >= PARAM_COUNT)
+        {
+            continue;
+        }
+
+        if (ui_param_is_track_scoped(id) != 0U)
+        {
+            float value = 0.0f;
+            if (param_registry_get_track_value(id, active_track, &value) != 0U)
+            {
+                param_store_set_active(id, value);
+            }
+            continue;
+        }
+
+        param_store_set_active(id, param_get(id));
+    }
 }
 
 static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,

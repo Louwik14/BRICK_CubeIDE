@@ -166,6 +166,8 @@ file(GLOB SRC_UI_SRC
 
 list(APPEND SRC_UI_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_system_sync_internal.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_edit_context_sync.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_active_track_sync.c"
 )
 
 # Mutable Instruments

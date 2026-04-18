@@ -306,6 +306,13 @@ static void ui_page_template_colors_tick(void)
     ui_template_page_tick();
 }
 
+static void ui_page_template_colors_sync_active_context(void)
+{
+    ui_page_template_colors_sync_family();
+    ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
+    ui_template_page_sync_active_track_context();
+}
+
 static void ui_page_template_colors_render(void)
 {
     ui_page_template_colors_sync_family();
@@ -317,6 +324,7 @@ const ui_page_t g_ui_page_template_colors = {
     .leave = ui_template_page_leave,
     .handle_event = ui_page_template_colors_handle_event,
     .tick = ui_page_template_colors_tick,
+    .sync_active_context = ui_page_template_colors_sync_active_context,
     .render = ui_page_template_colors_render,
     .context = &g_ui_template_filter_state,
 };
@@ -326,6 +334,7 @@ const ui_page_t g_ui_page_template_vca = {
     .leave = ui_template_page_leave,
     .handle_event = ui_template_page_handle_event,
     .tick = ui_template_page_tick,
+    .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,
     .context = &g_ui_template_vca_state,
 };

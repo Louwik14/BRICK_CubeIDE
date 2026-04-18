@@ -123,6 +123,7 @@ const ui_page_t g_ui_page_template_cfg = {
     .leave = ui_template_page_leave,
     .handle_event = ui_template_page_handle_event,
     .tick = ui_template_page_tick,
+    .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,
     .context = &g_ui_template_cfg_state,
 };
@@ -140,6 +141,7 @@ const ui_page_t g_ui_page_template_rec_cfg = {
     .leave = ui_template_page_leave,
     .handle_event = ui_template_page_handle_event,
     .tick = ui_template_page_tick,
+    .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,
     .context = &g_ui_template_rec_cfg_state,
 };

@@ -274,6 +274,13 @@ static void ui_page_template_tone_tick(void)
     ui_template_page_tick();
 }
 
+static void ui_page_template_tone_sync_active_context(void)
+{
+    ui_page_template_tone_sync_drum_family();
+    ui_template_page_select_subpage(&g_ui_template_dx7_state, g_ui_template_dx7_state.active_subpage);
+    ui_template_page_sync_active_track_context();
+}
+
 static void ui_page_template_tone_render(void)
 {
     ui_page_template_tone_sync_drum_family();
@@ -285,6 +292,7 @@ const ui_page_t g_ui_page_template_dx7 = {
     .leave = ui_template_page_leave,
     .handle_event = ui_page_template_tone_handle_event,
     .tick = ui_page_template_tone_tick,
+    .sync_active_context = ui_page_template_tone_sync_active_context,
     .render = ui_page_template_tone_render,
     .context = &g_ui_template_dx7_state,
 };

@@ -6,6 +6,7 @@
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
 #include "UI/ui_core.h"
+#include "UI/ui_active_track_sync.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
@@ -575,7 +576,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         (void)seq_runtime_set_playhead_step(track, 0U);
     }
 
-    param_registry_sync_ui_for_active_track();
+    ui_active_track_sync_full_after_global_restore();
 
     if ((resume_transport != 0U) && (was_running != 0U))
     {

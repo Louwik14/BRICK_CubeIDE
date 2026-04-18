@@ -138,3 +138,17 @@ uint8_t ui_page_get_id(void)
 {
     return g_ui_current_page_id;
 }
+
+void ui_page_sync_active_context(void)
+{
+    const ui_page_t *const active_page = ui_page_get();
+    if (active_page == 0)
+    {
+        return;
+    }
+
+    if (active_page->sync_active_context != 0)
+    {
+        active_page->sync_active_context();
+    }
+}

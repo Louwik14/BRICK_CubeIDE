@@ -42,5 +42,6 @@ void ui_page_set(uint8_t page_id);
 /* Read active page pointer/id for event dispatch and rendering. */
 const ui_page_t *ui_page_get(void);
 uint8_t ui_page_get_id(void);
+void ui_page_sync_active_context(void);
 
 #endif /* UI_PAGE_MANAGER_H */

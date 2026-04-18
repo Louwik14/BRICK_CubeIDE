@@ -294,7 +294,7 @@ uint8_t keyboard_runtime_active_track_is_input_hybrid(void)
             && (type == UI_TRACK_TYPE_HYBRID)) ? 1U : 0U;
 }
 
-void keyboard_runtime_on_active_track_changed(void)
+void keyboard_runtime_sync_track_focus_context(void)
 {
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();
     if ((hall_mode != UI_HALL_MODE_KEYBOARD) && (hall_mode != UI_HALL_MODE_ARP))
