@@ -70,6 +70,7 @@ Familles d'autorite:
 - globals: `param_set`.
 - track-aware: `param_registry_apply_track_value`.
 - LFO config: `mod_lfo_v1_set_track_param` uniquement.
+- post-restore global UI: via `ui_active_track_sync_full_after_global_restore()` (pas d'appel storage direct a `param_registry_sync_ui_for_active_track`).
 
 ## 5. Invariants a ne pas casser
 

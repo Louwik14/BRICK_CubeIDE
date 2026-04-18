@@ -111,6 +111,7 @@ Z2 dépend de la config UI pour construire son état effectif.
 ## 8. Dépendances inter-zones
 Entrées de Z2:
 - Z5 UI Interaction (source family/type)
+- Z5 `ui_system_sync_internal` orchestre la reconfig runtime (invalidate/enables/notify) sans porter de sync UI.
 
 Sorties de Z2:
 - Z1 Audio Hard-RT Mix (engine/mix target/routability)

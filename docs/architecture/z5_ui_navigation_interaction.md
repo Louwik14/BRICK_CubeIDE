@@ -30,9 +30,9 @@ Exclusions explicites:
 - Autorite param/modele seq hors UI (Z3/Z4), seulement pilotees depuis Z5.
 
 Sous-roles concentres dans `ui_core.c`:
-- Etat UI global courant (track, hall mode, feedback, states pattern/mute/clipboard).
-- Orchestration des interactions (track select, transport, shortcuts, clipboard, pattern mode).
-- Synchronisation contexte track actif vers param/runtime.
+- Etat UI global courant (track, hall mode, feedback, states pattern/mute).
+- Orchestration centrale des interactions (track select, transport, shortcuts, pattern mode).
+- Orchestration explicite des contrats de sync (selection legere, sync edit-context, reconfig runtime).
 
 ## 2. Autorite(s) de verite
 
@@ -47,8 +47,8 @@ Autorite page/ensemble actif:
 Autorite track select:
 - `ui_core_service_track_selection_inputs` + `ui_core_handle_track_hall_action` + `ui_core_set_active_track`.
 - Changement track actif explicite localement:
-  - `ui_core_set_active_track`: same-track => resync only.
-  - changement reel => callback keyboard runtime -> mutation `active_track` -> sync systeme via `ui_system_sync_apply_track_context_change`.
+  - `ui_core_set_active_track`: selection legere (focus UI) + sync context UI explicite.
+  - le pipeline `ui_system_sync_internal` n'est pas utilise pour la selection legere de track.
 
 Autorite hall modes:
 - Chemin central: `ui_set_hall_mode` (validation transition + forced clears mute/pattern + callback keyboard runtime + commit mode).
@@ -64,7 +64,7 @@ Autorite raccourcis interaction:
 - `ui_core_handle_global_shortcuts`, `ui_core_handle_transport_event`, `ui_core_handle_seq_mode_event`, `ui_core_handle_pattern_mode_event`, `ui_core_mute_handle_event`.
 
 Clipboard UI:
-- `g_ui_clipboard` dans `ui_core.c` + handlers `ui_core_handle_*_clipboard_event`.
+- `Src/UI/ui_core_clipboard.c` + `Inc/UI/ui_core_clipboard.h` (etat et handlers dedies).
 
 Seconde autorite concurrente:
 - Pas de seconde autorite concurrente sur l'etat UI courant; `ui_core` reste le point central.
@@ -115,9 +115,9 @@ Etat global UI:
 - Lectures: getters UI, renderer template, hall keyboard bridge, logique shortcuts.
 
 Etat clipboard:
-- `g_ui_clipboard` (`ui_clipboard_state_t`) avec sous-etats track/ensemble/page.
-- Ecriture: copy handlers (`ui_core_clipboard_copy_*`).
-- Lecture: paste/clear handlers.
+- `g_ui_clipboard` (`ui_clipboard_state_t`) dans `ui_core_clipboard.c` avec sous-etats track/ensemble/page.
+- Ecriture: copy handlers dans `ui_core_clipboard.c`.
+- Lecture: paste/clear handlers dans `ui_core_clipboard.c`.
 
 Etat page active:
 - `g_ui_current_page_id` + `g_ui_pages[]` dans `ui_page_manager.c`.
@@ -146,14 +146,14 @@ Flux nominal prouve:
 - Dans `ui_core_tick`: resolution priorisee mute/transport/shortcuts/pattern/seq/navigation.
 
 3. Mutation etat UI
-- Mutations de `g_ui_track_state` (hall_mode, track_select_armed, active_track, pattern/mute/feedback/clipboard states).
-- Noyau de sync systeme track/config factorise dans `ui_system_sync_internal` (profils `ui_system_sync_make_request_*` + apply unique) pour 4 chemins: active-track, family change, type change, restore bulk.
+- Mutations de `g_ui_track_state` (hall_mode, track_select_armed, active_track, pattern/mute/feedback).
+- Noyau de sync systeme track/config factorise dans `ui_system_sync_internal` (profils `ui_system_sync_make_request_*` + apply unique) pour 3 chemins runtime: family change, type change, restore bulk.
 - Durcissement du module prive: une requete de sync invalide (callbacks adapteur requis manquants) est rejetee sans execution partielle.
 - Restore bulk track config:
   - validation snapshot all-or-nothing,
   - ecriture `g_ui_track_state.*`,
-  - pipeline post-apply localise: `ui_core_restore_post_apply_sync_and_notify()`
-    (`track_runtime_invalidate_all` -> `ui_core_sync_audio_runtime_enables` -> `keyboard_runtime_on_active_track_changed` -> `ui_core_sync_active_track_cfg_params`).
+  - pipeline post-apply localise: `ui_core_post_restore_global_sync()`
+    (`ui_system_sync_make_request_restore_bulk` -> `ui_system_sync_apply_track_context_change` -> `ui_active_track_sync_after_track_structure_change(1)`).
 
 4. Resolution contextuelle page/ensemble
 - `ui_navigation_handle_event` mappe boutons param -> page cible selon disponibilite track-family/type.
@@ -195,6 +195,7 @@ Invariants prouves:
 - Priorite SHIFT/HALL sur track-select en service input: condition explicite `shift_down !=0` et `track_select_armed==0` avant trigger mode hall.
 - Changement hall mode: chemin central via `ui_set_hall_mode` avec side effects explicites (mute/pattern inclus).
 - Contrat d'ordre `ui_core_tick` explicite en code: `track_selection` amont, stages consommants ordonnes, puis `navigation` -> `active_page->handle_event`.
+- `active_page->tick()` reste un tick de page local, pas un mecanisme de resync active-track.
 - Contrat d'ordre stabilise: `global_shortcuts` est prioritaire sur `pattern/seq/navigation/page` pour un event consomme.
 - Navigation et logique runtime ne sont pas separees strictement: `ui_core` appelle directement seq/param/track_runtime/storage.
 - Cohabitation hall modes / ensembles UI maintenue par resolver family/subpage et label suffix selon mode.
