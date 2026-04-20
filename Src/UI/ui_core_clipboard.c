@@ -909,7 +909,7 @@ uint8_t ui_core_clipboard_handle_seq_track_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if (ui_get_hall_mode() != UI_HALL_MODE_SEQ)
+    if (ui_hall_is_seq_context(ui_get_hall_mode()) == 0U)
     {
         return 0U;
     }

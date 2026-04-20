@@ -70,6 +70,8 @@
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
+#define UI_HALL_MODE_TRIGGER_NONE 0xFFU
+#define UI_HALL_MODE_TARGET_PAGE_NONE 0xFFU
 #define UI_TRACK_MOD_BUTTON BTN_PARAM_8
 
 typedef struct
@@ -131,15 +133,37 @@ static ui_track_state_t g_ui_track_state = {
 
 typedef struct
 {
-    uint8_t hall_index;
-    ui_hall_mode_t target_mode;
+    uint8_t trigger_hall;
     uint8_t target_page;
-} ui_hall_mode_trigger_t;
+    const char *base_label;
+} ui_hall_mode_contract_t;
 
-static const ui_hall_mode_trigger_t g_ui_hall_mode_triggers[] = {
-    { UI_HALL_KEYBOARD_MODE_TRIGGER, UI_HALL_MODE_KEYBOARD, UI_PAGE_TEMPLATE_KEYBOARD },
-    { UI_HALL_ARP_MODE_TRIGGER, UI_HALL_MODE_ARP, UI_PAGE_TEMPLATE_ARP },
-    { UI_HALL_SEQ_MODE_TRIGGER, UI_HALL_MODE_SEQ, UI_PAGE_TEMPLATE_SEQ },
+static const ui_hall_mode_contract_t g_ui_hall_mode_contracts[UI_HALL_MODE_COUNT] = {
+    [UI_HALL_MODE_SEQ] = {
+        .trigger_hall = UI_HALL_SEQ_MODE_TRIGGER,
+        .target_page = UI_PAGE_TEMPLATE_SEQ,
+        .base_label = "SEQ"
+    },
+    [UI_HALL_MODE_KEYBOARD] = {
+        .trigger_hall = UI_HALL_KEYBOARD_MODE_TRIGGER,
+        .target_page = UI_PAGE_TEMPLATE_KEYBOARD,
+        .base_label = "KBD"
+    },
+    [UI_HALL_MODE_ARP] = {
+        .trigger_hall = UI_HALL_ARP_MODE_TRIGGER,
+        .target_page = UI_PAGE_TEMPLATE_ARP,
+        .base_label = "ARP"
+    },
+    [UI_HALL_MODE_PATTERN] = {
+        .trigger_hall = UI_HALL_MODE_TRIGGER_NONE,
+        .target_page = UI_HALL_MODE_TARGET_PAGE_NONE,
+        .base_label = "PAT"
+    },
+    [UI_HALL_MODE_MUTE] = {
+        .trigger_hall = UI_HALL_MODE_TRIGGER_NONE,
+        .target_page = UI_HALL_MODE_TARGET_PAGE_NONE,
+        .base_label = "MUTE"
+    },
 };
 
 static void ui_core_mute_suppress_hall_note(uint8_t hall)
@@ -824,31 +848,61 @@ static void ui_core_update_track_modifier_state(uint8_t track_modifier_down)
     g_ui_track_state.track_select_armed = (track_modifier_down != 0U) ? 1U : 0U;
 }
 
-static const ui_hall_mode_trigger_t *ui_core_find_hall_mode_trigger(uint8_t hall)
+static uint8_t ui_core_track_is_master_buffer(uint8_t track)
 {
-    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_hall_mode_triggers) / sizeof(g_ui_hall_mode_triggers[0])); ++i)
+    if (track >= UI_TRACK_COUNT)
     {
-        if (g_ui_hall_mode_triggers[i].hall_index == hall)
+        return 0U;
+    }
+
+    return (uint8_t)((g_ui_track_state.track_configs[track].family == UI_TRACK_FAMILY_MASTER)
+            && (g_ui_track_state.track_configs[track].type == UI_TRACK_TYPE_BUFFER));
+}
+
+static const ui_hall_mode_contract_t *ui_core_get_hall_mode_contract(ui_hall_mode_t mode)
+{
+    if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)
+    {
+        return 0;
+    }
+
+    return &g_ui_hall_mode_contracts[(uint8_t)mode];
+}
+
+static uint8_t ui_core_find_hall_mode_trigger(uint8_t hall, ui_hall_mode_t *out_mode, uint8_t *out_page)
+{
+    for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
+    {
+        uint8_t trigger_hall = 0U;
+        uint8_t target_page = 0U;
+        if ((ui_hall_mode_get_trigger_hall((ui_hall_mode_t)mode, &trigger_hall) != 0U)
+                && (trigger_hall == hall)
+                && (ui_hall_mode_get_target_page((ui_hall_mode_t)mode, &target_page) != 0U))
         {
-            return &g_ui_hall_mode_triggers[i];
+            if (out_mode != 0)
+            {
+                *out_mode = (ui_hall_mode_t)mode;
+            }
+            if (out_page != 0)
+            {
+                *out_page = target_page;
+            }
+            return 1U;
         }
     }
 
-    return 0;
+    return 0U;
 }
 
-static void ui_core_activate_hall_mode_trigger(const ui_hall_mode_trigger_t *trigger, uint8_t open_target_page)
+static void ui_core_activate_hall_mode_trigger(ui_hall_mode_t target_mode,
+                                               uint8_t target_page,
+                                               uint8_t open_target_page)
 {
-    if (trigger == 0)
-    {
-        return;
-    }
+    ui_set_hall_mode(target_mode);
 
-    ui_set_hall_mode(trigger->target_mode);
-
-    if (open_target_page != 0U)
+    if ((open_target_page != 0U) && (target_page != UI_HALL_MODE_TARGET_PAGE_NONE))
     {
-        ui_page_set(trigger->target_page);
+        ui_page_set(target_page);
     }
 }
 
@@ -859,17 +913,18 @@ static void ui_core_handle_shift_hall_action(uint8_t hall)
         return;
     }
 
-    const ui_hall_mode_trigger_t *trigger = ui_core_find_hall_mode_trigger(hall);
-    if (trigger != 0)
+    ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
+    uint8_t target_page = UI_HALL_MODE_TARGET_PAGE_NONE;
+    if (ui_core_find_hall_mode_trigger(hall, &target_mode, &target_page) != 0U)
     {
         g_ui_track_state.hall_note_suppressed[hall] = 1U;
         const uint32_t now = HAL_GetTick();
-        const uint32_t last_tap = g_ui_track_state.mode_tap_ms[trigger->target_mode];
+        const uint32_t last_tap = g_ui_track_state.mode_tap_ms[target_mode];
         const uint8_t is_double_tap = ((last_tap != 0U)
                                        && ((now - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
 
-        g_ui_track_state.mode_tap_ms[trigger->target_mode] = now;
-        ui_core_activate_hall_mode_trigger(trigger, is_double_tap);
+        g_ui_track_state.mode_tap_ms[target_mode] = now;
+        ui_core_activate_hall_mode_trigger(target_mode, target_page, is_double_tap);
         return;
     }
 
@@ -1201,10 +1256,7 @@ void ui_core_service_track_selection_inputs(void)
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 
-    if (((ui_get_hall_mode() == UI_HALL_MODE_KEYBOARD)
-            || ((ui_get_hall_mode() == UI_HALL_MODE_ARP)
-                && ((ui_get_track_family(ui_get_active_track()) != UI_TRACK_FAMILY_MASTER)
-                    || (ui_get_track_type(ui_get_active_track()) != UI_TRACK_TYPE_BUFFER))))
+    if ((ui_hall_allows_injection(ui_get_active_track(), ui_get_hall_mode()) != 0U)
         && (g_ui_track_state.shift_down == 0U)
         && (g_ui_track_state.track_select_armed == 0U))
     {
@@ -1705,6 +1757,8 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
      *   2) forced pattern abort when leaving PATTERN
      *   3) keyboard runtime transition callback
      *   4) hall_mode state commit
+     * - Consumers can read raw mode through ui_get_hall_mode(), but must not
+     *   mutate g_ui_track_state.hall_mode directly.
      */
     if ((uint8_t)mode >= (uint8_t)UI_HALL_MODE_COUNT)
     {
@@ -1741,32 +1795,14 @@ const char *ui_get_hall_mode_short_label(void)
         return "TRACK";
     }
 
-    if (g_ui_track_state.hall_mode == UI_HALL_MODE_KEYBOARD)
+    const ui_hall_mode_effective_view_t view =
+        ui_hall_mode_resolve_effective_view(active_track, g_ui_track_state.hall_mode);
+    if (view == UI_HALL_MODE_VIEW_ROUT)
     {
-        return "KBD";
+        return "ROUT";
     }
 
-    if (g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)
-    {
-        if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
-                && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER))
-        {
-            return "ROUT";
-        }
-        return "ARP";
-    }
-
-    if (g_ui_track_state.hall_mode == UI_HALL_MODE_PATTERN)
-    {
-        return "PAT";
-    }
-
-    if (g_ui_track_state.hall_mode == UI_HALL_MODE_MUTE)
-    {
-        return "MUTE";
-    }
-
-    return "SEQ";
+    return ui_hall_mode_get_base_label(g_ui_track_state.hall_mode);
 }
 
 const char *ui_get_hall_mode_suffix_label(void)
@@ -1806,9 +1842,7 @@ const char *ui_get_hall_mode_suffix_label(void)
         return "";
     }
 
-    if ((g_ui_track_state.hall_mode == UI_HALL_MODE_ARP)
-            && (ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER))
+    if (ui_hall_mode_resolve_effective_view(active_track, g_ui_track_state.hall_mode) == UI_HALL_MODE_VIEW_ROUT)
     {
         return "";
     }
@@ -1882,4 +1916,98 @@ void ui_core_clear_hall_note_suppression(uint8_t hall)
     }
 
     g_ui_track_state.hall_note_suppressed[hall] = 0U;
+}
+
+ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track, ui_hall_mode_t raw_mode)
+{
+    /*
+     * Effective-view resolver contract:
+     * - pure read-only projection from (track, raw_mode),
+     * - single winning remap: ARP + Master/Buffer => ROUT view,
+     * - no persistence and no side effects,
+     * - does not include temporary overlays (TRACK/select modifiers).
+     */
+    switch (raw_mode)
+    {
+        case UI_HALL_MODE_SEQ:
+            return UI_HALL_MODE_VIEW_SEQ;
+
+        case UI_HALL_MODE_KEYBOARD:
+            return UI_HALL_MODE_VIEW_KEYBOARD;
+
+        case UI_HALL_MODE_ARP:
+            return (ui_core_track_is_master_buffer(track) != 0U)
+                    ? UI_HALL_MODE_VIEW_ROUT
+                    : UI_HALL_MODE_VIEW_ARP;
+
+        case UI_HALL_MODE_PATTERN:
+            return UI_HALL_MODE_VIEW_PATTERN;
+
+        case UI_HALL_MODE_MUTE:
+            return UI_HALL_MODE_VIEW_MUTE;
+
+        default:
+            return UI_HALL_MODE_VIEW_SEQ;
+    }
+}
+
+uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
+{
+    const ui_hall_mode_effective_view_t view = ui_hall_mode_resolve_effective_view(track, raw_mode);
+    return (uint8_t)((view == UI_HALL_MODE_VIEW_KEYBOARD) || (view == UI_HALL_MODE_VIEW_ARP));
+}
+
+uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode)
+{
+    return (uint8_t)(ui_hall_mode_resolve_effective_view(track, raw_mode) == UI_HALL_MODE_VIEW_ARP);
+}
+
+uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode)
+{
+    return (uint8_t)(raw_mode == UI_HALL_MODE_SEQ);
+}
+
+uint8_t ui_hall_mode_get_trigger_hall(ui_hall_mode_t mode, uint8_t *out_hall)
+{
+    if (out_hall == 0)
+    {
+        return 0U;
+    }
+
+    const ui_hall_mode_contract_t *const contract = ui_core_get_hall_mode_contract(mode);
+    if ((contract == 0) || (contract->trigger_hall == UI_HALL_MODE_TRIGGER_NONE))
+    {
+        return 0U;
+    }
+
+    *out_hall = contract->trigger_hall;
+    return 1U;
+}
+
+uint8_t ui_hall_mode_get_target_page(ui_hall_mode_t mode, uint8_t *out_page)
+{
+    if (out_page == 0)
+    {
+        return 0U;
+    }
+
+    const ui_hall_mode_contract_t *const contract = ui_core_get_hall_mode_contract(mode);
+    if ((contract == 0) || (contract->target_page == UI_HALL_MODE_TARGET_PAGE_NONE))
+    {
+        return 0U;
+    }
+
+    *out_page = contract->target_page;
+    return 1U;
+}
+
+const char *ui_hall_mode_get_base_label(ui_hall_mode_t mode)
+{
+    const ui_hall_mode_contract_t *const contract = ui_core_get_hall_mode_contract(mode);
+    if ((contract == 0) || (contract->base_label == 0))
+    {
+        return "SEQ";
+    }
+
+    return contract->base_label;
 }

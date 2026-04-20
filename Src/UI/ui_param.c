@@ -238,7 +238,7 @@ static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,
                                              seq_step_id_t *out_ref_step,
                                              uint8_t promote_pending)
 {
-    if ((out_track == 0) || (out_ref_step == 0) || (ui_get_hall_mode() != UI_HALL_MODE_SEQ))
+    if ((out_track == 0) || (out_ref_step == 0) || (ui_hall_is_seq_context(ui_get_hall_mode()) == 0U))
     {
         return 0U;
     }
@@ -350,7 +350,7 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
                                             float min_value,
                                             float max_value)
 {
-    if ((ui_get_hall_mode() != UI_HALL_MODE_SEQ) || (desc == 0))
+    if ((ui_hall_is_seq_context(ui_get_hall_mode()) == 0U) || (desc == 0))
     {
         return 0U;
     }

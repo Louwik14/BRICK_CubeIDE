@@ -52,6 +52,22 @@
 SDRAM_RECORDER static float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
 static live_recorder_t g_live_recorder;
 
+static void brick6_process_hall_ui_keyboard_chain(void)
+{
+    /*
+     * Ordering contract (do not reorder):
+     * 1) hall_loop_process()
+     * 2) ui_core_service_track_selection_inputs()
+     * 3) hall_keyboard_bridge_process()
+     *
+     * ui_core must consume track-selection and hall-mode side effects before
+     * hall->keyboard injection runs in the same superloop cycle.
+     */
+    hall_loop_process();
+    ui_core_service_track_selection_inputs();
+    hall_keyboard_bridge_process();
+}
+
 
 /* ============================================================
    INIT APP
@@ -163,9 +179,7 @@ void brick6_app_process(void)
     sd_preview_process();
     brick6_master_control_process();
 
-    hall_loop_process();
-    ui_core_service_track_selection_inputs();
-    hall_keyboard_bridge_process();
+    brick6_process_hall_ui_keyboard_chain();
 
     brick6_recorder_runtime_process_transport(&g_live_recorder);
 

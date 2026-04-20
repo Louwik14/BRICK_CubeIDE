@@ -15,7 +15,6 @@ void hall_keyboard_bridge_process(void)
     {
         const uint8_t note_on_pending = hall_engine_consume_note_on(key);
         const uint8_t note_off_pending = hall_engine_consume_note_off(key);
-        const ui_hall_mode_t hall_mode = ui_get_hall_mode();
         uint8_t velocity = hall_engine_get_velocity(key);
         if ((hall_engine_get_velocity_valid(key) == 0U) || (velocity == 0U))
         {
@@ -31,9 +30,7 @@ void hall_keyboard_bridge_process(void)
             continue;
         }
 
-        if ((hall_mode != UI_HALL_MODE_KEYBOARD)
-                && ((hall_mode != UI_HALL_MODE_ARP)
-                    || (keyboard_runtime_is_master_buffer_route_context() != 0U)))
+        if (ui_hall_allows_injection(ui_get_active_track(), ui_get_hall_mode()) == 0U)
         {
             continue;
         }

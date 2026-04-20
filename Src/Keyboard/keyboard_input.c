@@ -18,20 +18,24 @@
 #include "Keyboard/keyboard_arp.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
-#include "Keyboard/keyboard_runtime.h"
 #include "Keyboard/ui_keyboard_app.h"
 #include "ui_core.h"
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 {
-    if (ui_get_hall_mode() == UI_HALL_MODE_ARP)
-    {
-        if (keyboard_runtime_is_master_buffer_route_context() != 0U)
-        {
-            return;
-        }
+    const uint8_t active_track = ui_get_active_track();
+    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    const ui_hall_mode_effective_view_t effective_view =
+        ui_hall_mode_resolve_effective_view(active_track, hall_mode);
 
+    if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
+    {
         keyboard_arp_note_on(note, velocity);
+        return;
+    }
+
+    if (effective_view == UI_HALL_MODE_VIEW_ROUT)
+    {
         return;
     }
 
@@ -40,14 +44,19 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 
 static void keyboard_input_note_off_sink(uint8_t note)
 {
-    if (ui_get_hall_mode() == UI_HALL_MODE_ARP)
-    {
-        if (keyboard_runtime_is_master_buffer_route_context() != 0U)
-        {
-            return;
-        }
+    const uint8_t active_track = ui_get_active_track();
+    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    const ui_hall_mode_effective_view_t effective_view =
+        ui_hall_mode_resolve_effective_view(active_track, hall_mode);
 
+    if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
+    {
         keyboard_arp_note_off(note);
+        return;
+    }
+
+    if (effective_view == UI_HALL_MODE_VIEW_ROUT)
+    {
         return;
     }
 
@@ -56,7 +65,8 @@ static void keyboard_input_note_off_sink(uint8_t note)
 
 static void keyboard_input_all_notes_off_sink(void)
 {
-    if (keyboard_runtime_is_master_buffer_route_context() == 0U)
+    if (ui_hall_mode_resolve_effective_view(ui_get_active_track(),
+                                            ui_get_hall_mode()) != UI_HALL_MODE_VIEW_ROUT)
     {
         keyboard_arp_all_notes_off();
     }

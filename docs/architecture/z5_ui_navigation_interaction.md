@@ -54,8 +54,9 @@ Autorite hall modes:
 - Chemin central: `ui_set_hall_mode` (validation transition + forced clears mute/pattern + callback keyboard runtime + commit mode).
 - Les transitions mute/pattern passent par `ui_set_hall_mode`; pas de chemin local direct autoritatif concurrent.
 - Triggers SHIFT+HALL dans `ui_core_handle_shift_hall_action`.
-- `KEYBOARD` reste un mode normal (pas de remap `Master/Buffer -> ROUT` sur ce mode).
-- `ARP` sur track `Master/Buffer` devient contextuellement `ROUT` (resolution page/label + gardes runtime).
+- `KEYBOARD` reste un mode brut normal.
+- `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
+- Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
@@ -159,8 +160,8 @@ Flux nominal prouve:
 - `ui_navigation_handle_event` mappe boutons param -> page cible selon disponibilite track-family/type.
 - `ui_template_page` resout family/subpage active et banque param associee.
 - Resolution contextuelle `Master/Buffer -> ROUT` (propre):
-  - page ARP: `ui_page_template_arp_register_families` associe `MASTER+BUFFER` a une famille template `ROUT`,
-  - label mode hall: `ui_get_hall_mode_short_label` affiche `ROUT` en `hall_mode==ARP` sur `MASTER+BUFFER`.
+  - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
+  - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
 
 5. Appels vers param/runtime/seq/storage
 - Selon handler: apply params, track config, seq edits, pattern queue/store, undo, settings, master buffer routing/record.
@@ -172,9 +173,9 @@ Flux nominal prouve:
 - Feedback texte via `ui_core_set_feedback` visible dans header track.
 - `hall_keyboard_bridge` consomme hall mode + flags suppression pour autoriser/bloquer emission note hall.
 - Gardes runtime explicites en contexte `ROUT`:
-  - `hall_keyboard_bridge_process` bloque l'injection hall->keyboard en `ARP` si `keyboard_runtime_is_master_buffer_route_context()!=0`,
-  - `keyboard_runtime_tick` n'active pas l'arp engine via `keyboard_runtime_hall_mode_uses_arp_engine` sur `MASTER/BUFFER`,
-  - `keyboard_input_note_on/off/all_notes_off` neutralisent les sinks ARP en route context.
+  - `hall_keyboard_bridge_process` utilise `ui_hall_allows_injection(...)`,
+  - `keyboard_runtime_tick` utilise `ui_hall_uses_arp_engine(...)`,
+  - `keyboard_input_note_on/off/all_notes_off` s'aligne sur `ui_hall_uses_arp_engine(...)` + `effective_view`.
 
 ## 7. Contraintes RT/CPU/memoire
 
@@ -191,6 +192,8 @@ Dependances de cadence:
 
 Invariants prouves:
 - Autorite unique etat UI courant: `g_ui_track_state` centralise dans `ui_core.c`.
+- Mutation du mode brut: `ui_set_hall_mode` est l'unique mutateur de `hall_mode`.
+- `effective_view` reste une projection read-only; aucune ecriture persistante.
 - Resolution contextuelle track-aware: disponibilite pages/types depend de family/type de la track active (`ui_navigation_is_page_available`, `ui_template_family_resolve_active_track`).
 - Priorite SHIFT/HALL sur track-select en service input: condition explicite `shift_down !=0` et `track_select_armed==0` avant trigger mode hall.
 - Changement hall mode: chemin central via `ui_set_hall_mode` avec side effects explicites (mute/pattern inclus).
@@ -199,10 +202,9 @@ Invariants prouves:
 - Contrat d'ordre stabilise: `global_shortcuts` est prioritaire sur `pattern/seq/navigation/page` pour un event consomme.
 - Navigation et logique runtime ne sont pas separees strictement: `ui_core` appelle directement seq/param/track_runtime/storage.
 - Cohabitation hall modes / ensembles UI maintenue par resolver family/subpage et label suffix selon mode.
-- Deviation `Master/Buffer` en ARP est fonctionnellement coherente mais distribuee:
-  - resolution contextuelle propre (page/label/template),
-  - cas speciaux locaux UI (`ui_core`),
-  - gardes runtime explicites (`hall_keyboard_bridge` / `keyboard_runtime` / `keyboard_input`).
+- Deviation `Master/Buffer` en ARP est centralisee par `effective_view`:
+  - page/label/template lisent la meme projection,
+  - gardes runtime keyboard/hall consomment les helpers centraux.
 - Contrat d'ordre utile confirme: `ui_core_service_track_selection_inputs` precede `hall_keyboard_bridge_process`; sur les cas frontiere audites, pas de fuite hall/note/arp prouvee.
 
 ## 9. Dependances inter-zones

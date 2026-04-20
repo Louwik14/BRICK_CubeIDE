@@ -33,17 +33,9 @@ static uint8_t g_keyboard_runtime_midi_sustain_down[KEYBOARD_RUNTIME_MIDI_CHANNE
 
 void keyboard_runtime_all_notes_off(void);
 
-static uint8_t keyboard_runtime_active_track_is_master_buffer(void)
-{
-    const uint8_t active_track = ui_get_active_track();
-    return ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_BUFFER)) ? 1U : 0U;
-}
-
 static uint8_t keyboard_runtime_hall_mode_uses_arp_engine(ui_hall_mode_t hall_mode)
 {
-    return ((hall_mode == UI_HALL_MODE_ARP)
-            && (keyboard_runtime_active_track_is_master_buffer() == 0U)) ? 1U : 0U;
+    return ui_hall_uses_arp_engine(ui_get_active_track(), hall_mode);
 }
 
 static void keyboard_runtime_reset_midi_state(void)
@@ -272,8 +264,8 @@ void keyboard_runtime_all_notes_off(void)
 
 uint8_t keyboard_runtime_is_master_buffer_route_context(void)
 {
-    return ((ui_get_hall_mode() == UI_HALL_MODE_ARP)
-            && (keyboard_runtime_active_track_is_master_buffer() != 0U)) ? 1U : 0U;
+    return (uint8_t)(ui_hall_mode_resolve_effective_view(ui_get_active_track(),
+                                                          ui_get_hall_mode()) == UI_HALL_MODE_VIEW_ROUT);
 }
 
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)

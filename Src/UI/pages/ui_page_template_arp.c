@@ -48,6 +48,15 @@ static const ui_template_family_t g_ui_template_arp_family_buffer = {
 
 static const ui_template_family_t *ui_page_template_arp_resolve_family(void)
 {
+    const uint8_t active_track = ui_get_active_track();
+    const ui_hall_mode_effective_view_t effective_view =
+        ui_hall_mode_resolve_effective_view(active_track, UI_HALL_MODE_ARP);
+
+    if (effective_view == UI_HALL_MODE_VIEW_ROUT)
+    {
+        return &g_ui_template_arp_family_buffer;
+    }
+
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ARP);
 }
 
@@ -76,16 +85,10 @@ void ui_page_template_arp_register_families(void)
                 continue;
             }
 
-            const ui_template_family_t *family_template = &g_ui_template_arp_family;
-            if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
-            {
-                family_template = &g_ui_template_arp_family_buffer;
-            }
-
             ui_template_family_register(UI_TEMPLATE_FAMILY_ARP,
                                         track_family,
                                         track_type,
-                                        family_template);
+                                        &g_ui_template_arp_family);
         }
     }
 }

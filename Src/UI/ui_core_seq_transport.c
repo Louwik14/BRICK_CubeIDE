@@ -141,7 +141,7 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
                                                     uint8_t shift_down,
                                                     ui_core_seq_transport_feedback_fn feedback)
 {
-    if ((ev == 0) || (hall_mode != UI_HALL_MODE_SEQ))
+    if ((ev == 0) || (ui_hall_is_seq_context(hall_mode) == 0U))
     {
         return 0U;
     }

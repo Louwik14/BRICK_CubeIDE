@@ -69,6 +69,17 @@ typedef enum
 
 typedef enum
 {
+    UI_HALL_MODE_VIEW_SEQ = 0,
+    UI_HALL_MODE_VIEW_KEYBOARD,
+    UI_HALL_MODE_VIEW_ARP,
+    UI_HALL_MODE_VIEW_ROUT,
+    UI_HALL_MODE_VIEW_PATTERN,
+    UI_HALL_MODE_VIEW_MUTE,
+    UI_HALL_MODE_VIEW_COUNT
+} ui_hall_mode_effective_view_t;
+
+typedef enum
+{
     UI_MUTE_SUBMODE_NONE = 0,
     UI_MUTE_SUBMODE_QUICK,
     UI_MUTE_SUBMODE_HOLD_QUICK,
@@ -154,10 +165,25 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                                   const uint8_t midi_source[UI_TRACK_COUNT]);
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16);
 void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_len);
+
+/*
+ * Hall mode contract (Z5):
+ * - raw hall_mode is persisted in ui_core and mutated only by ui_set_hall_mode().
+ * - effective_view is a read-only projection derived from (track, raw_mode).
+ * - ROUT is an effective view only; never a raw hall mode.
+ * - temporary overlays (ex: TRACK / track_select_armed) are not part of effective_view.
+ */
 ui_hall_mode_t ui_get_hall_mode(void);
 void ui_set_hall_mode(ui_hall_mode_t mode);
 const char *ui_get_hall_mode_short_label(void);
 const char *ui_get_hall_mode_suffix_label(void);
+ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track, ui_hall_mode_t raw_mode);
+uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode);
+uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode);
+uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode);
+uint8_t ui_hall_mode_get_trigger_hall(ui_hall_mode_t mode, uint8_t *out_hall);
+uint8_t ui_hall_mode_get_target_page(ui_hall_mode_t mode, uint8_t *out_page);
+const char *ui_hall_mode_get_base_label(ui_hall_mode_t mode);
 ui_mute_state_t ui_get_mute_state(void);
 uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
