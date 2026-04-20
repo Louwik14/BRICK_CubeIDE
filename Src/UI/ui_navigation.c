@@ -137,6 +137,30 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
     }
 }
 
+void ui_navigation_request_page_with_availability(uint8_t page_id)
+{
+    if (page_id == UI_PAGE_TEMPLATE_CFG)
+    {
+        ui_navigation_request_ensemble_page(page_id);
+        return;
+    }
+
+    if (ui_navigation_is_ensemble_page(page_id) != 0U)
+    {
+        ui_navigation_request_ensemble_page(page_id);
+        return;
+    }
+
+    if ((ui_navigation_is_track_bound_template_page(page_id) != 0U)
+            && (ui_navigation_is_page_available(page_id) == 0U))
+    {
+        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_CFG);
+        return;
+    }
+
+    ui_page_set(page_id);
+}
+
 void ui_navigation_handle_event(const ui_event_t *event)
 {
     if ((event == 0) || (event->type != UI_EVENT_BUTTON_PRESS))

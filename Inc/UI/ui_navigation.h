@@ -23,5 +23,6 @@ void ui_navigation_handle_event(const ui_event_t *event);
 button_id_t ui_navigation_get_button_for_page(uint8_t page_id);
 void ui_navigation_sync_active_track_ensemble(void);
 void ui_navigation_request_ensemble_page(uint8_t page_id);
+void ui_navigation_request_page_with_availability(uint8_t page_id);
 
 #endif /* UI_NAVIGATION_H */

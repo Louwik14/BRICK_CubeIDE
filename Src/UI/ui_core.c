@@ -902,7 +902,7 @@ static void ui_core_activate_hall_mode_trigger(ui_hall_mode_t target_mode,
 
     if ((open_target_page != 0U) && (target_page != UI_HALL_MODE_TARGET_PAGE_NONE))
     {
-        ui_page_set(target_page);
+        ui_navigation_request_page_with_availability(target_page);
     }
 }
 
