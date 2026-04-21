@@ -32,6 +32,7 @@ void drv_display_update(void);
 uint8_t* drv_display_get_buffer(void);
 drv_display_state_t drv_display_get_state(void);
 const drv_display_stats_t* drv_display_get_stats(void);
+uint8_t drv_display_flush_in_progress(void);
 
 void drv_display_set_font(const font_t *font);
 

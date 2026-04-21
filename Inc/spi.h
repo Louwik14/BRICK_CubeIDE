@@ -33,6 +33,7 @@ extern "C" {
 /* USER CODE END Includes */
 
 extern SPI_HandleTypeDef hspi5;
+extern DMA_HandleTypeDef hdma_spi5_tx;
 
 /* USER CODE BEGIN Private defines */
 
@@ -49,4 +50,3 @@ void MX_SPI5_Init(void);
 #endif
 
 #endif /* __SPI_H__ */
-

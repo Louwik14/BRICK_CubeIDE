@@ -3,6 +3,7 @@
 #include "spi.h"
 #include "gpio.h"
 #include "sdram.h"
+#include "Storage/memory_layout.h"
 #include "../../U8g2/u8g2.h"
 
 #include <string.h>
@@ -15,11 +16,17 @@ extern SPI_HandleTypeDef hspi5;
 /* ====================================================================== */
 
 static uint8_t buffer[OLED_WIDTH * OLED_HEIGHT / 8] SDRAM_BSS;
+static uint8_t flush_snapshot[OLED_WIDTH * OLED_HEIGHT / 8] DMA_BUFFER;
 
 static u8g2_t g_u8g2;
 static const uint8_t *g_active_font = u8g2_font_5x7_tr;
 static drv_display_state_t g_display_state = DRV_DISPLAY_STATE_UNINIT;
 static drv_display_stats_t g_display_stats;
+static volatile uint8_t g_dma_payload_busy;
+static volatile uint8_t g_dma_payload_done;
+static volatile uint8_t g_dma_payload_error;
+static uint8_t g_flush_active;
+static uint8_t g_flush_page;
 
 /* ====================================================================== */
 /*                             SPI / GPIO                                 */
@@ -102,9 +109,34 @@ static uint8_t send_cmd_burst(const uint8_t *cmds, size_t len)
     return transport_burst(0U, cmds, len, 20U);
 }
 
-static uint8_t send_data_burst(const uint8_t *data, size_t len)
+static uint8_t send_data_burst_dma(const uint8_t *data, size_t len)
 {
-    return transport_burst(1U, data, len, 100U);
+    HAL_StatusTypeDef rc;
+
+    if ((data == NULL) || (len == 0U))
+    {
+        return 1U;
+    }
+
+    if (g_dma_payload_busy != 0U)
+    {
+        return 0U;
+    }
+
+    transport_begin(1U);
+    g_dma_payload_busy = 1U;
+    g_dma_payload_done = 0U;
+    rc = HAL_SPI_Transmit_DMA(&hspi5, (uint8_t *)data, (uint16_t)len);
+    if (rc == HAL_OK)
+    {
+        return 1U;
+    }
+
+    g_dma_payload_busy = 0U;
+    transport_end();
+    g_display_stats.tx_err++;
+    g_display_state = DRV_DISPLAY_STATE_FAULT;
+    return 0U;
 }
 
 static uint8_t ssd1309_init_sequence(void)
@@ -152,6 +184,16 @@ const drv_display_stats_t* drv_display_get_stats(void)
     return &g_display_stats;
 }
 
+uint8_t drv_display_flush_in_progress(void)
+{
+    if ((g_dma_payload_busy != 0U) || (g_flush_active != 0U))
+    {
+        return 1U;
+    }
+
+    return 0U;
+}
+
 /* ====================================================================== */
 /*                              CLEAR                                     */
 /* ====================================================================== */
@@ -176,33 +218,69 @@ void drv_display_update(void)
         return;
     }
 
-    /*
-     * U8g2 buffer uses page-oriented vertical bytes.
-     * Keep the controller in page addressing mode so 0xB0+page and
-     * page*OLED_WIDTH indexing stay aligned.
-     */
-    if (send_cmd_burst(k_page_mode_cmds, sizeof(k_page_mode_cmds)) == 0U)
+    if (g_dma_payload_error != 0U)
     {
+        g_dma_payload_error = 0U;
         g_display_stats.flush_fail++;
         return;
     }
 
-    for (uint8_t page = 0; page < 8; page++)
+    if (g_dma_payload_busy != 0U)
+    {
+        return;
+    }
+
+    if (g_flush_active == 0U)
+    {
+        /*
+         * U8g2 buffer uses page-oriented vertical bytes.
+         * Keep the controller in page addressing mode so 0xB0+page and
+         * page*OLED_WIDTH indexing stay aligned.
+         */
+        if (send_cmd_burst(k_page_mode_cmds, sizeof(k_page_mode_cmds)) == 0U)
+        {
+            g_display_stats.flush_fail++;
+            return;
+        }
+
+        /*
+         * Ownership contract:
+         * - buffer: live render target written by U8g2/UI.
+         * - flush_snapshot: frozen frame source consumed by DMA for one full
+         *   8-page transfer, preventing inter-frame page mixing.
+         */
+        memcpy(flush_snapshot, buffer, sizeof(flush_snapshot));
+        g_flush_active = 1U;
+        g_flush_page = 0U;
+    }
+    else if (g_dma_payload_done != 0U)
+    {
+        g_dma_payload_done = 0U;
+        g_flush_page++;
+        if (g_flush_page >= 8U)
+        {
+            g_flush_active = 0U;
+            return;
+        }
+    }
+
     {
         uint8_t page_cmds[3];
-        page_cmds[0] = (uint8_t)(0xB0U + page);
+        page_cmds[0] = (uint8_t)(0xB0U + g_flush_page);
         page_cmds[1] = 0x00U;
         page_cmds[2] = 0x10U;
 
         if (send_cmd_burst(page_cmds, sizeof(page_cmds)) == 0U)
         {
             g_display_stats.flush_fail++;
+            g_flush_active = 0U;
             return;
         }
 
-        if (send_data_burst(&buffer[page * OLED_WIDTH], OLED_WIDTH) == 0U)
+        if (send_data_burst_dma(&flush_snapshot[g_flush_page * OLED_WIDTH], OLED_WIDTH) == 0U)
         {
             g_display_stats.flush_fail++;
+            g_flush_active = 0U;
             return;
         }
     }
@@ -216,6 +294,11 @@ void drv_display_init(void)
 {
     memset(&g_display_stats, 0, sizeof(g_display_stats));
     g_display_state = DRV_DISPLAY_STATE_UNINIT;
+    g_dma_payload_busy = 0U;
+    g_dma_payload_done = 0U;
+    g_dma_payload_error = 0U;
+    g_flush_active = 0U;
+    g_flush_page = 0U;
 
     /*
      * Contract boundary:
@@ -254,6 +337,29 @@ void drv_display_init(void)
 
     if (g_display_state != DRV_DISPLAY_STATE_READY)
     {
+        g_display_state = DRV_DISPLAY_STATE_FAULT;
+    }
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if ((hspi == &hspi5) && (g_dma_payload_busy != 0U))
+    {
+        transport_end();
+        g_dma_payload_busy = 0U;
+        g_dma_payload_done = 1U;
+        g_display_stats.tx_ok++;
+    }
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+    if ((hspi == &hspi5) && (g_dma_payload_busy != 0U))
+    {
+        transport_end();
+        g_dma_payload_busy = 0U;
+        g_dma_payload_error = 1U;
+        g_display_stats.tx_err++;
         g_display_state = DRV_DISPLAY_STATE_FAULT;
     }
 }
