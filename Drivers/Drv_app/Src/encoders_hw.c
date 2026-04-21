@@ -21,6 +21,8 @@
 
 #include "encoders_hw.h"
 
+#include <limits.h>
+
 #include "main.h"
 #include "tim.h"
 
@@ -40,7 +42,7 @@ static const encoder_hw_pin_t enc_hw_pins[ENC_COUNT] = {
 };
 
 static uint8_t enc_prev_state[ENC_COUNT];
-static volatile int8_t enc_raw_delta[ENC_COUNT];
+static volatile int16_t enc_raw_delta[ENC_COUNT];
 
 static const int8_t quad_table[16] = {
      0, -1, +1,  0,
@@ -173,7 +175,19 @@ void encoders_hw_read(void)
             continue;
         }
 
-        enc_raw_delta[i] = (int8_t)(enc_raw_delta[i] + step);
+        const int32_t sum = (int32_t)enc_raw_delta[i] + (int32_t)step;
+        if (sum > (int32_t)INT16_MAX)
+        {
+            enc_raw_delta[i] = INT16_MAX;
+        }
+        else if (sum < (int32_t)INT16_MIN)
+        {
+            enc_raw_delta[i] = INT16_MIN;
+        }
+        else
+        {
+            enc_raw_delta[i] = (int16_t)sum;
+        }
     }
 }
 
@@ -190,14 +204,14 @@ void encoders_hw_read(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-int8_t encoders_hw_get_delta(uint8_t encoder)
+int16_t encoders_hw_get_delta(uint8_t encoder)
 {
     if (encoder >= (uint8_t)ENC_COUNT)
     {
         return 0;
     }
 
-    int8_t delta;
+    int16_t delta;
 
     __disable_irq();
     delta = enc_raw_delta[encoder];

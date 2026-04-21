@@ -21,11 +21,13 @@
 
 #include "encoders.h"
 
+#include <limits.h>
+
 #include "encoders_hw.h"
 
-#define ENCODER_MAX_STEP_PER_TICK 8
+#define ENCODER_MAX_CONSUME_PER_TICK 8
 
-static int16_t enc_accumulated_delta[ENC_COUNT];
+static int32_t enc_accumulated_delta[ENC_COUNT];
 
 /**
  * @brief Point d'entrée encoder_clamp_step.
@@ -40,19 +42,19 @@ static int16_t enc_accumulated_delta[ENC_COUNT];
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static int16_t encoder_clamp_step(int16_t value)
+static int16_t encoder_clamp_to_i16(int32_t value)
 {
-    if (value > ENCODER_MAX_STEP_PER_TICK)
+    if (value > (int32_t)INT16_MAX)
     {
-        return ENCODER_MAX_STEP_PER_TICK;
+        return INT16_MAX;
     }
 
-    if (value < -ENCODER_MAX_STEP_PER_TICK)
+    if (value < (int32_t)INT16_MIN)
     {
-        return -ENCODER_MAX_STEP_PER_TICK;
+        return INT16_MIN;
     }
 
-    return value;
+    return (int16_t)value;
 }
 
 /**
@@ -69,20 +71,20 @@ static int16_t encoder_clamp_step(int16_t value)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static int16_t encoder_accumulate_saturating(int16_t current, int16_t delta)
+static int32_t encoder_accumulate_saturating(int32_t current, int32_t delta)
 {
-    int32_t sum = (int32_t)current + (int32_t)delta;
+    int64_t sum = (int64_t)current + (int64_t)delta;
 
-    if (sum > 32767)
+    if (sum > (int64_t)INT32_MAX)
     {
-        sum = 32767;
+        sum = (int64_t)INT32_MAX;
     }
-    else if (sum < -32768)
+    else if (sum < (int64_t)INT32_MIN)
     {
-        sum = -32768;
+        sum = (int64_t)INT32_MIN;
     }
 
-    return (int16_t)sum;
+    return (int32_t)sum;
 }
 
 /**
@@ -123,8 +125,7 @@ void encoders_update(uint32_t dt_ms)
 
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
     {
-        int16_t delta = (int16_t)encoders_hw_get_delta(i);
-        delta = encoder_clamp_step(delta);
+        const int32_t delta = (int32_t)encoders_hw_get_delta(i);
 
         if (delta == 0)
         {
@@ -155,7 +156,7 @@ int16_t encoder_get_delta(uint8_t encoder)
         return 0;
     }
 
-    return enc_accumulated_delta[encoder];
+    return encoder_clamp_to_i16(enc_accumulated_delta[encoder]);
 }
 
 /**
@@ -178,7 +179,32 @@ int16_t encoder_consume_delta(uint8_t encoder)
         return 0;
     }
 
-    const int16_t delta = enc_accumulated_delta[encoder];
+    const int32_t backlog = enc_accumulated_delta[encoder];
+    if (backlog == 0)
+    {
+        return 0;
+    }
+
+    int32_t drain = backlog;
+    if (drain > ENCODER_MAX_CONSUME_PER_TICK)
+    {
+        drain = ENCODER_MAX_CONSUME_PER_TICK;
+    }
+    else if (drain < -ENCODER_MAX_CONSUME_PER_TICK)
+    {
+        drain = -ENCODER_MAX_CONSUME_PER_TICK;
+    }
+
+    enc_accumulated_delta[encoder] = backlog - drain;
+    return (int16_t)drain;
+}
+
+void encoder_reset_delta(uint8_t encoder)
+{
+    if (encoder >= (uint8_t)ENC_COUNT)
+    {
+        return;
+    }
+
     enc_accumulated_delta[encoder] = 0;
-    return delta;
 }

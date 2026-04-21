@@ -82,5 +82,5 @@ int16_t drv_encoder_get_delta(uint8_t id)
  */
 void drv_encoder_reset(uint8_t id)
 {
-    (void)encoder_consume_delta(id);
+    encoder_reset_delta(id);
 }

@@ -15,6 +15,6 @@ void encoders_fast_poll_init(void);
  */
 void encoders_fast_poll_irq(void);
 void encoders_hw_read(void);
-int8_t encoders_hw_get_delta(uint8_t encoder);
+int16_t encoders_hw_get_delta(uint8_t encoder);
 
 #endif

@@ -17,5 +17,6 @@ void encoders_update(uint32_t dt_ms);
 
 int16_t encoder_get_delta(uint8_t encoder);
 int16_t encoder_consume_delta(uint8_t encoder);
+void encoder_reset_delta(uint8_t encoder);
 
 #endif
