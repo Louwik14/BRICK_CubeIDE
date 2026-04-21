@@ -1,22 +1,22 @@
-/**
+﻿/**
  * @file voice_manager.c
  * @brief Module applicatif voice_manager.
  *
- * Rôle du module:
- * - Implémenter les traitements liés à voice_manager.
- * - Fournir les services internes utilisés par le firmware utilisateur.
+ * RÃ´le du module:
+ * - ImplÃ©menter les traitements liÃ©s Ã  voice_manager.
+ * - Fournir les services internes utilisÃ©s par le firmware utilisateur.
  *
  * Architecture:
- * - Appelé par: modules applicatifs selon l'orchestration du firmware.
- * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ * - AppelÃ© par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dÃ©pendances matÃ©rielles et/ou modules utilisateur associÃ©s.
  *
- * Contraintes temps réel:
- * - IRQ: selon les API appelées.
- * - Hard realtime: selon le chemin d'exécution.
- * - malloc: éviter en chemin critique.
+ * Contraintes temps rÃ©el:
+ * - IRQ: selon les API appelÃ©es.
+ * - Hard realtime: selon le chemin d'exÃ©cution.
+ * - malloc: Ã©viter en chemin critique.
  *
  * Notes:
- * - Documentation ajoutée sans modification de la logique d'exécution.
+ * - Documentation ajoutÃ©e sans modification de la logique d'exÃ©cution.
  */
 
 #include "Sampler/voice_manager.h"
@@ -25,7 +25,6 @@
 #include <math.h>
 #include <stddef.h>
 
-#include "audio_debug_log.h"
 
 #define VOICE_MANAGER_MAX_VOICES (2U)
 
@@ -36,14 +35,14 @@ static uint32_t s_generation_counter;
 static uint32_t s_process_call_count;
 
 /**
- * @brief Point d'entrée finite_or_zero.
+ * @brief Point d'entrÃ©e finite_or_zero.
  *
- * Rôle:
- * - Exécuter le traitement associé à finite_or_zero.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  finite_or_zero.
  *
- * @param v Paramètre d'entrée de l'API.
+ * @param v ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -54,12 +53,12 @@ static float finite_or_zero(float v)
 }
 
 /**
- * @brief Point d'entrée voice_clear.
+ * @brief Point d'entrÃ©e voice_clear.
  *
- * Rôle:
- * - Exécuter le traitement associé à voice_clear.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  voice_clear.
  *
- * @param index Paramètre d'entrée de l'API.
+ * @param index ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -80,10 +79,10 @@ static void voice_clear(uint32_t index)
 }
 
 /**
- * @brief Point d'entrée voice_manager_init.
+ * @brief Point d'entrÃ©e voice_manager_init.
  *
- * Rôle:
- * - Exécuter le traitement associé à voice_manager_init.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  voice_manager_init.
  *
  *
  * Contexte d'appel:
@@ -99,14 +98,14 @@ void voice_manager_init(void)
 }
 
 /**
- * @brief Point d'entrée voice_manager_trigger.
+ * @brief Point d'entrÃ©e voice_manager_trigger.
  *
- * Rôle:
- * - Exécuter le traitement associé à voice_manager_trigger.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  voice_manager_trigger.
  *
- * @param sample_id Paramètre d'entrée de l'API.
- * @param gain_l Paramètre d'entrée de l'API.
- * @param gain_r Paramètre d'entrée de l'API.
+ * @param sample_id ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param gain_l ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param gain_r ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -164,10 +163,10 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 }
 
 /**
- * @brief Point d'entrée voice_manager_service.
+ * @brief Point d'entrÃ©e voice_manager_service.
  *
- * Rôle:
- * - Exécuter le traitement associé à voice_manager_service.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  voice_manager_service.
  *
  *
  * Contexte d'appel:
@@ -212,14 +211,14 @@ static uint8_t voice_has_valid_sample(uint32_t voice_index, const voice_t *voice
 }
 
 /**
- * @brief Point d'entrée voice_manager_process.
+ * @brief Point d'entrÃ©e voice_manager_process.
  *
- * Rôle:
- * - Exécuter le traitement associé à voice_manager_process.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  voice_manager_process.
  *
- * @param out_l Paramètre d'entrée de l'API.
- * @param out_r Paramètre d'entrée de l'API.
- * @param frames Paramètre d'entrée de l'API.
+ * @param out_l ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param out_r ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param frames ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -281,15 +280,7 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
         }
 
         if(voice->active != 0U)
-            voice->position = position;
-
-        if((s_process_call_count <= 8U) || ((s_process_call_count % 512U) == 0U))
-        {
-            AUDIO_DEBUG_LOG("[VOICE] process idx=%lu active=%u state=%u pos=%lu\r\n",
-                            (unsigned long)voice_index,
-                            (unsigned int)voice->active,
-                            (unsigned int)voice->state,
-                            (unsigned long)voice->position);
-        }
-    }
+            voice->position = position;    }
 }
+
+

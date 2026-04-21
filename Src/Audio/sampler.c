@@ -20,9 +20,6 @@
  */
 
 #include "sampler.h"
-#include <stdio.h>
-
-#define DBG(...) printf(__VA_ARGS__)
 
 /**
  * @brief Point d'entrée sample_voice_init.

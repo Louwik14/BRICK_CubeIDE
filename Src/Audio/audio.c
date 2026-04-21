@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file audio.c
  * @brief Couche matérielle audio STM32H743 (SAI TDM8 + DMA double buffer).
  *
@@ -28,7 +28,6 @@
 
 #include <string.h>
 #include <stdint.h>
-#include <stdio.h>
 
 /* ============================================================
    CONFIG AUDIO : STM32H743 + CS42448 TDM8
@@ -50,16 +49,6 @@
 /* Taille totale des buffers DMA (en int32) */
 #define AUDIO_BUFFER_WORDS       (AUDIO_FRAMES_TOTAL * AUDIO_WORDS_PER_FRAME)
 #define AUDIO_SEQ_MAX_BLOCK_EVENTS 128U
-
-#ifndef AUDIO_DEBUG_SEQ_BLOCK_TRACE
-#define AUDIO_DEBUG_SEQ_BLOCK_TRACE 0
-#endif
-
-#if AUDIO_DEBUG_SEQ_BLOCK_TRACE
-#define AUDIO_SEQ_BLOCK_LOG(...) printf(__VA_ARGS__)
-#else
-#define AUDIO_SEQ_BLOCK_LOG(...) do { } while (0)
-#endif
 
 /* ============================================================
    DMA BUFFERS
@@ -136,11 +125,6 @@ static void process_half(uint32_t half_index)
     {
         g_audio_seq_diag.max_events_collected_per_half = event_count;
     }
-    AUDIO_SEQ_BLOCK_LOG("[AUD][BLK] half=%lu events=%u frames=%u\r\n",
-                        (unsigned long)half_index,
-                        (unsigned)event_count,
-                        (unsigned)AUDIO_FRAMES_PER_HALF);
-
     uint32_t cursor = 0U;
     uint16_t event_index = 0U;
     uint16_t segment_count = 0U;
@@ -155,11 +139,6 @@ static void process_half(uint32_t half_index)
         if ((uint32_t)event_offset > cursor)
         {
             const uint32_t segment_frames = (uint32_t)event_offset - cursor;
-            AUDIO_SEQ_BLOCK_LOG("[AUD][SEG] half=%lu from=%lu len=%lu to=%u\r\n",
-                                (unsigned long)half_index,
-                                (unsigned long)cursor,
-                                (unsigned long)segment_frames,
-                                (unsigned)event_offset);
             audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
                                       &tx[cursor * AUDIO_WORDS_PER_FRAME],
                                       segment_frames);
@@ -170,14 +149,6 @@ static void process_half(uint32_t half_index)
         while ((event_index < event_count)
                && (block_events[event_index].sample_offset_in_block == event_offset))
         {
-            AUDIO_SEQ_BLOCK_LOG("[AUD][EVT] half=%lu idx=%u ty=%u tr=%u n=%u vel=%u off=%u\r\n",
-                                (unsigned long)half_index,
-                                (unsigned)event_index,
-                                (unsigned)block_events[event_index].type,
-                                (unsigned)block_events[event_index].track,
-                                (unsigned)block_events[event_index].note,
-                                (unsigned)block_events[event_index].velocity,
-                                (unsigned)block_events[event_index].sample_offset_in_block);
             seq_runtime_audio_apply_event(&block_events[event_index]);
             event_index++;
         }
@@ -185,10 +156,6 @@ static void process_half(uint32_t half_index)
 
     if (cursor < AUDIO_FRAMES_PER_HALF)
     {
-        AUDIO_SEQ_BLOCK_LOG("[AUD][SEG] half=%lu from=%lu len=%u to=end\r\n",
-                            (unsigned long)half_index,
-                            (unsigned long)cursor,
-                            (unsigned)(AUDIO_FRAMES_PER_HALF - cursor));
         audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
                                   &tx[cursor * AUDIO_WORDS_PER_FRAME],
                                   AUDIO_FRAMES_PER_HALF - cursor);

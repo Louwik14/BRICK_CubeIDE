@@ -1,6 +1,5 @@
-#include "Storage/pattern_live_ram.h"
+﻿#include "Storage/pattern_live_ram.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #include "Storage/memory_layout.h"
@@ -433,12 +432,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
     uint8_t overflow_track = 0U;
     uint16_t overflow_required = 0U;
     if (pattern_live_seq_block_validate_plock_budget(seq, &overflow_track, &overflow_required) == 0U)
-    {
-        printf("[PATTERN][LIVE] seq apply rejected: track=%u required=%u budget=%u\r\n",
-               (unsigned)(overflow_track + 1U),
-               (unsigned)overflow_required,
-               (unsigned)SEQ_PLOCK_BUDGET_PER_TRACK);
-        return 0U;
+    {        return 0U;
     }
 
     seq_model_init_defaults();
@@ -468,12 +462,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
                                                                                  pattern_live_plock_get_value16(pl),
                                                                                  pl->flags);
                 if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
-                {
-                    printf("[PATTERN][LIVE] seq apply aborted: track=%u step=%u status=%u\r\n",
-                           (unsigned)(track + 1U),
-                           (unsigned)(step + 1U),
-                           (unsigned)status);
-                    return 0U;
+                {                    return 0U;
                 }
             }
         }
@@ -801,3 +790,4 @@ uint8_t pattern_live_is_apply_in_progress(void)
 {
     return g_apply_in_progress;
 }
+

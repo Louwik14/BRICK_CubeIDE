@@ -5,10 +5,6 @@
 
 #include "ff.h"
 
-#ifndef SD_ACCESS_TRACE_ENABLED
-#define SD_ACCESS_TRACE_ENABLED 0
-#endif
-
 typedef enum
 {
     SD_ACCESS_CLIENT_NONE = 0,

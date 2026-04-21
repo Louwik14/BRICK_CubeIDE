@@ -19,14 +19,8 @@
  * - Documentation ajoutée sans modification de la logique d'exécution.
  */
 
-#include <stdio.h>
-
-#include "audio_debug_log.h"
-
 #include "App/app_sample_boot.h"
 #include "Storage/wav_loader.h"
-
-#define DBG(...) AUDIO_DEBUG_LOG(__VA_ARGS__)
 
 /**
  * @brief Point d'entrée app_sample_boot_init.
@@ -41,9 +35,5 @@
 void app_sample_boot_init(void)
 {
     char wav_path[64];
-
-    if(wav_loader_find_first_wav(wav_path, sizeof(wav_path)))
-        DBG("[WAV] found: %s\r\n", wav_path);
-    else
-        DBG("[WAV] no WAV found\r\n");
+    (void)wav_loader_find_first_wav(wav_path, sizeof(wav_path));
 }

@@ -1,4 +1,4 @@
-#include "pages/ui_page_settings.h"
+﻿#include "pages/ui_page_settings.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -12,26 +12,6 @@
 #include "Storage/wav_loader.h"
 #include "drv_display.h"
 #include "ui_page_manager.h"
-
-#ifndef UI_SETTINGS_PROJECT_DIAG_ENABLED
-#define UI_SETTINGS_PROJECT_DIAG_ENABLED 1
-#endif
-
-static void ui_page_settings_project_diag(const char *action, uint8_t slot, uint8_t ok)
-{
-#if UI_SETTINGS_PROJECT_DIAG_ENABLED
-    printf("[PROJECT][UI] action=%s slot=%u ok=%u v1_err=%s sd_err=%u\r\n",
-           (action != 0) ? action : "-",
-           (unsigned)slot,
-           (unsigned)ok,
-           project_v1_error_to_string(project_v1_get_last_error()),
-           (unsigned)project_v1_get_last_sd_error_code());
-#else
-    (void)action;
-    (void)slot;
-    (void)ok;
-#endif
-}
 
 typedef enum
 {
@@ -462,31 +442,21 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
             if ((level->selected_index < g_ui_settings.project_slot_count)
                 && (project_v1_load_slot(g_ui_settings.project_slots[level->selected_index]) != 0U))
-            {
-                ui_page_settings_project_diag("load", g_ui_settings.project_slots[level->selected_index], 1U);
-                ui_page_settings_status("LOAD OK");
+            {                ui_page_settings_status("LOAD OK");
             }
             else
             {
-                const uint8_t slot = (level->selected_index < g_ui_settings.project_slot_count)
-                    ? g_ui_settings.project_slots[level->selected_index]
-                    : 0U;
-                ui_page_settings_project_diag("load", slot, 0U);
                 ui_page_settings_status("LOAD FAIL");
             }
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
             if (project_v1_save_slot(level->selected_index) != 0U)
-            {
-                ui_page_settings_project_diag("save_as", level->selected_index, 1U);
-                ui_page_settings_refresh_project_slots();
+            {                ui_page_settings_refresh_project_slots();
                 ui_page_settings_status("SAVE OK");
             }
             else
-            {
-                ui_page_settings_project_diag("save_as", level->selected_index, 0U);
-                ui_page_settings_status("SAVE FAIL");
+            {                ui_page_settings_status("SAVE FAIL");
             }
             break;
 
@@ -502,40 +472,28 @@ static void ui_page_settings_apply_action(void)
             if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
             {
                 if (project_v1_load_slot(g_ui_settings.selected_slot) != 0U)
-                {
-                    ui_page_settings_project_diag("load_from", g_ui_settings.selected_slot, 1U);
-                    ui_page_settings_status("LOAD FROM OK");
+                {                    ui_page_settings_status("LOAD FROM OK");
                 }
                 else
-                {
-                    ui_page_settings_project_diag("load_from", g_ui_settings.selected_slot, 0U);
-                    ui_page_settings_status("LOAD FROM FAIL");
+                {                    ui_page_settings_status("LOAD FROM FAIL");
                 }
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
             {
                 if (project_v1_save_slot(g_ui_settings.selected_slot) != 0U)
-                {
-                    ui_page_settings_project_diag("save_to", g_ui_settings.selected_slot, 1U);
-                    ui_page_settings_status("SAVE TO OK");
+                {                    ui_page_settings_status("SAVE TO OK");
                 }
                 else
-                {
-                    ui_page_settings_project_diag("save_to", g_ui_settings.selected_slot, 0U);
-                    ui_page_settings_status("SAVE TO FAIL");
+                {                    ui_page_settings_status("SAVE TO FAIL");
                 }
             }
             else if (project_v1_delete_slot(g_ui_settings.selected_slot) != 0U)
-            {
-                ui_page_settings_project_diag("delete", g_ui_settings.selected_slot, 1U);
-                ui_page_settings_refresh_project_slots();
+            {                ui_page_settings_refresh_project_slots();
                 ui_page_settings_back();
                 ui_page_settings_status("DELETE OK");
             }
             else
-            {
-                ui_page_settings_project_diag("delete", g_ui_settings.selected_slot, 0U);
-                ui_page_settings_status("DELETE FAIL");
+            {                ui_page_settings_status("DELETE FAIL");
             }
             break;
 
@@ -618,13 +576,7 @@ static void ui_page_settings_apply_action(void)
                         ui_page_settings_status("LOAD SD OK");
                     }
                     else
-                    {
-                        printf("[SAMPLER][UI] load fail slot=%u err=%u sd_err=%u path=%s\r\n",
-                               (unsigned)g_ui_settings.selected_slot,
-                               (unsigned)sample_pool_get_last_load_error(),
-                               (unsigned)sample_pool_get_last_sd_error_code(),
-                               entry->path);
-                        ui_page_settings_status(ui_page_settings_sampler_load_error_label());
+                    {                        ui_page_settings_status(ui_page_settings_sampler_load_error_label());
                     }
                 }
             }
@@ -855,3 +807,4 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
     ui_page_settings_handle_event_internal(ev);
     return 1U;
 }
+

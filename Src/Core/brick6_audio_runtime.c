@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file brick6_audio_runtime.c
  * @brief Callback DSP runtime extrait de brick6_app_init.
  *
@@ -15,7 +15,6 @@
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
-#include <stdio.h>
 
 #include "Audio/live_recorder.h"
 #include "Audio/microdexed_synth.h"
@@ -32,15 +31,6 @@
 #include "Mod/mod_lfo_v1.h"
 
 #define HALFPI_F 1.57079632679489661923f
-#ifndef SEQ_DEBUG_TRACK_BINDING
-#define SEQ_DEBUG_TRACK_BINDING 0
-#endif
-
-#if SEQ_DEBUG_TRACK_BINDING
-#define BRICK6_RT_LOG(...) printf(__VA_ARGS__)
-#else
-#define BRICK6_RT_LOG(...) do { } while (0)
-#endif
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_monob_processed = 0xFFU;
@@ -310,11 +300,6 @@ brick6_collect_runtime_synth_usage(&synth_usage);
                 || (dx7_tracks != g_runtime_last_dx7_tracks)
                 || (ui_get_active_track() != g_runtime_last_ui_active_track))
         {
-            BRICK6_RT_LOG("[AUDIO][RT] monob_tracks=%u drum_tracks=%u dx7_tracks=%u ui_active=%u\r\n",
-                          (unsigned)monob_processed,
-                          (unsigned)drum_processed,
-                          (unsigned)dx7_tracks,
-                          (unsigned)ui_get_active_track());
             g_runtime_last_monob_processed = monob_processed;
             g_runtime_last_drum_processed = drum_processed;
             g_runtime_last_dx7_tracks = dx7_tracks;

@@ -1,6 +1,5 @@
-#include "Storage/project_v1.h"
+﻿#include "Storage/project_v1.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #include "Storage/memory_layout.h"
@@ -17,26 +16,6 @@ static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
-
-#ifndef PROJECT_V1_DIAG_ENABLED
-#define PROJECT_V1_DIAG_ENABLED 1
-#endif
-
-static void project_v1_diag_log(const char *stage, uint8_t slot, uint8_t ok)
-{
-#if PROJECT_V1_DIAG_ENABLED
-    printf("[PROJECT][V1] stage=%s slot=%u ok=%u err=%s sd_err=%s\r\n",
-           (stage != 0) ? stage : "-",
-           (unsigned)slot,
-           (unsigned)ok,
-           project_v1_error_to_string(g_project_last_error),
-           project_sd_bank_error_to_string(g_project_last_sd_error));
-#else
-    (void)stage;
-    (void)slot;
-    (void)ok;
-#endif
-}
 
 static void project_v1_set_error(project_v1_error_t err)
 {
@@ -69,7 +48,6 @@ void project_v1_init(void)
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
     boot_context_flash_init();
-    project_v1_diag_log("init_done", 0U, 1U);
 }
 
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
@@ -146,30 +124,24 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
 
 uint8_t project_v1_save_slot(uint8_t project_slot)
 {
-    project_v1_diag_log("save_enter", project_slot, 1U);
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
-        project_v1_diag_log("save_invalid", project_slot, 0U);
         return 0U;
     }
 
     if (project_v1_capture_current(&g_project_work) == 0U)
     {
-        project_v1_diag_log("save_capture_fail", project_slot, 0U);
         return 0U;
     }
-    project_v1_diag_log("save_capture_ok", project_slot, 1U);
 
     g_project_work.state.active_project_slot_valid = 1U;
     g_project_work.state.active_project_slot = project_slot;
 
     if (project_v1_store_snapshot_to_slot(project_slot, &g_project_work, 1U) == 0U)
     {
-        project_v1_diag_log("save_store_fail", project_slot, 0U);
         return 0U;
     }
-    project_v1_diag_log("save_store_ok", project_slot, 1U);
     return 1U;
 }
 
@@ -177,7 +149,6 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
                                           const ProjectSaveV1 *project,
                                           uint8_t mark_active_slot)
 {
-    project_v1_diag_log("store_enter", project_slot, 1U);
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (project == 0) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT
@@ -190,7 +161,6 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
     if (project_sd_bank_store_slot(project_slot, project, next_counter) == 0U)
     {
         project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_STORE_FAIL);
-        project_v1_diag_log("store_sd_fail", project_slot, 0U);
         return 0U;
     }
 
@@ -202,15 +172,11 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
     }
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
-    project_boot_ctx_commit_current_state_if_valid();
-    project_v1_diag_log("store_done", project_slot, 1U);
-    return 1U;
+    project_boot_ctx_commit_current_state_if_valid();    return 1U;
 }
 
 uint8_t project_v1_load_slot(uint8_t project_slot)
-{
-    project_v1_diag_log("load_enter", project_slot, 1U);
-    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
+{    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
@@ -219,27 +185,19 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     uint32_t loaded_counter = 0U;
     if (project_sd_bank_load_slot(project_slot, &g_project_work, &loaded_counter) == 0U)
     {
-        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
-        project_v1_diag_log("load_sd_fail", project_slot, 0U);
-        return 0U;
+        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);        return 0U;
     }
-    project_v1_diag_log("load_sd_ok", project_slot, 1U);
-
     sample_pool_restore_project_snapshot(&g_project_work.sample_pool);
 
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
-    {
-        project_v1_diag_log("load_apply_fail", project_slot, 0U);
-        return 0U;
+    {        return 0U;
     }
 
     undo_v1_clear_history();
 
     if (project_sd_bank_commit_slot_patterns(project_slot) == 0U)
     {
-        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);
-        project_v1_diag_log("load_commit_fail", project_slot, 0U);
-        return 0U;
+        project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);        return 0U;
     }
 
     g_project_save_counter = loaded_counter;
@@ -247,9 +205,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     g_project_active_slot = project_slot;
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
-    project_boot_ctx_commit_current_state_if_valid();
-    project_v1_diag_log("load_done", project_slot, 1U);
-    return 1U;
+    project_boot_ctx_commit_current_state_if_valid();    return 1U;
 }
 
 uint8_t project_v1_delete_slot(uint8_t project_slot)
@@ -389,3 +345,4 @@ uint8_t project_v1_restore_boot_context(void)
 
     return 1U;
 }
+

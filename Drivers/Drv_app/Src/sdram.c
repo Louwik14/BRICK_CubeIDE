@@ -28,11 +28,7 @@
 
 #include "sdram.h"
 #include "fmc.h"
-#include "usart.h"
 #include "w9825g6kh_conf.h"
-
-#include <stdio.h>
-#include <string.h>
 
 /* =========================================================
  * Local buffers for test
@@ -64,13 +60,7 @@ static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offs
  */
 void SDRAM_Init(void)
 {
-    const char *msg = "Starting SDRAM init...\r\n";
-    HAL_UART_Transmit(&huart1, (uint8_t *)msg, strlen(msg), 10);
-
     SDRAM_Initialization_Sequence(&hsdram1, &sdram_command);
-
-    msg = "SDRAM init done\r\n";
-    HAL_UART_Transmit(&huart1, (uint8_t *)msg, strlen(msg), 10);
 }
 
 /**
@@ -88,9 +78,6 @@ void SDRAM_Test(void)
     uint32_t index = 0;
     uint32_t status = 0;
     uint32_t fail_index = 0;
-    char log_buffer[128];
-
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Starting SDRAM test...\r\n", 25, 10);
 
     Fill_Buffer(sdram_tx_buffer, SDRAM_BUFFER_SIZE, 0xA244250FU);
     Fill_Buffer(sdram_rx_buffer, SDRAM_BUFFER_SIZE, 0xBBBBBBBBU);
@@ -100,8 +87,6 @@ void SDRAM_Test(void)
     {
         sdram_write32(index, sdram_tx_buffer[index]);
     }
-
-    HAL_UART_Transmit(&huart1, (uint8_t *)"SDRAM write done\r\n", 18, 10);
 
     /* Read */
     for (index = 0; index < SDRAM_BUFFER_SIZE; index++)
@@ -119,23 +104,8 @@ void SDRAM_Test(void)
             break;
         }
     }
-
-    if (status != 0U)
-    {
-        snprintf(log_buffer, sizeof(log_buffer),
-                 "SDRAM test FAILED at index %lu: got 0x%08lX expected 0x%08lX\r\n",
-                 (unsigned long)fail_index,
-                 (unsigned long)sdram_rx_buffer[fail_index],
-                 (unsigned long)sdram_tx_buffer[fail_index]);
-    }
-    else
-    {
-        snprintf(log_buffer, sizeof(log_buffer),
-                 "SDRAM test OK (%lu words)\r\n",
-                 (unsigned long)SDRAM_BUFFER_SIZE);
-    }
-
-    HAL_UART_Transmit(&huart1, (uint8_t *)log_buffer, strlen(log_buffer), 10);
+    (void)status;
+    (void)fail_index;
 }
 
 /* =========================================================

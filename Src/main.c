@@ -43,12 +43,10 @@
 #include "audio.h"
 #include "audio_float.h"
 #include "fatfs.h"
-#include "audio_debug_log.h"
 #include "led_rgb.h"
 #include "led_ids.h"
 #include "display_flush_service.h"
 #include "ui_renderer_oled.h"
-#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,7 +55,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PHASE0_DEBUG_LOG 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -177,9 +174,6 @@ int main(void)
   MX_TIM5_Init();
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
-#if PHASE0_DEBUG_LOG
-  printf("[BOOT] UART debug log active\r\n");
-#endif
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);
@@ -349,7 +343,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     ex: AUDIO_DEBUG_LOG("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     ex: log backend optionnel si nécessaire */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

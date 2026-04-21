@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file param_registry.c
  * @brief Module applicatif param_registry.
  *
@@ -42,19 +42,8 @@
 #include "Storage/memory_layout.h"
 #include "Storage/undo_v1.h"
 #include <math.h>
-#include <stdio.h>
 #include <stddef.h>
 #include <string.h>
-
-#ifndef SEQ_DEBUG_TRACK_BINDING
-#define SEQ_DEBUG_TRACK_BINDING 0
-#endif
-
-#if SEQ_DEBUG_TRACK_BINDING
-#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
-#else
-#define SEQ_BIND_LOG(...) do { } while (0)
-#endif
 
 static uint8_t seq_div_ui_to_runtime(float v);
 static float seq_div_runtime_to_ui(uint8_t runtime_div);
@@ -1445,12 +1434,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_DECIMATOR_RATE:
         case PARAM_FILTER_DECIMATOR_RATE2:
             if (resolve_filter_drive_target_track_for_ui_track(track, &target_track) == 0U)
-            {
-                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_drive_target ui_active=%u\r\n",
-                             (unsigned)track,
-                             (unsigned)id,
-                             (unsigned)ui_get_active_track());
-                return 0U;
+            {                return 0U;
             }
             if (state == NULL)
             {
@@ -1473,12 +1457,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
             if (resolve_filter_target_track_for_ui_track(track, &target_track) == 0U)
-            {
-                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u no_target ui_active=%u\r\n",
-                             (unsigned)track,
-                             (unsigned)id,
-                             (unsigned)ui_get_active_track());
-                return 0U;
+            {                return 0U;
             }
             if (state == NULL)
             {
@@ -1503,13 +1482,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 }
                 const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
                 if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
-                {
-                    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_blocked bind=%u reason=%u\r\n",
-                                 (unsigned)track,
-                                 (unsigned)id,
-                                 (unsigned)((ctx != NULL) ? ctx->bind_state : 0xFFU),
-                                 (unsigned)((ctx != NULL) ? ctx->bind_reason : 0xFFU));
-                    return 0U;
+                {                    return 0U;
                 }
 
                 if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
@@ -1545,13 +1518,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     }
 
                     if (param_runtime_apply_track(track, id, clamped) == 0U)
-                    {
-                        SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u tone_unsupported engine=%u inst=%u\r\n",
-                                     (unsigned)track,
-                                     (unsigned)id,
-                                     (unsigned)ctx->engine,
-                                     (unsigned)ctx->instance_id);
-                        return 0U;
+                    {                        return 0U;
                     }
 
                     track_runtime_invalidate_track(track);
@@ -1559,13 +1526,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
                 {
                     if (param_runtime_apply_track(track, id, clamped) == 0U)
-                    {
-                        SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u mix_unsupported engine=%u mix=%u\r\n",
-                                     (unsigned)track,
-                                     (unsigned)id,
-                                     (unsigned)ctx->engine,
-                                     (unsigned)ctx->mix_track_id);
-                        return 0U;
+                    {                        return 0U;
                     }
 
                     param_runtime_cache_set(track, id, clamped);
@@ -1579,13 +1540,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)
                 {
                     if (param_runtime_apply_buffer_track(track, id, clamped) == 0U)
-                    {
-                        SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u buffer_unsupported engine=%u inst=%u\r\n",
-                                     (unsigned)track,
-                                     (unsigned)id,
-                                     (unsigned)ctx->engine,
-                                     (unsigned)ctx->instance_id);
-                        return 0U;
+                    {                        return 0U;
                     }
 
                     track_runtime_invalidate_track(track);
@@ -1593,34 +1548,12 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 else
                 {
                     param_runtime_cache_set(track, id, clamped);
-                }
-
-                SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u domain=%u engine=%u inst=%u\r\n",
-                             (unsigned)track,
-                             (unsigned)id,
-                             (unsigned)rule.domain,
-                             (unsigned)ctx->engine,
-                             (unsigned)ctx->instance_id);
-                mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
+                }                mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
                 return 1U;
-            }
-
-            SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u global_apply ui_active=%u\r\n",
-                         (unsigned)track,
-                         (unsigned)id,
-                         (unsigned)ui_get_active_track());
-            param_set(id, clamped);
+            }            param_set(id, clamped);
             return 1U;
         }
     }
-
-    SEQ_BIND_LOG("[SEQ][REG][APPLY] tr=%u param=%u -> target=%u ui_active=%u v=%.3f\r\n",
-                 (unsigned)track,
-                 (unsigned)id,
-                 (unsigned)target_track,
-                 (unsigned)ui_get_active_track(),
-                 (double)clamped);
-
     switch (id)
     {
         case PARAM_FILTER_TYPE:
@@ -3086,3 +3019,4 @@ void param_reset(param_id_t id)
 
     param_set(id, param_registry[id].default_value);
 }
+

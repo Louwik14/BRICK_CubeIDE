@@ -1,7 +1,6 @@
-#pragma once
+﻿#pragma once
 
 #include <stdint.h>
-#include <stdio.h>
 
 #include "ui_core.h"
 
@@ -31,16 +30,6 @@ typedef struct
  *
  * In-tree operational callers should use `track_runtime` directly.
  */
-
-#ifndef SEQ_DEBUG_TRACK_BINDING
-#define SEQ_DEBUG_TRACK_BINDING 0
-#endif
-
-#if SEQ_DEBUG_TRACK_BINDING
-#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
-#else
-#define SEQ_BIND_LOG(...) do { } while (0)
-#endif
 
 static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runtime_target_t *out_target)
 {
@@ -100,14 +89,6 @@ static inline uint8_t runtime_target_resolve_for_ui_track(uint8_t ui_track, runt
             break;
     }
 
-    SEQ_BIND_LOG("[SEQ][TARGET] tr=%u family=%u type=%u -> has_filter=%u target=%u ui_active=%u\r\n",
-                 (unsigned)ui_track,
-                 (unsigned)config.family,
-                 (unsigned)config.type,
-                 (unsigned)out_target->has_filter_target,
-                 (unsigned)out_target->filter_target_track,
-                 (unsigned)ui_get_active_track());
-
     return 1U;
 }
 
@@ -136,3 +117,4 @@ static inline uint8_t runtime_target_resolve_filter_for_ui_track(uint8_t ui_trac
 #ifdef __cplusplus
 }
 #endif
+

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Module: seq_param_iface
  * Role: Interface de binding entre paramètres globaux et domaines plock séquenceur.
  * Responsibilities: valider mapping set/param, maintenir base/runtime values,
@@ -8,7 +8,6 @@
 #include "Seq/seq_param_iface.h"
 
 #include <string.h>
-#include <stdio.h>
 
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
@@ -24,16 +23,6 @@ typedef struct
 } seq_param_slot_state_t;
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
-
-#ifndef SEQ_DEBUG_TRACK_BINDING
-#define SEQ_DEBUG_TRACK_BINDING 0
-#endif
-
-#if SEQ_DEBUG_TRACK_BINDING
-#define SEQ_BIND_LOG(...) printf(__VA_ARGS__)
-#else
-#define SEQ_BIND_LOG(...) do { } while (0)
-#endif
 
 static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 {
@@ -187,13 +176,6 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, value16);
-    SEQ_BIND_LOG("[SEQ][IFACE] apply tr=%u set=%u p=%u v16=%u dec=%.3f ui_active=%u\r\n",
-                 (unsigned)track,
-                 (unsigned)set_id,
-                 (unsigned)param8,
-                 (unsigned)value16,
-                 (double)decoded,
-                 (unsigned)ui_get_active_track());
     if (param_registry_apply_track_value(param, track, decoded) == 0U)
     {
         return 0U;

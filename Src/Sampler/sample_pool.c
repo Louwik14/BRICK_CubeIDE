@@ -1,22 +1,22 @@
-/**
+﻿/**
  * @file sample_pool.c
  * @brief Module applicatif sample_pool.
  *
- * Rôle du module:
- * - Implémenter les traitements liés à sample_pool.
- * - Fournir les services internes utilisés par le firmware utilisateur.
+ * RÃ´le du module:
+ * - ImplÃ©menter les traitements liÃ©s Ã  sample_pool.
+ * - Fournir les services internes utilisÃ©s par le firmware utilisateur.
  *
  * Architecture:
- * - Appelé par: modules applicatifs selon l'orchestration du firmware.
- * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ * - AppelÃ© par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dÃ©pendances matÃ©rielles et/ou modules utilisateur associÃ©s.
  *
- * Contraintes temps réel:
- * - IRQ: selon les API appelées.
- * - Hard realtime: selon le chemin d'exécution.
- * - malloc: éviter en chemin critique.
+ * Contraintes temps rÃ©el:
+ * - IRQ: selon les API appelÃ©es.
+ * - Hard realtime: selon le chemin d'exÃ©cution.
+ * - malloc: Ã©viter en chemin critique.
  *
  * Notes:
- * - Documentation ajoutée sans modification de la logique d'exécution.
+ * - Documentation ajoutÃ©e sans modification de la logique d'exÃ©cution.
  */
 
 #include "Sampler/sample_pool.h"
@@ -38,14 +38,6 @@
 
 #ifndef SAMPLE_POOL_HAS_FATFS
 #define SAMPLE_POOL_HAS_FATFS 0
-#endif
-
-#define SAMPLE_POOL_DEBUG 1
-
-#if SAMPLE_POOL_DEBUG
-#define SAMPLE_POOL_LOG(...) printf(__VA_ARGS__)
-#else
-#define SAMPLE_POOL_LOG(...)
 #endif
 
 SDRAM_SAMPLES static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
@@ -71,25 +63,25 @@ static void sample_pool_set_error(sample_pool_load_error_t error, FRESULT fr)
 }
 
 /**
- * @brief Point d'entrée sample_pool_pcm24_to_float.
+ * @brief Point d'entrÃ©e sample_pool_pcm24_to_float.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_pcm24_to_float.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_pcm24_to_float.
  *
- * @param p Paramètre d'entrée de l'API.
+ * @param p ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
 /**
- * @brief Point d'entrée sample_pool_release_slot.
+ * @brief Point d'entrÃ©e sample_pool_release_slot.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_release_slot.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_release_slot.
  *
- * @param sample_id Paramètre d'entrée de l'API.
+ * @param sample_id ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -108,13 +100,13 @@ static void sample_pool_release_slot(uint16_t sample_id)
 }
 
 /**
- * @brief Point d'entrée sample_pool_alloc_slot.
+ * @brief Point d'entrÃ©e sample_pool_alloc_slot.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_alloc_slot.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_alloc_slot.
  *
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -184,18 +176,18 @@ static int16_t sample_pool_alloc_region(uint32_t frames, uint32_t *start_frame)
 
 #if SAMPLE_POOL_HAS_FATFS
 /**
- * @brief Point d'entrée sample_pool_load_full_data.
+ * @brief Point d'entrÃ©e sample_pool_load_full_data.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_load_full_data.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_load_full_data.
  *
- * @param fp Paramètre d'entrée de l'API.
- * @param slot Paramètre d'entrée de l'API.
- * @param info Paramètre d'entrée de l'API.
- * @param data_size_aligned Paramètre d'entrée de l'API.
- * @param desc Paramètre d'entrée de l'API.
+ * @param fp ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param slot ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param info ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param data_size_aligned ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param desc ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -220,13 +212,7 @@ static bool sample_pool_load_full_data(FIL *fp,
         return false;
 
     if(sample_pool_alloc_region(total_frames, &start_frame) != 0)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] pool full sample=%u slot=%u frames=%lu total=%u\n",
-                        (unsigned)sample_id,
-                        (unsigned)slot,
-                        (unsigned long)total_frames,
-                        (unsigned)SAMPLE_POOL_TOTAL_FRAMES);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_MEMORY_LIMIT, FR_OK);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_MEMORY_LIMIT, FR_OK);
         return false;
     }
 
@@ -279,12 +265,12 @@ static uint8_t g_sample_pool_fs_mounted;
 #endif
 
 /**
- * @brief Point d'entrée sample_pool_clear_entry.
+ * @brief Point d'entrÃ©e sample_pool_clear_entry.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_clear_entry.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_clear_entry.
  *
- * @param desc Paramètre d'entrée de l'API.
+ * @param desc ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -328,16 +314,16 @@ void sample_pool_clear(uint16_t id)
 }
 
 /**
- * @brief Point d'entrée sample_pool_trim_path_copy.
+ * @brief Point d'entrÃ©e sample_pool_trim_path_copy.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_trim_path_copy.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_trim_path_copy.
  *
- * @param dst Paramètre d'entrée de l'API.
- * @param dst_size Paramètre d'entrée de l'API.
- * @param src Paramètre d'entrée de l'API.
+ * @param dst ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param dst_size ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param src ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -369,10 +355,10 @@ static size_t sample_pool_trim_path_copy(char *dst, size_t dst_size, const char 
 }
 
 /**
- * @brief Point d'entrée sample_pool_init.
+ * @brief Point d'entrÃ©e sample_pool_init.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_init.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_init.
  *
  *
  * Contexte d'appel:
@@ -441,15 +427,15 @@ void sample_pool_restore_project_snapshot(const sample_pool_project_snapshot_t *
 }
 
 /**
- * @brief Point d'entrée sample_pool_load.
+ * @brief Point d'entrÃ©e sample_pool_load.
  *
- * Rôle:
- * - Exécuter le traitement associé à sample_pool_load.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  sample_pool_load.
  *
- * @param id Paramètre d'entrée de l'API.
- * @param path Paramètre d'entrée de l'API.
+ * @param id ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param path ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -462,38 +448,26 @@ bool sample_pool_load(uint16_t id, const char *path)
     sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 
     if(id >= SAMPLE_POOL_SIZE)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] invalid id=%u\n", (unsigned)id);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_ID, FR_INVALID_PARAMETER);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_ID, FR_INVALID_PARAMETER);
         return false;
     }
 
     sample_pool_release_slot(id);
 
     if((path == NULL) || (path[0] == '\0'))
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u invalid path\n", (unsigned)id);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
     }
 
     const size_t raw_path_len = strlen(path);
     if(raw_path_len >= SAMPLE_POOL_PATH_MAX)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u path too long (%lu >= %u)\n",
-                        (unsigned)id,
-                        (unsigned long)raw_path_len,
-                        (unsigned)SAMPLE_POOL_PATH_MAX);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_PATH_TOO_LONG, FR_INVALID_NAME);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_PATH_TOO_LONG, FR_INVALID_NAME);
         return false;
     }
 
     path_len = sample_pool_trim_path_copy(trimmed_path, sizeof(trimmed_path), path);
     if(path_len == 0U)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] id=%u path invalid/empty after trim\n",
-                        (unsigned)id);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
     }
 
@@ -502,18 +476,14 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     const int16_t slot = sample_pool_alloc_slot();
     if(slot < 0)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] no free resident slots for id=%u\n", (unsigned)id);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_NO_FREE_SLOT, FR_NOT_ENOUGH_CORE);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_NO_FREE_SLOT, FR_NOT_ENOUGH_CORE);
         return false;
     }
 
 #if SAMPLE_POOL_HAS_FATFS
     uint8_t sd_gate_held = 0U;
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] sd gate refused for id=%u path=%s\n", (unsigned)id, desc->path);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_SD_GATE_REFUSED, FR_TIMEOUT);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_SD_GATE_REFUSED, FR_TIMEOUT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
         return false;
     }
@@ -525,12 +495,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         const FRESULT mount_fr = f_mount(&g_sample_pool_fs, "0:", 1U);
         sd_access_trace_end("sample_pool_f_mount", (int)mount_fr, 0U);
         if(mount_fr != FR_OK)
-        {
-            SAMPLE_POOL_LOG("[SAMPLE_POOL] f_mount failed id=%u path=%s fr=%d\n",
-                            (unsigned)id,
-                            desc->path,
-                            (int)mount_fr);
-            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, mount_fr);
+        {            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, mount_fr);
             sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
             g_sample_slot_in_use[(uint32_t)slot] = 0U;
             return false;
@@ -544,12 +509,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     const FRESULT open_fr = f_open(&fp, desc->path, FA_READ);
     sd_access_trace_end("sample_pool_f_open", (int)open_fr, 0U);
     if(open_fr != FR_OK)
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] f_open failed id=%u path=%s fr=%d\n",
-                        (unsigned)id,
-                        desc->path,
-                        (int)open_fr);
-        if (open_fr == FR_NO_FILE)
+    {        if (open_fr == FR_NO_FILE)
         {
             sample_pool_set_error(SAMPLE_POOL_LOAD_SD_FILE_NOT_FOUND, open_fr);
         }
@@ -566,11 +526,7 @@ bool sample_pool_load(uint16_t id, const char *path)
     memset(&info, 0, sizeof(info));
 
     if(!wav_parser_parse_info(&fp, &info))
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] wav parse failed id=%u path=%s\n",
-                        (unsigned)id,
-                        desc->path);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_PARSE_FAIL, FR_INVALID_OBJECT);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_PARSE_FAIL, FR_INVALID_OBJECT);
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
@@ -582,17 +538,7 @@ bool sample_pool_load(uint16_t id, const char *path)
        ((info.bits_per_sample != 16U) && (info.bits_per_sample != 24U) && (info.bits_per_sample != 32U)) ||
        (info.block_align == 0U) ||
        (info.sample_rate == 0U))
-    {
-        SAMPLE_POOL_LOG("[SAMPLE_POOL] wav unsupported id=%u path=%s fmt=%u sr=%lu ch=%u bits=%u align=%u br=%lu\n",
-                        (unsigned)id,
-                        desc->path,
-                        (unsigned)info.audio_format,
-                        (unsigned long)info.sample_rate,
-                        (unsigned)info.channels,
-                        (unsigned)info.bits_per_sample,
-                        (unsigned)info.block_align,
-                        (unsigned long)info.byte_rate);
-        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
         g_sample_slot_in_use[(uint32_t)slot] = 0U;
@@ -628,21 +574,12 @@ bool sample_pool_load(uint16_t id, const char *path)
     if (sd_gate_held != 0U)
     {
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-    }
-
-    SAMPLE_POOL_LOG("[SAMPLE_POOL] loaded id=%u slot=%d path=%s frames=%lu\n",
-                    (unsigned)id,
-                    (int)slot,
-                    desc->path,
-                    (unsigned long)desc->length_frames);
-    sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
+    }    sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 
     return true;
 #else
     (void)path;
-    g_sample_slot_in_use[(uint32_t)slot] = 0U;
-    SAMPLE_POOL_LOG("[SAMPLE_POOL] FatFs unavailable in this build\n");
-    return false;
+    g_sample_slot_in_use[(uint32_t)slot] = 0U;    return false;
 #endif
 }
 
@@ -685,3 +622,4 @@ uint8_t sample_pool_get_last_sd_error_code(void)
 {
     return g_sample_pool_last_sd_error_code;
 }
+

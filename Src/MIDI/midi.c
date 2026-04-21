@@ -29,12 +29,10 @@
 #include "midi.h"
 #include "main.h"
 #include "tim.h"
-#include "usart.h"
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
 #include <string.h>
-#include <stdio.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
@@ -71,18 +69,10 @@ static volatile bool midi_clock_timer_armed = false;
 #define MIDI_CLOCK_TX_PROBE_ENABLE 1
 #endif
 
-#ifndef MIDI_CLOCK_TX_UART_DEBUG_ENABLE
-#define MIDI_CLOCK_TX_UART_DEBUG_ENABLE 1
-#endif
-
 midi_clock_tx_probe_t midi_clock_tx_probe = {0};
 
 #if MIDI_CLOCK_TX_PROBE_ENABLE
 static volatile uint32_t midi_clock_f8_inflight_pending = 0U;
-#if MIDI_CLOCK_TX_UART_DEBUG_ENABLE
-static uint32_t midi_clock_probe_uart_last_dump_ms = 0U;
-#define MIDI_CLOCK_TX_UART_DUMP_PERIOD_MS 10000U
-#endif
 
 static inline uint32_t midi_clock_probe_count_f8_in_usb_packets(const uint8_t *buffer, uint16_t bytes_len) {
   if ((buffer == NULL) || (bytes_len < 4U)) {
@@ -99,34 +89,6 @@ static inline uint32_t midi_clock_probe_count_f8_in_usb_packets(const uint8_t *b
   }
 
   return count;
-}
-#endif
-
-#if MIDI_CLOCK_TX_PROBE_ENABLE && MIDI_CLOCK_TX_UART_DEBUG_ENABLE
-static void midi_clock_probe_uart_dump_if_due(void) {
-  const uint32_t now = HAL_GetTick();
-  if ((uint32_t)(now - midi_clock_probe_uart_last_dump_ms) < MIDI_CLOCK_TX_UART_DUMP_PERIOD_MS) {
-    return;
-  }
-
-  midi_clock_tx_probe_t snap;
-  char msg[192];
-  midi_clock_tx_probe_snapshot(&snap);
-  const int n = snprintf(msg, sizeof(msg),
-                         "[MCLK] F8 gen=%lu enq=%lu send=%lu done=%lu drop=%lu defer=%lu rollback=%lu inflight=%lu\r\n",
-                         (unsigned long)snap.clock_f8_generated_count,
-                         (unsigned long)snap.clock_f8_enqueued_count,
-                         (unsigned long)snap.clock_f8_usb_send_count,
-                         (unsigned long)snap.clock_f8_usb_complete_count,
-                         (unsigned long)snap.clock_f8_queue_drop_count,
-                         (unsigned long)snap.clock_f8_send_deferred_count,
-                         (unsigned long)snap.clock_f8_send_rollback_count,
-                         (unsigned long)snap.clock_f8_inflight_count);
-  if (n > 0) {
-    const uint16_t tx_len = (uint16_t)(((size_t)n < sizeof(msg)) ? (size_t)n : (sizeof(msg) - 1U));
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)msg, tx_len, 10U);
-  }
-  midi_clock_probe_uart_last_dump_ms = now;
 }
 #endif
 
@@ -1078,9 +1040,6 @@ void midi_poll(void) {
 
   midi_process_usb_rx();
   midi_usb_try_flush();
-#if MIDI_CLOCK_TX_PROBE_ENABLE && MIDI_CLOCK_TX_UART_DEBUG_ENABLE
-  midi_clock_probe_uart_dump_if_due();
-#endif
 }
 
 /**
@@ -1525,9 +1484,6 @@ void midi_start(midi_dest_t dest) {
 
   if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
     midi_clock_tx_probe_reset();
-#if MIDI_CLOCK_TX_PROBE_ENABLE && MIDI_CLOCK_TX_UART_DEBUG_ENABLE
-    midi_clock_probe_uart_last_dump_ms = HAL_GetTick();
-#endif
     midi_clock_set_running(true);
   }
 }

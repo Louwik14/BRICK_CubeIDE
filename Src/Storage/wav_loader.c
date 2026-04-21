@@ -1,19 +1,19 @@
-/**
+﻿/**
  * @file wav_loader.c
  * @brief Module applicatif wav_loader.
  *
- * Rôle du module:
- * - Implémenter les traitements liés à wav_loader.
- * - Fournir les services internes utilisés par le firmware utilisateur.
+ * RÃ´le du module:
+ * - ImplÃ©menter les traitements liÃ©s Ã  wav_loader.
+ * - Fournir les services internes utilisÃ©s par le firmware utilisateur.
  *
  * Architecture:
- * - Appelé par: modules applicatifs selon l'orchestration du firmware.
- * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ * - AppelÃ© par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dÃ©pendances matÃ©rielles et/ou modules utilisateur associÃ©s.
  *
- * Contraintes temps réel:
- * - IRQ: selon les API appelées.
- * - Hard realtime: selon le chemin d'exécution.
- * - malloc: éviter en chemin critique.
+ * Contraintes temps rÃ©el:
+ * - IRQ: selon les API appelÃ©es.
+ * - Hard realtime: selon le chemin d'exÃ©cution.
+ * - malloc: Ã©viter en chemin critique.
  */
 
 #include "wav_loader.h"
@@ -35,14 +35,14 @@ static uint8_t g_wav_catalog_count;
 static uint8_t g_wav_catalog_ready;
 
 /**
- * @brief Point d'entrée pcm24_to_float.
+ * @brief Point d'entrÃ©e pcm24_to_float.
  *
- * Rôle:
- * - Exécuter le traitement associé à pcm24_to_float.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  pcm24_to_float.
  *
- * @param p Paramètre d'entrée de l'API.
+ * @param p ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -53,13 +53,13 @@ const float *wav_loader_get_interleaved_buffer(void)
 }
 
 /**
- * @brief Point d'entrée wav_loader_get_capacity_frames.
+ * @brief Point d'entrÃ©e wav_loader_get_capacity_frames.
  *
- * Rôle:
- * - Exécuter le traitement associé à wav_loader_get_capacity_frames.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  wav_loader_get_capacity_frames.
  *
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -75,14 +75,14 @@ static FATFS g_wav_fs;
 static uint8_t g_wav_fs_mounted;
 
 /**
- * @brief Point d'entrée wav_ext_is_wav.
+ * @brief Point d'entrÃ©e wav_ext_is_wav.
  *
- * Rôle:
- * - Exécuter le traitement associé à wav_ext_is_wav.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  wav_ext_is_wav.
  *
- * @param name Paramètre d'entrée de l'API.
+ * @param name ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -124,9 +124,7 @@ static void wav_loader_catalog_add(const char *name)
     if ((name_len < 0) || (path_len < 0)
         || ((uint32_t)name_len >= sizeof(entry->name))
         || ((uint32_t)path_len >= sizeof(entry->path)))
-    {
-        printf("[WAV] catalog skip long entry: %s\r\n", name);
-        memset(entry, 0, sizeof(*entry));
+    {        memset(entry, 0, sizeof(*entry));
         return;
     }
     entry->state = WAV_LOADER_CATALOG_READY;
@@ -146,27 +144,21 @@ void wav_loader_catalog_refresh(void)
     {
         fr = f_mount(&g_wav_fs, "0:", 1U);
         if (fr != FR_OK)
-        {
-            printf("[WAV] catalog f_mount failed: %d\r\n", (int)fr);
-            return;
+        {            return;
         }
         g_wav_fs_mounted = 1U;
     }
 
     fr = f_opendir(&dir, "0:/");
     if (fr != FR_OK)
-    {
-        printf("[WAV] catalog f_opendir failed: %d\r\n", (int)fr);
-        return;
+    {        return;
     }
 
     while (1)
     {
         fr = f_readdir(&dir, &fno);
         if (fr != FR_OK)
-        {
-            printf("[WAV] catalog f_readdir failed: %d\r\n", (int)fr);
-            break;
+        {            break;
         }
 
         if (fno.fname[0] == '\0')
@@ -212,15 +204,15 @@ const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint8_t index)
 #endif
 
 /**
- * @brief Point d'entrée wav_loader_find_first_wav.
+ * @brief Point d'entrÃ©e wav_loader_find_first_wav.
  *
- * Rôle:
- * - Exécuter le traitement associé à wav_loader_find_first_wav.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  wav_loader_find_first_wav.
  *
- * @param out_path Paramètre d'entrée de l'API.
- * @param max_len Paramètre d'entrée de l'API.
+ * @param out_path ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param max_len ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -228,39 +220,32 @@ const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint8_t index)
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
 {
     if((out_path == 0) || (max_len < 8U))
-    {
-        printf("[WAV] invalid output buffer\r\n");
-        return false;
+    {        return false;
     }
 
     wav_loader_catalog_refresh();
     if (g_wav_catalog_count == 0U)
-    {
-        printf("[WAV] no WAV file in root\r\n");
-        return false;
+    {        return false;
     }
 
-    if ((snprintf(out_path, max_len, "%s", g_wav_catalog[0].path) < 0) ||
-        (strlen(out_path) >= max_len))
+    if ((snprintf(out_path, max_len, "%s", g_wav_catalog[0].path) < 0)
+        || (strlen(out_path) >= max_len))
     {
-        printf("[WAV] path too long: %s\r\n", g_wav_catalog[0].path);
         return false;
     }
-
-    printf("[WAV] found file: %s\r\n", out_path);
     return true;
 }
 
 /**
- * @brief Point d'entrée wav_loader_load_to_sdram.
+ * @brief Point d'entrÃ©e wav_loader_load_to_sdram.
  *
- * Rôle:
- * - Exécuter le traitement associé à wav_loader_load_to_sdram.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  wav_loader_load_to_sdram.
  *
- * @param path Paramètre d'entrée de l'API.
- * @param info Paramètre d'entrée de l'API.
+ * @param path ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param info ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -282,70 +267,45 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
     uint32_t frames_loaded = 0U;
 
     if(path == 0)
-    {
-        printf("[WAV] invalid path\r\n");
-        return false;
+    {        return false;
     }
 
     if(g_wav_fs_mounted == 0U)
     {
         fr = f_mount(&g_wav_fs, "0:", 1U);
         if(fr != FR_OK)
-        {
-            printf("[WAV] f_mount failed: %d\r\n", (int)fr);
-            return false;
+        {            return false;
         }
         g_wav_fs_mounted = 1U;
     }
 
     fr = f_open(&fp, path, FA_READ);
     if(fr != FR_OK)
-    {
-        printf("[WAV] f_open failed: %s (%d)\r\n", path, (int)fr);
-        return false;
+    {        return false;
     }
 
     if(!wav_parser_parse_info(&fp, out_info))
     {
-        (void)f_close(&fp);
-        printf("[WAV] invalid RIFF/WAVE or missing chunks\r\n");
-        return false;
+        (void)f_close(&fp);        return false;
     }
-
-    printf("[WAV] fmt=%u ch=%u sr=%lu bits=%u data=%lu bytes off=%lu\r\n",
-           (unsigned)out_info->audio_format,
-           (unsigned)out_info->channels,
-           (unsigned long)out_info->sample_rate,
-           (unsigned)out_info->bits_per_sample,
-           (unsigned long)out_info->data_size,
-           (unsigned long)out_info->data_offset);
-
     if(!((out_info->audio_format == 1U) || (out_info->audio_format == 65534U)))
     {
-        (void)f_close(&fp);
-        printf("[WAV ERROR] format unsupported\r\n");
-        return false;
+        (void)f_close(&fp);        return false;
     }
 
     if(!((out_info->channels == 1U) || (out_info->channels == 2U)))
     {
-        (void)f_close(&fp);
-        printf("[WAV ERROR] unsupported channel count\r\n");
-        return false;
+        (void)f_close(&fp);        return false;
     }
 
     if(!((out_info->bits_per_sample == 16U) || (out_info->bits_per_sample == 24U) || (out_info->bits_per_sample == 32U)))
     {
-        (void)f_close(&fp);
-        printf("[WAV ERROR] format unsupported\r\n");
-        return false;
+        (void)f_close(&fp);        return false;
     }
 
     if((out_info->block_align == 0U) || (out_info->sample_rate == 0U))
     {
-        (void)f_close(&fp);
-        printf("[WAV ERROR] invalid timing metadata\r\n");
-        return false;
+        (void)f_close(&fp);        return false;
     }
 
     {
@@ -359,18 +319,14 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 
         if (frames_to_load == 0U)
         {
-            (void)f_close(&fp);
-            printf("[WAV ERROR] empty source\r\n");
-            return false;
+            (void)f_close(&fp);            return false;
         }
 
         wav_audio_stream_t stream;
         wav_audio_stream_init(&stream, &fp, out_info, target_rate);
         if (wav_audio_stream_start(&stream, out_info->data_offset) == 0U)
         {
-            (void)f_close(&fp);
-            printf("[WAV] f_lseek data failed\r\n");
-            return false;
+            (void)f_close(&fp);            return false;
         }
 
         while ((frames_loaded < frames_to_load) && (frames_loaded < WAV_BUFFER_FRAMES))
@@ -389,9 +345,7 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
 
         if ((frames_loaded == 0U) || (stream.io_error != 0U))
         {
-            (void)f_close(&fp);
-            printf("[WAV] stream decode failed\r\n");
-            return false;
+            (void)f_close(&fp);            return false;
         }
 
         if (info != 0)
@@ -407,16 +361,10 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
         }
 
         (void)f_close(&fp);
-
-        printf("[WAV] loaded frames=%lu (capacity=%lu)\r\n",
-               (unsigned long)frames_loaded,
-               (unsigned long)WAV_BUFFER_FRAMES);
-
         return true;
     }
 #else
-    (void)path;
-    printf("[WAV] FatFs unavailable in this build\r\n");
-    return false;
+    (void)path;    return false;
 #endif
 }
+

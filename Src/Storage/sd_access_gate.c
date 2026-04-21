@@ -1,7 +1,5 @@
 #include "Storage/sd_access_gate.h"
 
-#include <stdio.h>
-
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;
@@ -104,44 +102,18 @@ void sd_access_gate_release(sd_access_client_t client)
 
 void sd_access_trace_begin(const char *op)
 {
-#if SD_ACCESS_TRACE_ENABLED
-    if (op != 0)
-    {
-        printf("[SD][TRACE] begin %s\r\n", op);
-    }
-#else
     (void)op;
-#endif
 }
 
 void sd_access_trace_end(const char *op, int result, uint32_t elapsed_ms)
 {
-#if SD_ACCESS_TRACE_ENABLED
-    if (op != 0)
-    {
-        printf("[SD][TRACE] end %s res=%d dt=%lums\r\n",
-               op,
-               result,
-               (unsigned long)elapsed_ms);
-    }
-#else
     (void)op;
     (void)result;
     (void)elapsed_ms;
-#endif
 }
 
 void sd_access_trace_timeout(const char *stage, uint32_t elapsed_ms)
 {
-#if SD_ACCESS_TRACE_ENABLED
-    if (stage != 0)
-    {
-        printf("[SD][TRACE] timeout %s dt=%lums\r\n",
-               stage,
-               (unsigned long)elapsed_ms);
-    }
-#else
     (void)stage;
     (void)elapsed_ms;
-#endif
 }

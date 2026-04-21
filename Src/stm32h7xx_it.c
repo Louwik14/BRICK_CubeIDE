@@ -25,10 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "cpu_load.h"
-#include "usart.h"
 #include "encoders_hw.h"
-#include <stdio.h>
-#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,18 +56,6 @@ void midi_usb_tx_deferred_service_from_isr(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void uart_log(const char *message)
-{
-  (void)HAL_UART_Transmit(&huart1, (uint8_t *)message, (uint16_t)strlen(message), 10);
-}
-
-static void uart_log_hex(const char *label, uint32_t value)
-{
-  char buffer[96];
-  snprintf(buffer, sizeof(buffer), "%s0x%08lX\r\n", label, (unsigned long)value);
-  uart_log(buffer);
-}
-
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -421,18 +406,7 @@ void SAI2_IRQHandler(void)
 void hardfault_c(uint32_t *sp)
 {
   __disable_irq();
-
-  uint32_t lr = sp[5];
-  uint32_t pc = sp[6];
-
-  uart_log("\r\nHardFault\r\n");
-
-  uart_log_hex("PC=", pc);
-  uart_log_hex("LR=", lr);
-  uart_log_hex("CFSR=", SCB->CFSR);
-  uart_log_hex("HFSR=", SCB->HFSR);
-  uart_log_hex("MMFAR=", SCB->MMFAR);
-  uart_log_hex("BFAR=", SCB->BFAR);
+  (void)sp;
 
   while (1);
 }void OTG_HS_IRQHandler(void)
