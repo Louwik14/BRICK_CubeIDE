@@ -1839,8 +1839,8 @@ void USBD_MIDI_OnPacketsReceived(uint8_t *data, uint8_t len) {
  * - init / main loop / tasklet selon le module.
  */
 void USBD_MIDI_OnPacketsSent(void) {
-  /* Completion IN USB: relancer immédiatement le flush pour éviter le trou
-     superloop entre deux paquets realtime. */
+  /* Completion IN USB:
+     keep IRQ work minimal and defer TX batching outside high-priority USB IRQ. */
 #if MIDI_CLOCK_TX_PROBE_ENABLE
   if (midi_clock_f8_inflight_pending > 0U) {
     midi_clock_tx_probe.clock_f8_usb_complete_count += midi_clock_f8_inflight_pending;
@@ -1849,7 +1849,7 @@ void USBD_MIDI_OnPacketsSent(void) {
     midi_clock_tx_probe.clock_f8_inflight_count = 0U;
   }
 #endif
-  midi_usb_try_flush_internal(true);
+  midi_usb_request_deferred_flush_from_isr();
 }
 
 void midi_usb_tx_deferred_service_from_isr(void) {
