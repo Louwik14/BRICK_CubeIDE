@@ -1,0 +1,540 @@
+#include "ui_track_catalog.h"
+
+static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
+{
+    static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_SAMPLER };
+    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
+    static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
+    static const ui_track_type_t k_drum_types[] = {
+        UI_TRACK_TYPE_DRUM_TRX_BD,
+        UI_TRACK_TYPE_DRUM_TRX_CLAVES,
+        UI_TRACK_TYPE_DRUM_TRX_HIHAT,
+        UI_TRACK_TYPE_DRUM_TRX_SNARE,
+        UI_TRACK_TYPE_DRUM_FM_KICK,
+        UI_TRACK_TYPE_DRUM_FM_SNARE,
+        UI_TRACK_TYPE_DRUM_FM_TOM,
+        UI_TRACK_TYPE_DRUM_FM_RIMSHOT,
+        UI_TRACK_TYPE_DRUM_FM_CLAP,
+        UI_TRACK_TYPE_DRUM_FM_COWBELL,
+        UI_TRACK_TYPE_DRUM_FM_CYMBAL
+    };
+
+    if (out_count == 0)
+    {
+        return 0;
+    }
+
+    switch (family)
+    {
+        case UI_TRACK_FAMILY_INPUT1:
+        case UI_TRACK_FAMILY_INPUT2:
+        case UI_TRACK_FAMILY_INPUT3:
+        case UI_TRACK_FAMILY_INPUT4:
+            *out_count = (uint8_t)(sizeof(k_input_types) / sizeof(k_input_types[0]));
+            return k_input_types;
+
+        case UI_TRACK_FAMILY_SYNTH:
+            *out_count = (uint8_t)(sizeof(k_synth_types) / sizeof(k_synth_types[0]));
+            return k_synth_types;
+
+        case UI_TRACK_FAMILY_DRUM:
+            *out_count = (uint8_t)(sizeof(k_drum_types) / sizeof(k_drum_types[0]));
+            return k_drum_types;
+
+        case UI_TRACK_FAMILY_MASTER:
+            *out_count = (uint8_t)(sizeof(k_master_types) / sizeof(k_master_types[0]));
+            return k_master_types;
+
+        case UI_TRACK_FAMILY_MIDI:
+            *out_count = (uint8_t)(sizeof(k_midi_types) / sizeof(k_midi_types[0]));
+            return k_midi_types;
+
+        case UI_TRACK_FAMILY_OFF:
+        default:
+            *out_count = 0U;
+            return 0;
+    }
+}
+
+static uint8_t ui_track_catalog_track_uses_type(uint8_t track,
+                                                 ui_track_family_t family,
+                                                 ui_track_type_t type,
+                                                 const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    if ((track >= UI_TRACK_COUNT) || (track_configs == 0))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((track_configs[track].family == family) && (track_configs[track].type == type));
+}
+
+bool ui_track_catalog_family_is_input(ui_track_family_t family)
+{
+    return (family == UI_TRACK_FAMILY_INPUT1)
+            || (family == UI_TRACK_FAMILY_INPUT2)
+            || (family == UI_TRACK_FAMILY_INPUT3)
+            || (family == UI_TRACK_FAMILY_INPUT4);
+}
+
+bool ui_track_catalog_family_is_engine(ui_track_family_t family)
+{
+    return (family == UI_TRACK_FAMILY_SYNTH) || (family == UI_TRACK_FAMILY_DRUM);
+}
+
+bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type)
+{
+    if (((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
+            || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
+    {
+        return false;
+    }
+
+    uint8_t type_count = 0U;
+    const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &type_count);
+    if ((catalog == 0) || (type_count == 0U))
+    {
+        return false;
+    }
+
+    for (uint8_t i = 0U; i < type_count; ++i)
+    {
+        if (catalog[i] == type)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ui_track_catalog_type_is_available(uint8_t track,
+                                        ui_track_family_t family,
+                                        ui_track_type_t type,
+                                        const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    if ((track >= UI_TRACK_COUNT)
+            || (track_configs == 0)
+            || !ui_track_catalog_type_is_valid_for_family(family, type))
+    {
+        return false;
+    }
+
+    if ((family != UI_TRACK_FAMILY_SYNTH) && (family != UI_TRACK_FAMILY_MASTER))
+    {
+        return true;
+    }
+
+    if ((family == UI_TRACK_FAMILY_SYNTH) && (type != UI_TRACK_TYPE_DX7))
+    {
+        return true;
+    }
+
+    if ((family == UI_TRACK_FAMILY_MASTER) && (type != UI_TRACK_TYPE_BUFFER))
+    {
+        return true;
+    }
+
+    for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
+    {
+        if (other_track == track)
+        {
+            continue;
+        }
+
+        if ((family == UI_TRACK_FAMILY_SYNTH)
+                && (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_SYNTH, type, track_configs) != 0U))
+        {
+            return false;
+        }
+
+        if ((family == UI_TRACK_FAMILY_MASTER)
+                && (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_MASTER, type, track_configs) != 0U))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ui_track_catalog_family_is_available(uint8_t track,
+                                          ui_track_family_t family,
+                                          const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    if ((track >= UI_TRACK_COUNT) || (track_configs == 0) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    {
+        return false;
+    }
+
+    if (family == UI_TRACK_FAMILY_OFF)
+    {
+        return true;
+    }
+
+    if (family == UI_TRACK_FAMILY_MASTER)
+    {
+        for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
+        {
+            if (other_track == track)
+            {
+                continue;
+            }
+
+            if (track_configs[other_track].family == UI_TRACK_FAMILY_MASTER)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (!ui_track_catalog_family_is_input(family))
+    {
+        return true;
+    }
+
+    for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
+    {
+        if (other_track == track)
+        {
+            continue;
+        }
+
+        if (track_configs[other_track].family == family)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+uint8_t ui_track_catalog_type_count_for_family(ui_track_family_t family,
+                                               uint8_t track,
+                                               const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    if ((track >= UI_TRACK_COUNT) || (track_configs == 0) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    {
+        return 0U;
+    }
+
+    if (family == UI_TRACK_FAMILY_OFF)
+    {
+        return 0U;
+    }
+
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);
+    if ((catalog == 0) || (catalog_count == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        if (ui_track_catalog_type_is_available(track, family, catalog[i], track_configs))
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+uint8_t ui_track_catalog_type_index_for_family(ui_track_family_t family,
+                                               ui_track_type_t type,
+                                               uint8_t track,
+                                               const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    if (!ui_track_catalog_type_is_available(track, family, type, track_configs))
+    {
+        return 0U;
+    }
+
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);
+    if ((catalog == 0) || (catalog_count == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t index = 0U;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        const ui_track_type_t candidate = catalog[i];
+        if (!ui_track_catalog_type_is_available(track, family, candidate, track_configs))
+        {
+            continue;
+        }
+
+        if (candidate == type)
+        {
+            return index;
+        }
+
+        ++index;
+    }
+
+    return 0U;
+}
+
+ui_track_type_t ui_track_catalog_type_from_family_index(ui_track_family_t family,
+                                                        uint8_t index,
+                                                        uint8_t track,
+                                                        const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    if ((track >= UI_TRACK_COUNT)
+            || (track_configs == 0)
+            || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
+    {
+        return UI_TRACK_TYPE_AUDIO;
+    }
+
+    if (family == UI_TRACK_FAMILY_OFF)
+    {
+        return UI_TRACK_TYPE_AUDIO;
+    }
+
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);
+    if ((catalog == 0) || (catalog_count == 0U))
+    {
+        return ui_track_catalog_default_type_for_family(family);
+    }
+
+    uint8_t current = 0U;
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        const ui_track_type_t candidate = catalog[i];
+        if (!ui_track_catalog_type_is_available(track, family, candidate, track_configs))
+        {
+            continue;
+        }
+
+        if (current == index)
+        {
+            return candidate;
+        }
+
+        ++current;
+    }
+
+    return ui_track_catalog_default_type_for_family(family);
+}
+
+ui_track_type_t ui_track_catalog_first_available_type(ui_track_family_t family,
+                                                      uint8_t track,
+                                                      const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);
+    if ((catalog == 0) || (catalog_count == 0U))
+    {
+        return UI_TRACK_TYPE_AUDIO;
+    }
+
+    for (uint8_t i = 0U; i < catalog_count; ++i)
+    {
+        if (ui_track_catalog_type_is_available(track, family, catalog[i], track_configs))
+        {
+            return catalog[i];
+        }
+    }
+
+    return UI_TRACK_TYPE_AUDIO;
+}
+
+ui_track_type_t ui_track_catalog_default_type_for_family(ui_track_family_t family)
+{
+    uint8_t catalog_count = 0U;
+    const ui_track_type_t *const catalog = ui_track_catalog_get_types_for_family(family, &catalog_count);
+    if ((catalog != 0) && (catalog_count > 0U))
+    {
+        return catalog[0];
+    }
+
+    return UI_TRACK_TYPE_AUDIO;
+}
+
+const char *ui_track_catalog_family_display_name(ui_track_family_t family)
+{
+    switch (family)
+    {
+        case UI_TRACK_FAMILY_OFF:
+            return "Off";
+
+        case UI_TRACK_FAMILY_INPUT1:
+            return "Input1";
+
+        case UI_TRACK_FAMILY_INPUT2:
+            return "Input2";
+
+        case UI_TRACK_FAMILY_INPUT3:
+            return "Input3";
+
+        case UI_TRACK_FAMILY_INPUT4:
+            return "Input4";
+
+        case UI_TRACK_FAMILY_SYNTH:
+            return "Synth";
+        case UI_TRACK_FAMILY_DRUM:
+            return "Drum";
+        case UI_TRACK_FAMILY_MASTER:
+            return "Master";
+        case UI_TRACK_FAMILY_MIDI:
+            return "MIDI";
+
+        default:
+            return "Track";
+    }
+}
+
+const char *ui_track_catalog_family_short_name(ui_track_family_t family)
+{
+    switch (family)
+    {
+        case UI_TRACK_FAMILY_OFF:
+            return "Off";
+
+        case UI_TRACK_FAMILY_INPUT1:
+            return "In1";
+
+        case UI_TRACK_FAMILY_INPUT2:
+            return "In2";
+
+        case UI_TRACK_FAMILY_INPUT3:
+            return "In3";
+
+        case UI_TRACK_FAMILY_INPUT4:
+            return "In4";
+
+        case UI_TRACK_FAMILY_SYNTH:
+            return "Syn";
+        case UI_TRACK_FAMILY_DRUM:
+            return "Drm";
+        case UI_TRACK_FAMILY_MASTER:
+            return "Mst";
+        case UI_TRACK_FAMILY_MIDI:
+            return "MID";
+
+        default:
+            return "---";
+    }
+}
+
+const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_track_type_t type)
+{
+    if (!ui_track_catalog_type_is_valid_for_family(family, type))
+    {
+        return "-";
+    }
+
+    switch (type)
+    {
+        case UI_TRACK_TYPE_AUDIO:
+            return "Audio";
+
+        case UI_TRACK_TYPE_HYBRID:
+            return "Hybrid";
+
+        case UI_TRACK_TYPE_DX7:
+            return "DX7";
+
+        case UI_TRACK_TYPE_MONOB:
+            return "MonoB";
+
+        case UI_TRACK_TYPE_SAMPLER:
+            return "Sampler";
+
+        case UI_TRACK_TYPE_BUFFER:
+            return "Buffer";
+
+        case UI_TRACK_TYPE_DRUM_TRX_BD:
+            return "TRX BD";
+        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+            return "TRX Claves";
+        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+            return "TRX HiHat";
+        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+            return "TRX Snare";
+        case UI_TRACK_TYPE_DRUM_FM_KICK:
+            return "FM Kick";
+        case UI_TRACK_TYPE_DRUM_FM_SNARE:
+            return "FM Snare";
+        case UI_TRACK_TYPE_DRUM_FM_TOM:
+            return "FM Tom";
+        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+            return "FM Rim";
+        case UI_TRACK_TYPE_DRUM_FM_CLAP:
+            return "FM Clap";
+        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+            return "FM Cow";
+        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+            return "FM Cym";
+        case UI_TRACK_TYPE_MIDI:
+            return "MIDI";
+
+        default:
+            return "-";
+    }
+}
+
+const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_type_t type)
+{
+    if (!ui_track_catalog_type_is_valid_for_family(family, type))
+    {
+        return "---";
+    }
+
+    switch (type)
+    {
+        case UI_TRACK_TYPE_AUDIO:
+            return "Aud";
+
+        case UI_TRACK_TYPE_HYBRID:
+            return "Hyb";
+
+        case UI_TRACK_TYPE_DX7:
+            return "DX7";
+
+        case UI_TRACK_TYPE_MONOB:
+            return "MB";
+
+        case UI_TRACK_TYPE_SAMPLER:
+            return "Smp";
+
+        case UI_TRACK_TYPE_BUFFER:
+            return "Buf";
+
+        case UI_TRACK_TYPE_DRUM_TRX_BD:
+            return "TBD";
+        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
+            return "TCL";
+        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
+            return "THH";
+        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
+            return "TSN";
+        case UI_TRACK_TYPE_DRUM_FM_KICK:
+            return "FMK";
+        case UI_TRACK_TYPE_DRUM_FM_SNARE:
+            return "FMS";
+        case UI_TRACK_TYPE_DRUM_FM_TOM:
+            return "FMT";
+        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
+            return "FMR";
+        case UI_TRACK_TYPE_DRUM_FM_CLAP:
+            return "FMC";
+        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
+            return "FMW";
+        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
+            return "FMY";
+        case UI_TRACK_TYPE_MIDI:
+            return "MID";
+
+        default:
+            return "---";
+    }
+}

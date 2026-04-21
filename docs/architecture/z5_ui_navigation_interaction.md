@@ -5,6 +5,8 @@
 Perimetre operationnel de zone (appartient a Z5):
 - `Src/UI/ui_core.c`
 - `Inc/UI/ui_core.h`
+- `Src/UI/ui_track_catalog.c`
+- `Inc/UI/ui_track_catalog.h`
 - `Src/UI/ui_navigation.c`
 - `Inc/UI/ui_navigation.h`
 - `Src/UI/ui_template_page.c`
@@ -33,6 +35,10 @@ Sous-roles concentres dans `ui_core.c`:
 - Etat UI global courant (track, hall mode, feedback, states pattern/mute).
 - Orchestration centrale des interactions (track select, transport, shortcuts, pattern mode).
 - Orchestration explicite des contrats de sync (selection legere, sync edit-context, reconfig runtime).
+
+Policy catalogue track/type/labels:
+- `ui_track_catalog` porte les regles de validite/disponibilite family/type et les labels associes.
+- `ui_core` conserve l'etat live (`g_ui_track_state`) et delegue cette policy via wrappers publics.
 
 ## 2. Autorite(s) de verite
 
