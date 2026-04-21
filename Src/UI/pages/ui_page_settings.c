@@ -197,6 +197,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
             return wav_loader_catalog_count();
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
+            return (uint8_t)(g_ui_settings.project_slot_count + 1U);
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
             return g_ui_settings.project_slot_count;
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
@@ -226,6 +227,16 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             }
             return "MANAGE";
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
+            if (index == 0U)
+            {
+                return "BLANK PROJECT";
+            }
+            if ((index - 1U) >= g_ui_settings.project_slot_count)
+            {
+                return "-";
+            }
+            (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)g_ui_settings.project_slots[index - 1U]);
+            return out;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
             if (index >= g_ui_settings.project_slot_count)
             {
@@ -416,11 +427,6 @@ static void ui_page_settings_apply_action(void)
             if (level->selected_index == 0U)
             {
                 ui_page_settings_refresh_project_slots();
-                if (g_ui_settings.project_slot_count == 0U)
-                {
-                    ui_page_settings_status("NO PROJECT");
-                    break;
-                }
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_LOAD);
             }
             else if (level->selected_index == 1U)
@@ -440,9 +446,21 @@ static void ui_page_settings_apply_action(void)
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
-            if ((level->selected_index < g_ui_settings.project_slot_count)
-                && (project_v1_load_slot(g_ui_settings.project_slots[level->selected_index]) != 0U))
-            {                ui_page_settings_status("LOAD OK");
+            if (level->selected_index == 0U)
+            {
+                if (project_v1_load_blank() != 0U)
+                {
+                    ui_page_settings_status("BLANK OK");
+                }
+                else
+                {
+                    ui_page_settings_status("BLANK FAIL");
+                }
+            }
+            else if (((level->selected_index - 1U) < g_ui_settings.project_slot_count)
+                     && (project_v1_load_slot(g_ui_settings.project_slots[level->selected_index - 1U]) != 0U))
+            {
+                ui_page_settings_status("LOAD OK");
             }
             else
             {

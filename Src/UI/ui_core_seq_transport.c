@@ -51,10 +51,7 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if (mute_active != 0U)
-    {
-        return 0U;
-    }
+    (void)mute_active;
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
     {

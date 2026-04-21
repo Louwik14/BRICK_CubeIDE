@@ -180,3 +180,8 @@ Familles d'autorite:
 - Le chemin RT fast applique `PARAM_FILTER_*` sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
 - Le shadow-state `PARAM_FILTER_*` porte la base par track logique, jamais par lane mixer physique.
 - Lors d'un changement `CFG_TRACK`/`CFG_TRACK_TYPE`, Z3 migre d'abord le runtime per-lane (MIX/FILTER/VCA) selon le rebind des mix lanes, puis reapplique explicitement tous les params lane-bound track-aware (`FILTER_*`, `level/pan/sends/hybrid_gate/vca`) pour recoller le runtime a l'autorite logique.
+
+## 14. Contrat corridor structurel Off -> On
+- Le corridor structurel est maintenant unique et centralise: capture des mix-targets precedents, mutation family/type, invalidation/sync systeme, rebind mixer, neutralisation runtime invalide, puis re-apply lane-bound avant toute sync UI active-track.
+- Le re-apply lane-bound ne depend plus d'un cache partiel silencieux: l'autorite est explicite (`filter_ui_state` pour FILTER, cache track-aware sinon valeur par defaut promue dans le cache).
+- Pendant ce corridor, les consommateurs de modulation control-rate (`mod_lfo_v1`) sont suspendus pour eviter une capture/restauration sur topologie intermediaire.

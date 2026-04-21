@@ -17,8 +17,6 @@
 #include <string.h>
 
 #include "Audio/live_recorder.h"
-#include "Audio/microdexed_synth.h"
-#include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Audio/sd_multitrack_recorder.h"
 #include "Core/brick6_master_buffer.h"
@@ -33,24 +31,18 @@
 #define HALFPI_F 1.57079632679489661923f
 
 static uint8_t g_runtime_track_enabled = 1U;
-static uint8_t g_runtime_last_monob_processed = 0xFFU;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
-static uint8_t g_runtime_last_dx7_tracks = 0xFFU;
 static uint8_t g_runtime_last_ui_active_track = 0xFFU;
 static float g_buffer_xfade_smoothed = 0.0f;
 static float g_buffer_xfade_prev = 0.0f;
 typedef struct
 {
-    uint8_t monob_tracks;
     uint8_t drum_tracks;
-    uint8_t dx7_tracks;
 } brick6_synth_usage_t;
 
 static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
 {
-    uint8_t monob_count = 0U;
     uint8_t drum_count = 0U;
-    uint8_t dx7_tracks = 0U;
 
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
@@ -61,25 +53,15 @@ static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
             continue;
         }
 
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-        {
-            monob_count++;
-        }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
             drum_count++;
-        }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-        {
-            dx7_tracks++;
         }
     }
 
     if (out_usage != NULL)
     {
-        out_usage->monob_tracks = monob_count;
         out_usage->drum_tracks = drum_count;
-        out_usage->dx7_tracks = dx7_tracks;
     }
 }
 
@@ -115,30 +97,10 @@ static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_typ
 }
 
 static void brick6_render_synth_tracks(uint32_t frames,
-                                       uint8_t *out_monob_tracks,
-                                       uint8_t *out_drum_tracks,
-                                       uint8_t *out_dx7_tracks)
+                                       uint8_t *out_drum_tracks)
 {
-    static float monob_tmp[AUDIO_BLOCK_SIZE];
     static float drum_tmp[AUDIO_BLOCK_SIZE];
-    static float dx7_tmp[AUDIO_BLOCK_SIZE];
-    uint8_t monob_tracks = 0U;
     uint8_t drum_tracks = 0U;
-    uint8_t dx7_tracks = 0U;
-    uint8_t dx7_rendered_once = 0U;
-    uint8_t dx7_mix_track = 0xFFU;
-
-    {
-        const uint8_t active_track = ui_get_active_track();
-        const track_runtime_ctx_t *const active_ctx = track_runtime_get_ctx(active_track);
-        if ((active_ctx != NULL)
-                && (active_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (active_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-                && (track_runtime_is_audio_routable(active_track) != 0U))
-        {
-            dx7_mix_track = active_ctx->mix_track_id;
-        }
-    }
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -148,35 +110,6 @@ static void brick6_render_synth_tracks(uint32_t frames,
                 || (track_runtime_is_audio_routable(track) == 0U))
         {
             continue;
-        }
-
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-        {
-            monob_synth_process_block_for_instance(ctx->instance_id, monob_tmp, frames);
-            mixer_submit_external_mono(ctx->mix_track_id, monob_tmp, frames);
-            monob_tracks++;
-            continue;
-        }
-
-
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-        {
-            if ((dx7_mix_track == 0xFFU) && (track_runtime_is_audio_routable(track) != 0U))
-            {
-                dx7_mix_track = ctx->mix_track_id;
-            }
-
-            if (dx7_rendered_once == 0U)
-            {
-                microdexed_synth_process_block(dx7_tmp, frames);
-                dx7_rendered_once = 1U;
-            }
-
-            if (ctx->mix_track_id == dx7_mix_track)
-            {
-                mixer_submit_external_mono(ctx->mix_track_id, dx7_tmp, frames);
-            }
-            dx7_tracks++;
         }
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
@@ -199,16 +132,6 @@ static void brick6_render_synth_tracks(uint32_t frames,
         }
     }
 
-    if (out_monob_tracks != NULL)
-    {
-        *out_monob_tracks = monob_tracks;
-    }
-
-
-    if (out_dx7_tracks != NULL)
-    {
-        *out_dx7_tracks = dx7_tracks;
-    }
     if (out_drum_tracks != NULL)
     {
         *out_drum_tracks = drum_tracks;
@@ -272,17 +195,13 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
-    brick6_synth_usage_t synth_usage = { 0U, 0U, 0U };
-brick6_collect_runtime_synth_usage(&synth_usage);
-    const uint8_t synth_runtime_enabled = ((synth_usage.monob_tracks > 0U)
-            || (synth_usage.drum_tracks > 0U)
-            || (synth_usage.dx7_tracks > 0U)) ? 1U : 0U;
+    brick6_synth_usage_t synth_usage = { 0U };
+    brick6_collect_runtime_synth_usage(&synth_usage);
+    const uint8_t synth_runtime_enabled = (synth_usage.drum_tracks > 0U) ? 1U : 0U;
 
     if (((synth_runtime_enabled == 0U) && (g_runtime_track_enabled != 0U))
             || ((synth_runtime_enabled != 0U) && (g_runtime_track_enabled == 0U)))
     {
-        microdexed_synth_all_notes_off();
-        monob_synth_all_notes_off_all();
         drum_synth_all_notes_off_all();
     }
     g_runtime_track_enabled = synth_runtime_enabled;
@@ -290,19 +209,13 @@ brick6_collect_runtime_synth_usage(&synth_usage);
     mixer_external_inputs_clear();
     if (synth_runtime_enabled != 0U)
     {
-        uint8_t monob_processed = 0U;
         uint8_t drum_processed = 0U;
-        uint8_t dx7_tracks = 0U;
-        brick6_render_synth_tracks(frames, &monob_processed, &drum_processed, &dx7_tracks);
+        brick6_render_synth_tracks(frames, &drum_processed);
 
-        if ((monob_processed != g_runtime_last_monob_processed)
-                || (drum_processed != g_runtime_last_drum_processed)
-                || (dx7_tracks != g_runtime_last_dx7_tracks)
+        if ((drum_processed != g_runtime_last_drum_processed)
                 || (ui_get_active_track() != g_runtime_last_ui_active_track))
         {
-            g_runtime_last_monob_processed = monob_processed;
             g_runtime_last_drum_processed = drum_processed;
-            g_runtime_last_dx7_tracks = dx7_tracks;
             g_runtime_last_ui_active_track = ui_get_active_track();
         }
     }

@@ -174,6 +174,9 @@ Z0 appelle principalement:
   - seq runtime,
   - pattern/project/boot-context/undo,
   - control events + hall loop,
+  - politique UI boot explicite:
+    - calibration hall invalide/absente -> page `CALIBRATION`,
+    - calibration hall valide -> page `CFG` (`UI_PAGE_TEMPLATE_CFG`),
   - start audio,
   - delay 200 ms,
   - reset peak CPU,

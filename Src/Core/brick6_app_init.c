@@ -19,7 +19,6 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "cpu_load.h"
-#include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "ui_core.h"
@@ -108,8 +107,6 @@ void brick6_app_init(void)
                               g_live_recorder_buffer,
                               LIVE_RECORDER_MAX_FRAMES);
 
-    microdexed_synth_init(48000.0f, AUDIO_BLOCK_SIZE);
-    microdexed_synth_set_enabled(1U);
     monob_synth_init(48000.0f);
     drum_synth_init(48000.0f);
     hall_keyboard_bridge_init();
@@ -138,7 +135,7 @@ void brick6_app_init(void)
     hall_loop_init();
     if (hall_calibration_load() != 0U)
     {
-        ui_page_set(UI_PAGE_TEMPLATE_COLORS);
+        ui_page_set(UI_PAGE_TEMPLATE_CFG);
     }
     else
     {

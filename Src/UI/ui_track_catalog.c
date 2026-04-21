@@ -3,7 +3,7 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_DX7, UI_TRACK_TYPE_MONOB, UI_TRACK_TYPE_SAMPLER };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_SAMPLER };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
@@ -126,11 +126,6 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         return true;
     }
 
-    if ((family == UI_TRACK_FAMILY_SYNTH) && (type != UI_TRACK_TYPE_DX7))
-    {
-        return true;
-    }
-
     if ((family == UI_TRACK_FAMILY_MASTER) && (type != UI_TRACK_TYPE_BUFFER))
     {
         return true;
@@ -141,12 +136,6 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         if (other_track == track)
         {
             continue;
-        }
-
-        if ((family == UI_TRACK_FAMILY_SYNTH)
-                && (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_SYNTH, type, track_configs) != 0U))
-        {
-            return false;
         }
 
         if ((family == UI_TRACK_FAMILY_MASTER)
@@ -440,12 +429,6 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
         case UI_TRACK_TYPE_HYBRID:
             return "Hybrid";
 
-        case UI_TRACK_TYPE_DX7:
-            return "DX7";
-
-        case UI_TRACK_TYPE_MONOB:
-            return "MonoB";
-
         case UI_TRACK_TYPE_SAMPLER:
             return "Sampler";
 
@@ -496,12 +479,6 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
 
         case UI_TRACK_TYPE_HYBRID:
             return "Hyb";
-
-        case UI_TRACK_TYPE_DX7:
-            return "DX7";
-
-        case UI_TRACK_TYPE_MONOB:
-            return "MB";
 
         case UI_TRACK_TYPE_SAMPLER:
             return "Smp";

@@ -177,6 +177,7 @@ Points de lecture principaux:
   - valide budget plocks,
   - stop transport + panic,
   - restore track config UI,
+  - migration compat track-config: `Synth/MonoB` et `Synth/DX7` sont remappes explicitement vers `Synth/Sampler`,
   - `track_runtime_refresh_all()`,
   - apply seq block (plus tot),
   - batch apply params + globals,
@@ -283,6 +284,16 @@ Aucune double autorite complete concurrente de save/load projet n'est observee.
 ## 12. Conclusion stricte
 
 `cause trouvee`
+
+## 15. Contrat "Blank Project"
+- Autorite unique: `project_v1_load_blank()`.
+- Comportement:
+  - reset pool Sampler (`sample_pool_init()`),
+  - apply snapshot boot vierge via `pattern_live_apply_boot_snapshot(0)`,
+  - clear historique undo,
+  - projet actif logique sans slot (`active_project_slot_valid=0`),
+  - clear boot context flash (aucun slot force au prochain boot).
+- Aucun slot projet SD n'est ecrit/modifie par cette operation.
 
 ## 13. Chantier Z6 cible - `pattern_live_apply_snapshot()`
 

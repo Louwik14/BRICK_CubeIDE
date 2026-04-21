@@ -22,7 +22,6 @@
 #include "param_registry.h"
 
 #include "audio_float.h"
-#include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_master_buffer.h"
@@ -47,6 +46,8 @@
 
 static uint8_t seq_div_ui_to_runtime(float v);
 static float seq_div_runtime_to_ui(uint8_t runtime_div);
+static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track);
+static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track);
 
 /**
  * @brief Point d'entrée clamp_value.
@@ -471,6 +472,7 @@ typedef struct
 static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_STATE_COUNT];
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 static uint8_t g_param_registry_batch_depth = 0U;
+static volatile uint8_t g_param_registry_track_structure_transition_depth = 0U;
 SEQ_STATE_D2 static float g_param_runtime_track_values[SEQ_TRACK_COUNT][PARAM_COUNT];
 SEQ_STATE_D2 static uint8_t g_param_runtime_track_valid[SEQ_TRACK_COUNT][PARAM_COUNT];
 
@@ -488,6 +490,27 @@ void param_registry_batch_end(void)
     {
         g_param_registry_batch_depth--;
     }
+}
+
+void param_registry_track_structure_transition_begin(void)
+{
+    if (g_param_registry_track_structure_transition_depth < 255U)
+    {
+        g_param_registry_track_structure_transition_depth++;
+    }
+}
+
+void param_registry_track_structure_transition_end(void)
+{
+    if (g_param_registry_track_structure_transition_depth > 0U)
+    {
+        g_param_registry_track_structure_transition_depth--;
+    }
+}
+
+uint8_t param_registry_track_structure_transition_is_active(void)
+{
+    return (g_param_registry_track_structure_transition_depth != 0U) ? 1U : 0U;
 }
 
 static uint8_t param_runtime_cache_get(uint8_t track, param_id_t id, float *out_value)
@@ -588,34 +611,6 @@ static uint8_t param_is_filter_ui_param(param_id_t id)
             return 1U;
         default:
             return 0U;
-    }
-}
-
-static uint8_t param_runtime_apply_tone_dx7(uint8_t instance_id, param_id_t id, float value)
-{
-    if (instance_id != 0U)
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_DX7_ALGORITHM: microdexed_synth_set_param(MICRODEXED_PARAM_ALGORITHM, value); return 1U;
-        case PARAM_DX7_FEEDBACK: microdexed_synth_set_param(MICRODEXED_PARAM_FEEDBACK, value); return 1U;
-        case PARAM_DX7_TRANSPOSE: microdexed_synth_set_param(MICRODEXED_PARAM_TRANSPOSE, value); return 1U;
-        case PARAM_DX7_LFO_SPEED: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_SPEED, value); return 1U;
-        case PARAM_DX7_LFO_DELAY: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_DELAY, value); return 1U;
-        case PARAM_DX7_LFO_PITCH_MOD_DEPTH: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_PITCH_MOD_DEPTH, value); return 1U;
-        case PARAM_DX7_LFO_AMP_MOD_DEPTH: microdexed_synth_set_param(MICRODEXED_PARAM_LFO_AMP_MOD_DEPTH, value); return 1U;
-        case PARAM_DX7_PITCH_BEND_RANGE: microdexed_synth_set_param(MICRODEXED_PARAM_PITCH_BEND_RANGE, value); return 1U;
-        case PARAM_DX7_PORTAMENTO_TIME: microdexed_synth_set_param(MICRODEXED_PARAM_PORTAMENTO_TIME, value); return 1U;
-        case PARAM_DX7_MONO_MODE: microdexed_synth_set_param(MICRODEXED_PARAM_MONO_MODE, value); return 1U;
-        case PARAM_DX7_OPERATOR_MASK: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_MASK, value); return 1U;
-        case PARAM_DX7_OPERATOR_1_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_1_LEVEL, value); return 1U;
-        case PARAM_DX7_OPERATOR_2_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_2_LEVEL, value); return 1U;
-        case PARAM_DX7_OPERATOR_3_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_3_LEVEL, value); return 1U;
-        case PARAM_DX7_OPERATOR_4_LEVEL: microdexed_synth_set_param(MICRODEXED_PARAM_OPERATOR_4_LEVEL, value); return 1U;
-        default: return 0U;
     }
 }
 
@@ -835,10 +830,6 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     else if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
     {
         applied = param_runtime_apply_buffer_track(track, id, value);
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-    {
-        applied = param_runtime_apply_tone_dx7(ctx->instance_id, id, value);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
     {
@@ -1123,6 +1114,7 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
                 }
 
                 *out_value = param_registry[id].default_value;
+                param_runtime_cache_set(track, id, *out_value);
                 return 1U;
             }
 
@@ -1298,7 +1290,7 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     return 0U;
 }
 
-static void param_registry_capture_mix_targets(uint8_t *out_mix_tracks)
+void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
 {
     if (out_mix_tracks == NULL)
     {
@@ -1325,6 +1317,31 @@ static void param_registry_capture_mix_targets(uint8_t *out_mix_tracks)
 static void param_registry_mark_runtime_global_dirty(void)
 {
     track_runtime_invalidate_all();
+}
+
+static uint8_t param_registry_get_authoritative_track_value(param_id_t id,
+                                                            uint8_t track,
+                                                            float *out_value)
+{
+    if ((id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    if (param_is_filter_ui_param(id) != 0U)
+    {
+        return param_registry_get_track_value(id, track, out_value);
+    }
+
+    if (param_runtime_cache_get(track, id, out_value) != 0U)
+    {
+        return 1U;
+    }
+
+    *out_value = param_registry[id].default_value;
+    param_runtime_cache_set(track, id, *out_value);
+    mod_lfo_v1_resync_base_on_authoritative_write(track, id, *out_value);
+    return 1U;
 }
 
 static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const uint8_t *previous_mix_tracks)
@@ -1382,7 +1399,7 @@ static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const u
         for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
         {
             float value = 0.0f;
-            if (param_registry_get_track_value(k_lane_bound_params[i], track, &value) == 0U)
+            if (param_registry_get_authoritative_track_value(k_lane_bound_params[i], track, &value) == 0U)
             {
                 continue;
             }
@@ -1401,8 +1418,27 @@ static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_track
         return;
     }
 
-    param_registry_capture_mix_targets(next_mix_tracks);
+    param_registry_capture_runtime_mix_targets(next_mix_tracks);
     mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
+    param_registry_mark_runtime_global_dirty();
+}
+
+void param_registry_finalize_track_structure_change(const uint8_t *previous_mix_tracks)
+{
+    if (previous_mix_tracks == NULL)
+    {
+        return;
+    }
+
+    param_registry_rebind_lane_runtime(previous_mix_tracks);
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        param_registry_neutralize_filter_runtime_if_invalid(track);
+        param_registry_neutralize_vca_runtime_if_invalid(track);
+    }
+
+    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
     param_registry_mark_runtime_global_dirty();
 }
 
@@ -1693,6 +1729,11 @@ void param_registry_sync_filter_ui_for_active_track(void)
 
 void param_registry_sync_ui_for_active_track(void)
 {
+    if (param_registry_track_structure_transition_is_active() != 0U)
+    {
+        return;
+    }
+
     const uint8_t active_track = ui_get_active_track();
     const float seq_length = (float)seq_model_get_track_length(active_track);
     uint8_t track_div = 1U;
@@ -2177,12 +2218,9 @@ static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
 static void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
     const ui_track_family_t previous_family = ui_get_track_family(active_track);
     const ui_track_type_t previous_type = ui_get_track_type(active_track);
     const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
-
-    param_registry_capture_mix_targets(previous_mix_tracks);
 
     if (ui_set_track_family(active_track, requested_family) == false)
     {
@@ -2198,25 +2236,17 @@ static void apply_cfg_track(float v)
     {
         return;
     }
-
-    param_registry_rebind_lane_runtime(previous_mix_tracks);
-    param_registry_neutralize_filter_runtime_if_invalid(active_track);
-    param_registry_neutralize_vca_runtime_if_invalid(active_track);
-    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
-    param_registry_mark_runtime_global_dirty();
 }
 
 static void apply_cfg_track_type(float v)
 {
     g_param_cfg_track_type_apply_stage = 1U;
     const uint8_t active_track = ui_get_active_track();
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
     const ui_track_family_t active_family = ui_get_track_family(active_track);
     const ui_track_type_t previous_type = ui_get_track_type(active_track);
     const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
     const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
 
-    param_registry_capture_mix_targets(previous_mix_tracks);
     g_param_cfg_track_type_apply_stage = 2U;
 
     if (ui_set_track_type(active_track, requested_type) == false)
@@ -2232,12 +2262,6 @@ static void apply_cfg_track_type(float v)
         g_param_cfg_track_type_apply_stage = 4U;
         return;
     }
-
-    param_registry_rebind_lane_runtime(previous_mix_tracks);
-    param_registry_neutralize_filter_runtime_if_invalid(active_track);
-    param_registry_neutralize_vca_runtime_if_invalid(active_track);
-    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
-    param_registry_mark_runtime_global_dirty();
     g_param_cfg_track_type_apply_stage = 4U;
 }
 
@@ -3019,4 +3043,3 @@ void param_reset(param_id_t id)
 
     param_set(id, param_registry[id].default_value);
 }
-

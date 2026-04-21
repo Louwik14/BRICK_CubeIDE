@@ -21,7 +21,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
 Dependances de Z1 sans appartenir a Z1:
-- Engines synth/sampler (`microdexed`, `monob`, `drum`, `voice_manager`).
+- Engines synth/sampler (`drum`, `voice_manager`).
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
@@ -132,7 +132,7 @@ Contrats timing sortants:
 - `g_runtime_track_enabled`, `g_runtime_last_*`, `g_buffer_xfade_smoothed`
   - Ecriture/Lecture: `brick6_audio_runtime_dsp` et helper xfade.
   - Role: gating des engines et smoothing blend buffer.
-- temporaires bloc `monob_tmp`, `drum_tmp`, `dx7_tmp`, `recL`, `recR`
+- temporaires bloc `drum_tmp`, `recL`, `recR`
   - Role: scratch per-block pour rendu engines et read playback.
 
 ### `Src/Audio/mixer.c`
@@ -184,7 +184,7 @@ Flux nominal prouve par code:
 - Avant chaque sous-segment, `seq_runtime_audio_apply_event` applique les events a l'offset.
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
-  - rendu engines externes (DX7/MonoB/Drum) -> `mixer_submit_external_mono`
+  - rendu engines externes (Drum) -> `mixer_submit_external_mono`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
   - tap `SD_RECORDER_TAP_TRACK_RAW`

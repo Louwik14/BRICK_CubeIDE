@@ -134,11 +134,6 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
             return 0U;
         }
 
-        if (type == UI_TRACK_TYPE_DX7)
-        {
-            return ((dest >= PARAM_DX7_ALGORITHM) && (dest <= PARAM_DX7_OPERATOR_4_LEVEL)) ? 1U : 0U;
-        }
-
         if (type == UI_TRACK_TYPE_MONOB)
         {
             return ((dest >= PARAM_MONOB_OSC1_WAVE) && (dest <= PARAM_MONOB_SUB_MIX)) ? 1U : 0U;
@@ -485,6 +480,11 @@ static void mod_lfo_release_last_destination(uint8_t track,
 
 static void mod_lfo_process_control_tick(void)
 {
+    if (param_registry_track_structure_transition_is_active() != 0U)
+    {
+        return;
+    }
+
     const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {

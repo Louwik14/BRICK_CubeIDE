@@ -208,6 +208,32 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     project_boot_ctx_commit_current_state_if_valid();    return 1U;
 }
 
+uint8_t project_v1_load_blank(void)
+{
+    if (__get_IPSR() != 0U)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_ISR_CONTEXT);
+        return 0U;
+    }
+
+    sample_pool_init();
+    if (pattern_live_apply_boot_snapshot(0U) == 0U)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);
+        return 0U;
+    }
+
+    undo_v1_clear_history();
+
+    g_project_save_counter = 0U;
+    g_project_active_slot_valid = 0U;
+    g_project_active_slot = 0U;
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+    boot_context_flash_clear();
+    return 1U;
+}
+
 uint8_t project_v1_delete_slot(uint8_t project_slot)
 {
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
@@ -345,4 +371,3 @@ uint8_t project_v1_restore_boot_context(void)
 
     return 1U;
 }
-

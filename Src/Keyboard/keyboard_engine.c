@@ -14,7 +14,6 @@
 
 #include "Keyboard/keyboard_engine.h"
 
-#include "Audio/microdexed_synth.h"
 #include "Audio/mixer.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
@@ -195,17 +194,6 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                 drum_synth_note_off_for_instance(ctx->instance_id, note);
             }
         }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-        {
-            if (is_note_on != 0U)
-            {
-                microdexed_synth_note_on(note, velocity);
-            }
-            else
-            {
-                microdexed_synth_note_off(note);
-            }
-        }
         else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
         {
             if (is_note_on != 0U)
@@ -328,10 +316,6 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
         g_keyboard_engine_sounding_drum_instance = ctx->instance_id;
         drum_synth_note_on_for_instance(g_keyboard_engine_sounding_drum_instance, note, velocity);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-    {
-        microdexed_synth_note_on(note, velocity);
-    }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         brick6_sampler_runtime_trigger_note(active_track, note);
@@ -411,10 +395,7 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
             brick6_sampler_runtime_stop(active_track);
         }
     }
-    else
-    {
-        microdexed_synth_note_off(note);
-    }
+    
 }
 
 void keyboard_engine_note_on_from_source(seq_live_rec_source_t source,
@@ -446,7 +427,6 @@ void keyboard_engine_note_off(uint8_t note)
 
 void keyboard_engine_all_notes_off(void)
 {
-    microdexed_synth_all_notes_off();
     monob_synth_all_notes_off_all();
     drum_synth_all_notes_off_all();
 
@@ -519,8 +499,6 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL, channel, note);
     }
 
-    uint8_t dx7_hit = 0U;
-    uint8_t dx7_panic_hit = 0U;
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
@@ -595,17 +573,6 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
                 monob_synth_all_notes_off_for_instance(ctx->instance_id);
             }
         }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-        {
-            if ((is_note_on != 0U) || (is_note_off != 0U))
-            {
-                dx7_hit = 1U;
-            }
-            else if (is_all_notes_off != 0U)
-            {
-                dx7_panic_hit = 1U;
-            }
-        }
         else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
             if (is_note_on != 0U)
@@ -641,20 +608,4 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         }
     }
 
-    if (dx7_hit != 0U)
-    {
-        if (is_note_on != 0U)
-        {
-            microdexed_synth_note_on(note, velocity);
-        }
-        else if (is_note_off != 0U)
-        {
-            microdexed_synth_note_off(note);
-        }
-    }
-
-    if (dx7_panic_hit != 0U)
-    {
-        microdexed_synth_all_notes_off();
-    }
 }

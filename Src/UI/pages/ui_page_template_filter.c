@@ -206,47 +206,35 @@ static void ui_page_template_colors_sync_family(void)
     }
     if (!ui_resolve_filter_target_track(&filter_target_track))
     {
-        const uint8_t allow_dx7_colors_without_filter_target = ((active_family == UI_TRACK_FAMILY_SYNTH)
-                                                              && (active_type == UI_TRACK_TYPE_DX7)) ? 1U : 0U;
-        if (allow_dx7_colors_without_filter_target != 0U)
-        {
-            /*
-             * DX7 keeps COLORS pages even when mixer filter target resolution is
-             * temporarily unavailable in runtime binding (track-aware fallback).
-             */
-        }
-        else
-        {
-            family->nav_labels[0] = "-";
-            family->nav_labels[1] = "-";
-            family->nav_labels[2] = "-";
-            family->nav_labels[3] = "-";
+        family->nav_labels[0] = "-";
+        family->nav_labels[1] = "-";
+        family->nav_labels[2] = "-";
+        family->nav_labels[3] = "-";
 
-            family->subpages[0].title = "N/A";
-            family->subpages[0].param_bank.params[0] = PARAM_COUNT;
-            family->subpages[0].param_bank.params[1] = PARAM_COUNT;
-            family->subpages[0].param_bank.params[2] = PARAM_COUNT;
-            family->subpages[0].param_bank.params[3] = PARAM_COUNT;
+        family->subpages[0].title = "N/A";
+        family->subpages[0].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[0].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[0].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[0].param_bank.params[3] = PARAM_COUNT;
 
-            family->subpages[1].title = "-";
-            family->subpages[1].param_bank.params[0] = PARAM_COUNT;
-            family->subpages[1].param_bank.params[1] = PARAM_COUNT;
-            family->subpages[1].param_bank.params[2] = PARAM_COUNT;
-            family->subpages[1].param_bank.params[3] = PARAM_COUNT;
+        family->subpages[1].title = "-";
+        family->subpages[1].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[1].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[1].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[1].param_bank.params[3] = PARAM_COUNT;
 
-            family->subpages[2].title = "-";
-            family->subpages[2].param_bank.params[0] = PARAM_COUNT;
-            family->subpages[2].param_bank.params[1] = PARAM_COUNT;
-            family->subpages[2].param_bank.params[2] = PARAM_COUNT;
-            family->subpages[2].param_bank.params[3] = PARAM_COUNT;
+        family->subpages[2].title = "-";
+        family->subpages[2].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
 
-            family->subpages[3].title = "-";
-            family->subpages[3].param_bank.params[0] = PARAM_COUNT;
-            family->subpages[3].param_bank.params[1] = PARAM_COUNT;
-            family->subpages[3].param_bank.params[2] = PARAM_COUNT;
-            family->subpages[3].param_bank.params[3] = PARAM_COUNT;
-            return;
-        }
+        family->subpages[3].title = "-";
+        family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+        family->subpages[3].param_bank.params[3] = PARAM_COUNT;
+        return;
     }
 
     const mixer_track_filter_type_t filter_type = (mixer_track_filter_type_t)((uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f));

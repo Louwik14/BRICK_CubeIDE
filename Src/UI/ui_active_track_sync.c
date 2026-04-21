@@ -69,7 +69,7 @@ void ui_active_track_sync_after_track_structure_change(uint8_t sync_active_track
     }
 
     ui_active_track_sync_full_after_reconfigure();
-    ui_edit_context_sync_active_track(0U);
+    ui_edit_context_sync_active_track(sync_active_track_ui_context);
 }
 
 void ui_active_track_sync_full_after_global_restore(void)

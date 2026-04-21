@@ -156,6 +156,7 @@ Flux nominal prouve:
 - Mutations de `g_ui_track_state` (hall_mode, track_select_armed, active_track, pattern/mute/feedback).
 - Noyau de sync systeme track/config factorise dans `ui_system_sync_internal` (profils `ui_system_sync_make_request_*` + apply unique) pour 3 chemins runtime: family change, type change, restore bulk.
 - Durcissement du module prive: une requete de sync invalide (callbacks adapteur requis manquants) est rejetee sans execution partielle.
+- Pour une mutation structurelle `CFG_TRACK` / `CFG_TRACK_TYPE` / restore bulk, Z5 ne pousse plus la sync UI active-track immediatement apres l'invalidation: le corridor attend la finalisation Z3 (rebind mixer + re-apply lane-bound) avant `param_registry_sync_ui_for_active_track` et `ui_param_sync_active_bank_values`.
 - Restore bulk track config:
   - validation snapshot all-or-nothing,
   - ecriture `g_ui_track_state.*`,
@@ -252,7 +253,7 @@ Points factuels:
   - non exposes: `COLORS`, `MIX`, `VCA`.
 - `CFG` reste l'autorite UI pour le channel MIDI (`PARAM_CFG_MIDI_CH`) ; aucun deplacement vers `TONE`.
 - Resolution template contextuelle MIDI:
-  - `TONE` utilise une famille template MIDI dediee (`PROG`, `CC1`, `CC2`, `CC3`) sans fallback audio DX7/MonoB,
+  - `TONE` utilise une famille template MIDI dediee (`PROG`, `CC1`, `CC2`, `CC3`) sans fallback audio Synth,
   - page `PROG`: `PARAM_MIDI_PROGRAM`,
   - pages `CCX`: `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4`.
 - Contrat runtime/UI associe:
@@ -263,7 +264,7 @@ Points factuels:
 - `Hybrid` n'est pas une nouvelle family: `family=Input1..4`, `type=Hybrid`.
 - Exposition UI pour `Input/Hybrid`:
   - exposes: `PLAY`, `MOD`, `TONE`, `VCA`, `COLORS`, `MIX`, `CFG`.
-- `TONE` Hybrid utilise une famille template dediee (pas fallback DX7):
+- `TONE` Hybrid utilise une famille template dediee (pas fallback Synth):
   - page `PROG`: `Gate` + `Program`,
   - pages suivantes: `CC1`, `CC2`, `CC3`.
 - `PLAY` est explicitement navigable pour `Input/Hybrid`.
@@ -283,4 +284,21 @@ Points factuels:
   - pas de seconde autorite UI,
   - pas de refonte de page,
   - pas de nouveau flux de navigation autonome.
+
+## 15. Contrat UI Settings - Load Project
+- `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.
+- Action associee: appel direct `project_v1_load_blank()`.
+- Les slots SD restent listes apres cette entree (index decales de +1).
+- Le flux `PROJECT > MANAGE` reste reserve aux slots reels.
+
+## 16. Contrat boot UI
+- Etat boot UI voulu:
+  - track active logique = track 1 (index 0),
+  - ensemble/page active = `CFG` (`UI_PAGE_TEMPLATE_CFG`) en boot normal.
+- Priorite hall/bootstrap:
+  - `ui_bootstrap_init` pose l'etat initial `CALIBRATION`,
+  - `brick6_app_init` decide ensuite selon `hall_calibration_load()`:
+    - succes -> bascule vers `CFG`,
+    - echec -> conserve `CALIBRATION`.
+- Aucun fallback renderer n'est utilise pour masquer un etat UI invalide.
 

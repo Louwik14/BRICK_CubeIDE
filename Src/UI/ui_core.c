@@ -300,6 +300,11 @@ static uint8_t ui_core_select_active_track(uint8_t track)
 
 static void ui_core_sync_adapter_notify_keyboard_active_track_changed(void)
 {
+    if (param_registry_track_structure_transition_is_active() != 0U)
+    {
+        return;
+    }
+
     keyboard_runtime_sync_track_focus_context();
 }
 
@@ -315,6 +320,7 @@ static const ui_system_sync_adapter_t g_ui_core_system_sync_adapter = {
 };
 
 static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *request,
+                                              const uint8_t *previous_mix_tracks,
                                               uint8_t sync_active_track_ui_context)
 {
     if (request == 0)
@@ -322,7 +328,10 @@ static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *re
         return;
     }
 
+    param_registry_track_structure_transition_begin();
     ui_system_sync_apply_track_context_change(request, &g_ui_core_system_sync_adapter);
+    param_registry_finalize_track_structure_change(previous_mix_tracks);
+    param_registry_track_structure_transition_end();
     ui_active_track_sync_after_track_structure_change(sync_active_track_ui_context);
 }
 
@@ -343,10 +352,10 @@ static void ui_core_set_active_track(uint8_t track)
     ui_core_sync_active_track_ui_context(1U);
 }
 
-static void ui_core_post_restore_global_sync(void)
+static void ui_core_post_restore_global_sync(const uint8_t *previous_mix_tracks)
 {
     const ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
-    ui_core_reconfigure_track_runtime(&request, 1U);
+    ui_core_reconfigure_track_runtime(&request, previous_mix_tracks, 1U);
 }
 
 uint8_t ui_get_track_midi_channel(uint8_t track)
@@ -410,6 +419,9 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                                   const uint8_t midi_channel[UI_TRACK_COUNT],
                                   const uint8_t midi_source[UI_TRACK_COUNT])
 {
+    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
+    ui_track_type_t normalized_type[UI_TRACK_COUNT];
+
     if ((family == 0) || (type == 0) || (midi_channel == 0) || (midi_source == 0))
     {
         return false;
@@ -421,8 +433,8 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_family_t fam = (ui_track_family_t)family[track];
-        const ui_track_type_t typ = (ui_track_type_t)type[track];
         const ui_track_midi_source_t src = (ui_track_midi_source_t)midi_source[track];
+        ui_track_type_t typ = (ui_track_type_t)type[track];
 
         if (((uint8_t)fam >= (uint8_t)UI_TRACK_FAMILY_COUNT)
                 || ((uint8_t)src >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
@@ -432,13 +444,21 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
 
         if (fam == UI_TRACK_FAMILY_OFF)
         {
+            normalized_type[track] = UI_TRACK_TYPE_AUDIO;
             continue;
+        }
+
+        if ((fam == UI_TRACK_FAMILY_SYNTH)
+                && ((typ == UI_TRACK_TYPE_MONOB) || (typ == UI_TRACK_TYPE_DX7)))
+        {
+            typ = UI_TRACK_TYPE_SAMPLER;
         }
 
         if (!ui_track_type_is_valid_for_family(fam, typ))
         {
             return false;
         }
+        normalized_type[track] = typ;
 
         if (ui_track_family_is_input(fam))
         {
@@ -460,33 +480,12 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
 
     }
 
-    /*
-     * Compat: historical snapshots may contain several DX7 tracks.
-     * Current runtime allows at most one instance.
-     * Preserve the first requested slot and gracefully fold extras to MONOB
-     * instead of rejecting the full snapshot load.
-     */
-    uint8_t dx7_kept = 0U;
+    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_family_t fam = (ui_track_family_t)family[track];
-        ui_track_type_t requested_type = (ui_track_type_t)type[track];
-
-        if (fam == UI_TRACK_FAMILY_SYNTH)
-        {
-            if (requested_type == UI_TRACK_TYPE_DX7)
-            {
-                if (dx7_kept == 0U)
-                {
-                    dx7_kept = 1U;
-                }
-                else
-                {
-                    requested_type = UI_TRACK_TYPE_MONOB;
-                }
-            }
-        }
+        ui_track_type_t requested_type = normalized_type[track];
 
         g_ui_track_state.track_configs[track].family = fam;
         g_ui_track_state.track_configs[track].type = (fam == UI_TRACK_FAMILY_OFF)
@@ -500,7 +499,7 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         g_ui_track_state.track_midi_source[track] = midi_source[track];
     }
 
-    ui_core_post_restore_global_sync();
+    ui_core_post_restore_global_sync(previous_mix_tracks);
     return true;
 }
 
@@ -891,14 +890,16 @@ void ui_core_service_track_selection_inputs(void)
      * - Keeps modifier mirrors (shift_down / track_select_armed) coherent with raw
      *   button state, so downstream queued handlers read fresh flags.
      */
-    if (ui_core_mute_is_active() != 0U)
-    {
-        /* While mute is active, this path is fully suspended. */
-        return;
-    }
-
+    const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
     ui_core_update_shift_state(button_down(BTN_SHIFT));
-    ui_core_update_track_modifier_state(button_down(UI_TRACK_MOD_BUTTON));
+    if (mute_active == 0U)
+    {
+        ui_core_update_track_modifier_state(button_down(UI_TRACK_MOD_BUTTON));
+    }
+    else
+    {
+        g_ui_track_state.track_select_armed = 0U;
+    }
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
@@ -911,7 +912,7 @@ void ui_core_service_track_selection_inputs(void)
         {
             ui_core_handle_shift_hall_action(hall);
         }
-        else if (action == UI_HALL_DIRECT_ACTION_TRACK_SELECT)
+        else if ((action == UI_HALL_DIRECT_ACTION_TRACK_SELECT) && (mute_active == 0U))
         {
             ui_core_handle_track_hall_action(hall);
         }
@@ -1060,6 +1061,8 @@ ui_track_type_t ui_get_track_type(uint8_t track)
 
 bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 {
+    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
+
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
         return false;
@@ -1104,6 +1107,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
+    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
     config->family = family;
     if (!ui_track_type_is_available(track, config->family, config->type))
     {
@@ -1115,13 +1119,15 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_family_change(active_track_touched);
-    ui_core_reconfigure_track_runtime(&request, active_track_touched);
+    ui_core_reconfigure_track_runtime(&request, previous_mix_tracks, active_track_touched);
 
     return true;
 }
 
 bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 {
+    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
+
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
     {
         return false;
@@ -1155,11 +1161,12 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return true;
     }
 
+    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
     config->type = type;
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_type_change(active_track_touched);
-    ui_core_reconfigure_track_runtime(&request, active_track_touched);
+    ui_core_reconfigure_track_runtime(&request, previous_mix_tracks, active_track_touched);
 
     return true;
 }

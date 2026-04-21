@@ -383,9 +383,7 @@ static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipbo
         return 0U;
     }
 
-    return (uint8_t)((cb->config.family == UI_TRACK_FAMILY_SYNTH)
-                     && (cb->config.type == UI_TRACK_TYPE_DX7))
-            || (uint8_t)((cb->config.family == UI_TRACK_FAMILY_MASTER)
+    return (uint8_t)((cb->config.family == UI_TRACK_FAMILY_MASTER)
                          && (cb->config.type == UI_TRACK_TYPE_BUFFER));
 }
 

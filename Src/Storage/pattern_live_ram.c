@@ -577,6 +577,25 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
     return 1U;
 }
 
+uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
+{
+    if (pattern_live_apply_snapshot(&g_boot_pattern, resume_transport) == 0U)
+    {
+        return 0U;
+    }
+
+    memcpy(&g_current_pattern, &g_boot_pattern, sizeof(g_current_pattern));
+    memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
+    g_active_bank = 0U;
+    g_active_pattern = 0U;
+    g_queued_valid = 0U;
+    g_queued_bank = 0U;
+    g_queued_pattern = 0U;
+    g_queued_boundary_track = 0U;
+    g_queued_boundary_generation = 0U;
+    return 1U;
+}
+
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 {
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
@@ -790,4 +809,3 @@ uint8_t pattern_live_is_apply_in_progress(void)
 {
     return g_apply_in_progress;
 }
-

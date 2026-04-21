@@ -103,6 +103,7 @@ void pattern_live_set_active_state(uint8_t active_bank,
                                    uint8_t queued_pattern);
 uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern);
 uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume_transport);
+uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport);
 uint8_t pattern_live_is_apply_in_progress(void);
 
 #endif

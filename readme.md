@@ -78,7 +78,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `DX7`, `MonoB`
+- `Synth`: `Sampler`
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`
 
@@ -105,6 +105,7 @@ Current families:
 - track-aware page exposure
 - hall-based interaction model
 - keyboard / arp / pattern / mute workflows
+- boot default (normal path): track 1 focused on `CFG` (hall calibration path stays prioritary)
 
 ### Parameter system
 - UI-side parameter control

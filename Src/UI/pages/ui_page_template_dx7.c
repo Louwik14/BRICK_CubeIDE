@@ -4,30 +4,6 @@
 #include "ui_core.h"
 #include "ui_template_page.h"
 
-static const ui_template_family_t g_ui_template_dx7_family = {
-    .family_title = "TONE",
-    .nav_labels = { "PLAY", "MOT", "CTRL", "COL" },
-    .subpages = {
-        { .title = "PLAY", .param_bank = { .params = { PARAM_DX7_ALGORITHM, PARAM_DX7_FEEDBACK, PARAM_MIX_LEVEL, PARAM_DX7_TRANSPOSE } } },
-        { .title = "MOTION", .param_bank = { .params = { PARAM_DX7_LFO_SPEED, PARAM_DX7_LFO_DELAY, PARAM_DX7_LFO_PITCH_MOD_DEPTH, PARAM_DX7_LFO_AMP_MOD_DEPTH } } },
-        { .title = "CTRL", .param_bank = { .params = { PARAM_DX7_PITCH_BEND_RANGE, PARAM_DX7_PORTAMENTO_TIME, PARAM_DX7_MONO_MODE, PARAM_DX7_OPERATOR_MASK } } },
-        { .title = "COLOR", .param_bank = { .params = { PARAM_DX7_OPERATOR_1_LEVEL, PARAM_DX7_OPERATOR_2_LEVEL, PARAM_DX7_OPERATOR_3_LEVEL, PARAM_DX7_OPERATOR_4_LEVEL } } },
-    },
-    .default_subpage = 0U,
-};
-
-static const ui_template_family_t g_ui_template_tone_family_monob = {
-    .family_title = "TONE",
-    .nav_labels = { "OSC", "RNG", "DET", "MIX" },
-    .subpages = {
-        { .title = "OSC", .param_bank = { .params = { PARAM_MONOB_OSC1_WAVE, PARAM_MONOB_OSC2_WAVE, PARAM_MONOB_OSC3_WAVE, PARAM_MONOB_SUB_WAVE } } },
-        { .title = "RANGE", .param_bank = { .params = { PARAM_MONOB_OSC1_RANGE, PARAM_MONOB_OSC2_RANGE, PARAM_MONOB_OSC3_RANGE, PARAM_MONOB_SUB_OCTAVE } } },
-        { .title = "DETUNE", .param_bank = { .params = { PARAM_MONOB_OSC1_DETUNE, PARAM_MONOB_OSC2_DETUNE, PARAM_MONOB_OSC3_DETUNE, PARAM_COUNT } } },
-        { .title = "MIX", .param_bank = { .params = { PARAM_MONOB_OSC1_MIX, PARAM_MONOB_OSC2_MIX, PARAM_MONOB_OSC3_MIX, PARAM_MONOB_SUB_MIX } } },
-    },
-    .default_subpage = 0U,
-};
-
 static const ui_template_family_t g_ui_template_tone_family_buffer = {
     .family_title = "TONE",
     .nav_labels = { "REC", "FADE", "-", "-" },
@@ -219,15 +195,7 @@ void ui_page_template_dx7_register_families(void)
             }
 
             const ui_template_family_t *family_template = NULL;
-            if ((track_family == UI_TRACK_FAMILY_SYNTH) && (track_type == UI_TRACK_TYPE_DX7))
-            {
-                family_template = &g_ui_template_dx7_family;
-            }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
-            {
-                family_template = &g_ui_template_tone_family_monob;
-            }
-            else if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
+            if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
             {
                 family_template = &g_ui_template_tone_family_buffer;
             }

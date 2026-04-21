@@ -149,8 +149,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `Hybrid`
 
 #### Pour `Synth`
-- `DX7`
-- `MonoB`
+- `Sampler`
 
 #### Pour `Drum`
 - `TRX BD`
@@ -368,7 +367,7 @@ toujours utiliser des tables explicites.
 - `SHIFT + PASTE` en scope ensemble/page clear les paramètres ciblés vers leur minimum
 
 ### Ressources exclusives
-- `DX7` : move-on-paste
+- `Synth/Sampler` : paste direct (non exclusif)
 - `Input1..4` : priorité à un input libre, sinon move-on-paste
 - après move réussi, le clipboard reste chaînable
 

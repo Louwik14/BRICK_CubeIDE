@@ -11,8 +11,6 @@
 #define TRACK_RUNTIME_FLAG_CAN_PLAY    (1U << 2)
 #define TRACK_RUNTIME_INSTANCE_NONE    0xFFU
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
-#define TRACK_RUNTIME_DX7_MAX_INSTANCES 1U
-#define TRACK_RUNTIME_MONOB_MAX_INSTANCES 8U
 #define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
 
@@ -25,8 +23,6 @@ static track_runtime_synth_usage_t g_track_runtime_synth_usage;
 
 typedef struct
 {
-    uint8_t dx7_used;
-    uint8_t monob_used;
     uint8_t drum_used;
 } track_runtime_allocator_state_t;
 
@@ -73,10 +69,10 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_HYBRID;
 
         case UI_TRACK_TYPE_DX7:
-            return TRACK_RUNTIME_TYPE_DX7;
+            return TRACK_RUNTIME_TYPE_SAMPLER;
 
         case UI_TRACK_TYPE_MONOB:
-            return TRACK_RUNTIME_TYPE_MONOB;
+            return TRACK_RUNTIME_TYPE_SAMPLER;
 
         case UI_TRACK_TYPE_SAMPLER:
             return TRACK_RUNTIME_TYPE_SAMPLER;
@@ -254,10 +250,6 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
 
     switch ((track_runtime_engine_t)ctx->engine)
     {
-        case TRACK_RUNTIME_ENGINE_DX7:
-            return TRACK_RUNTIME_VOICE_MODE_POLY;
-
-        case TRACK_RUNTIME_ENGINE_MONOB:
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
@@ -279,9 +271,7 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
         return 0U;
     }
 
-    if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
     {
         return 1U;
@@ -390,13 +380,17 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
             return;
         }
 
-        if (allocator->drum_used >= TRACK_RUNTIME_DRUM_MAX_INSTANCES)
+        if (ctx->track_id >= TRACK_RUNTIME_DRUM_MAX_INSTANCES)
         {
             track_runtime_set_quota_blocked(ctx);
             return;
         }
 
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, allocator->drum_used);
+        /*
+         * Keep drum instance ownership stable per logical track.
+         * This prevents cross-track state migration when drum track cardinality changes.
+         */
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DRUM, ctx->track_id);
         allocator->drum_used++;
         return;
     }
@@ -410,32 +404,6 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         }
 
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_MASTER_BUFFER, ctx->track_id);
-        return;
-    }
-
-    if (type == TRACK_RUNTIME_TYPE_DX7)
-    {
-        if (allocator->dx7_used >= TRACK_RUNTIME_DX7_MAX_INSTANCES)
-        {
-            track_runtime_set_quota_blocked(ctx);
-            return;
-        }
-
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_DX7, allocator->dx7_used);
-        allocator->dx7_used++;
-        return;
-    }
-
-    if (type == TRACK_RUNTIME_TYPE_MONOB)
-    {
-        if (allocator->monob_used >= TRACK_RUNTIME_MONOB_MAX_INSTANCES)
-        {
-            track_runtime_set_quota_blocked(ctx);
-            return;
-        }
-
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_MONOB, allocator->monob_used);
-        allocator->monob_used++;
         return;
     }
 
@@ -471,12 +439,10 @@ void track_runtime_invalidate_track(uint8_t track)
 
 void track_runtime_refresh_all(void)
 {
-    track_runtime_allocator_state_t allocator = { 0U, 0U, 0U };
+    track_runtime_allocator_state_t allocator = { 0U };
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
     uint8_t previous_mix_track[SEQ_TRACK_COUNT];
-    uint8_t monob_count = 0U;
     uint8_t drum_count = 0U;
-    uint8_t dx7_tracks = 0U;
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -558,24 +524,15 @@ void track_runtime_refresh_all(void)
 
         if (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
         {
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-            {
-                monob_count++;
-            }
-            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             {
                 drum_count++;
-            }
-            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-            {
-                dx7_tracks++;
             }
         }
     }
 
-    g_track_runtime_synth_usage.monob_tracks = monob_count;
+    g_track_runtime_synth_usage.monob_tracks = 0U;
     g_track_runtime_synth_usage.drum_tracks = drum_count;
-    g_track_runtime_synth_usage.dx7_tracks = dx7_tracks;
     g_track_runtime_global_dirty = 0U;
     ++g_track_runtime_revision;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -715,17 +672,6 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     }
 
     if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) == 0U)
-    {
-        return 0U;
-    }
-
-    /*
-     * Mixer BI/EQ filter target is valid only for track contexts that actually
-     * use mixer COLORS filtering. Synth engines with dedicated filter paths
-     * (MonoB) must not keep a mixer filter target alive.
-     */
-    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MONOB))
     {
         return 0U;
     }

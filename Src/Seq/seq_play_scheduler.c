@@ -12,7 +12,6 @@
 #include "stm32h7xx_hal.h"
 #include "Core/track_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
-#include "Audio/microdexed_synth.h"
 #include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
@@ -312,17 +311,6 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             monob_synth_note_off_for_instance(ctx->instance_id, note);
-        }
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DX7)
-    {
-        if (is_note_on != 0U)
-        {
-            microdexed_synth_note_on(note, velocity);
-        }
-        else
-        {
-            microdexed_synth_note_off(note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)

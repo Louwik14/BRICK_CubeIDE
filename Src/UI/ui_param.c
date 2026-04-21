@@ -206,6 +206,11 @@ void ui_param_invalidate_bank(void)
 
 void ui_param_sync_active_bank_values(void)
 {
+    if (param_registry_track_structure_transition_is_active() != 0U)
+    {
+        return;
+    }
+
     if (g_ui_param.valid == 0U)
     {
         return;
