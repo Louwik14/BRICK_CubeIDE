@@ -45,7 +45,25 @@ static inline void dc_data(void)
     HAL_GPIO_WritePin(OLED_DC_GPIO_Port, OLED_DC_Pin, GPIO_PIN_SET);
 }
 
-static uint8_t spi_tx(const uint8_t *data, size_t len, uint32_t timeout_ms)
+static void transport_begin(uint8_t is_data)
+{
+    if (is_data != 0U)
+    {
+        dc_data();
+    }
+    else
+    {
+        dc_cmd();
+    }
+    cs_low();
+}
+
+static void transport_end(void)
+{
+    cs_high();
+}
+
+static uint8_t transport_tx(const uint8_t *data, size_t len, uint32_t timeout_ms)
 {
     HAL_StatusTypeDef rc = HAL_SPI_Transmit(&hspi5, (uint8_t *)data, (uint16_t)len, timeout_ms);
     if (rc == HAL_OK)
@@ -63,47 +81,54 @@ static uint8_t spi_tx(const uint8_t *data, size_t len, uint32_t timeout_ms)
     return 0U;
 }
 
-static uint8_t send_cmd(uint8_t cmd)
+static uint8_t transport_burst(uint8_t is_data, const uint8_t *data, size_t len, uint32_t timeout_ms)
 {
-    dc_cmd();
-    cs_low();
-    uint8_t ok = spi_tx(&cmd, 1U, 10U);
-    cs_high();
+    uint8_t ok;
+
+    if ((data == NULL) || (len == 0U))
+    {
+        return 1U;
+    }
+
+    transport_begin(is_data);
+    ok = transport_tx(data, len, timeout_ms);
+    transport_end();
+
     return ok;
 }
 
-static uint8_t send_data(const uint8_t *data, size_t len)
+static uint8_t send_cmd_burst(const uint8_t *cmds, size_t len)
 {
-    dc_data();
-    cs_low();
-    uint8_t ok = spi_tx(data, len, 100U);
-    cs_high();
-    return ok;
+    return transport_burst(0U, cmds, len, 20U);
 }
 
-static uint8_t send_cmd2(uint8_t a, uint8_t b)
+static uint8_t send_data_burst(const uint8_t *data, size_t len)
 {
-    return (send_cmd(a) != 0U) && (send_cmd(b) != 0U);
+    return transport_burst(1U, data, len, 100U);
 }
 
 static uint8_t ssd1309_init_sequence(void)
 {
-    if (send_cmd(0xAEU) == 0U) return 0U;          /* Display OFF */
-    if (send_cmd2(0xD5U, 0xA0U) == 0U) return 0U;  /* Clock divide / osc */
-    if (send_cmd2(0xA8U, 0x3FU) == 0U) return 0U;  /* Multiplex ratio */
-    if (send_cmd2(0xD3U, 0x00U) == 0U) return 0U;  /* Display offset */
-    if (send_cmd(0x40U) == 0U) return 0U;          /* Start line */
-    if (send_cmd2(0x20U, 0x02U) == 0U) return 0U;  /* Page addressing mode */
-    if (send_cmd(0xA1U) == 0U) return 0U;          /* Segment remap */
-    if (send_cmd(0xC8U) == 0U) return 0U;          /* COM scan direction */
-    if (send_cmd2(0xDAU, 0x12U) == 0U) return 0U;  /* COM pins config */
-    if (send_cmd2(0x81U, 0x6FU) == 0U) return 0U;  /* Contrast */
-    if (send_cmd2(0xD9U, 0xD3U) == 0U) return 0U;  /* Pre-charge */
-    if (send_cmd2(0xDBU, 0x20U) == 0U) return 0U;  /* VCOMH */
-    if (send_cmd(0x2EU) == 0U) return 0U;          /* Scroll OFF */
-    if (send_cmd(0xA4U) == 0U) return 0U;          /* Resume RAM content display */
-    if (send_cmd(0xA6U) == 0U) return 0U;          /* Normal display */
-    if (send_cmd(0xAFU) == 0U) return 0U;          /* Display ON */
+    static const uint8_t k_init_cmds[] = {
+        0xAEU,       /* Display OFF */
+        0xD5U, 0xA0U,/* Clock divide / osc */
+        0xA8U, 0x3FU,/* Multiplex ratio */
+        0xD3U, 0x00U,/* Display offset */
+        0x40U,       /* Start line */
+        0x20U, 0x02U,/* Page addressing mode */
+        0xA1U,       /* Segment remap */
+        0xC8U,       /* COM scan direction */
+        0xDAU, 0x12U,/* COM pins config */
+        0x81U, 0x6FU,/* Contrast */
+        0xD9U, 0xD3U,/* Pre-charge */
+        0xDBU, 0x20U,/* VCOMH */
+        0x2EU,       /* Scroll OFF */
+        0xA4U,       /* Resume RAM content display */
+        0xA6U,       /* Normal display */
+        0xAFU        /* Display ON */
+    };
+
+    if (send_cmd_burst(k_init_cmds, sizeof(k_init_cmds)) == 0U) return 0U;
 
     return 1U;
 }
@@ -142,6 +167,7 @@ void drv_display_clear(void)
 
 void drv_display_update(void)
 {
+    static const uint8_t k_page_mode_cmds[] = { 0x20U, 0x02U };
     g_display_stats.flush_count++;
 
     if (g_display_state != DRV_DISPLAY_STATE_READY)
@@ -155,7 +181,7 @@ void drv_display_update(void)
      * Keep the controller in page addressing mode so 0xB0+page and
      * page*OLED_WIDTH indexing stay aligned.
      */
-    if (send_cmd2(0x20U, 0x02U) == 0U)
+    if (send_cmd_burst(k_page_mode_cmds, sizeof(k_page_mode_cmds)) == 0U)
     {
         g_display_stats.flush_fail++;
         return;
@@ -163,15 +189,18 @@ void drv_display_update(void)
 
     for (uint8_t page = 0; page < 8; page++)
     {
-        if (send_cmd((uint8_t)(0xB0U + page)) == 0U ||
-            send_cmd(0x00U) == 0U ||
-            send_cmd(0x10U) == 0U)
+        uint8_t page_cmds[3];
+        page_cmds[0] = (uint8_t)(0xB0U + page);
+        page_cmds[1] = 0x00U;
+        page_cmds[2] = 0x10U;
+
+        if (send_cmd_burst(page_cmds, sizeof(page_cmds)) == 0U)
         {
             g_display_stats.flush_fail++;
             return;
         }
 
-        if (send_data(&buffer[page * OLED_WIDTH], OLED_WIDTH) == 0U)
+        if (send_data_burst(&buffer[page * OLED_WIDTH], OLED_WIDTH) == 0U)
         {
             g_display_stats.flush_fail++;
             return;
