@@ -25,9 +25,42 @@
 
 #include "encoders_hw.h"
 
-#define ENCODER_MAX_CONSUME_PER_TICK 8
+#define ENCODER_MAX_CONSUME_PER_TICK 4
 
 static int32_t enc_accumulated_delta[ENC_COUNT];
+
+static int32_t encoder_compute_drain(int32_t backlog)
+{
+    int32_t abs_backlog;
+    int32_t drain_mag;
+
+    if (backlog == 0)
+    {
+        return 0;
+    }
+
+    if (backlog == INT32_MIN)
+    {
+        abs_backlog = INT32_MAX;
+    }
+    else
+    {
+        abs_backlog = (backlog > 0) ? backlog : -backlog;
+    }
+
+    /*
+     * Adaptive drain:
+     * - tiny backlog: fine-grain restitution
+     * - large backlog: accelerates progressively up to a bounded max
+     */
+    drain_mag = (abs_backlog / 3) + 1;
+    if (drain_mag > ENCODER_MAX_CONSUME_PER_TICK)
+    {
+        drain_mag = ENCODER_MAX_CONSUME_PER_TICK;
+    }
+
+    return (backlog > 0) ? drain_mag : -drain_mag;
+}
 
 /**
  * @brief Point d'entrée encoder_clamp_step.
@@ -185,15 +218,7 @@ int16_t encoder_consume_delta(uint8_t encoder)
         return 0;
     }
 
-    int32_t drain = backlog;
-    if (drain > ENCODER_MAX_CONSUME_PER_TICK)
-    {
-        drain = ENCODER_MAX_CONSUME_PER_TICK;
-    }
-    else if (drain < -ENCODER_MAX_CONSUME_PER_TICK)
-    {
-        drain = -ENCODER_MAX_CONSUME_PER_TICK;
-    }
+    const int32_t drain = encoder_compute_drain(backlog);
 
     enc_accumulated_delta[encoder] = backlog - drain;
     return (int16_t)drain;
