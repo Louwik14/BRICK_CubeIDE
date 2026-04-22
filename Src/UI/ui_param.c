@@ -281,6 +281,37 @@ static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,
     return 1U;
 }
 
+void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t *frame_ctx)
+{
+    if (frame_ctx == 0)
+    {
+        return;
+    }
+
+    frame_ctx->seq_context_active = 0U;
+    frame_ctx->has_ref_step = 0U;
+    frame_ctx->ref_track = 0U;
+    frame_ctx->ref_step = 0U;
+
+    if (ui_hall_is_seq_context(ui_get_hall_mode()) == 0U)
+    {
+        return;
+    }
+
+    frame_ctx->seq_context_active = 1U;
+
+    seq_track_id_t ref_track = 0U;
+    seq_step_id_t ref_step = 0U;
+    if (ui_param_seq_resolve_ref_step(&ref_track, &ref_step, 0U) == 0U)
+    {
+        return;
+    }
+
+    frame_ctx->has_ref_step = 1U;
+    frame_ctx->ref_track = ref_track;
+    frame_ctx->ref_step = ref_step;
+}
+
 static uint8_t ui_param_is_track_scoped(param_id_t param)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
@@ -546,7 +577,10 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
     return 1U;
 }
 
-uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, uint8_t *out_inverted)
+uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_feedback_frame_t *frame_ctx,
+                                                       param_id_t param,
+                                                       float *out_value,
+                                                       uint8_t *out_inverted)
 {
     if (out_inverted != 0)
     {
@@ -558,6 +592,13 @@ uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, 
         return 0U;
     }
 
+    if ((frame_ctx == 0)
+            || (frame_ctx->seq_context_active == 0U)
+            || (frame_ctx->has_ref_step == 0U))
+    {
+        return 0U;
+    }
+
     uint8_t set_id = 0U;
     seq_param8_t param8 = 0U;
     if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
@@ -565,15 +606,12 @@ uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, 
         return 0U;
     }
 
-    seq_track_id_t ref_track = 0U;
-    seq_step_id_t ref_step = 0U;
-    if (ui_param_seq_resolve_ref_step(&ref_track, &ref_step, 0U) == 0U)
-    {
-        return 0U;
-    }
-
     seq_plock_entry_t existing;
-    if (seq_edit_step_plock_find(ref_track, ref_step, set_id, param8, &existing) == 0U)
+    if (seq_edit_step_plock_find(frame_ctx->ref_track,
+                                 frame_ctx->ref_step,
+                                 set_id,
+                                 param8,
+                                 &existing) == 0U)
     {
         return 0U;
     }
@@ -585,6 +623,13 @@ uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, 
     }
 
     return 1U;
+}
+
+uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, uint8_t *out_inverted)
+{
+    ui_param_seq_plock_feedback_frame_t frame_ctx;
+    ui_param_seq_plock_feedback_frame_begin(&frame_ctx);
+    return ui_param_try_get_seq_plock_feedback_with_frame(&frame_ctx, param, out_value, out_inverted);
 }
 
 /**

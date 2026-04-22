@@ -44,6 +44,7 @@
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_system_sync_internal.h"
+#include "Mod/mod_lfo_v1.h"
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "param_registry.h"
@@ -332,6 +333,7 @@ static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *re
     ui_system_sync_apply_track_context_change(request, &g_ui_core_system_sync_adapter);
     param_registry_finalize_track_structure_change(previous_mix_tracks);
     param_registry_track_structure_transition_end();
+    mod_lfo_v1_invalidate_dest_cache_all();
     ui_active_track_sync_after_track_structure_change(sync_active_track_ui_context);
 }
 

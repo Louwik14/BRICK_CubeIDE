@@ -51,8 +51,23 @@ typedef struct
     uint8_t calib_valid;
 } mod_lfo_runtime_state_t;
 
+typedef struct
+{
+    uint8_t valid;
+    uint8_t ui_family;
+    uint8_t ui_type;
+    uint8_t rt_bind_state;
+    uint8_t rt_family;
+    uint8_t rt_type;
+    uint8_t rt_mix_track_id;
+    uint16_t count;
+    param_id_t index_to_param[PARAM_COUNT + 1U];
+    uint16_t param_to_index[PARAM_COUNT];
+} mod_lfo_dest_cache_t;
+
 static mod_lfo_track_settings_t g_mod_lfo_settings[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
+static mod_lfo_dest_cache_t g_mod_lfo_dest_cache[SEQ_TRACK_COUNT];
 static uint32_t g_mod_lfo_control_counter = 0U;
 
 static float mod_lfo_clampf(float v, float lo, float hi)
@@ -224,30 +239,111 @@ static uint8_t mod_lfo_dest_supported_fast(uint8_t track,
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
-static uint16_t mod_lfo_dest_count_supported(uint8_t track)
+static void mod_lfo_dest_cache_invalidate_track_internal(uint8_t track)
 {
-    uint16_t count = 1U;
-
     if (track >= SEQ_TRACK_COUNT)
     {
-        return count;
+        return;
+    }
+
+    g_mod_lfo_dest_cache[track].valid = 0U;
+}
+
+void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track)
+{
+    mod_lfo_dest_cache_invalidate_track_internal(track);
+}
+
+void mod_lfo_v1_invalidate_dest_cache_all(void)
+{
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        mod_lfo_dest_cache_invalidate_track_internal(track);
+    }
+}
+
+static uint8_t mod_lfo_dest_cache_matches_context(const mod_lfo_dest_cache_t *cache,
+                                                  ui_track_family_t family,
+                                                  ui_track_type_t type,
+                                                  const track_runtime_ctx_t *ctx)
+{
+    if ((cache == NULL) || (cache->valid == 0U))
+    {
+        return 0U;
+    }
+
+    const uint8_t ctx_bind_state = (ctx != NULL) ? ctx->bind_state : 0xFFU;
+    const uint8_t ctx_family = (ctx != NULL) ? ctx->family : 0xFFU;
+    const uint8_t ctx_type = (ctx != NULL) ? ctx->type : 0xFFU;
+    const uint8_t ctx_mix_track_id = (ctx != NULL) ? ctx->mix_track_id : 0xFFU;
+
+    return ((cache->ui_family == (uint8_t)family)
+            && (cache->ui_type == (uint8_t)type)
+            && (cache->rt_bind_state == ctx_bind_state)
+            && (cache->rt_family == ctx_family)
+            && (cache->rt_type == ctx_type)
+            && (cache->rt_mix_track_id == ctx_mix_track_id))
+            ? 1U
+            : 0U;
+}
+
+static mod_lfo_dest_cache_t *mod_lfo_dest_cache_resolve(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return NULL;
     }
 
     track_runtime_refresh_track(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     const ui_track_family_t family = ui_get_track_family(track);
     const ui_track_type_t type = ui_get_track_type(track);
+    mod_lfo_dest_cache_t *const cache = &g_mod_lfo_dest_cache[track];
 
+    if (mod_lfo_dest_cache_matches_context(cache, family, type, ctx) != 0U)
+    {
+        return cache;
+    }
+
+    cache->index_to_param[0] = MOD_LFO_DEST_NONE;
+    for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
+    {
+        cache->param_to_index[raw] = 0U;
+    }
+
+    uint16_t count = 1U;
     for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
     {
         const param_id_t param = (param_id_t)raw;
-        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) != 0U)
+        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) == 0U)
         {
-            ++count;
+            continue;
         }
+
+        if (count <= (uint16_t)PARAM_COUNT)
+        {
+            cache->index_to_param[count] = param;
+            cache->param_to_index[raw] = count;
+        }
+        ++count;
     }
 
-    return count;
+    cache->count = count;
+    cache->ui_family = (uint8_t)family;
+    cache->ui_type = (uint8_t)type;
+    cache->rt_bind_state = (ctx != NULL) ? ctx->bind_state : 0xFFU;
+    cache->rt_family = (ctx != NULL) ? ctx->family : 0xFFU;
+    cache->rt_type = (ctx != NULL) ? ctx->type : 0xFFU;
+    cache->rt_mix_track_id = (ctx != NULL) ? ctx->mix_track_id : 0xFFU;
+    cache->valid = 1U;
+
+    return cache;
+}
+
+static uint16_t mod_lfo_dest_count_supported(uint8_t track)
+{
+    mod_lfo_dest_cache_t *const cache = mod_lfo_dest_cache_resolve(track);
+    return (cache != NULL) ? cache->count : 1U;
 }
 
 static param_id_t mod_lfo_dest_from_index(uint8_t track, uint16_t dest_index)
@@ -257,29 +353,13 @@ static param_id_t mod_lfo_dest_from_index(uint8_t track, uint16_t dest_index)
         return MOD_LFO_DEST_NONE;
     }
 
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    const ui_track_family_t family = ui_get_track_family(track);
-    const ui_track_type_t type = ui_get_track_type(track);
-
-    uint16_t current = 1U;
-    for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
+    mod_lfo_dest_cache_t *const cache = mod_lfo_dest_cache_resolve(track);
+    if ((cache == NULL) || (dest_index >= cache->count))
     {
-        const param_id_t param = (param_id_t)raw;
-        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) == 0U)
-        {
-            continue;
-        }
-
-        if (current == dest_index)
-        {
-            return param;
-        }
-
-        ++current;
+        return MOD_LFO_DEST_NONE;
     }
 
-    return MOD_LFO_DEST_NONE;
+    return cache->index_to_param[dest_index];
 }
 
 static uint16_t mod_lfo_dest_to_index(uint8_t track, param_id_t dest)
@@ -289,29 +369,13 @@ static uint16_t mod_lfo_dest_to_index(uint8_t track, param_id_t dest)
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    const ui_track_family_t family = ui_get_track_family(track);
-    const ui_track_type_t type = ui_get_track_type(track);
-
-    uint16_t index = 1U;
-    for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
+    mod_lfo_dest_cache_t *const cache = mod_lfo_dest_cache_resolve(track);
+    if (cache == NULL)
     {
-        const param_id_t param = (param_id_t)raw;
-        if (mod_lfo_dest_supported_fast(track, param, family, type, ctx) == 0U)
-        {
-            continue;
-        }
-
-        if (param == dest)
-        {
-            return index;
-        }
-
-        ++index;
+        return 0U;
     }
 
-    return 0U;
+    return cache->param_to_index[(uint16_t)dest];
 }
 
 static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(uint8_t rate_index, uint32_t bpm_milli)
@@ -537,6 +601,7 @@ void mod_lfo_v1_init(void)
 {
     memset(g_mod_lfo_settings, 0, sizeof(g_mod_lfo_settings));
     memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
+    memset(g_mod_lfo_dest_cache, 0, sizeof(g_mod_lfo_dest_cache));
     g_mod_lfo_control_counter = 0U;
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -562,6 +627,8 @@ void mod_lfo_v1_init(void)
             g_mod_lfo_runtime[track][lfo].calib_valid = 0U;
         }
     }
+
+    mod_lfo_v1_invalidate_dest_cache_all();
 }
 
 void mod_lfo_v1_reset_runtime(void)
@@ -580,6 +647,8 @@ void mod_lfo_v1_reset_runtime(void)
             g_mod_lfo_runtime[track][lfo].calib_valid = 0U;
         }
     }
+
+    mod_lfo_v1_invalidate_dest_cache_all();
 }
 
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value)

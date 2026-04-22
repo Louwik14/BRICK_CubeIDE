@@ -9,6 +9,7 @@
 #include "param_registry.h"
 #include "param_store.h"
 #include "ui_core.h"
+#include "ui_param.h"
 #include "ui_widgets.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime.h"
@@ -281,7 +282,10 @@ static float ui_renderer_template_get_param_display_value(param_id_t id)
     return param_store_get_active(id);
 }
 
-static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state, uint8_t slot, param_id_t id)
+static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
+                                                 const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                 uint8_t slot,
+                                                 param_id_t id)
 {
     const int x = g_ui_template_frame_x[slot];
     const int y = UI_TEMPLATE_FRAME_Y;
@@ -298,7 +302,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     const param_desc_t *desc = &param_registry[id];
     float value = ui_renderer_template_get_param_display_value(id);
     uint8_t draw_name_inverted = 0U;
-    (void)ui_param_try_get_seq_plock_feedback(id, &value, &draw_name_inverted);
+    (void)ui_param_try_get_seq_plock_feedback_with_frame(plock_frame_ctx, id, &value, &draw_name_inverted);
 
     const char *enum_label = NULL;
     char value_txt[20];
@@ -515,12 +519,15 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
 
     ui_renderer_template_draw_header(state);
 
+    ui_param_seq_plock_feedback_frame_t plock_frame_ctx;
+    ui_param_seq_plock_feedback_frame_begin(&plock_frame_ctx);
+
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage != NULL)
     {
         for (uint8_t i = 0U; i < 4U; i++)
         {
-            ui_renderer_template_draw_param_slot(state, i, subpage->param_bank.params[i]);
+            ui_renderer_template_draw_param_slot(state, &plock_frame_ctx, i, subpage->param_bank.params[i]);
         }
     }
 
