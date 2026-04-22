@@ -12,7 +12,6 @@
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
 #include "param_registry.h"
-#include "ui_core.h"
 
 typedef struct
 {
@@ -192,24 +191,19 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
     return 1U;
 }
 
-uint8_t seq_param_iface_ui_commit_base_after_authoritative_apply(seq_track_id_t ui_active_track,
-                                                                 uint8_t set_id,
-                                                                 seq_param8_t param8,
-                                                                 seq_value16_t value16)
+uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_iface_base_commit_cmd_t *cmd)
 {
-    /*
-     * Narrow fast-path contract:
-     * - UI-only
-     * - active track only
-     * - param/set pair must match canonical map
-     * - apply has already succeeded through param_registry_apply_track_value(...)
-     */
-    if (ui_get_active_track() != ui_active_track)
+    if ((cmd == 0) || (cmd->authoritative_apply_done == 0U))
     {
         return 0U;
     }
 
-    if (seq_param_iface_is_slot_addressable(ui_active_track, set_id, param8) == 0U)
+    if (cmd->source != SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT)
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_is_slot_addressable(cmd->target_track, cmd->set_id, cmd->param8) == 0U)
     {
         return 0U;
     }
@@ -217,23 +211,23 @@ uint8_t seq_param_iface_ui_commit_base_after_authoritative_apply(seq_track_id_t 
     {
         uint8_t expected_set_id = 0U;
         seq_param8_t expected_param8 = 0U;
-        if (seq_param_iface_map_param((param_id_t)param8, &expected_set_id, &expected_param8) == 0U)
+        if (seq_param_iface_map_param((param_id_t)cmd->param8, &expected_set_id, &expected_param8) == 0U)
         {
             return 0U;
         }
-        if ((expected_set_id != set_id) || (expected_param8 != param8))
+        if ((expected_set_id != cmd->set_id) || (expected_param8 != cmd->param8))
         {
             return 0U;
         }
     }
 
-    seq_param_slot_state_t *const state = &g_seq_param_state[ui_active_track][set_id][param8];
-    state->base_value = value16;
+    seq_param_slot_state_t *const state = &g_seq_param_state[cmd->target_track][cmd->set_id][cmd->param8];
+    state->base_value = cmd->value16;
     state->base_valid = 1U;
 
     if (state->runtime_locked == 0U)
     {
-        state->runtime_value = value16;
+        state->runtime_value = cmd->value16;
     }
 
     return 1U;

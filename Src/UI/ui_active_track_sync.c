@@ -2,7 +2,7 @@
 
 #include "ui_core.h"
 #include "ui_edit_context_sync.h"
-#include "param_registry.h"
+#include "ui_param.h"
 #include "param_store.h"
 #include "Seq/seq_runtime.h"
 
@@ -58,7 +58,7 @@ void ui_active_track_sync_mirror_cfg_midi_source(void)
 void ui_active_track_sync_full_after_reconfigure(void)
 {
     ui_active_track_sync_mirror();
-    param_registry_sync_ui_for_active_track();
+    ui_param_sync_active_track_mirror_from_runtime();
 }
 
 void ui_active_track_sync_after_track_structure_change(uint8_t sync_active_track_ui_context)

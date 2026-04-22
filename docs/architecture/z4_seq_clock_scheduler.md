@@ -23,7 +23,7 @@ Dependances de Z4 sans appartenir a Z4:
 - `seq_param_iface` (mapping set/param et apply/restore de locks).
 - `seq_output_guard` (anti doublons note-on/note-off et panic stop).
 - engines/mixer/MIDI output (`monob`, `drum`, `brick6_sampler_runtime`, `mixer`, `midi`) appeles par le scheduler applique.
-- `ui_core` (source active track, MIDI channel track) pour certains choix runtime/live-rec/sortie MIDI.
+- `ui_core` (source de contexte UI pour les commandes explicites envoyees vers Z4, sans lecture implicite du focus UI par `seq_param_iface`).
 - `seq_live_rec_capture` et `seq_edit` pour le chemin capture live-rec.
 
 Exclusions explicites:
@@ -76,6 +76,7 @@ Entrees directes de Z4:
 - Transport utilisateur: `seq_runtime_toggle_play_stop`, `seq_runtime_start`, `seq_runtime_stop` (UI/param).
 - Realtime MIDI clock transport: `seq_runtime_midi_clock_from_source`, `seq_runtime_midi_start_from_source`, `seq_runtime_midi_continue_from_source`, `seq_runtime_midi_stop_from_source` (depuis `midi_internal_receive_with_source` dans `midi.c`).
 - Configuration runtime: `seq_runtime_set_clock_source`, `seq_runtime_set_tempo_bpm_milli`, `seq_runtime_set_track_div/quant/swing`, `seq_runtime_on_track_length_changed`.
+- Contexte pattern-rec explicite depuis UI: `seq_runtime_set_pattern_rec_target_track` (la UI pousse le focus d'edition, Z4 ne lit plus directement `ui_get_active_track`).
 - Live-rec entree notes: `seq_runtime_live_rec_note_on/off` (keyboard engine).
 - Live-rec entree param: `seq_runtime_live_rec_param_write` (edits param track-scoped en PLAY+REC).
 - Consommation audio: `seq_runtime_audio_collect_block_events`, `seq_runtime_audio_apply_event` (audio IRQ `process_half` dans `audio.c`).
@@ -93,6 +94,7 @@ Sorties vers autres zones:
 - Vers moteurs/sorties note: `seq_play_scheduler_audio_apply_event` envoie MIDI (`midi_note_on/off`) et notes engines (`drum_synth_*`, `brick6_sampler_runtime_*`), plus gate mixer (`mixer_track_filter_*`, `mixer_track_vca_*`).
 - Vers param domaine lock: `seq_boundary_engine_*` appelle `seq_param_iface_apply_lock`, `seq_param_iface_restore_base`.
 - Vers UI param (PLAY+REC): `ui_param` route l'edit track-scoped vers `seq_runtime_live_rec_param_write` (ecriture p-lock), sans write runtime direct concurrent.
+- Vers UI param (hors PLAY+REC): `ui_param` emet une commande explicite `seq_param_iface_commit_base_after_authoritative_apply(cmd)` apres `param_registry_apply_track_value(...)`; `seq_param_iface` ne relit pas `ui_get_active_track()` pour valider ce commit.
 - Vers clock MIDI sortant: `seq_runtime_send_transport_realtime`, `midi_clock`, `midi_clock_set_*`.
 - Vers securite sortie: `seq_output_guard_*` (`panic`, note state).
 
@@ -248,8 +250,9 @@ Points factuels observes:
   - la progression step (interne/externe) depend d'un appel audio regulier a `seq_runtime_audio_collect_block_events`.
   - `seq_runtime_time_adapter_process` reste necessaire pour transport et supervision bridge externe, mais n'est plus autorite d'avance step.
 - Couplage implicite avec UI dans le coeur runtime:
-  - `seq_runtime_pattern_rec_start_now` lit `ui_get_active_track`.
-  - Le bind live-rec pattern reste pilote par la track active UI.
+  - Le bind pattern-rec ne lit plus l'etat UI directement; il consomme une cible explicite (`seq_runtime_set_pattern_rec_target_track`) fournie par Z5.
+  - Le focus UI reste un contexte d'entree (source du target track), plus une verite runtime lue depuis Z4.
+  - Le commit base post-apply UI->Seq (`seq_param_iface_commit_base_after_authoritative_apply`) consomme un contrat explicite (source + target track + set/param + precondition apply) sans relecture de focus UI global.
   - Le channel MIDI runtime du scheduler/live-rec/output-guard passe desormais via Z2 (`track_runtime_get_midi_channel_*`) et non par lecture directe UI.
   - Le scheduler note-engine consomme `track_runtime_resolve_track` (descriptor + cibles resolues) au lieu de re-resoudre localement filter/mix/gate.
 - Double logique tempo interne/externe assumee mais pas concurrente active; bascule source explicite via `seq_runtime_set_clock_source`.

@@ -111,7 +111,7 @@ Sorties vers autres zones:
 - Z2: `track_runtime_refresh_*`, `track_runtime_get_ctx`, `track_runtime_invalidate_all`, etc.
 - Z2: `track_runtime_is_ui_ensemble_available` pour le gating de disponibilité d'ensembles.
 - Z2: `track_runtime_resolve_track` pour la resolution explicite de cible filter depuis `ui_core`.
-- Z3: `param_set`, `param_registry_apply_track_value`, `param_registry_batch_*`, `param_registry_sync_ui_for_active_track`, `param_store_set_active`.
+- Z3: `param_set`, `param_registry_apply_track_edit`, `param_registry_apply_track_structure_transition`, `param_registry_batch_*`, `param_store_set_active`.
 - Z4: `seq_runtime_toggle_play_stop`, `seq_runtime_rec_toggle_arm`, `seq_runtime_set_track_div/quant/swing`, `seq_edit_*`, `seq_model_*`.
 - Storage: `pattern_live_queue_slot`, `pattern_live_capture_to_slot`, `undo_v1_restore`.
 - Master buffer: `brick6_master_buffer_*` (routing hall en mode ARP master-buffer, REC shortcuts).
@@ -163,7 +163,7 @@ Flux nominal prouve:
 - Mutations de `g_ui_track_state` (hall_mode, track_select_armed, active_track, pattern/mute/feedback).
 - Noyau de sync systeme track/config factorise dans `ui_system_sync_internal` (profils `ui_system_sync_make_request_*` + apply unique) pour 3 chemins runtime: family change, type change, restore bulk.
 - Durcissement du module prive: une requete de sync invalide (callbacks adapteur requis manquants) est rejetee sans execution partielle.
-- Pour une mutation structurelle `CFG_TRACK` / `CFG_TRACK_TYPE` / restore bulk, Z5 ne pousse plus la sync UI active-track immediatement apres l'invalidation: le corridor attend la finalisation Z3 (rebind mixer + re-apply lane-bound) avant `param_registry_sync_ui_for_active_track` et `ui_param_sync_active_bank_values`.
+- Pour une mutation structurelle `CFG_TRACK` / `CFG_TRACK_TYPE` / restore bulk, Z5 delegue le corridor a Z3 via `param_registry_apply_track_structure_transition(...)`; la resync UI active-track reste explicite cote Z5 (`ui_param_sync_active_track_mirror_from_runtime` puis `ui_param_sync_active_bank_values`) apres finalisation runtime Z3.
 - Restore bulk track config:
   - validation snapshot all-or-nothing,
   - ecriture `g_ui_track_state.*`,

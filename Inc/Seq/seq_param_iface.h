@@ -15,6 +15,21 @@ typedef enum
     SEQ_PLOCK_SET_COUNT
 } seq_plock_set_id_t;
 
+typedef enum
+{
+    SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT = 0
+} seq_param_iface_commit_source_t;
+
+typedef struct
+{
+    seq_param_iface_commit_source_t source;
+    uint8_t authoritative_apply_done;
+    seq_track_id_t target_track;
+    uint8_t set_id;
+    seq_param8_t param8;
+    seq_value16_t value16;
+} seq_param_iface_base_commit_cmd_t;
+
 void seq_param_iface_init(void);
 
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id);
@@ -29,10 +44,7 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        uint8_t set_id,
                                        seq_param8_t param8,
                                        seq_value16_t value16);
-uint8_t seq_param_iface_ui_commit_base_after_authoritative_apply(seq_track_id_t ui_active_track,
-                                                                 uint8_t set_id,
-                                                                 seq_param8_t param8,
-                                                                 seq_value16_t value16);
+uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_iface_base_commit_cmd_t *cmd);
 uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    uint8_t set_id,
                                    seq_param8_t param8,

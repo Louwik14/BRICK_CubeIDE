@@ -104,6 +104,7 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
             return 1U;
         }
 
+        seq_runtime_set_pattern_rec_target_track(ui_get_active_track());
         seq_runtime_rec_toggle_arm();
         return 1U;
     }

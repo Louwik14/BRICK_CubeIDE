@@ -2,13 +2,15 @@
 
 ## 1. Perimetre
 
-Zone Z3 (coeur):
-- `Src/Param/param_registry.c`
-- `Inc/Param/param_registry.h`
-- `Src/Param/param_store.c`
-- `Inc/Param/param_store.h`
-- `Src/Mod/mod_lfo_v1.c`
-- `Inc/Mod/mod_lfo_v1.h`
+Zone Z3 (coeur + modules param_registry):
+- `Src/Param/param_registry.c` / `Inc/Param/param_registry.h`
+- `Src/Param/param_registry_catalog.c` / `Inc/Param/param_registry_catalog.h`
+- `Src/Param/param_filter.c` / `Inc/Param/param_filter.h`
+- `Src/Param/param_registry_backends.c` / `Inc/Param/param_registry_backends.h`
+- `Src/Param/param_registry_runtime_state.c` / `Inc/Param/param_registry_runtime_state.h`
+- `Src/Param/param_registry_apply_wrappers.c` / `Inc/Param/param_registry_apply_bindings.h`
+- `Src/Param/param_store.c` / `Inc/Param/param_store.h`
+- `Src/Mod/mod_lfo_v1.c` / `Inc/Mod/mod_lfo_v1.h`
 
 Dependances de preuve strictes:
 - Z2: `track_runtime_get_param_rule`, `track_runtime_get_effective_param_status`, bind/runtime ctx.
@@ -38,6 +40,22 @@ Familles d'autorite:
 - `legacy-physical` (`PARAM_MIX_TRACK0..3_*`):
   - Statut: tombstones de compat storage/load-only.
   - Pas de write runtime normal; les flows utilisateur MIX passent par `PARAM_MIX_*` et `param_registry_apply_track_value`.
+
+## 2.b Repartition des responsabilites (etat courant)
+
+- `param_registry.c`:
+  - point d'entree Z3 autoritatif (`param_registry_apply_track_value`, `..._rt_fast`, transition structurelle),
+  - orchestration autorisation + consommation des rules/resolution Z2 + sync minimale.
+- `param_registry_catalog.*`:
+  - catalogue statique des descripteurs param (`param_registry[]`), labels, bornes, bindings `apply`.
+- `param_filter.*`:
+  - domaine FILTER complet: resolution cible, conversions, apply runtime, shadow-state UI, orchestration normal/rt_fast.
+- `param_registry_backends.*`:
+  - details backend par ressource/famille (mix, buffer, tone, colors, midi) consommes par le coeur Z3.
+- `param_registry_runtime_state.*`:
+  - cache runtime track-scoped + bridge/resync LFO + invalidations associees.
+- `param_registry_apply_wrappers.*`:
+  - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
 
 ## 3. Statut des chemins sensibles
 
@@ -70,7 +88,7 @@ Familles d'autorite:
 - globals: `param_set`.
 - track-aware: `param_registry_apply_track_value`.
 - LFO config: `mod_lfo_v1_set_track_param` uniquement.
-- post-restore global UI: via `ui_active_track_sync_full_after_global_restore()` (pas d'appel storage direct a `param_registry_sync_ui_for_active_track`).
+- post-restore global UI: via `ui_active_track_sync_full_after_global_restore()` (miroir UI actif fait cote Z5 via `ui_param_sync_active_track_mirror_from_runtime`, pas d'appel storage direct).
 
 ## 5. Invariants a ne pas casser
 
@@ -88,14 +106,14 @@ Familles d'autorite:
 ## 6. Dette technique restante (bornee)
 
 - Coexistence maintenue `param_set` (global) vs `param_registry_apply_track_value` (track-aware).
-- `param_registry.c` reste monolithique (metadata + dispatch + cache + filtres + bindings).
+- `param_registry.c` reste dense mais plus cible orchestration (le catalogue, FILTER, backends, runtime-state et wrappers sont externalises).
 - Ilot legacy `PARAM_MIX_TRACK0..3_*` conserve pour layout storage et migration load-only; UI mute, restore normal et boot defaults ne l'utilisent plus comme runtime physique.
 
 ## 7. Carte courte de la dette reelle (audit code)
 
 - Concentration structurelle (reelle):
-  - `param_registry.c` cumule dans un seul TU: contrat public, table metadata complete, dispatch global, dispatch track-aware, cache runtime track, UI filter shadow-state, pont LFO, mappings legacy MIX, et sync UI.
-  - La fonction `param_registry_apply_track_value` concentre plusieurs autorites (global/track-aware/filter/LFO) avec branches longues et duplications de patterns.
+  - le coeur est maintenant distribue en modules specialises; la densite residuelle porte surtout sur l'orchestration dans `param_registry.c`.
+  - `param_registry_apply_track_value` reste le point unique multi-domaines (global/track-aware/filter/LFO) et conserve une logique de routage non triviale.
 
 - Risques reels (encore actifs):
   - Risque de divergence `get/apply` sur les params filtre (`PARAM_FILTER_*`) car logique miroir (resolution cible + shadow-state + conversions) dupliquee entre `param_registry_get_track_value` et `param_registry_apply_track_value`.
@@ -103,8 +121,8 @@ Familles d'autorite:
   - Risque de confusion d'autorite `param_store.active[]` (verite globale vs miroir UI track) toujours present si appelant hors contrat lit sans distinguer domaine.
 
 - Dette lisibilite (non urgente):
-  - Densite de helpers et mappings locaux (conversions UI127, apply wrappers, enums labels) elevee mais stable.
-  - `param_store.c` reste simple et contractuel; coupling vers `param_registry` pour defaults/apply est connu et borne.
+  - densite locale surtout dans les decisions d'orchestration Z3 (autorisation + routing des chemins).
+  - `param_store.c` reste simple et contractuel; coupling vers le catalogue/bindings est connu et borne.
 
 ## 8. Plus petite prochaine passe utile
 
@@ -118,6 +136,7 @@ Familles d'autorite:
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.
 - Frontiere Z3/Z4 (live-rec param):
   - Hors PLAY+REC actif: edition param track-aware -> `param_registry_apply_track_value` (autorite Z3).
+  - Sur ce chemin hors PLAY+REC, la sync base Seq post-apply passe par une commande explicite UI->Seq (`seq_param_iface_commit_base_after_authoritative_apply(cmd)`), avec cible/preconditions explicites; `seq_param_iface` ne lit plus `ui_get_active_track()` comme garde implicite.
   - En PLAY+REC actif: edition param track-aware routee vers Z4 (`seq_runtime_live_rec_param_write`) pour ecriture p-lock sequenceur.
   - Contrat d'autorite: pas de double write concurrent `param_registry_apply_track_value` + ecriture p-lock sur le meme edit live.
 
@@ -183,9 +202,21 @@ Familles d'autorite:
 - Lors d'un changement `CFG_TRACK`/`CFG_TRACK_TYPE`, Z3 migre d'abord le runtime per-lane (MIX/FILTER/VCA) selon le rebind des mix lanes, puis reapplique explicitement tous les params lane-bound track-aware (`FILTER_*`, `level/pan/sends/hybrid_gate/vca`) pour recoller le runtime a l'autorite logique.
 
 ## 14. Contrat corridor structurel Off -> On
-- Le corridor structurel est maintenant unique et centralise: capture des mix-targets precedents, mutation family/type, invalidation/sync systeme, rebind mixer, neutralisation runtime invalide, puis re-apply lane-bound avant toute sync UI active-track.
+- Le corridor structurel est maintenant unique et centralise cote Z3 via `param_registry_apply_track_structure_transition(...)`: capture des mix-targets precedents, mutation structurelle delegatee (callback Z5), rebind mixer, neutralisation runtime invalide, puis re-apply lane-bound avant toute resync UI active-track.
 - Le re-apply lane-bound ne depend plus d'un cache partiel silencieux: l'autorite est explicite (`filter_ui_state` pour FILTER, cache track-aware sinon valeur par defaut promue dans le cache).
 - Pendant ce corridor, les consommateurs de modulation control-rate (`mod_lfo_v1`) sont suspendus pour eviter une capture/restauration sur topologie intermediaire.
+
+## 19. Contrat Passe 6 - Frontiere Z3 execution vs miroir UI Z5
+
+- Contrat d'edit track-aware explicite:
+  - Z5 emet `param_registry_track_edit_cmd_t` vers Z3 (`param_registry_apply_track_edit`).
+  - Z3 applique sans relire le focus UI implicite.
+- Contrat de transition structurelle explicite:
+  - Z5 delegue la mutation runtime a Z3 via `param_registry_track_structure_transition_cmd_t`.
+  - Z3 orchestre l'ordre capture -> mutation -> rebind/re-apply -> fin de transition.
+- Contrat miroir UI:
+  - le miroir `param_store.active[]` track-scoped actif est synchronise cote Z5 (`ui_param_sync_active_track_mirror_from_runtime`).
+  - Z3 conserve l'autorite runtime d'execution; Z5 conserve l'autorite presentation/contexte d'edition.
 
 ## 15. Contrat Passe 1 - Autorite execution MIDI
 - Les chemins d'application MIDI dans `param_registry` lisent le canal via Z2 (`track_runtime_get_midi_channel_zero_based`).
@@ -194,3 +225,51 @@ Familles d'autorite:
 ## 16. Contrat Passe 2 - Consommation du resolver Z2
 - Les helpers de resolution de cible FILTER (`resolve_filter_target_track*`) consomment desormais `track_runtime_resolve_track`.
 - Z3 n'interprete plus localement l'etat bind/mix-target pour ces chemins: la cible resolue vient de Z2.
+
+## 17. Contrat Passe 3 - Apply engine interne clarifie
+
+- `param_registry_apply_track_value` est desormais un routeur court:
+  - params LFO config -> `mod_lfo_v1_set_track_param`,
+  - params FILTER -> `param_apply_filter_track_value`,
+  - autres params track-aware/global -> `param_apply_non_filter_track_value`.
+- Le chemin non-FILTER est separe en 4 sous-roles explicites:
+  - resolution contextuelle Z2 (`param_track_apply_ctx_build`),
+  - autorisation (`param_track_apply_authorize`),
+  - application backend (`param_track_apply_backend`),
+  - sync post-apply (`param_track_apply_sync_after_apply`).
+- La resolution structurelle consomme le resolver Z2 (`track_runtime_resolve_track`) plutot que `track_runtime_get_ctx` local dans le coeur d'apply.
+- Les decisions MIDI TONE (Program/CC) sont autorisees depuis le descriptor resolu (`family/type`) puis appliquees localement (emit/cache).
+- Le bloc FILTER garde son shadow-state UI, mais l'apply est isole dans un helper dedie au lieu d'etre melange au reste du dispatch.
+
+Impact debug immediat:
+- point d'entree d'apply plus lisible,
+- etapes autorisation/resolution/apply/sync tracables en isolation,
+- reduction du risque d'oubli de resync LFO sur les chemins non-FILTER.
+
+Dette explicitement laissee pour Passe 4:
+- extraire davantage la logique FILTER (shadow-state + conversions) pour reduire la duplication get/apply,
+- rapprocher `param_registry_apply_track_value_rt_fast` de la meme frontiere interne,
+- isoler les backends engine-specifiques hors du fichier monolithique `param_registry.c`.
+
+## 18. Contrat Passe 4 - FILTER/RT fast/domaines explicites
+
+- FILTER n'est plus applique via un bloc unique melange:
+  - resolution cible: `param_filter_resolve_target`,
+  - apply runtime mixer/audio: `param_filter_apply_runtime`,
+  - mutation shadow-state UI track: `param_filter_update_shadow_state`,
+  - orchestration complete: `param_filter_apply_value`.
+- `param_apply_filter_track_value` est reduit a un routeur de politique (`update_shadow=1`, `resync=1`).
+- `param_registry_apply_track_value_rt_fast` reutilise le meme coeur FILTER (`param_filter_apply_value`) avec une politique RT explicite (`update_shadow=0`, `resync=0`).
+- Le non-FILTER RT fast suit maintenant une frontiere explicite (ctx/authorize/apply):
+  - `param_track_rt_fast_ctx_build`,
+  - `param_track_rt_fast_authorize`,
+  - `param_track_rt_fast_apply_backend`.
+- Domaines residuels clarifies explicitement:
+  - en apply normal (`param_track_apply_backend`): `PLAY` et `MOD` => refuses explicitement,
+  - en RT fast (`param_track_rt_fast_authorize` + backend): `PLAY`, `MOD` et `MIDI_PROGRAM` => refuses explicitement.
+- Le chemin normal conserve la sync base LFO apres apply autoritatif; le RT fast reste sans sync base pour la modulation control-rate.
+
+Dette explicite post-passe 4:
+- `param_runtime_apply_track` reste encore mixe (dispatch tone/mix + engine-specific) dans le meme TU,
+- le shadow FILTER reste local a `param_registry.c` (pas encore isole dans un sous-module dedie),
+- la separation en fichiers Z3 (rules/resolution/apply/sync) reste a faire seulement si necessaire en passe suivante.

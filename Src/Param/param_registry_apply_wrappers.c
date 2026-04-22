@@ -1,0 +1,379 @@
+#include "Param/param_registry_apply_bindings.h"
+#include "Param/param_registry.h"
+#include "audio_float.h"
+#include "Keyboard/keyboard_runtime.h"
+#include "fx_daisy_comp.h"
+#include "fx_granular.h"
+#include "fx_pool.h"
+#include "mixer.h"
+#include "ui_core.h"
+#include "Seq/seq_runtime.h"
+#include "Seq/seq_model.h"
+#include "Storage/undo_v1.h"
+#include "Mod/mod_lfo_v1.h"
+
+static float clamp_value(float v, float lo, float hi)
+{
+    if (v < lo)
+        return lo;
+    if (v > hi)
+        return hi;
+    return v;
+}
+
+static int8_t control_float_to_slot(float v)
+{
+    if (v < 0.0f)
+        return -1;
+    return (int8_t)v;
+}
+
+static uint8_t control_float_to_ui127(float v)
+{
+    if (v <= 0.0f)
+        return 0U;
+    if (v >= 1.0f)
+        return 127U;
+    return (uint8_t)(v * 127.0f + 0.5f);
+}
+
+static void apply_tone_live_track(param_id_t id, float value)
+{
+    (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
+}
+
+static fx_granular_state_t *get_active_granular_state(void)
+{
+    for (uint32_t i = 0U;; ++i)
+    {
+        fx_slot_t *slot = fx_pool_get_slot(i);
+        if (slot == NULL)
+            break;
+
+        if ((slot->active != 0U) && ((fx_type_t)slot->type == FX_GRANULAR) && (slot->state != NULL))
+            return (fx_granular_state_t *)slot->state;
+    }
+
+    return NULL;
+}
+
+static uint8_t seq_div_ui_to_runtime(float v)
+{
+    const uint8_t ui = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    switch (ui)
+    {
+        case 1U: return 2U;
+        case 2U: return 4U;
+        case 3U: return 8U;
+        case 0U:
+        default: return 1U;
+    }
+}
+
+volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
+
+void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
+void apply_mix_send1_fx(float v) { mixer_set_send_fx_slot(1U, control_float_to_slot(v)); }
+
+void apply_mix_reverb_wet(float v) { mixer_set_reverb_wet(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_size(float v) { mixer_set_reverb_size(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_type(float v) { mixer_set_reverb_type((uint8_t)clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0.0f, 1.0f)); }
+
+void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
+void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
+void apply_sampler_gain(float v) { apply_tone_live_track(PARAM_SAMPLER_GAIN, v); }
+void apply_sampler_start(float v) { apply_tone_live_track(PARAM_SAMPLER_START, v); }
+void apply_sampler_end(float v) { apply_tone_live_track(PARAM_SAMPLER_END, v); }
+void apply_sampler_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_MODE, v); }
+void apply_sampler_tune(float v) { apply_tone_live_track(PARAM_SAMPLER_TUNE, v); }
+void apply_sampler_fade_in(float v) { apply_tone_live_track(PARAM_SAMPLER_FADE_IN, v); }
+void apply_sampler_fade_out(float v) { apply_tone_live_track(PARAM_SAMPLER_FADE_OUT, v); }
+void apply_sampler_slice_count(float v) { apply_tone_live_track(PARAM_SAMPLER_SLICE_COUNT, v); }
+void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }
+void apply_midi_cc1_2(float v) { apply_tone_live_track(PARAM_MIDI_CC1_2, v); }
+void apply_midi_cc1_3(float v) { apply_tone_live_track(PARAM_MIDI_CC1_3, v); }
+void apply_midi_cc1_4(float v) { apply_tone_live_track(PARAM_MIDI_CC1_4, v); }
+void apply_midi_cc2_1(float v) { apply_tone_live_track(PARAM_MIDI_CC2_1, v); }
+void apply_midi_cc2_2(float v) { apply_tone_live_track(PARAM_MIDI_CC2_2, v); }
+void apply_midi_cc2_3(float v) { apply_tone_live_track(PARAM_MIDI_CC2_3, v); }
+void apply_midi_cc2_4(float v) { apply_tone_live_track(PARAM_MIDI_CC2_4, v); }
+void apply_midi_cc3_1(float v) { apply_tone_live_track(PARAM_MIDI_CC3_1, v); }
+void apply_midi_cc3_2(float v) { apply_tone_live_track(PARAM_MIDI_CC3_2, v); }
+void apply_midi_cc3_3(float v) { apply_tone_live_track(PARAM_MIDI_CC3_3, v); }
+void apply_midi_cc3_4(float v) { apply_tone_live_track(PARAM_MIDI_CC3_4, v); }
+
+void apply_gran_density(float v)
+{
+    fx_granular_state_t *state = get_active_granular_state();
+    if (state != NULL) fx_granular_set_density(state, v);
+}
+
+void apply_gran_pitch(float v)
+{
+    fx_granular_state_t *state = get_active_granular_state();
+    if (state != NULL) fx_granular_set_pitch(state, v);
+}
+
+void apply_gran_mix(float v)
+{
+    fx_granular_state_t *state = get_active_granular_state();
+    if (state != NULL) fx_granular_set_mix(state, v);
+}
+
+void apply_gran_freeze(float v)
+{
+    fx_granular_state_t *state = get_active_granular_state();
+    if (state != NULL) fx_granular_set_freeze(state, (v >= 0.5f));
+}
+
+void apply_gran_spread(float v)
+{
+    fx_granular_state_t *state = get_active_granular_state();
+    if (state != NULL) fx_granular_set_spread(state, v);
+}
+
+void apply_gran_stereo(float v)
+{
+    fx_granular_state_t *state = get_active_granular_state();
+    if (state != NULL) fx_granular_set_stereo_offset(state, v);
+}
+
+void apply_eq_low_db(float v) { audio_float_set_dj_eq_low_db(v); }
+void apply_eq_mid_db(float v) { audio_float_set_dj_eq_mid_db(v); }
+void apply_eq_high_db(float v) { audio_float_set_dj_eq_high_db(v); }
+
+void apply_sat_tone(float v) { audio_float_set_saturation_tone_ui(control_float_to_ui127(v)); }
+void apply_sat_bias(float v) { audio_float_set_saturation_bias_ui(control_float_to_ui127(v)); }
+void apply_sat_drive(float v) { audio_float_set_saturation_drive_ui(control_float_to_ui127(v)); }
+void apply_sat_mix(float v) { audio_float_set_saturation_mix_ui(control_float_to_ui127(v)); }
+
+void apply_lfo1_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEST, v); }
+void apply_lfo1_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_RATE, v); }
+void apply_lfo1_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEPTH, v); }
+void apply_lfo1_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_SHAPE, v); }
+void apply_lfo2_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEST, v); }
+void apply_lfo2_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_RATE, v); }
+void apply_lfo2_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEPTH, v); }
+void apply_lfo2_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_SHAPE, v); }
+
+void apply_cfg_track(float v)
+{
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t previous_family = ui_get_track_family(active_track);
+    const ui_track_type_t previous_type = ui_get_track_type(active_track);
+    const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
+
+    if (ui_set_track_family(active_track, requested_family) == false)
+    {
+        param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
+        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+        return;
+    }
+
+    param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
+    param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+    if ((ui_get_track_family(active_track) == previous_family)
+            && (ui_get_track_type(active_track) == previous_type))
+    {
+        return;
+    }
+}
+
+void apply_cfg_track_type(float v)
+{
+    g_param_cfg_track_type_apply_stage = 1U;
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_family_t active_family = ui_get_track_family(active_track);
+    const ui_track_type_t previous_type = ui_get_track_type(active_track);
+    const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
+    const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
+
+    g_param_cfg_track_type_apply_stage = 2U;
+
+    if (ui_set_track_type(active_track, requested_type) == false)
+    {
+        g_param_cfg_track_type_apply_stage = 3U;
+        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+        return;
+    }
+
+    param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+    if (ui_get_track_type(active_track) == previous_type)
+    {
+        g_param_cfg_track_type_apply_stage = 4U;
+        return;
+    }
+    g_param_cfg_track_type_apply_stage = 4U;
+}
+
+void apply_cfg_midi_ch(float v)
+{
+    const uint8_t active_track = ui_get_active_track();
+    const uint8_t requested_channel = (uint8_t)(clamp_value(v, 1.0f, 16.0f) + 0.5f);
+    (void)ui_set_track_midi_channel(active_track, requested_channel);
+    param_store_set_active(PARAM_CFG_MIDI_CH, (float)ui_get_track_midi_channel(active_track));
+}
+
+void apply_cfg_midi_src(float v)
+{
+    const uint8_t active_track = ui_get_active_track();
+    const ui_track_midi_source_t requested_source =
+            (ui_track_midi_source_t)((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f));
+    (void)ui_set_track_midi_source(active_track, requested_source);
+    param_store_set_active(PARAM_CFG_MIDI_SRC, (float)ui_get_track_midi_source(active_track));
+}
+
+void apply_cfg_rec(float v)
+{
+    uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    seq_runtime_set_rec_count_in_mode(mode);
+    mode = seq_runtime_get_rec_count_in_mode();
+    param_store_set_active(PARAM_CFG_REC, (float)mode);
+}
+
+void apply_cfg_tempo(float v)
+{
+    uint32_t bpm_milli = (uint32_t)(clamp_value(v, 40.0f, 300.0f) * 1000.0f + 0.5f);
+    seq_runtime_set_tempo_bpm_milli(bpm_milli);
+    bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    param_store_set_active(PARAM_CFG_TEMPO, (float)bpm_milli / 1000.0f);
+}
+
+void apply_cfg_sync(float v)
+{
+    const uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f);
+    seq_clock_src_t source = SEQ_CLOCK_SRC_INTERNAL;
+    if (mode == 1U)
+    {
+        source = SEQ_CLOCK_SRC_EXTERNAL_MIDI;
+    }
+    else if (mode == 2U)
+    {
+        source = SEQ_CLOCK_SRC_EXTERNAL_USB;
+    }
+
+    seq_runtime_set_clock_source(source);
+
+    uint8_t synced_mode = 0U;
+    switch (seq_runtime_get_clock_source())
+    {
+        case SEQ_CLOCK_SRC_EXTERNAL_MIDI:
+            synced_mode = 1U;
+            break;
+        case SEQ_CLOCK_SRC_EXTERNAL_USB:
+            synced_mode = 2U;
+            break;
+        case SEQ_CLOCK_SRC_INTERNAL:
+        default:
+            synced_mode = 0U;
+            break;
+    }
+    param_store_set_active(PARAM_CFG_SYNC, (float)synced_mode);
+}
+
+void apply_cfg_rec_len(float v)
+{
+    uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f);
+    seq_runtime_set_rec_len_mode(mode);
+    mode = seq_runtime_get_rec_len_mode();
+    param_store_set_active(PARAM_CFG_REC_LEN, (float)mode);
+}
+
+void apply_seq_length(float v)
+{
+    const uint8_t track = ui_get_active_track();
+    (void)undo_v1_capture_before_edit(0U);
+    seq_model_set_track_length(track, (uint8_t)(v + 0.5f));
+    seq_runtime_on_track_length_changed(track);
+}
+
+void apply_seq_div(float v)
+{
+    seq_runtime_set_track_div(ui_get_active_track(), seq_div_ui_to_runtime(v));
+}
+
+void apply_seq_quant(float v)
+{
+    seq_runtime_set_track_quant(ui_get_active_track(), (uint8_t)(v + 0.5f));
+}
+
+void apply_seq_swing(float v)
+{
+    seq_runtime_set_track_swing(ui_get_active_track(), (uint8_t)(v + 0.5f));
+}
+
+void apply_kbd_root(float v) { keyboard_runtime_set_root((uint8_t)(clamp_value(v, 0.0f, 11.0f) + 0.5f)); }
+void apply_kbd_scale(float v) { keyboard_runtime_set_scale((uint8_t)(clamp_value(v, 0.0f, (float)KBD_SCALE_CHROMATIC) + 0.5f)); }
+void apply_kbd_omnichord(float v) { keyboard_runtime_set_omnichord(v >= 0.5f); }
+void apply_kbd_note_order(float v) { keyboard_runtime_set_note_order((v >= 0.5f) ? NOTE_ORDER_FIFTHS : NOTE_ORDER_NATURAL); }
+void apply_kbd_chord_override(float v) { keyboard_runtime_set_chord_override(v >= 0.5f); }
+void apply_arp_hold(float v) { keyboard_runtime_set_arp_hold(v >= 0.5f); }
+void apply_arp_rate(float v) { keyboard_runtime_set_arp_rate((uint8_t)(clamp_value(v, 0.0f, 7.0f) + 0.5f)); }
+void apply_arp_oct(float v) { keyboard_runtime_set_arp_oct((uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+void apply_arp_pattern(float v) { keyboard_runtime_set_arp_pattern((uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+void apply_arp_gate(float v) { keyboard_runtime_set_arp_gate((uint8_t)(clamp_value(v, 1.0f, 127.0f) + 0.5f)); }
+void apply_arp_swing(float v) { keyboard_runtime_set_arp_swing((uint8_t)(clamp_value(v, 0.0f, 100.0f) + 0.5f)); }
+void apply_arp_accent(float v) { keyboard_runtime_set_arp_accent((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
+void apply_arp_vel_acc(float v) { keyboard_runtime_set_arp_vel_acc((uint8_t)(clamp_value(v, 0.0f, 64.0f) + 0.5f)); }
+void apply_arp_strum(float v) { keyboard_runtime_set_arp_strum((uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }
+void apply_arp_offset(float v) { keyboard_runtime_set_arp_offset((int8_t)(clamp_value(v, -24.0f, 24.0f) + ((v >= 0.0f) ? 0.5f : -0.5f))); }
+void apply_arp_trans(float v) { keyboard_runtime_set_arp_transpose((int8_t)(clamp_value(v, -24.0f, 24.0f) + ((v >= 0.0f) ? 0.5f : -0.5f))); }
+void apply_arp_spread(float v) { keyboard_runtime_set_arp_spread((uint8_t)(clamp_value(v, 0.0f, 12.0f) + 0.5f)); }
+void apply_arp_dir(float v) { keyboard_runtime_set_arp_dir((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f)); }
+void apply_arp_sync(float v) { keyboard_runtime_set_arp_sync((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f)); }
+
+void apply_master_gain(float v) { (void)v; }
+void apply_post_gain(float v) { audio_float_set_postgain(v); }
+void apply_output_comp(float v) { audio_float_set_output_compensation(v); }
+
+void apply_bus_comp_threshold(float v) { audio_float_set_bus_comp_threshold_db(v); }
+void apply_bus_comp_ratio(float v) { audio_float_set_bus_comp_ratio(v); }
+void apply_bus_comp_attack_index(float v) { audio_float_set_bus_comp_attack_index((uint8_t)v); }
+void apply_bus_comp_release_index(float v) { audio_float_set_bus_comp_release_index((uint8_t)v); }
+void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(v); }
+void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
+
+void apply_daisy_threshold(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_threshold_db(comp, v);
+}
+
+void apply_daisy_ratio(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_ratio(comp, v);
+}
+
+void apply_daisy_attack(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_attack_s(comp, v);
+}
+
+void apply_daisy_release(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_release_s(comp, v);
+}
+
+void apply_daisy_makeup(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_makeup_db(comp, v);
+}
+
+void apply_daisy_auto_makeup(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_auto_makeup(comp, (v >= 0.5f) ? 1U : 0U);
+}
+
+void apply_daisy_mix(float v)
+{
+    fx_daisy_comp_t *comp = fx_daisy_comp_get_instance();
+    if (comp != NULL) fx_daisy_comp_set_mix(comp, v);
+}

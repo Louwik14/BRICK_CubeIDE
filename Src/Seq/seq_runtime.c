@@ -25,7 +25,6 @@
 #include "Seq/seq_transport_fsm.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Storage/undo_v1.h"
-#include "UI/ui_core.h"
 #include "main.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
@@ -40,6 +39,7 @@ SEQ_STATE_D2 static uint8_t g_seq_rec_count_in_mode;
 SEQ_STATE_D2 static uint8_t g_seq_rec_len_mode;
 SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_pending_start;
 SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_active;
+SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_target_track;
 SEQ_STATE_D2 static uint8_t g_seq_pattern_rec_track;
 SEQ_STATE_D2 static uint32_t g_seq_pattern_rec_steps_remaining;
 static volatile uint32_t g_seq_internal_time_tick;
@@ -54,7 +54,7 @@ SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
 static void seq_runtime_pattern_rec_start_now(void);
 static void seq_runtime_process_step_boundaries(void);
 static void seq_runtime_live_rec_flush_and_reset(void);
-static void seq_runtime_pattern_rec_bind_track_to_active(void);
+static void seq_runtime_pattern_rec_bind_track_to_target(void);
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static void seq_runtime_begin_running_at_sample_q16(uint64_t start_sample_q16);
 static void seq_runtime_process_step_pulse_at_sample_q16(uint64_t pulse_sample_q16, uint32_t now_tick);
@@ -221,14 +221,18 @@ static uint8_t seq_runtime_get_track_pattern_length_steps(seq_track_id_t track)
     return seq_model_get_track_playback_length(track);
 }
 
-static void seq_runtime_pattern_rec_bind_track_to_active(void)
+static uint8_t seq_runtime_pattern_rec_sanitize_track(uint8_t track)
 {
-    uint8_t track = ui_get_active_track();
     if (track >= SEQ_TRACK_COUNT)
     {
-        track = 0U;
+        return 0U;
     }
-    g_seq_pattern_rec_track = track;
+    return track;
+}
+
+static void seq_runtime_pattern_rec_bind_track_to_target(void)
+{
+    g_seq_pattern_rec_track = seq_runtime_pattern_rec_sanitize_track(g_seq_pattern_rec_target_track);
 }
 
 static uint32_t seq_runtime_get_track_pattern_duration_steps(seq_track_id_t track)
@@ -591,6 +595,7 @@ void seq_runtime_init(void)
     g_seq_rec_len_mode = (uint8_t)SEQ_REC_LEN_MODE_OVERDUB;
     g_seq_pattern_rec_pending_start = 0U;
     g_seq_pattern_rec_active = 0U;
+    g_seq_pattern_rec_target_track = 0U;
     g_seq_pattern_rec_track = 0U;
     g_seq_pattern_rec_steps_remaining = 0U;
     seq_clock_bridge_init(&g_seq_clock_bridge,
@@ -1145,7 +1150,7 @@ void seq_runtime_rec_toggle_arm(void)
         if ((g_seq_rec_armed == 0U) && (seq_runtime_is_running() != 0U))
         {
             g_seq_rec_armed = 1U;
-            seq_runtime_pattern_rec_bind_track_to_active();
+            seq_runtime_pattern_rec_bind_track_to_target();
             g_seq_pattern_rec_pending_start = 1U;
             g_seq_pattern_rec_active = 0U;
             g_seq_pattern_rec_steps_remaining = 0U;
@@ -1157,7 +1162,7 @@ void seq_runtime_rec_toggle_arm(void)
     g_seq_rec_armed = (g_seq_rec_armed == 0U) ? 1U : 0U;
     if ((g_seq_rec_armed != 0U) && (g_seq_rec_len_mode == (uint8_t)SEQ_REC_LEN_MODE_PATTERN))
     {
-        seq_runtime_pattern_rec_bind_track_to_active();
+        seq_runtime_pattern_rec_bind_track_to_target();
     }
     if (g_seq_rec_armed == 0U)
     {
@@ -1278,6 +1283,22 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
 
     seq_edit_step_plock_commit(track, step, set_id, param8);
     return 1U;
+}
+
+void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_seq_pattern_rec_target_track = track;
+
+    if ((g_seq_rec_len_mode == (uint8_t)SEQ_REC_LEN_MODE_PATTERN)
+        && (g_seq_pattern_rec_active == 0U))
+    {
+        g_seq_pattern_rec_track = g_seq_pattern_rec_target_track;
+    }
 }
 
 uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,

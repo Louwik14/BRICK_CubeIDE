@@ -320,8 +320,98 @@ static const ui_system_sync_adapter_t g_ui_core_system_sync_adapter = {
     .sync_audio_runtime_enables = ui_core_sync_audio_runtime_enables
 };
 
+static bool ui_apply_track_config_bulk_mutation_internal(const uint8_t family[UI_TRACK_COUNT],
+                                                         const uint8_t type[UI_TRACK_COUNT],
+                                                         const uint8_t midi_channel[UI_TRACK_COUNT],
+                                                         const uint8_t midi_source[UI_TRACK_COUNT]);
+
+typedef struct
+{
+    const ui_system_sync_request_t *request;
+    uint8_t sync_active_track_ui_context;
+    const uint8_t *family;
+    const uint8_t *type;
+    const uint8_t *midi_channel;
+    const uint8_t *midi_source;
+} ui_core_track_transition_ctx_t;
+
+static uint8_t ui_core_track_transition_apply_system_sync(const ui_core_track_transition_ctx_t *ctx)
+{
+    if ((ctx == 0) || (ctx->request == 0))
+    {
+        return 0U;
+    }
+
+    ui_system_sync_apply_track_context_change(ctx->request, &g_ui_core_system_sync_adapter);
+    return 1U;
+}
+
+static uint8_t ui_core_track_transition_mutate_structure(void *ctx_ptr)
+{
+    const ui_core_track_transition_ctx_t *const ctx =
+        (const ui_core_track_transition_ctx_t *)ctx_ptr;
+    return ui_core_track_transition_apply_system_sync(ctx);
+}
+
+static uint8_t ui_core_track_transition_mutate_bulk_restore(void *ctx_ptr)
+{
+    ui_core_track_transition_ctx_t *const ctx = (ui_core_track_transition_ctx_t *)ctx_ptr;
+    if ((ctx == 0)
+            || (ctx->family == 0)
+            || (ctx->type == 0)
+            || (ctx->midi_channel == 0)
+            || (ctx->midi_source == 0))
+    {
+        return 0U;
+    }
+
+    if (ui_apply_track_config_bulk_mutation_internal(ctx->family,
+                                                     ctx->type,
+                                                     ctx->midi_channel,
+                                                     ctx->midi_source) == false)
+    {
+        return 0U;
+    }
+
+    return ui_core_track_transition_apply_system_sync(ctx);
+}
+
+static uint8_t ui_core_track_transition_ui_sync_apply(void *ctx_ptr)
+{
+    const ui_core_track_transition_ctx_t *const ctx =
+        (const ui_core_track_transition_ctx_t *)ctx_ptr;
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    mod_lfo_v1_invalidate_dest_cache_all();
+    ui_active_track_sync_after_track_structure_change(ctx->sync_active_track_ui_context);
+    return 1U;
+}
+
+static uint8_t ui_core_run_track_transition_pipeline(param_registry_track_transition_stage_fn_t mutate_fn,
+                                                     void *ctx_ptr)
+{
+    if ((mutate_fn == 0) || (ctx_ptr == 0))
+    {
+        return 0U;
+    }
+
+    const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
+        .prepare_fn = NULL,
+        .mutate_fn = mutate_fn,
+        .reapply_fn = NULL,
+        .seq_runtime_sync_fn = NULL,
+        .ui_sync_fn = ui_core_track_transition_ui_sync_apply,
+        .resume_fn = NULL,
+        .ctx = ctx_ptr
+    };
+
+    return param_registry_run_track_transition_pipeline(&transition_cmd);
+}
+
 static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *request,
-                                              const uint8_t *previous_mix_tracks,
                                               uint8_t sync_active_track_ui_context)
 {
     if (request == 0)
@@ -329,12 +419,17 @@ static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *re
         return;
     }
 
-    param_registry_track_structure_transition_begin();
-    ui_system_sync_apply_track_context_change(request, &g_ui_core_system_sync_adapter);
-    param_registry_finalize_track_structure_change(previous_mix_tracks);
-    param_registry_track_structure_transition_end();
-    mod_lfo_v1_invalidate_dest_cache_all();
-    ui_active_track_sync_after_track_structure_change(sync_active_track_ui_context);
+    const ui_core_track_transition_ctx_t transition_ctx = {
+        .request = request,
+        .sync_active_track_ui_context = sync_active_track_ui_context,
+        .family = 0,
+        .type = 0,
+        .midi_channel = 0,
+        .midi_source = 0
+    };
+
+    (void)ui_core_run_track_transition_pipeline(ui_core_track_transition_mutate_structure,
+                                                (void *)&transition_ctx);
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -352,12 +447,6 @@ static void ui_core_set_active_track(uint8_t track)
 
     (void)ui_core_select_active_track(track);
     ui_core_sync_active_track_ui_context(1U);
-}
-
-static void ui_core_post_restore_global_sync(const uint8_t *previous_mix_tracks)
-{
-    const ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
-    ui_core_reconfigure_track_runtime(&request, previous_mix_tracks, 1U);
 }
 
 uint8_t ui_get_track_midi_channel(uint8_t track)
@@ -416,12 +505,11 @@ bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
     return true;
 }
 
-bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
-                                  const uint8_t type[UI_TRACK_COUNT],
-                                  const uint8_t midi_channel[UI_TRACK_COUNT],
-                                  const uint8_t midi_source[UI_TRACK_COUNT])
+static bool ui_apply_track_config_bulk_mutation_internal(const uint8_t family[UI_TRACK_COUNT],
+                                                         const uint8_t type[UI_TRACK_COUNT],
+                                                         const uint8_t midi_channel[UI_TRACK_COUNT],
+                                                         const uint8_t midi_source[UI_TRACK_COUNT])
 {
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
     ui_track_type_t normalized_type[UI_TRACK_COUNT];
 
     if ((family == 0) || (type == 0) || (midi_channel == 0) || (midi_source == 0))
@@ -476,8 +564,6 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
 
     }
 
-    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
-
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_family_t fam = (ui_track_family_t)family[track];
@@ -495,7 +581,37 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
         g_ui_track_state.track_midi_source[track] = midi_source[track];
     }
 
-    ui_core_post_restore_global_sync(previous_mix_tracks);
+    return true;
+}
+
+bool ui_apply_track_config_bulk_mutation(const uint8_t family[UI_TRACK_COUNT],
+                                         const uint8_t type[UI_TRACK_COUNT],
+                                         const uint8_t midi_channel[UI_TRACK_COUNT],
+                                         const uint8_t midi_source[UI_TRACK_COUNT])
+{
+    return ui_apply_track_config_bulk_mutation_internal(family, type, midi_channel, midi_source);
+}
+
+bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
+                                  const uint8_t type[UI_TRACK_COUNT],
+                                  const uint8_t midi_channel[UI_TRACK_COUNT],
+                                  const uint8_t midi_source[UI_TRACK_COUNT])
+{
+    const ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
+    ui_core_track_transition_ctx_t transition_ctx = {
+        .request = &request,
+        .sync_active_track_ui_context = 1U,
+        .family = family,
+        .type = type,
+        .midi_channel = midi_channel,
+        .midi_source = midi_source
+    };
+
+    if (ui_core_run_track_transition_pipeline(ui_core_track_transition_mutate_bulk_restore,
+                                              (void *)&transition_ctx) == 0U)
+    {
+        return false;
+    }
     return true;
 }
 
@@ -1065,8 +1181,6 @@ ui_track_type_t ui_get_track_type(uint8_t track)
 
 bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 {
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
-
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
     {
         return false;
@@ -1111,7 +1225,6 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
     config->family = family;
     if (!ui_track_type_is_available(track, config->family, config->type))
     {
@@ -1123,15 +1236,13 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_family_change(active_track_touched);
-    ui_core_reconfigure_track_runtime(&request, previous_mix_tracks, active_track_touched);
+    ui_core_reconfigure_track_runtime(&request, active_track_touched);
 
     return true;
 }
 
 bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 {
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
-
     if ((track >= UI_TRACK_COUNT) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
     {
         return false;
@@ -1165,12 +1276,11 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return true;
     }
 
-    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
     config->type = type;
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_type_change(active_track_touched);
-    ui_core_reconfigure_track_runtime(&request, previous_mix_tracks, active_track_touched);
+    ui_core_reconfigure_track_runtime(&request, active_track_touched);
 
     return true;
 }

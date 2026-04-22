@@ -6,7 +6,6 @@
 #include "Param/param_store.h"
 #include "Storage/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
-#include "UI/ui_active_track_sync.h"
 #include "main.h"
 
 #define UNDO_V1_GESTURE_TIMEOUT_TICKS 300U
@@ -176,8 +175,6 @@ uint8_t undo_v1_restore(uint8_t resume_transport)
         {
             g_undo_v1.count--;
         }
-
-        ui_active_track_sync_full_after_global_restore();
     }
     g_undo_capture_suspended = 0U;
     g_undo_gesture_key = 0U;

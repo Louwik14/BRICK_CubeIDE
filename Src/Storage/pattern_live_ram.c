@@ -54,10 +54,10 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
         return 0U;
     }
 
-    return (ui_restore_track_config_bulk(track_cfg->family,
-                                         track_cfg->type,
-                                         track_cfg->midi_channel,
-                                         track_cfg->midi_source) != false)
+    return (ui_apply_track_config_bulk_mutation(track_cfg->family,
+                                                track_cfg->type,
+                                                track_cfg->midi_channel,
+                                                track_cfg->midi_source) != false)
         ? 1U
         : 0U;
 }
@@ -471,6 +471,151 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
     return 1U;
 }
 
+typedef struct
+{
+    const PatternSaveV1 *pattern;
+    uint8_t resume_transport;
+    uint8_t was_running;
+} pattern_live_transition_ctx_t;
+
+static uint8_t pattern_live_transition_prepare(void *ctx_ptr)
+{
+    pattern_live_transition_ctx_t *const ctx = (pattern_live_transition_ctx_t *)ctx_ptr;
+    if ((ctx == 0) || (ctx->pattern == 0))
+    {
+        return 0U;
+    }
+
+    ctx->was_running = seq_runtime_is_running();
+    seq_runtime_stop();
+    return 1U;
+}
+
+static uint8_t pattern_live_transition_mutate(void *ctx_ptr)
+{
+    pattern_live_transition_ctx_t *const ctx = (pattern_live_transition_ctx_t *)ctx_ptr;
+    if ((ctx == 0) || (ctx->pattern == 0))
+    {
+        return 0U;
+    }
+
+    return pattern_live_apply_track_config_block(&ctx->pattern->track_cfg);
+}
+
+static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
+{
+    pattern_live_transition_ctx_t *const ctx = (pattern_live_transition_ctx_t *)ctx_ptr;
+    if ((ctx == 0) || (ctx->pattern == 0))
+    {
+        return 0U;
+    }
+
+    if (pattern_live_apply_seq_block(&ctx->pattern->seq) == 0U)
+    {
+        return 0U;
+    }
+
+    param_registry_batch_begin();
+    pattern_live_apply_legacy_mix_globals_as_track_values(ctx->pattern);
+
+    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
+    {
+        const param_id_t id = (param_id_t)id_raw;
+
+        for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        {
+            if (ctx->pattern->sound.track_valid[track][id] != 0U)
+            {
+                (void)param_registry_apply_track_value(id, track, ctx->pattern->sound.track_values[track][id]);
+            }
+
+            if (ctx->pattern->mix.track_valid[track][id] != 0U)
+            {
+                (void)param_registry_apply_track_value(id, track, ctx->pattern->mix.track_values[track][id]);
+            }
+        }
+
+        if (ctx->pattern->globals.global_valid[id] != 0U)
+        {
+            if ((param_registry_is_legacy_physical_mix_param(id) != 0U)
+                    || (pattern_live_is_track_scoped_param(id) != 0U))
+            {
+                continue;
+            }
+
+            param_set(id, ctx->pattern->globals.global_values[id]);
+        }
+    }
+
+    param_registry_batch_end();
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        /* LFO restore authority: config is restored only via mod_lfo_v1_set_track_param. */
+        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEST, (float)ctx->pattern->mod.tracks[track].lfo1.dest);
+        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_RATE, (float)ctx->pattern->mod.tracks[track].lfo1.rate);
+        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEPTH, (float)ctx->pattern->mod.tracks[track].lfo1.depth);
+        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_SHAPE, (float)ctx->pattern->mod.tracks[track].lfo1.shape);
+        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEST, (float)ctx->pattern->mod.tracks[track].lfo2.dest);
+        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_RATE, (float)ctx->pattern->mod.tracks[track].lfo2.rate);
+        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEPTH, (float)ctx->pattern->mod.tracks[track].lfo2.depth);
+        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_SHAPE, (float)ctx->pattern->mod.tracks[track].lfo2.shape);
+    }
+
+    return 1U;
+}
+
+static uint8_t pattern_live_transition_seq_runtime_sync(void *ctx_ptr)
+{
+    pattern_live_transition_ctx_t *const ctx = (pattern_live_transition_ctx_t *)ctx_ptr;
+    if ((ctx == 0) || (ctx->pattern == 0))
+    {
+        return 0U;
+    }
+
+    seq_runtime_set_tempo_bpm_milli(ctx->pattern->globals.tempo_bpm_milli);
+    seq_runtime_set_clock_source((seq_clock_src_t)ctx->pattern->globals.clock_src);
+    seq_runtime_set_rec_count_in_mode(ctx->pattern->globals.rec_count_in_mode);
+    seq_runtime_set_rec_len_mode(ctx->pattern->globals.rec_len_mode);
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        seq_runtime_set_track_div(track, ctx->pattern->globals.track_div[track]);
+        seq_runtime_set_track_quant(track, ctx->pattern->globals.track_quant[track]);
+        seq_runtime_set_track_swing(track, ctx->pattern->globals.track_swing[track]);
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        (void)seq_runtime_set_playhead_step(track, 0U);
+    }
+
+    return 1U;
+}
+
+static uint8_t pattern_live_transition_ui_sync(void *ctx_ptr)
+{
+    (void)ctx_ptr;
+    ui_active_track_sync_full_after_global_restore();
+    return 1U;
+}
+
+static uint8_t pattern_live_transition_resume(void *ctx_ptr)
+{
+    pattern_live_transition_ctx_t *const ctx = (pattern_live_transition_ctx_t *)ctx_ptr;
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    if ((ctx->resume_transport != 0U) && (ctx->was_running != 0U))
+    {
+        seq_runtime_start();
+    }
+
+    return 1U;
+}
+
 uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume_transport)
 {
     if ((pattern == 0) || (g_apply_in_progress != 0U))
@@ -485,92 +630,25 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
 
     g_apply_in_progress = 1U;
 
-    const uint8_t was_running = seq_runtime_is_running();
-    seq_runtime_stop();
+    pattern_live_transition_ctx_t transition_ctx = {
+        .pattern = pattern,
+        .resume_transport = resume_transport,
+        .was_running = 0U
+    };
+    const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
+        .prepare_fn = pattern_live_transition_prepare,
+        .mutate_fn = pattern_live_transition_mutate,
+        .reapply_fn = pattern_live_transition_reapply,
+        .seq_runtime_sync_fn = pattern_live_transition_seq_runtime_sync,
+        .ui_sync_fn = pattern_live_transition_ui_sync,
+        .resume_fn = pattern_live_transition_resume,
+        .ctx = (void *)&transition_ctx
+    };
 
-    if (pattern_live_apply_track_config_block(&pattern->track_cfg) == 0U)
+    if (param_registry_run_track_transition_pipeline(&transition_cmd) == 0U)
     {
         g_apply_in_progress = 0U;
         return 0U;
-    }
-
-    track_runtime_refresh_all();
-
-    if (pattern_live_apply_seq_block(&pattern->seq) == 0U)
-    {
-        g_apply_in_progress = 0U;
-        return 0U;
-    }
-
-    param_registry_batch_begin();
-    pattern_live_apply_legacy_mix_globals_as_track_values(pattern);
-
-    for (uint16_t id_raw = 0U; id_raw < (uint16_t)PARAM_COUNT; ++id_raw)
-    {
-        const param_id_t id = (param_id_t)id_raw;
-
-        for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-        {
-            if (pattern->sound.track_valid[track][id] != 0U)
-            {
-                (void)param_registry_apply_track_value(id, track, pattern->sound.track_values[track][id]);
-            }
-
-            if (pattern->mix.track_valid[track][id] != 0U)
-            {
-                (void)param_registry_apply_track_value(id, track, pattern->mix.track_values[track][id]);
-            }
-        }
-
-        if (pattern->globals.global_valid[id] != 0U)
-        {
-            if ((param_registry_is_legacy_physical_mix_param(id) != 0U)
-                    || (pattern_live_is_track_scoped_param(id) != 0U))
-            {
-                continue;
-            }
-
-            param_set(id, pattern->globals.global_values[id]);
-        }
-    }
-
-    param_registry_batch_end();
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        /* LFO restore authority: config is restored only via mod_lfo_v1_set_track_param. */
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEST, (float)pattern->mod.tracks[track].lfo1.dest);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_RATE, (float)pattern->mod.tracks[track].lfo1.rate);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_DEPTH, (float)pattern->mod.tracks[track].lfo1.depth);
-        (void)mod_lfo_v1_set_track_param(track, 0U, MOD_LFO_PARAM_SHAPE, (float)pattern->mod.tracks[track].lfo1.shape);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEST, (float)pattern->mod.tracks[track].lfo2.dest);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_RATE, (float)pattern->mod.tracks[track].lfo2.rate);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_DEPTH, (float)pattern->mod.tracks[track].lfo2.depth);
-        (void)mod_lfo_v1_set_track_param(track, 1U, MOD_LFO_PARAM_SHAPE, (float)pattern->mod.tracks[track].lfo2.shape);
-    }
-
-    seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_bpm_milli);
-    seq_runtime_set_clock_source((seq_clock_src_t)pattern->globals.clock_src);
-    seq_runtime_set_rec_count_in_mode(pattern->globals.rec_count_in_mode);
-    seq_runtime_set_rec_len_mode(pattern->globals.rec_len_mode);
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        seq_runtime_set_track_div(track, pattern->globals.track_div[track]);
-        seq_runtime_set_track_quant(track, pattern->globals.track_quant[track]);
-        seq_runtime_set_track_swing(track, pattern->globals.track_swing[track]);
-    }
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        (void)seq_runtime_set_playhead_step(track, 0U);
-    }
-
-    ui_active_track_sync_full_after_global_restore();
-
-    if ((resume_transport != 0U) && (was_running != 0U))
-    {
-        seq_runtime_start();
     }
 
     g_apply_in_progress = 0U;

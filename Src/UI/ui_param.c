@@ -26,6 +26,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_model.h"
 #include "Core/track_runtime.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
@@ -247,6 +248,62 @@ void ui_param_sync_active_bank_values(void)
     }
 }
 
+void ui_param_sync_active_track_mirror_from_runtime(void)
+{
+    if (param_registry_track_structure_transition_is_active() != 0U)
+    {
+        return;
+    }
+
+    const uint8_t active_track = ui_get_active_track();
+    const float seq_length = (float)seq_model_get_track_length(active_track);
+    uint8_t track_div = 1U;
+    uint8_t track_quant = 0U;
+    uint8_t track_swing = 0U;
+
+    for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
+    {
+        const param_id_t id = (param_id_t)raw_id;
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+        {
+            continue;
+        }
+
+        if ((id >= PARAM_FILTER_TYPE) && (id <= PARAM_FILTER_DECIMATOR_RATE2))
+        {
+            continue;
+        }
+
+        float value = 0.0f;
+        if (param_registry_get_track_value(id, active_track, &value) != 0U)
+        {
+            param_store_set_active(id, value);
+        }
+    }
+
+    param_store_set_active(PARAM_SEQ_LENGTH, seq_length);
+    if (seq_runtime_get_track_div(active_track, &track_div) != 0U)
+    {
+        param_store_set_active(PARAM_SEQ_DIV, (track_div == 1U) ? 0.0f
+                                                                 : (track_div == 2U) ? 1.0f
+                                                                 : (track_div == 4U) ? 2.0f
+                                                                 : (track_div == 8U) ? 3.0f
+                                                                 : 0.0f);
+    }
+    if (seq_runtime_get_track_quant(active_track, &track_quant) != 0U)
+    {
+        param_store_set_active(PARAM_SEQ_QUANT, (float)track_quant);
+    }
+    if (seq_runtime_get_track_swing(active_track, &track_swing) != 0U)
+    {
+        param_store_set_active(PARAM_SEQ_SWING, (float)track_swing);
+    }
+
+    param_registry_sync_filter_ui_for_active_track();
+}
+
 static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,
                                              seq_step_id_t *out_ref_step,
                                              uint8_t promote_pending)
@@ -408,7 +465,12 @@ static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
 
     (void)undo_v1_capture_before_edit(0U);
 
-    if (param_registry_apply_track_value(param, active_track, clamped) == 0U)
+    const param_registry_track_edit_cmd_t edit_cmd = {
+        .id = param,
+        .track = active_track,
+        .value = clamped
+    };
+    if (param_registry_apply_track_edit(&edit_cmd) == 0U)
     {
         return 0U;
     }
@@ -418,7 +480,15 @@ static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
     if (seq_param_iface_map_param(param, &set_id, &param8) != 0U)
     {
         const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
-        (void)seq_param_iface_ui_commit_base_after_authoritative_apply(active_track, set_id, param8, encoded);
+        const seq_param_iface_base_commit_cmd_t cmd = {
+            .source = SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT,
+            .authoritative_apply_done = 1U,
+            .target_track = active_track,
+            .set_id = set_id,
+            .param8 = param8,
+            .value16 = encoded
+        };
+        (void)seq_param_iface_commit_base_after_authoritative_apply(&cmd);
     }
 
     /* Track-scoped contract: active[] mirrors the UI edit context; runtime authority is apply_track_value(track,...). */
