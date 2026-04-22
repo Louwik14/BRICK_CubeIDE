@@ -48,6 +48,7 @@ Doc :
 
 ## Z2 — Track Runtime Authority
 Lit ce document si le sujet touche :
+- track_state autoritatif
 - family / type effectifs
 - binding runtime
 - mix target runtime
@@ -65,6 +66,8 @@ Lit ce document si le sujet touche :
 - staging / commit
 - modulation LFO
 - coexistence global / track-aware / legacy
+- modèle paramétrique par track
+- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Sampler + MIDI simple + TRX BD + TRX Claves + TRX HiHat + FM Kick)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`
@@ -158,5 +161,4 @@ Documents conserves pour tracabilite uniquement:
 - docs/architecture/historique_z3_param_write_map_audit_2026-04-14.md (passe d'audit ciblee).
 - docs/architecture/historique_z4_quant_swing_runtime_contract_2026-04-14.md (note de chantier pre-consolidation).
 - docs/architecture/historique_z5_ui_orchestration_cartographie_2026-04-14.md (cartographie de passe initiale).
-
 

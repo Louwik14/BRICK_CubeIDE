@@ -2,11 +2,13 @@
 
 ## 1. Périmètre
 Zone opérationnelle:
+- Inc/Core/track_state.h
+- Src/Core/track_state.c
 - Src/Core/track_runtime.c
 - Inc/Core/track_runtime.h
 
 Zone élargie pour preuve de contrats:
-- Inc/UI/ui_core.h (API source family/type)
+- Inc/UI/ui_core.h (surface de mutation / mirror lecture family/type)
 - Src/UI/ui_core.c (invalidation explicite)
 - Src/Param/param_registry.c
 - Src/Seq/seq_play_scheduler.c
@@ -20,7 +22,8 @@ Exclusions:
 
 ## 2. Autorité(s) de vérité
 Autorité principale:
-- track_runtime_refresh_all(): recalcule le contexte runtime complet de toutes les tracks.
+- track_state: autorite par-track pour family/type/midi (source structurelle).
+- track_runtime_refresh_all(): recalcule la projection runtime complete a partir du track_state.
 
 Autorités secondaires dans la zone:
 - track_runtime_invalidate_all(): invalide globalement (dirty flag).
@@ -68,7 +71,7 @@ Dépendances sortantes de Z2:
 - ui_get_track_type(track)
 - ui_track_family_is_input(family)
 
-Z2 dépend de la config UI pour construire son état effectif.
+Z2 dépend de `track_state` pour construire son état effectif.
 
 ## 5. États structurants possédés
 - g_track_runtime_ctx[SEQ_TRACK_COUNT] (track_runtime_ctx_t)
@@ -82,10 +85,10 @@ Z2 dépend de la config UI pour construire son état effectif.
 
 ## 6. Flux runtime
 1) Source config:
-- refresh_all lit family/type depuis UI.
+- refresh_all lit family/type/midi depuis `track_state`.
 
 2) Invalidation:
-- changements structurants UI (family/type) appellent invalidate_all.
+- les mutations structurelles de `track_state` appellent invalidate_all via les call sites autorisés.
 
 3) Refresh:
 - refresh_track(track) fait full refresh si dirty.
@@ -120,7 +123,7 @@ Z2 dépend de la config UI pour construire son état effectif.
 
 ## 8. Dépendances inter-zones
 Entrées de Z2:
-- Z5 UI Interaction (source family/type)
+- Z5 UI Interaction (surface de mutation family/type)
 - Z5 `ui_system_sync_internal` orchestre la reconfig runtime (invalidate/enables/notify) sans porter de sync UI.
 
 Sorties de Z2:
@@ -131,17 +134,18 @@ Sorties de Z2:
 - Z6 Persistence (refresh après restore snapshot)
 
 ## 9. Dette technique observée
-- Couplage direct à UI comme fournisseur de vérité family/type.
+- Couplage direct a UI en voie de retrait: `track_state` porte la verite family/type/midi.
 - Discipline refresh: explicite côté call sites (refresh_track/refresh_all), sans auto-refresh dans les getters/helpers.
 - Présence d’un shim legacy runtime_target potentiellement confus en doc, bien que hors chemin opérationnel.
 
 ## 10. Impact éventuel sur la cartographie globale
-- Z2 confirmé comme noyau d’autorité transversal.
-- Pas de split nécessaire.
-- Master/Buffer ne justifie pas une zone séparée: il consomme la politique de bind de Z2.
+- Z2 confirme comme noyau d'autorite transversal.
+- `track_state` devient la source de verite structurelle par track.
+- Pas de split necessaire.
+- Master/Buffer ne justifie pas une zone separee: il consomme la politique de bind de Z2.
 
 ## 11. Contrat MIDI (passe 2 bornee)
-- Source de verite inchangee: Z5 fournit `UI_TRACK_FAMILY_MIDI` + `UI_TRACK_TYPE_MIDI`.
+- Source de verite structurelle: `track_state` porte family/type/midi; Z5 expose les edits et les labels.
 - Mapping runtime explicite: `TRACK_RUNTIME_FAMILY_MIDI` + `TRACK_RUNTIME_TYPE_MIDI`.
 - Binding runtime MIDI:
   - `bind_state=BOUND`,

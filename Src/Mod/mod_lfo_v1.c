@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "Core/track_sound_state.h"
 #include "Core/track_runtime.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_runtime.h"
@@ -26,14 +27,6 @@ static const float g_mod_lfo_rate_bars_per_cycle[MOD_LFO_RATE_STEP_COUNT] = {
 static const float g_mod_lfo_sine_lut[MOD_LFO_SINE_LUT_SIZE + 1U] = {
 #include "mod_lfo_sine_lut_257.inc"
 };
-
-typedef struct
-{
-    uint16_t dest;
-    uint8_t rate;
-    uint8_t depth;
-    uint8_t shape;
-} mod_lfo_track_settings_t;
 
 typedef struct
 {
@@ -65,7 +58,6 @@ typedef struct
     uint16_t param_to_index[PARAM_COUNT];
 } mod_lfo_dest_cache_t;
 
-static mod_lfo_track_settings_t g_mod_lfo_settings[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 static mod_lfo_dest_cache_t g_mod_lfo_dest_cache[SEQ_TRACK_COUNT];
 static uint32_t g_mod_lfo_control_counter = 0U;
@@ -81,6 +73,41 @@ static float mod_lfo_clampf(float v, float lo, float hi)
         return hi;
     }
     return v;
+}
+
+static track_mod_lfo_state_t *mod_lfo_track_settings_mut(uint8_t track, uint8_t lfo_index)
+{
+    track_sound_state_t *const state = track_sound_state_get(track);
+
+    if ((state == NULL) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return NULL;
+    }
+
+    return &state->mod_lfo[lfo_index];
+}
+
+static const track_mod_lfo_state_t *mod_lfo_track_settings_const(uint8_t track, uint8_t lfo_index)
+{
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+
+    if ((state == NULL) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK))
+    {
+        return NULL;
+    }
+
+    return &state->mod_lfo[lfo_index];
+}
+
+static param_id_t mod_lfo_track_settings_dest(uint8_t track, uint8_t lfo_index)
+{
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    if (s == NULL)
+    {
+        return MOD_LFO_DEST_NONE;
+    }
+
+    return (param_id_t)((uint16_t)(s->dest + 0.5f));
 }
 
 static uint8_t mod_lfo_is_internal_param(param_id_t id)
@@ -467,9 +494,9 @@ static uint8_t mod_lfo_is_effectively_active(uint8_t track,
         return 0U;
     }
 
-    const mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo_index];
-    const param_id_t dest = (param_id_t)s->dest;
-    if ((dest == MOD_LFO_DEST_NONE) || (s->depth == 0U))
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    const param_id_t dest = mod_lfo_track_settings_dest(track, lfo_index);
+    if ((s == NULL) || (dest == MOD_LFO_DEST_NONE) || (s->depth == 0.0f))
     {
         return 0U;
     }
@@ -511,7 +538,7 @@ static void mod_lfo_release_last_destination(uint8_t track,
         {
             continue;
         }
-        if ((param_id_t)g_mod_lfo_settings[track][other].dest == previous_dest)
+        if (mod_lfo_track_settings_dest(track, other) == previous_dest)
         {
             other_active_same_dest = 1U;
             break;
@@ -547,50 +574,56 @@ static void mod_lfo_process_control_tick(void)
 
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
-            mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo];
+            track_mod_lfo_state_t *const s = mod_lfo_track_settings_mut(track, lfo);
             mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
-            const param_id_t dest = (param_id_t)s->dest;
+            const param_id_t dest = mod_lfo_track_settings_dest(track, lfo);
 
-            if ((rt->last_dest != (uint16_t)MOD_LFO_DEST_NONE) && (rt->last_dest != s->dest))
+            if (s == NULL)
+            {
+                continue;
+            }
+
+            if ((rt->last_dest != (uint16_t)MOD_LFO_DEST_NONE)
+                    && (rt->last_dest != (uint16_t)(s->dest + 0.5f)))
             {
                 mod_lfo_release_last_destination(track, lfo, family, type, ctx);
             }
 
-            if ((dest == MOD_LFO_DEST_NONE) || (s->depth == 0U)
+            if ((dest == MOD_LFO_DEST_NONE) || (s->depth == 0.0f)
                     || (mod_lfo_dest_supported_fast(track, dest, family, type, ctx) == 0U))
             {
                 mod_lfo_release_last_destination(track, lfo, family, type, ctx);
                 continue;
             }
 
-            if ((rt->base_valid == 0U) || (rt->last_dest != s->dest))
+            if ((rt->base_valid == 0U) || (rt->last_dest != (uint16_t)(s->dest + 0.5f)))
             {
                 if (param_registry_get_track_value(dest, track, &rt->base_value) == 0U)
                 {
                     continue;
                 }
-                rt->last_dest = s->dest;
+                rt->last_dest = (uint16_t)(s->dest + 0.5f);
                 rt->base_valid = 1U;
             }
 
-            rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(s->rate, bpm_milli);
+            rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm((uint8_t)(s->rate + 0.5f), bpm_milli);
             const uint32_t phase_prev = rt->phase;
             rt->phase += rt->phase_inc;
 
-            if (((mod_lfo_shape_t)s->shape == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_prev))
+            if (((mod_lfo_shape_t)((uint8_t)(s->shape + 0.5f)) == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_prev))
             {
                 rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
             }
 
-            rt->current = mod_lfo_wave((mod_lfo_shape_t)s->shape, phase_prev, rt);
-            if ((rt->calib_valid == 0U) || (rt->last_dest != s->dest))
+            rt->current = mod_lfo_wave((mod_lfo_shape_t)((uint8_t)(s->shape + 0.5f)), phase_prev, rt);
+            if ((rt->calib_valid == 0U) || (rt->last_dest != (uint16_t)(s->dest + 0.5f)))
             {
                 const param_desc_t *const desc = &param_registry[dest];
                 rt->dest_min = desc->min;
                 rt->dest_max = desc->max;
                 rt->calib_valid = 1U;
             }
-            rt->depth_scale = ((float)s->depth / 127.0f) * (rt->dest_max - rt->dest_min);
+            rt->depth_scale = (s->depth / 127.0f) * (rt->dest_max - rt->dest_min);
             const float modulated = mod_lfo_clampf(rt->base_value + (rt->current * rt->depth_scale), rt->dest_min, rt->dest_max);
             (void)param_registry_apply_track_value_rt_fast(dest, track, modulated);
         }
@@ -599,7 +632,6 @@ static void mod_lfo_process_control_tick(void)
 
 void mod_lfo_v1_init(void)
 {
-    memset(g_mod_lfo_settings, 0, sizeof(g_mod_lfo_settings));
     memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
     memset(g_mod_lfo_dest_cache, 0, sizeof(g_mod_lfo_dest_cache));
     g_mod_lfo_control_counter = 0U;
@@ -608,11 +640,6 @@ void mod_lfo_v1_init(void)
     {
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
-            g_mod_lfo_settings[track][lfo].dest = (uint16_t)MOD_LFO_DEST_NONE;
-            g_mod_lfo_settings[track][lfo].rate = 7U;
-            g_mod_lfo_settings[track][lfo].depth = 0U;
-            g_mod_lfo_settings[track][lfo].shape = (uint8_t)MOD_LFO_SHAPE_SINE;
-
             g_mod_lfo_runtime[track][lfo].phase = 0U;
             g_mod_lfo_runtime[track][lfo].phase_inc = 1U;
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
@@ -639,7 +666,11 @@ void mod_lfo_v1_reset_runtime(void)
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         {
             g_mod_lfo_runtime[track][lfo].phase = 0U;
-            g_mod_lfo_runtime[track][lfo].phase_inc = mod_lfo_phase_inc_from_rate(g_mod_lfo_settings[track][lfo].rate);
+            {
+                const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+                const uint8_t rate = (s != NULL) ? (uint8_t)(s->rate + 0.5f) : 7U;
+                g_mod_lfo_runtime[track][lfo].phase_inc = mod_lfo_phase_inc_from_rate(rate);
+            }
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
@@ -658,8 +689,13 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         return 0U;
     }
 
-    mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo_index];
+    track_mod_lfo_state_t *const s = mod_lfo_track_settings_mut(track, lfo_index);
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+
+    if (s == NULL)
+    {
+        return 0U;
+    }
 
     switch (param)
     {
@@ -669,7 +705,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
             const uint16_t max_index = (uint16_t)(mod_lfo_dest_count_supported(track) - 1U);
             const uint16_t dest_index = (uint16_t)mod_lfo_clampf(value, 0.0f, (float)max_index);
-            s->dest = (uint16_t)mod_lfo_dest_from_index(track, dest_index);
+            s->dest = (float)mod_lfo_dest_from_index(track, dest_index);
             rt->base_valid = 0U;
             rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             rt->calib_valid = 0U;
@@ -678,13 +714,13 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         }
 
         case MOD_LFO_PARAM_RATE:
-            s->rate = (uint8_t)mod_lfo_clampf(value, 0.0f, (float)(MOD_LFO_RATE_STEP_COUNT - 1U));
-            rt->phase_inc = mod_lfo_phase_inc_from_rate(s->rate);
+            s->rate = mod_lfo_clampf(value, 0.0f, (float)(MOD_LFO_RATE_STEP_COUNT - 1U));
+            rt->phase_inc = mod_lfo_phase_inc_from_rate((uint8_t)(s->rate + 0.5f));
             return 1U;
 
         case MOD_LFO_PARAM_DEPTH:
-            s->depth = (uint8_t)mod_lfo_clampf(value, 0.0f, 127.0f);
-            if (s->depth == 0U)
+            s->depth = mod_lfo_clampf(value, 0.0f, 127.0f);
+            if (s->depth == 0.0f)
             {
                 track_runtime_refresh_track(track);
                 mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
@@ -692,7 +728,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             return 1U;
 
         case MOD_LFO_PARAM_SHAPE:
-            s->shape = (uint8_t)mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
+            s->shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
             return 1U;
 
         default:
@@ -708,24 +744,28 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         return 0U;
     }
 
-    const mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo_index];
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    if (s == NULL)
+    {
+        return 0U;
+    }
 
     switch (param)
     {
         case MOD_LFO_PARAM_DEST:
-            *out_value = (float)mod_lfo_dest_to_index(track, (param_id_t)s->dest);
+            *out_value = (float)mod_lfo_dest_to_index(track, (param_id_t)((uint16_t)(s->dest + 0.5f)));
             return 1U;
 
         case MOD_LFO_PARAM_RATE:
-            *out_value = (float)s->rate;
+            *out_value = s->rate;
             return 1U;
 
         case MOD_LFO_PARAM_DEPTH:
-            *out_value = (float)s->depth;
+            *out_value = s->depth;
             return 1U;
 
         case MOD_LFO_PARAM_SHAPE:
-            *out_value = (float)s->shape;
+            *out_value = s->shape;
             return 1U;
 
         default:
@@ -742,9 +782,9 @@ void mod_lfo_v1_resync_base_on_authoritative_write(uint8_t track, param_id_t id,
 
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {
-        const mod_lfo_track_settings_t *const s = &g_mod_lfo_settings[track][lfo];
+        const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
         mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
-        if ((param_id_t)s->dest != id)
+        if ((s == NULL) || ((param_id_t)((uint16_t)(s->dest + 0.5f)) != id))
         {
             continue;
         }

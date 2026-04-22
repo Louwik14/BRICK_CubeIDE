@@ -4,7 +4,8 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
-#include "ui_core.h"
+#include "Core/track_state.h"
+#include "UI/ui_track_catalog.h"
 
 #define TRACK_RUNTIME_FLAG_CAN_FILTER  (1U << 0)
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
@@ -50,7 +51,7 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
         return TRACK_RUNTIME_FAMILY_MIDI;
     }
 
-    if (ui_track_family_is_input(family) != 0)
+    if (ui_track_catalog_family_is_input(family) != 0)
     {
         return TRACK_RUNTIME_FAMILY_INPUT;
     }
@@ -494,16 +495,17 @@ void track_runtime_refresh_all(void)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
-        const ui_track_family_t ui_family = ui_get_track_family(track);
-        const ui_track_type_t ui_type = ui_get_track_type(track);
+        const ui_track_config_t config = track_state_get_config(track);
+        const ui_track_family_t ui_family = config.family;
+        const ui_track_type_t ui_type = config.type;
 
         const track_runtime_family_t family = track_runtime_family_from_ui(ui_family);
         const track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
 
         ctx->track_id = track;
         ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
-        ctx->midi_channel_1_16 = ui_get_track_midi_channel(track);
-        ctx->midi_source = (uint8_t)ui_get_track_midi_source(track);
+        ctx->midi_channel_1_16 = track_state_get_midi_channel(track);
+        ctx->midi_source = (uint8_t)track_state_get_midi_source(track);
         ctx->family = (uint8_t)family;
         ctx->type = (uint8_t)type;
         ctx->flags = track_runtime_compute_flags(family, type);

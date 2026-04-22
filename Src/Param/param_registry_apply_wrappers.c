@@ -1,5 +1,6 @@
 #include "Param/param_registry_apply_bindings.h"
 #include "Param/param_registry.h"
+#include "Core/track_state.h"
 #include "audio_float.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
@@ -11,6 +12,7 @@
 #include "Seq/seq_model.h"
 #include "Storage/undo_v1.h"
 #include "Mod/mod_lfo_v1.h"
+#include "UI/ui_track_catalog.h"
 
 static float clamp_value(float v, float lo, float hi)
 {
@@ -162,21 +164,29 @@ void apply_lfo2_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_
 void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_family_t previous_family = ui_get_track_family(active_track);
-    const ui_track_type_t previous_type = ui_get_track_type(active_track);
+    const ui_track_family_t previous_family = track_state_get_family(active_track);
+    const ui_track_type_t previous_type = track_state_get_type(active_track);
     const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
 
     if (ui_set_track_family(active_track, requested_family) == false)
     {
-        param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
-        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
+        param_store_set_active(PARAM_CFG_TRACK, (float)track_state_get_family(active_track));
+        param_store_set_active(PARAM_CFG_TRACK_TYPE,
+                               (float)ui_track_catalog_type_index_for_family(track_state_get_family(active_track),
+                                                                             track_state_get_type(active_track),
+                                                                             active_track,
+                                                                             track_state_get_configs()));
         return;
     }
 
-    param_store_set_active(PARAM_CFG_TRACK, (float)ui_get_track_family(active_track));
-    param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(ui_get_track_family(active_track), ui_get_track_type(active_track)));
-    if ((ui_get_track_family(active_track) == previous_family)
-            && (ui_get_track_type(active_track) == previous_type))
+    param_store_set_active(PARAM_CFG_TRACK, (float)track_state_get_family(active_track));
+    param_store_set_active(PARAM_CFG_TRACK_TYPE,
+                           (float)ui_track_catalog_type_index_for_family(track_state_get_family(active_track),
+                                                                         track_state_get_type(active_track),
+                                                                         active_track,
+                                                                         track_state_get_configs()));
+    if ((track_state_get_family(active_track) == previous_family)
+            && (track_state_get_type(active_track) == previous_type))
     {
         return;
     }
@@ -186,22 +196,33 @@ void apply_cfg_track_type(float v)
 {
     g_param_cfg_track_type_apply_stage = 1U;
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_family_t active_family = ui_get_track_family(active_track);
-    const ui_track_type_t previous_type = ui_get_track_type(active_track);
+    const ui_track_family_t active_family = track_state_get_family(active_track);
+    const ui_track_type_t previous_type = track_state_get_type(active_track);
     const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
-    const ui_track_type_t requested_type = ui_get_track_type_from_family_index(active_family, requested_index);
+    const ui_track_type_t requested_type = ui_track_catalog_type_from_family_index(active_family,
+                                                                                   requested_index,
+                                                                                   active_track,
+                                                                                   track_state_get_configs());
 
     g_param_cfg_track_type_apply_stage = 2U;
 
     if (ui_set_track_type(active_track, requested_type) == false)
     {
         g_param_cfg_track_type_apply_stage = 3U;
-        param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
+        param_store_set_active(PARAM_CFG_TRACK_TYPE,
+                               (float)ui_track_catalog_type_index_for_family(active_family,
+                                                                             track_state_get_type(active_track),
+                                                                             active_track,
+                                                                             track_state_get_configs()));
         return;
     }
 
-    param_store_set_active(PARAM_CFG_TRACK_TYPE, (float)ui_get_track_type_index_for_family(active_family, ui_get_track_type(active_track)));
-    if (ui_get_track_type(active_track) == previous_type)
+    param_store_set_active(PARAM_CFG_TRACK_TYPE,
+                           (float)ui_track_catalog_type_index_for_family(active_family,
+                                                                         track_state_get_type(active_track),
+                                                                         active_track,
+                                                                         track_state_get_configs()));
+    if (track_state_get_type(active_track) == previous_type)
     {
         g_param_cfg_track_type_apply_stage = 4U;
         return;
@@ -214,7 +235,7 @@ void apply_cfg_midi_ch(float v)
     const uint8_t active_track = ui_get_active_track();
     const uint8_t requested_channel = (uint8_t)(clamp_value(v, 1.0f, 16.0f) + 0.5f);
     (void)ui_set_track_midi_channel(active_track, requested_channel);
-    param_store_set_active(PARAM_CFG_MIDI_CH, (float)ui_get_track_midi_channel(active_track));
+    param_store_set_active(PARAM_CFG_MIDI_CH, (float)track_state_get_midi_channel(active_track));
 }
 
 void apply_cfg_midi_src(float v)
@@ -223,7 +244,7 @@ void apply_cfg_midi_src(float v)
     const ui_track_midi_source_t requested_source =
             (ui_track_midi_source_t)((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f));
     (void)ui_set_track_midi_source(active_track, requested_source);
-    param_store_set_active(PARAM_CFG_MIDI_SRC, (float)ui_get_track_midi_source(active_track));
+    param_store_set_active(PARAM_CFG_MIDI_SRC, (float)track_state_get_midi_source(active_track));
 }
 
 void apply_cfg_rec(float v)

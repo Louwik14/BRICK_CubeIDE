@@ -15,9 +15,9 @@ Statut documentaire: annexe utile (non canonique), alignee sur le code au 2026-0
 - unicite famille master,
 
 2. Apply snapshot UI:
-- ecrit `g_ui_track_state.track_configs[]`,
-- ecrit `g_ui_track_state.track_midi_channel[]` (clamp 1..16),
-- ecrit `g_ui_track_state.track_midi_source[]`.
+- ecrit `track_state` comme autorite par-track,
+- les champs familiaux/type/MIDI ne vivent plus dans `g_ui_track_state`,
+- `ui_core` applique ensuite la sync runtime/UI autour de cette verite.
 
 3. Post-restore global explicite:
 - `ui_core_post_restore_global_sync()`

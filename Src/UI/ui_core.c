@@ -44,6 +44,7 @@
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_system_sync_internal.h"
+#include "Core/track_state.h"
 #include "Mod/mod_lfo_v1.h"
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -72,9 +73,6 @@ typedef struct
     ui_hall_mode_t hall_mode;
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
     uint32_t cfg_tap_ms[UI_TRACK_COUNT];
-    ui_track_config_t track_configs[UI_TRACK_COUNT];
-    uint8_t track_midi_channel[UI_TRACK_COUNT];
-    uint8_t track_midi_source[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
 } ui_track_state_t;
@@ -86,35 +84,6 @@ static ui_track_state_t g_ui_track_state = {
     .hall_mode = UI_HALL_MODE_SEQ,
     .mode_tap_ms = { 0U },
     .cfg_tap_ms = { 0U },
-    .track_configs = {
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-        { UI_TRACK_FAMILY_OFF, UI_TRACK_TYPE_AUDIO },
-    },
-    .track_midi_channel = {
-        1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
-        9U, 10U, 11U, 12U, 13U, 14U
-    },
-    .track_midi_source = {
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL,
-        (uint8_t)UI_TRACK_MIDI_SRC_ALL, (uint8_t)UI_TRACK_MIDI_SRC_ALL
-    },
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
 };
@@ -185,6 +154,11 @@ static ui_track_config_t ui_core_get_default_track_config(void)
     return config;
 }
 
+static const ui_track_config_t *ui_core_get_track_configs(void)
+{
+    return track_state_get_configs();
+}
+
 bool ui_track_family_is_input(ui_track_family_t family)
 {
     return ui_track_catalog_family_is_input(family);
@@ -202,7 +176,7 @@ bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t
 
 bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type)
 {
-    return ui_track_catalog_type_is_available(track, family, type, g_ui_track_state.track_configs);
+    return ui_track_catalog_type_is_available(track, family, type, ui_core_get_track_configs());
 }
 
 ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family)
@@ -214,7 +188,7 @@ uint8_t ui_get_track_type_count_for_family(ui_track_family_t family)
 {
     return ui_track_catalog_type_count_for_family(family,
                                                   g_ui_track_state.active_track,
-                                                  g_ui_track_state.track_configs);
+                                                  ui_core_get_track_configs());
 }
 
 uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_type_t type)
@@ -222,7 +196,7 @@ uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_ty
     return ui_track_catalog_type_index_for_family(family,
                                                   type,
                                                   g_ui_track_state.active_track,
-                                                  g_ui_track_state.track_configs);
+                                                  ui_core_get_track_configs());
 }
 
 ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, uint8_t index)
@@ -230,12 +204,12 @@ ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, ui
     return ui_track_catalog_type_from_family_index(family,
                                                    index,
                                                    g_ui_track_state.active_track,
-                                                   g_ui_track_state.track_configs);
+                                                   ui_core_get_track_configs());
 }
 
 static bool ui_core_track_family_is_available(uint8_t track, ui_track_family_t family)
 {
-    return ui_track_catalog_family_is_available(track, family, g_ui_track_state.track_configs);
+    return ui_track_catalog_family_is_available(track, family, ui_core_get_track_configs());
 }
 
 static uint8_t ui_core_has_track_family(ui_track_family_t family)
@@ -245,15 +219,7 @@ static uint8_t ui_core_has_track_family(ui_track_family_t family)
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; track++)
-    {
-        if (g_ui_track_state.track_configs[track].family == family)
-        {
-            return 1U;
-        }
-    }
-
-    return 0U;
+    return (track_state_count_tracks_with_family(family) > 0U) ? 1U : 0U;
 }
 
 static void ui_core_sync_audio_runtime_enables(void)
@@ -456,8 +422,7 @@ uint8_t ui_get_track_midi_channel(uint8_t track)
         return 1U;
     }
 
-    const uint8_t ch = g_ui_track_state.track_midi_channel[track];
-    return (ch < 1U) ? 1U : ((ch > 16U) ? 16U : ch);
+    return track_state_get_midi_channel(track);
 }
 
 bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
@@ -467,7 +432,10 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
         return false;
     }
 
-    g_ui_track_state.track_midi_channel[track] = channel_1_16;
+    if (track_state_set_track_midi_channel(track, channel_1_16) == false)
+    {
+        return false;
+    }
     if (track == g_ui_track_state.active_track)
     {
         ui_active_track_sync_mirror_cfg_midi_channel();
@@ -482,12 +450,7 @@ ui_track_midi_source_t ui_get_track_midi_source(uint8_t track)
         return UI_TRACK_MIDI_SRC_ALL;
     }
 
-    const uint8_t source = g_ui_track_state.track_midi_source[track];
-    if (source >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT)
-    {
-        return UI_TRACK_MIDI_SRC_ALL;
-    }
-    return (ui_track_midi_source_t)source;
+    return track_state_get_midi_source(track);
 }
 
 bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
@@ -497,7 +460,10 @@ bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
         return false;
     }
 
-    g_ui_track_state.track_midi_source[track] = (uint8_t)source;
+    if (track_state_set_track_midi_source(track, source) == false)
+    {
+        return false;
+    }
     if (track == g_ui_track_state.active_track)
     {
         ui_active_track_sync_mirror_cfg_midi_source();
@@ -510,78 +476,12 @@ static bool ui_apply_track_config_bulk_mutation_internal(const uint8_t family[UI
                                                          const uint8_t midi_channel[UI_TRACK_COUNT],
                                                          const uint8_t midi_source[UI_TRACK_COUNT])
 {
-    ui_track_type_t normalized_type[UI_TRACK_COUNT];
-
     if ((family == 0) || (type == 0) || (midi_channel == 0) || (midi_source == 0))
     {
         return false;
     }
 
-    uint8_t input_family_count[(uint8_t)UI_TRACK_FAMILY_COUNT] = { 0U };
-    uint8_t master_family_count = 0U;
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const ui_track_family_t fam = (ui_track_family_t)family[track];
-        const ui_track_midi_source_t src = (ui_track_midi_source_t)midi_source[track];
-        ui_track_type_t typ = (ui_track_type_t)type[track];
-
-        if (((uint8_t)fam >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-                || ((uint8_t)src >= (uint8_t)UI_TRACK_MIDI_SRC_COUNT))
-        {
-            return false;
-        }
-
-        if (fam == UI_TRACK_FAMILY_OFF)
-        {
-            normalized_type[track] = UI_TRACK_TYPE_AUDIO;
-            continue;
-        }
-
-        if (!ui_track_type_is_valid_for_family(fam, typ))
-        {
-            return false;
-        }
-        normalized_type[track] = typ;
-
-        if (ui_track_family_is_input(fam))
-        {
-            input_family_count[(uint8_t)fam]++;
-            if (input_family_count[(uint8_t)fam] > 1U)
-            {
-                return false;
-            }
-        }
-
-        if (fam == UI_TRACK_FAMILY_MASTER)
-        {
-            master_family_count++;
-            if (master_family_count > 1U)
-            {
-                return false;
-            }
-        }
-
-    }
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const ui_track_family_t fam = (ui_track_family_t)family[track];
-        ui_track_type_t requested_type = normalized_type[track];
-
-        g_ui_track_state.track_configs[track].family = fam;
-        g_ui_track_state.track_configs[track].type = (fam == UI_TRACK_FAMILY_OFF)
-            ? UI_TRACK_TYPE_AUDIO
-            : requested_type;
-
-        const uint8_t midi_ch = (midi_channel[track] < 1U)
-            ? 1U
-            : ((midi_channel[track] > 16U) ? 16U : midi_channel[track]);
-        g_ui_track_state.track_midi_channel[track] = midi_ch;
-        g_ui_track_state.track_midi_source[track] = midi_source[track];
-    }
-
-    return true;
+    return track_state_apply_bulk(family, type, midi_channel, midi_source);
 }
 
 bool ui_apply_track_config_bulk_mutation(const uint8_t family[UI_TRACK_COUNT],
@@ -664,8 +564,8 @@ static uint8_t ui_core_track_is_master_buffer(uint8_t track)
         return 0U;
     }
 
-    return (uint8_t)((g_ui_track_state.track_configs[track].family == UI_TRACK_FAMILY_MASTER)
-            && (g_ui_track_state.track_configs[track].type == UI_TRACK_TYPE_BUFFER));
+    return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_MASTER)
+            && (track_state_get_type(track) == UI_TRACK_TYPE_BUFFER));
 }
 
 static const ui_hall_mode_contract_t *ui_core_get_hall_mode_contract(ui_hall_mode_t mode)
@@ -961,19 +861,13 @@ void ui_core_init(void)
     ui_core_clipboard_init();
     ui_core_feedback_init();
     ui_core_pattern_init();
+    track_state_init();
     g_ui_track_state.active_track = 0U;
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
     g_ui_track_state.hall_mode = UI_HALL_MODE_SEQ;
     ui_core_mute_init();
     ui_core_set_feedback(0);
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        g_ui_track_state.track_configs[track].family = UI_TRACK_FAMILY_OFF;
-        g_ui_track_state.track_configs[track].type = UI_TRACK_TYPE_AUDIO;
-        g_ui_track_state.track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
-        g_ui_track_state.track_midi_source[track] = (uint8_t)UI_TRACK_MIDI_SRC_ALL;
-    }
     for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
     {
         g_ui_track_state.mode_tap_ms[mode] = 0U;
@@ -1166,7 +1060,7 @@ ui_track_config_t ui_get_track_config(uint8_t track)
         return ui_core_get_default_track_config();
     }
 
-    return g_ui_track_state.track_configs[track];
+    return track_state_get_config(track);
 }
 
 ui_track_family_t ui_get_track_family(uint8_t track)
@@ -1195,17 +1089,22 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    ui_track_config_t *config = &g_ui_track_state.track_configs[track];
+    const ui_track_config_t config = track_state_get_config(track);
 
-    if (config->family == family)
+    if (config.family == family)
     {
-        if (!ui_track_type_is_valid_for_family(config->family, config->type))
+        if (track_state_set_track_family(track, family) == false)
         {
-            config->type = ui_track_catalog_first_available_type(config->family,
-                                                                 track,
-                                                                 g_ui_track_state.track_configs);
+            return false;
         }
-
+        if ((track_state_get_family(track) != config.family)
+                || (track_state_get_type(track) != config.type))
+        {
+            const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
+            const ui_system_sync_request_t request =
+                ui_system_sync_make_request_track_type_change(active_track_touched);
+            ui_core_reconfigure_track_runtime(&request, active_track_touched);
+        }
         if (track == g_ui_track_state.active_track)
         {
             ui_core_sync_active_track_ui_context(0U);
@@ -1216,7 +1115,7 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     if ((family != UI_TRACK_FAMILY_OFF)
             && (ui_track_catalog_type_count_for_family(family,
                                                        track,
-                                                       g_ui_track_state.track_configs) == 0U))
+                                                       ui_core_get_track_configs()) == 0U))
     {
         if (track == g_ui_track_state.active_track)
         {
@@ -1225,15 +1124,15 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
         return false;
     }
 
-    config->family = family;
-    if (!ui_track_type_is_available(track, config->family, config->type))
-    {
-        config->type = ui_track_catalog_first_available_type(config->family,
-                                                             track,
-                                                             g_ui_track_state.track_configs);
-    }
-
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
+    if (track_state_set_track_family(track, family) == false)
+    {
+        if (track == g_ui_track_state.active_track)
+        {
+            ui_core_sync_active_track_ui_context(0U);
+        }
+        return false;
+    }
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_family_change(active_track_touched);
     ui_core_reconfigure_track_runtime(&request, active_track_touched);
@@ -1248,8 +1147,8 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return false;
     }
 
-    ui_track_config_t *config = &g_ui_track_state.track_configs[track];
-    if (!ui_track_type_is_valid_for_family(config->family, type))
+    const ui_track_config_t config = track_state_get_config(track);
+    if (!ui_track_type_is_valid_for_family(config.family, type))
     {
         if (track == g_ui_track_state.active_track)
         {
@@ -1258,7 +1157,7 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return false;
     }
 
-    if (!ui_track_type_is_available(track, config->family, type))
+    if (!ui_track_type_is_available(track, config.family, type))
     {
         if (track == g_ui_track_state.active_track)
         {
@@ -1267,8 +1166,12 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return false;
     }
 
-    if (config->type == type)
+    if (config.type == type)
     {
+        if (track_state_set_track_type(track, type) == false)
+        {
+            return false;
+        }
         if (track == g_ui_track_state.active_track)
         {
             ui_core_sync_active_track_ui_context(0U);
@@ -1276,7 +1179,10 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return true;
     }
 
-    config->type = type;
+    if (track_state_set_track_type(track, type) == false)
+    {
+        return false;
+    }
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
     const ui_system_sync_request_t request =
         ui_system_sync_make_request_track_type_change(active_track_touched);
@@ -1287,22 +1193,12 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 
 uint8_t ui_count_tracks_with_family(ui_track_family_t family)
 {
-    uint8_t count = 0U;
-
     if ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
     {
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; track++)
-    {
-        if (g_ui_track_state.track_configs[track].family == family)
-        {
-            count++;
-        }
-    }
-
-    return count;
+    return track_state_count_tracks_with_family(family);
 }
 
 const char *ui_get_track_family_display_name(ui_track_family_t family)

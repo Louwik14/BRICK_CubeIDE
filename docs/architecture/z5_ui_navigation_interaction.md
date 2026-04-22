@@ -1,9 +1,11 @@
-﻿# Z5 - UI / Navigation / Interaction
+# Z5 - UI / Navigation / Interaction
 
 ## 1. Perimetre
 
 Perimetre operationnel de zone (appartient a Z5):
 - `Src/UI/ui_core.c`
+- `Inc/Core/track_state.h`
+- `Src/Core/track_state.c`
 - `Inc/UI/ui_core.h`
 - `Src/UI/ui_track_catalog.c`
 - `Inc/UI/ui_track_catalog.h`
@@ -38,7 +40,7 @@ Sous-roles concentres dans `ui_core.c`:
 
 Policy catalogue track/type/labels:
 - `ui_track_catalog` porte les regles de validite/disponibilite family/type et les labels associes.
-- `ui_core` conserve l'etat live (`g_ui_track_state`) et delegue cette policy via wrappers publics.
+- `ui_core` conserve l'etat UI live (selection, modes, feedback) tandis que `track_state` porte l'autorite par-track pour family/type/midi.
 
 ## 2. Autorite(s) de verite
 
@@ -123,8 +125,10 @@ Getters non-mutants vs mutables:
 ## 5. Etats structurants possedes
 
 Etat global UI:
-- `g_ui_track_state` (`ui_track_state_t`) dans `ui_core.c`.
-- Champs structurants: active track, shift, track_select_armed, hall_mode, mode/cfg tap timers, track_configs[14], midi channel/source, hall suppression, pattern state, feedback, mute state/buffers, armement prepare du hold quick mute.
+- `g_ui_track_state` (`ui_track_state_t`) dans `ui_core.c` pour l'etat UI pur.
+- `track_state` dans `Src/Core/track_state.c` pour l'autorite par-track.
+- Champs structurants: active track, shift, track_select_armed, hall_mode, mode/cfg tap timers, hall suppression, pattern state, feedback, mute state/buffers, armement prepare du hold quick mute.
+- Etat track autoritatif externe: family/type/midi channel/source dans `track_state`.
 - Ecritures: init + handlers d'events/selection.
 - Lectures: getters UI, renderer template, hall keyboard bridge, logique shortcuts.
 
@@ -166,7 +170,7 @@ Flux nominal prouve:
 - Pour une mutation structurelle `CFG_TRACK` / `CFG_TRACK_TYPE` / restore bulk, Z5 delegue le corridor a Z3 via `param_registry_apply_track_structure_transition(...)`; la resync UI active-track reste explicite cote Z5 (`ui_param_sync_active_track_mirror_from_runtime` puis `ui_param_sync_active_bank_values`) apres finalisation runtime Z3.
 - Restore bulk track config:
   - validation snapshot all-or-nothing,
-  - ecriture `g_ui_track_state.*`,
+  - ecriture de `track_state` comme autorite par-track,
   - pipeline post-apply localise: `ui_core_post_restore_global_sync()`
     (`ui_system_sync_make_request_restore_bulk` -> `ui_system_sync_apply_track_context_change` -> `ui_active_track_sync_after_track_structure_change(1)`).
 
@@ -206,6 +210,7 @@ Dependances de cadence:
 
 Invariants prouves:
 - Autorite unique etat UI courant: `g_ui_track_state` centralise dans `ui_core.c`.
+- Autorite unique etat track: `track_state` centralise family/type/midi en dehors de `ui_core.c`.
 - Mutation du mode brut: `ui_set_hall_mode` est l'unique mutateur de `hall_mode`.
 - `effective_view` reste une projection read-only; aucune ecriture persistante.
 - Resolution contextuelle track-aware: disponibilite pages/types depend de family/type de la track active (`ui_navigation_is_page_available`, `ui_template_family_resolve_active_track`).
@@ -236,7 +241,7 @@ Sorties de Z5:
 ## 10. Dette technique observee
 
 Points factuels:
-- `ui_core.c` tres central (etat global + orchestration shortcuts + clipboard + pattern/mute + ponts inter-zones).
+- `ui_core.c` reste central pour l'UI, mais ne porte plus l'autorite par-track.
 - Logique de navigation distribuee entre `ui_navigation`, `ui_template_page`, et cas speciaux dans `ui_core`.
 - Couplage fort a `track_runtime`, `param_registry`, `seq_*`, `pattern_live_*` depuis Z5.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.

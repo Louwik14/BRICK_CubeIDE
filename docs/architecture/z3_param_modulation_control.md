@@ -3,6 +3,8 @@
 ## 1. Perimetre
 
 Zone Z3 (coeur + modules param_registry):
+- `Inc/Core/track_sound_state.h` / `Src/Core/track_sound_state.c`
+- `Inc/Core/track_tone_sound_state.h` / `Src/Core/track_tone_sound_state.c`
 - `Src/Param/param_registry.c` / `Inc/Param/param_registry.h`
 - `Src/Param/param_registry_catalog.c` / `Inc/Param/param_registry_catalog.h`
 - `Src/Param/param_filter.c` / `Inc/Param/param_filter.h`
@@ -45,7 +47,8 @@ Familles d'autorite:
 
 - `param_registry.c`:
   - point d'entree Z3 autoritatif (`param_registry_apply_track_value`, `..._rt_fast`, transition structurelle),
-  - orchestration autorisation + consommation des rules/resolution Z2 + sync minimale.
+  - orchestration autorisation + consommation des rules/resolution Z2 + sync minimale,
+  - lecture directe de `track_state` pour les params CFG par-track.
 - `param_registry_catalog.*`:
   - catalogue statique des descripteurs param (`param_registry[]`), labels, bornes, bindings `apply`.
 - `param_filter.*`:
@@ -56,6 +59,15 @@ Familles d'autorite:
   - cache runtime track-scoped + bridge/resync LFO + invalidations associees.
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
+  - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
+- `track_sound_state.*`:
+  - premiere base canonique par track pour les blocs sonores extraits du runtime,
+  - contient actuellement les blocs communs MIX, MOD, FILTER et VCA comme premier noyau du modele parametrique par track,
+  - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
+- `track_tone_sound_state.*`:
+  - base canonique par track pour les blocs TONE specifiques moteur,
+  - contient le noyau Sampler, MIDI simple, TRX BD, TRX Claves, TRX HiHat et FM Kick par track,
+  - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
 
 ## 3. Statut des chemins sensibles
 
@@ -100,6 +112,15 @@ Familles d'autorite:
 - `param_store.active[]`:
   - global-only: verite runtime.
   - track-scoped UI: miroir UI.
+- `track_state`:
+  - source autoritative par track pour family/type/MIDI,
+  - lu directement par les wrappers CFG quand la valeur effective doit etre reflchee apres mutation.
+- `track_sound_state`:
+  - source autoritative par track pour les sous-ensembles communs MIX, MOD, FILTER et VCA actuellement extraits du runtime,
+  - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
+- `track_tone_sound_state`:
+  - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
+  - sert de base canonique Sampler, MIDI simple, TRX BD, TRX Claves, TRX HiHat et FM Kick par track, distincte de `track_sound_state`.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
@@ -148,7 +169,7 @@ Familles d'autorite:
   - `Slice Count` visible en UI.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
-  - le backend Sampler track-aware est mis a jour sans pipeline parallele.
+  - le backend Sampler track-aware met a jour `track_tone_sound_state` puis `brick6_sampler_runtime`.
 - `PARAM_SAMPLER_SAMPLE` met a jour la selection runtime sans retrigger automatique de preview.
 - P-locks:
   - les params Sampler de base restent p-lockables via le flux track-aware.
@@ -158,7 +179,99 @@ Familles d'autorite:
   - `Tune` est exprime en semitones avec pas UI de 1 st,
   - aucune allocation dynamique ni recalcul lourd dans l'IRQ audio.
 
-## 10. Contrat MIDI TONE (tranche fonctionnelle)
+## 11. Contrat MIDI simple Tone
+
+- Params track-aware exposes pour `UI_TRACK_TYPE_MIDI` et `UI_TRACK_TYPE_INPUT/HYBRID`:
+  - `PARAM_MIDI_PROGRAM`,
+  - `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4`.
+- Autorite:
+  - `param_registry_apply_track_value` reste point d'entree unique,
+  - la base canonique est stockee dans `track_tone_sound_state`,
+  - l'emission runtime reste dans les chemins existants (`seq_runtime_on_midi_program_live_change`, `midi_cc`).
+- Invariants:
+  - Program et CC restent des valeurs track-aware stables,
+  - aucune logique Drum/Hybrid/routage audio n'entre dans ce bloc,
+  - aucune seconde autorite runtime n'est introduite.
+
+## 12. Contrat TRX BD Tone
+
+- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_TRX_BD`:
+  - `PARAM_DRUM_TRX_BD_PITCH`,
+  - `PARAM_DRUM_TRX_BD_DECAY`,
+  - `PARAM_DRUM_TRX_BD_PITCH_SWEEP`,
+  - `PARAM_DRUM_TRX_BD_SWEEP_DECAY`,
+  - `PARAM_DRUM_TRX_BD_ATTACK`,
+  - `PARAM_DRUM_TRX_BD_NOISE`,
+  - `PARAM_DRUM_TRX_BD_HARMONICS`,
+  - `PARAM_DRUM_TRX_BD_DRIVE`.
+- Autorite:
+  - `param_registry_apply_track_value` reste point d'entree unique,
+  - la base canonique est stockee dans `track_tone_sound_state`,
+  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
+- Invariants:
+  - TRX BD garde sa propre base track-aware,
+  - aucun autre sous-moteur Drum n'entre dans ce bloc,
+  - aucun état runtime n'est pousse dans la base canonique.
+
+## 13. Contrat TRX Claves Tone
+
+- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_TRX_CLAVES`:
+  - `PARAM_DRUM_TRX_CLAVES_PITCH`,
+  - `PARAM_DRUM_TRX_CLAVES_INTERVAL`,
+  - `PARAM_DRUM_TRX_CLAVES_DECAY`,
+  - `PARAM_DRUM_TRX_CLAVES_BALANCE`,
+  - `PARAM_DRUM_TRX_CLAVES_DRIVE`.
+- Autorite:
+  - `param_registry_apply_track_value` reste point d'entree unique,
+  - la base canonique est stockee dans `track_tone_sound_state`,
+  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
+- Invariants:
+  - TRX Claves garde sa propre base track-aware,
+  - aucun autre sous-moteur Drum n'entre dans ce bloc,
+  - aucun état runtime n'est pousse dans la base canonique.
+
+## 14. Contrat TRX HiHat Tone
+
+- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_TRX_HIHAT`:
+  - `PARAM_DRUM_TRX_HIHAT_DECAY`,
+  - `PARAM_DRUM_TRX_HIHAT_METAL`,
+  - `PARAM_DRUM_TRX_HIHAT_HP_TONE`,
+  - `PARAM_DRUM_TRX_HIHAT_LP_TONE`,
+  - `PARAM_DRUM_TRX_HIHAT_GAP`,
+  - `PARAM_DRUM_TRX_HIHAT_PEAK`.
+- Autorite:
+  - `param_registry_apply_track_value` reste point d'entree unique,
+  - la base canonique est stockee dans `track_tone_sound_state`,
+  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
+- Invariants:
+  - TRX HiHat garde sa propre base track-aware,
+  - aucun autre sous-moteur Drum n'entre dans ce bloc,
+  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+
+## 15. Contrat FM Kick Tone
+
+- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_KICK`:
+  - `PARAM_DRUM_FM_KICK_PITCH`,
+  - `PARAM_DRUM_FM_KICK_DECAY`,
+  - `PARAM_DRUM_FM_KICK_FM_AMOUNT`,
+  - `PARAM_DRUM_FM_KICK_PITCH_SWEEP`,
+  - `PARAM_DRUM_FM_KICK_FEEDBACK`,
+  - `PARAM_DRUM_FM_KICK_MOD_FREQ`,
+  - `PARAM_DRUM_FM_KICK_MOD_DECAY`,
+  - `PARAM_DRUM_FM_KICK_SWEEP_DECAY`,
+  - `PARAM_DRUM_FM_KICK_RATIO_MODE`,
+  - `PARAM_DRUM_FM_KICK_RATIO_INDEX`,
+  - `PARAM_DRUM_FM_KICK_MOD_ENV_SYNC`.
+- Autorite:
+  - `param_registry_apply_track_value` reste point d'entree unique,
+  - la base canonique est stockee dans `track_tone_sound_state`,
+  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
+- Invariants:
+  - FM Kick garde sa propre base track-aware,
+  - aucun autre sous-moteur Drum n'entre dans ce bloc,
+  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+
+## 16. Contrat MIDI TONE (tranche fonctionnelle)
 
 - Nouveaux params track-aware TONE:
   - `PARAM_MIDI_PROGRAM` (0=OFF, 1..128 => Program 0..127),
@@ -173,7 +286,7 @@ Familles d'autorite:
 - Cache/runtime:
   - base track-aware stockee dans le cache runtime Z3 pour support plock/restore sans seconde autorite.
 
-## 11. Contrat LFO MIDI (borne)
+## 17. Contrat LFO MIDI (borne)
 
 - Autorite de mapping destination LFO: `mod_lfo_v1` (selection des destinations supportees par track).
 - Pour une track MIDI:
@@ -185,28 +298,33 @@ Familles d'autorite:
   - emission CC via `midi_cc` pour les destinations MIDI CC,
   - aucun backend audio ajoute.
 
-## 12. Contrat Hybrid v1 (param/runtime borne)
+## 18. Contrat Hybrid v1 (param/runtime borne)
 - `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input/Hybrid` uniquement.
 - `PARAM_HYBRID_GATE` pilote le gate VCA runtime du mix-track Hybrid:
   - `OFF`: bypass gate (audio input libre),
   - `ON`: gate actif pilote par activite note.
+- Les params MIX track-aware (`LEVEL`, `PAN`, `SEND1`, `SEND2`, `MUTE`) vivent eux aussi dans `track_sound_state` comme base canonique par track, puis sont projetes vers le mixer runtime.
+- Les params Sampler track-aware vivent dans `track_tone_sound_state` comme base canonique par track, puis sont projetes vers `brick6_sampler_runtime`.
 - Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input/Hybrid` (en plus de `family MIDI`):
   - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
   - `CC`: emission directe `midi_cc`.
 - Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.
 
-## 13. Contrat LFO COLORS + rebind MIX (runtime)
+## 19. Contrat LFO COLORS + rebind MIX (runtime)
 - `param_registry_apply_track_value_rt_fast` est autorite d'application pour LFO sur `PARAM_FILTER_*` (COLORS mixer), pas uniquement pour COLORS engine-specifiques.
 - Le chemin RT fast applique `PARAM_FILTER_*` sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
 - Le shadow-state `PARAM_FILTER_*` porte la base par track logique, jamais par lane mixer physique.
+- Le bloc MIX suit le meme principe: la base track-aware est portee par `track_sound_state`, la lane mixer n'est qu'une projection temporaire.
+- Le bloc MOD suit le meme principe: la config LFO canonique par track est portee par `track_sound_state`, `mod_lfo_v1` n'en fait que l'execution/runtime et le cache de destination.
+- Le bloc TONE Sampler suit le meme principe: la base canonique par track est portee par `track_tone_sound_state`, `brick6_sampler_runtime` n'en fait que l'execution/runtime.
 - Lors d'un changement `CFG_TRACK`/`CFG_TRACK_TYPE`, Z3 migre d'abord le runtime per-lane (MIX/FILTER/VCA) selon le rebind des mix lanes, puis reapplique explicitement tous les params lane-bound track-aware (`FILTER_*`, `level/pan/sends/hybrid_gate/vca`) pour recoller le runtime a l'autorite logique.
 
-## 14. Contrat corridor structurel Off -> On
+## 20. Contrat corridor structurel Off -> On
 - Le corridor structurel est maintenant unique et centralise cote Z3 via `param_registry_apply_track_structure_transition(...)`: capture des mix-targets precedents, mutation structurelle delegatee (callback Z5), rebind mixer, neutralisation runtime invalide, puis re-apply lane-bound avant toute resync UI active-track.
 - Le re-apply lane-bound ne depend plus d'un cache partiel silencieux: l'autorite est explicite (`filter_ui_state` pour FILTER, cache track-aware sinon valeur par defaut promue dans le cache).
 - Pendant ce corridor, les consommateurs de modulation control-rate (`mod_lfo_v1`) sont suspendus pour eviter une capture/restauration sur topologie intermediaire.
 
-## 19. Contrat Passe 6 - Frontiere Z3 execution vs miroir UI Z5
+## 22. Contrat Passe 6 - Frontiere Z3 execution vs miroir UI Z5
 
 - Contrat d'edit track-aware explicite:
   - Z5 emet `param_registry_track_edit_cmd_t` vers Z3 (`param_registry_apply_track_edit`).

@@ -1,7 +1,9 @@
 #include "Param/param_filter.h"
 #include "param_store.h"
 #include "ui_core.h"
+#include "Core/track_tone_sound_state.h"
 #include "Core/track_runtime.h"
+#include "Core/track_sound_state.h"
 #include "Mod/mod_lfo_v1.h"
 #include "audio_float.h"
 #include "mixer.h"
@@ -98,36 +100,13 @@ static float filter_eq_ui127_to_db(float v)
     return ((clamped - 64.0f) / 63.0f) * 12.0f;
 }
 
-#define FILTER_TRACK_STATE_COUNT SEQ_TRACK_COUNT
+typedef track_sound_state_t filter_ui_state_t;
 
-typedef struct
-{
-    float type;
-    float cutoff;
-    float resonance;
-    float eg_amount;
-    float attack;
-    float decay;
-    float sustain;
-    float release;
-    float keytrack;
-    float env_reset;
-    float env_delay;
-    float eq_low;
-    float eq_mid;
-    float eq_high;
-    float drive;
-    float decimator_bits;
-    float decimator_rate;
-    float decimator_rate2;
-} filter_ui_state_t;
-
-static filter_ui_state_t g_filter_ui_state[FILTER_TRACK_STATE_COUNT];
-static void filter_ui_state_init_defaults(void);
 
 void param_filter_init(void)
 {
-    filter_ui_state_init_defaults();
+    track_sound_state_init();
+    track_tone_sound_state_init();
 }
 
 uint8_t param_filter_is_param(param_id_t id)
@@ -165,31 +144,7 @@ static uint8_t filter_mod_locked_for_active_track(void)
     const ui_track_type_t type = ui_get_track_type(active_track);
 
     return (ui_track_family_is_input(family) && (type == UI_TRACK_TYPE_AUDIO)) ? 1U : 0U;
-}
 
-static void filter_ui_state_init_defaults(void)
-{
-    for (uint32_t i = 0U; i < FILTER_TRACK_STATE_COUNT; ++i)
-    {
-        g_filter_ui_state[i].type = param_registry[PARAM_FILTER_TYPE].default_value;
-        g_filter_ui_state[i].cutoff = param_registry[PARAM_FILTER_CUTOFF].default_value;
-        g_filter_ui_state[i].resonance = param_registry[PARAM_FILTER_RESONANCE].default_value;
-        g_filter_ui_state[i].eg_amount = param_registry[PARAM_FILTER_EG_AMT].default_value;
-        g_filter_ui_state[i].attack = param_registry[PARAM_FILTER_ATTACK].default_value;
-        g_filter_ui_state[i].decay = param_registry[PARAM_FILTER_DECAY].default_value;
-        g_filter_ui_state[i].sustain = param_registry[PARAM_FILTER_SUSTAIN].default_value;
-        g_filter_ui_state[i].release = param_registry[PARAM_FILTER_RELEASE].default_value;
-        g_filter_ui_state[i].keytrack = param_registry[PARAM_FILTER_KEYTRK].default_value;
-        g_filter_ui_state[i].env_reset = param_registry[PARAM_FILTER_ENVRST].default_value;
-        g_filter_ui_state[i].env_delay = param_registry[PARAM_FILTER_ENVDLY].default_value;
-        g_filter_ui_state[i].eq_low = param_registry[PARAM_FILTER_EQ_LOW].default_value;
-        g_filter_ui_state[i].eq_mid = param_registry[PARAM_FILTER_EQ_MID].default_value;
-        g_filter_ui_state[i].eq_high = param_registry[PARAM_FILTER_EQ_HIGH].default_value;
-        g_filter_ui_state[i].drive = param_registry[PARAM_FILTER_DRIVE].default_value;
-        g_filter_ui_state[i].decimator_bits = param_registry[PARAM_FILTER_DECIMATOR_BITS].default_value;
-        g_filter_ui_state[i].decimator_rate = param_registry[PARAM_FILTER_DECIMATOR_RATE].default_value;
-        g_filter_ui_state[i].decimator_rate2 = param_registry[PARAM_FILTER_DECIMATOR_RATE2].default_value;
-    }
 }
 
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
@@ -236,11 +191,7 @@ static uint8_t resolve_filter_drive_target_track_for_ui_track(uint8_t ui_track, 
 
 static filter_ui_state_t *resolve_filter_ui_state_for_track(uint8_t track)
 {
-    if (track >= FILTER_TRACK_STATE_COUNT)
-    {
-        return NULL;
-    }
-    return &g_filter_ui_state[track];
+    return track_sound_state_get(track);
 }
 
 static void apply_filter_drive_runtime(uint32_t target_track, float drive_ui)
@@ -899,3 +850,6 @@ float param_filter_ui127_to_attack_s(float v) { return filter_ui127_to_attack_s(
 float param_filter_ui127_to_decay_s(float v) { return filter_ui127_to_decay_s(v); }
 float param_filter_ui127_to_sustain(float v) { return filter_ui127_to_sustain(v); }
 float param_filter_ui127_to_release_s(float v) { return filter_ui127_to_release_s(v); }
+
+
+

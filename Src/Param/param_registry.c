@@ -2,21 +2,21 @@
  * @file param_registry.c
  * @brief Module applicatif param_registry.
  *
- * Rôle du module:
- * - Implémenter les traitements liés à param_registry.
- * - Fournir les services internes utilisés par le firmware utilisateur.
+ * RÃ´le du module:
+ * - ImplÃ©menter les traitements liÃ©s Ã  param_registry.
+ * - Fournir les services internes utilisÃ©s par le firmware utilisateur.
  *
  * Architecture:
- * - Appelé par: modules applicatifs selon l'orchestration du firmware.
- * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
+ * - AppelÃ© par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dÃ©pendances matÃ©rielles et/ou modules utilisateur associÃ©s.
  *
- * Contraintes temps réel:
- * - IRQ: selon les API appelées.
- * - Hard realtime: selon le chemin d'exécution.
- * - malloc: éviter en chemin critique.
+ * Contraintes temps rÃ©el:
+ * - IRQ: selon les API appelÃ©es.
+ * - Hard realtime: selon le chemin d'exÃ©cution.
+ * - malloc: Ã©viter en chemin critique.
  *
  * Notes:
- * - Documentation ajoutée sans modification de la logique d'exécution.
+ * - Documentation ajoutÃ©e sans modification de la logique d'exÃ©cution.
  */
 
 #include "param_registry.h"
@@ -26,7 +26,11 @@
 #include "mixer.h"
 #include "Seq/seq_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/track_tone_sound_state.h"
+#include "Core/track_sound_state.h"
+#include "Core/track_state.h"
 #include "Mod/mod_lfo_v1.h"
+#include "UI/ui_track_catalog.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -36,18 +40,21 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t track,
                                                        float clamped,
                                                        uint8_t rt_fast);
+static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track, float *out_value);
+static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track, float *out_value);
+static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track, float value);
 
 /**
- * @brief Point d'entrée clamp_value.
+ * @brief Point d'entrÃ©e clamp_value.
  *
- * Rôle:
- * - Exécuter le traitement associé à clamp_value.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  clamp_value.
  *
- * @param v Paramètre d'entrée de l'API.
- * @param lo Paramètre d'entrée de l'API.
- * @param hi Paramètre d'entrée de l'API.
+ * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param lo ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param hi ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -166,7 +173,10 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
     }
 }
 
-static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float value)
+static uint8_t param_runtime_apply_track(uint8_t track,
+                                         param_id_t id,
+                                         float value,
+                                         uint8_t update_base_state)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
@@ -215,7 +225,7 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
-        applied = param_backend_apply_tone_drum(ctx, id, value);
+        applied = param_backend_apply_tone_drum(track, ctx, id, value, update_base_state);
     }
 
     if (applied != 0U)
@@ -224,6 +234,396 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     }
 
     return applied;
+}
+
+static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track, float *out_value)
+{
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+
+    if ((state == NULL) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_MIX_LEVEL:
+            *out_value = state->mix_level;
+            return 1U;
+        case PARAM_MIX_PAN:
+            *out_value = state->mix_pan;
+            return 1U;
+        case PARAM_MIX_SEND1:
+            *out_value = state->mix_send1;
+            return 1U;
+        case PARAM_MIX_SEND2:
+            *out_value = state->mix_send2;
+            return 1U;
+        case PARAM_MIX_MUTE:
+            *out_value = state->mix_mute;
+            return 1U;
+        case PARAM_HYBRID_GATE:
+            *out_value = state->hybrid_gate;
+            return 1U;
+        case PARAM_VCA_ATTACK:
+            *out_value = state->vca_attack;
+            return 1U;
+        case PARAM_VCA_DECAY:
+            *out_value = state->vca_decay;
+            return 1U;
+        case PARAM_VCA_SUSTAIN:
+            *out_value = state->vca_sustain;
+            return 1U;
+        case PARAM_VCA_RELEASE:
+            *out_value = state->vca_release;
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track, float *out_value)
+{
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+
+    if ((state == NULL) || (out_value == NULL))
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_SAMPLER_SAMPLE:
+            *out_value = state->sample;
+            return 1U;
+        case PARAM_SAMPLER_GAIN:
+            *out_value = state->gain;
+            return 1U;
+        case PARAM_SAMPLER_START:
+            *out_value = state->start;
+            return 1U;
+        case PARAM_SAMPLER_END:
+            *out_value = state->end;
+            return 1U;
+        case PARAM_SAMPLER_MODE:
+            *out_value = state->mode;
+            return 1U;
+        case PARAM_SAMPLER_TUNE:
+            *out_value = state->tune;
+            return 1U;
+        case PARAM_SAMPLER_FADE_IN:
+            *out_value = state->fade_in;
+            return 1U;
+        case PARAM_SAMPLER_FADE_OUT:
+            *out_value = state->fade_out;
+            return 1U;
+        case PARAM_SAMPLER_SLICE_COUNT:
+            *out_value = state->slice_count;
+            return 1U;
+        case PARAM_MIDI_PROGRAM:
+            *out_value = state->midi_program;
+            return 1U;
+        case PARAM_MIDI_CC1_1:
+            *out_value = state->midi_cc[0];
+            return 1U;
+        case PARAM_MIDI_CC1_2:
+            *out_value = state->midi_cc[1];
+            return 1U;
+        case PARAM_MIDI_CC1_3:
+            *out_value = state->midi_cc[2];
+            return 1U;
+        case PARAM_MIDI_CC1_4:
+            *out_value = state->midi_cc[3];
+            return 1U;
+        case PARAM_MIDI_CC2_1:
+            *out_value = state->midi_cc[4];
+            return 1U;
+        case PARAM_MIDI_CC2_2:
+            *out_value = state->midi_cc[5];
+            return 1U;
+        case PARAM_MIDI_CC2_3:
+            *out_value = state->midi_cc[6];
+            return 1U;
+        case PARAM_MIDI_CC2_4:
+            *out_value = state->midi_cc[7];
+            return 1U;
+        case PARAM_MIDI_CC3_1:
+            *out_value = state->midi_cc[8];
+            return 1U;
+        case PARAM_MIDI_CC3_2:
+            *out_value = state->midi_cc[9];
+            return 1U;
+        case PARAM_MIDI_CC3_3:
+            *out_value = state->midi_cc[10];
+            return 1U;
+        case PARAM_MIDI_CC3_4:
+            *out_value = state->midi_cc[11];
+            return 1U;
+        case PARAM_DRUM_TRX_BD_PITCH:
+            *out_value = state->trx_bd.pitch;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_DECAY:
+            *out_value = state->trx_bd.decay;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
+            *out_value = state->trx_bd.pitch_sweep;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_SWEEP_DECAY:
+            *out_value = state->trx_bd.sweep_decay;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_ATTACK:
+            *out_value = state->trx_bd.attack;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_NOISE:
+            *out_value = state->trx_bd.noise;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_HARMONICS:
+            *out_value = state->trx_bd.harmonics;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_DRIVE:
+            *out_value = state->trx_bd.drive;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_PITCH:
+            *out_value = state->trx_claves.pitch;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_INTERVAL:
+            *out_value = state->trx_claves.interval;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_DECAY:
+            *out_value = state->trx_claves.decay;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_BALANCE:
+            *out_value = state->trx_claves.balance;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_DRIVE:
+            *out_value = state->trx_claves.drive;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_DECAY:
+            *out_value = state->trx_hihat.decay;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_METAL:
+            *out_value = state->trx_hihat.metal;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_HP_TONE:
+            *out_value = state->trx_hihat.hp_tone;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_LP_TONE:
+            *out_value = state->trx_hihat.lp_tone;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_GAP:
+            *out_value = state->trx_hihat.gap;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_PEAK:
+            *out_value = state->trx_hihat.peak;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_PITCH:
+            *out_value = state->fm_kick.pitch;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_DECAY:
+            *out_value = state->fm_kick.decay;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_FM_AMOUNT:
+            *out_value = state->fm_kick.fm_amount;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_PITCH_SWEEP:
+            *out_value = state->fm_kick.pitch_sweep;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_FEEDBACK:
+            *out_value = state->fm_kick.feedback;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_MOD_FREQ:
+            *out_value = state->fm_kick.mod_freq;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_MOD_DECAY:
+            *out_value = state->fm_kick.mod_decay;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_SWEEP_DECAY:
+            *out_value = state->fm_kick.sweep_decay;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_RATIO_MODE:
+            *out_value = state->fm_kick.ratio_mode;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_RATIO_INDEX:
+            *out_value = state->fm_kick.ratio_index;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_MOD_ENV_SYNC:
+            *out_value = state->fm_kick.mod_env_sync;
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track, float value)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+
+    if (state == NULL)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_SAMPLER_SAMPLE:
+            state->sample = value;
+            return 1U;
+        case PARAM_SAMPLER_GAIN:
+            state->gain = value;
+            return 1U;
+        case PARAM_SAMPLER_START:
+            state->start = value;
+            return 1U;
+        case PARAM_SAMPLER_END:
+            state->end = value;
+            return 1U;
+        case PARAM_SAMPLER_MODE:
+            state->mode = value;
+            return 1U;
+        case PARAM_SAMPLER_TUNE:
+            state->tune = value;
+            return 1U;
+        case PARAM_SAMPLER_FADE_IN:
+            state->fade_in = value;
+            return 1U;
+        case PARAM_SAMPLER_FADE_OUT:
+            state->fade_out = value;
+            return 1U;
+        case PARAM_SAMPLER_SLICE_COUNT:
+            state->slice_count = value;
+            return 1U;
+        case PARAM_MIDI_PROGRAM:
+            state->midi_program = value;
+            return 1U;
+        case PARAM_MIDI_CC1_1:
+            state->midi_cc[0] = value;
+            return 1U;
+        case PARAM_MIDI_CC1_2:
+            state->midi_cc[1] = value;
+            return 1U;
+        case PARAM_MIDI_CC1_3:
+            state->midi_cc[2] = value;
+            return 1U;
+        case PARAM_MIDI_CC1_4:
+            state->midi_cc[3] = value;
+            return 1U;
+        case PARAM_MIDI_CC2_1:
+            state->midi_cc[4] = value;
+            return 1U;
+        case PARAM_MIDI_CC2_2:
+            state->midi_cc[5] = value;
+            return 1U;
+        case PARAM_MIDI_CC2_3:
+            state->midi_cc[6] = value;
+            return 1U;
+        case PARAM_MIDI_CC2_4:
+            state->midi_cc[7] = value;
+            return 1U;
+        case PARAM_MIDI_CC3_1:
+            state->midi_cc[8] = value;
+            return 1U;
+        case PARAM_MIDI_CC3_2:
+            state->midi_cc[9] = value;
+            return 1U;
+        case PARAM_MIDI_CC3_3:
+            state->midi_cc[10] = value;
+            return 1U;
+        case PARAM_MIDI_CC3_4:
+            state->midi_cc[11] = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_PITCH:
+            state->trx_bd.pitch = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_DECAY:
+            state->trx_bd.decay = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
+            state->trx_bd.pitch_sweep = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_SWEEP_DECAY:
+            state->trx_bd.sweep_decay = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_ATTACK:
+            state->trx_bd.attack = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_NOISE:
+            state->trx_bd.noise = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_HARMONICS:
+            state->trx_bd.harmonics = value;
+            return 1U;
+        case PARAM_DRUM_TRX_BD_DRIVE:
+            state->trx_bd.drive = value;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_PITCH:
+            state->trx_claves.pitch = value;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_INTERVAL:
+            state->trx_claves.interval = value;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_DECAY:
+            state->trx_claves.decay = value;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_BALANCE:
+            state->trx_claves.balance = value;
+            return 1U;
+        case PARAM_DRUM_TRX_CLAVES_DRIVE:
+            state->trx_claves.drive = value;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_DECAY:
+            state->trx_hihat.decay = value;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_METAL:
+            state->trx_hihat.metal = value;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_HP_TONE:
+            state->trx_hihat.hp_tone = value;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_LP_TONE:
+            state->trx_hihat.lp_tone = value;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_GAP:
+            state->trx_hihat.gap = value;
+            return 1U;
+        case PARAM_DRUM_TRX_HIHAT_PEAK:
+            state->trx_hihat.peak = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_PITCH:
+            state->fm_kick.pitch = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_DECAY:
+            state->fm_kick.decay = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_FM_AMOUNT:
+            state->fm_kick.fm_amount = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_PITCH_SWEEP:
+            state->fm_kick.pitch_sweep = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_FEEDBACK:
+            state->fm_kick.feedback = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_MOD_FREQ:
+            state->fm_kick.mod_freq = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_MOD_DECAY:
+            state->fm_kick.mod_decay = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_SWEEP_DECAY:
+            state->fm_kick.sweep_decay = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_RATIO_MODE:
+            state->fm_kick.ratio_mode = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_RATIO_INDEX:
+            state->fm_kick.ratio_index = value;
+            return 1U;
+        case PARAM_DRUM_FM_KICK_MOD_ENV_SYNC:
+            state->fm_kick.mod_env_sync = value;
+            return 1U;
+        default:
+            return 0U;
+    }
 }
 
 static uint8_t param_apply_non_filter_track_value_rt_fast(param_id_t id,
@@ -239,6 +639,34 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return 0U;
     }
 
+    if (track < SEQ_TRACK_COUNT)
+    {
+        switch (id)
+        {
+            case PARAM_CFG_TRACK:
+                *out_value = (float)track_state_get_family(track);
+                return 1U;
+
+            case PARAM_CFG_TRACK_TYPE:
+                *out_value = (float)ui_track_catalog_type_index_for_family(track_state_get_family(track),
+                                                                           track_state_get_type(track),
+                                                                           track,
+                                                                           track_state_get_configs());
+                return 1U;
+
+            case PARAM_CFG_MIDI_CH:
+                *out_value = (float)track_state_get_midi_channel(track);
+                return 1U;
+
+            case PARAM_CFG_MIDI_SRC:
+                *out_value = (float)track_state_get_midi_source(track);
+                return 1U;
+
+            default:
+                break;
+        }
+    }
+
     {
         uint8_t lfo_index = 0U;
         mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
@@ -249,6 +677,16 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     }
 
     if (param_filter_get_track_value(id, track, out_value) != 0U)
+    {
+        return 1U;
+    }
+
+    if (param_registry_get_track_sound_value(id, track, out_value) != 0U)
+    {
+        return 1U;
+    }
+
+    if (param_registry_get_track_tone_value(id, track, out_value) != 0U)
     {
         return 1U;
     }
@@ -334,13 +772,23 @@ static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
 
     if (param_filter_is_param(id) != 0U)
     {
-        /* FILTER authority is shadow-state per logical track, not runtime cache. */
+        /* FILTER, MIX and VCA authority is shadow-state per logical track, not runtime cache. */
         return param_registry_get_track_value(id, track, out_value);
+    }
+
+    if (param_registry_get_track_sound_value(id, track, out_value) != 0U)
+    {
+        return 1U;
+    }
+
+    if (param_registry_get_track_tone_value(id, track, out_value) != 0U)
+    {
+        return 1U;
     }
 
     /*
      * Lane-bound reapply runs after mixer lane rebind already restored runtime states.
-     * On non-FILTER params, a cache miss is not authoritative and must not promote
+     * On non-FILTER/VCA params, a cache miss is not authoritative and must not promote
      * descriptor defaults that would overwrite the freshly rebound runtime values.
      */
     return param_registry_runtime_cache_get(track, id, out_value);
@@ -381,25 +829,44 @@ static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const u
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        uint8_t previous_mix_track = FILTER_RUNTIME_REBIND_NONE;
+        uint8_t current_mix_track = FILTER_RUNTIME_REBIND_NONE;
+        uint8_t migrated_existing_lane = 0U;
+
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx != NULL)
+                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (ctx->mix_track_id < MIXER_MAX_TRACKS))
+        {
+            current_mix_track = ctx->mix_track_id;
+        }
+
         if (previous_mix_tracks != NULL)
         {
-            uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
-            const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-            if ((ctx != NULL)
-                    && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                    && (ctx->mix_track_id < MIXER_MAX_TRACKS))
-            {
-                mix_track = ctx->mix_track_id;
-            }
+            previous_mix_track = previous_mix_tracks[track];
 
-            if (previous_mix_tracks[track] == mix_track)
+            if (previous_mix_track == current_mix_track)
             {
                 continue;
             }
+
+            migrated_existing_lane = ((previous_mix_track < MIXER_MAX_TRACKS)
+                    && (current_mix_track < MIXER_MAX_TRACKS)) ? 1U : 0U;
         }
 
         for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
         {
+            if ((migrated_existing_lane != 0U)
+                    && (param_filter_is_param(k_lane_bound_params[i]) != 0U))
+            {
+                /*
+                 * Runtime FILTER state for lane migrations is already moved by
+                 * mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks,...).
+                 * Reapplying from FILTER shadow here can overwrite that good runtime state.
+                 */
+                continue;
+            }
+
             float value = 0.0f;
             if (param_registry_get_reapply_lane_bound_track_value(k_lane_bound_params[i], track, &value) == 0U)
             {
@@ -594,6 +1061,10 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
         case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
             if ((ctx->rt_fast == 0U) && (ctx->id == PARAM_MIDI_PROGRAM))
             {
+                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+                {
+                    return 0U;
+                }
                 param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
                 seq_runtime_on_midi_program_live_change(ctx->track, ctx->clamped);
                 return 1U;
@@ -601,6 +1072,10 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
 
             if ((ctx->rt_fast == 0U) && (param_backend_is_midi_cc_id(ctx->id) != 0U))
             {
+                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+                {
+                    return 0U;
+                }
                 if (param_backend_send_midi_cc(ctx->track, ctx->id, ctx->clamped) == 0U)
                 {
                     return 0U;
@@ -609,10 +1084,73 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
                 return 1U;
             }
 
-            return param_runtime_apply_track(ctx->track, ctx->id, ctx->clamped);
+            if ((ctx->rt_fast == 0U)
+                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
+                    && (ctx->id >= PARAM_DRUM_TRX_BD_PITCH)
+                    && (ctx->id <= PARAM_DRUM_TRX_BD_DRIVE))
+            {
+                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+                {
+                    return 0U;
+                }
+                {
+                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
+                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
+                }
+            }
+
+            if ((ctx->rt_fast == 0U)
+                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES)
+                    && (ctx->id >= PARAM_DRUM_TRX_CLAVES_PITCH)
+                    && (ctx->id <= PARAM_DRUM_TRX_CLAVES_DRIVE))
+            {
+                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+                {
+                    return 0U;
+                }
+                {
+                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
+                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
+                }
+            }
+
+            if ((ctx->rt_fast == 0U)
+                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT)
+                    && (ctx->id >= PARAM_DRUM_TRX_HIHAT_DECAY)
+                    && (ctx->id <= PARAM_DRUM_TRX_HIHAT_PEAK))
+            {
+                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+                {
+                    return 0U;
+                }
+                {
+                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
+                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
+                }
+            }
+
+            if ((ctx->rt_fast == 0U)
+                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_KICK)
+                    && (ctx->id >= PARAM_DRUM_FM_KICK_PITCH)
+                    && (ctx->id <= PARAM_DRUM_FM_KICK_MOD_ENV_SYNC))
+            {
+                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+                {
+                    return 0U;
+                }
+                {
+                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
+                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
+                }
+            }
+
+            return param_runtime_apply_track(ctx->track,
+                                             ctx->id,
+                                             ctx->clamped,
+                                             (ctx->rt_fast == 0U) ? 1U : 0U);
 
         case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
-            if (param_runtime_apply_track(ctx->track, ctx->id, ctx->clamped) == 0U)
+            if (param_runtime_apply_track(ctx->track, ctx->id, ctx->clamped, 1U) == 0U)
             {
                 return 0U;
             }
@@ -844,10 +1382,10 @@ void param_registry_sync_filter_ui_for_active_track(void)
 
 
 /**
- * @brief Point d'entrée param_registry_init.
+ * @brief Point d'entrÃ©e param_registry_init.
  *
- * Rôle:
- * - Exécuter le traitement associé à param_registry_init.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  param_registry_init.
  *
  *
  * Contexte d'appel:
@@ -862,14 +1400,14 @@ void param_registry_init(void)
 }
 
 /**
- * @brief Point d'entrée param_get.
+ * @brief Point d'entrÃ©e param_get.
  *
- * Rôle:
- * - Exécuter le traitement associé à param_get.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  param_get.
  *
- * @param id Paramètre d'entrée de l'API.
+ * @param id ParamÃ¨tre d'entrÃ©e de l'API.
  *
- * @return Valeur de retour définie par le contrat de l'API.
+ * @return Valeur de retour dÃ©finie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -880,13 +1418,13 @@ float param_get(param_id_t id)
 }
 
 /**
- * @brief Point d'entrée param_set.
+ * @brief Point d'entrÃ©e param_set.
  *
- * Rôle:
- * - Exécuter le traitement associé à param_set.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  param_set.
  *
- * @param id Paramètre d'entrée de l'API.
- * @param value Paramètre d'entrée de l'API.
+ * @param id ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param value ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -917,12 +1455,12 @@ void param_set(param_id_t id, float value)
 }
 
 /**
- * @brief Point d'entrée param_reset.
+ * @brief Point d'entrÃ©e param_reset.
  *
- * Rôle:
- * - Exécuter le traitement associé à param_reset.
+ * RÃ´le:
+ * - ExÃ©cuter le traitement associÃ© Ã  param_reset.
  *
- * @param id Paramètre d'entrée de l'API.
+ * @param id ParamÃ¨tre d'entrÃ©e de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.

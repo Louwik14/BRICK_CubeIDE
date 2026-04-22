@@ -102,6 +102,8 @@ file(GLOB SRC_CORE_SRC
 )
 
 list(APPEND SRC_CORE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
 )
 
