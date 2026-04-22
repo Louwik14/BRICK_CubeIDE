@@ -16,7 +16,6 @@
 #include "Audio/mixer.h"
 #include "param_registry.h"
 #include "midi.h"
-#include "ui_core.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
@@ -119,8 +118,7 @@ static uint8_t seq_play_scheduler_event_priority(uint8_t type)
 
 static void seq_play_scheduler_emit_midi_program(seq_track_id_t track, uint8_t program_0_127)
 {
-    const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
-    const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+    const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
     midi_program_change(MIDI_DEST_BOTH, channel, program_0_127);
 
     if (track < SEQ_TRACK_COUNT)
@@ -166,20 +164,20 @@ static void seq_play_scheduler_push_program_change(uint64_t due_sample_time,
                             0U);
 }
 
-static uint8_t seq_play_scheduler_track_supports_program_change(const track_runtime_ctx_t *ctx)
+static uint8_t seq_play_scheduler_track_supports_program_change(const track_runtime_descriptor_t *descriptor)
 {
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if ((descriptor == NULL) || (descriptor->bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;
     }
 
-    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+    if (descriptor->family == TRACK_RUNTIME_FAMILY_MIDI)
     {
         return 1U;
     }
 
-    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
+    return ((descriptor->family == TRACK_RUNTIME_FAMILY_INPUT)
+            && (descriptor->type == TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
 }
 
 static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent)
@@ -266,59 +264,58 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
                                                 uint8_t velocity,
                                                 uint8_t is_note_on)
 {
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    track_runtime_resolved_track_t resolved;
+    if (track_runtime_resolve_track(track, &resolved) == 0U)
     {
         return;
     }
 
-    const uint8_t track_supports_vca_gate = track_runtime_supports_vca_gate(ctx);
-
-    uint8_t filter_track = 0U;
-    uint8_t mix_track = 0U;
-    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+    if (resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
     {
-        if (is_note_on != 0U)
-        {
-            mixer_track_filter_note_on(filter_track, note, velocity);
-        }
-        else
-        {
-            mixer_track_filter_note_off(filter_track, note);
-        }
-    }
-    if ((track_supports_vca_gate != 0U)
-            && (track_runtime_get_mix_target_track(track, &mix_track) != 0U))
-    {
-        if (is_note_on != 0U)
-        {
-            mixer_track_vca_note_on(mix_track, note, velocity);
-        }
-        else
-        {
-            mixer_track_vca_note_off(mix_track, note);
-        }
+        return;
     }
 
-    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    if (resolved.has_filter_target != 0U)
     {
         if (is_note_on != 0U)
         {
-            drum_synth_note_on_for_instance(ctx->instance_id, note, velocity);
+            mixer_track_filter_note_on(resolved.filter_track_id, note, velocity);
         }
         else
         {
-            drum_synth_note_off_for_instance(ctx->instance_id, note);
+            mixer_track_filter_note_off(resolved.filter_track_id, note);
         }
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    if ((resolved.supports_vca_gate != 0U) && (resolved.has_mix_target != 0U))
+    {
+        if (is_note_on != 0U)
+        {
+            mixer_track_vca_note_on(resolved.mix_track_id, note, velocity);
+        }
+        else
+        {
+            mixer_track_vca_note_off(resolved.mix_track_id, note);
+        }
+    }
+
+    if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DRUM)
+    {
+        if (is_note_on != 0U)
+        {
+            drum_synth_note_on_for_instance(resolved.descriptor.instance_id, note, velocity);
+        }
+        else
+        {
+            drum_synth_note_off_for_instance(resolved.descriptor.instance_id, note);
+        }
+    }
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         if (is_note_on != 0U)
         {
             brick6_sampler_runtime_trigger_note(track, note);
         }
-        else if (track_supports_vca_gate == 0U)
+        else if (resolved.supports_vca_gate == 0U)
         {
             brick6_sampler_runtime_stop(track);
         }
@@ -332,8 +329,7 @@ static void seq_play_scheduler_emit_midi_note(const seq_play_scheduler_audio_eve
         return;
     }
 
-    const uint8_t channel_1_16 = ui_get_track_midi_channel(event->track);
-    const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+    const uint8_t channel = track_runtime_get_midi_channel_zero_based(event->track);
     const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
 
     if (is_note_on != 0U)
@@ -413,11 +409,13 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         return;
     }
 
-    track_runtime_refresh_track(track);
-    const track_runtime_param_status_t play_status =
-            track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == 0) || (play_status == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
+    track_runtime_resolved_track_t resolved;
+    if (track_runtime_resolve_track(track, &resolved) == 0U)
+    {
+        return;
+    }
+    if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
     {
         return;
     }
@@ -682,9 +680,9 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
 
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)
 {
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if (seq_play_scheduler_track_supports_program_change(ctx) == 0U)
+    track_runtime_descriptor_t descriptor;
+    if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
+            || (seq_play_scheduler_track_supports_program_change(&descriptor) == 0U))
     {
         return;
     }
@@ -696,9 +694,9 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 {
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        track_runtime_refresh_track(track);
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if (seq_play_scheduler_track_supports_program_change(ctx) == 0U)
+        track_runtime_descriptor_t descriptor;
+        if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
+                || (seq_play_scheduler_track_supports_program_change(&descriptor) == 0U))
         {
             continue;
         }
@@ -715,9 +713,9 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 {
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if (seq_play_scheduler_track_supports_program_change(ctx) == 0U)
+    track_runtime_descriptor_t descriptor;
+    if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
+            || (seq_play_scheduler_track_supports_program_change(&descriptor) == 0U))
     {
         return;
     }

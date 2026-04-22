@@ -13,7 +13,6 @@
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "midi.h"
-#include "ui_core.h"
 
 typedef struct
 {
@@ -77,8 +76,7 @@ uint8_t seq_output_guard_is_note_active_on_channel(uint8_t channel_zero_based, u
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
-        const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
+        const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
         {
             continue;
@@ -97,8 +95,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 {
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
-        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+        const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
 
         for (uint8_t note = 0U; note < 128U; ++note)
         {
@@ -128,7 +125,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
         midi_stop(MIDI_DEST_BOTH);
     }
 
-    uint8_t drum_killed[UI_TRACK_COUNT] = { 0U };
+    uint8_t drum_killed[SEQ_TRACK_COUNT] = { 0U };
     track_runtime_refresh_all();
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -145,7 +142,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
-            if ((ctx->instance_id < UI_TRACK_COUNT) && (drum_killed[ctx->instance_id] == 0U))
+            if ((ctx->instance_id < SEQ_TRACK_COUNT) && (drum_killed[ctx->instance_id] == 0U))
             {
                 drum_killed[ctx->instance_id] = 1U;
                 drum_synth_all_notes_off_for_instance(ctx->instance_id);

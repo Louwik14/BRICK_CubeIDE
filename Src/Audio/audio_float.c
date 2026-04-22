@@ -20,7 +20,8 @@
  * Mapping sortie TDM:
  * - MAIN L/R -> slots 0/1.
  * - CUE L/R (copie MAIN par défaut) -> slots 2/3.
- * - slots 4..7 forcés à 0.
+ * - Copie MAIN L/R -> slots 4/5.
+ * - slots 6/7 forcés à 0.
  *
  * Contraintes temps réel:
  * - Fonction principale exécutée en IRQ audio.

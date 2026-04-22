@@ -211,7 +211,8 @@ Flux nominal prouve par code:
 - `audio_process_block_int32` -> `audio_io_pack_ramped`:
   - MAIN -> slots TX 0/1
   - CUE -> slots TX 2/3
-  - slots 4..7 a zero
+  - copie MAIN -> slots TX 4/5
+  - slots 6/7 a zero
 - `process_half` nettoie D-cache TX puis DMA consomme.
 
 ## 7. Contraintes RT/CPU/memoire

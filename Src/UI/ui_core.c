@@ -1031,8 +1031,16 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
-    track_runtime_refresh_track(ui_get_active_track());
-    return (track_runtime_resolve_filter_target_track(ui_get_active_track(), out_track_id) != 0U) ? true : false;
+    track_runtime_resolved_track_t resolved;
+    if ((out_track_id == 0)
+            || (track_runtime_resolve_track(ui_get_active_track(), &resolved) == 0U)
+            || (resolved.has_filter_target == 0U))
+    {
+        return false;
+    }
+
+    *out_track_id = resolved.filter_track_id;
+    return true;
 }
 
 ui_track_config_t ui_get_track_config(uint8_t track)

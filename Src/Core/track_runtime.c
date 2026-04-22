@@ -235,6 +235,53 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     return flags;
 }
 
+static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t *ctx)
+{
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+
+    uint16_t mask = 0U;
+    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_CFG);
+    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD);
+    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_ARP);
+    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_SEQ);
+
+    if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+    {
+        return mask;
+    }
+
+    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_TONE);
+    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
+
+    if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
+    {
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_PLAY);
+    }
+
+    if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) != 0U)
+    {
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_COLORS);
+    }
+
+    if (track_runtime_is_audio_routable(ctx->track_id) != 0U)
+    {
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIX);
+    }
+
+    if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SYNTH)
+            || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_DRUM))
+            || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_INPUT)
+                && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_HYBRID)))
+    {
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_VCA);
+    }
+
+    return mask;
+}
+
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx)
 {
     if (ctx == NULL)
@@ -455,6 +502,8 @@ void track_runtime_refresh_all(void)
 
         ctx->track_id = track;
         ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
+        ctx->midi_channel_1_16 = ui_get_track_midi_channel(track);
+        ctx->midi_source = (uint8_t)ui_get_track_midi_source(track);
         ctx->family = (uint8_t)family;
         ctx->type = (uint8_t)type;
         ctx->flags = track_runtime_compute_flags(family, type);
@@ -675,6 +724,126 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     }
 
     return 1U;
+}
+
+uint8_t track_runtime_get_midi_channel_1_16(uint8_t track)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (ctx == NULL)
+    {
+        return 1U;
+    }
+
+    const uint8_t channel = ctx->midi_channel_1_16;
+    return (channel < 1U) ? 1U : ((channel > 16U) ? 16U : channel);
+}
+
+uint8_t track_runtime_get_midi_channel_zero_based(uint8_t track)
+{
+    return (uint8_t)(track_runtime_get_midi_channel_1_16(track) - 1U);
+}
+
+track_runtime_midi_source_t track_runtime_get_midi_source(uint8_t track)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (ctx == NULL)
+    {
+        return TRACK_RUNTIME_MIDI_SOURCE_ALL;
+    }
+
+    switch ((ui_track_midi_source_t)ctx->midi_source)
+    {
+        case UI_TRACK_MIDI_SRC_INT:
+            return TRACK_RUNTIME_MIDI_SOURCE_INTERNAL;
+        case UI_TRACK_MIDI_SRC_EXT:
+            return TRACK_RUNTIME_MIDI_SOURCE_EXTERNAL;
+        case UI_TRACK_MIDI_SRC_ALL:
+        default:
+            return TRACK_RUNTIME_MIDI_SOURCE_ALL;
+    }
+}
+
+uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *out_descriptor)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_descriptor == NULL))
+    {
+        return 0U;
+    }
+
+    track_runtime_refresh_track(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+
+    out_descriptor->family = (track_runtime_family_t)ctx->family;
+    out_descriptor->type = (track_runtime_type_t)ctx->type;
+    out_descriptor->engine = (track_runtime_engine_t)ctx->engine;
+    out_descriptor->bind_state = ctx->bind_state;
+    out_descriptor->bind_reason = ctx->bind_reason;
+    out_descriptor->instance_id = ctx->instance_id;
+    out_descriptor->mix_track_id = ctx->mix_track_id;
+    out_descriptor->flags = ctx->flags;
+    out_descriptor->midi_channel_1_16 = track_runtime_get_midi_channel_1_16(track);
+    out_descriptor->ui_ensemble_mask = track_runtime_compute_ui_ensemble_mask(ctx);
+    return 1U;
+}
+
+uint8_t track_runtime_resolve_track(uint8_t track, track_runtime_resolved_track_t *out_resolved)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_resolved == NULL))
+    {
+        return 0U;
+    }
+
+    memset(out_resolved, 0, sizeof(*out_resolved));
+    out_resolved->track_id = track;
+    out_resolved->midi_source = TRACK_RUNTIME_MIDI_SOURCE_ALL;
+
+    if (track_runtime_get_descriptor(track, &out_resolved->descriptor) == 0U)
+    {
+        return 0U;
+    }
+
+    out_resolved->midi_channel_zero_based = (uint8_t)((out_resolved->descriptor.midi_channel_1_16 > 0U)
+            ? (out_resolved->descriptor.midi_channel_1_16 - 1U)
+            : 0U);
+    out_resolved->midi_source = track_runtime_get_midi_source(track);
+
+    uint8_t mix_track = 0U;
+    if (track_runtime_get_mix_target_track(track, &mix_track) != 0U)
+    {
+        out_resolved->has_mix_target = 1U;
+        out_resolved->mix_track_id = mix_track;
+    }
+
+    uint8_t filter_track = 0U;
+    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
+    {
+        out_resolved->has_filter_target = 1U;
+        out_resolved->filter_track_id = filter_track;
+    }
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    out_resolved->supports_vca_gate = track_runtime_supports_vca_gate(ctx);
+    return 1U;
+}
+
+uint8_t track_runtime_is_ui_ensemble_available(uint8_t track, track_runtime_ui_ensemble_t ensemble)
+{
+    if ((uint8_t)ensemble >= (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_COUNT)
+    {
+        return 0U;
+    }
+
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(track, &descriptor) == 0U)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((descriptor.ui_ensemble_mask & (uint16_t)(1U << (uint8_t)ensemble)) != 0U);
 }
 
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)

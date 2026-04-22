@@ -38,10 +38,16 @@ Initialisation / mutation:
 
 Lecture / résolution:
 - track_runtime_get_ctx()
+- track_runtime_get_descriptor()
+- track_runtime_resolve_track()
+- track_runtime_is_ui_ensemble_available()
 - track_runtime_is_audio_routable()
 - track_runtime_get_mix_target_track()
 - track_runtime_get_logical_track_for_mix_track()
 - track_runtime_resolve_filter_target_track()
+- track_runtime_get_midi_channel_1_16()
+- track_runtime_get_midi_channel_zero_based()
+- track_runtime_get_midi_source()
 - track_runtime_get_effective_param_status()
 - track_runtime_get_param_rule()
 - track_runtime_get_voice_mode()
@@ -108,6 +114,9 @@ Z2 dépend de la config UI pour construire son état effectif.
 - Interdiction de refresh implicite dans les wrappers de convenance (UI/Param/Seq/Audio): la discipline reste centralisee au call site appelant.
 - Résolution strictement track-aware.
 - Master/Buffer reste un bind runtime dédié (family master/type buffer).
+- Le contrat "track -> capacités -> ensembles UI exposables" est matérialisé dans Z2 (`track_runtime_descriptor_t` + `ui_ensemble_mask`) et consommé par Z5 sans redécision distribuée.
+- Les couches d'exécution (scheduler/param apply) lisent le channel MIDI via Z2 (`track_runtime_get_midi_channel_*`) au lieu d'un couplage direct à l'état UI.
+- Le resolver structurel pur est explicite: `track_runtime_resolve_track()` renvoie une vue résolue (descriptor + cibles runtime valides) sans logique UI contextuelle.
 
 ## 8. Dépendances inter-zones
 Entrées de Z2:
@@ -178,3 +187,24 @@ Sorties de Z2:
 
 ## 14. Contrat produit Synth = Sampler
 - La famille `Synth` ne propose qu'un type operationnel: `Sampler`.
+
+## 15. Contrat Passe 1 - Descriptor structurel explicite
+- Z2 expose un descriptor runtime stable par track:
+  - identité runtime (family/type/engine/bind_state/bind_reason),
+  - capacités runtime (`flags`),
+  - canal MIDI runtime,
+  - ensembles UI exposables (`ui_ensemble_mask`).
+- Ce descriptor ne remplace pas encore un resolver structurel dédié, mais devient la première autorité explicite partagée entre:
+  - Z5 (disponibilité d'ensembles/pages),
+  - Z3/Z4 (chemins d'exécution qui ne doivent plus relire UI directement pour des décisions structurelles simples).
+
+## 16. Contrat Passe 2 - Resolver structurel pur
+- Nouvelle frontière Z2 explicite:
+  - `track_runtime_descriptor_t`: identité/capacités/canal/ensembles exposables.
+  - `track_runtime_resolved_track_t`: descriptor + cibles runtime résolues (`mix/filter`), support gate VCA, source/canal MIDI.
+- Intention:
+  - une fois résolu côté Z2, les call-sites Z3/Z4 consomment cette résolution sans redécider localement les mêmes règles structurelles.
+- Migration effective passe 2:
+  - Z4 scheduler note-engine consomme `track_runtime_resolve_track`.
+  - Z4 live-rec source MIDI consomme `track_runtime_get_midi_source`.
+  - Z3 résolution cibles filter/drive pour apply runtime consomme `track_runtime_resolve_track`.

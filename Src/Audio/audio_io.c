@@ -20,7 +20,7 @@
  * - Track 3 est une source interne et n'est pas alimentée par l'entrée TDM.
  * - Cible produit: Input1..Input4 (4 entrées stéréo physiques). Sur la
  *   devboard proto actuelle, seules 3 entrées stéréo sont câblées ici.
- * - Mapping sortie: MAIN->0/1, CUE->2/3, slots 4..7 à 0.
+ * - Mapping sortie: MAIN->0/1, CUE->2/3, copie MAIN->4/5, slots 6/7 à 0.
  */
 
 #include "audio_io.h"
@@ -323,14 +323,16 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
         ptx[1] = f2s24_fast_ssat(main_r);
         ptx[2] = f2s24_fast_ssat(cue_l);
         ptx[3] = f2s24_fast_ssat(cue_r);
+        ptx[4] = f2s24_fast_ssat(main_l);
+        ptx[5] = f2s24_fast_ssat(main_r);
 #else
         ptx[0] = f2s24_fast(main_l);
         ptx[1] = f2s24_fast(main_r);
         ptx[2] = f2s24_fast(cue_l);
         ptx[3] = f2s24_fast(cue_r);
+        ptx[4] = f2s24_fast(main_l);
+        ptx[5] = f2s24_fast(main_r);
 #endif
-        ptx[4] = 0;
-        ptx[5] = 0;
         ptx[6] = 0;
         ptx[7] = 0;
         ptx += AUDIO_TDM_SLOTS;

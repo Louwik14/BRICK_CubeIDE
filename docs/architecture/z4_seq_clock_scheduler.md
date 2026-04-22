@@ -249,7 +249,9 @@ Points factuels observes:
   - `seq_runtime_time_adapter_process` reste necessaire pour transport et supervision bridge externe, mais n'est plus autorite d'avance step.
 - Couplage implicite avec UI dans le coeur runtime:
   - `seq_runtime_pattern_rec_start_now` lit `ui_get_active_track`.
-  - `seq_play_scheduler_emit_midi_note` lit `ui_get_track_midi_channel`.
+  - Le bind live-rec pattern reste pilote par la track active UI.
+  - Le channel MIDI runtime du scheduler/live-rec/output-guard passe desormais via Z2 (`track_runtime_get_midi_channel_*`) et non par lecture directe UI.
+  - Le scheduler note-engine consomme `track_runtime_resolve_track` (descriptor + cibles resolues) au lieu de re-resoudre localement filter/mix/gate.
 - Double logique tempo interne/externe assumee mais pas concurrente active; bascule source explicite via `seq_runtime_set_clock_source`.
 - Indice de dette documente dans le code:
   - commentaire `TODO(clock-source)` dans `seq_runtime_init` sur branchement source clock globale/menu.

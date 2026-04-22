@@ -756,8 +756,7 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
         {
             const uint8_t cc_number = param_midi_cc_number_from_id(id);
             const uint8_t cc_value = (uint8_t)(clamp_value(value, 0.0f, 127.0f) + 0.5f);
-            const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
-            const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+            const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
             midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
             param_runtime_cache_set(track, id, value);
             return 1U;
@@ -848,50 +847,43 @@ static void filter_ui_state_init_defaults(void)
 
 static uint8_t resolve_filter_target_track(uint32_t *out_track_id)
 {
-    uint8_t track_id = 0U;
-    const uint8_t ui_track = ui_get_active_track();
-    track_runtime_refresh_track(ui_track);
-    if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_track, &track_id) == 0U))
+    track_runtime_resolved_track_t resolved;
+    if ((out_track_id == NULL)
+            || (track_runtime_resolve_track(ui_get_active_track(), &resolved) == 0U)
+            || (resolved.has_filter_target == 0U))
     {
         return 0U;
     }
 
-    *out_track_id = (uint32_t)track_id;
+    *out_track_id = (uint32_t)resolved.filter_track_id;
     return 1U;
 }
 
 static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
 {
-    uint8_t track_id = 0U;
-    track_runtime_refresh_track(ui_track);
-    if ((out_track_id == NULL) || (track_runtime_resolve_filter_target_track(ui_track, &track_id) == 0U))
+    track_runtime_resolved_track_t resolved;
+    if ((out_track_id == NULL)
+            || (track_runtime_resolve_track(ui_track, &resolved) == 0U)
+            || (resolved.has_filter_target == 0U))
     {
         return 0U;
     }
 
-    *out_track_id = (uint32_t)track_id;
+    *out_track_id = (uint32_t)resolved.filter_track_id;
     return 1U;
 }
 
 static uint8_t resolve_filter_drive_target_track_for_ui_track(uint8_t ui_track, uint32_t *out_track_id)
 {
-    uint8_t track_id = 0U;
-    track_runtime_refresh_track(ui_track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(ui_track);
+    track_runtime_resolved_track_t resolved;
     if ((out_track_id == NULL)
-            || (ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (track_runtime_is_audio_routable(ui_track) == 0U))
+            || (track_runtime_resolve_track(ui_track, &resolved) == 0U)
+            || (resolved.has_mix_target == 0U))
     {
         return 0U;
     }
 
-    if (track_runtime_get_mix_target_track(ui_track, &track_id) == 0U)
-    {
-        return 0U;
-    }
-
-    *out_track_id = (uint32_t)track_id;
+    *out_track_id = (uint32_t)resolved.mix_track_id;
     return 1U;
 }
 
@@ -1446,8 +1438,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         }
                         const uint8_t cc_number = param_midi_cc_number_from_id(id);
                         const uint8_t cc_value = (uint8_t)(clamp_value(clamped, 0.0f, 127.0f) + 0.5f);
-                        const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
-                        const uint8_t channel = (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
+                        const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
                         midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
                         param_runtime_cache_set(track, id, clamped);
                         mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);

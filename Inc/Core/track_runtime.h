@@ -44,6 +44,8 @@ typedef struct
 {
     uint8_t track_id;
     uint8_t mix_track_id;
+    uint8_t midi_channel_1_16;
+    uint8_t midi_source;
     uint8_t family;
     uint8_t type;
     uint8_t engine;
@@ -134,6 +136,55 @@ typedef struct
     uint8_t drum_tracks;
 } track_runtime_synth_usage_t;
 
+typedef enum
+{
+    TRACK_RUNTIME_UI_ENSEMBLE_CFG = 0,
+    TRACK_RUNTIME_UI_ENSEMBLE_COLORS,
+    TRACK_RUNTIME_UI_ENSEMBLE_TONE,
+    TRACK_RUNTIME_UI_ENSEMBLE_MOD,
+    TRACK_RUNTIME_UI_ENSEMBLE_MIX,
+    TRACK_RUNTIME_UI_ENSEMBLE_PLAY,
+    TRACK_RUNTIME_UI_ENSEMBLE_VCA,
+    TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD,
+    TRACK_RUNTIME_UI_ENSEMBLE_ARP,
+    TRACK_RUNTIME_UI_ENSEMBLE_SEQ,
+    TRACK_RUNTIME_UI_ENSEMBLE_COUNT
+} track_runtime_ui_ensemble_t;
+
+typedef struct
+{
+    track_runtime_family_t family;
+    track_runtime_type_t type;
+    track_runtime_engine_t engine;
+    track_runtime_bind_state_t bind_state;
+    track_runtime_bind_reason_t bind_reason;
+    uint8_t instance_id;
+    uint8_t mix_track_id;
+    uint8_t flags;
+    uint8_t midi_channel_1_16;
+    uint16_t ui_ensemble_mask;
+} track_runtime_descriptor_t;
+
+typedef enum
+{
+    TRACK_RUNTIME_MIDI_SOURCE_INTERNAL = 0,
+    TRACK_RUNTIME_MIDI_SOURCE_EXTERNAL,
+    TRACK_RUNTIME_MIDI_SOURCE_ALL
+} track_runtime_midi_source_t;
+
+typedef struct
+{
+    uint8_t track_id;
+    track_runtime_descriptor_t descriptor;
+    uint8_t has_mix_target;
+    uint8_t mix_track_id;
+    uint8_t has_filter_target;
+    uint8_t filter_track_id;
+    uint8_t supports_vca_gate;
+    uint8_t midi_channel_zero_based;
+    track_runtime_midi_source_t midi_source;
+} track_runtime_resolved_track_t;
+
 void track_runtime_init(void);
 void track_runtime_invalidate_all(void);
 void track_runtime_invalidate_track(uint8_t track);
@@ -147,6 +198,12 @@ uint8_t track_runtime_is_audio_routable(uint8_t track);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
 uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t *out_track);
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track);
+uint8_t track_runtime_get_midi_channel_1_16(uint8_t track);
+uint8_t track_runtime_get_midi_channel_zero_based(uint8_t track);
+track_runtime_midi_source_t track_runtime_get_midi_source(uint8_t track);
+uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *out_descriptor);
+uint8_t track_runtime_resolve_track(uint8_t track, track_runtime_resolved_track_t *out_resolved);
+uint8_t track_runtime_is_ui_ensemble_available(uint8_t track, track_runtime_ui_ensemble_t ensemble);
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);

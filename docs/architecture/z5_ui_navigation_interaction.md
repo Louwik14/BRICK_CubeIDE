@@ -66,6 +66,11 @@ Autorite hall modes:
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
+- Disponibilité d'ensembles template:
+  - `ui_navigation_is_page_available` combine:
+    - contrat structurel Z2 (`track_runtime_is_ui_ensemble_available`),
+    - résolution template locale (`ui_template_family_resolve_active_track`).
+  - Z5 ne redécide plus seule la présence des ensembles principaux (`COLORS/TONE/MOD/MIX/PLAY/VCA`).
 
 Autorite raccourcis interaction:
 - `ui_core_handle_global_shortcuts`, `ui_core_handle_transport_event`, `ui_core_handle_seq_mode_event`, `ui_core_handle_pattern_mode_event`, `ui_core_mute_handle_event`.
@@ -104,6 +109,8 @@ Sorties vers UI interne:
 
 Sorties vers autres zones:
 - Z2: `track_runtime_refresh_*`, `track_runtime_get_ctx`, `track_runtime_invalidate_all`, etc.
+- Z2: `track_runtime_is_ui_ensemble_available` pour le gating de disponibilité d'ensembles.
+- Z2: `track_runtime_resolve_track` pour la resolution explicite de cible filter depuis `ui_core`.
 - Z3: `param_set`, `param_registry_apply_track_value`, `param_registry_batch_*`, `param_registry_sync_ui_for_active_track`, `param_store_set_active`.
 - Z4: `seq_runtime_toggle_play_stop`, `seq_runtime_rec_toggle_arm`, `seq_runtime_set_track_div/quant/swing`, `seq_edit_*`, `seq_model_*`.
 - Storage: `pattern_live_queue_slot`, `pattern_live_capture_to_slot`, `undo_v1_restore`.

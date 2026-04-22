@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include "Core/track_runtime.h"
-#include "ui_core.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
@@ -255,13 +254,15 @@ static int32_t seq_live_rec_capture_select_voice_deterministic(seq_track_id_t tr
 static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
                                                           seq_live_rec_source_t source)
 {
-    const ui_track_midi_source_t track_source = ui_get_track_midi_source(track);
+    const track_runtime_midi_source_t track_source = track_runtime_get_midi_source(track);
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
-        return ((track_source == UI_TRACK_MIDI_SRC_INT) || (track_source == UI_TRACK_MIDI_SRC_ALL)) ? 1U : 0U;
+        return ((track_source == TRACK_RUNTIME_MIDI_SOURCE_INTERNAL)
+                || (track_source == TRACK_RUNTIME_MIDI_SOURCE_ALL)) ? 1U : 0U;
     }
 
-    return ((track_source == UI_TRACK_MIDI_SRC_EXT) || (track_source == UI_TRACK_MIDI_SRC_ALL)) ? 1U : 0U;
+    return ((track_source == TRACK_RUNTIME_MIDI_SOURCE_EXTERNAL)
+            || (track_source == TRACK_RUNTIME_MIDI_SOURCE_ALL)) ? 1U : 0U;
 }
 
 static uint64_t seq_live_rec_capture_mictim_positive_offset_q16(int8_t mictim,
@@ -593,8 +594,7 @@ void seq_live_rec_capture_note_on(uint8_t active,
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         track_runtime_refresh_track(track);
-        const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
-        const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
+        const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
         {
             continue;
@@ -749,8 +749,7 @@ void seq_live_rec_capture_note_off(uint8_t active,
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const uint8_t track_ch_1_16 = ui_get_track_midi_channel(track);
-        const uint8_t track_ch = (uint8_t)((track_ch_1_16 > 0U) ? (track_ch_1_16 - 1U) : 0U);
+        const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
         {
             continue;

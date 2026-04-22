@@ -83,6 +83,7 @@ Familles d'autorite:
   - global-only: verite runtime.
   - track-scoped UI: miroir UI.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
+- Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
 ## 6. Dette technique restante (bornee)
 
@@ -185,3 +186,11 @@ Familles d'autorite:
 - Le corridor structurel est maintenant unique et centralise: capture des mix-targets precedents, mutation family/type, invalidation/sync systeme, rebind mixer, neutralisation runtime invalide, puis re-apply lane-bound avant toute sync UI active-track.
 - Le re-apply lane-bound ne depend plus d'un cache partiel silencieux: l'autorite est explicite (`filter_ui_state` pour FILTER, cache track-aware sinon valeur par defaut promue dans le cache).
 - Pendant ce corridor, les consommateurs de modulation control-rate (`mod_lfo_v1`) sont suspendus pour eviter une capture/restauration sur topologie intermediaire.
+
+## 15. Contrat Passe 1 - Autorite execution MIDI
+- Les chemins d'application MIDI dans `param_registry` lisent le canal via Z2 (`track_runtime_get_midi_channel_zero_based`).
+- Objectif: reduire le couplage implicite UI -> execution courante pour les writes runtime simples.
+
+## 16. Contrat Passe 2 - Consommation du resolver Z2
+- Les helpers de resolution de cible FILTER (`resolve_filter_target_track*`) consomment desormais `track_runtime_resolve_track`.
+- Z3 n'interprete plus localement l'etat bind/mix-target pour ces chemins: la cible resolue vient de Z2.

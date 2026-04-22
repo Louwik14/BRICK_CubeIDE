@@ -1,6 +1,7 @@
 #include "ui_navigation.h"
 
 #include "ui_core.h"
+#include "Core/track_runtime.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 
@@ -34,9 +35,15 @@ static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 
 static uint8_t ui_navigation_is_page_available(uint8_t page_id)
 {
+    const uint8_t active_track = ui_get_active_track();
+
     switch (page_id)
     {
         case UI_PAGE_TEMPLATE_COLORS:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_COLORS) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_COLORS) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_CFG:
@@ -44,27 +51,59 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
             return 1U;
 
         case UI_PAGE_TEMPLATE_TONE:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_TONE) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_MOD:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_MOD) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MOD) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_KEYBOARD:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_KEYBOARD) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_KEYBOARD) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_ARP:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_ARP) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_ARP) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_SEQ:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_SEQ) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_SEQ) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_MIX:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_MIX) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MIX) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_PLAY:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_PLAY) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_PLAY) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_VCA:
+            if (track_runtime_is_ui_ensemble_available(active_track, TRACK_RUNTIME_UI_ENSEMBLE_VCA) == 0U)
+            {
+                return 0U;
+            }
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_VCA) != 0) ? 1U : 0U;
 
         default:
