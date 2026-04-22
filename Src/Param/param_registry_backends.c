@@ -311,6 +311,219 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
                     break;
             }
         }
+        else if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_FM_SNARE)
+                && (id >= PARAM_DRUM_FM_SNARE_PITCH)
+                && (id <= PARAM_DRUM_FM_SNARE_NOISE_DECAY))
+        {
+            switch (id)
+            {
+                case PARAM_DRUM_FM_SNARE_PITCH:
+                    state->fm_snare.pitch = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_DECAY:
+                    state->fm_snare.decay = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_FM_AMOUNT:
+                    state->fm_snare.fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_NOISE:
+                    state->fm_snare.noise = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_HP_TONE:
+                    state->fm_snare.hp_tone = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_MOD_FREQ:
+                    state->fm_snare.mod_freq = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_MOD_DECAY:
+                    state->fm_snare.mod_decay = value;
+                    break;
+                case PARAM_DRUM_FM_SNARE_NOISE_DECAY:
+                    state->fm_snare.noise_decay = value;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_FM_TOM)
+                && (id >= PARAM_DRUM_FM_TOM_PITCH)
+                && (id <= PARAM_DRUM_FM_TOM_START_PHASE))
+        {
+            switch (id)
+            {
+                case PARAM_DRUM_FM_TOM_PITCH:
+                    state->fm_tom.pitch = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_DECAY:
+                    state->fm_tom.decay = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_PITCH_SWEEP:
+                    state->fm_tom.pitch_sweep = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_FM_AMOUNT:
+                    state->fm_tom.fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_MOD_FREQ:
+                    state->fm_tom.mod_freq = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_MOD_DECAY:
+                    state->fm_tom.mod_decay = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_SWEEP_DECAY:
+                    state->fm_tom.sweep_decay = value;
+                    break;
+                case PARAM_DRUM_FM_TOM_START_PHASE:
+                    state->fm_tom.start_phase = value;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT)
+                && (id >= PARAM_DRUM_FM_RIMSHOT_RIM_PITCH)
+                && (id <= PARAM_DRUM_FM_RIMSHOT_MOD_DECAY))
+        {
+            switch (id)
+            {
+                case PARAM_DRUM_FM_RIMSHOT_RIM_PITCH:
+                    state->fm_rimshot.rim_pitch = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_RIM_DECAY:
+                    state->fm_rimshot.rim_decay = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_BODY_MIX:
+                    state->fm_rimshot.body_mix = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_HP_TONE:
+                    state->fm_rimshot.hp_tone = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_RIM_FM_AMOUNT:
+                    state->fm_rimshot.rim_fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_BODY_PITCH:
+                    state->fm_rimshot.body_pitch = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_BODY_DECAY:
+                    state->fm_rimshot.body_decay = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_BODY_FM_AMOUNT:
+                    state->fm_rimshot.body_fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_RIMSHOT_MOD_DECAY:
+                    state->fm_rimshot.mod_decay = value;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_FM_CLAP)
+                && (id >= PARAM_DRUM_FM_CLAP_CLAP_COUNT)
+                && (id <= PARAM_DRUM_FM_CLAP_CLAP_DECAY))
+        {
+            switch (id)
+            {
+                case PARAM_DRUM_FM_CLAP_CLAP_COUNT:
+                    state->fm_clap.clap_count = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_CLAP_SPACING:
+                    state->fm_clap.clap_spacing = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_TAIL_DECAY:
+                    state->fm_clap.tail_decay = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_HP_TONE:
+                    state->fm_clap.hp_tone = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_FEEDBACK:
+                    state->fm_clap.feedback = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_FM_AMOUNT:
+                    state->fm_clap.fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_BASE_FREQ:
+                    state->fm_clap.base_freq = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_MOD_FREQ:
+                    state->fm_clap.mod_freq = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_MOD_DECAY:
+                    state->fm_clap.mod_decay = value;
+                    break;
+                case PARAM_DRUM_FM_CLAP_CLAP_DECAY:
+                    state->fm_clap.clap_decay = value;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL)
+                && (id >= PARAM_DRUM_FM_COWBELL_PITCH)
+                && (id <= PARAM_DRUM_FM_COWBELL_MOD_FREQ))
+        {
+            switch (id)
+            {
+                case PARAM_DRUM_FM_COWBELL_PITCH:
+                    state->fm_cowbell.pitch = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_DECAY_SHORT:
+                    state->fm_cowbell.decay_short = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_DECAY_LONG:
+                    state->fm_cowbell.decay_long = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_FM_AMOUNT:
+                    state->fm_cowbell.fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_FEEDBACK:
+                    state->fm_cowbell.feedback = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_ENV_MIX:
+                    state->fm_cowbell.env_mix = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_MOD_DECAY:
+                    state->fm_cowbell.mod_decay = value;
+                    break;
+                case PARAM_DRUM_FM_COWBELL_MOD_FREQ:
+                    state->fm_cowbell.mod_freq = value;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL)
+                && (id >= PARAM_DRUM_FM_CYMBAL_DECAY)
+                && (id <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY))
+        {
+            switch (id)
+            {
+                case PARAM_DRUM_FM_CYMBAL_DECAY:
+                    state->fm_cymbal.decay = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_SUSTAIN:
+                    state->fm_cymbal.sustain = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_FM_AMOUNT:
+                    state->fm_cymbal.fm_amount = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_HP_TONE:
+                    state->fm_cymbal.hp_tone = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_FEEDBACK:
+                    state->fm_cymbal.feedback = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_BASE_CARRIER:
+                    state->fm_cymbal.base_carrier = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_BASE_MOD:
+                    state->fm_cymbal.base_mod = value;
+                    break;
+                case PARAM_DRUM_FM_CYMBAL_MOD_DECAY:
+                    state->fm_cymbal.mod_decay = value;
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
