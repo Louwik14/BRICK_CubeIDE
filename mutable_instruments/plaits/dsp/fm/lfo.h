@@ -24,7 +24,7 @@
 //
 // -----------------------------------------------------------------------------
 //
-// DX7-compatible LFO.
+// FM-compatible LFO.
 
 #ifndef PLAITS_DSP_FM_LFO_H_
 #define PLAITS_DSP_FM_LFO_H_

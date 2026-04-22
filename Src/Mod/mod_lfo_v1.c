@@ -134,12 +134,6 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
             return 0U;
         }
 
-        if (type == UI_TRACK_TYPE_MONOB)
-        {
-            return ((dest >= PARAM_MONOB_OSC1_WAVE) && (dest <= PARAM_MONOB_SUB_MIX)) ? 1U : 0U;
-        }
-
-
         return 0U;
     }
 
@@ -149,12 +143,6 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
         {
             return 0U;
         }
-
-        if (type == UI_TRACK_TYPE_MONOB)
-        {
-            return ((dest >= PARAM_MONOB_FILTER_TYPE) && (dest <= PARAM_MONOB_FILTER_ENVDLY)) ? 1U : 0U;
-        }
-
 
         return ((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_DRIVE)) ? 1U : 0U;
     }

@@ -24,7 +24,7 @@
 //
 // -----------------------------------------------------------------------------
 //
-// Various conversion routines for DX7 patch data.
+// Various conversion routines for FM patch data.
 
 #include "plaits/dsp/fm/dx_units.h"
 

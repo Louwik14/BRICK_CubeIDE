@@ -24,7 +24,7 @@
 //
 // -----------------------------------------------------------------------------
 //
-// Various "magic" conversion functions for DX7 patch data.
+// Various "magic" conversion functions for FM patch data.
 
 #ifndef PLAITS_DSP_DX_UNITS_H_
 #define PLAITS_DSP_DX_UNITS_H_

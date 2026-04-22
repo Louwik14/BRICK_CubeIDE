@@ -68,12 +68,6 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         case UI_TRACK_TYPE_HYBRID:
             return TRACK_RUNTIME_TYPE_HYBRID;
 
-        case UI_TRACK_TYPE_DX7:
-            return TRACK_RUNTIME_TYPE_SAMPLER;
-
-        case UI_TRACK_TYPE_MONOB:
-            return TRACK_RUNTIME_TYPE_SAMPLER;
-
         case UI_TRACK_TYPE_SAMPLER:
             return TRACK_RUNTIME_TYPE_SAMPLER;
 
@@ -531,7 +525,6 @@ void track_runtime_refresh_all(void)
         }
     }
 
-    g_track_runtime_synth_usage.monob_tracks = 0U;
     g_track_runtime_synth_usage.drum_tracks = drum_count;
     g_track_runtime_global_dirty = 0U;
     ++g_track_runtime_revision;
@@ -708,51 +701,9 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
-        case PARAM_MONOB_FILTER_TYPE:
-        case PARAM_MONOB_FILTER_CUTOFF:
-        case PARAM_MONOB_FILTER_RESONANCE:
-        case PARAM_MONOB_FILTER_EG_AMT:
-        case PARAM_MONOB_FILTER_ATTACK:
-        case PARAM_MONOB_FILTER_DECAY:
-        case PARAM_MONOB_FILTER_SUSTAIN:
-        case PARAM_MONOB_FILTER_RELEASE:
-        case PARAM_MONOB_FILTER_KEYTRK:
-        case PARAM_MONOB_FILTER_ENVRST:
-        case PARAM_MONOB_FILTER_ENVDLY:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_COLORS;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
             return rule;
-
-        case PARAM_DX7_ALGORITHM:
-        case PARAM_DX7_FEEDBACK:
-        case PARAM_DX7_TRANSPOSE:
-        case PARAM_DX7_LFO_SPEED:
-        case PARAM_DX7_LFO_DELAY:
-        case PARAM_DX7_LFO_PITCH_MOD_DEPTH:
-        case PARAM_DX7_LFO_AMP_MOD_DEPTH:
-        case PARAM_DX7_PITCH_BEND_RANGE:
-        case PARAM_DX7_PORTAMENTO_TIME:
-        case PARAM_DX7_MONO_MODE:
-        case PARAM_DX7_OPERATOR_MASK:
-        case PARAM_DX7_OPERATOR_1_LEVEL:
-        case PARAM_DX7_OPERATOR_2_LEVEL:
-        case PARAM_DX7_OPERATOR_3_LEVEL:
-        case PARAM_DX7_OPERATOR_4_LEVEL:
-        case PARAM_MONOB_OSC1_WAVE:
-        case PARAM_MONOB_OSC2_WAVE:
-        case PARAM_MONOB_OSC3_WAVE:
-        case PARAM_MONOB_SUB_WAVE:
-        case PARAM_MONOB_OSC1_RANGE:
-        case PARAM_MONOB_OSC2_RANGE:
-        case PARAM_MONOB_OSC3_RANGE:
-        case PARAM_MONOB_SUB_OCTAVE:
-        case PARAM_MONOB_OSC1_DETUNE:
-        case PARAM_MONOB_OSC2_DETUNE:
-        case PARAM_MONOB_OSC3_DETUNE:
-        case PARAM_MONOB_OSC1_MIX:
-        case PARAM_MONOB_OSC2_MIX:
-        case PARAM_MONOB_OSC3_MIX:
-        case PARAM_MONOB_SUB_MIX:
         case PARAM_DRUM_TRX_BD_PITCH:
         case PARAM_DRUM_TRX_BD_DECAY:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:

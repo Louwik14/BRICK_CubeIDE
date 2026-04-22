@@ -448,12 +448,6 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
             continue;
         }
 
-        if ((fam == UI_TRACK_FAMILY_SYNTH)
-                && ((typ == UI_TRACK_TYPE_MONOB) || (typ == UI_TRACK_TYPE_DX7)))
-        {
-            typ = UI_TRACK_TYPE_SAMPLER;
-        }
-
         if (!ui_track_type_is_valid_for_family(fam, typ))
         {
             return false;

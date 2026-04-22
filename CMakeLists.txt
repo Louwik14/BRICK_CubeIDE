@@ -75,12 +75,6 @@ file(GLOB U8G2_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2/*.c"
 )
 
-# Engines / synths
-file(GLOB MICRO_DEXED_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Micro_Dexed/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Micro_Dexed/*.cpp"
-)
-
 # Project source tree (custom code only; base Src/*.c already added by CubeMX)
 file(GLOB SRC_APP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/*.c"
@@ -276,7 +270,6 @@ set(ALL_USER_SOURCES
     ${CMSIS_DSP_SRC}
     ${DRV_APP_SRC}
     ${U8G2_SRC}
-    ${MICRO_DEXED_SRC}
     ${SRC_APP_SRC}
     ${SRC_AUDIO_SRC}
     ${SRC_CORE_SRC}
@@ -335,7 +328,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
-    ${CMAKE_CURRENT_SOURCE_DIR}/Micro_Dexed
     ${CMAKE_CURRENT_SOURCE_DIR}/freeverb-main/Components
     ${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb

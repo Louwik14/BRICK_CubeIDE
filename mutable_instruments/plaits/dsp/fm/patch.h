@@ -24,7 +24,7 @@
 //
 // -----------------------------------------------------------------------------
 //
-// DX7 patch.
+// FM patch.
 
 #ifndef PLAITS_DSP_FM_PATCH_H_
 #define PLAITS_DSP_FM_PATCH_H_

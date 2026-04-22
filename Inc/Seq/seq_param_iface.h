@@ -29,6 +29,10 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        uint8_t set_id,
                                        seq_param8_t param8,
                                        seq_value16_t value16);
+uint8_t seq_param_iface_ui_commit_base_after_authoritative_apply(seq_track_id_t ui_active_track,
+                                                                 uint8_t set_id,
+                                                                 seq_param8_t param8,
+                                                                 seq_value16_t value16);
 uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    uint8_t set_id,
                                    seq_param8_t param8,

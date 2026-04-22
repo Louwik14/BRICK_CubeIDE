@@ -28,27 +28,27 @@
 #include "param_registry.h"
 #include "ui_param.h"
 
-static const ui_param_bank_t g_dx7_param_banks[] = {
-    { .params = { PARAM_DX7_ALGORITHM, PARAM_DX7_FEEDBACK, PARAM_MIX_LEVEL, PARAM_DX7_TRANSPOSE } },
-    { .params = { PARAM_DX7_LFO_SPEED, PARAM_DX7_LFO_DELAY, PARAM_DX7_LFO_PITCH_MOD_DEPTH, PARAM_DX7_LFO_AMP_MOD_DEPTH } },
-    { .params = { PARAM_DX7_PITCH_BEND_RANGE, PARAM_DX7_PORTAMENTO_TIME, PARAM_DX7_MONO_MODE, PARAM_DX7_OPERATOR_MASK } },
-    { .params = { PARAM_DX7_OPERATOR_1_LEVEL, PARAM_DX7_OPERATOR_2_LEVEL, PARAM_DX7_OPERATOR_3_LEVEL, PARAM_DX7_OPERATOR_4_LEVEL } },
+static const ui_param_bank_t g_tone_param_banks[] = {
+    { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_START, PARAM_SAMPLER_END } },
+    { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } },
+    { .params = { PARAM_SAMPLER_SLICE_COUNT, PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_VCA_ATTACK } },
+    { .params = { PARAM_MIDI_PROGRAM, PARAM_MIDI_CC1_1, PARAM_MIDI_CC1_2, PARAM_MIDI_CC1_3 } },
 };
 
-static const char *const g_dx7_page_names[] = {
+static const char *const g_tone_page_names[] = {
     "PLAY",
     "MOTION",
     "CTRL",
     "COLOR",
 };
 
-static uint8_t g_dx7_page_index = 0U;
+static uint8_t g_tone_page_index = 0U;
 
 static void ui_page_param_test_select_page(uint8_t page_index)
 {
-    const uint8_t page_count = (uint8_t)(sizeof(g_dx7_param_banks) / sizeof(g_dx7_param_banks[0]));
-    g_dx7_page_index = (page_count == 0U) ? 0U : (uint8_t)(page_index % page_count);
-    ui_param_set_bank(&g_dx7_param_banks[g_dx7_page_index]);
+    const uint8_t page_count = (uint8_t)(sizeof(g_tone_param_banks) / sizeof(g_tone_param_banks[0]));
+    g_tone_page_index = (page_count == 0U) ? 0U : (uint8_t)(page_index % page_count);
+    ui_param_set_bank(&g_tone_param_banks[g_tone_page_index]);
 }
 
 /**
@@ -165,7 +165,7 @@ static void ui_page_param_test_handle_event(const ui_event_t *ev)
 
     if (ev->id == (uint8_t)BTN_PARAM_1)
     {
-        ui_page_param_test_select_page((uint8_t)(g_dx7_page_index + 1U));
+        ui_page_param_test_select_page((uint8_t)(g_tone_page_index + 1U));
     }
 }
 
@@ -193,7 +193,7 @@ static void ui_page_param_test_tick(void) {}
  */
 static void ui_page_param_test_render(void)
 {
-    const ui_param_bank_t *bank = &g_dx7_param_banks[g_dx7_page_index];
+    const ui_param_bank_t *bank = &g_tone_param_banks[g_tone_page_index];
 
     for (uint8_t i = 0U; i < 4U; i++)
     {
@@ -206,7 +206,7 @@ static void ui_page_param_test_render(void)
 
         if (i == 0U)
         {
-            (void)snprintf(line_txt, sizeof(line_txt), "%s %s %s", g_dx7_page_names[g_dx7_page_index], desc->name, value_txt);
+            (void)snprintf(line_txt, sizeof(line_txt), "%s %s %s", g_tone_page_names[g_tone_page_index], desc->name, value_txt);
         }
         else
         {

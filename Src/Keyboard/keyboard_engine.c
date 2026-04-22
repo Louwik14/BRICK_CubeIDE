@@ -15,7 +15,6 @@
 #include "Keyboard/keyboard_engine.h"
 
 #include "Audio/mixer.h"
-#include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "MIDI/midi.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -26,7 +25,6 @@
 
 static bool g_keyboard_engine_sounding_active = false;
 static uint8_t g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
-static uint8_t g_keyboard_engine_sounding_monob_instance = 0U;
 static uint8_t g_keyboard_engine_sounding_drum_instance = 0U;
 
 #define KBD_REC_NOTE_STACK_DEPTH 8U
@@ -78,21 +76,6 @@ static uint8_t keyboard_engine_active_track_supports_vca_gate(void)
     const uint8_t active_track = ui_get_active_track();
     track_runtime_refresh_track(active_track);
     return track_runtime_supports_vca_gate(track_runtime_get_ctx(active_track));
-}
-
-static uint8_t keyboard_engine_get_active_monob_instance(void)
-{
-    const uint8_t active_track = ui_get_active_track();
-    track_runtime_refresh_track(active_track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
-    if ((ctx == NULL)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
-    {
-        return 0U;
-    }
-
-    return ctx->instance_id;
 }
 
 static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
@@ -172,18 +155,7 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             }
         }
 
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-        {
-            if (is_note_on != 0U)
-            {
-                monob_synth_note_on_for_instance(ctx->instance_id, note, velocity);
-            }
-            else
-            {
-                monob_synth_note_off_for_instance(ctx->instance_id, note);
-            }
-        }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
             if (is_note_on != 0U)
             {
@@ -306,12 +278,7 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
     g_keyboard_engine_sounding_active = true;
     g_keyboard_engine_sounding_engine = ctx->engine;
 
-    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-    {
-        g_keyboard_engine_sounding_monob_instance = keyboard_engine_get_active_monob_instance();
-        monob_synth_note_on_for_instance(g_keyboard_engine_sounding_monob_instance, note, velocity);
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         g_keyboard_engine_sounding_drum_instance = ctx->instance_id;
         drum_synth_note_on_for_instance(g_keyboard_engine_sounding_drum_instance, note, velocity);
@@ -378,11 +345,7 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
         }
     }
 
-    if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-    {
-        monob_synth_note_off_for_instance(g_keyboard_engine_sounding_monob_instance, note);
-    }
-    else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         drum_synth_note_off_for_instance(sounding_instance, note);
     }
@@ -427,7 +390,6 @@ void keyboard_engine_note_off(uint8_t note)
 
 void keyboard_engine_all_notes_off(void)
 {
-    monob_synth_all_notes_off_all();
     drum_synth_all_notes_off_all();
 
     const uint8_t filter_track = keyboard_engine_get_filter_target_track();
@@ -458,7 +420,6 @@ void keyboard_engine_all_notes_off(void)
 
     g_keyboard_engine_sounding_active = false;
     g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
-    g_keyboard_engine_sounding_monob_instance = 0U;
     g_keyboard_engine_sounding_drum_instance = 0U;
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
 }
@@ -558,22 +519,7 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             }
         }
 
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-        {
-            if (is_note_on != 0U)
-            {
-                monob_synth_note_on_for_instance(ctx->instance_id, note, velocity);
-            }
-            else if (is_note_off != 0U)
-            {
-                monob_synth_note_off_for_instance(ctx->instance_id, note);
-            }
-            else if (is_all_notes_off != 0U)
-            {
-                monob_synth_all_notes_off_for_instance(ctx->instance_id);
-            }
-        }
-        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
             if (is_note_on != 0U)
             {

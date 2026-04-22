@@ -47,13 +47,13 @@
     {
       "label": "Clean Release",
       "type": "shell",
-      "command": "cmake",
+      "command": "powershell",
       "args": [
-        "--build",
-        "--preset",
-        "Release",
-        "--target",
-        "clean"
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "if (Test-Path '${workspaceFolder}\\build\\Release') { Remove-Item '${workspaceFolder}\\build\\Release' -Recurse -Force }; cmake --preset Release"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

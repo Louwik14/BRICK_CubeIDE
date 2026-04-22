@@ -41,6 +41,14 @@ static ui_param_state_t g_ui_param = {
     .valid = 0U,
 };
 
+typedef struct
+{
+    seq_track_id_t track;
+    seq_step_id_t step;
+    uint8_t set_id;
+    seq_param8_t param8;
+} ui_param_live_rec_ctx_t;
+
 static uint8_t ui_param_is_track_scoped(param_id_t param);
 
 /**
@@ -301,6 +309,44 @@ static float ui_param_get_active_track_value(param_id_t param)
     return param_store_get_active(param);
 }
 
+static uint8_t ui_param_live_rec_resolve_context(param_id_t param, ui_param_live_rec_ctx_t *out_ctx)
+{
+    if (out_ctx == 0)
+    {
+        return 0U;
+    }
+
+    const seq_track_id_t track = ui_get_active_track();
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    uint8_t set_id = 0U;
+    seq_param8_t param8 = 0U;
+    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+    {
+        return 0U;
+    }
+
+    if (seq_runtime_live_rec_param_can_write(track, set_id, param8) == 0U)
+    {
+        return 0U;
+    }
+
+    seq_step_id_t step = 0U;
+    if (seq_runtime_get_playhead_step(track, &step) == 0U)
+    {
+        return 0U;
+    }
+
+    out_ctx->track = track;
+    out_ctx->step = step;
+    out_ctx->set_id = set_id;
+    out_ctx->param8 = param8;
+    return 1U;
+}
+
 static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
 {
     if (ui_param_is_track_scoped(param) == 0U)
@@ -341,7 +387,7 @@ static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
     if (seq_param_iface_map_param(param, &set_id, &param8) != 0U)
     {
         const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
-        (void)seq_param_iface_set_base_value(active_track, set_id, param8, encoded);
+        (void)seq_param_iface_ui_commit_base_after_authoritative_apply(active_track, set_id, param8, encoded);
     }
 
     /* Track-scoped contract: active[] mirrors the UI edit context; runtime authority is apply_track_value(track,...). */
@@ -457,6 +503,12 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
         return 0U;
     }
 
+    ui_param_live_rec_ctx_t live_rec_ctx;
+    if (ui_param_live_rec_resolve_context(param, &live_rec_ctx) == 0U)
+    {
+        return 0U;
+    }
+
     seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
     seq_track_id_t held_track = 0U;
     if (seq_edit_collect_held_steps(&held_track,
@@ -467,23 +519,13 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
         return 0U;
     }
 
-    const seq_track_id_t track = ui_get_active_track();
-    seq_step_id_t step = 0U;
-    if ((track >= SEQ_TRACK_COUNT) || (seq_runtime_get_playhead_step(track, &step) == 0U))
-    {
-        return 0U;
-    }
-
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
-    {
-        return 0U;
-    }
-
     float source_value = ui_param_get_active_track_value(param);
     seq_plock_entry_t existing;
-    if (seq_edit_step_plock_find(track, step, set_id, param8, &existing) != 0U)
+    if (seq_edit_step_plock_find(live_rec_ctx.track,
+                                 live_rec_ctx.step,
+                                 live_rec_ctx.set_id,
+                                 live_rec_ctx.param8,
+                                 &existing) != 0U)
     {
         source_value = seq_param_iface_decode_param_value(param, existing.value16);
     }
@@ -492,7 +534,10 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
     next_value = ui_param_clamp(next_value, min_value, max_value);
     const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
 
-    if (seq_runtime_live_rec_param_write(track, set_id, param8, encoded) == 0U)
+    if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
+                                         live_rec_ctx.set_id,
+                                         live_rec_ctx.param8,
+                                         encoded) == 0U)
     {
         return 0U;
     }

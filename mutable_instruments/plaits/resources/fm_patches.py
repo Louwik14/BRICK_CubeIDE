@@ -26,7 +26,7 @@
 #
 # -----------------------------------------------------------------------------
 #
-# My favorite DX7 patches.
+# My favorite FM patches.
 
 def Read(name):
   data = file(name, 'rb').read()

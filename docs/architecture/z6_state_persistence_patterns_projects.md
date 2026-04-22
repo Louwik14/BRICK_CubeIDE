@@ -177,7 +177,6 @@ Points de lecture principaux:
   - valide budget plocks,
   - stop transport + panic,
   - restore track config UI,
-  - migration compat track-config: `Synth/MonoB` et `Synth/DX7` sont remappes explicitement vers `Synth/Sampler`,
   - `track_runtime_refresh_all()`,
   - apply seq block (plus tot),
   - batch apply params + globals,

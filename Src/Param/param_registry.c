@@ -1,28 +1,27 @@
-ï»¿/**
+/**
  * @file param_registry.c
  * @brief Module applicatif param_registry.
  *
- * RÃ´le du module:
- * - ImplÃ©menter les traitements liÃ©s Ã  param_registry.
- * - Fournir les services internes utilisÃ©s par le firmware utilisateur.
+ * Rôle du module:
+ * - Implémenter les traitements liés à param_registry.
+ * - Fournir les services internes utilisés par le firmware utilisateur.
  *
  * Architecture:
- * - AppelÃ© par: modules applicatifs selon l'orchestration du firmware.
- * - Appelle: dÃ©pendances matÃ©rielles et/ou modules utilisateur associÃ©s.
+ * - Appelé par: modules applicatifs selon l'orchestration du firmware.
+ * - Appelle: dépendances matérielles et/ou modules utilisateur associés.
  *
- * Contraintes temps rÃ©el:
- * - IRQ: selon les API appelÃ©es.
- * - Hard realtime: selon le chemin d'exÃ©cution.
- * - malloc: Ã©viter en chemin critique.
+ * Contraintes temps réel:
+ * - IRQ: selon les API appelées.
+ * - Hard realtime: selon le chemin d'exécution.
+ * - malloc: éviter en chemin critique.
  *
  * Notes:
- * - Documentation ajoutÃ©e sans modification de la logique d'exÃ©cution.
+ * - Documentation ajoutée sans modification de la logique d'exécution.
  */
 
 #include "param_registry.h"
 
 #include "audio_float.h"
-#include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -50,16 +49,16 @@ static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track);
 static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track);
 
 /**
- * @brief Point d'entrÃ©e clamp_value.
+ * @brief Point d'entrée clamp_value.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  clamp_value.
+ * Rôle:
+ * - Exécuter le traitement associé à clamp_value.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
- * @param lo ParamÃ¨tre d'entrÃ©e de l'API.
- * @param hi ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
+ * @param lo Paramètre d'entrée de l'API.
+ * @param hi Paramètre d'entrée de l'API.
  *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
+ * @return Valeur de retour définie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -74,14 +73,14 @@ static float clamp_value(float v, float lo, float hi)
 }
 
 /**
- * @brief Point d'entrÃ©e control_float_to_slot.
+ * @brief Point d'entrée control_float_to_slot.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  control_float_to_slot.
+ * Rôle:
+ * - Exécuter le traitement associé à control_float_to_slot.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
+ * @return Valeur de retour définie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -94,14 +93,14 @@ static int8_t control_float_to_slot(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e control_float_to_ui127.
+ * @brief Point d'entrée control_float_to_ui127.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  control_float_to_ui127.
+ * Rôle:
+ * - Exécuter le traitement associé à control_float_to_ui127.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
+ * @return Valeur de retour définie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -191,20 +190,6 @@ static float filter_ui127_to_env_delay_s(float v)
     return filter_ui127_to_time_s(v, 0.001f, 5.0f) - 0.001f;
 }
 
-static int8_t monob_range_index_to_octave(float v)
-{
-    static const int8_t octave_map[] = {-1, 0, 1, 2};
-    uint8_t index = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
-    return octave_map[index];
-}
-
-static int8_t monob_sub_octave_index_to_octave(float v)
-{
-    static const int8_t octave_map[] = {-1, -2, -3, -4};
-    uint8_t index = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
-    return octave_map[index];
-}
-
 static float filter_eq_ui127_to_db(float v)
 {
     const float clamped = filter_ui127_clamp(v);
@@ -278,21 +263,6 @@ static uint8_t param_track_supports_midi_tone(const track_runtime_ctx_t *ctx)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID)) ? 1U : 0U;
 }
 
-static void apply_dx7_algorithm(float v) { apply_tone_live_track(PARAM_DX7_ALGORITHM, v); }
-static void apply_dx7_feedback(float v) { apply_tone_live_track(PARAM_DX7_FEEDBACK, v); }
-static void apply_dx7_transpose(float v) { apply_tone_live_track(PARAM_DX7_TRANSPOSE, v); }
-static void apply_dx7_lfo_speed(float v) { apply_tone_live_track(PARAM_DX7_LFO_SPEED, v); }
-static void apply_dx7_lfo_delay(float v) { apply_tone_live_track(PARAM_DX7_LFO_DELAY, v); }
-static void apply_dx7_lfo_pitch_mod_depth(float v) { apply_tone_live_track(PARAM_DX7_LFO_PITCH_MOD_DEPTH, v); }
-static void apply_dx7_lfo_amp_mod_depth(float v) { apply_tone_live_track(PARAM_DX7_LFO_AMP_MOD_DEPTH, v); }
-static void apply_dx7_pitch_bend_range(float v) { apply_tone_live_track(PARAM_DX7_PITCH_BEND_RANGE, v); }
-static void apply_dx7_portamento_time(float v) { apply_tone_live_track(PARAM_DX7_PORTAMENTO_TIME, v); }
-static void apply_dx7_mono_mode(float v) { apply_tone_live_track(PARAM_DX7_MONO_MODE, v); }
-static void apply_dx7_operator_mask(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_MASK, v); }
-static void apply_dx7_operator_1_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_1_LEVEL, v); }
-static void apply_dx7_operator_2_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_2_LEVEL, v); }
-static void apply_dx7_operator_3_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_3_LEVEL, v); }
-static void apply_dx7_operator_4_level(float v) { apply_tone_live_track(PARAM_DX7_OPERATOR_4_LEVEL, v); }
 static void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
 static void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
 static void apply_sampler_gain(float v) { apply_tone_live_track(PARAM_SAMPLER_GAIN, v); }
@@ -332,12 +302,12 @@ static fx_granular_state_t *get_active_granular_state(void)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_gran_density.
+ * @brief Point d'entrée apply_gran_density.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_gran_density.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_density.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -349,12 +319,12 @@ static void apply_gran_density(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_gran_pitch.
+ * @brief Point d'entrée apply_gran_pitch.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_gran_pitch.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_pitch.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -366,12 +336,12 @@ static void apply_gran_pitch(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_gran_mix.
+ * @brief Point d'entrée apply_gran_mix.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_gran_mix.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_mix.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -383,12 +353,12 @@ static void apply_gran_mix(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_gran_freeze.
+ * @brief Point d'entrée apply_gran_freeze.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_gran_freeze.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_freeze.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -400,12 +370,12 @@ static void apply_gran_freeze(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_gran_spread.
+ * @brief Point d'entrée apply_gran_spread.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_gran_spread.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_spread.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -417,12 +387,12 @@ static void apply_gran_spread(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_gran_stereo.
+ * @brief Point d'entrée apply_gran_stereo.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_gran_stereo.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_gran_stereo.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -611,29 +581,6 @@ static uint8_t param_is_filter_ui_param(param_id_t id)
             return 1U;
         default:
             return 0U;
-    }
-}
-
-static uint8_t param_runtime_apply_tone_monob(uint8_t instance_id, param_id_t id, float value)
-{
-    switch (id)
-    {
-        case PARAM_MONOB_OSC1_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 0U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_OSC2_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 1U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_OSC3_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 2U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_SUB_WAVE: monob_synth_set_osc_wave_for_instance(instance_id, 3U, (uint8_t)(clamp_value(value, 0.0f, 4.0f) + 0.5f)); return 1U;
-        case PARAM_MONOB_OSC1_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 0U, monob_range_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_OSC2_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 1U, monob_range_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_OSC3_RANGE: monob_synth_set_osc_range_for_instance(instance_id, 2U, monob_range_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_SUB_OCTAVE: monob_synth_set_sub_octave_for_instance(instance_id, monob_sub_octave_index_to_octave(value)); return 1U;
-        case PARAM_MONOB_OSC1_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 0U, clamp_value(value, -24.0f, 24.0f)); return 1U;
-        case PARAM_MONOB_OSC2_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 1U, clamp_value(value, -24.0f, 24.0f)); return 1U;
-        case PARAM_MONOB_OSC3_DETUNE: monob_synth_set_osc_detune_for_instance(instance_id, 2U, clamp_value(value, -24.0f, 24.0f)); return 1U;
-        case PARAM_MONOB_OSC1_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 0U, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        case PARAM_MONOB_OSC2_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 1U, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        case PARAM_MONOB_OSC3_MIX: monob_synth_set_osc_mix_for_instance(instance_id, 2U, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        case PARAM_MONOB_SUB_MIX: monob_synth_set_sub_mix_for_instance(instance_id, clamp_value(value, 0.0f, 1.0f)); return 1U;
-        default: return 0U;
     }
 }
 
@@ -831,10 +778,6 @@ static uint8_t param_runtime_apply_track(uint8_t track, param_id_t id, float val
     {
         applied = param_runtime_apply_buffer_track(track, id, value);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_MONOB)
-    {
-        applied = param_runtime_apply_tone_monob(ctx->instance_id, id, value);
-    }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         applied = param_runtime_apply_tone_sampler(track, id, value);
@@ -862,45 +805,6 @@ static uint8_t param_runtime_apply_colors_track(uint8_t track, param_id_t id, fl
 
     switch (ctx->engine)
     {
-        case (uint8_t)TRACK_RUNTIME_ENGINE_MONOB:
-            switch (id)
-            {
-                case PARAM_MONOB_FILTER_TYPE:
-                    monob_synth_set_filter_type_for_instance(ctx->instance_id, (uint8_t)(clamp_value(value, 0.0f, 1.0f) + 0.5f));
-                    return 1U;
-                case PARAM_MONOB_FILTER_CUTOFF:
-                    monob_synth_set_filter_cutoff_for_instance(ctx->instance_id, filter_ui127_to_cutoff_hz(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_RESONANCE:
-                    monob_synth_set_filter_resonance_for_instance(ctx->instance_id, filter_ui127_to_resonance(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_EG_AMT:
-                    monob_synth_set_filter_eg_amount_for_instance(ctx->instance_id, filter_ui127_to_eg_amount(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_ATTACK:
-                    monob_synth_set_filter_attack_for_instance(ctx->instance_id, filter_ui127_to_attack_s(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_DECAY:
-                    monob_synth_set_filter_decay_for_instance(ctx->instance_id, filter_ui127_to_decay_s(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_SUSTAIN:
-                    monob_synth_set_filter_sustain_for_instance(ctx->instance_id, filter_ui127_to_sustain(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_RELEASE:
-                    monob_synth_set_filter_release_for_instance(ctx->instance_id, filter_ui127_to_release_s(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_KEYTRK:
-                    monob_synth_set_filter_keytrack_for_instance(ctx->instance_id, filter_ui127_to_keytrack(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_ENVRST:
-                    monob_synth_set_filter_env_reset_for_instance(ctx->instance_id, filter_ui127_to_bool(value));
-                    return 1U;
-                case PARAM_MONOB_FILTER_ENVDLY:
-                    monob_synth_set_filter_env_delay_for_instance(ctx->instance_id, filter_ui127_to_env_delay_s(value));
-                    return 1U;
-                default:
-                    return 0U;
-            }
         case (uint8_t)TRACK_RUNTIME_ENGINE_DRUM:
             return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
         default:
@@ -1114,7 +1018,6 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
                 }
 
                 *out_value = param_registry[id].default_value;
-                param_runtime_cache_set(track, id, *out_value);
                 return 1U;
             }
 
@@ -1532,7 +1435,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         param_runtime_cache_set(track, id, clamped);
                         mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
                         seq_runtime_on_midi_program_live_change(track, clamped);
-                        track_runtime_invalidate_track(track);
                         return 1U;
                     }
 
@@ -1549,15 +1451,12 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
                         param_runtime_cache_set(track, id, clamped);
                         mod_lfo_v1_resync_base_on_authoritative_write(track, id, clamped);
-                        track_runtime_invalidate_track(track);
                         return 1U;
                     }
 
                     if (param_runtime_apply_track(track, id, clamped) == 0U)
                     {                        return 0U;
                     }
-
-                    track_runtime_invalidate_track(track);
                 }
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
                 {
@@ -1566,7 +1465,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     }
 
                     param_runtime_cache_set(track, id, clamped);
-                    track_runtime_invalidate_track(track);
                 }
                 else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
                 {
@@ -1578,8 +1476,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                     if (param_runtime_apply_buffer_track(track, id, clamped) == 0U)
                     {                        return 0U;
                     }
-
-                    track_runtime_invalidate_track(track);
                 }
                 else
                 {
@@ -1778,8 +1674,8 @@ void param_registry_sync_ui_for_active_track(void)
 /*
  * Variante FILTER audio:
  * - le runtime audio n'expose plus que Off / EQ3 / SVF Peaks multimode.
- * - le systÃ¨me de paramÃ¨tres conserve un jeu global `PARAM_FILTER_*`.
- * - la cible DSP est rÃ©solue dynamiquement depuis le contexte UI actif.
+ * - le système de paramètres conserve un jeu global `PARAM_FILTER_*`.
+ * - la cible DSP est résolue dynamiquement depuis le contexte UI actif.
  */
 static void apply_filter_type(float v)
 {
@@ -2114,33 +2010,6 @@ static void apply_filter_decimator_rate2(float v)
     }
 }
 
-static void apply_monob_filter_type(float v) { monob_synth_set_filter_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
-static void apply_monob_filter_cutoff(float v) { monob_synth_set_filter_cutoff(filter_ui127_to_cutoff_hz(v)); }
-static void apply_monob_filter_resonance(float v) { monob_synth_set_filter_resonance(filter_ui127_to_resonance(v)); }
-static void apply_monob_filter_eg_amount(float v) { monob_synth_set_filter_eg_amount(filter_ui127_to_eg_amount(v)); }
-static void apply_monob_filter_attack(float v) { monob_synth_set_filter_attack(filter_ui127_to_attack_s(v)); }
-static void apply_monob_filter_decay(float v) { monob_synth_set_filter_decay(filter_ui127_to_decay_s(v)); }
-static void apply_monob_filter_sustain(float v) { monob_synth_set_filter_sustain(filter_ui127_to_sustain(v)); }
-static void apply_monob_filter_release(float v) { monob_synth_set_filter_release(filter_ui127_to_release_s(v)); }
-static void apply_monob_filter_keytrack(float v) { monob_synth_set_filter_keytrack(filter_ui127_to_keytrack(v)); }
-static void apply_monob_filter_env_reset(float v) { monob_synth_set_filter_env_reset(filter_ui127_to_bool(v)); }
-static void apply_monob_filter_env_delay(float v) { monob_synth_set_filter_env_delay(filter_ui127_to_env_delay_s(v)); }
-
-static void apply_monob_osc1_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_WAVE, v); }
-static void apply_monob_osc2_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_WAVE, v); }
-static void apply_monob_osc3_wave(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_WAVE, v); }
-static void apply_monob_sub_wave(float v) { apply_tone_live_track(PARAM_MONOB_SUB_WAVE, v); }
-static void apply_monob_osc1_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_RANGE, v); }
-static void apply_monob_osc2_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_RANGE, v); }
-static void apply_monob_osc3_range(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_RANGE, v); }
-static void apply_monob_sub_octave(float v) { apply_tone_live_track(PARAM_MONOB_SUB_OCTAVE, v); }
-static void apply_monob_osc1_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_DETUNE, v); }
-static void apply_monob_osc2_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_DETUNE, v); }
-static void apply_monob_osc3_detune(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_DETUNE, v); }
-static void apply_monob_osc1_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC1_MIX, v); }
-static void apply_monob_osc2_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC2_MIX, v); }
-static void apply_monob_osc3_mix(float v) { apply_tone_live_track(PARAM_MONOB_OSC3_MIX, v); }
-static void apply_monob_sub_mix(float v) { apply_tone_live_track(PARAM_MONOB_SUB_MIX, v); }
 static void apply_lfo1_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEST, v); }
 static void apply_lfo1_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_RATE, v); }
 static void apply_lfo1_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEPTH, v); }
@@ -2424,12 +2293,12 @@ static void apply_bus_comp_makeup(float v) { audio_float_set_bus_comp_makeup_db(
 static void apply_bus_comp_auto_makeup(float v) { audio_float_set_bus_comp_auto_makeup((v >= 0.5f) ? 1U : 0U); }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_threshold.
+ * @brief Point d'entrée apply_daisy_threshold.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_threshold.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_threshold.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2441,12 +2310,12 @@ static void apply_daisy_threshold(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_ratio.
+ * @brief Point d'entrée apply_daisy_ratio.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_ratio.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_ratio.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2458,12 +2327,12 @@ static void apply_daisy_ratio(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_attack.
+ * @brief Point d'entrée apply_daisy_attack.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_attack.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_attack.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2475,12 +2344,12 @@ static void apply_daisy_attack(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_release.
+ * @brief Point d'entrée apply_daisy_release.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_release.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_release.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2492,12 +2361,12 @@ static void apply_daisy_release(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_makeup.
+ * @brief Point d'entrée apply_daisy_makeup.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_makeup.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_makeup.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2509,12 +2378,12 @@ static void apply_daisy_makeup(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_auto_makeup.
+ * @brief Point d'entrée apply_daisy_auto_makeup.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_auto_makeup.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_auto_makeup.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2526,12 +2395,12 @@ static void apply_daisy_auto_makeup(float v)
 }
 
 /**
- * @brief Point d'entrÃ©e apply_daisy_mix.
+ * @brief Point d'entrée apply_daisy_mix.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  apply_daisy_mix.
+ * Rôle:
+ * - Exécuter le traitement associé à apply_daisy_mix.
  *
- * @param v ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param v Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2578,10 +2447,6 @@ static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP
 static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "RevLoop", "Slice", "RevSlice", NULL};
 static const char *const g_sampler_slice_count_labels[] = {"2", "4", "8", "16", "32", "64", NULL};
-static const char *const g_monob_filter_type_labels[] = {"Off", "On", NULL};
-static const char *const g_monob_wave_labels[] = {"Off", "Sine", "Square", "Tri", "Saw", NULL};
-static const char *const g_monob_range_labels[] = {"16'", "8'", "4'", "2'", NULL};
-static const char *const g_monob_sub_octave_labels[] = {"-1", "-2", "-3", "-4", NULL};
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
@@ -2708,7 +2573,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_CFG_TRACK_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U), 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_cfg_track_type),
     PARAM_DESC_EX(PARAM_CFG_MIDI_CH, "Midi CH", PARAM_TYPE_INT, 1.0f, 16.0f, 1.0f, 1.0f, PARAM_DISPLAY_INT, "", NULL, apply_cfg_midi_ch),
     PARAM_DESC_EX(PARAM_CFG_MIDI_SRC, "Midi Src", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_track_midi_source_labels, apply_cfg_midi_src),
-    PARAM_DESC_EX(PARAM_CFG_REC, "PrÃ©roll", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_labels, apply_cfg_rec),
+    PARAM_DESC_EX(PARAM_CFG_REC, "Préroll", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_labels, apply_cfg_rec),
     PARAM_DESC_EX(PARAM_CFG_TEMPO, "Tempo", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_cfg_tempo),
     PARAM_DESC_EX(PARAM_CFG_SYNC, "Sync", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_sync_labels, apply_cfg_sync),
     PARAM_DESC_EX(PARAM_CFG_REC_LEN, "Len", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_cfg_rec_len_labels, apply_cfg_rec_len),
@@ -2767,50 +2632,6 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_POST_GAIN, "Post Gain", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_post_gain),
     PARAM_DESC_EX(PARAM_OUTPUT_COMP, "Output Comp", PARAM_TYPE_FLOAT, 0.0f, 2.0f, 0.01f, 1.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_output_comp),
 
-   
-    PARAM_DESC(PARAM_DX7_ALGORITHM, "ALGO", PARAM_TYPE_INT, 0.0f, 31.0f, 1.0f, 4.0f, "", apply_dx7_algorithm),
-    PARAM_DESC(PARAM_DX7_FEEDBACK, "FDBK", PARAM_TYPE_INT, 0.0f, 7.0f, 1.0f, 6.0f, "", apply_dx7_feedback),
-    PARAM_DESC(PARAM_DX7_TRANSPOSE, "TRANS", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, "st", apply_dx7_transpose),
-    PARAM_DESC(PARAM_DX7_LFO_SPEED, "LFO SPD", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 34.0f, "", apply_dx7_lfo_speed),
-    PARAM_DESC(PARAM_DX7_LFO_DELAY, "LFO DLY", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 33.0f, "", apply_dx7_lfo_delay),
-    PARAM_DESC(PARAM_DX7_LFO_PITCH_MOD_DEPTH, "PMD", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, "", apply_dx7_lfo_pitch_mod_depth),
-    PARAM_DESC(PARAM_DX7_LFO_AMP_MOD_DEPTH, "AMD", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 0.0f, "", apply_dx7_lfo_amp_mod_depth),
-    PARAM_DESC(PARAM_DX7_PITCH_BEND_RANGE, "BEND", PARAM_TYPE_INT, 0.0f, 12.0f, 1.0f, 2.0f, "st", apply_dx7_pitch_bend_range),
-    PARAM_DESC(PARAM_DX7_PORTAMENTO_TIME, "PORTA", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, "", apply_dx7_portamento_time),
-    PARAM_DESC_EX(PARAM_DX7_MONO_MODE, "MONO", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_dx7_mono_mode),
-    PARAM_DESC(PARAM_DX7_OPERATOR_MASK, "OPS", PARAM_TYPE_INT, 0.0f, 63.0f, 1.0f, 63.0f, "", apply_dx7_operator_mask),
-    PARAM_DESC(PARAM_DX7_OPERATOR_1_LEVEL, "OP1", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 79.0f, "", apply_dx7_operator_1_level),
-    PARAM_DESC(PARAM_DX7_OPERATOR_2_LEVEL, "OP2", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 99.0f, "", apply_dx7_operator_2_level),
-    PARAM_DESC(PARAM_DX7_OPERATOR_3_LEVEL, "OP3", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 89.0f, "", apply_dx7_operator_3_level),
-    PARAM_DESC(PARAM_DX7_OPERATOR_4_LEVEL, "OP4", PARAM_TYPE_INT, 0.0f, 99.0f, 1.0f, 99.0f, "", apply_dx7_operator_4_level),
-
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_TYPE, "F Type", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_monob_filter_type_labels, apply_monob_filter_type),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_CUTOFF, "Cutoff", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_cutoff),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_RESONANCE, "Res", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_resonance),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_EG_AMT, "Eg amount", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_eg_amount),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_ATTACK, "A", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 34.3f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_attack),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_DECAY, "D", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_decay),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_SUSTAIN, "S", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 127.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_sustain),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_RELEASE, "R", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 68.7f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_release),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_KEYTRK, "KeyTrk", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_keytrack),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_ENVRST, "EnvRst", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_monob_filter_env_reset),
-    PARAM_DESC_EX(PARAM_MONOB_FILTER_ENVDLY, "EnvDly", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_monob_filter_env_delay),
-    PARAM_DESC_EX(PARAM_MONOB_OSC1_WAVE, "Osc1", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc1_wave),
-    PARAM_DESC_EX(PARAM_MONOB_OSC2_WAVE, "Osc2", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc2_wave),
-    PARAM_DESC_EX(PARAM_MONOB_OSC3_WAVE, "Osc3", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_osc3_wave),
-    PARAM_DESC_EX(PARAM_MONOB_SUB_WAVE, "Sub", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 2.0f, PARAM_DISPLAY_ENUM, "", g_monob_wave_labels, apply_monob_sub_wave),
-    PARAM_DESC_EX(PARAM_MONOB_OSC1_RANGE, "O1 Rng", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_range_labels, apply_monob_osc1_range),
-    PARAM_DESC_EX(PARAM_MONOB_OSC2_RANGE, "O2 Rng", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_range_labels, apply_monob_osc2_range),
-    PARAM_DESC_EX(PARAM_MONOB_OSC3_RANGE, "O3 Rng", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_range_labels, apply_monob_osc3_range),
-    PARAM_DESC_EX(PARAM_MONOB_SUB_OCTAVE, "SubOct", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_monob_sub_octave_labels, apply_monob_sub_octave),
-    PARAM_DESC(PARAM_MONOB_OSC1_DETUNE, "O1 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, "ct", apply_monob_osc1_detune),
-    PARAM_DESC(PARAM_MONOB_OSC2_DETUNE, "O2 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, -7.0f, "ct", apply_monob_osc2_detune),
-    PARAM_DESC(PARAM_MONOB_OSC3_DETUNE, "O3 Det", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 7.0f, "ct", apply_monob_osc3_detune),
-    PARAM_DESC_EX(PARAM_MONOB_DRIFT, "-", PARAM_TYPE_FLOAT, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_MONOB_OSC1_MIX, "O1 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.9f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc1_mix),
-    PARAM_DESC_EX(PARAM_MONOB_OSC2_MIX, "O2 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.6f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc2_mix),
-    PARAM_DESC_EX(PARAM_MONOB_OSC3_MIX, "O3 Mix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.45f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_osc3_mix),
-    PARAM_DESC_EX(PARAM_MONOB_SUB_MIX, "SubMix", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.35f, PARAM_DISPLAY_PERCENT, "", NULL, apply_monob_sub_mix),
     PARAM_DESC_EX(PARAM_TB3_WAVEFORM, "TB3 OFF", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_TB3_VOLUME, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 100.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_TB3_ACCENT, "TB3 OFF", PARAM_TYPE_FLOAT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
@@ -2952,10 +2773,10 @@ const param_desc_t param_registry[PARAM_COUNT] = {
 };
 
 /**
- * @brief Point d'entrÃ©e param_registry_init.
+ * @brief Point d'entrée param_registry_init.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  param_registry_init.
+ * Rôle:
+ * - Exécuter le traitement associé à param_registry_init.
  *
  *
  * Contexte d'appel:
@@ -2971,14 +2792,14 @@ void param_registry_init(void)
 }
 
 /**
- * @brief Point d'entrÃ©e param_get.
+ * @brief Point d'entrée param_get.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  param_get.
+ * Rôle:
+ * - Exécuter le traitement associé à param_get.
  *
- * @param id ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param id Paramètre d'entrée de l'API.
  *
- * @return Valeur de retour dÃ©finie par le contrat de l'API.
+ * @return Valeur de retour définie par le contrat de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -2989,13 +2810,13 @@ float param_get(param_id_t id)
 }
 
 /**
- * @brief Point d'entrÃ©e param_set.
+ * @brief Point d'entrée param_set.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  param_set.
+ * Rôle:
+ * - Exécuter le traitement associé à param_set.
  *
- * @param id ParamÃ¨tre d'entrÃ©e de l'API.
- * @param value ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param id Paramètre d'entrée de l'API.
+ * @param value Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -3026,12 +2847,12 @@ void param_set(param_id_t id, float value)
 }
 
 /**
- * @brief Point d'entrÃ©e param_reset.
+ * @brief Point d'entrée param_reset.
  *
- * RÃ´le:
- * - ExÃ©cuter le traitement associÃ© Ã  param_reset.
+ * Rôle:
+ * - Exécuter le traitement associé à param_reset.
  *
- * @param id ParamÃ¨tre d'entrÃ©e de l'API.
+ * @param id Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.

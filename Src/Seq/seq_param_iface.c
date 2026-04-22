@@ -29,6 +29,50 @@ static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
 
+static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
+                                                   uint8_t set_id,
+                                                   seq_param8_t param8)
+{
+    if ((seq_param_iface_track_is_valid(track) == 0U) || (seq_param_iface_is_set_plockable(set_id) == 0U))
+    {
+        return 0U;
+    }
+
+    const param_id_t param = (param_id_t)param8;
+    if ((param >= PARAM_COUNT) || (param == PARAM_SAMPLER_SLICE_COUNT))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
+    {
+        return 0U;
+    }
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS) && (set_id != (uint8_t)SEQ_PLOCK_SET_COLORS))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE) && (set_id != (uint8_t)SEQ_PLOCK_SET_TONE))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) && (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) && (set_id != (uint8_t)SEQ_PLOCK_SET_MOD))
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
 void seq_param_iface_init(void)
 {
     memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
@@ -137,6 +181,53 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
     }
 
     seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
+    state->base_value = value16;
+    state->base_valid = 1U;
+
+    if (state->runtime_locked == 0U)
+    {
+        state->runtime_value = value16;
+    }
+
+    return 1U;
+}
+
+uint8_t seq_param_iface_ui_commit_base_after_authoritative_apply(seq_track_id_t ui_active_track,
+                                                                 uint8_t set_id,
+                                                                 seq_param8_t param8,
+                                                                 seq_value16_t value16)
+{
+    /*
+     * Narrow fast-path contract:
+     * - UI-only
+     * - active track only
+     * - param/set pair must match canonical map
+     * - apply has already succeeded through param_registry_apply_track_value(...)
+     */
+    if (ui_get_active_track() != ui_active_track)
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_is_slot_addressable(ui_active_track, set_id, param8) == 0U)
+    {
+        return 0U;
+    }
+
+    {
+        uint8_t expected_set_id = 0U;
+        seq_param8_t expected_param8 = 0U;
+        if (seq_param_iface_map_param((param_id_t)param8, &expected_set_id, &expected_param8) == 0U)
+        {
+            return 0U;
+        }
+        if ((expected_set_id != set_id) || (expected_param8 != param8))
+        {
+            return 0U;
+        }
+    }
+
+    seq_param_slot_state_t *const state = &g_seq_param_state[ui_active_track][set_id][param8];
     state->base_value = value16;
     state->base_valid = 1U;
 

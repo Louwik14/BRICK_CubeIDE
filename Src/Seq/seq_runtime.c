@@ -1248,24 +1248,12 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          seq_param8_t param8,
                                          seq_value16_t value16)
 {
-    if ((track >= SEQ_TRACK_COUNT)
-        || (seq_param_iface_is_set_plockable(set_id) == 0U)
-        || (seq_runtime_live_rec_is_active() == 0U))
-    {
-        return 0U;
-    }
-
-    if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
+    if (seq_runtime_live_rec_param_can_write(track, set_id, param8) == 0U)
     {
         return 0U;
     }
 
     const uint8_t length = seq_model_get_track_playback_length(track);
-    if (length == 0U)
-    {
-        return 0U;
-    }
-
     seq_step_id_t step = g_seq_runtime.play_step[track];
     if (step >= length)
     {
@@ -1290,6 +1278,25 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
 
     seq_edit_step_plock_commit(track, step, set_id, param8);
     return 1U;
+}
+
+uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
+                                             uint8_t set_id,
+                                             seq_param8_t param8)
+{
+    if ((track >= SEQ_TRACK_COUNT)
+        || (seq_param_iface_is_set_plockable(set_id) == 0U)
+        || (seq_runtime_live_rec_is_active() == 0U))
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
+    {
+        return 0U;
+    }
+
+    return (seq_model_get_track_playback_length(track) == 0U) ? 0U : 1U;
 }
 
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,

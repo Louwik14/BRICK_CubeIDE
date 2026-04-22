@@ -117,6 +117,9 @@ uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          uint8_t set_id,
                                          seq_param8_t param8,
                                          seq_value16_t value16);
+uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
+                                             uint8_t set_id,
+                                             seq_param8_t param8);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,

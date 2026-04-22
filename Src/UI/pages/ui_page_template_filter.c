@@ -4,6 +4,7 @@
 #include "param_store.h"
 #include "ui_core.h"
 #include "ui_template_page.h"
+#include "Core/track_runtime.h"
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "COLORS",
@@ -28,31 +29,6 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
     },
     .default_subpage = 0U,
 };
-
-static ui_template_family_t g_ui_template_filter_family_monob = {
-    .family_title = "COLORS",
-    .nav_labels = { "MAIN", "ENV", "MOD", "CRUNCH" },
-    .subpages = {
-        {
-            .title = "MAIN",
-            .param_bank = { .params = { PARAM_MONOB_FILTER_TYPE, PARAM_MONOB_FILTER_CUTOFF, PARAM_MONOB_FILTER_RESONANCE, PARAM_MONOB_FILTER_EG_AMT } },
-        },
-        {
-            .title = "ENV",
-            .param_bank = { .params = { PARAM_MONOB_FILTER_ATTACK, PARAM_MONOB_FILTER_DECAY, PARAM_MONOB_FILTER_SUSTAIN, PARAM_MONOB_FILTER_RELEASE } },
-        },
-        {
-            .title = "MOD",
-            .param_bank = { .params = { PARAM_MONOB_FILTER_KEYTRK, PARAM_MONOB_FILTER_ENVRST, PARAM_MONOB_FILTER_ENVDLY, PARAM_COUNT } },
-        },
-        {
-            .title = "CRUNCH",
-            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE, PARAM_FILTER_DECIMATOR_RATE2 } },
-        },
-    },
-    .default_subpage = 0U,
-};
-
 
 static const ui_template_family_t *ui_page_template_colors_resolve_family(void)
 {
@@ -95,6 +71,18 @@ static ui_template_page_state_t g_ui_template_filter_state = {
     .has_visited = 0U,
 };
 
+typedef struct
+{
+    uint8_t valid;
+    uint8_t active_track;
+    uint8_t family;
+    uint8_t type;
+    uint8_t filter_type_ui;
+    uint32_t runtime_track_revision;
+} ui_page_template_colors_sync_cache_t;
+
+static ui_page_template_colors_sync_cache_t g_ui_template_colors_sync_cache = { 0U };
+
 static ui_template_page_state_t g_ui_template_vca_state = {
     .family = 0,
     .family_resolver = ui_page_template_vca_resolve_family,
@@ -119,13 +107,7 @@ void ui_page_template_colors_register_families(void)
                 continue;
             }
 
-            const ui_template_family_t *family_template = &g_ui_template_filter_family_audio;
-            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_MONOB))
-            {
-                family_template = &g_ui_template_filter_family_monob;
-            }
-
-            ui_template_family_register(UI_TEMPLATE_FAMILY_COLORS, track_family, track_type, family_template);
+            ui_template_family_register(UI_TEMPLATE_FAMILY_COLORS, track_family, track_type, &g_ui_template_filter_family_audio);
         }
     }
 }
@@ -160,6 +142,32 @@ static ui_template_family_t *ui_page_template_colors_get_audio_family(void)
     return (ui_template_family_t *)ui_page_template_colors_resolve_family();
 }
 
+static uint8_t ui_page_template_colors_sync_should_recompute(uint8_t active_track,
+                                                             ui_track_family_t active_family,
+                                                             ui_track_type_t active_type)
+{
+    const uint32_t runtime_track_revision = track_runtime_get_track_revision(active_track);
+    const uint8_t filter_type_ui = (uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f);
+
+    if ((g_ui_template_colors_sync_cache.valid != 0U)
+            && (g_ui_template_colors_sync_cache.active_track == active_track)
+            && (g_ui_template_colors_sync_cache.family == (uint8_t)active_family)
+            && (g_ui_template_colors_sync_cache.type == (uint8_t)active_type)
+            && (g_ui_template_colors_sync_cache.filter_type_ui == filter_type_ui)
+            && (g_ui_template_colors_sync_cache.runtime_track_revision == runtime_track_revision))
+    {
+        return 0U;
+    }
+
+    g_ui_template_colors_sync_cache.valid = 1U;
+    g_ui_template_colors_sync_cache.active_track = active_track;
+    g_ui_template_colors_sync_cache.family = (uint8_t)active_family;
+    g_ui_template_colors_sync_cache.type = (uint8_t)active_type;
+    g_ui_template_colors_sync_cache.filter_type_ui = filter_type_ui;
+    g_ui_template_colors_sync_cache.runtime_track_revision = runtime_track_revision;
+    return 1U;
+}
+
 static void ui_page_template_colors_sync_family(void)
 {
     ui_template_family_t *family = ui_page_template_colors_get_audio_family();
@@ -172,38 +180,11 @@ static void ui_page_template_colors_sync_family(void)
         return;
     }
 
-    if (active_type == UI_TRACK_TYPE_MONOB)
+    if (ui_page_template_colors_sync_should_recompute(active_track, active_family, active_type) == 0U)
     {
-        family->nav_labels[0] = "MAIN";
-        family->nav_labels[1] = "ENV";
-        family->nav_labels[2] = "MOD";
-        family->nav_labels[3] = "CRUNCH";
-
-        family->subpages[0].title = "MAIN";
-        family->subpages[0].param_bank.params[0] = PARAM_MONOB_FILTER_TYPE;
-        family->subpages[0].param_bank.params[1] = PARAM_MONOB_FILTER_CUTOFF;
-        family->subpages[0].param_bank.params[2] = PARAM_MONOB_FILTER_RESONANCE;
-        family->subpages[0].param_bank.params[3] = PARAM_MONOB_FILTER_EG_AMT;
-
-        family->subpages[1].title = "ENV";
-        family->subpages[1].param_bank.params[0] = PARAM_MONOB_FILTER_ATTACK;
-        family->subpages[1].param_bank.params[1] = PARAM_MONOB_FILTER_DECAY;
-        family->subpages[1].param_bank.params[2] = PARAM_MONOB_FILTER_SUSTAIN;
-        family->subpages[1].param_bank.params[3] = PARAM_MONOB_FILTER_RELEASE;
-
-        family->subpages[2].title = "MOD";
-        family->subpages[2].param_bank.params[0] = PARAM_MONOB_FILTER_KEYTRK;
-        family->subpages[2].param_bank.params[1] = PARAM_MONOB_FILTER_ENVRST;
-        family->subpages[2].param_bank.params[2] = PARAM_MONOB_FILTER_ENVDLY;
-        family->subpages[2].param_bank.params[3] = PARAM_COUNT;
-
-        family->subpages[3].title = "CRUNCH";
-        family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
-        family->subpages[3].param_bank.params[1] = PARAM_FILTER_DECIMATOR_BITS;
-        family->subpages[3].param_bank.params[2] = PARAM_FILTER_DECIMATOR_RATE;
-        family->subpages[3].param_bank.params[3] = PARAM_FILTER_DECIMATOR_RATE2;
         return;
     }
+
     if (!ui_resolve_filter_target_track(&filter_target_track))
     {
         family->nav_labels[0] = "-";
@@ -281,7 +262,6 @@ static void ui_page_template_colors_enter(void)
 
 static void ui_page_template_colors_handle_event(const ui_event_t *ev)
 {
-    ui_page_template_colors_sync_family();
     ui_template_page_handle_event(ev);
     ui_page_template_colors_sync_family();
     ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
@@ -290,14 +270,12 @@ static void ui_page_template_colors_handle_event(const ui_event_t *ev)
 static void ui_page_template_colors_tick(void)
 {
     ui_page_template_colors_sync_family();
-    ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
     ui_template_page_tick();
 }
 
 static void ui_page_template_colors_sync_active_context(void)
 {
     ui_page_template_colors_sync_family();
-    ui_template_page_select_subpage(&g_ui_template_filter_state, g_ui_template_filter_state.active_subpage);
     ui_template_page_sync_active_track_context();
 }
 

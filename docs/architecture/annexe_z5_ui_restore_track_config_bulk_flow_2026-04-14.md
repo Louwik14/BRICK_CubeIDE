@@ -13,7 +13,6 @@ Statut documentaire: annexe utile (non canonique), alignee sur le code au 2026-0
 - validite type/family,
 - unicite familles input,
 - unicite famille master,
-- normalisation compat DX7 legacy.
 
 2. Apply snapshot UI:
 - ecrit `g_ui_track_state.track_configs[]`,

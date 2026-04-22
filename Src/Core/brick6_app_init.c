@@ -19,7 +19,6 @@
 #include "param_store.h"
 #include "control_events.h"
 #include "cpu_load.h"
-#include "Audio/monob_synth.h"
 #include "Audio/drum_synth.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
@@ -107,7 +106,6 @@ void brick6_app_init(void)
                               g_live_recorder_buffer,
                               LIVE_RECORDER_MAX_FRAMES);
 
-    monob_synth_init(48000.0f);
     drum_synth_init(48000.0f);
     hall_keyboard_bridge_init();
 

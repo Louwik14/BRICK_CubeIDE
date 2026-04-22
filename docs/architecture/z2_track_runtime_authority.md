@@ -177,6 +177,4 @@ Sorties de Z2:
   - la grille de slices est reconstruite hors IRQ lors des changements de sample/compteur.
 
 ## 14. Contrat produit Synth = Sampler
-- `UI_TRACK_TYPE_DX7` et `UI_TRACK_TYPE_MONOB` restent des identifiants legacy de snapshot uniquement.
-- Le runtime remappe `UI_TRACK_TYPE_DX7` et `UI_TRACK_TYPE_MONOB` vers `TRACK_RUNTIME_TYPE_SAMPLER`.
-- `track_runtime_bind_ctx` ne bind plus `TRACK_RUNTIME_ENGINE_DX7` ni `TRACK_RUNTIME_ENGINE_MONOB` dans le chemin operationnel.
+- La famille `Synth` ne propose qu'un type operationnel: `Sampler`.

@@ -10,7 +10,7 @@
  */
 static const ui_nav_rule_t g_ui_nav_rules[] = {
     { BTN_PARAM_1, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_COLORS },
-    { BTN_PARAM_2, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_DX7 },
+    { BTN_PARAM_2, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_TONE },
     { BTN_PARAM_3, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_MOD },
     { BTN_PARAM_4, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_MIX },
     { BTN_PARAM_5, UI_NAV_ANY_PAGE, UI_PAGE_TEMPLATE_PLAY },
@@ -43,7 +43,7 @@ static uint8_t ui_navigation_is_page_available(uint8_t page_id)
         case UI_PAGE_TEMPLATE_REC_CFG:
             return 1U;
 
-        case UI_PAGE_TEMPLATE_DX7:
+        case UI_PAGE_TEMPLATE_TONE:
             return (ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE) != 0) ? 1U : 0U;
 
         case UI_PAGE_TEMPLATE_MOD:
@@ -78,7 +78,7 @@ static uint8_t ui_navigation_is_track_bound_template_page(uint8_t page_id)
     {
         case UI_PAGE_TEMPLATE_COLORS:
         case UI_PAGE_TEMPLATE_CFG:
-        case UI_PAGE_TEMPLATE_DX7:
+        case UI_PAGE_TEMPLATE_TONE:
         case UI_PAGE_TEMPLATE_MOD:
         case UI_PAGE_TEMPLATE_KEYBOARD:
         case UI_PAGE_TEMPLATE_ARP:

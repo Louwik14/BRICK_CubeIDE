@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include "pages/ui_page_template_dx7.h"
+#include "pages/ui_page_template_tone.h"
 
 #include "ui_core.h"
 #include "ui_template_page.h"
@@ -65,14 +65,14 @@ static ui_template_family_t g_ui_template_tone_family_drum = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t *ui_page_template_dx7_resolve_family(void)
+static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
 {
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
 
-static ui_template_page_state_t g_ui_template_dx7_state = {
+static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
-    .family_resolver = ui_page_template_dx7_resolve_family,
+    .family_resolver = ui_page_template_tone_resolve_family,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -181,7 +181,7 @@ static void ui_page_template_tone_sync_drum_family(void)
     }
 }
 
-void ui_page_template_dx7_register_families(void)
+void ui_page_template_tone_register_families(void)
 {
     for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
     {
@@ -232,20 +232,20 @@ static void ui_page_template_tone_handle_event(const ui_event_t *ev)
     ui_page_template_tone_sync_drum_family();
     ui_template_page_handle_event(ev);
     ui_page_template_tone_sync_drum_family();
-    ui_template_page_select_subpage(&g_ui_template_dx7_state, g_ui_template_dx7_state.active_subpage);
+    ui_template_page_select_subpage(&g_ui_template_tone_state, g_ui_template_tone_state.active_subpage);
 }
 
 static void ui_page_template_tone_tick(void)
 {
     ui_page_template_tone_sync_drum_family();
-    ui_template_page_select_subpage(&g_ui_template_dx7_state, g_ui_template_dx7_state.active_subpage);
+    ui_template_page_select_subpage(&g_ui_template_tone_state, g_ui_template_tone_state.active_subpage);
     ui_template_page_tick();
 }
 
 static void ui_page_template_tone_sync_active_context(void)
 {
     ui_page_template_tone_sync_drum_family();
-    ui_template_page_select_subpage(&g_ui_template_dx7_state, g_ui_template_dx7_state.active_subpage);
+    ui_template_page_select_subpage(&g_ui_template_tone_state, g_ui_template_tone_state.active_subpage);
     ui_template_page_sync_active_track_context();
 }
 
@@ -255,12 +255,12 @@ static void ui_page_template_tone_render(void)
     ui_template_page_render();
 }
 
-const ui_page_t g_ui_page_template_dx7 = {
+const ui_page_t g_ui_page_template_tone = {
     .enter = ui_page_template_tone_enter,
     .leave = ui_template_page_leave,
     .handle_event = ui_page_template_tone_handle_event,
     .tick = ui_page_template_tone_tick,
     .sync_active_context = ui_page_template_tone_sync_active_context,
     .render = ui_page_template_tone_render,
-    .context = &g_ui_template_dx7_state,
+    .context = &g_ui_template_tone_state,
 };

@@ -24,7 +24,7 @@
 //
 // -----------------------------------------------------------------------------
 //
-// DX7 voice.
+// FM voice.
 
 #ifndef PLAITS_DSP_FM_VOICE_H_
 #define PLAITS_DSP_FM_VOICE_H_
