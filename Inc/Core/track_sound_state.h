@@ -22,7 +22,10 @@ typedef struct
     float mix_send1;
     float mix_send2;
     float mix_mute;
-    float hybrid_gate;
+    struct
+    {
+        float hybrid_gate;
+    } input;
     float type;
     float cutoff;
     float resonance;

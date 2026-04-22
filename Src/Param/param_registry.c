@@ -68,22 +68,6 @@ static float clamp_value(float v, float lo, float hi)
     return v;
 }
 
-/*
- * Legacy MIX params (PARAM_MIX_TRACKx_*) are storage tombstones/load-only compat.
- * Normal MIX runtime writes use PARAM_MIX_* through param_registry_apply_track_value(track,...).
- */
-#define PARAM_MIX_LEGACY_TRACK_COUNT MAX_TRACKS
-#if PARAM_MIX_LEGACY_TRACK_COUNT != 4U
-#error "Legacy PARAM_MIX_TRACKx mapping assumes 4 physical tracks"
-#endif
-
-uint8_t param_registry_is_legacy_physical_mix_param(param_id_t id)
-{
-    return ((id >= PARAM_MIX_TRACK0_GAIN)
-            && (id <= PARAM_MIX_TRACK3_SEND1)
-            && (id != PARAM_MIX_MUTE)) ? 1U : 0U;
-}
-
 extern const param_desc_t param_registry[PARAM_COUNT];
 #define FILTER_RUNTIME_REBIND_NONE 0xFFU
 
@@ -263,7 +247,7 @@ static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track
             *out_value = state->mix_mute;
             return 1U;
         case PARAM_HYBRID_GATE:
-            *out_value = state->hybrid_gate;
+            *out_value = state->input.hybrid_gate;
             return 1U;
         case PARAM_VCA_ATTACK:
             *out_value = state->vca_attack;

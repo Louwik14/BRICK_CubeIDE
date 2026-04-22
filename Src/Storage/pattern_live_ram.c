@@ -116,7 +116,8 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         return 0U;
     }
 
-    if (param_registry_is_legacy_physical_mix_param(id) != 0U)
+    if (((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1))
+            && (id != PARAM_MIX_MUTE))
     {
         return 0U;
     }
@@ -537,7 +538,8 @@ static uint8_t pattern_live_transition_reapply(void *ctx_ptr)
 
         if (ctx->pattern->globals.global_valid[id] != 0U)
         {
-            if ((param_registry_is_legacy_physical_mix_param(id) != 0U)
+            if ((((id >= PARAM_MIX_TRACK0_GAIN) && (id <= PARAM_MIX_TRACK3_SEND1))
+                    && (id != PARAM_MIX_MUTE))
                     || (pattern_live_is_track_scoped_param(id) != 0U))
             {
                 continue;

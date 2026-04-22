@@ -642,7 +642,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx, uint8_t tr
                 track_sound_state_t *state = track_sound_state_get(track);
                 if (state != NULL)
                 {
-                    state->hybrid_gate = (value >= 0.5f) ? 1.0f : 0.0f;
+                    state->input.hybrid_gate = (value >= 0.5f) ? 1.0f : 0.0f;
                 }
             }
             mixer_set_track_vca_enabled(ctx->mix_track_id, (value >= 0.5f) ? 1U : 0U);

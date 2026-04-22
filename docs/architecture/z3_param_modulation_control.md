@@ -63,6 +63,7 @@ Familles d'autorite:
 - `track_sound_state.*`:
   - premiere base canonique par track pour les blocs sonores extraits du runtime,
   - contient actuellement les blocs communs MIX, MOD, FILTER et VCA comme premier noyau du modele parametrique par track,
+  - contient aussi un bloc `input` track-aware pour les Input1/2/3 hybrides, avec `hybrid_gate` comme premiere autorite canonique,
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
@@ -117,6 +118,7 @@ Familles d'autorite:
   - lu directement par les wrappers CFG quand la valeur effective doit etre reflchee apres mutation.
 - `track_sound_state`:
   - source autoritative par track pour les sous-ensembles communs MIX, MOD, FILTER et VCA actuellement extraits du runtime,
+  - porte aussi l'autorite canonique `input.hybrid_gate` pour Input1/2/3 hybrides,
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
@@ -422,13 +424,14 @@ Familles d'autorite:
   - aucun backend audio ajoute.
 
 ## 24. Contrat Hybrid v1 (param/runtime borne)
-- `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input/Hybrid` uniquement.
+- `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input1/2/3` en mode `Hybrid` uniquement.
 - `PARAM_HYBRID_GATE` pilote le gate VCA runtime du mix-track Hybrid:
   - `OFF`: bypass gate (audio input libre),
   - `ON`: gate actif pilote par activite note.
 - Les params MIX track-aware (`LEVEL`, `PAN`, `SEND1`, `SEND2`, `MUTE`) vivent eux aussi dans `track_sound_state` comme base canonique par track, puis sont projetes vers le mixer runtime.
+- La valeur canonique `hybrid_gate` vit dans `track_sound_state.input` comme autorite par track.
 - Les params Sampler track-aware vivent dans `track_tone_sound_state` comme base canonique par track, puis sont projetes vers `brick6_sampler_runtime`.
-- Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input/Hybrid` (en plus de `family MIDI`):
+- Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input1/2/3 Hybrid` (en plus de `family MIDI`):
   - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
   - `CC`: emission directe `midi_cc`.
 - Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.

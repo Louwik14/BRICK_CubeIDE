@@ -20,7 +20,7 @@ static void track_sound_state_set_defaults(track_sound_state_t *state)
     state->mix_send1 = param_registry[PARAM_MIX_SEND1].default_value;
     state->mix_send2 = param_registry[PARAM_MIX_SEND2].default_value;
     state->mix_mute = param_registry[PARAM_MIX_MUTE].default_value;
-    state->hybrid_gate = param_registry[PARAM_HYBRID_GATE].default_value;
+    state->input.hybrid_gate = param_registry[PARAM_HYBRID_GATE].default_value;
     state->type = param_registry[PARAM_FILTER_TYPE].default_value;
     state->cutoff = param_registry[PARAM_FILTER_CUTOFF].default_value;
     state->resonance = param_registry[PARAM_FILTER_RESONANCE].default_value;
