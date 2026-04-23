@@ -23,7 +23,6 @@
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry_runtime_state.h"
-#include "mixer.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_param_iface.h"
 #include "Core/track_runtime.h"
@@ -35,16 +34,11 @@
 #include <stddef.h>
 #include <string.h>
 
-static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track);
-static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track);
 static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t track,
                                                        float clamped,
                                                        uint8_t rt_fast);
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
-static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track, float *out_value);
-static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track, float *out_value);
-static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track, float value);
 
 /**
  * @brief Point d'entrée clamp_value.
@@ -71,10 +65,8 @@ static float clamp_value(float v, float lo, float hi)
 }
 
 extern const param_desc_t param_registry[PARAM_COUNT];
-#define FILTER_RUNTIME_REBIND_NONE 0xFFU
 
 static uint8_t g_param_registry_batch_depth = 0U;
-static volatile uint8_t g_param_registry_track_structure_transition_depth = 0U;
 
 void param_registry_batch_begin(void)
 {
@@ -90,27 +82,6 @@ void param_registry_batch_end(void)
     {
         g_param_registry_batch_depth--;
     }
-}
-
-static void param_registry_track_structure_transition_begin(void)
-{
-    if (g_param_registry_track_structure_transition_depth < 255U)
-    {
-        g_param_registry_track_structure_transition_depth++;
-    }
-}
-
-static void param_registry_track_structure_transition_end(void)
-{
-    if (g_param_registry_track_structure_transition_depth > 0U)
-    {
-        g_param_registry_track_structure_transition_depth--;
-    }
-}
-
-uint8_t param_registry_track_structure_transition_is_active(void)
-{
-    return (g_param_registry_track_structure_transition_depth != 0U) ? 1U : 0U;
 }
 
 static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_param_t *out_lfo_param)
@@ -159,69 +130,6 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
     }
 }
 
-static uint8_t param_runtime_apply_track(uint8_t track,
-                                         param_id_t id,
-                                         float value,
-                                         uint8_t update_base_state)
-{
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
-    {
-        return 0U;
-    }
-
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
-    {
-        return 0U;
-    }
-
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (param_backend_track_supports_midi_tone_ctx(ctx) != 0U))
-    {
-        if (param_backend_is_midi_cc_id(id) != 0U)
-        {
-            if (param_backend_send_midi_cc(track, id, value) == 0U)
-            {
-                return 0U;
-            }
-            param_registry_runtime_cache_set(track, id, value);
-            return 1U;
-        }
-
-        if (id == PARAM_MIDI_PROGRAM)
-        {
-            return 0U;
-        }
-    }
-
-    uint8_t applied = 0U;
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-    {
-        applied = param_backend_apply_mix_track(ctx, track, id, value);
-    }
-    else if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
-    {
-        applied = param_backend_apply_buffer_track(ctx, track, id, value);
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-    {
-        applied = param_backend_apply_tone_sampler(track, id, value);
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-    {
-        applied = param_backend_apply_tone_drum(track, ctx, id, value, update_base_state);
-    }
-
-    if (applied != 0U)
-    {
-        param_registry_runtime_cache_set(track, id, value);
-    }
-
-    return applied;
-}
-
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped)
 {
     if (id == PARAM_MIDI_PROGRAM)
@@ -233,7 +141,7 @@ static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float 
             return 0U;
         }
 
-        param_registry_runtime_cache_set(track, id, clamped);
+        param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
         seq_runtime_on_midi_program_live_change(track, clamped);
         return 1U;
     }
@@ -253,7 +161,7 @@ static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float 
         return 0U;
     }
 
-    param_registry_runtime_cache_set(track, id, clamped);
+    param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
     return 1U;
 }
 
@@ -959,6 +867,317 @@ static uint8_t param_apply_non_filter_track_value_rt_fast(param_id_t id,
 {
     return param_apply_non_filter_track_value_core(id, track, clamped, 1U);
 }
+
+typedef struct
+{
+    uint8_t track;
+    param_id_t id;
+    float clamped;
+    uint8_t rt_fast;
+    track_runtime_param_rule_t rule;
+    track_runtime_resolved_track_t resolved;
+} param_track_exec_ctx_t;
+
+static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
+                                          uint8_t track,
+                                          param_id_t id,
+                                          float clamped,
+                                          track_runtime_param_rule_t rule,
+                                          uint8_t rt_fast)
+{
+    if ((ctx == NULL) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->track = track;
+    ctx->id = id;
+    ctx->clamped = clamped;
+    ctx->rt_fast = rt_fast;
+    ctx->rule = rule;
+
+    if ((rt_fast == 0U) && (g_param_registry_batch_depth == 0U))
+    {
+        track_runtime_refresh_track(track);
+    }
+
+    if (track_runtime_resolve_track(track, &ctx->resolved) == 0U)
+    {
+        return 0U;
+    }
+
+    if (ctx->resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t param_track_exec_authorize(const param_track_exec_ctx_t *ctx)
+{
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+
+    if (ctx->rt_fast != 0U)
+    {
+        if ((ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+                || (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+                || (ctx->id == PARAM_MIDI_PROGRAM))
+        {
+            return 0U;
+        }
+
+        return 1U;
+    }
+
+    if ((ctx->rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            || ((ctx->id != PARAM_MIDI_PROGRAM) && (param_backend_is_midi_cc_id(ctx->id) == 0U)))
+    {
+        return 1U;
+    }
+
+    return param_backend_track_supports_midi_tone_descriptor(&ctx->resolved.descriptor);
+}
+
+static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
+{
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+    if ((ctx->rt_fast == 0U) && (ctx->id == PARAM_MIDI_PROGRAM))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        param_registry_runtime_commit_authoritative_write(ctx->track, ctx->id, ctx->clamped, 1U);
+        seq_runtime_on_midi_program_live_change(ctx->track, ctx->clamped);
+        return 1U;
+    }
+
+    if ((ctx->rt_fast == 0U) && (param_backend_is_midi_cc_id(ctx->id) != 0U))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        if (param_backend_send_midi_cc(ctx->track, ctx->id, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        param_registry_runtime_commit_authoritative_write(ctx->track, ctx->id, ctx->clamped, 1U);
+        return 1U;
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
+            && (ctx->id >= PARAM_DRUM_TRX_BD_PITCH)
+            && (ctx->id <= PARAM_DRUM_TRX_BD_DRIVE))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES)
+            && (ctx->id >= PARAM_DRUM_TRX_CLAVES_PITCH)
+            && (ctx->id <= PARAM_DRUM_TRX_CLAVES_DRIVE))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT)
+            && (ctx->id >= PARAM_DRUM_TRX_HIHAT_DECAY)
+            && (ctx->id <= PARAM_DRUM_TRX_HIHAT_PEAK))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_KICK)
+            && (ctx->id >= PARAM_DRUM_FM_KICK_PITCH)
+            && (ctx->id <= PARAM_DRUM_FM_KICK_MOD_ENV_SYNC))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_SNARE)
+            && (ctx->id >= PARAM_DRUM_FM_SNARE_PITCH)
+            && (ctx->id <= PARAM_DRUM_FM_SNARE_NOISE_DECAY))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_TOM)
+            && (ctx->id >= PARAM_DRUM_FM_TOM_PITCH)
+            && (ctx->id <= PARAM_DRUM_FM_TOM_START_PHASE))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT)
+            && (ctx->id >= PARAM_DRUM_FM_RIMSHOT_RIM_PITCH)
+            && (ctx->id <= PARAM_DRUM_FM_RIMSHOT_MOD_DECAY))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_CLAP)
+            && (ctx->id >= PARAM_DRUM_FM_CLAP_CLAP_COUNT)
+            && (ctx->id <= PARAM_DRUM_FM_CLAP_CLAP_DECAY))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL)
+            && (ctx->id >= PARAM_DRUM_FM_COWBELL_PITCH)
+            && (ctx->id <= PARAM_DRUM_FM_COWBELL_MOD_FREQ))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    if ((ctx->rt_fast == 0U)
+            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL)
+            && (ctx->id >= PARAM_DRUM_FM_CYMBAL_DECAY)
+            && (ctx->id <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY))
+    {
+        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        {
+            return 0U;
+        }
+        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+    }
+
+    return param_backend_apply_track_value(ctx->track,
+                                           ctx->id,
+                                           ctx->clamped,
+                                           (ctx->rt_fast == 0U) ? 1U : 0U);
+}
+
+static uint8_t param_track_exec_sync_after_apply(const param_track_exec_ctx_t *ctx, uint8_t applied)
+{
+    if ((ctx == NULL) || (applied == 0U))
+    {
+        return 0U;
+    }
+
+    if (ctx->rt_fast == 0U)
+    {
+        param_registry_runtime_resync_lfo(ctx->track, ctx->id, ctx->clamped);
+    }
+
+    return applied;
+}
+
+static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
+                                                       uint8_t track,
+                                                       float clamped,
+                                                       uint8_t rt_fast)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+    {
+        if (rt_fast != 0U)
+        {
+            return 0U;
+        }
+
+        param_set(id, clamped);
+        return 1U;
+    }
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+    {
+        if (rt_fast != 0U)
+        {
+            return 0U;
+        }
+
+        return param_apply_play_track_value(id, track, clamped);
+    }
+
+    param_track_exec_ctx_t ctx;
+    if (param_track_exec_ctx_build(&ctx, track, id, clamped, rule, rt_fast) == 0U)
+    {
+        return 0U;
+    }
+
+    if (param_track_exec_authorize(&ctx) == 0U)
+    {
+        return 0U;
+    }
+
+    return param_track_exec_sync_after_apply(&ctx, param_track_exec_apply_backend(&ctx));
+}
+
+static uint8_t param_apply_non_filter_track_value(param_id_t id, uint8_t track, float clamped)
+{
+    return param_apply_non_filter_track_value_core(id, track, clamped, 0U);
+}
+
+static uint8_t param_apply_filter_track_value(param_id_t id, uint8_t track, float clamped)
+{
+    return param_filter_apply_value(id, track, clamped, 1U, 1U);
+}
+
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
 {
     if ((id >= PARAM_COUNT) || (out_value == NULL))
@@ -1074,626 +1293,6 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
 }
 
-static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
-{
-    if (out_mix_tracks == NULL)
-    {
-        return;
-    }
-
-    track_runtime_refresh_all();
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        out_mix_tracks[track] = FILTER_RUNTIME_REBIND_NONE;
-
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL)
-                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->mix_track_id >= MIXER_MAX_TRACKS))
-        {
-            continue;
-        }
-
-        out_mix_tracks[track] = ctx->mix_track_id;
-    }
-}
-
-static void param_registry_mark_runtime_global_dirty(void)
-{
-    track_runtime_invalidate_all();
-}
-
-static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
-                                                                 uint8_t track,
-                                                                 float *out_value)
-{
-    if ((id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT) || (out_value == NULL))
-    {
-        return 0U;
-    }
-
-    if (param_filter_is_param(id) != 0U)
-    {
-        /* FILTER, MIX and VCA authority is shadow-state per logical track, not runtime cache. */
-        return param_registry_get_track_value(id, track, out_value);
-    }
-
-    if (param_registry_get_track_sound_value(id, track, out_value) != 0U)
-    {
-        return 1U;
-    }
-
-    if (param_registry_get_track_tone_value(id, track, out_value) != 0U)
-    {
-        return 1U;
-    }
-
-    /*
-     * Lane-bound reapply runs after mixer lane rebind already restored runtime states.
-     * On non-FILTER/VCA params, a cache miss is not authoritative and must not promote
-     * descriptor defaults that would overwrite the freshly rebound runtime values.
-     */
-    return param_registry_runtime_cache_get(track, id, out_value);
-}
-
-static void param_registry_reapply_lane_bound_runtime_for_changed_tracks(const uint8_t *previous_mix_tracks)
-{
-    static const param_id_t k_lane_bound_params[] = {
-        PARAM_FILTER_TYPE,
-        PARAM_FILTER_CUTOFF,
-        PARAM_FILTER_RESONANCE,
-        PARAM_FILTER_EG_AMT,
-        PARAM_FILTER_ATTACK,
-        PARAM_FILTER_DECAY,
-        PARAM_FILTER_SUSTAIN,
-        PARAM_FILTER_RELEASE,
-        PARAM_FILTER_KEYTRK,
-        PARAM_FILTER_ENVRST,
-        PARAM_FILTER_ENVDLY,
-        PARAM_FILTER_EQ_LOW,
-        PARAM_FILTER_EQ_MID,
-        PARAM_FILTER_EQ_HIGH,
-        PARAM_FILTER_DRIVE,
-        PARAM_FILTER_DECIMATOR_BITS,
-        PARAM_FILTER_DECIMATOR_RATE,
-        PARAM_FILTER_DECIMATOR_RATE2,
-        PARAM_MIX_LEVEL,
-        PARAM_MIX_PAN,
-        PARAM_MIX_SEND1,
-        PARAM_MIX_SEND2,
-        PARAM_MIX_MUTE,
-        PARAM_HYBRID_GATE,
-        PARAM_VCA_ATTACK,
-        PARAM_VCA_DECAY,
-        PARAM_VCA_SUSTAIN,
-        PARAM_VCA_RELEASE
-    };
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        uint8_t previous_mix_track = FILTER_RUNTIME_REBIND_NONE;
-        uint8_t current_mix_track = FILTER_RUNTIME_REBIND_NONE;
-        uint8_t migrated_existing_lane = 0U;
-
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx != NULL)
-                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->mix_track_id < MIXER_MAX_TRACKS))
-        {
-            current_mix_track = ctx->mix_track_id;
-        }
-
-        if (previous_mix_tracks != NULL)
-        {
-            previous_mix_track = previous_mix_tracks[track];
-
-            if (previous_mix_track == current_mix_track)
-            {
-                continue;
-            }
-
-            migrated_existing_lane = ((previous_mix_track < MIXER_MAX_TRACKS)
-                    && (current_mix_track < MIXER_MAX_TRACKS)) ? 1U : 0U;
-        }
-
-        for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
-        {
-            if ((migrated_existing_lane != 0U)
-                    && (param_filter_is_param(k_lane_bound_params[i]) != 0U))
-            {
-                /*
-                 * Runtime FILTER state for lane migrations is already moved by
-                 * mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks,...).
-                 * Reapplying from FILTER shadow here can overwrite that good runtime state.
-                 */
-                continue;
-            }
-
-            float value = 0.0f;
-            if (param_registry_get_reapply_lane_bound_track_value(k_lane_bound_params[i], track, &value) == 0U)
-            {
-                continue;
-            }
-
-            (void)param_registry_apply_track_value(k_lane_bound_params[i], track, value);
-        }
-    }
-}
-
-static void param_registry_rebind_lane_runtime(const uint8_t *previous_mix_tracks)
-{
-    uint8_t next_mix_tracks[SEQ_TRACK_COUNT];
-
-    if (previous_mix_tracks == NULL)
-    {
-        return;
-    }
-
-    param_registry_capture_runtime_mix_targets(next_mix_tracks);
-    mixer_rebind_track_states(previous_mix_tracks, next_mix_tracks, SEQ_TRACK_COUNT);
-    param_registry_mark_runtime_global_dirty();
-}
-
-static void param_registry_neutralize_filter_runtime_if_invalid(uint8_t track)
-{
-    uint8_t filter_track = 0U;
-    uint8_t mix_track = 0U;
-
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    track_runtime_refresh_track(track);
-    if (track_runtime_resolve_filter_target_track(track, &filter_track) != 0U)
-    {
-        return;
-    }
-
-    if (track_runtime_is_audio_routable(track) == 0U)
-    {
-        return;
-    }
-
-    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-    {
-        return;
-    }
-
-    mixer_set_track_filter_type((uint32_t)mix_track, MIXER_TRACK_FILTER_OFF);
-    mixer_track_filter_all_notes_off((uint32_t)mix_track);
-}
-
-static void param_registry_neutralize_vca_runtime_if_invalid(uint8_t track)
-{
-    uint8_t mix_track = 0U;
-
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx != NULL)
-            && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-            && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-                || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-                || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_INPUT)
-                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_HYBRID))))
-    {
-        return;
-    }
-
-    if (track_runtime_is_audio_routable(track) == 0U)
-    {
-        return;
-    }
-
-    if (track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-    {
-        return;
-    }
-
-    mixer_track_vca_all_notes_off((uint32_t)mix_track);
-    mixer_set_track_vca_enabled((uint32_t)mix_track, 0U);
-}
-static void param_registry_finalize_track_structure_change(const uint8_t *previous_mix_tracks)
-{
-    if (previous_mix_tracks == NULL)
-    {
-        return;
-    }
-
-    param_registry_rebind_lane_runtime(previous_mix_tracks);
-
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        param_registry_neutralize_filter_runtime_if_invalid(track);
-        param_registry_neutralize_vca_runtime_if_invalid(track);
-    }
-
-    param_registry_reapply_lane_bound_runtime_for_changed_tracks(previous_mix_tracks);
-    param_registry_mark_runtime_global_dirty();
-}
-
-typedef struct
-{
-    uint8_t track;
-    param_id_t id;
-    float clamped;
-    uint8_t rt_fast;
-    track_runtime_param_rule_t rule;
-    track_runtime_resolved_track_t resolved;
-} param_track_exec_ctx_t;
-static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
-                                          uint8_t track,
-                                          param_id_t id,
-                                          float clamped,
-                                          track_runtime_param_rule_t rule,
-                                          uint8_t rt_fast)
-{
-    if ((ctx == NULL) || (track >= SEQ_TRACK_COUNT))
-    {
-        return 0U;
-    }
-
-    memset(ctx, 0, sizeof(*ctx));
-    ctx->track = track;
-    ctx->id = id;
-    ctx->clamped = clamped;
-    ctx->rt_fast = rt_fast;
-    ctx->rule = rule;
-
-    if ((rt_fast == 0U) && (g_param_registry_batch_depth == 0U))
-    {
-        track_runtime_refresh_track(track);
-    }
-
-    if (track_runtime_resolve_track(track, &ctx->resolved) == 0U)
-    {
-        return 0U;
-    }
-
-    if (ctx->resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t param_track_exec_authorize(const param_track_exec_ctx_t *ctx)
-{
-    if (ctx == NULL)
-    {
-        return 0U;
-    }
-
-    if (ctx->rt_fast != 0U)
-    {
-        if ((ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-                || (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-                || (ctx->id == PARAM_MIDI_PROGRAM))
-        {
-            return 0U;
-        }
-
-        return 1U;
-    }
-
-    if ((ctx->rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            || ((ctx->id != PARAM_MIDI_PROGRAM) && (param_backend_is_midi_cc_id(ctx->id) == 0U)))
-    {
-        return 1U;
-    }
-
-    return param_backend_track_supports_midi_tone_descriptor(&ctx->resolved.descriptor);
-}
-
-static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
-{
-    if (ctx == NULL)
-    {
-        return 0U;
-    }
-
-    switch (ctx->rule.domain)
-    {
-        case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
-            if ((ctx->rt_fast == 0U) && (ctx->id == PARAM_MIDI_PROGRAM))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
-                seq_runtime_on_midi_program_live_change(ctx->track, ctx->clamped);
-                return 1U;
-            }
-
-            if ((ctx->rt_fast == 0U) && (param_backend_is_midi_cc_id(ctx->id) != 0U))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                if (param_backend_send_midi_cc(ctx->track, ctx->id, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
-                return 1U;
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
-                    && (ctx->id >= PARAM_DRUM_TRX_BD_PITCH)
-                    && (ctx->id <= PARAM_DRUM_TRX_BD_DRIVE))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES)
-                    && (ctx->id >= PARAM_DRUM_TRX_CLAVES_PITCH)
-                    && (ctx->id <= PARAM_DRUM_TRX_CLAVES_DRIVE))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT)
-                    && (ctx->id >= PARAM_DRUM_TRX_HIHAT_DECAY)
-                    && (ctx->id <= PARAM_DRUM_TRX_HIHAT_PEAK))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_KICK)
-                    && (ctx->id >= PARAM_DRUM_FM_KICK_PITCH)
-                    && (ctx->id <= PARAM_DRUM_FM_KICK_MOD_ENV_SYNC))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_SNARE)
-                    && (ctx->id >= PARAM_DRUM_FM_SNARE_PITCH)
-                    && (ctx->id <= PARAM_DRUM_FM_SNARE_NOISE_DECAY))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_TOM)
-                    && (ctx->id >= PARAM_DRUM_FM_TOM_PITCH)
-                    && (ctx->id <= PARAM_DRUM_FM_TOM_START_PHASE))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT)
-                    && (ctx->id >= PARAM_DRUM_FM_RIMSHOT_RIM_PITCH)
-                    && (ctx->id <= PARAM_DRUM_FM_RIMSHOT_MOD_DECAY))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_CLAP)
-                    && (ctx->id >= PARAM_DRUM_FM_CLAP_CLAP_COUNT)
-                    && (ctx->id <= PARAM_DRUM_FM_CLAP_CLAP_DECAY))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL)
-                    && (ctx->id >= PARAM_DRUM_FM_COWBELL_PITCH)
-                    && (ctx->id <= PARAM_DRUM_FM_COWBELL_MOD_FREQ))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            if ((ctx->rt_fast == 0U)
-                    && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL)
-                    && (ctx->id >= PARAM_DRUM_FM_CYMBAL_DECAY)
-                    && (ctx->id <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY))
-            {
-                if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
-                {
-                    return 0U;
-                }
-                {
-                    const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-                    return param_backend_apply_tone_drum(ctx->track, runtime_ctx, ctx->id, ctx->clamped, 0U);
-                }
-            }
-
-            return param_runtime_apply_track(ctx->track,
-                                             ctx->id,
-                                             ctx->clamped,
-                                             (ctx->rt_fast == 0U) ? 1U : 0U);
-
-        case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
-            if (param_runtime_apply_track(ctx->track, ctx->id, ctx->clamped, 1U) == 0U)
-            {
-                return 0U;
-            }
-            if (ctx->rt_fast == 0U)
-            {
-                param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
-            }
-            return 1U;
-
-        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
-        {
-            const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-            const uint8_t applied = param_backend_apply_colors_track(runtime_ctx, ctx->id, ctx->clamped);
-            if (ctx->rt_fast != 0U)
-            {
-                if (applied != 0U)
-                {
-                    param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
-                }
-                return applied;
-            }
-            param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
-            return 1U;
-        }
-
-        case TRACK_RUNTIME_PARAM_DOMAIN_BUFFER:
-            {
-            const track_runtime_ctx_t *const runtime_ctx = track_runtime_get_ctx(ctx->track);
-            const uint8_t applied = param_backend_apply_buffer_track(runtime_ctx, ctx->track, ctx->id, ctx->clamped);
-            if (applied != 0U)
-            {
-                param_registry_runtime_cache_set(ctx->track, ctx->id, ctx->clamped);
-            }
-            return applied;
-        }
-
-        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
-        case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
-        case TRACK_RUNTIME_PARAM_DOMAIN_NONE:
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t param_track_exec_sync_after_apply(const param_track_exec_ctx_t *ctx, uint8_t applied)
-{
-    if ((ctx == NULL) || (applied == 0U))
-    {
-        return 0U;
-    }
-
-    if (ctx->rt_fast == 0U)
-    {
-        param_registry_runtime_resync_lfo(ctx->track, ctx->id, ctx->clamped);
-    }
-
-    return applied;
-}
-
-static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
-                                                       uint8_t track,
-                                                       float clamped,
-                                                       uint8_t rt_fast)
-{
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
-    {
-        if (rt_fast != 0U)
-        {
-            return 0U;
-        }
-
-        param_set(id, clamped);
-        return 1U;
-    }
-
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-    {
-        if (rt_fast != 0U)
-        {
-            return 0U;
-        }
-
-        return param_apply_play_track_value(id, track, clamped);
-    }
-
-    param_track_exec_ctx_t ctx;
-    if (param_track_exec_ctx_build(&ctx, track, id, clamped, rule, rt_fast) == 0U)
-    {
-        return 0U;
-    }
-
-    if (param_track_exec_authorize(&ctx) == 0U)
-    {
-        return 0U;
-    }
-
-    return param_track_exec_sync_after_apply(&ctx, param_track_exec_apply_backend(&ctx));
-}
-
-static uint8_t param_apply_non_filter_track_value(param_id_t id, uint8_t track, float clamped)
-{
-    return param_apply_non_filter_track_value_core(id, track, clamped, 0U);
-}
-static uint8_t param_apply_filter_track_value(param_id_t id, uint8_t track, float clamped)
-{
-    return param_filter_apply_value(id, track, clamped, 1U, 1U);
-}
-
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
     if (id >= PARAM_COUNT)
@@ -1731,92 +1330,6 @@ uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *c
     return param_registry_apply_track_value(cmd->id, cmd->track, cmd->value);
 }
 
-uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd)
-{
-    uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
-
-    if ((cmd == NULL) || (cmd->mutate_fn == NULL))
-    {
-        return 0U;
-    }
-
-    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
-    param_registry_track_structure_transition_begin();
-
-    uint8_t ok = 1U;
-    if ((cmd->prepare_fn != NULL) && (cmd->prepare_fn(cmd->ctx) == 0U))
-    {
-        ok = 0U;
-    }
-
-    if ((ok != 0U) && (cmd->mutate_fn(cmd->ctx) == 0U))
-    {
-        ok = 0U;
-    }
-
-    if (ok != 0U)
-    {
-        param_registry_finalize_track_structure_change(previous_mix_tracks);
-    }
-
-    param_registry_track_structure_transition_end();
-
-    if (ok == 0U)
-    {
-        return 0U;
-    }
-
-    if ((cmd->reapply_fn != NULL) && (cmd->reapply_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->seq_runtime_sync_fn != NULL) && (cmd->seq_runtime_sync_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->ui_sync_fn != NULL) && (cmd->ui_sync_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->resume_fn != NULL) && (cmd->resume_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t param_registry_apply_track_structure_transition_mutate(void *ctx)
-{
-    const param_registry_track_structure_transition_cmd_t *const cmd =
-            (const param_registry_track_structure_transition_cmd_t *)ctx;
-
-    if ((cmd == NULL) || (cmd->mutation_fn == NULL))
-    {
-        return 0U;
-    }
-
-    cmd->mutation_fn(cmd->mutation_ctx);
-    return 1U;
-}
-
-void param_registry_apply_track_structure_transition(const param_registry_track_structure_transition_cmd_t *cmd)
-{
-    const param_registry_track_transition_pipeline_cmd_t pipeline_cmd = {
-        .prepare_fn = NULL,
-        .mutate_fn = param_registry_apply_track_structure_transition_mutate,
-        .reapply_fn = NULL,
-        .seq_runtime_sync_fn = NULL,
-        .ui_sync_fn = NULL,
-        .resume_fn = NULL,
-        .ctx = (void *)cmd
-    };
-
-    (void)param_registry_run_track_transition_pipeline(&pipeline_cmd);
-}
 void param_registry_sync_filter_ui_for_active_track(void)
 {
     param_filter_sync_ui_for_active_track();

@@ -40,6 +40,23 @@ void param_registry_runtime_cache_set(uint8_t track, param_id_t id, float value)
     g_param_runtime_track_valid[track][id] = 1U;
 }
 
+void param_registry_runtime_commit_authoritative_write(uint8_t track,
+                                                       param_id_t id,
+                                                       float value,
+                                                       uint8_t resync_lfo)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
+    {
+        return;
+    }
+
+    param_registry_runtime_cache_set(track, id, value);
+    if (resync_lfo != 0U)
+    {
+        param_registry_runtime_resync_lfo(track, id, value);
+    }
+}
+
 uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
                                               param_id_t id,
                                               uint8_t track,

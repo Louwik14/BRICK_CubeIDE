@@ -1,4 +1,4 @@
-# Z3 - Param / Modulation / Control
+﻿# Z3 - Param / Modulation / Control
 
 ## 1. Perimetre
 
@@ -6,9 +6,11 @@ Zone Z3 (coeur + modules param_registry):
 - `Inc/Core/track_sound_state.h` / `Src/Core/track_sound_state.c`
 - `Inc/Core/track_tone_sound_state.h` / `Src/Core/track_tone_sound_state.c`
 - `Src/Param/param_registry.c` / `Inc/Param/param_registry.h`
+- `Src/Param/param_registry_transition.c`
 - `Src/Param/param_registry_catalog.c` / `Inc/Param/param_registry_catalog.h`
 - `Src/Param/param_filter.c` / `Inc/Param/param_filter.h`
 - `Src/Param/param_registry_backends.c` / `Inc/Param/param_registry_backends.h`
+- `Src/Param/param_registry_tone_backends.c`
 - `Src/Param/param_registry_runtime_state.c` / `Inc/Param/param_registry_runtime_state.h`
 - `Src/Param/param_registry_apply_wrappers.c` / `Inc/Param/param_registry_apply_bindings.h`
 - `Src/Param/param_store.c` / `Inc/Param/param_store.h`
@@ -49,14 +51,20 @@ Familles d'autorite:
   - point d'entree Z3 autoritatif (`param_registry_apply_track_value`, `..._rt_fast`, transition structurelle),
   - orchestration autorisation + consommation des rules/resolution Z2 + sync minimale,
   - lecture directe de `track_state` pour les params CFG par-track.
+- `param_registry_transition.c`:
+  - pipeline structurel unique pour les mutations `CFG_TRACK` / `CFG_TRACK_TYPE`,
+  - capture/rebind/neutralisation/reapply lane-bound hors du coeur d'apply courant.
 - `param_registry_catalog.*`:
   - catalogue statique des descripteurs param (`param_registry[]`), labels, bornes, bindings `apply`.
 - `param_filter.*`:
   - domaine FILTER complet: resolution cible, conversions, apply runtime, shadow-state UI, orchestration normal/rt_fast.
 - `param_registry_backends.*`:
-  - details backend par ressource/famille (mix, buffer, tone, colors, midi) consommes par le coeur Z3.
+  - details backend par ressource/famille (mix, buffer, colors) consommes par le coeur Z3.
+- `param_registry_tone_backends.*`:
+  - exécuteur backend central pour le flux d'apply track-aware normal,
+  - dispatch tone/mix-aware par engine/family stable.
 - `param_registry_runtime_state.*`:
-  - cache runtime track-scoped + bridge/resync LFO + invalidations associees.
+  - cache runtime track-scoped + commit authoritative write + bridge/resync LFO + invalidations associees.
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
   - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
@@ -130,6 +138,9 @@ Familles d'autorite:
 
 - Coexistence maintenue `param_set` (global) vs `param_registry_apply_track_value` (track-aware).
 - `param_registry.c` reste dense mais plus cible orchestration (le catalogue, FILTER, backends, runtime-state et wrappers sont externalises).
+- Le chemin d'apply track-aware normal est maintenant plus lisible: autorisation -> backend -> resync LFO, avec un exécuteur backend centralisé cote `param_registry_tone_backends.c`.
+- Les familles tonales stables ont ete extraites dans `param_registry_tone_backends.c`; `param_registry_backends.c` porte surtout les backends communs.
+- Les commits de write runtime passent maintenant par un helper unique dans `param_registry_runtime_state.c`.
 - Ilot legacy `PARAM_MIX_TRACK0..3_*` conserve pour layout storage et migration load-only; UI mute, restore normal et boot defaults ne l'utilisent plus comme runtime physique.
 
 ## 7. Carte courte de la dette reelle (audit code)
@@ -157,7 +168,8 @@ Familles d'autorite:
 ## 9. Impact sur cartographie globale
 
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.
-- Les edits structurels UI `CFG_TRACK` / `CFG_TRACK_TYPE` empruntent maintenant le corridor complet Z3 (`param_registry_run_track_transition_pipeline` + finalisation lane-bound) au lieu d'une sync allégée parallele.
+- Les edits structurels UI `CFG_TRACK` / `CFG_TRACK_TYPE` empruntent maintenant le corridor complet Z3 (`param_registry_run_track_transition_pipeline` + finalisation lane-bound) au lieu d'une sync allÃ©gÃ©e parallele.
+- Le pipeline structurel est dÃ©sormais isolÃ© dans `param_registry_transition.c`; `param_registry.c` conserve l'orchestration d'apply normal.
 - Frontiere Z3/Z4 (live-rec param):
   - Hors PLAY+REC actif: edition param track-aware -> `param_registry_apply_track_value` (autorite Z3).
   - Sur ce chemin hors PLAY+REC, la sync base Seq post-apply passe par une commande explicite UI->Seq (`seq_param_iface_commit_base_after_authoritative_apply(cmd)`), avec cible/preconditions explicites; `seq_param_iface` ne lit plus `ui_get_active_track()` comme garde implicite.
@@ -214,7 +226,7 @@ Familles d'autorite:
 - Invariants:
   - TRX BD garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun état runtime n'est pousse dans la base canonique.
+  - aucun Ã©tat runtime n'est pousse dans la base canonique.
 
 ## 13. Contrat TRX Claves Tone
 
@@ -231,7 +243,7 @@ Familles d'autorite:
 - Invariants:
   - TRX Claves garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun état runtime n'est pousse dans la base canonique.
+  - aucun Ã©tat runtime n'est pousse dans la base canonique.
 
 ## 14. Contrat TRX HiHat Tone
 
@@ -249,7 +261,7 @@ Familles d'autorite:
 - Invariants:
   - TRX HiHat garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 15. Contrat FM Kick Tone
 
@@ -272,7 +284,7 @@ Familles d'autorite:
 - Invariants:
   - FM Kick garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 16. Contrat FM Snare Tone
 
@@ -292,7 +304,7 @@ Familles d'autorite:
 - Invariants:
   - FM Snare garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 17. Contrat FM Tom Tone
 
@@ -312,7 +324,7 @@ Familles d'autorite:
 - Invariants:
   - FM Tom garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 18. Contrat FM Rimshot Tone
 
@@ -333,7 +345,7 @@ Familles d'autorite:
 - Invariants:
   - FM Rimshot garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 19. Contrat FM Clap Tone
 
@@ -355,7 +367,7 @@ Familles d'autorite:
 - Invariants:
   - FM Clap garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 20. Contrat FM Cowbell Tone
 
@@ -375,7 +387,7 @@ Familles d'autorite:
 - Invariants:
   - FM Cowbell garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 21. Contrat FM Cymbal Tone
 
@@ -395,7 +407,7 @@ Familles d'autorite:
 - Invariants:
   - FM Cymbal garde sa propre base track-aware,
   - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
+  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
 
 ## 22. Contrat MIDI TONE (tranche fonctionnelle)
 
@@ -433,7 +445,7 @@ Familles d'autorite:
 - La valeur canonique `hybrid_gate` vit dans `track_sound_state.input` comme autorite par track.
 - Les params Sampler track-aware vivent dans `track_tone_sound_state` comme base canonique par track, puis sont projetes vers `brick6_sampler_runtime`.
 - Les params TONE MIDI (`Program` + `CC`) sont acceptes aussi pour `Input1/2/3 Hybrid` (en plus de `family MIDI`):
-  - `Program`: chemin live existant inchangé (emit conditionnelle via runtime seq),
+  - `Program`: chemin live existant inchangÃ© (emit conditionnelle via runtime seq),
   - `CC`: emission directe `midi_cc`.
 - Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.
 
@@ -462,7 +474,7 @@ Familles d'autorite:
 - Contrat miroir UI:
   - le miroir `param_store.active[]` track-scoped actif est synchronise cote Z5 (`ui_param_sync_active_track_mirror_from_runtime`).
   - Z3 conserve l'autorite runtime d'execution; Z5 conserve l'autorite presentation/contexte d'edition.
-- Pour `PLAY`, ce miroir UI reflète la base seq canonique exposee par Z3.
+- Pour `PLAY`, ce miroir UI reflÃ¨te la base seq canonique exposee par Z3.
 
 ## 15. Contrat Passe 1 - Autorite execution MIDI
 - Les chemins d'application MIDI dans `param_registry` lisent le canal via Z2 (`track_runtime_get_midi_channel_zero_based`).
@@ -520,3 +532,7 @@ Dette explicite post-passe 4:
 - `param_runtime_apply_track` reste encore mixe (dispatch tone/mix + engine-specific) dans le meme TU,
 - le shadow FILTER reste local a `param_registry.c` (pas encore isole dans un sous-module dedie),
 - la separation en fichiers Z3 (rules/resolution/apply/sync) reste a faire seulement si necessaire en passe suivante.
+
+
+
+

@@ -127,6 +127,11 @@ file(GLOB SRC_PARAM_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/*.cpp"
 )
 
+list(APPEND SRC_PARAM_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_transition.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
+)
+
 file(GLOB SRC_SD_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/*.cpp"
