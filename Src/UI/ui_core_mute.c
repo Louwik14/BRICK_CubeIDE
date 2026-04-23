@@ -455,7 +455,11 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < UI_TRACK_COUNT))
     {
-        if (*io_shift_down != 0U)
+        const uint8_t quick_like_submode =
+            (uint8_t)((g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
+                      || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK));
+
+        if ((*io_shift_down != 0U) && (quick_like_submode == 0U))
         {
             return 1U;
         }
@@ -479,7 +483,11 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < UI_TRACK_COUNT))
     {
-        if (*io_shift_down != 0U)
+        const uint8_t quick_like_submode =
+            (uint8_t)((g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
+                      || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK));
+
+        if ((*io_shift_down != 0U) && (quick_like_submode == 0U))
         {
             return 1U;
         }

@@ -3,6 +3,7 @@
 #include "App/Hall/hall_engine.h"
 #include "buttons.h"
 #include "stm32h7xx_hal.h"
+#include "ui_core_mute.h"
 #include "ui_core_runtime_bridge.h"
 #include "ui_hall_mode_flow.h"
 
@@ -26,10 +27,16 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
 
     if (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
     {
-        ui_hall_mode_flow_handle_shift_hall_action(hall,
-                                                   now_ms,
-                                                   mode_tap_ms,
-                                                   hall_note_suppressed);
+        const ui_mute_submode_t mute_submode = ui_core_mute_get_submode();
+        const uint8_t allow_shift_mode_redirect =
+            (mute_active == 0U) || (mute_submode == UI_MUTE_SUBMODE_PREPARE);
+        if (allow_shift_mode_redirect != 0U)
+        {
+            ui_hall_mode_flow_handle_shift_hall_action(hall,
+                                                       now_ms,
+                                                       mode_tap_ms,
+                                                       hall_note_suppressed);
+        }
         return;
     }
 
@@ -38,7 +45,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    if ((was_pressed != 0U) && (hall < HALL_KEY_COUNT) && (hall < UI_TRACK_COUNT))
+    if ((hall < HALL_KEY_COUNT) && (hall < UI_TRACK_COUNT))
     {
         ui_hall_mode_flow_handle_track_hall_action(hall,
                                                    now_ms,
