@@ -5,6 +5,8 @@
 Perimetre operationnel de zone (appartient a Z4):
 - `Src/Seq/seq_runtime.c`
 - `Inc/Seq/seq_runtime.h`
+- `Src/Seq/seq_runtime_exec.c`
+- `Inc/Seq/seq_runtime_exec.h`
 - `Src/Seq/seq_play_scheduler.c`
 - `Inc/Seq/seq_play_scheduler.h`
 - `Src/Seq/seq_boundary_engine.c`
@@ -37,6 +39,10 @@ Sous-roles concentres dans `seq_runtime.c`:
 - Bridge vers domaine sample/audio bloc.
 - Facade vers la session live-rec; le detail edit/capture vit dans `seq_live_rec_session`.
 
+Support execution:
+- `seq_runtime_exec.c` + `seq_runtime_exec.h`: proprietaire de l'etat runtime de progression/timeline partage; `seq_runtime.c` y accede via facade interne.
+- Il porte aussi la timeline audio bloc, la consommation des pulses de step, la remise en route/arrêt de l'etat d'execution, la preparation de start lifecycle, la cadence MIDI clock audio-alignee, et l'avance interne/externe du bloc audio.
+
 ## 2. Autorite(s) de verite
 
 Autorite transport:
@@ -47,13 +53,13 @@ Autorite clock/tempo:
 - Source clock active: `seq_runtime_set_clock_source` (etat de controle interne du runtime, propage via `seq_clock_bridge_set_source`).
 - Tempo interne: `seq_runtime_set_tempo_bpm_milli` -> `seq_clock_bridge_set_internal_tempo`.
 - Tempo externe: `seq_clock_bridge_on_external_clock_pulse` (appele depuis `seq_runtime_midi_clock_from_source`).
-- Cadence interne effective (steps): `seq_runtime_audio_collect_block_events` -> `seq_runtime_audio_drive_internal_steps_for_block` (domaine audio sample, IRQ DMA).
+- Cadence interne effective (steps): `seq_runtime_exec_collect_block_events` -> `seq_runtime_exec_drive_internal_steps_for_block` (domaine audio sample, IRQ DMA).
 - Tick interne auxiliaire: `seq_runtime_time_adapter_process_internal_from_irq` (IRQ TIM12) conserve un compteur de temps, sans autorite d'avance step en clock interne.
 
 Autorite position musicale (step/boundary):
 - Avance step: `seq_boundary_engine_advance_one_step`.
 - Detection/changement boundary: `seq_boundary_engine_process`.
-- Orchestration boundary: `seq_runtime_process_step_boundaries`.
+- Orchestration boundary: `seq_boundary_engine_process`.
 
 Autorite scheduling d'evenements:
 - Generation note events: `seq_play_scheduler_schedule_step`.
@@ -85,7 +91,7 @@ Entrees directes de Z4:
 Contrats implicites d'entree:
 - En clock interne, la progression step ne depend plus du superloop: elle est drivee au debut de chaque bloc audio dans `seq_runtime_audio_collect_block_events`.
 - TIM12 reste un ticker auxiliaire (metriques/temps), non autorite d'avance step.
-- En source externe, les pulses MIDI clock (0xF8) arrivent via `midi_internal_receive_with_source` et sont convertis en pending step-pulses; leur consommation effective pour l'avance step se fait en debut de bloc audio dans `seq_runtime_audio_collect_block_events`.
+- En source externe, les pulses MIDI clock (0xF8) arrivent via `midi_internal_receive_with_source` et sont convertis en pending step-pulses; leur consommation effective pour l'avance step se fait en debut de bloc audio dans `seq_runtime_exec_collect_block_events`.
 - `seq_runtime_audio_collect_block_events` est suppose appele une fois par bloc audio dans l'ordre de timeline; il incremente `audio_timeline_sample`.
 
 ## 4. API sortantes
@@ -106,7 +112,7 @@ Contrats implicites de sortie:
 ## 5. Etats structurants possedes
 
 Etat runtime principal (`seq_runtime.c`):
-- `g_seq_runtime` (`seq_runtime_state_t`, defini dans `Inc/Seq/seq_runtime.h`)
+- `g_seq_runtime` (`seq_runtime_state_t`, stockage porte par `seq_runtime_exec.c`, defini dans `Inc/Seq/seq_runtime.h`)
   - Champs structurants: `running`, `play_step[]`, `prev_step[]`, `prev_step_valid[]`, `track_div_phase[]`, `tick_accum`, `ticks_per_step`, `ext_clock_tick_accum`, `step_sample_q16`, `samples_per_step_q16`, `audio_block_start_sample`, `audio_timeline_sample`, `active_locks[][]`, `active_lock_count[]`.
   - Ecriture: `seq_runtime_init/start/stop/process_core/process_step_pulse`, `seq_boundary_engine_process/advance_one_step/restore_all_active_locks`, setters track.*.
   - Lecture: getters runtime, scheduler/boundary internes, `brick6_master_buffer`, UI/param/storage (etat expose).
@@ -154,25 +160,25 @@ Etat modele sequenceur (`seq_model.c`):
 
 Flux nominal prouve:
 1. Source tempo/clock
-- Interne: au debut de chaque bloc audio, `seq_runtime_audio_collect_block_events` appelle `seq_runtime_audio_drive_internal_steps_for_block`; les pulses de step sont derives de `audio_timeline_sample`/`samples_per_step_q16`.
+- Interne: au debut de chaque bloc audio, `seq_runtime_exec_collect_block_events` appelle `seq_runtime_exec_drive_internal_steps_for_block`; les pulses de step sont derives de `audio_timeline_sample`/`samples_per_step_q16`.
 - Externe MIDI/USB: `midi_internal_receive_with_source` route 0xF8/0xFA/0xFB/0xFC vers `seq_runtime_midi_*_from_source`.
 
 2. Start/stop/continue transport
-- `seq_runtime_start` initialise accumulators, clear scheduler/output guard/live-rec puis requete FSM.
-- `seq_runtime_stop` applique `seq_runtime_stop_lifecycle_apply` (flush live-rec, clear scheduler, restore locks, panic sortie conditionnelle).
+- `seq_runtime_start` prepare l'execution bloc via `seq_runtime_exec_prepare_start_lifecycle`, puis requete FSM.
+- `seq_runtime_stop` applique `seq_runtime_exec_stop_lifecycle_apply` (flush live-rec, clear scheduler, restore locks, panic sortie conditionnelle).
 - `seq_runtime_midi_continue_from_source` reprend RUNNING sans reset complet du modele et rebase timeline musicale si reprise depuis STOP.
 
 3. Progression temporelle
-- Interne: `seq_runtime_audio_drive_internal_steps_for_block` produit les pulses strictement dans la timeline audio absolue.
-- Externe: `seq_runtime_midi_clock_from_source` met en file des pending step-pulses; `seq_runtime_audio_drive_external_steps_for_block` les consomme dans le domaine audio bloc.
-- L'avance step (interne/externe) converge sur `seq_runtime_process_step_pulse_at_sample_q16`.
+- Interne: `seq_runtime_exec_drive_internal_steps_for_block` produit les pulses strictement dans la timeline audio absolue.
+- Externe: `seq_runtime_midi_clock_from_source` met en file des pending step-pulses; `seq_runtime_exec_drive_external_steps_for_block` les consomme dans le domaine audio bloc.
+- L'avance step (interne/externe) converge sur `seq_runtime_exec_process_step_pulse_at_sample_q16`.
 
 4. Detection boundary / advance pattern
-- `seq_runtime_process_step_pulse`:
+- `seq_runtime_exec_process_step_pulse_at_sample_q16`:
   - si RUNNING et autorise: `seq_boundary_engine_advance_one_step` (respect `track_div`/`track_div_phase`).
   - incremente `step_sample_q16`.
-  - appelle `seq_runtime_process_step_boundaries`.
-- `seq_runtime_process_step_boundaries` -> `seq_boundary_engine_process` detecte boundaries track par track et gere apply/restore locks.
+  - appelle `seq_boundary_engine_process`.
+- `seq_boundary_engine_process` detecte boundaries track par track et gere apply/restore locks.
 
 5. Generation/collecte des evenements
 - Pour chaque `seq_boundary_hit_t`, `seq_play_scheduler_schedule_step` lit trig/plocks/param defaults et pousse NOTE_ON/NOTE_OFF horodates en sample-domain.
@@ -182,7 +188,7 @@ Flux nominal prouve:
 - Au debut de chaque bloc audio, `seq_runtime_audio_collect_block_events`:
   - capture `block_start_sample = g_seq_runtime.audio_timeline_sample`.
   - incremente `audio_timeline_sample += block_frames`.
-  - emet clocks MIDI audio-alignes (`seq_runtime_midi_clock_audio_emit_for_block`).
+  - emet clocks MIDI audio-alignes (`seq_runtime_exec_emit_midi_clock_for_block`).
   - collecte depuis `seq_play_scheduler_audio_collect_block_events` les events dus dans `[block_start, block_end)` avec `sample_offset_in_block`.
 
 7. Consommation aval audio/runtime/param

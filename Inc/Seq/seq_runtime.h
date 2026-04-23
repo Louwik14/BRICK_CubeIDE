@@ -77,6 +77,34 @@ void seq_runtime_stop(void);
 void seq_runtime_toggle_play_stop(void);
 uint8_t seq_runtime_is_running(void);
 uint8_t seq_runtime_is_start_pending(void);
+uint8_t seq_runtime_rec_is_armed(void);
+void seq_runtime_set_rec_count_in_mode(uint8_t mode);
+uint8_t seq_runtime_get_rec_count_in_mode(void);
+void seq_runtime_set_rec_len_mode(uint8_t mode);
+uint8_t seq_runtime_get_rec_len_mode(void);
+uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
+uint8_t seq_runtime_rec_is_pattern_pending_start(void);
+void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);
+void seq_runtime_rec_toggle_arm(void);
+uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
+                                         uint8_t set_id,
+                                         seq_param8_t param8,
+                                         seq_value16_t value16);
+uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
+                                             uint8_t set_id,
+                                             seq_param8_t param8);
+void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
+                                  uint8_t channel_zero_based,
+                                  uint8_t note,
+                                  uint8_t velocity);
+void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
+                                   uint8_t channel_zero_based,
+                                   uint8_t note);
+uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
+void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
+void seq_runtime_midi_start_from_source(seq_clock_src_t source);
+void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
+void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
 void seq_runtime_diag_reset(void);

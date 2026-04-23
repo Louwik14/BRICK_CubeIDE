@@ -1,0 +1,494 @@
+/*
+ * Module: seq_runtime_exec
+ * Role: Etat d'execution et timeline musicale du sequenceur.
+ * Responsibilities: stocker l'etat runtime de progression et servir de
+ * support partage a l'orchestrateur seq_runtime.
+ * Integration: proprietaire unique de l'etat runtime partage; seq_runtime.c
+ * continue d'orchestrer, mais ne porte plus la structure elle-meme.
+ */
+#define SEQ_BOUNDARY_ENGINE_IMPLEMENTATION 1
+#define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
+
+#include "Seq/seq_runtime_exec.h"
+
+#include "Seq/seq_boundary_engine.h"
+#include "Seq/seq_clock_bridge.h"
+#include "Seq/seq_live_rec_session.h"
+#include "Seq/seq_output_guard.h"
+#include "Seq/seq_play_scheduler.h"
+#include "Seq/seq_transport_fsm.h"
+#include "midi.h"
+
+static seq_runtime_state_t g_seq_runtime_exec_state;
+static uint64_t g_seq_runtime_exec_audio_timeline_sample;
+static uint8_t g_seq_runtime_exec_midi_clock_audio_enabled;
+static uint32_t g_seq_runtime_exec_midi_clock_period_q16;
+static uint64_t g_seq_runtime_exec_midi_clock_next_sample_q16;
+static volatile uint16_t g_seq_runtime_exec_external_step_pulses_pending;
+
+seq_runtime_state_t *seq_runtime_exec_state(void)
+{
+    return &g_seq_runtime_exec_state;
+}
+
+const seq_runtime_state_t *seq_runtime_exec_state_const(void)
+{
+    return &g_seq_runtime_exec_state;
+}
+
+void seq_runtime_exec_init(void)
+{
+    g_seq_runtime_exec_state = (seq_runtime_state_t){0};
+    g_seq_runtime_exec_audio_timeline_sample = 0U;
+    g_seq_runtime_exec_midi_clock_audio_enabled = 0U;
+    g_seq_runtime_exec_midi_clock_period_q16 = 1U;
+    g_seq_runtime_exec_midi_clock_next_sample_q16 = 0U;
+    g_seq_runtime_exec_external_step_pulses_pending = 0U;
+}
+
+void seq_runtime_exec_reset_audio_timeline(uint64_t start_sample)
+{
+    g_seq_runtime_exec_audio_timeline_sample = start_sample;
+}
+
+uint64_t seq_runtime_exec_get_audio_timeline_sample(void)
+{
+    return g_seq_runtime_exec_audio_timeline_sample;
+}
+
+uint64_t seq_runtime_exec_begin_audio_block(uint16_t block_frames)
+{
+    const uint64_t block_start_sample = g_seq_runtime_exec_audio_timeline_sample;
+    g_seq_runtime_exec_audio_timeline_sample = block_start_sample + (uint64_t)block_frames;
+    return block_start_sample;
+}
+
+void seq_runtime_exec_prepare_start_lifecycle(seq_runtime_state_t *state,
+                                              seq_clock_bridge_t *clock_bridge,
+                                              uint32_t now_tick)
+{
+    if ((state == 0) || (clock_bridge == 0))
+    {
+        return;
+    }
+
+    seq_clock_bridge_prepare_internal_run(clock_bridge);
+    state->tick_accum = 0U;
+    state->last_tick_count = now_tick;
+    state->ext_clock_tick_accum = 0U;
+    state->running = 0U;
+    state->step_sample_q16 = (seq_runtime_exec_get_audio_timeline_sample() << 16);
+    seq_runtime_exec_set_external_step_pulses_pending(0U);
+    seq_play_scheduler_clear();
+    seq_output_guard_reset();
+    seq_live_rec_session_reset_capture();
+    seq_runtime_exec_set_midi_clock_audio_enabled(0U);
+}
+
+void seq_runtime_exec_set_midi_clock_audio_enabled(uint8_t enabled)
+{
+    g_seq_runtime_exec_midi_clock_audio_enabled = enabled;
+}
+
+void seq_runtime_exec_set_midi_clock_period_q16(uint32_t period_q16)
+{
+    g_seq_runtime_exec_midi_clock_period_q16 = (period_q16 == 0U) ? 1U : period_q16;
+}
+
+uint32_t seq_runtime_exec_get_midi_clock_period_q16(void)
+{
+    return g_seq_runtime_exec_midi_clock_period_q16;
+}
+
+void seq_runtime_exec_rebase_midi_clock_audio(uint64_t start_sample)
+{
+    g_seq_runtime_exec_midi_clock_next_sample_q16 =
+            (start_sample << 16) + (uint64_t)g_seq_runtime_exec_midi_clock_period_q16;
+}
+
+void seq_runtime_exec_emit_midi_clock_for_block(uint64_t block_start_sample,
+                                                uint16_t block_frames,
+                                                seq_clock_src_t clock_src,
+                                                uint8_t running)
+{
+    if ((g_seq_runtime_exec_midi_clock_audio_enabled == 0U)
+        || (clock_src == SEQ_CLOCK_SRC_EXTERNAL_MIDI)
+        || (clock_src == SEQ_CLOCK_SRC_EXTERNAL_USB)
+        || (running == 0U)
+        || (g_seq_runtime_exec_midi_clock_period_q16 == 0U))
+    {
+        return;
+    }
+
+    const uint64_t block_start_q16 = block_start_sample << 16;
+    const uint64_t block_end_q16 = (block_start_sample + (uint64_t)block_frames) << 16;
+
+    while (g_seq_runtime_exec_midi_clock_next_sample_q16 < block_end_q16)
+    {
+        if (g_seq_runtime_exec_midi_clock_next_sample_q16 >= block_start_q16)
+        {
+            midi_clock(MIDI_DEST_BOTH);
+        }
+
+        g_seq_runtime_exec_midi_clock_next_sample_q16 += (uint64_t)g_seq_runtime_exec_midi_clock_period_q16;
+    }
+}
+
+void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
+                                                  seq_transport_fsm_t *transport_fsm,
+                                                  seq_clock_bridge_t *clock_bridge,
+                                                  uint32_t now_tick,
+                                                  uint64_t start_sample_q16)
+{
+    if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0))
+    {
+        return;
+    }
+
+    if (seq_transport_fsm_is_running(transport_fsm) == 0U)
+    {
+        return;
+    }
+
+    state->running = 0U;
+    state->tick_accum = 0U;
+    state->ext_clock_tick_accum = 0U;
+    state->last_tick_count = now_tick;
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        state->play_step[track] = 0U;
+        state->prev_step_valid[track] = 0U;
+        state->prev_step[track] = 0U;
+        state->track_div_phase[track] = 0U;
+        seq_boundary_engine_restore_all_active_locks(state, track);
+    }
+
+    state->ticks_per_step = (uint16_t)((clock_bridge->internal_next_step_ticks == 0U)
+                                           ? 1U
+                                           : clock_bridge->internal_next_step_ticks);
+    state->step_sample_q16 = start_sample_q16;
+    state->running = 1U;
+
+    if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
+    {
+        seq_boundary_hit_t hits[SEQ_TRACK_COUNT];
+        uint8_t hit_count = 0U;
+        seq_boundary_engine_process(state, hits, SEQ_TRACK_COUNT, &hit_count);
+
+        for (uint8_t i = 0U; i < hit_count; ++i)
+        {
+            seq_play_scheduler_schedule_step(hits[i].track,
+                                             hits[i].step,
+                                             state->ticks_per_step,
+                                             now_tick,
+                                             (state->step_sample_q16 >> 16),
+                                             state->samples_per_step_q16);
+        }
+    }
+
+    seq_play_scheduler_emit_midi_program_on_transport_start();
+    seq_live_rec_session_on_transport_start();
+}
+
+void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
+{
+    if (state == 0)
+    {
+        return;
+    }
+
+    seq_live_rec_session_on_transport_stop(seq_runtime_exec_get_audio_timeline_sample(), state->samples_per_step_q16);
+
+    state->running = 0U;
+    state->tick_accum = 0U;
+    state->ext_clock_tick_accum = 0U;
+    state->step_sample_q16 = 0U;
+    seq_runtime_exec_set_external_step_pulses_pending(0U);
+    seq_play_scheduler_clear();
+
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        seq_boundary_engine_restore_all_active_locks(state, track);
+        state->prev_step_valid[track] = 0U;
+        state->track_div_phase[track] = 0U;
+    }
+}
+
+void seq_runtime_exec_set_external_step_pulses_pending(uint16_t pending)
+{
+    g_seq_runtime_exec_external_step_pulses_pending = pending;
+}
+
+void seq_runtime_exec_increment_external_step_pulses_pending(void)
+{
+    if (g_seq_runtime_exec_external_step_pulses_pending < 0xFFFFU)
+    {
+        g_seq_runtime_exec_external_step_pulses_pending++;
+    }
+}
+
+uint16_t seq_runtime_exec_consume_external_step_pulses_pending(void)
+{
+    const uint16_t pending = g_seq_runtime_exec_external_step_pulses_pending;
+    g_seq_runtime_exec_external_step_pulses_pending = 0U;
+    return pending;
+}
+
+void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *state,
+                                                       seq_transport_fsm_t *transport_fsm,
+                                                       seq_clock_bridge_t *clock_bridge,
+                                                       seq_runtime_diag_t *diag,
+                                                       uint32_t *track_loop_generation,
+                                                       uint64_t pulse_sample_q16,
+                                                       uint32_t now_tick,
+                                                       uint64_t now_sample)
+{
+    (void)now_tick;
+    (void)diag;
+
+    if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0) || (diag == 0) || (track_loop_generation == 0))
+    {
+        return;
+    }
+
+    if (seq_transport_fsm_is_stopped(transport_fsm) != 0U)
+    {
+        return;
+    }
+
+    if (seq_transport_fsm_is_start_pending(transport_fsm) != 0U)
+    {
+        state->step_sample_q16 = pulse_sample_q16;
+        if (seq_transport_fsm_on_step_pulse(transport_fsm) != 0U)
+        {
+            seq_runtime_exec_begin_running_at_sample_q16(state,
+                                                         transport_fsm,
+                                                         clock_bridge,
+                                                         now_tick,
+                                                         pulse_sample_q16);
+        }
+        return;
+    }
+
+    if (seq_transport_fsm_allow_advance(transport_fsm) != 0U)
+    {
+        uint8_t previous_step[SEQ_TRACK_COUNT];
+        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        {
+            previous_step[track] = state->play_step[track];
+        }
+
+        seq_boundary_engine_advance_one_step(state);
+        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+        {
+            if ((state->play_step[track] == 0U) && (previous_step[track] != 0U))
+            {
+                track_loop_generation[track]++;
+            }
+        }
+        seq_live_rec_session_on_step_advanced(state, now_sample);
+    }
+
+    state->step_sample_q16 = pulse_sample_q16;
+    if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
+    {
+        seq_boundary_hit_t hits[SEQ_TRACK_COUNT];
+        uint8_t hit_count = 0U;
+        seq_boundary_engine_process(state, hits, SEQ_TRACK_COUNT, &hit_count);
+
+        for (uint8_t i = 0U; i < hit_count; ++i)
+        {
+            const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
+            seq_play_scheduler_schedule_step(hits[i].track,
+                                             hits[i].step,
+                                             state->ticks_per_step,
+                                             now_tick,
+                                             scheduled_sample_time,
+                                             state->samples_per_step_q16);
+        }
+    }
+
+}
+
+void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
+                                                     seq_transport_fsm_t *transport_fsm,
+                                                     seq_clock_bridge_t *clock_bridge,
+                                                     seq_runtime_diag_t *diag,
+                                                     uint32_t *track_loop_generation,
+                                                     seq_clock_src_t clock_src,
+                                                     uint32_t now_tick,
+                                                     uint64_t block_start_sample,
+                                                     uint16_t block_frames)
+{
+    if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0) || (diag == 0) || (track_loop_generation == 0))
+    {
+        return;
+    }
+
+    if (seq_clock_bridge_is_external_source(clock_src) != 0U)
+    {
+        return;
+    }
+
+    if (seq_transport_fsm_is_stopped(transport_fsm) != 0U)
+    {
+        return;
+    }
+    if ((seq_transport_fsm_is_running(transport_fsm) != 0U) && (state->running == 0U))
+    {
+        return;
+    }
+
+    if (state->samples_per_step_q16 == 0U)
+    {
+        state->samples_per_step_q16 = 1U;
+    }
+
+    const uint64_t block_end_q16 = (block_start_sample + (uint64_t)block_frames) << 16;
+    uint16_t pulses_in_block = 0U;
+    uint64_t next_pulse_sample_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
+    while (next_pulse_sample_q16 < block_end_q16)
+    {
+        seq_runtime_exec_process_step_pulse_at_sample_q16(state,
+                                                          transport_fsm,
+                                                          clock_bridge,
+                                                          diag,
+                                                          track_loop_generation,
+                                                          next_pulse_sample_q16,
+                                                          now_tick,
+                                                          seq_runtime_exec_get_audio_timeline_sample());
+        pulses_in_block++;
+        next_pulse_sample_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
+    }
+
+    if (pulses_in_block > diag->max_internal_step_pulses_per_block)
+    {
+        diag->max_internal_step_pulses_per_block = pulses_in_block;
+    }
+    if (pulses_in_block > 1U)
+    {
+        diag->internal_step_burst_block_count++;
+    }
+}
+
+void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
+                                                     seq_transport_fsm_t *transport_fsm,
+                                                     seq_clock_bridge_t *clock_bridge,
+                                                     uint32_t *track_loop_generation,
+                                                     seq_clock_src_t clock_src,
+                                                     uint32_t now_tick,
+                                                     uint64_t block_start_sample,
+                                                     uint16_t block_frames)
+{
+    (void)block_frames;
+
+    if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0))
+    {
+        return;
+    }
+
+    if (seq_clock_bridge_is_external_source(clock_src) == 0U)
+    {
+        return;
+    }
+
+    if (seq_transport_fsm_is_stopped(transport_fsm) != 0U)
+    {
+        return;
+    }
+    if ((seq_transport_fsm_is_running(transport_fsm) != 0U) && (state->running == 0U))
+    {
+        return;
+    }
+
+    uint16_t pending_steps = seq_runtime_exec_consume_external_step_pulses_pending();
+    if (pending_steps == 0U)
+    {
+        return;
+    }
+
+    const uint64_t pulse_sample_q16 = block_start_sample << 16;
+    while (pending_steps > 0U)
+    {
+        seq_runtime_exec_process_step_pulse_at_sample_q16(state,
+                                                          transport_fsm,
+                                                          clock_bridge,
+                                                          &(seq_runtime_diag_t){0},
+                                                          track_loop_generation,
+                                                          pulse_sample_q16,
+                                                          now_tick,
+                                                          seq_runtime_exec_get_audio_timeline_sample());
+        pending_steps--;
+    }
+}
+
+uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
+                                               seq_transport_fsm_t *transport_fsm,
+                                               seq_clock_bridge_t *clock_bridge,
+                                               seq_runtime_diag_t *diag,
+                                               uint32_t *track_loop_generation,
+                                               seq_runtime_audio_event_t *out_events,
+                                               uint16_t max_events,
+                                               uint16_t block_frames,
+                                               seq_clock_src_t clock_src,
+                                               uint8_t running)
+{
+    if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0) || (diag == 0) || (track_loop_generation == 0)
+        || (out_events == 0) || (max_events == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t block_start_sample = seq_runtime_exec_begin_audio_block(block_frames);
+    const uint32_t now_tick = 0U;
+    seq_runtime_exec_drive_external_steps_for_block(state,
+                                                    transport_fsm,
+                                                    clock_bridge,
+                                                    track_loop_generation,
+                                                    clock_src,
+                                                    now_tick,
+                                                    block_start_sample,
+                                                    block_frames);
+    seq_runtime_exec_drive_internal_steps_for_block(state,
+                                                    transport_fsm,
+                                                    clock_bridge,
+                                                    diag,
+                                                    track_loop_generation,
+                                                    clock_src,
+                                                    now_tick,
+                                                    block_start_sample,
+                                                    block_frames);
+    seq_runtime_exec_emit_midi_clock_for_block(block_start_sample, block_frames, clock_src, running);
+
+    uint16_t total = 0U;
+    seq_play_scheduler_audio_event_t scheduler_events[16];
+    while (total < max_events)
+    {
+        const uint16_t request = (uint16_t)(((max_events - total) > 16U) ? 16U : (max_events - total));
+        const uint16_t count = seq_play_scheduler_audio_collect_block_events(scheduler_events,
+                                                                             request,
+                                                                             block_frames,
+                                                                             block_start_sample);
+        if (count == 0U)
+        {
+            break;
+        }
+
+        for (uint16_t i = 0U; i < count; ++i)
+        {
+            out_events[total + i].type = scheduler_events[i].type;
+            out_events[total + i].track = scheduler_events[i].track;
+            out_events[total + i].note = scheduler_events[i].note;
+            out_events[total + i].velocity = scheduler_events[i].velocity;
+            out_events[total + i].sample_offset_in_block = scheduler_events[i].sample_offset_in_block;
+        }
+        total = (uint16_t)(total + count);
+        if (count < request)
+        {
+            break;
+        }
+    }
+
+    return total;
+}
