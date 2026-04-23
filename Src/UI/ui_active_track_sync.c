@@ -5,6 +5,7 @@
 #include "ui_param.h"
 #include "param_store.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 
 #define UI_CFG_TRACK_PARAM ((param_id_t)PARAM_CFG_TRACK)
 #define UI_CFG_TRACK_TYPE_PARAM ((param_id_t)PARAM_CFG_TRACK_TYPE)

@@ -13,6 +13,7 @@
 #include "ui_widgets.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Mod/mod_lfo_v1.h"
 
 #define UI_TEMPLATE_FRAME_W          31

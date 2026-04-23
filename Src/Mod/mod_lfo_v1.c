@@ -7,6 +7,7 @@
 #include "Core/track_runtime.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
 #define MOD_LFO_COUNT_PER_TRACK 2U

@@ -110,7 +110,6 @@ void seq_clock_bridge_set_source(seq_clock_bridge_t *bridge,
         return;
     }
 
-    runtime->clock_src = src;
     runtime->ext_clock_tick_accum = 0U;
     runtime->tick_accum = 0U;
     seq_clock_bridge_reset_external_tempo(bridge);

@@ -6,6 +6,7 @@
 #include "Audio/audio_float.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Storage/memory_layout.h"
 #include "ui_core.h"
 

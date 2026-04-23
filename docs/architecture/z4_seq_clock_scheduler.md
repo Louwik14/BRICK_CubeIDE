@@ -15,6 +15,7 @@ Perimetre operationnel de zone (appartient a Z4):
 Elargissements necessaires (preuves de frontieres et contrats):
 - `Src/Seq/seq_clock_bridge.c` + `Inc/Seq/seq_clock_bridge.h`: autorite tempo interne/externe, conversion ticks<->step.
 - `Src/Seq/seq_transport_fsm.c` + `Inc/Seq/seq_transport_fsm.h`: autorite etats transport STOPPED/START_PENDING/RUNNING.
+- `Src/Seq/seq_live_rec_session.c` + `Inc/Seq/seq_live_rec_session.h`: autorite session live-rec/edit, arming/count-in/pattern-rec et ecriture p-lock live.
 - `Src/MIDI/midi.c`: source reelle des evenements MIDI clock/start/continue/stop vers `seq_runtime_*_from_source` et IRQ TIM12 qui cadence l'horloge interne.
 - `Src/Audio/audio.c`: preuve de consommation audio-block des evenements sequenceur (`seq_runtime_audio_collect_block_events`, `seq_runtime_audio_apply_event`).
 
@@ -34,7 +35,7 @@ Sous-roles concentres dans `seq_runtime.c`:
 - Orchestrateur transport+clock runtime.
 - Pilotage des boundaries et scheduling pas.
 - Bridge vers domaine sample/audio bloc.
-- Pilotage live-rec pattern/overdub autour du transport.
+- Facade vers la session live-rec; le detail edit/capture vit dans `seq_live_rec_session`.
 
 ## 2. Autorite(s) de verite
 
@@ -43,7 +44,7 @@ Autorite transport:
 - Decisions d'etat via `seq_transport_fsm_request_start/stop/continue`, `seq_transport_fsm_on_step_pulse`, `seq_transport_fsm_abort_pending`.
 
 Autorite clock/tempo:
-- Source clock active: `seq_runtime_set_clock_source` (mutations sur `g_seq_runtime.clock_src` via `seq_clock_bridge_set_source`).
+- Source clock active: `seq_runtime_set_clock_source` (etat de controle interne du runtime, propage via `seq_clock_bridge_set_source`).
 - Tempo interne: `seq_runtime_set_tempo_bpm_milli` -> `seq_clock_bridge_set_internal_tempo`.
 - Tempo externe: `seq_clock_bridge_on_external_clock_pulse` (appele depuis `seq_runtime_midi_clock_from_source`).
 - Cadence interne effective (steps): `seq_runtime_audio_collect_block_events` -> `seq_runtime_audio_drive_internal_steps_for_block` (domaine audio sample, IRQ DMA).
@@ -106,9 +107,14 @@ Contrats implicites de sortie:
 
 Etat runtime principal (`seq_runtime.c`):
 - `g_seq_runtime` (`seq_runtime_state_t`, defini dans `Inc/Seq/seq_runtime.h`)
-  - Champs structurants: `running`, `clock_src`, `play_step[]`, `prev_step[]`, `prev_step_valid[]`, `track_div[]`, `track_div_phase[]`, `track_quant[]`, `track_swing[]`, `tick_accum`, `ticks_per_step`, `ext_clock_tick_accum`, `step_sample_q16`, `samples_per_step_q16`, `audio_block_start_sample`, `audio_timeline_sample`, `active_locks[][]`, `active_lock_count[]`.
+  - Champs structurants: `running`, `play_step[]`, `prev_step[]`, `prev_step_valid[]`, `track_div_phase[]`, `tick_accum`, `ticks_per_step`, `ext_clock_tick_accum`, `step_sample_q16`, `samples_per_step_q16`, `audio_block_start_sample`, `audio_timeline_sample`, `active_locks[][]`, `active_lock_count[]`.
   - Ecriture: `seq_runtime_init/start/stop/process_core/process_step_pulse`, `seq_boundary_engine_process/advance_one_step/restore_all_active_locks`, setters track.*.
   - Lecture: getters runtime, scheduler/boundary internes, `brick6_master_buffer`, UI/param/storage (etat expose).
+
+Etat de controle runtime:
+- `g_seq_runtime_control` (interne `seq_runtime.c`)
+  - Champs structurants: `clock_src`, `track_div[]`, `track_quant[]`, `track_swing[]`.
+  - Role: politique d'execution portee hors de `seq_runtime_state_t`; acces via `seq_runtime_control.h`.
 
 Etat transport:
 - `g_seq_transport_fsm` (`seq_transport_fsm_t`)
@@ -183,6 +189,7 @@ Flux nominal prouve:
 - `audio.c` applique les events aux offsets via `seq_runtime_audio_apply_event`.
 - `seq_play_scheduler_audio_apply_event` envoie MIDI note et note engine + gate mixer.
 - Les locks de pas affectent domaine param via `seq_boundary_engine` + `seq_param_iface_apply_lock/restore_base`.
+- Le chemin live-rec/edit ne passe plus par `seq_runtime.c` pour muter le modele: cette autorite vit dans `seq_live_rec_session`.
 
 ## 7. Contraintes RT/CPU/memoire
 
@@ -246,6 +253,9 @@ Sorties de Z4:
 
 Points factuels observes:
 - Concentration de responsabilites dans `seq_runtime.c` (transport, clock, boundary orchestration, scheduler bridge, live-rec, MIDI clock audio TX) augmente le couplage interne.
+- La partie live-rec/edit a ete extraite vers `seq_live_rec_session`; `seq_runtime.c` garde la facade de transport mais ne porte plus la mutation directe du modele live-rec.
+- La source clock active est maintenant portee par un etat de controle interne distinct; `seq_runtime_state_t` ne sert plus de support a cette autorite.
+- Les verbes de politique/runtime control sont exposes via `seq_runtime_control.h`, pour garder `seq_runtime.h` centre sur l'execution et la collecte.
 - Dependance forte a l'ordre d'appel:
   - sans pulses externes, la progression externe stoppe.
   - la progression step (interne/externe) depend d'un appel audio regulier a `seq_runtime_audio_collect_block_events`.

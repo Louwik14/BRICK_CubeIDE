@@ -9,6 +9,7 @@
 #include "mixer.h"
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_model.h"
 #include "Storage/undo_v1.h"
 #include "Mod/mod_lfo_v1.h"

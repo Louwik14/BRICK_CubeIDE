@@ -21,6 +21,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 
 #define SEQ_PLAY_SCHEDULER_VOICE_COUNT 4U
 #define SEQ_PLAY_SCHEDULER_EVENT_CAP 256U
@@ -432,10 +433,9 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
 
     const float samples_per_step_f = ((float)samples_per_step_q16) / 65536.0f;
     uint8_t track_quant = 0U;
-    const seq_runtime_state_t *const runtime_state = seq_runtime_get_state();
-    if ((runtime_state != NULL) && (track < SEQ_TRACK_COUNT))
+    if (track < SEQ_TRACK_COUNT)
     {
-        track_quant = runtime_state->track_quant[track];
+        (void)seq_runtime_get_track_quant(track, &track_quant);
         if (track_quant > 100U)
         {
             track_quant = 100U;

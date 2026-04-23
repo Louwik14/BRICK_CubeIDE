@@ -21,6 +21,7 @@
 #include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include <string.h>
 
 static bool g_keyboard_engine_sounding_active = false;

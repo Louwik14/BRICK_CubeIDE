@@ -8,6 +8,7 @@
 #include "UI/ui_core.h"
 #include "UI/ui_active_track_sync.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_param_iface.h"
 #include "Param/param_registry.h"
 #include "Mod/mod_lfo_v1.h"

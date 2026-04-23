@@ -12,6 +12,7 @@
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
+#include "Seq/seq_runtime_control.h"
 
 typedef struct
 {
@@ -270,7 +271,8 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        uint8_t div = state->track_div[track];
+        uint8_t div = 1U;
+        (void)seq_runtime_get_track_div(track, &div);
         if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
         {
             div = 1U;

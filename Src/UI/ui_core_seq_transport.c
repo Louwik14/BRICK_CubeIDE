@@ -6,6 +6,7 @@
 #include "Core/brick6_master_buffer.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_clipboard.h"
 
 static uint8_t ui_core_find_unique_master_buffer_track(uint8_t *out_track)

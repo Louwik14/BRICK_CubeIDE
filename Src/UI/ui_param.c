@@ -26,6 +26,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_model.h"
 #include "Core/track_runtime.h"
 #include "param_store.h"

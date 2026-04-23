@@ -14,6 +14,7 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_clipboard.h"
 
 typedef enum
