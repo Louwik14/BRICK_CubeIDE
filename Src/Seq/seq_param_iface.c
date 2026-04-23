@@ -23,10 +23,53 @@ typedef struct
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
 
+static uint8_t seq_param_iface_is_play_param(param_id_t param)
+{
+    return (track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) ? 1U : 0U;
+}
+
+static void seq_param_iface_seed_play_defaults(void)
+{
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
+        {
+            const param_id_t param = (param_id_t)param_raw;
+            uint8_t set_id = 0U;
+            seq_param8_t param8 = 0U;
+            seq_param_slot_state_t *state;
+
+            if (seq_param_iface_is_play_param(param) == 0U)
+            {
+                continue;
+            }
+            if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+            {
+                continue;
+            }
+
+            state = &g_seq_param_state[track][set_id][param8];
+            if (state->base_valid == 0U)
+            {
+                const float default_value = param_registry[param].default_value;
+                const seq_value16_t encoded = seq_param_iface_encode_param_value(param, default_value);
+                state->base_value = encoded;
+                state->runtime_value = encoded;
+                state->base_valid = 1U;
+                state->runtime_locked = 0U;
+            }
+        }
+    }
+}
+
 static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 {
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
+
+uint8_t seq_param_iface_map_param(param_id_t param,
+                                  uint8_t *out_set_id,
+                                  seq_param8_t *out_param8);
 
 static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
                                                    uint8_t set_id,
@@ -76,6 +119,7 @@ void seq_param_iface_init(void)
 {
     memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
     track_runtime_init();
+    seq_param_iface_seed_play_defaults();
 }
 
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id)
@@ -155,14 +199,22 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
     if (state->base_valid == 0U)
     {
         const param_id_t param = (param_id_t)param8;
-        float runtime_value = 0.0f;
-        if ((param >= PARAM_COUNT) || (param_registry_get_track_value(param, track, &runtime_value) == 0U))
+        if ((param >= PARAM_COUNT) || (seq_param_iface_is_play_param(param) == 0U))
         {
-            return 0U;
-        }
+            float runtime_value = 0.0f;
+            if ((param >= PARAM_COUNT) || (param_registry_get_track_value(param, track, &runtime_value) == 0U))
+            {
+                return 0U;
+            }
 
-        state->base_value = seq_param_iface_encode_param_value(param, runtime_value);
-        state->base_valid = 1U;
+            state->base_value = seq_param_iface_encode_param_value(param, runtime_value);
+            state->base_valid = 1U;
+        }
+        else
+        {
+            state->base_value = seq_param_iface_encode_param_value(param, param_registry[param].default_value);
+            state->base_valid = 1U;
+        }
     }
 
     *out_value16 = state->base_value;
@@ -189,6 +241,20 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
     }
 
     return 1U;
+}
+
+uint8_t seq_param_iface_get_play_base_value(seq_track_id_t track,
+                                            seq_param8_t param8,
+                                            seq_value16_t *out_value16)
+{
+    return seq_param_iface_get_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param8, out_value16);
+}
+
+uint8_t seq_param_iface_set_play_base_value(seq_track_id_t track,
+                                            seq_param8_t param8,
+                                            seq_value16_t value16)
+{
+    return seq_param_iface_set_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param8, value16);
 }
 
 uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_iface_base_commit_cmd_t *cmd)
@@ -260,6 +326,18 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 0U;
     }
 
+    if (seq_param_iface_is_play_param(param) != 0U)
+    {
+        if (seq_param_iface_set_base_value(track, set_id, param8, value16) == 0U)
+        {
+            return 0U;
+        }
+
+        state->runtime_value = value16;
+        state->runtime_locked = 1U;
+        return 1U;
+    }
+
     const float decoded = seq_param_iface_decode_param_value(param, value16);
     if (param_registry_apply_track_value(param, track, decoded) == 0U)
     {
@@ -286,6 +364,20 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     if (param >= PARAM_COUNT)
     {
         return 0U;
+    }
+
+    if (seq_param_iface_is_play_param(param) != 0U)
+    {
+        if (seq_param_iface_set_base_value(track, set_id, param8, base_value16) == 0U)
+        {
+            return 0U;
+        }
+
+        state->base_value = base_value16;
+        state->base_valid = 1U;
+        state->runtime_value = base_value16;
+        state->runtime_locked = 0U;
+        return 1U;
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, base_value16);

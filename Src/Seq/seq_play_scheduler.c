@@ -355,6 +355,7 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
 {
     uint8_t set_id = 0U;
     seq_param8_t param8 = 0U;
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
     if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
     {
         return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
@@ -364,6 +365,15 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
     if (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U)
     {
         return entry.value16;
+    }
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+    {
+        seq_value16_t base_value16 = 0U;
+        if (seq_param_iface_get_play_base_value(track, param8, &base_value16) != 0U)
+        {
+            return base_value16;
+        }
     }
 
     return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);

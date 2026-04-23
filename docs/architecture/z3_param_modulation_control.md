@@ -462,6 +462,7 @@ Familles d'autorite:
 - Contrat miroir UI:
   - le miroir `param_store.active[]` track-scoped actif est synchronise cote Z5 (`ui_param_sync_active_track_mirror_from_runtime`).
   - Z3 conserve l'autorite runtime d'execution; Z5 conserve l'autorite presentation/contexte d'edition.
+- Pour `PLAY`, ce miroir UI reflète la base seq canonique exposee par Z3.
 
 ## 15. Contrat Passe 1 - Autorite execution MIDI
 - Les chemins d'application MIDI dans `param_registry` lisent le canal via Z2 (`track_runtime_get_midi_channel_zero_based`).
@@ -485,6 +486,7 @@ Familles d'autorite:
 - La resolution structurelle consomme le resolver Z2 (`track_runtime_resolve_track`) plutot que `track_runtime_get_ctx` local dans le coeur d'apply.
 - Les decisions MIDI TONE (Program/CC) sont autorisees depuis le descriptor resolu (`family/type`) puis appliquees localement (emit/cache).
 - Le bloc FILTER garde son shadow-state UI, mais l'apply est isole dans un helper dedie au lieu d'etre melange au reste du dispatch.
+- Le domaine `PLAY` a maintenant une base seq canonique: l'apply normal route vers `seq_param_iface_set_base_value`, le read normal remonte via `seq_param_iface_get_base_value`, et les locks seq mettent a jour cette meme base sans passer par le backend generique Z3.
 
 Impact debug immediat:
 - point d'entree d'apply plus lisible,

@@ -25,6 +25,7 @@
 #include "Param/param_registry_runtime_state.h"
 #include "mixer.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_param_iface.h"
 #include "Core/track_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
@@ -40,6 +41,7 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t track,
                                                        float clamped,
                                                        uint8_t rt_fast);
+static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
 static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track, float *out_value);
 static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track, float *out_value);
 static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track, float value);
@@ -220,6 +222,41 @@ static uint8_t param_runtime_apply_track(uint8_t track,
     return applied;
 }
 
+static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped)
+{
+    if (id == PARAM_MIDI_PROGRAM)
+    {
+        if (seq_param_iface_set_play_base_value(track,
+                                                (seq_param8_t)id,
+                                                seq_param_iface_encode_param_value(id, clamped)) == 0U)
+        {
+            return 0U;
+        }
+
+        param_registry_runtime_cache_set(track, id, clamped);
+        seq_runtime_on_midi_program_live_change(track, clamped);
+        return 1U;
+    }
+
+    if (param_backend_is_midi_cc_id(id) != 0U)
+    {
+        if (param_backend_send_midi_cc(track, id, clamped) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    if (seq_param_iface_set_play_base_value(track,
+                                            (seq_param8_t)id,
+                                            seq_param_iface_encode_param_value(id, clamped)) == 0U)
+    {
+        return 0U;
+    }
+
+    param_registry_runtime_cache_set(track, id, clamped);
+    return 1U;
+}
+
 static uint8_t param_registry_get_track_sound_value(param_id_t id, uint8_t track, float *out_value)
 {
     const track_sound_state_t *const state = track_sound_state_get_const(track);
@@ -272,8 +309,8 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
 
     if ((state == NULL) || (out_value == NULL))
     {
-        return 0U;
-    }
+    return 0U;
+}
 
     switch (id)
     {
@@ -966,6 +1003,21 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         }
     }
 
+    {
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+        {
+            seq_value16_t encoded = 0U;
+            if (seq_param_iface_get_play_base_value(track, (seq_param8_t)id, &encoded) == 0U)
+            {
+                return 0U;
+            }
+
+            *out_value = seq_param_iface_decode_param_value(id, encoded);
+            return 1U;
+        }
+    }
+
     if (param_filter_get_track_value(id, track, out_value) != 0U)
     {
         return 1U;
@@ -1607,6 +1659,16 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
 
         param_set(id, clamped);
         return 1U;
+    }
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+    {
+        if (rt_fast != 0U)
+        {
+            return 0U;
+        }
+
+        return param_apply_play_track_value(id, track, clamped);
     }
 
     param_track_exec_ctx_t ctx;
