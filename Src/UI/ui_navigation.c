@@ -20,6 +20,11 @@ static const ui_nav_rule_t g_ui_nav_rules[] = {
 
 static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
 
+static void ui_navigation_refresh_active_track_runtime(void)
+{
+    track_runtime_refresh_track(ui_get_active_track());
+}
+
 static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 {
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
@@ -149,6 +154,8 @@ static uint8_t ui_navigation_resolve_effective_ensemble_page(void)
 
 void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
+    ui_navigation_refresh_active_track_runtime();
+
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
         g_ui_requested_ensemble_page = page_id;
@@ -178,6 +185,8 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
 
 void ui_navigation_request_page_with_availability(uint8_t page_id)
 {
+    ui_navigation_refresh_active_track_runtime();
+
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
         ui_navigation_request_ensemble_page(page_id);
@@ -207,6 +216,8 @@ void ui_navigation_handle_event(const ui_event_t *event)
         return;
     }
 
+    ui_navigation_refresh_active_track_runtime();
+
     const uint8_t current_page = ui_page_get_id();
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
@@ -224,6 +235,8 @@ void ui_navigation_handle_event(const ui_event_t *event)
 
 button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 {
+    ui_navigation_refresh_active_track_runtime();
+
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
     {
         const ui_nav_rule_t *rule = &g_ui_nav_rules[i];
@@ -243,6 +256,8 @@ button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 
 void ui_navigation_sync_active_track_ensemble(void)
 {
+    ui_navigation_refresh_active_track_runtime();
+
     const uint8_t current_page = ui_page_get_id();
     if ((current_page == UI_PAGE_TEMPLATE_CFG) || (ui_navigation_is_ensemble_page(current_page) != 0U))
     {

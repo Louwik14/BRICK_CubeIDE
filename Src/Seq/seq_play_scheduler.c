@@ -52,6 +52,7 @@ static uint8_t g_seq_play_generation;
 static uint8_t g_seq_play_midi_program_valid[SEQ_TRACK_COUNT];
 static uint8_t g_seq_play_midi_program_last[SEQ_TRACK_COUNT];
 static seq_play_scheduler_diag_t g_seq_play_diag;
+static void seq_play_scheduler_refresh_track(uint8_t track);
 static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t type,
                                     seq_track_id_t track,
@@ -196,6 +197,11 @@ static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_sample
     const int32_t remaining_percent = (int32_t)(100U - quant_percent);
     const int64_t scaled = (int64_t)microtiming_samples * (int64_t)remaining_percent;
     return (int32_t)((scaled + 50LL) / 100LL);
+}
+
+static void seq_play_scheduler_refresh_track(uint8_t track)
+{
+    track_runtime_refresh_track(track);
 }
 
 
@@ -409,6 +415,8 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
 {
     (void)ticks_per_step;
     (void)step_tick;
+
+    seq_play_scheduler_refresh_track(track);
 
     if (seq_model_step_is_active(track, step) == 0U)
     {
@@ -690,6 +698,8 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
 
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)
 {
+    seq_play_scheduler_refresh_track(track);
+
     track_runtime_descriptor_t descriptor;
     if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
             || (seq_play_scheduler_track_supports_program_change(&descriptor) == 0U))
@@ -702,6 +712,8 @@ void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float pr
 
 void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 {
+    track_runtime_refresh_all();
+
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         track_runtime_descriptor_t descriptor;
@@ -723,6 +735,8 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 {
+    seq_play_scheduler_refresh_track(track);
+
     track_runtime_descriptor_t descriptor;
     if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
             || (seq_play_scheduler_track_supports_program_change(&descriptor) == 0U))

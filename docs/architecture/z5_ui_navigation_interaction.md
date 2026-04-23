@@ -352,3 +352,11 @@ Points factuels:
     - echec -> conserve `CALIBRATION`.
 - Aucun fallback renderer n'est utilise pour masquer un etat UI invalide.
 
+
+## 9. Contrat query stricte - filter target
+- `ui_resolve_filter_target_track` porte l'explicitation du refresh avant la query.
+- `ui_core_runtime_bridge_resolve_filter_target_track` reste une query pure et ne refresh plus au passage.
+
+## 10. Contrat transport explicite
+- Le seam transport du runtime bridge est désormais découpé en commandes explicites PLAY / REC / pattern shortcut.
+- L'arbritrage reste côté UI; le bridge porte seulement l'exécution des commandes et leurs feedbacks associés.

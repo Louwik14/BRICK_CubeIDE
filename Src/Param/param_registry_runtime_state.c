@@ -73,8 +73,6 @@ uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
     }
 
     *out_value = registry[id].default_value;
-    param_registry_runtime_cache_set(track, id, *out_value);
-    param_registry_runtime_resync_lfo(track, id, *out_value);
     return 1U;
 }
 

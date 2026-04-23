@@ -814,6 +814,7 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
         return 0U;
     }
 
+    track_runtime_refresh_track(track);
     if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
     {
         return 0U;

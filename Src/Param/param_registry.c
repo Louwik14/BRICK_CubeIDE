@@ -897,11 +897,6 @@ static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
     ctx->rt_fast = rt_fast;
     ctx->rule = rule;
 
-    if ((rt_fast == 0U) && (g_param_registry_batch_depth == 0U))
-    {
-        track_runtime_refresh_track(track);
-    }
-
     if (track_runtime_resolve_track(track, &ctx->resolved) == 0U)
     {
         return 0U;
@@ -1300,6 +1295,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return 0U;
     }
 
+    track_runtime_refresh_track(track);
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 

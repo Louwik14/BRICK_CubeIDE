@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Core/track_runtime.h"
 #include "Seq/seq_param_iface.h"
 
 typedef struct
@@ -190,6 +191,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         seq_model_set_trig(target_track, target_step, src->trig);
         seq_model_step_plock_clear(target_track, target_step);
 
+        track_runtime_refresh_track(target_track);
         for (uint8_t l = 0U; l < src->lock_count; ++l)
         {
             const seq_clipboard_lock_t *const lock = &src->locks[l];

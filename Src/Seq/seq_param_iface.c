@@ -180,7 +180,6 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
     const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, param);
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
@@ -198,23 +197,7 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
     seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
     if (state->base_valid == 0U)
     {
-        const param_id_t param = (param_id_t)param8;
-        if ((param >= PARAM_COUNT) || (seq_param_iface_is_play_param(param) == 0U))
-        {
-            float runtime_value = 0.0f;
-            if ((param >= PARAM_COUNT) || (param_registry_get_track_value(param, track, &runtime_value) == 0U))
-            {
-                return 0U;
-            }
-
-            state->base_value = seq_param_iface_encode_param_value(param, runtime_value);
-            state->base_valid = 1U;
-        }
-        else
-        {
-            state->base_value = seq_param_iface_encode_param_value(param, param_registry[param].default_value);
-            state->base_valid = 1U;
-        }
+        return 0U;
     }
 
     *out_value16 = state->base_value;
@@ -226,11 +209,11 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        seq_param8_t param8,
                                        seq_value16_t value16)
 {
+    track_runtime_refresh_track(track);
     if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
     {
         return 0U;
     }
-
     seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
     state->base_value = value16;
     state->base_valid = 1U;
@@ -304,11 +287,11 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    seq_param8_t param8,
                                    seq_value16_t value16)
 {
+    track_runtime_refresh_track(track);
     if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
     {
         return 0U;
     }
-
     seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
     if (state->base_valid == 0U)
     {
@@ -354,11 +337,11 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      seq_param8_t param8,
                                      seq_value16_t base_value16)
 {
+    track_runtime_refresh_track(track);
     if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
     {
         return 0U;
     }
-
     seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
     const param_id_t param = (param_id_t)param8;
     if (param >= PARAM_COUNT)

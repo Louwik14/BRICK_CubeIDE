@@ -536,3 +536,11 @@ Dette explicite post-passe 4:
 
 
 
+
+## 13. Contrat queries strictes - runtime state
+- `param_registry_runtime_get_or_default` ne resynchronise plus LFO ni cache au passage; la query de valeur ne doit plus produire d'effet caché.
+- Les commandes d'ecriture restent les seules autorites de commit runtime et de resync associe.
+
+## 14. Contrat commandes explicites - apply track-aware
+- `param_registry_apply_track_value` porte maintenant le refresh runtime explicite avant resolution et execution track-aware.
+- `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.

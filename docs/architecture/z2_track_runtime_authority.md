@@ -212,3 +212,7 @@ Sorties de Z2:
   - Z4 scheduler note-engine consomme `track_runtime_resolve_track`.
   - Z4 live-rec source MIDI consomme `track_runtime_get_midi_source`.
   - Z3 résolution cibles filter/drive pour apply runtime consomme `track_runtime_resolve_track`.
+## 17. Contrat queries strictes
+- Les queries de projection ne declenchent plus de refresh implicite.
+- `track_runtime_get_cached_synth_usage`, `track_runtime_get_descriptor`, `track_runtime_get_revision`, `track_runtime_get_track_revision`, `track_runtime_is_ui_ensemble_available` et `track_runtime_resolve_track` restent des lectures pures.
+- `track_runtime_refresh_track` et `track_runtime_refresh_all` sont des commandes explicites de maintenance, appelees avant la query par le call site qui en a besoin.

@@ -323,6 +323,7 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
     (void)seq_runtime_get_track_quant(track, &cb->seq_quant);
     (void)seq_runtime_get_track_swing(track, &cb->seq_swing);
 
+    track_runtime_refresh_track(track);
     uint8_t count = 0U;
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
     {

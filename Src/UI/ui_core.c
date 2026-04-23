@@ -43,6 +43,7 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
+#include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "App/Hall/hall_engine.h"
 
@@ -623,6 +624,7 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
+    track_runtime_refresh_track(ui_get_active_track());
     if (ui_core_runtime_bridge_resolve_filter_target_track(out_track_id) == 0U)
     {
         return false;

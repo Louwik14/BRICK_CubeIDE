@@ -602,8 +602,6 @@ void track_runtime_refresh_track(uint8_t track)
 
 void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage)
 {
-    track_runtime_refresh_all();
-
     if (out_usage != NULL)
     {
         *out_usage = g_track_runtime_synth_usage;
@@ -612,11 +610,6 @@ void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage
 
 uint32_t track_runtime_get_revision(void)
 {
-    if (g_track_runtime_global_dirty != 0U)
-    {
-        track_runtime_refresh_all();
-    }
-
     return g_track_runtime_revision;
 }
 
@@ -625,11 +618,6 @@ uint32_t track_runtime_get_track_revision(uint8_t track)
     if (track >= SEQ_TRACK_COUNT)
     {
         return 0U;
-    }
-
-    if ((g_track_runtime_global_dirty != 0U) || (g_track_runtime_track_dirty[track] != 0U))
-    {
-        track_runtime_refresh_all();
     }
 
     return g_track_runtime_track_revision[track];
@@ -771,8 +759,6 @@ uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *
     {
         return 0U;
     }
-
-    track_runtime_refresh_track(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if (ctx == NULL)
     {

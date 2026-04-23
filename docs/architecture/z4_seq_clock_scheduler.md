@@ -325,3 +325,8 @@ Points factuels observes:
   - pas de vraie polyphonie audio ajoutee (toujours un flux input unique gate),
   - `panic` / `all notes off` referme proprement le gate (`mixer_track_vca_all_notes_off`).
 
+
+## 11. Contrat queries strictes - seq_param_iface
+- `seq_param_iface_is_param_supported` reste une query pure et ne refresh plus le runtime.
+- `seq_param_iface_get_base_value` / `seq_param_iface_get_play_base_value` ne seedent plus d'etat implicite; la base doit etre deja materialisee par les commandes d'ecriture ou par l'initialisation explicite.
+- Les call sites qui avaient besoin d'un runtime frais declenchent maintenant `track_runtime_refresh_track` explicitement avant lecture.

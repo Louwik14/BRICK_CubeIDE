@@ -41,6 +41,8 @@ typedef struct
     ui_core_runtime_bridge_post_sync_fn post_sync;
 } ui_core_runtime_bridge_track_transition_ctx_t;
 
+static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track);
+
 static uint8_t ui_core_runtime_bridge_track_is_master_buffer(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)
@@ -50,6 +52,99 @@ static uint8_t ui_core_runtime_bridge_track_is_master_buffer(uint8_t track)
 
     return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_MASTER)
             && (track_state_get_type(track) == UI_TRACK_TYPE_BUFFER));
+}
+
+static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS) || (ev->id != (uint8_t)BTN_PLAY))
+    {
+        return 0U;
+    }
+
+    seq_runtime_toggle_play_stop();
+    return 1U;
+}
+
+static uint8_t ui_core_runtime_bridge_transport_pattern_shortcut(const ui_event_t *ev,
+                                                                 uint8_t shift_down,
+                                                                 uint8_t track_select_armed,
+                                                                 ui_core_runtime_bridge_pattern_enter_fn pattern_enter)
+{
+    if ((ev == 0)
+        || (ev->type != UI_EVENT_BUTTON_PRESS)
+        || (ev->id != (uint8_t)BTN_TRANSPOSE_DOWN))
+    {
+        return 0U;
+    }
+
+    if ((shift_down == 0U) && (track_select_armed == 0U))
+    {
+        return 0U;
+    }
+
+    if (pattern_enter == 0)
+    {
+        return 1U;
+    }
+
+    pattern_enter((shift_down != 0U) ? UI_PATTERN_MODE_RECALL : UI_PATTERN_MODE_STORE);
+    return 1U;
+}
+
+static uint8_t ui_core_runtime_bridge_transport_rec_command(const ui_event_t *ev,
+                                                            uint8_t shift_down,
+                                                            uint8_t track_select_armed,
+                                                            ui_core_runtime_bridge_feedback_fn feedback)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS) || (ev->id != (uint8_t)BTN_REC))
+    {
+        return 0U;
+    }
+
+    uint8_t master_buffer_track = 0U;
+    const uint8_t has_master_buffer = ui_core_runtime_bridge_find_unique_master_buffer_track(&master_buffer_track);
+
+    if ((track_select_armed != 0U) && (has_master_buffer != 0U))
+    {
+        if (shift_down != 0U)
+        {
+            brick6_master_buffer_request_clear();
+            if (feedback != 0)
+            {
+                feedback("BUF CLR");
+            }
+        }
+        else
+        {
+            brick6_master_buffer_request_record();
+            if (feedback != 0)
+            {
+                if (brick6_master_buffer_is_recording() != 0U)
+                {
+                    feedback("BUF REC");
+                }
+                else if (brick6_master_buffer_is_armed() != 0U)
+                {
+                    feedback("BUF ARM");
+                }
+                else
+                {
+                    feedback("BUF STOP");
+                }
+            }
+        }
+        return 1U;
+    }
+
+    if (shift_down != 0U)
+    {
+        ui_core_navigation_bridge_open_rec_cfg_page();
+        return 1U;
+    }
+
+    seq_runtime_set_pattern_rec_target_track(ui_get_active_track());
+    seq_runtime_rec_toggle_arm();
+    return 1U;
 }
 
 static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track)
@@ -353,88 +448,20 @@ uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
 {
     (void)mute_active;
 
-    if (ev == 0)
+    if (ui_core_runtime_bridge_transport_play_command(ev) != 0U)
     {
-        return 0U;
-    }
-
-    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
-    {
-        seq_runtime_toggle_play_stop();
         return 1U;
     }
 
-    if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_REC))
+    if (ui_core_runtime_bridge_transport_rec_command(ev, shift_down, track_select_armed, feedback) != 0U)
     {
-        uint8_t master_buffer_track = 0U;
-        const uint8_t has_master_buffer = ui_core_runtime_bridge_find_unique_master_buffer_track(&master_buffer_track);
-
-        if ((track_select_armed != 0U) && (has_master_buffer != 0U))
-        {
-            if (shift_down != 0U)
-            {
-                brick6_master_buffer_request_clear();
-                if (feedback != 0)
-                {
-                    feedback("BUF CLR");
-                }
-            }
-            else
-            {
-                brick6_master_buffer_request_record();
-                if (feedback != 0)
-                {
-                    if (brick6_master_buffer_is_recording() != 0U)
-                    {
-                        feedback("BUF REC");
-                    }
-                    else if (brick6_master_buffer_is_armed() != 0U)
-                    {
-                        feedback("BUF ARM");
-                    }
-                    else
-                    {
-                        feedback("BUF STOP");
-                    }
-                }
-            }
-            return 1U;
-        }
-
-        if (shift_down != 0U)
-        {
-            ui_core_navigation_bridge_open_rec_cfg_page();
-            return 1U;
-        }
-
-        seq_runtime_set_pattern_rec_target_track(ui_get_active_track());
-        seq_runtime_rec_toggle_arm();
         return 1U;
     }
 
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
-        && (shift_down != 0U))
-    {
-        if (pattern_enter != 0)
-        {
-            pattern_enter(UI_PATTERN_MODE_RECALL);
-        }
-        return 1U;
-    }
-
-    if ((ev->type == UI_EVENT_BUTTON_PRESS)
-        && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
-        && (track_select_armed != 0U))
-    {
-        if (pattern_enter != 0)
-        {
-            pattern_enter(UI_PATTERN_MODE_STORE);
-        }
-        return 1U;
-    }
-
-    return 0U;
+    return ui_core_runtime_bridge_transport_pattern_shortcut(ev,
+                                                             shift_down,
+                                                             track_select_armed,
+                                                             pattern_enter);
 }
 
 uint8_t ui_core_runtime_bridge_request_undo(ui_core_runtime_bridge_feedback_fn feedback)

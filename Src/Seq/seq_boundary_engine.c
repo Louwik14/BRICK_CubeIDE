@@ -10,6 +10,7 @@
 
 #include <string.h>
 
+#include "Core/track_runtime.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
@@ -68,6 +69,7 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
         return 0U;
     }
 
+    track_runtime_refresh_track(track);
     if (seq_model_step_is_active(track, step) == 0U)
     {
         *out_count = 0U;
