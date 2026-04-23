@@ -117,6 +117,7 @@ static void process_half(uint32_t half_index)
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traité. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
 
+    /* Audio-block seam: collect runtime projection, then keep apply separate from block DSP. */
     seq_runtime_audio_event_t block_events[AUDIO_SEQ_MAX_BLOCK_EVENTS];
     const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
                                                                         AUDIO_SEQ_MAX_BLOCK_EVENTS,
@@ -149,6 +150,7 @@ static void process_half(uint32_t half_index)
         while ((event_index < event_count)
                && (block_events[event_index].sample_offset_in_block == event_offset))
         {
+            /* Audio apply seam: runtime event dispatch stays separate from block scheduling and block DSP. */
             seq_runtime_audio_apply_event(&block_events[event_index]);
             event_index++;
         }

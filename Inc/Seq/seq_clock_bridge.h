@@ -25,6 +25,12 @@ void seq_clock_bridge_init(seq_clock_bridge_t *bridge,
                            seq_runtime_state_t *runtime,
                            uint32_t default_tempo_bpm_milli);
 uint8_t seq_clock_bridge_is_external_source(seq_clock_src_t src);
+/*
+ * Contract surface:
+ * - clock-source and tempo policy live here.
+ * - converts tempo/ticks and external clock pulses into cadence inputs.
+ * - transport ownership remains in seq_transport_fsm.
+ */
 void seq_clock_bridge_reset_external_tempo(seq_clock_bridge_t *bridge);
 void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
                                  seq_clock_src_t active_src,
@@ -33,6 +39,12 @@ void seq_clock_bridge_set_source(seq_clock_bridge_t *bridge,
                                  seq_runtime_state_t *runtime,
                                  seq_clock_src_t src);
 void seq_clock_bridge_prepare_internal_run(seq_clock_bridge_t *bridge);
+/*
+ * Contract surface:
+ * - internal cadence accumulator only.
+ * - consumes the next due internal step from accumulated tick budget.
+ * - transport state remains owned by seq_transport_fsm.
+ */
 uint8_t seq_clock_bridge_consume_internal_step_due(seq_clock_bridge_t *bridge,
                                                    uint32_t *tick_accum);
 uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,

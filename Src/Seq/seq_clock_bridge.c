@@ -86,6 +86,7 @@ void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
                                  seq_clock_src_t active_src,
                                  uint32_t engine_ticks_now)
 {
+    /* Hybrid seam: this supervises clock policy only; transport state remains in seq_transport_fsm. */
     if ((bridge == 0) || (seq_clock_bridge_is_external_source(active_src) == 0U) || (bridge->ext_clock_last_tick == 0U))
     {
         return;
@@ -105,6 +106,7 @@ void seq_clock_bridge_set_source(seq_clock_bridge_t *bridge,
                                  seq_runtime_state_t *runtime,
                                  seq_clock_src_t src)
 {
+    /* Hybrid seam: source change resets cadence policy and runtime tick accumulators, but not transport state. */
     if ((bridge == 0) || (runtime == 0))
     {
         return;
@@ -134,6 +136,7 @@ void seq_clock_bridge_prepare_internal_run(seq_clock_bridge_t *bridge)
 uint8_t seq_clock_bridge_consume_internal_step_due(seq_clock_bridge_t *bridge,
                                                    uint32_t *tick_accum)
 {
+    /* Hybrid seam: internal cadence counter only; transport state remains owned elsewhere. */
     if ((bridge == 0) || (tick_accum == 0))
     {
         return 0U;
@@ -169,6 +172,7 @@ uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,
                                                  uint32_t engine_ticks_now,
                                                  uint8_t *out_step_pulse)
 {
+    /* Hybrid seam: external clock pulses update cadence policy and emit a step request; transport owns the actual step progression. */
     if ((bridge == 0) || (runtime == 0) || (out_step_pulse == 0))
     {
         return 0U;
@@ -225,6 +229,7 @@ void seq_clock_bridge_set_internal_tempo(seq_clock_bridge_t *bridge,
                                          seq_runtime_state_t *runtime,
                                          uint32_t bpm_milli)
 {
+    /* Hybrid seam: tempo change updates cadence policy and recomputes step timing; transport remains separate. */
     if ((bridge == 0) || (runtime == 0))
     {
         return;

@@ -32,10 +32,7 @@
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 
-/*
- * Shared execution state lives in seq_runtime_exec.
- * seq_runtime keeps orchestration policy and reaches the shared state only through this facade alias.
- */
+/* Shared execution state lives in seq_runtime_exec. */
 #define g_seq_runtime (*seq_runtime_exec_state())
 SEQ_STATE_D2 static struct
 {
@@ -207,8 +204,7 @@ void seq_runtime_init(void)
     /* Orchestration seam: runtime bootstrap delegates execution-state ownership to seq_runtime_exec. */
     seq_runtime_exec_init();
     memset(g_seq_track_loop_generation, 0, sizeof(g_seq_track_loop_generation));
-    /* TODO(clock-source): wire this to a global runtime/menu setting (INT/EXT).
-     * For now, keep forced to internal clock to preserve current UX. */
+    /* Default to internal clock at boot; runtime policy may retarget later. */
     g_seq_runtime_control.clock_src = SEQ_CLOCK_SRC_INTERNAL;
     g_seq_internal_time_tick = 0U;
     seq_runtime_exec_set_external_step_pulses_pending(0U);
@@ -247,11 +243,13 @@ void seq_runtime_start(void)
         return;
     }
 
+    /* Orchestration seam: runtime asks clock policy to prepare cadence, then asks transport FSM for START. */
     seq_runtime_exec_prepare_start_lifecycle(&g_seq_runtime,
                                              &g_seq_clock_bridge,
                                              seq_runtime_get_now_tick());
     seq_runtime_update_samples_per_step_from_tempo();
 
+    /* Orchestration seam: transport FSM owns the start transition and count-in state. */
     if (seq_transport_fsm_request_start(&g_seq_transport_fsm,
                                         seq_live_rec_session_rec_is_armed(),
                                         seq_live_rec_session_get_rec_count_in_mode()) == 0U)
@@ -280,6 +278,7 @@ void seq_runtime_stop(void)
         return;
     }
 
+    /* Orchestration seam: STOP resolves through transport FSM, then runtime applies the lifecycle. */
     if (seq_transport_fsm_is_start_pending(&g_seq_transport_fsm) != 0U)
     {
         seq_transport_fsm_abort_pending(&g_seq_transport_fsm);
@@ -326,6 +325,7 @@ uint8_t seq_runtime_is_start_pending(void)
 static void seq_runtime_process_core(void)
 {
     const uint32_t now_tick = seq_runtime_get_now_tick();
+    /* Orchestration seam: clock bridge only supervises cadence policy here; transport state is checked separately. */
     seq_clock_bridge_on_process(&g_seq_clock_bridge, seq_runtime_get_clock_source_internal(), now_tick);
 
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
@@ -355,6 +355,7 @@ void seq_runtime_time_adapter_process(void)
      * Runtime core is serviced from superloop for transport/external-clock
      * state work. Internal step progression is driven from audio block domain.
      */
+    /* Orchestration seam: superloop services clock policy and transport supervision only. */
     seq_runtime_process_core();
 }
 
@@ -395,6 +396,7 @@ void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
     {
         return;
     }
+    /* Audio apply seam: runtime forwards collected events to scheduler/engines only. */
     seq_play_scheduler_audio_event_t scheduler_event;
     scheduler_event.type = event->type;
     scheduler_event.track = event->track;
@@ -455,6 +457,7 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
 
     const uint32_t now = seq_runtime_get_now_tick_for_source(source);
     uint8_t step_pulse = 0U;
+    /* Orchestration seam: external MIDI clock updates cadence policy first, then transport gets the step request. */
     if (seq_clock_bridge_on_external_clock_pulse(&g_seq_clock_bridge,
                                                  &g_seq_runtime,
                                                  seq_runtime_get_clock_source_internal(),
@@ -520,6 +523,7 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
         return;
     }
 
+    /* Orchestration seam: transport FSM owns CONTINUE; runtime only re-anchors shared execution state. */
     if (seq_transport_fsm_request_continue(&g_seq_transport_fsm) == 0U)
     {
         return;

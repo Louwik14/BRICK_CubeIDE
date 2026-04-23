@@ -78,6 +78,7 @@ void seq_runtime_time_adapter_process(void);
 uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
                                                 uint16_t max_events,
                                                 uint16_t block_frames);
+/* Audio apply seam: forwards collected runtime events to the scheduler apply surface. */
 void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event);
 uint32_t seq_runtime_get_samples_per_step_q16(void);
 

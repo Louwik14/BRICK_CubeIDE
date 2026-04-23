@@ -52,6 +52,18 @@ static uint8_t g_seq_play_generation;
 static uint8_t g_seq_play_midi_program_valid[SEQ_TRACK_COUNT];
 static uint8_t g_seq_play_midi_program_last[SEQ_TRACK_COUNT];
 static seq_play_scheduler_diag_t g_seq_play_diag;
+static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
+    PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
+};
+static const param_id_t g_seq_play_voice_vel_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
+    PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V2_VEL, PARAM_SEQ_PLAY_V3_VEL, PARAM_SEQ_PLAY_V4_VEL
+};
+static const param_id_t g_seq_play_voice_len_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
+    PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V4_LEN
+};
+static const param_id_t g_seq_play_voice_mictim_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
+    PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM
+};
 static void seq_play_scheduler_refresh_track(uint8_t track);
 static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t type,
@@ -59,6 +71,9 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t note,
                                     uint8_t velocity);
 static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent);
+static param_id_t seq_play_scheduler_param_by_voice(const param_id_t *voice_ids,
+                                                    uint8_t voice,
+                                                    param_id_t fallback);
 
 static uint32_t seq_play_scheduler_enter_critical(void)
 {
@@ -234,36 +249,31 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
     seq_play_scheduler_exit_critical(primask);
 }
 
+static param_id_t seq_play_scheduler_param_by_voice(const param_id_t *voice_ids,
+                                                    uint8_t voice,
+                                                    param_id_t fallback)
+{
+    return (voice_ids != NULL && voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? voice_ids[voice] : fallback;
+}
+
 static param_id_t seq_play_scheduler_param_note(uint8_t voice)
 {
-    static const param_id_t k_note[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
-        PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
-    };
-    return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_note[voice] : PARAM_SEQ_PLAY_V1_NOTE;
+    return seq_play_scheduler_param_by_voice(g_seq_play_voice_note_ids, voice, PARAM_SEQ_PLAY_V1_NOTE);
 }
 
 static param_id_t seq_play_scheduler_param_vel(uint8_t voice)
 {
-    static const param_id_t k_vel[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
-        PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V2_VEL, PARAM_SEQ_PLAY_V3_VEL, PARAM_SEQ_PLAY_V4_VEL
-    };
-    return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_vel[voice] : PARAM_SEQ_PLAY_V1_VEL;
+    return seq_play_scheduler_param_by_voice(g_seq_play_voice_vel_ids, voice, PARAM_SEQ_PLAY_V1_VEL);
 }
 
 static param_id_t seq_play_scheduler_param_len(uint8_t voice)
 {
-    static const param_id_t k_len[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
-        PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V4_LEN
-    };
-    return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_len[voice] : PARAM_SEQ_PLAY_V1_LEN;
+    return seq_play_scheduler_param_by_voice(g_seq_play_voice_len_ids, voice, PARAM_SEQ_PLAY_V1_LEN);
 }
 
 static param_id_t seq_play_scheduler_param_mictim(uint8_t voice)
 {
-    static const param_id_t k_mictim[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
-        PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM
-    };
-    return (voice < SEQ_PLAY_SCHEDULER_VOICE_COUNT) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
+    return seq_play_scheduler_param_by_voice(g_seq_play_voice_mictim_ids, voice, PARAM_SEQ_PLAY_V1_MICTIM);
 }
 
 static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
@@ -413,6 +423,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                       uint64_t step_sample_time,
                                       uint32_t samples_per_step_q16)
 {
+    /* Scheduling seam: consume resolved step boundaries and queue sample-domain events only. */
     (void)ticks_per_step;
     (void)step_tick;
 
@@ -549,6 +560,7 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
                                                        uint16_t block_frames,
                                                        uint64_t block_start_sample)
 {
+    /* Projection seam: expose due queued events for the current audio block without changing timeline ownership. */
     if ((out_events == NULL) || (max_events == 0U))
     {
         return 0U;
@@ -659,6 +671,7 @@ uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_
 
 void seq_play_scheduler_diag_reset(void)
 {
+    /* Diagnostics mirror only: clear accumulated queue stats without affecting scheduler ownership. */
     const uint32_t primask = seq_play_scheduler_enter_critical();
     g_seq_play_diag = (seq_play_scheduler_diag_t){0};
     g_seq_play_diag.queue_high_water = g_seq_play_event_count;
@@ -667,6 +680,7 @@ void seq_play_scheduler_diag_reset(void)
 
 void seq_play_scheduler_diag_snapshot(seq_play_scheduler_diag_t *out_diag)
 {
+    /* Diagnostics mirror only: expose queue stats as read-only projection. */
     if (out_diag == NULL)
     {
         return;
@@ -679,6 +693,7 @@ void seq_play_scheduler_diag_snapshot(seq_play_scheduler_diag_t *out_diag)
 
 void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t *event)
 {
+    /* Apply seam: dispatch a scheduler event to engines/output only. */
     if (event == NULL)
     {
         return;
@@ -700,6 +715,7 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
 
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)
 {
+    /* Post-commit seam: runtime already committed the change; scheduler only refreshes emit mirrors. */
     seq_play_scheduler_refresh_track(track);
 
     track_runtime_descriptor_t descriptor;
@@ -714,6 +730,7 @@ void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float pr
 
 void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 {
+    /* Post-commit seam: transport start re-seeds scheduler-side program state only. */
     track_runtime_refresh_all();
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -737,6 +754,7 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 {
+    /* Post-commit seam: pattern change re-seeds scheduler-side program state only. */
     seq_play_scheduler_refresh_track(track);
 
     track_runtime_descriptor_t descriptor;

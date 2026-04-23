@@ -218,8 +218,8 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
 
     if ((state == NULL) || (out_value == NULL))
     {
-    return 0U;
-}
+        return 0U;
+    }
 
     switch (id)
     {
@@ -869,7 +869,7 @@ static uint8_t param_apply_non_filter_track_value_rt_fast(param_id_t id,
     return param_apply_non_filter_track_value_core(id, track, clamped, 1U);
 }
 
-typedef struct
+typedef struct param_track_exec_ctx_t
 {
     uint8_t track;
     param_id_t id;
@@ -878,6 +878,29 @@ typedef struct
     track_runtime_param_rule_t rule;
     track_runtime_resolved_track_t resolved;
 } param_track_exec_ctx_t;
+
+static uint8_t param_track_exec_apply_tone_drum_range(const param_track_exec_ctx_t *ctx,
+                                                      track_runtime_type_t type,
+                                                      param_id_t first_id,
+                                                      param_id_t last_id)
+{
+    if ((ctx == NULL)
+        || (ctx->rt_fast != 0U)
+        || (ctx->rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        || (ctx->resolved.descriptor.type != type)
+        || (ctx->id < first_id)
+        || (ctx->id > last_id))
+    {
+        return 2U;
+    }
+
+    if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+    {
+        return 0U;
+    }
+
+    return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
+}
 
 static uint8_t param_track_exec_ctx_build(param_track_exec_ctx_t *ctx,
                                           uint8_t track,
@@ -970,134 +993,114 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
         return 1U;
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
-            && (ctx->id >= PARAM_DRUM_TRX_BD_PITCH)
-            && (ctx->id <= PARAM_DRUM_TRX_BD_DRIVE))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_TRX_BD,
+                                                                        PARAM_DRUM_TRX_BD_PITCH,
+                                                                        PARAM_DRUM_TRX_BD_DRIVE);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES)
-            && (ctx->id >= PARAM_DRUM_TRX_CLAVES_PITCH)
-            && (ctx->id <= PARAM_DRUM_TRX_CLAVES_DRIVE))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES,
+                                                                        PARAM_DRUM_TRX_CLAVES_PITCH,
+                                                                        PARAM_DRUM_TRX_CLAVES_DRIVE);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT)
-            && (ctx->id >= PARAM_DRUM_TRX_HIHAT_DECAY)
-            && (ctx->id <= PARAM_DRUM_TRX_HIHAT_PEAK))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT,
+                                                                        PARAM_DRUM_TRX_HIHAT_DECAY,
+                                                                        PARAM_DRUM_TRX_HIHAT_PEAK);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_KICK)
-            && (ctx->id >= PARAM_DRUM_FM_KICK_PITCH)
-            && (ctx->id <= PARAM_DRUM_FM_KICK_MOD_ENV_SYNC))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_KICK,
+                                                                        PARAM_DRUM_FM_KICK_PITCH,
+                                                                        PARAM_DRUM_FM_KICK_MOD_ENV_SYNC);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_SNARE)
-            && (ctx->id >= PARAM_DRUM_FM_SNARE_PITCH)
-            && (ctx->id <= PARAM_DRUM_FM_SNARE_NOISE_DECAY))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_SNARE,
+                                                                        PARAM_DRUM_FM_SNARE_PITCH,
+                                                                        PARAM_DRUM_FM_SNARE_NOISE_DECAY);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_TOM)
-            && (ctx->id >= PARAM_DRUM_FM_TOM_PITCH)
-            && (ctx->id <= PARAM_DRUM_FM_TOM_START_PHASE))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_TOM,
+                                                                        PARAM_DRUM_FM_TOM_PITCH,
+                                                                        PARAM_DRUM_FM_TOM_START_PHASE);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT)
-            && (ctx->id >= PARAM_DRUM_FM_RIMSHOT_RIM_PITCH)
-            && (ctx->id <= PARAM_DRUM_FM_RIMSHOT_MOD_DECAY))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT,
+                                                                        PARAM_DRUM_FM_RIMSHOT_RIM_PITCH,
+                                                                        PARAM_DRUM_FM_RIMSHOT_MOD_DECAY);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_CLAP)
-            && (ctx->id >= PARAM_DRUM_FM_CLAP_CLAP_COUNT)
-            && (ctx->id <= PARAM_DRUM_FM_CLAP_CLAP_DECAY))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_CLAP,
+                                                                        PARAM_DRUM_FM_CLAP_CLAP_COUNT,
+                                                                        PARAM_DRUM_FM_CLAP_CLAP_DECAY);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL)
-            && (ctx->id >= PARAM_DRUM_FM_COWBELL_PITCH)
-            && (ctx->id <= PARAM_DRUM_FM_COWBELL_MOD_FREQ))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL,
+                                                                        PARAM_DRUM_FM_COWBELL_PITCH,
+                                                                        PARAM_DRUM_FM_COWBELL_MOD_FREQ);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
-    if ((ctx->rt_fast == 0U)
-            && (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (ctx->resolved.descriptor.type == TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL)
-            && (ctx->id >= PARAM_DRUM_FM_CYMBAL_DECAY)
-            && (ctx->id <= PARAM_DRUM_FM_CYMBAL_MOD_DECAY))
     {
-        if (param_registry_set_track_tone_value(ctx->id, ctx->track, ctx->clamped) == 0U)
+        const uint8_t applied = param_track_exec_apply_tone_drum_range(ctx,
+                                                                        TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL,
+                                                                        PARAM_DRUM_FM_CYMBAL_DECAY,
+                                                                        PARAM_DRUM_FM_CYMBAL_MOD_DECAY);
+        if (applied != 2U)
         {
-            return 0U;
+            return applied;
         }
-        return param_backend_apply_tone_drum(ctx->track, track_runtime_get_ctx(ctx->track), ctx->id, ctx->clamped, 0U);
     }
 
     return param_backend_apply_track_value(ctx->track,

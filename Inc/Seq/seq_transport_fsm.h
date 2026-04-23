@@ -16,13 +16,30 @@ typedef struct
     uint32_t rec_count_in_remaining_steps;
 } seq_transport_fsm_t;
 
+/*
+ * Contract surface:
+ * - transport state ownership and transitions.
+ * - start/continue/stop/count-in policy.
+ * - no tempo or clock-source policy here.
+ */
 void seq_transport_fsm_init(seq_transport_fsm_t *fsm);
+/*
+ * Contract surface:
+ * - internal lifecycle reset / pending-abort helper.
+ * - clears transport state without introducing clock or tempo policy.
+ * - caller remains responsible for orchestration context.
+ */
 void seq_transport_fsm_reset(seq_transport_fsm_t *fsm);
 uint8_t seq_transport_fsm_request_start(seq_transport_fsm_t *fsm,
                                         uint8_t rec_armed,
                                         uint8_t rec_count_in_mode);
 uint8_t seq_transport_fsm_request_stop(seq_transport_fsm_t *fsm);
 uint8_t seq_transport_fsm_request_continue(seq_transport_fsm_t *fsm);
+/*
+ * Contract surface:
+ * - internal lifecycle helper to cancel a pending start.
+ * - does not own clock policy or cadence.
+ */
 void seq_transport_fsm_abort_pending(seq_transport_fsm_t *fsm);
 uint8_t seq_transport_fsm_on_step_pulse(seq_transport_fsm_t *fsm);
 

@@ -25,6 +25,8 @@ static uint8_t g_seq_runtime_exec_midi_clock_audio_enabled;
 static uint32_t g_seq_runtime_exec_midi_clock_period_q16;
 static uint64_t g_seq_runtime_exec_midi_clock_next_sample_q16;
 static volatile uint16_t g_seq_runtime_exec_external_step_pulses_pending;
+static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_t *out_event,
+                                                        const seq_play_scheduler_audio_event_t *scheduler_event);
 
 seq_runtime_state_t *seq_runtime_exec_state(void)
 {
@@ -34,7 +36,7 @@ seq_runtime_state_t *seq_runtime_exec_state(void)
 
 const seq_runtime_state_t *seq_runtime_exec_state_const(void)
 {
-    /* Read-only view of the shared execution state owner. */
+    /* Read-only projection of the shared execution state owner. */
     return &g_seq_runtime_exec_state;
 }
 
@@ -48,6 +50,21 @@ void seq_runtime_exec_init(void)
     g_seq_runtime_exec_external_step_pulses_pending = 0U;
 }
 
+static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_t *out_event,
+                                                        const seq_play_scheduler_audio_event_t *scheduler_event)
+{
+    if ((out_event == NULL) || (scheduler_event == NULL))
+    {
+        return;
+    }
+
+    out_event->type = scheduler_event->type;
+    out_event->track = scheduler_event->track;
+    out_event->note = scheduler_event->note;
+    out_event->velocity = scheduler_event->velocity;
+    out_event->sample_offset_in_block = scheduler_event->sample_offset_in_block;
+}
+
 void seq_runtime_exec_reset_audio_timeline(uint64_t start_sample)
 {
     g_seq_runtime_exec_audio_timeline_sample = start_sample;
@@ -55,6 +72,7 @@ void seq_runtime_exec_reset_audio_timeline(uint64_t start_sample)
 
 uint64_t seq_runtime_exec_get_audio_timeline_sample(void)
 {
+    /* Timeline projection only: callers read the execution clock, they do not own it. */
     return g_seq_runtime_exec_audio_timeline_sample;
 }
 
@@ -142,6 +160,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
                                                   uint32_t now_tick,
                                                   uint64_t start_sample_q16)
 {
+    /* Seam boundary: lifecycle start seeds runtime state, then hands boundaries to scheduler. */
     if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0))
     {
         return;
@@ -195,6 +214,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
 
 void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
 {
+    /* Seam boundary: lifecycle stop flushes runtime execution and clears scheduler state. */
     if (state == 0)
     {
         return;
@@ -249,6 +269,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
     (void)now_tick;
     (void)diag;
 
+    /* Seam boundary: pulse processing owns runtime progression, not scheduler queue storage. */
     if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0) || (diag == 0) || (track_loop_generation == 0))
     {
         return;
@@ -261,6 +282,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
 
     if (seq_transport_fsm_is_start_pending(transport_fsm) != 0U)
     {
+        /* Progression guard: a pending-start pulse owns the transition into RUNNING and anchors step zero. */
         state->step_sample_q16 = pulse_sample_q16;
         if (seq_transport_fsm_on_step_pulse(transport_fsm) != 0U)
         {
@@ -275,6 +297,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
 
     if (seq_transport_fsm_allow_advance(transport_fsm) != 0U)
     {
+        /* Progression guard: only running transport may advance musical step position. */
         uint8_t previous_step[SEQ_TRACK_COUNT];
         for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
         {
@@ -295,6 +318,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
     state->step_sample_q16 = pulse_sample_q16;
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
+        /* Progression guard: scheduling follows the same transport running state as advancement. */
         seq_boundary_hit_t hits[SEQ_TRACK_COUNT];
         uint8_t hit_count = 0U;
         seq_boundary_engine_process(state, hits, SEQ_TRACK_COUNT, &hit_count);
@@ -347,6 +371,7 @@ void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
         state->samples_per_step_q16 = 1U;
     }
 
+    /* Progression guard: internal cadence only advances from the audio block timeline. */
     const uint64_t block_end_q16 = (block_start_sample + (uint64_t)block_frames) << 16;
     uint16_t pulses_in_block = 0U;
     uint64_t next_pulse_sample_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
@@ -385,6 +410,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
 {
     (void)block_frames;
 
+    /* Seam boundary: external cadence is consumed inside runtime-exec, not in the scheduler. */
     if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0))
     {
         return;
@@ -404,6 +430,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
         return;
     }
 
+    /* Progression guard: external cadence consumes pending pulses only inside the audio block domain. */
     uint16_t pending_steps = seq_runtime_exec_consume_external_step_pulses_pending();
     if (pending_steps == 0U)
     {
@@ -436,6 +463,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
                                                seq_clock_src_t clock_src,
                                                uint8_t running)
 {
+    /* Seam boundary: runtime-exec advances block timeline and drains scheduler output. */
     if ((state == 0) || (transport_fsm == 0) || (clock_bridge == 0) || (diag == 0) || (track_loop_generation == 0)
         || (out_events == 0) || (max_events == 0U))
     {
@@ -444,6 +472,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
 
     const uint64_t block_start_sample = seq_runtime_exec_begin_audio_block(block_frames);
     const uint32_t now_tick = 0U;
+    /* Progression guard: audio block collection drives cadence first, then exports due events. */
     seq_runtime_exec_drive_external_steps_for_block(state,
                                                     transport_fsm,
                                                     clock_bridge,
@@ -479,11 +508,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
 
         for (uint16_t i = 0U; i < count; ++i)
         {
-            out_events[total + i].type = scheduler_events[i].type;
-            out_events[total + i].track = scheduler_events[i].track;
-            out_events[total + i].note = scheduler_events[i].note;
-            out_events[total + i].velocity = scheduler_events[i].velocity;
-            out_events[total + i].sample_offset_in_block = scheduler_events[i].sample_offset_in_block;
+            seq_runtime_exec_copy_scheduler_audio_event(&out_events[total + i], &scheduler_events[i]);
         }
         total = (uint16_t)(total + count);
         if (count < request)

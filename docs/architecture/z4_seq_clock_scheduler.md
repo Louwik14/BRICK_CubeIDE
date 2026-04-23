@@ -159,6 +159,147 @@ Contrat:
 - elles notifient ou propagent un etat deja etabli;
 - les miroirs UI/post-apply qui suivent une commande restent des copies explicites, pas des triggers caches.
 
+## 2.h Contrat interne `seq_clock_bridge` / `seq_transport_fsm`
+
+Surface `seq_clock_bridge`:
+- politique d'horloge et de tempo
+- source clock interne/externe
+- conversion tempo/ticks et estimation tempo externe
+- conversion des pulses transport vers la cadence runtime
+
+Surface `seq_transport_fsm`:
+- etat transport STOPPED/START_PENDING/RUNNING
+- transitions start/continue/stop
+- count-in et autorisations de progression
+- pas de politique d'horloge ou de tempo
+
+Ambiguite bornee restante:
+- `seq_clock_bridge_on_external_clock_pulse` nourrit la progression, mais ne possede pas l'autorite transport.
+- `seq_runtime` reste la facade d'orchestration entre les deux sous-autorites.
+
+## 2.i APIs hybrides internes
+
+APIs hybrides bornees:
+- `seq_clock_bridge_on_process`: supervision de clock policy uniquement.
+- `seq_clock_bridge_set_source`: reinitialisation de cadence et accumulateurs de tick.
+- `seq_clock_bridge_consume_internal_step_due`: consommation du prochain step interne du budget de tick accumule.
+- `seq_clock_bridge_on_external_clock_pulse`: conversion d'impulsions externes en demande de step.
+- `seq_clock_bridge_set_internal_tempo`: reparametrage de la cadence interne.
+- `seq_transport_fsm_reset`: remise a zero du transport sans politique d'horloge.
+- `seq_transport_fsm_request_start` / `seq_transport_fsm_request_continue`: transitions de transport, pas de politique de tempo.
+- `seq_transport_fsm_abort_pending`: annulation d'un start en attente.
+- `seq_transport_fsm_on_step_pulse`: consommation d'une impulsion de step pour faire avancer l'etat transport.
+- `seq_transport_fsm_allow_advance` / `seq_transport_fsm_allow_schedule_play` / `seq_transport_fsm_allow_live_rec`: queries de garde derivees de l'etat transport.
+
+Contrat:
+- `seq_clock_bridge` decide la cadence et la source;
+- `seq_transport_fsm` decide l'etat et les transitions;
+- les fonctions hybrides ne doivent pas masquer une seconde autorite.
+
+Contrat complementaire:
+- `seq_clock_bridge_consume_internal_step_due` reste un helper de cadence interne, sans autorite transport.
+- `seq_transport_fsm_reset` et `seq_transport_fsm_abort_pending` restent des helpers de cycle de vie interne, sans politique d'horloge.
+
+## 2.k Garde de progression
+
+La progression temporelle est bornee par des gardes explicites:
+- `seq_transport_fsm_on_step_pulse` consomme un pulse de step pour basculer `START_PENDING -> RUNNING`.
+- `seq_transport_fsm_allow_advance` autorise l'avance musicale uniquement quand le transport est RUNNING.
+- `seq_transport_fsm_allow_schedule_play` autorise le scheduling uniquement quand le transport est RUNNING.
+- `seq_clock_bridge_on_external_clock_pulse` convertit un pulse externe en demande de step, sans prendre l'autorite de progression elle-meme.
+- `seq_runtime_exec_process_step_pulse_at_sample_q16` est le point unique qui applique la progression musicale.
+- `seq_runtime_exec_drive_internal_steps_for_block` et `seq_runtime_exec_drive_external_steps_for_block` limitent cette progression au domaine bloc audio.
+
+Contrat:
+- la cadence produit des pulses;
+- le transport decide quand ces pulses avancent l'etat;
+- la progression musicale n'est appliquee qu'au point de convergence runtime-exec.
+
+## 2.j Call-sites d'orchestration
+
+`seq_runtime` reste la facade d'orchestration entre clock policy et transport FSM:
+- `seq_runtime_start`: prepare la cadence via `seq_clock_bridge`, puis delegue la transition START a `seq_transport_fsm`.
+- `seq_runtime_stop`: delegue STOP a `seq_transport_fsm`, puis applique le lifecycle d'arret runtime.
+- `seq_runtime_process_core`: supervise `seq_clock_bridge_on_process` et les etats transport, sans prendre la propriete de l'un ou de l'autre.
+- `seq_runtime_midi_clock_from_source`: fait passer la pulsation externe par `seq_clock_bridge_on_external_clock_pulse`, puis pousse la demande de step vers le domaine runtime.
+- `seq_runtime_midi_continue_from_source`: delegue la transition CONTINUE a `seq_transport_fsm`, puis rebase la timeline de progression.
+
+Contrat:
+- `seq_runtime` orchestre, il ne remplace ni la politique de clock ni l'autorite transport;
+- les appels sont intensionnellement sequentiels: policy d'abord, transport ensuite, puis lifecycle si necessaire.
+
+## 2.l Contrat interne `seq_runtime_exec` / `seq_play_scheduler`
+
+Surface `seq_runtime_exec`:
+- progression effective et timeline audio bloc;
+- convergence des pulses internes / externes vers le point d'avance step;
+- lifecycle execution start/stop;
+- collecte bloc qui avance la timeline puis draine les evenements dus.
+
+Surface `seq_play_scheduler`:
+- scheduling note/program a partir des boundaries resolues;
+- queue sample-domain des evenements dus;
+- projection audio bloc des evenements dus;
+- application MIDI / engine / mixer des evenements en queue;
+- diagnostics de queue et de collecte.
+
+Ambiguite bornee restante:
+- `seq_runtime_exec_collect_block_events` reste le point de convergence bloc: il orchestre progression et collecte, mais ne possede pas la queue des evenements.
+- `seq_play_scheduler_audio_collect_block_events` reste une projection de queue: elle n'avance ni transport ni timeline.
+
+Contrat:
+- `seq_runtime_exec` avance la timeline et produit le contexte de bloc;
+- `seq_play_scheduler` produit, projette et applique les evenements;
+- le seam entre les deux reste contractuel mais sans double autorite.
+
+## 2.m APIs hybrides internes complementaires
+
+APIs hybrides bornees cote `seq_runtime_exec`:
+- `seq_runtime_exec_begin_running_at_sample_q16`: lifecycle start qui seed l'execution puis autorise le scheduler.
+- `seq_runtime_exec_stop_lifecycle_apply`: lifecycle stop qui flush l'execution et vide la queue scheduler.
+- `seq_runtime_exec_process_step_pulse_at_sample_q16`: point de convergence de progression, pas proprietaire du scheduler.
+- `seq_runtime_exec_drive_internal_steps_for_block` / `seq_runtime_exec_drive_external_steps_for_block`: helpers de bloc qui transforment cadence en pulses puis en progression runtime.
+
+APIs post-commit cote `seq_play_scheduler`:
+- `seq_play_scheduler_live_midi_program_changed`: notification apres commit runtime, refresh des miroirs de program.
+- `seq_play_scheduler_emit_midi_program_on_transport_start`: notification de reseed au transport start.
+- `seq_play_scheduler_notify_track_pattern_change`: notification de reseed apres changement de pattern.
+
+Contrat:
+- `seq_runtime_exec` ne change pas la proprieté de la queue scheduler;
+- `seq_play_scheduler` ne change pas la propriete de timeline/runtime;
+- les helpers restent des seams explicites, pas des secondes autorites.
+
+## 2.n Readbacks et diagnostics explicites
+
+Projection runtime-exec:
+- `seq_runtime_exec_state_const`: miroir readonly de l'etat d'execution partage.
+- `seq_runtime_exec_get_audio_timeline_sample`: projection de timeline audio bloc.
+
+Diagnostics scheduler:
+- `seq_play_scheduler_diag_reset`: remise a zero du miroir de diagnostic queue.
+- `seq_play_scheduler_diag_snapshot`: projection readonly des stats de queue/collecte.
+
+Contrat:
+- les readbacks exposent l'etat existant, sans mutation d'autorite;
+- les diagnostics sont des miroirs de service, pas des commandes de progression;
+- toute mutation reste dans les surfaces commande/seam deja contractees.
+
+## 2.o Consommation audio bloc
+
+`audio.c` est le consumer final de la projection bloc runtime:
+- appelle `seq_runtime_audio_collect_block_events` une fois par demi-buffer audio;
+- applique ensuite les evenements via `seq_runtime_audio_apply_event`;
+- ne detient aucune autorite de progression ni de scheduling.
+
+`seq_runtime_audio_apply_event` est le forwarder explicite entre projection bloc runtime et surface d'application scheduler.
+La DSP audio du demi-buffer reste separee de la collecte et de l'application des evenements sequencer.
+
+Contrat:
+- la collecte runtime precede l'application audio;
+- l'application des evenements reste separee du calcul de bloc;
+- la timeline et la queue d'evenements restent proprietes internes des couches en amont.
+
 ## 2. Autorite(s) de verite
 
 Autorite transport:
