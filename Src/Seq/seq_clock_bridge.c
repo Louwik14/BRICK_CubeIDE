@@ -27,6 +27,20 @@ static uint32_t seq_clock_bridge_clamp_tempo(uint32_t bpm_milli)
     return bpm_milli;
 }
 
+static void seq_clock_bridge_reset_external_tempo_state(seq_clock_bridge_t *bridge)
+{
+    if (bridge == 0)
+    {
+        return;
+    }
+
+    bridge->ext_clock_last_tick = 0U;
+    bridge->ext_clock_period_accum = 0U;
+    bridge->ext_clock_period_samples = 0U;
+    bridge->ext_clock_tempo_valid = 0U;
+    bridge->ext_clock_bpm_milli = 0U;
+}
+
 static void seq_clock_bridge_internal_step_period_recompute(seq_clock_bridge_t *bridge,
                                                             seq_runtime_state_t *runtime)
 {
@@ -70,16 +84,7 @@ uint8_t seq_clock_bridge_is_external_source(seq_clock_src_t src)
 
 void seq_clock_bridge_reset_external_tempo(seq_clock_bridge_t *bridge)
 {
-    if (bridge == 0)
-    {
-        return;
-    }
-
-    bridge->ext_clock_last_tick = 0U;
-    bridge->ext_clock_period_accum = 0U;
-    bridge->ext_clock_period_samples = 0U;
-    bridge->ext_clock_tempo_valid = 0U;
-    bridge->ext_clock_bpm_milli = 0U;
+    seq_clock_bridge_reset_external_tempo_state(bridge);
 }
 
 void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
@@ -95,10 +100,7 @@ void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
     const uint32_t silent_ticks = engine_ticks_now - bridge->ext_clock_last_tick;
     if (silent_ticks > SEQ_CLOCK_BRIDGE_EXT_TEMPO_TIMEOUT_TICKS)
     {
-        bridge->ext_clock_tempo_valid = 0U;
-        bridge->ext_clock_bpm_milli = 0U;
-        bridge->ext_clock_period_accum = 0U;
-        bridge->ext_clock_period_samples = 0U;
+        seq_clock_bridge_reset_external_tempo_state(bridge);
     }
 }
 
@@ -114,7 +116,7 @@ void seq_clock_bridge_set_source(seq_clock_bridge_t *bridge,
 
     runtime->ext_clock_tick_accum = 0U;
     runtime->tick_accum = 0U;
-    seq_clock_bridge_reset_external_tempo(bridge);
+    seq_clock_bridge_reset_external_tempo_state(bridge);
 
     if (seq_clock_bridge_is_external_source(src) == 0U)
     {

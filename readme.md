@@ -1,19 +1,19 @@
-# 🎛️ Embedded Audio Engine – Product Overview
+# Embedded Audio Engine - Product Overview
 
 ## 1. Vision
 
-Standalone embedded audio machine inspired by the Elektron Octatrack.
+Standalone embedded audio machine for live use.
+
+The project is track-aware by construction: the meaningful unit is the logical track, not a hidden global node and not a physical lane.
 
 Core use:
 - real-time audio mixer for external synths
-- creative FX box for live performance
+- performance FX and routing
 - cue / main style routing
-- crossfader-oriented performance workflow
-- integrated MIDI sequencer with parameter locks and modulation
+- track-aware sequencer and modulation
+- contextual UI driven by the active track identity
 
-This repository targets a playable, deterministic instrument firmware, not a generic DSP sandbox.
-
----
+This repository targets a playable, deterministic instrument firmware. It is not a generic DSP sandbox and it does not rely on ambiguous central nodes.
 
 ## 2. Product priorities
 
@@ -28,8 +28,6 @@ Guiding rule:
 - if it risks audio stability, reject it
 - if it breaks worst-case predictability, rethink it
 - if it improves live performance without breaking invariants, prioritize it
-
----
 
 ## 3. Hardware and runtime constraints
 
@@ -47,8 +45,6 @@ Guiding rule:
 - no blocking calls in the hard real-time path
 
 These constraints are structural, not optional.
-
----
 
 ## 4. High-level product model
 
@@ -82,7 +78,19 @@ Current families:
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`
 
----
+### Ownership model
+
+The architecture is organized around three distinct layers:
+- canonical control state
+- runtime projection
+- execution
+
+Features should hook into the layer that owns the decision:
+- canonical control state for source-of-truth edits
+- runtime projection for track-aware binding and capability resolution
+- execution for hard real-time audio, transport, and other bounded runtime work
+
+This separation is intentional. Do not add a second authority for the same state.
 
 ## 5. Current feature shape
 
@@ -118,11 +126,9 @@ Current families:
 - project save/load
 - boot context restore
 
----
-
 ## 6. Current special case: Master/Buffer
 
-`Master/Buffer` is a special track identity currently under integration.
+`Master/Buffer` is a special track identity.
 
 Current intent:
 - unique `Master` family / `Buffer` type
@@ -133,16 +139,26 @@ Current intent:
 - no second concurrent recorder architecture
 
 Current exposed controls:
-- `TRACK + REC` → record/start buffer workflow
-- `TRACK + SHIFT + REC` → clear buffer
+- `TRACK + REC` -> record/start buffer workflow
+- `TRACK + SHIFT + REC` -> clear buffer
 - `ARP` context becomes `ROUT` for source selection
 - `TONE` exposes buffer-specific parameters
 
-`Master/Buffer` is still considered integration in progress.
+`Master/Buffer` is an explicit track identity, not a global mode.
 
----
+## 7. What must stay true
 
-## 7. What this repo is optimizing for
+The project should keep these rules visible in new work:
+- every feature should declare its owner layer
+- runtime seams must stay explicit
+- track-aware behavior must remain the default reasoning model
+- future dual-core work should be prepared by clean seams, not by premature IPC or central buses
+- avoid hidden coupling through ambiguous shared nodes
+- reuse existing authorities before creating new ones
+
+When adding a feature, hall mode, engine, UI behavior, or runtime seam, prefer the smallest change that preserves these boundaries.
+
+## 8. What this repo is optimizing for
 
 This project is optimizing for:
 - deterministic embedded behavior
@@ -157,9 +173,7 @@ This project is not optimizing for:
 - feature growth that breaks timing guarantees
 - convenience patterns that add hidden authorities
 
----
-
-## 8. Documentation map
+## 9. Documentation map
 
 Use the documents according to their role:
 
@@ -168,7 +182,7 @@ Use the documents according to their role:
   - modification discipline
   - global invariants to respect
 
-- `ARCHITECTURE_GLOBAL.md`
+- `docs/architecture/ARCHITECTURE_GLOBAL.md`
   - orientation map
   - which architecture zone to read first
 
@@ -179,9 +193,7 @@ Use the documents according to their role:
 This `README.md` is intentionally product-oriented.
 It is not the authoritative architecture document.
 
----
-
-## 9. Current status
+## 10. Current status
 
 The codebase already contains:
 - 14 logical tracks
@@ -195,8 +207,6 @@ The codebase already contains:
 Some areas are stable, others are still under active stabilization.
 When in doubt, trust the code and the architecture zone documents before broad assumptions.
 
----
-
-## 10. Principle
+## 11. Principle
 
 Keep it simple, deterministic, and playable.

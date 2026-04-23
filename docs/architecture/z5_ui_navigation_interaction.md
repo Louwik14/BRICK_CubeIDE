@@ -1,4 +1,4 @@
-# Z5 - UI / Navigation / Interaction
+ï»¿# Z5 - UI / Navigation / Interaction
 
 ## 1. Perimetre
 
@@ -358,5 +358,5 @@ Points factuels:
 - `ui_core_runtime_bridge_resolve_filter_target_track` reste une query pure et ne refresh plus au passage.
 
 ## 10. Contrat transport explicite
-- Le seam transport du runtime bridge est désormais découpé en commandes explicites PLAY / REC / pattern shortcut.
-- L'arbritrage reste côté UI; le bridge porte seulement l'exécution des commandes et leurs feedbacks associés.
+- Le seam transport du runtime bridge est dï¿½sormais dï¿½coupï¿½ en commandes explicites PLAY / REC / pattern shortcut.
+- L'arbritrage reste cï¿½tï¿½ UI; le bridge porte seulement l'exï¿½cution des commandes et leurs feedbacks associï¿½s.

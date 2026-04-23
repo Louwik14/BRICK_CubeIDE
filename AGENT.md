@@ -1,4 +1,3 @@
-```md
 # AGENT.md
 
 ## Rôle
@@ -49,6 +48,7 @@ Si la passe traite un bug :
 En fin de passe, indiquer obligatoirement :
 - documents mis à jour
 - ou `aucune mise à jour doc requise`
+
 ---
 
 ## 2. Philosophie de travail
@@ -61,6 +61,12 @@ En fin de passe, indiquer obligatoirement :
 - réutiliser un backend ou sous-système existant avant d’en introduire un nouveau
 - éviter les doubles autorités sur un même état runtime
 - ne pas confondre logique, runtime et physique : utiliser des remaps explicites
+- penser le projet comme une séparation nette entre :
+  - état canonique / contrôle
+  - projection runtime
+  - exécution
+- préparer les seams pour un futur split dual-core par découpage propre, pas par bus ou IPC prématuré
+- refuser les nœuds centraux ambigus et les autorités partagées implicites
 - pas de refonte gratuite
 - pas de malloc dans le runtime critique
 - garder CPU et worst-case bornés
@@ -97,6 +103,13 @@ Toujours raisonner avec :
 - runtime associé
 - capacité réelle du backend ciblé
 
+La bonne lecture du projet est :
+- la logique canonique décide
+- la projection runtime traduit selon la track active et ses capacités
+- l'exécution consomme de façon bornée
+
+Cette séparation doit rester visible dans les nouveaux seams.
+
 Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - d’une track active
 - d’une identité runtime spéciale
@@ -117,6 +130,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - Les getters/checks runtime ne doivent pas déclencher de refresh implicite, sauf exception explicitement auditée et documentée.
 - L’invalidation reste explicite (`track_runtime_invalidate_all`) et le refresh est demandé explicitement par les appelants autorisés.
 - Ne jamais créer une seconde autorité parallèle pour un état déjà porté par le runtime, le mixer ou un backend audio existant.
+- Le futur dual-core se prépare par seams explicites, pas par une infrastructure centrale artificielle.
 
 ---
 
@@ -189,19 +203,19 @@ Avant toute passe :
 - ensuite seulement auditer le code réel local
 
 Raccourcis utiles :
-- boot / init / superloop → Z0
-- IRQ audio / mix / DMA / pipeline bloc → Z1
-- family / type / bind runtime / mix target → Z2
-- paramètres / apply / staging / modulation → Z3
-- transport / tempo / scheduler / live-rec seq → Z4
-- UI / halls / navigation / pages / clipboard → Z5
-- save/load / patterns / projects / restore → Z6
+- boot / init / superloop -> Z0
+- IRQ audio / mix / DMA / pipeline bloc -> Z1
+- family / type / bind runtime / mix target -> Z2
+- paramètres / apply / staging / modulation -> Z3
+- transport / tempo / scheduler / live-rec seq -> Z4
+- UI / halls / navigation / pages / clipboard -> Z5
+- save/load / patterns / projects / restore -> Z6
 
 Cas transverses fréquents :
-- `Input Audio vs Hybrid` → Z2 + Z3 + Z5
-- `Master/Buffer` → Z1 + Z2 + Z3 + Z4 + Z5
-- bug track-aware transversal → commencer par Z2
-- bug après load/restore → Z6 puis zones impactées
+- `Input Audio vs Hybrid` -> Z2 + Z3 + Z5
+- `Master/Buffer` -> Z1 + Z2 + Z3 + Z4 + Z5
+- bug track-aware transversal -> commencer par Z2
+- bug après load/restore -> Z6 puis zones impactées
 
 ---
 
@@ -451,4 +465,3 @@ Principe directeur :
 - si ça risque la stabilité audio : rejeter
 - si ça complique le worst-case : repenser
 - si ça aide le jeu live sans casser les invariants : prioriser
-```

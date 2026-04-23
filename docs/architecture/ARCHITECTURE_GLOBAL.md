@@ -10,6 +10,13 @@ Il sert uniquement à :
 - comprendre les dépendances principales entre zones
 - savoir quels documents lire avant de modifier le code
 
+Lecture cible du projet :
+- état canonique / contrôle
+- projection runtime track-aware
+- exécution bornée
+
+La trajectoire d’architecture vise des seams explicites et une préparation propre au futur split dual-core, sans créer de bus central ou d’IPC prématuré.
+
 Le détail réel vit dans :
 - `docs/architecture/z0_plateforme_cadence.md`
 - `docs/architecture/z1_audio_hard_rt_mix.md`
@@ -118,10 +125,16 @@ Doc :
 - En clock interne/externe sequencer, Z1 fournit la consommation finale d'avance step de Z4 (domaine audio bloc)
 - Z2 fournit la vérité runtime aux autres zones
 - Z3 applique des valeurs en s’appuyant sur Z2
-- En PLAY+REC actif, les edits param track-aware sont rediriges vers Z4 (ecriture p-lock live), sans write runtime direct Z3 en parallele
+- En PLAY+REC actif, les edits param track-aware sont redirigés vers Z4 (écriture p-lock live), sans write runtime direct Z3 en parallèle
 - Z4 produit les événements temporels consommés par Z1
 - Z5 pilote Z2, Z3, Z4 et Z6 via l’interaction utilisateur
 - Z6 capture/restaure de l’état qui réimpacte Z2, Z3, Z4 et Z5
+
+Règle de lecture transversale :
+- Z2 porte la projection runtime track-aware
+- Z3 et Z4 consomment cette projection sans recréer d’autorité locale parallèle
+- Z5 expose des choix utilisateur, mais ne doit pas devenir une seconde autorité de structure
+- Z1 et Z0 restent des zones d’exécution / orchestration bornée, pas des lieux de décision métier
 
 ---
 
@@ -142,6 +155,16 @@ Doc :
 - **bug track-aware transversal** → commencer par Z2
 - **bug après load/restore** → Z6 puis Z2/Z3/Z4/Z5 selon symptôme
 
+### Philosophie d’architecture attendue
+- track-aware avant global
+- ownership clair avant confort d’implémentation
+- canonical state avant projection
+- projection avant exécution
+- seams explicites avant abstractions larges
+- future dual-core par séparation réelle, pas par surcouche de transport
+- pas de nœud central ambigu
+- pas d’infra prématurée
+
 ---
 
 ## 5. Annexes utiles (non canoniques)
@@ -161,4 +184,3 @@ Documents conserves pour tracabilite uniquement:
 - docs/architecture/historique_z3_param_write_map_audit_2026-04-14.md (passe d'audit ciblee).
 - docs/architecture/historique_z4_quant_swing_runtime_contract_2026-04-14.md (note de chantier pre-consolidation).
 - docs/architecture/historique_z5_ui_orchestration_cartographie_2026-04-14.md (cartographie de passe initiale).
-

@@ -42,6 +42,20 @@ typedef struct
 } ui_core_runtime_bridge_track_transition_ctx_t;
 
 static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track);
+static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sync_request_t *request,
+                                                                    uint8_t active_track_touched);
+static void ui_core_runtime_bridge_init_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
+                                                             const ui_system_sync_request_t *request,
+                                                             uint8_t sync_active_track_ui_context,
+                                                             uint8_t track,
+                                                             ui_core_runtime_bridge_post_sync_fn post_sync);
+static void ui_core_runtime_bridge_init_bulk_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
+                                                                  const ui_system_sync_request_t *request,
+                                                                  const uint8_t family[UI_TRACK_COUNT],
+                                                                  const uint8_t type[UI_TRACK_COUNT],
+                                                                  const uint8_t midi_channel[UI_TRACK_COUNT],
+                                                                  const uint8_t midi_source[UI_TRACK_COUNT],
+                                                                  ui_core_runtime_bridge_post_sync_fn post_sync);
 
 static uint8_t ui_core_runtime_bridge_track_is_master_buffer(uint8_t track)
 {
@@ -176,6 +190,61 @@ static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *o
         *out_track = found_track;
     }
     return 1U;
+}
+
+static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sync_request_t *request,
+                                                                    uint8_t active_track_touched)
+{
+    if (request == 0)
+    {
+        return;
+    }
+
+    *request = ui_system_sync_make_request_restore_bulk();
+    request->notify_keyboard_after_runtime_sync = active_track_touched;
+}
+
+static void ui_core_runtime_bridge_init_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
+                                                             const ui_system_sync_request_t *request,
+                                                             uint8_t sync_active_track_ui_context,
+                                                             uint8_t track,
+                                                             ui_core_runtime_bridge_post_sync_fn post_sync)
+{
+    if (ctx == 0)
+    {
+        return;
+    }
+
+    *ctx = (ui_core_runtime_bridge_track_transition_ctx_t){
+        .request = request,
+        .sync_active_track_ui_context = sync_active_track_ui_context,
+        .track = track,
+        .post_sync = post_sync
+    };
+}
+
+static void ui_core_runtime_bridge_init_bulk_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
+                                                                  const ui_system_sync_request_t *request,
+                                                                  const uint8_t family[UI_TRACK_COUNT],
+                                                                  const uint8_t type[UI_TRACK_COUNT],
+                                                                  const uint8_t midi_channel[UI_TRACK_COUNT],
+                                                                  const uint8_t midi_source[UI_TRACK_COUNT],
+                                                                  ui_core_runtime_bridge_post_sync_fn post_sync)
+{
+    if (ctx == 0)
+    {
+        return;
+    }
+
+    *ctx = (ui_core_runtime_bridge_track_transition_ctx_t){
+        .request = request,
+        .sync_active_track_ui_context = 1U,
+        .family_data = family,
+        .type_data = type,
+        .midi_channel_data = midi_channel,
+        .midi_source_data = midi_source,
+        .post_sync = post_sync
+    };
 }
 
 static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
@@ -342,18 +411,18 @@ bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
                                                       uint8_t active_track_touched,
                                                       ui_core_runtime_bridge_post_sync_fn post_sync)
 {
-    ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
-    request.notify_keyboard_after_runtime_sync = active_track_touched;
-    ui_core_runtime_bridge_track_transition_ctx_t transition_ctx = {
-        .request = &request,
-        .sync_active_track_ui_context = active_track_touched,
-        .track = track,
-        .family = family
-    };
-    transition_ctx.post_sync = post_sync;
+    ui_system_sync_request_t request;
+    ui_core_runtime_bridge_track_transition_ctx_t transition_ctx;
+    ui_core_runtime_bridge_prepare_track_transition_request(&request, active_track_touched);
+    ui_core_runtime_bridge_init_track_transition_ctx(&transition_ctx,
+                                                     &request,
+                                                     active_track_touched,
+                                                     track,
+                                                     post_sync);
+    transition_ctx.family = family;
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_family_change_mutate,
-                                                             (void *)&transition_ctx) == 0U)
+                                                              (void *)&transition_ctx) == 0U)
     {
         return false;
     }
@@ -366,18 +435,18 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
                                                     uint8_t active_track_touched,
                                                     ui_core_runtime_bridge_post_sync_fn post_sync)
 {
-    ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
-    request.notify_keyboard_after_runtime_sync = active_track_touched;
-    ui_core_runtime_bridge_track_transition_ctx_t transition_ctx = {
-        .request = &request,
-        .sync_active_track_ui_context = active_track_touched,
-        .track = track,
-        .type = type
-    };
-    transition_ctx.post_sync = post_sync;
+    ui_system_sync_request_t request;
+    ui_core_runtime_bridge_track_transition_ctx_t transition_ctx;
+    ui_core_runtime_bridge_prepare_track_transition_request(&request, active_track_touched);
+    ui_core_runtime_bridge_init_track_transition_ctx(&transition_ctx,
+                                                     &request,
+                                                     active_track_touched,
+                                                     track,
+                                                     post_sync);
+    transition_ctx.type = type;
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_type_change_mutate,
-                                                             (void *)&transition_ctx) == 0U)
+                                                              (void *)&transition_ctx) == 0U)
     {
         return false;
     }
@@ -391,19 +460,19 @@ bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TR
                                                       const uint8_t midi_source[UI_TRACK_COUNT],
                                                       ui_core_runtime_bridge_post_sync_fn post_sync)
 {
-    const ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
-    ui_core_runtime_bridge_track_transition_ctx_t transition_ctx = {
-        .request = &request,
-        .sync_active_track_ui_context = 1U,
-        .family_data = family,
-        .type_data = type,
-        .midi_channel_data = midi_channel,
-        .midi_source_data = midi_source,
-        .post_sync = post_sync
-    };
+    ui_system_sync_request_t request;
+    ui_core_runtime_bridge_track_transition_ctx_t transition_ctx;
+    ui_core_runtime_bridge_prepare_track_transition_request(&request, 1U);
+    ui_core_runtime_bridge_init_bulk_track_transition_ctx(&transition_ctx,
+                                                          &request,
+                                                          family,
+                                                          type,
+                                                          midi_channel,
+                                                          midi_source,
+                                                          post_sync);
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_transition_mutate_bulk_restore,
-                                                             (void *)&transition_ctx) == 0U)
+                                                              (void *)&transition_ctx) == 0U)
     {
         return false;
     }

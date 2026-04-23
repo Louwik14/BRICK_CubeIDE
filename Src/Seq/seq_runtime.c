@@ -58,6 +58,10 @@ static void seq_runtime_update_samples_per_step_from_tempo(void);
 static void seq_runtime_update_midi_clock_period_from_step_period(void);
 static void seq_runtime_send_transport_realtime(uint8_t status);
 static seq_clock_src_t seq_runtime_get_clock_source_internal(void);
+static uint8_t seq_runtime_clamp_track_div(uint8_t div);
+static uint8_t seq_runtime_clamp_percent(uint8_t value);
+static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *scheduler_event,
+                                         const seq_runtime_audio_event_t *event);
 
 static void seq_runtime_send_transport_realtime(uint8_t status)
 {
@@ -68,6 +72,36 @@ static void seq_runtime_send_transport_realtime(uint8_t status)
 static seq_clock_src_t seq_runtime_get_clock_source_internal(void)
 {
     return g_seq_runtime_control.clock_src;
+}
+
+static uint8_t seq_runtime_clamp_track_div(uint8_t div)
+{
+    if ((div == 1U) || (div == 2U) || (div == 4U) || (div == 8U))
+    {
+        return div;
+    }
+
+    return 1U;
+}
+
+static uint8_t seq_runtime_clamp_percent(uint8_t value)
+{
+    return (value > 100U) ? 100U : value;
+}
+
+static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *scheduler_event,
+                                         const seq_runtime_audio_event_t *event)
+{
+    if ((scheduler_event == NULL) || (event == NULL))
+    {
+        return;
+    }
+
+    scheduler_event->type = event->type;
+    scheduler_event->track = event->track;
+    scheduler_event->note = event->note;
+    scheduler_event->velocity = event->velocity;
+    scheduler_event->sample_offset_in_block = event->sample_offset_in_block;
 }
 
 static void seq_runtime_send_transport_start(void)
@@ -398,11 +432,7 @@ void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event)
     }
     /* Audio apply seam: runtime forwards collected events to scheduler/engines only. */
     seq_play_scheduler_audio_event_t scheduler_event;
-    scheduler_event.type = event->type;
-    scheduler_event.track = event->track;
-    scheduler_event.note = event->note;
-    scheduler_event.velocity = event->velocity;
-    scheduler_event.sample_offset_in_block = event->sample_offset_in_block;
+    seq_runtime_copy_audio_event(&scheduler_event, event);
     seq_play_scheduler_audio_apply_event(&scheduler_event);
 }
 
@@ -650,11 +680,7 @@ void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
         return;
     }
 
-    if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
-    {
-        div = 1U;
-    }
-    g_seq_runtime_control.track_div[track] = div;
+    g_seq_runtime_control.track_div[track] = seq_runtime_clamp_track_div(div);
     g_seq_runtime.track_div_phase[track] = 0U;
 }
 
@@ -676,11 +702,7 @@ void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
         return;
     }
 
-    if (quant > 100U)
-    {
-        quant = 100U;
-    }
-    g_seq_runtime_control.track_quant[track] = quant;
+    g_seq_runtime_control.track_quant[track] = seq_runtime_clamp_percent(quant);
 }
 
 uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant)
@@ -701,11 +723,7 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
         return;
     }
 
-    if (swing > 100U)
-    {
-        swing = 100U;
-    }
-    g_seq_runtime_control.track_swing[track] = swing;
+    g_seq_runtime_control.track_swing[track] = seq_runtime_clamp_percent(swing);
 }
 
 uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing)
