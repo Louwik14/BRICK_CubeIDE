@@ -6,11 +6,21 @@ Perimetre operationnel de zone (appartient a Z5):
 - `Src/UI/ui_core.c`
 - `Src/UI/ui_core_runtime_bridge.c`
 - `Src/UI/ui_core_navigation_bridge.c`
+- `Src/UI/ui_hall_mode_contract.c`
+- `Src/UI/ui_hall_mode_flow.c`
+- `Src/UI/ui_hall_mode_projection.c`
+- `Src/UI/ui_hall_mode_state.c`
+- `Src/UI/ui_hall_input_service.c`
 - `Inc/Core/track_state.h`
 - `Src/Core/track_state.c`
 - `Inc/UI/ui_core.h`
 - `Inc/UI/ui_core_runtime_bridge.h`
 - `Inc/UI/ui_core_navigation_bridge.h`
+- `Inc/UI/ui_hall_mode_contract.h`
+- `Inc/UI/ui_hall_mode_flow.h`
+- `Inc/UI/ui_hall_mode_projection.h`
+- `Inc/UI/ui_hall_mode_state.h`
+- `Inc/UI/ui_hall_input_service.h`
 - `Src/UI/ui_track_catalog.c`
 - `Inc/UI/ui_track_catalog.h`
 - `Src/UI/ui_navigation.c`
@@ -162,11 +172,19 @@ Frontiere commit runtime UI:
 - `ui_core_runtime_bridge` porte les effets runtime, la transition track structurelle et les callbacks de commit explicitement appeles depuis `ui_core`.
 - `ui_core_runtime_bridge` porte aussi le post-commit visible UI: miroir active-track, sync edit-context, mirror MIDI actif et reconfiguration post-structure.
 - `ui_core_runtime_bridge` porte aussi les lectures runtime encore consommees par l'UI centrale (`seq_edit_step_hold_update`, `track_runtime_resolve_track`, `seq_edit_get_page`, `keyboard_runtime_get_octave_shift`, `pattern_live_*`) afin de garder `ui_core.c` du cote arbitrage.
+- `ui_hall_mode_contract` porte la table de contrat hall mode centrale (trigger, page cible, label brut).
+- `ui_hall_mode_flow` porte la politique d'activation hall et le double-tap/ciblage associe.
+- `ui_hall_mode_projection` porte la vue effective, les labels et les helpers de lecture/injection du domaine hall.
+- `ui_hall_mode_state` porte l'autorite brute du hall_mode et les transitions d'ecriture.
+- `ui_hall_input_service` porte le chemin hors queue hall/transpose et delegue les effets aux helpers de domaine.
 - `ui_core.c` conserve l'arbitrage et la decision; le bridge porte l'execution des actions runtime et la sync post-commit.
 
 Frontiere navigation UI:
 - `ui_core_navigation_bridge` porte les requetes de page et le dispatch navigation depuis `ui_core`/`ui_edit_context_sync`.
 - `ui_core.c` ne porte plus les details des requetes de page cible ni le sync contextualise de navigation.
+- `ui_hall_mode_contract.c` centralise la metadonnee de mode hall et les helpers de contrat associes.
+- `ui_hall_mode_flow.c` centralise la transition/activation des hall modes, en gardant `ui_core` au niveau orchestration.
+- `ui_hall_mode_projection.c` centralise la projection visible hall, sans couture dans `ui_core`.
 
 ## 6. Flux runtime
 

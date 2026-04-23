@@ -129,6 +129,9 @@ typedef enum
     UI_TRACK_MIDI_SRC_COUNT
 } ui_track_midi_source_t;
 
+#include "ui_hall_mode_projection.h"
+#include "ui_hall_mode_state.h"
+
 void ui_core_init(void);
 void ui_core_tick(void);
 void ui_core_service_track_selection_inputs(void);
@@ -170,19 +173,11 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
 
 /*
  * Hall mode contract (Z5):
- * - raw hall_mode is persisted in ui_core and mutated only by ui_set_hall_mode().
+ * - raw hall_mode is owned by ui_hall_mode_state and mutated only by ui_set_hall_mode().
  * - effective_view is a read-only projection derived from (track, raw_mode).
  * - ROUT is an effective view only; never a raw hall mode.
  * - temporary overlays (ex: TRACK / track_select_armed) are not part of effective_view.
  */
-ui_hall_mode_t ui_get_hall_mode(void);
-void ui_set_hall_mode(ui_hall_mode_t mode);
-const char *ui_get_hall_mode_short_label(void);
-const char *ui_get_hall_mode_suffix_label(void);
-ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track, ui_hall_mode_t raw_mode);
-uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode);
-uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode);
-uint8_t ui_hall_is_seq_context(ui_hall_mode_t raw_mode);
 uint8_t ui_hall_mode_get_trigger_hall(ui_hall_mode_t mode, uint8_t *out_hall);
 uint8_t ui_hall_mode_get_target_page(ui_hall_mode_t mode, uint8_t *out_page);
 const char *ui_hall_mode_get_base_label(ui_hall_mode_t mode);

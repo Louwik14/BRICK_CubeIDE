@@ -35,6 +35,11 @@ Scope: passe d'audit ciblee `ui_core_tick` + helpers directement appeles par `ui
 - Les reconfigurations structurelles `track family/type` et `restore bulk` passent par `ui_core_runtime_bridge` puis sur un post-commit unique `ui_core_runtime_bridge_post_track_structure_change()`.
 - Le miroir de track active au moment du focus courant est egalement porte par `ui_core_runtime_bridge` (`sync_active_track_context` / `sync_active_track_mirror` / mirror MIDI), afin de garder `ui_core` dans le role d'arbitre.
 - Les lectures runtime encore exposees au rendu UI (`seq_edit_step_hold_update`, `track_runtime_resolve_track`, `seq_edit_get_page`, `keyboard_runtime_get_octave_shift`, `pattern_live_*`) passent aussi par `ui_core_runtime_bridge`, pour eviter une dependance directe de `ui_core.c` a ces sous-systemes.
+- La metadonnee hall mode (trigger, page cible, label brut) est centralisee dans `ui_hall_mode_contract`.
+- La politique d'activation hall (double-tap, trigger->page, transition) est centralisee dans `ui_hall_mode_flow`.
+- La projection visible hall (effective view, labels, lecture/injection) est centralisee dans `ui_hall_mode_projection`.
+- L'autorite brute du hall_mode est portee par `ui_hall_mode_state`, hors de `ui_core`.
+- Le chemin hors queue hall/transpose est porte par `ui_hall_input_service`, avec `ui_core` reduit a l'orchestration superloop et au track-select residuel.
 
 ## Contrat navigation UI
 - `ui_core` ne requiert plus directement de page via `ui_navigation_*`; les demandes de page passent par `ui_core_navigation_bridge`.
