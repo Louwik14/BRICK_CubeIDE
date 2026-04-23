@@ -1,11 +1,9 @@
 #include "ui_hall_mode_flow.h"
 
-#include "ui_core.h"
 #include "ui_core_navigation_bridge.h"
 #include "ui_hall_mode_contract.h"
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
-#define UI_HALL_MODE_TARGET_PAGE_NONE 0xFFU
 
 ui_hall_direct_action_t ui_hall_mode_flow_resolve_direct_action(uint8_t shift_down,
                                                                 uint8_t track_select_armed,

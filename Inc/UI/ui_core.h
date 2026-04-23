@@ -171,16 +171,6 @@ bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16);
 void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_len);
 
-/*
- * Hall mode contract (Z5):
- * - raw hall_mode is owned by ui_hall_mode_state and mutated only by ui_set_hall_mode().
- * - effective_view is a read-only projection derived from (track, raw_mode).
- * - ROUT is an effective view only; never a raw hall mode.
- * - temporary overlays (ex: TRACK / track_select_armed) are not part of effective_view.
- */
-uint8_t ui_hall_mode_get_trigger_hall(ui_hall_mode_t mode, uint8_t *out_hall);
-uint8_t ui_hall_mode_get_target_page(ui_hall_mode_t mode, uint8_t *out_page);
-const char *ui_hall_mode_get_base_label(ui_hall_mode_t mode);
 ui_mute_state_t ui_get_mute_state(void);
 uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);

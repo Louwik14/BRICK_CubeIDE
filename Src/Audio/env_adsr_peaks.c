@@ -15,11 +15,10 @@ static uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi)
 
 static uint32_t phase_increment_from_time(const env_adsr_peaks_t *env, uint16_t time)
 {
-    const uint64_t x = (uint64_t)time;
-    const uint64_t x3 = x * x * x;
     uint32_t scaled = 0u;
 #if defined(__SIZEOF_INT128__)
-    const __uint128_t scaled_wide = ((__uint128_t)x3 * (__uint128_t)env->max_segment_samples) >> 48;
+    const uint64_t x = (uint64_t)time;
+    const __uint128_t scaled_wide = ((__uint128_t)(x * x * x) * (__uint128_t)env->max_segment_samples) >> 48;
     scaled = (scaled_wide > (__uint128_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)scaled_wide;
 #else
     /* Fallback without 128-bit arithmetic: keep cubic law monotonic and overflow-safe. */

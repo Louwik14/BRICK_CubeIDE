@@ -56,24 +56,12 @@ static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli);
 static void seq_runtime_update_samples_per_step_from_tempo(void);
 static void seq_runtime_update_midi_clock_period_from_step_period(void);
 static void seq_runtime_send_transport_realtime(uint8_t status);
-static uint64_t seq_runtime_compute_track_schedule_sample_time(seq_track_id_t track,
-                                                               seq_step_id_t step,
-                                                               uint64_t step_sample_time);
 static seq_clock_src_t seq_runtime_get_clock_source_internal(void);
 
 static void seq_runtime_send_transport_realtime(uint8_t status)
 {
     const uint8_t msg[1] = { status };
     midi_send_raw(MIDI_DEST_BOTH, msg, sizeof(msg));
-}
-
-static uint64_t seq_runtime_compute_track_schedule_sample_time(seq_track_id_t track,
-                                                               seq_step_id_t step,
-                                                               uint64_t step_sample_time)
-{
-    (void)track;
-    (void)step;
-    return step_sample_time;
 }
 
 static seq_clock_src_t seq_runtime_get_clock_source_internal(void)

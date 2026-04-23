@@ -518,10 +518,10 @@ void ui_core_service_track_selection_inputs(void)
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 
+    const uint8_t active_track = ui_get_active_track();
     ui_hall_input_service_handle_transpose(g_ui_track_state.shift_down,
                                            g_ui_track_state.track_select_armed,
-                                           ui_get_active_track(),
-                                           g_ui_track_state.hall_note_suppressed);
+                                           active_track);
 }
 
 /**
