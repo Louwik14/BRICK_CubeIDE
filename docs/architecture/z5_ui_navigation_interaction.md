@@ -4,9 +4,13 @@
 
 Perimetre operationnel de zone (appartient a Z5):
 - `Src/UI/ui_core.c`
+- `Src/UI/ui_core_runtime_bridge.c`
+- `Src/UI/ui_core_navigation_bridge.c`
 - `Inc/Core/track_state.h`
 - `Src/Core/track_state.c`
 - `Inc/UI/ui_core.h`
+- `Inc/UI/ui_core_runtime_bridge.h`
+- `Inc/UI/ui_core_navigation_bridge.h`
 - `Src/UI/ui_track_catalog.c`
 - `Inc/UI/ui_track_catalog.h`
 - `Src/UI/ui_navigation.c`
@@ -37,6 +41,7 @@ Sous-roles concentres dans `ui_core.c`:
 - Etat UI global courant (track, hall mode, feedback, states pattern/mute).
 - Orchestration centrale des interactions (track select, transport, shortcuts, pattern mode).
 - Orchestration explicite des contrats de sync (selection legere, sync edit-context, reconfig runtime).
+- Arbitrage UI des demandes runtime, avec delegation des effets et commits a `ui_core_runtime_bridge`.
 
 Policy catalogue track/type/labels:
 - `ui_track_catalog` porte les regles de validite/disponibilite family/type et les labels associes.
@@ -153,6 +158,16 @@ Etat queue events UI:
 - Ecriture: `ui_event_from_inputs`.
 - Lecture: `ui_event_pop` dans `ui_core_tick`.
 
+Frontiere commit runtime UI:
+- `ui_core_runtime_bridge` porte les effets runtime, la transition track structurelle et les callbacks de commit explicitement appeles depuis `ui_core`.
+- `ui_core_runtime_bridge` porte aussi le post-commit visible UI: miroir active-track, sync edit-context, mirror MIDI actif et reconfiguration post-structure.
+- `ui_core_runtime_bridge` porte aussi les lectures runtime encore consommees par l'UI centrale (`seq_edit_step_hold_update`, `track_runtime_resolve_track`, `seq_edit_get_page`, `keyboard_runtime_get_octave_shift`, `pattern_live_*`) afin de garder `ui_core.c` du cote arbitrage.
+- `ui_core.c` conserve l'arbitrage et la decision; le bridge porte l'execution des actions runtime et la sync post-commit.
+
+Frontiere navigation UI:
+- `ui_core_navigation_bridge` porte les requetes de page et le dispatch navigation depuis `ui_core`/`ui_edit_context_sync`.
+- `ui_core.c` ne porte plus les details des requetes de page cible ni le sync contextualise de navigation.
+
 ## 6. Flux runtime
 
 Flux nominal prouve:
@@ -244,8 +259,11 @@ Sorties de Z5:
 
 Points factuels:
 - `ui_core.c` reste central pour l'UI, mais ne porte plus l'autorite par-track.
+- `ui_core_runtime_bridge.c` concentre la couche d'execution UI -> runtime pour les mutations track, transport, shortcuts et remaps de commit.
+- `ui_core_runtime_bridge.c` concentre aussi le post-commit UI associe aux changements structurels, au miroir de la track active, et aux lectures runtime encore utilisees par l'UI centrale.
+- `ui_core_navigation_bridge.c` concentre la policy de requete/navigation appliquee depuis l'arbitrage UI.
 - Logique de navigation distribuee entre `ui_navigation`, `ui_template_page`, et cas speciaux dans `ui_core`.
-- Couplage fort a `track_runtime`, `param_registry`, `seq_*`, `pattern_live_*` depuis Z5.
+- Couplage fort a `param_registry`, `seq_*`, `pattern_live_*` depuis Z5; les lectures runtime restantes passent maintenant par `ui_core_runtime_bridge`.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
 - Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC), transverse mais restant dans frontiere Z5 comme logique d'interaction.
 - Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` sur `MASTER/BUFFER`, renforcee par des gardes locaux.

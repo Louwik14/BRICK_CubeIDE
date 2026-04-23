@@ -31,8 +31,17 @@ Scope: passe d'audit ciblee `ui_core_tick` + helpers directement appeles par `ui
   - `ui_core_is_track_hall_event_consumed` depend de `track_select_armed` pre-mis a jour pour bloquer/laisser passer les halls.
   - `ui_navigation_handle_event` peut changer la page active juste avant le dispatch final; `active_page->handle_event` recoit donc l'event sur la page active apres navigation.
 
+## Contrat post-commit UI
+- Les reconfigurations structurelles `track family/type` et `restore bulk` passent par `ui_core_runtime_bridge` puis sur un post-commit unique `ui_core_runtime_bridge_post_track_structure_change()`.
+- Le miroir de track active au moment du focus courant est egalement porte par `ui_core_runtime_bridge` (`sync_active_track_context` / `sync_active_track_mirror` / mirror MIDI), afin de garder `ui_core` dans le role d'arbitre.
+- Les lectures runtime encore exposees au rendu UI (`seq_edit_step_hold_update`, `track_runtime_resolve_track`, `seq_edit_get_page`, `keyboard_runtime_get_octave_shift`, `pattern_live_*`) passent aussi par `ui_core_runtime_bridge`, pour eviter une dependance directe de `ui_core.c` a ces sous-systemes.
+
+## Contrat navigation UI
+- `ui_core` ne requiert plus directement de page via `ui_navigation_*`; les demandes de page passent par `ui_core_navigation_bridge`.
+- La synchronisation d'ensemble actif au post-commit de contexte passe aussi par le bridge navigation.
+
 ## Ordre reel des stages dans `ui_core_tick`
-Source: `Src/UI/ui_core.c:2734-2807`.
+Source: `Src/UI/ui_core.c:743-805`.
 
 1. `ui_core_handle_track_selection_event(&ev)` (toujours execute, non bloquant)
 2. `ui_core_mute_handle_event(&ev)` (consume+block)
@@ -62,10 +71,10 @@ Source: `Src/UI/ui_core.c:2734-2807`.
 | `active_page->handle_event` | page active et handler non nul | propre a la page | N/A | N/A | Recoit l'event sur la page active apres `ui_navigation_handle_event` (contrat volontaire) |
 
 ## Verifications ciblees demandees
-- `mute` vs `ui_set_hall_mode`: aligne. Les transitions mute (entree quick/prepare, sortie vers mode precedent) passent par `ui_set_hall_mode`, donc conservent callback `keyboard_runtime_on_hall_mode_changed` et hooks de sortie centralises (`Src/UI/ui_core.c:411-455`, `3175-3214`).
-- Entree/sortie `pattern`: entree uniquement depuis stage transport sur `BTN_TRANSPOSE_DOWN` combos (`ui_core_pattern_enter`), sorties via handler pattern (cancel/success/fail) et via abort force lors de `ui_set_hall_mode(mode!=PATTERN)` (`Src/UI/ui_core.c:231-247`, `1453-1528`, `2415-2461`, `3206-3210`).
-- Gate reel de `seq mode`: strict `hall_mode==SEQ` via helper local `ui_core_is_seq_mode_gate_open`; aucun sous-etat dedie SEQ. Events consommes: `COPY/PASTE` (si steps tenus), `HALL_PRESS/RELEASE` sur step, `TRANSPOSE_UP/DOWN` page seq, avec court-circuit si `shift_down!=0` hors bloc copy/paste (`Src/UI/ui_core.c:2501-2589`).
-- Priorite `global_shortcuts` avant `pattern/seq`: confirmee par table de stages (`Src/UI/ui_core.c:2750-2752`).
+- `mute` vs `ui_set_hall_mode`: aligne. Les transitions mute (entree quick/prepare, sortie vers mode precedent) passent par `ui_set_hall_mode`, donc conservent le bridge de notification hall-mode et les hooks de sortie centralises (`Src/UI/ui_core.c:1055-1090`, `Src/UI/ui_core_runtime_bridge.c:498-505`).
+- Entree/sortie `pattern`: entree uniquement depuis stage transport sur `BTN_TRANSPOSE_DOWN` combos (`ui_core_pattern_enter`), sorties via handler pattern (cancel/success/fail) et via abort force lors de `ui_set_hall_mode(mode!=PATTERN)` (`Src/UI/ui_core.c:569-574`, `Src/UI/ui_core.c:1055-1090`, `Src/UI/ui_core_runtime_bridge.c:457-470`).
+- Gate reel de `seq mode`: strict `hall_mode==SEQ` via helper local `ui_hall_is_seq_context`; aucun sous-etat dedie SEQ. Events consommes: `COPY/PASTE` (si steps tenus), `HALL_PRESS/RELEASE` sur step, `TRANSPOSE_UP/DOWN` page seq, avec court-circuit si `shift_down!=0` hors bloc copy/paste (`Src/UI/ui_core.c:639-805`, `Src/UI/ui_core_runtime_bridge.c:492-500`).
+- Priorite `global_shortcuts` avant `pattern/seq`: confirmee par table de stages (`Src/UI/ui_core.c:779-787`).
 - Events/combos consommes par `global_shortcuts`:
   - clipboard track (`track_select_armed=1` + `COPY/PASTE`),
   - clipboard ensemble (param button tenue + `COPY/PASTE`),
@@ -74,7 +83,8 @@ Source: `Src/UI/ui_core.c:2734-2807`.
   - `BTN_SETTINGS` press,
   - `SHIFT+COPY` (undo).
 - Masquage effectif si consume `global_shortcuts`: `pattern_mode`, `seq_mode`, `navigation`, puis `active_page->handle_event` sur le meme event.
-- Interaction hors queue `ui_core_service_track_selection_inputs()`: confirmee en superloop avant bridge hall; peut changer `hall_mode` via `ui_core_handle_shift_hall_action()` et track actif avant tout traitement event de `ui_core_tick` (`Src/Core/brick6_app_init.c:151-153`, `Src/UI/ui_core.c:1259-1277`, `2675-2722`).
+- Interaction hors queue `ui_core_service_track_selection_inputs()`: confirmee en superloop avant bridge hall; peut changer `hall_mode` via `ui_core_handle_shift_hall_action()` et track actif avant tout traitement event de `ui_core_tick` (`Src/Core/brick6_app_init.c:64-66`, `Src/UI/ui_core.c:675-742`, `Src/UI/ui_core.c:743-805`).
+- Post-commit structurel: `ui_core_runtime_bridge_post_track_structure_change()` centralise la sync UI visible apres mutation structurelle, au lieu de laisser `ui_core` rebrancher lui-meme le miroir et l'edit-context.
 - Contrat `navigation -> active_page->handle_event`: coherent et volontaire. `ui_navigation_handle_event` peut appeler `ui_page_set`; le `ui_page_get()` fait juste apres determine la page qui traite effectivement le meme event.
 
 ## Fragilites structurelles prouvees (courtes)
