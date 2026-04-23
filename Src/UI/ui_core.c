@@ -301,6 +301,22 @@ typedef struct
     const uint8_t *midi_source;
 } ui_core_track_transition_ctx_t;
 
+typedef struct
+{
+    const ui_system_sync_request_t *request;
+    uint8_t sync_active_track_ui_context;
+    uint8_t track;
+    ui_track_family_t family;
+} ui_core_track_family_change_ctx_t;
+
+typedef struct
+{
+    const ui_system_sync_request_t *request;
+    uint8_t sync_active_track_ui_context;
+    uint8_t track;
+    ui_track_type_t type;
+} ui_core_track_type_change_ctx_t;
+
 static uint8_t ui_core_track_transition_apply_system_sync(const ui_core_track_transition_ctx_t *ctx)
 {
     if ((ctx == 0) || (ctx->request == 0))
@@ -312,11 +328,38 @@ static uint8_t ui_core_track_transition_apply_system_sync(const ui_core_track_tr
     return 1U;
 }
 
-static uint8_t ui_core_track_transition_mutate_structure(void *ctx_ptr)
+static uint8_t ui_core_track_family_change_mutate(void *ctx_ptr)
 {
-    const ui_core_track_transition_ctx_t *const ctx =
-        (const ui_core_track_transition_ctx_t *)ctx_ptr;
-    return ui_core_track_transition_apply_system_sync(ctx);
+    ui_core_track_family_change_ctx_t *const ctx = (ui_core_track_family_change_ctx_t *)ctx_ptr;
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    if (track_state_set_track_family(ctx->track, ctx->family) == false)
+    {
+        return 0U;
+    }
+
+    ui_system_sync_apply_track_context_change(ctx->request, &g_ui_core_system_sync_adapter);
+    return 1U;
+}
+
+static uint8_t ui_core_track_type_change_mutate(void *ctx_ptr)
+{
+    ui_core_track_type_change_ctx_t *const ctx = (ui_core_track_type_change_ctx_t *)ctx_ptr;
+    if (ctx == 0)
+    {
+        return 0U;
+    }
+
+    if (track_state_set_track_type(ctx->track, ctx->type) == false)
+    {
+        return 0U;
+    }
+
+    ui_system_sync_apply_track_context_change(ctx->request, &g_ui_core_system_sync_adapter);
+    return 1U;
 }
 
 static uint8_t ui_core_track_transition_mutate_bulk_restore(void *ctx_ptr)
@@ -377,25 +420,38 @@ static uint8_t ui_core_run_track_transition_pipeline(param_registry_track_transi
     return param_registry_run_track_transition_pipeline(&transition_cmd);
 }
 
-static void ui_core_reconfigure_track_runtime(const ui_system_sync_request_t *request,
-                                              uint8_t sync_active_track_ui_context)
+static bool ui_core_apply_track_family_change(uint8_t track,
+                                              ui_track_family_t family,
+                                              uint8_t active_track_touched)
 {
-    if (request == 0)
-    {
-        return;
-    }
-
-    const ui_core_track_transition_ctx_t transition_ctx = {
-        .request = request,
-        .sync_active_track_ui_context = sync_active_track_ui_context,
-        .family = 0,
-        .type = 0,
-        .midi_channel = 0,
-        .midi_source = 0
+    ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
+    request.notify_keyboard_after_runtime_sync = active_track_touched;
+    ui_core_track_family_change_ctx_t transition_ctx = {
+        .request = &request,
+        .sync_active_track_ui_context = active_track_touched,
+        .track = track,
+        .family = family
     };
 
-    (void)ui_core_run_track_transition_pipeline(ui_core_track_transition_mutate_structure,
-                                                (void *)&transition_ctx);
+    return (ui_core_run_track_transition_pipeline(ui_core_track_family_change_mutate,
+                                                  (void *)&transition_ctx) != 0U);
+}
+
+static bool ui_core_apply_track_type_change(uint8_t track,
+                                            ui_track_type_t type,
+                                            uint8_t active_track_touched)
+{
+    ui_system_sync_request_t request = ui_system_sync_make_request_restore_bulk();
+    request.notify_keyboard_after_runtime_sync = active_track_touched;
+    ui_core_track_type_change_ctx_t transition_ctx = {
+        .request = &request,
+        .sync_active_track_ui_context = active_track_touched,
+        .track = track,
+        .type = type
+    };
+
+    return (ui_core_run_track_transition_pipeline(ui_core_track_type_change_mutate,
+                                                  (void *)&transition_ctx) != 0U);
 }
 
 static void ui_core_set_active_track(uint8_t track)
@@ -1093,17 +1149,13 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
 
     if (config.family == family)
     {
-        if (track_state_set_track_family(track, family) == false)
-        {
-            return false;
-        }
-        if ((track_state_get_family(track) != config.family)
-                || (track_state_get_type(track) != config.type))
+        if (ui_track_catalog_type_is_available(track, family, config.type, ui_core_get_track_configs()) == false)
         {
             const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
-            const ui_system_sync_request_t request =
-                ui_system_sync_make_request_track_type_change(active_track_touched);
-            ui_core_reconfigure_track_runtime(&request, active_track_touched);
+            if (ui_core_apply_track_family_change(track, family, active_track_touched) == false)
+            {
+                return false;
+            }
         }
         if (track == g_ui_track_state.active_track)
         {
@@ -1125,17 +1177,10 @@ bool ui_set_track_family(uint8_t track, ui_track_family_t family)
     }
 
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
-    if (track_state_set_track_family(track, family) == false)
+    if (ui_core_apply_track_family_change(track, family, active_track_touched) == false)
     {
-        if (track == g_ui_track_state.active_track)
-        {
-            ui_core_sync_active_track_ui_context(0U);
-        }
         return false;
     }
-    const ui_system_sync_request_t request =
-        ui_system_sync_make_request_track_family_change(active_track_touched);
-    ui_core_reconfigure_track_runtime(&request, active_track_touched);
 
     return true;
 }
@@ -1168,10 +1213,6 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
 
     if (config.type == type)
     {
-        if (track_state_set_track_type(track, type) == false)
-        {
-            return false;
-        }
         if (track == g_ui_track_state.active_track)
         {
             ui_core_sync_active_track_ui_context(0U);
@@ -1179,14 +1220,11 @@ bool ui_set_track_type(uint8_t track, ui_track_type_t type)
         return true;
     }
 
-    if (track_state_set_track_type(track, type) == false)
+    const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
+    if (ui_core_apply_track_type_change(track, type, active_track_touched) == false)
     {
         return false;
     }
-    const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
-    const ui_system_sync_request_t request =
-        ui_system_sync_make_request_track_type_change(active_track_touched);
-    ui_core_reconfigure_track_runtime(&request, active_track_touched);
 
     return true;
 }

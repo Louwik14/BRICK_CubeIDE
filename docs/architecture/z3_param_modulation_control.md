@@ -157,6 +157,7 @@ Familles d'autorite:
 ## 9. Impact sur cartographie globale
 
 - La frontiere Z3/Z2 reste: Z2 autorise/contraint, Z3 applique.
+- Les edits structurels UI `CFG_TRACK` / `CFG_TRACK_TYPE` empruntent maintenant le corridor complet Z3 (`param_registry_run_track_transition_pipeline` + finalisation lane-bound) au lieu d'une sync allégée parallele.
 - Frontiere Z3/Z4 (live-rec param):
   - Hors PLAY+REC actif: edition param track-aware -> `param_registry_apply_track_value` (autorite Z3).
   - Sur ce chemin hors PLAY+REC, la sync base Seq post-apply passe par une commande explicite UI->Seq (`seq_param_iface_commit_base_after_authoritative_apply(cmd)`), avec cible/preconditions explicites; `seq_param_iface` ne lit plus `ui_get_active_track()` comme garde implicite.
