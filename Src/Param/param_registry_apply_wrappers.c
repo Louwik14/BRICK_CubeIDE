@@ -42,6 +42,7 @@ static uint8_t control_float_to_ui127(float v)
 
 static void apply_tone_live_track(param_id_t id, float value)
 {
+    /* Explicit apply seam: live UI edits route to the track-aware mutation surface. */
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
 }
 
@@ -251,7 +252,9 @@ void apply_cfg_midi_src(float v)
 void apply_cfg_rec(float v)
 {
     uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f);
+    /* Command surface: rec-count mode is written explicitly, then mirrored back for UI/store. */
     seq_runtime_set_rec_count_in_mode(mode);
+    /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     mode = seq_runtime_get_rec_count_in_mode();
     param_store_set_active(PARAM_CFG_REC, (float)mode);
 }
@@ -259,7 +262,9 @@ void apply_cfg_rec(float v)
 void apply_cfg_tempo(float v)
 {
     uint32_t bpm_milli = (uint32_t)(clamp_value(v, 40.0f, 300.0f) * 1000.0f + 0.5f);
+    /* Command surface: tempo is written explicitly, then mirrored back for UI/store. */
     seq_runtime_set_tempo_bpm_milli(bpm_milli);
+    /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     bpm_milli = seq_runtime_get_tempo_bpm_milli();
     param_store_set_active(PARAM_CFG_TEMPO, (float)bpm_milli / 1000.0f);
 }
@@ -277,9 +282,11 @@ void apply_cfg_sync(float v)
         source = SEQ_CLOCK_SRC_EXTERNAL_USB;
     }
 
+    /* Command surface: clock source is written explicitly, then mirrored back for UI/store. */
     seq_runtime_set_clock_source(source);
 
     uint8_t synced_mode = 0U;
+    /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     switch (seq_runtime_get_clock_source())
     {
         case SEQ_CLOCK_SRC_EXTERNAL_MIDI:
@@ -299,7 +306,9 @@ void apply_cfg_sync(float v)
 void apply_cfg_rec_len(float v)
 {
     uint8_t mode = (uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f);
+    /* Command surface: rec-length mode is written explicitly, then mirrored back for UI/store. */
     seq_runtime_set_rec_len_mode(mode);
+    /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     mode = seq_runtime_get_rec_len_mode();
     param_store_set_active(PARAM_CFG_REC_LEN, (float)mode);
 }
@@ -314,16 +323,19 @@ void apply_seq_length(float v)
 
 void apply_seq_div(float v)
 {
+    /* Command surface: track div is written explicitly on the active track. */
     seq_runtime_set_track_div(ui_get_active_track(), seq_div_ui_to_runtime(v));
 }
 
 void apply_seq_quant(float v)
 {
+    /* Command surface: track quant is written explicitly on the active track. */
     seq_runtime_set_track_quant(ui_get_active_track(), (uint8_t)(v + 0.5f));
 }
 
 void apply_seq_swing(float v)
 {
+    /* Command surface: track swing is written explicitly on the active track. */
     seq_runtime_set_track_swing(ui_get_active_track(), (uint8_t)(v + 0.5f));
 }
 

@@ -42,6 +42,122 @@ Sous-roles concentres dans `seq_runtime.c`:
 Support execution:
 - `seq_runtime_exec.c` + `seq_runtime_exec.h`: proprietaire de l'etat runtime de progression/timeline partage; `seq_runtime.c` y accede via facade interne.
 - Il porte aussi la timeline audio bloc, la consommation des pulses de step, la remise en route/arrêt de l'etat d'execution, la preparation de start lifecycle, la cadence MIDI clock audio-alignee, et l'avance interne/externe du bloc audio.
+- L'etat partage (`seq_runtime_state_t`) est explicitement owned par `seq_runtime_exec`; `seq_runtime.c` ne le manipule qu'en facade d'orchestration.
+
+## 2.b Contrat de frontière `seq_runtime` / `seq_runtime_exec`
+
+Surface `seq_runtime`:
+- orchestration et policy transport/clock
+- route des evenements externes vers le runtime
+- commandes live-rec / rec-arming / tempo / clock source / track-control
+- queries de haut niveau sur l'etat runtime, le transport et les diagnostics
+
+Surface `seq_runtime_exec`:
+- proprietaire de l'etat d'execution partage
+- timeline audio bloc
+- progression step / pulses / scheduling temporel
+- lifecycle execution start/stop
+- cadence MIDI clock audio-alignee
+
+Ambiguite bornee restante:
+- `seq_runtime_audio_collect_block_events` est une query de collecte avec avance de timeline, mais son role de seam audio bloc reste explicite.
+- `seq_runtime.c` conserve des alias internes vers l'etat d'execution pour l'orchestration, mais la propriete canonique reste `seq_runtime_exec`.
+
+Call-sites de frontiere:
+- `seq_runtime.c` orchestre les appels vers `seq_runtime_exec_*` comme un controlleur, pas comme un second owner.
+- `audio.c` consomme `seq_runtime_audio_collect_block_events` comme seam audio bloc unique avant application des events.
+
+## 2.c APIs hybrides
+
+APIs de `seq_runtime` qui traversent plusieurs natures mais restent contractuellement bornees:
+- `seq_runtime_audio_collect_block_events`: query de collecte avec avance explicite de timeline audio.
+- `seq_runtime_time_adapter_process_internal_from_irq`: maintenance/notification d'IRQ, sans autorite de progression step.
+- `seq_runtime_time_adapter_process`: orchestration de supervision runtime, pas de proprietaire d'etat.
+- `seq_runtime_midi_clock_from_source` / `seq_runtime_midi_start_from_source` / `seq_runtime_midi_continue_from_source` / `seq_runtime_midi_stop_from_source`: notifications d'entree transport/MIDI qui alimentent la policy runtime.
+- `seq_runtime_live_rec_param_write`: commande live-rec routee par la policy runtime vers l'autorite p-lock.
+- `seq_runtime_on_midi_program_live_change` / `seq_runtime_on_track_pattern_change`: notifications post-commit de domaine runtime.
+
+## 2.d Petite spec de synchronisation future
+
+Sans bus, sans IPC, sans file de messages:
+
+Commandes:
+- `seq_runtime_set_clock_source`
+- `seq_runtime_set_tempo_bpm_milli`
+- `seq_runtime_start` / `seq_runtime_stop` / `seq_runtime_toggle_play_stop`
+- `seq_runtime_set_rec_count_in_mode` / `seq_runtime_set_rec_len_mode`
+- `seq_runtime_set_pattern_rec_target_track`
+- `seq_runtime_live_rec_param_write`
+
+Queries:
+- `seq_runtime_get_state`
+- `seq_runtime_is_running` / `seq_runtime_is_start_pending`
+- `seq_runtime_get_rec_count_in_mode` / `seq_runtime_get_rec_len_mode`
+- `seq_runtime_get_rec_count_in_remaining_steps`
+- `seq_runtime_rec_is_armed` / `seq_runtime_rec_is_pattern_pending_start`
+- `seq_runtime_get_track_loop_generation`
+- `seq_runtime_exec_state_const`
+- `seq_runtime_exec_get_audio_timeline_sample`
+
+Notifications:
+- `seq_runtime_time_adapter_process_internal_from_irq`
+- `seq_runtime_time_adapter_process`
+- `seq_runtime_midi_clock_from_source`
+- `seq_runtime_midi_start_from_source`
+- `seq_runtime_midi_continue_from_source`
+- `seq_runtime_midi_stop_from_source`
+- `seq_runtime_on_midi_program_live_change`
+- `seq_runtime_on_track_pattern_change`
+
+Projection / miroir:
+- `seq_runtime_audio_collect_block_events` comme projection bloc audio lisible par l'IRQ audio
+- `seq_runtime_get_samples_per_step_q16` comme miroir scalaire explicite pour les conversions step->frames
+- `seq_runtime_exec_state_const` comme miroir readonly de la timeline et de la progression
+
+## 2.e Consommateurs non-UI de projection
+
+Lectures runtime explicites, sans autorite locale de mutation:
+- `seq_boundary_engine`: lit `seq_runtime_get_track_div` comme garde de boundary.
+- `seq_play_scheduler`: lit `seq_runtime_get_track_quant` et les projections `track_runtime_*` pour calculer le scheduling.
+- `seq_live_rec_session`: lit `seq_runtime_is_running`, `seq_runtime_get_rec_count_in_remaining_steps`, `seq_runtime_get_track_div` et `track_runtime_get_midi_source` comme gardes de session.
+- `seq_live_rec_capture`: lit `track_runtime_get_midi_source`, `track_runtime_get_midi_channel_zero_based` et `track_runtime_get_effective_param_status` comme gardes de capture.
+- `seq_led`: lit `seq_runtime_is_running` et `seq_runtime_get_playhead_step` comme projections de cursor.
+- `seq_output_guard`: lit `track_runtime_get_midi_channel_zero_based` et la projection runtime resolue pour le panic/cleanup.
+- `brick6_master_buffer`: lit `seq_runtime_get_samples_per_step_q16` comme miroir d'execution pour les conversions step -> frames et les gardes de preroll.
+
+Contrat:
+- ces consumers ne font pas de refresh implicite;
+- tout refresh requis reste au bord de l'orchestrateur appelant;
+- les getters runtime restent des projections pures ou des miroirs explicites, jamais des commandes cachees.
+
+## 2.f Consommateurs non-UI de commande
+
+Commandes runtime explicites, avec readback miroir quand le caller doit resynchroniser son store/UI:
+- `param_registry_apply_wrappers.c`: `apply_cfg_rec`, `apply_cfg_tempo`, `apply_cfg_sync`, `apply_cfg_rec_len`, `apply_seq_div`, `apply_seq_quant`, `apply_seq_swing`.
+- `ui_core_seq_transport.c`: `seq_runtime_toggle_play_stop`, `seq_runtime_set_pattern_rec_target_track`, `seq_runtime_rec_toggle_arm`, et les commandes buffer associées.
+
+Contrat:
+- ces chemins écrivent une autorite runtime explicite;
+- les lectures qui suivent servent uniquement de miroir post-apply;
+- aucune lecture ne doit etre interpretee comme un trigger de mutation cache.
+
+## 2.g Notifications / post-commit
+
+Notifications explicites, emises apres mutation ou progression d'etat:
+- `seq_runtime_on_midi_program_live_change`
+- `seq_runtime_on_track_pattern_change`
+- `seq_runtime_time_adapter_process_internal_from_irq`
+- `seq_runtime_time_adapter_process`
+- `seq_runtime_midi_clock_from_source`
+- `seq_runtime_midi_start_from_source`
+- `seq_runtime_midi_continue_from_source`
+- `seq_runtime_midi_stop_from_source`
+- `seq_runtime_audio_collect_block_events`
+
+Contrat:
+- ces fonctions ne portent pas l'autorite de mutation principale;
+- elles notifient ou propagent un etat deja etabli;
+- les miroirs UI/post-apply qui suivent une commande restent des copies explicites, pas des triggers caches.
 
 ## 2. Autorite(s) de verite
 
@@ -225,7 +341,7 @@ Invariants prouves par le code:
   - `seq_model` porte donnees pattern/plocks.
   - `seq_play_scheduler` porte file d'evenements sample-domain.
 - Pas de mutation cachee dans getters principaux Z4:
-  - `seq_runtime_get_state`, `seq_runtime_get_playhead_step`, `seq_runtime_get_track_div/quant/swing`, `seq_runtime_get_tempo_bpm_milli`, `seq_model_get_*` lisent sans muter.
+  - `seq_runtime_get_playhead_step`, `seq_runtime_get_track_div/quant/swing`, `seq_runtime_get_tempo_bpm_milli`, `seq_model_get_*` lisent sans muter.
 - Conditions de boundary explicites:
   - boundary hit si `prev_step_valid==0` ou `prev_step != current_step`.
   - `seq_boundary_engine_process` fait apply/restore locks avant emission hit.

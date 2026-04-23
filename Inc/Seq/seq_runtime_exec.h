@@ -7,6 +7,12 @@
 
 seq_runtime_state_t *seq_runtime_exec_state(void);
 const seq_runtime_state_t *seq_runtime_exec_state_const(void);
+
+/*
+ * Contract surface:
+ * - execution state ownership: timeline, step progression, transport execution, audio block state.
+ * - all functions here are the explicit runtime-execution seam used by seq_runtime.
+ */
 void seq_runtime_exec_init(void);
 void seq_runtime_exec_reset_audio_timeline(uint64_t start_sample);
 uint64_t seq_runtime_exec_get_audio_timeline_sample(void);

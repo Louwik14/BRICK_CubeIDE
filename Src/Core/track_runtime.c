@@ -306,6 +306,26 @@ uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx)
     return (track_runtime_get_voice_mode(ctx) == TRACK_RUNTIME_VOICE_MODE_POLY) ? 4U : 1U;
 }
 
+uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor)
+{
+    if (descriptor == NULL)
+    {
+        return 1U;
+    }
+
+    switch ((track_runtime_engine_t)descriptor->engine)
+    {
+        case TRACK_RUNTIME_ENGINE_NONE:
+        case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
+        case TRACK_RUNTIME_ENGINE_SAMPLER:
+        case TRACK_RUNTIME_ENGINE_MASTER_BUFFER:
+        case TRACK_RUNTIME_ENGINE_TB3:
+        case TRACK_RUNTIME_ENGINE_DRUM:
+        default:
+            return 1U;
+    }
+}
+
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 {
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))

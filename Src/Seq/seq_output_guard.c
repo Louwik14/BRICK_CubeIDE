@@ -129,23 +129,30 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
     track_runtime_refresh_all();
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+        /* Non-UI projection consumer: panic only needs resolved routing/engine state. */
+        track_runtime_resolved_track_t resolved;
+        if (track_runtime_resolve_track(track, &resolved) == 0U)
         {
             continue;
         }
 
-        if (ctx->mix_track_id < MIXER_MAX_TRACKS)
+        if (resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
         {
-            mixer_track_vca_all_notes_off(ctx->mix_track_id);
+            continue;
         }
 
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        if (resolved.mix_track_id < MIXER_MAX_TRACKS)
         {
-            if ((ctx->instance_id < SEQ_TRACK_COUNT) && (drum_killed[ctx->instance_id] == 0U))
+            mixer_track_vca_all_notes_off(resolved.mix_track_id);
+        }
+
+        if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+        {
+            if ((resolved.descriptor.instance_id < SEQ_TRACK_COUNT)
+                    && (drum_killed[resolved.descriptor.instance_id] == 0U))
             {
-                drum_killed[ctx->instance_id] = 1U;
-                drum_synth_all_notes_off_for_instance(ctx->instance_id);
+                drum_killed[resolved.descriptor.instance_id] = 1U;
+                drum_synth_all_notes_off_for_instance(resolved.descriptor.instance_id);
             }
         }
     }

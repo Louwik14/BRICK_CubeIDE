@@ -56,6 +56,7 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
     {
+        /* Command surface: transport toggle is an explicit runtime command, not a query side effect. */
         seq_runtime_toggle_play_stop();
         return 1U;
     }
@@ -105,6 +106,7 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
             return 1U;
         }
 
+        /* Command surface: pattern-rec arm is an explicit runtime command with target track preselection. */
         seq_runtime_set_pattern_rec_target_track(ui_get_active_track());
         seq_runtime_rec_toggle_arm();
         return 1U;

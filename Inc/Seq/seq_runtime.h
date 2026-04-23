@@ -63,29 +63,33 @@ typedef struct
     uint16_t max_internal_step_pulses_per_block;
 } seq_runtime_diag_t;
 
+/*
+ * Contract surface:
+ * - orchestration / policy / event routing: lifecycle, transport, live-rec, clock policy.
+ * - queries: pure reads of runtime/control state and diagnostics.
+ * - the shared execution state is owned by seq_runtime_exec; seq_runtime uses it as facade.
+ */
 void seq_runtime_init(void);
+/* Notification/maintenance seam: IRQ tick accounting only, no step authority. */
 void seq_runtime_time_adapter_process_internal_from_irq(void);
+/* Orchestration loop: supervises transport, clock source and external/internal progress. */
 void seq_runtime_time_adapter_process(void);
+/* Hybrid seam: query of due events with explicit audio-timeline advance. */
 uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_events,
                                                 uint16_t max_events,
                                                 uint16_t block_frames);
 void seq_runtime_audio_apply_event(const seq_runtime_audio_event_t *event);
-const seq_runtime_state_t *seq_runtime_get_state(void);
+uint32_t seq_runtime_get_samples_per_step_q16(void);
 
+/* Orchestration / policy surface. */
 void seq_runtime_start(void);
 void seq_runtime_stop(void);
 void seq_runtime_toggle_play_stop(void);
-uint8_t seq_runtime_is_running(void);
-uint8_t seq_runtime_is_start_pending(void);
-uint8_t seq_runtime_rec_is_armed(void);
 void seq_runtime_set_rec_count_in_mode(uint8_t mode);
-uint8_t seq_runtime_get_rec_count_in_mode(void);
 void seq_runtime_set_rec_len_mode(uint8_t mode);
-uint8_t seq_runtime_get_rec_len_mode(void);
-uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
-uint8_t seq_runtime_rec_is_pattern_pending_start(void);
 void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);
 void seq_runtime_rec_toggle_arm(void);
+/* Command surface: live-rec write routed through the runtime policy layer. */
 uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          uint8_t set_id,
                                          seq_param8_t param8,
@@ -100,13 +104,23 @@ void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
 void seq_runtime_live_rec_note_off(seq_live_rec_source_t source,
                                    uint8_t channel_zero_based,
                                    uint8_t note);
-uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
+/* Notification surface from MIDI input / transport source. */
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
 void seq_runtime_midi_start_from_source(seq_clock_src_t source);
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
+
+/* Queries / diagnostics. */
+uint8_t seq_runtime_is_running(void);
+uint8_t seq_runtime_is_start_pending(void);
+uint8_t seq_runtime_rec_is_armed(void);
+uint8_t seq_runtime_get_rec_count_in_mode(void);
+uint8_t seq_runtime_get_rec_len_mode(void);
+uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
+uint8_t seq_runtime_rec_is_pattern_pending_start(void);
+uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
 void seq_runtime_diag_reset(void);
 void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag);
 

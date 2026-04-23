@@ -216,3 +216,25 @@ Sorties de Z2:
 - Les queries de projection ne declenchent plus de refresh implicite.
 - `track_runtime_get_cached_synth_usage`, `track_runtime_get_descriptor`, `track_runtime_get_revision`, `track_runtime_get_track_revision`, `track_runtime_is_ui_ensemble_available` et `track_runtime_resolve_track` restent des lectures pures.
 - `track_runtime_refresh_track` et `track_runtime_refresh_all` sont des commandes explicites de maintenance, appelees avant la query par le call site qui en a besoin.
+
+## 18. Contrat projection UI
+- Surface de projection UI recommandee:
+  - `track_runtime_get_descriptor`
+  - `track_runtime_resolve_track`
+  - `track_runtime_is_ui_ensemble_available`
+  - `track_runtime_is_audio_routable`
+  - `track_runtime_get_mix_target_track`
+  - `track_runtime_get_logical_track_for_mix_track`
+  - `track_runtime_resolve_filter_target_track`
+  - `track_runtime_get_midi_channel_1_16`
+  - `track_runtime_get_midi_channel_zero_based`
+  - `track_runtime_get_midi_source`
+  - `track_runtime_get_effective_param_status`
+  - `track_runtime_get_play_voice_count`
+  - `track_runtime_get_play_voice_count_from_descriptor`
+- Garde technique:
+  - `track_runtime_get_track_revision` et `track_runtime_get_revision` servent de gardes de coherence uniquement, apres refresh explicite au bord du consumer.
+- Escape hatch:
+  - `track_runtime_get_ctx` reste disponible pour les consumers internes qui ont besoin du descriptor runtime complet, mais n'est pas la surface UI preferentielle.
+- Politique de refresh:
+  - le refresh reste explicite au bord du consumer UI, jamais dans les getters.

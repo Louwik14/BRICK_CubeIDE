@@ -254,6 +254,7 @@ static int32_t seq_live_rec_capture_select_voice_deterministic(seq_track_id_t tr
 static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
                                                           seq_live_rec_source_t source)
 {
+    /* Projection read: MIDI source gates capture acceptance; no runtime mutation here. */
     const track_runtime_midi_source_t track_source = track_runtime_get_midi_source(track);
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
@@ -594,6 +595,7 @@ void seq_live_rec_capture_note_on(uint8_t active,
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         track_runtime_refresh_track(track);
+        /* Projection read: MIDI channel is a runtime mirror used to route capture. */
         const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
         {
@@ -605,6 +607,7 @@ void seq_live_rec_capture_note_on(uint8_t active,
             continue;
         }
 
+        /* Projection read: param status is used as a runtime guard, not recomputed locally. */
         if (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) != TRACK_RUNTIME_PARAM_ALLOWED)
         {
             continue;

@@ -70,6 +70,12 @@ static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
                                                                  uint8_t track,
                                                                  float *out_value)
 {
+    /*
+     * Reapply path contract:
+     * - prefer pure query values
+     * - fall back to runtime cache
+     * - never seed defaults or mutate runtime state here
+     */
     if ((id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT) || (out_value == NULL))
     {
         return 0U;
@@ -292,6 +298,7 @@ static uint8_t param_registry_apply_track_structure_transition_mutate(void *ctx)
 
 uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd)
 {
+    /* Internal structural pipeline: no query semantics, only ordered mutation/reapply/sync callbacks. */
     uint8_t previous_mix_tracks[SEQ_TRACK_COUNT];
 
     if ((cmd == NULL) || (cmd->mutate_fn == NULL))

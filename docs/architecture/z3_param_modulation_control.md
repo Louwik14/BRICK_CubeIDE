@@ -78,6 +78,38 @@ Familles d'autorite:
   - contient le noyau Sampler, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
 
+## 2.c Contrat public du seam `param_registry`
+
+Surface `query`:
+- `param_registry_get_track_value`
+- `param_registry_runtime_get_or_default` quand il est utilise comme lecture de cache/default
+- les helpers internes de lecture de domaine `param_registry_get_track_sound_value` et `param_registry_get_track_tone_value`
+- `param_get` pour la valeur globale canonique
+
+Surface `command / apply / transition / post-commit`:
+- `param_registry_apply_track_value`
+- `param_registry_apply_track_value_rt_fast`
+- `param_registry_apply_track_edit`
+- `param_registry_batch_begin`
+- `param_registry_batch_end`
+- `param_registry_sync_filter_ui_for_active_track`
+- `param_registry_apply_track_structure_transition`
+- `param_registry_run_track_transition_pipeline`
+- `param_registry_runtime_commit_authoritative_write`
+- `param_registry_runtime_resync_lfo`
+- `param_set`
+- `param_reset`
+
+Ambiguite bornee restante:
+- `param_registry_get_track_value` reste un multiplexeur de lecture large par domaine, mais il est contractuellement pure query.
+- `param_registry_run_track_transition_pipeline` reste un orchestrateur interne de transition; il est classe cote mutation/post-commit, pas cote query.
+
+Call-sites critiques:
+- UI read paths use `param_registry_get_track_value` and `param_get` only.
+- UI edit paths use `param_registry_apply_track_value` / `param_registry_apply_track_edit`.
+- RT modulation uses `param_registry_apply_track_value_rt_fast`.
+- Snapshot restore and structure changes use `param_registry_run_track_transition_pipeline`.
+
 ## 3. Statut des chemins sensibles
 
 - `control_router_set_param`:

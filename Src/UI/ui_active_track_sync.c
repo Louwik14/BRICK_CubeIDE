@@ -35,6 +35,7 @@ void ui_active_track_sync_mirror(void)
     const uint8_t active_track = ui_get_active_track();
     const ui_track_config_t active_config = ui_get_track_config(active_track);
 
+    /* Mirror surface: UI store is resynced from explicit runtime projection reads. */
     param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_config.family);
     param_store_set_active(UI_CFG_TRACK_TYPE_PARAM,
                            (float)ui_get_track_type_index_for_family(active_config.family, active_config.type));

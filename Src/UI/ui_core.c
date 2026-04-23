@@ -624,6 +624,7 @@ uint8_t ui_get_active_track(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
+    /* Consumer-edge refresh: filter routing uses a refreshed projection before the runtime resolver. */
     track_runtime_refresh_track(ui_get_active_track());
     if (ui_core_runtime_bridge_resolve_filter_target_track(out_track_id) == 0U)
     {

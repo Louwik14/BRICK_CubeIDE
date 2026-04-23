@@ -32,6 +32,10 @@
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 
+/*
+ * Shared execution state lives in seq_runtime_exec.
+ * seq_runtime keeps orchestration policy and reaches the shared state only through this facade alias.
+ */
 #define g_seq_runtime (*seq_runtime_exec_state())
 SEQ_STATE_D2 static struct
 {
@@ -200,6 +204,7 @@ void seq_runtime_init(void)
     seq_model_init_defaults();
     seq_param_iface_init();
 
+    /* Orchestration seam: runtime bootstrap delegates execution-state ownership to seq_runtime_exec. */
     seq_runtime_exec_init();
     memset(g_seq_track_loop_generation, 0, sizeof(g_seq_track_loop_generation));
     /* TODO(clock-source): wire this to a global runtime/menu setting (INT/EXT).
@@ -371,6 +376,7 @@ uint16_t seq_runtime_audio_collect_block_events(seq_runtime_audio_event_t *out_e
         return 0U;
     }
 
+    /* Audio-block seam: collect via execution owner, then hand events to audio. */
     return seq_runtime_exec_collect_block_events(&g_seq_runtime,
                                                  &g_seq_transport_fsm,
                                                  &g_seq_clock_bridge,
@@ -419,6 +425,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
 
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
+        /* Execution seam: external clock disables audio clock TX and pending step pulses. */
         seq_runtime_exec_set_midi_clock_audio_enabled(0U);
         midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_SLAVE);
@@ -428,6 +435,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
+        /* Execution seam: rebase audio clock timeline after clock-source policy changes. */
         seq_runtime_exec_rebase_midi_clock_audio(seq_runtime_exec_get_audio_timeline_sample());
     }
     seq_runtime_exit_critical(primask);
@@ -464,6 +472,7 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
 
     seq_runtime_update_samples_per_step_from_tempo();
     const uint32_t primask = seq_runtime_enter_critical();
+    /* Execution seam: external MIDI clock pulses are converted to pending step work by seq_runtime_exec. */
     seq_runtime_exec_increment_external_step_pulses_pending();
     seq_runtime_exit_critical(primask);
 }
@@ -577,9 +586,9 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
     return 1U;
 }
 
-const seq_runtime_state_t *seq_runtime_get_state(void)
+uint32_t seq_runtime_get_samples_per_step_q16(void)
 {
-    return &g_seq_runtime;
+    return g_seq_runtime.samples_per_step_q16;
 }
 
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step)
@@ -836,6 +845,7 @@ void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)
         return;
     }
 
+    /* Post-commit notification: runtime relays a committed program change to the scheduler. */
     seq_play_scheduler_live_midi_program_changed(track, program_value);
 }
 
@@ -851,6 +861,7 @@ void seq_runtime_on_track_pattern_change(uint8_t track)
         return;
     }
 
+    /* Post-commit notification: pattern changes are forwarded to the scheduler only when running. */
     seq_play_scheduler_notify_track_pattern_change(track);
 }
 

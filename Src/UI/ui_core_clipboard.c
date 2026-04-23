@@ -272,6 +272,7 @@ static uint8_t ui_core_clipboard_apply_param_list(uint8_t track,
         return 0U;
     }
 
+    /* Consumer-edge refresh: clipboard apply runs against a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
     uint8_t applied = 0U;
@@ -295,6 +296,7 @@ static void ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         return;
     }
 
+    /* Consumer-edge refresh: clear-to-min applies on a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
     for (uint8_t i = 0U; i < count; ++i)
@@ -323,6 +325,7 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
     (void)seq_runtime_get_track_quant(track, &cb->seq_quant);
     (void)seq_runtime_get_track_swing(track, &cb->seq_swing);
 
+    /* Consumer-edge refresh: clipboard copy snapshots projection after explicit refresh. */
     track_runtime_refresh_track(track);
     uint8_t count = 0U;
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
@@ -574,6 +577,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
 
     uint8_t applied = 0U;
     uint8_t common = 0U;
+    /* Consumer-edge refresh: intersection apply uses a refreshed projection. */
     track_runtime_refresh_track(track);
     param_registry_batch_begin();
 

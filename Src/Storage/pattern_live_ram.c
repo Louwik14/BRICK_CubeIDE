@@ -648,6 +648,7 @@ uint8_t pattern_live_apply_snapshot(const PatternSaveV1 *pattern, uint8_t resume
         .ctx = (void *)&transition_ctx
     };
 
+    /* Structural mutation seam: snapshot restore runs through the explicit transition pipeline. */
     if (param_registry_run_track_transition_pipeline(&transition_cmd) == 0U)
     {
         g_apply_in_progress = 0U;

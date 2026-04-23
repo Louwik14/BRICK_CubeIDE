@@ -23,9 +23,15 @@ static const ui_template_family_t *ui_page_template_play_resolve_family(void)
 static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
 {
     const uint8_t active_track = ui_get_active_track();
+    /* Consumer-edge refresh: subpage availability is a pure projection read after refresh. */
     track_runtime_refresh_track(active_track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
-    return (subpage_index < track_runtime_get_play_voice_count(ctx)) ? 1U : 0U;
+    track_runtime_resolved_track_t resolved;
+    if (track_runtime_resolve_track(active_track, &resolved) == 0U)
+    {
+        return 0U;
+    }
+
+    return (subpage_index < track_runtime_get_play_voice_count_from_descriptor(&resolved.descriptor)) ? 1U : 0U;
 }
 
 static ui_template_page_state_t g_ui_template_play_state = {

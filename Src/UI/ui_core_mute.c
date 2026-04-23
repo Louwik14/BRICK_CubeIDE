@@ -68,10 +68,10 @@ static uint8_t ui_core_input_family_wired_mute_track(ui_track_family_t family, u
 }
 
 static uint8_t ui_core_resolve_mute_mix_track(uint8_t track,
-                                              const track_runtime_ctx_t *ctx,
+                                              const track_runtime_resolved_track_t *resolved,
                                               uint8_t *out_mix_track)
 {
-    if ((ctx == 0) || (out_mix_track == 0))
+    if ((resolved == 0) || (out_mix_track == 0))
     {
         return 0U;
     }
@@ -81,12 +81,12 @@ static uint8_t ui_core_resolve_mute_mix_track(uint8_t track,
         return 1U;
     }
 
-    if (track_runtime_is_audio_routable(track) == 0U)
+    if (resolved->has_mix_target == 0U)
     {
         return 0U;
     }
 
-    *out_mix_track = ctx->mix_track_id;
+    *out_mix_track = resolved->mix_track_id;
     return 1U;
 }
 
@@ -105,15 +105,17 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
         return 1U;
     }
 
+    /* Consumer-edge refresh: mute state reads projection after explicit refresh. */
     track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == 0) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    track_runtime_resolved_track_t resolved;
+    if (track_runtime_resolve_track(track, &resolved) == 0U)
     {
         return 1U;
     }
 
     uint8_t mute_mix_track = 0U;
-    if (ui_core_resolve_mute_mix_track(track, ctx, &mute_mix_track) == 0U)
+    if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ui_core_resolve_mute_mix_track(track, &resolved, &mute_mix_track) == 0U))
     {
         return 1U;
     }
@@ -138,15 +140,17 @@ static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
         return 0U;
     }
 
+    /* Consumer-edge refresh: binding/routability is checked on a refreshed projection before apply. */
     track_runtime_refresh_track(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == 0) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    track_runtime_resolved_track_t resolved;
+    if (track_runtime_resolve_track(track, &resolved) == 0U)
     {
         return 0U;
     }
 
     uint8_t mute_mix_track = 0U;
-    if (ui_core_resolve_mute_mix_track(track, ctx, &mute_mix_track) == 0U)
+    if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ui_core_resolve_mute_mix_track(track, &resolved, &mute_mix_track) == 0U))
     {
         return 0U;
     }

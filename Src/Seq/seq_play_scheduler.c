@@ -443,6 +443,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     uint8_t track_quant = 0U;
     if (track < SEQ_TRACK_COUNT)
     {
+        /* Projection read: quant is a runtime mirror applied to note timing, not an authority. */
         (void)seq_runtime_get_track_quant(track, &track_quant);
         if (track_quant > 100U)
         {
@@ -459,6 +460,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         const param_id_t vel_id = seq_play_scheduler_param_vel(voice);
         const param_id_t len_id = seq_play_scheduler_param_len(voice);
         const param_id_t mictim_id = seq_play_scheduler_param_mictim(voice);
+        /* Projection read: per-param status is a runtime guard, not a local recomputation. */
         if (track_runtime_get_effective_param_status(track, note_id) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
         {
             continue;

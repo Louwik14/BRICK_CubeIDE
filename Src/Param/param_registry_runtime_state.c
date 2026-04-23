@@ -45,6 +45,7 @@ void param_registry_runtime_commit_authoritative_write(uint8_t track,
                                                        float value,
                                                        uint8_t resync_lfo)
 {
+    /* Post-commit helper: cache is authoritative, optional LFO resync stays explicit. */
     if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
     {
         return;
@@ -62,6 +63,7 @@ uint8_t param_registry_runtime_get_or_default(const param_desc_t *registry,
                                               uint8_t track,
                                               float *out_value)
 {
+    /* Pure query helper: no cache write, no resync, only cache/default resolution. */
     if ((registry == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_TRACK_COUNT) || (out_value == NULL))
     {
         return 0U;

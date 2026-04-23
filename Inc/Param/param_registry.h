@@ -81,18 +81,24 @@ typedef struct
 } param_registry_track_transition_pipeline_cmd_t;
 
 void param_registry_init(void);
+
+/* Query surface: pure reads only. */
+uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value);
+float param_get(param_id_t id);
+
+/* Command / apply / transition / post-commit surface. */
 void param_registry_sync_filter_ui_for_active_track(void);
 void param_registry_batch_begin(void);
 void param_registry_batch_end(void);
+/* Internal transition pipeline: structural mutation + reapply/sync callbacks. */
 uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd);
 void param_registry_apply_track_structure_transition(const param_registry_track_structure_transition_cmd_t *cmd);
 uint8_t param_registry_track_structure_transition_is_active(void);
 uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *cmd);
-uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value);
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
+/* Fast path reserved for RT modulation, not a general apply entry point. */
 uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value);
 
-float param_get(param_id_t id);
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);
 

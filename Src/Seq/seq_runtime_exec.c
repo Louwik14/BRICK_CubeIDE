@@ -28,11 +28,13 @@ static volatile uint16_t g_seq_runtime_exec_external_step_pulses_pending;
 
 seq_runtime_state_t *seq_runtime_exec_state(void)
 {
+    /* Single owner of the shared execution state. */
     return &g_seq_runtime_exec_state;
 }
 
 const seq_runtime_state_t *seq_runtime_exec_state_const(void)
 {
+    /* Read-only view of the shared execution state owner. */
     return &g_seq_runtime_exec_state;
 }
 

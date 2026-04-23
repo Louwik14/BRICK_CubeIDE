@@ -142,6 +142,7 @@ static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float 
         }
 
         param_registry_runtime_commit_authoritative_write(track, id, clamped, 1U);
+        /* Post-commit notification: MIDI program changes are forwarded after the authoritative write. */
         seq_runtime_on_midi_program_live_change(track, clamped);
         return 1U;
     }
@@ -1173,6 +1174,7 @@ static uint8_t param_apply_filter_track_value(param_id_t id, uint8_t track, floa
     return param_filter_apply_value(id, track, clamped, 1U, 1U);
 }
 
+/* Query surface: pure value read, no mutation, no resync, no transition. */
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
 {
     if ((id >= PARAM_COUNT) || (out_value == NULL))
@@ -1270,8 +1272,10 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
     *out_value = param_get(id);
     return 1U;
 }
+/* Command surface: RT fast-path apply reserved for modulation callers. */
 uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value)
 {
+    /* RT fast path: same value semantics as apply_track_value, but restricted to modulation callers. */
     if (id >= PARAM_COUNT)
     {
         return 0U;
@@ -1288,6 +1292,7 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
 }
 
+/* Command surface: track-aware apply and post-commit routing. */
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
     if (id >= PARAM_COUNT)
@@ -1316,6 +1321,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     return param_apply_non_filter_track_value(id, track, clamped);
 }
 
+/* Command surface: UI edit command forwarded to the track-aware apply seam. */
 uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *cmd)
 {
     if ((cmd == NULL) || (cmd->id >= PARAM_COUNT) || (cmd->track >= SEQ_TRACK_COUNT))
@@ -1326,8 +1332,10 @@ uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *c
     return param_registry_apply_track_value(cmd->id, cmd->track, cmd->value);
 }
 
+/* Post-commit notification: refresh the filter UI mirror for the active track. */
 void param_registry_sync_filter_ui_for_active_track(void)
 {
+    /* Post-commit notification: keep UI mirror aligned with the active track filter context. */
     param_filter_sync_ui_for_active_track();
 }
 
@@ -1363,6 +1371,7 @@ void param_registry_init(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+/* Query surface: global canonical value read. */
 float param_get(param_id_t id)
 {
     return param_store_get_active(id);
@@ -1380,6 +1389,7 @@ float param_get(param_id_t id)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+/* Command surface: global canonical write. */
 void param_set(param_id_t id, float value)
 {
     if (id >= PARAM_COUNT)
@@ -1416,6 +1426,7 @@ void param_set(param_id_t id, float value)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
+/* Command surface: reset global canonical value to default. */
 void param_reset(param_id_t id)
 {
     if (id >= PARAM_COUNT)

@@ -40,7 +40,8 @@ static ALIGN32 float g_capture_r[AUDIO_BLOCK_SIZE];
 
 static uint32_t brick6_master_buffer_steps_to_frames(uint32_t steps)
 {
-    const seq_runtime_state_t *const seq_state = seq_runtime_get_state();
+    /* Escape-hatch projection: master buffer reads the scalar samples-per-step mirror from seq runtime. */
+    const uint32_t samples_per_step_q16 = seq_runtime_get_samples_per_step_q16();
     uint32_t frames = 0U;
 
     if (steps == 0U)
@@ -48,10 +49,7 @@ static uint32_t brick6_master_buffer_steps_to_frames(uint32_t steps)
         steps = 1U;
     }
 
-    if (seq_state != NULL)
-    {
-        frames = (uint32_t)(((uint64_t)seq_state->samples_per_step_q16 * (uint64_t)steps) >> 16);
-    }
+    frames = (uint32_t)(((uint64_t)samples_per_step_q16 * (uint64_t)steps) >> 16);
 
     if (frames < AUDIO_BLOCK_SIZE)
     {
@@ -96,6 +94,7 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
         }
 
         uint8_t div = 1U;
+        /* Projection read: track div is a runtime mirror used to derive buffer boundary length. */
         (void)seq_runtime_get_track_div(track, &div);
         const uint32_t duration = (uint32_t)seq_model_get_track_playback_length(track) * (uint32_t)div;
         if (duration > longest_duration)
@@ -117,6 +116,7 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
         }
 
         uint8_t div = 1U;
+        /* Projection read: track div is a runtime mirror used to derive buffer boundary length. */
         (void)seq_runtime_get_track_div(track, &div);
         const uint32_t duration = (uint32_t)seq_model_get_track_playback_length(track) * (uint32_t)div;
         if (duration != longest_duration)
@@ -125,6 +125,7 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
         }
 
         seq_step_id_t playhead = 0U;
+        /* Projection read: playhead is consumed as a runtime mirror for preroll/boundary gating. */
         if ((seq_runtime_get_playhead_step(track, &playhead) != 0U) && (playhead == 0U))
         {
             return 1U;
@@ -136,6 +137,7 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
 
 static uint8_t brick6_master_buffer_is_preroll_active(void)
 {
+    /* Projection reads: preroll gating follows runtime start/pattern/count-in mirrors. */
     return ((seq_runtime_is_start_pending() != 0U)
             || (seq_runtime_rec_is_pattern_pending_start() != 0U)
             || (seq_runtime_get_rec_count_in_remaining_steps() > 0U)) ? 1U : 0U;

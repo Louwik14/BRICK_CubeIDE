@@ -44,12 +44,14 @@ void seq_led_render_active_track_page(void)
         }
     }
 
+    /* Projection read: LED cursor visibility follows runtime running/playhead mirrors. */
     if (seq_runtime_is_running() == 0U)
     {
         return;
     }
 
     seq_step_id_t playhead = 0U;
+    /* Projection read: playhead is consumed as a runtime mirror for cursor rendering. */
     if (seq_runtime_get_playhead_step(track, &playhead) == 0U)
     {
         return;

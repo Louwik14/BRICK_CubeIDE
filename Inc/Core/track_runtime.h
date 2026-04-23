@@ -191,8 +191,20 @@ void track_runtime_invalidate_track(uint8_t track);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
 void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage);
+/*
+ * Revision guards:
+ * - track_runtime_get_revision / track_runtime_get_track_revision are coherence markers only.
+ * - they are valid after an explicit refresh at the consumer edge.
+ * - they must not become UI business logic or hidden refresh triggers.
+ */
 uint32_t track_runtime_get_revision(void);
 uint32_t track_runtime_get_track_revision(uint8_t track);
+/*
+ * Projection surface:
+ * - pure reads of runtime state / descriptor / routing / gating / ensemble availability.
+ * - refresh remains explicit at the call site; getters never auto-refresh.
+ * - track_runtime_get_ctx is an escape hatch for consumers that need the full runtime ctx.
+ */
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
 uint8_t track_runtime_is_audio_routable(uint8_t track);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
@@ -209,6 +221,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
+uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);
 
 #ifdef __cplusplus
 }

@@ -22,6 +22,7 @@ static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
 
 static void ui_navigation_refresh_active_track_runtime(void)
 {
+    /* Consumer-edge refresh: navigation reads projection only after an explicit refresh. */
     track_runtime_refresh_track(ui_get_active_track());
 }
 

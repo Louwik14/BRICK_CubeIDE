@@ -237,6 +237,7 @@ void ui_param_sync_active_bank_values(void)
 
         if (ui_param_is_track_scoped(id) != 0U)
         {
+            /* Query seam: sync the UI mirror from the track-aware value surface. */
             float value = 0.0f;
             if (param_registry_get_track_value(id, active_track, &value) != 0U)
             {
@@ -277,6 +278,7 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
             continue;
         }
 
+        /* Query seam: read track-aware value without mutating the runtime. */
         float value = 0.0f;
         if (param_registry_get_track_value(id, active_track, &value) != 0U)
         {
@@ -460,6 +462,7 @@ static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
     if ((param_registry_get_track_value(param, active_track, &current_value) != 0U)
             && (ui_param_value_is_same(current_value, clamped) != 0U))
     {
+        /* Query check before command: avoid redundant apply when the effective value is unchanged. */
         param_store_set_active(param, clamped);
         return 1U;
     }

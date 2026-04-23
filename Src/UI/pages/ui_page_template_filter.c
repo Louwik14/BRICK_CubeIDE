@@ -146,6 +146,7 @@ static uint8_t ui_page_template_colors_sync_should_recompute(uint8_t active_trac
                                                              ui_track_family_t active_family,
                                                              ui_track_type_t active_type)
 {
+    /* Consumer-edge refresh: revision checks use a refreshed projection; the revision is a coherence guard only. */
     track_runtime_refresh_track(active_track);
     const uint32_t runtime_track_revision = track_runtime_get_track_revision(active_track);
     const uint8_t filter_type_ui = (uint8_t)(param_store_get_active(PARAM_FILTER_TYPE) + 0.5f);

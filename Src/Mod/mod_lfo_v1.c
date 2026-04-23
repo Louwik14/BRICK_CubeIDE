@@ -599,6 +599,7 @@ static void mod_lfo_process_control_tick(void)
 
             if ((rt->base_valid == 0U) || (rt->last_dest != (uint16_t)(s->dest + 0.5f)))
             {
+                /* Query seam: seed the modulation base from the pure value surface only. */
                 if (param_registry_get_track_value(dest, track, &rt->base_value) == 0U)
                 {
                     continue;
@@ -626,6 +627,7 @@ static void mod_lfo_process_control_tick(void)
             }
             rt->depth_scale = (s->depth / 127.0f) * (rt->dest_max - rt->dest_min);
             const float modulated = mod_lfo_clampf(rt->base_value + (rt->current * rt->depth_scale), rt->dest_min, rt->dest_max);
+            /* RT apply seam: modulation writes use the fast track-aware mutation path. */
             (void)param_registry_apply_track_value_rt_fast(dest, track, modulated);
         }
     }

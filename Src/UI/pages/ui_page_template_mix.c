@@ -54,8 +54,11 @@ static const ui_template_family_t g_ui_template_mix_unavailable_family = {
 
 static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
 {
+    /* Consumer-edge refresh: routability is read only after an explicit refresh. */
     track_runtime_refresh_track(ui_get_active_track());
-    if (track_runtime_is_audio_routable(ui_get_active_track()) == 0U)
+    track_runtime_resolved_track_t resolved;
+    if ((track_runtime_resolve_track(ui_get_active_track(), &resolved) == 0U)
+            || (resolved.has_mix_target == 0U))
     {
         return &g_ui_template_mix_unavailable_family;
     }

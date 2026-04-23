@@ -85,6 +85,7 @@ static uint8_t seq_live_rec_session_is_live_rec_active(void)
         return g_seq_live_rec_pattern_active;
     }
 
+    /* Projection reads: transport state and count-in gates are consumed as runtime mirrors. */
     return ((g_seq_live_rec_armed != 0U)
             && (seq_runtime_is_running() != 0U)
             && (seq_runtime_get_rec_count_in_remaining_steps() == 0U)) ? 1U : 0U;
@@ -93,6 +94,7 @@ static uint8_t seq_live_rec_session_is_live_rec_active(void)
 static uint8_t seq_live_rec_session_track_accepts_source(seq_track_id_t track,
                                                          seq_live_rec_source_t source)
 {
+    /* Projection read: MIDI source gates live-rec acceptance; no runtime mutation here. */
     const track_runtime_midi_source_t track_source = track_runtime_get_midi_source(track);
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
@@ -584,6 +586,7 @@ static void seq_live_rec_session_bind_pattern_track_to_target(void)
 static uint32_t seq_live_rec_session_get_track_pattern_duration_steps(seq_track_id_t track)
 {
     uint8_t div = 1U;
+    /* Projection read: pattern duration uses track div as a runtime mirror. */
     (void)seq_runtime_get_track_div(track, &div);
     return (uint32_t)seq_model_get_track_playback_length(track) * (uint32_t)div;
 }
