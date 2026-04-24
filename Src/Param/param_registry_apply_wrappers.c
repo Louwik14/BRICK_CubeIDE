@@ -11,7 +11,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_model.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 #include "Mod/mod_lfo_v1.h"
 #include "UI/ui_track_catalog.h"
 
@@ -316,9 +316,25 @@ void apply_cfg_rec_len(float v)
 void apply_seq_length(float v)
 {
     const uint8_t track = ui_get_active_track();
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t gesture_key = (0x50000000UL
+                                 | ((uint32_t)track << 16)
+                                 | (uint32_t)((uint8_t)(v + 0.5f)));
+    const uint8_t undo_started = (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_SYSTEM,
+                                                                     gesture_key) == UNDO_V2_STATUS_OK)
+                                 && (undo_v2_capture_snapshot_before() == UNDO_V2_STATUS_OK);
     seq_model_set_track_length(track, (uint8_t)(v + 0.5f));
     seq_runtime_on_track_length_changed(track);
+    if (undo_started != 0U)
+    {
+        if (undo_v2_capture_snapshot_after() != UNDO_V2_STATUS_OK)
+        {
+            undo_v2_cancel_transaction();
+        }
+        else
+        {
+            (void)undo_v2_commit_transaction();
+        }
+    }
 }
 
 void apply_seq_div(float v)

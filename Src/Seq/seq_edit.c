@@ -16,7 +16,7 @@
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_engine.h"
 #include "param_registry.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 
 #define SEQ_STEP_HOLD_THRESHOLD_TICKS 160U
 
@@ -50,6 +50,42 @@ static uint32_t seq_edit_make_undo_gesture_key(uint8_t op,
         | ((uint32_t)track << 16)
         | ((uint32_t)step << 8)
         | (uint32_t)extra);
+}
+
+static uint8_t seq_edit_begin_snapshot_undo(uint8_t op,
+                                            seq_track_id_t track,
+                                            seq_step_id_t step,
+                                            uint8_t extra)
+{
+    if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_BUTTON,
+                                           seq_edit_make_undo_gesture_key(op, track, step, extra)) != UNDO_V2_STATUS_OK)
+    {
+        return 0U;
+    }
+
+    if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
+    {
+        undo_v2_cancel_transaction();
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static void seq_edit_finish_snapshot_undo(uint8_t started)
+{
+    if (started == 0U)
+    {
+        return;
+    }
+
+    if (undo_v2_capture_snapshot_after() != UNDO_V2_STATUS_OK)
+    {
+        undo_v2_cancel_transaction();
+        return;
+    }
+
+    (void)undo_v2_commit_transaction();
 }
 
 static uint8_t seq_edit_is_play_note_param(uint8_t set_id, seq_param8_t param8)
@@ -104,13 +140,12 @@ static void seq_edit_apply_short_action(uint8_t hall)
 
     const seq_track_id_t track = g_seq_hold_state.track_id[hall];
     const seq_step_id_t step = g_seq_hold_state.step_id[hall];
-    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(0U, track, step, hall));
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(0U, track, step, hall);
     if ((g_seq_hold_state.pressed_active[hall] == 0U)
             && (g_seq_hold_state.pressed_content[hall] == SEQ_STEP_CONTENT_EMPTY)
             && (g_seq_hold_state.auto_note_pending[hall] != 0U)
             && (seq_model_step_is_quick_note_eligible(track, step) != 0U))
     {
-        (void)undo_v1_capture_before_edit(0U);
         seq_model_set_trig(track, step, 1U);
         float note_value = 60.0f;
         if (param_registry_get_track_value(PARAM_SEQ_PLAY_V1_NOTE, track, &note_value) == 0U)
@@ -129,10 +164,10 @@ static void seq_edit_apply_short_action(uint8_t hall)
         {
             seq_model_set_trig(track, step, 0U);
         }
+        seq_edit_finish_snapshot_undo(undo_started);
         return;
     }
 
-    (void)undo_v1_capture_before_edit(0U);
     if (seq_model_step_is_active(track, step) != 0U)
     {
         seq_model_set_trig(track, step, 0U);
@@ -141,6 +176,7 @@ static void seq_edit_apply_short_action(uint8_t hall)
     {
         seq_model_set_trig(track, step, 1U);
     }
+    seq_edit_finish_snapshot_undo(undo_started);
 }
 
 static void seq_edit_reset_hall_press_state(uint8_t hall)
@@ -170,9 +206,9 @@ uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
         return 0U;
     }
 
-    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(1U, track, step, hall_index));
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(1U, track, step, hall_index);
     seq_model_toggle_trig(track, step);
+    seq_edit_finish_snapshot_undo(undo_started);
     return 1U;
 }
 
@@ -370,7 +406,6 @@ seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
                                                   seq_value16_t value16,
                                                   uint8_t flags)
 {
-    (void)undo_v1_capture_before_edit(0U);
     return seq_model_step_plock_upsert(track, step, set_id, param8, value16, flags);
 }
 
@@ -381,14 +416,12 @@ void seq_edit_step_plock_commit(seq_track_id_t track,
 {
     if (seq_edit_is_play_note_param(set_id, param8) != 0U)
     {
-        (void)undo_v1_capture_before_edit(0U);
         seq_model_set_trig(track, step, 1U);
     }
 
     seq_edit_mark_step_edited(track, step);
     if (seq_model_step_is_active(track, step) == 0U)
     {
-        (void)undo_v1_capture_before_edit(0U);
         seq_model_set_trig(track, step, 1U);
     }
     seq_edit_clear_auto_note_pending(track, step);
@@ -399,16 +432,75 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   uint8_t set_id,
                                                   seq_param8_t param8)
 {
-    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(4U, track, step, (uint8_t)(set_id ^ param8)));
-    (void)undo_v1_capture_before_edit(0U);
-    return seq_model_step_plock_delete(track, step, set_id, param8);
+    seq_plock_entry_t before_entry;
+    const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param8, &before_entry);
+    const uint8_t before_trig = seq_model_get_trig(track, step);
+    if (undo_v2_begin_transaction(UNDO_V2_TX_KIND_PLOCK,
+                                  UNDO_V2_SOURCE_BUTTON,
+                                  seq_edit_make_undo_gesture_key(4U, track, step, (uint8_t)(set_id ^ param8)),
+                                  UNDO_V2_TX_MODE_DELTA) != UNDO_V2_STATUS_OK)
+    {
+        return SEQ_PLOCK_OP_NOT_FOUND;
+    }
+    const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param8);
+    if ((status == SEQ_PLOCK_OP_DELETED) || (status == SEQ_PLOCK_OP_NOT_FOUND))
+    {
+        (void)undo_v2_record_plock_change(track,
+                                          step,
+                                          set_id,
+                                          param8,
+                                          before_present,
+                                          (before_present != 0U) ? before_entry.value16 : 0U,
+                                          (before_present != 0U) ? before_entry.flags : 0U,
+                                          before_trig,
+                                          0U,
+                                          0U,
+                                          0U,
+                                          before_trig);
+        (void)undo_v2_commit_transaction();
+    }
+    else
+    {
+        undo_v2_cancel_transaction();
+    }
+    return status;
+}
+
+uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
+                                        seq_step_id_t step,
+                                        uint8_t set_id,
+                                        seq_param8_t param8,
+                                        uint8_t present,
+                                        seq_value16_t value16,
+                                        uint8_t flags,
+                                        uint8_t trig_active)
+{
+    if (present != 0U)
+    {
+        const seq_plock_op_status_t status = seq_model_step_plock_upsert(track, step, set_id, param8, value16, flags);
+        if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
+        {
+            return 0U;
+        }
+    }
+    else
+    {
+        const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param8);
+        if ((status != SEQ_PLOCK_OP_DELETED) && (status != SEQ_PLOCK_OP_NOT_FOUND))
+        {
+            return 0U;
+        }
+    }
+
+    seq_model_set_trig(track, step, (trig_active != 0U) ? 1U : 0U);
+    return 1U;
 }
 
 void seq_edit_step_plock_clear(seq_track_id_t track, seq_step_id_t step)
 {
-    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(5U, track, step, 0U));
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(5U, track, step, 0U);
     seq_model_step_plock_clear(track, step);
+    seq_edit_finish_snapshot_undo(undo_started);
 }
 
 uint8_t seq_edit_step_plock_count(seq_track_id_t track, seq_step_id_t step)
@@ -441,9 +533,10 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
     {
         first_step = dest_steps[0];
     }
-    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(6U, track, first_step, dest_count));
-    (void)undo_v1_capture_before_edit(0U);
-    return seq_clipboard_paste(track, dest_steps, dest_count, out_result);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(6U, track, first_step, dest_count);
+    const uint8_t ok = seq_clipboard_paste(track, dest_steps, dest_count, out_result);
+    seq_edit_finish_snapshot_undo(undo_started);
+    return ok;
 }
 
 void seq_edit_clear_steps(seq_track_id_t track,
@@ -455,8 +548,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
         return;
     }
 
-    undo_v1_begin_gesture(seq_edit_make_undo_gesture_key(7U, track, steps[0], step_count));
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t undo_started = seq_edit_begin_snapshot_undo(7U, track, steps[0], step_count);
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         const seq_step_id_t step = steps[i];
@@ -468,4 +560,5 @@ void seq_edit_clear_steps(seq_track_id_t track,
         seq_model_set_trig(track, step, 0U);
         seq_model_step_plock_clear(track, step);
     }
+    seq_edit_finish_snapshot_undo(undo_started);
 }

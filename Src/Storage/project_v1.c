@@ -6,7 +6,7 @@
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 #include "Param/param_macro.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
@@ -331,7 +331,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     {        return 0U;
     }
 
-    undo_v1_clear_history();
+    undo_v2_clear_all();
 
     if (project_sd_bank_commit_slot_patterns(project_slot) == 0U)
     {
@@ -364,7 +364,7 @@ uint8_t project_v1_load_blank(void)
 
     param_macro_sync_active_bank();
 
-    undo_v1_clear_history();
+    undo_v2_clear_all();
 
     g_project_save_counter = 0U;
     g_project_active_slot_valid = 0U;

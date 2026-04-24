@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 #include "Core/track_runtime.h"
 #include "UI/ui_core.h"
 #include "UI/ui_active_track_sync.h"
@@ -737,7 +737,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         g_queued_valid = 0U;
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
-        undo_v1_clear_history();
+        undo_v2_clear_all();
         return 1U;
     }
 
@@ -750,7 +750,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         g_queued_boundary_track = 0U;
     }
     (void)seq_runtime_get_track_loop_generation(g_queued_boundary_track, &g_queued_boundary_generation);
-    undo_v1_clear_history();
+    undo_v2_clear_all();
     return 1U;
 }
 
@@ -790,7 +790,7 @@ void pattern_live_service(void)
         g_queued_valid = 0U;
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
-        undo_v1_clear_history();
+        undo_v2_clear_all();
     }
 }
 

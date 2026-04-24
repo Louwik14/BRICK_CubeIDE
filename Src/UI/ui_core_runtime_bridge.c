@@ -9,7 +9,7 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 #include "Storage/pattern_live_ram.h"
 #include "audio_float.h"
 #include "buttons.h"
@@ -536,7 +536,7 @@ uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
 
 uint8_t ui_core_runtime_bridge_request_undo(ui_core_runtime_bridge_feedback_fn feedback)
 {
-    const uint8_t ok = undo_v1_restore(0U);
+    const uint8_t ok = (undo_v2_undo() == UNDO_V2_STATUS_OK) ? 1U : 0U;
     if (ok != 0U)
     {
         if (feedback != 0)

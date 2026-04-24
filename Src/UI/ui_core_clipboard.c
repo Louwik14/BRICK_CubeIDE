@@ -8,7 +8,7 @@
 #include "ui_template_page.h"
 #include "ui_edit_context_sync.h"
 #include "ui_macro_interaction.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 #include "Storage/project_v1.h"
 #include "Core/engine_tasklet.h"
 #include "param_registry.h"
@@ -68,6 +68,41 @@ typedef struct
     ui_param_clipboard_t ensemble;
     ui_param_clipboard_t page;
 } ui_clipboard_state_t;
+
+static uint32_t ui_core_clipboard_make_undo_gesture_key(uint8_t op, uint8_t track, uint8_t extra);
+
+static uint8_t ui_core_clipboard_begin_snapshot_undo(uint8_t op, uint8_t track, uint8_t extra)
+{
+    if (undo_v2_begin_snapshot_transaction(UNDO_V2_SOURCE_CLIPBOARD,
+                                           ui_core_clipboard_make_undo_gesture_key(op, track, extra)) != UNDO_V2_STATUS_OK)
+    {
+        return 0U;
+    }
+
+    if (undo_v2_capture_snapshot_before() != UNDO_V2_STATUS_OK)
+    {
+        undo_v2_cancel_transaction();
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static void ui_core_clipboard_finish_snapshot_undo(uint8_t started)
+{
+    if (started == 0U)
+    {
+        return;
+    }
+
+    if (undo_v2_capture_snapshot_after() != UNDO_V2_STATUS_OK)
+    {
+        undo_v2_cancel_transaction();
+        return;
+    }
+
+    (void)undo_v2_commit_transaction();
+}
 
 static ui_clipboard_state_t g_ui_clipboard;
 
@@ -832,17 +867,16 @@ uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        undo_v1_begin_gesture(ui_core_clipboard_make_undo_gesture_key(1U, track, 0U));
-        (void)undo_v1_capture_before_edit(0U);
+        const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(1U, track, 0U);
         if (ui_core_clipboard_clear_track(track) != 0U)
         {
             ui_core_clipboard_feedback(feedback, "TRACK CLEARED");
         }
+        ui_core_clipboard_finish_snapshot_undo(undo_started);
         return 1U;
     }
 
-    undo_v1_begin_gesture(ui_core_clipboard_make_undo_gesture_key(2U, track, 0U));
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(2U, track, 0U);
     if (ui_core_clipboard_paste_track(track) != 0U)
     {
         ui_core_clipboard_feedback(feedback, "TRACK PASTED");
@@ -851,6 +885,7 @@ uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,
     {
         ui_core_clipboard_feedback(feedback, "TRACK INCOMP");
     }
+    ui_core_clipboard_finish_snapshot_undo(undo_started);
     return 1U;
 }
 
@@ -904,16 +939,15 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        undo_v1_begin_gesture(ui_core_clipboard_make_undo_gesture_key(3U, track, (uint8_t)count));
-        (void)undo_v1_capture_before_edit(0U);
+        const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(3U, track, (uint8_t)count);
         ui_core_clipboard_clear_param_list_to_min(track, params, count);
         ui_edit_context_sync_active_track(0U);
         ui_core_clipboard_feedback(feedback, "ENS CLEARED");
+        ui_core_clipboard_finish_snapshot_undo(undo_started);
         return 1U;
     }
 
-    undo_v1_begin_gesture(ui_core_clipboard_make_undo_gesture_key(4U, track, (uint8_t)count));
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(4U, track, (uint8_t)count);
     uint8_t common_count = 0U;
     const uint8_t applied = ui_core_clipboard_apply_intersection(track,
                                                                  &g_ui_clipboard.ensemble,
@@ -923,6 +957,7 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
     if ((common_count == 0U) || (applied == 0U))
     {
         ui_core_clipboard_feedback(feedback, "ENS INCOMP");
+        ui_core_clipboard_finish_snapshot_undo(undo_started);
         return 1U;
     }
 
@@ -935,6 +970,7 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
     {
         ui_core_clipboard_feedback(feedback, "ENS PASTED");
     }
+    ui_core_clipboard_finish_snapshot_undo(undo_started);
     return 1U;
 }
 
@@ -980,16 +1016,15 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        undo_v1_begin_gesture(ui_core_clipboard_make_undo_gesture_key(5U, track, (uint8_t)count));
-        (void)undo_v1_capture_before_edit(0U);
+        const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(5U, track, (uint8_t)count);
         ui_core_clipboard_clear_param_list_to_min(track, params, count);
         ui_edit_context_sync_active_track(0U);
         ui_core_clipboard_feedback(feedback, "PAGE CLEARED");
+        ui_core_clipboard_finish_snapshot_undo(undo_started);
         return 1U;
     }
 
-    undo_v1_begin_gesture(ui_core_clipboard_make_undo_gesture_key(6U, track, (uint8_t)count));
-    (void)undo_v1_capture_before_edit(0U);
+    const uint8_t undo_started = ui_core_clipboard_begin_snapshot_undo(6U, track, (uint8_t)count);
     uint8_t common_count = 0U;
     const uint8_t applied = ui_core_clipboard_apply_intersection(track,
                                                                  &g_ui_clipboard.page,
@@ -999,6 +1034,7 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
     if ((common_count == 0U) || (applied == 0U))
     {
         ui_core_clipboard_feedback(feedback, "PAGE INCOMP");
+        ui_core_clipboard_finish_snapshot_undo(undo_started);
         return 1U;
     }
 
@@ -1011,6 +1047,7 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
     {
         ui_core_clipboard_feedback(feedback, "PAGE PASTED");
     }
+    ui_core_clipboard_finish_snapshot_undo(undo_started);
     return 1U;
 }
 

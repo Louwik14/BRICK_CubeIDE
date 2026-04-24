@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Storage/undo_v1.h"
+#include "Storage/undo_v2.h"
 #include "Core/track_runtime.h"
 
 #include "Seq/seq_edit.h"
@@ -76,6 +76,18 @@ static param_id_t seq_live_rec_session_play_param_mictim(uint8_t voice)
         PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM
     };
     return (voice < 4U) ? k_mictim[voice] : PARAM_SEQ_PLAY_V1_MICTIM;
+}
+
+static uint32_t seq_live_rec_session_make_plock_gesture_key(seq_track_id_t track,
+                                                            seq_step_id_t step,
+                                                            uint8_t set_id,
+                                                            seq_param8_t param8)
+{
+    return (0x40000000UL
+            | ((uint32_t)8U << 24)
+            | ((uint32_t)track << 16)
+            | ((uint32_t)step << 8)
+            | ((uint32_t)set_id ^ (uint32_t)param8));
 }
 
 static uint8_t seq_live_rec_session_is_live_rec_active(void)
@@ -845,11 +857,16 @@ uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *run
         step = 0U;
     }
 
-    undo_v1_begin_gesture((0x40000000UL
-                           | ((uint32_t)8U << 24)
-                           | ((uint32_t)track << 16)
-                           | ((uint32_t)step << 8)
-                           | ((uint32_t)set_id ^ (uint32_t)param8)));
+    seq_plock_entry_t before_entry;
+    const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param8, &before_entry);
+    const uint8_t before_trig = seq_model_get_trig(track, step);
+    if (undo_v2_begin_transaction(UNDO_V2_TX_KIND_PLOCK,
+                                  UNDO_V2_SOURCE_SYSTEM,
+                                  seq_live_rec_session_make_plock_gesture_key(track, step, set_id, param8),
+                                  UNDO_V2_TX_MODE_DELTA) != UNDO_V2_STATUS_OK)
+    {
+        return 0U;
+    }
     const seq_plock_op_status_t status = seq_edit_step_plock_upsert(track,
                                                                      step,
                                                                      set_id,
@@ -858,10 +875,24 @@ uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *run
                                                                      0U);
     if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
     {
+        undo_v2_cancel_transaction();
         return 0U;
     }
 
     seq_edit_step_plock_commit(track, step, set_id, param8);
+    (void)undo_v2_record_plock_change(track,
+                                      step,
+                                      set_id,
+                                      param8,
+                                      before_present,
+                                      (before_present != 0U) ? before_entry.value16 : 0U,
+                                      (before_present != 0U) ? before_entry.flags : 0U,
+                                      before_trig,
+                                      1U,
+                                      value16,
+                                      0U,
+                                      seq_model_get_trig(track, step));
+    (void)undo_v2_commit_transaction();
     return 1U;
 }
 
