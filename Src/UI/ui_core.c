@@ -594,6 +594,9 @@ void ui_core_tick(void)
     ui_param_encoder_context_t encoder_ctx;
 
     ui_param_capture_encoder_context(&encoder_ctx);
+    track_runtime_refresh_track(encoder_ctx.active_track);
+    param_registry_batch_begin();
+    ui_param_begin_encoder_edit_group(&encoder_ctx);
 
     for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
     {
@@ -614,6 +617,9 @@ void ui_core_tick(void)
             }
         }
     }
+
+    ui_param_end_encoder_edit_group();
+    param_registry_batch_end();
 
     ui_event_from_inputs();
     ui_core_runtime_bridge_update_seq_step_hold();

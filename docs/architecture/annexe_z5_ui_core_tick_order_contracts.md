@@ -9,6 +9,7 @@ Scope: passe d'audit ciblee `ui_core_tick` + helpers directement appeles par `ui
 ## Preuve de flux runtime
 - Superloop: `brick6_app_process()` appelle `hall_loop_process()` -> `ui_core_service_track_selection_inputs()` -> `hall_keyboard_bridge_process()` (`Src/Core/brick6_app_init.c:151-153`).
 - Tasklet UI: `ui_tasklet_poll()` appelle `ui_core_tick()` (`Src/UI/ui_tasklet.c:50`).
+- Scheduler: `main` ne lance plus `ui_tasklet_poll()` en 1:1 avec `engine_tick_count`; le service UI est sous-echantillonne par un diviseur explicite et le rattrapage reste borne par tour de boucle principale.
 - Implication contractuelle: certaines transitions de mode/track se font hors queue d'events, avant `ui_core_tick` et avant le bridge clavier hall.
 
 ## Contrat du chemin hors queue
@@ -31,6 +32,7 @@ Scope: passe d'audit ciblee `ui_core_tick` + helpers directement appeles par `ui
   - `ui_core_is_track_hall_event_consumed` depend de `track_select_armed` pre-mis a jour pour bloquer/laisser passer les halls.
   - `ui_navigation_handle_event` peut changer la page active juste avant le dispatch final; `active_page->handle_event` recoit donc l'event sur la page active apres navigation.
 - Les deltas encodeur sont resolus sur un snapshot local du contexte actif pris au debut du tick UI; un edit qui reconfigure bank ou track pendant la passe ne rebind pas le sens des deltas suivants dans le meme tick.
+- Le drain encodeur du tick est encadre par `param_registry_batch_begin/end` et un refresh runtime unique en amont, afin de coalescer les applies track-aware du meme tick.
 
 ## Contrat post-commit UI
 - Les reconfigurations structurelles `track family/type` et `restore bulk` passent par `ui_core_runtime_bridge` puis sur un post-commit unique `ui_core_runtime_bridge_post_track_structure_change()`.

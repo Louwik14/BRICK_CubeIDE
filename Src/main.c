@@ -85,6 +85,8 @@ extern uint32_t __ram_d2_dma_end__;
 #define RAM_D2_DMA_MPU_BASE               (0x30000000UL)
 #define RAM_D2_DMA_MPU_COVERED_BYTES      (12UL * 1024UL)
 #define RAM_D2_DMA_MPU_SUBREGION_DISABLE  (0xF8U)
+#define UI_TASKLET_ENGINE_DIVIDER         (4UL)
+#define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 
 static void MPU_Config(void)
 {
@@ -181,6 +183,7 @@ int main(void)
   brick6_app_init();
   led_init();
   uint32_t last_tick = 0;
+  uint32_t ui_tasklet_divider = 0U;
 
   /* USER CODE END 2 */
 
@@ -200,10 +203,19 @@ int main(void)
 	     usb_host_tasklet_poll_bounded(4);
 	     midi_host_poll_bounded(8);
 
-	     while (engine_tick_count != last_tick)
+	     uint32_t ui_ticks_processed = 0U;
+	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
 	     {
 	         last_tick++;
+	         ui_tasklet_divider++;
+	         if (ui_tasklet_divider < UI_TASKLET_ENGINE_DIVIDER)
+	         {
+	             continue;
+	         }
+
+	         ui_tasklet_divider = 0U;
 	         ui_tasklet_poll();
+	         ui_ticks_processed++;
 	     }
 
 	     if (ui_tasklet_is_initialized() != 0U)

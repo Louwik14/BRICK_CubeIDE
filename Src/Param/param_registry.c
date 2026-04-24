@@ -69,6 +69,11 @@ extern const param_desc_t param_registry[PARAM_COUNT];
 
 static uint8_t g_param_registry_batch_depth = 0U;
 
+static uint8_t param_registry_batch_is_active(void)
+{
+    return (g_param_registry_batch_depth != 0U) ? 1U : 0U;
+}
+
 void param_registry_batch_begin(void)
 {
     if (g_param_registry_batch_depth < 255U)
@@ -1352,7 +1357,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
+    if (param_registry_batch_is_active() == 0U)
+    {
+        track_runtime_refresh_track(track);
+    }
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
 

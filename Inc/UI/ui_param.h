@@ -30,6 +30,8 @@ void ui_param_invalidate_bank(void);
 void ui_param_sync_active_bank_values(void);
 void ui_param_sync_active_track_mirror_from_runtime(void);
 void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx);
+void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx);
+void ui_param_end_encoder_edit_group(void);
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param);
 uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *ctx,
                                              uint8_t encoder,

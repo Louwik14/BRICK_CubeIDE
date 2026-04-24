@@ -127,6 +127,7 @@ Entrees directes:
 - Appelants reels:
   - `ui_tasklet_poll` -> `ui_core_init/ui_core_tick`.
   - `brick6_app_process` -> `ui_core_service_track_selection_inputs`.
+  - `main` ne pilote plus `ui_tasklet_poll` en 1:1 avec `engine_tick_count`: la cadence UI est sous-echantillonnee par un diviseur explicite et le rattrapage par boucle principale reste borne.
 
 Entrees evenementielles:
 - `ui_event_from_inputs` (buttons + hall) alimente queue lue par `ui_core_tick`.
@@ -262,6 +263,7 @@ Contraintes observees:
 - Aucun malloc dans Z5; etats statiques.
 - Traitement UI event-driven/control-rate (main loop/tasklet), pas hard-RT IRQ audio.
 - File events taille fixe (`UI_EVENT_Q_LEN=32`) avec drop silencieux si pleine.
+- Le service `ui_core_tick` n'est plus cadence a chaque tick moteur audio: la boucle principale agrège les ticks moteur et ne laisse passer qu'un tick UI sur N, avec budget de rattrapage borne par tour de superloop, afin de garantir du temps CPU au rendu/flush OLED.
 
 Dependances de cadence:
 - `ui_core_service_track_selection_inputs` doit tourner regulierement pour detection taps/double taps/armed states.

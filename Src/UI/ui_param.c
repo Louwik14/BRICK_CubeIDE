@@ -42,6 +42,8 @@ static ui_param_state_t g_ui_param = {
     .bank = { .params = { PARAM_GRAN_DENSITY, PARAM_GRAN_PITCH, PARAM_GRAN_MIX, PARAM_GRAN_FREEZE } },
     .valid = 0U,
 };
+static uint8_t g_ui_param_encoder_edit_group_active = 0U;
+static uint32_t g_ui_param_encoder_edit_group_key = 0U;
 
 typedef struct
 {
@@ -52,6 +54,7 @@ typedef struct
 } ui_param_live_rec_ctx_t;
 
 static uint8_t ui_param_is_track_scoped(param_id_t param);
+static uint32_t ui_param_make_encoder_group_gesture_key(const ui_param_encoder_context_t *ctx);
 
 /**
  * @brief Point d'entrée ui_param_clamp.
@@ -321,6 +324,17 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
     out_ctx->active_track = ui_get_active_track();
 }
 
+void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx)
+{
+    g_ui_param_encoder_edit_group_key = ui_param_make_encoder_group_gesture_key(ctx);
+    g_ui_param_encoder_edit_group_active = 1U;
+}
+
+void ui_param_end_encoder_edit_group(void)
+{
+    g_ui_param_encoder_edit_group_active = 0U;
+}
+
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param)
 {
     if ((out_param == 0) || (g_ui_param.valid == 0U) || (encoder >= 4U))
@@ -412,6 +426,24 @@ static uint32_t ui_param_make_gesture_key(uint8_t encoder, param_id_t param, uin
         | ((uint32_t)active_track << 20)
         | ((uint32_t)param << 4)
         | (uint32_t)(encoder & 0x0FU);
+}
+
+static uint32_t ui_param_make_encoder_group_gesture_key(const ui_param_encoder_context_t *ctx)
+{
+    uint32_t key = 0x20000000UL | (((uint32_t)ui_get_hall_mode() & 0x0FU) << 24);
+
+    if ((ctx == 0) || (ctx->valid == 0U))
+    {
+        return key;
+    }
+
+    key ^= ((uint32_t)ctx->active_track & 0x0FU) << 20;
+    for (uint8_t encoder = 0U; encoder < 4U; ++encoder)
+    {
+        key ^= ((uint32_t)ctx->bank.params[encoder] & 0x03FFUL) << (encoder * 5U);
+    }
+
+    return key;
 }
 
 static float ui_param_get_active_track_value(param_id_t param, uint8_t active_track)
@@ -767,7 +799,14 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         return 0U;
     }
 
-    undo_v1_begin_gesture(ui_param_make_gesture_key(encoder, param, ctx->active_track));
+    if (g_ui_param_encoder_edit_group_active != 0U)
+    {
+        undo_v1_begin_gesture(g_ui_param_encoder_edit_group_key);
+    }
+    else
+    {
+        undo_v1_begin_gesture(ui_param_make_gesture_key(encoder, param, ctx->active_track));
+    }
 
     const param_desc_t *desc = &param_registry[param];
     float min_value = desc->min;
