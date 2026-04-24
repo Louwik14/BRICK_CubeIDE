@@ -20,6 +20,7 @@
  */
 
 #include "param_registry.h"
+#include "Param/param_macro.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry_runtime_state.h"
@@ -1356,6 +1357,7 @@ void param_registry_sync_filter_ui_for_active_track(void)
 void param_registry_init(void)
 {
     /* Registry is static metadata; runtime values are in param_store. */
+    param_macro_init();
     param_filter_init();
     mod_lfo_v1_init();
     param_registry_runtime_state_init();

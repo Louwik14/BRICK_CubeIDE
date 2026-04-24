@@ -11,6 +11,7 @@ Zone Z3 (coeur + modules param_registry):
 - `Src/Param/param_filter.c` / `Inc/Param/param_filter.h`
 - `Src/Param/param_registry_backends.c` / `Inc/Param/param_registry_backends.h`
 - `Src/Param/param_registry_tone_backends.c`
+- `Src/Param/param_macro.c` / `Inc/Param/param_macro.h`
 - `Src/Param/param_registry_runtime_state.c` / `Inc/Param/param_registry_runtime_state.h`
 - `Src/Param/param_registry_apply_wrappers.c` / `Inc/Param/param_registry_apply_bindings.h`
 - `Src/Param/param_store.c` / `Inc/Param/param_store.h`
@@ -65,6 +66,11 @@ Familles d'autorite:
   - dispatch tone/mix-aware par engine/family stable.
 - `param_registry_runtime_state.*`:
   - cache runtime track-scoped + commit authoritative write + bridge/resync LFO + invalidations associees.
+- `param_macro.*`:
+  - seam Z3 dedie au MACRO runtime,
+  - interpolation `base -> scene`, validation track-aware du slot, et handoff explicite vers `param_registry_apply_track_value`,
+  - runtime pot-state borne a 4 amount caches locaux, avec sync explicite de la bank active,
+  - pas d'autorite canonique propre, pas de stockage projet, pas de second cache runtime.
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
   - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
@@ -90,6 +96,15 @@ Surface `command / apply / transition / post-commit`:
 - `param_registry_apply_track_value`
 - `param_registry_apply_track_value_rt_fast`
 - `param_registry_apply_track_edit`
+- `param_macro_init`
+- `param_macro_lerp`
+- `param_macro_resolve_slot`
+- `param_macro_apply_resolution`
+- `param_macro_apply_slot`
+- `param_macro_sync_active_bank`
+- `param_macro_set_amount`
+- `param_macro_adjust_amount`
+- `param_macro_get_amount`
 - `param_registry_batch_begin`
 - `param_registry_batch_end`
 - `param_registry_sync_filter_ui_for_active_track`
@@ -137,7 +152,13 @@ Call-sites critiques:
 - Apply module via `_rt_fast`.
 - Release -> write base via `_rt_fast`.
 
-3. Restore snapshot:
+3. MACRO:
+- Resolution slot via `param_macro_resolve_slot`.
+- Interpolation base -> scene via `param_macro_lerp`.
+- Handoff d'ecriture via `param_macro_apply_resolution` vers le chemin track-aware standard.
+- Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`.
+
+4. Restore snapshot:
 - globals: `param_set`.
 - track-aware: `param_registry_apply_track_value`.
 - LFO config: `mod_lfo_v1_set_track_param` uniquement.

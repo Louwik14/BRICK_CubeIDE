@@ -381,6 +381,11 @@ void drv_display_set_font(const font_t *font)
     u8g2_SetFont(&g_u8g2, g_active_font);
 }
 
+void drv_display_set_draw_color(uint8_t color)
+{
+    u8g2_SetDrawColor(&g_u8g2, color);
+}
+
 static inline int drv_display_baseline(int y)
 {
     return y + u8g2_GetAscent(&g_u8g2);

@@ -40,7 +40,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     uint8_t applied = 0U;
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
     {
-        applied = param_backend_apply_mix_track(ctx, track, id, value);
+        applied = param_backend_apply_mix_track(ctx, track, id, value, update_base_state);
     }
     else if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
     {
@@ -48,7 +48,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
-        applied = param_backend_apply_tone_sampler(track, id, value);
+        applied = param_backend_apply_tone_sampler(track, id, value, update_base_state);
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {

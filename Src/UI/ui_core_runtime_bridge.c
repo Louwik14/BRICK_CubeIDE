@@ -20,6 +20,7 @@
 #include "ui_core_pattern.h"
 #include "ui_core_seq_transport.h"
 #include "ui_core_shortcuts.h"
+#include "ui_macro_interaction.h"
 #include "ui_system_sync_internal.h"
 
 /*
@@ -600,6 +601,7 @@ void ui_core_runtime_bridge_step_octave(int8_t step)
 void ui_core_runtime_bridge_notify_hall_mode_changed(ui_hall_mode_t previous_mode,
                                                      ui_hall_mode_t next_mode)
 {
+    ui_macro_interaction_reset();
     keyboard_runtime_on_hall_mode_changed(previous_mode, next_mode);
 }
 

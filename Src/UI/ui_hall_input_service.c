@@ -5,11 +5,13 @@
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
 #include "ui_core_runtime_bridge.h"
+#include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
 
 void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t pressed,
                                        uint8_t was_pressed,
+                                       ui_hall_mode_t hall_mode,
                                        uint8_t shift_down,
                                        uint8_t track_select_armed,
                                        uint8_t mute_active,
@@ -38,6 +40,18 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                                        hall_note_suppressed);
         }
         return;
+    }
+
+    if ((hall_mode == UI_HALL_MODE_MACRO) && (mute_active == 0U))
+    {
+        if ((was_pressed == 0U) && (pressed != 0U))
+        {
+            ui_macro_interaction_note_hall_press(hall);
+        }
+        else if ((was_pressed != 0U) && (pressed == 0U))
+        {
+            ui_macro_interaction_note_hall_release(hall);
+        }
     }
 
     if ((action != UI_HALL_DIRECT_ACTION_TRACK_SELECT) || (mute_active != 0U))

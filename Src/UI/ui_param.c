@@ -307,6 +307,17 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
     param_registry_sync_filter_ui_for_active_track();
 }
 
+uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param)
+{
+    if ((out_param == 0) || (g_ui_param.valid == 0U) || (encoder >= 4U))
+    {
+        return 0U;
+    }
+
+    *out_param = g_ui_param.bank.params[encoder];
+    return (*out_param < PARAM_COUNT) ? 1U : 0U;
+}
+
 static uint8_t ui_param_seq_resolve_ref_step(seq_track_id_t *out_track,
                                              seq_step_id_t *out_ref_step,
                                              uint8_t promote_pending)

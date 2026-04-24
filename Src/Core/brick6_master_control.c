@@ -16,11 +16,14 @@
 
 #include "App/mux_pots.h"
 #include "mixer.h"
+#include "Param/param_macro.h"
 
 void brick6_master_control_process(void)
 {
     enum
     {
+        POT_MACRO_BASE_INDEX = 0U,
+        POT_MACRO_COUNT = 4U,
         POT_MASTER_INDEX = 4U,
         POT_RAW_MAX = 65535U,
         POT_MUTE_THRESHOLD = 1024U,
@@ -29,6 +32,38 @@ void brick6_master_control_process(void)
 
     static uint8_t initialized = 0U;
     static uint16_t last_step = 0xFFFFU;
+    static uint8_t macro_initialized[POT_MACRO_COUNT] = { 0U, 0U, 0U, 0U };
+    static uint16_t macro_last_step[POT_MACRO_COUNT] = {
+        0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU
+    };
+    static const uint8_t macro_pot_index_map[POT_MACRO_COUNT] = { 2U, 1U, 0U, 3U };
+
+    for (uint8_t macro = 0U; macro < POT_MACRO_COUNT; ++macro)
+    {
+        const uint8_t pot_index = (uint8_t)(POT_MACRO_BASE_INDEX + macro_pot_index_map[macro]);
+        if (mux_pots_is_valid(pot_index) == 0U)
+        {
+            continue;
+        }
+
+        const uint16_t raw = mux_pots_get(pot_index);
+        uint16_t step = (uint16_t)(((uint32_t)raw * (uint32_t)(POT_MASTER_STEPS - 1U) + (POT_RAW_MAX / 2U))
+                                   / POT_RAW_MAX);
+
+        if (step >= POT_MASTER_STEPS)
+        {
+            step = (uint16_t)(POT_MASTER_STEPS - 1U);
+        }
+
+        if ((macro_initialized[macro] != 0U) && (macro_last_step[macro] == step))
+        {
+            continue;
+        }
+
+        (void)param_macro_set_amount(macro, (float)step / (float)(POT_MASTER_STEPS - 1U));
+        macro_last_step[macro] = step;
+        macro_initialized[macro] = 1U;
+    }
 
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
     {

@@ -11,6 +11,7 @@ typedef void (*ui_hall_input_service_set_active_track_fn)(uint8_t track);
 void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t pressed,
                                        uint8_t was_pressed,
+                                       ui_hall_mode_t hall_mode,
                                        uint8_t shift_down,
                                        uint8_t track_select_armed,
                                        uint8_t mute_active,

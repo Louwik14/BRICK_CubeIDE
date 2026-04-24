@@ -7,7 +7,9 @@
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 #include "ui_edit_context_sync.h"
+#include "ui_macro_interaction.h"
 #include "Storage/undo_v1.h"
+#include "Storage/project_v1.h"
 #include "Core/engine_tasklet.h"
 #include "param_registry.h"
 #include "Core/track_runtime.h"
@@ -55,6 +57,13 @@ typedef struct
 
 typedef struct
 {
+    uint8_t valid;
+    project_v1_macro_slot_t slot;
+} ui_macro_slot_clipboard_t;
+
+typedef struct
+{
+    ui_macro_slot_clipboard_t macro_slot;
     ui_track_clipboard_t track;
     ui_param_clipboard_t ensemble;
     ui_param_clipboard_t page;
@@ -76,6 +85,61 @@ static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, c
     {
         feedback(message);
     }
+}
+
+static uint8_t ui_core_clipboard_macro_make_empty_slot(project_v1_macro_slot_t *out_slot)
+{
+    if (out_slot == 0)
+    {
+        return 0U;
+    }
+
+    out_slot->track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
+    out_slot->param = PROJECT_V1_MACRO_SLOT_PARAM_NONE;
+    out_slot->scene_value = 0.0f;
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_resolve_active_macro_slot_target(uint8_t *out_bank,
+                                                                  uint8_t *out_macro,
+                                                                  uint8_t *out_slot)
+{
+    return ui_macro_interaction_get_active_slot_target(out_bank, out_macro, out_slot);
+}
+
+static uint8_t ui_core_clipboard_copy_macro_slot(uint8_t bank, uint8_t macro, uint8_t slot)
+{
+    project_v1_macro_slot_t current;
+
+    if (project_v1_macro_get_slot(bank, macro, slot, &current) == 0U)
+    {
+        return 0U;
+    }
+
+    g_ui_clipboard.macro_slot.slot = current;
+    g_ui_clipboard.macro_slot.valid = 1U;
+    return 1U;
+}
+
+static uint8_t ui_core_clipboard_paste_macro_slot(uint8_t bank, uint8_t macro, uint8_t slot)
+{
+    if (g_ui_clipboard.macro_slot.valid == 0U)
+    {
+        return 0U;
+    }
+
+    return project_v1_macro_set_slot(bank, macro, slot, &g_ui_clipboard.macro_slot.slot);
+}
+
+static uint8_t ui_core_clipboard_clear_macro_slot(uint8_t bank, uint8_t macro, uint8_t slot)
+{
+    project_v1_macro_slot_t empty_slot;
+    if (ui_core_clipboard_macro_make_empty_slot(&empty_slot) == 0U)
+    {
+        return 0U;
+    }
+
+    return project_v1_macro_set_slot(bank, macro, slot, &empty_slot);
 }
 
 static uint8_t ui_core_clipboard_collect_params_from_subpage(const ui_template_subpage_t *subpage,
@@ -686,6 +750,58 @@ static uint8_t ui_core_clipboard_resolve_seq_steps(seq_track_id_t *io_track,
 void ui_core_clipboard_init(void)
 {
     memset(&g_ui_clipboard, 0, sizeof(g_ui_clipboard));
+}
+
+uint8_t ui_core_clipboard_handle_macro_slot_event(const ui_event_t *ev,
+                                                  uint8_t shift_down,
+                                                  ui_core_clipboard_feedback_fn feedback)
+{
+    uint8_t bank = 0U;
+    uint8_t macro = 0U;
+    uint8_t slot = 0U;
+
+    if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
+    {
+        return 0U;
+    }
+
+    if ((ev->id != (uint8_t)BTN_COPY) && (ev->id != (uint8_t)BTN_PASTE))
+    {
+        return 0U;
+    }
+
+    if (ui_core_clipboard_resolve_active_macro_slot_target(&bank, &macro, &slot) == 0U)
+    {
+        return 0U;
+    }
+
+    if (ev->id == (uint8_t)BTN_COPY)
+    {
+        if (ui_core_clipboard_copy_macro_slot(bank, macro, slot) != 0U)
+        {
+            ui_core_clipboard_feedback(feedback, "MACRO COPIED");
+        }
+        return 1U;
+    }
+
+    if (shift_down != 0U)
+    {
+        if (ui_core_clipboard_clear_macro_slot(bank, macro, slot) != 0U)
+        {
+            ui_core_clipboard_feedback(feedback, "MACRO CLEARED");
+        }
+        return 1U;
+    }
+
+    if (ui_core_clipboard_paste_macro_slot(bank, macro, slot) != 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "MACRO PASTED");
+    }
+    else
+    {
+        ui_core_clipboard_feedback(feedback, "MACRO INCOMP");
+    }
+    return 1U;
 }
 
 uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,

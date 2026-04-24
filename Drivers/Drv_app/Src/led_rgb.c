@@ -26,11 +26,15 @@
 
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/track_runtime.h"
+#include "buttons.h"
 #include "led_remap.h"
 #include "led_anim.h"
 #include "led_layer.h"
+#include "Storage/project_v1.h"
 #include "UI/ui_core.h"
 #include "UI/ui_navigation.h"
+#include "UI/ui_macro_interaction.h"
 #include "UI/ui_page_manager.h"
 #include "Seq/seq_led.h"
 #include "Seq/seq_edit.h"
@@ -119,7 +123,14 @@ static const led_rgb_color_t g_led_keyboard_omni_chord_colors[4] = {
     { 80U, 0U, 128U },
 };
 
-static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets)
+static const led_rgb_color_t g_led_macro_slot_group_colors[4] = {
+    { 128U, 72U, 0U },   /* amber */
+    { 96U, 0U, 128U },   /* violet */
+    { 0U, 96U, 96U },    /* aqua */
+    { 88U, 128U, 0U }    /* chartreuse */
+};
+
+static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets, button_id_t macro_button)
 {
     uint8_t r = LED_FIXED_GREEN_R;
     uint8_t g = LED_FIXED_GREEN_G;
@@ -160,7 +171,40 @@ static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets)
         }
     }
 
+    if ((macro_button != BTN_COUNT) && (led == led_remap_param_led_for_button(macro_button)))
+    {
+        r = LED_FIXED_ORANGE_R;
+        g = LED_FIXED_ORANGE_G;
+        b = LED_FIXED_ORANGE_B;
+    }
+
     led_layer_set(LED_LAYER_UI, led, r, g, b);
+}
+
+static button_id_t led_macro_param_to_button(param_id_t param)
+{
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+
+    switch (rule.domain)
+    {
+        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
+            return BTN_PARAM_1;
+
+        case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
+            return BTN_PARAM_2;
+
+        case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
+            return BTN_PARAM_3;
+
+        case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
+            return BTN_PARAM_4;
+
+        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
+            return BTN_PARAM_5;
+
+        default:
+            return BTN_COUNT;
+    }
 }
 
 static void led_apply_default_hall_scene(uint8_t hall)
@@ -257,6 +301,46 @@ static void led_apply_pattern_hall_scene(uint8_t hall)
     }
 
     led_layer_set(LED_LAYER_UI, led, r, g, b);
+}
+
+static void led_apply_macro_slot_hall_scene(uint8_t hall)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    const uint8_t active_bank = project_v1_macro_get_active_bank();
+    const uint8_t macro = (uint8_t)(hall / PROJECT_V1_MACRO_SLOT_COUNT);
+    const uint8_t slot = (uint8_t)(hall % PROJECT_V1_MACRO_SLOT_COUNT);
+    project_v1_macro_slot_t macro_slot;
+
+    if (project_v1_macro_get_slot(active_bank, macro, slot, &macro_slot) == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    if ((macro_slot.track == PROJECT_V1_MACRO_SLOT_TRACK_NONE)
+            || (macro_slot.param == PROJECT_V1_MACRO_SLOT_PARAM_NONE))
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    const led_rgb_color_t color = g_led_macro_slot_group_colors[macro & 0x03U];
+    led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
+}
+
+static void led_apply_macro_bank_hall_scene(uint8_t hall)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    const uint8_t group = (uint8_t)(hall / 4U);
+    const uint8_t active_bank = project_v1_macro_get_active_bank();
+    const led_rgb_color_t color = g_led_macro_slot_group_colors[group & 0x03U];
+    if (hall == active_bank)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_WHITE_R, LED_FIXED_WHITE_G, LED_FIXED_WHITE_B);
+        return;
+    }
+
+    led_layer_set(LED_LAYER_UI, led, (uint8_t)(color.r / 4U), (uint8_t)(color.g / 4U), (uint8_t)(color.b / 4U));
 }
 
 static void led_apply_track_select_hall_scene(uint8_t hall)
@@ -398,6 +482,12 @@ static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
     const uint8_t held_plock_sets = led_seq_collect_held_plock_set_mask();
+    button_id_t macro_button = BTN_COUNT;
+    param_id_t macro_param = PARAM_COUNT;
+    if (ui_macro_interaction_get_active_slot_lock(&macro_param) != 0U)
+    {
+        macro_button = led_macro_param_to_button(macro_param);
+    }
 
     if (ui_is_track_modifier_held() != 0U)
     {
@@ -432,6 +522,17 @@ static void led_apply_fixed_scene(void)
             {
                 led_apply_keyboard_hall_scene(hall);
             }
+            else if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+            {
+                if (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_BANK)
+                {
+                    led_apply_macro_bank_hall_scene(hall);
+                }
+                else
+                {
+                    led_apply_macro_slot_hall_scene(hall);
+                }
+            }
             else
             {
                 led_apply_default_hall_scene(hall);
@@ -447,7 +548,7 @@ static void led_apply_fixed_scene(void)
         }
         else if (led_remap_is_param_led((led_id_t)led))
         {
-            led_apply_param_button_scene((led_id_t)led, held_plock_sets);
+            led_apply_param_button_scene((led_id_t)led, held_plock_sets, macro_button);
         }
         else
         {

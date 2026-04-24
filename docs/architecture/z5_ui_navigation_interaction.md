@@ -77,9 +77,30 @@ Autorite hall modes:
 - Chemin central: `ui_set_hall_mode` (validation transition + forced clears mute/pattern + callback keyboard runtime + commit mode).
 - Les transitions mute/pattern passent par `ui_set_hall_mode`; pas de chemin local direct autoritatif concurrent.
 - Triggers SHIFT+HALL dans `ui_core_handle_shift_hall_action`.
+- Mode hall natif `MACRO` (raw mode) expose en Z5:
+  - trigger: `SHIFT + HALL 15`,
+  - double tap `SHIFT + HALL 15`: ouvre la page hall mode dediee `Macro CFG` via la cible de contrat hall mode,
+  - page `Macro CFG` UI-only:
+    - une seule page `MODE`,
+    - parametre local unique `Hall Switch Mode` (`Slot`/`Bank`),
+    - valeur par defaut `Slot`,
+    - rendu via le meme pipeline template natif (`ui_template_page` + `ui_renderer_template`) que les autres ensembles,
+    - aucun write runtime/persistence/undo.
+  - vitrine `Macro` = `Macro CFG` du systeme natif, sans owner local.
+  - scope borne UI-only (aucune autorite runtime macro, aucune persistence macro).
+- Le geste d'assignation MACRO vit dans `ui_macro_interaction`:
+  - `SHIFT` absent,
+  - `Slot` mode: maintien hall -> capture encoder sans write live -> relâchement -> écriture du slot projet,
+  - `Bank` mode: réglage projet pour la projection visuelle et la capture, sans prise de contrôle globale de l'UI,
+  - pendant un maintien de slot MACRO, la grammaire visuelle réutilise le modèle p-lock: paramètre présent sur la page = cadre slot-lock inversé, sinon fallback LED orange sur l'ensemble cible,
+  - état de capture purement transitoire, reset aux changements de hall mode, de `Hall Switch Mode`, ou à l'ouverture de `Macro CFG`.
+- En mode brut `MACRO`, l'UI standard reste intacte; la surcouche MACRO ne prend pas le contrôle global des encodeurs ni du track-select.
+- La capture MACRO ne s'active que pendant un maintien de slot, puis se finalise au relâchement.
+- `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
+- Le feedback LED MACRO lit directement `project_v1` pour la bank active et les slots du projet, avec fallback orange sur l'ensemble cible pendant un slot-lock; aucune autorite visuelle locale ne persiste dans l'UI.
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
@@ -194,6 +215,10 @@ Flux nominal prouve:
 
 2. Resolution navigation / raccourci
 - Dans `ui_core_service_track_selection_inputs`: SHIFT+HALL => mode trigger; TRACK_MOD+HALL => active track.
+- Contrat specifique `MACRO`: `SHIFT+HALL15` arme le raw mode `MACRO`; double tap ouvre la page dediee `Macro` (cible de contrat), sans effet runtime cache.
+- Grammaire visuelle halls en `MACRO`:
+  - `Mode = Slot`: 16 halls exposes en 4 groupes de 4 (couleurs groupe 1..4: ambre/violet/aqua/chartreuse), slot vide=LED off, slot rempli=couleur groupe.
+  - `Mode = Bank`: lecture orientee selection de bank par groupes de 4 halls (groupes 0..3 = banks, groupe actif en blanc, autres groupes en couleur attenuee).
 - Dans `ui_core_tick`: resolution priorisee mute/transport/shortcuts/pattern/seq/navigation.
 
 3. Mutation etat UI

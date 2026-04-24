@@ -7,15 +7,54 @@
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
 #include "Storage/undo_v1.h"
+#include "Param/param_macro.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
 
 UI_SDRAM static ProjectSaveV1 g_project_work;
+static project_v1_macro_state_t g_project_macro_state;
 static uint8_t g_project_active_slot_valid;
 static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
+
+static uint8_t project_v1_macro_slot_is_valid(uint8_t bank, uint8_t macro, uint8_t slot)
+{
+    return (uint8_t)((bank < PROJECT_V1_MACRO_BANK_COUNT)
+            && (macro < PROJECT_V1_MACRO_PER_BANK)
+            && (slot < PROJECT_V1_MACRO_SLOT_COUNT));
+}
+
+static void project_v1_macro_clear_slot(project_v1_macro_slot_t *slot)
+{
+    if (slot == 0)
+    {
+        return;
+    }
+
+    slot->track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
+    slot->param = PROJECT_V1_MACRO_SLOT_PARAM_NONE;
+    slot->scene_value = 0.0f;
+}
+
+static void project_v1_macro_sanitize_state(project_v1_macro_state_t *state)
+{
+    if (state == NULL)
+    {
+        return;
+    }
+
+    if ((uint8_t)state->hall_switch_mode >= (uint8_t)PROJECT_V1_MACRO_HALL_SWITCH_COUNT)
+    {
+        state->hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SLOT;
+    }
+
+    if (state->active_bank >= PROJECT_V1_MACRO_BANK_COUNT)
+    {
+        state->active_bank = 0U;
+    }
+}
 
 static void project_v1_set_error(project_v1_error_t err)
 {
@@ -38,9 +77,104 @@ static void project_boot_ctx_commit_current_state_if_valid(void)
     (void)boot_context_flash_commit(g_project_active_slot);
 }
 
+void project_v1_macro_init(void)
+{
+    g_project_macro_state.hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SLOT;
+    g_project_macro_state.active_bank = 0U;
+
+    for (uint8_t bank = 0U; bank < PROJECT_V1_MACRO_BANK_COUNT; ++bank)
+    {
+        for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_PER_BANK; ++macro)
+        {
+            for (uint8_t slot = 0U; slot < PROJECT_V1_MACRO_SLOT_COUNT; ++slot)
+            {
+                project_v1_macro_clear_slot(&g_project_macro_state.banks[bank].macros[macro].slots[slot]);
+            }
+        }
+    }
+}
+
+project_v1_macro_hall_switch_mode_t project_v1_macro_get_hall_switch_mode(void)
+{
+    return g_project_macro_state.hall_switch_mode;
+}
+
+void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t mode)
+{
+    if ((uint8_t)mode >= (uint8_t)PROJECT_V1_MACRO_HALL_SWITCH_COUNT)
+    {
+        return;
+    }
+
+    g_project_macro_state.hall_switch_mode = mode;
+}
+
+uint8_t project_v1_macro_get_active_bank(void)
+{
+    return g_project_macro_state.active_bank;
+}
+
+void project_v1_macro_set_active_bank(uint8_t bank)
+{
+    if (bank >= PROJECT_V1_MACRO_BANK_COUNT)
+    {
+        return;
+    }
+
+    if (g_project_macro_state.active_bank == bank)
+    {
+        return;
+    }
+
+    g_project_macro_state.active_bank = bank;
+    param_macro_sync_active_bank();
+}
+
+uint8_t project_v1_macro_slot_is_empty(uint8_t bank, uint8_t macro, uint8_t slot)
+{
+    project_v1_macro_slot_t current;
+    if (project_v1_macro_get_slot(bank, macro, slot, &current) == 0U)
+    {
+        return 1U;
+    }
+
+    return ((current.track == PROJECT_V1_MACRO_SLOT_TRACK_NONE)
+            || (current.param == PROJECT_V1_MACRO_SLOT_PARAM_NONE)) ? 1U : 0U;
+}
+
+uint8_t project_v1_macro_get_slot(uint8_t bank, uint8_t macro, uint8_t slot, project_v1_macro_slot_t *out_slot)
+{
+    if ((out_slot == 0) || (project_v1_macro_slot_is_valid(bank, macro, slot) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_slot = g_project_macro_state.banks[bank].macros[macro].slots[slot];
+    return 1U;
+}
+
+uint8_t project_v1_macro_set_slot(uint8_t bank,
+                                  uint8_t macro,
+                                  uint8_t slot,
+                                  const project_v1_macro_slot_t *in_slot)
+{
+    if ((in_slot == 0) || (project_v1_macro_slot_is_valid(bank, macro, slot) == 0U))
+    {
+        return 0U;
+    }
+
+    g_project_macro_state.banks[bank].macros[macro].slots[slot] = *in_slot;
+    if (bank == g_project_macro_state.active_bank)
+    {
+        param_macro_sync_active_bank();
+    }
+    return 1U;
+}
+
 void project_v1_init(void)
 {
     memset(&g_project_work, 0, sizeof(g_project_work));
+    project_v1_macro_init();
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
@@ -75,6 +209,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
                                   &out_project->state.queued_pattern_bank,
                                   &out_project->state.queued_pattern_slot);
 
+    out_project->macro = g_project_macro_state;
     out_project->state.active_project_slot_valid = g_project_active_slot_valid;
     out_project->state.active_project_slot = g_project_active_slot;
 
@@ -116,6 +251,9 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
                                   project->state.queued_pattern_bank,
                                   project->state.queued_pattern_slot);
 
+    g_project_macro_state = project->macro;
+    project_v1_macro_sanitize_state(&g_project_macro_state);
+    param_macro_sync_active_bank();
     g_project_active_slot_valid = project->state.active_project_slot_valid;
     g_project_active_slot = project->state.active_project_slot;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
@@ -217,11 +355,14 @@ uint8_t project_v1_load_blank(void)
     }
 
     sample_pool_init();
+    project_v1_macro_init();
     if (pattern_live_apply_boot_snapshot(0U) == 0U)
     {
         project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);
         return 0U;
     }
+
+    param_macro_sync_active_bank();
 
     undo_v1_clear_history();
 

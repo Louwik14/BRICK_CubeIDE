@@ -142,7 +142,8 @@ Points de lecture principaux:
 - `g_pattern_write_chunk[4096]`: tampon chunk write pour payload pattern.
 
 ### `project_v1.c`
-- `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet.
+- `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet et le bloc MACRO projet.
+- `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (banks/pots/slots + `Hall Switch Mode`), distinct du payload pattern et du `undo_v1`.
 - `g_project_active_slot_valid`, `g_project_active_slot`: slot projet actif logique.
 - `g_project_save_counter`: compteur de version save.
 - `g_project_last_error`, `g_project_last_sd_error`: etat erreur expose API.
@@ -155,6 +156,16 @@ Points de lecture principaux:
 ### `boot_context_flash.c`
 - `g_boot_ctx_cache` (`boot_context_flash_data_t {version, valid, crc, active_project_slot}`): cache dernier contexte valide.
 - `g_boot_ctx_cache_valid`: validite cache RAM.
+
+### `project_v1` macro RAM
+- `project_v1_macro_state_t` porte le modele MACRO projet-level en RAM:
+  - `hall_switch_mode` (`Slot` / `Bank`),
+  - `active_bank`,
+  - `banks[16]` -> `macros[4]` -> `slots[4]`.
+- Les slots vides utilisent une convention sentinel explicite:
+  - `track = PROJECT_V1_MACRO_SLOT_TRACK_NONE`,
+  - `param = PROJECT_V1_MACRO_SLOT_PARAM_NONE`.
+- Ce bloc est capture/restaure dans `ProjectSaveV1` et persiste via `project_sd_bank_*` au niveau projet.
 
 ### `undo_v1.c` (sous-zone dependante)
 - `g_undo_v1` (`undo_snapshot_v1_history_t`): ring buffer de 10 snapshots undo.
@@ -205,6 +216,7 @@ Points de lecture principaux:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
   - capture aussi le snapshot `sample_pool` courant du projet,
+  - capture le bloc MACRO projet (`hall switch mode`, bank active, banks/macros/slots),
   - force active slot dans snapshot,
   - stocke via `project_v1_store_snapshot_to_slot` -> `project_sd_bank_store_slot`,
   - incremente save_counter,
@@ -214,6 +226,7 @@ Points de lecture principaux:
 - `project_v1_load_slot()`:
   - charge depuis SD via `project_sd_bank_load_slot` (lecture + validation header/checksum + records, sans commit pattern-bank),
   - restaure le `sample_pool` du projet avant l'apply live,
+  - restaure le bloc MACRO projet depuis `ProjectSaveV1`,
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
   - commit ensuite le pattern-bank SD via `project_sd_bank_commit_slot_patterns`,
   - met a jour slot actif/counter,
@@ -284,6 +297,10 @@ Aucune double autorite complete concurrente de save/load projet n'est observee.
 
 `cause trouvee`
 
+## 16. Chantier MACRO - RAM owner de reference
+- Le chantier MACRO commence par l'owner RAM canonique dans `project_v1`.
+- La persistence projet-only et le branchement UI/runtime suivront sur des seams distincts.
+
 ## 15. Contrat "Blank Project"
 - Autorite unique: `project_v1_load_blank()`.
 - Comportement:
@@ -327,6 +344,8 @@ Plus petite prochaine passe utile:
 - La grille Slice n'est jamais persistée:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.
-- `PROJECT_V1_FILE_VERSION` a ete incremente pour refléter le payload Sampler v1.
+- `PROJECT_V1_FILE_VERSION` a ete incremente pour refl�ter le payload Sampler v1 et le bloc MACRO projet.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
+
+

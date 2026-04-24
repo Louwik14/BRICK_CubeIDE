@@ -22,6 +22,7 @@ void ui_param_set_bank(const ui_param_bank_t *bank);
 void ui_param_invalidate_bank(void);
 void ui_param_sync_active_bank_values(void);
 void ui_param_sync_active_track_mirror_from_runtime(void);
+uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param);
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
 void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t *frame_ctx);
 uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_feedback_frame_t *frame_ctx,

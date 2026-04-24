@@ -22,7 +22,7 @@
 #include "ui_page_manager.h"
 #include "ui_param.h"
 
-#define UI_PAGE_MANAGER_MAX_PAGES 16U
+#define UI_PAGE_MANAGER_MAX_PAGES UI_PAGE_COUNT
 
 /*
  * Page manager responsibilities:

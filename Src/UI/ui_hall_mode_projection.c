@@ -33,6 +33,9 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
                     ? UI_HALL_MODE_VIEW_ROUT
                     : UI_HALL_MODE_VIEW_ARP;
 
+        case UI_HALL_MODE_MACRO:
+            return UI_HALL_MODE_VIEW_MACRO;
+
         case UI_HALL_MODE_PATTERN:
             return UI_HALL_MODE_VIEW_PATTERN;
 
@@ -101,6 +104,11 @@ const char *ui_get_hall_mode_suffix_label(void)
     if (raw_mode == UI_HALL_MODE_PATTERN)
     {
         return (ui_core_pattern_get_mode() == UI_PATTERN_MODE_STORE) ? "STR" : "RCL";
+    }
+
+    if (raw_mode == UI_HALL_MODE_MACRO)
+    {
+        return "";
     }
 
     if (raw_mode == UI_HALL_MODE_MUTE)

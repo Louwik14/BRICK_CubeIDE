@@ -9,9 +9,11 @@
 #include "param_registry.h"
 #include "param_store.h"
 #include "ui_core.h"
+#include "ui_macro_interaction.h"
 #include "ui_param.h"
 #include "ui_widgets.h"
 #include "Core/track_runtime.h"
+#include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Mod/mod_lfo_v1.h"
@@ -285,16 +287,52 @@ static float ui_renderer_template_get_param_display_value(param_id_t id)
 
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
                                                  const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                 param_id_t macro_slot_param,
                                                  uint8_t slot,
                                                  param_id_t id)
 {
     const int x = g_ui_template_frame_x[slot];
     const int y = UI_TEMPLATE_FRAME_Y;
+    const uint8_t slot_locked = (uint8_t)((macro_slot_param < PARAM_COUNT) && (macro_slot_param == id));
+
+    if (slot_locked != 0U)
+    {
+        drv_display_fill_rect(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+        drv_display_set_draw_color(0U);
+    }
 
     ui_renderer_template_draw_open_corner_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
 
     if (id >= PARAM_COUNT)
     {
+        if (slot_locked != 0U)
+        {
+            drv_display_set_draw_color(1U);
+        }
+
+        if ((state != NULL) && (state->virtual_slot_text != NULL))
+        {
+            char virt_name[24];
+            char virt_value[20];
+            const uint8_t has_virtual = state->virtual_slot_text(slot,
+                                                                 virt_name,
+                                                                 (uint32_t)sizeof(virt_name),
+                                                                 virt_value,
+                                                                 (uint32_t)sizeof(virt_value));
+            if (has_virtual != 0U)
+            {
+                drv_display_set_font(&FONT_4X6);
+                drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
+                                      (uint8_t)(y + 3),
+                                      virt_name);
+                uiw_draw_enum_text(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, virt_value);
+                drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_value),
+                                      (uint8_t)(y + UI_TEMPLATE_FRAME_H - 8),
+                                      virt_value);
+                return;
+            }
+        }
+
         drv_display_set_font(&FONT_4X6);
         drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, "-"), (uint8_t)(y + 14), "-");
         return;
@@ -303,7 +341,26 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     const param_desc_t *desc = &param_registry[id];
     float value = ui_renderer_template_get_param_display_value(id);
     uint8_t draw_name_inverted = 0U;
-    (void)ui_param_try_get_seq_plock_feedback_with_frame(plock_frame_ctx, id, &value, &draw_name_inverted);
+    uint8_t macro_slot_track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
+    param_id_t macro_slot_value_param = PARAM_COUNT;
+    float macro_slot_scene_value = 0.0f;
+    const uint8_t has_macro_slot_value =
+        ui_macro_interaction_get_active_slot_value(&macro_slot_track,
+                                                   &macro_slot_value_param,
+                                                   &macro_slot_scene_value);
+    const uint8_t macro_value_visible =
+        (uint8_t)((has_macro_slot_value != 0U)
+                && (macro_slot_track == ui_get_active_track())
+                && (macro_slot_value_param == id));
+
+    if (macro_value_visible != 0U)
+    {
+        value = macro_slot_scene_value;
+    }
+    else
+    {
+        (void)ui_param_try_get_seq_plock_feedback_with_frame(plock_frame_ctx, id, &value, &draw_name_inverted);
+    }
 
     const char *enum_label = NULL;
     char value_txt[20];
@@ -320,7 +377,13 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     ui_renderer_template_format_value(id, value, value_txt, (uint32_t)sizeof(value_txt));
 
     drv_display_set_font(&FONT_4X6);
-    if (draw_name_inverted != 0U)
+    if (slot_locked != 0U)
+    {
+        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name),
+                              (uint8_t)(y + 3),
+                              desc->name);
+    }
+    else if (draw_name_inverted != 0U)
     {
         ui_renderer_template_draw_inverted_label((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name),
                                                  (uint8_t)(y + 2),
@@ -340,41 +403,108 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             break;
 
         case UIW_WIDGET_SWITCH:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             uiw_draw_switch(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (value >= 0.5f) ? 1U : 0U);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             break;
 
         case UIW_WIDGET_ENUM_TEXT:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             uiw_draw_enum_text(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (enum_label != NULL) ? enum_label : value_txt);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             break;
 
         case UIW_WIDGET_JACK:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             uiw_draw_jack_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             break;
 
         case UIW_WIDGET_KEYBOARD:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             uiw_draw_keyboard_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             break;
 
         case UIW_WIDGET_WAVE_ICON:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             uiw_draw_wave_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             break;
 
         case UIW_WIDGET_FILTER_ICON:
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             uiw_draw_filter_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             break;
 
         case UIW_WIDGET_KNOB:
         default:
         {
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
             const int vmin = (int)(desc->min * 10.0f);
             const int vmax = (int)(desc->max * 10.0f);
             const int vint = (int)(value * 10.0f);
             uiw_draw_knob(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, vint, vmin, vmax);
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
             break;
         }
     }
 
+    if (slot_locked != 0U)
+    {
+        drv_display_set_draw_color(0U);
+    }
+
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, value_txt), (uint8_t)(y + UI_TEMPLATE_FRAME_H - 8), value_txt);
+
+    if (slot_locked != 0U)
+    {
+        drv_display_set_draw_color(1U);
+    }
+
 }
 
 static void ui_renderer_template_draw_header(const ui_template_page_state_t *state)
@@ -522,13 +652,15 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
 
     ui_param_seq_plock_feedback_frame_t plock_frame_ctx;
     ui_param_seq_plock_feedback_frame_begin(&plock_frame_ctx);
+    param_id_t macro_slot_param = PARAM_COUNT;
+    (void)ui_macro_interaction_get_active_slot_lock(&macro_slot_param);
 
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage != NULL)
     {
         for (uint8_t i = 0U; i < 4U; i++)
         {
-            ui_renderer_template_draw_param_slot(state, &plock_frame_ctx, i, subpage->param_bank.params[i]);
+            ui_renderer_template_draw_param_slot(state, &plock_frame_ctx, macro_slot_param, i, subpage->param_bank.params[i]);
         }
     }
 

@@ -35,6 +35,7 @@
 #include "ui_hall_input_service.h"
 #include "ui_hall_mode_state.h"
 #include "ui_hall_mode_flow.h"
+#include "ui_macro_interaction.h"
 #include "ui_track_catalog.h"
 #include "ui_core_clipboard.h"
 #include "ui_core_feedback.h"
@@ -43,6 +44,8 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
+#include "pages/ui_page_template_macro.h"
+#include "Storage/project_v1.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "App/Hall/hall_engine.h"
@@ -455,11 +458,39 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
                                                         ui_core_set_feedback);
 }
 
+static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ui_get_hall_mode() != UI_HALL_MODE_MACRO))
+    {
+        return 0U;
+    }
+
+    if ((ev->type != UI_EVENT_HALL_PRESS) && (ev->type != UI_EVENT_HALL_RELEASE))
+    {
+        return 0U;
+    }
+
+    if (ev->id >= HALL_KEY_COUNT)
+    {
+        return 0U;
+    }
+
+    if ((ui_page_get_id() != UI_PAGE_TEMPLATE_MACRO)
+            && (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_BANK)
+            && (ev->type == UI_EVENT_HALL_PRESS))
+    {
+        project_v1_macro_set_active_bank(ev->id);
+    }
+
+    return 1U;
+}
+
 void ui_core_init(void)
 {
     ui_core_clipboard_init();
     ui_core_feedback_init();
     ui_core_pattern_init();
+    ui_macro_interaction_init();
     track_state_init();
     g_ui_track_state.active_track = 0U;
     g_ui_track_state.shift_down = 0U;
@@ -509,6 +540,7 @@ void ui_core_service_track_selection_inputs(void)
         ui_hall_input_service_handle_hall(hall,
                                           pressed,
                                           was_pressed,
+                                          ui_get_hall_mode(),
                                           g_ui_track_state.shift_down,
                                           g_ui_track_state.track_select_armed,
                                           mute_active,
@@ -554,6 +586,7 @@ void ui_core_tick(void)
         /* Intentionally before pattern/seq: global shortcuts can fully mask them. */
         { ui_core_handle_global_shortcuts, 1U, 1U },
         { ui_core_handle_pattern_mode_event, 1U, 1U },
+        { ui_core_handle_macro_mode_event, 1U, 1U },
         { ui_core_handle_seq_mode_event, 1U, 1U },
     };
 
@@ -566,9 +599,16 @@ void ui_core_tick(void)
         {
             ui_page_settings_handle_encoder(encoder, delta);
         }
+        else if (ui_page_get_id() == UI_PAGE_TEMPLATE_MACRO)
+        {
+            ui_page_template_macro_handle_encoder(encoder, delta);
+        }
         else
         {
-            ui_param_handle_encoder(encoder, delta);
+            if (ui_macro_interaction_note_encoder_delta(encoder, delta) == 0U)
+            {
+                ui_param_handle_encoder(encoder, delta);
+            }
         }
     }
 

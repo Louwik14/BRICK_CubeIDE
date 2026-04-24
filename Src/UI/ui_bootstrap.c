@@ -10,6 +10,7 @@
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_arp.h"
 #include "pages/ui_page_template_seq.h"
+#include "pages/ui_page_template_macro.h"
 #include "pages/ui_page_template_mix.h"
 #include "pages/ui_page_template_play.h"
 #include "pages/ui_page_settings.h"
@@ -48,6 +49,7 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(&g_ui_page_template_keyboard);
     ui_page_manager_register(&g_ui_page_template_arp);
     ui_page_manager_register(&g_ui_page_template_seq);
+    ui_page_manager_register(&g_ui_page_template_macro);
     ui_page_manager_register(&g_ui_page_template_mix);
     ui_page_manager_register(&g_ui_page_template_play);
     ui_page_manager_register(&g_ui_page_template_vca);

@@ -9,8 +9,21 @@
 #define PROJECT_V1_BANK_COUNT      16U
 #define PROJECT_V1_PATTERN_COUNT   16U
 #define PROJECT_V1_SLOT_COUNT      16U
+#define PROJECT_V1_MACRO_BANK_COUNT 16U
+#define PROJECT_V1_MACRO_PER_BANK   4U
+#define PROJECT_V1_MACRO_SLOT_COUNT 4U
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    6U /* Sampler project pool + Tone/Slice params payload */
+#define PROJECT_V1_FILE_VERSION    7U /* Sampler project pool + Tone/Slice params payload + MACRO project state */
+
+typedef enum
+{
+    PROJECT_V1_MACRO_HALL_SWITCH_SLOT = 0,
+    PROJECT_V1_MACRO_HALL_SWITCH_BANK,
+    PROJECT_V1_MACRO_HALL_SWITCH_COUNT
+} project_v1_macro_hall_switch_mode_t;
+
+#define PROJECT_V1_MACRO_SLOT_TRACK_NONE 0xFFU
+#define PROJECT_V1_MACRO_SLOT_PARAM_NONE PARAM_COUNT
 
 typedef enum
 {
@@ -40,8 +53,33 @@ typedef struct
 
 typedef struct
 {
+    uint8_t track;
+    param_id_t param;
+    float scene_value;
+} project_v1_macro_slot_t;
+
+typedef struct
+{
+    project_v1_macro_slot_t slots[PROJECT_V1_MACRO_SLOT_COUNT];
+} project_v1_macro_t;
+
+typedef struct
+{
+    project_v1_macro_t macros[PROJECT_V1_MACRO_PER_BANK];
+} project_v1_macro_bank_t;
+
+typedef struct
+{
+    project_v1_macro_hall_switch_mode_t hall_switch_mode;
+    uint8_t active_bank;
+    project_v1_macro_bank_t banks[PROJECT_V1_MACRO_BANK_COUNT];
+} project_v1_macro_state_t;
+
+typedef struct
+{
     project_v1_state_block_t state;
     sample_pool_project_snapshot_t sample_pool;
+    project_v1_macro_state_t macro;
     PatternSaveV1 live;
 } ProjectSaveV1;
 
@@ -71,6 +109,17 @@ typedef struct __attribute__((packed))
 } project_v1_slot_record_t;
 
 void project_v1_init(void);
+void project_v1_macro_init(void);
+project_v1_macro_hall_switch_mode_t project_v1_macro_get_hall_switch_mode(void);
+void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t mode);
+uint8_t project_v1_macro_get_active_bank(void);
+void project_v1_macro_set_active_bank(uint8_t bank);
+uint8_t project_v1_macro_slot_is_empty(uint8_t bank, uint8_t macro, uint8_t slot);
+uint8_t project_v1_macro_get_slot(uint8_t bank, uint8_t macro, uint8_t slot, project_v1_macro_slot_t *out_slot);
+uint8_t project_v1_macro_set_slot(uint8_t bank,
+                                  uint8_t macro,
+                                  uint8_t slot,
+                                  const project_v1_macro_slot_t *in_slot);
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project);
 uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_transport);
 uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
