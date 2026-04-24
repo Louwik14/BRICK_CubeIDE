@@ -7,7 +7,8 @@ Ce document decoupe l'integration Plaits en passes courtes, executables une par 
 Hypotheses verrouillees pour v1:
 - Plaits = nouveau `type` dans la family `Synth`
 - integration strictement track-aware
-- une instance Plaits par track logique
+- une seule instance physique Plaits v1
+- au plus une track logique configuree en `Synth/Plaits`
 - monophonique par track
 - politique audio v1 = `OUT-only mono`
 - `AUX` ignore en v1
@@ -119,7 +120,8 @@ Patch attendu:
 - ajout des parametres TONE Plaits au catalogue
 - bornes, defaults, labels, domaine, page/ordre d'exposition
 - mapping explicite vers le state canonique Plaits
-- compatibilite p-lock/modulation selon les regles existantes du domaine `TONE`
+- ne pas rendre tous les parametres p-lockables/modulables par defaut
+- chaque support p-lock/modulation doit etre explicite et justifie dans le catalogue
 
 Verifications / build checks:
 - build compile
@@ -134,40 +136,10 @@ Criteres de fin:
 - les 8 parametres Plaits v1 existent dans `param_registry`
 - ils pointent vers l'etat canonique track-aware correct
 
-### Etape 4 - Ajouter le backend apply Plaits
+### Etape 4 - Ajouter le runtime wrapper Plaits minimal
 
 Objectif:
-- brancher l'ecriture d'un parametre canonique Plaits vers un backend runtime Plaits, meme si le moteur audio n'est pas encore final
-
-Fichiers probables a modifier:
-- `Src/Param/param_registry_backends.c`
-- `Src/Param/param_registry_tone_backends.c`
-- `Inc/Core/track_runtime.h`
-- `Src/Core/track_runtime.c`
-- futur header runtime Plaits minimal si necessaire
-
-Patch attendu:
-- ajout du dispatch apply pour les parametres Plaits
-- conversion valeur canonique -> valeur runtime Plaits
-- table ou switch track-aware local au backend TONE
-- aucun chemin parallele hors `param_registry`
-
-Verifications / build checks:
-- build compile
-- verification qu'un write `param_registry_apply_track_value(...)` atteint bien le backend Plaits
-- verification qu'aucun autre backend moteur n'est regresse
-
-Dependance:
-- Etape 3
-
-Criteres de fin:
-- chaque parametre Plaits v1 a un chemin apply complet jusqu'au runtime cible
-- l'architecture d'apply reste entierement dans Z3
-
-### Etape 5 - Ajouter le runtime Plaits minimal
-
-Objectif:
-- introduire une instance runtime Plaits par track logique, sans encore la rendre audible dans le mixer si cela complique la passe
+- introduire un runtime wrapper Plaits par track logique, sans encore le rendre audible dans le mixer si cela complique la passe
 
 Fichiers probables a modifier:
 - nouveau module runtime Plaits sous `Src/Core/` ou `Src/Audio/`
@@ -192,12 +164,41 @@ Verifications / build checks:
 - verification reset/rebind propre quand une track change de type
 
 Dependance:
+- Etape 3
+
+Criteres de fin:
+- le runtime wrapper Plaits existe
+- son etat interne minimal est reservable par track
+- pas encore besoin d'un rendu final audible si la passe suivante s'en charge
+
+### Etape 5 - Ajouter le backend apply Plaits
+
+Objectif:
+- brancher l'ecriture d'un parametre canonique Plaits vers le runtime wrapper Plaits, meme si le moteur audio n'est pas encore final
+
+Fichiers probables a modifier:
+- `Src/Param/param_registry_backends.c`
+- `Src/Param/param_registry_tone_backends.c`
+- futur header runtime Plaits minimal si necessaire
+- `Src/Core/track_runtime.c`
+
+Patch attendu:
+- ajout du dispatch apply pour les parametres Plaits
+- conversion valeur canonique -> valeur runtime Plaits
+- table ou switch track-aware local au backend TONE
+- aucun chemin parallele hors `param_registry`
+
+Verifications / build checks:
+- build compile
+- verification qu'un write `param_registry_apply_track_value(...)` atteint bien le backend Plaits
+- verification qu'aucun autre backend moteur n'est regresse
+
+Dependance:
 - Etape 4
 
 Criteres de fin:
-- le runtime Plaits existe
-- les parametres appliques peuvent modifier son etat interne
-- pas encore besoin d'un rendu final audible si la passe suivante s'en charge
+- chaque parametre Plaits v1 a un chemin apply complet jusqu'au runtime cible
+- l'architecture d'apply reste entierement dans Z3
 
 ### Etape 6 - Brancher le rendu audio Plaits `OUT-only mono`
 
@@ -211,7 +212,8 @@ Fichiers probables a modifier:
 Patch attendu:
 - rendu bloc Plaits par track runtime active
 - buffer temporaire mono local type `float tmp[AUDIO_BLOCK_SIZE]`
-- `AUX` calcule cote engine si necessaire mais non consomme par BRICK
+- `AUX` n'est ni expose, ni route, ni mixe en v1
+- si l'API Plaits le calcule, `AUX` est ignore localement
 - submit via `mixer_submit_external_mono(track_id, tmp, frames)`
 - aucun seam stereo, aucun `L/R`, aucun mode output
 
@@ -307,7 +309,8 @@ Patch attendu:
 - inclusion des parametres/etat canonique Plaits dans les snapshots necessaires
 - versioning format si requis par les structures persistantes
 - restauration correcte apres load
-- pas de backward-compat legacy complexe requise en phase proto, mais version explicite si le format change
+- aucune retrocompatibilite ou migration legacy n'est requise en phase proto
+- bump ou clear format autorise si le layout change
 
 Verifications / build checks:
 - build compile
@@ -340,7 +343,7 @@ Verifications / build checks:
 - verification selection `Synth/Plaits`
 - verification rendu audio `OUT-only mono`
 - verification notes/gates clavier + sequencer
-- verification p-locks sur les 8 parametres v1
+- verification p-locks uniquement sur les parametres declares p-lockables
 - verification navigation UI TONE
 - verification save/load pattern et projet
 - verification absence de regression Drum/Sampler/Master Buffer
@@ -377,4 +380,3 @@ Regle d'execution attendue pour ces passes:
 - ne traiter que l'etape demandee
 - ne pas anticiper l'etape suivante sauf micro-fix strictement necessaire au build
 - mettre a jour la documentation uniquement si la passe modifie la cartographie ou revele une divergence reelle
-

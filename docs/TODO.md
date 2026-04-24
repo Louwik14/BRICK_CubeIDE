@@ -1,10 +1,8 @@
 # TODO trié par dépendances
 
 ## 1. Base track / UI
-~~- Créer le type de track MIDI et son fonctionnement~~
  
 
-~~- Mettre en place la track Hybrid et son fonctionnement~~  
   
 - Retravailler l’UI et essayer d’avoir un ensemble plus joli, avec une vraie identité visuelle, en s’éloignant de celle d’Elektron  
   Piste : à traiter après stabilisation des ensembles et workflows principaux, pour éviter de remaquetter une UI encore mouvante.
@@ -25,7 +23,6 @@
 - Créer le type de track Looper et son fonctionnement  
   Piste : garder les paramètres sonores universels comme `VCA`, `Mix`, `Colors`, mais remplacer `Tone` par un paramétrage propre au looper. Il faut aussi réfléchir à comment choisir quelles pistes vont dans le looper, avec un système intuitif et cohérent avec le workflow actuel.
 
--~~Résoudre le bug `Rec Len` du rec buffer~~
   
 - Ajouter les paramètres de décalage de lecture pour le rec buffer afin de pouvoir caller la loop comme sur l’Octatrack  
   Piste : ajouter un offset de lecture cohérent avec la logique actuelle du buffer, sans casser l’alignement rec / loop / playback.
@@ -39,26 +36,15 @@
   - mode slice où la loop est découpée et où chacun des 16 pads saute vers un des 16 points de la loop  
   - réfléchir à la coexistence ou à la fusion entre mode DJ loop et mode slice
 
-## 4. Infra sample
 
-## 5. Tracks sample
-- Créer la track sampleur one shot et son fonctionnement  
-  Piste : garder les ensembles de tracks sonores classiques, mais remplacer `Tone` par des paramètres propres au sampleur one shot.
-
-- Créer la track sampleur slice et son fonctionnement  
-  Piste : même logique que la track sampleur one shot. On garde les ensembles sonores, et `Tone` sert aux paramètres propres à cette track.
 
 ## 7. Séquenceur / performance
-- ~~Mettre en place réellement le swing et le quantize du séquenceur~~  
 
 
 - Trouver comment ajouter une fonction ratchet / roll pour le séquenceur, surtout trouver son workflow  
   Piste : aucune.
 
-- Trouver comment mettre en place la fonction macro des 4 potentiomètres dispo, et surtout leur attribution / workflow  
-  Piste : possiblement un hall ensemble, par exemple en appuyant sur `Shift` + un hall.  
-  Idéalement, il y aurait plusieurs banques, et les halls switch serviraient à choisir la banque.  
-  Pour choisir quel paramètre va sur quel pot, il faudrait idéalement lancer un mode `choose` qui permet de naviguer parmi les ensembles ; dans ce mode, tourner l’encodeur ne modifierait pas le paramètre mais assignerait le paramètre touché au potentiomètre visé. Le workflow reste à clarifier.
+
 
 ## 8. Système global
 - Mettre en place d’autres paramètres dans le menu réglage global, et le retravailler  

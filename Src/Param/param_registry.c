@@ -251,6 +251,30 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_SLICE_COUNT:
             *out_value = state->slice_count;
             return 1U;
+        case PARAM_PLAITS_MODEL:
+            *out_value = state->plaits.model;
+            return 1U;
+        case PARAM_PLAITS_COARSE_FREQUENCY:
+            *out_value = state->plaits.coarse_frequency;
+            return 1U;
+        case PARAM_PLAITS_HARMONICS:
+            *out_value = state->plaits.harmonics;
+            return 1U;
+        case PARAM_PLAITS_TIMBRE:
+            *out_value = state->plaits.timbre;
+            return 1U;
+        case PARAM_PLAITS_MORPH:
+            *out_value = state->plaits.morph;
+            return 1U;
+        case PARAM_PLAITS_LPG_RESPONSE:
+            *out_value = state->plaits.lpg_response;
+            return 1U;
+        case PARAM_PLAITS_DECAY:
+            *out_value = state->plaits.decay;
+            return 1U;
+        case PARAM_PLAITS_FREQUENCY_RANGE:
+            *out_value = state->plaits.frequency_range;
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -575,6 +599,30 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
             state->slice_count = value;
+            return 1U;
+        case PARAM_PLAITS_MODEL:
+            state->plaits.model = value;
+            return 1U;
+        case PARAM_PLAITS_COARSE_FREQUENCY:
+            state->plaits.coarse_frequency = value;
+            return 1U;
+        case PARAM_PLAITS_HARMONICS:
+            state->plaits.harmonics = value;
+            return 1U;
+        case PARAM_PLAITS_TIMBRE:
+            state->plaits.timbre = value;
+            return 1U;
+        case PARAM_PLAITS_MORPH:
+            state->plaits.morph = value;
+            return 1U;
+        case PARAM_PLAITS_LPG_RESPONSE:
+            state->plaits.lpg_response = value;
+            return 1U;
+        case PARAM_PLAITS_DECAY:
+            state->plaits.decay = value;
+            return 1U;
+        case PARAM_PLAITS_FREQUENCY_RANGE:
+            state->plaits.frequency_range = value;
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

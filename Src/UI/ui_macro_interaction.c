@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "App/Hall/hall_engine.h"
 #include "Core/track_runtime.h"
 #include "Param/param_macro.h"
 #include "Param/param_registry.h"

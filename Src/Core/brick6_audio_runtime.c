@@ -20,6 +20,7 @@
 #include "Audio/drum_synth.h"
 #include "Audio/sd_multitrack_recorder.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/brick6_plaits_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
@@ -166,6 +167,34 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
     }
 }
 
+static void brick6_render_plaits_tracks(uint32_t frames, uint8_t *out_plaits_tracks)
+{
+    static float plaits_tmp[AUDIO_BLOCK_SIZE];
+    uint8_t plaits_tracks = 0U;
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL)
+                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+                || (track_runtime_is_audio_routable(track) == 0U))
+        {
+            continue;
+        }
+
+        memset(plaits_tmp, 0, frames * sizeof(float));
+        brick6_plaits_runtime_render_instance(ctx->instance_id, plaits_tmp, frames);
+        mixer_submit_external_mono(ctx->mix_track_id, plaits_tmp, frames);
+        plaits_tracks++;
+    }
+
+    if (out_plaits_tracks != NULL)
+    {
+        *out_plaits_tracks = plaits_tracks;
+    }
+}
+
 void brick6_audio_runtime_init(live_recorder_t *live_recorder)
 {
     (void)live_recorder;
@@ -224,6 +253,12 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t sampler_tracks = 0U;
         brick6_render_sampler_tracks(frames, &sampler_tracks);
         (void)sampler_tracks;
+    }
+
+    {
+        uint8_t plaits_tracks = 0U;
+        brick6_render_plaits_tracks(frames, &plaits_tracks);
+        (void)plaits_tracks;
     }
 
     mod_lfo_v1_process_block(frames);

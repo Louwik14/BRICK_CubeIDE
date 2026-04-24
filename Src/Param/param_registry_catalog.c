@@ -39,6 +39,7 @@ static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP
 static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "RevLoop", "Slice", "RevSlice", NULL};
 static const char *const g_sampler_slice_count_labels[] = {"2", "4", "8", "16", "32", "64", NULL};
+static const char *const g_plaits_model_labels[] = {"VA", "WS", "FM", "Grain", "WT", "Chord", "Speech", "Swarm", "Noise", "Particle", "String", "Modal", "Additive", "Kick", "Snare", "Hat", "PD", "6Op", "Terrain", "StrMach", "Chip", "VA VCF", NULL};
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
@@ -347,6 +348,14 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_FADE_IN, "Fade In", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_in),
     PARAM_DESC_EX(PARAM_SAMPLER_FADE_OUT, "Fade Out", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_out),
     PARAM_DESC_EX(PARAM_SAMPLER_SLICE_COUNT, "Slice Count", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_slice_count_labels, apply_sampler_slice_count),
+    PARAM_DESC_EX(PARAM_PLAITS_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 21.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_plaits_model_labels, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_COARSE_FREQUENCY, "Coarse", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_HARMONICS, "Harmonics", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_MORPH, "Morph", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_LPG_RESPONSE, "LPG Resp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_PLAITS_FREQUENCY_RANGE, "Range", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),

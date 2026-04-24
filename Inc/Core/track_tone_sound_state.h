@@ -18,6 +18,17 @@ typedef struct
     float fade_in;
     float fade_out;
     float slice_count;
+    struct
+    {
+        float model;
+        float coarse_frequency;
+        float harmonics;
+        float timbre;
+        float morph;
+        float lpg_response;
+        float decay;
+        float frequency_range;
+    } plaits;
     float midi_program;
     float midi_cc[12];
     struct

@@ -3,7 +3,7 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_SAMPLER };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_SAMPLER, UI_TRACK_TYPE_PLAITS };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
@@ -123,6 +123,24 @@ bool ui_track_catalog_type_is_available(uint8_t track,
 
     if ((family != UI_TRACK_FAMILY_SYNTH) && (family != UI_TRACK_FAMILY_MASTER))
     {
+        return true;
+    }
+
+    if ((family == UI_TRACK_FAMILY_SYNTH) && (type == UI_TRACK_TYPE_PLAITS))
+    {
+        for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
+        {
+            if (other_track == track)
+            {
+                continue;
+            }
+
+            if (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_SYNTH, UI_TRACK_TYPE_PLAITS, track_configs) != 0U)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -431,6 +449,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
 
         case UI_TRACK_TYPE_SAMPLER:
             return "Sampler";
+        case UI_TRACK_TYPE_PLAITS:
+            return "Plaits";
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buffer";
@@ -482,6 +502,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
 
         case UI_TRACK_TYPE_SAMPLER:
             return "Smp";
+        case UI_TRACK_TYPE_PLAITS:
+            return "Plt";
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buf";

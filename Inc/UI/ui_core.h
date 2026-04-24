@@ -32,6 +32,7 @@ typedef enum
     UI_TRACK_TYPE_AUDIO = 0,
     UI_TRACK_TYPE_HYBRID,
     UI_TRACK_TYPE_SAMPLER,
+    UI_TRACK_TYPE_PLAITS,
     UI_TRACK_TYPE_BUFFER,
     UI_TRACK_TYPE_TB3, /* legacy type kept for snapshot compatibility; no active routing */
     UI_TRACK_TYPE_DRUM_TRX_BD,

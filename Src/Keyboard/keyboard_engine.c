@@ -17,6 +17,7 @@
 #include "Audio/mixer.h"
 #include "Audio/drum_synth.h"
 #include "MIDI/midi.h"
+#include "Core/brick6_plaits_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
@@ -178,6 +179,17 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                 brick6_sampler_runtime_stop(ctx->track_id);
             }
         }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+        {
+            if (is_note_on != 0U)
+            {
+                brick6_plaits_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+            }
+            else
+            {
+                brick6_plaits_runtime_note_off(ctx->instance_id);
+            }
+        }
     }
 }
 
@@ -288,6 +300,10 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
     {
         brick6_sampler_runtime_trigger_note(active_track, note);
     }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+    {
+        brick6_plaits_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+    }
 }
 
 static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
@@ -359,6 +375,16 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
             brick6_sampler_runtime_stop(active_track);
         }
     }
+    else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+    {
+        const uint8_t active_track = ui_get_active_track();
+        track_runtime_refresh_track(active_track);
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+        if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+        {
+            brick6_plaits_runtime_note_off(ctx->instance_id);
+        }
+    }
     
 }
 
@@ -411,6 +437,11 @@ void keyboard_engine_all_notes_off(void)
                 && (track_runtime_get_ctx(active_track)->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))
         {
             brick6_sampler_runtime_stop(active_track);
+        }
+        else if ((track_runtime_get_ctx(active_track) != NULL)
+                && (track_runtime_get_ctx(active_track)->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS))
+        {
+            brick6_plaits_runtime_note_off(track_runtime_get_ctx(active_track)->instance_id);
         }
     }
 
@@ -551,6 +582,17 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
             else if (is_all_notes_off != 0U)
             {
                 brick6_sampler_runtime_stop(track);
+            }
+        }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+        {
+            if (is_note_on != 0U)
+            {
+                brick6_plaits_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+            }
+            else if ((is_note_off != 0U) || (is_all_notes_off != 0U))
+            {
+                brick6_plaits_runtime_note_off(ctx->instance_id);
             }
         }
     }

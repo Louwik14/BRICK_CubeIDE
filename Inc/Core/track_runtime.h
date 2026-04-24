@@ -29,6 +29,7 @@ typedef enum
     TRACK_RUNTIME_ENGINE_NONE = 0,
     TRACK_RUNTIME_ENGINE_AUDIO_TRACK,
     TRACK_RUNTIME_ENGINE_SAMPLER,
+    TRACK_RUNTIME_ENGINE_PLAITS,
     TRACK_RUNTIME_ENGINE_MASTER_BUFFER,
     TRACK_RUNTIME_ENGINE_TB3, /* legacy engine id retained; not bound anymore */
     TRACK_RUNTIME_ENGINE_DRUM
@@ -71,6 +72,7 @@ typedef enum
     TRACK_RUNTIME_TYPE_AUDIO = 0,
     TRACK_RUNTIME_TYPE_HYBRID,
     TRACK_RUNTIME_TYPE_SAMPLER,
+    TRACK_RUNTIME_TYPE_PLAITS,
     TRACK_RUNTIME_TYPE_BUFFER,
     TRACK_RUNTIME_TYPE_TB3, /* legacy runtime type retained; not bound anymore */
     TRACK_RUNTIME_TYPE_DRUM_TRX_BD,
@@ -222,6 +224,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);
+uint8_t track_runtime_is_track_plaits_available(uint8_t track);
 
 #ifdef __cplusplus
 }

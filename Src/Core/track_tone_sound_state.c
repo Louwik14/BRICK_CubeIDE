@@ -8,6 +8,15 @@
 
 SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_COUNT];
 
+#define TRACK_TONE_PLAITS_DEFAULT_MODEL              0.0f
+#define TRACK_TONE_PLAITS_DEFAULT_COARSE_FREQUENCY   0.5f
+#define TRACK_TONE_PLAITS_DEFAULT_HARMONICS          0.5f
+#define TRACK_TONE_PLAITS_DEFAULT_TIMBRE             0.5f
+#define TRACK_TONE_PLAITS_DEFAULT_MORPH              0.5f
+#define TRACK_TONE_PLAITS_DEFAULT_LPG_RESPONSE       0.0f
+#define TRACK_TONE_PLAITS_DEFAULT_DECAY              0.5f
+#define TRACK_TONE_PLAITS_DEFAULT_FREQUENCY_RANGE    0.5f
+
 static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
 {
     if (state == NULL)
@@ -24,6 +33,14 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->fade_in = param_registry[PARAM_SAMPLER_FADE_IN].default_value;
     state->fade_out = param_registry[PARAM_SAMPLER_FADE_OUT].default_value;
     state->slice_count = param_registry[PARAM_SAMPLER_SLICE_COUNT].default_value;
+    state->plaits.model = TRACK_TONE_PLAITS_DEFAULT_MODEL;
+    state->plaits.coarse_frequency = TRACK_TONE_PLAITS_DEFAULT_COARSE_FREQUENCY;
+    state->plaits.harmonics = TRACK_TONE_PLAITS_DEFAULT_HARMONICS;
+    state->plaits.timbre = TRACK_TONE_PLAITS_DEFAULT_TIMBRE;
+    state->plaits.morph = TRACK_TONE_PLAITS_DEFAULT_MORPH;
+    state->plaits.lpg_response = TRACK_TONE_PLAITS_DEFAULT_LPG_RESPONSE;
+    state->plaits.decay = TRACK_TONE_PLAITS_DEFAULT_DECAY;
+    state->plaits.frequency_range = TRACK_TONE_PLAITS_DEFAULT_FREQUENCY_RANGE;
     state->midi_program = param_registry[PARAM_MIDI_PROGRAM].default_value;
     state->midi_cc[0] = param_registry[PARAM_MIDI_CC1_1].default_value;
     state->midi_cc[1] = param_registry[PARAM_MIDI_CC1_2].default_value;
