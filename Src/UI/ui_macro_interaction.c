@@ -213,13 +213,15 @@ void ui_macro_interaction_note_hall_press(uint8_t hall)
     g_ui_macro_interaction.scene_value = 0.0f;
 }
 
-uint8_t ui_macro_interaction_note_encoder_delta(uint8_t encoder, int16_t delta)
+uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_encoder_context_t *ctx,
+                                                            uint8_t encoder,
+                                                            int16_t delta)
 {
     param_id_t param = PARAM_COUNT;
     const param_desc_t *desc = NULL;
     float current_value = 0.0f;
 
-    if ((delta == 0) || (encoder >= 4U))
+    if ((ctx == 0) || (ctx->valid == 0U) || (delta == 0) || (encoder >= 4U))
     {
         return 0U;
     }
@@ -234,7 +236,8 @@ uint8_t ui_macro_interaction_note_encoder_delta(uint8_t encoder, int16_t delta)
         return 0U;
     }
 
-    if (ui_param_get_active_bank_param(encoder, &param) == 0U)
+    param = ctx->bank.params[encoder];
+    if (param >= PARAM_COUNT)
     {
         return 0U;
     }
@@ -287,6 +290,13 @@ uint8_t ui_macro_interaction_note_encoder_delta(uint8_t encoder, int16_t delta)
 
     g_ui_macro_interaction.scene_value = current_value;
     return 1U;
+}
+
+uint8_t ui_macro_interaction_note_encoder_delta(uint8_t encoder, int16_t delta)
+{
+    ui_param_encoder_context_t ctx;
+    ui_param_capture_encoder_context(&ctx);
+    return ui_macro_interaction_note_encoder_delta_with_context(&ctx, encoder, delta);
 }
 
 void ui_macro_interaction_note_hall_release(uint8_t hall)

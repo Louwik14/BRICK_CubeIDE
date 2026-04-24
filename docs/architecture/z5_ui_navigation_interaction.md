@@ -130,6 +130,7 @@ Entrees directes:
 
 Entrees evenementielles:
 - `ui_event_from_inputs` (buttons + hall) alimente queue lue par `ui_core_tick`.
+- Les deltas encodeur sont pris sur un snapshot local du bank/track actif au debut du tick UI, pour que plusieurs edits arrives dans la meme passe restent deterministes si un edit reconfigure le contexte.
 - `ui_core_tick` materialise la politique des stages consommants via `k_event_stages[]` (ordre stabilise): mute -> consommations hall track-select -> master-buffer routing -> transport -> settings -> global shortcuts -> pattern mode -> seq mode.
 - `track_selection` reste hors table et execute en amont.
 - `navigation` puis `active_page->handle_event` restent en fin de chaine.

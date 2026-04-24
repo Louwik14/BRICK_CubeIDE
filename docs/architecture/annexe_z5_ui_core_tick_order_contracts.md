@@ -30,6 +30,7 @@ Scope: passe d'audit ciblee `ui_core_tick` + helpers directement appeles par `ui
   - `seq`/`pattern` gates lisent `hall_mode` potentiellement bascule juste avant depilement de queue,
   - `ui_core_is_track_hall_event_consumed` depend de `track_select_armed` pre-mis a jour pour bloquer/laisser passer les halls.
   - `ui_navigation_handle_event` peut changer la page active juste avant le dispatch final; `active_page->handle_event` recoit donc l'event sur la page active apres navigation.
+- Les deltas encodeur sont resolus sur un snapshot local du contexte actif pris au debut du tick UI; un edit qui reconfigure bank ou track pendant la passe ne rebind pas le sens des deltas suivants dans le meme tick.
 
 ## Contrat post-commit UI
 - Les reconfigurations structurelles `track family/type` et `restore bulk` passent par `ui_core_runtime_bridge` puis sur un post-commit unique `ui_core_runtime_bridge_post_track_structure_change()`.

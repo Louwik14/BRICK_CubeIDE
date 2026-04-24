@@ -591,6 +591,9 @@ void ui_core_tick(void)
     };
 
     ui_event_t ev;
+    ui_param_encoder_context_t encoder_ctx;
+
+    ui_param_capture_encoder_context(&encoder_ctx);
 
     for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
     {
@@ -605,9 +608,9 @@ void ui_core_tick(void)
         }
         else
         {
-            if (ui_macro_interaction_note_encoder_delta(encoder, delta) == 0U)
+            if (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U)
             {
-                ui_param_handle_encoder(encoder, delta);
+                ui_param_handle_encoder_with_context(&encoder_ctx, encoder, delta);
             }
         }
     }

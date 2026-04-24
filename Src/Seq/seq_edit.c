@@ -18,7 +18,7 @@
 #include "param_registry.h"
 #include "Storage/undo_v1.h"
 
-#define SEQ_STEP_HOLD_THRESHOLD_TICKS 240U
+#define SEQ_STEP_HOLD_THRESHOLD_TICKS 160U
 
 typedef struct
 {

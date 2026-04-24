@@ -59,6 +59,21 @@ static void ui_renderer_template_format_semitones(float value, char *out, uint32
     (void)snprintf(out, out_len, "%+ld st", (long)semitones);
 }
 
+static float ui_renderer_template_clamp(float value, float min, float max)
+{
+    if (value < min)
+    {
+        return min;
+    }
+
+    if (value > max)
+    {
+        return max;
+    }
+
+    return value;
+}
+
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
 {
     const param_desc_t *desc = &param_registry[id];
@@ -117,6 +132,14 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         const int32_t note_index = note % 12;
         const int32_t octave = (note / 12) - 1;
         (void)snprintf(out, out_len, "%s%ld", g_ui_template_midi_note_names[note_index], (long)octave);
+        return;
+    }
+
+    if (id == PARAM_PLAITS_FREQUENCY_RANGE)
+    {
+        static const int8_t k_range_semitones[4] = {-24, -12, 0, 12};
+        const uint8_t index = (uint8_t)(ui_renderer_template_clamp(value, 0.0f, 1.0f) * 3.0f + 0.5f);
+        ui_renderer_template_format_semitones((float)k_range_semitones[index], out, out_len);
         return;
     }
 

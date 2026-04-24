@@ -309,12 +309,12 @@ void brick6_plaits_runtime_render_instance(uint8_t instance_id, float *out_mono,
     modulations.timbre = 0.0f;
     modulations.morph = 0.0f;
     modulations.trigger = (instance->voice.gate != 0U || instance->voice.trigger != 0U) ? 1.0f : 0.0f;
-    modulations.level = brick6_plaits_runtime_clamp(instance->voice.velocity, 0.0f, 1.0f);
+    modulations.level = 0.0f;
     modulations.frequency_patched = false;
     modulations.timbre_patched = false;
     modulations.morph_patched = false;
     modulations.trigger_patched = true;
-    modulations.level_patched = true;
+    modulations.level_patched = false;
 
     uint32_t offset = 0U;
     while (offset < frames)

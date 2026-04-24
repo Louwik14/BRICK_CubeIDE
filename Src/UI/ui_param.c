@@ -104,7 +104,7 @@ static uint8_t ui_param_value_is_same(float a, float b)
     return ((diff > -0.000001f) && (diff < 0.000001f)) ? 1U : 0U;
 }
 
-static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family)
+static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family, uint8_t active_track)
 {
     if ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
     {
@@ -119,7 +119,7 @@ static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family)
         }
     }
 
-    if (family == ui_get_track_family(ui_get_active_track()))
+    if (family == ui_get_track_family(active_track))
     {
         return 1U;
     }
@@ -127,7 +127,7 @@ static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family)
     return (uint8_t)((ui_count_tracks_with_family(family) == 0U) ? 1U : 0U);
 }
 
-static float ui_param_step_cfg_track(float current_value, int8_t direction)
+static float ui_param_step_cfg_track(float current_value, int8_t direction, uint8_t active_track)
 {
     int16_t candidate = (int16_t)(current_value + 0.5f);
 
@@ -145,16 +145,18 @@ static float ui_param_step_cfg_track(float current_value, int8_t direction)
             return current_value;
         }
 
-        if (ui_param_cfg_track_family_is_available((ui_track_family_t)candidate) != 0U)
+        if (ui_param_cfg_track_family_is_available((ui_track_family_t)candidate, active_track) != 0U)
         {
             return (float)candidate;
         }
     }
 }
 
-static float ui_param_step_cfg_track_type(float current_value, int8_t direction)
+static float ui_param_step_cfg_track_type(float current_value,
+                                          int8_t direction,
+                                          uint8_t active_track)
 {
-    const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
+    const ui_track_family_t active_family = ui_get_track_family(active_track);
     const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
     int16_t candidate = (int16_t)(current_value + 0.5f);
 
@@ -307,6 +309,18 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
     param_registry_sync_filter_ui_for_active_track();
 }
 
+void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
+{
+    if (out_ctx == 0)
+    {
+        return;
+    }
+
+    out_ctx->bank = g_ui_param.bank;
+    out_ctx->valid = g_ui_param.valid;
+    out_ctx->active_track = ui_get_active_track();
+}
+
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param)
 {
     if ((out_param == 0) || (g_ui_param.valid == 0U) || (encoder >= 4U))
@@ -390,18 +404,17 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
             && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
-static uint32_t ui_param_make_gesture_key(uint8_t encoder, param_id_t param)
+static uint32_t ui_param_make_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track)
 {
     const uint32_t hall_mode = (uint32_t)ui_get_hall_mode();
-    const uint32_t active_track = (uint32_t)ui_get_active_track();
     return 0x10000000UL
         | (hall_mode << 28)
-        | (active_track << 20)
+        | ((uint32_t)active_track << 20)
         | ((uint32_t)param << 4)
         | (uint32_t)(encoder & 0x0FU);
 }
 
-static float ui_param_get_active_track_value(param_id_t param)
+static float ui_param_get_active_track_value(param_id_t param, uint8_t active_track)
 {
     if (ui_param_is_track_scoped(param) == 0U)
     {
@@ -411,14 +424,16 @@ static float ui_param_get_active_track_value(param_id_t param)
     return param_store_get_active(param);
 }
 
-static uint8_t ui_param_live_rec_resolve_context(param_id_t param, ui_param_live_rec_ctx_t *out_ctx)
+static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
+                                                 uint8_t active_track,
+                                                 ui_param_live_rec_ctx_t *out_ctx)
 {
     if (out_ctx == 0)
     {
         return 0U;
     }
 
-    const seq_track_id_t track = ui_get_active_track();
+    const seq_track_id_t track = active_track;
     if (track >= SEQ_TRACK_COUNT)
     {
         return 0U;
@@ -449,7 +464,7 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param, ui_param_live
     return 1U;
 }
 
-static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
+static uint8_t ui_param_set_active_track_value(param_id_t param, float value, uint8_t active_track)
 {
     if (ui_param_is_track_scoped(param) == 0U)
     {
@@ -467,7 +482,6 @@ static uint8_t ui_param_set_active_track_value(param_id_t param, float value)
 
     const param_desc_t *const desc = &param_registry[param];
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
-    const uint8_t active_track = ui_get_active_track();
     float current_value = 0.0f;
 
     if ((param_registry_get_track_value(param, active_track, &current_value) != 0U)
@@ -515,7 +529,8 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
                                             const param_desc_t *desc,
                                             int16_t delta,
                                             float min_value,
-                                            float max_value)
+                                            float max_value,
+                                            uint8_t active_track)
 {
     if ((ui_hall_is_seq_context(ui_get_hall_mode()) == 0U) || (desc == 0))
     {
@@ -541,7 +556,7 @@ static uint8_t ui_param_try_apply_seq_plock(param_id_t param,
     }
 
     const float delta_value = (float)delta * desc->step;
-    const float base_track_value = ui_param_get_active_track_value(param);
+    const float base_track_value = ui_param_get_active_track_value(param, active_track);
     seq_plock_entry_t prior_entries[SEQ_STEPS_PER_PAGE];
     seq_value16_t target_values[SEQ_STEPS_PER_PAGE];
     uint8_t had_prior_entry[SEQ_STEPS_PER_PAGE];
@@ -612,7 +627,8 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
                                                  const param_desc_t *desc,
                                                  int16_t delta,
                                                  float min_value,
-                                                 float max_value)
+                                                 float max_value,
+                                                 uint8_t active_track)
 {
     if ((desc == 0) || (ui_param_is_track_scoped(param) == 0U))
     {
@@ -620,7 +636,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
     }
 
     ui_param_live_rec_ctx_t live_rec_ctx;
-    if (ui_param_live_rec_resolve_context(param, &live_rec_ctx) == 0U)
+    if (ui_param_live_rec_resolve_context(param, active_track, &live_rec_ctx) == 0U)
     {
         return 0U;
     }
@@ -635,7 +651,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(param_id_t param,
         return 0U;
     }
 
-    float source_value = ui_param_get_active_track_value(param);
+    float source_value = ui_param_get_active_track_value(param, active_track);
     seq_plock_entry_t existing;
     if (seq_edit_step_plock_find(live_rec_ctx.track,
                                  live_rec_ctx.step,
@@ -731,18 +747,27 @@ uint8_t ui_param_try_get_seq_plock_feedback(param_id_t param, float *out_value, 
  */
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if ((g_ui_param.valid == 0U) || (delta == 0) || (encoder >= 4U))
+    ui_param_encoder_context_t ctx;
+    ui_param_capture_encoder_context(&ctx);
+    (void)ui_param_handle_encoder_with_context(&ctx, encoder, delta);
+}
+
+uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *ctx,
+                                             uint8_t encoder,
+                                             int16_t delta)
+{
+    if ((ctx == 0) || (ctx->valid == 0U) || (delta == 0) || (encoder >= 4U))
     {
-        return;
+        return 0U;
     }
 
-    const param_id_t param = g_ui_param.bank.params[encoder];
+    const param_id_t param = ctx->bank.params[encoder];
     if (param >= PARAM_COUNT)
     {
-        return;
+        return 0U;
     }
 
-    undo_v1_begin_gesture(ui_param_make_gesture_key(encoder, param));
+    undo_v1_begin_gesture(ui_param_make_gesture_key(encoder, param, ctx->active_track));
 
     const param_desc_t *desc = &param_registry[param];
     float min_value = desc->min;
@@ -754,48 +779,48 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
     }
     else if (param == PARAM_CFG_TRACK_TYPE)
     {
-        const ui_track_family_t active_family = ui_get_track_family(ui_get_active_track());
+        const ui_track_family_t active_family = ui_get_track_family(ctx->active_track);
         const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
         max_value = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
     }
     else if ((param == PARAM_LFO1_DEST) || (param == PARAM_LFO2_DEST))
     {
-        const uint16_t count = mod_lfo_v1_dest_count(ui_get_active_track());
+        const uint16_t count = mod_lfo_v1_dest_count(ctx->active_track);
         max_value = (count > 0U) ? (float)(count - 1U) : 0.0f;
     }
 
-    if (ui_param_try_apply_seq_plock(param, desc, delta, min_value, max_value) != 0U)
+    if (ui_param_try_apply_seq_plock(param, desc, delta, min_value, max_value, ctx->active_track) != 0U)
     {
-        return;
+        return 1U;
     }
 
-    if (ui_param_try_apply_live_rec_plock(param, desc, delta, min_value, max_value) != 0U)
+    if (ui_param_try_apply_live_rec_plock(param, desc, delta, min_value, max_value, ctx->active_track) != 0U)
     {
-        return;
+        return 1U;
     }
 
-    float value = ui_param_get_active_track_value(param);
+    float value = ui_param_get_active_track_value(param, ctx->active_track);
 
     if (param == PARAM_CFG_TRACK)
     {
-        value = ui_param_step_cfg_track(value, ui_param_signum(delta));
-        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param)) != 0U)
+        value = ui_param_step_cfg_track(value, ui_param_signum(delta), ctx->active_track);
+        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param, ctx->active_track)) != 0U)
         {
-            return;
+            return 0U;
         }
-        ui_param_set_active_track_value(param, value);
-        return;
+        ui_param_set_active_track_value(param, value, ctx->active_track);
+        return 1U;
     }
 
     if (param == PARAM_CFG_TRACK_TYPE)
     {
-        value = ui_param_step_cfg_track_type(value, ui_param_signum(delta));
-        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param)) != 0U)
+        value = ui_param_step_cfg_track_type(value, ui_param_signum(delta), ctx->active_track);
+        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param, ctx->active_track)) != 0U)
         {
-            return;
+            return 0U;
         }
-        ui_param_set_active_track_value(param, value);
-        return;
+        ui_param_set_active_track_value(param, value, ctx->active_track);
+        return 1U;
     }
 
     {
@@ -805,9 +830,10 @@ void ui_param_handle_encoder(uint8_t encoder, int16_t delta)
 
         if (ui_param_value_is_same(value, current_value) != 0U)
         {
-            return;
+            return 0U;
         }
     }
 
-    ui_param_set_active_track_value(param, value);
+    ui_param_set_active_track_value(param, value, ctx->active_track);
+    return 1U;
 }
