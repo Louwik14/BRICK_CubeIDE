@@ -154,6 +154,14 @@ void keyboard_runtime_set_scale(uint8_t scale_index) { keyboard_params_set_scale
 void keyboard_runtime_set_omnichord(bool enabled) { keyboard_params_set_omnichord(enabled); }
 void keyboard_runtime_set_note_order(note_order_t order) { keyboard_params_set_note_order(order); }
 void keyboard_runtime_set_chord_override(bool enabled) { keyboard_params_set_chord_override(enabled); }
+void keyboard_runtime_set_mono_last(bool enabled)
+{
+    keyboard_params_set_mono_last(enabled);
+    if (!enabled)
+    {
+        keyboard_engine_clear_state_silent();
+    }
+}
 
 
 void keyboard_runtime_set_arp_hold(bool enabled) { keyboard_arp_set_hold(enabled); }
@@ -304,6 +312,7 @@ void keyboard_runtime_sync_track_focus_context(void)
      */
     ui_keyboard_app_clear_state_silent();
     keyboard_arp_clear_state_silent();
+    keyboard_engine_clear_state_silent();
     keyboard_runtime_reset_midi_state();
 
     if (keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
@@ -322,6 +331,7 @@ void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall
     if ((previous_mode == UI_HALL_MODE_ARP) && (new_mode != UI_HALL_MODE_ARP))
     {
         ui_keyboard_app_clear_state_silent();
+        keyboard_engine_clear_state_silent();
     }
 
     if ((keyboard_runtime_hall_mode_uses_arp_engine(new_mode) != 0U)
@@ -333,6 +343,7 @@ void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall
     if ((previous_mode == UI_HALL_MODE_KEYBOARD) && (new_mode != UI_HALL_MODE_KEYBOARD))
     {
         ui_keyboard_app_clear_state_silent();
+        keyboard_engine_clear_state_silent();
     }
 
     keyboard_runtime_reset_midi_state();
@@ -343,6 +354,7 @@ uint8_t keyboard_runtime_get_scale_index(void) { return keyboard_params_get_scal
 bool keyboard_runtime_get_omnichord(void) { return keyboard_params_get_omnichord(); }
 note_order_t keyboard_runtime_get_note_order(void) { return keyboard_params_get_note_order(); }
 bool keyboard_runtime_get_chord_override(void) { return keyboard_params_get_chord_override(); }
+bool keyboard_runtime_get_mono_last(void) { return keyboard_params_get_mono_last(); }
 
 int8_t keyboard_runtime_get_octave_shift(void)
 {

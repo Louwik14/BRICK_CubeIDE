@@ -25,6 +25,7 @@ typedef struct
     bool omnichord;
     note_order_t note_order;
     bool chord_override;
+    bool mono_last;
 } keyboard_params_state_t;
 
 static keyboard_params_state_t g_keyboard_params = {
@@ -33,6 +34,7 @@ static keyboard_params_state_t g_keyboard_params = {
     .omnichord = false,
     .note_order = NOTE_ORDER_NATURAL,
     .chord_override = false,
+    .mono_last = false,
 };
 
 static void keyboard_params_apply(void)
@@ -85,6 +87,11 @@ void keyboard_params_set_chord_override(bool enabled)
     keyboard_params_apply();
 }
 
+void keyboard_params_set_mono_last(bool enabled)
+{
+    g_keyboard_params.mono_last = enabled;
+}
+
 uint8_t keyboard_params_get_root_index(void)
 {
     return g_keyboard_params.root_index;
@@ -108,4 +115,9 @@ note_order_t keyboard_params_get_note_order(void)
 bool keyboard_params_get_chord_override(void)
 {
     return g_keyboard_params.chord_override;
+}
+
+bool keyboard_params_get_mono_last(void)
+{
+    return g_keyboard_params.mono_last;
 }

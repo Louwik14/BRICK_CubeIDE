@@ -50,6 +50,7 @@ void apply_gran_spread(float v);
 void apply_gran_stereo(float v);
 void apply_kbd_chord_override(float v);
 void apply_kbd_note_order(float v);
+void apply_kbd_mono_last(float v);
 void apply_kbd_omnichord(float v);
 void apply_kbd_root(float v);
 void apply_kbd_scale(float v);

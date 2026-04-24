@@ -12,7 +12,7 @@ static const ui_template_family_t g_ui_template_keyboard_family = {
         },
         {
             .title = "MODE",
-            .param_bank = { .params = { PARAM_KBD_NOTE_ORDER, PARAM_KBD_CHORD_OVERRIDE, PARAM_COUNT, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_KBD_NOTE_ORDER, PARAM_KBD_CHORD_OVERRIDE, PARAM_KBD_MONO_LAST, PARAM_COUNT } },
         },
         {
             .title = "-",

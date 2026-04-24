@@ -335,7 +335,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         }
         else
         {
-            brick6_plaits_runtime_note_off(resolved.descriptor.instance_id);
+            brick6_plaits_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)

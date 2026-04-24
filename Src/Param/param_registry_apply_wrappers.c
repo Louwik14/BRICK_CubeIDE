@@ -344,6 +344,7 @@ void apply_kbd_scale(float v) { keyboard_runtime_set_scale((uint8_t)(clamp_value
 void apply_kbd_omnichord(float v) { keyboard_runtime_set_omnichord(v >= 0.5f); }
 void apply_kbd_note_order(float v) { keyboard_runtime_set_note_order((v >= 0.5f) ? NOTE_ORDER_FIFTHS : NOTE_ORDER_NATURAL); }
 void apply_kbd_chord_override(float v) { keyboard_runtime_set_chord_override(v >= 0.5f); }
+void apply_kbd_mono_last(float v) { keyboard_runtime_set_mono_last(v >= 0.5f); }
 void apply_arp_hold(float v) { keyboard_runtime_set_arp_hold(v >= 0.5f); }
 void apply_arp_rate(float v) { keyboard_runtime_set_arp_rate((uint8_t)(clamp_value(v, 0.0f, 7.0f) + 0.5f)); }
 void apply_arp_oct(float v) { keyboard_runtime_set_arp_oct((uint8_t)(clamp_value(v, 0.0f, 4.0f) + 0.5f)); }

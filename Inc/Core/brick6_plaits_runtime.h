@@ -27,6 +27,8 @@ typedef struct
     float frequency_range;
     float note;
     float velocity;
+    uint8_t active_note;
+    uint8_t has_active_note;
     uint8_t gate;
     uint8_t trigger;
 } brick6_plaits_runtime_voice_t;
@@ -46,7 +48,8 @@ void brick6_plaits_runtime_set_decay(uint8_t instance_id, float decay);
 void brick6_plaits_runtime_set_frequency_range(uint8_t instance_id, float frequency_range);
 
 void brick6_plaits_runtime_note_on(uint8_t instance_id, float note, float velocity);
-void brick6_plaits_runtime_note_off(uint8_t instance_id);
+void brick6_plaits_runtime_note_off(uint8_t instance_id, uint8_t note);
+void brick6_plaits_runtime_all_notes_off(uint8_t instance_id);
 void brick6_plaits_runtime_clear_trigger(uint8_t instance_id);
 void brick6_plaits_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames);
 

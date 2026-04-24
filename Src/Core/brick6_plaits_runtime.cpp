@@ -16,7 +16,6 @@
 namespace {
 
 constexpr size_t kPlaitsAllocatorBytes = 8192U;
-
 typedef struct
 {
     brick6_plaits_runtime_voice_t voice;
@@ -97,6 +96,8 @@ static void brick6_plaits_runtime_init_instance(brick6_plaits_runtime_instance_t
     instance->voice.frequency_range = 0.5f;
     instance->voice.note = 60.0f;
     instance->voice.velocity = 0.8f;
+    instance->voice.active_note = 60U;
+    instance->voice.has_active_note = 0U;
     instance->voice.gate = 0U;
     instance->voice.trigger = 0U;
     instance->has_note = 0U;
@@ -220,19 +221,46 @@ void brick6_plaits_runtime_note_on(uint8_t instance_id, float note, float veloci
     brick6_plaits_runtime_instance_t *const instance = brick6_plaits_runtime_get_instance_mut(instance_id);
     if (instance != NULL)
     {
+        const float clamped_velocity = brick6_plaits_runtime_clamp(velocity, 0.0f, 1.0f);
+        const uint8_t midi_note = (uint8_t)brick6_plaits_runtime_clamp(note, 0.0f, 127.0f);
+        if (clamped_velocity <= 0.0f)
+        {
+            brick6_plaits_runtime_note_off(instance_id, midi_note);
+            return;
+        }
+
         instance->voice.note = note;
-        instance->voice.velocity = brick6_plaits_runtime_clamp(velocity, 0.0f, 1.0f);
+        instance->voice.velocity = clamped_velocity;
+        instance->voice.active_note = midi_note;
+        instance->voice.has_active_note = 1U;
         instance->voice.gate = 1U;
         instance->voice.trigger = 1U;
         instance->has_note = 1U;
     }
 }
 
-void brick6_plaits_runtime_note_off(uint8_t instance_id)
+void brick6_plaits_runtime_note_off(uint8_t instance_id, uint8_t note)
 {
     brick6_plaits_runtime_instance_t *const instance = brick6_plaits_runtime_get_instance_mut(instance_id);
     if (instance != NULL)
     {
+        if ((instance->voice.has_active_note == 0U) || (instance->voice.active_note != note))
+        {
+            return;
+        }
+
+        instance->voice.has_active_note = 0U;
+        instance->voice.gate = 0U;
+        instance->voice.trigger = 0U;
+    }
+}
+
+void brick6_plaits_runtime_all_notes_off(uint8_t instance_id)
+{
+    brick6_plaits_runtime_instance_t *const instance = brick6_plaits_runtime_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->voice.has_active_note = 0U;
         instance->voice.gate = 0U;
         instance->voice.trigger = 0U;
     }
@@ -281,7 +309,7 @@ void brick6_plaits_runtime_render_instance(uint8_t instance_id, float *out_mono,
     modulations.timbre = 0.0f;
     modulations.morph = 0.0f;
     modulations.trigger = (instance->voice.gate != 0U || instance->voice.trigger != 0U) ? 1.0f : 0.0f;
-    modulations.level = (instance->voice.gate != 0U) ? brick6_plaits_runtime_clamp(instance->voice.velocity, 0.0f, 1.0f) : 0.0f;
+    modulations.level = brick6_plaits_runtime_clamp(instance->voice.velocity, 0.0f, 1.0f);
     modulations.frequency_patched = false;
     modulations.timbre_patched = false;
     modulations.morph_patched = false;
