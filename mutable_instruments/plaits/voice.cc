@@ -26,8 +26,8 @@
 //
 // Main synthesis voice.
 
-#include "plaits/dsp/voice.h"
-#include "plaits/user_data.h"
+#include "plaits/voice.h"
+#include "plaits/resources.h"
 
 namespace plaits {
 
@@ -126,9 +126,8 @@ void Voice::Render(
   Engine* e = engines_.get(engine_index);
   
   if (engine_index != previous_engine_index_ || reload_user_data_) {
-    UserData user_data;
-    const uint8_t* data = user_data.ptr(engine_index);
-    if (!data && engine_index >= 2 && engine_index <= 4) {
+    const uint8_t* data = NULL;
+    if (engine_index >= 2 && engine_index <= 4) {
       data = fm_patches_table[engine_index - 2];
     }
     e->LoadUserData(data);

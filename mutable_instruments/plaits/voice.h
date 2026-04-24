@@ -29,6 +29,9 @@
 #ifndef PLAITS_DSP_VOICE_H_
 #define PLAITS_DSP_VOICE_H_
 
+#include <algorithm>
+#include <math.h>
+
 #include "stmlib/stmlib.h"
 
 #include "stmlib/dsp/filter.h"
