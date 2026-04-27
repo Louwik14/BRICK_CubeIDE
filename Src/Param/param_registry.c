@@ -256,6 +256,27 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_SLICE_COUNT:
             *out_value = state->slice_count;
             return 1U;
+        case PARAM_BUFFER_TSTR:
+            *out_value = state->buffer.stretch_mode;
+            return 1U;
+        case PARAM_BUFFER_QUALITY:
+            *out_value = state->buffer.quality;
+            return 1U;
+        case PARAM_BUFFER_SYNC_LEN:
+            *out_value = state->buffer.sync_len;
+            return 1U;
+        case PARAM_BUFFER_SRC_BPM:
+            *out_value = state->buffer.source_bpm;
+            return 1U;
+        case PARAM_BUFFER_RATIO_Q16:
+            *out_value = state->buffer.ratio_q16;
+            return 1U;
+        case PARAM_BUFFER_TSNS:
+            *out_value = state->buffer.transient_sensitivity;
+            return 1U;
+        case PARAM_BUFFER_PRESERVE_PITCH:
+            *out_value = state->buffer.preserve_pitch;
+            return 1U;
         case PARAM_PLAITS_MODEL:
             *out_value = state->plaits.model;
             return 1U;
@@ -604,6 +625,27 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
             state->slice_count = value;
+            return 1U;
+        case PARAM_BUFFER_TSTR:
+            state->buffer.stretch_mode = value;
+            return 1U;
+        case PARAM_BUFFER_QUALITY:
+            state->buffer.quality = value;
+            return 1U;
+        case PARAM_BUFFER_SYNC_LEN:
+            state->buffer.sync_len = value;
+            return 1U;
+        case PARAM_BUFFER_SRC_BPM:
+            state->buffer.source_bpm = value;
+            return 1U;
+        case PARAM_BUFFER_RATIO_Q16:
+            state->buffer.ratio_q16 = value;
+            return 1U;
+        case PARAM_BUFFER_TSNS:
+            state->buffer.transient_sensitivity = value;
+            return 1U;
+        case PARAM_BUFFER_PRESERVE_PITCH:
+            state->buffer.preserve_pitch = value;
             return 1U;
         case PARAM_PLAITS_MODEL:
             state->plaits.model = value;

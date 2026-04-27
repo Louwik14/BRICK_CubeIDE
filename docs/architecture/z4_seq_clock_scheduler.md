@@ -587,3 +587,4 @@ Points factuels observes:
 - `seq_param_iface_is_param_supported` reste une query pure et ne refresh plus le runtime.
 - `seq_param_iface_get_base_value` / `seq_param_iface_get_play_base_value` ne seedent plus d'etat implicite; la base doit etre deja materialisee par les commandes d'ecriture ou par l'initialisation explicite.
 - Les call sites qui avaient besoin d'un runtime frais declenchent maintenant `track_runtime_refresh_track` explicitement avant lecture.
+- `Master/Buffer` ne devient pas owner temporel dans Z4: il lit explicitement `samples_per_step_q16` et `tempo_bpm_milli` comme miroirs runtime pour resoudre `SYNC_LEN` (`1/2/4 bars` ou `AUTO`), derive `target_frames` si necessaire, puis calcule son `ratio_q16` local au bord consumer du playback/capture.

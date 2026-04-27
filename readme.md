@@ -143,6 +143,7 @@ Current exposed controls:
 - `TRACK + SHIFT + REC` -> clear buffer
 - `ARP` context becomes `ROUT` for source selection
 - `TONE` exposes buffer-specific parameters
+- `TONE` buffer pages now include local timestretch controls (`TStr`, `Quality`, `Sync Len`, `Src BPM`, `TSns`, `Pitch`) on the recorded-buffer playback path only
 
 `Master/Buffer` is an explicit track identity, not a global mode.
 

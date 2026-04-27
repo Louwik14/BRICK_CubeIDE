@@ -17,6 +17,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
 - `Src/Core/brick6_master_buffer.c` + `Inc/Core/brick6_master_buffer.h` : preuve du branchement bloc debut/fin et read playback dans pipeline.
+- `Src/Core/brick6_master_buffer_stretch.c` + `Inc/Core/brick6_master_buffer_stretch.h` : seam local du futur timestretch playback Master/Buffer, borne a une instance unique et sans pipeline parallele.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
@@ -27,6 +28,7 @@ Dependances de Z1 sans appartenir a Z1:
 - `seq_runtime` (event scheduling audio).
 - `sd_multitrack_recorder` (taps et writer hors IRQ).
 - `brick6_master_buffer` (capture post-fader + lecture playback).
+- `brick6_master_buffer_stretch` (etat runtime local du timestretch playback, sans ownership du recorder brut).
 - `fx_chain`, `fx_reverb`, `env_adsr`, `fx_biquad_filter`.
 
 Exclusions explicites:
@@ -247,6 +249,20 @@ Memoire:
 - `audio_io_unpack` reserve lane 3 comme source interne (pas de mapping TDM physique direct).
 - Z1 ne doit pas faire d'I/O SD bloquante: seulement captures/taps; writer hors IRQ.
 - Master-buffer est dans le pipeline de bloc (`begin -> submit -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`.
+- Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
+- Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.
+- Le lifecycle du stretch buffer reste pilote par `brick6_master_buffer`: invalidation sur clear/debut de record, republication explicite de la source sur fin auto ou stop manuel.
+- L'analyse stretch (metadata/transients/anchors) reste hors IRQ et est servicee depuis la superloop via `brick6_app_process()`, par slices bornees et reliees a une `source_generation` explicite.
+- Le moteur stretch playback `Master/Buffer` reste local a `brick6_master_buffer_stretch`, mais il n'utilise plus de phase-vocoder spectral: il repose sur une lecture time-domain par grains fenetres, OLA et ring de sortie statique.
+- `QUALITY=ECO` utilise un profil 256/128 et `QUALITY=STD` un profil 512/256, sans second pipeline ni allocation dynamique.
+- `Pitch=Off` force un fallback varispeed local tres leger; `Pitch=On` active l'OLA time-domain borne.
+- Le mode `BEAT` consomme la table de transients hors IRQ pour re-ancrer localement les grains autour des attaques; si l'analyse n'est pas encore prete, le rendu reste fonctionnel et retombe sur le comportement `NORMAL`.
+- Criteres de validation manuelle a conserver pour `Master/Buffer` timestretch:
+  - `OFF` doit retomber sur la lecture brute existante,
+  - `NORMAL` doit conserver le pitch en variation de `SYNC_LEN`/`Ratio`,
+  - `BEAT` doit rester stable si la table de transients est absente ou invalidee,
+  - `REC/CLEAR/stop manuel/start transport` doivent invalider ou republier explicitement la source stretch,
+  - `XFade`, `Fade In/Out`, `Q Rec`, `Q Play` et restore pattern/project ne doivent pas contourner le seam local `brick6_master_buffer_read_playback()`.
 
 ## 9. Dependances inter-zones
 

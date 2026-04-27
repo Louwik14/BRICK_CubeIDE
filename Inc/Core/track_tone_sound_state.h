@@ -20,6 +20,16 @@ typedef struct
     float slice_count;
     struct
     {
+        float stretch_mode;
+        float quality;
+        float sync_len;
+        float source_bpm;
+        float ratio_q16;
+        float transient_sensitivity;
+        float preserve_pitch;
+    } buffer;
+    struct
+    {
         float model;
         float coarse_frequency;
         float harmonics;

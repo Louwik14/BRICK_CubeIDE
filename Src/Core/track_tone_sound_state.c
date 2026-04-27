@@ -16,6 +16,13 @@ SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_
 #define TRACK_TONE_PLAITS_DEFAULT_LPG_RESPONSE       0.0f
 #define TRACK_TONE_PLAITS_DEFAULT_DECAY              0.5f
 #define TRACK_TONE_PLAITS_DEFAULT_FREQUENCY_RANGE    0.5f
+#define TRACK_TONE_BUFFER_DEFAULT_STRETCH_MODE       0.0f
+#define TRACK_TONE_BUFFER_DEFAULT_QUALITY            0.0f
+#define TRACK_TONE_BUFFER_DEFAULT_SYNC_LEN           0.0f
+#define TRACK_TONE_BUFFER_DEFAULT_SOURCE_BPM         120.0f
+#define TRACK_TONE_BUFFER_DEFAULT_RATIO_Q16          65536.0f
+#define TRACK_TONE_BUFFER_DEFAULT_TRANSIENT_SENS     64.0f
+#define TRACK_TONE_BUFFER_DEFAULT_PRESERVE_PITCH     1.0f
 
 static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
 {
@@ -33,6 +40,13 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->fade_in = param_registry[PARAM_SAMPLER_FADE_IN].default_value;
     state->fade_out = param_registry[PARAM_SAMPLER_FADE_OUT].default_value;
     state->slice_count = param_registry[PARAM_SAMPLER_SLICE_COUNT].default_value;
+    state->buffer.stretch_mode = TRACK_TONE_BUFFER_DEFAULT_STRETCH_MODE;
+    state->buffer.quality = TRACK_TONE_BUFFER_DEFAULT_QUALITY;
+    state->buffer.sync_len = TRACK_TONE_BUFFER_DEFAULT_SYNC_LEN;
+    state->buffer.source_bpm = TRACK_TONE_BUFFER_DEFAULT_SOURCE_BPM;
+    state->buffer.ratio_q16 = TRACK_TONE_BUFFER_DEFAULT_RATIO_Q16;
+    state->buffer.transient_sensitivity = TRACK_TONE_BUFFER_DEFAULT_TRANSIENT_SENS;
+    state->buffer.preserve_pitch = TRACK_TONE_BUFFER_DEFAULT_PRESERVE_PITCH;
     state->plaits.model = TRACK_TONE_PLAITS_DEFAULT_MODEL;
     state->plaits.coarse_frequency = TRACK_TONE_PLAITS_DEFAULT_COARSE_FREQUENCY;
     state->plaits.harmonics = TRACK_TONE_PLAITS_DEFAULT_HARMONICS;

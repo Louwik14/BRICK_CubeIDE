@@ -35,6 +35,9 @@
 
 static const char *const g_bool_labels[] = {"Off", "On", NULL};
 static const char *const g_route_labels[] = {"None", "Master", "Cue", "Both", NULL};
+static const char *const g_buffer_tstr_labels[] = {"Off", "Normal", "Beat", NULL};
+static const char *const g_buffer_quality_labels[] = {"Eco", "Std", NULL};
+static const char *const g_buffer_sync_len_labels[] = {"Off", "1 bar", "2 bars", "4 bars", "Auto", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
 static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "RevLoop", "Slice", "RevSlice", NULL};
@@ -177,6 +180,13 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_BUFFER_FADE_IN, "Fade In", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_BUFFER_FADE_OUT, "Fade Out", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_BUFFER_XFADE, "XFade", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_TSTR, "TStr", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_buffer_tstr_labels, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_QUALITY, "Quality", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_buffer_quality_labels, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_SYNC_LEN, "Sync Len", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_buffer_sync_len_labels, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_SRC_BPM, "Src BPM", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_RATIO_Q16, "Ratio", PARAM_TYPE_INT, 16384.0f, 262144.0f, 1.0f, 65536.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_TSNS, "TSns", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BUFFER_PRESERVE_PITCH, "Pitch", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
 
     PARAM_DESC_EX(PARAM_SEQ_LENGTH, "LENGTH", PARAM_TYPE_INT, 1.0f, 64.0f, 1.0f, 64.0f, PARAM_DISPLAY_INT, "", NULL, apply_seq_length),
     PARAM_DESC_EX(PARAM_SEQ_DIV, "DIV", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_seq_div_labels, apply_seq_div),

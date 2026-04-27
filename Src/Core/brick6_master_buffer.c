@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Audio/audio_float.h"
+#include "Core/brick6_master_buffer_stretch.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -28,6 +29,7 @@ static uint8_t g_record_waiting_boundary = 0U;
 static uint8_t g_play_waiting_boundary = 0U;
 static uint32_t g_record_frames_written = 0U;
 static uint32_t g_record_target_frames = 0U;
+static uint32_t g_buffer_source_generation = 0U;
 static uint32_t g_record_len_steps = 16U;
 static uint8_t g_quantize_record = 1U;
 static uint8_t g_quantize_play = 1U;
@@ -35,6 +37,15 @@ static float g_rate = 1.0f;
 static float g_xfade = 0.0f;
 static uint32_t g_fade_in_amount = 0U;
 static uint32_t g_fade_out_amount = 0U;
+static brick6_master_buffer_stretch_config_t g_stretch_config = {
+    .stretch_mode = 0U,
+    .quality = 0U,
+    .sync_len = 0U,
+    .source_bpm_milli = 120000U,
+    .ratio_q16 = 65536U,
+    .transient_sensitivity = 64U,
+    .preserve_pitch = 1U,
+};
 static ALIGN32 float g_capture_l[AUDIO_BLOCK_SIZE];
 static ALIGN32 float g_capture_r[AUDIO_BLOCK_SIZE];
 
@@ -69,6 +80,65 @@ static uint32_t brick6_master_buffer_refresh_record_target(void)
     const uint32_t target_frames = brick6_master_buffer_steps_to_frames(g_record_len_steps);
     g_record_target_frames = target_frames;
     return target_frames;
+}
+
+static uint32_t brick6_master_buffer_resolve_stretch_target_steps(uint8_t sync_len)
+{
+    switch (sync_len)
+    {
+        case 1U:
+            return 16U;
+        case 2U:
+            return 32U;
+        case 3U:
+            return 64U;
+        case 4U:
+            return (g_record_len_steps == 0U) ? 16U : g_record_len_steps;
+        default:
+            return 0U;
+    }
+}
+
+static uint32_t brick6_master_buffer_clamp_ratio_q16(uint32_t ratio_q16)
+{
+    if (ratio_q16 < 16384U)
+    {
+        return 16384U;
+    }
+    if (ratio_q16 > 262144U)
+    {
+        return 262144U;
+    }
+    return ratio_q16;
+}
+
+static void brick6_master_buffer_push_stretch_config(void)
+{
+    brick6_master_buffer_stretch_config_t runtime_config = g_stretch_config;
+
+    if (runtime_config.sync_len != 0U)
+    {
+        if ((runtime_config.sync_len == 4U)
+                && (runtime_config.source_bpm_milli >= 40000U)
+                && (seq_runtime_get_tempo_bpm_milli() >= 40000U))
+        {
+            const uint32_t tempo_bpm_milli = seq_runtime_get_tempo_bpm_milli();
+            runtime_config.ratio_q16 = brick6_master_buffer_clamp_ratio_q16(
+                    (uint32_t)(((uint64_t)tempo_bpm_milli << 16) / runtime_config.source_bpm_milli));
+        }
+        else if ((g_buffer_recorder != NULL) && (g_buffer_recorder->recorded_frames >= 2U))
+        {
+            const uint32_t target_steps = brick6_master_buffer_resolve_stretch_target_steps(runtime_config.sync_len);
+            const uint32_t target_frames = brick6_master_buffer_steps_to_frames(target_steps);
+            if (target_frames != 0U)
+            {
+                runtime_config.ratio_q16 = brick6_master_buffer_clamp_ratio_q16(
+                        (uint32_t)(((uint64_t)g_buffer_recorder->recorded_frames << 16) / target_frames));
+            }
+        }
+    }
+
+    brick6_master_buffer_stretch_set_config(&runtime_config);
 }
 
 static void brick6_master_buffer_apply_record_target_to_recorder(void)
@@ -143,6 +213,43 @@ static uint8_t brick6_master_buffer_is_preroll_active(void)
             || (seq_runtime_get_rec_count_in_remaining_steps() > 0U)) ? 1U : 0U;
 }
 
+static void brick6_master_buffer_reset_stretch_config(void)
+{
+    g_stretch_config.stretch_mode = 0U;
+    g_stretch_config.quality = 0U;
+    g_stretch_config.sync_len = 0U;
+    g_stretch_config.source_bpm_milli = 120000U;
+    g_stretch_config.ratio_q16 = 65536U;
+    g_stretch_config.transient_sensitivity = 64U;
+    g_stretch_config.preserve_pitch = 1U;
+}
+
+static void brick6_master_buffer_publish_stretch_source(void)
+{
+    if (g_buffer_recorder == NULL)
+    {
+        return;
+    }
+
+    brick6_master_buffer_stretch_notify_record_finished(g_buffer_recorder->buffer,
+                                                        g_buffer_recorder->recorded_frames,
+                                                        g_buffer_recorder->max_frames,
+                                                        g_buffer_source_generation);
+}
+
+static void brick6_master_buffer_publish_stretch_source_stopped(void)
+{
+    if (g_buffer_recorder == NULL)
+    {
+        return;
+    }
+
+    brick6_master_buffer_stretch_notify_record_stopped(g_buffer_recorder->buffer,
+                                                       g_buffer_recorder->recorded_frames,
+                                                       g_buffer_recorder->max_frames,
+                                                       g_buffer_source_generation);
+}
+
 void brick6_master_buffer_init(live_recorder_t *rec,
                                float *storage,
                                uint32_t max_frames)
@@ -156,6 +263,7 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
+    g_buffer_source_generation = 0U;
     g_record_len_steps = 16U;
     g_quantize_record = 1U;
     g_quantize_play = 1U;
@@ -163,6 +271,9 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     g_xfade = 0.0f;
     g_fade_in_amount = 0U;
     g_fade_out_amount = 0U;
+    brick6_master_buffer_reset_stretch_config();
+    brick6_master_buffer_stretch_init(max_frames);
+    brick6_master_buffer_push_stretch_config();
     memset(g_source_enabled, 0, sizeof(g_source_enabled));
     for (uint8_t track = 0U; track < BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS; ++track)
     {
@@ -187,18 +298,22 @@ void brick6_master_buffer_init(live_recorder_t *rec,
 void brick6_master_buffer_reset(void)
 {
     brick6_master_buffer_clear();
+    brick6_master_buffer_stretch_reset();
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
     g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
+    g_buffer_source_generation = 0U;
     g_quantize_record = 1U;
     g_quantize_play = 1U;
     g_rate = 1.0f;
     g_xfade = 0.0f;
     g_fade_in_amount = 0U;
     g_fade_out_amount = 0U;
+    brick6_master_buffer_reset_stretch_config();
+    brick6_master_buffer_push_stretch_config();
     memset(g_source_enabled, 0, sizeof(g_source_enabled));
     for (uint8_t track = 0U; track < BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS; ++track)
     {
@@ -213,6 +328,7 @@ void brick6_master_buffer_reset(void)
 
 void brick6_master_buffer_clear(void)
 {
+    g_buffer_source_generation++;
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
@@ -221,6 +337,7 @@ void brick6_master_buffer_clear(void)
     g_record_target_frames = 0U;
     memset(g_capture_l, 0, sizeof(g_capture_l));
     memset(g_capture_r, 0, sizeof(g_capture_r));
+    brick6_master_buffer_stretch_clear();
 
     if (g_buffer_recorder != NULL)
     {
@@ -242,6 +359,7 @@ void brick6_master_buffer_set_record_len(uint32_t steps)
 
     g_record_len_steps = steps;
     (void)brick6_master_buffer_refresh_record_target();
+    brick6_master_buffer_push_stretch_config();
 }
 
 void brick6_master_buffer_set_quantize_record(uint8_t enabled)
@@ -290,6 +408,46 @@ void brick6_master_buffer_set_fade_in(uint32_t frames)
 void brick6_master_buffer_set_fade_out(uint32_t frames)
 {
     g_fade_out_amount = frames;
+}
+
+void brick6_master_buffer_set_stretch_config(const brick6_master_buffer_stretch_config_t *config)
+{
+    if (config == NULL)
+    {
+        return;
+    }
+
+    g_stretch_config.stretch_mode = (config->stretch_mode > 2U) ? 2U : config->stretch_mode;
+    g_stretch_config.quality = (config->quality > 1U) ? 1U : config->quality;
+    g_stretch_config.sync_len = (config->sync_len > 4U) ? 4U : config->sync_len;
+    g_stretch_config.source_bpm_milli = config->source_bpm_milli;
+    if (g_stretch_config.source_bpm_milli != 0U)
+    {
+        if (g_stretch_config.source_bpm_milli < 40000U)
+        {
+            g_stretch_config.source_bpm_milli = 40000U;
+        }
+        else if (g_stretch_config.source_bpm_milli > 300000U)
+        {
+            g_stretch_config.source_bpm_milli = 300000U;
+        }
+    }
+    g_stretch_config.ratio_q16 = brick6_master_buffer_clamp_ratio_q16(config->ratio_q16);
+    g_stretch_config.transient_sensitivity = (config->transient_sensitivity > 127U)
+            ? 127U
+            : config->transient_sensitivity;
+    g_stretch_config.preserve_pitch = (config->preserve_pitch != 0U) ? 1U : 0U;
+    brick6_master_buffer_push_stretch_config();
+}
+
+void brick6_master_buffer_get_stretch_config(brick6_master_buffer_stretch_config_t *out_config)
+{
+    if (out_config == NULL)
+    {
+        return;
+    }
+
+    *out_config = g_stretch_config;
 }
 
 void brick6_master_buffer_set_source_enabled(uint8_t track, uint8_t enabled)
@@ -344,6 +502,9 @@ void brick6_master_buffer_request_record(void)
             {
                 g_play_waiting_boundary = 0U;
             }
+
+            brick6_master_buffer_publish_stretch_source_stopped();
+            brick6_master_buffer_push_stretch_config();
         }
         g_recording = 0U;
         g_record_armed = 0U;
@@ -425,6 +586,11 @@ void brick6_master_buffer_begin_block(uint32_t frames)
 {
     (void)frames;
 
+    if ((g_stretch_config.stretch_mode != 0U) && (g_stretch_config.sync_len != 0U))
+    {
+        brick6_master_buffer_push_stretch_config();
+    }
+
     memset(g_capture_l, 0, sizeof(g_capture_l));
     memset(g_capture_r, 0, sizeof(g_capture_r));
 
@@ -440,6 +606,8 @@ void brick6_master_buffer_begin_block(uint32_t frames)
         {
             brick6_master_buffer_apply_record_target_to_recorder();
             live_recorder_stop_play(g_buffer_recorder);
+            g_buffer_source_generation++;
+            brick6_master_buffer_stretch_notify_record_started(g_buffer_source_generation);
             g_play_waiting_boundary = 0U;
             live_recorder_start_record(g_buffer_recorder);
             g_recording = 1U;
@@ -519,6 +687,8 @@ void brick6_master_buffer_commit_block(uint32_t frames)
         {
             g_play_waiting_boundary = 0U;
         }
+        brick6_master_buffer_publish_stretch_source();
+        brick6_master_buffer_push_stretch_config();
         g_recording = 0U;
         g_record_armed = 0U;
         g_record_waiting_boundary = 0U;
@@ -544,7 +714,19 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
     uint32_t sample_pos = g_buffer_recorder->read_pos;
     uint32_t sample_frac_q16 = g_buffer_recorder->read_pos_q16 & 0xFFFFU;
     const uint32_t read_step_q16 = (g_buffer_recorder->read_step_q16 == 0U) ? (1U << 16) : g_buffer_recorder->read_step_q16;
-    live_recorder_read(g_buffer_recorder, left, right, frames);
+    const uint8_t use_stretch = ((g_stretch_config.stretch_mode != 0U)
+                                 && (brick6_master_buffer_stretch_is_ready() != 0U))
+                                        ? 1U
+                                        : 0U;
+
+    if (use_stretch != 0U)
+    {
+        brick6_master_buffer_stretch_render_block(left, right, frames);
+    }
+    else
+    {
+        live_recorder_read(g_buffer_recorder, left, right, frames);
+    }
 
     const uint32_t fade_in_frames = (g_fade_in_amount == 0U)
             ? 0U

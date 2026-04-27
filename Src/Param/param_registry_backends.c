@@ -632,6 +632,8 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
 
 uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t track, param_id_t id, float value)
 {
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
@@ -663,6 +665,75 @@ uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t
         case PARAM_BUFFER_XFADE:
             brick6_master_buffer_set_xfade(param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
+        case PARAM_BUFFER_TSTR:
+        case PARAM_BUFFER_QUALITY:
+        case PARAM_BUFFER_SYNC_LEN:
+        case PARAM_BUFFER_SRC_BPM:
+        case PARAM_BUFFER_RATIO_Q16:
+        case PARAM_BUFFER_TSNS:
+        case PARAM_BUFFER_PRESERVE_PITCH:
+        {
+            brick6_master_buffer_stretch_config_t config;
+            brick6_master_buffer_get_stretch_config(&config);
+
+            switch (id)
+            {
+                case PARAM_BUFFER_TSTR:
+                    config.stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
+                    if (state != NULL)
+                    {
+                        state->buffer.stretch_mode = (float)config.stretch_mode;
+                    }
+                    break;
+                case PARAM_BUFFER_QUALITY:
+                    config.quality = (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f);
+                    if (state != NULL)
+                    {
+                        state->buffer.quality = (float)config.quality;
+                    }
+                    break;
+                case PARAM_BUFFER_SYNC_LEN:
+                    config.sync_len = (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f);
+                    if (state != NULL)
+                    {
+                        state->buffer.sync_len = (float)config.sync_len;
+                    }
+                    break;
+                case PARAM_BUFFER_SRC_BPM:
+                    config.source_bpm_milli = (uint32_t)(param_backend_clamp_value(value, 40.0f, 300.0f) * 1000.0f);
+                    if (state != NULL)
+                    {
+                        state->buffer.source_bpm = ((float)config.source_bpm_milli) * 0.001f;
+                    }
+                    break;
+                case PARAM_BUFFER_RATIO_Q16:
+                    config.ratio_q16 = (uint32_t)(param_backend_clamp_value(value, 16384.0f, 262144.0f) + 0.5f);
+                    if (state != NULL)
+                    {
+                        state->buffer.ratio_q16 = (float)config.ratio_q16;
+                    }
+                    break;
+                case PARAM_BUFFER_TSNS:
+                    config.transient_sensitivity = (uint8_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f);
+                    if (state != NULL)
+                    {
+                        state->buffer.transient_sensitivity = (float)config.transient_sensitivity;
+                    }
+                    break;
+                case PARAM_BUFFER_PRESERVE_PITCH:
+                    config.preserve_pitch = (value >= 0.5f) ? 1U : 0U;
+                    if (state != NULL)
+                    {
+                        state->buffer.preserve_pitch = (float)config.preserve_pitch;
+                    }
+                    break;
+                default:
+                    break;
+            }
+
+            brick6_master_buffer_set_stretch_config(&config);
+            return 1U;
+        }
         default:
             (void)track;
             return 0U;

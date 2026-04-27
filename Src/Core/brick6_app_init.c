@@ -28,6 +28,7 @@
 #include "Audio/live_recorder_config.h"
 #include "Storage/memory_layout.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/brick6_master_buffer_stretch.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
@@ -175,6 +176,7 @@ void brick6_app_process(void)
     pattern_live_service();
     sd_preview_process();
     brick6_master_control_process();
+    brick6_master_buffer_stretch_service_analysis();
 
     brick6_process_hall_ui_keyboard_chain();
 

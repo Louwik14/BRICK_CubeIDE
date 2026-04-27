@@ -1086,6 +1086,13 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_BUFFER_FADE_IN:
         case PARAM_BUFFER_FADE_OUT:
         case PARAM_BUFFER_XFADE:
+        case PARAM_BUFFER_TSTR:
+        case PARAM_BUFFER_QUALITY:
+        case PARAM_BUFFER_SYNC_LEN:
+        case PARAM_BUFFER_SRC_BPM:
+        case PARAM_BUFFER_RATIO_Q16:
+        case PARAM_BUFFER_TSNS:
+        case PARAM_BUFFER_PRESERVE_PITCH:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_BUFFER;
             rule.resource = TRACK_RUNTIME_RESOURCE_BUFFER;
             return rule;

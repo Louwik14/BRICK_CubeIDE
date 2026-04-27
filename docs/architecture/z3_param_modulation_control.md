@@ -81,7 +81,7 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - contient le noyau Sampler, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
+  - contient le noyau Sampler, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
 
 ## 2.c Contrat public du seam `param_registry`
@@ -183,7 +183,9 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
-  - sert de base canonique Sampler, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track, distincte de `track_sound_state`.
+  - sert de base canonique Sampler, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track, distincte de `track_sound_state`.
+- Les params stretch Master/Buffer sont des params BUFFER track-aware (`TStr`, `Quality`, `Sync Len`, `Src BPM`, `Ratio`, `TSns`, `Pitch`) gates par Z2; ils ne doivent pas devenir des globals ni utiliser `param_store.active[]` comme verite track-scoped.
+- Leur apply ecrit la base canonique `track_tone_sound_state.buffer`, puis projette explicitement la configuration vers l'etat runtime local de `brick6_master_buffer`; `live_recorder` reste backend stockage/lecture brute.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
@@ -597,3 +599,4 @@ Dette explicite post-passe 4:
 ## 14. Contrat commandes explicites - apply track-aware
 - `param_registry_apply_track_value` porte maintenant le refresh runtime explicite avant resolution et execution track-aware.
 - `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.
+- Les params `Master/Buffer` du domaine runtime `BUFFER` transitent par le meme seam d'apply track-aware que `TONE/MIX`; ils ne doivent pas etre filtres en amont par un gate limite a `TONE/MIX` sous peine de bloquer l'edition UI de l'ensemble `TONE` pour la track buffer.

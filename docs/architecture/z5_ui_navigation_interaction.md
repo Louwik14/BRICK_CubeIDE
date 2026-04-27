@@ -242,6 +242,11 @@ Flux nominal prouve:
 - Resolution contextuelle `Master/Buffer -> ROUT` (propre):
   - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
   - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
+- Resolution contextuelle `Master/Buffer -> TONE`:
+  - la famille template buffer garde `REC` et `FADE`,
+  - les controles stretch restent dans `TONE` via sous-pages buffer-specifiques `STR` et `SYNC`,
+  - `SYNC` expose `Sync Len` et `Src BPM` uniquement pour `Master/Buffer`,
+  - aucun nouveau hall mode ni deplacement de `ROUT`.
 
 5. Appels vers param/runtime/seq/storage
 - Selon handler: apply params, track config, seq edits, pattern queue/store, undo, settings, master buffer routing/record.

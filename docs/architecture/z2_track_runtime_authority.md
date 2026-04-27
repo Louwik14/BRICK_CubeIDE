@@ -117,6 +117,7 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - Interdiction de refresh implicite dans les wrappers de convenance (UI/Param/Seq/Audio): la discipline reste centralisee au call site appelant.
 - Résolution strictement track-aware.
 - Master/Buffer reste un bind runtime dédié (family master/type buffer).
+- Les paramètres BUFFER incluent les contrôles existants du recorder/playback et les futurs contrôles stretch Master/Buffer; ils restent gates par `TRACK_RUNTIME_RESOURCE_BUFFER` et ne sont autorisés que sur `TRACK_RUNTIME_FAMILY_MASTER` / `TRACK_RUNTIME_TYPE_BUFFER`.
 - Le contrat "track -> capacités -> ensembles UI exposables" est matérialisé dans Z2 (`track_runtime_descriptor_t` + `ui_ensemble_mask`) et consommé par Z5 sans redécision distribuée.
 - Les couches d'exécution (scheduler/param apply) lisent le channel MIDI via Z2 (`track_runtime_get_midi_channel_*`) au lieu d'un couplage direct à l'état UI.
 - Le resolver structurel pur est explicite: `track_runtime_resolve_track()` renvoie une vue résolue (descriptor + cibles runtime valides) sans logique UI contextuelle.
