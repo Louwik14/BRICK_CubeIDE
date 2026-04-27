@@ -19,8 +19,9 @@ typedef enum
 typedef struct
 {
     uint8_t stretch_mode;
-    uint8_t quality;
     uint8_t sync_len;
+    uint16_t grain_size;
+    uint16_t hop_size;
     uint32_t source_bpm_milli;
     uint32_t ratio_q16;
     uint8_t transient_sensitivity;

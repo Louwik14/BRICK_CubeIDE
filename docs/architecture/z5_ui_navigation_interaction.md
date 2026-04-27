@@ -245,6 +245,7 @@ Flux nominal prouve:
 - Resolution contextuelle `Master/Buffer -> TONE`:
   - la famille template buffer garde `REC` et `FADE`,
   - les controles stretch restent dans `TONE` via sous-pages buffer-specifiques `STR` et `SYNC`,
+  - `STR` expose `TStr`, `Grain` et `Hop` pour `Master/Buffer`,
   - `SYNC` expose `Sync Len` et `Src BPM` uniquement pour `Master/Buffer`,
   - aucun nouveau hall mode ni deplacement de `ROUT`.
 

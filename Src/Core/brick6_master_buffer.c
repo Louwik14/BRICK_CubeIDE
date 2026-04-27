@@ -39,8 +39,9 @@ static uint32_t g_fade_in_amount = 0U;
 static uint32_t g_fade_out_amount = 0U;
 static brick6_master_buffer_stretch_config_t g_stretch_config = {
     .stretch_mode = 0U,
-    .quality = 0U,
     .sync_len = 0U,
+    .grain_size = 256U,
+    .hop_size = 128U,
     .source_bpm_milli = 120000U,
     .ratio_q16 = 65536U,
     .transient_sensitivity = 64U,
@@ -216,8 +217,9 @@ static uint8_t brick6_master_buffer_is_preroll_active(void)
 static void brick6_master_buffer_reset_stretch_config(void)
 {
     g_stretch_config.stretch_mode = 0U;
-    g_stretch_config.quality = 0U;
     g_stretch_config.sync_len = 0U;
+    g_stretch_config.grain_size = 256U;
+    g_stretch_config.hop_size = 128U;
     g_stretch_config.source_bpm_milli = 120000U;
     g_stretch_config.ratio_q16 = 65536U;
     g_stretch_config.transient_sensitivity = 64U;
@@ -417,9 +419,28 @@ void brick6_master_buffer_set_stretch_config(const brick6_master_buffer_stretch_
         return;
     }
 
-    g_stretch_config.stretch_mode = (config->stretch_mode > 2U) ? 2U : config->stretch_mode;
-    g_stretch_config.quality = (config->quality > 1U) ? 1U : config->quality;
+    g_stretch_config.stretch_mode = (config->stretch_mode > 1U) ? 1U : config->stretch_mode;
     g_stretch_config.sync_len = (config->sync_len > 4U) ? 4U : config->sync_len;
+    g_stretch_config.grain_size = config->grain_size;
+    if ((g_stretch_config.grain_size != 128U)
+            && (g_stretch_config.grain_size != 256U)
+            && (g_stretch_config.grain_size != 384U)
+            && (g_stretch_config.grain_size != 512U))
+    {
+        g_stretch_config.grain_size = 256U;
+    }
+    g_stretch_config.hop_size = config->hop_size;
+    if ((g_stretch_config.hop_size != 64U)
+            && (g_stretch_config.hop_size != 128U)
+            && (g_stretch_config.hop_size != 192U)
+            && (g_stretch_config.hop_size != 256U))
+    {
+        g_stretch_config.hop_size = 128U;
+    }
+    if (g_stretch_config.hop_size > g_stretch_config.grain_size)
+    {
+        g_stretch_config.hop_size = g_stretch_config.grain_size;
+    }
     g_stretch_config.source_bpm_milli = config->source_bpm_milli;
     if (g_stretch_config.source_bpm_milli != 0U)
     {

@@ -259,8 +259,14 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_BUFFER_TSTR:
             *out_value = state->buffer.stretch_mode;
             return 1U;
+        case PARAM_BUFFER_GRAIN:
+            *out_value = state->buffer.grain_size;
+            return 1U;
+        case PARAM_BUFFER_HOP:
+            *out_value = state->buffer.hop_size;
+            return 1U;
         case PARAM_BUFFER_QUALITY:
-            *out_value = state->buffer.quality;
+            *out_value = 0.0f;
             return 1U;
         case PARAM_BUFFER_SYNC_LEN:
             *out_value = state->buffer.sync_len;
@@ -629,8 +635,14 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_BUFFER_TSTR:
             state->buffer.stretch_mode = value;
             return 1U;
+        case PARAM_BUFFER_GRAIN:
+            state->buffer.grain_size = value;
+            return 1U;
+        case PARAM_BUFFER_HOP:
+            state->buffer.hop_size = value;
+            return 1U;
         case PARAM_BUFFER_QUALITY:
-            state->buffer.quality = value;
+            return 1U;
             return 1U;
         case PARAM_BUFFER_SYNC_LEN:
             state->buffer.sync_len = value;

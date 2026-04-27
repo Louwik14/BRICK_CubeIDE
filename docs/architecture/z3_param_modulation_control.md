@@ -184,7 +184,7 @@ Call-sites critiques:
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
   - sert de base canonique Sampler, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track, distincte de `track_sound_state`.
-- Les params stretch Master/Buffer sont des params BUFFER track-aware (`TStr`, `Quality`, `Sync Len`, `Src BPM`, `Ratio`, `TSns`, `Pitch`) gates par Z2; ils ne doivent pas devenir des globals ni utiliser `param_store.active[]` comme verite track-scoped.
+- Les params stretch Master/Buffer sont des params BUFFER track-aware (`TStr`, `Grain`, `Hop`, `Sync Len`, `Src BPM`, `Pitch`) gates par Z2; ils ne doivent pas devenir des globals ni utiliser `param_store.active[]` comme verite track-scoped.
 - Leur apply ecrit la base canonique `track_tone_sound_state.buffer`, puis projette explicitement la configuration vers l'etat runtime local de `brick6_master_buffer`; `live_recorder` reste backend stockage/lecture brute.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.

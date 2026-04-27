@@ -21,8 +21,9 @@ typedef struct
     struct
     {
         float stretch_mode;
-        float quality;
         float sync_len;
+        float grain_size;
+        float hop_size;
         float source_bpm;
         float ratio_q16;
         float transient_sensitivity;

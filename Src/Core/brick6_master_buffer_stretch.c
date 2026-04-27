@@ -13,12 +13,15 @@
 #define BRICK6_MASTER_BUFFER_STRETCH_ECO_GRAIN_SIZE 256U
 #define BRICK6_MASTER_BUFFER_STRETCH_ECO_HOP_SIZE 128U
 #define BRICK6_MASTER_BUFFER_STRETCH_STD_GRAIN_SIZE 512U
-#define BRICK6_MASTER_BUFFER_STRETCH_STD_HOP_SIZE 256U
+#define BRICK6_MASTER_BUFFER_STRETCH_STD_HOP_SIZE 128U
 #define BRICK6_MASTER_BUFFER_STRETCH_MAX_GRAIN_SIZE BRICK6_MASTER_BUFFER_STRETCH_STD_GRAIN_SIZE
 #define BRICK6_MASTER_BUFFER_STRETCH_RING_SIZE 4096U
 #define BRICK6_MASTER_BUFFER_STRETCH_MAX_ANALYSIS_WINDOW 64U
+#define BRICK6_MASTER_BUFFER_STRETCH_SEEK_WINDOW 16U
+#define BRICK6_MASTER_BUFFER_STRETCH_SEEK_COMPARE 48U
 #define BRICK6_MASTER_BUFFER_STRETCH_VARISPEED_LIMIT_Q16 (8U << 16)
 #define BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE (1U << 16)
+#define BRICK6_MASTER_BUFFER_STRETCH_RATIO_RAMP_STEP_Q16 2048U
 
 typedef struct
 {
@@ -31,6 +34,8 @@ typedef struct
     brick6_master_buffer_stretch_config_t config;
     brick6_master_buffer_stretch_state_t state;
     uint64_t source_pos_q16;
+    uint32_t current_ratio_q16;
+    uint32_t target_ratio_q16;
     uint32_t output_read_index;
     uint32_t output_write_origin;
     uint32_t output_fill;
@@ -42,23 +47,54 @@ typedef struct
 
 static brick6_master_buffer_stretch_runtime_t g_master_buffer_stretch;
 
+static uint32_t brick6_master_buffer_stretch_sanitize_grain_size(uint32_t grain_size)
+{
+    switch (grain_size)
+    {
+        case 128U:
+        case 256U:
+        case 384U:
+        case 512U:
+            return grain_size;
+        default:
+            return BRICK6_MASTER_BUFFER_STRETCH_ECO_GRAIN_SIZE;
+    }
+}
+
+static uint32_t brick6_master_buffer_stretch_sanitize_hop_size(uint32_t hop_size)
+{
+    switch (hop_size)
+    {
+        case 64U:
+        case 128U:
+        case 192U:
+        case 256U:
+            return hop_size;
+        default:
+            return BRICK6_MASTER_BUFFER_STRETCH_ECO_HOP_SIZE;
+    }
+}
+
 static uint32_t brick6_master_buffer_stretch_get_grain_size(void)
 {
-    return (g_master_buffer_stretch.config.quality == 0U)
-            ? BRICK6_MASTER_BUFFER_STRETCH_ECO_GRAIN_SIZE
-            : BRICK6_MASTER_BUFFER_STRETCH_STD_GRAIN_SIZE;
+    return brick6_master_buffer_stretch_sanitize_grain_size(g_master_buffer_stretch.config.grain_size);
 }
 
 static uint32_t brick6_master_buffer_stretch_get_hop_size(void)
 {
-    return (g_master_buffer_stretch.config.quality == 0U)
-            ? BRICK6_MASTER_BUFFER_STRETCH_ECO_HOP_SIZE
-            : BRICK6_MASTER_BUFFER_STRETCH_STD_HOP_SIZE;
+    uint32_t hop_size = brick6_master_buffer_stretch_sanitize_hop_size(g_master_buffer_stretch.config.hop_size);
+    const uint32_t grain_size = brick6_master_buffer_stretch_get_grain_size();
+    if (hop_size > grain_size)
+    {
+        hop_size = grain_size;
+    }
+    return hop_size;
 }
 
 static const float *brick6_master_buffer_stretch_get_window(void)
 {
-    return (g_master_buffer_stretch.config.quality == 0U)
+    const uint32_t grain_size = brick6_master_buffer_stretch_get_grain_size();
+    return (grain_size <= BRICK6_MASTER_BUFFER_STRETCH_ECO_GRAIN_SIZE)
             ? g_master_buffer_stretch.window_eco
             : g_master_buffer_stretch.window_std;
 }
@@ -142,6 +178,10 @@ static void brick6_master_buffer_stretch_prepare_windows(void)
 static void brick6_master_buffer_stretch_reset_dsp_state(void)
 {
     g_master_buffer_stretch.source_pos_q16 = 0U;
+    g_master_buffer_stretch.current_ratio_q16 = brick6_master_buffer_stretch_clamp_ratio_q16(
+            (g_master_buffer_stretch.target_ratio_q16 == 0U)
+                    ? g_master_buffer_stretch.config.ratio_q16
+                    : g_master_buffer_stretch.target_ratio_q16);
     g_master_buffer_stretch.output_read_index = 0U;
     g_master_buffer_stretch.output_write_origin = 0U;
     g_master_buffer_stretch.output_fill = 0U;
@@ -154,10 +194,14 @@ static void brick6_master_buffer_stretch_reset_dsp_state(void)
 static void brick6_master_buffer_stretch_reset_runtime(void)
 {
     memset(&g_master_buffer_stretch, 0, sizeof(g_master_buffer_stretch));
+    g_master_buffer_stretch.config.grain_size = BRICK6_MASTER_BUFFER_STRETCH_ECO_GRAIN_SIZE;
+    g_master_buffer_stretch.config.hop_size = BRICK6_MASTER_BUFFER_STRETCH_ECO_HOP_SIZE;
     g_master_buffer_stretch.config.ratio_q16 = BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE;
     g_master_buffer_stretch.config.transient_sensitivity = 64U;
     g_master_buffer_stretch.config.preserve_pitch = 1U;
     g_master_buffer_stretch.config.source_bpm_milli = 120000U;
+    g_master_buffer_stretch.current_ratio_q16 = BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE;
+    g_master_buffer_stretch.target_ratio_q16 = BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE;
     g_master_buffer_stretch.state.status = BRICK6_MASTER_BUFFER_STRETCH_STATUS_BYPASS;
 }
 
@@ -261,6 +305,100 @@ static float brick6_master_buffer_stretch_sample_source(uint32_t channel, uint64
     }
 }
 
+static uint32_t brick6_master_buffer_stretch_get_effective_ratio_q16(void)
+{
+    return (g_master_buffer_stretch.current_ratio_q16 == 0U)
+            ? BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE
+            : g_master_buffer_stretch.current_ratio_q16;
+}
+
+static void brick6_master_buffer_stretch_step_ratio(void)
+{
+    const uint32_t target = brick6_master_buffer_stretch_clamp_ratio_q16(g_master_buffer_stretch.target_ratio_q16);
+    uint32_t current = brick6_master_buffer_stretch_get_effective_ratio_q16();
+
+    if (current < target)
+    {
+        const uint32_t delta = target - current;
+        current += (delta > BRICK6_MASTER_BUFFER_STRETCH_RATIO_RAMP_STEP_Q16)
+                ? BRICK6_MASTER_BUFFER_STRETCH_RATIO_RAMP_STEP_Q16
+                : delta;
+    }
+    else if (current > target)
+    {
+        const uint32_t delta = current - target;
+        current -= (delta > BRICK6_MASTER_BUFFER_STRETCH_RATIO_RAMP_STEP_Q16)
+                ? BRICK6_MASTER_BUFFER_STRETCH_RATIO_RAMP_STEP_Q16
+                : delta;
+    }
+
+    g_master_buffer_stretch.current_ratio_q16 = current;
+}
+
+static float brick6_master_buffer_stretch_score_candidate(uint64_t source_start_q16)
+{
+    const uint32_t compare_len = BRICK6_MASTER_BUFFER_STRETCH_SEEK_COMPARE;
+    float cross = 0.0f;
+    float energy_existing = 0.0f;
+    float energy_candidate = 0.0f;
+    float diff_energy = 0.0f;
+
+    for (uint32_t i = 0U; i < compare_len; ++i)
+    {
+        const uint32_t ring_index = (g_master_buffer_stretch.output_write_origin + i)
+                % BRICK6_MASTER_BUFFER_STRETCH_RING_SIZE;
+        const float existing_l = g_master_buffer_stretch.output_ring_l[ring_index];
+        const float existing_r = g_master_buffer_stretch.output_ring_r[ring_index];
+        const float candidate_l = brick6_master_buffer_stretch_sample_source(0U, source_start_q16 + ((uint64_t)i << 16));
+        const float candidate_r = brick6_master_buffer_stretch_sample_source(1U, source_start_q16 + ((uint64_t)i << 16));
+        const float taper = 1.0f - ((float)i / (float)compare_len);
+        const float diff_l = existing_l - candidate_l;
+        const float diff_r = existing_r - candidate_r;
+
+        cross += ((existing_l * candidate_l) + (existing_r * candidate_r)) * taper;
+        energy_existing += ((existing_l * existing_l) + (existing_r * existing_r)) * taper;
+        energy_candidate += ((candidate_l * candidate_l) + (candidate_r * candidate_r)) * taper;
+        diff_energy += ((diff_l * diff_l) + (diff_r * diff_r)) * taper;
+    }
+
+    if ((energy_existing > 1.0e-9f) && (energy_candidate > 1.0e-9f))
+    {
+        const float denom = sqrtf(energy_existing * energy_candidate);
+        const float corr = cross / denom;
+        return diff_energy - (corr * 0.5f);
+    }
+
+    return diff_energy;
+}
+
+static uint64_t brick6_master_buffer_stretch_seek_grain_start_q16(uint64_t source_start_q16)
+{
+    const uint32_t seek_window = BRICK6_MASTER_BUFFER_STRETCH_SEEK_WINDOW;
+    uint64_t best_start_q16 = source_start_q16;
+    float best_score = brick6_master_buffer_stretch_score_candidate(source_start_q16);
+
+    if (g_master_buffer_stretch.output_fill == 0U)
+    {
+        return source_start_q16;
+    }
+
+    for (int32_t delta = -(int32_t)seek_window; delta <= (int32_t)seek_window; ++delta)
+    {
+        const uint32_t candidate_frame = brick6_master_buffer_stretch_wrap_frame_signed(
+                (int32_t)(source_start_q16 >> 16) + delta);
+        const uint64_t candidate_q16 = ((uint64_t)candidate_frame << 16);
+        const float score = brick6_master_buffer_stretch_score_candidate(candidate_q16);
+
+        if (score < best_score)
+        {
+            best_score = score;
+            best_start_q16 = candidate_q16;
+        }
+    }
+
+    return best_start_q16;
+}
+
 static void brick6_master_buffer_stretch_emit_grain(uint64_t source_start_q16)
 {
     const uint32_t grain_size = brick6_master_buffer_stretch_get_grain_size();
@@ -298,16 +436,21 @@ static uint8_t brick6_master_buffer_stretch_find_nearby_transient(uint32_t sourc
     }
 
     {
-        const uint32_t max_distance = 32U + (((uint32_t)g_master_buffer_stretch.config.transient_sensitivity * 3U) >> 1U);
+        const uint32_t max_distance = 24U + (g_master_buffer_stretch.config.transient_sensitivity >> 1U);
         uint32_t best_frame = 0U;
         uint32_t best_distance = 0xFFFFFFFFU;
 
         for (uint32_t i = 0U; i < g_master_buffer_stretch.state.transient_count; ++i)
         {
             const uint32_t candidate = g_master_buffer_stretch.transient_frames[i];
-            const uint32_t distance = (candidate > source_frame)
-                    ? (candidate - source_frame)
-                    : (source_frame - candidate);
+            uint32_t distance = 0U;
+
+            if (candidate < source_frame)
+            {
+                continue;
+            }
+
+            distance = candidate - source_frame;
             if ((distance <= max_distance) && (distance < best_distance))
             {
                 best_distance = distance;
@@ -339,7 +482,10 @@ static uint64_t brick6_master_buffer_stretch_resolve_grain_start_q16(void)
 
         if ((brick6_master_buffer_stretch_find_nearby_transient(source_frame, &transient_frame) != 0U)
                 && ((g_master_buffer_stretch.last_anchor_valid == 0U)
-                    || (transient_frame != g_master_buffer_stretch.last_anchor_frame)))
+                    || (((transient_frame > g_master_buffer_stretch.last_anchor_frame)
+                            ? (transient_frame - g_master_buffer_stretch.last_anchor_frame)
+                            : (g_master_buffer_stretch.last_anchor_frame - transient_frame))
+                        >= grain_size)))
         {
             const int32_t pre_roll = (int32_t)(grain_size >> 2U);
             const uint32_t anchor_start = brick6_master_buffer_stretch_wrap_frame_signed((int32_t)transient_frame - pre_roll);
@@ -350,7 +496,7 @@ static uint64_t brick6_master_buffer_stretch_resolve_grain_start_q16(void)
         }
     }
 
-    return source_start_q16;
+    return brick6_master_buffer_stretch_seek_grain_start_q16(source_start_q16);
 }
 
 static uint8_t brick6_master_buffer_stretch_process_frame(void)
@@ -371,10 +517,11 @@ static uint8_t brick6_master_buffer_stretch_process_frame(void)
         return 0U;
     }
 
+    brick6_master_buffer_stretch_step_ratio();
     brick6_master_buffer_stretch_prepare_windows();
     brick6_master_buffer_stretch_emit_grain(brick6_master_buffer_stretch_resolve_grain_start_q16());
 
-    analysis_hop_q16 = g_master_buffer_stretch.config.ratio_q16 * hop_size;
+    analysis_hop_q16 = (uint64_t)brick6_master_buffer_stretch_get_effective_ratio_q16() * hop_size;
     if (analysis_hop_q16 < BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE)
     {
         analysis_hop_q16 = BRICK6_MASTER_BUFFER_STRETCH_Q16_ONE;
@@ -394,7 +541,7 @@ static void brick6_master_buffer_stretch_render_varispeed(float *left, float *ri
 {
     const uint32_t source_frames = g_master_buffer_stretch.state.source_frames;
     const uint64_t loop_q16 = ((uint64_t)source_frames << 16);
-    uint64_t step_q16 = g_master_buffer_stretch.config.ratio_q16;
+    uint64_t step_q16 = brick6_master_buffer_stretch_get_effective_ratio_q16();
 
     if ((source_frames < 2U) || (loop_q16 == 0U))
     {
@@ -414,6 +561,8 @@ static void brick6_master_buffer_stretch_render_varispeed(float *left, float *ri
 
     for (uint32_t i = 0U; i < frames; ++i)
     {
+        brick6_master_buffer_stretch_step_ratio();
+        step_q16 = brick6_master_buffer_stretch_get_effective_ratio_q16();
         left[i] = brick6_master_buffer_stretch_sample_source(0U, g_master_buffer_stretch.source_pos_q16);
         right[i] = brick6_master_buffer_stretch_sample_source(1U, g_master_buffer_stretch.source_pos_q16);
         g_master_buffer_stretch.source_pos_q16 += step_q16;
@@ -456,7 +605,6 @@ void brick6_master_buffer_stretch_set_config(const brick6_master_buffer_stretch_
 {
     brick6_master_buffer_stretch_config_t next_config;
     uint8_t mode_changed;
-    uint8_t quality_changed;
     uint8_t preserve_pitch_changed;
 
     if (config == NULL)
@@ -465,6 +613,12 @@ void brick6_master_buffer_stretch_set_config(const brick6_master_buffer_stretch_
     }
 
     next_config = *config;
+    next_config.grain_size = (uint16_t)brick6_master_buffer_stretch_sanitize_grain_size(next_config.grain_size);
+    next_config.hop_size = (uint16_t)brick6_master_buffer_stretch_sanitize_hop_size(next_config.hop_size);
+    if (next_config.hop_size > next_config.grain_size)
+    {
+        next_config.hop_size = next_config.grain_size;
+    }
     next_config.ratio_q16 = brick6_master_buffer_stretch_clamp_ratio_q16(next_config.ratio_q16);
 
     if (memcmp(&g_master_buffer_stretch.config, &next_config, sizeof(next_config)) == 0)
@@ -474,14 +628,15 @@ void brick6_master_buffer_stretch_set_config(const brick6_master_buffer_stretch_
     }
 
     mode_changed = (g_master_buffer_stretch.config.stretch_mode != next_config.stretch_mode) ? 1U : 0U;
-    quality_changed = (g_master_buffer_stretch.config.quality != next_config.quality) ? 1U : 0U;
     preserve_pitch_changed = (g_master_buffer_stretch.config.preserve_pitch != next_config.preserve_pitch) ? 1U : 0U;
 
     g_master_buffer_stretch.config = next_config;
-    if ((mode_changed != 0U) || (quality_changed != 0U) || (preserve_pitch_changed != 0U))
+    g_master_buffer_stretch.target_ratio_q16 = next_config.ratio_q16;
+    if ((mode_changed != 0U) || (preserve_pitch_changed != 0U))
     {
         g_master_buffer_stretch.state.config_generation++;
         brick6_master_buffer_stretch_reset_dsp_state();
+        g_master_buffer_stretch.current_ratio_q16 = next_config.ratio_q16;
     }
     brick6_master_buffer_stretch_refresh_status();
 }

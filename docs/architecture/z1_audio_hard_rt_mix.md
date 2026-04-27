@@ -254,13 +254,12 @@ Memoire:
 - Le lifecycle du stretch buffer reste pilote par `brick6_master_buffer`: invalidation sur clear/debut de record, republication explicite de la source sur fin auto ou stop manuel.
 - L'analyse stretch (metadata/transients/anchors) reste hors IRQ et est servicee depuis la superloop via `brick6_app_process()`, par slices bornees et reliees a une `source_generation` explicite.
 - Le moteur stretch playback `Master/Buffer` reste local a `brick6_master_buffer_stretch`, mais il n'utilise plus de phase-vocoder spectral: il repose sur une lecture time-domain par grains fenetres, OLA et ring de sortie statique.
-- `QUALITY=ECO` utilise un profil 256/128 et `QUALITY=STD` un profil 512/256, sans second pipeline ni allocation dynamique.
+- Les profils de qualite visibles ont disparu; le moteur est maintenant regle explicitement par `Grain` et `Hop` dans le seam local.
 - `Pitch=Off` force un fallback varispeed local tres leger; `Pitch=On` active l'OLA time-domain borne.
-- Le mode `BEAT` consomme la table de transients hors IRQ pour re-ancrer localement les grains autour des attaques; si l'analyse n'est pas encore prete, le rendu reste fonctionnel et retombe sur le comportement `NORMAL`.
 - Criteres de validation manuelle a conserver pour `Master/Buffer` timestretch:
   - `OFF` doit retomber sur la lecture brute existante,
-  - `NORMAL` doit conserver le pitch en variation de `SYNC_LEN`/`Ratio`,
-  - `BEAT` doit rester stable si la table de transients est absente ou invalidee,
+  - `NORMAL` doit conserver le pitch en variation de `SYNC_LEN`/`Src BPM`,
+  - les changements `Grain/Hop` ne doivent pas casser la stabilite du seam local,
   - `REC/CLEAR/stop manuel/start transport` doivent invalider ou republier explicitement la source stretch,
   - `XFade`, `Fade In/Out`, `Q Rec`, `Q Play` et restore pattern/project ne doivent pas contourner le seam local `brick6_master_buffer_read_playback()`.
 

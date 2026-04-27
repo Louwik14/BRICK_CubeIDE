@@ -1087,6 +1087,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_BUFFER_FADE_OUT:
         case PARAM_BUFFER_XFADE:
         case PARAM_BUFFER_TSTR:
+        case PARAM_BUFFER_GRAIN:
+        case PARAM_BUFFER_HOP:
         case PARAM_BUFFER_QUALITY:
         case PARAM_BUFFER_SYNC_LEN:
         case PARAM_BUFFER_SRC_BPM:

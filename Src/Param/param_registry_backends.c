@@ -633,6 +633,8 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
 uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t track, param_id_t id, float value)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    uint16_t grain_size = 256U;
+    uint16_t hop_size = 128U;
 
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
@@ -666,6 +668,8 @@ uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t
             brick6_master_buffer_set_xfade(param_backend_clamp_value(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_BUFFER_TSTR:
+        case PARAM_BUFFER_GRAIN:
+        case PARAM_BUFFER_HOP:
         case PARAM_BUFFER_QUALITY:
         case PARAM_BUFFER_SYNC_LEN:
         case PARAM_BUFFER_SRC_BPM:
@@ -679,18 +683,43 @@ uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t
             switch (id)
             {
                 case PARAM_BUFFER_TSTR:
-                    config.stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
+                    config.stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f);
                     if (state != NULL)
                     {
                         state->buffer.stretch_mode = (float)config.stretch_mode;
                     }
                     break;
-                case PARAM_BUFFER_QUALITY:
-                    config.quality = (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f);
+                case PARAM_BUFFER_GRAIN:
+                    switch ((uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f))
+                    {
+                        case 0U: grain_size = 128U; break;
+                        case 1U: grain_size = 256U; break;
+                        case 2U: grain_size = 384U; break;
+                        case 3U: grain_size = 512U; break;
+                        default: grain_size = 256U; break;
+                    }
+                    config.grain_size = grain_size;
                     if (state != NULL)
                     {
-                        state->buffer.quality = (float)config.quality;
+                        state->buffer.grain_size = param_backend_clamp_value(value, 0.0f, 3.0f);
                     }
+                    break;
+                case PARAM_BUFFER_HOP:
+                    switch ((uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f))
+                    {
+                        case 0U: hop_size = 64U; break;
+                        case 1U: hop_size = 128U; break;
+                        case 2U: hop_size = 192U; break;
+                        case 3U: hop_size = 256U; break;
+                        default: hop_size = 128U; break;
+                    }
+                    config.hop_size = hop_size;
+                    if (state != NULL)
+                    {
+                        state->buffer.hop_size = param_backend_clamp_value(value, 0.0f, 3.0f);
+                    }
+                    break;
+                case PARAM_BUFFER_QUALITY:
                     break;
                 case PARAM_BUFFER_SYNC_LEN:
                     config.sync_len = (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f);
