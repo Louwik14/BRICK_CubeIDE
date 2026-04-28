@@ -12,7 +12,8 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
-- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend mono minimal du Sampler branche sur le point d'insertion unique, en lecture depuis le pool resident.
+- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend mono minimal du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
+- `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : owner de la memoire audio runtime Sampler; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
@@ -248,6 +249,8 @@ Memoire:
 - `AUDIO_FRAMES_PER_HALF` doit rester coherent avec `AUDIO_BLOCK_SIZE`.
 - `audio_io_unpack` reserve lane 3 comme source interne (pas de mapping TDM physique direct).
 - Z1 ne doit pas faire d'I/O SD bloquante: seulement captures/taps; writer hors IRQ.
+- Le Sampler track-aware lit via `sample_cache` en RAM. `sample_pool` reste catalogue/projet/metadata; `sample_desc->data` est une compat legacy hors autorite audio principale.
+- Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple; reverse, loop, slice avance et pitch/resampling temps reel restent hors chemin cache stabilise.
 - Master-buffer est dans le pipeline de bloc (`begin -> submit -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`.
 - Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
 - Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.

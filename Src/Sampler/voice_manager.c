@@ -25,6 +25,8 @@
 #include <math.h>
 #include <stddef.h>
 
+#include "Audio/audio_float.h"
+#include "Sampler/sample_cache.h"
 
 #define VOICE_MANAGER_MAX_VOICES (2U)
 
@@ -74,7 +76,9 @@ static void voice_clear(uint32_t index)
     voices[index].loop_start_frame = 0U;
     voices[index].loop_end_frame = 0U;
     voices[index].state = VOICE_OFF;
+    voices[index].use_sample_cache = 0U;
     voices[index].active = 0U;
+    sample_cache_stop_voice((uint8_t)index);
     s_voice_generation[index] = 0U;
 }
 
@@ -155,6 +159,7 @@ void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
     voices[target_index].loop_start_frame = 0U;
     voices[target_index].loop_end_frame = sample_desc->length_frames;
     voices[target_index].state = VOICE_ON;
+    voices[target_index].use_sample_cache = sample_cache_start_voice(sample_id, (uint8_t)target_index);
     voices[target_index].active = 1U;
     s_voice_generation[target_index] = s_generation_counter++;
 
@@ -210,6 +215,59 @@ static uint8_t voice_has_valid_sample(uint32_t voice_index, const voice_t *voice
     return 1U;
 }
 
+static void voice_manager_process_cache_voice(uint32_t voice_index,
+                                              voice_t *voice,
+                                              float *out_l,
+                                              float *out_r,
+                                              uint32_t frames)
+{
+    static float cache_l[VOICE_MANAGER_MAX_VOICES][AUDIO_BLOCK_SIZE];
+    static float cache_r[VOICE_MANAGER_MAX_VOICES][AUDIO_BLOCK_SIZE];
+
+    if ((voice_index >= VOICE_MANAGER_MAX_VOICES) || (voice == NULL)
+        || (out_l == NULL) || (out_r == NULL) || (frames == 0U)
+        || (frames > AUDIO_BLOCK_SIZE))
+    {
+        return;
+    }
+
+    uint32_t offset = 0U;
+    while ((offset < frames) && (voice->active != 0U))
+    {
+        const uint32_t remaining = frames - offset;
+        for (uint32_t i = 0U; i < remaining; ++i)
+        {
+            cache_l[voice_index][i] = 0.0f;
+            cache_r[voice_index][i] = 0.0f;
+        }
+
+        const uint32_t produced = sample_cache_read_voice((uint8_t)voice_index,
+                                                          cache_l[voice_index],
+                                                          cache_r[voice_index],
+                                                          remaining);
+        for (uint32_t i = 0U; i < produced; ++i)
+        {
+            out_l[offset + i] = finite_or_zero(out_l[offset + i]
+                                               + (cache_l[voice_index][i] * voice->gain_l));
+            out_r[offset + i] = finite_or_zero(out_r[offset + i]
+                                               + (cache_r[voice_index][i] * voice->gain_r));
+        }
+
+        offset += produced;
+        if (produced == remaining)
+        {
+            break;
+        }
+
+        if ((voice->loop_enabled == 0U)
+            || (sample_cache_start_voice(voice->sample_id, (uint8_t)voice_index) == 0U))
+        {
+            voice_clear(voice_index);
+            break;
+        }
+    }
+}
+
 /**
  * @brief Point d'entrÃ©e voice_manager_process.
  *
@@ -241,6 +299,12 @@ void voice_manager_process(float *out_l, float *out_r, uint32_t frames)
         if(voice_has_valid_sample(voice_index, voice, sample_desc) == 0U)
         {
             voice_clear(voice_index);
+            continue;
+        }
+
+        if ((voice->use_sample_cache != 0U) && (frames <= AUDIO_BLOCK_SIZE))
+        {
+            voice_manager_process_cache_voice(voice_index, voice, out_l, out_r, frames);
             continue;
         }
 

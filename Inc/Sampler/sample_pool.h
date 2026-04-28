@@ -59,12 +59,9 @@ typedef struct
 } sample_pool_project_snapshot_t;
 
 /*
- * Phase 1 scope:
- * - metadata-only sample catalog for 64 project samples.
- * - no audio/DSP coupling.
- * - no runtime allocation.
- *
- * Samples are loaded fully in SDRAM and played directly from memory.
+ * sample_pool is the project/catalog owner only.
+ * Runtime audio memory is owned by sample_cache; data is legacy compatibility
+ * and may alias a READY_FULL cache, but sample_pool never owns sample audio.
  */
 void sample_pool_init(void);
 bool sample_pool_load(uint16_t id, const char *path);

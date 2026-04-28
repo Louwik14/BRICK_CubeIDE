@@ -53,7 +53,9 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     else if (g_sd_access_owner != (uint8_t)client)
     {
         if ((client == (uint8_t)SD_ACCESS_CLIENT_PREVIEW)
-            || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PREVIEW))
+            || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PREVIEW)
+            || (client == (uint8_t)SD_ACCESS_CLIENT_SAMPLE_CACHE)
+            || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_SAMPLE_CACHE))
         {
             __enable_irq();
             return 0U;

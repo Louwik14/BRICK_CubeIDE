@@ -12,8 +12,9 @@ typedef enum
     SD_ACCESS_CLIENT_SAMPLE_BOOT = 2,
     SD_ACCESS_CLIENT_PATTERN = 3,
     SD_ACCESS_CLIENT_PROJECT = 4,
+    SD_ACCESS_CLIENT_SAMPLE_CACHE = 5,
     /* Preview is exclusive: no shared ownership with other SD clients. */
-    SD_ACCESS_CLIENT_PREVIEW = 5
+    SD_ACCESS_CLIENT_PREVIEW = 6
 } sd_access_client_t;
 
 void sd_access_gate_init(void);

@@ -24,6 +24,7 @@
 #include "ui_page_manager.h"
 
 #include "Sampler/voice_manager.h"
+#include "Sampler/sample_cache.h"
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
 #include "Storage/memory_layout.h"
@@ -173,6 +174,7 @@ void brick6_app_process(void)
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
+    sample_cache_service(4096U);
     pattern_live_service();
     sd_preview_process();
     brick6_master_control_process();

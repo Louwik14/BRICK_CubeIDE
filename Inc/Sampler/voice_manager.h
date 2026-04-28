@@ -28,6 +28,7 @@ typedef struct
     uint32_t loop_end_frame;
 
     voice_state_t state;
+    uint8_t use_sample_cache;
     uint8_t active;
 } voice_t;
 
