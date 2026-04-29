@@ -109,6 +109,20 @@ static const char *ui_page_settings_sampler_load_error_label(void)
             return "MEMORY FULL";
         case SAMPLE_POOL_LOAD_SD_READ_FAIL:
             return "SD READ FAIL";
+        case SAMPLE_POOL_LOAD_SD_SEEK_FAIL:
+            return "SD SEEK FAIL";
+        case SAMPLE_POOL_LOAD_SD_SHORT_READ:
+            return "SD SHORT READ";
+        case SAMPLE_POOL_LOAD_SD_READ_INT_ERR:
+            return "SD INT ERR";
+        case SAMPLE_POOL_LOAD_SD_NOT_READY:
+            return "SD NOT READY";
+        case SAMPLE_POOL_LOAD_SD_INVALID_OBJECT:
+            return "SD OBJ ERR";
+        case SAMPLE_POOL_LOAD_SD_TIMEOUT:
+            return "SD TIMEOUT";
+        case SAMPLE_POOL_LOAD_SD_NOT_ENOUGH_CORE:
+            return "SD CORE LOW";
         default:
             return "LOAD SD FAIL";
     }
@@ -265,6 +279,14 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 if (state == SAMPLE_POOL_SLOT_LOADED)
                 {
                     state_label = "LOADED";
+                }
+                else if (state == SAMPLE_POOL_SLOT_PREPARING)
+                {
+                    state_label = "PREP";
+                }
+                else if (state == SAMPLE_POOL_SLOT_ERROR)
+                {
+                    state_label = "ERROR";
                 }
                 else if (state == SAMPLE_POOL_SLOT_MISSING)
                 {
@@ -726,6 +748,8 @@ static void ui_page_settings_render(void)
         char slot_line[24];
         const sample_pool_slot_state_t state = sample_pool_get_state(g_ui_settings.selected_slot);
         const char *state_label = (state == SAMPLE_POOL_SLOT_LOADED) ? "LOADED"
+                                 : (state == SAMPLE_POOL_SLOT_PREPARING) ? "PREP"
+                                 : (state == SAMPLE_POOL_SLOT_ERROR) ? "ERROR"
                                  : (state == SAMPLE_POOL_SLOT_MISSING) ? "MISSING"
                                  : "EMPTY";
         (void)snprintf(slot_line, sizeof(slot_line), "SLOT %02u %s",

@@ -116,6 +116,10 @@ void voice_manager_init(void)
  */
 void voice_manager_trigger(uint16_t sample_id, float gain_l, float gain_r)
 {
+    /*
+     * Legacy compat path. The track-aware Sampler runtime is sample_cache-only;
+     * keep this fallback for older callers until they are migrated.
+     */
     const sample_desc_t *sample_desc = sample_pool_get(sample_id);
     if((sample_desc == NULL) || (sample_desc->valid == 0U) ||
        (sample_desc->data == NULL) || (sample_desc->length_frames == 0U))

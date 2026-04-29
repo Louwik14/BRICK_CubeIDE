@@ -16,7 +16,9 @@
  * - malloc: éviter en chemin critique.
  *
  * Notes:
- * - Documentation ajoutée sans modification de la logique d'exécution.
+ * - Legacy low-level sampler helper. The product track-aware Sampler runtime
+ *   is brick6_sampler_runtime reading sample_cache; do not add new product
+ *   audio ownership through this file.
  */
 
 #include "sampler.h"

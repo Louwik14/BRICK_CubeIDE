@@ -208,7 +208,7 @@ Points de lecture principaux:
 
 5. Bascule queue au boundary:
 - `pattern_live_service()`:
-  - active seulement si queued + transport run + pas d'apply en cours,
+  - active seulement si snapshot RAM complet arme + transport run + pas d'apply en cours,
   - lit playhead track active,
   - applique sur transition non-zero -> zero.
 
@@ -349,3 +349,24 @@ Plus petite prochaine passe utile:
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
 
 
+
+## Addendum 2026-04-29 - pattern_load deux temps
+
+Contrat runtime pattern load:
+- `pattern_load_request()` enregistre la demande bank/pattern sans apply live.
+- `pattern_load_service()` est le seul point de progression SD du load pattern et produit un `PatternSaveV1` complet en RAM.
+- `pattern_load_is_ready()` est une query pure.
+- `pattern_load_take_ready()` transfere le snapshot RAM complet au seam musical.
+- `pattern_live_service()` ne lit plus la SD pour appliquer un pattern; il arme `g_next_pattern` uniquement depuis RAM puis applique au boundary.
+- Si le snapshot demande n'est pas pret au boundary, le pattern courant reste actif et la demande pending reste conservee.
+- Le backend de lecture reste encore synchrone via `pattern_sd_bank_load_slot()` dans `pattern_load_service()`; le decoupage chunked futur doit rester derriere cette API.
+Contrat Sampler persistence/cache:
+- `sample_pool` est catalogue/projet/metadata: slot, path, metadata et etat de restauration.
+- La memoire audio runtime appartient a `sample_cache`; `sample_desc->data` est une compat legacy et ne doit pas redevenir owner.
+- Les snapshots projet persistent les paths WAV, pas l'audio brut.
+
+TODO policy SD/projet:
+- Project save/load pendant playback reste a refuser ou differer explicitement.
+- Project save/load ne doit pas preempter `sample_cache_service()` quand un stream sample a besoin de refill.
+- Project load ne doit jamais appliquer un etat partiel.
+- Politique finale SD attendue: SAMPLE_CACHE prioritaire, PATTERN_LOAD entre refills, PATTERN_SAVE differe, PROJECT hors playback, PREVIEW exclusif, sans scheduler SD generique.

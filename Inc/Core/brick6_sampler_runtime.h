@@ -1,6 +1,6 @@
 /**
  * @file brick6_sampler_runtime.h
- * @brief Minimal sampler runtime facade.
+ * @brief Sampler runtime facade.
  *
  * Rôle du module:
  * - Porter le point d'insertion unique du futur moteur Sampler.
@@ -32,7 +32,8 @@ void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_stop(uint8_t track_id);
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
-                                         float *out_mono,
+                                         float *out_l,
+                                         float *out_r,
                                          uint32_t frames);
 
 #ifdef __cplusplus

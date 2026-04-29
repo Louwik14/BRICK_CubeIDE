@@ -10,6 +10,8 @@ typedef enum
 {
     SAMPLE_POOL_SLOT_EMPTY = 0,
     SAMPLE_POOL_SLOT_LOADED,
+    SAMPLE_POOL_SLOT_PREPARING,
+    SAMPLE_POOL_SLOT_ERROR,
     SAMPLE_POOL_SLOT_MISSING
 } sample_pool_slot_state_t;
 
@@ -27,7 +29,14 @@ typedef enum
     SAMPLE_POOL_LOAD_WAV_PARSE_FAIL,
     SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT,
     SAMPLE_POOL_LOAD_MEMORY_LIMIT,
-    SAMPLE_POOL_LOAD_SD_READ_FAIL
+    SAMPLE_POOL_LOAD_SD_READ_FAIL,
+    SAMPLE_POOL_LOAD_SD_SEEK_FAIL,
+    SAMPLE_POOL_LOAD_SD_SHORT_READ,
+    SAMPLE_POOL_LOAD_SD_READ_INT_ERR,
+    SAMPLE_POOL_LOAD_SD_NOT_READY,
+    SAMPLE_POOL_LOAD_SD_INVALID_OBJECT,
+    SAMPLE_POOL_LOAD_SD_TIMEOUT,
+    SAMPLE_POOL_LOAD_SD_NOT_ENOUGH_CORE
 } sample_pool_load_error_t;
 
 typedef struct
@@ -43,6 +52,9 @@ typedef struct
     uint16_t channels;
     uint16_t bits_per_sample;
 
+    /* Legacy compatibility only: may alias a READY_FULL sample_cache buffer.
+     * sample_pool never owns runtime audio memory. New audio consumers must use
+     * sample_cache APIs instead of this pointer. */
     float *data;
 
     uint8_t valid;

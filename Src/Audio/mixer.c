@@ -1064,6 +1064,30 @@ void __attribute__((used)) mixer_submit_external_mono(uint32_t track_id, const f
     g_external_track_enabled[track_id] = 1U;
 }
 
+void __attribute__((used)) mixer_submit_external_stereo(uint32_t track_id,
+                                                        const float *left,
+                                                        const float *right,
+                                                        uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS) || (left == NULL) || (right == NULL))
+    {
+        return;
+    }
+
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        g_external_track_l[track_id][i] = left[i];
+        g_external_track_r[track_id][i] = right[i];
+    }
+
+    g_external_track_enabled[track_id] = 1U;
+}
+
 /**
  * @brief Traite un bloc de mixage final MAIN/CUE.
  *

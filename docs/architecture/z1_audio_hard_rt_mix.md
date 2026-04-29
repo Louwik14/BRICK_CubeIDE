@@ -12,7 +12,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
-- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend mono minimal du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
+- `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : owner de la memoire audio runtime Sampler; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
@@ -153,7 +153,7 @@ Contrats timing sortants:
   - Lecture: `mixer_process`.
   - Role: routing sends/reverb global.
 - `g_external_track_l/r`, `g_external_track_enabled`
-  - Ecriture: `mixer_submit_external_mono` (depuis `brick6_audio_runtime`).
+  - Ecriture: `mixer_submit_external_mono` et `mixer_submit_external_stereo` (depuis `brick6_audio_runtime`).
   - Lecture+clear: `mixer_process`, `mixer_external_inputs_clear`.
   - Role: injection sources engines externes dans lanes mixer.
 - buffers bus statiques dans `mixer_process`: `bus_main_*`, `bus_cue_*`, `send_*`, `reverb_return_*`
@@ -187,7 +187,7 @@ Flux nominal prouve par code:
 - Avant chaque sous-segment, `seq_runtime_audio_apply_event` applique les events a l'offset.
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
-  - rendu engines externes (Drum) -> `mixer_submit_external_mono`
+  - rendu engines externes (Drum/Plaits mono, Sampler stereo) -> `mixer_submit_external_*`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
   - tap `SD_RECORDER_TAP_TRACK_RAW`
@@ -250,7 +250,14 @@ Memoire:
 - `audio_io_unpack` reserve lane 3 comme source interne (pas de mapping TDM physique direct).
 - Z1 ne doit pas faire d'I/O SD bloquante: seulement captures/taps; writer hors IRQ.
 - Le Sampler track-aware lit via `sample_cache` en RAM. `sample_pool` reste catalogue/projet/metadata; `sample_desc->data` est une compat legacy hors autorite audio principale.
+- La sortie principale Sampler reste stereo de bout en bout: pas de downmix L/R->mono avant injection mixer; les samples mono restent dupliques identiquement sur L/R.
 - Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple; reverse, loop, slice avance et pitch/resampling temps reel restent hors chemin cache stabilise.
+- `sample_cache` possede la memoire audio runtime. `READY_FULL` signifie sample entier resident dans le cache; `READY_PARTIAL` signifie debut resident et refill SD hors audio via `sample_cache_service()`.
+- Retrigger Sampler track-aware: `brick6_sampler_runtime_trigger()` coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` jugé rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.
+- Limitations actuelles `READY_PARTIAL`: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24-bit, forward simple, une seule voix active par sample, pas de reverse/loop/pitch/resampling temps reel.
+- `sample_cache_read_voice()`, `sample_cache_read_voice_frame()`, `sample_cache_begin_read_block()` et `sample_cache_commit_read_block()` sont RAM-only. FatFs reste limite a `sample_cache_prepare()` et `sample_cache_service()`.
+- Lecture bloc Sampler stabilisee pour le playback forward simple: `sample_cache_begin_read_block()` expose un segment stereo contigu en RAM sans traverser le wrap du ring `READY_PARTIAL`, puis `sample_cache_commit_read_block()` avance explicitement la voix. `brick6_sampler_runtime` consomme maintenant ce chemin bloc-by-bloc au lieu d'un appel cache par frame.
+- Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
 - Master-buffer est dans le pipeline de bloc (`begin -> submit -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`.
 - Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
 - Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.

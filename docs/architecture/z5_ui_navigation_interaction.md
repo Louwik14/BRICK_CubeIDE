@@ -364,6 +364,11 @@ Points factuels:
 - `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.
 - La preecoute s'arrete au changement de selection, au retour/back, et avant `Load/Replace`.
 - `Load/Replace` reste l'autorite d'import vers le pool projet; la preview reste hors slots projet.
+- Les etats visibles de slot Sampler suivent `sample_pool_get_state()`:
+  - `LOADED` pour `READY_FULL`, `READY_PARTIAL` jouable et `PLAYING`,
+  - `PREP` pour `PREPARING`, `PREFILLING`, `DONE`, `UNDERRUN`, `NEEDS_REPREPARE`,
+  - `ERROR` pour une faute cache/SD/format,
+  - `MISSING` reserve au catalogue/path absent ou fichier manquant au load/restore.
 - Invariants conserves:
   - pas de seconde autorite UI,
   - pas de refonte de page,

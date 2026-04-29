@@ -23,9 +23,20 @@ typedef struct
     uint8_t dirty_pending_persist;
 } pattern_slot_meta_t;
 
+typedef enum
+{
+    PATTERN_LOAD_IDLE = 0,
+    PATTERN_LOAD_REQUESTED,
+    PATTERN_LOAD_LOADING,
+    PATTERN_LOAD_READY,
+    PATTERN_LOAD_ERROR
+} pattern_load_state_t;
+
 UI_SDRAM static PatternSaveV1 g_current_pattern;
 UI_SDRAM static PatternSaveV1 g_next_pattern;
 UI_SDRAM static PatternSaveV1 g_boot_pattern;
+UI_SDRAM static PatternSaveV1 g_pattern_load_work;
+UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
 static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
 static uint8_t g_active_bank;
@@ -35,13 +46,28 @@ static uint8_t g_queued_bank;
 static uint8_t g_queued_pattern;
 static uint8_t g_queued_boundary_track;
 static uint32_t g_queued_boundary_generation;
+static uint8_t g_pending_queue_valid;
+static uint8_t g_pending_queue_bank;
+static uint8_t g_pending_queue_pattern;
+static uint8_t g_pending_boundary_track;
+static uint32_t g_pending_boundary_generation;
 static uint8_t g_apply_in_progress;
+static pattern_load_state_t g_pattern_load_state;
+static uint8_t g_pattern_load_bank;
+static uint8_t g_pattern_load_pattern;
+static uint8_t g_pattern_load_last_error;
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
 static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step);
 static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
                                                             uint8_t *out_track,
                                                             uint16_t *out_required);
+static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
+                                            uint8_t pattern,
+                                            const PatternSaveV1 *snapshot,
+                                            uint8_t boundary_track,
+                                            uint32_t boundary_generation);
+static uint8_t pattern_live_try_take_pending_ready(void);
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
@@ -283,6 +309,42 @@ static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq
     if (out_required != 0)
     {
         *out_required = 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
+                                            uint8_t pattern,
+                                            const PatternSaveV1 *snapshot,
+                                            uint8_t boundary_track,
+                                            uint32_t boundary_generation)
+{
+    if ((snapshot == 0) || (pattern_live_slot_is_valid(bank, pattern) == 0U))
+    {
+        return 0U;
+    }
+
+    if (boundary_track >= SEQ_TRACK_COUNT)
+    {
+        boundary_track = 0U;
+    }
+
+    if (snapshot != &g_next_pattern)
+    {
+        memcpy(&g_next_pattern, snapshot, sizeof(g_next_pattern));
+    }
+    g_queued_valid = 1U;
+    g_queued_bank = bank;
+    g_queued_pattern = pattern;
+    g_queued_boundary_track = boundary_track;
+    g_queued_boundary_generation = boundary_generation;
+
+    if ((g_pending_queue_valid != 0U)
+        && (g_pending_queue_bank == bank)
+        && (g_pending_queue_pattern == pattern))
+    {
+        g_pending_queue_valid = 0U;
     }
 
     return 1U;
@@ -675,7 +737,123 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
     g_queued_pattern = 0U;
     g_queued_boundary_track = 0U;
     g_queued_boundary_generation = 0U;
+    g_pending_queue_valid = 0U;
+    g_pending_queue_bank = 0U;
+    g_pending_queue_pattern = 0U;
+    g_pending_boundary_track = 0U;
+    g_pending_boundary_generation = 0U;
+    pattern_load_cancel();
     return 1U;
+}
+
+uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
+{
+    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
+    {
+        g_pattern_load_state = PATTERN_LOAD_ERROR;
+        g_pattern_load_last_error = 1U;
+        return 0U;
+    }
+
+    if ((g_pattern_load_state == PATTERN_LOAD_READY)
+        && (g_pattern_load_bank == bank)
+        && (g_pattern_load_pattern == pattern))
+    {
+        return 1U;
+    }
+
+    g_pattern_load_bank = bank;
+    g_pattern_load_pattern = pattern;
+    g_pattern_load_last_error = 0U;
+    memset(&g_pattern_load_work, 0, sizeof(g_pattern_load_work));
+
+    const uint8_t has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
+    g_pattern_slot_meta[bank][pattern].has_snapshot = has_snapshot;
+    if (has_snapshot == 0U)
+    {
+        memcpy(&g_pattern_load_ready, &g_boot_pattern, sizeof(g_pattern_load_ready));
+        g_pattern_load_state = PATTERN_LOAD_READY;
+        return 1U;
+    }
+
+    g_pattern_load_state = PATTERN_LOAD_REQUESTED;
+    return 1U;
+}
+
+void pattern_load_service(uint32_t byte_budget)
+{
+    if ((g_pattern_load_state != PATTERN_LOAD_REQUESTED)
+        && (g_pattern_load_state != PATTERN_LOAD_LOADING))
+    {
+        return;
+    }
+
+    if (byte_budget == 0U)
+    {
+        return;
+    }
+
+    g_pattern_load_state = PATTERN_LOAD_LOADING;
+
+    if (pattern_sd_bank_load_slot(g_pattern_load_bank, g_pattern_load_pattern, &g_pattern_load_work) == 0U)
+    {
+        g_pattern_load_state = PATTERN_LOAD_ERROR;
+        g_pattern_load_last_error = 2U;
+        return;
+    }
+
+    memcpy(&g_pattern_load_ready, &g_pattern_load_work, sizeof(g_pattern_load_ready));
+    g_pattern_load_state = PATTERN_LOAD_READY;
+    g_pattern_load_last_error = 0U;
+}
+
+uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern)
+{
+    if (g_pattern_load_state != PATTERN_LOAD_READY)
+    {
+        return 0U;
+    }
+
+    if (out_bank != 0)
+    {
+        *out_bank = g_pattern_load_bank;
+    }
+    if (out_pattern != 0)
+    {
+        *out_pattern = g_pattern_load_pattern;
+    }
+    return 1U;
+}
+
+uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, PatternSaveV1 *out_snapshot)
+{
+    if ((out_snapshot == 0) || (g_pattern_load_state != PATTERN_LOAD_READY))
+    {
+        return 0U;
+    }
+
+    if (out_bank != 0)
+    {
+        *out_bank = g_pattern_load_bank;
+    }
+    if (out_pattern != 0)
+    {
+        *out_pattern = g_pattern_load_pattern;
+    }
+    memcpy(out_snapshot, &g_pattern_load_ready, sizeof(*out_snapshot));
+    g_pattern_load_state = PATTERN_LOAD_IDLE;
+    g_pattern_load_last_error = 0U;
+    return 1U;
+}
+
+void pattern_load_cancel(void)
+{
+    g_pattern_load_state = PATTERN_LOAD_IDLE;
+    g_pattern_load_bank = 0U;
+    g_pattern_load_pattern = 0U;
+    g_pattern_load_last_error = 0U;
+    memset(&g_pattern_load_work, 0, sizeof(g_pattern_load_work));
+    memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
 }
 
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
@@ -713,20 +891,37 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    const uint8_t has_snapshot = pattern_sd_bank_slot_has_data(bank, pattern);
-    g_pattern_slot_meta[bank][pattern].has_snapshot = has_snapshot;
-
-    if (has_snapshot == 0U)
-    {
-        memcpy(&g_next_pattern, &g_boot_pattern, sizeof(g_next_pattern));
-    }
-    else if (pattern_sd_bank_load_slot(bank, pattern, &g_next_pattern) == 0U)
+    if (pattern_load_request(bank, pattern) == 0U)
     {
         return 0U;
     }
 
+    uint8_t boundary_track = ui_get_active_track();
+    if (boundary_track >= SEQ_TRACK_COUNT)
+    {
+        boundary_track = 0U;
+    }
+    uint32_t boundary_generation = 0U;
+    (void)seq_runtime_get_track_loop_generation(boundary_track, &boundary_generation);
+
     if (seq_runtime_is_running() == 0U)
     {
+        uint8_t ready_bank = 0U;
+        uint8_t ready_pattern = 0U;
+        if ((pattern_load_is_ready(&ready_bank, &ready_pattern) == 0U)
+            || (ready_bank != bank)
+            || (ready_pattern != pattern)
+            || (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) == 0U))
+        {
+            g_pending_queue_valid = 1U;
+            g_pending_queue_bank = bank;
+            g_pending_queue_pattern = pattern;
+            g_pending_boundary_track = boundary_track;
+            g_pending_boundary_generation = boundary_generation;
+            undo_v2_clear_all();
+            return 1U;
+        }
+
         if (pattern_live_apply_snapshot(&g_next_pattern, 0U) == 0U)
         {
             return 0U;
@@ -735,21 +930,32 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         g_active_bank = bank;
         g_active_pattern = pattern;
         g_queued_valid = 0U;
+        g_pending_queue_valid = 0U;
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
         undo_v2_clear_all();
         return 1U;
     }
 
-    g_queued_bank = bank;
-    g_queued_pattern = pattern;
-    g_queued_valid = 1U;
-    g_queued_boundary_track = ui_get_active_track();
-    if (g_queued_boundary_track >= SEQ_TRACK_COUNT)
+    g_pending_queue_valid = 1U;
+    g_pending_queue_bank = bank;
+    g_pending_queue_pattern = pattern;
+    g_pending_boundary_track = boundary_track;
+    g_pending_boundary_generation = boundary_generation;
+
+    uint8_t ready_bank = 0U;
+    uint8_t ready_pattern = 0U;
+    if ((pattern_load_is_ready(&ready_bank, &ready_pattern) != 0U)
+        && (ready_bank == bank)
+        && (ready_pattern == pattern)
+        && (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) != 0U))
     {
-        g_queued_boundary_track = 0U;
+        (void)pattern_live_arm_ready_queue(bank,
+                                           pattern,
+                                           &g_next_pattern,
+                                           boundary_track,
+                                           boundary_generation);
     }
-    (void)seq_runtime_get_track_loop_generation(g_queued_boundary_track, &g_queued_boundary_generation);
     undo_v2_clear_all();
     return 1U;
 }
@@ -764,9 +970,67 @@ uint8_t pattern_live_capture_boot_snapshot(void)
     return 1U;
 }
 
+static uint8_t pattern_live_try_take_pending_ready(void)
+{
+    if (g_pending_queue_valid == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t ready_bank = 0U;
+    uint8_t ready_pattern = 0U;
+    if (pattern_load_is_ready(&ready_bank, &ready_pattern) == 0U)
+    {
+        return 0U;
+    }
+
+    if ((ready_bank != g_pending_queue_bank) || (ready_pattern != g_pending_queue_pattern))
+    {
+        return 0U;
+    }
+
+    if (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) == 0U)
+    {
+        return 0U;
+    }
+
+    if (seq_runtime_is_running() == 0U)
+    {
+        if (pattern_live_apply_snapshot(&g_next_pattern, 0U) == 0U)
+        {
+            return 0U;
+        }
+
+        memcpy(&g_current_pattern, &g_next_pattern, sizeof(g_current_pattern));
+        g_active_bank = ready_bank;
+        g_active_pattern = ready_pattern;
+        g_queued_valid = 0U;
+        g_pending_queue_valid = 0U;
+        g_queued_boundary_track = 0U;
+        g_queued_boundary_generation = 0U;
+        undo_v2_clear_all();
+        return 1U;
+    }
+
+    uint32_t current_generation = 0U;
+    (void)seq_runtime_get_track_loop_generation(g_pending_boundary_track, &current_generation);
+    return pattern_live_arm_ready_queue(ready_bank,
+                                        ready_pattern,
+                                        &g_next_pattern,
+                                        g_pending_boundary_track,
+                                        current_generation);
+}
+
 void pattern_live_service(void)
 {
-    if ((g_queued_valid == 0U) || (seq_runtime_is_running() == 0U) || (g_apply_in_progress != 0U))
+    if (g_apply_in_progress != 0U)
+    {
+        return;
+    }
+
+    (void)pattern_live_try_take_pending_ready();
+
+    if ((g_queued_valid == 0U) || (seq_runtime_is_running() == 0U))
     {
         return;
     }
@@ -790,6 +1054,12 @@ void pattern_live_service(void)
         g_queued_valid = 0U;
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
+        if ((g_pending_queue_valid != 0U)
+            && (g_pending_queue_bank == g_active_bank)
+            && (g_pending_queue_pattern == g_active_pattern))
+        {
+            g_pending_queue_valid = 0U;
+        }
         undo_v2_clear_all();
     }
 }
@@ -799,6 +1069,8 @@ void pattern_live_init(void)
     memset(&g_current_pattern, 0, sizeof(g_current_pattern));
     memset(&g_next_pattern, 0, sizeof(g_next_pattern));
     memset(&g_boot_pattern, 0, sizeof(g_boot_pattern));
+    memset(&g_pattern_load_work, 0, sizeof(g_pattern_load_work));
+    memset(&g_pattern_load_ready, 0, sizeof(g_pattern_load_ready));
     memset(&g_pattern_slot_meta, 0, sizeof(g_pattern_slot_meta));
     g_active_bank = 0U;
     g_active_pattern = 0U;
@@ -807,7 +1079,16 @@ void pattern_live_init(void)
     g_queued_pattern = 0U;
     g_queued_boundary_track = 0U;
     g_queued_boundary_generation = 0U;
+    g_pending_queue_valid = 0U;
+    g_pending_queue_bank = 0U;
+    g_pending_queue_pattern = 0U;
+    g_pending_boundary_track = 0U;
+    g_pending_boundary_generation = 0U;
     g_apply_in_progress = 0U;
+    g_pattern_load_state = PATTERN_LOAD_IDLE;
+    g_pattern_load_bank = 0U;
+    g_pattern_load_pattern = 0U;
+    g_pattern_load_last_error = 0U;
 
     if (pattern_live_capture_current(&g_boot_pattern) != 0U)
     {
@@ -869,21 +1150,29 @@ void pattern_live_set_active_state(uint8_t active_bank,
 
     if ((queued_valid != 0U) && (pattern_live_slot_is_valid(queued_bank, queued_pattern) != 0U))
     {
-        g_queued_valid = 1U;
-        g_queued_bank = queued_bank;
-        g_queued_pattern = queued_pattern;
-        g_queued_boundary_track = ui_get_active_track();
-        if (g_queued_boundary_track >= SEQ_TRACK_COUNT)
+        uint8_t boundary_track = ui_get_active_track();
+        if (boundary_track >= SEQ_TRACK_COUNT)
         {
-            g_queued_boundary_track = 0U;
+            boundary_track = 0U;
         }
-        (void)seq_runtime_get_track_loop_generation(g_queued_boundary_track, &g_queued_boundary_generation);
+        g_queued_valid = 0U;
+        g_queued_boundary_track = 0U;
+        g_queued_boundary_generation = 0U;
+        if (pattern_load_request(queued_bank, queued_pattern) != 0U)
+        {
+            g_pending_queue_valid = 1U;
+            g_pending_queue_bank = queued_bank;
+            g_pending_queue_pattern = queued_pattern;
+            g_pending_boundary_track = boundary_track;
+            (void)seq_runtime_get_track_loop_generation(boundary_track, &g_pending_boundary_generation);
+        }
     }
     else
     {
         g_queued_valid = 0U;
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
+        g_pending_queue_valid = 0U;
     }
 }
 

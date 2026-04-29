@@ -174,7 +174,8 @@ void brick6_app_process(void)
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
-    sample_cache_service(4096U);
+    sample_cache_service(32768U);
+    pattern_load_service(4096U);
     pattern_live_service();
     sd_preview_process();
     brick6_master_control_process();

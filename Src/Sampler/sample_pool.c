@@ -50,6 +50,94 @@ static void sample_pool_set_error(sample_pool_load_error_t error, FRESULT fr)
     g_sample_pool_last_sd_error_code = (uint8_t)fr;
 }
 
+static void sample_pool_set_read_error_from_fresult(FRESULT fr)
+{
+    switch (fr)
+    {
+        case FR_DISK_ERR:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, fr);
+            break;
+
+        case FR_INT_ERR:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_INT_ERR, fr);
+            break;
+
+        case FR_NOT_READY:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_NOT_READY, fr);
+            break;
+
+        case FR_INVALID_OBJECT:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_INVALID_OBJECT, fr);
+            break;
+
+        case FR_TIMEOUT:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_TIMEOUT, fr);
+            break;
+
+        case FR_NOT_ENOUGH_CORE:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_NOT_ENOUGH_CORE, fr);
+            break;
+
+        default:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, fr);
+            break;
+    }
+}
+
+static void sample_pool_set_error_from_cache(uint8_t cache_error, FRESULT cache_fr)
+{
+    switch (cache_error)
+    {
+        case 1U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, cache_fr);
+            break;
+
+        case 2U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_GATE_REFUSED, cache_fr);
+            break;
+
+        case 3U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, cache_fr);
+            break;
+
+        case 4U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_OPEN_FAIL, cache_fr);
+            break;
+
+        case 5U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_PARSE_FAIL, cache_fr);
+            break;
+
+        case 6U:
+        case 7U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, cache_fr);
+            break;
+
+        case 8U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_MEMORY_LIMIT, cache_fr);
+            break;
+
+        case 9U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_SEEK_FAIL, cache_fr);
+            break;
+
+        case 13U:
+        case 14U:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_SHORT_READ, cache_fr);
+            break;
+
+        case 12U:
+            sample_pool_set_read_error_from_fresult(cache_fr);
+            break;
+
+        case 10U:
+        case 11U:
+        default:
+            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, cache_fr);
+            break;
+    }
+}
+
 /**
  * @brief Point d'entrÃ©e sample_pool_pcm24_to_float.
  *
@@ -373,9 +461,18 @@ bool sample_pool_load(uint16_t id, const char *path)
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     }
 
-    if ((desc->length_frames == 0U) || (sample_cache_prepare(id, desc->path) == 0U))
+    if (desc->length_frames == 0U)
     {
-        sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, FR_DISK_ERR);
+        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
+        sample_pool_clear_entry(desc);
+        sample_pool_set_missing_entry(desc, trimmed_path);
+        return false;
+    }
+
+    if (sample_cache_prepare(id, desc->path) == 0U)
+    {
+        sample_pool_set_error_from_cache(sample_cache_get_last_error(id),
+                                         (FRESULT)sample_cache_get_last_fresult(id));
         sample_pool_clear_entry(desc);
         sample_pool_set_missing_entry(desc, trimmed_path);
         return false;
@@ -425,9 +522,28 @@ sample_pool_slot_state_t sample_pool_get_state(uint16_t id)
         return SAMPLE_POOL_SLOT_EMPTY;
     }
 
-    if ((desc->valid != 0U) && (desc->length_frames != 0U) && (sample_cache_is_ready(id) != 0U))
+    if ((desc->valid != 0U) && (desc->length_frames != 0U))
     {
-        return SAMPLE_POOL_SLOT_LOADED;
+        const sample_cache_state_t state = sample_cache_get_state(id);
+        if ((sample_cache_is_ready(id) != 0U)
+            || (state == SAMPLE_CACHE_PLAYING))
+        {
+            return SAMPLE_POOL_SLOT_LOADED;
+        }
+
+        if ((state == SAMPLE_CACHE_PREPARING)
+            || (state == SAMPLE_CACHE_PREFILLING)
+            || (state == SAMPLE_CACHE_DONE)
+            || (state == SAMPLE_CACHE_UNDERRUN)
+            || (state == SAMPLE_CACHE_NEEDS_REPREPARE))
+        {
+            return SAMPLE_POOL_SLOT_PREPARING;
+        }
+
+        if (state == SAMPLE_CACHE_ERROR)
+        {
+            return SAMPLE_POOL_SLOT_ERROR;
+        }
     }
 
     return (desc->path[0] != '\0') ? SAMPLE_POOL_SLOT_MISSING : SAMPLE_POOL_SLOT_EMPTY;
