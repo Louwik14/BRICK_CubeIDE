@@ -34,6 +34,7 @@ SDRAM_SAMPLES static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE
                                                                      * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
 static CTRL_STATE sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+static CTRL_STATE uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 
 static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot_index)
 {
@@ -52,11 +53,28 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
 
 static sample_page_desc_t *sample_page_cache_find_page_mut(uint16_t sample_id, uint32_t page_index)
 {
+    if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        const uint16_t last_slot = g_sample_page_last_slot[sample_id];
+        if (last_slot < SAMPLE_PAGE_MAX_COUNT)
+        {
+            sample_page_desc_t *const last_page = &g_sample_page_desc[last_slot];
+            if ((last_page->sample_id == sample_id) && (last_page->page_index == page_index))
+            {
+                return last_page;
+            }
+        }
+    }
+
     for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
     {
         sample_page_desc_t *const page = &g_sample_page_desc[i];
         if ((page->sample_id == sample_id) && (page->page_index == page_index))
         {
+            if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            {
+                g_sample_page_last_slot[sample_id] = (uint16_t)i;
+            }
             return page;
         }
     }
@@ -67,6 +85,20 @@ static sample_page_desc_t *sample_page_cache_find_page_mut(uint16_t sample_id, u
 static const sample_page_desc_t *sample_page_cache_find_page(uint16_t sample_id, uint32_t page_index)
 {
     return sample_page_cache_find_page_mut(sample_id, page_index);
+}
+
+static uint8_t sample_page_cache_fill_ref(const sample_page_desc_t *page,
+                                          sample_page_ref_t *out_ref)
+{
+    if ((page == 0) || (out_ref == 0))
+    {
+        return 0U;
+    }
+
+    out_ref->page_index = page->page_index;
+    out_ref->page_generation = page->generation;
+    out_ref->slot_index = (uint32_t)(page - g_sample_page_desc);
+    return 1U;
 }
 
 static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id, uint32_t page_index)
@@ -275,6 +307,10 @@ void sample_page_cache_reset(void)
 {
     memset(&g_sample_page_cache_state, 0, sizeof(g_sample_page_cache_state));
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_CACHE_MAX_SAMPLES; ++i)
+    {
+        g_sample_page_last_slot[i] = UINT16_MAX;
+    }
     for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
     {
         sample_page_cache_clear_desc(&g_sample_page_desc[i], i);
@@ -298,6 +334,7 @@ void sample_page_cache_clear_sample(uint16_t sample_id)
 
     memset(&g_sample_page_sample_desc[sample_id], 0, sizeof(g_sample_page_sample_desc[sample_id]));
     g_sample_page_sample_desc[sample_id].first_slot = UINT16_MAX;
+    g_sample_page_last_slot[sample_id] = UINT16_MAX;
 }
 
 sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_t page_index)
@@ -340,6 +377,37 @@ uint8_t sample_page_cache_try_acquire_page(uint16_t sample_id,
     out_span->frame_count = page->frame_count;
     out_span->start_frame = page->start_frame;
     out_span->page_index = page->page_index;
+    out_span->page_generation = page->generation;
+    out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
+    return 1U;
+}
+
+uint8_t sample_page_cache_try_acquire_page_ref(uint16_t sample_id,
+                                               const sample_page_ref_t *ref,
+                                               sample_page_span_t *out_span)
+{
+    if ((ref == 0) || (out_span == 0) || (ref->slot_index >= SAMPLE_PAGE_MAX_COUNT))
+    {
+        return 0U;
+    }
+
+    memset(out_span, 0, sizeof(*out_span));
+
+    sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
+    if ((page->sample_id != sample_id) || (page->page_index != ref->page_index)
+        || (page->generation != ref->page_generation) || (page->state != SAMPLE_PAGE_READY)
+        || (page->data == 0))
+    {
+        return 0U;
+    }
+
+    page->use_count++;
+    out_span->frames_interleaved = page->data;
+    out_span->frame_count = page->frame_count;
+    out_span->start_frame = page->start_frame;
+    out_span->page_index = page->page_index;
+    out_span->page_generation = page->generation;
+    out_span->slot_index = ref->slot_index;
     return 1U;
 }
 
@@ -356,6 +424,26 @@ void sample_page_cache_release_page(uint16_t sample_id, uint32_t page_index)
         page->use_count--;
     }
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
+}
+
+void sample_page_cache_release_page_ref(uint16_t sample_id, const sample_page_ref_t *ref)
+{
+    if ((ref == 0) || (ref->slot_index >= SAMPLE_PAGE_MAX_COUNT))
+    {
+        return;
+    }
+
+    sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
+    if ((page->sample_id != sample_id) || (page->page_index != ref->page_index)
+        || (page->generation != ref->page_generation))
+    {
+        return;
+    }
+
+    if (page->use_count != 0U)
+    {
+        page->use_count--;
+    }
 }
 
 const float *sample_page_cache_get_full_sample_base(uint16_t sample_id, uint32_t *out_frames)
@@ -461,6 +549,33 @@ uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index)
     }
 
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    return 1U;
+}
+
+uint8_t sample_page_cache_request_page_ref(uint16_t sample_id,
+                                           uint32_t page_index,
+                                           sample_page_ref_t *out_ref)
+{
+    sample_page_desc_t *page = sample_page_cache_find_page_mut(sample_id, page_index);
+    if (page == 0)
+    {
+        page = sample_page_cache_alloc_empty_slot(sample_id, page_index);
+        if (page == 0)
+        {
+            return 0U;
+        }
+    }
+
+    if (page->state == SAMPLE_PAGE_EMPTY)
+    {
+        page->state = SAMPLE_PAGE_QUEUED;
+    }
+
+    page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    if (out_ref != 0)
+    {
+        (void)sample_page_cache_fill_ref(page, out_ref);
+    }
     return 1U;
 }
 

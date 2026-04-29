@@ -54,7 +54,34 @@ enum
 
 static brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
 
+#if BRICK6_SAMPLER_DIAG_ENABLE
+static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
+#define BRICK6_SAMPLER_RUNTIME_DIAG_INC(field) (++g_brick6_sampler_runtime_diag.field)
+#else
+#define BRICK6_SAMPLER_RUNTIME_DIAG_INC(field) ((void)0)
+#endif
+
+volatile sample_cache_diag_snapshot_t g_sample_cache_diag_snapshot;
+volatile sample_voice_reader_diag_snapshot_t g_sample_voice_reader_diag_snapshot;
+volatile brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag_snapshot;
+
 static const uint8_t g_sampler_slice_counts[] = {2U, 4U, 8U, 16U, 32U, 64U};
+
+#define BRICK6_SAMPLER_STEP_EPSILON (0.0001f)
+
+static uint32_t brick6_sampler_runtime_diag_count_active_voices(void)
+{
+    uint32_t active = 0U;
+    for (uint32_t i = 0U; i < SEQ_TRACK_COUNT; ++i)
+    {
+        if (g_sampler_voice[i].active != 0U)
+        {
+            active++;
+        }
+    }
+
+    return active;
+}
 
 static uint8_t brick6_sampler_runtime_mode_is_reverse(uint8_t mode)
 {
@@ -82,6 +109,8 @@ static uint8_t brick6_sampler_runtime_mode_uses_slice(uint8_t mode)
 }
 
 static uint8_t brick6_sampler_runtime_pick_slice_index(const brick6_sampler_voice_t *voice, uint8_t note);
+void brick6_sampler_runtime_diag_reset(void);
+void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
 
 static uint8_t brick6_sampler_runtime_cache_voice_id(uint8_t track_id)
 {
@@ -297,8 +326,29 @@ static float brick6_sampler_runtime_fade_gain(uint32_t frame_index,
     return (gain < 0.0f) ? 0.0f : gain;
 }
 
+static uint8_t brick6_sampler_runtime_is_terminal_position(const brick6_sampler_voice_t *voice, float position)
+{
+    if (voice == NULL)
+    {
+        return 1U;
+    }
+
+    if (voice->loop_mode != BRICK6_SAMPLER_LOOP_NONE)
+    {
+        return 0U;
+    }
+
+    if (voice->reverse != 0U)
+    {
+        return (position < (float)voice->region_begin) ? 1U : 0U;
+    }
+
+    return (position >= (float)voice->region_end) ? 1U : 0U;
+}
+
 void brick6_sampler_runtime_init(void)
 {
+    brick6_sampler_runtime_diag_reset();
     memset(g_sampler_voice, 0, sizeof(g_sampler_voice));
     for (uint8_t i = 0U; i < SEQ_TRACK_COUNT; ++i)
     {
@@ -492,6 +542,50 @@ void brick6_sampler_runtime_stop(uint8_t track_id)
     sample_voice_reader_stop(&g_sampler_voice[track_id].reader);
 }
 
+void brick6_sampler_runtime_diag_reset(void)
+{
+#if BRICK6_SAMPLER_DIAG_ENABLE
+    memset(&g_brick6_sampler_runtime_diag, 0, sizeof(g_brick6_sampler_runtime_diag));
+#endif
+}
+
+void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot)
+{
+    if (out_snapshot == NULL)
+    {
+        return;
+    }
+
+    memset(out_snapshot, 0, sizeof(*out_snapshot));
+#if BRICK6_SAMPLER_DIAG_ENABLE
+    *out_snapshot = g_brick6_sampler_runtime_diag;
+    out_snapshot->active_voices = brick6_sampler_runtime_diag_count_active_voices();
+    if (out_snapshot->active_voices > out_snapshot->max_active_voices)
+    {
+        out_snapshot->max_active_voices = out_snapshot->active_voices;
+    }
+#endif
+}
+
+void sampler_perf_diag_capture(void)
+{
+    sample_cache_diag_snapshot_t cache_snapshot;
+    sample_voice_reader_diag_snapshot_t reader_snapshot;
+    brick6_sampler_runtime_diag_snapshot_t runtime_snapshot;
+
+    memset(&cache_snapshot, 0, sizeof(cache_snapshot));
+    memset(&reader_snapshot, 0, sizeof(reader_snapshot));
+    memset(&runtime_snapshot, 0, sizeof(runtime_snapshot));
+
+    sample_cache_diag_get_snapshot(&cache_snapshot);
+    sample_voice_reader_diag_get_snapshot(&reader_snapshot);
+    brick6_sampler_runtime_diag_get_snapshot(&runtime_snapshot);
+
+    g_sample_cache_diag_snapshot = cache_snapshot;
+    g_sample_voice_reader_diag_snapshot = reader_snapshot;
+    g_brick6_sampler_runtime_diag_snapshot = runtime_snapshot;
+}
+
 static void brick6_sampler_render_sample(const sample_desc_t *desc,
                                          brick6_sampler_voice_t *voice,
                                          float *out_l,
@@ -521,9 +615,11 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
     const uint8_t has_fade = ((voice->fade_in_frames != 0U) || (voice->fade_out_frames != 0U)) ? 1U : 0U;
     uint32_t produced = 0U;
 
-    if ((voice->reverse != 0U) || (voice->step_signed != 1.0f)
+    if ((voice->reverse != 0U) || (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)
         || (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG))
     {
+        BRICK6_SAMPLER_RUNTIME_DIAG_INC(slow_path_blocks);
+        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
         float fade_buf[AUDIO_BLOCK_SIZE];
         const float *fade_ptr = 0;
         uint32_t fade_count = 0U;
@@ -560,7 +656,8 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
                                                             frames,
                                                             &underrun);
         voice->position = voice->reader.position;
-        if ((underrun != 0U) || (produced < frames))
+        if ((underrun != 0U) || (produced < frames)
+            || (brick6_sampler_runtime_is_terminal_position(voice, voice->reader.position) != 0U))
         {
             voice->active = 0U;
             voice->position = 0.0f;
@@ -608,6 +705,9 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
             sample_voice_reader_stop(&voice->reader);
             break;
         }
+
+        BRICK6_SAMPLER_RUNTIME_DIAG_INC(fast_path_blocks);
+        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
 
         const float *src_l = block.l;
         const float *src_r = (block.is_mono != 0U) ? block.l : block.r;
@@ -663,6 +763,12 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
     }
 
     voice->position = (float)position;
+    if (brick6_sampler_runtime_is_terminal_position(voice, voice->position) != 0U)
+    {
+        voice->active = 0U;
+        voice->position = 0.0f;
+        sample_voice_reader_stop(&voice->reader);
+    }
 }
 
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
@@ -674,6 +780,17 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
     {
         return;
     }
+
+    BRICK6_SAMPLER_RUNTIME_DIAG_INC(render_track_calls);
+#if BRICK6_SAMPLER_DIAG_ENABLE
+    {
+        const uint32_t active_voices = brick6_sampler_runtime_diag_count_active_voices();
+        if (active_voices > g_brick6_sampler_runtime_diag.max_active_voices)
+        {
+            g_brick6_sampler_runtime_diag.max_active_voices = active_voices;
+        }
+    }
+#endif
 
     if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))

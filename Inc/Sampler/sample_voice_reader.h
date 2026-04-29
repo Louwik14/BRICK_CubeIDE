@@ -8,6 +8,10 @@
 extern "C" {
 #endif
 
+#ifndef BRICK6_SAMPLER_DIAG_ENABLE
+#define BRICK6_SAMPLER_DIAG_ENABLE 0
+#endif
+
 typedef struct
 {
     uint8_t cache_voice_id;
@@ -17,6 +21,15 @@ typedef struct
     uint32_t frame_pos;
     uint8_t active;
 } sample_voice_reader_t;
+
+typedef struct
+{
+    uint32_t render_pitch_forward_calls;
+    uint32_t segments_mixed;
+    uint32_t span_acquire_calls;
+    uint32_t neighbor_span_acquire_calls;
+    uint32_t seek_calls;
+} sample_voice_reader_diag_snapshot_t;
 
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
 void sample_voice_reader_bind(sample_voice_reader_t *reader,
@@ -43,6 +56,8 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   float *out_r,
                                                   uint32_t frames,
                                                   uint8_t *out_underrun);
+void sample_voice_reader_diag_reset(void);
+void sample_voice_reader_diag_get_snapshot(sample_voice_reader_diag_snapshot_t *out_snapshot);
 
 #ifdef __cplusplus
 }

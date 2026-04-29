@@ -9,6 +9,10 @@
 extern "C" {
 #endif
 
+#ifndef BRICK6_SAMPLER_DIAG_ENABLE
+#define BRICK6_SAMPLER_DIAG_ENABLE 0
+#endif
+
 typedef enum
 {
     SAMPLE_CACHE_EMPTY = 0,
@@ -51,11 +55,41 @@ typedef struct
 
 typedef struct
 {
+    uint32_t page_index;
+    uint32_t slot_index;
+    uint32_t generation;
+    uint8_t valid;
+    uint8_t acquired;
+} sample_stream_page_handle_t;
+
+typedef struct
+{
+    const float *base;
+    uint32_t start_frame;
+    uint32_t frame_count;
+    uint32_t offset_frames;
+    uint8_t valid;
+} sample_stream_span_t;
+
+typedef struct
+{
+    uint16_t sample_id;
+    uint32_t frame_pos;
+    sample_stream_page_handle_t current_page;
+    sample_stream_span_t current_span;
+    sample_stream_page_handle_t lookahead_page;
+    uint8_t valid;
+    uint8_t lookahead_requested;
+} sample_stream_cursor_t;
+
+typedef struct
+{
     uint8_t voice_id;
     uint16_t sample_id;
     uint32_t frame_pos;
     uint8_t active;
     uint8_t stop_on_underrun;
+    sample_stream_cursor_t cursor;
 } sample_cache_voice_t;
 
 typedef enum
@@ -76,6 +110,36 @@ typedef struct
     sample_cache_block_status_t status;
 } sample_cache_block_t;
 
+typedef struct
+{
+    const float *l;
+    const float *r;
+    uint32_t frames;
+    uint32_t frame_stride;
+    uint32_t start_frame;
+    uint32_t backing_page_index;
+    uint8_t is_mono;
+    uint8_t page_acquired;
+} sample_cache_span_t;
+
+typedef struct
+{
+    uint32_t begin_read_block_calls;
+    uint32_t cursor_span_hits;
+    uint32_t page_resolve_acquire_calls;
+    uint32_t page_release_calls;
+    uint32_t page_transitions;
+    uint32_t lookahead_requests;
+    uint32_t slow_path_fallbacks;
+    uint32_t peek_frame_calls;
+    uint32_t page_cache_lookup_calls;
+    uint32_t spans_returned;
+    uint64_t span_frames_total;
+    uint32_t average_span_frames;
+    uint32_t active_voices;
+    uint32_t max_active_voices;
+} sample_cache_diag_snapshot_t;
+
 void sample_cache_init(void);
 void sample_cache_clear(uint16_t sample_id);
 uint8_t sample_cache_prepare(uint16_t sample_id, const char *path);
@@ -90,12 +154,19 @@ uint8_t sample_cache_begin_read_block(uint8_t voice_id,
                                       uint32_t max_frames,
                                       sample_cache_block_t *out_block);
 void sample_cache_commit_read_block(uint8_t voice_id, uint32_t consumed_frames);
+uint8_t sample_cache_try_acquire_span(uint16_t sample_id,
+                                      uint32_t frame_index,
+                                      uint32_t max_frames,
+                                      sample_cache_span_t *out_span);
+void sample_cache_release_span(uint16_t sample_id, sample_cache_span_t *span);
 void sample_cache_set_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos);
 uint32_t sample_cache_read_voice(uint8_t voice_id, float *out_l, float *out_r, uint32_t frames);
 uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, float *out_l, float *out_r);
 uint8_t sample_cache_peek_frame(uint16_t sample_id, uint32_t frame_index, float *out_l, float *out_r);
 const float *sample_cache_get_legacy_data(uint16_t sample_id, uint32_t *out_frames);
 void sample_cache_stop_voice(uint8_t voice_id);
+void sample_cache_diag_reset(void);
+void sample_cache_diag_get_snapshot(sample_cache_diag_snapshot_t *out_snapshot);
 
 #ifdef __cplusplus
 }

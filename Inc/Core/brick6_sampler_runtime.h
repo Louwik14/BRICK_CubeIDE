@@ -12,10 +12,30 @@
 #include <stdint.h>
 
 #include "Core/track_runtime.h"
+#include "Sampler/sample_cache.h"
+#include "Sampler/sample_voice_reader.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#ifndef BRICK6_SAMPLER_DIAG_ENABLE
+#define BRICK6_SAMPLER_DIAG_ENABLE 0
+#endif
+
+typedef struct
+{
+    uint32_t fast_path_blocks;
+    uint32_t slow_path_blocks;
+    uint32_t mixed_segments;
+    uint32_t render_track_calls;
+    uint32_t active_voices;
+    uint32_t max_active_voices;
+} brick6_sampler_runtime_diag_snapshot_t;
+
+extern volatile sample_cache_diag_snapshot_t g_sample_cache_diag_snapshot;
+extern volatile sample_voice_reader_diag_snapshot_t g_sample_voice_reader_diag_snapshot;
+extern volatile brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag_snapshot;
 
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
@@ -35,6 +55,9 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
                                          float *out_l,
                                          float *out_r,
                                          uint32_t frames);
+void brick6_sampler_runtime_diag_reset(void);
+void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
+void sampler_perf_diag_capture(void);
 
 #ifdef __cplusplus
 }
