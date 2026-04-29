@@ -25,6 +25,7 @@
 
 #include "Sampler/voice_manager.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_page_cache.h"
 #include "Audio/live_recorder.h"
 #include "Audio/live_recorder_config.h"
 #include "Storage/memory_layout.h"
@@ -99,6 +100,7 @@ void brick6_app_init(void)
 
     sd_access_gate_init();
     sd_preview_init();
+    sample_page_cache_init();
 
     brick6_sampler_bootstrap_load_pool();
 

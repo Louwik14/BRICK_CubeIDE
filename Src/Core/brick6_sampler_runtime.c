@@ -8,8 +8,10 @@
 #include <math.h>
 #include <string.h>
 
+#include "Audio/audio_float.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_pool.h"
+#include "Sampler/sample_voice_reader.h"
 
 #define BRICK6_SAMPLER_CACHE_VOICE_BASE (2U)
 
@@ -38,9 +40,17 @@ typedef struct
     uint8_t reverse;
     uint8_t loop_mode;
     uint8_t use_slice;
+    sample_voice_reader_t reader;
     uint32_t slice_begin[64U];
     uint32_t slice_end[64U];
 } brick6_sampler_voice_t;
+
+enum
+{
+    BRICK6_SAMPLER_LOOP_NONE = 0,
+    BRICK6_SAMPLER_LOOP_FORWARD = 1,
+    BRICK6_SAMPLER_LOOP_PINGPONG = 2
+};
 
 static brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
 
@@ -48,12 +58,22 @@ static const uint8_t g_sampler_slice_counts[] = {2U, 4U, 8U, 16U, 32U, 64U};
 
 static uint8_t brick6_sampler_runtime_mode_is_reverse(uint8_t mode)
 {
-    return ((mode == 1U) || (mode == 3U) || (mode == 5U)) ? 1U : 0U;
+    return ((mode == 1U) || (mode == 5U)) ? 1U : 0U;
 }
 
-static uint8_t brick6_sampler_runtime_mode_uses_loop(uint8_t mode)
+static uint8_t brick6_sampler_runtime_mode_loop_kind(uint8_t mode)
 {
-    return ((mode == 2U) || (mode == 3U)) ? 1U : 0U;
+    if (mode == 2U)
+    {
+        return BRICK6_SAMPLER_LOOP_FORWARD;
+    }
+
+    if (mode == 3U)
+    {
+        return BRICK6_SAMPLER_LOOP_PINGPONG;
+    }
+
+    return BRICK6_SAMPLER_LOOP_NONE;
 }
 
 static uint8_t brick6_sampler_runtime_mode_uses_slice(uint8_t mode)
@@ -75,7 +95,21 @@ static uint8_t brick6_sampler_runtime_supports_cache_forward_simple(const brick6
         return 0U;
     }
 
-    return ((voice->mode == 0U) && (voice->note == 60U) && (voice->tune == 0.0f)) ? 1U : 0U;
+    return ((voice->mode == 0U) || (voice->mode == 1U) || (voice->mode == 2U)
+            || (voice->mode == 3U) || (voice->mode == 4U) || (voice->mode == 5U))
+               ? 1U
+               : 0U;
+}
+
+static float brick6_sampler_runtime_compute_step(const brick6_sampler_voice_t *voice)
+{
+    if (voice == NULL)
+    {
+        return 1.0f;
+    }
+
+    const float semitones = ((float)((int32_t)voice->note - 60)) + voice->tune;
+    return powf(2.0f, semitones * (1.0f / 12.0f));
 }
 
 static uint32_t brick6_sampler_runtime_clamp_region_begin(uint32_t length_frames, float start)
@@ -184,11 +218,11 @@ static void brick6_sampler_runtime_build_render_plan(uint8_t track_id)
     voice->region_begin = begin;
     voice->region_end = end;
     voice->reverse = brick6_sampler_runtime_mode_is_reverse(voice->mode);
-    voice->loop_mode = brick6_sampler_runtime_mode_uses_loop(voice->mode);
+    voice->loop_mode = brick6_sampler_runtime_mode_loop_kind(voice->mode);
     voice->use_slice = use_slice;
     voice->loop_frames = (end > begin) ? (end - begin) : 0U;
     brick6_sampler_runtime_compute_fade_frames(voice);
-    voice->step_signed = 1.0f;
+    voice->step_signed = brick6_sampler_runtime_compute_step(voice);
 }
 
 static void brick6_sampler_runtime_rebuild_grid(uint8_t track_id)
@@ -275,6 +309,7 @@ void brick6_sampler_runtime_init(void)
         g_sampler_voice[i].slice_count = 2U;
         g_sampler_voice[i].loop_mode = 0U;
         g_sampler_voice[i].reverse = 0U;
+        sample_voice_reader_reset(&g_sampler_voice[i].reader);
     }
 }
 
@@ -287,6 +322,7 @@ void brick6_sampler_runtime_reset_track(uint8_t track_id)
 
     memset(&g_sampler_voice[track_id], 0, sizeof(g_sampler_voice[track_id]));
     sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
+    sample_voice_reader_reset(&g_sampler_voice[track_id].reader);
     g_sampler_voice[track_id].note = 60U;
     g_sampler_voice[track_id].gain = 1.0f;
     g_sampler_voice[track_id].end = 1.0f;
@@ -406,21 +442,29 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
         voice->position = brick6_sampler_runtime_initial_position(voice->region_begin,
                                                                   voice->region_end,
                                                                   voice->reverse);
+        const uint32_t start_frame = (uint32_t)voice->position;
         if (sample_cache_start_voice_at(voice->sample_id,
                                         brick6_sampler_runtime_cache_voice_id(track_id),
-                                        voice->region_begin) != 0U)
+                                        start_frame) != 0U)
         {
+            sample_voice_reader_bind(&voice->reader,
+                                     voice->sample_id,
+                                     brick6_sampler_runtime_cache_voice_id(track_id),
+                                     start_frame);
+            sample_voice_reader_set_step(&voice->reader, voice->step_signed);
             g_sampler_voice[track_id].active = 1U;
         }
         else
         {
             voice->position = 0.0f;
+            sample_voice_reader_reset(&voice->reader);
             g_sampler_voice[track_id].active = 0U;
         }
     }
     else
     {
         voice->position = 0.0f;
+        sample_voice_reader_reset(&voice->reader);
         g_sampler_voice[track_id].active = 0U;
     }
 }
@@ -445,7 +489,7 @@ void brick6_sampler_runtime_stop(uint8_t track_id)
 
     g_sampler_voice[track_id].active = 0U;
     g_sampler_voice[track_id].position = 0.0f;
-    sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
+    sample_voice_reader_stop(&g_sampler_voice[track_id].reader);
 }
 
 static void brick6_sampler_render_sample(const sample_desc_t *desc,
@@ -471,22 +515,78 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
         voice->sample = desc;
     }
 
-    const uint8_t cache_voice_id =
-        brick6_sampler_runtime_cache_voice_id((uint8_t)(voice - g_sampler_voice));
     const uint32_t loop_begin = voice->region_begin;
     const uint32_t loop_end = voice->region_end;
     const uint32_t loop_frames = voice->loop_frames;
-    uint32_t position = (uint32_t)voice->position;
+    const uint8_t has_fade = ((voice->fade_in_frames != 0U) || (voice->fade_out_frames != 0U)) ? 1U : 0U;
     uint32_t produced = 0U;
+
+    if ((voice->reverse != 0U) || (voice->step_signed != 1.0f)
+        || (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG))
+    {
+        float fade_buf[AUDIO_BLOCK_SIZE];
+        const float *fade_ptr = 0;
+        uint32_t fade_count = 0U;
+        uint8_t underrun = 0U;
+        if (has_fade != 0U)
+        {
+            fade_ptr = fade_buf;
+            fade_count = frames;
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                const uint32_t base_frame = (uint32_t)voice->reader.position;
+                const uint32_t loop_pos = (voice->reverse != 0U)
+                                              ? ((loop_end > 0U) && (base_frame < loop_end)
+                                                     ? ((loop_end - 1U) - base_frame)
+                                                     : 0U)
+                                              : ((base_frame > loop_begin) ? (base_frame - loop_begin) : 0U);
+                fade_buf[i] = brick6_sampler_runtime_fade_gain(loop_pos,
+                                                               loop_frames,
+                                                               voice->fade_in_frames,
+                                                               voice->fade_out_frames);
+            }
+        }
+
+        produced = sample_voice_reader_render_pitch_forward(&voice->reader,
+                                                            loop_begin,
+                                                            loop_end,
+                                                            &voice->reverse,
+                                                            voice->loop_mode,
+                                                            voice->gain,
+                                                            fade_ptr,
+                                                            fade_count,
+                                                            out_l,
+                                                            out_r,
+                                                            frames,
+                                                            &underrun);
+        voice->position = voice->reader.position;
+        if ((underrun != 0U) || (produced < frames))
+        {
+            voice->active = 0U;
+            voice->position = 0.0f;
+            sample_voice_reader_stop(&voice->reader);
+        }
+
+        return;
+    }
+
+    uint32_t position = (uint32_t)voice->position;
 
     while (produced < frames)
     {
         if (position >= loop_end)
         {
+            if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD) && (loop_end > loop_begin))
+            {
+                position = loop_begin;
+                sample_voice_reader_seek(&voice->reader, loop_begin);
+                continue;
+            }
+
             voice->active = 0U;
             voice->position = 0.0f;
-            sample_cache_commit_read_block(cache_voice_id, 0U);
-            sample_cache_stop_voice(cache_voice_id);
+            sample_voice_reader_commit_block(&voice->reader, 0U);
+            sample_voice_reader_stop(&voice->reader);
             break;
         }
 
@@ -498,38 +598,68 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
         }
 
         sample_cache_block_t block;
-        if ((sample_cache_begin_read_block(cache_voice_id, request_frames, &block) == 0U)
+        if ((sample_voice_reader_begin_block(&voice->reader, request_frames, &block) == 0U)
             || (block.status != SAMPLE_CACHE_BLOCK_OK)
             || (block.frames == 0U))
         {
             voice->active = 0U;
             voice->position = 0.0f;
-            sample_cache_commit_read_block(cache_voice_id, 0U);
-            sample_cache_stop_voice(cache_voice_id);
+            sample_voice_reader_commit_block(&voice->reader, 0U);
+            sample_voice_reader_stop(&voice->reader);
             break;
         }
 
         const float *src_l = block.l;
         const float *src_r = (block.is_mono != 0U) ? block.l : block.r;
-        uint32_t loop_pos = position - loop_begin;
-        for (uint32_t i = 0U; i < block.frames; ++i)
+        if (has_fade == 0U)
         {
-            const float fade_gain = brick6_sampler_runtime_fade_gain(loop_pos + i,
-                                                                     loop_frames,
-                                                                     voice->fade_in_frames,
-                                                                     voice->fade_out_frames);
-            const float sample_gain = voice->gain * fade_gain;
-            const float sample_l = src_l[i * block.frame_stride];
-            const float sample_r = (block.is_mono != 0U)
-                                       ? sample_l
-                                       : src_r[i * block.frame_stride];
-            out_l[produced + i] += sample_l * sample_gain;
-            out_r[produced + i] += sample_r * sample_gain;
+            const float sample_gain = voice->gain;
+            if (block.is_mono != 0U)
+            {
+                for (uint32_t i = 0U; i < block.frames; ++i)
+                {
+                    const float sample_l = src_l[i * block.frame_stride];
+                    out_l[produced + i] += sample_l * sample_gain;
+                    out_r[produced + i] += sample_l * sample_gain;
+                }
+            }
+            else
+            {
+                for (uint32_t i = 0U; i < block.frames; ++i)
+                {
+                    out_l[produced + i] += src_l[i * block.frame_stride] * sample_gain;
+                    out_r[produced + i] += src_r[i * block.frame_stride] * sample_gain;
+                }
+            }
+        }
+        else
+        {
+            uint32_t loop_pos = position - loop_begin;
+            for (uint32_t i = 0U; i < block.frames; ++i)
+            {
+                const float fade_gain = brick6_sampler_runtime_fade_gain(loop_pos + i,
+                                                                         loop_frames,
+                                                                         voice->fade_in_frames,
+                                                                         voice->fade_out_frames);
+                const float sample_gain = voice->gain * fade_gain;
+                const float sample_l = src_l[i * block.frame_stride];
+                const float sample_r = (block.is_mono != 0U)
+                                           ? sample_l
+                                           : src_r[i * block.frame_stride];
+                out_l[produced + i] += sample_l * sample_gain;
+                out_r[produced + i] += sample_r * sample_gain;
+            }
         }
 
-        sample_cache_commit_read_block(cache_voice_id, block.frames);
+        sample_voice_reader_commit_block(&voice->reader, block.frames);
         produced += block.frames;
         position += block.frames;
+        if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD) && (position >= loop_end)
+            && (loop_end > loop_begin))
+        {
+            position = loop_begin;
+            sample_voice_reader_seek(&voice->reader, loop_begin);
+        }
     }
 
     voice->position = (float)position;

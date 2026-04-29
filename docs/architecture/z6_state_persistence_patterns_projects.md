@@ -344,7 +344,7 @@ Plus petite prochaine passe utile:
 - La grille Slice n'est jamais persistÃ©e:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.
-- `PROJECT_V1_FILE_VERSION` a ete incremente pour refléter le payload Sampler v1 et le bloc MACRO projet.
+- `PROJECT_V1_FILE_VERSION` a ete incremente pour reflï¿½ter le payload Sampler v1 et le bloc MACRO projet.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
 
@@ -362,7 +362,7 @@ Contrat runtime pattern load:
 - Le backend de lecture reste encore synchrone via `pattern_sd_bank_load_slot()` dans `pattern_load_service()`; le decoupage chunked futur doit rester derriere cette API.
 Contrat Sampler persistence/cache:
 - `sample_pool` est catalogue/projet/metadata: slot, path, metadata et etat de restauration.
-- La memoire audio runtime appartient a `sample_cache`; `sample_desc->data` est une compat legacy et ne doit pas redevenir owner.
+- La memoire audio runtime appartient a `sample_page_cache`; `sample_cache` reste la facade/orchestration prepare-service-compat, et `sample_desc->data` est une compat legacy qui ne doit pas redevenir owner.
 - Les snapshots projet persistent les paths WAV, pas l'audio brut.
 
 TODO policy SD/projet:

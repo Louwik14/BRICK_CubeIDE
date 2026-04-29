@@ -101,6 +101,13 @@ This separation is intentional. Do not add a second authority for the same state
 - insert-style processing
 - master-oriented performance processing
 
+### Sampler
+- stereo runtime playback through the normal track-aware mixer path
+- paged sample cache with RAM-only audio reads
+- `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
+- forward playback, simple repitch with linear interpolation, simple reverse playback, simple forward loop playback, and simple ping-pong playback
+- slice grid v1 with note-selected slice triggering
+
 ### Sequencer
 - integrated sequencer
 - transport / clock / scheduler

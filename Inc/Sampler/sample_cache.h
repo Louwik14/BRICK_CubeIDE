@@ -90,8 +90,10 @@ uint8_t sample_cache_begin_read_block(uint8_t voice_id,
                                       uint32_t max_frames,
                                       sample_cache_block_t *out_block);
 void sample_cache_commit_read_block(uint8_t voice_id, uint32_t consumed_frames);
+void sample_cache_set_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos);
 uint32_t sample_cache_read_voice(uint8_t voice_id, float *out_l, float *out_r, uint32_t frames);
 uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, float *out_l, float *out_r);
+uint8_t sample_cache_peek_frame(uint16_t sample_id, uint32_t frame_index, float *out_l, float *out_r);
 const float *sample_cache_get_legacy_data(uint16_t sample_id, uint32_t *out_frames);
 void sample_cache_stop_voice(uint8_t voice_id);
 
