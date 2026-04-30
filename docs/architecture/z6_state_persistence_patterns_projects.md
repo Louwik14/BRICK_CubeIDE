@@ -341,6 +341,11 @@ Plus petite prochaine passe utile:
 
 - Le snapshot projet/pattern transporte les params Sampler via le flux param track-aware existant:
   - `Sample`, `Gain`, `Start`, `End`, `Mode`, `Tune`, `Fade In`, `Fade Out`, `Slice Count`.
+- Compat restore:
+  - les payloads pattern/projet gardent les memes champs family/type,
+  - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=OneShot`,
+  - un ancien mode `Slice` / `RevSlice` est rabattu vers `Shot` au restore/apply runtime pour eviter toute exposition produit `OneShot`,
+  - aucun bump de format snapshot n'est requis pour cette seule sortie de family.
 - La grille Slice n'est jamais persistée:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.

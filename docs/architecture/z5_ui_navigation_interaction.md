@@ -354,13 +354,14 @@ Points factuels:
 - `PLAY` est explicitement navigable pour `Input/Hybrid`.
 
 ## 14. Contrat Sampler v0
-- `UI_TRACK_TYPE_SAMPLER` est reconnu comme type de track synth pour le socle d'integration.
+- `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
+- `UI_TRACK_TYPE_ONE_SHOT` est le type canonique de cette famille; `UI_TRACK_TYPE_SAMPLER` reste un alias de compat snapshot.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
   - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
   - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
+- Les modes produits exposes pour `OneShot` sont bornes a `Shot`, `RevShot`, `Loop`, `PingPong`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
-- Un sous-onglet `SLICE` borne `Slice Count` sans editeur de slices.
-- Cette passe ne cree pas de nouvelle navigation produit ni d'editor Slice.
+- `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.
 - `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.
 - La preecoute s'arrete au changement de selection, au retour/back, et avant `Load/Replace`.
 - `Load/Replace` reste l'autorite d'import vers le pool projet; la preview reste hors slots projet.
@@ -373,6 +374,9 @@ Points factuels:
   - pas de seconde autorite UI,
   - pas de refonte de page,
   - pas de nouveau flux de navigation autonome.
+- Compat UI/restore:
+  - un ancien couple `Synth/Sampler` est remappe vers `Sampler/OneShot`,
+  - la famille `Synth` ne propose plus que `Plaits`.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.

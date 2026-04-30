@@ -40,6 +40,10 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
     {
         return TRACK_RUNTIME_FAMILY_SYNTH;
     }
+    if (family == UI_TRACK_FAMILY_SAMPLER)
+    {
+        return TRACK_RUNTIME_FAMILY_SAMPLER;
+    }
     if (family == UI_TRACK_FAMILY_DRUM)
     {
         return TRACK_RUNTIME_FAMILY_DRUM;
@@ -213,6 +217,7 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
 
     if ((family == TRACK_RUNTIME_FAMILY_INPUT)
             || (family == TRACK_RUNTIME_FAMILY_SYNTH)
+            || (family == TRACK_RUNTIME_FAMILY_SAMPLER)
             || (family == TRACK_RUNTIME_FAMILY_DRUM)
             || (family == TRACK_RUNTIME_FAMILY_MASTER))
     {
@@ -226,8 +231,9 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
 
-    if (((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
-            || (type == TRACK_RUNTIME_TYPE_SAMPLER))
+    if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            || (((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
+                || (type == TRACK_RUNTIME_TYPE_SAMPLER)))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
@@ -277,6 +283,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     }
 
     if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SYNTH)
+            || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
             || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_DRUM))
             || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_INPUT)
                 && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_HYBRID)))
@@ -434,6 +441,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
     }
 
     if ((family != TRACK_RUNTIME_FAMILY_SYNTH)
+            && (family != TRACK_RUNTIME_FAMILY_SAMPLER)
             && (family != TRACK_RUNTIME_FAMILY_DRUM)
             && (family != TRACK_RUNTIME_FAMILY_MASTER))
     {

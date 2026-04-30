@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "Audio/audio_float.h"
+#include "Storage/memory_layout.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_pool.h"
 #include "Sampler/sample_voice_reader.h"
@@ -54,7 +55,7 @@ enum
     BRICK6_SAMPLER_LOOP_PINGPONG = 2
 };
 
-static brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
+static AUDIO_HOT brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
 
 #if BRICK6_SAMPLER_DIAG_ENABLE
 static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;

@@ -225,6 +225,7 @@ static track_runtime_param_status_t mod_lfo_effective_status_from_ctx(const trac
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
             return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI))
                     ? TRACK_RUNTIME_PARAM_ALLOWED

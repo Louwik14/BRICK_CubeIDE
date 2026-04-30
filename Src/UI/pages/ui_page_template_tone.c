@@ -18,11 +18,11 @@ static const ui_template_family_t g_ui_template_tone_family_buffer = {
 
 static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .family_title = "TONE",
-    .nav_labels = { "PLAY", "FX", "SLICE", "-" },
+    .nav_labels = { "PLAY", "FX", "-", "-" },
     .subpages = {
         { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_START, PARAM_SAMPLER_END } } },
         { .title = "FX", .param_bank = { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } } },
-        { .title = "SLICE", .param_bank = { .params = { PARAM_SAMPLER_SLICE_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,

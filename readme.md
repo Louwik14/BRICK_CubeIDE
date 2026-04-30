@@ -71,10 +71,12 @@ Current families:
 - `Synth`
 - `Drum`
 - `Master`
+- `Sampler`
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Sampler`
+- `Synth`: `Plaits`
+- `Sampler`: `OneShot`
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`
 
@@ -105,8 +107,8 @@ This separation is intentional. Do not add a second authority for the same state
 - stereo runtime playback through the normal track-aware mixer path
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
-- forward playback, simple repitch with linear interpolation, simple reverse playback, simple forward loop playback, and simple ping-pong playback
-- slice grid v1 with note-selected slice triggering
+- `OneShot` currently exposes only `Shot`, `RevShot`, `Loop`, and `PingPong`
+- legacy slice handling remains internal compatibility, not a product mode
 
 ### Sequencer
 - integrated sequencer

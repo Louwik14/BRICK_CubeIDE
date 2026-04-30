@@ -3,7 +3,8 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_SAMPLER, UI_TRACK_TYPE_PLAITS };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_PLAITS };
+    static const ui_track_type_t k_sampler_types[] = { UI_TRACK_TYPE_ONE_SHOT };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
@@ -37,6 +38,10 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
         case UI_TRACK_FAMILY_SYNTH:
             *out_count = (uint8_t)(sizeof(k_synth_types) / sizeof(k_synth_types[0]));
             return k_synth_types;
+
+        case UI_TRACK_FAMILY_SAMPLER:
+            *out_count = (uint8_t)(sizeof(k_sampler_types) / sizeof(k_sampler_types[0]));
+            return k_sampler_types;
 
         case UI_TRACK_FAMILY_DRUM:
             *out_count = (uint8_t)(sizeof(k_drum_types) / sizeof(k_drum_types[0]));
@@ -80,7 +85,9 @@ bool ui_track_catalog_family_is_input(ui_track_family_t family)
 
 bool ui_track_catalog_family_is_engine(ui_track_family_t family)
 {
-    return (family == UI_TRACK_FAMILY_SYNTH) || (family == UI_TRACK_FAMILY_DRUM);
+    return (family == UI_TRACK_FAMILY_SYNTH)
+            || (family == UI_TRACK_FAMILY_SAMPLER)
+            || (family == UI_TRACK_FAMILY_DRUM);
 }
 
 bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type)
@@ -387,6 +394,8 @@ const char *ui_track_catalog_family_display_name(ui_track_family_t family)
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Synth";
+        case UI_TRACK_FAMILY_SAMPLER:
+            return "Sampler";
         case UI_TRACK_FAMILY_DRUM:
             return "Drum";
         case UI_TRACK_FAMILY_MASTER:
@@ -420,6 +429,8 @@ const char *ui_track_catalog_family_short_name(ui_track_family_t family)
 
         case UI_TRACK_FAMILY_SYNTH:
             return "Syn";
+        case UI_TRACK_FAMILY_SAMPLER:
+            return "Smp";
         case UI_TRACK_FAMILY_DRUM:
             return "Drm";
         case UI_TRACK_FAMILY_MASTER:
@@ -448,7 +459,7 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Hybrid";
 
         case UI_TRACK_TYPE_SAMPLER:
-            return "Sampler";
+            return (family == UI_TRACK_FAMILY_SAMPLER) ? "OneShot" : "Sampler";
         case UI_TRACK_TYPE_PLAITS:
             return "Plaits";
 
@@ -501,7 +512,7 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Hyb";
 
         case UI_TRACK_TYPE_SAMPLER:
-            return "Smp";
+            return (family == UI_TRACK_FAMILY_SAMPLER) ? "1Sht" : "Smp";
         case UI_TRACK_TYPE_PLAITS:
             return "Plt";
 

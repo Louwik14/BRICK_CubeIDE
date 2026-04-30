@@ -74,7 +74,8 @@ static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
         return UIW_WIDGET_EMPTY;
     }
 
-    if ((value_label != NULL) && (strncmp(value_label, "Synth", 5) == 0))
+    if ((value_label != NULL) && ((strncmp(value_label, "Synth", 5) == 0)
+            || (strncmp(value_label, "Sampler", 7) == 0)))
     {
         return UIW_WIDGET_KEYBOARD;
     }

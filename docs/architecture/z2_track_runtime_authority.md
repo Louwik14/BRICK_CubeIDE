@@ -175,11 +175,12 @@ Sorties de Z2:
 
 ## 13. Contrat Sampler v0
 - Nouvelle identite runtime branchee:
+  - `TRACK_RUNTIME_FAMILY_SAMPLER`,
   - `TRACK_RUNTIME_ENGINE_SAMPLER`,
-  - `TRACK_RUNTIME_TYPE_SAMPLER`.
+  - `TRACK_RUNTIME_TYPE_ONE_SHOT` (alias runtime du sampler actuel).
 - Binding:
   - autorite conservee dans `track_runtime`,
-  - backend mono initialement silencieux tant que le moteur Sampler final n'est pas branche.
+  - le backend Sampler existant reste reutilise tel quel.
 - Gate note/mix:
   - le helper central `track_runtime_supports_vca_gate()` inclut le sampler, pour reutiliser le gate VCA mixer sans autorite parallele.
 - Invariants conserves:
@@ -190,8 +191,10 @@ Sorties de Z2:
   - `Slice Count` est un parametre runtime local, non p-lockable,
   - la grille de slices est reconstruite hors IRQ lors des changements de sample/compteur.
 
-## 14. Contrat produit Synth = Sampler
-- La famille `Synth` ne propose qu'un type operationnel: `Sampler`.
+## 14. Contrat produit Synth / Sampler
+- La famille `Synth` ne porte plus le sampler produit.
+- La famille `Sampler` expose un seul type canonique: `OneShot`.
+- Compat restore: un ancien couple `family=Synth` + `type=Sampler` est remappe explicitement vers `family=Sampler` + `type=OneShot` avant le bind runtime.
 
 ## 15. Contrat Passe 1 - Descriptor structurel explicite
 - Z2 expose un descriptor runtime stable par track:

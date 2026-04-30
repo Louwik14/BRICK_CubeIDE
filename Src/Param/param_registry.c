@@ -618,7 +618,7 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             state->end = value;
             return 1U;
         case PARAM_SAMPLER_MODE:
-            state->mode = value;
+            state->mode = (value >= 4.0f) ? 0.0f : value;
             return 1U;
         case PARAM_SAMPLER_TUNE:
             state->tune = value;

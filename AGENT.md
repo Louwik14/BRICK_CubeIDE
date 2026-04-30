@@ -153,6 +153,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `Input3`
 - `Input4`
 - `Synth`
+- `Sampler`
 - `Drum`
 - `Master`
 
@@ -163,7 +164,10 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `Hybrid`
 
 #### Pour `Synth`
-- `Sampler`
+- `Plaits`
+
+#### Pour `Sampler`
+- `OneShot`
 
 #### Pour `Drum`
 - `TRX BD`
@@ -345,8 +349,8 @@ Toujours penser :
 - `BTN_PARAM_2` -> `TONE`
 - `BTN_PARAM_3` -> `MOD`
 - `BTN_PARAM_4` -> `MIX`
-- `BTN_PARAM_5` -> `PLAY` uniquement pour families moteur `Synth` ou `Drum`
-- `BTN_PARAM_6` -> `VCA` uniquement pour families moteur `Synth` ou `Drum` ou `Hybrid`
+- `BTN_PARAM_5` -> `PLAY` uniquement pour families moteur `Synth`, `Sampler` ou `Drum`
+- `BTN_PARAM_6` -> `VCA` uniquement pour families moteur `Synth`, `Sampler`, `Drum` ou `Hybrid`
 - `BTN_PARAM_8` -> bouton spécial `TRACK`
 
 ### Règle générale
@@ -381,7 +385,7 @@ toujours utiliser des tables explicites.
 - `SHIFT + PASTE` en scope ensemble/page clear les paramètres ciblés vers leur minimum
 
 ### Ressources exclusives
-- `Synth/Sampler` : paste direct (non exclusif)
+- `Sampler/OneShot` : paste direct (non exclusif)
 - `Input1..4` : priorité à un input libre, sinon move-on-paste
 - après move réussi, le clipboard reste chaînable
 

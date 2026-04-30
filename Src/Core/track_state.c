@@ -20,6 +20,28 @@ static ui_track_config_t track_state_default_config(void)
     return config;
 }
 
+static void track_state_normalize_config(ui_track_config_t *config)
+{
+    if (config == NULL)
+    {
+        return;
+    }
+
+    if ((config->family == UI_TRACK_FAMILY_SYNTH)
+            && (config->type == UI_TRACK_TYPE_SAMPLER))
+    {
+        config->family = UI_TRACK_FAMILY_SAMPLER;
+        config->type = UI_TRACK_TYPE_ONE_SHOT;
+        return;
+    }
+
+    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
+            && (config->type == UI_TRACK_TYPE_SAMPLER))
+    {
+        config->type = UI_TRACK_TYPE_ONE_SHOT;
+    }
+}
+
 static void track_state_bump_revision(uint8_t track)
 {
     if (track >= UI_TRACK_COUNT)
@@ -184,6 +206,7 @@ bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
 
     ui_track_config_t next_config = next_configs[track];
     next_config.type = type;
+    track_state_normalize_config(&next_config);
     if (family == UI_TRACK_FAMILY_OFF)
     {
         next_config.type = UI_TRACK_TYPE_AUDIO;
@@ -267,13 +290,27 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
         {
             typ = UI_TRACK_TYPE_AUDIO;
         }
-        else if (!ui_track_catalog_type_is_valid_for_family(fam, typ))
+        else
         {
-            return false;
+            ui_track_config_t normalized = {
+                .family = fam,
+                .type = typ
+            };
+            track_state_normalize_config(&normalized);
+            if (!ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
+            {
+                return false;
+            }
+
+            next_configs[track].family = normalized.family;
+            next_configs[track].type = normalized.type;
         }
 
-        next_configs[track].family = fam;
-        next_configs[track].type = typ;
+        if (fam == UI_TRACK_FAMILY_OFF)
+        {
+            next_configs[track].family = fam;
+            next_configs[track].type = typ;
+        }
         next_channels[track] = (midi_channel[track] < 1U)
             ? 1U
             : ((midi_channel[track] > 16U) ? 16U : midi_channel[track]);

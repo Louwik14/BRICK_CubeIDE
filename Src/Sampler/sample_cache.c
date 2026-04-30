@@ -15,7 +15,7 @@
 #define SAMPLE_CACHE_STREAM_START_PAGES (2U)
 
 SDRAM_SAMPLES static sample_cache_desc_t g_sample_cache[SAMPLE_POOL_SIZE];
-static CTRL_STATE sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
+static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
 static AUDIO_WARM uint8_t g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + 1U];
 static FIL g_sample_cache_file[SAMPLE_POOL_SIZE];
 static CTRL_STATE uint8_t g_sample_cache_file_open[SAMPLE_POOL_SIZE];
