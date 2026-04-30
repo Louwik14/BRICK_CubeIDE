@@ -150,7 +150,10 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
         return 0U;
     }
 
-    if (state->position >= (float)state->plan.region_end)
+    const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
+    const uint8_t loop_forward = ((state->plan.loop_mode == 1U) && (forward_end > state->plan.loop_begin)) ? 1U : 0U;
+
+    if (state->position >= (float)forward_end)
     {
         out_segment->status = SAMPLE_AUDIO_SEGMENT_DONE;
         return 1U;
@@ -172,7 +175,7 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
 
     while (segment_frames < max_frames)
     {
-        if (scan_position >= (float)state->plan.region_end)
+        if (scan_position >= (float)forward_end)
         {
             break;
         }
@@ -184,9 +187,20 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
             break;
         }
 
-        if ((base_frame + 1U) < state->plan.region_end)
+        if ((base_frame + 1U) < forward_end)
         {
             const uint32_t neighbor_frame = base_frame + 1U;
+            if ((neighbor_frame < state->audio_cursor.current_start_frame)
+                || (neighbor_frame
+                    >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
+            {
+                needs_neighbor = 1U;
+                neighbor_page_index = neighbor_frame / SAMPLE_PAGE_FRAMES;
+            }
+        }
+        else if (loop_forward != 0U)
+        {
+            const uint32_t neighbor_frame = state->plan.loop_begin;
             if ((neighbor_frame < state->audio_cursor.current_start_frame)
                 || (neighbor_frame
                     >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
@@ -198,7 +212,7 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
 
         segment_frames++;
         const float next_position = scan_position + state->step;
-        if (next_position >= (float)state->plan.region_end)
+        if (next_position >= (float)forward_end)
         {
             break;
         }
@@ -234,10 +248,119 @@ static uint8_t sample_voice_reader_prepare_pitch_forward_segment(sample_voice_re
     out_segment->start_frame = (uint32_t)state->position;
     out_segment->source_start_frame = state->audio_cursor.current_start_frame;
     out_segment->source_frame_count = state->audio_cursor.current_frame_count;
+    out_segment->neighbor_start_frame = state->audio_cursor.neighbor_start_frame;
+    out_segment->neighbor_frame_count = state->audio_cursor.neighbor_frame_count;
+    out_segment->source_limit_frame = forward_end;
+    out_segment->source_region_begin = state->plan.region_begin;
     out_segment->source_position = state->position;
     out_segment->source_step = state->step;
     out_segment->is_mono = 0U;
     out_segment->kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
+    out_segment->status = SAMPLE_AUDIO_SEGMENT_OK;
+    return 1U;
+}
+
+static uint8_t sample_voice_reader_prepare_pitch_reverse_segment(sample_voice_reader_state_t *state,
+                                                                 uint32_t max_frames,
+                                                                 sample_audio_segment_t *out_segment)
+{
+    if ((state == 0) || (out_segment == 0) || (max_frames == 0U))
+    {
+        return 0U;
+    }
+
+    if (state->position < (float)state->plan.region_begin)
+    {
+        out_segment->status = SAMPLE_AUDIO_SEGMENT_DONE;
+        return 1U;
+    }
+
+    if (state->audio_cursor.current_acquired == 0U)
+    {
+        if (sample_voice_reader_acquire_audio_page(state, (uint32_t)state->position) == 0U)
+        {
+            out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
+            return 1U;
+        }
+    }
+
+    uint32_t segment_frames = 0U;
+    uint8_t needs_neighbor = 0U;
+    uint32_t neighbor_page_index = UINT32_MAX;
+    float scan_position = state->position;
+
+    while (segment_frames < max_frames)
+    {
+        if (scan_position < (float)state->plan.region_begin)
+        {
+            break;
+        }
+
+        const uint32_t base_frame = (uint32_t)scan_position;
+        if ((base_frame < state->audio_cursor.current_start_frame)
+            || (base_frame >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
+        {
+            break;
+        }
+
+        if (base_frame > state->plan.region_begin)
+        {
+            const uint32_t neighbor_frame = base_frame - 1U;
+            if ((neighbor_frame < state->audio_cursor.current_start_frame)
+                || (neighbor_frame
+                    >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
+            {
+                needs_neighbor = 1U;
+                neighbor_page_index = neighbor_frame / SAMPLE_PAGE_FRAMES;
+            }
+        }
+
+        segment_frames++;
+        const float next_position = scan_position - state->step;
+        if (next_position < (float)state->plan.region_begin)
+        {
+            break;
+        }
+
+        const uint32_t next_base = (uint32_t)next_position;
+        if ((next_base < state->audio_cursor.current_start_frame)
+            || (next_base >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
+        {
+            break;
+        }
+
+        scan_position = next_position;
+    }
+
+    if (segment_frames == 0U)
+    {
+        out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
+        return 1U;
+    }
+
+    if ((needs_neighbor != 0U) && (sample_voice_reader_acquire_neighbor_page(state, neighbor_page_index) == 0U))
+    {
+        out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
+        return 1U;
+    }
+
+    out_segment->l = state->audio_cursor.current_base;
+    out_segment->r = state->audio_cursor.current_base + 1U;
+    out_segment->neighbor_l = state->audio_cursor.neighbor_base;
+    out_segment->neighbor_r = (state->audio_cursor.neighbor_base != 0) ? (state->audio_cursor.neighbor_base + 1U) : 0;
+    out_segment->frames = segment_frames;
+    out_segment->frame_stride = 2U;
+    out_segment->start_frame = (uint32_t)state->position;
+    out_segment->source_start_frame = state->audio_cursor.current_start_frame;
+    out_segment->source_frame_count = state->audio_cursor.current_frame_count;
+    out_segment->neighbor_start_frame = state->audio_cursor.neighbor_start_frame;
+    out_segment->neighbor_frame_count = state->audio_cursor.neighbor_frame_count;
+    out_segment->source_limit_frame = state->plan.region_end;
+    out_segment->source_region_begin = state->plan.region_begin;
+    out_segment->source_position = state->position;
+    out_segment->source_step = state->step;
+    out_segment->is_mono = 0U;
+    out_segment->kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
     out_segment->status = SAMPLE_AUDIO_SEGMENT_OK;
     return 1U;
 }
@@ -437,7 +560,8 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
     if ((state->plan_valid == 0U)
         || ((state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
             && (state->plan.kernel_type != SAMPLE_KERNEL_REV_1X)
-            && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)))
+            && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)
+            && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_REV_LINEAR)))
     {
         return 0U;
     }
@@ -445,6 +569,11 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
     if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
     {
         return sample_voice_reader_prepare_pitch_forward_segment(state, max_frames, out_segment);
+    }
+
+    if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
+    {
+        return sample_voice_reader_prepare_pitch_reverse_segment(state, max_frames, out_segment);
     }
 
     const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
@@ -515,15 +644,58 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
     if ((state->plan_valid == 0U) || ((state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
                                       && (state->plan.kernel_type != SAMPLE_KERNEL_REV_1X)
-                                      && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)))
+                                      && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_FWD_LINEAR)
+                                      && (state->plan.kernel_type != SAMPLE_KERNEL_PITCH_REV_LINEAR)))
     {
         return;
     }
 
     if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_FWD_LINEAR)
     {
+        const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
+        const uint8_t loop_forward =
+            ((state->plan.loop_mode == 1U) && (forward_end > state->plan.loop_begin)) ? 1U : 0U;
+        const uint8_t pingpong =
+            ((state->plan.loop_mode == 2U) && (sample_voice_reader_pingpong_span_valid(state) != 0U)) ? 1U : 0U;
+        uint8_t wrapped_loop = 0U;
+        uint8_t bounced_pingpong = 0U;
+
         state->position += state->step * (float)consumed_frames;
-        if (state->position >= (float)state->plan.region_end)
+        if (loop_forward != 0U)
+        {
+            const float loop_begin = (float)state->plan.loop_begin;
+            const float loop_end = (float)forward_end;
+            const float loop_length = loop_end - loop_begin;
+            while ((loop_length > 0.0f) && (state->position >= loop_end))
+            {
+                state->position = loop_begin + (state->position - loop_end);
+                wrapped_loop = 1U;
+            }
+            state->frame_pos = (uint32_t)state->position;
+        }
+        else if (pingpong != 0U)
+        {
+            const float loop_begin = (float)state->plan.loop_begin;
+            const float loop_end = (float)forward_end;
+            while (state->position >= loop_end)
+            {
+                state->position = ((2.0f * loop_end) - state->position) - 1.0f;
+                state->plan.direction = 1U;
+                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
+                sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                bounced_pingpong = 1U;
+            }
+            while (state->position < loop_begin)
+            {
+                state->position = (2.0f * loop_begin) - state->position;
+                state->plan.direction = 0U;
+                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
+                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                bounced_pingpong = 1U;
+            }
+            state->frame_pos = (uint32_t)state->position;
+        }
+        else if (state->position >= (float)state->plan.region_end)
         {
             state->position = (float)state->plan.region_end;
             state->frame_pos = state->plan.region_end;
@@ -541,7 +713,66 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
             return;
         }
 
-        if ((state->audio_cursor.current_acquired == 0U)
+        if ((wrapped_loop != 0U) || (bounced_pingpong != 0U) || (state->audio_cursor.current_acquired == 0U)
+            || (state->frame_pos < state->audio_cursor.current_start_frame)
+            || (state->frame_pos
+                >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
+        {
+            sample_voice_reader_release_audio_cursor(state);
+            (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
+            return;
+        }
+
+        state->audio_cursor.current_offset_frames = state->frame_pos - state->audio_cursor.current_start_frame;
+        return;
+    }
+
+    if (state->plan.kernel_type == SAMPLE_KERNEL_PITCH_REV_LINEAR)
+    {
+        const uint8_t pingpong =
+            ((state->plan.loop_mode == 2U) && (sample_voice_reader_pingpong_span_valid(state) != 0U)) ? 1U : 0U;
+        uint8_t bounced_pingpong = 0U;
+        state->position -= state->step * (float)consumed_frames;
+        if (pingpong != 0U)
+        {
+            const float loop_begin = (float)state->plan.region_begin;
+            while (state->position < loop_begin)
+            {
+                state->position = (2.0f * loop_begin) - state->position;
+                state->plan.direction = 0U;
+                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
+                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                bounced_pingpong = 1U;
+            }
+            while (state->position >= (float)state->plan.region_end)
+            {
+                state->position = ((2.0f * (float)state->plan.region_end) - state->position) - 1.0f;
+                state->plan.direction = 1U;
+                state->plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
+                sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                bounced_pingpong = 1U;
+            }
+            state->frame_pos = (uint32_t)state->position;
+        }
+        else if (state->position < (float)state->plan.region_begin)
+        {
+            state->position = (float)((int32_t)state->plan.region_begin - 1);
+            state->frame_pos = state->plan.region_begin;
+            state->active = 0U;
+        }
+        else
+        {
+            state->frame_pos = (uint32_t)state->position;
+        }
+
+        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+        if (state->active == 0U)
+        {
+            sample_voice_reader_release_audio_cursor(state);
+            return;
+        }
+
+        if ((bounced_pingpong != 0U) || (state->audio_cursor.current_acquired == 0U)
             || (state->frame_pos < state->audio_cursor.current_start_frame)
             || (state->frame_pos
                 >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
@@ -743,35 +974,146 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
         return;
     }
 
-    float position = segment->source_position;
-    for (uint32_t i = 0U; i < segment->frames; ++i)
+    const float *const src = segment->l;
+    const float *const neighbor = segment->neighbor_l;
+    const uint32_t frames = segment->frames;
+    const uint32_t source_start_frame = segment->source_start_frame;
+    const uint32_t source_end_frame = source_start_frame + segment->source_frame_count;
+    const uint32_t neighbor_start_frame = segment->neighbor_start_frame;
+    const uint32_t source_limit_frame = segment->source_limit_frame;
+    const float gain_base = gain;
+    uint32_t pos_q16 = (uint32_t)(((segment->source_position - (float)source_start_frame) * 65536.0f) + 0.5f);
+    const uint32_t step_q16 = (uint32_t)(segment->source_step * 65536.0f + 0.5f);
+    float *dst_l = &out_l[out_offset];
+    float *dst_r = &out_r[out_offset];
+    const uint8_t has_neighbor = ((neighbor != 0) && (segment->neighbor_r != 0)) ? 1U : 0U;
+    const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
+    const float frac_scale = 1.0f / 65536.0f;
+
+    for (uint32_t i = 0U; i < frames; ++i)
     {
-        const uint32_t base_frame = (uint32_t)position;
-        const float frac = position - (float)base_frame;
-        const uint32_t current_index = base_frame - segment->source_start_frame;
-        const float curr_l = segment->l[current_index * segment->frame_stride];
-        const float curr_r = segment->r[current_index * segment->frame_stride];
+        const uint32_t base_offset = pos_q16 >> 16;
+        const uint32_t base_frame = segment->source_start_frame + base_offset;
+        const float frac = (float)(pos_q16 & 0xFFFFU) * frac_scale;
+        const uint32_t current_index = base_offset;
+        const float *const curr_ptr = &src[current_index * 2U];
+        const float curr_l = curr_ptr[0];
+        const float curr_r = curr_ptr[1];
         float next_l = curr_l;
         float next_r = curr_r;
-        if ((base_frame + 1U) < (segment->source_start_frame + segment->source_frame_count))
+
+        if (((base_frame + 1U) < source_limit_frame) && ((base_frame + 1U) < source_end_frame))
         {
-            next_l = segment->l[(current_index + 1U) * segment->frame_stride];
-            next_r = segment->r[(current_index + 1U) * segment->frame_stride];
+            const float *const next_ptr = &src[(current_index + 1U) * 2U];
+            next_l = next_ptr[0];
+            next_r = next_ptr[1];
         }
-        else if ((segment->neighbor_l != 0) && (segment->neighbor_r != 0))
+        else if ((base_frame + 1U) >= source_limit_frame)
         {
-            next_l = segment->neighbor_l[0];
-            next_r = segment->neighbor_r[0];
+            const uint32_t wrap_frame = segment->source_region_begin;
+            const float *next_ptr = 0;
+            if ((wrap_frame >= source_start_frame) && (wrap_frame < source_end_frame))
+            {
+                next_ptr = &src[(wrap_frame - source_start_frame) * 2U];
+            }
+            else if (has_neighbor != 0U)
+            {
+                const uint32_t neighbor_index = wrap_frame - neighbor_start_frame;
+                next_ptr = &neighbor[neighbor_index * 2U];
+            }
+
+            if (next_ptr != 0)
+            {
+                next_l = next_ptr[0];
+                next_r = next_ptr[1];
+            }
+        }
+        else if (has_neighbor != 0U)
+        {
+            const uint32_t neighbor_frame = base_frame + 1U;
+            const uint32_t neighbor_index = neighbor_frame - neighbor_start_frame;
+            const float *const next_ptr = &neighbor[neighbor_index * 2U];
+            next_l = next_ptr[0];
+            next_r = next_ptr[1];
         }
 
-        float sample_l = 0.0f;
-        float sample_r = 0.0f;
-        wav_audio_codec_resample_linear(curr_l, curr_r, next_l, next_r, frac, &sample_l, &sample_r);
-        const float fade = ((fade_gain != 0) && (i < fade_count)) ? fade_gain[i] : 1.0f;
-        const float sample_gain = gain * fade;
-        out_l[out_offset + i] += sample_l * sample_gain;
-        out_r[out_offset + i] += sample_r * sample_gain;
-        position += segment->source_step;
+        const float sample_l = curr_l + ((next_l - curr_l) * frac);
+        const float sample_r = curr_r + ((next_r - curr_r) * frac);
+        const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+        dst_l[i] += sample_l * sample_gain;
+        dst_r[i] += sample_r * sample_gain;
+        pos_q16 += step_q16;
+    }
+}
+
+void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segment,
+                                              float gain,
+                                              const float *fade_gain,
+                                              uint32_t fade_count,
+                                              float *out_l,
+                                              float *out_r,
+                                              uint32_t out_offset)
+{
+    SAMPLE_VOICE_READER_DIAG_INC(mix_pitch_rev_linear_calls);
+    if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
+    {
+        return;
+    }
+
+    const float *const src = segment->l;
+    const float *const neighbor = segment->neighbor_l;
+    const uint32_t frames = segment->frames;
+    const uint32_t source_start_frame = segment->source_start_frame;
+    const uint32_t neighbor_start_frame = segment->neighbor_start_frame;
+    const uint32_t source_region_begin = segment->source_region_begin;
+    const uint32_t neighbor_frame_count = segment->neighbor_frame_count;
+    const float gain_base = gain;
+    uint32_t pos_q16 = (uint32_t)(((segment->source_position - (float)source_start_frame) * 65536.0f) + 0.5f);
+    const uint32_t step_q16 = (uint32_t)(segment->source_step * 65536.0f + 0.5f);
+    float *dst_l = &out_l[out_offset];
+    float *dst_r = &out_r[out_offset];
+    const uint8_t has_neighbor = ((neighbor != 0) && (segment->neighbor_r != 0) && (neighbor_frame_count != 0U))
+                                     ? 1U
+                                     : 0U;
+    const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
+    const float frac_scale = 1.0f / 65536.0f;
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        const uint32_t base_offset = pos_q16 >> 16;
+        const uint32_t base_frame = source_start_frame + base_offset;
+        const float frac = (float)(pos_q16 & 0xFFFFU) * frac_scale;
+        const uint32_t current_index = base_offset;
+        const float *const curr_ptr = &src[current_index * 2U];
+        const float curr_l = curr_ptr[0];
+        const float curr_r = curr_ptr[1];
+        float prev_l = curr_l;
+        float prev_r = curr_r;
+
+        if (base_frame > source_region_begin)
+        {
+            if (base_frame > source_start_frame)
+            {
+                const float *const prev_ptr = &src[(current_index - 1U) * 2U];
+                prev_l = prev_ptr[0];
+                prev_r = prev_ptr[1];
+            }
+            else if (has_neighbor != 0U)
+            {
+                const uint32_t prev_frame = base_frame - 1U;
+                const uint32_t prev_index = prev_frame - neighbor_start_frame;
+                const float *const prev_ptr = &neighbor[prev_index * 2U];
+                prev_l = prev_ptr[0];
+                prev_r = prev_ptr[1];
+            }
+        }
+
+        const float sample_l = curr_l + ((prev_l - curr_l) * frac);
+        const float sample_r = curr_r + ((prev_r - curr_r) * frac);
+        const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+        dst_l[i] += sample_l * sample_gain;
+        dst_r[i] += sample_r * sample_gain;
+        pos_q16 -= step_q16;
     }
 }
 

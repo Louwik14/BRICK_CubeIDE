@@ -57,6 +57,10 @@ typedef struct
     uint32_t start_frame;
     uint32_t source_start_frame;
     uint32_t source_frame_count;
+    uint32_t neighbor_start_frame;
+    uint32_t neighbor_frame_count;
+    uint32_t source_limit_frame;
+    uint32_t source_region_begin;
     float source_position;
     float source_step;
     uint8_t is_mono;
@@ -105,6 +109,7 @@ typedef struct
     uint32_t mix_fwd_1x_calls;
     uint32_t mix_rev_1x_calls;
     uint32_t mix_pitch_fwd_linear_calls;
+    uint32_t mix_pitch_rev_linear_calls;
 } sample_voice_reader_diag_snapshot_t;
 
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
@@ -143,6 +148,13 @@ void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
                                     float *out_r,
                                     uint32_t out_offset);
 void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segment,
+                                              float gain,
+                                              const float *fade_gain,
+                                              uint32_t fade_count,
+                                              float *out_l,
+                                              float *out_r,
+                                              uint32_t out_offset);
+void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segment,
                                               float gain,
                                               const float *fade_gain,
                                               uint32_t fade_count,
