@@ -65,6 +65,7 @@ static uint8_t sample_cache_voice_cursor_prepare(sample_cache_voice_t *voice,
                                                  uint32_t frame_index);
 static void sample_cache_invalidate_voices_for_sample(uint16_t sample_id);
 static uint32_t sample_cache_diag_count_active_voices(void);
+static void sample_cache_queue_active_stream_pages(void);
 
 static uint8_t *sample_cache_io_buffer(void)
 {
@@ -859,6 +860,36 @@ static uint8_t sample_cache_any_voice_active(uint16_t sample_id)
     return 0U;
 }
 
+static void sample_cache_queue_active_stream_pages(void)
+{
+    for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
+    {
+        const sample_cache_voice_t *const voice = &g_sample_cache_voice[i];
+        if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+        {
+            continue;
+        }
+
+        const sample_cache_desc_t *const desc = &g_sample_cache[voice->sample_id];
+        if ((desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->fully_cached != 0U))
+        {
+            continue;
+        }
+
+        const uint32_t current_page = voice->frame_pos / SAMPLE_PAGE_FRAMES;
+        for (uint32_t ahead = 1U; ahead <= 2U; ++ahead)
+        {
+            const uint32_t page_index = current_page + ahead;
+            if ((page_index * SAMPLE_PAGE_FRAMES) >= desc->total_frames)
+            {
+                break;
+            }
+
+            (void)sample_page_cache_request_page(voice->sample_id, page_index);
+        }
+    }
+}
+
 static void sample_cache_close_stream_file(uint16_t sample_id)
 {
     if ((sample_id < SAMPLE_POOL_SIZE) && (g_sample_cache_file_open[sample_id] != 0U))
@@ -1196,6 +1227,7 @@ void sample_cache_service(uint32_t byte_budget)
         return;
     }
 
+    sample_cache_queue_active_stream_pages();
     sample_page_cache_service(byte_budget);
 
     uint32_t remaining = byte_budget;
@@ -1586,6 +1618,38 @@ void sample_cache_set_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos)
     sample_cache_voice_seek(voice, frame_pos);
 }
 
+void sample_cache_update_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos)
+{
+    if (voice_id >= SAMPLE_CACHE_MAX_VOICES)
+    {
+        return;
+    }
+
+    sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    {
+        return;
+    }
+
+    voice->frame_pos = frame_pos;
+
+    sample_stream_cursor_t *const cursor = &voice->cursor;
+    cursor->frame_pos = frame_pos;
+
+    if ((cursor->valid == 0U) || (cursor->current_page.valid == 0U)
+        || (cursor->current_page.acquired == 0U) || (cursor->current_span.valid == 0U)
+        || (cursor->current_span.base == 0))
+    {
+        return;
+    }
+
+    if ((frame_pos >= cursor->current_span.start_frame)
+        && (frame_pos < (cursor->current_span.start_frame + cursor->current_span.frame_count)))
+    {
+        cursor->current_span.offset_frames = frame_pos - cursor->current_span.start_frame;
+    }
+}
+
 uint32_t sample_cache_read_voice(uint8_t voice_id, float *out_l, float *out_r, uint32_t frames)
 {
     if ((voice_id >= SAMPLE_CACHE_MAX_VOICES) || (out_l == 0) || (out_r == 0) || (frames == 0U))
@@ -1781,7 +1845,10 @@ void sample_cache_stop_voice(uint8_t voice_id)
             }
             else
             {
-                desc->state = SAMPLE_CACHE_NEEDS_REPREPARE;
+                desc->state =
+                    (sample_page_cache_get_page_state(sample_id, 0U) == SAMPLE_PAGE_READY)
+                        ? SAMPLE_CACHE_READY_PARTIAL
+                        : SAMPLE_CACHE_NEEDS_REPREPARE;
                 desc->reprepare_start_frame = 0U;
             }
         }

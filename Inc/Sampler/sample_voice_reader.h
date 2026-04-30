@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_page_cache.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,60 @@ extern "C" {
 #define BRICK6_SAMPLER_DIAG_ENABLE 0
 #endif
 
+typedef enum
+{
+    SAMPLE_KERNEL_FWD_1X = 0,
+    SAMPLE_KERNEL_REV_1X,
+    SAMPLE_KERNEL_PITCH_FWD_LINEAR,
+    SAMPLE_KERNEL_PITCH_REV_LINEAR
+} sample_kernel_type_t;
+
+typedef struct
+{
+    uint16_t sample_id;
+    uint32_t start_frame;
+    uint32_t region_begin;
+    uint32_t region_end;
+    uint32_t fade_in_frames;
+    uint32_t fade_out_frames;
+    uint32_t step_q16;
+    uint8_t direction;
+    uint8_t loop_mode;
+    uint8_t stop_on_underrun;
+    sample_kernel_type_t kernel_type;
+} sample_play_plan_t;
+
+typedef enum
+{
+    SAMPLE_AUDIO_SEGMENT_NOT_READY = 0,
+    SAMPLE_AUDIO_SEGMENT_OK,
+    SAMPLE_AUDIO_SEGMENT_DONE,
+    SAMPLE_AUDIO_SEGMENT_UNDERRUN
+} sample_audio_segment_status_t;
+
+typedef struct
+{
+    const float *l;
+    const float *r;
+    uint32_t frames;
+    uint32_t frame_stride;
+    uint32_t start_frame;
+    uint8_t is_mono;
+    sample_kernel_type_t kernel_type;
+    sample_audio_segment_status_t status;
+} sample_audio_segment_t;
+
+typedef struct
+{
+    sample_page_ref_t current_page_ref;
+    const float *current_base;
+    uint32_t current_start_frame;
+    uint32_t current_frame_count;
+    uint32_t current_offset_frames;
+    uint8_t current_acquired;
+    uint8_t active;
+} sample_audio_cursor_t;
+
 typedef struct
 {
     uint8_t cache_voice_id;
@@ -20,6 +75,9 @@ typedef struct
     float step;
     uint32_t frame_pos;
     uint8_t active;
+    sample_play_plan_t plan;
+    sample_audio_cursor_t audio_cursor;
+    uint8_t plan_valid;
 } sample_voice_reader_t;
 
 typedef struct
@@ -29,6 +87,9 @@ typedef struct
     uint32_t span_acquire_calls;
     uint32_t neighbor_span_acquire_calls;
     uint32_t seek_calls;
+    uint32_t begin_segment_calls;
+    uint32_t commit_segment_calls;
+    uint32_t mix_fwd_1x_calls;
 } sample_voice_reader_diag_snapshot_t;
 
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
@@ -36,6 +97,9 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
                               uint16_t sample_id,
                               uint8_t cache_voice_id,
                               uint32_t start_frame);
+uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
+                                           const sample_play_plan_t *plan,
+                                           uint8_t cache_voice_id);
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step);
 void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos);
 void sample_voice_reader_stop(sample_voice_reader_t *reader);
@@ -44,6 +108,18 @@ uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,
                                         sample_cache_block_t *out_block);
 void sample_voice_reader_commit_block(sample_voice_reader_t *reader,
                                       uint32_t consumed_frames);
+uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
+                                          uint32_t max_frames,
+                                          sample_audio_segment_t *out_segment);
+void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
+                                        uint32_t consumed_frames);
+void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
+                                    float gain,
+                                    const float *fade_gain,
+                                    uint32_t fade_count,
+                                    float *out_l,
+                                    float *out_r,
+                                    uint32_t out_offset);
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t region_start,
                                                   uint32_t region_end,

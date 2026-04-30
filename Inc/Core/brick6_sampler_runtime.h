@@ -28,6 +28,7 @@ typedef struct
     uint32_t fast_path_blocks;
     uint32_t slow_path_blocks;
     uint32_t mixed_segments;
+    uint32_t segment_cursor_blocks;
     uint32_t render_track_calls;
     uint32_t active_voices;
     uint32_t max_active_voices;

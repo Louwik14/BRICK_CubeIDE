@@ -11,6 +11,67 @@ static sample_voice_reader_diag_snapshot_t g_sample_voice_reader_diag;
 #define SAMPLE_VOICE_READER_DIAG_INC(field) ((void)0)
 #endif
 
+#define SAMPLE_Q16_ONE (65536U)
+
+typedef struct
+{
+    uint8_t cache_voice_id;
+    uint16_t sample_id;
+    float position;
+    float step;
+    uint32_t frame_pos;
+    uint8_t active;
+    sample_play_plan_t plan;
+    sample_audio_cursor_t audio_cursor;
+    uint8_t plan_valid;
+} sample_voice_reader_state_t;
+
+static sample_voice_reader_state_t *sample_voice_reader_state(sample_voice_reader_t *reader)
+{
+    return (sample_voice_reader_state_t *)reader;
+}
+
+static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t *state)
+{
+    if (state == 0)
+    {
+        return;
+    }
+
+    if ((state->audio_cursor.current_acquired != 0U) && (state->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES))
+    {
+        sample_page_cache_release_page_ref(state->sample_id, &state->audio_cursor.current_page_ref);
+    }
+
+    memset(&state->audio_cursor, 0, sizeof(state->audio_cursor));
+}
+
+static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_t *state,
+                                                      uint32_t frame_pos)
+{
+    if ((state == 0) || (state->sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
+    {
+        return 0U;
+    }
+
+    sample_page_span_t span;
+    if (sample_page_cache_try_acquire_page(state->sample_id, frame_pos / SAMPLE_PAGE_FRAMES, &span) == 0U)
+    {
+        return 0U;
+    }
+
+    state->audio_cursor.current_page_ref.page_index = span.page_index;
+    state->audio_cursor.current_page_ref.page_generation = span.page_generation;
+    state->audio_cursor.current_page_ref.slot_index = span.slot_index;
+    state->audio_cursor.current_base = span.frames_interleaved;
+    state->audio_cursor.current_start_frame = span.start_frame;
+    state->audio_cursor.current_frame_count = span.frame_count;
+    state->audio_cursor.current_offset_frames = frame_pos - span.start_frame;
+    state->audio_cursor.current_acquired = 1U;
+    state->audio_cursor.active = 1U;
+    return 1U;
+}
+
 static float sample_voice_reader_span_sample_l(const sample_cache_span_t *span, uint32_t frame_index)
 {
     return span->l[(frame_index - span->start_frame) * span->frame_stride];
@@ -68,7 +129,9 @@ void sample_voice_reader_reset(sample_voice_reader_t *reader)
         return;
     }
 
-    memset(reader, 0, sizeof(*reader));
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    sample_voice_reader_release_audio_cursor(state);
+    memset(state, 0, sizeof(*state));
 }
 
 void sample_voice_reader_bind(sample_voice_reader_t *reader,
@@ -81,12 +144,42 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
         return;
     }
 
+    sample_voice_reader_reset(reader);
     reader->sample_id = sample_id;
     reader->cache_voice_id = cache_voice_id;
     reader->position = (float)start_frame;
     reader->step = 1.0f;
     reader->frame_pos = start_frame;
     reader->active = 1U;
+}
+
+uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
+                                           const sample_play_plan_t *plan,
+                                           uint8_t cache_voice_id)
+{
+    if ((reader == 0) || (plan == 0))
+    {
+        return 0U;
+    }
+
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    sample_voice_reader_reset(reader);
+    state->sample_id = plan->sample_id;
+    state->cache_voice_id = cache_voice_id;
+    state->position = (float)plan->start_frame;
+    state->step = (float)plan->step_q16 / (float)SAMPLE_Q16_ONE;
+    state->frame_pos = plan->start_frame;
+    state->active = 1U;
+    state->plan = *plan;
+    state->plan_valid = 1U;
+
+    if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)
+    {
+        sample_voice_reader_reset(reader);
+        return 0U;
+    }
+
+    return 1U;
 }
 
 void sample_voice_reader_set_step(sample_voice_reader_t *reader, float step)
@@ -149,6 +242,137 @@ void sample_voice_reader_commit_block(sample_voice_reader_t *reader,
     sample_cache_commit_read_block(reader->cache_voice_id, consumed_frames);
     reader->frame_pos += consumed_frames;
     reader->position = (float)reader->frame_pos;
+}
+
+uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
+                                          uint32_t max_frames,
+                                          sample_audio_segment_t *out_segment)
+{
+    SAMPLE_VOICE_READER_DIAG_INC(begin_segment_calls);
+    if (out_segment == 0)
+    {
+        return 0U;
+    }
+
+    memset(out_segment, 0, sizeof(*out_segment));
+    out_segment->status = SAMPLE_AUDIO_SEGMENT_NOT_READY;
+
+    if ((reader == 0) || (reader->active == 0U) || (max_frames == 0U))
+    {
+        return 0U;
+    }
+
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if ((state->plan_valid == 0U) || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X))
+    {
+        return 0U;
+    }
+
+    if (state->frame_pos >= state->plan.region_end)
+    {
+        out_segment->status = SAMPLE_AUDIO_SEGMENT_DONE;
+        return 1U;
+    }
+
+    if (state->audio_cursor.current_acquired == 0U)
+    {
+        if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
+        {
+            out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
+            return 1U;
+        }
+    }
+
+    uint32_t available = state->audio_cursor.current_frame_count - state->audio_cursor.current_offset_frames;
+    const uint32_t region_remaining = state->plan.region_end - state->frame_pos;
+    if (available > region_remaining)
+    {
+        available = region_remaining;
+    }
+    if (available > max_frames)
+    {
+        available = max_frames;
+    }
+    if (available == 0U)
+    {
+        out_segment->status = SAMPLE_AUDIO_SEGMENT_UNDERRUN;
+        return 1U;
+    }
+
+    out_segment->l = &state->audio_cursor.current_base[state->audio_cursor.current_offset_frames * 2U];
+    out_segment->r = &state->audio_cursor.current_base[(state->audio_cursor.current_offset_frames * 2U) + 1U];
+    out_segment->frames = available;
+    out_segment->frame_stride = 2U;
+    out_segment->start_frame = state->frame_pos;
+    out_segment->is_mono = 0U;
+    out_segment->kernel_type = state->plan.kernel_type;
+    out_segment->status = SAMPLE_AUDIO_SEGMENT_OK;
+    return 1U;
+}
+
+void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
+                                        uint32_t consumed_frames)
+{
+    SAMPLE_VOICE_READER_DIAG_INC(commit_segment_calls);
+    if ((reader == 0) || (reader->active == 0U))
+    {
+        return;
+    }
+
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if ((state->plan_valid == 0U) || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X))
+    {
+        return;
+    }
+
+    state->frame_pos += consumed_frames;
+    state->position = (float)state->frame_pos;
+    sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+
+    if (state->audio_cursor.current_acquired == 0U)
+    {
+        return;
+    }
+
+    state->audio_cursor.current_offset_frames += consumed_frames;
+    if (state->frame_pos >= state->plan.region_end)
+    {
+        sample_voice_reader_release_audio_cursor(state);
+        return;
+    }
+
+    if (state->audio_cursor.current_offset_frames < state->audio_cursor.current_frame_count)
+    {
+        return;
+    }
+
+    sample_voice_reader_release_audio_cursor(state);
+    (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
+}
+
+void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
+                                    float gain,
+                                    const float *fade_gain,
+                                    uint32_t fade_count,
+                                    float *out_l,
+                                    float *out_r,
+                                    uint32_t out_offset)
+{
+    SAMPLE_VOICE_READER_DIAG_INC(mix_fwd_1x_calls);
+    if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
+    {
+        return;
+    }
+
+    const float *src_l = segment->l;
+    const float *src_r = segment->r;
+    for (uint32_t i = 0U; i < segment->frames; ++i)
+    {
+        const float fade = ((fade_gain != 0) && (i < fade_count)) ? fade_gain[i] : 1.0f;
+        const float sample_gain = gain * fade;
+        out_l[out_offset + i] += src_l[i * segment->frame_stride] * sample_gain;
+        out_r[out_offset + i] += src_r[i * segment->frame_stride] * sample_gain;
+    }
 }
 
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
@@ -333,7 +557,7 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         reader->position = position;
         reverse = segment_reverse;
         reader->frame_pos = (uint32_t)reader->position;
-        sample_cache_set_voice_frame_pos(reader->cache_voice_id, reader->frame_pos);
+        sample_cache_update_voice_frame_pos(reader->cache_voice_id, reader->frame_pos);
         produced += segment_frames;
     }
 
