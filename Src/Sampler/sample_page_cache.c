@@ -101,9 +101,39 @@ static uint8_t sample_page_cache_fill_ref(const sample_page_desc_t *page,
     return 1U;
 }
 
+static uint32_t sample_page_cache_stream_page_frame_count(uint16_t sample_id, uint32_t page_index)
+{
+    if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[sample_id];
+        if ((sample->valid != 0U) && (sample->fully_loaded == 0U) && (sample->total_frames != 0U))
+        {
+            const uint32_t start_frame = page_index * SAMPLE_PAGE_FRAMES;
+            if (start_frame >= sample->total_frames)
+            {
+                return 0U;
+            }
+
+            uint32_t frame_count = sample->total_frames - start_frame;
+            if (frame_count > SAMPLE_PAGE_FRAMES)
+            {
+                frame_count = SAMPLE_PAGE_FRAMES;
+            }
+            return frame_count;
+        }
+    }
+
+    return SAMPLE_PAGE_FRAMES;
+}
+
 static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id, uint32_t page_index)
 {
     sample_page_desc_t *evict_page = 0;
+    const uint32_t frame_count = sample_page_cache_stream_page_frame_count(sample_id, page_index);
+    if (frame_count == 0U)
+    {
+        return 0;
+    }
 
     for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
     {
@@ -113,7 +143,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id
             page->sample_id = sample_id;
             page->page_index = page_index;
             page->start_frame = page_index * SAMPLE_PAGE_FRAMES;
-            page->frame_count = SAMPLE_PAGE_FRAMES;
+            page->frame_count = frame_count;
             page->generation = ++g_sample_page_cache_state.generation_counter;
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
             page->pin_count = 0U;
@@ -143,7 +173,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id
     evict_page->sample_id = sample_id;
     evict_page->page_index = page_index;
     evict_page->start_frame = page_index * SAMPLE_PAGE_FRAMES;
-    evict_page->frame_count = SAMPLE_PAGE_FRAMES;
+    evict_page->frame_count = frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
     evict_page->pin_count = 0U;
@@ -548,6 +578,13 @@ uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index)
         page->state = SAMPLE_PAGE_QUEUED;
     }
 
+    page->frame_count = sample_page_cache_stream_page_frame_count(sample_id, page_index);
+    if (page->frame_count == 0U)
+    {
+        page->state = SAMPLE_PAGE_ERROR;
+        return 0U;
+    }
+
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
     return 1U;
 }
@@ -569,6 +606,13 @@ uint8_t sample_page_cache_request_page_ref(uint16_t sample_id,
     if (page->state == SAMPLE_PAGE_EMPTY)
     {
         page->state = SAMPLE_PAGE_QUEUED;
+    }
+
+    page->frame_count = sample_page_cache_stream_page_frame_count(sample_id, page_index);
+    if (page->frame_count == 0U)
+    {
+        page->state = SAMPLE_PAGE_ERROR;
+        return 0U;
     }
 
     page->last_touch = ++g_sample_page_cache_state.touch_counter;

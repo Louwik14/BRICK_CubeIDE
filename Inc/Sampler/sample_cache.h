@@ -87,6 +87,7 @@ typedef struct
     uint8_t voice_id;
     uint16_t sample_id;
     uint32_t frame_pos;
+    int8_t direction;
     uint8_t active;
     uint8_t stop_on_underrun;
     sample_stream_cursor_t cursor;
@@ -161,6 +162,7 @@ uint8_t sample_cache_try_acquire_span(uint16_t sample_id,
 void sample_cache_release_span(uint16_t sample_id, sample_cache_span_t *span);
 void sample_cache_set_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos);
 void sample_cache_update_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos);
+void sample_cache_set_voice_direction(uint8_t voice_id, int8_t direction);
 uint32_t sample_cache_read_voice(uint8_t voice_id, float *out_l, float *out_r, uint32_t frames);
 uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, float *out_l, float *out_r);
 uint8_t sample_cache_peek_frame(uint16_t sample_id, uint32_t frame_index, float *out_l, float *out_r);

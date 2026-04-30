@@ -172,6 +172,7 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
     state->active = 1U;
     state->plan = *plan;
     state->plan_valid = 1U;
+    sample_cache_set_voice_direction(cache_voice_id, (plan->direction != 0U) ? -1 : 1);
 
     if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)
     {
@@ -263,12 +264,14 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
     }
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
-    if ((state->plan_valid == 0U) || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X))
+    if ((state->plan_valid == 0U)
+        || ((state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
+            && (state->plan.kernel_type != SAMPLE_KERNEL_REV_1X)))
     {
         return 0U;
     }
 
-    if (state->frame_pos >= state->plan.region_end)
+    if ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->frame_pos >= state->plan.region_end))
     {
         out_segment->status = SAMPLE_AUDIO_SEGMENT_DONE;
         return 1U;
@@ -283,11 +286,24 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
         }
     }
 
-    uint32_t available = state->audio_cursor.current_frame_count - state->audio_cursor.current_offset_frames;
-    const uint32_t region_remaining = state->plan.region_end - state->frame_pos;
-    if (available > region_remaining)
+    uint32_t available = 0U;
+    if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
     {
-        available = region_remaining;
+        available = state->audio_cursor.current_offset_frames + 1U;
+        const uint32_t region_remaining = (state->frame_pos - state->plan.region_begin) + 1U;
+        if (available > region_remaining)
+        {
+            available = region_remaining;
+        }
+    }
+    else
+    {
+        available = state->audio_cursor.current_frame_count - state->audio_cursor.current_offset_frames;
+        const uint32_t region_remaining = state->plan.region_end - state->frame_pos;
+        if (available > region_remaining)
+        {
+            available = region_remaining;
+        }
     }
     if (available > max_frames)
     {
@@ -320,13 +336,32 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
     }
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
-    if ((state->plan_valid == 0U) || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X))
+    if ((state->plan_valid == 0U) || ((state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
+                                      && (state->plan.kernel_type != SAMPLE_KERNEL_REV_1X)))
     {
         return;
     }
 
-    state->frame_pos += consumed_frames;
-    state->position = (float)state->frame_pos;
+    if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
+    {
+        const uint32_t region_remaining = (state->frame_pos - state->plan.region_begin) + 1U;
+        if (consumed_frames >= region_remaining)
+        {
+            state->frame_pos = state->plan.region_begin;
+            state->position = (float)((int32_t)state->plan.region_begin - 1);
+            state->active = 0U;
+        }
+        else
+        {
+            state->frame_pos -= consumed_frames;
+            state->position = (float)state->frame_pos;
+        }
+    }
+    else
+    {
+        state->frame_pos += consumed_frames;
+        state->position = (float)state->frame_pos;
+    }
     sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
 
     if (state->audio_cursor.current_acquired == 0U)
@@ -334,14 +369,37 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         return;
     }
 
-    state->audio_cursor.current_offset_frames += consumed_frames;
-    if (state->frame_pos >= state->plan.region_end)
+    const uint32_t previous_offset_frames = state->audio_cursor.current_offset_frames;
+    if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
+    {
+        if (consumed_frames > previous_offset_frames)
+        {
+            state->audio_cursor.current_offset_frames = 0U;
+        }
+        else
+        {
+            state->audio_cursor.current_offset_frames -= consumed_frames;
+        }
+    }
+    else
+    {
+        state->audio_cursor.current_offset_frames += consumed_frames;
+    }
+
+    if (((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->frame_pos >= state->plan.region_end))
+        || ((state->plan.kernel_type == SAMPLE_KERNEL_REV_1X) && (state->active == 0U)))
     {
         sample_voice_reader_release_audio_cursor(state);
         return;
     }
 
-    if (state->audio_cursor.current_offset_frames < state->audio_cursor.current_frame_count)
+    if ((state->plan.kernel_type == SAMPLE_KERNEL_REV_1X) && (consumed_frames <= previous_offset_frames))
+    {
+        return;
+    }
+
+    if ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X)
+        && (state->audio_cursor.current_offset_frames < state->audio_cursor.current_frame_count))
     {
         return;
     }
@@ -372,6 +430,31 @@ void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
         const float sample_gain = gain * fade;
         out_l[out_offset + i] += src_l[i * segment->frame_stride] * sample_gain;
         out_r[out_offset + i] += src_r[i * segment->frame_stride] * sample_gain;
+    }
+}
+
+void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
+                                    float gain,
+                                    const float *fade_gain,
+                                    uint32_t fade_count,
+                                    float *out_l,
+                                    float *out_r,
+                                    uint32_t out_offset)
+{
+    SAMPLE_VOICE_READER_DIAG_INC(mix_rev_1x_calls);
+    if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
+    {
+        return;
+    }
+
+    const float *src_l = segment->l;
+    const float *src_r = segment->r;
+    for (uint32_t i = 0U; i < segment->frames; ++i)
+    {
+        const float fade = ((fade_gain != 0) && (i < fade_count)) ? fade_gain[i] : 1.0f;
+        const float sample_gain = gain * fade;
+        out_l[out_offset + i] += src_l[-((int32_t)i * (int32_t)segment->frame_stride)] * sample_gain;
+        out_r[out_offset + i] += src_r[-((int32_t)i * (int32_t)segment->frame_stride)] * sample_gain;
     }
 }
 

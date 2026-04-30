@@ -90,6 +90,7 @@ typedef struct
     uint32_t begin_segment_calls;
     uint32_t commit_segment_calls;
     uint32_t mix_fwd_1x_calls;
+    uint32_t mix_rev_1x_calls;
 } sample_voice_reader_diag_snapshot_t;
 
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
@@ -114,6 +115,13 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
 void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                                         uint32_t consumed_frames);
 void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
+                                    float gain,
+                                    const float *fade_gain,
+                                    uint32_t fade_count,
+                                    float *out_l,
+                                    float *out_r,
+                                    uint32_t out_offset);
+void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
                                     float gain,
                                     const float *fade_gain,
                                     uint32_t fade_count,

@@ -66,6 +66,9 @@ static uint8_t sample_cache_voice_cursor_prepare(sample_cache_voice_t *voice,
 static void sample_cache_invalidate_voices_for_sample(uint16_t sample_id);
 static uint32_t sample_cache_diag_count_active_voices(void);
 static void sample_cache_queue_active_stream_pages(void);
+static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
+static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
+                                                        const sample_cache_desc_t *desc);
 
 static uint8_t *sample_cache_io_buffer(void)
 {
@@ -184,6 +187,7 @@ static void sample_cache_voice_reset(sample_cache_voice_t *voice)
     voice->active = 0U;
     voice->sample_id = UINT16_MAX;
     voice->frame_pos = 0U;
+    voice->direction = 1;
     voice->stop_on_underrun = 1U;
     sample_cache_cursor_reset(&voice->cursor);
 }
@@ -199,6 +203,7 @@ static void sample_cache_voice_release(sample_cache_voice_t *voice)
     voice->active = 0U;
     voice->sample_id = UINT16_MAX;
     voice->frame_pos = 0U;
+    voice->direction = 1;
 }
 
 static void sample_cache_voice_bind(sample_cache_voice_t *voice,
@@ -213,6 +218,7 @@ static void sample_cache_voice_bind(sample_cache_voice_t *voice,
     sample_cache_cursor_release(&voice->cursor);
     voice->sample_id = sample_id;
     voice->frame_pos = frame_index;
+    voice->direction = 1;
     voice->active = 1U;
     voice->stop_on_underrun = 1U;
     voice->cursor.sample_id = sample_id;
@@ -574,6 +580,32 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
         return 0U;
     }
 
+    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
+    if (last_page != 0U)
+    {
+        const uint32_t last_page_start_frame = last_page * SAMPLE_PAGE_FRAMES;
+        const uint32_t last_page_frames = desc->total_frames - last_page_start_frame;
+        if (sample_page_cache_request_page(sample_id, last_page) == 0U)
+        {
+            desc->last_error = 8U;
+            g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
+            return 0U;
+        }
+        if (sample_page_cache_pin_page(sample_id, last_page) == 0U)
+        {
+            desc->last_error = 8U;
+            g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
+            return 0U;
+        }
+        sample_page_cache_service(last_page_frames * desc->info.block_align);
+        if (sample_page_cache_get_page_state(sample_id, last_page) != SAMPLE_PAGE_READY)
+        {
+            desc->last_error = 12U;
+            g_sample_cache_last_fresult[sample_id] = FR_DISK_ERR;
+            return 0U;
+        }
+    }
+
     desc->cache = 0;
     desc->cache_window_start_frame = 0U;
     desc->cache_valid_frames = SAMPLE_PAGE_FRAMES * SAMPLE_CACHE_STREAM_START_PAGES;
@@ -831,6 +863,43 @@ static uint8_t sample_cache_start_frame_available(uint16_t sample_id)
     return sample_cache_frame_available(&g_sample_cache[sample_id], 0U);
 }
 
+static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc)
+{
+    if ((desc == 0) || (desc->total_frames == 0U))
+    {
+        return 0U;
+    }
+
+    return (desc->total_frames - 1U) / SAMPLE_PAGE_FRAMES;
+}
+
+static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
+                                                        const sample_cache_desc_t *desc)
+{
+    if ((sample_id >= SAMPLE_POOL_SIZE) || (desc == 0))
+    {
+        return 0U;
+    }
+
+    if ((desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->fully_cached != 0U))
+    {
+        return sample_cache_start_frame_available(sample_id);
+    }
+
+    if (sample_page_cache_get_page_state(sample_id, 0U) != SAMPLE_PAGE_READY)
+    {
+        return 0U;
+    }
+
+    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
+    if (last_page == 0U)
+    {
+        return 1U;
+    }
+
+    return (sample_page_cache_get_page_state(sample_id, last_page) == SAMPLE_PAGE_READY) ? 1U : 0U;
+}
+
 static uint32_t sample_cache_diag_count_active_voices(void)
 {
     uint32_t active = 0U;
@@ -879,8 +948,26 @@ static void sample_cache_queue_active_stream_pages(void)
         const uint32_t current_page = voice->frame_pos / SAMPLE_PAGE_FRAMES;
         for (uint32_t ahead = 1U; ahead <= 2U; ++ahead)
         {
-            const uint32_t page_index = current_page + ahead;
-            if ((page_index * SAMPLE_PAGE_FRAMES) >= desc->total_frames)
+            uint32_t page_index = UINT32_MAX;
+            if (voice->direction < 0)
+            {
+                if (current_page < ahead)
+                {
+                    break;
+                }
+
+                page_index = current_page - ahead;
+            }
+            else
+            {
+                page_index = current_page + ahead;
+                if ((page_index * SAMPLE_PAGE_FRAMES) >= desc->total_frames)
+                {
+                    break;
+                }
+            }
+
+            if (page_index == UINT32_MAX)
             {
                 break;
             }
@@ -1650,6 +1737,22 @@ void sample_cache_update_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos)
     }
 }
 
+void sample_cache_set_voice_direction(uint8_t voice_id, int8_t direction)
+{
+    if (voice_id >= SAMPLE_CACHE_MAX_VOICES)
+    {
+        return;
+    }
+
+    sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    {
+        return;
+    }
+
+    voice->direction = (direction < 0) ? -1 : 1;
+}
+
 uint32_t sample_cache_read_voice(uint8_t voice_id, float *out_l, float *out_r, uint32_t frames)
 {
     if ((voice_id >= SAMPLE_CACHE_MAX_VOICES) || (out_l == 0) || (out_r == 0) || (frames == 0U))
@@ -1845,10 +1948,9 @@ void sample_cache_stop_voice(uint8_t voice_id)
             }
             else
             {
-                desc->state =
-                    (sample_page_cache_get_page_state(sample_id, 0U) == SAMPLE_PAGE_READY)
-                        ? SAMPLE_CACHE_READY_PARTIAL
-                        : SAMPLE_CACHE_NEEDS_REPREPARE;
+                desc->state = (sample_cache_stream_boundary_pages_ready(sample_id, desc) != 0U)
+                                  ? SAMPLE_CACHE_READY_PARTIAL
+                                  : SAMPLE_CACHE_NEEDS_REPREPARE;
                 desc->reprepare_start_frame = 0U;
             }
         }
