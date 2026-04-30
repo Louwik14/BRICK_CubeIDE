@@ -139,10 +139,13 @@ static uint8_t brick6_sampler_runtime_use_segment_cursor_path(const brick6_sampl
         return 0U;
     }
 
-    return ((voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
-            && (fabsf(voice->step_signed - 1.0f) <= BRICK6_SAMPLER_STEP_EPSILON)
-            && (((voice->mode == 0U) && (voice->reverse == 0U))
-                || ((voice->mode == 1U) && (voice->reverse != 0U))))
+    return ((fabsf(voice->step_signed - 1.0f) <= BRICK6_SAMPLER_STEP_EPSILON)
+            && (((voice->mode == 0U) && (voice->reverse == 0U)
+                 && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE))
+                || ((voice->mode == 1U) && (voice->reverse != 0U)
+                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE))
+                || ((voice->mode == 2U) && (voice->reverse == 0U)
+                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD))))
                ? 1U
                : 0U;
 }
@@ -276,6 +279,8 @@ static void brick6_sampler_runtime_build_render_plan(uint8_t track_id)
     voice->play_plan.start_frame = (voice->reverse != 0U) ? ((end > begin) ? (end - 1U) : begin) : begin;
     voice->play_plan.region_begin = begin;
     voice->play_plan.region_end = end;
+    voice->play_plan.loop_begin = begin;
+    voice->play_plan.loop_end = end;
     voice->play_plan.fade_in_frames = voice->fade_in_frames;
     voice->play_plan.fade_out_frames = voice->fade_out_frames;
     voice->play_plan.step_q16 = 65536U;
@@ -755,7 +760,8 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
     if (voice->use_segment_cursor != 0U)
     {
         brick6_sampler_render_sample_segment_cursor(voice, out_l, out_r, frames);
-        if (((voice->reverse == 0U) && (voice->reader.position >= (float)voice->region_end))
+        if (((voice->reverse == 0U) && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
+             && (voice->reader.position >= (float)voice->region_end))
             || ((voice->reverse != 0U) && (voice->reader.active == 0U)))
         {
             voice->active = 0U;

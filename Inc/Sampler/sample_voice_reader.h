@@ -27,6 +27,8 @@ typedef struct
     uint32_t start_frame;
     uint32_t region_begin;
     uint32_t region_end;
+    uint32_t loop_begin;
+    uint32_t loop_end;
     uint32_t fade_in_frames;
     uint32_t fade_out_frames;
     uint32_t step_q16;

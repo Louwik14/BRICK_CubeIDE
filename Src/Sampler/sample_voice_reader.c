@@ -72,6 +72,21 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     return 1U;
 }
 
+static uint32_t sample_voice_reader_forward_end_frame(const sample_voice_reader_state_t *state)
+{
+    if (state == 0)
+    {
+        return 0U;
+    }
+
+    if ((state->plan.loop_mode != 0U) && (state->plan.loop_end > state->plan.loop_begin))
+    {
+        return state->plan.loop_end;
+    }
+
+    return state->plan.region_end;
+}
+
 static float sample_voice_reader_span_sample_l(const sample_cache_span_t *span, uint32_t frame_index)
 {
     return span->l[(frame_index - span->start_frame) * span->frame_stride];
@@ -271,7 +286,8 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
         return 0U;
     }
 
-    if ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->frame_pos >= state->plan.region_end))
+    const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
+    if ((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->frame_pos >= forward_end))
     {
         out_segment->status = SAMPLE_AUDIO_SEGMENT_DONE;
         return 1U;
@@ -299,7 +315,7 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
     else
     {
         available = state->audio_cursor.current_frame_count - state->audio_cursor.current_offset_frames;
-        const uint32_t region_remaining = state->plan.region_end - state->frame_pos;
+        const uint32_t region_remaining = forward_end - state->frame_pos;
         if (available > region_remaining)
         {
             available = region_remaining;
@@ -342,6 +358,9 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         return;
     }
 
+    const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
+    uint8_t wrapped_loop = 0U;
+
     if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
     {
         const uint32_t region_remaining = (state->frame_pos - state->plan.region_begin) + 1U;
@@ -360,6 +379,12 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
     else
     {
         state->frame_pos += consumed_frames;
+        if ((state->plan.loop_mode != 0U) && (forward_end > state->plan.loop_begin)
+            && (state->frame_pos >= forward_end))
+        {
+            state->frame_pos = state->plan.loop_begin;
+            wrapped_loop = 1U;
+        }
         state->position = (float)state->frame_pos;
     }
     sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
@@ -386,10 +411,18 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         state->audio_cursor.current_offset_frames += consumed_frames;
     }
 
-    if (((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->frame_pos >= state->plan.region_end))
+    if (((state->plan.kernel_type == SAMPLE_KERNEL_FWD_1X) && (state->plan.loop_mode == 0U)
+         && (state->frame_pos >= forward_end))
         || ((state->plan.kernel_type == SAMPLE_KERNEL_REV_1X) && (state->active == 0U)))
     {
         sample_voice_reader_release_audio_cursor(state);
+        return;
+    }
+
+    if (wrapped_loop != 0U)
+    {
+        sample_voice_reader_release_audio_cursor(state);
+        (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
         return;
     }
 
