@@ -50,9 +50,15 @@ typedef struct
 {
     const float *l;
     const float *r;
+    const float *neighbor_l;
+    const float *neighbor_r;
     uint32_t frames;
     uint32_t frame_stride;
     uint32_t start_frame;
+    uint32_t source_start_frame;
+    uint32_t source_frame_count;
+    float source_position;
+    float source_step;
     uint8_t is_mono;
     sample_kernel_type_t kernel_type;
     sample_audio_segment_status_t status;
@@ -61,11 +67,16 @@ typedef struct
 typedef struct
 {
     sample_page_ref_t current_page_ref;
+    sample_page_ref_t neighbor_page_ref;
     const float *current_base;
+    const float *neighbor_base;
     uint32_t current_start_frame;
     uint32_t current_frame_count;
+    uint32_t neighbor_start_frame;
+    uint32_t neighbor_frame_count;
     uint32_t current_offset_frames;
     uint8_t current_acquired;
+    uint8_t neighbor_acquired;
     uint8_t active;
 } sample_audio_cursor_t;
 
@@ -93,6 +104,7 @@ typedef struct
     uint32_t commit_segment_calls;
     uint32_t mix_fwd_1x_calls;
     uint32_t mix_rev_1x_calls;
+    uint32_t mix_pitch_fwd_linear_calls;
 } sample_voice_reader_diag_snapshot_t;
 
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
@@ -130,6 +142,13 @@ void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
                                     float *out_l,
                                     float *out_r,
                                     uint32_t out_offset);
+void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segment,
+                                              float gain,
+                                              const float *fade_gain,
+                                              uint32_t fade_count,
+                                              float *out_l,
+                                              float *out_r,
+                                              uint32_t out_offset);
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t region_start,
                                                   uint32_t region_end,
