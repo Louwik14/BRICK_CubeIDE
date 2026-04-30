@@ -145,7 +145,10 @@ static uint8_t brick6_sampler_runtime_use_segment_cursor_path(const brick6_sampl
                 || ((voice->mode == 1U) && (voice->reverse != 0U)
                     && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE))
                 || ((voice->mode == 2U) && (voice->reverse == 0U)
-                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD))))
+                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD))
+                || ((voice->mode == 3U) && (voice->reverse == 0U)
+                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
+                    && (voice->loop_frames >= 2U))))
                ? 1U
                : 0U;
 }

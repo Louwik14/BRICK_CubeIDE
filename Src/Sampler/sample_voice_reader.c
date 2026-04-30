@@ -87,6 +87,16 @@ static uint32_t sample_voice_reader_forward_end_frame(const sample_voice_reader_
     return state->plan.region_end;
 }
 
+static uint8_t sample_voice_reader_pingpong_span_valid(const sample_voice_reader_state_t *state)
+{
+    if (state == 0)
+    {
+        return 0U;
+    }
+
+    return (state->plan.loop_end > (state->plan.loop_begin + 1U)) ? 1U : 0U;
+}
+
 static float sample_voice_reader_span_sample_l(const sample_cache_span_t *span, uint32_t frame_index)
 {
     return span->l[(frame_index - span->start_frame) * span->frame_stride];
@@ -360,15 +370,28 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
 
     const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
     uint8_t wrapped_loop = 0U;
+    uint8_t bounced_pingpong = 0U;
 
     if (state->plan.kernel_type == SAMPLE_KERNEL_REV_1X)
     {
         const uint32_t region_remaining = (state->frame_pos - state->plan.region_begin) + 1U;
         if (consumed_frames >= region_remaining)
         {
-            state->frame_pos = state->plan.region_begin;
-            state->position = (float)((int32_t)state->plan.region_begin - 1);
-            state->active = 0U;
+            if ((state->plan.loop_mode == 2U) && (sample_voice_reader_pingpong_span_valid(state) != 0U))
+            {
+                state->frame_pos = state->plan.loop_begin + 1U;
+                state->plan.direction = 0U;
+                state->plan.kernel_type = SAMPLE_KERNEL_FWD_1X;
+                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                state->position = (float)state->frame_pos;
+                bounced_pingpong = 1U;
+            }
+            else
+            {
+                state->frame_pos = state->plan.region_begin;
+                state->position = (float)((int32_t)state->plan.region_begin - 1);
+                state->active = 0U;
+            }
         }
         else
         {
@@ -379,13 +402,34 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
     else
     {
         state->frame_pos += consumed_frames;
-        if ((state->plan.loop_mode != 0U) && (forward_end > state->plan.loop_begin)
-            && (state->frame_pos >= forward_end))
+        if ((state->plan.loop_mode == 2U) && (state->frame_pos >= forward_end))
+        {
+            if (sample_voice_reader_pingpong_span_valid(state) != 0U)
+            {
+                state->frame_pos = forward_end - 2U;
+                state->plan.direction = 1U;
+                state->plan.kernel_type = SAMPLE_KERNEL_REV_1X;
+                sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                state->position = (float)state->frame_pos;
+                bounced_pingpong = 1U;
+            }
+            else
+            {
+                state->active = 0U;
+                state->position = (float)forward_end;
+            }
+        }
+        else if ((state->plan.loop_mode != 0U) && (forward_end > state->plan.loop_begin)
+                 && (state->frame_pos >= forward_end))
         {
             state->frame_pos = state->plan.loop_begin;
             wrapped_loop = 1U;
+            sample_cache_set_voice_direction(state->cache_voice_id, 1);
         }
-        state->position = (float)state->frame_pos;
+        if ((wrapped_loop == 0U) && (bounced_pingpong == 0U))
+        {
+            state->position = (float)state->frame_pos;
+        }
     }
     sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
 
@@ -420,6 +464,13 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
     }
 
     if (wrapped_loop != 0U)
+    {
+        sample_voice_reader_release_audio_cursor(state);
+        (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
+        return;
+    }
+
+    if (bounced_pingpong != 0U)
     {
         sample_voice_reader_release_audio_cursor(state);
         (void)sample_voice_reader_acquire_audio_page(state, state->frame_pos);
