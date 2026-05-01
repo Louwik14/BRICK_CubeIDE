@@ -240,12 +240,12 @@ bool ui_track_catalog_family_is_available(uint8_t track,
                 return false;
             }
         }
-        return true;
+        return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
     }
 
     if (!ui_track_catalog_family_is_input(family))
     {
-        return true;
+        return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
     }
 
     for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
@@ -261,7 +261,14 @@ bool ui_track_catalog_family_is_available(uint8_t track,
         }
     }
 
-    return true;
+    return ui_track_catalog_type_count_for_family(family, track, track_configs) > 0U;
+}
+
+bool ui_track_catalog_family_has_available_type(uint8_t track,
+                                                ui_track_family_t family,
+                                                const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    return ui_track_catalog_family_is_available(track, family, track_configs);
 }
 
 uint8_t ui_track_catalog_type_count_for_family(ui_track_family_t family,

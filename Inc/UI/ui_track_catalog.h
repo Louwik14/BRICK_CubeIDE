@@ -18,6 +18,9 @@ bool ui_track_catalog_type_is_available(uint8_t track,
 bool ui_track_catalog_family_is_available(uint8_t track,
                                           ui_track_family_t family,
                                           const ui_track_config_t track_configs[UI_TRACK_COUNT]);
+bool ui_track_catalog_family_has_available_type(uint8_t track,
+                                                ui_track_family_t family,
+                                                const ui_track_config_t track_configs[UI_TRACK_COUNT]);
 uint8_t ui_track_catalog_type_count_for_family(ui_track_family_t family,
                                                uint8_t track,
                                                const ui_track_config_t track_configs[UI_TRACK_COUNT]);

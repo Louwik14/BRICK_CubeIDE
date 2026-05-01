@@ -23,12 +23,14 @@
 
 #include "param_registry.h"
 #include "ui_core.h"
+#include "ui_track_catalog.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_model.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Storage/undo_v2.h"
@@ -111,25 +113,9 @@ static uint8_t ui_param_value_is_same(float a, float b)
 
 static uint8_t ui_param_cfg_track_family_is_available(ui_track_family_t family, uint8_t active_track)
 {
-    if ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-    {
-        return 0U;
-    }
-
-    if (!ui_track_family_is_input(family))
-    {
-        if (family != UI_TRACK_FAMILY_MASTER)
-        {
-            return 1U;
-        }
-    }
-
-    if (family == ui_get_track_family(active_track))
-    {
-        return 1U;
-    }
-
-    return (uint8_t)((ui_count_tracks_with_family(family) == 0U) ? 1U : 0U);
+    return (uint8_t)(ui_track_catalog_family_has_available_type(active_track,
+                                                                family,
+                                                                track_state_get_configs()) ? 1U : 0U);
 }
 
 static float ui_param_step_cfg_track(float current_value, int8_t direction, uint8_t active_track)

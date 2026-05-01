@@ -102,6 +102,9 @@ static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 #define MIXER_REVERB_PREDELAY_MAX_S 0.090f
 #define MIXER_REVERB_SURROUND_MAX_S 0.018f
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
+// Nominal per-track trim for dry summing headroom.
+// 0 dBFS remains the hard ceiling; tracks are kept below it before summing.
+#define MIXER_TRACK_NOMINAL_TRIM 0.125f
 
 typedef struct
 {
@@ -1261,8 +1264,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
                     for(uint32_t i = 0; i < frames; i++)
                     {
-                        send_l[s][i] += L[i] * send_cur[s];
-                        send_r[s][i] += R[i] * send_cur[s];
+                        const float l_nom = L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                        const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                        send_l[s][i] += l_nom * send_cur[s];
+                        send_r[s][i] += r_nom * send_cur[s];
                         send_cur[s] += send_step[s];
                     }
                 }
@@ -1296,26 +1301,32 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         {
             for(uint32_t i = 0; i < frames; i++)
             {
-                bus_main_l[i] += L[i];
-                bus_main_r[i] += R[i];
-                bus_cue_l[i] += L[i];
-                bus_cue_r[i] += R[i];
+                const float l_nom = L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                bus_main_l[i] += l_nom;
+                bus_main_r[i] += r_nom;
+                bus_cue_l[i] += l_nom;
+                bus_cue_r[i] += r_nom;
             }
         }
         else if(mt->route_master)
         {
             for(uint32_t i = 0; i < frames; i++)
             {
-                bus_main_l[i] += L[i];
-                bus_main_r[i] += R[i];
+                const float l_nom = L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                bus_main_l[i] += l_nom;
+                bus_main_r[i] += r_nom;
             }
         }
         else if(mt->route_cue)
         {
             for(uint32_t i = 0; i < frames; i++)
             {
-                bus_cue_l[i] += L[i];
-                bus_cue_r[i] += R[i];
+                const float l_nom = L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                bus_cue_l[i] += l_nom;
+                bus_cue_r[i] += r_nom;
             }
         }
     }
