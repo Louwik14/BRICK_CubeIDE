@@ -20,6 +20,18 @@ typedef struct
     float slice_count;
     struct
     {
+        float source_bpm;
+        float sync_length;
+        float pitch;
+        float play_mode;
+        float loop;
+        float stretch_mode;
+        float grain_size;
+        float hop_size;
+        float search_size;
+    } clip;
+    struct
+    {
         float stretch_mode;
         float sync_len;
         float grain_size;

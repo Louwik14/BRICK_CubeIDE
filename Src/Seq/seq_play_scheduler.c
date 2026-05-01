@@ -342,11 +342,11 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     {
         if (is_note_on != 0U)
         {
-            brick6_sampler_runtime_trigger_note(track, note);
+            brick6_sampler_runtime_trigger_note_velocity(track, note, velocity);
         }
         else if (resolved.supports_vca_gate == 0U)
         {
-            brick6_sampler_runtime_stop(track);
+            brick6_sampler_runtime_note_off(track);
         }
     }
 }

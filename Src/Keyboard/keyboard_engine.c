@@ -162,11 +162,11 @@ static void keyboard_engine_send_active_track_note(uint8_t note, uint8_t velocit
     {
         if (is_note_on != 0U)
         {
-            brick6_sampler_runtime_trigger_note(active_track, note);
+            brick6_sampler_runtime_trigger_note_velocity(active_track, note, velocity);
         }
         else
         {
-            brick6_sampler_runtime_stop(active_track);
+            brick6_sampler_runtime_note_off(active_track);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
@@ -268,11 +268,11 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
         {
             if (is_note_on != 0U)
             {
-                brick6_sampler_runtime_trigger_note(ctx->track_id, note);
+                brick6_sampler_runtime_trigger_note_velocity(ctx->track_id, note, velocity);
             }
             else
             {
-                brick6_sampler_runtime_stop(ctx->track_id);
+                brick6_sampler_runtime_note_off(ctx->track_id);
             }
         }
         else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
@@ -468,7 +468,7 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
             track_runtime_refresh_track(active_track);
             if (track_runtime_supports_vca_gate(track_runtime_get_ctx(active_track)) == 0U)
             {
-                brick6_sampler_runtime_stop(active_track);
+                brick6_sampler_runtime_note_off(active_track);
             }
         }
         else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
@@ -705,13 +705,13 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
         {
             if (is_note_on != 0U)
             {
-                brick6_sampler_runtime_trigger_note(track, note);
+                brick6_sampler_runtime_trigger_note_velocity(track, note, velocity);
             }
             else if (is_note_off != 0U)
             {
                 if (track_runtime_supports_vca_gate(ctx) == 0U)
                 {
-                    brick6_sampler_runtime_stop(track);
+                    brick6_sampler_runtime_note_off(track);
                 }
             }
             else if (is_all_notes_off != 0U)

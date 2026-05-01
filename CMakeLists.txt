@@ -104,6 +104,7 @@ file(GLOB SRC_CORE_SRC
 list(APPEND SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_clip_stretch.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
 )
 
@@ -335,7 +336,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
-    ${CMAKE_CURRENT_SOURCE_DIR}/freeverb-main/Components
     ${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb
 )

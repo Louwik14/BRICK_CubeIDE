@@ -6,6 +6,8 @@
 
 #include "ui_core.h"
 
+#define BRICK6_MAX_CLIP_TRACKS 4U
+
 bool ui_track_catalog_family_is_input(ui_track_family_t family);
 bool ui_track_catalog_family_is_engine(ui_track_family_t family);
 bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type);

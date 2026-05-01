@@ -493,6 +493,10 @@ void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos)
         return;
     }
 
+    {
+        sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+        sample_voice_reader_release_audio_cursor(state);
+    }
     reader->frame_pos = frame_pos;
     reader->position = (float)frame_pos;
     SAMPLE_VOICE_READER_DIAG_INC(seek_calls);

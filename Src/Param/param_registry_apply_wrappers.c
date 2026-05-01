@@ -89,6 +89,15 @@ void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0
 void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
 void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
 void apply_sampler_gain(float v) { apply_tone_live_track(PARAM_SAMPLER_GAIN, v); }
+void apply_sampler_clip_source_bpm(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_SOURCE_BPM, v); }
+void apply_sampler_clip_sync_length(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_SYNC_LENGTH, v); }
+void apply_sampler_clip_pitch(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_PITCH, v); }
+void apply_sampler_clip_play_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_PLAY_MODE, v); }
+void apply_sampler_clip_loop(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_LOOP, v); }
+void apply_sampler_clip_stretch_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_STRETCH_MODE, v); }
+void apply_sampler_clip_grain(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_GRAIN, v); }
+void apply_sampler_clip_hop(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_HOP, v); }
+void apply_sampler_clip_search(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_SEARCH, v); }
 void apply_sampler_start(float v) { apply_tone_live_track(PARAM_SAMPLER_START, v); }
 void apply_sampler_end(float v) { apply_tone_live_track(PARAM_SAMPLER_END, v); }
 void apply_sampler_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_MODE, v); }

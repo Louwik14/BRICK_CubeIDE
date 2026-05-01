@@ -16,6 +16,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
+- `Src/Core/brick6_clip_stretch.c` + `Inc/Core/brick6_clip_stretch.h` : seam local du futur timestretch `Sampler/Clip`, instanceable, stream-compatible, sans ownership `sample_pool`/`sample_cache`/`sample_page_cache`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
@@ -264,6 +265,10 @@ Memoire:
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
 - Master-buffer est dans le pipeline de bloc (`begin -> submit -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`.
 - Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
+- Le futur stretch `Sampler/Clip` reste un seam local distinct: `brick6_clip_stretch` ne connait que son FIFO stereo local et laisse le pont cursor/page-cache/runtime au Sampler.
+- Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy sans nouvelle correction distribuee dans cette passe, et `Stretch Mode=Stretch` utilise le pipeline `sample_voice_reader -> brick6_clip_stretch FIFO -> render preserve-pitch -> mix`.
+- `brick6_clip_stretch` conserve le seam local et l'instrumentation de debug. Le mode `PRESERVE_PITCH` est actif par defaut (`BRICK6_CLIP_STRETCH_PRESERVE_PITCH_ENABLED=1`) et repose sur un WSOLA leger a grain fixe (`grain=256`, `hop=128`, `search=+-16`, correlation mono L+R, sans FFT/phase-vocoder) pilote par un accumulateur `ratio_q16`; `ratio>1` raccourcit la duree cible, `ratio<1` l'allonge, et la sortie zero-fill si le moteur est temporairement starved.
+- Le runtime lourd `Sampler/Clip` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Clip` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Stretch` retombe explicitement sur `Speed` sans crash.
 - Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.
 - Le lifecycle du stretch buffer reste pilote par `brick6_master_buffer`: invalidation sur clear/debut de record, republication explicite de la source sur fin auto ou stop manuel.
 - L'analyse stretch (metadata/transients/anchors) reste hors IRQ et est servicee depuis la superloop via `brick6_app_process()`, par slices bornees et reliees a une `source_generation` explicite.

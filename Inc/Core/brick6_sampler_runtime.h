@@ -49,8 +49,19 @@ void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune);
 void brick6_sampler_runtime_set_fade_in(uint8_t track_id, float fade_in);
 void brick6_sampler_runtime_set_fade_out(uint8_t track_id, float fade_out);
 void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_count);
+void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm);
+void brick6_sampler_runtime_set_clip_sync_length(uint8_t track_id, uint8_t sync_length);
+void brick6_sampler_runtime_set_clip_pitch(uint8_t track_id, float semitones);
+void brick6_sampler_runtime_set_clip_play_mode(uint8_t track_id, uint8_t play_mode);
+void brick6_sampler_runtime_set_clip_loop(uint8_t track_id, uint8_t loop_enabled);
+void brick6_sampler_runtime_set_clip_stretch_mode(uint8_t track_id, uint8_t stretch_mode);
+void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain_size);
+void brick6_sampler_runtime_set_clip_hop_size(uint8_t track_id, uint16_t hop_size);
+void brick6_sampler_runtime_set_clip_search_frames(uint8_t track_id, uint16_t search_frames);
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
+void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
+void brick6_sampler_runtime_note_off(uint8_t track_id);
 void brick6_sampler_runtime_stop(uint8_t track_id);
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
                                          float *out_l,

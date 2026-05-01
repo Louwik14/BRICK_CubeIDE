@@ -39,6 +39,13 @@ static void track_state_normalize_config(ui_track_config_t *config)
             && (config->type == UI_TRACK_TYPE_SAMPLER))
     {
         config->type = UI_TRACK_TYPE_ONE_SHOT;
+        return;
+    }
+
+    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
+            && (config->type == UI_TRACK_TYPE_SLICER))
+    {
+        return;
     }
 }
 

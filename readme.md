@@ -76,7 +76,7 @@ Current families:
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
 - `Synth`: `Plaits`
-- `Sampler`: `OneShot`
+- `Sampler`: `OneShot`, `Slicer`, `Clip`
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`
 
@@ -108,6 +108,12 @@ This separation is intentional. Do not add a second authority for the same state
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
 - `OneShot` currently exposes only `Shot`, `RevShot`, `Loop`, and `PingPong`
+- `Clip` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, and `Sync Len`
+- `Clip` supports forward `Gate`/`Launch` playback with three stretch modes:
+  - `Off`: 1x playback
+  - `Speed`: varispeed (`ratio = project_bpm / source_bpm`), pitch changes
+  - `Stretch`: preserve-pitch via the local `brick6_clip_stretch` OLA path
+- `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Stretch` keeps the existing WSOLA path
 - legacy slice handling remains internal compatibility, not a product mode
 
 ### Sequencer

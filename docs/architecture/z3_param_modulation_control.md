@@ -237,6 +237,19 @@ Call-sites critiques:
   - `Sample`, `Gain`, `Start`, `End`,
   - `Mode`, `Tune`, `Fade In`, `Fade Out`,
   - `Slice Count` visible en UI.
+- Params track-aware exposes pour `UI_TRACK_TYPE_CLIP`:
+  - `Sample`, `Gain`, `Src BPM`,
+  - `Play Mode`, `Loop`, `Stretch`,
+  - `Sync Len`,
+  - `Grain`, `Hop`, `Search` exposes seulement quand `Stretch=Stretch`,
+  - `Clip` reste borne produit a `BRICK6_MAX_CLIP_TRACKS=4`; au-dela, le catalogue UI ne propose plus ce type aux tracks non deja `Clip`.
+  - `Stretch=Off` force une lecture clip a vitesse/pitch d'origine (`ratio=1.0`, pas de tempo-sync, pas de WSOLA),
+  - `Stretch=Speed` garde le varispeed courant (`ratio = project_bpm / source_bpm`, pitch non preserve), sans nouvelle correction distribuee dans cette passe,
+  - `Stretch=Stretch` utilise le pipeline `brick6_clip_stretch` preserve-pitch local, borne en WSOLA leger (`grain/hop` exposes via enums `32/64/96/128/256/512`, defaults `256/128`, `search` expose via `0/4/8/12/16`, default `16`, correlation mono L+R) quand `BRICK6_CLIP_STRETCH_PRESERVE_PITCH_ENABLED=1`,
+  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..2`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Clip),
+  - compat anciens projets: la valeur canonique runtime existante `0=Speed / 1=Stretch` est conservee dans l'etat track-aware; l'UI remappe seulement l'ordre visible vers `Off / Speed / Stretch`,
+  - `Grain/Hop/Search` restent des setters passifs track-aware; les couples invalides sont normalises localement avec `hop <= grain`, `search in {0,4,8,12,16}`, puis pris en compte au prochain start/restart Clip,
+  - `Sync Len` reste track-aware et stocke la longueur musicale clip exposee au niveau produit.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
   - le backend Sampler track-aware met a jour `track_tone_sound_state` puis `brick6_sampler_runtime`.

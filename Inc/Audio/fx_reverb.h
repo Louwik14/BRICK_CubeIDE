@@ -3,10 +3,10 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-#include "../freeverb-main/Components/revmodel.hpp"
+#include "fx_reverb_drumboy.h"
 
 struct fx_reverb_t {
-    revmodel model;
+    fx_reverb_drumboy_t model;
     uint8_t bypass;
 };
 
@@ -33,7 +33,7 @@ void fx_reverb_set_bypass(fx_reverb_t *rev, uint8_t bypass);
 typedef enum
 {
     FX_REVERB_GLOBAL_TYPE_MONO = 0,   /* Drumboy */
-    FX_REVERB_GLOBAL_TYPE_STEREO = 1, /* Freeverb */
+    FX_REVERB_GLOBAL_TYPE_STEREO = 1, /* legacy compat tombstone */
 } fx_reverb_global_type_t;
 
 void fx_reverb_global_init(float sample_rate);

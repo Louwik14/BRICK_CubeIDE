@@ -40,9 +40,16 @@ static const char *const g_buffer_grain_labels[] = {"64", "128", "192", "256", "
 static const char *const g_buffer_hop_labels[] = {"32", "64", "96", "128", "192", "256", "384", "512", NULL};
 static const char *const g_buffer_sync_len_labels[] = {"Off", "1 bar", "2 bars", "4 bars", "Auto", NULL};
 static const char *const g_filter_type_labels[] = {"Off", "EQ3", "LP", "HP", "BP", NULL};
-static const char *const g_reverb_type_labels[] = {"Mono", "Stereo", NULL};
+static const char *const g_reverb_type_labels[] = {"Mono", NULL};
 static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "PingPong", NULL};
-static const char *const g_sampler_slice_count_labels[] = {"2", "4", "8", "16", "32", "64", NULL};
+static const char *const g_sampler_slice_count_labels[] = {"Off", "2", "4", "8", "16", "32", "64", NULL};
+static const char *const g_sampler_clip_sync_length_labels[] = {"Off", "1 bar", "2 bars", "4 bars", "Auto", NULL};
+static const char *const g_sampler_clip_play_mode_labels[] = {"Gate", "Launch", NULL};
+static const char *const g_sampler_clip_stretch_mode_labels[] = {"Off", "Speed", "Stretch", NULL};
+static const char *const g_sampler_clip_grain_labels[] = {"32", "64", "96", "128", "256", "512", NULL};
+static const char *const g_sampler_clip_hop_labels[] = {"32", "64", "96", "128", "256", "512", NULL};
+static const char *const g_sampler_clip_search_labels[] = {"0", "4", "8", "12", "16", NULL};
+
 static const char *const g_plaits_model_labels[] = {"VA", "WS", "FM", "Grain", "WT", "Chord", "Speech", "Swarm", "Noise", "Particle", "String", "Modal", "Additive", "Kick", "Snare", "Hat", "PD", "6Op", "Terrain", "StrMach", "Chip", "VA VCF", NULL};
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
@@ -350,7 +357,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MIX_REVERB_SIZE, "Size", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.7f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_size),
     PARAM_DESC_EX(PARAM_MIX_REVERB_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.2f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_decay),
     PARAM_DESC_EX(PARAM_MIX_REVERB_PRED, "PreD", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_pred),
-    PARAM_DESC_EX(PARAM_MIX_REVERB_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_type_labels, apply_mix_reverb_type),
+    PARAM_DESC_EX(PARAM_MIX_REVERB_TYPE, "Type", PARAM_TYPE_ENUM, 0.0f, 0.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_reverb_type_labels, apply_mix_reverb_type),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SURR, "Surr", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 1.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_surr),
 
     PARAM_DESC_EX(PARAM_SAMPLER_SAMPLE, "Sample", PARAM_TYPE_ENUM, 0.0f, 63.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", NULL, apply_sampler_sample),
@@ -361,7 +368,17 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_TUNE, "Tune", PARAM_TYPE_BIPOLAR, -24.0f, 24.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, apply_sampler_tune),
     PARAM_DESC_EX(PARAM_SAMPLER_FADE_IN, "Fade In", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_in),
     PARAM_DESC_EX(PARAM_SAMPLER_FADE_OUT, "Fade Out", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_sampler_fade_out),
-    PARAM_DESC_EX(PARAM_SAMPLER_SLICE_COUNT, "Slice Count", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_slice_count_labels, apply_sampler_slice_count),
+    PARAM_DESC_EX(PARAM_SAMPLER_SLICE_COUNT, "Slice Count", PARAM_TYPE_ENUM, 0.0f, 6.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_slice_count_labels, apply_sampler_slice_count),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SOURCE_BPM, "Src BPM", PARAM_TYPE_FLOAT, 40.0f, 300.0f, 0.1f, 120.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_sampler_clip_source_bpm),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SYNC_LENGTH, "Sync Len", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_sync_length_labels, apply_sampler_clip_sync_length),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_PITCH, "Pitch", PARAM_TYPE_BIPOLAR, -12.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, apply_sampler_clip_pitch),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_PLAY_MODE, "PlayMode", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_play_mode_labels, apply_sampler_clip_play_mode),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_LOOP, "Loop", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 1.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_sampler_clip_loop),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_STRETCH_MODE, "Stretch", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 1.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_stretch_mode_labels, apply_sampler_clip_stretch_mode),
+
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_GRAIN, "Grain", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_grain_labels, apply_sampler_clip_grain),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_HOP, "Hop", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 3.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_hop_labels, apply_sampler_clip_hop),
+    PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SEARCH, "Search", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_search_labels, apply_sampler_clip_search),
     PARAM_DESC_EX(PARAM_PLAITS_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 21.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_plaits_model_labels, NULL),
     PARAM_DESC_EX(PARAM_PLAITS_COARSE_FREQUENCY, "Coarse", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_PLAITS_HARMONICS, "Harmonics", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),

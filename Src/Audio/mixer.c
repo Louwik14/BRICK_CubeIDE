@@ -32,6 +32,7 @@
 #include "fx_chain.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
+#include "mixer_meter.h"
 #include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
 
@@ -761,7 +762,8 @@ void mixer_set_reverb_surround(float surround)
 
 void mixer_set_reverb_type(uint8_t type)
 {
-    g_reverb.type = (type == (uint8_t)FX_REVERB_GLOBAL_TYPE_STEREO) ? FX_REVERB_GLOBAL_TYPE_STEREO : FX_REVERB_GLOBAL_TYPE_MONO;
+    (void)type;
+    g_reverb.type = FX_REVERB_GLOBAL_TYPE_MONO;
     fx_reverb_global_set_type(g_reverb.type);
 }
 
@@ -1274,6 +1276,21 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                                       L,
                                       R,
                                       frames);
+
+        {
+            float peak_abs = 0.0f;
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                const float abs_l = (L[i] >= 0.0f) ? L[i] : -L[i];
+                const float abs_r = (R[i] >= 0.0f) ? R[i] : -R[i];
+                const float sample_peak = (abs_l >= abs_r) ? abs_l : abs_r;
+                if (sample_peak > peak_abs)
+                {
+                    peak_abs = sample_peak;
+                }
+            }
+            mixer_meter_submit_track_peak(t, peak_abs);
+        }
 
         if(mt->route_master && mt->route_cue)
         {

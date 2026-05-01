@@ -24,6 +24,15 @@ SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_
 #define TRACK_TONE_BUFFER_DEFAULT_RATIO_Q16          65536.0f
 #define TRACK_TONE_BUFFER_DEFAULT_TRANSIENT_SENS     64.0f
 #define TRACK_TONE_BUFFER_DEFAULT_PRESERVE_PITCH     1.0f
+#define TRACK_TONE_CLIP_DEFAULT_SOURCE_BPM           120.0f
+#define TRACK_TONE_CLIP_DEFAULT_SYNC_LENGTH          0.0f
+#define TRACK_TONE_CLIP_DEFAULT_PITCH                0.0f
+#define TRACK_TONE_CLIP_DEFAULT_PLAY_MODE            0.0f
+#define TRACK_TONE_CLIP_DEFAULT_LOOP                 1.0f
+#define TRACK_TONE_CLIP_DEFAULT_STRETCH_MODE         0.0f
+#define TRACK_TONE_CLIP_DEFAULT_GRAIN_SIZE           4.0f
+#define TRACK_TONE_CLIP_DEFAULT_HOP_SIZE             3.0f
+#define TRACK_TONE_CLIP_DEFAULT_SEARCH_SIZE          4.0f
 
 static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
 {
@@ -41,6 +50,15 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->fade_in = param_registry[PARAM_SAMPLER_FADE_IN].default_value;
     state->fade_out = param_registry[PARAM_SAMPLER_FADE_OUT].default_value;
     state->slice_count = param_registry[PARAM_SAMPLER_SLICE_COUNT].default_value;
+    state->clip.source_bpm = TRACK_TONE_CLIP_DEFAULT_SOURCE_BPM;
+    state->clip.sync_length = TRACK_TONE_CLIP_DEFAULT_SYNC_LENGTH;
+    state->clip.pitch = TRACK_TONE_CLIP_DEFAULT_PITCH;
+    state->clip.play_mode = TRACK_TONE_CLIP_DEFAULT_PLAY_MODE;
+    state->clip.loop = TRACK_TONE_CLIP_DEFAULT_LOOP;
+    state->clip.stretch_mode = TRACK_TONE_CLIP_DEFAULT_STRETCH_MODE;
+    state->clip.grain_size = TRACK_TONE_CLIP_DEFAULT_GRAIN_SIZE;
+    state->clip.hop_size = TRACK_TONE_CLIP_DEFAULT_HOP_SIZE;
+    state->clip.search_size = TRACK_TONE_CLIP_DEFAULT_SEARCH_SIZE;
     state->buffer.stretch_mode = TRACK_TONE_BUFFER_DEFAULT_STRETCH_MODE;
     state->buffer.sync_len = TRACK_TONE_BUFFER_DEFAULT_SYNC_LEN;
     state->buffer.grain_size = TRACK_TONE_BUFFER_DEFAULT_GRAIN_SIZE;

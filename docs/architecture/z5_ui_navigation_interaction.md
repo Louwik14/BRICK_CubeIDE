@@ -356,10 +356,20 @@ Points factuels:
 ## 14. Contrat Sampler v0
 - `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
 - `UI_TRACK_TYPE_ONE_SHOT` est le type canonique de cette famille; `UI_TRACK_TYPE_SAMPLER` reste un alias de compat snapshot.
+- `UI_TRACK_TYPE_CLIP` est expose comme type produit distinct dans la meme famille.
+- `UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Clip`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Clip`.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
   - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
   - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
 - Les modes produits exposes pour `OneShot` sont bornes a `Shot`, `RevShot`, `Loop`, `PingPong`.
+- Le rendu UI `Clip` expose quatre pages Tone dediees:
+  - `PLAY`: `Sample`, `Gain`, `Src BPM`,
+  - `CLIP`: `Play Mode`, `Loop`, `Stretch`,
+  - `SYNC`: `Sync Len`,
+  - `STR`: `Grain`, `Hop`, `Search`, visible seulement quand `Stretch=Stretch`.
+- `Stretch=Off` lit le clip a vitesse/pitch d'origine sans tempo-sync ni moteur stretch.
+- `Stretch=Speed` conserve le varispeed courant; `Stretch=Stretch` active le moteur preserve-pitch local `brick6_clip_stretch`.
+- `STR` utilise les valeurs bornees `Grain/Hop = 32/64/96/128/256/512` et `Search = 0/4/8/12/16`, avec defaults `Grain=256`, `Hop=128`, `Search=16`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
 - `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.
 - `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.

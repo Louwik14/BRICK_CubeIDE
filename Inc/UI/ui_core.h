@@ -34,6 +34,7 @@ typedef enum
     UI_TRACK_TYPE_HYBRID,
     UI_TRACK_TYPE_SAMPLER, /* legacy compat value retained for old snapshots */
     UI_TRACK_TYPE_ONE_SHOT = UI_TRACK_TYPE_SAMPLER,
+    UI_TRACK_TYPE_SLICER,
     UI_TRACK_TYPE_PLAITS,
     UI_TRACK_TYPE_BUFFER,
     UI_TRACK_TYPE_TB3, /* legacy type kept for snapshot compatibility; no active routing */
@@ -49,6 +50,7 @@ typedef enum
     UI_TRACK_TYPE_DRUM_FM_COWBELL,
     UI_TRACK_TYPE_DRUM_FM_CYMBAL,
     UI_TRACK_TYPE_MIDI,
+    UI_TRACK_TYPE_CLIP,
     UI_TRACK_TYPE_COUNT
 } ui_track_type_t;
 

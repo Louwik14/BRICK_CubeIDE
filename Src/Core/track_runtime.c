@@ -77,6 +77,10 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
 
         case UI_TRACK_TYPE_SAMPLER:
             return TRACK_RUNTIME_TYPE_SAMPLER;
+        case UI_TRACK_TYPE_SLICER:
+            return TRACK_RUNTIME_TYPE_SLICER;
+        case UI_TRACK_TYPE_CLIP:
+            return TRACK_RUNTIME_TYPE_CLIP;
         case UI_TRACK_TYPE_PLAITS:
             return TRACK_RUNTIME_TYPE_PLAITS;
 
@@ -233,7 +237,8 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
 
     if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
             || (((family == TRACK_RUNTIME_FAMILY_INPUT) && (type == TRACK_RUNTIME_TYPE_HYBRID))
-                || (type == TRACK_RUNTIME_TYPE_SAMPLER)))
+                || (type == TRACK_RUNTIME_TYPE_SAMPLER)
+                || (type == TRACK_RUNTIME_TYPE_SLICER)))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_PLAY;
     }
@@ -244,6 +249,19 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     }
 
     return flags;
+}
+
+static uint8_t track_runtime_param_is_clip_only(param_id_t param)
+{
+    return (uint8_t)((param == PARAM_SAMPLER_CLIP_SOURCE_BPM)
+                     || (param == PARAM_SAMPLER_CLIP_SYNC_LENGTH)
+                     || (param == PARAM_SAMPLER_CLIP_PITCH)
+                     || (param == PARAM_SAMPLER_CLIP_PLAY_MODE)
+                     || (param == PARAM_SAMPLER_CLIP_LOOP)
+                     || (param == PARAM_SAMPLER_CLIP_STRETCH_MODE)
+                     || (param == PARAM_SAMPLER_CLIP_GRAIN)
+                     || (param == PARAM_SAMPLER_CLIP_HOP)
+                     || (param == PARAM_SAMPLER_CLIP_SEARCH));
 }
 
 static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t *ctx)
@@ -484,7 +502,9 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if (type == TRACK_RUNTIME_TYPE_SAMPLER)
+    if ((type == TRACK_RUNTIME_TYPE_SAMPLER)
+            || (type == TRACK_RUNTIME_TYPE_SLICER)
+            || (type == TRACK_RUNTIME_TYPE_CLIP))
     {
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_SAMPLER, ctx->track_id);
         return;
@@ -1069,6 +1089,15 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_FADE_IN:
         case PARAM_SAMPLER_FADE_OUT:
         case PARAM_SAMPLER_SLICE_COUNT:
+        case PARAM_SAMPLER_CLIP_SOURCE_BPM:
+        case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
+        case PARAM_SAMPLER_CLIP_PITCH:
+        case PARAM_SAMPLER_CLIP_PLAY_MODE:
+        case PARAM_SAMPLER_CLIP_LOOP:
+        case PARAM_SAMPLER_CLIP_STRETCH_MODE:
+        case PARAM_SAMPLER_CLIP_GRAIN:
+        case PARAM_SAMPLER_CLIP_HOP:
+        case PARAM_SAMPLER_CLIP_SEARCH:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;
@@ -1205,6 +1234,14 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            if (track_runtime_param_is_clip_only(param) != 0U)
+            {
+                if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                        || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+                {
+                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                }
             }
             if ((param >= PARAM_MIDI_PROGRAM) && (param <= PARAM_MIDI_CC3_4))
             {

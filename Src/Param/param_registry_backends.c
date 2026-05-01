@@ -24,6 +24,30 @@ static float param_backend_clamp_value(float v, float lo, float hi)
     return v;
 }
 
+static uint8_t param_backend_clip_size_index(float value)
+{
+    const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f);
+    return (index <= 5U) ? index : 5U;
+}
+
+static uint16_t param_backend_clip_size_value(uint8_t index)
+{
+    static const uint16_t values[] = {32U, 64U, 96U, 128U, 256U, 512U};
+    return values[(index <= 5U) ? index : 5U];
+}
+
+static uint8_t param_backend_clip_search_index(float value)
+{
+    const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f);
+    return (index <= 4U) ? index : 4U;
+}
+
+static uint16_t param_backend_clip_search_value(uint8_t index)
+{
+    static const uint16_t values[] = {0U, 4U, 8U, 12U, 16U};
+    return values[(index <= 4U) ? index : 4U];
+}
+
 uint8_t param_backend_apply_tone_plaits(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
@@ -188,6 +212,7 @@ uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
 uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
 
     switch (id)
     {
@@ -261,13 +286,171 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
         {
-            static const uint8_t counts[] = {2U, 4U, 8U, 16U, 32U, 64U};
-            const uint8_t idx = (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f);
+            static const uint8_t counts[] = {0U, 2U, 4U, 8U, 16U, 32U, 64U};
+            const uint8_t idx = (uint8_t)(param_backend_clamp_value(value, 0.0f, 6.0f) + 0.5f);
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->slice_count = (float)idx;
             }
             brick6_sampler_runtime_set_slice_count(track, counts[idx]);
+            return 1U;
+        }
+        case PARAM_SAMPLER_CLIP_SOURCE_BPM:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.source_bpm = param_backend_clamp_value(value, 40.0f, 300.0f);
+            }
+            brick6_sampler_runtime_set_clip_source_bpm(track, param_backend_clamp_value(value, 40.0f, 300.0f));
+            return 1U;
+        case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.sync_length = param_backend_clamp_value(value, 0.0f, 4.0f);
+            }
+            brick6_sampler_runtime_set_clip_sync_length(track,
+                                                        (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f));
+            return 1U;
+        case PARAM_SAMPLER_CLIP_PITCH:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.pitch = param_backend_clamp_value(value, -12.0f, 12.0f);
+            }
+            brick6_sampler_runtime_set_clip_pitch(track, param_backend_clamp_value(value, -12.0f, 12.0f));
+            return 1U;
+        case PARAM_SAMPLER_CLIP_PLAY_MODE:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.play_mode = param_backend_clamp_value(value, 0.0f, 1.0f);
+            }
+            brick6_sampler_runtime_set_clip_play_mode(track,
+                                                      (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
+            return 1U;
+        case PARAM_SAMPLER_CLIP_LOOP:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.loop = param_backend_clamp_value(value, 0.0f, 1.0f);
+            }
+            brick6_sampler_runtime_set_clip_loop(track,
+                                                 (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
+            return 1U;
+        case PARAM_SAMPLER_CLIP_STRETCH_MODE:
+        {
+            uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
+
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+
+            if (stretch_mode == 0U)
+            {
+                stretch_mode = 2U;
+            }
+            else if (stretch_mode == 1U)
+            {
+                stretch_mode = 0U;
+            }
+            else
+            {
+                stretch_mode = 1U;
+            }
+
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.stretch_mode = (float)stretch_mode;
+            }
+            brick6_sampler_runtime_set_clip_stretch_mode(track, stretch_mode);
+            return 1U;
+        }
+        case PARAM_SAMPLER_CLIP_GRAIN:
+        {
+            uint8_t grain_index;
+            uint8_t hop_index;
+
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+
+            grain_index = param_backend_clip_size_index(value);
+            hop_index = (state != NULL) ? param_backend_clip_size_index(state->clip.hop_size) : 3U;
+            if (param_backend_clip_size_value(hop_index) > param_backend_clip_size_value(grain_index))
+            {
+                hop_index = grain_index;
+            }
+
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.grain_size = (float)grain_index;
+                state->clip.hop_size = (float)hop_index;
+            }
+
+            brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_size_value(grain_index));
+            brick6_sampler_runtime_set_clip_hop_size(track, param_backend_clip_size_value(hop_index));
+            return 1U;
+        }
+        case PARAM_SAMPLER_CLIP_HOP:
+        {
+            uint8_t grain_index;
+            uint8_t hop_index;
+
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+
+            grain_index = (state != NULL) ? param_backend_clip_size_index(state->clip.grain_size) : 4U;
+            hop_index = param_backend_clip_size_index(value);
+            if (param_backend_clip_size_value(hop_index) > param_backend_clip_size_value(grain_index))
+            {
+                hop_index = grain_index;
+            }
+
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.grain_size = (float)grain_index;
+                state->clip.hop_size = (float)hop_index;
+            }
+
+            brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_size_value(grain_index));
+            brick6_sampler_runtime_set_clip_hop_size(track, param_backend_clip_size_value(hop_index));
+            return 1U;
+        }
+        case PARAM_SAMPLER_CLIP_SEARCH:
+        {
+            const uint8_t search_index = param_backend_clip_search_index(value);
+
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
+            {
+                return 0U;
+            }
+
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->clip.search_size = (float)search_index;
+            }
+
+            brick6_sampler_runtime_set_clip_search_frames(track, param_backend_clip_search_value(search_index));
             return 1U;
         }
         default:

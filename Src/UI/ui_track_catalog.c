@@ -4,7 +4,7 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
     static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_PLAITS };
-    static const ui_track_type_t k_sampler_types[] = { UI_TRACK_TYPE_ONE_SHOT };
+    static const ui_track_type_t k_sampler_types[] = { UI_TRACK_TYPE_ONE_SHOT, UI_TRACK_TYPE_SLICER, UI_TRACK_TYPE_CLIP };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
@@ -75,6 +75,35 @@ static uint8_t ui_track_catalog_track_uses_type(uint8_t track,
     return (uint8_t)((track_configs[track].family == family) && (track_configs[track].type == type));
 }
 
+static uint8_t ui_track_catalog_count_sampler_clip_tracks(uint8_t track,
+                                                          const ui_track_config_t track_configs[UI_TRACK_COUNT])
+{
+    uint8_t count = 0U;
+
+    if ((track_configs == 0) || (track >= UI_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
+    {
+        if (other_track == track)
+        {
+            continue;
+        }
+
+        if (ui_track_catalog_track_uses_type(other_track,
+                                             UI_TRACK_FAMILY_SAMPLER,
+                                             UI_TRACK_TYPE_CLIP,
+                                             track_configs) != 0U)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
 bool ui_track_catalog_family_is_input(ui_track_family_t family)
 {
     return (family == UI_TRACK_FAMILY_INPUT1)
@@ -130,6 +159,16 @@ bool ui_track_catalog_type_is_available(uint8_t track,
 
     if ((family != UI_TRACK_FAMILY_SYNTH) && (family != UI_TRACK_FAMILY_MASTER))
     {
+        if ((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_CLIP))
+        {
+            if (ui_track_catalog_track_uses_type(track, family, type, track_configs) != 0U)
+            {
+                return true;
+            }
+
+            return (ui_track_catalog_count_sampler_clip_tracks(track, track_configs) < BRICK6_MAX_CLIP_TRACKS);
+        }
+
         return true;
     }
 
@@ -460,6 +499,10 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
 
         case UI_TRACK_TYPE_SAMPLER:
             return (family == UI_TRACK_FAMILY_SAMPLER) ? "OneShot" : "Sampler";
+        case UI_TRACK_TYPE_SLICER:
+            return "Slicer";
+        case UI_TRACK_TYPE_CLIP:
+            return "Clip";
         case UI_TRACK_TYPE_PLAITS:
             return "Plaits";
 
@@ -513,6 +556,10 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
 
         case UI_TRACK_TYPE_SAMPLER:
             return (family == UI_TRACK_FAMILY_SAMPLER) ? "1Sht" : "Smp";
+        case UI_TRACK_TYPE_SLICER:
+            return "Slcr";
+        case UI_TRACK_TYPE_CLIP:
+            return "Clip";
         case UI_TRACK_TYPE_PLAITS:
             return "Plt";
 

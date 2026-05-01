@@ -256,6 +256,44 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_SLICE_COUNT:
             *out_value = state->slice_count;
             return 1U;
+        case PARAM_SAMPLER_CLIP_SOURCE_BPM:
+            *out_value = state->clip.source_bpm;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
+            *out_value = state->clip.sync_length;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_PITCH:
+            *out_value = state->clip.pitch;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_PLAY_MODE:
+            *out_value = state->clip.play_mode;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_LOOP:
+            *out_value = state->clip.loop;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_STRETCH_MODE:
+            if (state->clip.stretch_mode >= 1.5f)
+            {
+                *out_value = 0.0f;
+            }
+            else if (state->clip.stretch_mode >= 0.5f)
+            {
+                *out_value = 2.0f;
+            }
+            else
+            {
+                *out_value = 1.0f;
+            }
+            return 1U;
+        case PARAM_SAMPLER_CLIP_GRAIN:
+            *out_value = state->clip.grain_size;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_HOP:
+            *out_value = state->clip.hop_size;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_SEARCH:
+            *out_value = state->clip.search_size;
+            return 1U;
         case PARAM_BUFFER_TSTR:
             *out_value = state->buffer.stretch_mode;
             return 1U;
@@ -631,6 +669,44 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
             state->slice_count = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_SOURCE_BPM:
+            state->clip.source_bpm = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
+            state->clip.sync_length = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_PITCH:
+            state->clip.pitch = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_PLAY_MODE:
+            state->clip.play_mode = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_LOOP:
+            state->clip.loop = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_STRETCH_MODE:
+            if (value < 0.5f)
+            {
+                state->clip.stretch_mode = 2.0f;
+            }
+            else if (value < 1.5f)
+            {
+                state->clip.stretch_mode = 0.0f;
+            }
+            else
+            {
+                state->clip.stretch_mode = 1.0f;
+            }
+            return 1U;
+        case PARAM_SAMPLER_CLIP_GRAIN:
+            state->clip.grain_size = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_HOP:
+            state->clip.hop_size = value;
+            return 1U;
+        case PARAM_SAMPLER_CLIP_SEARCH:
+            state->clip.search_size = value;
             return 1U;
         case PARAM_BUFFER_TSTR:
             state->buffer.stretch_mode = value;
