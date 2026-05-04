@@ -15,6 +15,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_pool.h"
 #include "Sampler/sample_voice_reader.h"
+#include "Seq/seq_runtime.h"
 #include "UI/ui_track_catalog.h"
 
 #define BRICK6_SAMPLER_Q16_ONE (65536U)

@@ -1,9 +1,9 @@
-ï»¿/*
+/*
  * Module: seq_live_rec_capture
- * Role: Capture live-record des Ã©vÃ©nements note vers le pattern sÃ©quenceur.
+ * Role: Capture live-record des événements note vers le pattern séquenceur.
  * Responsibilities: suivre note-on/off pendantes, quantifier vers steps,
- * Ã©crire trig/plocks NOTE/VEL/LEN/MICTIM et sÃ©curiser les sorties associÃ©es.
- * Integration: pilotÃ© par seq_runtime en mode REC; ne remplace pas le scheduler de playback.
+ * écrire trig/plocks NOTE/VEL/LEN/MICTIM et sécuriser les sorties associées.
+ * Integration: piloté par seq_runtime en mode REC; ne remplace pas le scheduler de playback.
  */
 #include "Seq/seq_live_rec_capture.h"
 
@@ -73,16 +73,16 @@ static int32_t seq_live_rec_capture_find_voice_with_note_lock(seq_track_id_t tra
 {
     for (uint8_t voice = 0U; voice < SEQ_LIVE_REC_CAPTURE_VOICE_COUNT; ++voice)
     {
-        uint8_t set_id = 0U;
-        seq_param8_t param8 = 0U;
+        const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+        seq_param_slot_t param_slot = 0U;
         const param_id_t note_id = seq_live_rec_capture_play_param_note(voice);
-        if (seq_param_iface_map_param(note_id, &set_id, &param8) == 0U)
+        if (seq_param_iface_param_to_slot(track, set_id, note_id, &param_slot) == 0U)
         {
             continue;
         }
 
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(track, step, set_id, param8, &entry) == 0U)
+        if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
         {
             continue;
         }
@@ -110,15 +110,15 @@ static uint8_t seq_live_rec_capture_voice_has_any_lock(seq_track_id_t track,
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-        uint8_t set_id = 0U;
-        seq_param8_t param8 = 0U;
-        if (seq_param_iface_map_param(params[i], &set_id, &param8) == 0U)
+        const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+        seq_param_slot_t param_slot = 0U;
+        if (seq_param_iface_param_to_slot(track, set_id, params[i], &param_slot) == 0U)
         {
             continue;
         }
 
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U)
+        if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) != 0U)
         {
             return 1U;
         }
@@ -370,9 +370,9 @@ static uint8_t seq_live_rec_capture_upsert_play_param(seq_track_id_t track,
                                                        param_id_t param_id,
                                                        float value)
 {
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -381,7 +381,7 @@ static uint8_t seq_live_rec_capture_upsert_play_param(seq_track_id_t track,
     const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
                                                                   step,
                                                                   set_id,
-                                                                  param8,
+                                                                  param_slot,
                                                                   encoded,
                                                                   0U);
     return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
@@ -391,14 +391,14 @@ static uint8_t seq_live_rec_capture_delete_play_param(seq_track_id_t track,
                                                        seq_step_id_t step,
                                                        param_id_t param_id)
 {
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
 
-    const seq_plock_op_status_t st = seq_model_step_plock_delete(track, step, set_id, param8);
+    const seq_plock_op_status_t st = seq_model_step_plock_delete(track, step, set_id, param_slot);
     return (st == SEQ_PLOCK_OP_DELETED) ? 1U : 0U;
 }
 
@@ -421,15 +421,15 @@ static uint8_t seq_live_rec_capture_read_play_param(seq_track_id_t track,
     out_saved->present = 0U;
     out_saved->value16 = 0U;
 
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
 
     seq_plock_entry_t entry;
-    if (seq_model_step_plock_find(track, step, set_id, param8, &entry) == 0U)
+    if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
     {
         return 1U;
     }
@@ -455,9 +455,9 @@ static uint8_t seq_live_rec_capture_restore_play_param(seq_track_id_t track,
         return 1U;
     }
 
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -465,7 +465,7 @@ static uint8_t seq_live_rec_capture_restore_play_param(seq_track_id_t track,
     const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
                                                                   step,
                                                                   set_id,
-                                                                  param8,
+                                                                  param_slot,
                                                                   saved->value16,
                                                                   0U);
     return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
@@ -778,3 +778,4 @@ void seq_live_rec_capture_note_off(uint8_t active,
                                            runtime_state->samples_per_step_q16);
     }
 }
+

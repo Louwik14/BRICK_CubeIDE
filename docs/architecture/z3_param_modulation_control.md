@@ -495,6 +495,7 @@ Call-sites critiques:
 ## 23. Contrat LFO MIDI (borne)
 
 - Autorite de mapping destination LFO: `mod_lfo_v1` (selection des destinations supportees par track).
+- Pour les destinations `TONE`, le filtrage passe par `track_runtime_tone_param_to_slot(type,param,&slot)` afin de rester aligne avec le mapping runtime effectif; il ne doit pas utiliser `seq_param_iface_map_param`.
 - Pour une track MIDI:
   - destinations LFO autorisees: `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` (TONE/CC),
   - destinations LFO interdites: `PARAM_MIDI_PROGRAM`,

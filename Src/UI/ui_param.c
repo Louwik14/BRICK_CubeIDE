@@ -52,7 +52,7 @@ typedef struct
     seq_track_id_t track;
     seq_step_id_t step;
     uint8_t set_id;
-    seq_param8_t param8;
+    seq_param_slot_t param_slot;
 } ui_param_live_rec_ctx_t;
 
 static uint8_t ui_param_is_track_scoped(param_id_t param);
@@ -471,6 +471,47 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     return param_store_get_active(param);
 }
 
+static uint8_t ui_param_resolve_seq_slot(uint8_t track,
+                                         param_id_t param,
+                                         uint8_t *out_set_id,
+                                         seq_param_slot_t *out_param_slot)
+{
+    if ((out_set_id == 0) || (out_param_slot == 0) || (track >= SEQ_TRACK_COUNT))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    uint8_t set_id = 0U;
+    switch (rule.domain)
+    {
+        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
+            set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+            break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
+            set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+            break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
+            set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+            break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
+            set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
+            break;
+        default:
+            return 0U;
+    }
+
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param, &param_slot) == 0U)
+    {
+        return 0U;
+    }
+
+    *out_set_id = set_id;
+    *out_param_slot = param_slot;
+    return 1U;
+}
+
 static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
                                                  uint8_t active_track,
                                                  ui_param_live_rec_ctx_t *out_ctx)
@@ -487,13 +528,13 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
     }
 
     uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+    seq_param_slot_t param_slot = 0U;
+    if (ui_param_resolve_seq_slot(track, param, &set_id, &param_slot) == 0U)
     {
         return 0U;
     }
 
-    if (seq_runtime_live_rec_param_can_write(track, set_id, param8) == 0U)
+    if (seq_runtime_live_rec_param_can_write(track, set_id, param_slot) == 0U)
     {
         return 0U;
     }
@@ -507,7 +548,7 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
     out_ctx->track = track;
     out_ctx->step = step;
     out_ctx->set_id = set_id;
-    out_ctx->param8 = param8;
+    out_ctx->param_slot = param_slot;
     return 1U;
 }
 
@@ -557,8 +598,8 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
     }
 
     uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param, &set_id, &param8) != 0U)
+    seq_param_slot_t param_slot = 0U;
+    if (ui_param_resolve_seq_slot(active_track, param, &set_id, &param_slot) != 0U)
     {
         const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
         const seq_param_iface_base_commit_cmd_t cmd = {
@@ -566,7 +607,7 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
             .authoritative_apply_done = 1U,
             .target_track = active_track,
             .set_id = set_id,
-            .param8 = param8,
+            .param_slot = param_slot,
             .value16 = encoded
         };
         (void)seq_param_iface_commit_base_after_authoritative_apply(&cmd);
@@ -594,13 +635,6 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         return 0U;
     }
 
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
-    {
-        return 0U;
-    }
-
     seq_step_id_t held_steps[SEQ_STEPS_PER_PAGE];
     seq_track_id_t held_track = 0U;
     const uint8_t held_count = seq_edit_collect_held_steps(&held_track,
@@ -608,6 +642,13 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                                            (uint8_t)SEQ_STEPS_PER_PAGE,
                                                            1U);
     if (held_count == 0U)
+    {
+        return 0U;
+    }
+
+    uint8_t set_id = 0U;
+    seq_param_slot_t param_slot = 0U;
+    if (ui_param_resolve_seq_slot(held_track, param, &set_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -634,7 +675,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
 
         float source_value = base_track_value;
         prior_trig[i] = seq_model_get_trig(held_track, step);
-        had_prior_entry[i] = seq_edit_step_plock_find(held_track, step, set_id, param8, &prior_entries[i]);
+        had_prior_entry[i] = seq_edit_step_plock_find(held_track, step, set_id, param_slot, &prior_entries[i]);
         if (had_prior_entry[i] != 0U)
         {
             source_value = seq_param_iface_decode_param_value(param, prior_entries[i].value16);
@@ -654,16 +695,16 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         const seq_plock_op_status_t status = seq_edit_step_plock_upsert(held_track,
                                                                         held_steps[applied_count],
                                                                         set_id,
-                                                                        param8,
+                                                                        param_slot,
                                                                         target_values[applied_count],
                                                                         0U);
         if ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED))
         {
-            seq_edit_step_plock_commit(held_track, held_steps[applied_count], set_id, param8);
+            seq_edit_step_plock_commit(held_track, held_steps[applied_count], set_id, param_slot);
             (void)undo_v2_record_plock_change(held_track,
                                               held_steps[applied_count],
                                               set_id,
-                                              param8,
+                                              param_slot,
                                               before_present,
                                               before_value16,
                                               before_flags,
@@ -683,7 +724,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                 (void)seq_model_step_plock_upsert(held_track,
                                                   held_steps[applied_count],
                                                   set_id,
-                                                  param8,
+                                                  param_slot,
                                                   prior_entries[applied_count].value16,
                                                   prior_entries[applied_count].flags);
             }
@@ -692,7 +733,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                 (void)seq_model_step_plock_delete(held_track,
                                                   held_steps[applied_count],
                                                   set_id,
-                                                  param8);
+                                                  param_slot);
             }
         }
 
@@ -740,7 +781,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
     const uint8_t before_present = seq_edit_step_plock_find(live_rec_ctx.track,
                                                             live_rec_ctx.step,
                                                             live_rec_ctx.set_id,
-                                                            live_rec_ctx.param8,
+                                                            live_rec_ctx.param_slot,
                                                             &existing);
     if (before_present != 0U)
     {
@@ -753,7 +794,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
 
     if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
                                          live_rec_ctx.set_id,
-                                         live_rec_ctx.param8,
+                                         live_rec_ctx.param_slot,
                                          encoded) == 0U)
     {
         return 0U;
@@ -786,8 +827,8 @@ uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_
     }
 
     uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+    seq_param_slot_t param_slot = 0U;
+    if (ui_param_resolve_seq_slot(frame_ctx->ref_track, param, &set_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -796,7 +837,7 @@ uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_
     if (seq_edit_step_plock_find(frame_ctx->ref_track,
                                  frame_ctx->ref_step,
                                  set_id,
-                                 param8,
+                                 param_slot,
                                  &existing) == 0U)
     {
         return 0U;
@@ -932,3 +973,4 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     }
     return 1U;
 }
+

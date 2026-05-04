@@ -81,13 +81,13 @@ static param_id_t seq_live_rec_session_play_param_mictim(uint8_t voice)
 static uint32_t seq_live_rec_session_make_plock_gesture_key(seq_track_id_t track,
                                                             seq_step_id_t step,
                                                             uint8_t set_id,
-                                                            seq_param8_t param8)
+                                                            seq_param_slot_t param_slot)
 {
     return (0x40000000UL
             | ((uint32_t)8U << 24)
             | ((uint32_t)track << 16)
             | ((uint32_t)step << 8)
-            | ((uint32_t)set_id ^ (uint32_t)param8));
+            | ((uint32_t)set_id ^ (uint32_t)param_slot));
 }
 
 static uint8_t seq_live_rec_session_is_live_rec_active(void)
@@ -222,9 +222,9 @@ static uint8_t seq_live_rec_session_upsert_play_param(seq_track_id_t track,
                                                      param_id_t param_id,
                                                      float value)
 {
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -233,7 +233,7 @@ static uint8_t seq_live_rec_session_upsert_play_param(seq_track_id_t track,
     const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
                                                                  step,
                                                                  set_id,
-                                                                 param8,
+                                                                 param_slot,
                                                                  encoded,
                                                                  0U);
     return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
@@ -243,14 +243,14 @@ static uint8_t seq_live_rec_session_delete_play_param(seq_track_id_t track,
                                                       seq_step_id_t step,
                                                       param_id_t param_id)
 {
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
 
-    const seq_plock_op_status_t st = seq_model_step_plock_delete(track, step, set_id, param8);
+    const seq_plock_op_status_t st = seq_model_step_plock_delete(track, step, set_id, param_slot);
     return (st == SEQ_PLOCK_OP_DELETED) ? 1U : 0U;
 }
 
@@ -273,15 +273,15 @@ static uint8_t seq_live_rec_session_read_play_param(seq_track_id_t track,
     out_saved->present = 0U;
     out_saved->value16 = 0U;
 
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
 
     seq_plock_entry_t entry;
-    if (seq_model_step_plock_find(track, step, set_id, param8, &entry) == 0U)
+    if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
     {
         return 1U;
     }
@@ -307,9 +307,9 @@ static uint8_t seq_live_rec_session_restore_play_param(seq_track_id_t track,
         return 1U;
     }
 
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return 0U;
     }
@@ -317,7 +317,7 @@ static uint8_t seq_live_rec_session_restore_play_param(seq_track_id_t track,
     const seq_plock_op_status_t st = seq_model_step_plock_upsert(track,
                                                                  step,
                                                                  set_id,
-                                                                 param8,
+                                                                 param_slot,
                                                                  saved->value16,
                                                                  0U);
     return ((st == SEQ_PLOCK_OP_CREATED) || (st == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
@@ -489,16 +489,16 @@ static int32_t seq_live_rec_session_find_voice_with_note_lock(seq_track_id_t tra
 {
     for (uint8_t voice = 0U; voice < 4U; ++voice)
     {
-        uint8_t set_id = 0U;
-        seq_param8_t param8 = 0U;
+        const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+        seq_param_slot_t param_slot = 0U;
         const param_id_t note_id = seq_live_rec_session_play_param_note(voice);
-        if (seq_param_iface_map_param(note_id, &set_id, &param8) == 0U)
+        if (seq_param_iface_param_to_slot(track, set_id, note_id, &param_slot) == 0U)
         {
             continue;
         }
 
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(track, step, set_id, param8, &entry) == 0U)
+        if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) == 0U)
         {
             continue;
         }
@@ -567,15 +567,15 @@ static uint8_t seq_live_rec_session_voice_has_any_lock(seq_track_id_t track,
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-        uint8_t set_id = 0U;
-        seq_param8_t param8 = 0U;
-        if (seq_param_iface_map_param(params[i], &set_id, &param8) == 0U)
+        const uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+        seq_param_slot_t param_slot = 0U;
+        if (seq_param_iface_param_to_slot(track, set_id, params[i], &param_slot) == 0U)
         {
             continue;
         }
 
         seq_plock_entry_t entry;
-        if (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U)
+        if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) != 0U)
         {
             return 1U;
         }
@@ -820,7 +820,7 @@ void seq_live_rec_session_set_pattern_rec_target_track(seq_track_id_t track)
 
 uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
                                                       uint8_t set_id,
-                                                      seq_param8_t param8)
+                                                      seq_param_slot_t param_slot)
 {
     if ((track >= SEQ_TRACK_COUNT)
         || (seq_param_iface_is_set_plockable(set_id) == 0U)
@@ -830,7 +830,7 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
     }
 
     track_runtime_refresh_track(track);
-    if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
+    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
     {
         return 0U;
     }
@@ -841,11 +841,11 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
 uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *runtime_state,
                                                   seq_track_id_t track,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8,
+                                                  seq_param_slot_t param_slot,
                                                   seq_value16_t value16)
 {
     if ((runtime_state == 0)
-        || (seq_live_rec_session_live_rec_param_can_write(track, set_id, param8) == 0U))
+        || (seq_live_rec_session_live_rec_param_can_write(track, set_id, param_slot) == 0U))
     {
         return 0U;
     }
@@ -858,11 +858,11 @@ uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *run
     }
 
     seq_plock_entry_t before_entry;
-    const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param8, &before_entry);
+    const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param_slot, &before_entry);
     const uint8_t before_trig = seq_model_get_trig(track, step);
     if (undo_v2_begin_transaction(UNDO_V2_TX_KIND_PLOCK,
                                   UNDO_V2_SOURCE_SYSTEM,
-                                  seq_live_rec_session_make_plock_gesture_key(track, step, set_id, param8),
+                                  seq_live_rec_session_make_plock_gesture_key(track, step, set_id, param_slot),
                                   UNDO_V2_TX_MODE_DELTA) != UNDO_V2_STATUS_OK)
     {
         return 0U;
@@ -870,7 +870,7 @@ uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *run
     const seq_plock_op_status_t status = seq_edit_step_plock_upsert(track,
                                                                      step,
                                                                      set_id,
-                                                                     param8,
+                                                                     param_slot,
                                                                      value16,
                                                                      0U);
     if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
@@ -879,11 +879,11 @@ uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *run
         return 0U;
     }
 
-    seq_edit_step_plock_commit(track, step, set_id, param8);
+    seq_edit_step_plock_commit(track, step, set_id, param_slot);
     (void)undo_v2_record_plock_change(track,
                                       step,
                                       set_id,
-                                      param8,
+                                      param_slot,
                                       before_present,
                                       (before_present != 0U) ? before_entry.value16 : 0U,
                                       (before_present != 0U) ? before_entry.flags : 0U,
@@ -1088,3 +1088,4 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                            runtime_state->samples_per_step_q16);
     }
 }
+

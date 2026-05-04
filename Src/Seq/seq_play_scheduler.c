@@ -382,16 +382,28 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
                                                               seq_step_id_t step,
                                                               param_id_t param_id)
 {
-    uint8_t set_id = 0U;
-    seq_param8_t param8 = 0U;
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
-    if (seq_param_iface_map_param(param_id, &set_id, &param8) == 0U)
+    uint8_t set_id = 0U;
+    switch (rule.domain)
+    {
+        case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
+            set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+            break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
+            set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+            break;
+        default:
+            return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
+    }
+
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &param_slot) == 0U)
     {
         return seq_param_iface_encode_param_value(param_id, param_registry[param_id].default_value);
     }
 
     seq_plock_entry_t entry;
-    if (seq_model_step_plock_find(track, step, set_id, param8, &entry) != 0U)
+    if (seq_model_step_plock_find(track, step, set_id, param_slot, &entry) != 0U)
     {
         return entry.value16;
     }
@@ -399,7 +411,7 @@ static seq_value16_t seq_play_scheduler_get_locked_or_default(seq_track_id_t tra
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
     {
         seq_value16_t base_value16 = 0U;
-        if (seq_param_iface_get_play_base_value(track, param8, &base_value16) != 0U)
+        if (seq_param_iface_get_play_base_value(track, param_slot, &base_value16) != 0U)
         {
             return base_value16;
         }
@@ -784,3 +796,4 @@ void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 
     seq_play_scheduler_send_program_if_needed(track, program_f, 1U);
 }
+

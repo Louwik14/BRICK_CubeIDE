@@ -9,7 +9,7 @@
 typedef struct __attribute__((packed))
 {
     uint8_t set_id;
-    seq_param8_t param8;
+    seq_param_slot_t param_slot;
     seq_value16_t value16;
     uint8_t flags;
 } pattern_v1_plock_t;
@@ -112,3 +112,4 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport);
 uint8_t pattern_live_is_apply_in_progress(void);
 
 #endif
+

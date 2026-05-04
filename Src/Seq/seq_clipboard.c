@@ -16,7 +16,7 @@
 typedef struct
 {
     uint8_t set_id;
-    seq_param8_t param8;
+    seq_param_slot_t param_slot;
     seq_value16_t value16;
     uint8_t flags;
 } seq_clipboard_lock_t;
@@ -128,7 +128,7 @@ uint8_t seq_clipboard_copy(seq_track_id_t track,
 
             seq_clipboard_lock_t *const lock = &dst->locks[dst->lock_count];
             lock->set_id = entry.set_id;
-            lock->param8 = entry.param8;
+            lock->param_slot = entry.param_slot;
             lock->value16 = entry.value16;
             lock->flags = entry.flags;
             dst->lock_count++;
@@ -195,7 +195,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
         for (uint8_t l = 0U; l < src->lock_count; ++l)
         {
             const seq_clipboard_lock_t *const lock = &src->locks[l];
-            if (seq_param_iface_is_param_supported(target_track, lock->set_id, lock->param8) == 0U)
+            if (seq_param_iface_slot_is_supported(target_track, lock->set_id, lock->param_slot) == 0U)
             {
                 result.partial = 1U;
                 continue;
@@ -204,7 +204,7 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
             const seq_plock_op_status_t status = seq_model_step_plock_upsert(target_track,
                                                                               target_step,
                                                                               lock->set_id,
-                                                                              lock->param8,
+                                                                              lock->param_slot,
                                                                               lock->value16,
                                                                               lock->flags);
             if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
@@ -219,3 +219,4 @@ uint8_t seq_clipboard_paste(seq_track_id_t target_track,
     *out_result = result;
     return (result.pasted_steps > 0U) ? 1U : 0U;
 }
+

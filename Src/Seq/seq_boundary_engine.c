@@ -18,7 +18,7 @@
 typedef struct
 {
     uint8_t set_id;
-    seq_param8_t param8;
+    seq_param_slot_t param_slot;
     seq_value16_t value16;
     seq_value16_t base_value16;
 } seq_boundary_engine_step_lock_t;
@@ -30,20 +30,20 @@ static uint8_t seq_boundary_engine_track_length(seq_track_id_t track)
 
 static uint8_t seq_boundary_engine_lock_equals(const seq_runtime_active_lock_t *active,
                                                uint8_t set_id,
-                                               seq_param8_t param8)
+                                               seq_param_slot_t param_slot)
 {
-    return ((active->active != 0U) && (active->set_id == set_id) && (active->param8 == param8)) ? 1U : 0U;
+    return ((active->active != 0U) && (active->set_id == set_id) && (active->param_slot == param_slot)) ? 1U : 0U;
 }
 
 static uint8_t seq_boundary_engine_find_next_lock(const seq_boundary_engine_step_lock_t *locks,
                                                   uint8_t count,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8,
+                                                  seq_param_slot_t param_slot,
                                                   uint8_t *out_index)
 {
     for (uint8_t i = 0U; i < count; ++i)
     {
-        if ((locks[i].set_id == set_id) && (locks[i].param8 == param8))
+        if ((locks[i].set_id == set_id) && (locks[i].param_slot == param_slot))
         {
             if (out_index != 0)
             {
@@ -86,7 +86,7 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
             continue;
         }
 
-        if (seq_param_iface_is_param_supported(track, entry.set_id, entry.param8) == 0U)
+        if (seq_param_iface_slot_is_supported(track, entry.set_id, entry.param_slot) == 0U)
         {
             continue;
         }
@@ -97,7 +97,7 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
         }
 
         out_locks[count].set_id = entry.set_id;
-        out_locks[count].param8 = entry.param8;
+        out_locks[count].param_slot = entry.param_slot;
         out_locks[count].value16 = entry.value16;
         out_locks[count].base_value16 = 0U;
         count++;
@@ -127,7 +127,7 @@ void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
 
         seq_param_iface_restore_base(track,
                                      active[i].set_id,
-                                     active[i].param8,
+                                     active[i].param_slot,
                                      active[i].base_value16);
     }
 
@@ -160,11 +160,11 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                 continue;
             }
 
-            if (seq_boundary_engine_find_next_lock(next_locks, next_count, active[i].set_id, active[i].param8, 0) == 0U)
+            if (seq_boundary_engine_find_next_lock(next_locks, next_count, active[i].set_id, active[i].param_slot, 0) == 0U)
             {
                 seq_param_iface_restore_base(track,
                                              active[i].set_id,
-                                             active[i].param8,
+                                             active[i].param_slot,
                                              active[i].base_value16);
             }
         }
@@ -177,7 +177,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
         {
             for (uint8_t j = 0U; j < active_count; ++j)
             {
-                if (seq_boundary_engine_lock_equals(&active[j], next_locks[i].set_id, next_locks[i].param8) != 0U)
+                if (seq_boundary_engine_lock_equals(&active[j], next_locks[i].set_id, next_locks[i].param_slot) != 0U)
                 {
                     next_locks[i].base_value16 = active[j].base_value16;
                     found_prev = 1U;
@@ -189,7 +189,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
         if (found_prev == 0U)
         {
             seq_value16_t base_value16 = 0U;
-            if (seq_param_iface_get_base_value(track, next_locks[i].set_id, next_locks[i].param8, &base_value16) == 0U)
+            if (seq_param_iface_get_base_value(track, next_locks[i].set_id, next_locks[i].param_slot, &base_value16) == 0U)
             {
                 continue;
             }
@@ -198,7 +198,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
 
         seq_param_iface_apply_lock(track,
                                    next_locks[i].set_id,
-                                   next_locks[i].param8,
+                                   next_locks[i].param_slot,
                                    next_locks[i].value16);
     }
 
@@ -209,7 +209,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
     {
         active[i].active = 1U;
         active[i].set_id = next_locks[i].set_id;
-        active[i].param8 = next_locks[i].param8;
+        active[i].param_slot = next_locks[i].param_slot;
         active[i].base_value16 = next_locks[i].base_value16;
         state->active_lock_count[track]++;
     }
@@ -303,3 +303,4 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         state->play_step[track] = next;
     }
 }
+

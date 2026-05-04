@@ -24,26 +24,26 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
 uint8_t seq_edit_step_plock_find(seq_track_id_t track,
                                  seq_step_id_t step,
                                  uint8_t set_id,
-                                 seq_param8_t param8,
+                                 seq_param_slot_t param_slot,
                                  seq_plock_entry_t *out_entry);
 seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
                                                   seq_step_id_t step,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8,
+                                                  seq_param_slot_t param_slot,
                                                   seq_value16_t value16,
                                                   uint8_t flags);
 void seq_edit_step_plock_commit(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t set_id,
-                                seq_param8_t param8);
+                                seq_param_slot_t param_slot);
 seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   seq_step_id_t step,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8);
+                                                  seq_param_slot_t param_slot);
 uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
                                         seq_step_id_t step,
                                         uint8_t set_id,
-                                        seq_param8_t param8,
+                                        seq_param_slot_t param_slot,
                                         uint8_t present,
                                         seq_value16_t value16,
                                         uint8_t flags,
@@ -67,3 +67,4 @@ void seq_edit_clear_steps(seq_track_id_t track,
                           uint8_t step_count);
 
 #endif /* SEQ_EDIT_H */
+

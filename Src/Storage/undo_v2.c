@@ -268,7 +268,7 @@ static undo_v2_plock_delta_t *undo_v2_find_plock_delta(undo_v2_tx_entry_t *tx,
                                                         uint8_t track,
                                                         uint8_t step,
                                                         uint8_t set_id,
-                                                        uint8_t param8)
+                                                        uint8_t param_slot)
 {
     if ((tx == 0) || (tx->kind != UNDO_V2_TX_KIND_PLOCK) || (tx->mode != UNDO_V2_TX_MODE_DELTA))
     {
@@ -283,7 +283,7 @@ static undo_v2_plock_delta_t *undo_v2_find_plock_delta(undo_v2_tx_entry_t *tx,
             && (delta->track == track)
             && (delta->step == step)
             && (delta->set_id == set_id)
-            && (delta->param8 == param8))
+            && (delta->param_slot == param_slot))
         {
             return delta;
         }
@@ -432,7 +432,7 @@ static undo_v2_status_t undo_v2_apply_plock_transaction(const undo_v2_tx_entry_t
         if (seq_edit_step_plock_apply_state(delta->track,
                                             delta->step,
                                             delta->set_id,
-                                            delta->param8,
+                                            delta->param_slot,
                                             present,
                                             (seq_value16_t)value16,
                                             flags,
@@ -665,7 +665,7 @@ undo_v2_status_t undo_v2_record_param_change(param_id_t param_id,
 undo_v2_status_t undo_v2_record_plock_change(uint8_t track,
                                              uint8_t step,
                                              uint8_t set_id,
-                                             uint8_t param8,
+                                             uint8_t param_slot,
                                              uint8_t before_present,
                                              uint16_t before_value16,
                                              uint8_t before_flags,
@@ -682,7 +682,7 @@ undo_v2_status_t undo_v2_record_plock_change(uint8_t track,
         return g_undo_v2_runtime.last_status;
     }
 
-    undo_v2_plock_delta_t *const existing = undo_v2_find_plock_delta(tx, track, step, set_id, param8);
+    undo_v2_plock_delta_t *const existing = undo_v2_find_plock_delta(tx, track, step, set_id, param_slot);
     if (existing != 0)
     {
         existing->after_present = after_present;
@@ -706,7 +706,7 @@ undo_v2_status_t undo_v2_record_plock_change(uint8_t track,
     delta->track = track;
     delta->step = step;
     delta->set_id = set_id;
-    delta->param8 = param8;
+    delta->param_slot = param_slot;
     delta->before_present = before_present;
     delta->before_value16 = before_value16;
     delta->before_flags = before_flags;
@@ -938,3 +938,4 @@ void undo_v2_set_capture_suspended(uint8_t suspended)
     g_undo_v2_runtime.capture_suspended = (suspended != 0U) ? 1U : 0U;
     undo_v2_set_status(UNDO_V2_STATUS_OK);
 }
+

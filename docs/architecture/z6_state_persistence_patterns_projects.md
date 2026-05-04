@@ -178,7 +178,7 @@ Points de lecture principaux:
 - Source: `pattern_live_capture_current()`.
 - Collecte:
   - track cfg UI (`ui_get_track_*`),
-  - seq model (trigs/plocks/pages/length),
+  - seq model (trigs/plocks/pages/length), avec p-locks stockes comme `set_id + param_slot + value16` ; le slot reste local et n'est pas un `param_id`,
   - params globaux + track values,
   - mod LFO,
   - tempo/clock/rec/div/quant/swing.

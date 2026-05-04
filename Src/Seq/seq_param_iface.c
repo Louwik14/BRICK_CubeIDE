@@ -1,6 +1,6 @@
-ï»¿/*
+/*
  * Module: seq_param_iface
- * Role: Interface de binding entre paramÃ¨tres globaux et domaines plock sÃ©quenceur.
+ * Role: Interface de binding entre paramètres globaux et domaines plock séquenceur.
  * Responsibilities: valider mapping set/param, maintenir base/runtime values,
  * appliquer/restaurer locks par track et exposer une API stable aux autres modules Seq.
  * Integration: couche d'abstraction entre seq_model et track_runtime/param_registry.
@@ -22,6 +22,11 @@ typedef struct
 } seq_param_slot_state_t;
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
+SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_COUNT][PARAM_COUNT];
+SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
+
+#define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
+#define SEQ_PARAM_ID_UNMAPPED ((param_id_t)0xFFFFU)
 
 static uint8_t seq_param_iface_is_play_param(param_id_t param)
 {
@@ -36,19 +41,19 @@ static void seq_param_iface_seed_play_defaults(void)
         {
             const param_id_t param = (param_id_t)param_raw;
             uint8_t set_id = 0U;
-            seq_param8_t param8 = 0U;
+            seq_param_slot_t param_slot = 0U;
             seq_param_slot_state_t *state;
 
             if (seq_param_iface_is_play_param(param) == 0U)
             {
                 continue;
             }
-            if (seq_param_iface_map_param(param, &set_id, &param8) == 0U)
+            if (seq_param_iface_map_param(param, &set_id, &param_slot) == 0U)
             {
                 continue;
             }
 
-            state = &g_seq_param_state[track][set_id][param8];
+            state = &g_seq_param_state[track][set_id][param_slot];
             if (state->base_valid == 0U)
             {
                 const float default_value = param_registry[param].default_value;
@@ -67,25 +72,74 @@ static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
 
-uint8_t seq_param_iface_map_param(param_id_t param,
-                                  uint8_t *out_set_id,
-                                  seq_param8_t *out_param8);
-
-static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
-                                                   uint8_t set_id,
-                                                   seq_param8_t param8)
+static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t domain, uint8_t *out_set_id)
 {
-    if ((seq_param_iface_track_is_valid(track) == 0U) || (seq_param_iface_is_set_plockable(set_id) == 0U))
+    if (out_set_id == 0)
     {
         return 0U;
     }
 
-    const param_id_t param = (param_id_t)param8;
-    if ((param >= PARAM_COUNT) || (param == PARAM_SAMPLER_SLICE_COUNT))
+    switch (domain)
     {
-        return 0U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static void seq_param_iface_rebuild_slot_maps(void)
+{
+    memset(g_seq_param_id_to_slot, SEQ_PARAM_SLOT_UNMAPPED, sizeof(g_seq_param_id_to_slot));
+
+    for (uint8_t set_id = 0U; set_id < (uint8_t)SEQ_PLOCK_SET_COUNT; ++set_id)
+    {
+        for (uint16_t slot = 0U; slot < 256U; ++slot)
+        {
+            g_seq_param_slot_to_id[set_id][slot] = SEQ_PARAM_ID_UNMAPPED;
+        }
     }
 
+    uint16_t next_slot[(uint8_t)SEQ_PLOCK_SET_COUNT] = {0U};
+
+    for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
+    {
+        const param_id_t param = (param_id_t)param_raw;
+        if (param == PARAM_SAMPLER_SLICE_COUNT)
+        {
+            continue;
+        }
+
+        uint8_t set_id = 0U;
+        if (seq_param_iface_set_id_from_domain(track_runtime_get_param_rule(param).domain, &set_id) == 0U)
+        {
+            continue;
+        }
+
+        const uint16_t slot = next_slot[set_id];
+        if (slot >= 256U)
+        {
+            continue;
+        }
+
+        g_seq_param_id_to_slot[set_id][param] = (seq_param_slot_t)slot;
+        g_seq_param_slot_to_id[set_id][slot] = param;
+        next_slot[set_id] = (uint16_t)(slot + 1U);
+    }
+}
+
+static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
+{
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
@@ -115,10 +169,55 @@ static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
     return 1U;
 }
 
+static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track, track_runtime_type_t *out_type)
+{
+    if ((out_type == NULL) || (seq_param_iface_track_is_valid(track) == 0U))
+    {
+        return 0U;
+    }
+
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    *out_type = (track_runtime_type_t)ctx->type;
+    return 1U;
+}
+
+uint8_t seq_param_iface_map_param(param_id_t param,
+                                  uint8_t *out_set_id,
+                                  seq_param_slot_t *out_param_slot);
+
+static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
+                                                   uint8_t set_id,
+                                                   seq_param_slot_t param_slot)
+{
+    if ((seq_param_iface_track_is_valid(track) == 0U) || (seq_param_iface_is_set_plockable(set_id) == 0U))
+    {
+        return 0U;
+    }
+
+    param_id_t param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_param_matches_set_domain(set_id, param) == 0U)
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
 void seq_param_iface_init(void)
 {
     memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
     track_runtime_init();
+    seq_param_iface_rebuild_slot_maps();
     seq_param_iface_seed_play_defaults();
 }
 
@@ -137,45 +236,115 @@ uint8_t seq_param_iface_set_to_mask(uint8_t set_id)
     return (uint8_t)(1U << set_id);
 }
 
-uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id, seq_param8_t param8)
+uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
+{
+    return seq_param_iface_slot_is_supported(track, set_id, param_slot);
+}
+
+uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
+                                      uint8_t set_id,
+                                      seq_param_slot_t param_slot,
+                                      param_id_t *out_param_id)
+{
+    if ((out_param_id == 0) || (seq_param_iface_is_set_plockable(set_id) == 0U))
+    {
+        return 0U;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+    {
+        track_runtime_type_t tone_type = TRACK_RUNTIME_TYPE_OTHER;
+        if (seq_param_iface_resolve_runtime_tone_type(track, &tone_type) == 0U)
+        {
+            return 0U;
+        }
+
+        param_id_t tone_param = PARAM_COUNT;
+        if (track_runtime_tone_slot_to_param(tone_type, param_slot, &tone_param) == 0U)
+        {
+            return 0U;
+        }
+        if ((tone_param >= PARAM_COUNT) || (seq_param_iface_param_matches_set_domain(set_id, tone_param) == 0U))
+        {
+            return 0U;
+        }
+
+        *out_param_id = tone_param;
+        return 1U;
+    }
+
+    const param_id_t param = g_seq_param_slot_to_id[set_id][param_slot];
+    if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_param_matches_set_domain(set_id, param) == 0U)
+    {
+        return 0U;
+    }
+
+    *out_param_id = param;
+    return 1U;
+}
+
+uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
+                                      uint8_t set_id,
+                                      param_id_t param_id,
+                                      seq_param_slot_t *out_param_slot)
+{
+    if ((out_param_slot == 0) || (param_id >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    if (seq_param_iface_param_matches_set_domain(set_id, param_id) == 0U)
+    {
+        return 0U;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+    {
+        track_runtime_type_t tone_type = TRACK_RUNTIME_TYPE_OTHER;
+        if (seq_param_iface_resolve_runtime_tone_type(track, &tone_type) == 0U)
+        {
+            return 0U;
+        }
+
+        uint8_t tone_slot = 0U;
+        if (track_runtime_tone_param_to_slot(tone_type, param_id, &tone_slot) == 0U)
+        {
+            return 0U;
+        }
+
+        *out_param_slot = (seq_param_slot_t)tone_slot;
+        return 1U;
+    }
+
+    uint8_t mapped_set_id = 0U;
+    seq_param_slot_t slot = 0U;
+    if (seq_param_iface_map_param(param_id, &mapped_set_id, &slot) == 0U)
+    {
+        return 0U;
+    }
+    if (mapped_set_id != set_id)
+    {
+        return 0U;
+    }
+
+    *out_param_slot = slot;
+    return 1U;
+}
+
+uint8_t seq_param_iface_slot_is_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
     if ((seq_param_iface_track_is_valid(track) == 0U) || (seq_param_iface_is_set_plockable(set_id) == 0U))
     {
         return 0U;
     }
 
-    const param_id_t param = (param_id_t)param8;
-    if (param >= PARAM_COUNT)
-    {
-        return 0U;
-    }
-    if (param == PARAM_SAMPLER_SLICE_COUNT)
-    {
-        return 0U;
-    }
-
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
-        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
-    {
-        return 0U;
-    }
-
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS) && (set_id != (uint8_t)SEQ_PLOCK_SET_COLORS))
-    {
-        return 0U;
-    }
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE) && (set_id != (uint8_t)SEQ_PLOCK_SET_TONE))
-    {
-        return 0U;
-    }
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) && (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY))
-    {
-        return 0U;
-    }
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) && (set_id != (uint8_t)SEQ_PLOCK_SET_MOD))
+    param_id_t param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
         return 0U;
     }
@@ -184,20 +353,43 @@ uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id,
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
-uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
-                                       uint8_t set_id,
-                                       seq_param8_t param8,
-                                       seq_value16_t *out_value16)
+uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
+                                           uint8_t set_id,
+                                           param_id_t param_id)
 {
-    if ((out_value16 == 0) || (seq_param_iface_is_param_supported(track, set_id, param8) == 0U))
+    seq_param_slot_t slot = 0U;
+    if (seq_param_iface_param_to_slot(track, set_id, param_id, &slot) == 0U)
     {
         return 0U;
     }
 
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
-    if (state->base_valid == 0U)
+    return seq_param_iface_slot_is_supported(track, set_id, slot);
+}
+
+uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
+                                       uint8_t set_id,
+                                       seq_param_slot_t param_slot,
+                                       seq_value16_t *out_value16)
+{
+    if ((out_value16 == 0) || (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U))
     {
         return 0U;
+    }
+
+    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
+    if (state->base_valid == 0U)
+    {
+        param_id_t param = PARAM_COUNT;
+        float value = 0.0f;
+        if ((seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
+                || (seq_param_iface_is_play_param(param) != 0U)
+                || (param_registry_get_track_value(param, track, &value) == 0U))
+        {
+            return 0U;
+        }
+
+        *out_value16 = seq_param_iface_encode_param_value(param, value);
+        return 1U;
     }
 
     *out_value16 = state->base_value;
@@ -206,15 +398,15 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
 
 uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        uint8_t set_id,
-                                       seq_param8_t param8,
+                                       seq_param_slot_t param_slot,
                                        seq_value16_t value16)
 {
     track_runtime_refresh_track(track);
-    if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
+    if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
     {
         return 0U;
     }
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
+    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
     state->base_value = value16;
     state->base_valid = 1U;
 
@@ -227,17 +419,17 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
 }
 
 uint8_t seq_param_iface_get_play_base_value(seq_track_id_t track,
-                                            seq_param8_t param8,
+                                            seq_param_slot_t param_slot,
                                             seq_value16_t *out_value16)
 {
-    return seq_param_iface_get_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param8, out_value16);
+    return seq_param_iface_get_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param_slot, out_value16);
 }
 
 uint8_t seq_param_iface_set_play_base_value(seq_track_id_t track,
-                                            seq_param8_t param8,
+                                            seq_param_slot_t param_slot,
                                             seq_value16_t value16)
 {
-    return seq_param_iface_set_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param8, value16);
+    return seq_param_iface_set_base_value(track, (uint8_t)SEQ_PLOCK_SET_PLAY, param_slot, value16);
 }
 
 uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_iface_base_commit_cmd_t *cmd)
@@ -252,25 +444,22 @@ uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_if
         return 0U;
     }
 
-    if (seq_param_iface_is_slot_addressable(cmd->target_track, cmd->set_id, cmd->param8) == 0U)
+    if (seq_param_iface_is_slot_addressable(cmd->target_track, cmd->set_id, cmd->param_slot) == 0U)
     {
         return 0U;
     }
 
+    param_id_t expected_param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(cmd->target_track, cmd->set_id, cmd->param_slot, &expected_param) == 0U)
     {
-        uint8_t expected_set_id = 0U;
-        seq_param8_t expected_param8 = 0U;
-        if (seq_param_iface_map_param((param_id_t)cmd->param8, &expected_set_id, &expected_param8) == 0U)
-        {
-            return 0U;
-        }
-        if ((expected_set_id != cmd->set_id) || (expected_param8 != cmd->param8))
-        {
-            return 0U;
-        }
+        return 0U;
+    }
+    if (expected_param >= PARAM_COUNT)
+    {
+        return 0U;
     }
 
-    seq_param_slot_state_t *const state = &g_seq_param_state[cmd->target_track][cmd->set_id][cmd->param8];
+    seq_param_slot_state_t *const state = &g_seq_param_state[cmd->target_track][cmd->set_id][cmd->param_slot];
     state->base_value = cmd->value16;
     state->base_valid = 1U;
 
@@ -284,34 +473,30 @@ uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_if
 
 uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    uint8_t set_id,
-                                   seq_param8_t param8,
+                                   seq_param_slot_t param_slot,
                                    seq_value16_t value16)
 {
     track_runtime_refresh_track(track);
-    if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
+    if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
     {
         return 0U;
     }
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
+    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
     if (state->base_valid == 0U)
     {
         state->base_value = state->runtime_value;
         state->base_valid = 1U;
     }
 
-    const param_id_t param = (param_id_t)param8;
-    if (param >= PARAM_COUNT)
-    {
-        return 0U;
-    }
-    if (param == PARAM_SAMPLER_SLICE_COUNT)
+    param_id_t param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
         return 0U;
     }
 
     if (seq_param_iface_is_play_param(param) != 0U)
     {
-        if (seq_param_iface_set_base_value(track, set_id, param8, value16) == 0U)
+        if (seq_param_iface_set_base_value(track, set_id, param_slot, value16) == 0U)
         {
             return 0U;
         }
@@ -334,24 +519,24 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
 
 uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      uint8_t set_id,
-                                     seq_param8_t param8,
+                                     seq_param_slot_t param_slot,
                                      seq_value16_t base_value16)
 {
     track_runtime_refresh_track(track);
-    if (seq_param_iface_is_param_supported(track, set_id, param8) == 0U)
+    if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
     {
         return 0U;
     }
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param8];
-    const param_id_t param = (param_id_t)param8;
-    if (param >= PARAM_COUNT)
+    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
+    param_id_t param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
         return 0U;
     }
 
     if (seq_param_iface_is_play_param(param) != 0U)
     {
-        if (seq_param_iface_set_base_value(track, set_id, param8, base_value16) == 0U)
+        if (seq_param_iface_set_base_value(track, set_id, param_slot, base_value16) == 0U)
         {
             return 0U;
         }
@@ -380,43 +565,34 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 
 uint8_t seq_param_iface_map_param(param_id_t param,
                                   uint8_t *out_set_id,
-                                  seq_param8_t *out_param8)
+                                  seq_param_slot_t *out_param_slot)
 {
-    if ((out_set_id == 0) || (out_param8 == 0))
+    if ((out_set_id == 0) || (out_param_slot == 0))
     {
         return 0U;
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
+    uint8_t set_id = 0U;
+    if (seq_param_iface_set_id_from_domain(rule.domain, &set_id) == 0U)
     {
-        *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
-        *out_param8 = (seq_param8_t)param;
-        return 1U;
+        return 0U;
     }
 
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    if (param >= PARAM_COUNT)
     {
-        *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
-        *out_param8 = (seq_param8_t)param;
-        return 1U;
+        return 0U;
     }
 
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+    const seq_param_slot_t slot = g_seq_param_id_to_slot[set_id][param];
+    if (slot == SEQ_PARAM_SLOT_UNMAPPED)
     {
-        *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
-        *out_param8 = (seq_param8_t)param;
-        return 1U;
+        return 0U;
     }
 
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-    {
-        *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
-        *out_param8 = (seq_param8_t)param;
-        return 1U;
-    }
-
-    return 0U;
+    *out_set_id = set_id;
+    *out_param_slot = slot;
+    return 1U;
 }
 
 seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value)
@@ -483,3 +659,4 @@ float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16
 
     return value;
 }
+

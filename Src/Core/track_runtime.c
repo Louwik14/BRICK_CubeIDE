@@ -264,6 +264,191 @@ static uint8_t track_runtime_param_is_clip_only(param_id_t param)
                      || (param == PARAM_SAMPLER_CLIP_SEARCH));
 }
 
+static const param_id_t g_track_runtime_tone_slots_plaits[] = {
+    PARAM_PLAITS_MODEL,
+    PARAM_PLAITS_COARSE_FREQUENCY,
+    PARAM_PLAITS_HARMONICS,
+    PARAM_PLAITS_TIMBRE,
+    PARAM_PLAITS_MORPH,
+    PARAM_PLAITS_LPG_RESPONSE,
+    PARAM_PLAITS_DECAY,
+    PARAM_PLAITS_FREQUENCY_RANGE
+};
+
+static const param_id_t g_track_runtime_tone_slots_sampler[] = {
+    PARAM_SAMPLER_SAMPLE,
+    PARAM_SAMPLER_GAIN,
+    PARAM_SAMPLER_START,
+    PARAM_SAMPLER_END,
+    PARAM_SAMPLER_MODE,
+    PARAM_SAMPLER_TUNE,
+    PARAM_SAMPLER_FADE_IN,
+    PARAM_SAMPLER_FADE_OUT
+};
+
+static const param_id_t g_track_runtime_tone_slots_slicer[] = {
+    PARAM_SAMPLER_SAMPLE,
+    PARAM_SAMPLER_SLICE_COUNT,
+    PARAM_SAMPLER_TUNE,
+    PARAM_SAMPLER_GAIN
+};
+
+static const param_id_t g_track_runtime_tone_slots_clip[] = {
+    PARAM_SAMPLER_SAMPLE,
+    PARAM_SAMPLER_GAIN,
+    PARAM_SAMPLER_CLIP_SOURCE_BPM,
+    PARAM_SAMPLER_CLIP_PLAY_MODE,
+    PARAM_SAMPLER_CLIP_LOOP,
+    PARAM_SAMPLER_CLIP_STRETCH_MODE,
+    PARAM_SAMPLER_CLIP_PITCH,
+    PARAM_SAMPLER_CLIP_SYNC_LENGTH,
+    PARAM_SAMPLER_CLIP_GRAIN,
+    PARAM_SAMPLER_CLIP_HOP,
+    PARAM_SAMPLER_CLIP_SEARCH
+};
+
+static const param_id_t g_track_runtime_tone_slots_midi[] = {
+    PARAM_MIDI_PROGRAM,
+    PARAM_MIDI_CC1_1, PARAM_MIDI_CC1_2, PARAM_MIDI_CC1_3, PARAM_MIDI_CC1_4,
+    PARAM_MIDI_CC2_1, PARAM_MIDI_CC2_2, PARAM_MIDI_CC2_3, PARAM_MIDI_CC2_4,
+    PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4
+};
+
+static const param_id_t g_track_runtime_tone_slots_hybrid[] = {
+    PARAM_HYBRID_GATE,
+    PARAM_MIDI_PROGRAM,
+    PARAM_MIDI_CC1_1, PARAM_MIDI_CC1_2, PARAM_MIDI_CC1_3, PARAM_MIDI_CC1_4,
+    PARAM_MIDI_CC2_1, PARAM_MIDI_CC2_2, PARAM_MIDI_CC2_3, PARAM_MIDI_CC2_4,
+    PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4
+};
+
+static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
+                                                 const param_id_t **out_table,
+                                                 uint8_t *out_count)
+{
+    if ((out_table == NULL) || (out_count == NULL))
+    {
+        return 0U;
+    }
+
+    switch (type)
+    {
+        case TRACK_RUNTIME_TYPE_PLAITS:
+            *out_table = g_track_runtime_tone_slots_plaits;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_plaits) / sizeof(g_track_runtime_tone_slots_plaits[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_SAMPLER:
+            *out_table = g_track_runtime_tone_slots_sampler;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_sampler) / sizeof(g_track_runtime_tone_slots_sampler[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_SLICER:
+            *out_table = g_track_runtime_tone_slots_slicer;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_slicer) / sizeof(g_track_runtime_tone_slots_slicer[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_CLIP:
+            *out_table = g_track_runtime_tone_slots_clip;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_clip) / sizeof(g_track_runtime_tone_slots_clip[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_MIDI:
+            *out_table = g_track_runtime_tone_slots_midi;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_midi) / sizeof(g_track_runtime_tone_slots_midi[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_HYBRID:
+            *out_table = g_track_runtime_tone_slots_hybrid;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_hybrid) / sizeof(g_track_runtime_tone_slots_hybrid[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
+            *out_table = NULL;
+            *out_count = 8U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
+            *out_table = NULL;
+            *out_count = 5U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
+            *out_table = NULL;
+            *out_count = 6U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
+            *out_table = NULL;
+            *out_count = 8U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
+            *out_table = NULL;
+            *out_count = 11U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
+            *out_table = NULL;
+            *out_count = 8U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
+            *out_table = NULL;
+            *out_count = 8U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
+            *out_table = NULL;
+            *out_count = 9U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
+            *out_table = NULL;
+            *out_count = 10U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
+            *out_table = NULL;
+            *out_count = 8U;
+            return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+            *out_table = NULL;
+            *out_count = 9U;
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t track_runtime_tone_drum_range(track_runtime_type_t type, param_id_t *out_first, uint8_t *out_count)
+{
+    if ((out_first == NULL) || (out_count == NULL))
+    {
+        return 0U;
+    }
+
+    switch (type)
+    {
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
+            *out_first = PARAM_DRUM_TRX_BD_PITCH; *out_count = 8U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
+            *out_first = PARAM_DRUM_TRX_CLAVES_PITCH; *out_count = 5U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
+            *out_first = PARAM_DRUM_TRX_HIHAT_DECAY; *out_count = 6U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
+            *out_first = PARAM_DRUM_TRX_SNARE_PITCH; *out_count = 8U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
+            *out_first = PARAM_DRUM_FM_KICK_PITCH; *out_count = 11U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
+            *out_first = PARAM_DRUM_FM_SNARE_PITCH; *out_count = 8U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
+            *out_first = PARAM_DRUM_FM_TOM_PITCH; *out_count = 8U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
+            *out_first = PARAM_DRUM_FM_RIMSHOT_RIM_PITCH; *out_count = 9U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
+            *out_first = PARAM_DRUM_FM_CLAP_CLAP_COUNT; *out_count = 10U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
+            *out_first = PARAM_DRUM_FM_COWBELL_PITCH; *out_count = 8U; return 1U;
+        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+            *out_first = PARAM_DRUM_FM_CYMBAL_DECAY; *out_count = 9U; return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t *ctx)
 {
     if (ctx == NULL)
@@ -1178,6 +1363,92 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         default:
             return rule;
     }
+}
+
+uint8_t track_runtime_tone_slot_to_param(track_runtime_type_t type,
+                                         uint8_t slot,
+                                         param_id_t *out_param)
+{
+    if (out_param == NULL)
+    {
+        return 0U;
+    }
+
+    const param_id_t *table = NULL;
+    uint8_t count = 0U;
+    if (track_runtime_tone_table_for_type(type, &table, &count) == 0U)
+    {
+        return 0U;
+    }
+
+    if (slot >= count)
+    {
+        return 0U;
+    }
+
+    if (table != NULL)
+    {
+        *out_param = table[slot];
+        return 1U;
+    }
+
+    param_id_t first = PARAM_COUNT;
+    uint8_t drum_count = 0U;
+    if (track_runtime_tone_drum_range(type, &first, &drum_count) == 0U)
+    {
+        return 0U;
+    }
+    if (slot >= drum_count)
+    {
+        return 0U;
+    }
+
+    *out_param = (param_id_t)((uint16_t)first + (uint16_t)slot);
+    return 1U;
+}
+
+uint8_t track_runtime_tone_param_to_slot(track_runtime_type_t type,
+                                         param_id_t param,
+                                         uint8_t *out_slot)
+{
+    if ((out_slot == NULL) || (param >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    const param_id_t *table = NULL;
+    uint8_t count = 0U;
+    if (track_runtime_tone_table_for_type(type, &table, &count) == 0U)
+    {
+        return 0U;
+    }
+
+    if (table != NULL)
+    {
+        for (uint8_t slot = 0U; slot < count; ++slot)
+        {
+            if (table[slot] == param)
+            {
+                *out_slot = slot;
+                return 1U;
+            }
+        }
+        return 0U;
+    }
+
+    param_id_t first = PARAM_COUNT;
+    uint8_t drum_count = 0U;
+    if (track_runtime_tone_drum_range(type, &first, &drum_count) == 0U)
+    {
+        return 0U;
+    }
+    if ((param < first) || (param >= (param_id_t)((uint16_t)first + (uint16_t)drum_count)))
+    {
+        return 0U;
+    }
+
+    *out_slot = (uint8_t)((uint16_t)param - (uint16_t)first);
+    return 1U;
 }
 
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param)

@@ -88,17 +88,23 @@ static void seq_edit_finish_snapshot_undo(uint8_t started)
     (void)undo_v2_commit_transaction();
 }
 
-static uint8_t seq_edit_is_play_note_param(uint8_t set_id, seq_param8_t param8)
+static uint8_t seq_edit_is_play_note_param(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
     if (set_id != (uint8_t)SEQ_PLOCK_SET_PLAY)
     {
         return 0U;
     }
 
-    return ((param8 == (seq_param8_t)PARAM_SEQ_PLAY_V1_NOTE)
-            || (param8 == (seq_param8_t)PARAM_SEQ_PLAY_V2_NOTE)
-            || (param8 == (seq_param8_t)PARAM_SEQ_PLAY_V3_NOTE)
-            || (param8 == (seq_param8_t)PARAM_SEQ_PLAY_V4_NOTE)) ? 1U : 0U;
+    param_id_t param = PARAM_COUNT;
+    if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
+    {
+        return 0U;
+    }
+
+    return ((param == PARAM_SEQ_PLAY_V1_NOTE)
+            || (param == PARAM_SEQ_PLAY_V2_NOTE)
+            || (param == PARAM_SEQ_PLAY_V3_NOTE)
+            || (param == PARAM_SEQ_PLAY_V4_NOTE)) ? 1U : 0U;
 }
 
 static void seq_edit_clear_auto_note_pending(seq_track_id_t track, seq_step_id_t step)
@@ -154,10 +160,20 @@ static void seq_edit_apply_short_action(uint8_t hall)
         }
 
         const seq_value16_t encoded = seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_V1_NOTE, note_value);
+        seq_param_slot_t note_slot = 0U;
+        if (seq_param_iface_param_to_slot(track,
+                                          (uint8_t)SEQ_PLOCK_SET_PLAY,
+                                          PARAM_SEQ_PLAY_V1_NOTE,
+                                          &note_slot) == 0U)
+        {
+            seq_model_set_trig(track, step, 0U);
+            seq_edit_finish_snapshot_undo(undo_started);
+            return;
+        }
         const seq_plock_op_status_t status = seq_model_step_plock_upsert(track,
                                                                           step,
                                                                           (uint8_t)SEQ_PLOCK_SET_PLAY,
-                                                                          (seq_param8_t)PARAM_SEQ_PLAY_V1_NOTE,
+                                                                          note_slot,
                                                                           encoded,
                                                                           0U);
         if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
@@ -393,28 +409,28 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
 uint8_t seq_edit_step_plock_find(seq_track_id_t track,
                                  seq_step_id_t step,
                                  uint8_t set_id,
-                                 seq_param8_t param8,
+                                 seq_param_slot_t param_slot,
                                  seq_plock_entry_t *out_entry)
 {
-    return seq_model_step_plock_find(track, step, set_id, param8, out_entry);
+    return seq_model_step_plock_find(track, step, set_id, param_slot, out_entry);
 }
 
 seq_plock_op_status_t seq_edit_step_plock_upsert(seq_track_id_t track,
                                                   seq_step_id_t step,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8,
+                                                  seq_param_slot_t param_slot,
                                                   seq_value16_t value16,
                                                   uint8_t flags)
 {
-    return seq_model_step_plock_upsert(track, step, set_id, param8, value16, flags);
+    return seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
 }
 
 void seq_edit_step_plock_commit(seq_track_id_t track,
                                 seq_step_id_t step,
                                 uint8_t set_id,
-                                seq_param8_t param8)
+                                seq_param_slot_t param_slot)
 {
-    if (seq_edit_is_play_note_param(set_id, param8) != 0U)
+    if (seq_edit_is_play_note_param(track, set_id, param_slot) != 0U)
     {
         seq_model_set_trig(track, step, 1U);
     }
@@ -430,25 +446,25 @@ void seq_edit_step_plock_commit(seq_track_id_t track,
 seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
                                                   seq_step_id_t step,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8)
+                                                  seq_param_slot_t param_slot)
 {
     seq_plock_entry_t before_entry;
-    const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param8, &before_entry);
+    const uint8_t before_present = seq_edit_step_plock_find(track, step, set_id, param_slot, &before_entry);
     const uint8_t before_trig = seq_model_get_trig(track, step);
     if (undo_v2_begin_transaction(UNDO_V2_TX_KIND_PLOCK,
                                   UNDO_V2_SOURCE_BUTTON,
-                                  seq_edit_make_undo_gesture_key(4U, track, step, (uint8_t)(set_id ^ param8)),
+                                  seq_edit_make_undo_gesture_key(4U, track, step, (uint8_t)(set_id ^ param_slot)),
                                   UNDO_V2_TX_MODE_DELTA) != UNDO_V2_STATUS_OK)
     {
         return SEQ_PLOCK_OP_NOT_FOUND;
     }
-    const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param8);
+    const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param_slot);
     if ((status == SEQ_PLOCK_OP_DELETED) || (status == SEQ_PLOCK_OP_NOT_FOUND))
     {
         (void)undo_v2_record_plock_change(track,
                                           step,
                                           set_id,
-                                          param8,
+                                          param_slot,
                                           before_present,
                                           (before_present != 0U) ? before_entry.value16 : 0U,
                                           (before_present != 0U) ? before_entry.flags : 0U,
@@ -469,7 +485,7 @@ seq_plock_op_status_t seq_edit_step_plock_delete(seq_track_id_t track,
 uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
                                         seq_step_id_t step,
                                         uint8_t set_id,
-                                        seq_param8_t param8,
+                                        seq_param_slot_t param_slot,
                                         uint8_t present,
                                         seq_value16_t value16,
                                         uint8_t flags,
@@ -477,7 +493,7 @@ uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
 {
     if (present != 0U)
     {
-        const seq_plock_op_status_t status = seq_model_step_plock_upsert(track, step, set_id, param8, value16, flags);
+        const seq_plock_op_status_t status = seq_model_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
         if (seq_edit_step_plock_upsert_succeeded(status) == 0U)
         {
             return 0U;
@@ -485,7 +501,7 @@ uint8_t seq_edit_step_plock_apply_state(seq_track_id_t track,
     }
     else
     {
-        const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param8);
+        const seq_plock_op_status_t status = seq_model_step_plock_delete(track, step, set_id, param_slot);
         if ((status != SEQ_PLOCK_OP_DELETED) && (status != SEQ_PLOCK_OP_NOT_FOUND))
         {
             return 0U;
@@ -562,3 +578,4 @@ void seq_edit_clear_steps(seq_track_id_t track,
     }
     seq_edit_finish_snapshot_undo(undo_started);
 }
+

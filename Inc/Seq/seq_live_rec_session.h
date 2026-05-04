@@ -22,11 +22,11 @@ void seq_live_rec_session_set_pattern_rec_target_track(seq_track_id_t track);
 
 uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
                                                       uint8_t set_id,
-                                                      seq_param8_t param8);
+                                                      seq_param_slot_t param_slot);
 uint8_t seq_live_rec_session_live_rec_param_write(const seq_runtime_state_t *runtime_state,
                                                   seq_track_id_t track,
                                                   uint8_t set_id,
-                                                  seq_param8_t param8,
+                                                  seq_param_slot_t param_slot,
                                                   seq_value16_t value16);
 void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
                                            uint8_t channel_zero_based,
@@ -41,3 +41,4 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
                                             uint64_t now_sample);
 
 #endif /* SEQ_LIVE_REC_SESSION_H */
+

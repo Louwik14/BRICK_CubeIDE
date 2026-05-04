@@ -243,14 +243,23 @@ Exposition UI :
 - `ui_page_template_tone.c` choisit les banques/subpages et les `param_id_t`
 
 P-locks :
-- `seq_param_iface_map_param()`
-- `seq_param_iface_apply_lock()`
-- `seq_param_iface_restore_base()`
+- le modèle Seq stocke `set_id + param_slot + value16` ; `param_slot` est un slot local, jamais un `param_id_t` casté/tronqué.
+- `seq_param_iface_param_to_slot(track,set,param,&slot)` encode un `param_id_t` vers le slot à stocker.
+- `seq_param_iface_slot_to_param(track,set,slot,&param)` décode un slot stocké vers le `param_id_t` canonique à appliquer.
+- `seq_param_iface_apply_lock()` et `seq_param_iface_restore_base()` consomment ces slots et repassent par `param_registry_apply_track_value()` pour les domaines non-PLAY.
 
-Un paramètre track-aware devient p-lockable s’il a un `param_id_t` supporté par le mapping sequencer.
+Contrat des mappings :
+- sets génériques (`PLAY`, `MOD`, `COLORS`) : mapping stable par set.
+- set `TONE` : mapping dépendant du `track_runtime_type` effectif de la track.
+- changement moteur : les p-locks `TONE` sont conservés par slot, sans migration implicite de sémantique.
+- slot non résoluble ou contexte runtime non bound : skip propre.
+
+`seq_param_iface_map_param()` est un helper legacy/interne/non track-aware. Ne pas l’utiliser pour encoder des p-locks depuis UI, live-rec, scheduler, feedback, base commit, LFO, ni pour des chemins `TONE` ou runtime-specific.
+
+Un paramètre track-aware devient p-lockable si `seq_param_iface_param_to_slot()` peut le résoudre pour la track/le set, et si le statut runtime effectif l’autorise.
 
 Exception observée :
-- `PARAM_SAMPLER_SLICE_COUNT` est explicitement refusé en p-lock dans `seq_param_iface_apply_lock()`
+- `PARAM_SAMPLER_SLICE_COUNT` est explicitement exclu du mapping p-lockable.
 
 Modulation :
 - `mod_lfo_v1` utilise `param_registry_apply_track_value_rt_fast()`
@@ -263,8 +272,9 @@ Seams probables pour un nouveau moteur :
 - `Src/Param/param_registry_catalog.c` : descriptors complets
 - `Inc/Core/track_tone_sound_state.h` : nouveau bloc canonique moteur
 - `Src/Core/track_tone_sound_state.c` : defaults associés
-- `Src/UI/pages/ui_page_template_tone.c` : pages/subpages TONE
-- `Src/Seq/seq_param_iface.c` : si certains params doivent être exclus des p-locks
+- `Src/Core/track_runtime.c` : table/règle `TONE slot -> param` et inverse pour le type runtime effectif
+- `Src/UI/pages/ui_page_template_tone.c` : pages/subpages TONE dans le même ordre que l’exposition runtime TONE
+- `Src/Seq/seq_param_iface.c` : seulement pour exclusions/règles du seam, pas pour recréer un mapping global TONE
 
 Point de vigilance persistence :
 - `PatternSaveV1` stocke `track_values[SEQ_TRACK_COUNT][PARAM_COUNT]`
@@ -465,29 +475,39 @@ Le clavier réutilise aussi `track_runtime` pour :
 
 ### 7.3 P-locks
 
-Apply :
-- `seq_param_iface_apply_lock()`
+Format modèle :
+- `seq_model` / persistence stockent `set_id + param_slot + value16`.
+- le format Seq/persistence ne stocke pas de `param_id_t` dans le champ slot.
+- la refonte slot/param ne change pas le format disque ; elle clarifie seulement la sémantique du champ `param_slot`.
 
-Si param PLAY :
-- base seq
+Encodage depuis un paramètre :
+- l’appelant détermine le `set_id` depuis le domaine runtime du paramètre.
+- il appelle `seq_param_iface_param_to_slot(track,set,param,&slot)`.
+- il écrit ensuite `set_id + slot + value16`.
+- aucun chemin externe ne doit faire `param_slot = (uint8_t)param_id`.
 
-Sinon :
-- `param_registry_apply_track_value()`
+Décodage / apply runtime :
+- `seq_boundary_engine` lit les slots stockés.
+- `seq_param_iface_slot_to_param(track,set,slot,&param)` résout le `param_id_t` canonique.
+- si `set=PLAY`, la base Seq est utilisée.
+- sinon, `seq_param_iface_apply_lock()` appelle `param_registry_apply_track_value(param, track, decoded)`.
+- `seq_param_iface_restore_base()` restaure par le même seam d’apply.
 
-Restore base :
-- `seq_param_iface_restore_base()`
-- même seam d’apply
+Spécificité `TONE` :
+- le mapping slot/param dépend du `track_runtime_type` effectif.
+- un changement moteur conserve les locks par slot, sans migration implicite vers les anciens `param_id_t`.
+- un slot non résoluble pour le type courant est ignoré proprement.
 
 Conclusion :
-- un nouveau moteur n’a pas besoin d’un système p-lock spécial si ses paramètres sont de vrais `param_id_t` track-aware supportés par `seq_param_iface`
+- un nouveau moteur n’a pas besoin d’un système p-lock spécial si ses paramètres sont de vrais `param_id_t` track-aware et si son type runtime expose un mapping `TONE slot -> param` symétrique.
 
 ### 7.4 Ce qu’un moteur mélodique doit vérifier
 
 Seams probables :
-- `Src/Seq/seq_play_scheduler.c` : ajout du dispatch note vers le runtime moteur
+- `Src/Seq/seq_play_scheduler.c` : ajout du dispatch note vers le runtime moteur, sans utiliser `seq_param_iface_map_param()` pour résoudre des locks
 - `Src/Keyboard/keyboard_engine.c` : même dispatch pour jeu clavier direct et MIDI externe
-- `Src/Seq/seq_param_iface.c` : filtrer les params p-lockables/non p-lockables
-- `Src/Core/track_runtime.c` : voice mode / play voice count si la polyphonie diffère du sampler/drum
+- `Src/Seq/seq_param_iface.c` : filtrer les params p-lockables/non p-lockables et utiliser `slot_to_param` / `param_to_slot` comme seam public
+- `Src/Core/track_runtime.c` : mapping TONE local au type runtime, voice mode / play voice count si la polyphonie diffère du sampler/drum
 
 Question ouverte :
 - le code actuel expose `TRACK_RUNTIME_VOICE_MODE_POLY` mais aucun moteur in-tree ne l’utilise vraiment.
@@ -542,6 +562,8 @@ Règles structurantes :
 - ne pas contourner `track_runtime_is_ui_ensemble_available()`
 - ne pas dupliquer une logique de contexte en dehors du système template existant
 - l’UI édite le modèle canonique via les commandes existantes, elle ne devient pas propriétaire du runtime DSP
+- l’ordre UI des paramètres TONE doit rester aligné avec l’ordre `TONE slot -> param` exposé par le type runtime effectif
+- les chemins UI p-lock/feedback/base commit doivent utiliser `seq_param_iface_param_to_slot(track,set,param,&slot)` et jamais `seq_param_iface_map_param()`
 
 ## 9. Persistence
 
@@ -685,11 +707,17 @@ Question à vérifier au moment du patch :
 
 10. Vérifier p-locks et exclusions.
 - Fichiers probables :
+  - `Src/Core/track_runtime.c`
   - `Src/Seq/seq_param_iface.c`
+  - `Src/UI/pages/ui_page_template_tone.c`
+  - `Src/UI/ui_param.c`
 - Points à trancher :
   - quels paramètres moteur sont p-lockables
+  - quel ordre `TONE slot -> param` est exposé pour le type runtime
   - quels paramètres doivent être exclus
   - quels paramètres sont compatibles avec l’apply RT fast
+  - vérifier que UI/live-rec/scheduler utilisent `param_to_slot` / `slot_to_param`, pas `seq_param_iface_map_param()`
+- Invariant : ne pas modifier le format Seq/p-lock pour ajouter un moteur ; ajouter seulement le mapping de slots et les règles d’exposition.
 
 11. Vérifier persistence pattern/project.
 - Fichiers probables :
@@ -757,6 +785,7 @@ Cela confirme que les flags ne sont pas un simple alias “moteur audio présent
 
 Certains paramètres peuvent être explicitement non p-lockables.
 Il faudra décider moteur par moteur quels paramètres doivent être p-lockables, modulables, ou exclus du chemin RT fast.
+Pour `TONE`, cette décision doit être portée par le mapping runtime effectif et consommée via `param_to_slot` / `slot_to_param`; `seq_param_iface_map_param()` ne doit pas redevenir une API d’encodage p-lock.
 
 ### Décisions à prendre avant l’intégration d’un nouveau moteur
 

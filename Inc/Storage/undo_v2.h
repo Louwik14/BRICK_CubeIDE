@@ -64,7 +64,7 @@ typedef struct
     uint8_t track;
     uint8_t step;
     uint8_t set_id;
-    uint8_t param8;
+    uint8_t param_slot;
     uint8_t before_present;
     uint16_t before_value16;
     uint8_t before_flags;
@@ -126,7 +126,7 @@ undo_v2_status_t undo_v2_record_param_change(param_id_t param_id,
 undo_v2_status_t undo_v2_record_plock_change(uint8_t track,
                                              uint8_t step,
                                              uint8_t set_id,
-                                             uint8_t param8,
+                                             uint8_t param_slot,
                                              uint8_t before_present,
                                              uint16_t before_value16,
                                              uint8_t before_flags,
@@ -157,3 +157,4 @@ uint8_t undo_v2_is_redo_available(void);
 void undo_v2_set_capture_suspended(uint8_t suspended);
 
 #endif
+

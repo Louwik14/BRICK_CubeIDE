@@ -9,7 +9,7 @@ typedef struct
 {
     uint8_t active;
     uint8_t set_id;
-    seq_param8_t param8;
+    seq_param_slot_t param_slot;
     uint8_t reserved;
     seq_value16_t base_value16;
 } seq_runtime_active_lock_t;
@@ -93,11 +93,11 @@ void seq_runtime_rec_toggle_arm(void);
 /* Command surface: live-rec write routed through the runtime policy layer. */
 uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          uint8_t set_id,
-                                         seq_param8_t param8,
+                                         seq_param_slot_t param_slot,
                                          seq_value16_t value16);
 uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
                                              uint8_t set_id,
-                                             seq_param8_t param8);
+                                             seq_param_slot_t param_slot);
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
                                   uint8_t channel_zero_based,
                                   uint8_t note,
@@ -120,9 +120,11 @@ uint8_t seq_runtime_rec_is_armed(void);
 uint8_t seq_runtime_get_rec_count_in_mode(void);
 uint8_t seq_runtime_get_rec_len_mode(void);
 uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
+uint32_t seq_runtime_get_tempo_bpm_milli(void);
 uint8_t seq_runtime_rec_is_pattern_pending_start(void);
 uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
 void seq_runtime_diag_reset(void);
 void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag);
 
 #endif /* SEQ_RUNTIME_H */
+

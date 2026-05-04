@@ -225,6 +225,12 @@ uint8_t track_runtime_is_ui_ensemble_available(uint8_t track, track_runtime_ui_e
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
+uint8_t track_runtime_tone_slot_to_param(track_runtime_type_t type,
+                                         uint8_t slot,
+                                         param_id_t *out_param);
+uint8_t track_runtime_tone_param_to_slot(track_runtime_type_t type,
+                                         param_id_t param,
+                                         uint8_t *out_slot);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);

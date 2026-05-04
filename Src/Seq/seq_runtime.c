@@ -1,10 +1,10 @@
-ï»¿/*
+/*
  * Module: seq_runtime
- * Role: Orchestrateur principal du sÃ©quenceur en exÃ©cution.
+ * Role: Orchestrateur principal du séquenceur en exécution.
  * Responsibilities: cycle start/stop/process, gestion playhead/ticks,
  * coordination clock bridge, transport FSM, scheduler, boundary engine
  * et facade live-rec.
- * Integration: point d'intÃ©gration central des modules Src/Seq avec MIDI et engine_tasklet.
+ * Integration: point d'intégration central des modules Src/Seq avec MIDI et engine_tasklet.
  */
 #include "Seq/seq_runtime.h"
 
@@ -814,13 +814,13 @@ uint32_t seq_runtime_get_external_tempo_bpm_milli(void)
 
 uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          uint8_t set_id,
-                                         seq_param8_t param8,
+                                         seq_param_slot_t param_slot,
                                          seq_value16_t value16)
 {
     return seq_live_rec_session_live_rec_param_write(&g_seq_runtime,
                                                      track,
                                                      set_id,
-                                                     param8,
+                                                     param_slot,
                                                      value16);
 }
 
@@ -831,9 +831,9 @@ void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track)
 
 uint8_t seq_runtime_live_rec_param_can_write(seq_track_id_t track,
                                              uint8_t set_id,
-                                             seq_param8_t param8)
+                                             seq_param_slot_t param_slot)
 {
-    return seq_live_rec_session_live_rec_param_can_write(track, set_id, param8);
+    return seq_live_rec_session_live_rec_param_can_write(track, set_id, param_slot);
 }
 
 void seq_runtime_live_rec_note_on(seq_live_rec_source_t source,
@@ -886,4 +886,5 @@ void seq_runtime_on_track_pattern_change(uint8_t track)
     /* Post-commit notification: pattern changes are forwarded to the scheduler only when running. */
     seq_play_scheduler_notify_track_pattern_change(track);
 }
+
 

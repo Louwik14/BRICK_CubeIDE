@@ -488,6 +488,9 @@ Invariants prouves par le code:
   - `seq_boundary_engine_process` fait apply/restore locks avant emission hit.
 - Integrite de parcours p-lock:
   - les parcours de listes p-lock cote modele (`find/mask/get_at`) sont bornes par la capacite pool track pour eviter toute boucle non bornee en presence de structure corrompue.
+  - le modele Seq stocke `set_id + param_slot + value16`; `param_slot` est un slot local et jamais un `param_id` tronque.
+  - les chemins qui encodent un parametre vers un p-lock utilisent `seq_param_iface_param_to_slot(track,set,param,&slot)`; les chemins qui appliquent/relisent un lock utilisent `seq_param_iface_slot_to_param(track,set,slot,&param)`.
+  - `seq_param_iface_map_param` reste hors contrat pour UI/live-rec/scheduler et pour les chemins TONE/runtime-specific.
 - Cohérence bloc audio / temps musical:
   - step scheduling en `due_sample_time` absolu.
   - conversion vers offset relatif au bloc lors de la collecte.

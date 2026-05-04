@@ -107,7 +107,7 @@ static void seq_model_free_lock_node(seq_track_id_t track, uint16_t idx)
 static uint16_t seq_model_find_lock_idx(seq_track_id_t track,
                                         const seq_step_t *step,
                                         uint8_t set_id,
-                                        seq_param8_t param8,
+                                        seq_param_slot_t param_slot,
                                         uint16_t *out_prev)
 {
     if (out_prev != 0)
@@ -131,7 +131,7 @@ static uint16_t seq_model_find_lock_idx(seq_track_id_t track,
         }
 
         const seq_plock_entry_t *entry = &g_seq_project.pool[track][idx];
-        if ((entry->set_id == set_id) && (entry->param8 == param8))
+        if ((entry->set_id == set_id) && (entry->param_slot == param_slot))
         {
             if (out_prev != 0)
             {
@@ -316,7 +316,7 @@ uint8_t seq_model_load_project(const seq_project_data_t *project)
                 (void)seq_model_step_plock_upsert(tr,
                                                   st,
                                                   entry->set_id,
-                                                  entry->param8,
+                                                  entry->param_slot,
                                                   entry->value16,
                                                   entry->flags);
 
@@ -553,7 +553,7 @@ uint8_t seq_model_step_is_quick_note_eligible(seq_track_id_t track, seq_step_id_
 uint8_t seq_model_step_plock_find(seq_track_id_t track,
                                   seq_step_id_t step,
                                   uint8_t set_id,
-                                  seq_param8_t param8,
+                                  seq_param_slot_t param_slot,
                                   seq_plock_entry_t *out_entry)
 {
     const seq_step_t *const s = seq_model_get_step_const(track, step);
@@ -562,7 +562,7 @@ uint8_t seq_model_step_plock_find(seq_track_id_t track,
         return 0U;
     }
 
-    const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param8, 0);
+    const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param_slot, 0);
     if (idx == SEQ_LOCK_NONE)
     {
         return 0U;
@@ -575,7 +575,7 @@ uint8_t seq_model_step_plock_find(seq_track_id_t track,
 seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
                                                    seq_step_id_t step,
                                                    uint8_t set_id,
-                                                   seq_param8_t param8,
+                                                   seq_param_slot_t param_slot,
                                                    seq_value16_t value16,
                                                    uint8_t flags)
 {
@@ -592,7 +592,7 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
 
     const uint32_t primask = seq_model_enter_critical();
 
-    const uint16_t existing_idx = seq_model_find_lock_idx(track, s, set_id, param8, 0);
+    const uint16_t existing_idx = seq_model_find_lock_idx(track, s, set_id, param_slot, 0);
     if (existing_idx != SEQ_LOCK_NONE)
     {
         g_seq_project.pool[track][existing_idx].value16 = value16;
@@ -616,7 +616,7 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
 
     seq_plock_entry_t *const entry = &g_seq_project.pool[track][new_idx];
     entry->set_id = set_id;
-    entry->param8 = param8;
+    entry->param_slot = param_slot;
     entry->value16 = value16;
     entry->flags = flags;
     entry->reserved = 0U;
@@ -633,7 +633,7 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
 seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
                                                    seq_step_id_t step,
                                                    uint8_t set_id,
-                                                   seq_param8_t param8)
+                                                   seq_param_slot_t param_slot)
 {
     seq_step_t *const s = seq_model_get_step_mut(track, step);
     if (s == 0)
@@ -643,7 +643,7 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
 
     const uint32_t primask = seq_model_enter_critical();
     uint16_t prev = SEQ_LOCK_NONE;
-    const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param8, &prev);
+    const uint16_t idx = seq_model_find_lock_idx(track, s, set_id, param_slot, &prev);
     if (idx == SEQ_LOCK_NONE)
     {
         seq_model_exit_critical(primask);
@@ -749,3 +749,4 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
 
     return 0U;
 }
+

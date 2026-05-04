@@ -138,10 +138,16 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
 
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped)
 {
+    seq_param_slot_t param_slot = 0U;
+    if (seq_param_iface_param_to_slot(track, (uint8_t)SEQ_PLOCK_SET_PLAY, id, &param_slot) == 0U)
+    {
+        return 0U;
+    }
+
     if (id == PARAM_MIDI_PROGRAM)
     {
         if (seq_param_iface_set_play_base_value(track,
-                                                (seq_param8_t)id,
+                                                param_slot,
                                                 seq_param_iface_encode_param_value(id, clamped)) == 0U)
         {
             return 0U;
@@ -162,7 +168,7 @@ static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float 
     }
 
     if (seq_param_iface_set_play_base_value(track,
-                                            (seq_param8_t)id,
+                                            param_slot,
                                             seq_param_iface_encode_param_value(id, clamped)) == 0U)
     {
         return 0U;
@@ -1410,8 +1416,14 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
         if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
         {
+            seq_param_slot_t param_slot = 0U;
             seq_value16_t encoded = 0U;
-            if (seq_param_iface_get_play_base_value(track, (seq_param8_t)id, &encoded) == 0U)
+            if (seq_param_iface_param_to_slot(track, (uint8_t)SEQ_PLOCK_SET_PLAY, id, &param_slot) == 0U)
+            {
+                return 0U;
+            }
+
+            if (seq_param_iface_get_play_base_value(track, param_slot, &encoded) == 0U)
             {
                 return 0U;
             }
@@ -1625,3 +1637,4 @@ void param_reset(param_id_t id)
 
     param_set(id, param_registry[id].default_value);
 }
+

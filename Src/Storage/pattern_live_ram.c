@@ -1,4 +1,4 @@
-﻿#include "Storage/pattern_live_ram.h"
+#include "Storage/pattern_live_ram.h"
 
 #include <string.h>
 
@@ -255,7 +255,7 @@ static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *st
         for (uint8_t j = 0U; j < i; ++j)
         {
             const pattern_v1_plock_t *const prior = &step->locks[j];
-            if ((prior->set_id == current->set_id) && (prior->param8 == current->param8))
+            if ((prior->set_id == current->set_id) && (prior->param_slot == current->param_slot))
             {
                 seen = 1U;
                 break;
@@ -392,7 +392,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
                 }
 
                 out_step->locks[i].set_id = entry.set_id;
-                out_step->locks[i].param8 = entry.param8;
+                out_step->locks[i].param_slot = entry.param_slot;
                 pattern_live_plock_set_value16(&out_step->locks[i], entry.value16);
                 out_step->locks[i].flags = entry.flags;
             }
@@ -446,6 +446,12 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
 
         for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
         {
+            const track_runtime_param_status_t status = track_runtime_get_effective_param_status(track, id);
+            if (status == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL)
+            {
+                continue;
+            }
+
             float value = 0.0f;
             if (param_registry_get_track_value(id, track, &value) == 0U)
             {
@@ -522,7 +528,7 @@ static uint8_t pattern_live_apply_seq_block(const pattern_v1_seq_block_t *seq)
                 const seq_plock_op_status_t status = seq_model_step_plock_upsert(track,
                                                                                  step,
                                                                                  pl->set_id,
-                                                                                 pl->param8,
+                                                                                 pl->param_slot,
                                                                                  pattern_live_plock_get_value16(pl),
                                                                                  pl->flags);
                 if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
@@ -1180,3 +1186,4 @@ uint8_t pattern_live_is_apply_in_progress(void)
 {
     return g_apply_in_progress;
 }
+
