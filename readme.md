@@ -128,6 +128,7 @@ This separation is intentional. Do not add a second authority for the same state
 - track-aware page exposure
 - hall-based interaction model
 - keyboard / arp / pattern / mute workflows
+- no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG` (hall calibration path stays prioritary)
 
 ### Parameter system

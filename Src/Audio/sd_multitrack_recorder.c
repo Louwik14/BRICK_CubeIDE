@@ -34,6 +34,13 @@
 #define RECORDER_DEBUG_LOG(...) do { } while(0)
 #endif
 
+#ifndef SD_RECORDER_PRODUCT_ENABLED
+/* Product gate: keep the SD multitrack recorder bypassed until the UI/product
+ * flow exists end-to-end. Master/Buffer is a separate internal recorder path
+ * and is intentionally not controlled by this flag. */
+#define SD_RECORDER_PRODUCT_ENABLED 0
+#endif
+
 #if (_USE_EXPAND != 1)
 #error "sd_multitrack_recorder requires FatFs _USE_EXPAND == 1"
 #endif
@@ -980,6 +987,10 @@ void sd_recorder_set_writer_budget(uint32_t max_bytes_per_call)
  */
 uint8_t sd_recorder_request_start(void)
 {
+#if !SD_RECORDER_PRODUCT_ENABLED
+    return 0U;
+#endif
+
     recorder_cmd_t cmd;
     cmd.type = CMD_START;
     cmd.stem_id = 0U;
@@ -1006,6 +1017,10 @@ uint8_t sd_recorder_request_start(void)
  */
 uint8_t sd_recorder_request_stop(void)
 {
+#if !SD_RECORDER_PRODUCT_ENABLED
+    return 0U;
+#endif
+
     recorder_cmd_t cmd;
     cmd.type = CMD_STOP;
     cmd.stem_id = 0U;
@@ -1035,6 +1050,12 @@ uint8_t sd_recorder_request_stop(void)
 uint8_t sd_recorder_request_arm_stem(uint8_t stem_id,
                                      const sd_recorder_stem_cfg_t *cfg)
 {
+#if !SD_RECORDER_PRODUCT_ENABLED
+    (void)stem_id;
+    (void)cfg;
+    return 0U;
+#endif
+
     if((cfg == 0) || (stem_id >= SD_RECORDER_MAX_STEMS) ||
        ((cfg->channels != 1U) && (cfg->channels != 2U)))
         return 0U;
@@ -1072,6 +1093,11 @@ uint8_t sd_recorder_request_arm_stem(uint8_t stem_id,
  */
 uint8_t sd_recorder_request_disarm_stem(uint8_t stem_id)
 {
+#if !SD_RECORDER_PRODUCT_ENABLED
+    (void)stem_id;
+    return 0U;
+#endif
+
     if(stem_id >= SD_RECORDER_MAX_STEMS)
         return 0U;
 
@@ -1106,6 +1132,11 @@ uint8_t sd_recorder_request_disarm_stem(uint8_t stem_id)
  */
 void sd_recorder_audio_block_begin(uint32_t frames)
 {
+#if !SD_RECORDER_PRODUCT_ENABLED
+    (void)frames;
+    return;
+#endif
+
     (void)frames;
 
     g_rec.block_boundary_calls++;
@@ -1221,6 +1252,15 @@ void sd_recorder_capture_tap_block(sd_recorder_tap_t tap,
                                    const float *src_r,
                                    uint32_t frames)
 {
+#if !SD_RECORDER_PRODUCT_ENABLED
+    (void)tap;
+    (void)bus_id;
+    (void)src_l;
+    (void)src_r;
+    (void)frames;
+    return;
+#endif
+
     if((src_l == 0) || (src_r == 0) || (frames == 0U) || (frames > AUDIO_BLOCK_SIZE))
         return;
 

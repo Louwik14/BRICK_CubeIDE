@@ -46,6 +46,7 @@ Dependances de Z5 sans appartenir a Z5:
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
 - Autorite param/modele seq hors UI (Z3/Z4), seulement pilotees depuis Z5.
+- `sd_multitrack_recorder` hors integration UI/produit a date: aucun workflow UI canonique start/stop/arm n'est expose tant que le bypass compile-time `SD_RECORDER_PRODUCT_ENABLED=0` reste actif. `Master/Buffer` reste un flux distinct et demeure expose.
 
 Sous-roles concentres dans `ui_core.c`:
 - Etat UI global courant (track, hall mode, feedback, states pattern/mute).
@@ -265,6 +266,7 @@ Flux nominal prouve:
 
 6. Feedback / consommation aval
 - Feedback texte via `ui_core_set_feedback` visible dans header track.
+- Le header template affiche la charge CPU moyenne uniquement; il ne lit plus de VU/peak/clip meter audio.
 - `hall_keyboard_bridge` consomme hall mode + flags suppression pour autoriser/bloquer emission note hall.
 - Gardes runtime explicites en contexte `ROUT`:
   - `hall_keyboard_bridge_process` utilise `ui_hall_allows_injection(...)`,
@@ -326,6 +328,7 @@ Points factuels:
 - Couplage fort a `param_registry`, `seq_*`, `pattern_live_*` depuis Z5; les lectures runtime restantes passent maintenant par `ui_core_runtime_bridge`.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
 - Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC), transverse mais restant dans frontiere Z5 comme logique d'interaction.
+- Le recorder SD/stems n'est pas un cas special UI actif dans l'etat produit courant: sa reactivation devra passer par une integration UI/produit explicite, puis par validation start/stop/arm et revalidation IRQ/audio.
 - Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` sur `MASTER/BUFFER`, renforcee par des gardes locaux.
 - Fragilites restantes prouvees:
   - priorites de consommation toujours tres centralisees dans `ui_core_tick` (desormais explicites via table locale),

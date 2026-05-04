@@ -213,7 +213,6 @@ static void brick6_render_braids_tracks(uint32_t frames, uint8_t *out_braids_tra
             continue;
         }
 
-        memset(braids_tmp, 0, frames * sizeof(float));
         brick6_braids_runtime_render_instance(ctx->instance_id, braids_tmp, frames);
         mixer_submit_external_mono_native(ctx->mix_track_id, braids_tmp, frames);
         braids_tracks++;

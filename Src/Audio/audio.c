@@ -13,8 +13,8 @@
  *
  * Contraintes temps réel:
  * - Le traitement audio est exécuté dans les callbacks IRQ DMA RX.
- * - Taille bloc temps réel: AUDIO_FRAMES_PER_HALF frames (64 ici).
- * - À 48 kHz, budget par half-buffer ≈ 64 / 48000 s = 1.33 ms.
+ * - Taille bloc temps réel: AUDIO_FRAMES_PER_HALF frames (128 ici).
+ * - À 48 kHz, budget par half-buffer ≈ 128 / 48000 s = 2.67 ms.
  * - Aucun malloc/printf/HAL bloquant dans le chemin IRQ.
  */
 
@@ -38,7 +38,7 @@
 
 /* Frames traitées par interruption half DMA.
    Doit rester cohérent avec AUDIO_BLOCK_SIZE (audio_float.h). */
-#define AUDIO_FRAMES_PER_HALF    64
+#define AUDIO_FRAMES_PER_HALF    128
 
 /* Double buffer DMA: [half0 | half1] */
 #define AUDIO_FRAMES_TOTAL       (AUDIO_FRAMES_PER_HALF * 2)

@@ -15,9 +15,12 @@ enum
     FX_REVERB_DRUMBOY_SURROUND_BUFFER_SIZE = 900U,
 };
 
-struct fx_reverb_drumboy_buffers_t {
+typedef struct fx_reverb_drumboy_delay_buffers_t {
     float predelay_buffer[FX_REVERB_DRUMBOY_PREDELAY_BUFFER_SIZE];
     float surround_buffer[FX_REVERB_DRUMBOY_SURROUND_BUFFER_SIZE];
+} fx_reverb_drumboy_delay_buffers_t;
+
+typedef struct fx_reverb_drumboy_feedback_buffers_t {
     float comb_buffer0[1116];
     float comb_buffer1[1188];
     float comb_buffer2[1277];
@@ -30,7 +33,7 @@ struct fx_reverb_drumboy_buffers_t {
     float apass_buffer1[556];
     float apass_buffer2[441];
     float apass_buffer3[341];
-};
+} fx_reverb_drumboy_feedback_buffers_t;
 
 struct fx_reverb_drumboy_t {
     uint8_t bypass;
@@ -46,7 +49,8 @@ struct fx_reverb_drumboy_t {
     float comb_decay1;
     float comb_decay2;
 
-    fx_reverb_drumboy_buffers_t *buffers;
+    fx_reverb_drumboy_delay_buffers_t *delay_buffers;
+    fx_reverb_drumboy_feedback_buffers_t *feedback_buffers;
 
     uint32_t predelay_play;
     uint32_t predelay_write;

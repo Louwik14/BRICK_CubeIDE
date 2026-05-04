@@ -1,6 +1,5 @@
 #include "ui_renderer_template.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -19,7 +18,6 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Mod/mod_lfo_v1.h"
-#include "mixer_meter.h"
 
 #define UI_TEMPLATE_FRAME_W          31
 #define UI_TEMPLATE_FRAME_H          37
@@ -193,24 +191,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
     }
 }
 
-static void ui_renderer_template_format_dbfs_1dp(float peak, char *out, uint32_t out_len)
-{
-    if ((out == NULL) || (out_len == 0U))
-    {
-        return;
-    }
-
-    if (peak <= 0.0f)
-    {
-        (void)snprintf(out, out_len, "---");
-        return;
-    }
-
-    const float dbfs = 20.0f * log10f(peak);
-    (void)snprintf(out, out_len, "%.1f", (double)dbfs);
-}
-
-static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len, uint8_t active_track)
+static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len)
 {
     if ((out == NULL) || (out_len == 0U))
     {
@@ -223,31 +204,9 @@ static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len, uin
         return;
     }
 
-    uint8_t mix_track = active_track;
-    if (track_runtime_get_mix_target_track(active_track, &mix_track) == 0U)
-    {
-        mix_track = active_track;
-    }
-
-    char track_db_label[8];
-    char master_db_label[8];
-    ui_renderer_template_format_dbfs_1dp(mixer_meter_get_track_peak(mix_track), track_db_label, (uint32_t)sizeof(track_db_label));
-    ui_renderer_template_format_dbfs_1dp(mixer_meter_get_master_peak(), master_db_label, (uint32_t)sizeof(master_db_label));
-
     const uint32_t avg_permille = cpu_load_get_avg_permille();
     const uint32_t percent = (avg_permille + 5U) / 10U;
-    uint32_t clip_count = mixer_meter_get_master_clip_count();
-    if (clip_count > 999U)
-    {
-        clip_count = 999U;
-    }
-    (void)snprintf(out,
-                   out_len,
-                   "%lu%%T%sM%sC%lu",
-                   (unsigned long)percent,
-                   track_db_label,
-                   master_db_label,
-                   (unsigned long)clip_count);
+    (void)snprintf(out, out_len, "%lu%%", (unsigned long)percent);
 }
 
 static int ui_renderer_template_center_x(int x, int w, const char *txt)
@@ -574,7 +533,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
         (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)track_display_id);
     }
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
-    ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label), active_track);
+    ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label));
     uint8_t draw_bpm = 0U;
     uint8_t bpm_inverted = 0U;
     uint32_t bpm_milli = 0U;

@@ -41,7 +41,7 @@ AUDIO_HOT static fx_saturation_t g_track_sat[FX_POOL_TRACK_SAT_COUNT];
 /* Large granular history buffers: keep out of D1 to free fast internal RAM. */
 AUDIO_COLD_SDRAM ALIGN32 static float grain_buffer_l[48000];
 AUDIO_COLD_SDRAM ALIGN32 static float grain_buffer_r[48000];
-AUDIO_HOT ALIGN32 static uint8_t g_granular_state_storage[2048];
+AUDIO_COLD_SDRAM ALIGN32 static uint8_t g_granular_state_storage[2048];
 
 static uint8_t g_granular_in_use;
 

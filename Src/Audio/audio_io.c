@@ -28,7 +28,6 @@
 #include <string.h>
 #include <arm_acle.h>
 #include "stm32h743xx.h"
-#include "mixer_meter.h"
 
 #define AUDIO_TDM_SLOTS 8U
 
@@ -306,15 +305,11 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     if ((out_gain_start == 0.0f) && (out_gain_end == 0.0f))
     {
         memset(tx, 0, frames * AUDIO_TDM_SLOTS * sizeof(int32_t));
-        mixer_meter_submit_master_block(0.0f, 0U);
-        mixer_meter_advance_window(frames);
         return;
     }
 
     int32_t *AUDIO_RESTRICT ptx = tx;
     float out_gain = out_gain_start;
-    float master_peak_abs = 0.0f;
-    uint32_t master_clip_count = 0U;
 
     for(uint32_t n = 0; n < frames; n++)
     {
@@ -342,24 +337,5 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
         ptx[7] = 0;
         ptx += AUDIO_TDM_SLOTS;
         out_gain += gain_step;
-
-        const float abs_l = (main_l >= 0.0f) ? main_l : -main_l;
-        const float abs_r = (main_r >= 0.0f) ? main_r : -main_r;
-        const float sample_peak = (abs_l >= abs_r) ? abs_l : abs_r;
-        if (sample_peak > master_peak_abs)
-        {
-            master_peak_abs = sample_peak;
-        }
-        if (abs_l >= 1.0f)
-        {
-            ++master_clip_count;
-        }
-        if (abs_r >= 1.0f)
-        {
-            ++master_clip_count;
-        }
     }
-
-    mixer_meter_submit_master_block(master_peak_abs, master_clip_count);
-    mixer_meter_advance_window(frames);
 }

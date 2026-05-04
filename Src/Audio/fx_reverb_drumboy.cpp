@@ -6,7 +6,8 @@
 const uint32_t fx_reverb_drumboy_t::comb_size[8] = {1116U, 1188U, 1277U, 1356U, 1422U, 1491U, 1557U, 1617U};
 const uint32_t fx_reverb_drumboy_t::apass_size[4] = {225U, 556U, 441U, 341U};
 
-AUDIO_COLD_SDRAM static fx_reverb_drumboy_buffers_t g_reverb_drumboy_buffers;
+AUDIO_HOT static fx_reverb_drumboy_feedback_buffers_t g_reverb_drumboy_feedback_buffers;
+AUDIO_LUT_D2 static fx_reverb_drumboy_delay_buffers_t g_reverb_drumboy_delay_buffers;
 
 static inline float clamp01_local(float v)
 {
@@ -29,33 +30,33 @@ static inline uint32_t lag_to_offset(float sample_rate, float seconds, uint32_t 
 
 static inline float *comb_buffer_ptr(fx_reverb_drumboy_t *r, uint32_t idx)
 {
-    if((r == 0) || (r->buffers == 0))
+    if((r == 0) || (r->feedback_buffers == 0))
         return 0;
 
     switch(idx)
     {
-        case 0: return r->buffers->comb_buffer0;
-        case 1: return r->buffers->comb_buffer1;
-        case 2: return r->buffers->comb_buffer2;
-        case 3: return r->buffers->comb_buffer3;
-        case 4: return r->buffers->comb_buffer4;
-        case 5: return r->buffers->comb_buffer5;
-        case 6: return r->buffers->comb_buffer6;
-        default: return r->buffers->comb_buffer7;
+        case 0: return r->feedback_buffers->comb_buffer0;
+        case 1: return r->feedback_buffers->comb_buffer1;
+        case 2: return r->feedback_buffers->comb_buffer2;
+        case 3: return r->feedback_buffers->comb_buffer3;
+        case 4: return r->feedback_buffers->comb_buffer4;
+        case 5: return r->feedback_buffers->comb_buffer5;
+        case 6: return r->feedback_buffers->comb_buffer6;
+        default: return r->feedback_buffers->comb_buffer7;
     }
 }
 
 static inline float *apass_buffer_ptr(fx_reverb_drumboy_t *r, uint32_t idx)
 {
-    if((r == 0) || (r->buffers == 0))
+    if((r == 0) || (r->feedback_buffers == 0))
         return 0;
 
     switch(idx)
     {
-        case 0: return r->buffers->apass_buffer0;
-        case 1: return r->buffers->apass_buffer1;
-        case 2: return r->buffers->apass_buffer2;
-        default: return r->buffers->apass_buffer3;
+        case 0: return r->feedback_buffers->apass_buffer0;
+        case 1: return r->feedback_buffers->apass_buffer1;
+        case 2: return r->feedback_buffers->apass_buffer2;
+        default: return r->feedback_buffers->apass_buffer3;
     }
 }
 
@@ -64,26 +65,26 @@ void fx_reverb_drumboy_reset(fx_reverb_drumboy_t *r)
     if(r == 0)
         return;
 
-    if(r->buffers == 0)
+    if((r->delay_buffers == 0) || (r->feedback_buffers == 0))
         return;
 
-    memset(r->buffers->predelay_buffer, 0, sizeof(r->buffers->predelay_buffer));
-    memset(r->buffers->surround_buffer, 0, sizeof(r->buffers->surround_buffer));
+    memset(r->delay_buffers->predelay_buffer, 0, sizeof(r->delay_buffers->predelay_buffer));
+    memset(r->delay_buffers->surround_buffer, 0, sizeof(r->delay_buffers->surround_buffer));
     memset(r->comb_index, 0, sizeof(r->comb_index));
     memset(r->comb_filter, 0, sizeof(r->comb_filter));
-    memset(r->buffers->comb_buffer0, 0, sizeof(r->buffers->comb_buffer0));
-    memset(r->buffers->comb_buffer1, 0, sizeof(r->buffers->comb_buffer1));
-    memset(r->buffers->comb_buffer2, 0, sizeof(r->buffers->comb_buffer2));
-    memset(r->buffers->comb_buffer3, 0, sizeof(r->buffers->comb_buffer3));
-    memset(r->buffers->comb_buffer4, 0, sizeof(r->buffers->comb_buffer4));
-    memset(r->buffers->comb_buffer5, 0, sizeof(r->buffers->comb_buffer5));
-    memset(r->buffers->comb_buffer6, 0, sizeof(r->buffers->comb_buffer6));
-    memset(r->buffers->comb_buffer7, 0, sizeof(r->buffers->comb_buffer7));
+    memset(r->feedback_buffers->comb_buffer0, 0, sizeof(r->feedback_buffers->comb_buffer0));
+    memset(r->feedback_buffers->comb_buffer1, 0, sizeof(r->feedback_buffers->comb_buffer1));
+    memset(r->feedback_buffers->comb_buffer2, 0, sizeof(r->feedback_buffers->comb_buffer2));
+    memset(r->feedback_buffers->comb_buffer3, 0, sizeof(r->feedback_buffers->comb_buffer3));
+    memset(r->feedback_buffers->comb_buffer4, 0, sizeof(r->feedback_buffers->comb_buffer4));
+    memset(r->feedback_buffers->comb_buffer5, 0, sizeof(r->feedback_buffers->comb_buffer5));
+    memset(r->feedback_buffers->comb_buffer6, 0, sizeof(r->feedback_buffers->comb_buffer6));
+    memset(r->feedback_buffers->comb_buffer7, 0, sizeof(r->feedback_buffers->comb_buffer7));
     memset(r->apass_index, 0, sizeof(r->apass_index));
-    memset(r->buffers->apass_buffer0, 0, sizeof(r->buffers->apass_buffer0));
-    memset(r->buffers->apass_buffer1, 0, sizeof(r->buffers->apass_buffer1));
-    memset(r->buffers->apass_buffer2, 0, sizeof(r->buffers->apass_buffer2));
-    memset(r->buffers->apass_buffer3, 0, sizeof(r->buffers->apass_buffer3));
+    memset(r->feedback_buffers->apass_buffer0, 0, sizeof(r->feedback_buffers->apass_buffer0));
+    memset(r->feedback_buffers->apass_buffer1, 0, sizeof(r->feedback_buffers->apass_buffer1));
+    memset(r->feedback_buffers->apass_buffer2, 0, sizeof(r->feedback_buffers->apass_buffer2));
+    memset(r->feedback_buffers->apass_buffer3, 0, sizeof(r->feedback_buffers->apass_buffer3));
 
     const uint32_t predelay_lag = lag_to_offset(r->sample_rate, r->predelay_s, fx_reverb_drumboy_t::kPredelayBufferSize);
     const uint32_t surround_lag = lag_to_offset(r->sample_rate, r->surround_s, fx_reverb_drumboy_t::kSurroundBufferSize);
@@ -112,7 +113,8 @@ void fx_reverb_drumboy_init(fx_reverb_drumboy_t *r, float sample_rate)
     r->surround_s = 0.005f;
     r->wet = 0.50f;
     r->apass_feedback = 0.5f;
-    r->buffers = &g_reverb_drumboy_buffers;
+    r->delay_buffers = &g_reverb_drumboy_delay_buffers;
+    r->feedback_buffers = &g_reverb_drumboy_feedback_buffers;
 
     fx_reverb_drumboy_set_size(r, r->size);
     fx_reverb_drumboy_set_decay(r, r->decay);
@@ -190,7 +192,7 @@ void fx_reverb_drumboy_process_block(fx_reverb_drumboy_t *r,
     if((r == 0) || (in_l == 0) || (in_r == 0) || (out_l == 0) || (out_r == 0))
         return;
 
-    if(r->buffers == 0)
+    if((r->delay_buffers == 0) || (r->feedback_buffers == 0))
         return;
 
     if(r->bypass != 0U)
@@ -204,8 +206,8 @@ void fx_reverb_drumboy_process_block(fx_reverb_drumboy_t *r,
     {
         const float input = 0.5f * (in_l[n] + in_r[n]);
 
-        r->buffers->predelay_buffer[r->predelay_write] = input;
-        const float reverb_input = r->buffers->predelay_buffer[r->predelay_play];
+        r->delay_buffers->predelay_buffer[r->predelay_write] = input;
+        const float reverb_input = r->delay_buffers->predelay_buffer[r->predelay_play];
         r->predelay_play = (r->predelay_play + 1U) % fx_reverb_drumboy_t::kPredelayBufferSize;
         r->predelay_write = (r->predelay_write + 1U) % fx_reverb_drumboy_t::kPredelayBufferSize;
 
@@ -237,8 +239,8 @@ void fx_reverb_drumboy_process_block(fx_reverb_drumboy_t *r,
 
         const float wet = ap * r->wet;
 
-        r->buffers->surround_buffer[r->surround_write] = wet;
-        const float delayed_r = r->buffers->surround_buffer[r->surround_play];
+        r->delay_buffers->surround_buffer[r->surround_write] = wet;
+        const float delayed_r = r->delay_buffers->surround_buffer[r->surround_play];
         r->surround_play = (r->surround_play + 1U) % fx_reverb_drumboy_t::kSurroundBufferSize;
         r->surround_write = (r->surround_write + 1U) % fx_reverb_drumboy_t::kSurroundBufferSize;
 

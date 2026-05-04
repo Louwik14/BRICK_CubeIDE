@@ -33,7 +33,6 @@
 #include "fx_pool.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
-#include "mixer_meter.h"
 #include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
 
@@ -164,7 +163,7 @@ typedef struct
     float surround;
 } mixer_reverb_state_t;
 
-static mixer_reverb_state_t g_reverb = {
+static AUDIO_HOT mixer_reverb_state_t g_reverb = {
     .type = FX_REVERB_GLOBAL_TYPE_MONO,
     .wet = 0.0f,
     .size = 0.70f,
@@ -693,24 +692,6 @@ typedef struct
     float *left;
     float *right;
 } mixer_lane_buffers_t;
-
-static void mixer_lane_project_mono_to_stereo(const float *mono,
-                                              float *left,
-                                              float *right,
-                                              uint32_t frames)
-{
-    if ((mono == NULL) || (left == NULL) || (right == NULL))
-    {
-        return;
-    }
-
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        const float s = mono[i];
-        left[i] = s;
-        right[i] = s;
-    }
-}
 
 static mixer_lane_buffers_t mixer_lane_prepare_stereo_buffers(uint32_t track_id,
                                                               const mixer_lane_plan_t *plan,
@@ -1722,24 +1703,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames);
         }
 
-        if (is_mono_native_lane != 0U)
-        {
-            mixer_lane_project_mono_to_stereo(mono, ext_mono_l, ext_mono_r, frames);
-            sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
-                                          t,
-                                          ext_mono_l,
-                                          ext_mono_r,
-                                          frames);
-        }
-        else
-        {
-            sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
-                                          t,
-                                          L,
-                                          R,
-                                          frames);
-        }
-
         {
             float gain_cur = mt->gain_current;
             float pan_cur = mt->pan_current;
@@ -1785,11 +1748,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             R = ext_mono_r;
         }
 
-        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_FADER,
-                                      t,
-                                      L,
-                                      R,
-                                      frames);
         uint8_t source_track = (uint8_t)t;
         if (track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track) == 0U)
         {
@@ -1828,27 +1786,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
                 mt->send_level_current[s] = mt->send_level[s];
             }
-        }
-
-        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_SEND,
-                                      t,
-                                      L,
-                                      R,
-                                      frames);
-
-        {
-            float peak_abs = 0.0f;
-            for (uint32_t i = 0U; i < frames; ++i)
-            {
-                const float abs_l = (L[i] >= 0.0f) ? L[i] : -L[i];
-                const float abs_r = (R[i] >= 0.0f) ? R[i] : -R[i];
-                const float sample_peak = (abs_l >= abs_r) ? abs_l : abs_r;
-                if (sample_peak > peak_abs)
-                {
-                    peak_abs = sample_peak;
-                }
-            }
-            mixer_meter_submit_track_peak(t, peak_abs);
         }
 
         if(mt->route_master && mt->route_cue)

@@ -337,8 +337,14 @@ void brick6_braids_runtime_clear_trigger(uint8_t instance_id)
 void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono, uint32_t frames)
 {
     brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
-    if ((instance == NULL) || (out_mono == NULL) || (frames == 0U))
+    if ((out_mono == NULL) || (frames == 0U))
     {
+        return;
+    }
+
+    if (instance == NULL)
+    {
+        memset(out_mono, 0, frames * sizeof(float));
         return;
     }
 
