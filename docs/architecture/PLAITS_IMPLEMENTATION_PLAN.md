@@ -1,5 +1,9 @@
 # Plaits Implementation Plan
 
+> Historique: `Plaits` a ete remplace cote produit par `Opal`.
+> Ce document ne decrit plus le moteur produit courant.
+> Le DSP Plaits peut rester une dependance interne d'Opal.
+
 ## 1. Scope
 
 Ce document decoupe l'integration Plaits en passes courtes, executables une par une, sans refonte large.

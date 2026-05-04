@@ -21,7 +21,7 @@
 #include "Audio/sd_multitrack_recorder.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_master_buffer.h"
-#include "Core/brick6_plaits_runtime.h"
+#include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
@@ -170,31 +170,31 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
     }
 }
 
-static void brick6_render_plaits_tracks(uint32_t frames, uint8_t *out_plaits_tracks)
+static void brick6_render_opal_tracks(uint32_t frames, uint8_t *out_opal_tracks)
 {
-    static float plaits_tmp[AUDIO_BLOCK_SIZE];
-    uint8_t plaits_tracks = 0U;
+    static float opal_tmp[AUDIO_BLOCK_SIZE];
+    uint8_t opal_tracks = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
                 || (track_runtime_is_audio_routable(track) == 0U))
         {
             continue;
         }
 
-        memset(plaits_tmp, 0, frames * sizeof(float));
-        brick6_plaits_runtime_render_instance(ctx->instance_id, plaits_tmp, frames);
-        mixer_submit_external_mono(ctx->mix_track_id, plaits_tmp, frames);
-        plaits_tracks++;
+        memset(opal_tmp, 0, frames * sizeof(float));
+        brick6_opal_runtime_render_instance(ctx->instance_id, opal_tmp, frames);
+        mixer_submit_external_mono(ctx->mix_track_id, opal_tmp, frames);
+        opal_tracks++;
     }
 
-    if (out_plaits_tracks != NULL)
+    if (out_opal_tracks != NULL)
     {
-        *out_plaits_tracks = plaits_tracks;
+        *out_opal_tracks = opal_tracks;
     }
 }
 
@@ -287,9 +287,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     }
 
     {
-        uint8_t plaits_tracks = 0U;
-        brick6_render_plaits_tracks(frames, &plaits_tracks);
-        (void)plaits_tracks;
+        uint8_t opal_tracks = 0U;
+        brick6_render_opal_tracks(frames, &opal_tracks);
+        (void)opal_tracks;
     }
 
     {

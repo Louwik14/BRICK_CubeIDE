@@ -13,7 +13,7 @@
 #define PROJECT_V1_MACRO_PER_BANK   4U
 #define PROJECT_V1_MACRO_SLOT_COUNT 4U
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    9U /* Braids TONE params extend PARAM_COUNT; legacy project files are intentionally not kept compatible in prototype phase */
+#define PROJECT_V1_FILE_VERSION    10U /* Opal replaces the public Plaits TONE surface and changes PARAM_COUNT; legacy project files are intentionally not kept compatible in prototype phase */
 
 typedef enum
 {

@@ -50,7 +50,7 @@ static const char *const g_sampler_clip_grain_labels[] = {"32", "64", "96", "128
 static const char *const g_sampler_clip_hop_labels[] = {"32", "64", "96", "128", "256", "512", NULL};
 static const char *const g_sampler_clip_search_labels[] = {"0", "4", "8", "12", "16", NULL};
 
-static const char *const g_plaits_model_labels[] = {"VA", "WS", "FM", "Grain", "WT", "Chord", "Speech", "Swarm", "Noise", "Particle", "String", "Modal", "Additive", "Kick", "Snare", "Hat", "PD", "6Op", "Terrain", "StrMach", "Chip", "VA VCF", NULL};
+
 static const char *const g_braids_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Comb", "Toy", "LP", "Peak", "BP", "HP", "Vosim", "Vowel", "FOF", "Harm", "FM", "FB FM", "Chaos", "Pluck", "Bowed", "Blown", "Fluted", "Bell", "Drum", "Kick", "Cymbal", "Snare", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
@@ -380,14 +380,9 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_GRAIN, "Grain", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_grain_labels, apply_sampler_clip_grain),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_HOP, "Hop", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 3.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_hop_labels, apply_sampler_clip_hop),
     PARAM_DESC_EX(PARAM_SAMPLER_CLIP_SEARCH, "Search", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_search_labels, apply_sampler_clip_search),
-    PARAM_DESC_EX(PARAM_PLAITS_MODEL, "Model", PARAM_TYPE_ENUM, 0.0f, 21.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_plaits_model_labels, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_COARSE_FREQUENCY, "Coarse", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_HARMONICS, "Harmonics", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_MORPH, "Morph", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_LPG_RESPONSE, "LPG Resp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
-    PARAM_DESC_EX(PARAM_PLAITS_FREQUENCY_RANGE, "Range", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_OPAL_PATCH, "Patch", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_OPAL_INDEX, "Index", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_OPAL_TIME, "Time", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_BRAIDS_EDIT, "Edit", PARAM_TYPE_ENUM, 0.0f, 47.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_braids_edit_labels, NULL),
     PARAM_DESC_EX(PARAM_BRAIDS_FINE, "Fine", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_BRAIDS_COARSE, "Coarse", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),

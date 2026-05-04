@@ -81,7 +81,8 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - contient le noyau Sampler, Plaits, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
+  - contient le noyau Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
+  - le bloc Opal est borne a 3 params TONE: `PATCH`, `INDEX`, `TIME`,
   - le bloc Braids est borne a 7 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
 
@@ -184,7 +185,8 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
-  - sert de base canonique Sampler, Plaits, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track, distincte de `track_sound_state`.
+  - sert de base canonique Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track, distincte de `track_sound_state`.
+  - pour `Opal`, la surface publique TONE est strictement limitee a `PARAM_OPAL_PATCH`, `PARAM_OPAL_INDEX`, `PARAM_OPAL_TIME`.
 - Les params stretch Master/Buffer sont des params BUFFER track-aware (`TStr`, `Grain`, `Hop`, `Sync Len`, `Src BPM`, `Pitch`) gates par Z2; ils ne doivent pas devenir des globals ni utiliser `param_store.active[]` comme verite track-scoped.
 - Leur apply ecrit la base canonique `track_tone_sound_state.buffer`, puis projette explicitement la configuration vers l'etat runtime local de `brick6_master_buffer`; `live_recorder` reste backend stockage/lecture brute.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.

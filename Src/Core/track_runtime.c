@@ -5,7 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_plaits_runtime.h"
+#include "Core/brick6_opal_runtime.h"
 #include "Core/track_state.h"
 #include "UI/ui_track_catalog.h"
 
@@ -27,7 +27,7 @@ static track_runtime_synth_usage_t g_track_runtime_synth_usage;
 typedef struct
 {
     uint8_t drum_used;
-    uint8_t plaits_used;
+    uint8_t opal_used;
     uint8_t braids_used;
 } track_runtime_allocator_state_t;
 
@@ -83,8 +83,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_SLICER;
         case UI_TRACK_TYPE_CLIP:
             return TRACK_RUNTIME_TYPE_CLIP;
-        case UI_TRACK_TYPE_PLAITS:
-            return TRACK_RUNTIME_TYPE_PLAITS;
+        case UI_TRACK_TYPE_OPAL:
+            return TRACK_RUNTIME_TYPE_OPAL;
         case UI_TRACK_TYPE_BRAIDS:
             return TRACK_RUNTIME_TYPE_BRAIDS;
 
@@ -268,15 +268,10 @@ static uint8_t track_runtime_param_is_clip_only(param_id_t param)
                      || (param == PARAM_SAMPLER_CLIP_SEARCH));
 }
 
-static const param_id_t g_track_runtime_tone_slots_plaits[] = {
-    PARAM_PLAITS_MODEL,
-    PARAM_PLAITS_COARSE_FREQUENCY,
-    PARAM_PLAITS_HARMONICS,
-    PARAM_PLAITS_TIMBRE,
-    PARAM_PLAITS_MORPH,
-    PARAM_PLAITS_LPG_RESPONSE,
-    PARAM_PLAITS_DECAY,
-    PARAM_PLAITS_FREQUENCY_RANGE
+static const param_id_t g_track_runtime_tone_slots_opal[] = {
+    PARAM_OPAL_PATCH,
+    PARAM_OPAL_INDEX,
+    PARAM_OPAL_TIME
 };
 
 static const param_id_t g_track_runtime_tone_slots_braids[] = {
@@ -347,9 +342,9 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
 
     switch (type)
     {
-        case TRACK_RUNTIME_TYPE_PLAITS:
-            *out_table = g_track_runtime_tone_slots_plaits;
-            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_plaits) / sizeof(g_track_runtime_tone_slots_plaits[0]));
+        case TRACK_RUNTIME_TYPE_OPAL:
+            *out_table = g_track_runtime_tone_slots_opal;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_opal) / sizeof(g_track_runtime_tone_slots_opal[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_BRAIDS:
@@ -526,7 +521,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
     switch ((track_runtime_engine_t)ctx->engine)
     {
         case TRACK_RUNTIME_ENGINE_SAMPLER:
-        case TRACK_RUNTIME_ENGINE_PLAITS:
+        case TRACK_RUNTIME_ENGINE_OPAL:
         case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
@@ -553,7 +548,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_SAMPLER:
-        case TRACK_RUNTIME_ENGINE_PLAITS:
+        case TRACK_RUNTIME_ENGINE_OPAL:
         case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_MASTER_BUFFER:
         case TRACK_RUNTIME_ENGINE_TB3:
@@ -572,7 +567,7 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 
     if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
     {
         return 1U;
@@ -717,16 +712,16 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if (type == TRACK_RUNTIME_TYPE_PLAITS)
+    if (type == TRACK_RUNTIME_TYPE_OPAL)
     {
-        if ((allocator == NULL) || (allocator->plaits_used >= BRICK6_PLAITS_MAX_INSTANCES))
+        if ((allocator == NULL) || (allocator->opal_used >= BRICK6_PLAITS_MAX_INSTANCES))
         {
             track_runtime_set_quota_blocked(ctx);
             return;
         }
 
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_PLAITS, allocator->plaits_used);
-        allocator->plaits_used++;
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_OPAL, allocator->opal_used);
+        allocator->opal_used++;
         return;
     }
 
@@ -773,8 +768,8 @@ void track_runtime_refresh_all(void)
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
     uint8_t previous_mix_track[SEQ_TRACK_COUNT];
     uint8_t drum_count = 0U;
-    uint8_t previous_plaits_owner = TRACK_RUNTIME_INSTANCE_NONE;
-    uint8_t current_plaits_owner = TRACK_RUNTIME_INSTANCE_NONE;
+    uint8_t previous_opal_owner = TRACK_RUNTIME_INSTANCE_NONE;
+    uint8_t current_opal_owner = TRACK_RUNTIME_INSTANCE_NONE;
     uint8_t previous_braids_owner = TRACK_RUNTIME_INSTANCE_NONE;
     uint8_t current_braids_owner = TRACK_RUNTIME_INSTANCE_NONE;
 
@@ -783,10 +778,10 @@ void track_runtime_refresh_all(void)
     {
         previous_mix_track[track] = g_track_runtime_ctx[track].mix_track_id;
         if ((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+                && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
                 && (g_track_runtime_ctx[track].instance_id == 0U))
         {
-            previous_plaits_owner = track;
+            previous_opal_owner = track;
         }
         if ((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
                 && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
@@ -877,9 +872,9 @@ void track_runtime_refresh_all(void)
             {
                 drum_count++;
             }
-            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
             {
-                current_plaits_owner = track;
+                current_opal_owner = track;
             }
             else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
             {
@@ -888,9 +883,9 @@ void track_runtime_refresh_all(void)
         }
     }
 
-    if (previous_plaits_owner != current_plaits_owner)
+    if (previous_opal_owner != current_opal_owner)
     {
-        brick6_plaits_runtime_reset_instance(0U);
+        brick6_opal_runtime_reset_instance(0U);
     }
     if (previous_braids_owner != current_braids_owner)
     {
@@ -907,7 +902,7 @@ void track_runtime_refresh_all(void)
     }
 }
 
-uint8_t track_runtime_is_track_plaits_available(uint8_t track)
+uint8_t track_runtime_is_track_opal_available(uint8_t track)
 {
     for (uint8_t other_track = 0U; other_track < SEQ_TRACK_COUNT; ++other_track)
     {
@@ -918,7 +913,7 @@ uint8_t track_runtime_is_track_plaits_available(uint8_t track)
 
         const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[other_track];
         if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS))
+                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL))
         {
             return 0U;
         }
@@ -1311,14 +1306,9 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_FM_CYMBAL_BASE_CARRIER:
         case PARAM_DRUM_FM_CYMBAL_BASE_MOD:
         case PARAM_DRUM_FM_CYMBAL_MOD_DECAY:
-        case PARAM_PLAITS_MODEL:
-        case PARAM_PLAITS_COARSE_FREQUENCY:
-        case PARAM_PLAITS_HARMONICS:
-        case PARAM_PLAITS_TIMBRE:
-        case PARAM_PLAITS_MORPH:
-        case PARAM_PLAITS_LPG_RESPONSE:
-        case PARAM_PLAITS_DECAY:
-        case PARAM_PLAITS_FREQUENCY_RANGE:
+        case PARAM_OPAL_PATCH:
+        case PARAM_OPAL_INDEX:
+        case PARAM_OPAL_TIME:
         case PARAM_BRAIDS_EDIT:
         case PARAM_BRAIDS_FINE:
         case PARAM_BRAIDS_COARSE:

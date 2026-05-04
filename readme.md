@@ -75,7 +75,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Plaits`
+- `Synth`: `Opal`
 - `Sampler`: `OneShot`, `Slicer`, `Clip`
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`

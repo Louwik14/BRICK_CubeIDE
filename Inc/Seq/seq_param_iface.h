@@ -74,6 +74,12 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      seq_param_slot_t param_slot,
                                      seq_value16_t base_value16);
 
+/*
+ * Legacy/non-track-aware helper.
+ * Do not use this to encode p-locks from UI/live-rec/scheduler paths.
+ * Do not use it for TONE or runtime-specific mappings.
+ * Use seq_param_iface_param_to_slot(...) / seq_param_iface_slot_to_param(...).
+ */
 uint8_t seq_param_iface_map_param(param_id_t param,
                                   uint8_t *out_set_id,
                                   seq_param_slot_t *out_param_slot);

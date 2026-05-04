@@ -1,5 +1,9 @@
 # Plaits Integration Audio Audit
 
+> Historique: `Plaits` a ete remplace cote produit par `Opal`.
+> Ce document ne decrit plus le moteur produit courant.
+> Le DSP Plaits peut rester une dependance interne d'Opal.
+
 ## 1. Scope
 
 Ce document est un audit cible sur Plaits et sur la chaine audio BRICK necessaire a son integration. Il complete `docs/architecture/NEW_DSP_ENGINE_MANUAL.md` sans le specialiser.
@@ -459,4 +463,3 @@ Mesures utiles avant validation:
 - Faut-il exposer des modeles dont `AUX` porte une grande partie de l'interet sonore si v1 reste `OUT-only`?
 - Si une v2 preserve `AUX`, faut-il l'exposer comme dual-output interne, comme source selectable, ou comme mode de sortie specifique Plaits?
 - Quelle limite de cardinalite Plaits simultanees est acceptable en worst-case sur la cible H743 une fois les vraies mesures prises?
-

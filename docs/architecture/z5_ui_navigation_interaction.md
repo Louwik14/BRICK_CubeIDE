@@ -386,7 +386,7 @@ Points factuels:
   - pas de nouveau flux de navigation autonome.
 - Compat UI/restore:
   - un ancien couple `Synth/Sampler` est remappe vers `Sampler/OneShot`,
-  - la famille `Synth` propose `Plaits` et `Braids`,
+  - la famille `Synth` propose `Opal` et `Braids`,
   - `Braids` reste mono-instance et cesse d'être proposé par `CFG` si une autre track le porte déjà.
 
 ## 14.b Contrat UI Braids

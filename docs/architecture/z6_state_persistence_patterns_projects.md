@@ -61,6 +61,7 @@ Autorite persistence projet SD:
 Compat prototype:
 - quand `PARAM_COUNT` change et modifie `PatternSaveV1` / `ProjectSaveV1`, Z6 peut bumper les versions fichier sans migration.
 - pour Braids, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
+- pour Opal, le remplacement de la surface publique `Plaits` par `PATCH/INDEX/TIME` suit la meme politique: bump de version fichier, aucun chemin de migration legacy requis.
 
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
@@ -354,6 +355,7 @@ Plus petite prochaine passe utile:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.
 - `PROJECT_V1_FILE_VERSION` a ete incremente pour refl�ter le payload Sampler v1 et le bloc MACRO projet.
+- `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquent la rupture prototype Opal; les anciens payloads incompatibles sont refuses via `version/payload_size`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
 

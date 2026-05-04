@@ -3,7 +3,7 @@
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_master_buffer.h"
-#include "Core/brick6_plaits_runtime.h"
+#include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
@@ -49,13 +49,13 @@ static uint16_t param_backend_clip_search_value(uint8_t index)
     return values[(index <= 4U) ? index : 4U];
 }
 
-uint8_t param_backend_apply_tone_plaits(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+uint8_t param_backend_apply_tone_opal(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS))
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_OPAL))
     {
         return 0U;
     }
@@ -64,84 +64,34 @@ uint8_t param_backend_apply_tone_plaits(uint8_t track, param_id_t id, float valu
 
     switch (id)
     {
-        case PARAM_PLAITS_MODEL:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 21.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->plaits.model = (float)(uint8_t)(clamped + 0.5f);
-            }
-            brick6_plaits_runtime_set_model(instance_id, (float)(uint8_t)(clamped + 0.5f));
-            return 1U;
-        }
-        case PARAM_PLAITS_COARSE_FREQUENCY:
+        case PARAM_OPAL_PATCH:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->plaits.coarse_frequency = clamped;
+                state->opal.patch = clamped;
             }
-            brick6_plaits_runtime_set_coarse_frequency(instance_id, clamped);
+            brick6_opal_runtime_set_harmonics(instance_id, clamped);
             return 1U;
         }
-        case PARAM_PLAITS_HARMONICS:
+        case PARAM_OPAL_INDEX:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->plaits.harmonics = clamped;
+                state->opal.index = clamped;
             }
-            brick6_plaits_runtime_set_harmonics(instance_id, clamped);
+            brick6_opal_runtime_set_timbre(instance_id, clamped);
             return 1U;
         }
-        case PARAM_PLAITS_TIMBRE:
+        case PARAM_OPAL_TIME:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->plaits.timbre = clamped;
+                state->opal.time = clamped;
             }
-            brick6_plaits_runtime_set_timbre(instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_PLAITS_MORPH:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->plaits.morph = clamped;
-            }
-            brick6_plaits_runtime_set_morph(instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_PLAITS_LPG_RESPONSE:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->plaits.lpg_response = clamped;
-            }
-            brick6_plaits_runtime_set_lpg_response(instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_PLAITS_DECAY:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->plaits.decay = clamped;
-            }
-            brick6_plaits_runtime_set_decay(instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_PLAITS_FREQUENCY_RANGE:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->plaits.frequency_range = clamped;
-            }
-            brick6_plaits_runtime_set_frequency_range(instance_id, clamped);
+            brick6_opal_runtime_set_morph(instance_id, clamped);
             return 1U;
         }
         default:

@@ -36,7 +36,7 @@
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
-#include "brick6_plaits_runtime.h"
+#include "brick6_opal_runtime.h"
 #include "brick6_recorder_runtime.h"
 #include "brick6_sampler_runtime.h"
 #include "brick6_sampler_bootstrap.h"
@@ -118,7 +118,7 @@ void brick6_app_init(void)
     brick6_sampler_bootstrap_init_voices();
     brick6_sampler_runtime_init();
     brick6_braids_runtime_init();
-    brick6_plaits_runtime_init();
+    brick6_opal_runtime_init();
 
     mixer_set_master(0.0f);
 

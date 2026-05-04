@@ -12,7 +12,7 @@
 #include "stm32h7xx_hal.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/track_runtime.h"
-#include "Core/brick6_plaits_runtime.h"
+#include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
@@ -328,15 +328,15 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             drum_synth_note_off_for_instance(resolved.descriptor.instance_id, note);
         }
     }
-    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_PLAITS)
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_OPAL)
     {
         if (is_note_on != 0U)
         {
-            brick6_plaits_runtime_note_on(resolved.descriptor.instance_id, (float)note, (float)velocity / 127.0f);
+            brick6_opal_runtime_note_on(resolved.descriptor.instance_id, (float)note, (float)velocity / 127.0f);
         }
         else
         {
-            brick6_plaits_runtime_note_off(resolved.descriptor.instance_id, note);
+            brick6_opal_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_BRAIDS)

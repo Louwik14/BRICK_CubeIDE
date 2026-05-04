@@ -43,15 +43,10 @@ typedef struct
     } buffer;
     struct
     {
-        float model;
-        float coarse_frequency;
-        float harmonics;
-        float timbre;
-        float morph;
-        float lpg_response;
-        float decay;
-        float frequency_range;
-    } plaits;
+        float patch;
+        float index;
+        float time;
+    } opal;
     struct
     {
         float edit;

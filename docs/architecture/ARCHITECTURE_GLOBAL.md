@@ -75,7 +75,7 @@ Lit ce document si le sujet touche :
 - modulation LFO
 - coexistence global / track-aware / legacy
 - modèle paramétrique par track
-- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Plaits + Braids + MIDI simple + TRX BD + TRX Claves + TRX HiHat + FM Kick + FM Snare + FM Tom + FM Rimshot + FM Clap + FM Cowbell + FM Cymbal)
+- base commune `track_sound_state` + base TONE `track_tone_sound_state` (Input1/2/3 Hybrid gate + Sampler + Opal + Braids + MIDI simple + TRX BD + TRX Claves + TRX HiHat + FM Kick + FM Snare + FM Tom + FM Rimshot + FM Clap + FM Cowbell + FM Cymbal)
 
 Doc :
 - `docs/architecture/z3_param_modulation_control.md`

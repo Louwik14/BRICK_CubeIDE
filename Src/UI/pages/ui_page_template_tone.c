@@ -52,12 +52,12 @@ static const ui_template_family_t g_ui_template_tone_family_clip = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_plaits = {
+static const ui_template_family_t g_ui_template_tone_family_opal = {
     .family_title = "TONE",
-    .nav_labels = { "MODEL", "LPG", "-", "-" },
+    .nav_labels = { "OPAL", "-", "-", "-" },
     .subpages = {
-        { .title = "MODEL", .param_bank = { .params = { PARAM_PLAITS_MODEL, PARAM_PLAITS_COARSE_FREQUENCY, PARAM_PLAITS_HARMONICS, PARAM_PLAITS_TIMBRE } } },
-        { .title = "LPG", .param_bank = { .params = { PARAM_PLAITS_MORPH, PARAM_PLAITS_LPG_RESPONSE, PARAM_PLAITS_DECAY, PARAM_PLAITS_FREQUENCY_RANGE } } },
+        { .title = "OPAL", .param_bank = { .params = { PARAM_OPAL_PATCH, PARAM_OPAL_INDEX, PARAM_OPAL_TIME, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -251,9 +251,9 @@ void ui_page_template_tone_register_families(void)
             {
                 family_template = &g_ui_template_tone_family_braids;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PLAITS))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_OPAL))
             {
-                family_template = &g_ui_template_tone_family_plaits;
+                family_template = &g_ui_template_tone_family_opal;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_SAMPLER))
             {

@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-uint8_t param_backend_apply_tone_plaits(uint8_t track, param_id_t id, float value, uint8_t update_base_state);
+uint8_t param_backend_apply_tone_opal(uint8_t track, param_id_t id, float value, uint8_t update_base_state);
 uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float value, uint8_t update_base_state);
 uint8_t param_backend_is_midi_cc_id(param_id_t id);
 uint8_t param_backend_midi_cc_number_from_id(param_id_t id);
