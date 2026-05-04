@@ -387,7 +387,7 @@ Points factuels:
 - Compat UI/restore:
   - un ancien couple `Synth/Sampler` est remappe vers `Sampler/OneShot`,
   - la famille `Synth` propose `Opal` et `Braids`,
-  - `Braids` reste mono-instance et cesse d'être proposé par `CFG` si une autre track le porte déjà.
+  - `Braids` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
 
 ## 14.b Contrat UI Braids
 - `Synth/Braids` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.

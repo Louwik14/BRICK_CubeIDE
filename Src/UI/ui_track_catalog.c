@@ -173,7 +173,7 @@ bool ui_track_catalog_type_is_available(uint8_t track,
     }
 
     if ((family == UI_TRACK_FAMILY_SYNTH)
-            && ((type == UI_TRACK_TYPE_OPAL) || (type == UI_TRACK_TYPE_BRAIDS)))
+            && (type == UI_TRACK_TYPE_OPAL))
     {
         for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
         {

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "Seq/seq_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +29,7 @@ typedef struct
     uint8_t trigger;
 } brick6_braids_runtime_voice_t;
 
-#define BRICK6_BRAIDS_MAX_INSTANCES 1U
+#define BRICK6_BRAIDS_MAX_INSTANCES SEQ_TRACK_COUNT
 
 void brick6_braids_runtime_init(void);
 void brick6_braids_runtime_reset_instance(uint8_t instance_id);

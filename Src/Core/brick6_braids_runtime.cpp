@@ -20,6 +20,49 @@ constexpr float kBraidsPitchCoarseRange = 48.0f;
 constexpr float kBraidsPitchFineRange = 2.0f;
 constexpr float kBraidsPitchFmRange = 24.0f;
 constexpr float kBraidsReleaseCoeff = 0.995f;
+constexpr float kBraidsEditMax = 38.0f;
+
+static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
+    braids::MACRO_OSC_SHAPE_CSAW,
+    braids::MACRO_OSC_SHAPE_MORPH,
+    braids::MACRO_OSC_SHAPE_SAW_SQUARE,
+    braids::MACRO_OSC_SHAPE_SINE_TRIANGLE,
+    braids::MACRO_OSC_SHAPE_BUZZ,
+    braids::MACRO_OSC_SHAPE_SQUARE_SUB,
+    braids::MACRO_OSC_SHAPE_SAW_SUB,
+    braids::MACRO_OSC_SHAPE_SQUARE_SYNC,
+    braids::MACRO_OSC_SHAPE_SAW_SYNC,
+    braids::MACRO_OSC_SHAPE_TRIPLE_SAW,
+    braids::MACRO_OSC_SHAPE_TRIPLE_SQUARE,
+    braids::MACRO_OSC_SHAPE_TRIPLE_TRIANGLE,
+    braids::MACRO_OSC_SHAPE_TRIPLE_SINE,
+    braids::MACRO_OSC_SHAPE_TRIPLE_RING_MOD,
+    braids::MACRO_OSC_SHAPE_SAW_SWARM,
+    braids::MACRO_OSC_SHAPE_TOY,
+    braids::MACRO_OSC_SHAPE_VOSIM,
+    braids::MACRO_OSC_SHAPE_VOWEL,
+    braids::MACRO_OSC_SHAPE_VOWEL_FOF,
+    braids::MACRO_OSC_SHAPE_HARMONICS,
+    braids::MACRO_OSC_SHAPE_FM,
+    braids::MACRO_OSC_SHAPE_FEEDBACK_FM,
+    braids::MACRO_OSC_SHAPE_CHAOTIC_FEEDBACK_FM,
+    braids::MACRO_OSC_SHAPE_STRUCK_BELL,
+    braids::MACRO_OSC_SHAPE_STRUCK_DRUM,
+    braids::MACRO_OSC_SHAPE_KICK,
+    braids::MACRO_OSC_SHAPE_CYMBAL,
+    braids::MACRO_OSC_SHAPE_SNARE,
+    braids::MACRO_OSC_SHAPE_WAVETABLES,
+    braids::MACRO_OSC_SHAPE_WAVE_MAP,
+    braids::MACRO_OSC_SHAPE_WAVE_LINE,
+    braids::MACRO_OSC_SHAPE_WAVE_PARAPHONIC,
+    braids::MACRO_OSC_SHAPE_FILTERED_NOISE,
+    braids::MACRO_OSC_SHAPE_TWIN_PEAKS_NOISE,
+    braids::MACRO_OSC_SHAPE_CLOCKED_NOISE,
+    braids::MACRO_OSC_SHAPE_GRANULAR_CLOUD,
+    braids::MACRO_OSC_SHAPE_PARTICLE_NOISE,
+    braids::MACRO_OSC_SHAPE_DIGITAL_MODULATION,
+    braids::MACRO_OSC_SHAPE_QUESTION_MARK,
+};
 
 typedef struct
 {
@@ -63,8 +106,8 @@ static int16_t brick6_braids_runtime_pitch_to_q7(const brick6_braids_runtime_voi
 
 static braids::MacroOscillatorShape brick6_braids_runtime_shape_from_edit(float edit)
 {
-    const int index = (int)(brick6_braids_runtime_clamp(edit, 0.0f, 47.0f) + 0.5f);
-    return static_cast<braids::MacroOscillatorShape>(index);
+    const int index = (int)(brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax) + 0.5f);
+    return kBraidsShapeMap[index];
 }
 
 static brick6_braids_runtime_instance_t *brick6_braids_runtime_get_instance_mut(uint8_t instance_id)
@@ -139,7 +182,7 @@ void brick6_braids_runtime_set_edit(uint8_t instance_id, float edit)
     brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
     if (instance != NULL)
     {
-        instance->voice.edit = brick6_braids_runtime_clamp(edit, 0.0f, 47.0f);
+        instance->voice.edit = brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax);
         instance->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(instance->voice.edit));
     }
 }

@@ -82,9 +82,19 @@ typedef struct {
 static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
 static mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
+static AUDIO_HOT float g_external_track_mono[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static AUDIO_HOT float g_external_track_l[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static AUDIO_HOT float g_external_track_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
+static uint8_t g_external_track_format[MIXER_MAX_TRACKS];
+static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
+
+enum
+{
+    MIXER_EXTERNAL_FORMAT_NONE = 0U,
+    MIXER_EXTERNAL_FORMAT_MONO_NATIVE = 1U,
+    MIXER_EXTERNAL_FORMAT_STEREO = 2U
+};
 
 #define MIXER_FILTER_SAMPLE_RATE_DEFAULT 48000.0f
 #define MIXER_FILTER_CUTOFF_MIN_HZ 20.0f
@@ -1046,6 +1056,8 @@ void mixer_track_filter_all_notes_off(uint32_t track_id)
 void __attribute__((used)) mixer_external_inputs_clear(void)
 {
     memset(g_external_track_enabled, 0, sizeof(g_external_track_enabled));
+    memset(g_external_track_format, 0, sizeof(g_external_track_format));
+    memset(g_external_track_frames_valid, 0, sizeof(g_external_track_frames_valid));
 }
 
 void __attribute__((used)) mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames)
@@ -1060,12 +1072,46 @@ void __attribute__((used)) mixer_submit_external_mono(uint32_t track_id, const f
         frames = AUDIO_BLOCK_SIZE;
     }
 
+    if (g_external_track_enabled[track_id] != 0U)
+    {
+        return;
+    }
+
     for (uint32_t i = 0U; i < frames; ++i)
     {
         g_external_track_l[track_id][i] = mono[i];
         g_external_track_r[track_id][i] = mono[i];
     }
 
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_STEREO;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
+    g_external_track_enabled[track_id] = 1U;
+}
+
+void __attribute__((used)) mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS) || (mono == NULL))
+    {
+        return;
+    }
+
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    if (g_external_track_enabled[track_id] != 0U)
+    {
+        return;
+    }
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        g_external_track_mono[track_id][i] = mono[i];
+    }
+
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_MONO_NATIVE;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
     g_external_track_enabled[track_id] = 1U;
 }
 
@@ -1084,12 +1130,19 @@ void __attribute__((used)) mixer_submit_external_stereo(uint32_t track_id,
         frames = AUDIO_BLOCK_SIZE;
     }
 
+    if (g_external_track_enabled[track_id] != 0U)
+    {
+        return;
+    }
+
     for (uint32_t i = 0U; i < frames; ++i)
     {
         g_external_track_l[track_id][i] = left[i];
         g_external_track_r[track_id][i] = right[i];
     }
 
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_STEREO;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
     g_external_track_enabled[track_id] = 1U;
 }
 
@@ -1118,6 +1171,8 @@ void __attribute__((used)) mixer_submit_external_stereo(uint32_t track_id,
  */
 void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 {
+    AUDIO_HOT ALIGN32 static float ext_mono_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float ext_mono_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_main_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_cue_l[AUDIO_BLOCK_SIZE];
@@ -1160,7 +1215,17 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         mixer_track_t *mt = &g_tracks[t];
         const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
-        const uint8_t ext_enabled = g_external_track_enabled[t];
+        uint8_t ext_enabled = g_external_track_enabled[t];
+        const uint8_t ext_format = g_external_track_format[t];
+        uint32_t ext_frames = g_external_track_frames_valid[t];
+        if ((ext_enabled != 0U)
+                && ((ext_frames != frames)
+                    || ((ext_format != MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                        && (ext_format != MIXER_EXTERNAL_FORMAT_STEREO))))
+        {
+            ext_enabled = 0U;
+            ext_frames = 0U;
+        }
         if (((hw_enabled == 0U) && (ext_enabled == 0U)) || mt->mute)
             continue;
 
@@ -1173,16 +1238,47 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         }
         else
         {
-            L = g_external_track_l[t];
-            R = g_external_track_r[t];
+            if (ext_enabled != 0U && ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+            {
+                for (uint32_t i = 0U; i < ext_frames; ++i)
+                {
+                    const float s = g_external_track_mono[t][i];
+                    ext_mono_l[i] = s;
+                    ext_mono_r[i] = s;
+                }
+                for (uint32_t i = ext_frames; i < frames; ++i)
+                {
+                    ext_mono_l[i] = 0.0f;
+                    ext_mono_r[i] = 0.0f;
+                }
+                L = ext_mono_l;
+                R = ext_mono_r;
+            }
+            else
+            {
+                L = g_external_track_l[t];
+                R = g_external_track_r[t];
+            }
         }
 
         if ((hw_enabled != 0U) && (ext_enabled != 0U))
         {
-            for (uint32_t i = 0U; i < frames; ++i)
+            if (ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
             {
-                L[i] += g_external_track_l[t][i];
-                R[i] += g_external_track_r[t][i];
+                for (uint32_t i = 0U; i < ext_frames; ++i)
+                {
+                    const float s = g_external_track_mono[t][i];
+                    L[i] += s;
+                    R[i] += s;
+                }
+            }
+            else
+            {
+                for (uint32_t i = 0U; i < ext_frames; ++i)
+                {
+                    L[i] += g_external_track_l[t][i];
+                    R[i] += g_external_track_r[t][i];
+                }
             }
         }
 

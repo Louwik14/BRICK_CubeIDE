@@ -727,7 +727,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 
     if (type == TRACK_RUNTIME_TYPE_BRAIDS)
     {
-        if ((allocator == NULL) || (allocator->braids_used >= 1U))
+        if ((allocator == NULL) || (allocator->braids_used >= BRICK6_BRAIDS_MAX_INSTANCES))
         {
             track_runtime_set_quota_blocked(ctx);
             return;
@@ -770,10 +770,15 @@ void track_runtime_refresh_all(void)
     uint8_t drum_count = 0U;
     uint8_t previous_opal_owner = TRACK_RUNTIME_INSTANCE_NONE;
     uint8_t current_opal_owner = TRACK_RUNTIME_INSTANCE_NONE;
-    uint8_t previous_braids_owner = TRACK_RUNTIME_INSTANCE_NONE;
-    uint8_t current_braids_owner = TRACK_RUNTIME_INSTANCE_NONE;
+    uint8_t previous_braids_owner[BRICK6_BRAIDS_MAX_INSTANCES];
+    uint8_t current_braids_owner[BRICK6_BRAIDS_MAX_INSTANCES];
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
+    for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_MAX_INSTANCES; ++instance)
+    {
+        previous_braids_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
+        current_braids_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
+    }
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         previous_mix_track[track] = g_track_runtime_ctx[track].mix_track_id;
@@ -785,9 +790,9 @@ void track_runtime_refresh_all(void)
         }
         if ((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
                 && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
-                && (g_track_runtime_ctx[track].instance_id == 0U))
+                && (g_track_runtime_ctx[track].instance_id < BRICK6_BRAIDS_MAX_INSTANCES))
         {
-            previous_braids_owner = track;
+            previous_braids_owner[g_track_runtime_ctx[track].instance_id] = track;
         }
     }
 
@@ -878,7 +883,10 @@ void track_runtime_refresh_all(void)
             }
             else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
             {
-                current_braids_owner = track;
+                if (ctx->instance_id < BRICK6_BRAIDS_MAX_INSTANCES)
+                {
+                    current_braids_owner[ctx->instance_id] = track;
+                }
             }
         }
     }
@@ -887,9 +895,12 @@ void track_runtime_refresh_all(void)
     {
         brick6_opal_runtime_reset_instance(0U);
     }
-    if (previous_braids_owner != current_braids_owner)
+    for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_MAX_INSTANCES; ++instance)
     {
-        brick6_braids_runtime_reset_instance(0U);
+        if (previous_braids_owner[instance] != current_braids_owner[instance])
+        {
+            brick6_braids_runtime_reset_instance(instance);
+        }
     }
 
     g_track_runtime_synth_usage.drum_tracks = drum_count;
@@ -924,6 +935,7 @@ uint8_t track_runtime_is_track_opal_available(uint8_t track)
 
 uint8_t track_runtime_is_track_braids_available(uint8_t track)
 {
+    uint8_t used = 0U;
     for (uint8_t other_track = 0U; other_track < SEQ_TRACK_COUNT; ++other_track)
     {
         if (other_track == track)
@@ -935,11 +947,11 @@ uint8_t track_runtime_is_track_braids_available(uint8_t track)
         if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
                 && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
         {
-            return 0U;
+            ++used;
         }
     }
 
-    return 1U;
+    return (used < BRICK6_BRAIDS_MAX_INSTANCES) ? 1U : 0U;
 }
 
 void track_runtime_refresh_track(uint8_t track)

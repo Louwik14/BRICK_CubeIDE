@@ -97,6 +97,7 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
                                uint32_t track_count);
 void mixer_external_inputs_clear(void);
 void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
+void mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_stereo(uint32_t track_id, const float *left, const float *right, uint32_t frames);
 
 void mixer_process(StereoTrack *tracks,

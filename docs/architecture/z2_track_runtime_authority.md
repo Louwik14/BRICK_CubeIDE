@@ -100,7 +100,7 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - map UI family/type -> runtime family/type
 - allocation mix_track
 - bind engine/instance avec quotas et reasons
-- `Synth/Opal` et `Synth/Braids` restent des engines mono-instance, avec quota runtime `1` et reset local quand l'owner change
+- `Synth/Opal` reste mono-instance (quota runtime `1`), tandis que `Synth/Braids` est multi-instances (quota runtime `BRICK6_BRAIDS_MAX_INSTANCES = SEQ_TRACK_COUNT`), avec reset local par `runtime_instance` quand l'owner de l'instance change
 - binding Drum: `instance_id` stable par track logique (`instance_id == track_id`), pour eviter toute migration d'etat inter-track lors des reconfigurations de cardinalite Drum
 - calcul flags capabilities
 

@@ -84,6 +84,7 @@ Familles d'autorite:
   - contient le noyau Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
   - le bloc Opal est borne a 3 params TONE: `PATCH`, `INDEX`, `TIME`,
   - le bloc Braids est borne a 7 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`,
+  - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
 
 ## 2.c Contrat public du seam `param_registry`

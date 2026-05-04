@@ -128,7 +128,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
             }
 
             drum_synth_process_block_for_instance(ctx->instance_id, drum_tmp, frames);
-            mixer_submit_external_mono(ctx->mix_track_id, drum_tmp, frames);
+            mixer_submit_external_mono_native(ctx->mix_track_id, drum_tmp, frames);
             drum_tracks++;
             continue;
         }
@@ -187,7 +187,7 @@ static void brick6_render_opal_tracks(uint32_t frames, uint8_t *out_opal_tracks)
         }
 
         brick6_opal_runtime_render_instance(ctx->instance_id, opal_tmp, frames);
-        mixer_submit_external_mono(ctx->mix_track_id, opal_tmp, frames);
+        mixer_submit_external_mono_native(ctx->mix_track_id, opal_tmp, frames);
         opal_tracks++;
     }
 
@@ -215,7 +215,7 @@ static void brick6_render_braids_tracks(uint32_t frames, uint8_t *out_braids_tra
 
         memset(braids_tmp, 0, frames * sizeof(float));
         brick6_braids_runtime_render_instance(ctx->instance_id, braids_tmp, frames);
-        mixer_submit_external_mono(ctx->mix_track_id, braids_tmp, frames);
+        mixer_submit_external_mono_native(ctx->mix_track_id, braids_tmp, frames);
         braids_tracks++;
     }
 

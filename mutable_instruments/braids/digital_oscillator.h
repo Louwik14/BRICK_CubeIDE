@@ -38,15 +38,7 @@
 
 namespace braids {
 
-static const size_t kWGBridgeLength = 1024;
-static const size_t kWGNeckLength = 4096;
-static const size_t kWGBoreLength = 2048;
-static const size_t kWGJetLength = 1024;
-static const size_t kWGFBoreLength = 4096;
-static const size_t kCombDelayLength = 8192;
-
 static const size_t kNumFormants = 5;
-static const size_t kNumPluckVoices = 3;
 static const size_t kNumOverlappingFof = 3;
 static const size_t kNumBellPartials = 11;
 static const size_t kNumDrumPartials = 6;
@@ -358,20 +350,6 @@ class DigitalOscillator {
   
   Excitation pulse_[4];
   Svf svf_[3];
-  
-  union {
-    int16_t comb[kCombDelayLength];
-    int16_t ks[1025 * 4];
-    struct {
-      int8_t bridge[kWGBridgeLength];
-      int8_t neck[kWGNeckLength];
-    } bowed;
-    int16_t bore[kWGBoreLength];
-    struct {
-      int8_t jet[kWGJetLength];
-      int8_t bore[kWGFBoreLength];
-    } fluted;
-  } delay_lines_;
   
   static RenderFn fn_table_[];
   
