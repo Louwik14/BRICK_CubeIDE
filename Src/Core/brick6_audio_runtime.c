@@ -186,7 +186,6 @@ static void brick6_render_opal_tracks(uint32_t frames, uint8_t *out_opal_tracks)
             continue;
         }
 
-        memset(opal_tmp, 0, frames * sizeof(float));
         brick6_opal_runtime_render_instance(ctx->instance_id, opal_tmp, frames);
         mixer_submit_external_mono(ctx->mix_track_id, opal_tmp, frames);
         opal_tracks++;

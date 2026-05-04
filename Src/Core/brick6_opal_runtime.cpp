@@ -209,6 +209,22 @@ void brick6_opal_runtime_render_instance(uint8_t instance_id, float *out_mono, u
         return;
     }
 
+    const int trigger = ((instance->voice.trigger != 0U) ? (int)plaits::TRIGGER_RISING_EDGE : (int)plaits::TRIGGER_LOW)
+        | ((instance->voice.gate != 0U) ? (int)plaits::TRIGGER_HIGH : (int)plaits::TRIGGER_LOW);
+    const float note = instance->voice.note + kOpalFixedPitchOffset;
+    const float timbre = instance->voice.index;
+    const float morph = instance->voice.time;
+    const float harmonics = instance->voice.patch;
+    const float accent = instance->voice.velocity;
+
+    plaits::EngineParameters parameters;
+    parameters.trigger = trigger;
+    parameters.note = note;
+    parameters.timbre = timbre;
+    parameters.morph = morph;
+    parameters.harmonics = harmonics;
+    parameters.accent = accent;
+
     uint32_t offset = 0U;
     while (offset < frames)
     {
@@ -216,14 +232,6 @@ void brick6_opal_runtime_render_instance(uint8_t instance_id, float *out_mono, u
         float out_block[plaits::kMaxBlockSize];
         float aux_block[plaits::kMaxBlockSize];
         bool already_enveloped = false;
-        plaits::EngineParameters parameters;
-        parameters.trigger = ((instance->voice.trigger != 0U) ? (int)plaits::TRIGGER_RISING_EDGE : (int)plaits::TRIGGER_LOW)
-            | ((instance->voice.gate != 0U) ? (int)plaits::TRIGGER_HIGH : (int)plaits::TRIGGER_LOW);
-        parameters.note = instance->voice.note + kOpalFixedPitchOffset;
-        parameters.timbre = brick6_opal_runtime_clamp(instance->voice.index, 0.0f, 1.0f);
-        parameters.morph = brick6_opal_runtime_clamp(instance->voice.time, 0.0f, 1.0f);
-        parameters.harmonics = brick6_opal_runtime_clamp(instance->voice.patch, 0.0f, 1.0f);
-        parameters.accent = brick6_opal_runtime_clamp(instance->voice.velocity, 0.0f, 1.0f);
         instance->synth_voice.Render(parameters, out_block, aux_block, block, &already_enveloped);
 
         for (size_t i = 0U; i < block; ++i)
