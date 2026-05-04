@@ -3,7 +3,7 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_PLAITS };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_PLAITS, UI_TRACK_TYPE_BRAIDS };
     static const ui_track_type_t k_sampler_types[] = { UI_TRACK_TYPE_ONE_SHOT, UI_TRACK_TYPE_SLICER, UI_TRACK_TYPE_CLIP };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
@@ -172,7 +172,8 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         return true;
     }
 
-    if ((family == UI_TRACK_FAMILY_SYNTH) && (type == UI_TRACK_TYPE_PLAITS))
+    if ((family == UI_TRACK_FAMILY_SYNTH)
+            && ((type == UI_TRACK_TYPE_PLAITS) || (type == UI_TRACK_TYPE_BRAIDS)))
     {
         for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
         {
@@ -181,7 +182,7 @@ bool ui_track_catalog_type_is_available(uint8_t track,
                 continue;
             }
 
-            if (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_SYNTH, UI_TRACK_TYPE_PLAITS, track_configs) != 0U)
+            if (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_SYNTH, type, track_configs) != 0U)
             {
                 return false;
             }
@@ -512,6 +513,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Clip";
         case UI_TRACK_TYPE_PLAITS:
             return "Plaits";
+        case UI_TRACK_TYPE_BRAIDS:
+            return "Braids";
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buffer";
@@ -569,6 +572,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Clip";
         case UI_TRACK_TYPE_PLAITS:
             return "Plt";
+        case UI_TRACK_TYPE_BRAIDS:
+            return "Brd";
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buf";

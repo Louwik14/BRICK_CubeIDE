@@ -51,6 +51,7 @@ static const char *const g_sampler_clip_hop_labels[] = {"32", "64", "96", "128",
 static const char *const g_sampler_clip_search_labels[] = {"0", "4", "8", "12", "16", NULL};
 
 static const char *const g_plaits_model_labels[] = {"VA", "WS", "FM", "Grain", "WT", "Chord", "Speech", "Swarm", "Noise", "Particle", "String", "Modal", "Additive", "Kick", "Snare", "Hat", "PD", "6Op", "Terrain", "StrMach", "Chip", "VA VCF", NULL};
+static const char *const g_braids_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Comb", "Toy", "LP", "Peak", "BP", "HP", "Vosim", "Vowel", "FOF", "Harm", "FM", "FB FM", "Chaos", "Pluck", "Bowed", "Blown", "Fluted", "Bell", "Drum", "Kick", "Cymbal", "Snare", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};
 static const char *const g_track_family_labels[] = {"Off", "Input1", "Input2", "Input3", "Input4", "Synth", "Drum", "Master", "MIDI", "Sampler", NULL};
 static const char *const g_track_midi_source_labels[] = {"INT", "EXT", "ALL", NULL};
 static const char *const g_cfg_rec_labels[] = {"Off", "4st", "8st", "16st", NULL};
@@ -387,6 +388,13 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_PLAITS_LPG_RESPONSE, "LPG Resp", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_PLAITS_DECAY, "Decay", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_PLAITS_FREQUENCY_RANGE, "Range", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_EDIT, "Edit", PARAM_TYPE_ENUM, 0.0f, 47.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_braids_edit_labels, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_FINE, "Fine", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_COARSE, "Coarse", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_FM, "FM", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_TIMBRE, "Timbre", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_MODULATION, "Modulation", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_BRAIDS_COLOR, "Color", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_HYBRID_GATE, "Gate", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, NULL),
     PARAM_DESC_EX(PARAM_MIDI_PROGRAM, "Program", PARAM_TYPE_INT, 0.0f, 128.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_midi_program),

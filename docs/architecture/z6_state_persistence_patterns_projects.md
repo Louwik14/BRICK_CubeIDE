@@ -58,6 +58,10 @@ Autorite orchestration projet:
 Autorite persistence projet SD:
 - `project_sd_bank_store_slot()`, `project_sd_bank_load_slot()`, `project_sd_bank_delete_slot()`, `project_sd_bank_is_slot_equivalent_to_live()`.
 
+Compat prototype:
+- quand `PARAM_COUNT` change et modifie `PatternSaveV1` / `ProjectSaveV1`, Z6 peut bumper les versions fichier sans migration.
+- pour Braids, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
+
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
 - Le service conserve une session SD exclusive et alimente un ring buffer audio pre-rendu hors IRQ.

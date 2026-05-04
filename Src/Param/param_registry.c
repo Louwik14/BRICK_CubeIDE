@@ -351,6 +351,27 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_PLAITS_FREQUENCY_RANGE:
             *out_value = state->plaits.frequency_range;
             return 1U;
+        case PARAM_BRAIDS_EDIT:
+            *out_value = state->braids.edit;
+            return 1U;
+        case PARAM_BRAIDS_FINE:
+            *out_value = state->braids.fine;
+            return 1U;
+        case PARAM_BRAIDS_COARSE:
+            *out_value = state->braids.coarse;
+            return 1U;
+        case PARAM_BRAIDS_FM:
+            *out_value = state->braids.fm;
+            return 1U;
+        case PARAM_BRAIDS_TIMBRE:
+            *out_value = state->braids.timbre;
+            return 1U;
+        case PARAM_BRAIDS_MODULATION:
+            *out_value = state->braids.modulation;
+            return 1U;
+        case PARAM_BRAIDS_COLOR:
+            *out_value = state->braids.color;
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -764,6 +785,27 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_PLAITS_FREQUENCY_RANGE:
             state->plaits.frequency_range = value;
+            return 1U;
+        case PARAM_BRAIDS_EDIT:
+            state->braids.edit = value;
+            return 1U;
+        case PARAM_BRAIDS_FINE:
+            state->braids.fine = value;
+            return 1U;
+        case PARAM_BRAIDS_COARSE:
+            state->braids.coarse = value;
+            return 1U;
+        case PARAM_BRAIDS_FM:
+            state->braids.fm = value;
+            return 1U;
+        case PARAM_BRAIDS_TIMBRE:
+            state->braids.timbre = value;
+            return 1U;
+        case PARAM_BRAIDS_MODULATION:
+            state->braids.modulation = value;
+            return 1U;
+        case PARAM_BRAIDS_COLOR:
+            state->braids.color = value;
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

@@ -18,6 +18,7 @@
 #include "Audio/drum_synth.h"
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_plaits_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "ui_core.h"
@@ -180,6 +181,17 @@ static void keyboard_engine_send_active_track_note(uint8_t note, uint8_t velocit
             brick6_plaits_runtime_note_off(ctx->instance_id, note);
         }
     }
+    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+    {
+        if (is_note_on != 0U)
+        {
+            brick6_braids_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+        }
+        else
+        {
+            brick6_braids_runtime_note_off(ctx->instance_id, note);
+        }
+    }
 }
 
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
@@ -284,6 +296,17 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
             else
             {
                 brick6_plaits_runtime_note_off(ctx->instance_id, note);
+            }
+        }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+        {
+            if (is_note_on != 0U)
+            {
+                brick6_braids_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+            }
+            else
+            {
+                brick6_braids_runtime_note_off(ctx->instance_id, note);
             }
         }
     }
@@ -481,6 +504,16 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
                 brick6_plaits_runtime_note_off(ctx->instance_id, note);
             }
         }
+        else if (sounding_engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+        {
+            const uint8_t active_track = ui_get_active_track();
+            track_runtime_refresh_track(active_track);
+            const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(active_track);
+            if ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+            {
+                brick6_braids_runtime_note_off(ctx->instance_id, note);
+            }
+        }
         return;
     }
 
@@ -568,6 +601,11 @@ void keyboard_engine_all_notes_off(void)
                 && (track_runtime_get_ctx(active_track)->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS))
         {
             brick6_plaits_runtime_all_notes_off(track_runtime_get_ctx(active_track)->instance_id);
+        }
+        else if ((track_runtime_get_ctx(active_track) != NULL)
+                && (track_runtime_get_ctx(active_track)->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+        {
+            brick6_braids_runtime_all_notes_off(track_runtime_get_ctx(active_track)->instance_id);
         }
     }
 
@@ -734,6 +772,24 @@ void keyboard_engine_midi_receive(const uint8_t *msg, size_t len)
                 else
                 {
                     brick6_plaits_runtime_note_off(ctx->instance_id, note);
+                }
+            }
+        }
+        else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+        {
+            if (is_note_on != 0U)
+            {
+                brick6_braids_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
+            }
+            else if ((is_note_off != 0U) || (is_all_notes_off != 0U))
+            {
+                if (is_all_notes_off != 0U)
+                {
+                    brick6_braids_runtime_all_notes_off(ctx->instance_id);
+                }
+                else
+                {
+                    brick6_braids_runtime_note_off(ctx->instance_id, note);
                 }
             }
         }

@@ -1,6 +1,7 @@
 #include "Param/param_registry_backends.h"
 
 #include "Audio/drum_synth.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/brick6_plaits_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -141,6 +142,96 @@ uint8_t param_backend_apply_tone_plaits(uint8_t track, param_id_t id, float valu
                 state->plaits.frequency_range = clamped;
             }
             brick6_plaits_runtime_set_frequency_range(instance_id, clamped);
+            return 1U;
+        }
+        default:
+            return 0U;
+    }
+}
+
+uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+    {
+        return 0U;
+    }
+
+    const uint8_t instance_id = ctx->instance_id;
+
+    switch (id)
+    {
+        case PARAM_BRAIDS_EDIT:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 47.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.edit = (float)(uint8_t)(clamped + 0.5f);
+            }
+            brick6_braids_runtime_set_edit(instance_id, (float)(uint8_t)(clamped + 0.5f));
+            return 1U;
+        }
+        case PARAM_BRAIDS_FINE:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.fine = clamped;
+            }
+            brick6_braids_runtime_set_fine(instance_id, clamped);
+            return 1U;
+        }
+        case PARAM_BRAIDS_COARSE:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.coarse = clamped;
+            }
+            brick6_braids_runtime_set_coarse(instance_id, clamped);
+            return 1U;
+        }
+        case PARAM_BRAIDS_FM:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.fm = clamped;
+            }
+            brick6_braids_runtime_set_fm(instance_id, clamped);
+            return 1U;
+        }
+        case PARAM_BRAIDS_TIMBRE:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.timbre = clamped;
+            }
+            brick6_braids_runtime_set_timbre(instance_id, clamped);
+            return 1U;
+        }
+        case PARAM_BRAIDS_MODULATION:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.modulation = clamped;
+            }
+            brick6_braids_runtime_set_modulation(instance_id, clamped);
+            return 1U;
+        }
+        case PARAM_BRAIDS_COLOR:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.color = clamped;
+            }
+            brick6_braids_runtime_set_color(instance_id, clamped);
             return 1U;
         }
         default:

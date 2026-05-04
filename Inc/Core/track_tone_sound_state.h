@@ -52,6 +52,16 @@ typedef struct
         float decay;
         float frequency_range;
     } plaits;
+    struct
+    {
+        float edit;
+        float fine;
+        float coarse;
+        float fm;
+        float timbre;
+        float modulation;
+        float color;
+    } braids;
     float midi_program;
     float midi_cc[12];
     struct

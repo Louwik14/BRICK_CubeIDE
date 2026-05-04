@@ -4,6 +4,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/mixer.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_plaits_runtime.h"
 #include "Core/track_state.h"
 #include "UI/ui_track_catalog.h"
@@ -27,6 +28,7 @@ typedef struct
 {
     uint8_t drum_used;
     uint8_t plaits_used;
+    uint8_t braids_used;
 } track_runtime_allocator_state_t;
 
 static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
@@ -83,6 +85,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_CLIP;
         case UI_TRACK_TYPE_PLAITS:
             return TRACK_RUNTIME_TYPE_PLAITS;
+        case UI_TRACK_TYPE_BRAIDS:
+            return TRACK_RUNTIME_TYPE_BRAIDS;
 
         case UI_TRACK_TYPE_BUFFER:
             return TRACK_RUNTIME_TYPE_BUFFER;
@@ -275,6 +279,16 @@ static const param_id_t g_track_runtime_tone_slots_plaits[] = {
     PARAM_PLAITS_FREQUENCY_RANGE
 };
 
+static const param_id_t g_track_runtime_tone_slots_braids[] = {
+    PARAM_BRAIDS_EDIT,
+    PARAM_BRAIDS_FINE,
+    PARAM_BRAIDS_COARSE,
+    PARAM_BRAIDS_FM,
+    PARAM_BRAIDS_TIMBRE,
+    PARAM_BRAIDS_MODULATION,
+    PARAM_BRAIDS_COLOR
+};
+
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_SAMPLE,
     PARAM_SAMPLER_GAIN,
@@ -336,6 +350,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_PLAITS:
             *out_table = g_track_runtime_tone_slots_plaits;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_plaits) / sizeof(g_track_runtime_tone_slots_plaits[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_BRAIDS:
+            *out_table = g_track_runtime_tone_slots_braids;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_braids) / sizeof(g_track_runtime_tone_slots_braids[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_SAMPLER:
@@ -508,6 +527,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
     {
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_PLAITS:
+        case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -534,6 +554,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_PLAITS:
+        case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_MASTER_BUFFER:
         case TRACK_RUNTIME_ENGINE_TB3:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -551,7 +572,8 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 
     if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS))
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS)
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
     {
         return 1U;
     }
@@ -708,6 +730,19 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
+    if (type == TRACK_RUNTIME_TYPE_BRAIDS)
+    {
+        if ((allocator == NULL) || (allocator->braids_used >= 1U))
+        {
+            track_runtime_set_quota_blocked(ctx);
+            return;
+        }
+
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_BRAIDS, allocator->braids_used);
+        allocator->braids_used++;
+        return;
+    }
+
 
     track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
 }
@@ -740,6 +775,8 @@ void track_runtime_refresh_all(void)
     uint8_t drum_count = 0U;
     uint8_t previous_plaits_owner = TRACK_RUNTIME_INSTANCE_NONE;
     uint8_t current_plaits_owner = TRACK_RUNTIME_INSTANCE_NONE;
+    uint8_t previous_braids_owner = TRACK_RUNTIME_INSTANCE_NONE;
+    uint8_t current_braids_owner = TRACK_RUNTIME_INSTANCE_NONE;
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -750,6 +787,12 @@ void track_runtime_refresh_all(void)
                 && (g_track_runtime_ctx[track].instance_id == 0U))
         {
             previous_plaits_owner = track;
+        }
+        if ((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+                && (g_track_runtime_ctx[track].instance_id == 0U))
+        {
+            previous_braids_owner = track;
         }
     }
 
@@ -838,12 +881,20 @@ void track_runtime_refresh_all(void)
             {
                 current_plaits_owner = track;
             }
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+            {
+                current_braids_owner = track;
+            }
         }
     }
 
     if (previous_plaits_owner != current_plaits_owner)
     {
         brick6_plaits_runtime_reset_instance(0U);
+    }
+    if (previous_braids_owner != current_braids_owner)
+    {
+        brick6_braids_runtime_reset_instance(0U);
     }
 
     g_track_runtime_synth_usage.drum_tracks = drum_count;
@@ -868,6 +919,26 @@ uint8_t track_runtime_is_track_plaits_available(uint8_t track)
         const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[other_track];
         if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
                 && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_PLAITS))
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+uint8_t track_runtime_is_track_braids_available(uint8_t track)
+{
+    for (uint8_t other_track = 0U; other_track < SEQ_TRACK_COUNT; ++other_track)
+    {
+        if (other_track == track)
+        {
+            continue;
+        }
+
+        const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[other_track];
+        if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
         {
             return 0U;
         }
@@ -1248,6 +1319,13 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_PLAITS_LPG_RESPONSE:
         case PARAM_PLAITS_DECAY:
         case PARAM_PLAITS_FREQUENCY_RANGE:
+        case PARAM_BRAIDS_EDIT:
+        case PARAM_BRAIDS_FINE:
+        case PARAM_BRAIDS_COARSE:
+        case PARAM_BRAIDS_FM:
+        case PARAM_BRAIDS_TIMBRE:
+        case PARAM_BRAIDS_MODULATION:
+        case PARAM_BRAIDS_COLOR:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
             return rule;

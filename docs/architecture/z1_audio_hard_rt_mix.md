@@ -12,6 +12,8 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
+- `Src/Core/brick6_plaits_runtime.cpp` + `Inc/Core/brick6_plaits_runtime.h` : wrapper mono-instance Plaits rendu en blocs puis injecte via `mixer_submit_external_mono`.
+- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : wrapper mono-instance Braids autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream.
@@ -26,7 +28,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
 Dependances de Z1 sans appartenir a Z1:
-- Engines synth/sampler (`drum`, `voice_manager`).
+- Engines synth/sampler (`drum`, `voice_manager`, wrappers Plaits/Braids/Sampler).
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
@@ -58,7 +60,7 @@ Autorite de rendu DSP principal:
 
 Autorite de rendu runtime applicatif:
 - `brick6_audio_runtime_dsp()` dans `Src/Core/brick6_audio_runtime.c`.
-- Ordonne render engines externes, modulation bloc, sampler, mixer, crossfade master/buffer, taps master.
+- Ordonne render engines externes (Drum, Sampler, Plaits, Braids), modulation bloc, sampler, mixer, crossfade master/buffer, taps master.
 
 Autorite de mixage final:
 - `mixer_process()` dans `Src/Audio/mixer.c`.
@@ -138,7 +140,7 @@ Contrats timing sortants:
 - `g_runtime_track_enabled`, `g_runtime_last_*`, `g_buffer_xfade_smoothed`
   - Ecriture/Lecture: `brick6_audio_runtime_dsp` et helper xfade.
   - Role: gating des engines et smoothing blend buffer.
-- temporaires bloc `drum_tmp`, `recL`, `recR`
+- temporaires bloc `drum_tmp`, `plaits_tmp`, `braids_tmp`, `recL`, `recR`
   - Role: scratch per-block pour rendu engines et read playback.
 
 ### `Src/Audio/mixer.c`
@@ -190,7 +192,7 @@ Flux nominal prouve par code:
 - Avant chaque sous-segment, `seq_runtime_audio_apply_event` applique les events a l'offset.
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
-  - rendu engines externes (Drum/Plaits mono, Sampler stereo) -> `mixer_submit_external_*`
+  - rendu engines externes (Drum/Plaits/Braids mono, Sampler stereo) -> `mixer_submit_external_*`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
   - tap `SD_RECORDER_TAP_TRACK_RAW`

@@ -239,6 +239,13 @@ file(GLOB MUTABLE_PLAITS_SPEECH_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/plaits/dsp/speech/*.cpp"
 )
 
+set(MUTABLE_BRAIDS_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/analog_oscillator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/digital_oscillator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/macro_oscillator.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/resources.cc"
+)
+
 file(GLOB MUTABLE_STMLIB_DSP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib/dsp/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib/dsp/*.cc"
@@ -300,6 +307,7 @@ set(ALL_USER_SOURCES
     ${MUTABLE_PLAITS_FM_SRC}
     ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC}
+    ${MUTABLE_BRAIDS_SRC}
     ${MUTABLE_STMLIB_DSP_SRC}
     ${MUTABLE_STMLIB_UTILS_SRC}
 )

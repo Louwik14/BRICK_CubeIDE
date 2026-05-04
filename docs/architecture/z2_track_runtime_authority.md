@@ -29,6 +29,7 @@ Autorités secondaires dans la zone:
 - track_runtime_invalidate_all(): invalide globalement (dirty flag).
 - track_runtime_bind_ctx(): décide engine/instance/bind_state/reason (appel interne).
 - track_runtime_get_param_rule() + track_runtime_get_effective_param_status(): autorité de statut param runtime.
+- `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`: autorité du mapping TONE local au `track_runtime_type` effectif.
 
 Il n’existe pas de seconde autorité active in-tree pour ce binding runtime.
 
@@ -99,6 +100,7 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - map UI family/type -> runtime family/type
 - allocation mix_track
 - bind engine/instance avec quotas et reasons
+- `Synth/Plaits` et `Synth/Braids` restent des engines mono-instance, avec quota runtime `1` et reset local quand l'owner change
 - binding Drum: `instance_id` stable par track logique (`instance_id == track_id`), pour eviter toute migration d'etat inter-track lors des reconfigurations de cardinalite Drum
 - calcul flags capabilities
 
@@ -121,6 +123,7 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - Le contrat "track -> capacités -> ensembles UI exposables" est matérialisé dans Z2 (`track_runtime_descriptor_t` + `ui_ensemble_mask`) et consommé par Z5 sans redécision distribuée.
 - Les couches d'exécution (scheduler/param apply) lisent le channel MIDI via Z2 (`track_runtime_get_midi_channel_*`) au lieu d'un couplage direct à l'état UI.
 - Le resolver structurel pur est explicite: `track_runtime_resolve_track()` renvoie une vue résolue (descriptor + cibles runtime valides) sans logique UI contextuelle.
+- Pour le set `TONE`, le mapping `slot -> param` est local au type runtime effectif; il ne doit pas être dupliqué dans Z4/Z5/Z3.
 
 ## 8. Dépendances inter-zones
 Entrées de Z2:

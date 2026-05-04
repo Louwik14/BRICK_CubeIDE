@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include "stm32h7xx_hal.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/brick6_plaits_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -336,6 +337,17 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         else
         {
             brick6_plaits_runtime_note_off(resolved.descriptor.instance_id, note);
+        }
+    }
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_BRAIDS)
+    {
+        if (is_note_on != 0U)
+        {
+            brick6_braids_runtime_note_on(resolved.descriptor.instance_id, (float)note, (float)velocity / 127.0f);
+        }
+        else
+        {
+            brick6_braids_runtime_note_off(resolved.descriptor.instance_id, note);
         }
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)

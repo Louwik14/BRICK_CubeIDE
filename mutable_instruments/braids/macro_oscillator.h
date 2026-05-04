@@ -36,7 +36,7 @@
 #include "braids/analog_oscillator.h"
 #include "braids/digital_oscillator.h"
 #include "braids/resources.h"
-#include "braids/settings.h"
+#include "braids/macro_oscillator_shape.h"
 
 namespace braids {
   

@@ -440,6 +440,12 @@ Flux nominal prouve:
 5. Generation/collecte des evenements
 - Pour chaque `seq_boundary_hit_t`, `seq_play_scheduler_schedule_step` lit trig/plocks/param defaults et pousse NOTE_ON/NOTE_OFF horodates en sample-domain.
 - Quand aucun plock `PLAY` n'est present, la valeur de base vient maintenant de l'autorite seq canonique (`seq_param_iface_get_base_value`) et non d'un fallback default descriptor.
+- Le dispatch note moteur reste resolu par track runtime effectif:
+  - `Sampler` -> `brick6_sampler_runtime`
+  - `Plaits` -> `brick6_plaits_runtime`
+  - `Braids` -> `brick6_braids_runtime`
+  - `Drum` -> `drum_synth`
+- Ce dispatch ne rederive pas de logique produit locale et reste borne a la projection Z2.
 
 6. Scheduling bloc audio
 - Au debut de chaque bloc audio, `seq_runtime_audio_collect_block_events`:

@@ -1,4 +1,4 @@
-﻿# Z5 - UI / Navigation / Interaction
+# Z5 - UI / Navigation / Interaction
 
 ## 1. Perimetre
 
@@ -386,7 +386,20 @@ Points factuels:
   - pas de nouveau flux de navigation autonome.
 - Compat UI/restore:
   - un ancien couple `Synth/Sampler` est remappe vers `Sampler/OneShot`,
-  - la famille `Synth` ne propose plus que `Plaits`.
+  - la famille `Synth` propose `Plaits` et `Braids`,
+  - `Braids` reste mono-instance et cesse d'être proposé par `CFG` si une autre track le porte déjà.
+
+## 14.b Contrat UI Braids
+- `Synth/Braids` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
+- La famille template `TONE` Braids expose exactement 7 params dans l'ordre runtime:
+  - `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`.
+- Le layout UI suit deux sous-pages:
+  - `EDIT`: `EDIT`, `FINE`, `COARSE`, `FM`
+  - `TONE`: `TIMBRE`, `MODULATION`, `COLOR`
+- L'ordre visible doit rester aligné avec `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()` pour le type runtime `Braids`.
+- Le clavier live réutilise le même seam track-aware que le scheduler:
+  - `note on/off` Braids passent par `keyboard_engine` puis `brick6_braids_runtime`
+  - aucun chemin UI local parallèle n'est autorisé pour le jeu de notes.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.

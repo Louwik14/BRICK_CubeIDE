@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "Core/track_runtime.h"
+#include "Core/brick6_braids_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "midi.h"
@@ -154,6 +155,10 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
                 drum_killed[resolved.descriptor.instance_id] = 1U;
                 drum_synth_all_notes_off_for_instance(resolved.descriptor.instance_id);
             }
+        }
+        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+        {
+            brick6_braids_runtime_all_notes_off(resolved.descriptor.instance_id);
         }
     }
 }
