@@ -7,6 +7,7 @@
 #include "mixer.h"
 #include "App/Hall/hall_engine.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_PARAM_8
 
@@ -105,23 +106,34 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
         return 1U;
     }
 
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    uint8_t mute_track = track;
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        if (track_runtime_get_voice_group_effective_master(track, &mute_track) == 0U)
+        {
+            return 1U;
+        }
+    }
+
     /* Consumer-edge refresh: mute state reads projection after explicit refresh. */
-    track_runtime_refresh_track(track);
+    track_runtime_refresh_track(mute_track);
     track_runtime_resolved_track_t resolved;
-    if (track_runtime_resolve_track(track, &resolved) == 0U)
+    if (track_runtime_resolve_track(mute_track, &resolved) == 0U)
     {
         return 1U;
     }
 
     uint8_t mute_mix_track = 0U;
     if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ui_core_resolve_mute_mix_track(track, &resolved, &mute_mix_track) == 0U))
+            || (ui_core_resolve_mute_mix_track(mute_track, &resolved, &mute_mix_track) == 0U))
     {
         return 1U;
     }
 
     float muted_value = 0.0f;
-    if (param_registry_get_track_value(PARAM_MIX_MUTE, track, &muted_value) != 0U)
+    if (param_registry_get_track_value(PARAM_MIX_MUTE, mute_track, &muted_value) != 0U)
     {
         *out_muted = (muted_value >= 0.5f) ? 1U : 0U;
     }
@@ -161,6 +173,38 @@ static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
     }
 
     return 1U;
+}
+
+static uint8_t ui_core_apply_group_runtime_mute(uint8_t track, uint8_t muted)
+{
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return 0U;
+    }
+
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        uint8_t members[UI_TRACK_COUNT];
+        uint8_t member_count = 0U;
+        if (track_runtime_collect_voice_group_members(track,
+                                                      members,
+                                                      (uint8_t)UI_TRACK_COUNT,
+                                                      &member_count) == 0U)
+        {
+            return 0U;
+        }
+
+        for (uint8_t i = 0U; i < member_count; ++i)
+        {
+            (void)ui_core_apply_track_runtime_mute(members[i], muted);
+        }
+        return 1U;
+    }
+
+    return ui_core_apply_track_runtime_mute(track, muted);
 }
 
 static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
@@ -256,6 +300,13 @@ static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn s
 
 static void ui_core_mute_toggle_quick_track(uint8_t track)
 {
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return;
+    }
+
     uint8_t muted = 0U;
     uint8_t available = 0U;
     if ((ui_core_get_track_runtime_mute(track, &muted, &available) == 0U) || (available == 0U))
@@ -263,13 +314,39 @@ static void ui_core_mute_toggle_quick_track(uint8_t track)
         return;
     }
 
-    (void)ui_core_apply_track_runtime_mute(track, (muted == 0U) ? 1U : 0U);
+    (void)ui_core_apply_group_runtime_mute(track, (muted == 0U) ? 1U : 0U);
 }
 
 static void ui_core_mute_toggle_prepared_track(uint8_t track)
 {
     if ((track >= UI_TRACK_COUNT) || (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF))
     {
+        return;
+    }
+
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return;
+    }
+
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        const uint8_t next = (g_ui_core_mute.prepared_state[track] == 0U) ? 1U : 0U;
+        uint8_t members[UI_TRACK_COUNT];
+        uint8_t member_count = 0U;
+        if (track_runtime_collect_voice_group_members(track,
+                                                      members,
+                                                      (uint8_t)UI_TRACK_COUNT,
+                                                      &member_count) == 0U)
+        {
+            return;
+        }
+        for (uint8_t i = 0U; i < member_count; ++i)
+        {
+            g_ui_core_mute.prepared_state[members[i]] = next;
+        }
         return;
     }
 

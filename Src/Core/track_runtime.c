@@ -762,6 +762,26 @@ void track_runtime_invalidate_track(uint8_t track)
     track_runtime_invalidate_all();
 }
 
+uint8_t track_runtime_refresh_if_dirty(void)
+{
+    if (g_track_runtime_global_dirty != 0U)
+    {
+        track_runtime_refresh_all();
+        return 1U;
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (g_track_runtime_track_dirty[track] != 0U)
+        {
+            track_runtime_refresh_all();
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
 void track_runtime_refresh_all(void)
 {
     track_runtime_allocator_state_t allocator = { 0U };
@@ -1635,4 +1655,101 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
+}
+
+uint8_t track_runtime_get_voice_group_role(uint8_t track, uint8_t *out_role)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_role == NULL))
+    {
+        return 0U;
+    }
+
+    *out_role = (uint8_t)track_state_get_voice_group_role(track);
+    return 1U;
+}
+
+uint8_t track_runtime_get_voice_group_effective_master(uint8_t track, uint8_t *out_master_track)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_master_track == NULL))
+    {
+        return 0U;
+    }
+
+    const track_voice_group_role_t role = track_state_get_voice_group_role(track);
+    if ((role == TRACK_VOICE_GROUP_ROLE_SOLO) || (role == TRACK_VOICE_GROUP_ROLE_MASTER))
+    {
+        *out_master_track = track;
+        return 1U;
+    }
+
+    if (track == 0U)
+    {
+        return 0U;
+    }
+
+    for (int32_t i = (int32_t)track; i >= 0; --i)
+    {
+        const track_voice_group_role_t cursor_role = track_state_get_voice_group_role((uint8_t)i);
+        if (cursor_role == TRACK_VOICE_GROUP_ROLE_SLAVE)
+        {
+            continue;
+        }
+
+        if (cursor_role == TRACK_VOICE_GROUP_ROLE_MASTER)
+        {
+            *out_master_track = (uint8_t)i;
+            return 1U;
+        }
+
+        return 0U;
+    }
+
+    return 0U;
+}
+
+uint8_t track_runtime_collect_voice_group_members(uint8_t master_track,
+                                                  uint8_t *out_members,
+                                                  uint8_t out_members_capacity,
+                                                  uint8_t *out_count)
+{
+    if ((master_track >= SEQ_TRACK_COUNT) || (out_count == NULL))
+    {
+        return 0U;
+    }
+
+    if (track_state_get_voice_group_role(master_track) != TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        return 0U;
+    }
+
+    uint8_t count = 0U;
+    for (uint8_t track = master_track; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_voice_group_role_t role = track_state_get_voice_group_role(track);
+        if (track == master_track)
+        {
+            if (role != TRACK_VOICE_GROUP_ROLE_MASTER)
+            {
+                return 0U;
+            }
+        }
+        else if (role != TRACK_VOICE_GROUP_ROLE_SLAVE)
+        {
+            break;
+        }
+
+        if ((out_members != NULL) && (count < out_members_capacity))
+        {
+            out_members[count] = track;
+        }
+        ++count;
+    }
+
+    if ((out_members != NULL) && (count > out_members_capacity))
+    {
+        return 0U;
+    }
+
+    *out_count = count;
+    return 1U;
 }

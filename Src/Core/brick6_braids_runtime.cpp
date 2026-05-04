@@ -21,6 +21,11 @@ constexpr float kBraidsPitchFineRange = 2.0f;
 constexpr float kBraidsPitchFmRange = 24.0f;
 constexpr float kBraidsReleaseCoeff = 0.995f;
 constexpr float kBraidsEditMax = 38.0f;
+constexpr float kBraidsSampleRate = 48000.0f;
+constexpr float kBraidsTailMinSeconds = 0.001f;
+constexpr float kBraidsTailMaxSeconds = 5.0f;
+constexpr float kBraidsTailSafetyMultiplier = 6.0f;
+constexpr float kBraidsTailSafetyFloorSeconds = 0.050f;
 
 static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
     braids::MACRO_OSC_SHAPE_CSAW,
@@ -69,6 +74,8 @@ typedef struct
     brick6_braids_runtime_voice_t voice;
     uint8_t has_note;
     float level;
+    float vca_release_s;
+    uint32_t tail_samples_remaining;
     braids::MacroOscillator oscillator;
 } brick6_braids_runtime_instance_t;
 
@@ -108,6 +115,13 @@ static braids::MacroOscillatorShape brick6_braids_runtime_shape_from_edit(float 
 {
     const int index = (int)(brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax) + 0.5f);
     return kBraidsShapeMap[index];
+}
+
+static uint32_t brick6_braids_runtime_compute_tail_samples(float release_s)
+{
+    const float clamped_release = brick6_braids_runtime_clamp(release_s, kBraidsTailMinSeconds, kBraidsTailMaxSeconds);
+    const float tail_s = (clamped_release * kBraidsTailSafetyMultiplier) + kBraidsTailSafetyFloorSeconds;
+    return (uint32_t)(tail_s * kBraidsSampleRate + 0.5f);
 }
 
 static brick6_braids_runtime_instance_t *brick6_braids_runtime_get_instance_mut(uint8_t instance_id)
@@ -152,6 +166,8 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
     instance->voice.trigger = 0U;
     instance->has_note = 0U;
     instance->level = 0.0f;
+    instance->vca_release_s = 0.001f;
+    instance->tail_samples_remaining = 0U;
     instance->oscillator.Init();
     instance->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(instance->voice.edit));
     instance->oscillator.set_pitch(brick6_braids_runtime_pitch_to_q7(&instance->voice));
@@ -241,6 +257,15 @@ void brick6_braids_runtime_set_color(uint8_t instance_id, float color)
     }
 }
 
+void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s)
+{
+    brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->vca_release_s = brick6_braids_runtime_clamp(release_s, kBraidsTailMinSeconds, kBraidsTailMaxSeconds);
+    }
+}
+
 void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float velocity)
 {
     brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
@@ -264,6 +289,7 @@ void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float veloci
     instance->voice.gate = 1U;
     instance->voice.trigger = 1U;
     instance->has_note = 1U;
+    instance->tail_samples_remaining = 0U;
 }
 
 void brick6_braids_runtime_note_off(uint8_t instance_id, uint8_t note)
@@ -282,6 +308,7 @@ void brick6_braids_runtime_note_off(uint8_t instance_id, uint8_t note)
     instance->voice.has_active_note = 0U;
     instance->voice.gate = 0U;
     instance->voice.trigger = 0U;
+    instance->tail_samples_remaining = brick6_braids_runtime_compute_tail_samples(instance->vca_release_s);
 }
 
 void brick6_braids_runtime_all_notes_off(uint8_t instance_id)
@@ -295,6 +322,7 @@ void brick6_braids_runtime_all_notes_off(uint8_t instance_id)
     instance->voice.has_active_note = 0U;
     instance->voice.gate = 0U;
     instance->voice.trigger = 0U;
+    instance->tail_samples_remaining = 0U;
 }
 
 void brick6_braids_runtime_clear_trigger(uint8_t instance_id)
@@ -321,7 +349,7 @@ void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono,
     }
 
     const float velocity_gain = 0.2f + (brick6_braids_runtime_clamp(instance->voice.velocity, 0.0f, 1.0f) * 0.8f);
-    const float gate_target = (instance->voice.gate != 0U) ? velocity_gain : 0.0f;
+    const float gate_target = ((instance->voice.gate != 0U) || (instance->tail_samples_remaining > 0U)) ? velocity_gain : 0.0f;
     instance->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(instance->voice.edit));
     instance->oscillator.set_pitch(brick6_braids_runtime_pitch_to_q7(&instance->voice));
     instance->oscillator.set_parameters(
@@ -347,13 +375,17 @@ void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono,
             const float coeff = (gate_target > instance->level) ? 0.05f : (1.0f - kBraidsReleaseCoeff);
             instance->level += (gate_target - instance->level) * coeff;
             out_mono[offset + i] = brick6_braids_runtime_clamp(((float)sample_block[i] / 32768.0f) * instance->level, -1.0f, 1.0f);
+            if ((instance->voice.gate == 0U) && (instance->tail_samples_remaining > 0U))
+            {
+                instance->tail_samples_remaining--;
+            }
         }
 
         offset += (uint32_t)block;
     }
 
     instance->voice.trigger = 0U;
-    if ((instance->voice.gate == 0U) && (instance->level <= 1.0e-5f))
+    if ((instance->voice.gate == 0U) && (instance->tail_samples_remaining == 0U) && (instance->level <= 1.0e-5f))
     {
         instance->level = 0.0f;
         instance->has_note = 0U;

@@ -25,11 +25,12 @@
 #include "fx_granular.h"
 #include "fx_saturation.h"
 #include "fx_daisy_comp.h"
+#include "mixer.h"
 #include "memory_layout.h"
 #include "stm32h7xx.h"
 
 #define FX_POOL_SIZE 3u
-#define FX_POOL_TRACK_SAT_COUNT 8u
+#define FX_POOL_TRACK_SAT_COUNT MIXER_MAX_TRACKS
 
 static fx_slot_t g_slots[FX_POOL_SIZE];
 

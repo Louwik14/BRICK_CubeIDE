@@ -34,6 +34,7 @@ typedef struct
     uint8_t type[SEQ_TRACK_COUNT];
     uint8_t midi_channel[SEQ_TRACK_COUNT];
     uint8_t midi_source[SEQ_TRACK_COUNT];
+    uint8_t voice_group_role[SEQ_TRACK_COUNT];
 } pattern_v1_track_cfg_block_t;
 
 typedef struct

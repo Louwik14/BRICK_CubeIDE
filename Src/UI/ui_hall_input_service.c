@@ -8,6 +8,42 @@
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
 
+static uint8_t ui_hall_input_service_find_held_master_candidate(uint8_t hall,
+                                                                const uint8_t hall_prev_pressed[HALL_KEY_COUNT],
+                                                                uint8_t *out_track)
+{
+    if ((hall_prev_pressed == 0) || (out_track == 0))
+    {
+        return 0U;
+    }
+
+    uint8_t candidate = 0U;
+    uint8_t found = 0U;
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if ((track == hall) || (hall_prev_pressed[track] == 0U))
+        {
+            continue;
+        }
+
+        if (found != 0U)
+        {
+            return 0U;
+        }
+
+        candidate = track;
+        found = 1U;
+    }
+
+    if (found == 0U)
+    {
+        return 0U;
+    }
+
+    *out_track = candidate;
+    return 1U;
+}
+
 void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t pressed,
                                        uint8_t was_pressed,
@@ -15,10 +51,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t shift_down,
                                        uint8_t track_select_armed,
                                        uint8_t mute_active,
+                                       uint8_t hall_prev_pressed[HALL_KEY_COUNT],
                                        uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
                                        uint32_t cfg_tap_ms[UI_TRACK_COUNT],
                                        uint8_t hall_note_suppressed[HALL_KEY_COUNT],
-                                       ui_hall_input_service_set_active_track_fn set_active_track)
+                                       ui_hall_input_service_set_active_track_fn set_active_track,
+                                       ui_hall_input_service_feedback_fn feedback)
 {
     const ui_hall_direct_action_t action =
         ui_hall_mode_flow_resolve_direct_action(shift_down,
@@ -61,11 +99,19 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
 
     if ((hall < HALL_KEY_COUNT) && (hall < UI_TRACK_COUNT))
     {
+        uint8_t held_master_candidate = 0U;
+        const uint8_t has_held_master_candidate =
+            ui_hall_input_service_find_held_master_candidate(hall,
+                                                             hall_prev_pressed,
+                                                             &held_master_candidate);
         ui_hall_mode_flow_handle_track_hall_action(hall,
                                                    now_ms,
+                                                   held_master_candidate,
+                                                   has_held_master_candidate,
                                                    cfg_tap_ms,
                                                    hall_note_suppressed,
-                                                   set_active_track);
+                                                   set_active_track,
+                                                   feedback);
     }
 }
 

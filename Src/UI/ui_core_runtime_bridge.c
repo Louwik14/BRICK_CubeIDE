@@ -157,7 +157,9 @@ static uint8_t ui_core_runtime_bridge_transport_rec_command(const ui_event_t *ev
         return 1U;
     }
 
-    seq_runtime_set_pattern_rec_target_track(ui_get_active_track());
+    uint8_t rec_target_track = ui_get_active_track();
+    (void)track_runtime_get_voice_group_effective_master(rec_target_track, &rec_target_track);
+    seq_runtime_set_pattern_rec_target_track(rec_target_track);
     seq_runtime_rec_toggle_arm();
     return 1U;
 }

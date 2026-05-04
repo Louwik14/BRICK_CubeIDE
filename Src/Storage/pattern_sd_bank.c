@@ -10,7 +10,9 @@
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
 #define PATTERN_MAGIC      0x31544150UL /* PAT1 */
-#define PATTERN_VERSION    6U /* Opal replaces the public Plaits TONE surface and changes PARAM_COUNT; legacy pattern files are intentionally not kept compatible in prototype phase */
+#define PATTERN_VERSION    7U
+#define PATTERN_VERSION_LEGACY 6U
+#define PATTERN_LEGACY_PAYLOAD_SIZE (sizeof(PatternSaveV1) - SEQ_TRACK_COUNT)
 #define PATTERN_WRITE_CHUNK_BYTES (512U * 8U)
 
 typedef struct __attribute__((packed))
@@ -42,6 +44,7 @@ static uint8_t pattern_sd_read_valid_slot_header(uint8_t bank,
                                                  pattern_sd_slot_header_t *out_hdr,
                                                  uint8_t *out_missing);
 static uint8_t pattern_sd_write_payload_chunked(FIL *fp, const PatternSaveV1 *pattern_data);
+static uint8_t pattern_sd_header_is_supported(const pattern_sd_slot_header_t *hdr);
 
 static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
 {
@@ -51,6 +54,31 @@ static uint32_t pattern_sd_checksum(const uint8_t *data, uint32_t len)
         crc = ((crc << 5) + crc) ^ data[i];
     }
     return crc;
+}
+
+static uint8_t pattern_sd_header_is_supported(const pattern_sd_slot_header_t *hdr)
+{
+    if (hdr == 0)
+    {
+        return 0U;
+    }
+
+    if (hdr->magic != PATTERN_MAGIC)
+    {
+        return 0U;
+    }
+
+    if ((hdr->version == PATTERN_VERSION) && (hdr->payload_size == sizeof(PatternSaveV1)))
+    {
+        return 1U;
+    }
+
+    if ((hdr->version == PATTERN_VERSION_LEGACY) && (hdr->payload_size == PATTERN_LEGACY_PAYLOAD_SIZE))
+    {
+        return 1U;
+    }
+
+    return 0U;
 }
 
 static void pattern_sd_meta_cache_invalidate(uint8_t bank, uint8_t pattern)
@@ -260,7 +288,7 @@ static uint8_t pattern_sd_read_valid_slot_header(uint8_t bank,
 
     (void)f_close(&fp);
 
-    if ((hdr.magic != PATTERN_MAGIC) || (hdr.version != PATTERN_VERSION) || (hdr.payload_size != sizeof(PatternSaveV1)))
+    if (pattern_sd_header_is_supported(&hdr) == 0U)
     {
         return 0U;
     }
@@ -314,13 +342,14 @@ uint8_t pattern_sd_bank_load_slot(uint8_t bank, uint8_t pattern, PatternSaveV1 *
         goto done;
     }
 
-    if ((hdr.magic != PATTERN_MAGIC) || (hdr.version != PATTERN_VERSION) || (hdr.payload_size != sizeof(PatternSaveV1)))
+    if (pattern_sd_header_is_supported(&hdr) == 0U)
     {
         (void)f_close(&fp);
         goto done;
     }
 
-    if ((f_read(&fp, out_pattern, sizeof(*out_pattern), &br) != FR_OK) || (br != sizeof(*out_pattern)))
+    memset(out_pattern, 0, sizeof(*out_pattern));
+    if ((f_read(&fp, out_pattern, hdr.payload_size, &br) != FR_OK) || (br != hdr.payload_size))
     {
         (void)f_close(&fp);
         goto done;
@@ -328,7 +357,7 @@ uint8_t pattern_sd_bank_load_slot(uint8_t bank, uint8_t pattern, PatternSaveV1 *
 
     (void)f_close(&fp);
 
-    if (pattern_sd_checksum((const uint8_t *)out_pattern, sizeof(*out_pattern)) != hdr.checksum)
+    if (pattern_sd_checksum((const uint8_t *)out_pattern, hdr.payload_size) != hdr.checksum)
     {
         goto done;
     }

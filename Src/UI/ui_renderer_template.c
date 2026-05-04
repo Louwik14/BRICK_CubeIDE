@@ -14,6 +14,7 @@
 #include "ui_param.h"
 #include "ui_widgets.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -552,12 +553,26 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
     const char *family_title = ((family != NULL) && (family->family_title != NULL)) ? family->family_title : "TEMPLATE";
     const uint8_t active_track = ui_get_active_track();
-    char track_label[4];
+    char track_label[8];
     char runtime_label[12];
     char cpu_avg_label[40];
     char bpm_label[12];
 
-    (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)(active_track + 1U));
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
+    const uint8_t track_display_id = (uint8_t)(active_track + 1U);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        (void)snprintf(track_label, sizeof(track_label), "M%u", (unsigned int)track_display_id);
+    }
+    else if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        (void)snprintf(track_label, sizeof(track_label), "S%u", (unsigned int)track_display_id);
+    }
+    else
+    {
+        (void)snprintf(track_label, sizeof(track_label), "%u", (unsigned int)track_display_id);
+    }
     ui_get_track_runtime_header_label(active_track, runtime_label, (uint32_t)sizeof(runtime_label));
     ui_renderer_template_format_cpu_avg(cpu_avg_label, (uint32_t)sizeof(cpu_avg_label), active_track);
     uint8_t draw_bpm = 0U;
@@ -588,16 +603,16 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 
     drv_display_set_font(&FONT_5X7);
     ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
-    const uint8_t track_label_shift = (active_track >= 9U) ? 4U : 0U;
-    drv_display_draw_text((uint8_t)(9U + track_label_shift), 1U, runtime_label);
+    const uint8_t track_label_w = (uint8_t)(drv_display_text_width(track_label) + 2U);
+    drv_display_draw_text((uint8_t)(track_label_w + 1U), 1U, runtime_label);
 
     drv_display_set_font(&FONT_4X6);
     const char *hall_mode_label = ui_get_hall_mode_short_label();
     const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
-    drv_display_draw_text((uint8_t)(9U + track_label_shift), 9U, hall_mode_label);
+    drv_display_draw_text((uint8_t)(track_label_w + 1U), 9U, hall_mode_label);
     if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
     {
-        const uint8_t suffix_x = (uint8_t)(9U + track_label_shift + drv_display_text_width(hall_mode_label) + 2U);
+        const uint8_t suffix_x = (uint8_t)(track_label_w + 1U + drv_display_text_width(hall_mode_label) + 2U);
         drv_display_draw_text(suffix_x, 9U, hall_mode_suffix);
     }
 

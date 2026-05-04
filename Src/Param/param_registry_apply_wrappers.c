@@ -1,6 +1,7 @@
 #include "Param/param_registry_apply_bindings.h"
 #include "Param/param_registry.h"
 #include "Core/track_state.h"
+#include "Core/track_runtime.h"
 #include "audio_float.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
@@ -244,6 +245,14 @@ void apply_cfg_track_type(float v)
 void apply_cfg_midi_ch(float v)
 {
     const uint8_t active_track = ui_get_active_track();
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        param_store_set_active(PARAM_CFG_MIDI_CH, (float)track_state_get_midi_channel(active_track));
+        return;
+    }
+
     const uint8_t requested_channel = (uint8_t)(clamp_value(v, 1.0f, 16.0f) + 0.5f);
     (void)ui_set_track_midi_channel(active_track, requested_channel);
     param_store_set_active(PARAM_CFG_MIDI_CH, (float)track_state_get_midi_channel(active_track));
@@ -252,6 +261,14 @@ void apply_cfg_midi_ch(float v)
 void apply_cfg_midi_src(float v)
 {
     const uint8_t active_track = ui_get_active_track();
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        param_store_set_active(PARAM_CFG_MIDI_SRC, (float)track_state_get_midi_source(active_track));
+        return;
+    }
+
     const ui_track_midi_source_t requested_source =
             (ui_track_midi_source_t)((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f));
     (void)ui_set_track_midi_source(active_track, requested_source);

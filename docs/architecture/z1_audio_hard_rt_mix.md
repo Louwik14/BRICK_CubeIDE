@@ -12,8 +12,8 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_io.c` : preuve unpack/pack TDM et mapping slots.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
-- `Src/Core/brick6_opal_runtime.cpp` + `Inc/Core/brick6_opal_runtime.h` : backend runtime mono-instance Opal rendu en blocs puis injecte via `mixer_submit_external_mono`, contraint localement au moteur Plaits `6OP` et branche directement `plaits::SixOpEngine` sans repasser par `plaits::Voice`.
-- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Braids multi-instances (une instance mono par track Braids) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono`.
+- `Src/Core/brick6_opal_runtime.cpp` + `Inc/Core/brick6_opal_runtime.h` : backend runtime mono-instance Opal rendu en blocs puis injecte via `mixer_submit_external_mono_native`, contraint localement au moteur Plaits `6OP` et branche directement `plaits::SixOpEngine` sans repasser par `plaits::Voice`.
+- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Braids multi-instances (une instance mono par track Braids) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream.
@@ -157,10 +157,14 @@ Contrats timing sortants:
   - Ecriture: `mixer_set_send_fx_slot`, `mixer_set_reverb_*`.
   - Lecture: `mixer_process`.
   - Role: routing sends/reverb global.
-- `g_external_track_l/r`, `g_external_track_enabled`
-  - Ecriture: `mixer_submit_external_mono` et `mixer_submit_external_stereo` (depuis `brick6_audio_runtime`).
+- `g_external_track_l/r`, `g_external_track_mono`, `g_external_track_enabled`, `g_external_track_format`, `g_external_track_frames_valid`
+  - Ecriture: `mixer_submit_external_mono`, `mixer_submit_external_mono_native` et `mixer_submit_external_stereo` (depuis `brick6_audio_runtime`).
   - Lecture+clear: `mixer_process`, `mixer_external_inputs_clear`.
-  - Role: injection sources engines externes dans lanes mixer.
+  - Role: injection des sources engines externes dans les lanes mixer, avec format mono-native ou stereo explicite.
+- `lane_plan` local de `mixer_process`
+  - Ecriture/Lecture: calcule localement a chaque bloc par `mixer_build_lane_plan`.
+  - Role: autorite locale mono/stereo par lane, sans nouveau param UI ni autorite globale parallele.
+  - Discipline: une lane mono-native ne reste mono que si tous les blocs actifs de la lane ont une variante mono reelle; sinon la lane repasse localement sur le fallback stereo de reference.
 - buffers bus statiques dans `mixer_process`: `bus_main_*`, `bus_cue_*`, `send_*`, `reverb_return_*`
   - Role: accumulation et rendu final du bloc.
 
@@ -204,7 +208,12 @@ Flux nominal prouve par code:
 6) Mixage bus / sends / master
 - `mixer_process`:
   - begin block master-buffer
-  - per-track: inserts -> filter/EQ/VCA -> gains/pan -> sends -> route MAIN/CUE
+  - calcule un `lane_plan` local par lane (`source mono-native`, `source stereo`, `promotion stereo requise`, `fallback stereo`)
+  - per-track stereo: inserts -> filter/EQ/VCA -> gains/pan -> sends -> route MAIN/CUE
+  - per-track mono-native: filtre biquad mono ou EQ3 mono -> inserts mono-compatibles -> VCA+gain dans la boucle commune -> projection vers `L/R` seulement au point utile pour taps, sends, routing MAIN/CUE et accumulation bus
+  - `EQ3` mono est un bloc mono reel pris directement par le `lane_plan`; une lane mono-native avec `EQ3` actif ne doit plus etre promue stereo pour appeler `EQ3` stereo avec `L/R` dupliques
+  - la projection `mono -> L/R` reste tardive et centralisee: taps `POST_INSERT`, boucle commune `VCA+gain+pan`, puis consommation `POST_FADER`, sends et bus
+  - le chemin stereo reste la reference fonctionnelle et ne met plus a jour les etats mono auxiliaires (`biquad_mono`, `eq3_mono`) quand la lane execute deja en stereo
   - returns reverb/send FX
   - ecrit resultat dans `tracks[0]` (MAIN) et `tracks[1]` (CUE)
 
@@ -256,6 +265,11 @@ Memoire:
 - Z1 ne doit pas faire d'I/O SD bloquante: seulement captures/taps; writer hors IRQ.
 - Le Sampler track-aware lit via `sample_cache` en RAM. `sample_pool` reste catalogue/projet/metadata; `sample_desc->data` est une compat legacy hors autorite audio principale.
 - La sortie principale Sampler reste stereo de bout en bout: pas de downmix L/R->mono avant injection mixer; les samples mono restent dupliques identiquement sur L/R.
+- Chemin mono-native mixer: si la source externe est mono-native et si tous les blocs track-level actifs ont une variante mono reelle, `mixer_process()` conserve le signal en mono jusqu'au dernier moment utile; le fallback stereo reste la reference fonctionnelle.
+- Les blocs track-level mono reels autorises dans ce corridor sont actuellement biquad mono, `EQ3` mono, `VCA`, `gain` et les inserts mono-compatibles exposes par `fx_chain` (actuellement `FX_SAT`).
+- L'ordre DSP mono aligne le chemin stereo de reference: filtre/EQ puis inserts, puis `VCA+gain`, puis projection tardive `mono -> L/R`.
+- Un bloc mono ne doit jamais appeler un traitement stereo avec `L/R` identiques pour simuler du mono.
+- La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN/CUE` et accumulation bus.
 - Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`.
 - La memoire audio runtime Sampler reste locale au sous-systeme Sampler: `sample_page_cache` est l'owner memoire audio runtime, `sample_cache` garde la facade produit/orchestration prepare-service-compat, et `sample_voice_reader` porte la lecture musicale. `READY_FULL` est materialise par pages contigues en SDRAM; `READY_PARTIAL` forward simple est maintenant servi par pages queuees/chargees hors audio via `sample_page_cache_service()` appele depuis `sample_cache_service()`.
 - Retrigger Sampler track-aware: `brick6_sampler_runtime_trigger()` coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` jugé rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.

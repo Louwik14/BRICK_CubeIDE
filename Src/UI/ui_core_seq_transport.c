@@ -4,6 +4,7 @@
 #include "ui_page_manager.h"
 #include "pages/ui_page_template_cfg.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/track_runtime.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -107,7 +108,9 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
         }
 
         /* Command surface: pattern-rec arm is an explicit runtime command with target track preselection. */
-        seq_runtime_set_pattern_rec_target_track(ui_get_active_track());
+        uint8_t rec_target_track = ui_get_active_track();
+        (void)track_runtime_get_voice_group_effective_master(rec_target_track, &rec_target_track);
+        seq_runtime_set_pattern_rec_target_track(rec_target_track);
         seq_runtime_rec_toggle_arm();
         return 1U;
     }

@@ -12,6 +12,7 @@
 #include "stm32h7xx_hal.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
@@ -54,6 +55,8 @@ static uint8_t g_seq_play_generation;
 static uint8_t g_seq_play_midi_program_valid[SEQ_TRACK_COUNT];
 static uint8_t g_seq_play_midi_program_last[SEQ_TRACK_COUNT];
 static seq_play_scheduler_diag_t g_seq_play_diag;
+static uint8_t g_seq_play_group_rr_cursor[SEQ_TRACK_COUNT];
+static uint8_t g_seq_play_group_track_active_count[SEQ_TRACK_COUNT];
 static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_SCHEDULER_VOICE_COUNT] = {
     PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE
 };
@@ -278,6 +281,42 @@ static param_id_t seq_play_scheduler_param_mictim(uint8_t voice)
     return seq_play_scheduler_param_by_voice(g_seq_play_voice_mictim_ids, voice, PARAM_SEQ_PLAY_V1_MICTIM);
 }
 
+static uint8_t seq_play_scheduler_resolve_note_target_track(seq_track_id_t source_track, uint8_t note)
+{
+    (void)note;
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(source_track, &role_u8);
+    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+    {
+        return source_track;
+    }
+
+    uint8_t members[SEQ_TRACK_COUNT];
+    uint8_t member_count = 0U;
+    if ((track_runtime_collect_voice_group_members(source_track,
+                                                   members,
+                                                   (uint8_t)SEQ_TRACK_COUNT,
+                                                   &member_count) == 0U)
+            || (member_count == 0U))
+    {
+        return source_track;
+    }
+
+    const uint8_t start = (uint8_t)(g_seq_play_group_rr_cursor[source_track] % member_count);
+    uint8_t target = members[start];
+    for (uint8_t i = 0U; i < member_count; ++i)
+    {
+        const uint8_t candidate = members[(uint8_t)((start + i) % member_count)];
+        if (g_seq_play_group_track_active_count[candidate] == 0U)
+        {
+            target = candidate;
+            break;
+        }
+    }
+    g_seq_play_group_rr_cursor[source_track] = (uint8_t)((start + 1U) % member_count);
+    return target;
+}
+
 static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
                                                 uint8_t note,
                                                 uint8_t velocity,
@@ -441,6 +480,8 @@ void seq_play_scheduler_init(void)
     {
         g_seq_play_midi_program_valid[track] = 0U;
         g_seq_play_midi_program_last[track] = 0U;
+        g_seq_play_group_rr_cursor[track] = 0U;
+        g_seq_play_group_track_active_count[track] = 0U;
     }
 }
 
@@ -448,6 +489,8 @@ void seq_play_scheduler_clear(void)
 {
     const uint32_t primask = seq_play_scheduler_enter_critical();
     g_seq_play_event_count = 0U;
+    memset(g_seq_play_group_rr_cursor, 0, sizeof(g_seq_play_group_rr_cursor));
+    memset(g_seq_play_group_track_active_count, 0, sizeof(g_seq_play_group_track_active_count));
     seq_play_scheduler_next_generation();
     seq_play_scheduler_exit_critical(primask);
 }
@@ -482,6 +525,13 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
     if ((resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
             || (track_runtime_get_effective_param_status(track, PARAM_SEQ_PLAY_V1_NOTE) == TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL))
+    {
+        return;
+    }
+
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
     {
         return;
     }
@@ -562,14 +612,16 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         }
         uint64_t note_off_sample_time = note_on_sample_time + len_samples;
 
+        const seq_track_id_t target_track = (seq_track_id_t)seq_play_scheduler_resolve_note_target_track(track, note);
+
         seq_play_scheduler_push(note_on_sample_time,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
-                                track,
+                                target_track,
                                 note,
                                 vel);
         seq_play_scheduler_push(note_off_sample_time,
                                 (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
-                                track,
+                                target_track,
                                 note,
                                 0U);
     }
@@ -742,6 +794,20 @@ void seq_play_scheduler_audio_apply_event(const seq_play_scheduler_audio_event_t
     }
 
     const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
+    if (event->track < SEQ_TRACK_COUNT)
+    {
+        if (is_note_on != 0U)
+        {
+            if (g_seq_play_group_track_active_count[event->track] < 255U)
+            {
+                g_seq_play_group_track_active_count[event->track]++;
+            }
+        }
+        else if (g_seq_play_group_track_active_count[event->track] > 0U)
+        {
+            g_seq_play_group_track_active_count[event->track]--;
+        }
+    }
     seq_play_scheduler_emit_midi_note(event);
     seq_play_scheduler_emit_engine_note((seq_track_id_t)event->track,
                                         event->note,

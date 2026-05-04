@@ -30,6 +30,13 @@ static inline int32_t fx_biquad_filter_clip16(int32_t x)
     return x;
 }
 
+static inline int32_t fx_biquad_filter_clip16_mono(int32_t x)
+{
+    if(x < -32767) return -32767;
+    if(x > 32767) return 32767;
+    return x;
+}
+
 static inline uint16_t fx_biquad_filter_interpolate824(const uint16_t *table, uint32_t phase)
 {
     const uint16_t a = table[(phase >> 24) & 0xffU];
@@ -170,5 +177,112 @@ void fx_biquad_filter_process_block(fx_biquad_filter_t *filter,
         if(filter->mode == (uint8_t)FX_BIQUAD_FILTER_MODE_HP) out_r = hp_r;
         else if(filter->mode == (uint8_t)FX_BIQUAD_FILTER_MODE_BP) out_r = filter->bp_r;
         inout_r[i] = (float)out_r * (1.0f / 32767.0f);
+    }
+}
+
+static inline int32_t fx_biquad_filter_process_sample_mono(fx_biquad_filter_mono_t *filter, float input)
+{
+    const int32_t in = (int32_t)(input * 32767.0f);
+    const int32_t notch = in - ((filter->bp * filter->damp_q15) >> 15);
+    filter->lp += (filter->f_q15 * filter->bp) >> 15;
+    filter->lp = fx_biquad_filter_clip16_mono(filter->lp);
+    const int32_t hp = notch - filter->lp;
+    filter->bp += (filter->f_q15 * hp) >> 15;
+    filter->bp = fx_biquad_filter_clip16_mono(filter->bp);
+
+    if(filter->mode == (uint8_t)FX_BIQUAD_FILTER_MODE_HP)
+    {
+        return hp;
+    }
+    if(filter->mode == (uint8_t)FX_BIQUAD_FILTER_MODE_BP)
+    {
+        return filter->bp;
+    }
+    return filter->lp;
+}
+
+void fx_biquad_filter_mono_init(fx_biquad_filter_mono_t *filter, float sample_rate)
+{
+    if(filter == NULL) return;
+
+    memset(filter, 0, sizeof(*filter));
+    filter->sample_rate = (sample_rate > 0.0f) ? sample_rate : FX_BIQUAD_FILTER_DEFAULT_SR;
+    filter->cutoff_hz = 16000.0f;
+    filter->q = FX_BIQUAD_FILTER_DEFAULT_Q;
+    filter->mode = (uint8_t)FX_BIQUAD_FILTER_MODE_LP;
+    filter->bypass = 1U;
+
+    fx_biquad_filter_mono_update_coeffs(filter);
+    filter->coeffs_pending_update = 0U;
+}
+
+void fx_biquad_filter_mono_reset(fx_biquad_filter_mono_t *filter)
+{
+    if(filter == NULL) return;
+    filter->lp = 0;
+    filter->bp = 0;
+}
+
+void fx_biquad_filter_mono_update_coeffs(fx_biquad_filter_mono_t *filter)
+{
+    if(filter == NULL) return;
+
+    filter->frequency_q15 = fx_biquad_filter_cutoff_to_peaks_frequency(filter->cutoff_hz, filter->sample_rate);
+    filter->resonance_q15 = fx_biquad_filter_q_to_peaks_resonance(filter->q);
+    filter->f_q15 = (int32_t)fx_biquad_filter_interpolate824(fx_peaks_lut_svf_cutoff,
+                                                              ((uint32_t)(uint16_t)filter->frequency_q15) << 17);
+    filter->damp_q15 = (int32_t)fx_biquad_filter_interpolate824(fx_peaks_lut_svf_damp,
+                                                                 ((uint32_t)(uint16_t)filter->resonance_q15) << 17);
+    filter->coeffs_pending_update = 1U;
+}
+
+void fx_biquad_filter_mono_set_sample_rate(fx_biquad_filter_mono_t *filter, float sample_rate)
+{
+    if(filter == NULL) return;
+    filter->sample_rate = (sample_rate > 0.0f) ? sample_rate : FX_BIQUAD_FILTER_DEFAULT_SR;
+    fx_biquad_filter_mono_update_coeffs(filter);
+}
+
+void fx_biquad_filter_mono_set_mode(fx_biquad_filter_mono_t *filter, fx_biquad_filter_mode_t mode)
+{
+    if(filter == NULL) return;
+    filter->mode = (uint8_t)mode;
+}
+
+void fx_biquad_filter_mono_set_cutoff(fx_biquad_filter_mono_t *filter, float cutoff_hz)
+{
+    if(filter == NULL) return;
+    filter->cutoff_hz = cutoff_hz;
+    fx_biquad_filter_mono_update_coeffs(filter);
+}
+
+void fx_biquad_filter_mono_set_q(fx_biquad_filter_mono_t *filter, float q)
+{
+    if(filter == NULL) return;
+    filter->q = q;
+    fx_biquad_filter_mono_update_coeffs(filter);
+}
+
+void fx_biquad_filter_mono_set_bypass(fx_biquad_filter_mono_t *filter, uint8_t bypass)
+{
+    if(filter == NULL) return;
+    filter->bypass = (bypass != 0U) ? 1U : 0U;
+}
+
+void fx_biquad_filter_mono_process_block(fx_biquad_filter_mono_t *filter,
+                                         float *inout,
+                                         uint32_t block_size)
+{
+    if((filter == NULL) || (inout == NULL) || (block_size == 0U) || (filter->bypass != 0U))
+    {
+        return;
+    }
+
+    filter->coeffs_pending_update = 0U;
+
+    for(uint32_t i = 0U; i < block_size; ++i)
+    {
+        const int32_t out = fx_biquad_filter_process_sample_mono(filter, inout[i]);
+        inout[i] = (float)out * (1.0f / 32767.0f);
     }
 }

@@ -11,6 +11,7 @@
 static uint8_t g_project_slot_has_data[PROJECT_V1_SLOT_COUNT];
 UI_SDRAM static PatternSaveV1 g_project_slot_buffer;
 static project_sd_bank_error_t g_project_sd_last_error;
+static const uint32_t k_project_pattern_payload_legacy_size = (uint32_t)(sizeof(PatternSaveV1) - SEQ_TRACK_COUNT);
 
 typedef struct
 {
@@ -43,6 +44,10 @@ static uint8_t project_sd_header_is_valid(const project_v1_file_header_t *hdr, u
         return 0U;
     }
 
+    const uint8_t pattern_payload_supported =
+        (uint8_t)((hdr->pattern_payload_size == sizeof(PatternSaveV1))
+                  || (hdr->pattern_payload_size == k_project_pattern_payload_legacy_size));
+
     return ((hdr->magic == PROJECT_V1_FILE_MAGIC)
             && (hdr->version == PROJECT_V1_FILE_VERSION)
             && (hdr->header_size == sizeof(project_v1_file_header_t))
@@ -50,7 +55,7 @@ static uint8_t project_sd_header_is_valid(const project_v1_file_header_t *hdr, u
             && (hdr->bank_count == PROJECT_V1_BANK_COUNT)
             && (hdr->pattern_count == PROJECT_V1_PATTERN_COUNT)
             && (hdr->slot_record_size == sizeof(project_v1_slot_record_t))
-            && (hdr->pattern_payload_size == sizeof(PatternSaveV1))
+            && (pattern_payload_supported != 0U)
             && (hdr->project_slot == (uint32_t)project_slot))
                ? 1U
                : 0U;
@@ -121,7 +126,9 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
             }
 
             const uint8_t rec_has_payload = (rec.payload_size != 0U) ? 1U : 0U;
-            if ((rec.payload_size != 0U) && (rec.payload_size != sizeof(PatternSaveV1)))
+            if ((rec.payload_size != 0U)
+                    && (rec.payload_size != sizeof(PatternSaveV1))
+                    && (rec.payload_size != k_project_pattern_payload_legacy_size))
             {
                 project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_SIZE);
                 return 0U;
@@ -147,7 +154,9 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
                 if ((unchanged != 0U) && (rec_has_data != 0U))
                 {
                     unchanged = (slot_checksum == rec.checksum) ? 1U : 0U;
-                    if ((unchanged != 0U) && (rec.payload_size != sizeof(PatternSaveV1)))
+                    if ((unchanged != 0U)
+                            && (rec.payload_size != sizeof(PatternSaveV1))
+                            && (rec.payload_size != k_project_pattern_payload_legacy_size))
                     {
                         unchanged = 0U;
                     }
@@ -197,8 +206,9 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
 
             if (rec_has_payload != 0U)
             {
-                if ((f_read(fp, &g_project_slot_buffer, sizeof(g_project_slot_buffer), &br) != FR_OK)
-                    || (br != sizeof(g_project_slot_buffer)))
+                memset(&g_project_slot_buffer, 0, sizeof(g_project_slot_buffer));
+                if ((f_read(fp, &g_project_slot_buffer, rec.payload_size, &br) != FR_OK)
+                    || (br != rec.payload_size))
                 {
                     project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
                     return 0U;
@@ -219,7 +229,7 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
             {
                 if (project_sd_checksum_accumulate(0U,
                                                    (const uint8_t *)&g_project_slot_buffer,
-                                                   sizeof(g_project_slot_buffer))
+                                                   rec.payload_size)
                     != rec.checksum)
                 {
                     project_sd_set_error(PROJECT_SD_BANK_ERR_CHECKSUM_FAIL);
@@ -234,7 +244,7 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
                 {
                     *io_checksum = project_sd_checksum_accumulate(*io_checksum,
                                                                   (const uint8_t *)&g_project_slot_buffer,
-                                                                  sizeof(g_project_slot_buffer));
+                                                                  rec.payload_size);
                 }
             }
 

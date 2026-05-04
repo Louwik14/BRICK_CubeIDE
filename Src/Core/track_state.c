@@ -7,6 +7,7 @@
 static ui_track_config_t g_track_configs[UI_TRACK_COUNT];
 static uint8_t g_track_midi_channel[UI_TRACK_COUNT];
 static ui_track_midi_source_t g_track_midi_source[UI_TRACK_COUNT];
+static track_voice_group_role_t g_track_voice_group_role[UI_TRACK_COUNT];
 static uint32_t g_track_revision[UI_TRACK_COUNT];
 static uint32_t g_track_state_global_revision = 0U;
 
@@ -60,6 +61,41 @@ static void track_state_bump_revision(uint8_t track)
     ++g_track_revision[track];
 }
 
+static uint8_t track_state_voice_group_roles_are_valid(const track_voice_group_role_t roles[UI_TRACK_COUNT])
+{
+    if (roles == NULL)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const track_voice_group_role_t role = roles[track];
+        if ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
+        {
+            return 0U;
+        }
+
+        if (role != TRACK_VOICE_GROUP_ROLE_SLAVE)
+        {
+            continue;
+        }
+
+        if (track == 0U)
+        {
+            return 0U;
+        }
+
+        const track_voice_group_role_t left = roles[(uint8_t)(track - 1U)];
+        if ((left != TRACK_VOICE_GROUP_ROLE_MASTER) && (left != TRACK_VOICE_GROUP_ROLE_SLAVE))
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
 static void track_state_commit_entry(uint8_t track,
                                      const ui_track_config_t *next_config,
                                      uint8_t next_midi_channel,
@@ -89,6 +125,7 @@ void track_state_init(void)
         g_track_configs[track] = track_state_default_config();
         g_track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
         g_track_midi_source[track] = UI_TRACK_MIDI_SRC_ALL;
+        g_track_voice_group_role[track] = TRACK_VOICE_GROUP_ROLE_SOLO;
         g_track_revision[track] = 0U;
     }
 
@@ -145,6 +182,63 @@ ui_track_midi_source_t track_state_get_midi_source(uint8_t track)
     }
 
     return (ui_track_midi_source_t)source;
+}
+
+track_voice_group_role_t track_state_get_voice_group_role(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return TRACK_VOICE_GROUP_ROLE_SOLO;
+    }
+
+    const track_voice_group_role_t role = g_track_voice_group_role[track];
+    if ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
+    {
+        return TRACK_VOICE_GROUP_ROLE_SOLO;
+    }
+
+    return role;
+}
+
+bool track_state_set_voice_group_role(uint8_t track, track_voice_group_role_t role)
+{
+    if ((track >= UI_TRACK_COUNT) || ((uint8_t)role >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT))
+    {
+        return false;
+    }
+
+    if (g_track_voice_group_role[track] == role)
+    {
+        return true;
+    }
+
+    track_voice_group_role_t next_roles[UI_TRACK_COUNT];
+    memcpy(next_roles, g_track_voice_group_role, sizeof(next_roles));
+    next_roles[track] = role;
+
+    if (track_state_voice_group_roles_are_valid(next_roles) == 0U)
+    {
+        return false;
+    }
+
+    g_track_voice_group_role[track] = role;
+    track_state_bump_revision(track);
+    return true;
+}
+
+bool track_state_is_voice_group_role_solo(uint8_t track)
+{
+    return (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_SOLO);
+}
+
+bool track_state_is_voice_group_role_master(uint8_t track)
+{
+    return (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_MASTER);
+}
+
+bool track_state_is_voice_group_role_slave(uint8_t track)
+{
+    return (track_state_get_voice_group_role(track) == TRACK_VOICE_GROUP_ROLE_SLAVE);
 }
 
 bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
@@ -370,6 +464,41 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         track_state_commit_entry(track, &next_configs[track], next_channels[track], next_sources[track]);
+    }
+
+    return true;
+}
+
+bool track_state_apply_voice_group_roles_bulk(const uint8_t role[UI_TRACK_COUNT])
+{
+    if (role == NULL)
+    {
+        return false;
+    }
+
+    track_voice_group_role_t next_roles[UI_TRACK_COUNT];
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const uint8_t role_u8 = role[track];
+        if (role_u8 >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
+        {
+            return false;
+        }
+        next_roles[track] = (track_voice_group_role_t)role_u8;
+    }
+
+    if (track_state_voice_group_roles_are_valid(next_roles) == 0U)
+    {
+        return false;
+    }
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        if (g_track_voice_group_role[track] != next_roles[track])
+        {
+            g_track_voice_group_role[track] = next_roles[track];
+            track_state_bump_revision(track);
+        }
     }
 
     return true;

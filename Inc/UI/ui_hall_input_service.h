@@ -7,6 +7,7 @@
 #include "ui_core.h"
 
 typedef void (*ui_hall_input_service_set_active_track_fn)(uint8_t track);
+typedef void (*ui_hall_input_service_feedback_fn)(const char *message);
 
 void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t pressed,
@@ -15,10 +16,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t shift_down,
                                        uint8_t track_select_armed,
                                        uint8_t mute_active,
+                                       uint8_t hall_prev_pressed[HALL_KEY_COUNT],
                                        uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
                                        uint32_t cfg_tap_ms[UI_TRACK_COUNT],
                                        uint8_t hall_note_suppressed[HALL_KEY_COUNT],
-                                       ui_hall_input_service_set_active_track_fn set_active_track);
+                                       ui_hall_input_service_set_active_track_fn set_active_track,
+                                       ui_hall_input_service_feedback_fn feedback);
 
 void ui_hall_input_service_handle_transpose(uint8_t shift_down,
                                            uint8_t track_select_armed,

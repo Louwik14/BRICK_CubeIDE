@@ -27,6 +27,7 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "buttons.h"
 #include "led_remap.h"
 #include "led_anim.h"
@@ -352,23 +353,28 @@ static void led_apply_track_select_hall_scene(uint8_t hall)
 
     if (hall < UI_TRACK_COUNT)
     {
-        if (hall == ui_get_active_track())
+        if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
         {
-            r = LED_FIXED_WHITE_R;
-            g = LED_FIXED_WHITE_G;
-            b = LED_FIXED_WHITE_B;
-        }
-        else if (ui_get_track_family(hall) == UI_TRACK_FAMILY_OFF)
-        {
-            r = LED_FIXED_DIM_WHITE;
-            g = LED_FIXED_DIM_WHITE;
-            b = LED_FIXED_DIM_WHITE;
+            r = 0U;
+            g = 0U;
+            b = 0U;
         }
         else
         {
-            r = LED_FIXED_BLUE_R;
-            g = LED_FIXED_BLUE_G;
-            b = LED_FIXED_BLUE_B;
+            uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+            (void)track_runtime_get_voice_group_role(hall, &role_u8);
+            if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+            {
+                r = LED_FIXED_LIGHT_BLUE_R;
+                g = LED_FIXED_LIGHT_BLUE_G;
+                b = LED_FIXED_LIGHT_BLUE_B;
+            }
+            else
+            {
+                r = LED_FIXED_DARK_BLUE_R;
+                g = LED_FIXED_DARK_BLUE_G;
+                b = LED_FIXED_DARK_BLUE_B;
+            }
         }
     }
 
@@ -396,17 +402,35 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
         led_on = (((HAL_GetTick() / 200U) & 0x1U) != 0U) ? 1U : 0U;
     }
 
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(hall, &role_u8);
+    const uint8_t is_slave = (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE) ? 1U : 0U;
+
     if (led_on == 0U)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
     }
     else if (mute_led.muted != 0U)
     {
-        led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_RED_G, LED_FIXED_RED_B);
+        if (is_slave != 0U)
+        {
+            led_layer_set(LED_LAYER_UI, led, (uint8_t)(LED_FIXED_RED_R / 2U), 0U, 0U);
+        }
+        else
+        {
+            led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_RED_G, LED_FIXED_RED_B);
+        }
     }
     else
     {
-        led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
+        if (is_slave != 0U)
+        {
+            led_layer_set(LED_LAYER_UI, led, 0U, (uint8_t)(LED_FIXED_GREEN_G / 2U), 0U);
+        }
+        else
+        {
+            led_layer_set(LED_LAYER_UI, led, LED_FIXED_GREEN_R, LED_FIXED_GREEN_G, LED_FIXED_GREEN_B);
+        }
     }
 
     return 1U;

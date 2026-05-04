@@ -212,6 +212,7 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
     {
         return false;
     }
+    track_runtime_invalidate_track(track);
     if (track == g_ui_track_state.active_track)
     {
         ui_core_runtime_bridge_sync_active_track_midi_channel();
@@ -240,6 +241,7 @@ bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
     {
         return false;
     }
+    track_runtime_invalidate_track(track);
     if (track == g_ui_track_state.active_track)
     {
         ui_core_runtime_bridge_sync_active_track_midi_source();
@@ -544,10 +546,12 @@ void ui_core_service_track_selection_inputs(void)
                                           g_ui_track_state.shift_down,
                                           g_ui_track_state.track_select_armed,
                                           mute_active,
+                                          g_ui_track_state.hall_prev_pressed,
                                           g_ui_track_state.mode_tap_ms,
                                           g_ui_track_state.cfg_tap_ms,
                                           g_ui_track_state.hall_note_suppressed,
-                                          ui_core_set_active_track);
+                                          ui_core_set_active_track,
+                                          ui_core_set_feedback);
         g_ui_track_state.hall_prev_pressed[hall] = pressed;
     }
 

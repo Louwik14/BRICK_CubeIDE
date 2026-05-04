@@ -196,6 +196,7 @@ typedef struct
 void track_runtime_init(void);
 void track_runtime_invalidate_all(void);
 void track_runtime_invalidate_track(uint8_t track);
+uint8_t track_runtime_refresh_if_dirty(void);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
 void track_runtime_get_cached_synth_usage(track_runtime_synth_usage_t *out_usage);
@@ -238,6 +239,12 @@ uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);
 uint8_t track_runtime_is_track_opal_available(uint8_t track);
 uint8_t track_runtime_is_track_braids_available(uint8_t track);
+uint8_t track_runtime_get_voice_group_role(uint8_t track, uint8_t *out_role);
+uint8_t track_runtime_get_voice_group_effective_master(uint8_t track, uint8_t *out_master_track);
+uint8_t track_runtime_collect_voice_group_members(uint8_t master_track,
+                                                  uint8_t *out_members,
+                                                  uint8_t out_members_capacity,
+                                                  uint8_t *out_count);
 
 #ifdef __cplusplus
 }

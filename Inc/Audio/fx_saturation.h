@@ -55,6 +55,9 @@ void fx_saturation_process_block(fx_saturation_t *fx,
                                  float *inout_l,
                                  float *inout_r,
                                  uint32_t frames);
+void fx_saturation_process_mono_block(fx_saturation_t *fx,
+                                      float *inout,
+                                      uint32_t frames);
 
 #ifdef __cplusplus
 }

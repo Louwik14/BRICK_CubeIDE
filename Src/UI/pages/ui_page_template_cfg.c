@@ -1,7 +1,10 @@
 #include "pages/ui_page_template_cfg.h"
 
+#include <stdio.h>
 #include <string.h>
 
+#include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_cfg_family = {
@@ -11,6 +14,30 @@ static const ui_template_family_t g_ui_template_cfg_family = {
         {
             .title = "TRACK",
             .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_CFG_MIDI_CH, PARAM_CFG_MIDI_SRC } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+        {
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_cfg_slave_proxy_family = {
+    .family_title = "CFG",
+    .nav_labels = { "MAIN", "-", "-", "-" },
+    .subpages = {
+        {
+            .title = "TRACK",
+            .param_bank = { .params = { PARAM_CFG_TRACK, PARAM_CFG_TRACK_TYPE, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -85,6 +112,13 @@ static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
 
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(ui_get_active_track(), &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return &g_ui_template_cfg_slave_proxy_family;
+    }
+
     if (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF)
     {
         return &g_ui_template_cfg_family;
@@ -93,10 +127,47 @@ static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_CFG);
 }
 
+static uint8_t ui_page_template_cfg_virtual_slot_text(uint8_t slot,
+                                                       char *out_name,
+                                                       uint32_t out_name_len,
+                                                       char *out_value,
+                                                       uint32_t out_value_len)
+{
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    const uint8_t active_track = ui_get_active_track();
+    (void)track_runtime_get_voice_group_role(active_track, &role_u8);
+    if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return 0U;
+    }
+
+    if ((slot != 2U) && (slot != 3U))
+    {
+        return 0U;
+    }
+
+    uint8_t master_track = active_track;
+    if (track_runtime_get_voice_group_effective_master(active_track, &master_track) == 0U)
+    {
+        return 0U;
+    }
+
+    if ((out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "%s", (slot == 2U) ? "Midi CH" : "Midi Src");
+    }
+    if ((out_value != NULL) && (out_value_len > 0U))
+    {
+        (void)snprintf(out_value, out_value_len, "M%u", (unsigned int)(master_track + 1U));
+    }
+    return 1U;
+}
+
 static ui_template_page_state_t g_ui_template_cfg_state = {
     .family = 0,
     .family_resolver = ui_page_template_cfg_resolve_family,
     .widget_picker = ui_page_template_cfg_pick_widget,
+    .virtual_slot_text = ui_page_template_cfg_virtual_slot_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

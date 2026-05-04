@@ -30,6 +30,7 @@
 #include <string.h>
 
 #include "fx_chain.h"
+#include "fx_pool.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
 #include "mixer_meter.h"
@@ -53,9 +54,11 @@ typedef struct {
 
 typedef struct {
     fx_biquad_filter_t biquad;
+    fx_biquad_filter_mono_t biquad_mono;
     env_adsr_t filter_env;
     adsr_daisy_c_t vca_env;
     fx_dj_eq3_t eq3;
+    fx_dj_eq3_mono_t eq3_mono;
     float sample_rate;
     float cutoff_hz;
     float cutoff_target_hz;
@@ -79,6 +82,33 @@ typedef struct {
     uint8_t type;
 } mixer_track_filter_t;
 
+typedef enum
+{
+    MIXER_LANE_SOURCE_NONE = 0U,
+    MIXER_LANE_SOURCE_HW_STEREO,
+    MIXER_LANE_SOURCE_EXT_STEREO,
+    MIXER_LANE_SOURCE_EXT_MONO_NATIVE,
+    MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO,
+    MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO
+} mixer_lane_source_kind_t;
+
+typedef enum
+{
+    MIXER_LANE_EXEC_STEREO = 0U,
+    MIXER_LANE_EXEC_MONO_NATIVE
+} mixer_lane_exec_kind_t;
+
+typedef struct
+{
+    uint8_t active;
+    uint8_t hw_enabled;
+    uint8_t ext_enabled;
+    uint8_t ext_format;
+    uint32_t ext_frames;
+    mixer_lane_source_kind_t source_kind;
+    mixer_lane_exec_kind_t exec_kind;
+} mixer_lane_plan_t;
+
 static mixer_track_t g_tracks[MIXER_MAX_TRACKS];
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
 static mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
@@ -88,6 +118,14 @@ static AUDIO_HOT float g_external_track_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 static uint8_t g_external_track_format[MIXER_MAX_TRACKS];
 static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
+
+static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
+                                                           float *left,
+                                                           float *right,
+                                                           uint32_t frames);
+static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
+                                                     float *mono,
+                                                     uint32_t frames);
 
 enum
 {
@@ -245,6 +283,18 @@ static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
     fx_dj_eq3_set_mid_db(&filter->eq3, filter->eq_mid_db);
     fx_dj_eq3_set_high_db(&filter->eq3, filter->eq_high_db);
     fx_dj_eq3_set_bypass(&filter->eq3, (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 0U : 1U);
+    fx_dj_eq3_mono_set_low_db(&filter->eq3_mono, filter->eq_low_db);
+    fx_dj_eq3_mono_set_mid_db(&filter->eq3_mono, filter->eq_mid_db);
+    fx_dj_eq3_mono_set_high_db(&filter->eq3_mono, filter->eq_high_db);
+    fx_dj_eq3_mono_set_bypass(&filter->eq3_mono, (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3) ? 0U : 1U);
+
+    fx_biquad_filter_mono_set_sample_rate(&filter->biquad_mono, filter->sample_rate);
+    fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, filter->cutoff_hz);
+    fx_biquad_filter_mono_set_q(&filter->biquad_mono, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+    fx_biquad_filter_mono_set_mode(&filter->biquad_mono,
+                                   mixer_track_filter_type_to_biquad_mode((mixer_track_filter_type_t)filter->type));
+    fx_biquad_filter_mono_set_bypass(&filter->biquad_mono,
+                                     (mixer_track_filter_type_is_biquad((mixer_track_filter_type_t)filter->type) != 0U) ? 0U : 1U);
 }
 
 static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
@@ -253,8 +303,11 @@ static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
         return;
 
     fx_biquad_filter_init(&filter->biquad, filter->sample_rate);
+    fx_biquad_filter_mono_init(&filter->biquad_mono, filter->sample_rate);
     fx_dj_eq3_init(&filter->eq3, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
+    fx_dj_eq3_mono_init(&filter->eq3_mono, filter->sample_rate, 300.0f, 1000.0f, 0.8f, 4000.0f);
     fx_biquad_filter_reset(&filter->biquad);
+    fx_biquad_filter_mono_reset(&filter->biquad_mono);
     mixer_track_filter_apply_core_params(filter);
 }
 
@@ -284,6 +337,7 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
     filter->vca_gate = 0U;
 
+    fx_biquad_filter_mono_init(&filter->biquad_mono, filter->sample_rate);
     env_adsr_init(&filter->filter_env, filter->sample_rate);
     env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f, filter->sample_rate));
     env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
@@ -398,31 +452,444 @@ static void mixer_track_filter_process_block(mixer_track_filter_t *filter,
         case MIXER_TRACK_FILTER_LP_BI:
         case MIXER_TRACK_FILTER_HP_BI:
         case MIXER_TRACK_FILTER_BP_BI:
-            {
-                uint32_t cutoff_update_countdown = 0U;
-                for(uint32_t i = 0U; i < frames; ++i)
-                {
-                    const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-                    if(cutoff_update_countdown == 0U)
-                    {
-                        fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
-                        cutoff_update_countdown = MIXER_FILTER_UPDATE_PERIOD - 1U;
-                    }
-                    else
-                    {
-                        --cutoff_update_countdown;
-                    }
-
-                    fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], 1U);
-                }
-            }
+            mixer_track_filter_process_biquad_stereo_block(filter, left, right, frames);
             break;
 
         default:
-            {
-                break;
-            }
+            break;
     }
+}
+
+static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
+                                                           float *left,
+                                                           float *right,
+                                                           uint32_t frames)
+{
+    uint32_t cutoff_update_countdown = 0U;
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
+        if(cutoff_update_countdown == 0U)
+        {
+            fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
+            cutoff_update_countdown = MIXER_FILTER_UPDATE_PERIOD - 1U;
+        }
+        else
+        {
+            --cutoff_update_countdown;
+        }
+
+        fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], 1U);
+    }
+}
+
+static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *filter,
+                                                         float *mono,
+                                                         uint32_t frames)
+{
+    uint32_t cutoff_update_countdown = 0U;
+
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
+        if(cutoff_update_countdown == 0U)
+        {
+            fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, mixer_track_filter_compute_modulated_cutoff(filter, env));
+            cutoff_update_countdown = MIXER_FILTER_UPDATE_PERIOD - 1U;
+        }
+        else
+        {
+            --cutoff_update_countdown;
+        }
+
+        fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], 1U);
+    }
+}
+
+static void mixer_track_filter_sync_stereo_state_from_mono(mixer_track_filter_t *filter)
+{
+    if (filter == NULL)
+    {
+        return;
+    }
+
+    filter->biquad.lp_l = filter->biquad_mono.lp;
+    filter->biquad.bp_l = filter->biquad_mono.bp;
+    filter->biquad.lp_r = filter->biquad_mono.lp;
+    filter->biquad.bp_r = filter->biquad_mono.bp;
+    filter->biquad.f_q15 = filter->biquad_mono.f_q15;
+    filter->biquad.damp_q15 = filter->biquad_mono.damp_q15;
+    filter->biquad.frequency_q15 = filter->biquad_mono.frequency_q15;
+    filter->biquad.resonance_q15 = filter->biquad_mono.resonance_q15;
+    filter->biquad.cutoff_hz = filter->biquad_mono.cutoff_hz;
+    filter->biquad.q = filter->biquad_mono.q;
+    filter->biquad.mode = filter->biquad_mono.mode;
+    filter->biquad.bypass = filter->biquad_mono.bypass;
+}
+
+static void mixer_track_filter_sync_stereo_state_from_mono_eq3(mixer_track_filter_t *filter)
+{
+    if (filter == NULL)
+    {
+        return;
+    }
+
+    memcpy(filter->eq3.state_l, filter->eq3_mono.state, sizeof(filter->eq3_mono.state));
+    memcpy(filter->eq3.state_r, filter->eq3_mono.state, sizeof(filter->eq3_mono.state));
+    memcpy(filter->eq3.coeffs, filter->eq3_mono.coeffs, sizeof(filter->eq3_mono.coeffs));
+    memcpy(filter->eq3.coeffs_pending, filter->eq3_mono.coeffs_pending, sizeof(filter->eq3_mono.coeffs_pending));
+    filter->eq3.sample_rate = filter->eq3_mono.sample_rate;
+    filter->eq3.low_freq = filter->eq3_mono.low_freq;
+    filter->eq3.mid_freq = filter->eq3_mono.mid_freq;
+    filter->eq3.high_freq = filter->eq3_mono.high_freq;
+    filter->eq3.mid_q = filter->eq3_mono.mid_q;
+    filter->eq3.low_db = filter->eq3_mono.low_db;
+    filter->eq3.mid_db = filter->eq3_mono.mid_db;
+    filter->eq3.high_db = filter->eq3_mono.high_db;
+    filter->eq3.bypass = filter->eq3_mono.bypass;
+    filter->eq3.coeffs_pending_update = filter->eq3_mono.coeffs_pending_update;
+}
+
+static uint8_t mixer_track_filter_supports_mono_native_path(const mixer_track_filter_t *filter)
+{
+    if (filter == NULL)
+    {
+        return 0U;
+    }
+
+    return ((filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
+            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3)
+            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_LP_BI)
+            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_HP_BI)
+            || (filter->type == (uint8_t)MIXER_TRACK_FILTER_BP_BI)) ? 1U : 0U;
+}
+
+static uint8_t mixer_track_insert_is_mono_native_compatible(int8_t slot)
+{
+    if (slot < 0)
+    {
+        return 1U;
+    }
+
+    fx_slot_t *fx_slot = fx_pool_get_slot((uint32_t)slot);
+    if ((fx_slot == NULL) || (fx_slot->active == 0U))
+    {
+        return 1U;
+    }
+
+    return ((fx_type_t)fx_slot->type == FX_SAT) ? 1U : 0U;
+}
+
+static uint8_t mixer_track_supports_mono_native_path(const mixer_track_t *track,
+                                                     const mixer_track_filter_t *filter)
+{
+    if ((track == NULL) || (filter == NULL))
+    {
+        return 0U;
+    }
+
+    if (mixer_track_filter_supports_mono_native_path(filter) == 0U)
+    {
+        return 0U;
+    }
+
+    for (uint32_t i = 0U; i < MIXER_INSERTS_PER_TRACK; ++i)
+    {
+        if (mixer_track_insert_is_mono_native_compatible(track->insert_slot[i]) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
+                                               const mixer_track_t *track,
+                                               const mixer_track_filter_t *filter,
+                                               uint8_t hw_enabled,
+                                               uint8_t ext_enabled,
+                                               uint8_t ext_format,
+                                               uint32_t ext_frames,
+                                               uint32_t frames)
+{
+    mixer_lane_plan_t plan;
+    memset(&plan, 0, sizeof(plan));
+
+    (void)track_id;
+    plan.hw_enabled = hw_enabled;
+    plan.ext_enabled = ext_enabled;
+    plan.ext_format = ext_format;
+    plan.ext_frames = ext_frames;
+
+    if ((track == NULL) || (filter == NULL))
+    {
+        return plan;
+    }
+
+    if (((hw_enabled == 0U) && (ext_enabled == 0U)) || (track->mute != 0U))
+    {
+        return plan;
+    }
+
+    if ((ext_enabled != 0U)
+            && ((ext_frames != frames)
+                || ((ext_format != MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                    && (ext_format != MIXER_EXTERNAL_FORMAT_STEREO))))
+    {
+        plan.ext_enabled = 0U;
+        plan.ext_format = MIXER_EXTERNAL_FORMAT_NONE;
+        plan.ext_frames = 0U;
+    }
+
+    if (((plan.hw_enabled == 0U) && (plan.ext_enabled == 0U)) || (track->mute != 0U))
+    {
+        return plan;
+    }
+
+    plan.active = 1U;
+    plan.exec_kind = MIXER_LANE_EXEC_STEREO;
+
+    if (plan.hw_enabled != 0U)
+    {
+        if ((plan.ext_enabled != 0U) && (plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE))
+        {
+            plan.source_kind = MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO;
+        }
+        else if (plan.ext_enabled != 0U)
+        {
+            plan.source_kind = MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO;
+        }
+        else
+        {
+            plan.source_kind = MIXER_LANE_SOURCE_HW_STEREO;
+        }
+
+        return plan;
+    }
+
+    if ((plan.ext_enabled != 0U) && (plan.ext_format == MIXER_EXTERNAL_FORMAT_STEREO))
+    {
+        plan.source_kind = MIXER_LANE_SOURCE_EXT_STEREO;
+        return plan;
+    }
+
+    if ((plan.ext_enabled != 0U) && (plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE))
+    {
+        plan.source_kind = MIXER_LANE_SOURCE_EXT_MONO_NATIVE;
+        if (mixer_track_supports_mono_native_path(track, filter) != 0U)
+        {
+            plan.exec_kind = MIXER_LANE_EXEC_MONO_NATIVE;
+        }
+    }
+
+    return plan;
+}
+
+typedef struct
+{
+    float *mono;
+    float *left;
+    float *right;
+} mixer_lane_buffers_t;
+
+static void mixer_lane_project_mono_to_stereo(const float *mono,
+                                              float *left,
+                                              float *right,
+                                              uint32_t frames)
+{
+    if ((mono == NULL) || (left == NULL) || (right == NULL))
+    {
+        return;
+    }
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        const float s = mono[i];
+        left[i] = s;
+        right[i] = s;
+    }
+}
+
+static mixer_lane_buffers_t mixer_lane_prepare_stereo_buffers(uint32_t track_id,
+                                                              const mixer_lane_plan_t *plan,
+                                                              StereoTrack *tracks,
+                                                              uint32_t frames,
+                                                              float *ext_mono_l,
+                                                              float *ext_mono_r)
+{
+    mixer_lane_buffers_t buffers = {0};
+
+    if ((plan == NULL) || (tracks == NULL) || (ext_mono_l == NULL) || (ext_mono_r == NULL))
+    {
+        return buffers;
+    }
+
+    if ((plan->source_kind == MIXER_LANE_SOURCE_HW_STEREO)
+            || (plan->source_kind == MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO)
+            || (plan->source_kind == MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO))
+    {
+        buffers.left = tracks[track_id].L;
+        buffers.right = tracks[track_id].R;
+        return buffers;
+    }
+
+    if (plan->source_kind == MIXER_LANE_SOURCE_EXT_MONO_NATIVE)
+    {
+        for (uint32_t i = 0U; i < plan->ext_frames; ++i)
+        {
+            const float s = g_external_track_mono[track_id][i];
+            ext_mono_l[i] = s;
+            ext_mono_r[i] = s;
+        }
+        for (uint32_t i = plan->ext_frames; i < frames; ++i)
+        {
+            ext_mono_l[i] = 0.0f;
+            ext_mono_r[i] = 0.0f;
+        }
+        buffers.left = ext_mono_l;
+        buffers.right = ext_mono_r;
+        return buffers;
+    }
+
+    if (plan->source_kind == MIXER_LANE_SOURCE_EXT_STEREO)
+    {
+        buffers.left = g_external_track_l[track_id];
+        buffers.right = g_external_track_r[track_id];
+    }
+
+    return buffers;
+}
+
+static void mixer_lane_accumulate_external_source(uint32_t track_id,
+                                                  const mixer_lane_plan_t *plan,
+                                                  float *left,
+                                                  float *right)
+{
+    if ((plan == NULL) || (left == NULL) || (right == NULL))
+    {
+        return;
+    }
+
+    if (plan->source_kind == MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO)
+    {
+        for (uint32_t i = 0U; i < plan->ext_frames; ++i)
+        {
+            const float s = g_external_track_mono[track_id][i];
+            left[i] += s;
+            right[i] += s;
+        }
+        return;
+    }
+
+    if (plan->source_kind == MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO)
+    {
+        for (uint32_t i = 0U; i < plan->ext_frames; ++i)
+        {
+            left[i] += g_external_track_l[track_id][i];
+            right[i] += g_external_track_r[track_id][i];
+        }
+    }
+}
+
+static mixer_lane_buffers_t mixer_lane_run_mono_native_path(uint32_t track_id,
+                                                            const mixer_track_t *track,
+                                                            mixer_track_filter_t *filter,
+                                                            uint32_t frames,
+                                                            float *ext_mono_l,
+                                                            float *ext_mono_r)
+{
+    mixer_lane_buffers_t buffers = {0};
+
+    if ((track == NULL) || (filter == NULL) || (ext_mono_l == NULL) || (ext_mono_r == NULL))
+    {
+        return buffers;
+    }
+
+    if (filter->type != (uint8_t)MIXER_TRACK_FILTER_OFF)
+    {
+        (void)mixer_track_filter_process_block_mono(filter, g_external_track_mono[track_id], frames);
+    }
+    for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
+    {
+        const int8_t slot = track->insert_slot[i];
+        if(slot >= 0)
+        {
+            fx_chain_process_slot_for_track_mono(track_id, (uint32_t)slot, g_external_track_mono[track_id], frames);
+        }
+    }
+
+    (void)ext_mono_l;
+    (void)ext_mono_r;
+    buffers.mono = g_external_track_mono[track_id];
+    return buffers;
+}
+
+static void mixer_lane_run_stereo_path(uint32_t track_id,
+                                       const mixer_track_t *track,
+                                       mixer_track_filter_t *filter,
+                                       float *left,
+                                       float *right,
+                                       uint32_t frames)
+{
+    if ((track == NULL) || (filter == NULL) || (left == NULL) || (right == NULL))
+    {
+        return;
+    }
+
+    for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
+    {
+        const int8_t slot = track->insert_slot[i];
+        if(slot >= 0)
+        {
+            fx_chain_process_slot_for_track(track_id, (uint32_t)slot, left, right, frames);
+        }
+    }
+
+    mixer_track_filter_process_block(filter, left, right, frames);
+}
+
+static uint8_t mixer_track_filter_process_block_mono(mixer_track_filter_t *filter,
+                                                     float *mono,
+                                                     uint32_t frames)
+{
+    if((filter == NULL) || (mono == NULL))
+    {
+        return 0U;
+    }
+
+    if(filter->type == (uint8_t)MIXER_TRACK_FILTER_OFF)
+    {
+        return 1U;
+    }
+
+    if (filter->type == (uint8_t)MIXER_TRACK_FILTER_EQ3)
+    {
+        filter->cutoff_hz = mixer_smooth_block(filter->cutoff_hz, filter->cutoff_target_hz, MIXER_FILTER_BLOCK_SMOOTH);
+        filter->resonance = mixer_smooth_block(filter->resonance, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
+        filter->eq_low_db = mixer_smooth_block(filter->eq_low_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+        filter->eq_mid_db = mixer_smooth_block(filter->eq_mid_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+        filter->eq_high_db = mixer_smooth_block(filter->eq_high_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+        fx_dj_eq3_mono_set_low_db(&filter->eq3_mono, filter->eq_low_db);
+        fx_dj_eq3_mono_set_mid_db(&filter->eq3_mono, filter->eq_mid_db);
+        fx_dj_eq3_mono_set_high_db(&filter->eq3_mono, filter->eq_high_db);
+        fx_dj_eq3_mono_process_block(&filter->eq3_mono, mono, frames);
+        mixer_track_filter_sync_stereo_state_from_mono_eq3(filter);
+        return 1U;
+    }
+
+    filter->cutoff_hz = mixer_smooth_block(filter->cutoff_hz, filter->cutoff_target_hz, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->resonance = mixer_smooth_block(filter->resonance, filter->resonance_target, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->eq_low_db = mixer_smooth_block(filter->eq_low_db, filter->eq_low_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->eq_mid_db = mixer_smooth_block(filter->eq_mid_db, filter->eq_mid_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+    filter->eq_high_db = mixer_smooth_block(filter->eq_high_db, filter->eq_high_target_db, MIXER_FILTER_BLOCK_SMOOTH);
+    fx_biquad_filter_mono_set_q(&filter->biquad_mono, mixer_track_filter_resonance_to_biquad_q(filter->resonance));
+
+    mixer_track_filter_process_biquad_mono_block(filter, mono, frames);
+    mixer_track_filter_sync_stereo_state_from_mono(filter);
+
+    return 1U;
 }
 
 /**
@@ -1215,87 +1682,63 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     {
         mixer_track_t *mt = &g_tracks[t];
         const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
-        uint8_t ext_enabled = g_external_track_enabled[t];
-        const uint8_t ext_format = g_external_track_format[t];
-        uint32_t ext_frames = g_external_track_frames_valid[t];
-        if ((ext_enabled != 0U)
-                && ((ext_frames != frames)
-                    || ((ext_format != MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-                        && (ext_format != MIXER_EXTERNAL_FORMAT_STEREO))))
-        {
-            ext_enabled = 0U;
-            ext_frames = 0U;
-        }
-        if (((hw_enabled == 0U) && (ext_enabled == 0U)) || mt->mute)
+        const mixer_lane_plan_t lane_plan = mixer_build_lane_plan(t,
+                                                                  mt,
+                                                                  &g_track_filters[t],
+                                                                  hw_enabled,
+                                                                  g_external_track_enabled[t],
+                                                                  g_external_track_format[t],
+                                                                  g_external_track_frames_valid[t],
+                                                                  frames);
+        if (lane_plan.active == 0U)
             continue;
 
         float *L = NULL;
         float *R = NULL;
-        if (hw_enabled != 0U)
+        float *mono = NULL;
+        const uint8_t is_mono_native_lane = (lane_plan.exec_kind == MIXER_LANE_EXEC_MONO_NATIVE) ? 1U : 0U;
+
+        if (is_mono_native_lane != 0U)
         {
-            L = tracks[t].L;
-            R = tracks[t].R;
+            const mixer_lane_buffers_t buffers = mixer_lane_run_mono_native_path(t,
+                                                                                 mt,
+                                                                                 &g_track_filters[t],
+                                                                                 frames,
+                                                                                 ext_mono_l,
+                                                                                 ext_mono_r);
+            mono = buffers.mono;
         }
         else
         {
-            if (ext_enabled != 0U && ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-            {
-                for (uint32_t i = 0U; i < ext_frames; ++i)
-                {
-                    const float s = g_external_track_mono[t][i];
-                    ext_mono_l[i] = s;
-                    ext_mono_r[i] = s;
-                }
-                for (uint32_t i = ext_frames; i < frames; ++i)
-                {
-                    ext_mono_l[i] = 0.0f;
-                    ext_mono_r[i] = 0.0f;
-                }
-                L = ext_mono_l;
-                R = ext_mono_r;
-            }
-            else
-            {
-                L = g_external_track_l[t];
-                R = g_external_track_r[t];
-            }
+            const mixer_lane_buffers_t buffers = mixer_lane_prepare_stereo_buffers(t,
+                                                                                   &lane_plan,
+                                                                                   tracks,
+                                                                                   frames,
+                                                                                   ext_mono_l,
+                                                                                   ext_mono_r);
+            L = buffers.left;
+            R = buffers.right;
+            mixer_lane_accumulate_external_source(t, &lane_plan, L, R);
+            mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames);
         }
 
-        if ((hw_enabled != 0U) && (ext_enabled != 0U))
+        if (is_mono_native_lane != 0U)
         {
-            if (ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-            {
-                for (uint32_t i = 0U; i < ext_frames; ++i)
-                {
-                    const float s = g_external_track_mono[t][i];
-                    L[i] += s;
-                    R[i] += s;
-                }
-            }
-            else
-            {
-                for (uint32_t i = 0U; i < ext_frames; ++i)
-                {
-                    L[i] += g_external_track_l[t][i];
-                    R[i] += g_external_track_r[t][i];
-                }
-            }
+            mixer_lane_project_mono_to_stereo(mono, ext_mono_l, ext_mono_r, frames);
+            sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
+                                          t,
+                                          ext_mono_l,
+                                          ext_mono_r,
+                                          frames);
         }
-
-        for(uint32_t i = 0; i < MIXER_INSERTS_PER_TRACK; i++)
+        else
         {
-            const int8_t slot = mt->insert_slot[i];
-            if(slot >= 0)
-                fx_chain_process_slot_for_track(t, (uint32_t)slot, L, R, frames);
+            sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
+                                          t,
+                                          L,
+                                          R,
+                                          frames);
         }
-
-        mixer_track_filter_process_block(&g_track_filters[t], L, R, frames);
-
-        sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_INSERT,
-                                      t,
-                                      L,
-                                      R,
-                                      frames);
 
         {
             float gain_cur = mt->gain_current;
@@ -1316,8 +1759,17 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                 const float vca_gain = (g_track_filters[t].vca_enabled != 0U)
                         ? adsr_daisy_c_process(&g_track_filters[t].vca_env, g_track_filters[t].vca_gate)
                         : 1.0f;
-                L[i] *= (gain_l * vca_gain);
-                R[i] *= (gain_r * vca_gain);
+                if (is_mono_native_lane != 0U)
+                {
+                    mono[i] *= (gain_cur * vca_gain);
+                    ext_mono_l[i] = mono[i] * pan_l;
+                    ext_mono_r[i] = mono[i] * pan_r;
+                }
+                else
+                {
+                    L[i] *= (gain_l * vca_gain);
+                    R[i] *= (gain_r * vca_gain);
+                }
 
                 gain_cur += gain_step;
                 pan_cur += pan_step;
@@ -1325,6 +1777,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
             mt->gain_current = mt->gain;
             mt->pan_current = mt->pan;
+        }
+
+        if (is_mono_native_lane != 0U)
+        {
+            L = ext_mono_l;
+            R = ext_mono_r;
         }
 
         sd_recorder_capture_tap_block(SD_RECORDER_TAP_TRACK_POST_FADER,

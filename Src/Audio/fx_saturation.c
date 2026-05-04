@@ -502,3 +502,95 @@ void fx_saturation_process_block(fx_saturation_t *fx,
     fx->decimator_rate2_next_sample_r = decimator_rate2_next_sample_r;
     fx->decimator_rate2_previous_sample_r = decimator_rate2_previous_sample_r;
 }
+
+void fx_saturation_process_mono_block(fx_saturation_t *fx,
+                                      float *inout,
+                                      uint32_t frames)
+{
+    if((fx == 0) || (inout == 0) || (frames == 0U) || (fx->bypass != 0U))
+        return;
+
+    const float k = fx->k;
+    const float tone = fx->tone;
+    const float asym = fx->asym;
+    const float pre = fx->pre_gain;
+    const float post = fx->post_gain;
+    const float wet = fx->mix;
+    const float dry = fx->dry;
+
+    float prev = fx->prev_l;
+    uint8_t decimator_inc = fx->decimator_inc_l;
+    float decimator_downsampled = fx->decimator_downsampled_l;
+    const uint8_t decimator_threshold = fx->decimator_threshold;
+    const uint8_t decimator_bits = fx->decimator_bits_to_crush;
+    const uint8_t decimator_enabled = fx->decimator_enabled;
+    const uint8_t decimator_rate2_enabled = fx->decimator_rate2_enabled;
+    const float decimator_rate2_frequency = fx->decimator_rate2_frequency;
+    float decimator_rate2_phase = fx->decimator_rate2_phase_l;
+    float decimator_rate2_sample = fx->decimator_rate2_sample_l;
+    float decimator_rate2_next_sample = fx->decimator_rate2_next_sample_l;
+    float decimator_rate2_previous_sample = fx->decimator_rate2_previous_sample_l;
+
+    for(uint32_t n = 0U; n < frames; n++)
+    {
+        const float in = inout[n];
+        float x = in;
+
+        const float dx = x - prev;
+        prev = x;
+        x += tone * dx;
+        x *= pre;
+        if(x < 0.0f) x *= asym;
+
+        const float x2 = x * x;
+        const float ax = __builtin_fabsf(x);
+        float y = x * (1.0f + k * ax) / (1.0f + k * x2);
+        y *= post;
+        y = in * dry + y * wet;
+        y = fx_softclip(y);
+
+        if (decimator_enabled != 0U)
+        {
+            int32_t y_i = 0;
+
+            decimator_inc = (uint8_t)(decimator_inc + 1U);
+            if (decimator_inc > decimator_threshold)
+            {
+                decimator_inc = 0U;
+                decimator_downsampled = y;
+            }
+
+            y_i = (int32_t)(decimator_downsampled * 65536.0f);
+            y_i >>= decimator_bits;
+            y_i <<= decimator_bits;
+            y = (float)y_i / 65536.0f;
+        }
+
+        if (decimator_rate2_enabled != 0U)
+        {
+            y = fx_saturation_rate2_process_sample(y,
+                                                   decimator_rate2_frequency,
+                                                   &decimator_rate2_phase,
+                                                   &decimator_rate2_sample,
+                                                   &decimator_rate2_next_sample,
+                                                   &decimator_rate2_previous_sample);
+        }
+
+        inout[n] = y;
+    }
+
+    fx->prev_l = prev;
+    fx->prev_r = prev;
+    fx->decimator_inc_l = decimator_inc;
+    fx->decimator_inc_r = decimator_inc;
+    fx->decimator_downsampled_l = decimator_downsampled;
+    fx->decimator_downsampled_r = decimator_downsampled;
+    fx->decimator_rate2_phase_l = decimator_rate2_phase;
+    fx->decimator_rate2_phase_r = decimator_rate2_phase;
+    fx->decimator_rate2_sample_l = decimator_rate2_sample;
+    fx->decimator_rate2_sample_r = decimator_rate2_sample;
+    fx->decimator_rate2_next_sample_l = decimator_rate2_next_sample;
+    fx->decimator_rate2_next_sample_r = decimator_rate2_next_sample;
+    fx->decimator_rate2_previous_sample_l = decimator_rate2_previous_sample;
+    fx->decimator_rate2_previous_sample_r = decimator_rate2_previous_sample;
+}

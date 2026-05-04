@@ -46,7 +46,7 @@ static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
 {
     uint8_t drum_count = 0U;
 
-    track_runtime_refresh_all();
+    (void)track_runtime_refresh_if_dirty();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);

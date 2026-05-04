@@ -1124,11 +1124,16 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
         case PARAM_VCA_RELEASE:
         {
             track_sound_state_t *state = track_sound_state_get(track);
+            const float release_s = param_filter_ui127_to_release_s(value);
             if (state != NULL)
             {
                 state->vca_release = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
-            mixer_set_track_vca_release(ctx->mix_track_id, param_filter_ui127_to_release_s(value));
+            mixer_set_track_vca_release(ctx->mix_track_id, release_s);
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+            {
+                brick6_braids_runtime_set_vca_release_seconds(ctx->instance_id, release_s);
+            }
             return 1U;
         }
 

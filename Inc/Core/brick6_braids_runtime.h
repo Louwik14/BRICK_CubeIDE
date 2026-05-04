@@ -41,6 +41,7 @@ void brick6_braids_runtime_set_fm(uint8_t instance_id, float fm);
 void brick6_braids_runtime_set_timbre(uint8_t instance_id, float timbre);
 void brick6_braids_runtime_set_modulation(uint8_t instance_id, float modulation);
 void brick6_braids_runtime_set_color(uint8_t instance_id, float color);
+void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s);
 
 void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float velocity);
 void brick6_braids_runtime_note_off(uint8_t instance_id, uint8_t note);

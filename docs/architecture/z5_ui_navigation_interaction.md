@@ -217,6 +217,14 @@ Flux nominal prouve:
 
 2. Resolution navigation / raccourci
 - Dans `ui_core_service_track_selection_inputs`: SHIFT+HALL => mode trigger; TRACK_MOD+HALL => active track.
+- Contrat explicite track halls sous `TRACK`:
+  - `TRACK` + tap track seul = focus/select track-aware historique uniquement.
+  - `TRACK` + simple tap ne demande jamais `CFG`; l'ouverture `CFG` sous `TRACK` reste reservee au double tap explicite sur la track deja focus.
+  - la mutation de chaine de voix ne s'arme que si une autre hall track est deja maintenue au moment du nouvel appui:
+    `TRACK` maintenu + master candidate maintenue + target press.
+  - sans seconde hall maintenue, aucun role `Solo/Master/Slave` ne change.
+  - le geste groupe conserve les validations locales existantes: ajout contigu a droite, retrait uniquement sur la derniere slave, refus sans auto-fill ni mutation.
+  - ajout special sur target `Off`: avant de devenir `Slave`, la target recoit une copie ponctuelle de l'etat instrument/per-track de la master candidate (family/type, config MIDI et params track-aware hors domaine `PLAY`), sans copie de sequence/trigs/steps/plocks `PLAY`.
 - Contrat specifique `MACRO`: `SHIFT+HALL15` arme le raw mode `MACRO`; double tap ouvre la page dediee `Macro` (cible de contrat), sans effet runtime cache.
 - Grammaire visuelle halls en `MACRO`:
   - `Mode = Slot`: 16 halls exposes en 4 groupes de 4 (couleurs groupe 1..4: ambre/violet/aqua/chartreuse), slot vide=LED off, slot rempli=couleur groupe.

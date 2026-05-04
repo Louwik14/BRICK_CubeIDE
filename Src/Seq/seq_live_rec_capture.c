@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
@@ -254,6 +255,13 @@ static int32_t seq_live_rec_capture_select_voice_deterministic(seq_track_id_t tr
 static uint8_t seq_live_rec_capture_track_accepts_source(seq_track_id_t track,
                                                           seq_live_rec_source_t source)
 {
+    uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+    (void)track_runtime_get_voice_group_role(track, &role_u8);
+    if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return 0U;
+    }
+
     /* Projection read: MIDI source gates capture acceptance; no runtime mutation here. */
     const track_runtime_midi_source_t track_source = track_runtime_get_midi_source(track);
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)

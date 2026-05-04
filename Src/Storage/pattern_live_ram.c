@@ -5,6 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/undo_v2.h"
 #include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "UI/ui_core.h"
 #include "UI/ui_active_track_sync.h"
 #include "Seq/seq_runtime.h"
@@ -16,6 +17,10 @@
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
+
+#if (UI_TRACK_COUNT != SEQ_TRACK_COUNT)
+#error "pattern_live_ram requires UI_TRACK_COUNT == SEQ_TRACK_COUNT for track config/role restore."
+#endif
 
 typedef struct
 {
@@ -58,6 +63,7 @@ static uint8_t g_pattern_load_pattern;
 static uint8_t g_pattern_load_last_error;
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
+static uint8_t pattern_live_voice_roles_are_valid(const uint8_t role[SEQ_TRACK_COUNT]);
 static uint8_t pattern_live_step_required_lock_count(const pattern_v1_step_t *step);
 static uint8_t pattern_live_seq_block_validate_plock_budget(const pattern_v1_seq_block_t *seq,
                                                             uint8_t *out_track,
@@ -74,6 +80,42 @@ static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
 }
 
+static uint8_t pattern_live_voice_roles_are_valid(const uint8_t role[SEQ_TRACK_COUNT])
+{
+    if (role == 0)
+    {
+        return 0U;
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const uint8_t current = role[track];
+        if (current >= (uint8_t)TRACK_VOICE_GROUP_ROLE_COUNT)
+        {
+            return 0U;
+        }
+
+        if (current != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+        {
+            continue;
+        }
+
+        if (track == 0U)
+        {
+            return 0U;
+        }
+
+        const uint8_t left = role[(uint8_t)(track - 1U)];
+        if ((left != (uint8_t)TRACK_VOICE_GROUP_ROLE_MASTER)
+                && (left != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE))
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg)
 {
     if (track_cfg == 0)
@@ -81,12 +123,22 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
         return 0U;
     }
 
-    return (ui_apply_track_config_bulk_mutation(track_cfg->family,
-                                                track_cfg->type,
-                                                track_cfg->midi_channel,
-                                                track_cfg->midi_source) != false)
-        ? 1U
-        : 0U;
+    uint8_t role_sanitized[SEQ_TRACK_COUNT];
+    memcpy(role_sanitized, track_cfg->voice_group_role, sizeof(role_sanitized));
+    if (pattern_live_voice_roles_are_valid(role_sanitized) == 0U)
+    {
+        memset(role_sanitized, (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO, sizeof(role_sanitized));
+    }
+
+    if (ui_apply_track_config_bulk_mutation(track_cfg->family,
+                                            track_cfg->type,
+                                            track_cfg->midi_channel,
+                                            track_cfg->midi_source) == false)
+    {
+        return 0U;
+    }
+
+    return (track_state_apply_voice_group_roles_bulk(role_sanitized) != false) ? 1U : 0U;
 }
 
 static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
@@ -371,6 +423,7 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
         out_pattern->track_cfg.type[track] = (uint8_t)ui_get_track_type(track);
         out_pattern->track_cfg.midi_channel[track] = ui_get_track_midi_channel(track);
         out_pattern->track_cfg.midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
+        out_pattern->track_cfg.voice_group_role[track] = (uint8_t)track_state_get_voice_group_role(track);
 
         out_pattern->seq.tracks[track].length_steps = project->tracks[track].length_steps;
         out_pattern->seq.tracks[track].ui_page = project->tracks[track].ui_page;
