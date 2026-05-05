@@ -14,15 +14,14 @@ constexpr uint32_t kHaasBufferSize = 2402U;
 constexpr float kMinDelaySamples = 4.0f;
 constexpr float kTimeSmoothSeconds = 0.15f;
 constexpr float kMaxAccent = 0.75f;
-constexpr float kMaxHaasMs = 35.0f;
+constexpr float kMaxHaasMs = 24.0f;
 constexpr float kNeutralEpsilon = 1.0e-6f;
 constexpr float kTwoPi = 6.28318530717958647692f;
 constexpr float kInvSqrt2 = 0.70710678118f;
 
 AUDIO_COLD_SDRAM ALIGN32 static float g_delay_l[kDelayBufferSize];
 AUDIO_COLD_SDRAM ALIGN32 static float g_delay_r[kDelayBufferSize];
-AUDIO_COLD_SDRAM ALIGN32 static float g_haas_l[kHaasBufferSize];
-AUDIO_COLD_SDRAM ALIGN32 static float g_haas_r[kHaasBufferSize];
+AUDIO_HOT ALIGN32 static float g_haas_side[kHaasBufferSize];
 
 static inline float clampf_local(float v, float lo, float hi)
 {
@@ -135,6 +134,20 @@ static inline float delay_line_read_linear(const delay_line_t *line, float delay
     const uint32_t i1 = (i0 + 1U >= line->size) ? 0U : (i0 + 1U);
     const float frac = read_pos - (float)i0;
     return line->buffer[i0] + ((line->buffer[i1] - line->buffer[i0]) * frac);
+}
+
+static inline float delay_line_read_integer(const delay_line_t *line, uint32_t delay)
+{
+    if((line == 0) || (line->buffer == 0) || (line->size == 0U))
+        return 0.0f;
+    if(delay < 1U)
+        delay = 1U;
+    if(delay >= line->size)
+        delay = line->size - 1U;
+    const uint32_t read_pos = (line->pos >= delay)
+            ? (line->pos - delay)
+            : (line->size + line->pos - delay);
+    return line->buffer[read_pos];
 }
 
 static inline void delay_line_write(delay_line_t *line, float sample, uint8_t overdub)
@@ -254,14 +267,13 @@ typedef struct
     float volume;
     delay_line_t delay_l;
     delay_line_t delay_r;
-    delay_line_t haas_l;
-    delay_line_t haas_r;
+    delay_line_t haas_side;
     feedback_filter_t filter_delay_l;
     feedback_filter_t filter_delay_r;
     uint8_t initialized;
 } fx_delay_dual_global_state_t;
 
-static fx_delay_dual_global_state_t g_dual;
+AUDIO_HOT static fx_delay_dual_global_state_t g_dual;
 
 static void resize_runtime_lines(uint8_t mode, float time_l, float time_r, float swing)
 {
@@ -272,19 +284,14 @@ static void resize_runtime_lines(uint8_t mode, float time_l, float time_r, float
 
     delay_line_resize(&g_dual.delay_l, max_main);
     delay_line_resize(&g_dual.delay_r, max_r);
-
     if(mode != (uint8_t)FX_DELAY_DUAL_MODE_PINGPONG
             && mode != (uint8_t)FX_DELAY_DUAL_MODE_CLASSIC_PINGPONG)
     {
-        const float haas = clampf_local(g_dual.width, -1.0f, 1.0f);
-        const uint32_t haas_left = (haas < 0.0f)
-                ? (uint32_t)ceilf((-haas * kMaxHaasMs * g_dual.sample_rate) / 1000.0f) + 1U
+        const float haas = fabsf(clampf_local(g_dual.width, -1.0f, 1.0f));
+        const uint32_t haas_size = (haas >= kNeutralEpsilon)
+                ? ((uint32_t)ceilf((haas * kMaxHaasMs * g_dual.sample_rate) / 1000.0f) + 1U)
                 : 1U;
-        const uint32_t haas_right = (haas > 0.0f)
-                ? (uint32_t)ceilf((haas * kMaxHaasMs * g_dual.sample_rate) / 1000.0f) + 1U
-                : 1U;
-        delay_line_resize(&g_dual.haas_l, haas_left);
-        delay_line_resize(&g_dual.haas_r, haas_right);
+        delay_line_resize(&g_dual.haas_side, haas_size);
     }
 }
 }
@@ -300,8 +307,7 @@ extern "C" void fx_delay_dual_global_init(float sample_rate)
     g_dual.time_r_samples = target_delay_samples(g_dual.time_r_s, g_dual.sample_rate);
     delay_line_init(&g_dual.delay_l, g_delay_l, kDelayBufferSize);
     delay_line_init(&g_dual.delay_r, g_delay_r, kDelayBufferSize);
-    delay_line_init(&g_dual.haas_l, g_haas_l, kHaasBufferSize);
-    delay_line_init(&g_dual.haas_r, g_haas_r, kHaasBufferSize);
+    delay_line_init(&g_dual.haas_side, g_haas_side, kHaasBufferSize);
     fx_delay_dual_global_clear();
     g_dual.initialized = 1U;
 }
@@ -310,8 +316,7 @@ extern "C" void fx_delay_dual_global_clear(void)
 {
     delay_line_clear(&g_dual.delay_l);
     delay_line_clear(&g_dual.delay_r);
-    delay_line_clear(&g_dual.haas_l);
-    delay_line_clear(&g_dual.haas_r);
+    delay_line_clear(&g_dual.haas_side);
     memset(&g_dual.filter_delay_l, 0, sizeof(g_dual.filter_delay_l));
     memset(&g_dual.filter_delay_r, 0, sizeof(g_dual.filter_delay_r));
     g_dual.time_l_samples = target_delay_samples(g_dual.time_l_s, g_dual.sample_rate);
@@ -440,9 +445,10 @@ extern "C" void fx_delay_dual_global_process_block(const float *in_l,
     const uint8_t lpf_active = (g_dual.lpf > 0.001f) ? 1U : 0U;
     const float hp_a = hpf_active ? hpf_alpha(g_dual.hpf) : 0.0f;
     const float lp_a = lpf_active ? lpf_alpha(g_dual.lpf) : 0.0f;
-    const uint8_t has_haas = ((mode != (uint8_t)FX_DELAY_DUAL_MODE_PINGPONG)
+    const uint8_t has_haas_light = ((mode != (uint8_t)FX_DELAY_DUAL_MODE_PINGPONG)
             && (mode != (uint8_t)FX_DELAY_DUAL_MODE_CLASSIC_PINGPONG)
             && (fabsf(width) >= kNeutralEpsilon)) ? 1U : 0U;
+    const float haas_light_gain = 0.35f * fabsf(width);
     const uint8_t has_mod = ((g_dual.mod_depth > kNeutralEpsilon)
             || (g_dual.mod_depth_smooth > kNeutralEpsilon)) ? 1U : 0U;
     float mod_phase = g_dual.mod_phase;
@@ -575,16 +581,16 @@ extern "C" void fx_delay_dual_global_process_block(const float *in_l,
             delay_line_write(&g_dual.delay_r, sanitize_feedback_sample(in_r[i] + (wet_filt_r * feedback_r)), 0U);
         }
 
-        if(has_haas != 0U)
-        {
-            delay_line_write(&g_dual.haas_l, sanitize_feedback_sample(v0), 0U);
-            delay_line_write(&g_dual.haas_r, sanitize_feedback_sample(v1), 0U);
-            v0 = delay_line_read_linear(&g_dual.haas_l, (float)(g_dual.haas_l.size - 1U));
-            v1 = delay_line_read_linear(&g_dual.haas_r, (float)(g_dual.haas_r.size - 1U));
-        }
-
         float wet_l = (v0 * accent_delay) + (s0 * accent_swing);
         float wet_r = (v1 * accent_delay) + (s1 * accent_swing);
+        if(has_haas_light != 0U)
+        {
+            const float side = 0.5f * (wet_l - wet_r);
+            delay_line_write(&g_dual.haas_side, sanitize_feedback_sample(side), 0U);
+            const float delayed_side = delay_line_read_integer(&g_dual.haas_side, g_dual.haas_side.size - 1U);
+            wet_l += delayed_side * haas_light_gain;
+            wet_r -= delayed_side * haas_light_gain;
+        }
         apply_width(wet_l, wet_r, width, &wet_l, &wet_r);
         out_l[i] = sanitize_output_sample(wet_l * vol);
         out_r[i] = sanitize_output_sample(wet_r * vol);
