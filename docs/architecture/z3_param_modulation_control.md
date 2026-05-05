@@ -675,3 +675,10 @@ Dette explicite post-passe 4:
 - `param_registry_apply_track_value` porte maintenant le refresh runtime explicite avant resolution et execution track-aware.
 - `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.
 - Les params `Master/Buffer` du domaine runtime `BUFFER` transitent par le meme seam d'apply track-aware que `TONE/MIX`; ils ne doivent pas etre filtres en amont par un gate limite a `TONE/MIX` sous peine de bloquer l'edition UI de l'ensemble `TONE` pour la track buffer.
+
+## 29. Contrat Master/FX UI-only
+- `track_tone_sound_state` porte un bloc `master_fx` par track: 4 slots, chacun avec `type`, `level`, `macro_a`, `macro_b`.
+- Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MASTER_FX1_TYPE/LVL/A/B` a `PARAM_MASTER_FX4_TYPE/LVL/A/B`.
+- Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants, mais sans apply DSP.
+- Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `ECHO`, `WOBBLE`, `COMB`, `RING`, `PITCH`, `TALK`, `STUTTER`, `FREEZE`.
+- Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.

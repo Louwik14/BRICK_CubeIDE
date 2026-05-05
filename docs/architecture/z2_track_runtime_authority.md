@@ -251,3 +251,10 @@ Sorties de Z2:
 - Contrat produit: tout parametre p-lockable est assignable au Hall Mode Macro; Z3 consomme cette meme autorite et ne maintient pas de table d'exclusion MACRO separee.
 - Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` / ressource `FILTER`, comme `Cutoff` et `Resonance`; ils sont p-lockables et macro-assignables quand le filter target runtime est autorise.
 - Les anciens params `COLORS/CRUNCH` (`Drive`, `Bits`, `Rate`, `Rate2`) ne sont plus dans le domaine COLORS effectif et ne doivent plus recevoir de rule p-lock/macro.
+
+## 20. Contrat Master/FX UI-only
+- Nouvelle identite structurelle: `TRACK_RUNTIME_FAMILY_MASTER` + `TRACK_RUNTIME_TYPE_MASTER_FX`.
+- Binding runtime volontairement sans moteur DSP actif: `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`, stockage param/UI autorise.
+- Ensembles exposes: `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `VCA`, `KEYBOARD`, `ARP/ROUT`, `SEQ`; `PLAY` reste masque.
+- Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes, sans projection audio.
+- Le mode `ARP` brut est projete en vue `ROUT` pour Master/FX comme pour Master/Buffer; le routing audio reel reste hors Z2.

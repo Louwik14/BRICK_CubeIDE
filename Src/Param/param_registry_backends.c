@@ -1000,6 +1000,51 @@ uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t
     }
 }
 
+uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
+                                            uint8_t track,
+                                            param_id_t id,
+                                            float value,
+                                            uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const uint8_t slot = (uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U);
+
+    if ((ctx == NULL)
+            || (state == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX)
+            || (id < PARAM_MASTER_FX1_TYPE)
+            || (id > PARAM_MASTER_FX4_B)
+            || (slot >= 4U))
+    {
+        return 0U;
+    }
+
+    if (update_base_state == 0U)
+    {
+        return 1U;
+    }
+
+    switch ((uint8_t)((id - PARAM_MASTER_FX1_TYPE) % 4U))
+    {
+        case 0U:
+            state->master_fx.type[slot] = param_backend_clamp_value(value, 0.0f, 12.0f);
+            return 1U;
+        case 1U:
+            state->master_fx.level[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
+            return 1U;
+        case 2U:
+            state->master_fx.macro_a[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
+            return 1U;
+        case 3U:
+            state->master_fx.macro_b[slot] = param_backend_clamp_value(value, 0.0f, 127.0f);
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                                       uint8_t track,
                                       param_id_t id,

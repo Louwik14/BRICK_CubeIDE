@@ -69,6 +69,13 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->buffer.ratio_q16 = TRACK_TONE_BUFFER_DEFAULT_RATIO_Q16;
     state->buffer.transient_sensitivity = TRACK_TONE_BUFFER_DEFAULT_TRANSIENT_SENS;
     state->buffer.preserve_pitch = TRACK_TONE_BUFFER_DEFAULT_PRESERVE_PITCH;
+    for (uint8_t slot = 0U; slot < 4U; ++slot)
+    {
+        state->master_fx.type[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_TYPE + (slot * 4U))].default_value;
+        state->master_fx.level[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_LEVEL + (slot * 4U))].default_value;
+        state->master_fx.macro_a[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_A + (slot * 4U))].default_value;
+        state->master_fx.macro_b[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_B + (slot * 4U))].default_value;
+    }
     state->opal.patch = TRACK_TONE_OPAL_DEFAULT_PATCH;
     state->opal.index = TRACK_TONE_OPAL_DEFAULT_INDEX;
     state->opal.time = TRACK_TONE_OPAL_DEFAULT_TIME;

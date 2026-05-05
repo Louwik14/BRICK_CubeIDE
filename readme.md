@@ -78,7 +78,7 @@ Current families:
 - `Synth`: `Opal`
 - `Sampler`: `OneShot`, `Slicer`, `Clip`
 - `Drum`: dedicated drum catalog
-- `Master`: `Buffer`
+- `Master`: `Buffer`, `FX`
 
 ### Ownership model
 
@@ -102,6 +102,7 @@ This separation is intentional. Do not add a second authority for the same state
 - sends and returns
 - insert-style processing
 - master-oriented performance processing
+- `Master/FX` existe comme contrat UI MacroFX 4 slots, sans traitement DSP actif dans cette passe
 
 ### Sampler
 - stereo runtime playback through the normal track-aware mixer path

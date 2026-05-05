@@ -115,6 +115,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL;
         case UI_TRACK_TYPE_MIDI:
             return TRACK_RUNTIME_TYPE_MIDI;
+        case UI_TRACK_TYPE_MASTER_FX:
+            return TRACK_RUNTIME_TYPE_MASTER_FX;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
@@ -331,6 +333,13 @@ static const param_id_t g_track_runtime_tone_slots_hybrid[] = {
     PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4
 };
 
+static const param_id_t g_track_runtime_tone_slots_master_fx[] = {
+    PARAM_MASTER_FX1_TYPE, PARAM_MASTER_FX1_LEVEL, PARAM_MASTER_FX1_A, PARAM_MASTER_FX1_B,
+    PARAM_MASTER_FX2_TYPE, PARAM_MASTER_FX2_LEVEL, PARAM_MASTER_FX2_A, PARAM_MASTER_FX2_B,
+    PARAM_MASTER_FX3_TYPE, PARAM_MASTER_FX3_LEVEL, PARAM_MASTER_FX3_A, PARAM_MASTER_FX3_B,
+    PARAM_MASTER_FX4_TYPE, PARAM_MASTER_FX4_LEVEL, PARAM_MASTER_FX4_A, PARAM_MASTER_FX4_B
+};
+
 static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
                                                  const param_id_t **out_table,
                                                  uint8_t *out_count)
@@ -375,6 +384,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_HYBRID:
             *out_table = g_track_runtime_tone_slots_hybrid;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_hybrid) / sizeof(g_track_runtime_tone_slots_hybrid[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_MASTER_FX:
+            *out_table = g_track_runtime_tone_slots_master_fx;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_master_fx) / sizeof(g_track_runtime_tone_slots_master_fx[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
@@ -483,6 +497,15 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
 
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_TONE);
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
+
+    if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MASTER)
+            && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MASTER_FX)))
+    {
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_COLORS);
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIX);
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_VCA);
+        return mask;
+    }
 
     if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) != 0U)
     {
@@ -694,6 +717,12 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 
     if (family == TRACK_RUNTIME_FAMILY_MASTER)
     {
+        if (type == TRACK_RUNTIME_TYPE_MASTER_FX)
+        {
+            track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_NONE, TRACK_RUNTIME_INSTANCE_NONE);
+            return;
+        }
+
         if (type != TRACK_RUNTIME_TYPE_BUFFER)
         {
             track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
@@ -1349,6 +1378,22 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_BRAIDS_TIMBRE:
         case PARAM_BRAIDS_MODULATION:
         case PARAM_BRAIDS_COLOR:
+        case PARAM_MASTER_FX1_TYPE:
+        case PARAM_MASTER_FX1_LEVEL:
+        case PARAM_MASTER_FX1_A:
+        case PARAM_MASTER_FX1_B:
+        case PARAM_MASTER_FX2_TYPE:
+        case PARAM_MASTER_FX2_LEVEL:
+        case PARAM_MASTER_FX2_A:
+        case PARAM_MASTER_FX2_B:
+        case PARAM_MASTER_FX3_TYPE:
+        case PARAM_MASTER_FX3_LEVEL:
+        case PARAM_MASTER_FX3_A:
+        case PARAM_MASTER_FX3_B:
+        case PARAM_MASTER_FX4_TYPE:
+        case PARAM_MASTER_FX4_LEVEL:
+        case PARAM_MASTER_FX4_A:
+        case PARAM_MASTER_FX4_B:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_SYNTH;
             return rule;
@@ -1597,6 +1642,13 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             if (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX)
+                    && (param >= PARAM_MASTER_FX1_TYPE)
+                    && (param <= PARAM_MASTER_FX4_B))
+            {
+                return TRACK_RUNTIME_PARAM_ALLOWED;
             }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED

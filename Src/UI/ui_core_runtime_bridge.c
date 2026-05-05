@@ -42,6 +42,8 @@ typedef struct
     ui_core_runtime_bridge_post_sync_fn post_sync;
 } ui_core_runtime_bridge_track_transition_ctx_t;
 
+static uint8_t g_master_fx_route_enabled[UI_TRACK_COUNT];
+
 static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track);
 static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sync_request_t *request,
                                                                     uint8_t active_track_touched);
@@ -67,6 +69,17 @@ static uint8_t ui_core_runtime_bridge_track_is_master_buffer(uint8_t track)
 
     return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_MASTER)
             && (track_state_get_type(track) == UI_TRACK_TYPE_BUFFER));
+}
+
+static uint8_t ui_core_runtime_bridge_track_is_master_fx(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_MASTER)
+            && (track_state_get_type(track) == UI_TRACK_TYPE_MASTER_FX));
 }
 
 static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *ev)
@@ -491,9 +504,10 @@ uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event
                                                                   ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note)
 {
     const uint8_t is_master_buffer = ui_core_runtime_bridge_track_is_master_buffer(active_track);
+    const uint8_t is_master_fx = ui_core_runtime_bridge_track_is_master_fx(active_track);
 
     if ((ev == 0)
-            || (is_master_buffer == 0U)
+            || ((is_master_buffer == 0U) && (is_master_fx == 0U))
             || (hall_mode != UI_HALL_MODE_ARP)
             || (track_select_armed != 0U)
             || (ev->type != UI_EVENT_HALL_PRESS)
@@ -503,13 +517,39 @@ uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event
     }
 
     const uint8_t hall = (uint8_t)ev->id;
-    const uint8_t enabled = brick6_master_buffer_get_source_enabled(hall);
-    brick6_master_buffer_set_source_enabled(hall, (enabled == 0U) ? 1U : 0U);
+    if (hall == active_track)
+    {
+        if (suppress_hall_note != 0)
+        {
+            suppress_hall_note(hall);
+        }
+        return 1U;
+    }
+
+    if (is_master_fx != 0U)
+    {
+        g_master_fx_route_enabled[hall] = (g_master_fx_route_enabled[hall] == 0U) ? 1U : 0U;
+    }
+    else
+    {
+        const uint8_t enabled = brick6_master_buffer_get_source_enabled(hall);
+        brick6_master_buffer_set_source_enabled(hall, (enabled == 0U) ? 1U : 0U);
+    }
     if (suppress_hall_note != 0)
     {
         suppress_hall_note(hall);
     }
     return 1U;
+}
+
+uint8_t ui_core_runtime_bridge_get_master_fx_route_enabled(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    return g_master_fx_route_enabled[track];
 }
 
 uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,

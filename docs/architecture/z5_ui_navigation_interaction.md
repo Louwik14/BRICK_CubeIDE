@@ -103,6 +103,7 @@ Autorite hall modes:
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
+- Les contextes `ROUT` visibles sont resolus par `ui_hall_mode_resolve_rout_context`: `Master/Buffer` et `Master/FX` partagent le label `ROUT`, mais gardent des etats/actions/renderers LED distincts.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
 - Le feedback LED MACRO lit directement `project_v1` pour la bank active et les slots du projet, avec fallback orange sur l'ensemble cible pendant un slot-lock; aucune autorite visuelle locale ne persiste dans l'UI.
 
@@ -259,6 +260,8 @@ Flux nominal prouve:
 - Resolution contextuelle `Master/Buffer -> ROUT` (propre):
   - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
   - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
+  - renderer LED: `led_rgb` lit le contexte ROUT explicite, puis garde le renderer existant `Master/Buffer` base sur `brick6_master_buffer_get_source_enabled`.
+  - le hall de la track `Master/Buffer` active est affiche en vert fonce comme destination courante et son toggle est ignore.
 - Resolution contextuelle `Master/Buffer -> TONE`:
   - la famille template buffer garde `REC` et `FADE`,
   - les controles stretch restent dans `TONE` via sous-pages buffer-specifiques `STR` et `SYNC`,
@@ -339,7 +342,7 @@ Points factuels:
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
 - Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC), transverse mais restant dans frontiere Z5 comme logique d'interaction.
 - Le recorder SD/stems n'est pas un cas special UI actif dans l'etat produit courant: sa reactivation devra passer par une integration UI/produit explicite, puis par validation start/stop/arm et revalidation IRQ/audio.
-- Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` sur `MASTER/BUFFER`, renforcee par des gardes locaux.
+- Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` avec contexte explicite (`MASTER/BUFFER` ou `MASTER/FX`) et gardes locaux separes.
 - Fragilites restantes prouvees:
   - priorites de consommation toujours tres centralisees dans `ui_core_tick` (desormais explicites via table locale),
   - contrat hors queue (`ui_core_service_track_selection_inputs`) restant critique pour la coherence mode/track avant bridge hall.
@@ -349,6 +352,19 @@ Points factuels:
 - Z5 est confirmee comme zone d'orchestration interactionnelle centrale, avec sous-composants internes: event queue, page manager, template resolver.
 - `ui_page_manager` et `ui_event` doivent etre rattaches explicitement a Z5 dans la carte globale (pas des utilitaires neutres).
 - Le cas Master/Buffer reste transverse Z5<->Z1/Z2/Z4 mais ne justifie pas une zone UI separee.
+
+## 17. Contrat UI Master/FX
+- `Master/FX` est un type de la family `Master` expose en `CFG`.
+- `TONE` expose 4 pages de 4 slots:
+  - `FX1`: `FX1`, `LVL`, macro A, macro B
+  - `FX2`: `FX2`, `LVL`, macro A, macro B
+  - `FX3`: `FX3`, `LVL`, macro A, macro B
+  - `FX4`: `FX4`, `LVL`, macro A, macro B
+- Les labels visibles des macros A/B changent selon le type FX: OFF `---/---`, DRIVE `TONE/SHAPE`, CRUSH `BITS/RATE`, PUMP `RATE/REL`, CHOP `RATE/SHAPE`, ECHO `TIME/FB`, WOBBLE `RATE/DEPTH`, COMB `TUNE/FB`, RING `FREQ/COLOR`, PITCH `SEMI/FINE`, TALK `VOWL/TONE`, STUTTER `SIZE/RATE`, FREEZE `TIME/HOLD`.
+- `ARP` brut est projete en `ROUT` pour Master/FX. L'etat ROUT Master/FX est UI-only local et ne modifie pas le routing audio.
+- Le renderer LED Master/FX ROUT utilise l'etat UI-only `g_master_fx_route_enabled[]` via le runtime bridge; il n'utilise pas le renderer ARP ni l'etat `Master/Buffer`.
+- Le hall de la track `Master/FX` active est affiche en vert fonce comme destination courante et son toggle est ignore.
+- Aucun DSP, FILTER ou REVERB MacroFX n'est cable dans cette passe.
 
 
 ## 12. Contrat MIDI UI v1 (canonique)

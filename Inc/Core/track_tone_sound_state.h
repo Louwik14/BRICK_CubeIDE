@@ -43,6 +43,13 @@ typedef struct
     } buffer;
     struct
     {
+        float type[4];
+        float level[4];
+        float macro_a[4];
+        float macro_b[4];
+    } master_fx;
+    struct
+    {
         float patch;
         float index;
         float time;

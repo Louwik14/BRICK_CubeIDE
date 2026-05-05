@@ -396,3 +396,9 @@ TODO policy SD/projet:
 - Project save/load ne doit pas preempter `sample_cache_service()` quand un stream sample a besoin de refill.
 - Project load ne doit jamais appliquer un etat partiel.
 - Politique finale SD attendue: SAMPLE_CACHE prioritaire, PATTERN_LOAD entre refills, PATTERN_SAVE differe, PROJECT hors playback, PREVIEW exclusif, sans scheduler SD generique.
+
+## Addendum 2026-05-06 - Master/FX UI-only
+
+- Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont ajoutes en fin d'enum et entrent dans les tableaux `PARAM_COUNT` existants.
+- Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
+- L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.

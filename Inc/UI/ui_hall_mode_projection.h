@@ -3,6 +3,14 @@
 
 #include "ui_core.h"
 
+typedef enum
+{
+    UI_HALL_ROUT_CONTEXT_NONE = 0,
+    UI_HALL_ROUT_CONTEXT_MASTER_BUFFER,
+    UI_HALL_ROUT_CONTEXT_MASTER_FX
+} ui_hall_rout_context_t;
+
+ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode);
 ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track, ui_hall_mode_t raw_mode);
 uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode);
 uint8_t ui_hall_uses_arp_engine(uint8_t track, ui_hall_mode_t raw_mode);

@@ -327,6 +327,30 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_BUFFER_PRESERVE_PITCH:
             *out_value = state->buffer.preserve_pitch;
             return 1U;
+        case PARAM_MASTER_FX1_TYPE:
+        case PARAM_MASTER_FX2_TYPE:
+        case PARAM_MASTER_FX3_TYPE:
+        case PARAM_MASTER_FX4_TYPE:
+            *out_value = state->master_fx.type[(uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U)];
+            return 1U;
+        case PARAM_MASTER_FX1_LEVEL:
+        case PARAM_MASTER_FX2_LEVEL:
+        case PARAM_MASTER_FX3_LEVEL:
+        case PARAM_MASTER_FX4_LEVEL:
+            *out_value = state->master_fx.level[(uint8_t)((id - PARAM_MASTER_FX1_LEVEL) / 4U)];
+            return 1U;
+        case PARAM_MASTER_FX1_A:
+        case PARAM_MASTER_FX2_A:
+        case PARAM_MASTER_FX3_A:
+        case PARAM_MASTER_FX4_A:
+            *out_value = state->master_fx.macro_a[(uint8_t)((id - PARAM_MASTER_FX1_A) / 4U)];
+            return 1U;
+        case PARAM_MASTER_FX1_B:
+        case PARAM_MASTER_FX2_B:
+        case PARAM_MASTER_FX3_B:
+        case PARAM_MASTER_FX4_B:
+            *out_value = state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)];
+            return 1U;
         case PARAM_OPAL_PATCH:
             *out_value = state->opal.patch;
             return 1U;
@@ -746,6 +770,30 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_BUFFER_PRESERVE_PITCH:
             state->buffer.preserve_pitch = value;
+            return 1U;
+        case PARAM_MASTER_FX1_TYPE:
+        case PARAM_MASTER_FX2_TYPE:
+        case PARAM_MASTER_FX3_TYPE:
+        case PARAM_MASTER_FX4_TYPE:
+            state->master_fx.type[(uint8_t)((id - PARAM_MASTER_FX1_TYPE) / 4U)] = value;
+            return 1U;
+        case PARAM_MASTER_FX1_LEVEL:
+        case PARAM_MASTER_FX2_LEVEL:
+        case PARAM_MASTER_FX3_LEVEL:
+        case PARAM_MASTER_FX4_LEVEL:
+            state->master_fx.level[(uint8_t)((id - PARAM_MASTER_FX1_LEVEL) / 4U)] = value;
+            return 1U;
+        case PARAM_MASTER_FX1_A:
+        case PARAM_MASTER_FX2_A:
+        case PARAM_MASTER_FX3_A:
+        case PARAM_MASTER_FX4_A:
+            state->master_fx.macro_a[(uint8_t)((id - PARAM_MASTER_FX1_A) / 4U)] = value;
+            return 1U;
+        case PARAM_MASTER_FX1_B:
+        case PARAM_MASTER_FX2_B:
+        case PARAM_MASTER_FX3_B:
+        case PARAM_MASTER_FX4_B:
+            state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)] = value;
             return 1U;
         case PARAM_OPAL_PATCH:
             state->opal.patch = value;

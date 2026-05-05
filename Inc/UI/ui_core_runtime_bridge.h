@@ -34,6 +34,7 @@ uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event
                                                                    ui_hall_mode_t hall_mode,
                                                                    uint8_t track_select_armed,
                                                                    ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note);
+uint8_t ui_core_runtime_bridge_get_master_fx_route_enabled(uint8_t track);
 
 uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
                                                       uint8_t mute_active,

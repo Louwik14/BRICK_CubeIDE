@@ -26,6 +26,11 @@ uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx,
                                          uint8_t track,
                                          param_id_t id,
                                          float value);
+uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,
+                                            uint8_t track,
+                                            param_id_t id,
+                                            float value,
+                                            uint8_t update_base_state);
 uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                                       uint8_t track,
                                       param_id_t id,

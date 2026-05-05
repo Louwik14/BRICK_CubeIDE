@@ -5,7 +5,7 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
     static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_OPAL, UI_TRACK_TYPE_BRAIDS };
     static const ui_track_type_t k_sampler_types[] = { UI_TRACK_TYPE_ONE_SHOT, UI_TRACK_TYPE_SLICER, UI_TRACK_TYPE_CLIP };
-    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER };
+    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER, UI_TRACK_TYPE_MASTER_FX };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_TRX_BD,
@@ -188,11 +188,6 @@ bool ui_track_catalog_type_is_available(uint8_t track,
             }
         }
 
-        return true;
-    }
-
-    if ((family == UI_TRACK_FAMILY_MASTER) && (type != UI_TRACK_TYPE_BUFFER))
-    {
         return true;
     }
 
@@ -518,6 +513,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buffer";
+        case UI_TRACK_TYPE_MASTER_FX:
+            return "FX";
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TRX BD";
@@ -577,6 +574,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
 
         case UI_TRACK_TYPE_BUFFER:
             return "Buf";
+        case UI_TRACK_TYPE_MASTER_FX:
+            return "FX";
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TBD";

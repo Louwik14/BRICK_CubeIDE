@@ -1,6 +1,8 @@
 #include <stddef.h>
+#include <stdio.h>
 #include "pages/ui_page_template_tone.h"
 
+#include "Param/param_registry.h"
 #include "ui_core.h"
 #include "ui_template_page.h"
 
@@ -12,6 +14,18 @@ static const ui_template_family_t g_ui_template_tone_family_buffer = {
         { .title = "FADE", .param_bank = { .params = { PARAM_BUFFER_FADE_IN, PARAM_BUFFER_FADE_OUT, PARAM_BUFFER_XFADE, PARAM_BUFFER_PRESERVE_PITCH } } },
         { .title = "STR", .param_bank = { .params = { PARAM_BUFFER_TSTR, PARAM_BUFFER_GRAIN, PARAM_BUFFER_HOP, PARAM_COUNT } } },
         { .title = "SYNC", .param_bank = { .params = { PARAM_BUFFER_SYNC_LEN, PARAM_BUFFER_SRC_BPM, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_master_fx = {
+    .family_title = "TONE",
+    .nav_labels = { "FX1", "FX2", "FX3", "FX4" },
+    .subpages = {
+        { .title = "FX1", .param_bank = { .params = { PARAM_MASTER_FX1_TYPE, PARAM_MASTER_FX1_LEVEL, PARAM_MASTER_FX1_A, PARAM_MASTER_FX1_B } } },
+        { .title = "FX2", .param_bank = { .params = { PARAM_MASTER_FX2_TYPE, PARAM_MASTER_FX2_LEVEL, PARAM_MASTER_FX2_A, PARAM_MASTER_FX2_B } } },
+        { .title = "FX3", .param_bank = { .params = { PARAM_MASTER_FX3_TYPE, PARAM_MASTER_FX3_LEVEL, PARAM_MASTER_FX3_A, PARAM_MASTER_FX3_B } } },
+        { .title = "FX4", .param_bank = { .params = { PARAM_MASTER_FX4_TYPE, PARAM_MASTER_FX4_LEVEL, PARAM_MASTER_FX4_A, PARAM_MASTER_FX4_B } } },
     },
     .default_subpage = 0U,
 };
@@ -118,12 +132,93 @@ static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
 
+static uint8_t ui_page_template_tone_virtual_slot_text(uint8_t slot,
+                                                       char *out_name,
+                                                       uint32_t out_name_len,
+                                                       char *out_value,
+                                                       uint32_t out_value_len);
+
 static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
     .family_resolver = ui_page_template_tone_resolve_family,
+    .virtual_slot_text = ui_page_template_tone_virtual_slot_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
+
+static void ui_page_template_tone_master_fx_macro_labels(uint8_t fx_type,
+                                                         const char **out_a,
+                                                         const char **out_b)
+{
+    static const char *const k_labels[][2] = {
+        { "---", "---" },
+        { "TONE", "SHAPE" },
+        { "BITS", "RATE" },
+        { "RATE", "REL" },
+        { "RATE", "SHAPE" },
+        { "TIME", "FB" },
+        { "RATE", "DEPTH" },
+        { "TUNE", "FB" },
+        { "FREQ", "COLOR" },
+        { "SEMI", "FINE" },
+        { "VOWL", "TONE" },
+        { "SIZE", "RATE" },
+        { "TIME", "HOLD" },
+    };
+
+    if ((out_a == NULL) || (out_b == NULL))
+    {
+        return;
+    }
+
+    if (fx_type >= (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])))
+    {
+        fx_type = 0U;
+    }
+
+    *out_a = k_labels[fx_type][0];
+    *out_b = k_labels[fx_type][1];
+}
+
+static uint8_t ui_page_template_tone_virtual_slot_text(uint8_t slot,
+                                                       char *out_name,
+                                                       uint32_t out_name_len,
+                                                       char *out_value,
+                                                       uint32_t out_value_len)
+{
+    const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_MASTER)
+            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_MASTER_FX)
+            || (slot < 2U)
+            || (slot > 3U)
+            || (g_ui_template_tone_state.active_subpage >= 4U))
+    {
+        return 0U;
+    }
+
+    const param_id_t type_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (g_ui_template_tone_state.active_subpage * 4U));
+    const param_id_t value_param = (param_id_t)(type_param + slot);
+    float fx_type_value = 0.0f;
+    float macro_value = 0.0f;
+    const char *label_a = "A";
+    const char *label_b = "B";
+
+    (void)param_registry_get_track_value(type_param, active_track, &fx_type_value);
+    (void)param_registry_get_track_value(value_param, active_track, &macro_value);
+    ui_page_template_tone_master_fx_macro_labels((uint8_t)(fx_type_value + 0.5f), &label_a, &label_b);
+
+    if ((out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "%s", (slot == 2U) ? label_a : label_b);
+    }
+
+    if ((out_value != NULL) && (out_value_len > 0U))
+    {
+        (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(macro_value + 0.5f));
+    }
+
+    return 1U;
+}
 
 static void ui_page_template_tone_set_subpage(uint8_t idx, const char *title, param_id_t p0, param_id_t p1, param_id_t p2, param_id_t p3)
 {
@@ -246,6 +341,10 @@ void ui_page_template_tone_register_families(void)
             if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
             {
                 family_template = &g_ui_template_tone_family_buffer;
+            }
+            else if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_MASTER_FX))
+            {
+                family_template = &g_ui_template_tone_family_master_fx;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_BRAIDS))
             {

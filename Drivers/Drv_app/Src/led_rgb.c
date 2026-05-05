@@ -34,6 +34,8 @@
 #include "led_layer.h"
 #include "Storage/project_v1.h"
 #include "UI/ui_core.h"
+#include "UI/ui_core_runtime_bridge.h"
+#include "UI/ui_hall_mode_projection.h"
 #include "UI/ui_navigation.h"
 #include "UI/ui_macro_interaction.h"
 #include "UI/ui_page_manager.h"
@@ -246,12 +248,23 @@ static void led_apply_keyboard_hall_scene(uint8_t hall)
     led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
 }
 
-static void led_apply_master_buffer_routing_hall_scene(uint8_t hall)
+static void led_apply_route_destination_hall_scene(led_id_t led)
+{
+    led_layer_set(LED_LAYER_UI, led, 0U, (uint8_t)(LED_FIXED_GREEN_G / 2U), 0U);
+}
+
+static void led_apply_master_buffer_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
     if (hall >= UI_TRACK_COUNT)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    if (hall == destination_track)
+    {
+        led_apply_route_destination_hall_scene(led);
         return;
     }
 
@@ -262,6 +275,30 @@ static void led_apply_master_buffer_routing_hall_scene(uint8_t hall)
     }
 
     led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, 0U, LED_FIXED_BLUE_B);
+}
+
+static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destination_track)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    if (hall >= UI_TRACK_COUNT)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    if (hall == destination_track)
+    {
+        led_apply_route_destination_hall_scene(led);
+        return;
+    }
+
+    if (ui_core_runtime_bridge_get_master_fx_route_enabled(hall) == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
+        return;
+    }
+
+    led_layer_set(LED_LAYER_UI, led, 0U, LED_FIXED_LIGHT_BLUE_G, LED_FIXED_LIGHT_BLUE_B);
 }
 
 static void led_apply_pattern_hall_scene(uint8_t hall)
@@ -528,6 +565,8 @@ static void led_apply_fixed_scene(void)
     {
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
+            const ui_hall_rout_context_t rout_context =
+                ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode());
             if (led_apply_mute_hall_scene(hall) != 0U)
             {
                 continue;
@@ -536,11 +575,13 @@ static void led_apply_fixed_scene(void)
             {
                 led_apply_pattern_hall_scene(hall);
             }
-            else if ((ui_get_hall_mode() == UI_HALL_MODE_ARP)
-                     && (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_MASTER)
-                     && (ui_get_track_type(ui_get_active_track()) == UI_TRACK_TYPE_BUFFER))
+            else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_BUFFER)
             {
-                led_apply_master_buffer_routing_hall_scene(hall);
+                led_apply_master_buffer_routing_hall_scene(hall, ui_get_active_track());
+            }
+            else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_FX)
+            {
+                led_apply_master_fx_routing_hall_scene(hall, ui_get_active_track());
             }
             else if (led_hall_mode_uses_keyboard_scene())
             {

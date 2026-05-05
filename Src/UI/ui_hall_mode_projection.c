@@ -7,15 +7,30 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_hall_mode_contract.h"
 
-static uint8_t ui_hall_mode_projection_is_master_buffer(uint8_t track)
+ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode)
 {
-    if (track >= UI_TRACK_COUNT)
+    if ((track >= UI_TRACK_COUNT) || (raw_mode != UI_HALL_MODE_ARP))
     {
-        return 0U;
+        return UI_HALL_ROUT_CONTEXT_NONE;
     }
 
-    return (uint8_t)((ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_BUFFER));
+    if (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)
+    {
+        return UI_HALL_ROUT_CONTEXT_NONE;
+    }
+
+    const ui_track_type_t type = ui_get_track_type(track);
+    if (type == UI_TRACK_TYPE_BUFFER)
+    {
+        return UI_HALL_ROUT_CONTEXT_MASTER_BUFFER;
+    }
+
+    if (type == UI_TRACK_TYPE_MASTER_FX)
+    {
+        return UI_HALL_ROUT_CONTEXT_MASTER_FX;
+    }
+
+    return UI_HALL_ROUT_CONTEXT_NONE;
 }
 
 ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track, ui_hall_mode_t raw_mode)
@@ -29,7 +44,7 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
             return UI_HALL_MODE_VIEW_KEYBOARD;
 
         case UI_HALL_MODE_ARP:
-            return (ui_hall_mode_projection_is_master_buffer(track) != 0U)
+            return (ui_hall_mode_resolve_rout_context(track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
                     ? UI_HALL_MODE_VIEW_ROUT
                     : UI_HALL_MODE_VIEW_ARP;
 
