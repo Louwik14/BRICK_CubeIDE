@@ -400,6 +400,8 @@ Points factuels:
   - la famille `Synth` propose `Opal` et `Braids`,
   - `Braids` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
 
+
+
 ## 14.b Contrat UI Braids
 - `Synth/Braids` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
 - La famille template `TONE` Braids expose exactement 7 params dans l'ordre runtime:
@@ -411,6 +413,31 @@ Points factuels:
 - Le clavier live réutilise le même seam track-aware que le scheduler:
   - `note on/off` Braids passent par `keyboard_engine` puis `brick6_braids_runtime`
   - aucun chemin UI local parallèle n'est autorisé pour le jeu de notes.
+
+
+## 14.c Contrat MIX send2 delay
+- La page template `MIX` conserve la page track-aware `MIX`: `Level`, `Pan`, `Send1`, `Send2`.
+- L'ensemble `MIX` est scinde en deux sous-ensembles locaux UI-only:
+  - appui `MIX` depuis un autre ensemble: ouvre `MIX 1/2`, subpage `MIX`,
+  - appui `MIX` depuis `MIX`: alterne `MIX 1/2` / `MIX 2/2`,
+  - le changement de sous-ensemble conserve la subpage active si elle reste disponible, sinon revient a `0`.
+- `MIX 1/2` expose:
+  - `MIX`: `Level`, `Pan`, `Send1`, `Send2`,
+  - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
+  - `REV2`: `Type`, `Surr`,
+  - `REV3`: `HPF`, `LPF`.
+- Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI:
+  - `DLY1`: `TIME`, `X`, `WID`, `FDBK`,
+  - `DLY2`: `HPF`, `LPF`, `REV`, `VOL`.
+- `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
+- Le delay global expose maintenant une surface 16 slots dans `MIX 2/2`:
+  - `DLY1`: `TYPE`, `TIME`, `X` en CLASSIC ou `MODE` en DUAL, `TIME_R`,
+  - `DLY2`: `FDBK`, `HPF`, `LPF`, `WID`,
+  - `DLY3`: `FBW`, `SWING`, `ACCENT`, `MOD`,
+  - `DLY4`: `M.RATE`, `REV`, `VOL`, slot libre.
+- `TYPE=CLASSIC` reste le default visible et conserve l'ancien controle `X`.
+- `TYPE=DUAL` substitue `MODE` au slot de `X`; `MODE` propose `Normal`, `PingPong`, `Tap`, `ClassicPP`.
+- `TIME_R` est surtout le temps principal du mode DUAL `Tap`; en CLASSIC il est persiste mais sans effet sur le moteur historique.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.

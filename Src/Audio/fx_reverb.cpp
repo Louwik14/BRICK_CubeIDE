@@ -121,10 +121,10 @@ static fx_reverb_global_state_t g_reverb_global = {
     .backend_valid = 0U,
     .sample_rate = 48000.0f,
     .wet = 0.0f,
-    .size = 0.70f,
-    .decay = 0.20f,
-    .predelay_s = 0.0f,
-    .surround_s = 0.018f,
+    .size = 0.0f,
+    .decay = 0.50f,
+    .predelay_s = 0.045f,
+    .surround_s = 0.009f,
 };
 
 static void fx_reverb_global_apply_params(void)

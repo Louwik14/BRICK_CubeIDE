@@ -1,12 +1,15 @@
 #include "pages/ui_page_template_mix.h"
 
 #include "Core/track_runtime.h"
+#include "Param/param_registry.h"
 #include "ui_core.h"
 #include "ui_template_page.h"
 
-static const ui_template_family_t g_ui_template_mix_family = {
-    .family_title = "MIX",
-    .nav_labels = { "MIX", "REV1", "REV2", "-" },
+static uint8_t g_ui_template_mix_subset = 0U;
+
+static const ui_template_family_t g_ui_template_mix_family_main = {
+    .family_title = "MIX 1/2",
+    .nav_labels = { "MIX", "REVB", "REV2", "REV3" },
     .subpages = {
         {
             .title = "MIX",
@@ -17,12 +20,60 @@ static const ui_template_family_t g_ui_template_mix_family = {
             .param_bank = { .params = { PARAM_MIX_REVERB_WET, PARAM_MIX_REVERB_SIZE, PARAM_MIX_REVERB_DECAY, PARAM_MIX_REVERB_PRED } },
         },
         {
-            .title = "REVB",
-            .param_bank = { .params = { PARAM_MIX_REVERB_SURR, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "REV2",
+            .param_bank = { .params = { PARAM_MIX_REVERB_TYPE, PARAM_MIX_REVERB_SURR, PARAM_COUNT, PARAM_COUNT } },
         },
         {
-            .title = "-",
-            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
+            .title = "REV3",
+            .param_bank = { .params = { PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF, PARAM_COUNT, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_mix_family_delay_classic = {
+    .family_title = "MIX 2/2",
+    .nav_labels = { "DLY1", "DLY2", "DLY3", "DLY4" },
+    .subpages = {
+        {
+            .title = "DLY1",
+            .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_PINGPONG, PARAM_MIX_DELAY_TIME_R } },
+        },
+        {
+            .title = "DLY2",
+            .param_bank = { .params = { PARAM_MIX_DELAY_FEEDBACK, PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_WIDTH } },
+        },
+        {
+            .title = "DLY3",
+            .param_bank = { .params = { PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_SWING, PARAM_MIX_DELAY_ACCENT, PARAM_MIX_DELAY_MOD } },
+        },
+        {
+            .title = "DLY4",
+            .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_VOL, PARAM_COUNT } },
+        },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_mix_family_delay_dual = {
+    .family_title = "MIX 2/2",
+    .nav_labels = { "DLY1", "DLY2", "DLY3", "DLY4" },
+    .subpages = {
+        {
+            .title = "DLY1",
+            .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_TIME_R } },
+        },
+        {
+            .title = "DLY2",
+            .param_bank = { .params = { PARAM_MIX_DELAY_FEEDBACK, PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_WIDTH } },
+        },
+        {
+            .title = "DLY3",
+            .param_bank = { .params = { PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_SWING, PARAM_MIX_DELAY_ACCENT, PARAM_MIX_DELAY_MOD } },
+        },
+        {
+            .title = "DLY4",
+            .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_VOL, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -63,15 +114,55 @@ static const ui_template_family_t *ui_page_template_mix_resolve_family(void)
         return &g_ui_template_mix_unavailable_family;
     }
 
-    return &g_ui_template_mix_family;
+    if (g_ui_template_mix_subset == 0U)
+    {
+        return &g_ui_template_mix_family_main;
+    }
+
+    return (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f)
+            ? &g_ui_template_mix_family_delay_dual
+            : &g_ui_template_mix_family_delay_classic;
+}
+
+static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
+{
+    if (g_ui_template_mix_subset == 0U)
+    {
+        return (subpage_index < 4U) ? 1U : 0U;
+    }
+
+    return (subpage_index < 4U) ? 1U : 0U;
 }
 
 static ui_template_page_state_t g_ui_template_mix_state = {
     .family = 0,
     .family_resolver = ui_page_template_mix_resolve_family,
+    .subpage_enabled = ui_page_template_mix_subpage_enabled,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
+
+void ui_page_template_mix_open_primary(void)
+{
+    g_ui_template_mix_subset = 0U;
+    g_ui_template_mix_state.resolved_family = ui_page_template_mix_resolve_family();
+    ui_template_page_select_subpage(&g_ui_template_mix_state, 0U);
+}
+
+void ui_page_template_mix_toggle_subset(void)
+{
+    const uint8_t previous_subpage = g_ui_template_mix_state.active_subpage;
+    g_ui_template_mix_subset = (g_ui_template_mix_subset == 0U) ? 1U : 0U;
+    g_ui_template_mix_state.resolved_family = ui_page_template_mix_resolve_family();
+
+    if (ui_page_template_mix_subpage_enabled(previous_subpage) != 0U)
+    {
+        ui_template_page_select_subpage(&g_ui_template_mix_state, previous_subpage);
+        return;
+    }
+
+    ui_template_page_select_subpage(&g_ui_template_mix_state, 0U);
+}
 
 void ui_page_template_mix_register_families(void)
 {
@@ -96,7 +187,7 @@ void ui_page_template_mix_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_MIX,
                                         track_family,
                                         track_type,
-                                        &g_ui_template_mix_family);
+                                        &g_ui_template_mix_family_main);
         }
     }
 }

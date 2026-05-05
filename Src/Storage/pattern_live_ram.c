@@ -220,6 +220,24 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_CFG_REC_LEN:
         case PARAM_MIX_SEND0_FX:
         case PARAM_MIX_SEND1_FX:
+        case PARAM_MIX_DELAY_TYPE:
+        case PARAM_MIX_DELAY_TIME:
+        case PARAM_MIX_DELAY_PINGPONG:
+        case PARAM_MIX_DELAY_MODE:
+        case PARAM_MIX_DELAY_TIME_R:
+        case PARAM_MIX_DELAY_WIDTH:
+        case PARAM_MIX_DELAY_FEEDBACK:
+        case PARAM_MIX_DELAY_HPF:
+        case PARAM_MIX_DELAY_LPF:
+        case PARAM_MIX_DELAY_FBW:
+        case PARAM_MIX_DELAY_SWING:
+        case PARAM_MIX_DELAY_ACCENT:
+        case PARAM_MIX_DELAY_MOD:
+        case PARAM_MIX_DELAY_MOD_RATE:
+        case PARAM_MIX_DELAY_REV:
+        case PARAM_MIX_DELAY_VOL:
+        case PARAM_MIX_REVERB_HPF:
+        case PARAM_MIX_REVERB_LPF:
             return 1U;
 
         default:

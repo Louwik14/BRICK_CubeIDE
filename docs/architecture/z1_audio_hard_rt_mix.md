@@ -157,6 +157,7 @@ Contrats timing sortants:
   - Role: etat filter/EQ/VCA par track.
   - Contrat `mixer_set_track_filter_type`: idempotent sur type identique (no-op) et reconfiguration sans reset DSP brutal, pour eviter les transitoires audibles sur re-apply redondant.
 - Lors d'un rebind logique->lane, la migration du state lane-bound (`g_tracks` + `g_track_filters`) doit etre faite explicitement avant re-apply des params autoritatifs; sinon le state FILTER/VCA reste attache a l'ancienne lane.
+- Apres copie d'un `g_track_filters` vers une nouvelle lane, les instances DSP internes qui portent des pointeurs vers leur stockage local (notamment `EQ3` CMSIS stereo/mono) doivent etre rebindees vers le stockage de la lane destination avant tout traitement audio.
 - `g_send_fx_slot[MIXER_NUM_SENDS]`, `g_reverb`
   - Ecriture: `mixer_set_send_fx_slot`, `mixer_set_reverb_*`.
   - Lecture: `mixer_process`.
@@ -366,3 +367,43 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 ## 12. Conclusion stricte
 
 `cause trouvee`
+
+## 13. Addendum - send2 delay stereo global
+
+- `PARAM_MIX_SEND2` reste le send amount track-aware vers `send index 1`.
+- `send index 1` est maintenant reserve au delay stereo global dedie: il ne passe pas par `fx_pool` et ne s'additionne pas avec `g_send_fx_slot[1]`.
+- Le flux produit est:
+  - tracks dry -> master,
+  - send1 -> reverb globale -> master,
+  - send2 -> delay stereo global -> master,
+  - delay wet -> reverb globale si `REV > 0`, sans retour reverb -> delay.
+- L'autorite d'execution reste `mixer_process()`: accumulation `send_l/r[1]`, appel `fx_delay_stereo_global_process_block()`, ajout du wet `VOL` au bus MAIN et addition du wet `REV` dans l'entree reverb avant traitement reverb.
+- La reverb globale est processee uniquement selon l'autorite `Wet`: `fx_reverb_global_is_active()` retourne vrai si `Wet > 0`, et `mixer_process()` appelle alors `fx_reverb_global_process_block()` a chaque bloc audio, meme si `send_l/r[0]` est silencieux.
+- `Wet=0` coupe immediatement le cout reverb; aucun gate local base sur l'entree et aucun tail mixer local ne participent a la decision.
+- L'entree de la reverb globale est filtree en place par les params globaux `PARAM_MIX_REVERB_HPF` / `PARAM_MIX_REVERB_LPF` dans `mixer_process()`, apres l'eventuel wet delay `REV` et juste avant `fx_reverb_global_process_block()`.
+- Le DSP delay vit dans `fx_delay_stereo.*`; ses buffers L/R sont statiques, alignes et places en `AUDIO_COLD_SDRAM`, dimensionnes pour le `1 bar` a 40 BPM.
+- V1 expose le contrat 8 params `TIME`, `X`, `WID`, `FDBK`, `HPF`, `LPF`, `REV`, `VOL`; `TIME` est une division musicale sync BPM stockee comme enum et convertie en secondes via l'autorite tempo `seq_runtime`, tandis que le smoothing/interpolation reste dans le DSP delay.
+- `X` est un bool ping-pong, `HPF/LPF` filtrent la boucle feedback, `WID` est bipolaire et agit uniquement sur le retour wet hors boucle feedback.
+- `VOL=0` garde le retour master inaudible; le delay reste traite si `REV>0` afin d'alimenter la reverb globale.
+
+## 14. Addendum - send2 delay TYPE CLASSIC/DUAL
+
+- `PARAM_MIX_DELAY_TYPE` choisit le backend global send2:
+  - `CLASSIC` garde le moteur existant `fx_delay_stereo.*` et reste le default.
+  - `DUAL` route le meme bus send2 vers le moteur dedie `fx_delay_dual.*`.
+- `send index 1` reste reserve au delay global dedie; `fx_pool` ne redevient pas autorite de send2.
+- L'autorite d'execution reste `mixer_process()`:
+  - accumulation `send_l/r[1]`,
+  - dispatch exclusif CLASSIC ou DUAL,
+  - ajout wet vers MAIN via `VOL`,
+  - ajout wet vers reverb globale via `REV`.
+- `fx_delay_dual.*` porte un dual delay L/R permanent inspire QDelay:
+  - lignes separees delay L/R, swing L/R, predelay/tap L/R et Haas width,
+  - modes `Normal`, `PingPong`, `Tap`, `ClassicPingPong`,
+  - interpolation cubic sur lecture temps modulee,
+  - modulation LFO bornee sur temps de lecture,
+  - HPF/LPF simplifie dans le feedback.
+- `Tap` suit le contrat QDelay: `TIME` sert de tap/predelay, `TIME_R` sert de temps principal.
+- `FBW` mappe le croisement/largeur de feedback; `WID` reste la largeur wet/haas/pingpong selon le mode.
+- Fonctions explicitement hors scope du backend DUAL: pitch, shimmer, reverse, diffusion, drive, ducking, phaser, EQ param complete, lo-fi.
+- Les buffers longs DUAL sont statiques en `AUDIO_COLD_SDRAM`; aucune allocation runtime audio n'est introduite.

@@ -536,6 +536,56 @@ Call-sites critiques:
 - Le re-apply lane-bound ne depend plus d'un cache partiel silencieux: l'autorite est explicite (`filter_ui_state` pour FILTER, cache track-aware sinon valeur par defaut promue dans le cache).
 - Pendant ce corridor, les consommateurs de modulation control-rate (`mod_lfo_v1`) sont suspendus pour eviter une capture/restauration sur topologie intermediaire.
 
+## 27. Contrat send2 delay global
+- `PARAM_MIX_SEND2` reste un param MIX track-aware stocke par track dans `track_sound_state` et projete vers `mixer_set_track_send_level(..., 1U, ...)`.
+- Les params delay sont globaux:
+  - `PARAM_MIX_DELAY_TIME`
+  - `PARAM_MIX_DELAY_PINGPONG`
+  - `PARAM_MIX_DELAY_WIDTH`
+  - `PARAM_MIX_DELAY_FEEDBACK`
+  - `PARAM_MIX_DELAY_HPF`
+  - `PARAM_MIX_DELAY_LPF`
+  - `PARAM_MIX_DELAY_REV`
+  - `PARAM_MIX_DELAY_VOL`
+- `PARAM_MIX_DELAY_TIME` est stocke comme division musicale sync BPM (`1/32`..`1 bar`), pas comme duree ms/secondes.
+- `apply_mix_delay_time()` lit l'autorite tempo `seq_runtime` (`seq_runtime_get_tempo_bpm_milli()` ou tempo externe valide selon `seq_runtime_get_clock_source()`), calcule la duree effective, puis conserve le smoothing/interpolation cote DSP.
+- `PARAM_MIX_DELAY_WIDTH` est bipolaire: `-1` mono, `0` stereo naturel, `+1` wide borne.
+- `PARAM_MIX_DELAY_PINGPONG` remplace l'ancien mode discret; aucun crossfeed n'est expose.
+- `PARAM_MIX_DELAY_REV` envoie le wet delay vers la reverb globale via `mixer_process()`, sans boucle reverb -> delay.
+- Leur apply passe par les wrappers `apply_mix_delay_*` puis par les setters mixer `mixer_set_delay_*`.
+- Le delay n'est pas un `fx_pool` slot et ne cree pas d'autorite par track.
+- `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont globaux et filtrent l'entree stereo de la reverb globale en pre-reverb.
+- Leur apply passe par `apply_mix_reverb_hpf/lpf` puis `mixer_set_reverb_hpf/lpf`; `0.0` reste neutre pour les deux params.
+- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `Type=0/Mono`, `Surr=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` et `Surr` sont convertis en secondes par les setters mixer.
+
+## 28. Contrat send2 delay DUAL
+
+- Les params delay restent globaux et ne creent pas d'autorite par track:
+  - `PARAM_MIX_DELAY_TYPE`,
+  - `PARAM_MIX_DELAY_TIME`,
+  - `PARAM_MIX_DELAY_PINGPONG`,
+  - `PARAM_MIX_DELAY_MODE`,
+  - `PARAM_MIX_DELAY_TIME_R`,
+  - `PARAM_MIX_DELAY_WIDTH`,
+  - `PARAM_MIX_DELAY_FEEDBACK`,
+  - `PARAM_MIX_DELAY_HPF`,
+  - `PARAM_MIX_DELAY_LPF`,
+  - `PARAM_MIX_DELAY_FBW`,
+  - `PARAM_MIX_DELAY_SWING`,
+  - `PARAM_MIX_DELAY_ACCENT`,
+  - `PARAM_MIX_DELAY_MOD`,
+  - `PARAM_MIX_DELAY_MOD_RATE`,
+  - `PARAM_MIX_DELAY_REV`,
+  - `PARAM_MIX_DELAY_VOL`.
+- `TYPE=CLASSIC` reste le default et continue de router vers le moteur `fx_delay_stereo.*`.
+- `TYPE=DUAL` route vers `fx_delay_dual.*`; `MODE` est interprete uniquement par ce backend.
+- En CLASSIC, `PARAM_MIX_DELAY_PINGPONG` garde le controle visible `X`.
+- En DUAL, la surface UI substitue `MODE` au slot de `X`; `PINGPONG` reste conserve pour compat CLASSIC.
+- `TIME` et `TIME_R` persistent des divisions musicales sync BPM, pas des durees calculees.
+- `apply_mix_delay_time()` et `apply_mix_delay_time_r()` recalculent les secondes depuis l'autorite tempo Z4.
+- `FDBK` accepte la plage DUAL jusqu'a `1.20`; le backend CLASSIC conserve son clamp interne historique a `0.95`.
+- `FBW`, `SWING`, `ACCENT`, `MOD` et `MOD_RATE` sont des globals DUAL; en CLASSIC ils restent sans effet audio direct.
+
 ## 22. Contrat Passe 6 - Frontiere Z3 execution vs miroir UI Z5
 
 - Contrat d'edit track-aware explicite:

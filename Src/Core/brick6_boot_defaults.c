@@ -21,4 +21,12 @@ void brick6_boot_apply_param_defaults(void)
     param_reset(PARAM_KBD_OMNICHORD);
     param_reset(PARAM_KBD_NOTE_ORDER);
     param_reset(PARAM_KBD_CHORD_OVERRIDE);
+    param_reset(PARAM_MIX_REVERB_WET);
+    param_reset(PARAM_MIX_REVERB_SIZE);
+    param_reset(PARAM_MIX_REVERB_DECAY);
+    param_reset(PARAM_MIX_REVERB_PRED);
+    param_reset(PARAM_MIX_REVERB_TYPE);
+    param_reset(PARAM_MIX_REVERB_SURR);
+    param_reset(PARAM_MIX_REVERB_HPF);
+    param_reset(PARAM_MIX_REVERB_LPF);
 }

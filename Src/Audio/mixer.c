@@ -24,6 +24,8 @@
 #include "adsr_daisy_c.h"
 #include "env_adsr.h"
 #include "fx_biquad_filter.h"
+#include "fx_delay_dual.h"
+#include "fx_delay_stereo.h"
 #include "fx_reverb.h"
 
 #include <math.h>
@@ -146,9 +148,21 @@ enum
 #define MIXER_FILTER_UPDATE_PERIOD 8U
 #define MIXER_FILTER_BLOCK_SMOOTH 0.25f
 #define MIXER_REVERB_SEND_INDEX 0U
+#define MIXER_DELAY_SEND_INDEX 1U
+
+typedef enum
+{
+    MIXER_DELAY_TYPE_CLASSIC = 0U,
+    MIXER_DELAY_TYPE_DUAL = 1U
+} mixer_delay_type_t;
+
+static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 #define MIXER_REVERB_PREDELAY_MAX_S 0.090f
 #define MIXER_REVERB_SURROUND_MAX_S 0.018f
+#define MIXER_REVERB_INPUT_LPF_MIN_ALPHA 0.01f
+#define MIXER_REVERB_INPUT_LPF_MAX_ALPHA 0.85f
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
+#define MIXER_EQ3_NUM_STAGES 3U
 // Nominal per-track trim for dry summing headroom.
 // 0 dBFS remains the hard ceiling; tracks are kept below it before summing.
 #define MIXER_TRACK_NOMINAL_TRIM 0.125f
@@ -161,16 +175,32 @@ typedef struct
     float decay;
     float pre_delay;
     float surround;
+    float hpf;
+    float lpf;
 } mixer_reverb_state_t;
+
+typedef struct
+{
+    float hpf_l;
+    float hpf_r;
+    float hpf_prev_l;
+    float hpf_prev_r;
+    float lp_l;
+    float lp_r;
+} mixer_reverb_input_filter_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
     .type = FX_REVERB_GLOBAL_TYPE_MONO,
     .wet = 0.0f,
-    .size = 0.70f,
-    .decay = 0.20f,
-    .pre_delay = 0.0f,
-    .surround = 1.0f,
+    .size = 0.0f,
+    .decay = 0.50f,
+    .pre_delay = 0.50f,
+    .surround = 0.50f,
+    .hpf = 0.0f,
+    .lpf = 0.0f,
 };
+
+static AUDIO_HOT mixer_reverb_input_filter_state_t g_reverb_input_filter;
 
 static float mixer_reverb_predelay_ui_to_seconds(float v)
 {
@@ -182,6 +212,82 @@ static float mixer_reverb_surround_ui_to_seconds(float v)
 {
     const float clamped = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
     return clamped * MIXER_REVERB_SURROUND_MAX_S;
+}
+
+static float mixer_reverb_input_lpf_alpha(float lpf)
+{
+    const float clamped = (lpf < 0.0f) ? 0.0f : ((lpf > 1.0f) ? 1.0f : lpf);
+    const float t = 1.0f - clamped;
+    return MIXER_REVERB_INPUT_LPF_MIN_ALPHA
+            + ((MIXER_REVERB_INPUT_LPF_MAX_ALPHA - MIXER_REVERB_INPUT_LPF_MIN_ALPHA) * t * t);
+}
+
+static float mixer_reverb_input_hpf_alpha(float hpf)
+{
+    const float clamped = (hpf < 0.0f) ? 0.0f : ((hpf > 1.0f) ? 1.0f : hpf);
+    return 0.995f - (0.94f * clamped * clamped);
+}
+
+static float mixer_reverb_input_process_hpf(float input, float hpf, float *state, float *prev_input)
+{
+    if(hpf <= 0.001f)
+    {
+        *prev_input = input;
+        *state = input;
+        return input;
+    }
+
+    const float y = mixer_reverb_input_hpf_alpha(hpf) * (*state + input - *prev_input);
+    *prev_input = input;
+    *state = y;
+    return y;
+}
+
+static void mixer_process_reverb_input_filter(float *left, float *right, uint32_t frames)
+{
+    if((left == 0) || (right == 0))
+    {
+        return;
+    }
+
+    const float hpf = g_reverb.hpf;
+    const float lpf = g_reverb.lpf;
+    if((hpf <= 0.001f) && (lpf <= 0.001f))
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            g_reverb_input_filter.hpf_prev_l = left[i];
+            g_reverb_input_filter.hpf_prev_r = right[i];
+            g_reverb_input_filter.hpf_l = left[i];
+            g_reverb_input_filter.hpf_r = right[i];
+            g_reverb_input_filter.lp_l = left[i];
+            g_reverb_input_filter.lp_r = right[i];
+        }
+        return;
+    }
+
+    const float lpf_a = mixer_reverb_input_lpf_alpha(lpf);
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        float l = mixer_reverb_input_process_hpf(left[i], hpf, &g_reverb_input_filter.hpf_l, &g_reverb_input_filter.hpf_prev_l);
+        float r = mixer_reverb_input_process_hpf(right[i], hpf, &g_reverb_input_filter.hpf_r, &g_reverb_input_filter.hpf_prev_r);
+
+        if(lpf > 0.001f)
+        {
+            g_reverb_input_filter.lp_l += (l - g_reverb_input_filter.lp_l) * lpf_a;
+            g_reverb_input_filter.lp_r += (r - g_reverb_input_filter.lp_r) * lpf_a;
+            l = g_reverb_input_filter.lp_l;
+            r = g_reverb_input_filter.lp_r;
+        }
+        else
+        {
+            g_reverb_input_filter.lp_l = l;
+            g_reverb_input_filter.lp_r = r;
+        }
+
+        left[i] = l;
+        right[i] = r;
+    }
 }
 
 static float clampf_local(float v, float lo, float hi)
@@ -310,6 +416,22 @@ static void mixer_track_filter_reset_dsp(mixer_track_filter_t *filter)
     mixer_track_filter_apply_core_params(filter);
 }
 
+static void mixer_track_filter_rebind_dsp_storage(mixer_track_filter_t *filter)
+{
+    if(filter == NULL)
+        return;
+
+    filter->eq3.inst_l.numStages = MIXER_EQ3_NUM_STAGES;
+    filter->eq3.inst_l.pCoeffs = filter->eq3.coeffs;
+    filter->eq3.inst_l.pState = filter->eq3.state_l;
+    filter->eq3.inst_r.numStages = MIXER_EQ3_NUM_STAGES;
+    filter->eq3.inst_r.pCoeffs = filter->eq3.coeffs;
+    filter->eq3.inst_r.pState = filter->eq3.state_r;
+    filter->eq3_mono.inst.numStages = MIXER_EQ3_NUM_STAGES;
+    filter->eq3_mono.inst.pCoeffs = filter->eq3_mono.coeffs;
+    filter->eq3_mono.inst.pState = filter->eq3_mono.state;
+}
+
 static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_rate)
 {
     if(filter == NULL)
@@ -416,6 +538,7 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
 
         g_tracks[next_mix] = previous_tracks[previous_mix];
         g_track_filters[next_mix] = previous_filters[previous_mix];
+        mixer_track_filter_rebind_dsp_storage(&g_track_filters[next_mix]);
     }
 
     mixer_external_inputs_clear();
@@ -932,12 +1055,16 @@ static float clamp_pan(float pan)
 void mixer_init(void)
 {
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+    memset(&g_reverb_input_filter, 0, sizeof(g_reverb_input_filter));
     fx_reverb_global_set_type(g_reverb.type);
     fx_reverb_global_set_wet(g_reverb.wet);
     fx_reverb_global_set_size(g_reverb.size);
     fx_reverb_global_set_decay(g_reverb.decay);
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
     fx_reverb_global_set_surround(mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
+    fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+    fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+    g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
@@ -1188,6 +1315,13 @@ void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot)
     if(send_idx >= MIXER_NUM_SENDS)
         return;
 
+    if(send_idx == MIXER_DELAY_SEND_INDEX)
+    {
+        /* Send2 is owned by the dedicated global delay path; legacy slot state is kept inactive. */
+        g_send_fx_slot[send_idx] = -1;
+        return;
+    }
+
     g_send_fx_slot[send_idx] = slot;
 }
 
@@ -1226,6 +1360,111 @@ void mixer_set_reverb_type(uint8_t type)
     (void)type;
     g_reverb.type = FX_REVERB_GLOBAL_TYPE_MONO;
     fx_reverb_global_set_type(g_reverb.type);
+}
+
+void mixer_set_reverb_hpf(float hpf)
+{
+    g_reverb.hpf = clamp01(hpf);
+}
+
+void mixer_set_reverb_lpf(float lpf)
+{
+    g_reverb.lpf = clamp01(lpf);
+}
+
+void mixer_set_delay_type(uint8_t type)
+{
+    const uint8_t next = (type != 0U) ? (uint8_t)MIXER_DELAY_TYPE_DUAL : (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
+    if(next == g_delay_type)
+        return;
+
+    g_delay_type = next;
+    if(g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
+    {
+        fx_delay_dual_global_clear();
+    }
+}
+
+void mixer_set_delay_mode(uint8_t mode)
+{
+    fx_delay_dual_global_set_mode(mode);
+}
+
+void mixer_set_delay_time(float time_s)
+{
+    fx_delay_stereo_global_set_time(time_s);
+    fx_delay_dual_global_set_time_l(time_s);
+}
+
+void mixer_set_delay_time_r(float time_s)
+{
+    fx_delay_dual_global_set_time_r(time_s);
+}
+
+void mixer_set_delay_feedback(float feedback)
+{
+    fx_delay_stereo_global_set_feedback(feedback);
+    fx_delay_dual_global_set_feedback(feedback);
+}
+
+void mixer_set_delay_hpf(float hpf)
+{
+    fx_delay_stereo_global_set_hpf(hpf);
+    fx_delay_dual_global_set_hpf(hpf);
+}
+
+void mixer_set_delay_lpf(float lpf)
+{
+    fx_delay_stereo_global_set_lpf(lpf);
+    fx_delay_dual_global_set_lpf(lpf);
+}
+
+void mixer_set_delay_pingpong(uint8_t enabled)
+{
+    fx_delay_stereo_global_set_pingpong(enabled);
+}
+
+void mixer_set_delay_width(float width)
+{
+    fx_delay_stereo_global_set_width(width);
+    fx_delay_dual_global_set_width(width);
+}
+
+void mixer_set_delay_feedback_width(float width)
+{
+    fx_delay_dual_global_set_feedback_width(width);
+}
+
+void mixer_set_delay_swing(float swing)
+{
+    fx_delay_dual_global_set_swing(swing);
+}
+
+void mixer_set_delay_accent(float accent)
+{
+    fx_delay_dual_global_set_accent(accent);
+}
+
+void mixer_set_delay_mod_depth(float depth)
+{
+    fx_delay_dual_global_set_mod_depth(depth);
+}
+
+void mixer_set_delay_mod_rate(float rate_hz)
+{
+    fx_delay_dual_global_set_mod_rate(rate_hz);
+}
+
+void mixer_set_delay_reverb_send(float reverb_send)
+{
+    fx_delay_stereo_global_set_reverb_send(reverb_send);
+    fx_delay_dual_global_set_reverb_send(reverb_send);
+}
+
+void mixer_set_delay_volume(float volume)
+{
+    fx_delay_stereo_global_set_volume(volume);
+    fx_delay_dual_global_set_volume(volume);
 }
 
 void mixer_set_track_filter_type(uint32_t track_id, mixer_track_filter_type_t type)
@@ -1629,6 +1868,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float reverb_return_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float reverb_return_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float delay_return_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float delay_return_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float delay_reverb_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float delay_reverb_r[AUDIO_BLOCK_SIZE];
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
@@ -1638,6 +1881,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     uint8_t send_fx_active = 0U;
     for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
     {
+        if(s == MIXER_DELAY_SEND_INDEX)
+        {
+            continue;
+        }
         if(g_send_fx_slot[s] >= 0)
         {
             send_fx_active = 1U;
@@ -1645,7 +1892,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         }
     }
     const uint8_t reverb_active = fx_reverb_global_is_active();
-    const uint8_t send_bus_active = ((send_fx_active != 0U) || (reverb_active != 0U)) ? 1U : 0U;
+    const uint8_t delay_active = (g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
+            ? fx_delay_dual_global_is_active()
+            : fx_delay_stereo_global_is_active();
+    const uint8_t send_bus_active = ((send_fx_active != 0U) || (reverb_active != 0U) || (delay_active != 0U)) ? 1U : 0U;
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
@@ -1767,8 +2017,9 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
             for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
             {
-                const uint8_t send_enabled = ((g_send_fx_slot[s] >= 0)
-                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))) ? 1U : 0U;
+                const uint8_t send_enabled = (((s != MIXER_DELAY_SEND_INDEX) && (g_send_fx_slot[s] >= 0))
+                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
+                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))) ? 1U : 0U;
                 if(send_enabled != 0U)
                 {
                     if((send_cur[s] <= 0.0f) && (mt->send_level[s] <= 0.0f))
@@ -1827,13 +2078,48 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
     if(send_bus_active != 0U)
     {
+        if(delay_active != 0U)
+        {
+            if(g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
+            {
+                fx_delay_dual_global_process_block(send_l[MIXER_DELAY_SEND_INDEX],
+                                                   send_r[MIXER_DELAY_SEND_INDEX],
+                                                   delay_return_l,
+                                                   delay_return_r,
+                                                   delay_reverb_l,
+                                                   delay_reverb_r,
+                                                   frames);
+            }
+            else
+            {
+                fx_delay_stereo_global_process_block(send_l[MIXER_DELAY_SEND_INDEX],
+                                                     send_r[MIXER_DELAY_SEND_INDEX],
+                                                     delay_return_l,
+                                                     delay_return_r,
+                                                     delay_reverb_l,
+                                                     delay_reverb_r,
+                                                     frames);
+            }
+            for(uint32_t i = 0; i < frames; i++)
+            {
+                bus_main_l[i] += delay_return_l[i];
+                bus_main_r[i] += delay_return_r[i];
+                send_l[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_l[i];
+                send_r[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_r[i];
+            }
+        }
+
         if(reverb_active != 0U)
         {
+            mixer_process_reverb_input_filter(send_l[MIXER_REVERB_SEND_INDEX],
+                                              send_r[MIXER_REVERB_SEND_INDEX],
+                                              frames);
             fx_reverb_global_process_block(send_l[MIXER_REVERB_SEND_INDEX],
                                            send_r[MIXER_REVERB_SEND_INDEX],
                                            reverb_return_l,
                                            reverb_return_r,
                                            frames);
+
             for(uint32_t i = 0; i < frames; i++)
             {
                 bus_main_l[i] += reverb_return_l[i];
@@ -1843,6 +2129,10 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
 
         for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
         {
+            if(s == MIXER_DELAY_SEND_INDEX)
+            {
+                continue;
+            }
             const int8_t slot = g_send_fx_slot[s];
             if(slot >= 0)
             {

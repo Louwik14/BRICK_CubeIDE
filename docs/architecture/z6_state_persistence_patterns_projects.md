@@ -359,6 +359,19 @@ Plus petite prochaine passe utile:
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
 
+## 15. Contrat send2 delay global
+
+- Les params delay globaux (`PARAM_MIX_DELAY_TYPE`, `PARAM_MIX_DELAY_TIME`, `PARAM_MIX_DELAY_PINGPONG`, `PARAM_MIX_DELAY_MODE`, `PARAM_MIX_DELAY_TIME_R`, `PARAM_MIX_DELAY_WIDTH`, `PARAM_MIX_DELAY_FEEDBACK`, `PARAM_MIX_DELAY_HPF`, `PARAM_MIX_DELAY_LPF`, `PARAM_MIX_DELAY_FBW`, `PARAM_MIX_DELAY_SWING`, `PARAM_MIX_DELAY_ACCENT`, `PARAM_MIX_DELAY_MOD`, `PARAM_MIX_DELAY_MOD_RATE`, `PARAM_MIX_DELAY_REV`, `PARAM_MIX_DELAY_VOL`) sont captures dans `PatternSaveV1.globals`.
+- `PARAM_MIX_DELAY_TIME` persiste la division musicale sync BPM, pas la duree calculee en ms/secondes.
+- `PARAM_MIX_DELAY_TIME_R` persiste aussi une division musicale sync BPM; en DUAL/Tap elle sert de temps principal.
+- `PARAM_MIX_DELAY_TYPE` persiste le choix `CLASSIC`/`DUAL`; le default est `CLASSIC`.
+- Le restore pattern/projet les reapplique via `param_set()`, comme les autres globals utiles.
+- `PARAM_COUNT` change avec ces nouveaux params; la version pattern et la version project sont incrementees pour refuser proprement les anciens payloads prototype de taille incompatible.
+- `PATTERN_VERSION=10` et `PROJECT_V1_FILE_VERSION=13` marquent la rupture prototype ou le delay passe au contrat 8 params `TIME/X/WID/FDBK/HPF/LPF/REV/VOL`.
+- Les params reverb globaux `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont captures dans `PatternSaveV1.globals`.
+- `PARAM_COUNT` change avec ces deux globals; `PATTERN_VERSION=11` et `PROJECT_V1_FILE_VERSION=14` marquent la rupture prototype reverb HPF/LPF pre-reverb.
+- `PATTERN_VERSION=12` et `PROJECT_V1_FILE_VERSION=15` marquent la rupture prototype DUAL send2 delay.
+
 
 
 ## Addendum 2026-04-29 - pattern_load deux temps

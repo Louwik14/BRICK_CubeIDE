@@ -75,6 +75,47 @@ static uint8_t seq_div_ui_to_runtime(float v)
     }
 }
 
+static uint32_t delay_time_get_bpm_milli(void)
+{
+    uint32_t bpm_milli = 120000U;
+    if ((seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL)
+        && (seq_runtime_is_external_tempo_valid() != 0U))
+    {
+        bpm_milli = seq_runtime_get_external_tempo_bpm_milli();
+    }
+    else
+    {
+        bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    }
+
+    if (bpm_milli < 40000U)
+        return 40000U;
+    if (bpm_milli > 300000U)
+        return 300000U;
+    return bpm_milli;
+}
+
+static float delay_time_sync_index_to_seconds(float v)
+{
+    static const float beats[] = {
+        0.125f,      /* 1/32 */
+        0.1666667f,  /* 1/16T */
+        0.25f,       /* 1/16 */
+        0.3333333f,  /* 1/8T */
+        0.5f,        /* 1/8 */
+        0.6666667f,  /* 1/4T */
+        0.75f,       /* 1/8D */
+        1.0f,        /* 1/4 */
+        1.3333334f,  /* 1/2T */
+        1.5f,        /* 1/4D */
+        2.0f,        /* 1/2 */
+        3.0f,        /* 1D */
+        4.0f         /* 1 bar */
+    };
+    const uint8_t index = (uint8_t)(clamp_value(v, 0.0f, 12.0f) + 0.5f);
+    return beats[index] * 60000.0f / (float)delay_time_get_bpm_milli();
+}
+
 volatile uint32_t g_param_cfg_track_type_apply_stage = 0U;
 
 void apply_mix_send0_fx(float v) { mixer_set_send_fx_slot(0U, control_float_to_slot(v)); }
@@ -86,6 +127,24 @@ void apply_mix_reverb_decay(float v) { mixer_set_reverb_decay(clamp_value(v, 0.0
 void apply_mix_reverb_pred(float v) { mixer_set_reverb_pre_delay(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_type(float v) { mixer_set_reverb_type((uint8_t)clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_reverb_surr(float v) { mixer_set_reverb_surround(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_hpf(float v) { mixer_set_reverb_hpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_reverb_lpf(float v) { mixer_set_reverb_lpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_type(float v) { mixer_set_delay_type((uint8_t)(clamp_value(v, 0.0f, 1.0f) + 0.5f)); }
+void apply_mix_delay_mode(float v) { mixer_set_delay_mode((uint8_t)(clamp_value(v, 0.0f, 3.0f) + 0.5f)); }
+void apply_mix_delay_time(float v) { mixer_set_delay_time(delay_time_sync_index_to_seconds(v)); }
+void apply_mix_delay_time_r(float v) { mixer_set_delay_time_r(delay_time_sync_index_to_seconds(v)); }
+void apply_mix_delay_feedback(float v) { mixer_set_delay_feedback(clamp_value(v, 0.0f, 1.20f)); }
+void apply_mix_delay_hpf(float v) { mixer_set_delay_hpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_lpf(float v) { mixer_set_delay_lpf(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_pingpong(float v) { mixer_set_delay_pingpong((v >= 0.5f) ? 1U : 0U); }
+void apply_mix_delay_rev(float v) { mixer_set_delay_reverb_send(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_width(float v) { mixer_set_delay_width(clamp_value(v, -1.0f, 1.0f)); }
+void apply_mix_delay_feedback_width(float v) { mixer_set_delay_feedback_width(clamp_value(v, -1.0f, 1.0f)); }
+void apply_mix_delay_swing(float v) { mixer_set_delay_swing(clamp_value(v, -1.0f, 1.0f)); }
+void apply_mix_delay_accent(float v) { mixer_set_delay_accent(clamp_value(v, -1.0f, 1.0f)); }
+void apply_mix_delay_mod(float v) { mixer_set_delay_mod_depth(clamp_value(v, 0.0f, 1.0f)); }
+void apply_mix_delay_mod_rate(float v) { mixer_set_delay_mod_rate(clamp_value(v, 0.01f, 12.0f)); }
+void apply_mix_delay_vol(float v) { mixer_set_delay_volume(clamp_value(v, 0.0f, 1.0f)); }
 
 void apply_midi_program(float v) { apply_tone_live_track(PARAM_MIDI_PROGRAM, v); }
 void apply_sampler_sample(float v) { apply_tone_live_track(PARAM_SAMPLER_SAMPLE, v); }
@@ -293,6 +352,8 @@ void apply_cfg_tempo(float v)
     /* Post-apply mirror: runtime getter is read back explicitly, not used as a mutation trigger. */
     bpm_milli = seq_runtime_get_tempo_bpm_milli();
     param_store_set_active(PARAM_CFG_TEMPO, (float)bpm_milli / 1000.0f);
+    apply_mix_delay_time(param_get(PARAM_MIX_DELAY_TIME));
+    apply_mix_delay_time_r(param_get(PARAM_MIX_DELAY_TIME_R));
 }
 
 void apply_cfg_sync(float v)
@@ -327,6 +388,8 @@ void apply_cfg_sync(float v)
             break;
     }
     param_store_set_active(PARAM_CFG_SYNC, (float)synced_mode);
+    apply_mix_delay_time(param_get(PARAM_MIX_DELAY_TIME));
+    apply_mix_delay_time_r(param_get(PARAM_MIX_DELAY_TIME_R));
 }
 
 void apply_cfg_rec_len(float v)

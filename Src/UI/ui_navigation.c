@@ -2,6 +2,7 @@
 
 #include "ui_core.h"
 #include "Core/track_runtime.h"
+#include "pages/ui_page_template_mix.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 
@@ -177,6 +178,11 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
         return;
     }
 
+    if (page_id == UI_PAGE_TEMPLATE_MIX)
+    {
+        ui_page_template_mix_open_primary();
+    }
+
     g_ui_requested_ensemble_page = page_id;
     if (ui_page_get_id() != page_id)
     {
@@ -228,6 +234,12 @@ void ui_navigation_handle_event(const ui_event_t *event)
         if ((event->id == (uint8_t)rule->button)
                 && ((rule->required_page == UI_NAV_ANY_PAGE) || (rule->required_page == current_page)))
         {
+            if ((rule->target_page == UI_PAGE_TEMPLATE_MIX) && (current_page == UI_PAGE_TEMPLATE_MIX))
+            {
+                ui_page_template_mix_toggle_subset();
+                break;
+            }
+
             ui_navigation_request_ensemble_page(rule->target_page);
             break;
         }
