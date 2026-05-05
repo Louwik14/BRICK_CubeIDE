@@ -230,8 +230,6 @@ static uint8_t pattern_live_is_global_param_useful(param_id_t id)
         case PARAM_MIX_DELAY_HPF:
         case PARAM_MIX_DELAY_LPF:
         case PARAM_MIX_DELAY_FBW:
-        case PARAM_MIX_DELAY_SWING:
-        case PARAM_MIX_DELAY_ACCENT:
         case PARAM_MIX_DELAY_MOD:
         case PARAM_MIX_DELAY_MOD_RATE:
         case PARAM_MIX_DELAY_REV:

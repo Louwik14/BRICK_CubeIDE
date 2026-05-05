@@ -1435,16 +1435,6 @@ void mixer_set_delay_feedback_width(float width)
     fx_delay_dual_global_set_feedback_width(width);
 }
 
-void mixer_set_delay_swing(float swing)
-{
-    fx_delay_dual_global_set_swing(swing);
-}
-
-void mixer_set_delay_accent(float accent)
-{
-    fx_delay_dual_global_set_accent(accent);
-}
-
 void mixer_set_delay_mod_depth(float depth)
 {
     fx_delay_dual_global_set_mod_depth(depth);

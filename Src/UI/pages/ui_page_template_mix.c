@@ -33,23 +33,23 @@ static const ui_template_family_t g_ui_template_mix_family_main = {
 
 static const ui_template_family_t g_ui_template_mix_family_delay_classic = {
     .family_title = "MIX 2/2",
-    .nav_labels = { "DLY1", "DLY2", "DLY3", "DLY4" },
+    .nav_labels = { "DLY1", "DLY2", "-", "-" },
     .subpages = {
         {
             .title = "DLY1",
-            .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_PINGPONG, PARAM_MIX_DELAY_TIME_R } },
+            .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_PINGPONG, PARAM_MIX_DELAY_VOL } },
         },
         {
             .title = "DLY2",
-            .param_bank = { .params = { PARAM_MIX_DELAY_FEEDBACK, PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_WIDTH } },
+            .param_bank = { .params = { PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } },
         },
         {
-            .title = "DLY3",
-            .param_bank = { .params = { PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_SWING, PARAM_MIX_DELAY_ACCENT, PARAM_MIX_DELAY_MOD } },
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
-            .title = "DLY4",
-            .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_VOL, PARAM_COUNT } },
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -61,19 +61,19 @@ static const ui_template_family_t g_ui_template_mix_family_delay_dual = {
     .subpages = {
         {
             .title = "DLY1",
-            .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_TIME_R } },
+            .param_bank = { .params = { PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_TIME, PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_VOL } },
         },
         {
             .title = "DLY2",
-            .param_bank = { .params = { PARAM_MIX_DELAY_FEEDBACK, PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_WIDTH } },
+            .param_bank = { .params = { PARAM_MIX_DELAY_HPF, PARAM_MIX_DELAY_LPF, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_FEEDBACK } },
         },
         {
             .title = "DLY3",
-            .param_bank = { .params = { PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_SWING, PARAM_MIX_DELAY_ACCENT, PARAM_MIX_DELAY_MOD } },
+            .param_bank = { .params = { PARAM_MIX_DELAY_TIME_R, PARAM_MIX_DELAY_WIDTH, PARAM_MIX_DELAY_FBW, PARAM_MIX_DELAY_MOD } },
         },
         {
             .title = "DLY4",
-            .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_MIX_DELAY_REV, PARAM_MIX_DELAY_VOL, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_MIX_DELAY_MOD_RATE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -131,7 +131,9 @@ static uint8_t ui_page_template_mix_subpage_enabled(uint8_t subpage_index)
         return (subpage_index < 4U) ? 1U : 0U;
     }
 
-    return (subpage_index < 4U) ? 1U : 0U;
+    const uint8_t delay_is_dual = (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f) ? 1U : 0U;
+    const uint8_t page_count = (delay_is_dual != 0U) ? 4U : 2U;
+    return (subpage_index < page_count) ? 1U : 0U;
 }
 
 static ui_template_page_state_t g_ui_template_mix_state = {

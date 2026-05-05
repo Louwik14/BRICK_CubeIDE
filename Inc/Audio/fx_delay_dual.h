@@ -25,8 +25,6 @@ void fx_delay_dual_global_set_hpf(float hpf);
 void fx_delay_dual_global_set_lpf(float lpf);
 void fx_delay_dual_global_set_width(float width);
 void fx_delay_dual_global_set_feedback_width(float width);
-void fx_delay_dual_global_set_swing(float swing);
-void fx_delay_dual_global_set_accent(float accent);
 void fx_delay_dual_global_set_mod_depth(float depth);
 void fx_delay_dual_global_set_mod_rate(float rate_hz);
 void fx_delay_dual_global_set_reverb_send(float reverb_send);

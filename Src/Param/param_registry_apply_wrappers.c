@@ -140,8 +140,6 @@ void apply_mix_delay_pingpong(float v) { mixer_set_delay_pingpong((v >= 0.5f) ? 
 void apply_mix_delay_rev(float v) { mixer_set_delay_reverb_send(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_delay_width(float v) { mixer_set_delay_width(clamp_value(v, -1.0f, 1.0f)); }
 void apply_mix_delay_feedback_width(float v) { mixer_set_delay_feedback_width(clamp_value(v, -1.0f, 1.0f)); }
-void apply_mix_delay_swing(float v) { mixer_set_delay_swing(clamp_value(v, -1.0f, 1.0f)); }
-void apply_mix_delay_accent(float v) { mixer_set_delay_accent(clamp_value(v, -1.0f, 1.0f)); }
 void apply_mix_delay_mod(float v) { mixer_set_delay_mod_depth(clamp_value(v, 0.0f, 1.0f)); }
 void apply_mix_delay_mod_rate(float v) { mixer_set_delay_mod_rate(clamp_value(v, 0.01f, 12.0f)); }
 void apply_mix_delay_vol(float v) { mixer_set_delay_volume(clamp_value(v, 0.0f, 1.0f)); }

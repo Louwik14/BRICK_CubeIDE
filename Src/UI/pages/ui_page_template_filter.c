@@ -8,7 +8,7 @@
 
 static ui_template_family_t g_ui_template_filter_family_audio = {
     .family_title = "COLORS",
-    .nav_labels = { "MAIN", "ADSR", "-", "CRUNCH" },
+    .nav_labels = { "MAIN", "ADSR", "-", "-" },
     .subpages = {
         {
             .title = "MAIN",
@@ -23,8 +23,8 @@ static ui_template_family_t g_ui_template_filter_family_audio = {
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
-            .title = "CRUNCH",
-            .param_bank = { .params = { PARAM_FILTER_DRIVE, PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE, PARAM_FILTER_DECIMATOR_RATE2 } },
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
@@ -229,7 +229,7 @@ static void ui_page_template_colors_sync_family(void)
     family->nav_labels[0] = "MAIN";
     family->nav_labels[1] = (has_adsr_page != 0U) ? "ADSR" : "-";
     family->nav_labels[2] = "-";
-    family->nav_labels[3] = "CRUNCH";
+    family->nav_labels[3] = "-";
 
     family->subpages[0].title = "MAIN";
     family->subpages[0].param_bank.params[0] = PARAM_FILTER_TYPE;
@@ -249,11 +249,11 @@ static void ui_page_template_colors_sync_family(void)
     family->subpages[2].param_bank.params[2] = PARAM_COUNT;
     family->subpages[2].param_bank.params[3] = PARAM_COUNT;
 
-    family->subpages[3].title = "CRUNCH";
-    family->subpages[3].param_bank.params[0] = PARAM_FILTER_DRIVE;
-    family->subpages[3].param_bank.params[1] = PARAM_FILTER_DECIMATOR_BITS;
-    family->subpages[3].param_bank.params[2] = PARAM_FILTER_DECIMATOR_RATE;
-    family->subpages[3].param_bank.params[3] = PARAM_FILTER_DECIMATOR_RATE2;
+    family->subpages[3].title = "-";
+    family->subpages[3].param_bank.params[0] = PARAM_COUNT;
+    family->subpages[3].param_bank.params[1] = PARAM_COUNT;
+    family->subpages[3].param_bank.params[2] = PARAM_COUNT;
+    family->subpages[3].param_bank.params[3] = PARAM_COUNT;
 }
 
 static void ui_page_template_colors_enter(void)

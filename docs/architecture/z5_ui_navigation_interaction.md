@@ -67,6 +67,9 @@ Autorite etat UI courant:
 Autorite page/ensemble actif:
 - Page active: `ui_page_manager` (`g_ui_current_page_id`, `ui_page_set`, `ui_page_get`).
 - Ensemble/subpage template active: `ui_template_page` (`ui_template_page_state_t.active_subpage`, `ui_template_family_resolve*`, `ui_template_page_select_subpage`).
+- Selectionnabilite subpage template: `ui_template_page_is_subpage_selectable`.
+  - Une subpage desactivee par le resolver local ou vide (`PARAM_COUNT` sur tous les slots et titre vide/`-`/`N/A`) n'est pas selectionnable.
+  - `ui_template_page_normalize_active_subpage` garantit que `active_subpage` pointe vers une subpage selectionnable; si aucune subpage ne l'est dans l'ensemble, le fallback borne reste la page `0`.
 
 Autorite track select:
 - `ui_core_service_track_selection_inputs` + `ui_core_handle_track_hall_action` + `ui_core_set_active_track`.
@@ -184,7 +187,7 @@ Etat page active:
 Etat template families/subpages:
 - `g_ui_template_family_registry[...]` dans `ui_template_page.c`.
 - Etat courant par page template: `ui_template_page_state_t` (dans chaque page concrete `Src/UI/pages/*`).
-- Ecriture: register families, `ui_template_page_select_subpage`, enter handlers.
+- Ecriture: register families, `ui_template_page_select_subpage`, `ui_template_page_normalize_active_subpage`, enter handlers.
 - Lecture: renderer template, clipboard active page.
 
 Etat queue events UI:
@@ -248,6 +251,11 @@ Flux nominal prouve:
 4. Resolution contextuelle page/ensemble
 - `ui_navigation_handle_event` mappe boutons param -> page cible selon disponibilite track-family/type.
 - `ui_template_page` resout family/subpage active et banque param associee.
+- Contrat subpage selectionnable:
+  - visible dans une famille/template ne signifie pas selectionnable si la subpage est vide ou desactivee,
+  - les boutons de page ne peuvent pas selectionner une subpage vide,
+  - l'entree/reload d'ecran, le tick template, la sync active-track et les changements de famille/resolver normalisent le focus vers une subpage selectionnable,
+  - les contextes dynamiques (`COLORS` EQ3/ADSR, `MIX 2/2` delay CLASSIC/DUAL, pages moteur/type track-aware) passent par cette normalisation centrale apres recomposition de leurs familles.
 - Resolution contextuelle `Master/Buffer -> ROUT` (propre):
   - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
   - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
@@ -290,6 +298,8 @@ Dependances de cadence:
 Invariants prouves:
 - Autorite unique etat UI courant: `g_ui_track_state` centralise dans `ui_core.c`.
 - Autorite unique etat track: `track_state` centralise family/type/midi en dehors de `ui_core.c`.
+- Une subpage template vide ne doit pas rester focus si une subpage selectionnable existe dans le meme ensemble.
+- Tout changement de contexte track/type/mode qui peut modifier les subpages selectionnables doit repasser par `ui_template_page_normalize_active_subpage` via enter/tick/sync active-context ou appel equivalent.
 - Mutation du mode brut: `ui_set_hall_mode` est l'unique mutateur de `hall_mode`.
 - `effective_view` reste une projection read-only; aucune ecriture persistante.
 - Resolution contextuelle track-aware: disponibilite pages/types depend de family/type de la track active (`ui_navigation_is_page_available`, `ui_template_family_resolve_active_track`).
@@ -354,6 +364,10 @@ Points factuels:
 - Contrat runtime/UI associe:
   - track MIDI non audio-routable (pas de cible mix/filter audio),
   - Z5 reste source family/type; Z2 reste autorite unique du bind runtime.
+- Contrat KBD/canal partage:
+  - le KBD interne emet sur le canal MIDI de la track focus/play-owner,
+  - le routage note interne est canal-aware: toutes les tracks moteur ou `Input/Hybrid` en source `INT`/`ALL` qui partagent ce canal recoivent note-on/note-off,
+  - ce routage reutilise le meme dispatch track-aware que l'entree MIDI externe, avec dedoublonnage par owner de voice group pour eviter un double trigger de la source.
 
 ## 13. Contrat Hybrid UI v1 (borne)
 - `Hybrid` n'est pas une nouvelle family: `family=Input1..4`, `type=Hybrid`.
@@ -363,6 +377,14 @@ Points factuels:
   - page `PROG`: `Gate` + `Program`,
   - pages suivantes: `CC1`, `CC2`, `CC3`.
 - `PLAY` est explicitement navigable pour `Input/Hybrid`.
+
+## 13.b Contrat COLORS UI
+- L'ensemble `COLORS` conserve uniquement les pages filtre utiles:
+  - `MAIN`: `F Type`, cutoff/low, resonance/mid, `EG Amt`/high selon type de filtre,
+  - `ADSR`: `Atk`, `Dec`, `Sus`, `Rel` uniquement pour les filtres biquad avec envelope,
+  - les slots 3 et 4 restent vides (`-`).
+- L'ancienne page 4 `CRUNCH` est retiree et ne doit plus exposer `Drive`, `Bits`, `Rate` ni `Rate2`.
+- Aucun fallback de page ou preset CRUNCH n'est conserve.
 
 ## 14. Contrat Sampler v0
 - `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
@@ -426,18 +448,20 @@ Points factuels:
   - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
   - `REV2`: `Type`, `Surr`,
   - `REV3`: `HPF`, `LPF`.
-- Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI:
-  - `DLY1`: `TIME`, `X`, `WID`, `FDBK`,
-  - `DLY2`: `HPF`, `LPF`, `REV`, `VOL`.
+- Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI.
 - `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
-- Le delay global expose maintenant une surface 16 slots dans `MIX 2/2`:
-  - `DLY1`: `TYPE`, `TIME`, `X` en CLASSIC ou `MODE` en DUAL, `TIME_R`,
-  - `DLY2`: `FDBK`, `HPF`, `LPF`, `WID`,
-  - `DLY3`: `FBW`, `SWING`, `ACCENT`, `MOD`,
-  - `DLY4`: `M.RATE`, `REV`, `VOL`, slot libre.
+- Le delay global expose une surface `MIX 2/2` contextuelle selon `TYPE`:
+  - CLASSIC `DLY1`: `TYPE`, `TIME`, `X`, `VOL`,
+  - CLASSIC `DLY2`: `HPF`, `LPF`, `REV`, `FDBK`,
+  - DUAL `DLY1`: `TYPE`, `TIME`, `MODE`, `VOL`,
+  - DUAL `DLY2`: `HPF`, `LPF`, `REV`, `FDBK`,
+  - DUAL `DLY3`: `TIME_R`, `WID`, `FBW`, `MOD`,
+  - DUAL `DLY4`: `M.RATE`.
+- `TYPE=CLASSIC` expose 2 pages delay; `TYPE=DUAL` expose 4 pages delay.
 - `TYPE=CLASSIC` reste le default visible et conserve l'ancien controle `X`.
 - `TYPE=DUAL` substitue `MODE` au slot de `X`; `MODE` propose `Normal`, `PingPong`, `Tap`, `ClassicPP`.
-- `TIME_R` est surtout le temps principal du mode DUAL `Tap`; en CLASSIC il est persiste mais sans effet sur le moteur historique.
+- `TIME_R` et `WID` sont visibles uniquement en DUAL; en `Tap`, `TIME_R` sert de temps principal.
+- `SWING` et `ACCENT` sont retires de la surface delay produit V1.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.

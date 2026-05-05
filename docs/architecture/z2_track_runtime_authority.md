@@ -245,3 +245,9 @@ Sorties de Z2:
   - `track_runtime_get_ctx` reste disponible pour les consumers internes qui ont besoin du descriptor runtime complet, mais n'est pas la surface UI preferentielle.
 - Politique de refresh:
   - le refresh reste explicite au bord du consumer UI, jamais dans les getters.
+
+## 19. Contrat p-lock / Macro
+- Source d'autorite p-lockable: `seq_param_iface_param_to_slot(track,set,param)` puis `seq_param_iface_param_is_supported(track,set,param)`, avec le set derive du domaine fourni par `track_runtime_get_param_rule()`.
+- Contrat produit: tout parametre p-lockable est assignable au Hall Mode Macro; Z3 consomme cette meme autorite et ne maintient pas de table d'exclusion MACRO separee.
+- Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` / ressource `FILTER`, comme `Cutoff` et `Resonance`; ils sont p-lockables et macro-assignables quand le filter target runtime est autorise.
+- Les anciens params `COLORS/CRUNCH` (`Drive`, `Bits`, `Rate`, `Rate2`) ne sont plus dans le domaine COLORS effectif et ne doivent plus recevoir de rule p-lock/macro.

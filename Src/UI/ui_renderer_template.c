@@ -607,10 +607,10 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
     {
         const int bx = g_ui_template_footer_x[i];
         const int bw = g_ui_template_footer_w[i];
-        const uint8_t subpage_enabled = ((state->subpage_enabled == NULL) || (state->subpage_enabled(i) != 0U)) ? 1U : 0U;
+        const uint8_t subpage_selectable = ui_template_page_is_subpage_selectable(state, i);
         const char *label = family->nav_labels[i];
 
-        if (subpage_enabled == 0U)
+        if (subpage_selectable == 0U)
         {
             label = "-";
         }

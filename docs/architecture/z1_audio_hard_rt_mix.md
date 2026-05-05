@@ -286,7 +286,7 @@ Granular / fx_pool:
 - Le Sampler track-aware lit via `sample_cache` en RAM. `sample_pool` reste catalogue/projet/metadata; `sample_desc->data` est une compat legacy hors autorite audio principale.
 - La sortie principale Sampler reste stereo de bout en bout: pas de downmix L/R->mono avant injection mixer; les samples mono restent dupliques identiquement sur L/R.
 - Chemin mono-native mixer: si la source externe est mono-native et si tous les blocs track-level actifs ont une variante mono reelle, `mixer_process()` conserve le signal en mono jusqu'au dernier moment utile; le fallback stereo reste la reference fonctionnelle.
-- Les blocs track-level mono reels autorises dans ce corridor sont actuellement biquad mono, `EQ3` mono, `VCA`, `gain` et les inserts mono-compatibles exposes par `fx_chain` (actuellement `FX_SAT`).
+- Les blocs track-level mono reels autorises dans ce corridor sont actuellement biquad mono, `EQ3` mono, `VCA` et `gain`; l'ancien insert track `FX_SAT` lie a `COLORS/CRUNCH` n'est plus active par la policy boot produit.
 - L'ordre DSP mono aligne le chemin stereo de reference: filtre/EQ puis inserts, puis `VCA+gain`, puis projection tardive `mono -> L/R`.
 - Un bloc mono ne doit jamais appeler un traitement stereo avec `L/R` identiques pour simuler du mono.
 - La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN/CUE` et accumulation bus.
@@ -398,12 +398,20 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
   - ajout wet vers MAIN via `VOL`,
   - ajout wet vers reverb globale via `REV`.
 - `fx_delay_dual.*` porte un dual delay L/R permanent inspire QDelay:
-  - lignes separees delay L/R, swing L/R, predelay/tap L/R et Haas width,
+  - lignes separees delay L/R et Haas width L/R,
   - modes `Normal`, `PingPong`, `Tap`, `ClassicPingPong`,
-  - interpolation cubic sur lecture temps modulee,
+  - interpolation lineaire sur lecture temps modulee,
   - modulation LFO bornee sur temps de lecture,
   - HPF/LPF simplifie dans le feedback.
 - `Tap` suit le contrat QDelay: `TIME` sert de tap/predelay, `TIME_R` sert de temps principal.
 - `FBW` mappe le croisement/largeur de feedback; `WID` reste la largeur wet/haas/pingpong selon le mode.
+- `SWING` et `ACCENT` sont retires du backend DUAL produit V1; les IDs param restent reserves pour ne pas renumeroter le stockage indexe par `PARAM_COUNT`.
 - Fonctions explicitement hors scope du backend DUAL: pitch, shimmer, reverse, diffusion, drive, ducking, phaser, EQ param complete, lo-fi.
 - Les buffers longs DUAL sont statiques en `AUDIO_COLD_SDRAM`; aucune allocation runtime audio n'est introduite.
+
+## 15. Addendum - retrait COLORS/CRUNCH
+
+- La page `COLORS/CRUNCH` est retiree du produit.
+- Les params track-aware `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne sont plus exposes par COLORS, ne sont plus p-lockables/macro-assignables, et ne reappliquent plus de runtime track insert.
+- La policy boot ne pre-active plus le slot `FX_SAT` en slot 1.
+- `fx_saturation.*` reste present comme code legacy/global non expose par COLORS; il n'est plus branche par le runtime COLORS track-aware.

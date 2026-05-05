@@ -40,10 +40,6 @@ typedef struct
     float eq_low;
     float eq_mid;
     float eq_high;
-    float drive;
-    float decimator_bits;
-    float decimator_rate;
-    float decimator_rate2;
     float vca_attack;
     float vca_decay;
     float vca_sustain;

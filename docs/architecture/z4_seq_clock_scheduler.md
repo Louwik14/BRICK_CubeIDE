@@ -582,6 +582,13 @@ Points factuels observes:
 - `Input/Hybrid` participe au gate note cote scheduler (`seq_play_scheduler_emit_engine_note`).
 - Alignement clavier/sequenceur:
   - scheduler et clavier appliquent le meme principe d'ouverture/fermeture du gate VCA pour `Input/Hybrid`.
+- Routage KBD interne:
+  - une note KBD est traitee comme une entree interne sur le canal MIDI de la track focus/play-owner,
+  - le dispatch note-on/note-off cible toutes les tracks moteur ou `Input/Hybrid` qui partagent ce canal et acceptent `INT`/`ALL`,
+  - le dedoublonnage par owner de voice group conserve un seul trigger pour la source et evite de rejouer les slaves separement.
+- Routage MIDI externe:
+  - le dispatch conserve le filtrage par canal partage et source `EXT`/`ALL`;
+  - le comportement externe reste aligne sur le contrat KBD interne, hors difference de source.
 - `Sampler` passe par le meme helper central de gate VCA (`track_runtime_supports_vca_gate`) pour ouvrir/fermer le mixer gate sur note-on/off.
 - Gate partage (cote mixer/VCA):
   - premiere note active ouvre le gate,

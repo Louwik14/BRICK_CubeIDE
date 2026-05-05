@@ -361,7 +361,8 @@ Plus petite prochaine passe utile:
 
 ## 15. Contrat send2 delay global
 
-- Les params delay globaux (`PARAM_MIX_DELAY_TYPE`, `PARAM_MIX_DELAY_TIME`, `PARAM_MIX_DELAY_PINGPONG`, `PARAM_MIX_DELAY_MODE`, `PARAM_MIX_DELAY_TIME_R`, `PARAM_MIX_DELAY_WIDTH`, `PARAM_MIX_DELAY_FEEDBACK`, `PARAM_MIX_DELAY_HPF`, `PARAM_MIX_DELAY_LPF`, `PARAM_MIX_DELAY_FBW`, `PARAM_MIX_DELAY_SWING`, `PARAM_MIX_DELAY_ACCENT`, `PARAM_MIX_DELAY_MOD`, `PARAM_MIX_DELAY_MOD_RATE`, `PARAM_MIX_DELAY_REV`, `PARAM_MIX_DELAY_VOL`) sont captures dans `PatternSaveV1.globals`.
+- Les params delay globaux produit (`PARAM_MIX_DELAY_TYPE`, `PARAM_MIX_DELAY_TIME`, `PARAM_MIX_DELAY_PINGPONG`, `PARAM_MIX_DELAY_MODE`, `PARAM_MIX_DELAY_TIME_R`, `PARAM_MIX_DELAY_WIDTH`, `PARAM_MIX_DELAY_FEEDBACK`, `PARAM_MIX_DELAY_HPF`, `PARAM_MIX_DELAY_LPF`, `PARAM_MIX_DELAY_FBW`, `PARAM_MIX_DELAY_MOD`, `PARAM_MIX_DELAY_MOD_RATE`, `PARAM_MIX_DELAY_REV`, `PARAM_MIX_DELAY_VOL`) sont captures dans `PatternSaveV1.globals`.
+- Les anciens IDs `PARAM_MIX_DELAY_SWING` et `PARAM_MIX_DELAY_ACCENT` restent dans le layout `PARAM_COUNT` comme tombstones reserves; ils ne sont plus reappliques comme globals utiles.
 - `PARAM_MIX_DELAY_TIME` persiste la division musicale sync BPM, pas la duree calculee en ms/secondes.
 - `PARAM_MIX_DELAY_TIME_R` persiste aussi une division musicale sync BPM; en DUAL/Tap elle sert de temps principal.
 - `PARAM_MIX_DELAY_TYPE` persiste le choix `CLASSIC`/`DUAL`; le default est `CLASSIC`.
@@ -371,6 +372,7 @@ Plus petite prochaine passe utile:
 - Les params reverb globaux `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont captures dans `PatternSaveV1.globals`.
 - `PARAM_COUNT` change avec ces deux globals; `PATTERN_VERSION=11` et `PROJECT_V1_FILE_VERSION=14` marquent la rupture prototype reverb HPF/LPF pre-reverb.
 - `PATTERN_VERSION=12` et `PROJECT_V1_FILE_VERSION=15` marquent la rupture prototype DUAL send2 delay.
+- Le retrait produit V1 de `SWING`/`ACCENT` ne change pas `PARAM_COUNT`; aucun bump pattern/projet supplementaire n'est requis.
 
 
 

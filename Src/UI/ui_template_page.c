@@ -1,6 +1,7 @@
 #include "ui_template_page.h"
 
 #include <stddef.h>
+#include <string.h>
 
 #include "buttons.h"
 #include "ui_page_manager.h"
@@ -34,17 +35,85 @@ static uint8_t ui_template_page_is_subpage_enabled(const ui_template_page_state_
     return 1U;
 }
 
-static uint8_t ui_template_page_get_first_enabled_subpage(const ui_template_page_state_t *state, uint8_t fallback)
+static uint8_t ui_template_subpage_has_param(const ui_template_subpage_t *subpage)
+{
+    if (subpage == NULL)
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        if (subpage->param_bank.params[i] < PARAM_COUNT)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_template_subpage_has_non_empty_title(const ui_template_subpage_t *subpage)
+{
+    if ((subpage == NULL) || (subpage->title == NULL) || (subpage->title[0] == '\0'))
+    {
+        return 0U;
+    }
+
+    if ((strcmp(subpage->title, "-") == 0) || (strcmp(subpage->title, "N/A") == 0))
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+uint8_t ui_template_page_is_subpage_selectable(const ui_template_page_state_t *state, uint8_t subpage_index)
+{
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    if ((state == NULL)
+            || (family == NULL)
+            || (subpage_index >= 4U)
+            || (ui_template_page_is_subpage_enabled(state, subpage_index) == 0U))
+    {
+        return 0U;
+    }
+
+    const ui_template_subpage_t *const subpage = &family->subpages[subpage_index];
+    if (ui_template_subpage_has_param(subpage) != 0U)
+    {
+        return 1U;
+    }
+
+    return ui_template_subpage_has_non_empty_title(subpage);
+}
+
+static uint8_t ui_template_page_get_first_selectable_subpage(const ui_template_page_state_t *state, uint8_t fallback)
 {
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-        if (ui_template_page_is_subpage_enabled(state, i) != 0U)
+        if (ui_template_page_is_subpage_selectable(state, i) != 0U)
         {
             return i;
         }
     }
 
     return fallback % 4U;
+}
+
+void ui_template_page_normalize_active_subpage(ui_template_page_state_t *state)
+{
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    if ((state == NULL) || (family == NULL))
+    {
+        return;
+    }
+
+    if ((state->active_subpage >= 4U)
+            || (ui_template_page_is_subpage_selectable(state, state->active_subpage) == 0U))
+    {
+        state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
+    }
 }
 
 static void ui_template_page_sync_resolved_family(ui_template_page_state_t *state)
@@ -58,7 +127,7 @@ static void ui_template_page_sync_resolved_family(ui_template_page_state_t *stat
     if (state->resolved_family != family)
     {
         state->resolved_family = family;
-        state->active_subpage = ui_template_page_get_first_enabled_subpage(state, family->default_subpage);
+        state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
     }
 }
 
@@ -135,6 +204,7 @@ const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_
 static void ui_template_page_apply_active_bank(ui_template_page_state_t *state)
 {
     ui_template_page_sync_resolved_family(state);
+    ui_template_page_normalize_active_subpage(state);
 
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage == 0)
@@ -151,8 +221,12 @@ void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t su
     if ((state == 0)
             || (ui_template_page_get_active_family(state) == 0)
             || (subpage_index >= 4U)
-            || (ui_template_page_is_subpage_enabled(state, subpage_index) == 0U))
+            || (ui_template_page_is_subpage_selectable(state, subpage_index) == 0U))
     {
+        if ((state != 0) && (subpage_index == state->active_subpage))
+        {
+            ui_template_page_apply_active_bank(state);
+        }
         return;
     }
 
@@ -186,11 +260,11 @@ void ui_template_page_enter(void)
 
     if ((state->has_visited == 0U) || (state->active_subpage >= 4U))
     {
-        state->active_subpage = ui_template_page_get_first_enabled_subpage(state, family->default_subpage);
+        state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
     }
-    else if (ui_template_page_is_subpage_enabled(state, state->active_subpage) == 0U)
+    else if (ui_template_page_is_subpage_selectable(state, state->active_subpage) == 0U)
     {
-        state->active_subpage = ui_template_page_get_first_enabled_subpage(state, family->default_subpage);
+        state->active_subpage = ui_template_page_get_first_selectable_subpage(state, family->default_subpage);
     }
 
     state->has_visited = 1U;

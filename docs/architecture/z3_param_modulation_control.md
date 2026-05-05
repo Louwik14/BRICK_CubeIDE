@@ -69,6 +69,7 @@ Familles d'autorite:
 - `param_macro.*`:
   - seam Z3 dedie au MACRO runtime,
   - interpolation `base -> scene`, validation track-aware du slot, et handoff explicite vers `param_registry_apply_track_value`,
+  - contrat produit: toute cible p-lockable selon `seq_param_iface_param_to_slot` + `seq_param_iface_param_is_supported` est assignable au Hall Mode Macro,
   - runtime pot-state borne a 4 amount caches locaux, avec sync explicite de la bank active,
   - pas d'autorite canonique propre, pas de stockage projet, pas de second cache runtime.
 - `param_registry_apply_wrappers.*`:
@@ -159,6 +160,11 @@ Call-sites critiques:
 - Resolution slot via `param_macro_resolve_slot`.
 - Interpolation base -> scene via `param_macro_lerp`.
 - Handoff d'ecriture via `param_macro_apply_resolution` vers le chemin track-aware standard.
+- La source d'autorite d'assignabilite MACRO est volontairement la meme que les p-locks: domaine Z2 -> set `SEQ_PLOCK_SET_*`, puis `seq_param_iface_param_is_supported(track,set,param)`.
+- Contrat produit: `p-lockable => macro-assignable`; aucune table MACRO separee ne doit retirer un parametre p-lockable.
+- Les assignations MACRO deja existantes hors p-lock (`MIX`, `BUFFER`) restent conservees par compatibilite produit, sans devenir p-lockables.
+- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Opal, Braids, MIX et BUFFER.
+- Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres slots.
 - Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`.
 
 4. Restore snapshot:
@@ -174,6 +180,7 @@ Call-sites critiques:
 - `param_registry_apply_track_value_rt_fast` reserve a la modulation RT.
 - Release LFO doit restaurer la base (et non la derniere valeur modulee).
 - Pour `PARAM_FILTER_TYPE`, un re-apply de la meme valeur effective ne doit pas provoquer de reset DSP audible: la cible runtime mixer est idempotente sur type identique.
+- Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` track-aware: ils sont p-lockables, macro-assignables, et appliques via `param_filter_apply_value` vers les setters mixer filter envelope.
 - `param_store.active[]`:
   - global-only: verite runtime.
   - track-scoped UI: miroir UI.
@@ -525,6 +532,7 @@ Call-sites critiques:
 ## 25. Contrat LFO COLORS + rebind MIX (runtime)
 - `param_registry_apply_track_value_rt_fast` est autorite d'application pour LFO sur `PARAM_FILTER_*` (COLORS mixer), pas uniquement pour COLORS engine-specifiques.
 - Le chemin RT fast applique `PARAM_FILTER_*` sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
+- La page produit `COLORS/CRUNCH` est retiree: `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne font plus partie du domaine COLORS effectif, ne sont plus p-lockables/macro-assignables et leurs wrappers d'apply ne branchent plus de runtime.
 - Le shadow-state `PARAM_FILTER_*` porte la base par track logique, jamais par lane mixer physique.
 - Le bloc MIX suit le meme principe: la base track-aware est portee par `track_sound_state`, la lane mixer n'est qu'une projection temporaire.
 - Le bloc MOD suit le meme principe: la config LFO canonique par track est portee par `track_sound_state`, `mod_lfo_v1` n'en fait que l'execution/runtime et le cache de destination.
@@ -571,12 +579,11 @@ Call-sites critiques:
   - `PARAM_MIX_DELAY_HPF`,
   - `PARAM_MIX_DELAY_LPF`,
   - `PARAM_MIX_DELAY_FBW`,
-  - `PARAM_MIX_DELAY_SWING`,
-  - `PARAM_MIX_DELAY_ACCENT`,
   - `PARAM_MIX_DELAY_MOD`,
   - `PARAM_MIX_DELAY_MOD_RATE`,
   - `PARAM_MIX_DELAY_REV`,
   - `PARAM_MIX_DELAY_VOL`.
+- Les anciens IDs `PARAM_MIX_DELAY_SWING` et `PARAM_MIX_DELAY_ACCENT` restent reserves/tombstones pour conserver la numerotation `PARAM_COUNT`, mais ne sont plus des params produit et n'ont plus d'apply DSP.
 - `TYPE=CLASSIC` reste le default et continue de router vers le moteur `fx_delay_stereo.*`.
 - `TYPE=DUAL` route vers `fx_delay_dual.*`; `MODE` est interprete uniquement par ce backend.
 - En CLASSIC, `PARAM_MIX_DELAY_PINGPONG` garde le controle visible `X`.
@@ -584,7 +591,7 @@ Call-sites critiques:
 - `TIME` et `TIME_R` persistent des divisions musicales sync BPM, pas des durees calculees.
 - `apply_mix_delay_time()` et `apply_mix_delay_time_r()` recalculent les secondes depuis l'autorite tempo Z4.
 - `FDBK` accepte la plage DUAL jusqu'a `1.20`; le backend CLASSIC conserve son clamp interne historique a `0.95`.
-- `FBW`, `SWING`, `ACCENT`, `MOD` et `MOD_RATE` sont des globals DUAL; en CLASSIC ils restent sans effet audio direct.
+- `FBW`, `MOD` et `MOD_RATE` sont des globals DUAL; en CLASSIC ils restent masques/sans effet audio direct.
 
 ## 22. Contrat Passe 6 - Frontiere Z3 execution vs miroir UI Z5
 

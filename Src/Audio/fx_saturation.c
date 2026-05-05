@@ -20,8 +20,10 @@
  */
 
 #include "fx_saturation.h"
-#define FX_SAT_MIN_K 1.0f
-#define FX_SAT_K_MAX 25.0f
+#include <math.h>
+
+#define FX_SAT_TRX_BD_DRIVE_GAIN_AMOUNT 5.0f
+#define FX_SAT_TONE_COEFF_MIN 0.20f
 #define FX_DECIMATOR_BITS_MAX 15U
 #define FX_RATE2_FREQ_MIN 0.0f
 #define FX_RATE2_FREQ_MAX 1.0f
@@ -85,44 +87,16 @@ static void fx_saturation_update_bypass(fx_saturation_t *fx)
     fx->bypass = ((fx->pre_gain <= 1.0f) && (fx->decimator_enabled == 0U) && (fx->decimator_rate2_enabled == 0U)) ? 1U : 0U;
 }
 
-/**
- * @brief Point d'entrée fx_softclip.
- *
- * Rôle:
- * - Exécuter le traitement associé à fx_softclip.
- *
- * @param x Paramètre d'entrée de l'API.
- *
- * @return Valeur de retour définie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-static inline float fx_softclip(float x)
+static inline float fx_trx_bd_drive_shape(float x, float drive_gain)
 {
-    const float ax = __builtin_fabsf(x);
-    return x / (1.0f + ax);
+    return tanhf(x * drive_gain);
 }
 
-// 🔥 TON waveshaper isolé (important pour normalisation cohérente)
-/**
- * @brief Point d'entrée fx_shape.
- *
- * Rôle:
- * - Exécuter le traitement associé à fx_shape.
- *
- * @param x Paramètre d'entrée de l'API.
- * @param k Paramètre d'entrée de l'API.
- *
- * @return Valeur de retour définie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-static inline float fx_shape(float x, float k)
+static inline float fx_saturation_onepole_lp(float x, float coeff, float *state)
 {
-    const float ax = __builtin_fabsf(x);
-    return x * (1.0f + k * ax) / (1.0f + k * x * x);
+    const float y = *state + (coeff * (x - *state));
+    *state = y;
+    return y;
 }
 
 /**
@@ -141,9 +115,9 @@ void fx_saturation_init(fx_saturation_t *fx)
     if(fx == 0)
         return;
 
-    fx->k = FX_SAT_MIN_K;
-    fx->tone = 0.0f;
-    fx->asym = 0.75f;
+    fx->k = 0.0f;
+    fx->tone = 1.0f;
+    fx->asym = 1.0f;
 
     fx->pre_gain = 1.0f;
     fx->post_gain = 1.0f;
@@ -195,44 +169,16 @@ void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
     if(drive_0_127 == 0U)
     {
         fx->pre_gain = 1.0f;
+        fx->k = 0.0f;
         fx->post_gain = 1.0f;
         fx_saturation_update_bypass(fx);
         return;
     }
 
-    const uint8_t drive_eff = (drive_0_127 == 0U)
-                            ? 0U
-                            : (uint8_t)(25U + (((uint32_t)(drive_0_127 - 1U) * 112U) / 126U));
-
-    const float d = (float)drive_eff * (1.0f / 128.0f);
-
-    // 🔥 mapping Daisy (musical + progressif)
-    const float d2 = d * d;
-    const float drive = 2.0f * d;
-
-    const float pre_a = drive * 0.5f;
-    const float pre_b = drive * drive * drive * drive * drive * 24.0f;
-
-    fx->pre_gain = pre_a + (pre_b - pre_a) * d2;
-
-    // 🔥 k pour ton waveshaper
-    fx->k = FX_SAT_MIN_K + (FX_SAT_K_MAX * d2);
-
-    // 🔥 normalisation TYPE DAISY mais avec TON shaping
-    const float drive_squashed = drive * (2.0f - drive);
-
-    // point de référence (comme Daisy)
-    const float ref = 0.33f + drive_squashed * (fx->pre_gain - 0.33f);
-
-    // passage dans TON waveshaper
-    float shaped_ref = fx_shape(ref, fx->k);
-
-    // sécurité (évite division explosive)
-    const float eps = 1e-6f;
-    if(__builtin_fabsf(shaped_ref) < eps)
-        shaped_ref = eps;
-
-    fx->post_gain = 1.0f / shaped_ref;
+    const float d = (float)drive_0_127 * (1.0f / 127.0f);
+    fx->k = d;
+    fx->pre_gain = 1.0f + (d * FX_SAT_TRX_BD_DRIVE_GAIN_AMOUNT);
+    fx->post_gain = 1.0f;
 
     fx_saturation_update_bypass(fx);
 }
@@ -313,7 +259,12 @@ void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127)
     if(fx == 0)
         return;
 
-    fx->tone = (float)tone_0_127 * (1.0f / 127.0f);
+    const float t = (float)tone_0_127 * (1.0f / 127.0f);
+    /* TONE is a post-shaper low-pass coefficient: low UI values darken,
+     * 127 is near-neutral and costs only one multiply per sample.
+     */
+    fx->tone = FX_SAT_TONE_COEFF_MIN +
+               ((1.0f - FX_SAT_TONE_COEFF_MIN) * t * t);
 }
 
 /**
@@ -333,7 +284,8 @@ void fx_saturation_set_bias_ui(fx_saturation_t *fx, uint8_t bias_0_127)
     if(fx == 0)
         return;
 
-    fx->asym = 0.5f + ((float)bias_0_127 * (1.0f / 127.0f)) * 0.5f;
+    (void)bias_0_127;
+    fx->asym = 1.0f;
 }
 
 /**
@@ -358,16 +310,15 @@ void fx_saturation_process_block(fx_saturation_t *fx,
     if((fx == 0) || (inout_l == 0) || (inout_r == 0) || (frames == 0U) || (fx->bypass != 0U))
         return;
 
-    const float k = fx->k;
     const float tone = fx->tone;
-    const float asym = fx->asym;
     const float pre = fx->pre_gain;
-    const float post = fx->post_gain;
+    const float level = fx->post_gain;
     const float wet = fx->mix;
     const float dry = fx->dry;
+    const uint8_t saturation_enabled = (pre > 1.0f) ? 1U : 0U;
 
-    float prev_l = fx->prev_l;
-    float prev_r = fx->prev_r;
+    float tone_l = fx->prev_l;
+    float tone_r = fx->prev_r;
     uint8_t decimator_inc_l = fx->decimator_inc_l;
     uint8_t decimator_inc_r = fx->decimator_inc_r;
     float decimator_downsampled_l = fx->decimator_downsampled_l;
@@ -396,46 +347,20 @@ void fx_saturation_process_block(fx_saturation_t *fx,
 
         float xl = in_l;
         float xr = in_r;
+        float yl = in_l;
+        float yr = in_r;
+        if(saturation_enabled != 0U)
+        {
+            yl = fx_trx_bd_drive_shape(xl, pre);
+            yr = fx_trx_bd_drive_shape(xr, pre);
 
-        // 🔥 tone (pré-emphasis)
-        const float dxl = xl - prev_l;
-        const float dxr = xr - prev_r;
-        prev_l = xl;
-        prev_r = xr;
-
-        xl += tone * dxl;
-        xr += tone * dxr;
-
-        // 🔥 drive
-        xl *= pre;
-        xr *= pre;
-
-        // 🔥 asymétrie
-        if(xl < 0.0f) xl *= asym;
-        if(xr < 0.0f) xr *= asym;
-
-        // 🔥 waveshaper
-        const float xl2 = xl * xl;
-        const float xr2 = xr * xr;
-
-        const float axl = __builtin_fabsf(xl);
-        const float axr = __builtin_fabsf(xr);
-
-        float yl = xl * (1.0f + k * axl) / (1.0f + k * xl2);
-        float yr = xr * (1.0f + k * axr) / (1.0f + k * xr2);
-
-        // 🔥 post gain (corrigé)
-        yl *= post;
-        yr *= post;
+            yl = fx_saturation_onepole_lp(yl, tone, &tone_l) * level;
+            yr = fx_saturation_onepole_lp(yr, tone, &tone_r) * level;
 
         // mix
-        yl = in_l * dry + yl * wet;
-        yr = in_r * dry + yr * wet;
-
-        // soft clamp léger (optionnel mais mieux que hard clamp)
-        yl = fx_softclip(yl);
-        yr = fx_softclip(yr);
-
+            yl = in_l * dry + yl * wet;
+            yr = in_r * dry + yr * wet;
+        }
         if (decimator_enabled != 0U)
         {
             int32_t yl_i = 0;
@@ -487,8 +412,8 @@ void fx_saturation_process_block(fx_saturation_t *fx,
         r[n] = yr;
     }
 
-    fx->prev_l = prev_l;
-    fx->prev_r = prev_r;
+    fx->prev_l = tone_l;
+    fx->prev_r = tone_r;
     fx->decimator_inc_l = decimator_inc_l;
     fx->decimator_inc_r = decimator_inc_r;
     fx->decimator_downsampled_l = decimator_downsampled_l;
@@ -510,15 +435,14 @@ void fx_saturation_process_mono_block(fx_saturation_t *fx,
     if((fx == 0) || (inout == 0) || (frames == 0U) || (fx->bypass != 0U))
         return;
 
-    const float k = fx->k;
     const float tone = fx->tone;
-    const float asym = fx->asym;
     const float pre = fx->pre_gain;
-    const float post = fx->post_gain;
+    const float level = fx->post_gain;
     const float wet = fx->mix;
     const float dry = fx->dry;
+    const uint8_t saturation_enabled = (pre > 1.0f) ? 1U : 0U;
 
-    float prev = fx->prev_l;
+    float tone_state = fx->prev_l;
     uint8_t decimator_inc = fx->decimator_inc_l;
     float decimator_downsampled = fx->decimator_downsampled_l;
     const uint8_t decimator_threshold = fx->decimator_threshold;
@@ -536,19 +460,13 @@ void fx_saturation_process_mono_block(fx_saturation_t *fx,
         const float in = inout[n];
         float x = in;
 
-        const float dx = x - prev;
-        prev = x;
-        x += tone * dx;
-        x *= pre;
-        if(x < 0.0f) x *= asym;
-
-        const float x2 = x * x;
-        const float ax = __builtin_fabsf(x);
-        float y = x * (1.0f + k * ax) / (1.0f + k * x2);
-        y *= post;
-        y = in * dry + y * wet;
-        y = fx_softclip(y);
-
+        float y = in;
+        if(saturation_enabled != 0U)
+        {
+            y = fx_trx_bd_drive_shape(x, pre);
+            y = fx_saturation_onepole_lp(y, tone, &tone_state) * level;
+            y = in * dry + y * wet;
+        }
         if (decimator_enabled != 0U)
         {
             int32_t y_i = 0;
@@ -579,8 +497,8 @@ void fx_saturation_process_mono_block(fx_saturation_t *fx,
         inout[n] = y;
     }
 
-    fx->prev_l = prev;
-    fx->prev_r = prev;
+    fx->prev_l = tone_state;
+    fx->prev_r = tone_state;
     fx->decimator_inc_l = decimator_inc;
     fx->decimator_inc_r = decimator_inc;
     fx->decimator_downsampled_l = decimator_downsampled;

@@ -20,7 +20,6 @@ void brick6_boot_fx_policy_init(void)
     fx_pool_init();
 
     (void)fx_pool_activate_slot(0U, FX_EQ3);
-    (void)fx_pool_activate_slot(1U, FX_SAT);
     (void)fx_pool_activate_slot(2U, FX_DAISY_COMP);
 
     /* Keep compressor slot available but do not insert it by default.

@@ -98,11 +98,6 @@ static uint8_t keyboard_engine_get_play_owner_track(void)
     return owner_track;
 }
 
-static bool keyboard_engine_active_track_is_synth(void)
-{
-    return (ui_track_family_is_engine(ui_get_track_family(keyboard_engine_get_play_owner_track())) != 0);
-}
-
 static bool keyboard_engine_active_track_has_midi_note_path(void)
 {
     const uint8_t owner_track = keyboard_engine_get_play_owner_track();
@@ -370,14 +365,6 @@ static void keyboard_engine_send_note_for_owner_track(uint8_t owner_track,
     keyboard_engine_emit_note_for_track(target_track, note, velocity, 0U);
 }
 
-static void keyboard_engine_send_active_track_note(uint8_t note, uint8_t velocity, uint8_t is_note_on)
-{
-    keyboard_engine_send_note_for_owner_track(keyboard_engine_get_play_owner_track(),
-                                              note,
-                                              velocity,
-                                              is_note_on);
-}
-
 static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                                                              uint8_t note,
                                                              uint8_t velocity,
@@ -432,6 +419,59 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
         owner_handled[owner_track] = 1U;
 
         keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, is_note_on);
+    }
+}
+
+static void keyboard_engine_all_notes_off_matching_tracks(uint8_t channel, uint8_t source_internal)
+{
+    uint8_t owner_handled[UI_TRACK_COUNT] = {0U};
+    track_runtime_refresh_all();
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const ui_track_config_t cfg = ui_get_track_config(track);
+        if ((ui_track_family_is_engine(cfg.family) == 0)
+                && !(ui_track_family_is_input(cfg.family) && (cfg.type == UI_TRACK_TYPE_HYBRID)))
+        {
+            continue;
+        }
+
+        const ui_track_midi_source_t source = ui_get_track_midi_source(track);
+        if (source_internal != 0U)
+        {
+            if ((source != UI_TRACK_MIDI_SRC_INT) && (source != UI_TRACK_MIDI_SRC_ALL))
+            {
+                continue;
+            }
+        }
+        else
+        {
+            if ((source != UI_TRACK_MIDI_SRC_EXT) && (source != UI_TRACK_MIDI_SRC_ALL))
+            {
+                continue;
+            }
+        }
+
+        if (keyboard_engine_get_track_midi_channel_zero_based(track) != channel)
+        {
+            continue;
+        }
+
+        uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
+        (void)track_runtime_get_voice_group_role(track, &role_u8);
+        if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+        {
+            continue;
+        }
+
+        uint8_t owner_track = track;
+        (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
+        if ((owner_track >= UI_TRACK_COUNT) || (owner_handled[owner_track] != 0U))
+        {
+            continue;
+        }
+        owner_handled[owner_track] = 1U;
+
+        keyboard_engine_all_notes_off_for_owner(owner_track);
     }
 }
 
@@ -491,51 +531,42 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
                      velocity);
     }
 
-    if ((source == SEQ_LIVE_REC_SRC_INTERNAL)
-            && (seq_runtime_rec_is_armed() != 0U)
-            && (seq_runtime_is_running() != 0U))
+    if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
-        /*
-         * During live-rec monitoring, dispatch through track-matching routing
-         * (same spirit as playback/external paths) to avoid active-track-only
-         * destructive behavior differences versus sequencer playback.
-         */
+        if (!keyboard_engine_active_track_has_midi_note_path())
+        {
+            return;
+        }
+
+        if (!keyboard_engine_active_track_accepts_internal_source())
+        {
+            return;
+        }
+
+        if (keyboard_params_get_mono_last() == false)
+        {
+            keyboard_engine_dispatch_note_to_matching_tracks(channel_zero_based, note, velocity, 1U, 1U);
+            return;
+        }
+
+        const int8_t existing = keyboard_engine_mono_find(note);
+        if (existing >= 0)
+        {
+            keyboard_engine_mono_remove_at((uint8_t)existing);
+        }
+        else if (g_keyboard_engine_mono_held_count >= KEYBOARD_ENGINE_MONO_HELD_MAX)
+        {
+            keyboard_engine_mono_remove_at(0U);
+        }
+
+        g_keyboard_engine_mono_held[g_keyboard_engine_mono_held_count].note = note;
+        g_keyboard_engine_mono_held[g_keyboard_engine_mono_held_count].velocity = velocity;
+        g_keyboard_engine_mono_held_count++;
+        g_keyboard_engine_mono_active_valid = 1U;
+        g_keyboard_engine_mono_active_note = note;
         keyboard_engine_dispatch_note_to_matching_tracks(channel_zero_based, note, velocity, 1U, 1U);
         return;
     }
-
-    if (!keyboard_engine_active_track_is_synth())
-    {
-        return;
-    }
-
-    if (!keyboard_engine_active_track_accepts_internal_source())
-    {
-        return;
-    }
-
-    if (keyboard_params_get_mono_last() == false)
-    {
-        keyboard_engine_send_active_track_note(note, velocity, 1U);
-        return;
-    }
-
-    const int8_t existing = keyboard_engine_mono_find(note);
-    if (existing >= 0)
-    {
-        keyboard_engine_mono_remove_at((uint8_t)existing);
-    }
-    else if (g_keyboard_engine_mono_held_count >= KEYBOARD_ENGINE_MONO_HELD_MAX)
-    {
-        keyboard_engine_mono_remove_at(0U);
-    }
-
-    g_keyboard_engine_mono_held[g_keyboard_engine_mono_held_count].note = note;
-    g_keyboard_engine_mono_held[g_keyboard_engine_mono_held_count].velocity = velocity;
-    g_keyboard_engine_mono_held_count++;
-    g_keyboard_engine_mono_active_valid = 1U;
-    g_keyboard_engine_mono_active_note = note;
-    keyboard_engine_send_active_track_note(note, velocity, 1U);
 }
 
 static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
@@ -553,52 +584,46 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
                       0U);
     }
 
-    if ((source == SEQ_LIVE_REC_SRC_INTERNAL)
-            && (seq_runtime_rec_is_armed() != 0U)
-            && (seq_runtime_is_running() != 0U))
+    if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
+        if (!keyboard_engine_active_track_has_midi_note_path() && !g_keyboard_engine_sounding_active)
+        {
+            return;
+        }
+
+        if (keyboard_params_get_mono_last() == false)
+        {
+            keyboard_engine_dispatch_note_to_matching_tracks(note_on_channel, note, 0U, 1U, 0U);
+            return;
+        }
+
+        const int8_t existing = keyboard_engine_mono_find(note);
+        if (existing < 0)
+        {
+            return;
+        }
+
+        const uint8_t was_active = (g_keyboard_engine_mono_active_valid != 0U) && (g_keyboard_engine_mono_active_note == note);
+        keyboard_engine_mono_remove_at((uint8_t)existing);
+
+        if (was_active == 0U)
+        {
+            return;
+        }
+
+        if (g_keyboard_engine_mono_held_count > 0U)
+        {
+            const keyboard_engine_mono_note_t *const fallback = &g_keyboard_engine_mono_held[g_keyboard_engine_mono_held_count - 1U];
+            g_keyboard_engine_mono_active_valid = 1U;
+            g_keyboard_engine_mono_active_note = fallback->note;
+            keyboard_engine_dispatch_note_to_matching_tracks(note_on_channel, fallback->note, fallback->velocity, 1U, 1U);
+            return;
+        }
+
+        g_keyboard_engine_mono_active_valid = 0U;
+        g_keyboard_engine_mono_active_note = 0U;
         keyboard_engine_dispatch_note_to_matching_tracks(note_on_channel, note, 0U, 1U, 0U);
-        return;
     }
-
-    if (!keyboard_engine_active_track_is_synth() && !g_keyboard_engine_sounding_active)
-    {
-        return;
-    }
-
-    if (keyboard_params_get_mono_last() == false)
-    {
-        keyboard_engine_send_active_track_note(note, 0U, 0U);
-        return;
-    }
-
-    const int8_t existing = keyboard_engine_mono_find(note);
-    if (existing < 0)
-    {
-        return;
-    }
-
-    const uint8_t was_active = (g_keyboard_engine_mono_active_valid != 0U) && (g_keyboard_engine_mono_active_note == note);
-    keyboard_engine_mono_remove_at((uint8_t)existing);
-
-    if (was_active == 0U)
-    {
-        return;
-    }
-
-    if (g_keyboard_engine_mono_held_count > 0U)
-    {
-        const keyboard_engine_mono_note_t *const fallback = &g_keyboard_engine_mono_held[g_keyboard_engine_mono_held_count - 1U];
-        g_keyboard_engine_mono_active_valid = 1U;
-        g_keyboard_engine_mono_active_note = fallback->note;
-        keyboard_engine_send_active_track_note(fallback->note, fallback->velocity, 1U);
-        return;
-    }
-
-    g_keyboard_engine_mono_active_valid = 0U;
-    g_keyboard_engine_mono_active_note = 0U;
-    keyboard_engine_send_active_track_note(note, 0U, 0U);
-    
 }
 
 void keyboard_engine_note_on_from_source(seq_live_rec_source_t source,
@@ -635,12 +660,12 @@ void keyboard_engine_all_notes_off(void)
     memset(g_keyboard_engine_group_note_count, 0, sizeof(g_keyboard_engine_group_note_count));
     memset(g_keyboard_engine_group_track_active_count, 0, sizeof(g_keyboard_engine_group_track_active_count));
 
-    const uint8_t owner_track = keyboard_engine_get_play_owner_track();
-    keyboard_engine_all_notes_off_for_owner(owner_track);
+    const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track());
+    keyboard_engine_all_notes_off_matching_tracks(active_channel, 1U);
 
     if (keyboard_engine_active_track_has_midi_note_path())
     {
-        midi_all_notes_off(MIDI_DEST_USB, keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track()));
+        midi_all_notes_off(MIDI_DEST_USB, active_channel);
     }
 
     g_keyboard_engine_sounding_active = false;

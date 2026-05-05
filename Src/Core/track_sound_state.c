@@ -35,10 +35,6 @@ static void track_sound_state_set_defaults(track_sound_state_t *state)
     state->eq_low = param_registry[PARAM_FILTER_EQ_LOW].default_value;
     state->eq_mid = param_registry[PARAM_FILTER_EQ_MID].default_value;
     state->eq_high = param_registry[PARAM_FILTER_EQ_HIGH].default_value;
-    state->drive = param_registry[PARAM_FILTER_DRIVE].default_value;
-    state->decimator_bits = param_registry[PARAM_FILTER_DECIMATOR_BITS].default_value;
-    state->decimator_rate = param_registry[PARAM_FILTER_DECIMATOR_RATE].default_value;
-    state->decimator_rate2 = param_registry[PARAM_FILTER_DECIMATOR_RATE2].default_value;
     state->vca_attack = param_registry[PARAM_VCA_ATTACK].default_value;
     state->vca_decay = param_registry[PARAM_VCA_DECAY].default_value;
     state->vca_sustain = param_registry[PARAM_VCA_SUSTAIN].default_value;

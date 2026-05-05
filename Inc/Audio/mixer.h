@@ -79,8 +79,6 @@ void mixer_set_delay_lpf(float lpf);
 void mixer_set_delay_pingpong(uint8_t enabled);
 void mixer_set_delay_width(float width);
 void mixer_set_delay_feedback_width(float width);
-void mixer_set_delay_swing(float swing);
-void mixer_set_delay_accent(float accent);
 void mixer_set_delay_mod_depth(float depth);
 void mixer_set_delay_mod_rate(float rate_hz);
 void mixer_set_delay_reverb_send(float reverb_send);

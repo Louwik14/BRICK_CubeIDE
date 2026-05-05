@@ -157,7 +157,8 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
             return 0U;
         }
 
-        return ((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_DRIVE)) ? 1U : 0U;
+        return (((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_ENVDLY))
+                || ((dest >= PARAM_FILTER_EQ_LOW) && (dest <= PARAM_FILTER_EQ_HIGH))) ? 1U : 0U;
     }
 
     return 0U;

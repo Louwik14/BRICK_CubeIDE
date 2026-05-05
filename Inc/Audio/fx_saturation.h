@@ -8,12 +8,12 @@ extern "C" {
 
 typedef struct
 {
-    float k;
-    float tone;
-    float asym;
+    float k;     // UI drive normalized 0..1
+    float tone;  // coefficient low-pass post-shaper
+    float asym;  // neutralized: TRX BD drive is symmetric
 
-    float pre_gain;   // 🔥 ajouté
-    float post_gain;  // 🔥 ajouté
+    float pre_gain;   // TRX BD driveGain = 1 + drive * 5
+    float post_gain;
 
     float mix;
     float dry;

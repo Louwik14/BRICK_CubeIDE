@@ -6,6 +6,7 @@
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry.h"
+#include "Seq/seq_param_iface.h"
 #include "Storage/project_v1.h"
 
 typedef struct
@@ -30,6 +31,32 @@ static float param_macro_clamp_amount(float amount)
     }
 
     return amount;
+}
+
+static uint8_t param_macro_plock_set_for_domain(track_runtime_param_domain_t domain, uint8_t *out_set_id)
+{
+    if (out_set_id == NULL)
+    {
+        return 0U;
+    }
+
+    switch (domain)
+    {
+        case TRACK_RUNTIME_PARAM_DOMAIN_COLORS:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_COLORS;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_TONE:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_PLAY;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
+            return 1U;
+        default:
+            return 0U;
+    }
 }
 
 void param_macro_init(void)
@@ -61,17 +88,25 @@ uint8_t param_macro_slot_target_is_supported(uint8_t track, param_id_t param)
 
     {
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-                || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-                || (param == PARAM_MIDI_PROGRAM))
+        uint8_t set_id = 0U;
+        if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
         {
             return 0U;
         }
-    }
 
-    return (track_runtime_get_effective_param_status(track, param) == TRACK_RUNTIME_PARAM_ALLOWED) ? 1U : 0U;
+        if (param_macro_plock_set_for_domain(rule.domain, &set_id) != 0U)
+        {
+            return seq_param_iface_param_is_supported(track, set_id, param);
+        }
+
+        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_BUFFER))
+        {
+            return (track_runtime_get_effective_param_status(track, param) == TRACK_RUNTIME_PARAM_ALLOWED) ? 1U : 0U;
+        }
+
+        return 0U;
+    }
 }
 
 static uint8_t param_macro_apply_preview_value(uint8_t track, param_id_t param, float value)
@@ -102,12 +137,23 @@ static uint8_t param_macro_apply_preview_value(uint8_t track, param_id_t param, 
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (param_backend_track_supports_midi_tone_descriptor(&resolved.descriptor) != 0U))
     {
+        if (param == PARAM_MIDI_PROGRAM)
+        {
+            return param_registry_apply_track_value(param, track, value);
+        }
+
         if (param_backend_is_midi_cc_id(param) == 0U)
         {
             return 0U;
         }
 
         return param_backend_send_midi_cc(track, param, value);
+    }
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD))
+    {
+        return param_registry_apply_track_value(param, track, value);
     }
 
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
@@ -120,17 +166,7 @@ static uint8_t param_macro_apply_preview_value(uint8_t track, param_id_t param, 
         return param_backend_apply_buffer_track(track_runtime_get_ctx(track), track, param, value);
     }
 
-    if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)
-    {
-        return param_backend_apply_tone_sampler(track, param, value, 0U);
-    }
-
-    if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_DRUM)
-    {
-        return param_backend_apply_tone_drum(track, track_runtime_get_ctx(track), param, value, 0U);
-    }
-
-    return 0U;
+    return param_backend_apply_track_value(track, param, value, 0U);
 }
 
 uint8_t param_macro_resolve_slot(uint8_t bank,

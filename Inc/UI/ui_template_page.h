@@ -69,6 +69,8 @@ void ui_template_page_sync_active_track_context(void);
 void ui_template_page_render(void);
 
 void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t subpage_index);
+uint8_t ui_template_page_is_subpage_selectable(const ui_template_page_state_t *state, uint8_t subpage_index);
+void ui_template_page_normalize_active_subpage(ui_template_page_state_t *state);
 const ui_template_subpage_t *ui_template_page_get_active_subpage(const ui_template_page_state_t *state);
 const ui_template_family_t *ui_template_page_get_active_family(const ui_template_page_state_t *state);
 
