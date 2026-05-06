@@ -18,7 +18,7 @@ typedef enum
     UIW_WIDGET_KEYBOARD,
 } uiw_widget_type_t;
 
-void uiw_draw_knob(int x, int y, int w, int h, int value, int vmin, int vmax);
+void uiw_draw_knob(int x, int y, int w, int h, float value, float vmin, float vmax);
 void uiw_draw_switch(int x, int y, int w, int h, uint8_t on);
 void uiw_draw_wave_icon(int x, int y, int w, int h, const char *label);
 void uiw_draw_filter_icon(int x, int y, int w, int h, const char *label);

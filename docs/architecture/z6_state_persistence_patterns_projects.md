@@ -148,7 +148,7 @@ Points de lecture principaux:
 
 ### `project_v1.c`
 - `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet et le bloc MACRO projet.
-- `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (banks/pots/slots + `Hall Switch Mode`), distinct du payload pattern et du `undo_v1`.
+- `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (scenes/pots/locks + `Mode`), distinct du payload pattern et du `undo_v1`.
 - `g_project_active_slot_valid`, `g_project_active_slot`: slot projet actif logique.
 - `g_project_save_counter`: compteur de version save.
 - `g_project_last_error`, `g_project_last_sd_error`: etat erreur expose API.
@@ -164,12 +164,12 @@ Points de lecture principaux:
 
 ### `project_v1` macro RAM
 - `project_v1_macro_state_t` porte le modele MACRO projet-level en RAM:
-  - `hall_switch_mode` (`Slot` / `Bank`),
-  - `active_bank`,
-  - `banks[16]` -> `macros[4]` -> `slots[4]`.
-- Les slots vides utilisent une convention sentinel explicite:
-  - `track = PROJECT_V1_MACRO_SLOT_TRACK_NONE`,
-  - `param = PROJECT_V1_MACRO_SLOT_PARAM_NONE`.
+  - `hall_switch_mode` (`Scene` / `Switch`),
+  - `macro_scene[4]` pour lier chaque macro pot a une scene,
+  - `scenes[16]` porte les 16 scenes MACRO; chaque scene contient `locks[32]`.
+- Les locks vides utilisent une convention sentinel explicite:
+  - `track = PROJECT_V1_MACRO_LOCK_TRACK_NONE`,
+  - `param = PROJECT_V1_MACRO_LOCK_PARAM_NONE`.
 - Ce bloc est capture/restaure dans `ProjectSaveV1` et persiste via `project_sd_bank_*` au niveau projet.
 
 ### `undo_v1.c` (sous-zone dependante)
@@ -221,7 +221,7 @@ Points de lecture principaux:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
   - capture aussi le snapshot `sample_pool` courant du projet,
-  - capture le bloc MACRO projet (`hall switch mode`, bank active, banks/macros/slots),
+  - capture le bloc MACRO projet (`Mode`, scenes liees aux pots, scenes/locks),
   - force active slot dans snapshot,
   - stocke via `project_v1_store_snapshot_to_slot` -> `project_sd_bank_store_slot`,
   - incremente save_counter,
@@ -373,6 +373,8 @@ Plus petite prochaine passe utile:
 - `PARAM_COUNT` change avec ces deux globals; `PATTERN_VERSION=11` et `PROJECT_V1_FILE_VERSION=14` marquent la rupture prototype reverb HPF/LPF pre-reverb.
 - `PATTERN_VERSION=12` et `PROJECT_V1_FILE_VERSION=15` marquent la rupture prototype DUAL send2 delay.
 - Le retrait produit V1 de `SWING`/`ACCENT` ne change pas `PARAM_COUNT`; aucun bump pattern/projet supplementaire n'est requis.
+- `PROJECT_V1_FILE_VERSION=16` marque la rupture prototype MACRO Scene/Switch 32 locks par scene: `ProjectSaveV1.macro` grossit, les anciens projets sont refuses proprement par version/payload_size, sans migration legacy.
+- `PatternSaveV1` ne change pas pour cette passe MACRO: les scenes/locks restent projet-only.
 
 
 

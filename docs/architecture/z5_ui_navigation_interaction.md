@@ -86,26 +86,30 @@ Autorite hall modes:
   - double tap `SHIFT + HALL 15`: ouvre la page hall mode dediee `Macro CFG` via la cible de contrat hall mode,
   - page `Macro CFG` UI-only:
     - une seule page `MODE`,
-    - parametre local unique `Hall Switch Mode` (`Slot`/`Bank`),
-    - valeur par defaut `Slot`,
+    - parametre local unique `Mode` (`Scene`/`Switch`),
+    - valeur par defaut `Scene`,
     - rendu via le meme pipeline template natif (`ui_template_page` + `ui_renderer_template`) que les autres ensembles,
     - aucun write runtime/persistence/undo.
   - vitrine `Macro` = `Macro CFG` du systeme natif, sans owner local.
   - scope borne UI-only (aucune autorite runtime macro, aucune persistence macro).
 - Le geste d'assignation MACRO vit dans `ui_macro_interaction`:
   - `SHIFT` absent,
-  - `Slot` mode: maintien hall -> capture encoder sans write live -> relâchement -> écriture du slot projet,
-  - `Bank` mode: réglage projet pour la projection visuelle et la capture, sans prise de contrôle globale de l'UI,
-  - pendant un maintien de slot MACRO, la grammaire visuelle réutilise le modèle p-lock: paramètre présent sur la page = cadre slot-lock inversé, sinon fallback LED orange sur l'ensemble cible,
-  - état de capture purement transitoire, reset aux changements de hall mode, de `Hall Switch Mode`, ou à l'ouverture de `Macro CFG`.
+  - `Scene` mode: maintien hall -> selection de la scene 0..15 -> capture encoder sans write live -> relâchement -> écriture/mise à jour d'un lock dans la scene projet,
+  - chaque scene contient jusqu'a 32 locks; une scene pleine refuse l'ajout d'un nouveau lock sans parcours non borne,
+  - `Scene` mode + `SHIFT` maintenu pendant un edit encodeur: suppression du lock `track+param` correspondant si present, no-op propre sinon,
+  - le feedback template teste chaque parametre visible contre tous les locks de la scene maintenue; plusieurs params lockes visibles peuvent donc etre encadres simultanement,
+  - pendant un maintien de scene MACRO, tourner un macro pot lie ce pot a cette scene sans appliquer le morph audio du pot,
+  - `Switch` mode: maintien hall -> morph momentane base -> scene 0..15 selon la position hall; relâchement -> retrait de cette source,
+  - pendant un maintien de scene MACRO, la grammaire visuelle réutilise le modèle p-lock: paramètre présent sur la page = cadre slot-lock inversé, sinon fallback LED orange sur l'ensemble cible,
+  - état de capture purement transitoire, reset aux changements de hall mode, de `Mode`, ou à l'ouverture de `Macro CFG`.
 - En mode brut `MACRO`, l'UI standard reste intacte; la surcouche MACRO ne prend pas le contrôle global des encodeurs ni du track-select.
-- La capture MACRO ne s'active que pendant un maintien de slot, puis se finalise au relâchement.
+- La capture MACRO ne s'active que pendant un maintien de scene en `Mode=Scene`, puis se finalise au relâchement.
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
 - Les contextes `ROUT` visibles sont resolus par `ui_hall_mode_resolve_rout_context`: `Master/Buffer` et `Master/FX` partagent le label `ROUT`, mais gardent des etats/actions/renderers LED distincts.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
-- Le feedback LED MACRO lit directement `project_v1` pour la bank active et les slots du projet, avec fallback orange sur l'ensemble cible pendant un slot-lock; aucune autorite visuelle locale ne persiste dans l'UI.
+- Le feedback LED MACRO lit directement `project_v1` pour l'etat vide/non vide des scenes et `ui_macro_interaction` pour la scene maintenue; la couleur de base vient d'une table stable scene -> couleur dans `led_rgb.c`, sans encoder les locks ni revenir au mapping pot/slot.
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
@@ -232,8 +236,10 @@ Flux nominal prouve:
   - ajout special sur target `Off`: avant de devenir `Slave`, la target recoit une copie ponctuelle de l'etat instrument/per-track de la master candidate (family/type, config MIDI et params track-aware hors domaine `PLAY`), sans copie de sequence/trigs/steps/plocks `PLAY`.
 - Contrat specifique `MACRO`: `SHIFT+HALL15` arme le raw mode `MACRO`; double tap ouvre la page dediee `Macro` (cible de contrat), sans effet runtime cache.
 - Grammaire visuelle halls en `MACRO`:
-  - `Mode = Slot`: 16 halls exposes en 4 groupes de 4 (couleurs groupe 1..4: ambre/violet/aqua/chartreuse), slot vide=LED off, slot rempli=couleur groupe.
-  - `Mode = Bank`: lecture orientee selection de bank par groupes de 4 halls (groupes 0..3 = banks, groupe actif en blanc, autres groupes en couleur attenuee).
+  - les 16 halls adressent les 16 scenes et chaque scene a une couleur stable dediee,
+  - `Mode = Scene`: scene vide=couleur dediee faible, scene non vide=couleur dediee normale, scene maintenue=couleur dediee forte,
+  - `Mode = Switch`: scene vide/non vide garde la meme identite couleur, avec intensite liee a la pression hall quand disponible,
+  - les Hall LEDs n'affichent jamais les 32 locks d'une scene, ni leur nombre, ni leur type.
 - Dans `ui_core_tick`: resolution priorisee mute/transport/shortcuts/pattern/seq/navigation.
 
 3. Mutation etat UI
@@ -361,10 +367,14 @@ Points factuels:
   - `FX3`: `FX3`, `LVL`, macro A, macro B
   - `FX4`: `FX4`, `LVL`, macro A, macro B
 - Les labels visibles des macros A/B changent selon le type FX: OFF `---/---`, DRIVE `TONE/SHAPE`, CRUSH `BITS/RATE`, PUMP `RATE/REL`, CHOP `RATE/SHAPE`, ECHO `TIME/FB`, WOBBLE `RATE/DEPTH`, COMB `TUNE/FB`, RING `FREQ/COLOR`, PITCH `SEMI/FINE`, TALK `VOWL/TONE`, STUTTER `SIZE/RATE`, FREEZE `TIME/HOLD`.
+- `RING COLOR` expose quatre positions nettes `SIN/TRI/SQR/DIRT`.
+- Les valeurs visibles de `LVL` et des macros A/B sont formatees par la page TONE selon le type FX courant et le mapping DSP reel, sans modifier le stockage `0..127` ni les plages DSP.
+- Les macros Master/FX labelisees discretes sont editees par steps UI locaux dans `ui_param`: l'encodeur convertit step discret vers valeur raw canonique `0..127`, puis le chemin param track-aware standard applique la valeur.
+- `LVL` et les macros A/B gardent le rendu parametre standard du template, avec widget potard normal; la contextualisation ne doit remplacer que le nom et le texte de valeur.
 - `ARP` brut est projete en `ROUT` pour Master/FX. L'etat ROUT Master/FX est UI-only local et ne modifie pas le routing audio.
 - Le renderer LED Master/FX ROUT utilise l'etat UI-only `g_master_fx_route_enabled[]` via le runtime bridge; il n'utilise pas le renderer ARP ni l'etat `Master/Buffer`.
 - Le hall de la track `Master/FX` active est affiche en vert fonce comme destination courante et son toggle est ignore.
-- Aucun DSP, FILTER ou REVERB MacroFX n'est cable dans cette passe.
+- Les series DSP Master/FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH`. Les labels UI existants restent l'autorite visible de mapping A/B; `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.
 
 
 ## 12. Contrat MIDI UI v1 (canonique)
@@ -415,9 +425,10 @@ Points factuels:
   - `PLAY`: `Sample`, `Gain`, `Src BPM`,
   - `CLIP`: `Play Mode`, `Loop`, `Stretch`,
   - `SYNC`: `Sync Len`,
-  - `STR`: `Grain`, `Hop`, `Search`, visible seulement quand `Stretch=Stretch`.
+  - `STR`: `Grain`, `Hop`, `Search`, visible seulement quand `Stretch=Stretch` ou `Stretch=Shifter`.
 - `Stretch=Off` lit le clip a vitesse/pitch d'origine sans tempo-sync ni moteur stretch.
-- `Stretch=Speed` conserve le varispeed courant; `Stretch=Stretch` active le moteur preserve-pitch local `brick6_clip_stretch`.
+- `Stretch=Speed` conserve le varispeed courant; `Stretch=Stretch` active le moteur preserve-pitch local `brick6_clip_stretch`; `Stretch=Shifter` conserve le cursor Speed puis applique le shifter stereo local.
+- En `Shifter`, `Grain` pilote la taille de fenetre; `Hop` et `Search` restent visibles/stockes par compat mais sans effet DSP dans cette passe.
 - `STR` utilise les valeurs bornees `Grain/Hop = 32/64/96/128/256/512` et `Search = 0/4/8/12/16`, avec defaults `Grain=256`, `Hop=128`, `Search=16`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
 - `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.

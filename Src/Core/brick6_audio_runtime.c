@@ -18,6 +18,7 @@
 
 #include "Audio/live_recorder.h"
 #include "Audio/drum_synth.h"
+#include "Audio/fx_master_macro.h"
 #include "Audio/sd_multitrack_recorder.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_master_buffer.h"
@@ -229,7 +230,8 @@ void brick6_audio_runtime_init(live_recorder_t *live_recorder)
     (void)live_recorder;
     g_runtime_track_enabled = 1U;
     g_buffer_xfade_smoothed = 0.0f;
-        g_buffer_xfade_prev = 0.0f;
+    g_buffer_xfade_prev = 0.0f;
+    fx_master_macro_init(48000.0f);
 }
 
 static float brick6_audio_runtime_get_buffer_xfade(void)
@@ -313,6 +315,7 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     mixer_process(tracks, track_count, frames);
     if (track_count > 0U)
     {
+        fx_master_macro_process_block(tracks[0].L, tracks[0].R, frames);
         (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
     }
 

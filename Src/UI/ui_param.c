@@ -24,6 +24,7 @@
 #include "param_registry.h"
 #include "ui_core.h"
 #include "ui_track_catalog.h"
+#include "Audio/fx_master_macro.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
@@ -59,6 +60,11 @@ static uint8_t ui_param_is_track_scoped(param_id_t param);
 static uint32_t ui_param_make_encoder_group_gesture_key(const ui_param_encoder_context_t *ctx);
 static uint32_t ui_param_get_active_undo_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track);
 static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, uint8_t active_track);
+static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
+                                                param_id_t param,
+                                                float current_value,
+                                                int16_t delta,
+                                                float *out_value);
 
 /**
  * @brief Point d'entrée ui_param_clamp.
@@ -167,6 +173,142 @@ static float ui_param_step_cfg_track_type(float current_value,
     }
 
     return (float)candidate;
+}
+
+static uint8_t ui_param_master_fx_slot_from_param(param_id_t param, uint8_t *out_slot, uint8_t *out_macro)
+{
+    if ((param < PARAM_MASTER_FX1_TYPE) || (param > PARAM_MASTER_FX4_B))
+    {
+        return 0U;
+    }
+
+    const uint8_t offset = (uint8_t)(param - PARAM_MASTER_FX1_TYPE);
+    const uint8_t macro = (uint8_t)(offset % 4U);
+    if (macro < 2U)
+    {
+        return 0U;
+    }
+
+    if (out_slot != 0)
+    {
+        *out_slot = (uint8_t)(offset / 4U);
+    }
+    if (out_macro != 0)
+    {
+        *out_macro = macro;
+    }
+    return 1U;
+}
+
+static uint8_t ui_param_master_fx_discrete_count(uint8_t fx_type, uint8_t macro)
+{
+    if (macro == 2U)
+    {
+        switch (fx_type)
+        {
+            case FX_MASTER_MACRO_CRUSH:
+                return 13U;
+            case FX_MASTER_MACRO_PUMP:
+            case FX_MASTER_MACRO_CHOP:
+                return 10U;
+            case FX_MASTER_MACRO_ECHO:
+            case FX_MASTER_MACRO_FREEZE:
+            case FX_MASTER_MACRO_STUTTER:
+                return 8U;
+            case FX_MASTER_MACRO_TALK:
+                return 5U;
+            case FX_MASTER_MACRO_PITCH:
+                return 25U;
+            default:
+                return 0U;
+        }
+    }
+
+    if (macro == 3U)
+    {
+        switch (fx_type)
+        {
+            case FX_MASTER_MACRO_DRIVE:
+            case FX_MASTER_MACRO_FREEZE:
+            case FX_MASTER_MACRO_RING:
+                return 4U;
+            case FX_MASTER_MACRO_CHOP:
+                return 3U;
+            case FX_MASTER_MACRO_STUTTER:
+                return 8U;
+            default:
+                return 0U;
+        }
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_param_master_fx_raw_to_step(float value, uint8_t count)
+{
+    const float clamped = ui_param_clamp(value, 0.0f, 127.0f);
+    const uint32_t raw = (uint32_t)(clamped + 0.5f);
+    return (uint8_t)((raw * (uint32_t)(count - 1U) + 63U) / 127U);
+}
+
+static float ui_param_master_fx_step_to_raw(uint8_t step, uint8_t count)
+{
+    if (count <= 1U)
+    {
+        return 0.0f;
+    }
+
+    if (step >= count)
+    {
+        step = (uint8_t)(count - 1U);
+    }
+
+    return (float)(((uint32_t)step * 127U + ((uint32_t)(count - 1U) / 2U)) / (uint32_t)(count - 1U));
+}
+
+static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
+                                                param_id_t param,
+                                                float current_value,
+                                                int16_t delta,
+                                                float *out_value)
+{
+    uint8_t slot = 0U;
+    uint8_t macro = 0U;
+    if ((out_value == 0)
+            || (delta == 0)
+            || (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)
+            || (ui_get_track_type(track) != UI_TRACK_TYPE_MASTER_FX)
+            || (ui_param_master_fx_slot_from_param(param, &slot, &macro) == 0U))
+    {
+        return 0U;
+    }
+
+    float fx_type_value = 0.0f;
+    const param_id_t type_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (slot * 4U));
+    if (param_registry_get_track_value(type_param, track, &fx_type_value) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint8_t count = ui_param_master_fx_discrete_count((uint8_t)(fx_type_value + 0.5f), macro);
+    if (count < 2U)
+    {
+        return 0U;
+    }
+
+    int16_t step = (int16_t)ui_param_master_fx_raw_to_step(current_value, count);
+    step = (int16_t)(step + delta);
+    if (step < 0)
+    {
+        step = 0;
+    }
+    if (step >= (int16_t)count)
+    {
+        step = (int16_t)count - 1;
+    }
+
+    *out_value = ui_param_master_fx_step_to_raw((uint8_t)step, count);
+    return 1U;
 }
 
 
@@ -682,7 +824,10 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         }
 
         float next_value = source_value + delta_value;
-        next_value = ui_param_clamp(next_value, min_value, max_value);
+        if (ui_param_master_fx_quantize_edit(held_track, param, source_value, delta, &next_value) == 0U)
+        {
+            next_value = ui_param_clamp(next_value, min_value, max_value);
+        }
         target_values[i] = seq_param_iface_encode_param_value(param, next_value);
     }
 
@@ -789,7 +934,10 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
     }
 
     float next_value = source_value + ((float)delta * desc->step);
-    next_value = ui_param_clamp(next_value, min_value, max_value);
+    if (ui_param_master_fx_quantize_edit(active_track, param, source_value, delta, &next_value) == 0U)
+    {
+        next_value = ui_param_clamp(next_value, min_value, max_value);
+    }
     const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
 
     if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
@@ -957,8 +1105,11 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     {
         const float current_value = value;
-        value += (float)delta * desc->step;
-        value = ui_param_clamp(value, min_value, max_value);
+        if (ui_param_master_fx_quantize_edit(ctx->active_track, param, current_value, delta, &value) == 0U)
+        {
+            value += (float)delta * desc->step;
+            value = ui_param_clamp(value, min_value, max_value);
+        }
 
         if (ui_param_value_is_same(value, current_value) != 0U)
         {

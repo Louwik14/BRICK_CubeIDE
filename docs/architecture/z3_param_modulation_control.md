@@ -68,9 +68,9 @@ Familles d'autorite:
   - cache runtime track-scoped + commit authoritative write + bridge/resync LFO + invalidations associees.
 - `param_macro.*`:
   - seam Z3 dedie au MACRO runtime,
-  - interpolation `base -> scene`, validation track-aware du slot, et handoff explicite vers `param_registry_apply_track_value`,
+  - interpolation `base -> scene`, validation track-aware des 32 locks par scene, et handoff explicite vers `param_registry_apply_track_value`,
   - contrat produit: toute cible p-lockable selon `seq_param_iface_param_to_slot` + `seq_param_iface_param_is_supported` est assignable au Hall Mode Macro,
-  - runtime pot-state borne a 4 amount caches locaux, avec sync explicite de la bank active,
+  - runtime source-state borne a 4 macro pots + 16 sources hall momentanees, chaque source parcourant au plus `PROJECT_V1_MACRO_SCENE_LOCK_COUNT` locks de la scene cible,
   - pas d'autorite canonique propre, pas de stockage projet, pas de second cache runtime.
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
@@ -102,7 +102,8 @@ Surface `command / apply / transition / post-commit`:
 - `param_registry_apply_track_edit`
 - `param_macro_init`
 - `param_macro_lerp`
-- `param_macro_resolve_slot`
+- `param_macro_resolve_lock`
+- `param_macro_resolve_slot` (compat legacy)
 - `param_macro_apply_resolution`
 - `param_macro_apply_slot`
 - `param_macro_sync_active_bank`
@@ -157,15 +158,20 @@ Call-sites critiques:
 - Release -> write base via `_rt_fast`.
 
 3. MACRO:
-- Resolution slot via `param_macro_resolve_slot`.
+- Resolution lock via `param_macro_resolve_lock` sur la scene cible.
 - Interpolation base -> scene via `param_macro_lerp`.
 - Handoff d'ecriture via `param_macro_apply_resolution` vers le chemin track-aware standard.
 - La source d'autorite d'assignabilite MACRO est volontairement la meme que les p-locks: domaine Z2 -> set `SEQ_PLOCK_SET_*`, puis `seq_param_iface_param_is_supported(track,set,param)`.
 - Contrat produit: `p-lockable => macro-assignable`; aucune table MACRO separee ne doit retirer un parametre p-lockable.
 - Les assignations MACRO deja existantes hors p-lock (`MIX`, `BUFFER`) restent conservees par compatibilite produit, sans devenir p-lockables.
 - Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Opal, Braids, MIX et BUFFER.
-- Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres slots.
-- Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`.
+- Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres locks.
+- Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`; chaque pot pointe vers une scene projet.
+- Pendant un maintien de scene en `Mode=Scene`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
+- Les sources hall `Switch` utilisent `param_macro_set_scene_source_amount` / `param_macro_release_scene_source`, restent momentanees et ne changent jamais la base canonique.
+- L'arbitrage multi-source est borne et statique: toutes les sources actives sont relâchees vers leur base puis reappliquees dans l'ordre de dernier toucher; si plusieurs sources ciblent le meme parametre, la derniere touchee gagne et une source precedente encore active reprend apres release de la gagnante.
+- La capacite MACRO runtime est `16 scenes * 32 locks`; les 4 pots ne possedent pas les locks, ils pointent seulement vers une scene.
+- Worst-case control-rate: une recomposition peut relacher puis reappliquer les 20 sources statiques, avec au plus 32 resolutions/applies par source active; ce parcours reste hors IRQ audio, sans malloc et borne par constantes compile-time.
 
 4. Restore snapshot:
 - globals: `param_set`.
@@ -252,13 +258,14 @@ Call-sites critiques:
   - `Sample`, `Gain`, `Src BPM`,
   - `Play Mode`, `Loop`, `Stretch`,
   - `Sync Len`,
-  - `Grain`, `Hop`, `Search` exposes seulement quand `Stretch=Stretch`,
+  - `Grain`, `Hop`, `Search` exposes seulement quand `Stretch=Stretch` ou `Stretch=Shifter`,
   - `Clip` reste borne produit a `BRICK6_MAX_CLIP_TRACKS=4`; au-dela, le catalogue UI ne propose plus ce type aux tracks non deja `Clip`.
   - `Stretch=Off` force une lecture clip a vitesse/pitch d'origine (`ratio=1.0`, pas de tempo-sync, pas de WSOLA),
   - `Stretch=Speed` garde le varispeed courant (`ratio = project_bpm / source_bpm`, pitch non preserve), sans nouvelle correction distribuee dans cette passe,
   - `Stretch=Stretch` utilise le pipeline `brick6_clip_stretch` preserve-pitch local, borne en WSOLA leger (`grain/hop` exposes via enums `32/64/96/128/256/512`, defaults `256/128`, `search` expose via `0/4/8/12/16`, default `16`, correlation mono L+R) quand `BRICK6_CLIP_STRETCH_PRESERVE_PITCH_ENABLED=1`,
-  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..2`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Clip),
-  - compat anciens projets: la valeur canonique runtime existante `0=Speed / 1=Stretch` est conservee dans l'etat track-aware; l'UI remappe seulement l'ordre visible vers `Off / Speed / Stretch`,
+  - `Stretch=Shifter` garde le cursor varispeed `Speed`, puis applique le pitch-shifter stereo local `brick6_clip_shifter`; `Pitch` et le ratio tempo alimentent `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la fenetre, `Hop/Search` restent stockes mais sans effet dans ce mode,
+  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..3`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Clip),
+  - compat anciens projets: la valeur canonique runtime existante `0=Speed / 1=Stretch / 2=Off` est conservee dans l'etat track-aware; `3=Shifter` est ajoute sans nouveau parametre, et l'UI remappe l'ordre visible vers `Off / Speed / Stretch / Shifter`,
   - `Grain/Hop/Search` restent des setters passifs track-aware; les couples invalides sont normalises localement avec `hop <= grain`, `search in {0,4,8,12,16}`, puis pris en compte au prochain start/restart Clip,
   - `Sync Len` reste track-aware et stocke la longueur musicale clip exposee au niveau produit.
 - Autorite:
@@ -676,9 +683,12 @@ Dette explicite post-passe 4:
 - `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.
 - Les params `Master/Buffer` du domaine runtime `BUFFER` transitent par le meme seam d'apply track-aware que `TONE/MIX`; ils ne doivent pas etre filtres en amont par un gate limite a `TONE/MIX` sous peine de bloquer l'edition UI de l'ensemble `TONE` pour la track buffer.
 
-## 29. Contrat Master/FX UI-only
+## 29. Contrat Master/FX MacroFX
 - `track_tone_sound_state` porte un bloc `master_fx` par track: 4 slots, chacun avec `type`, `level`, `macro_a`, `macro_b`.
 - Params ajoutes en fin d'enum pour limiter le risque de renumerotation: `PARAM_MASTER_FX1_TYPE/LVL/A/B` a `PARAM_MASTER_FX4_TYPE/LVL/A/B`.
-- Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants, mais sans apply DSP.
+- Ces params sont `TONE` track-aware, stockes et restaurables via les flux `PARAM_COUNT` existants.
+- Z3 conserve uniquement l'autorite de stockage/apply param; l'execution DSP lit la base `track_tone_sound_state` en Z1 sans ajouter de seconde autorite param.
+- `LVL` est interprete par le DSP comme profondeur/intensite du slot. `A/B` restent deux macros dependantes du type FX.
+- Types DSP actifs: `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK`, `PITCH`.
 - Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `ECHO`, `WOBBLE`, `COMB`, `RING`, `PITCH`, `TALK`, `STUTTER`, `FREEZE`.
 - Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.

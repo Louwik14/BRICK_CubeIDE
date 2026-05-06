@@ -48,6 +48,13 @@ typedef uint8_t (*ui_template_virtual_slot_text_fn)(uint8_t slot,
                                                     uint32_t out_name_len,
                                                     char *out_value,
                                                     uint32_t out_value_len);
+typedef uint8_t (*ui_template_param_text_fn)(uint8_t slot,
+                                             param_id_t id,
+                                             float value,
+                                             char *out_name,
+                                             uint32_t out_name_len,
+                                             char *out_value,
+                                             uint32_t out_value_len);
 
 typedef struct
 {
@@ -56,6 +63,7 @@ typedef struct
     ui_template_widget_picker_fn widget_picker;
     ui_template_subpage_enabled_fn subpage_enabled;
     ui_template_virtual_slot_text_fn virtual_slot_text;
+    ui_template_param_text_fn param_text;
     const ui_template_family_t *resolved_family;
     uint8_t active_subpage;
     uint8_t has_visited;

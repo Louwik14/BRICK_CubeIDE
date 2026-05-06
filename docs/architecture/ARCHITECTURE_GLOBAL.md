@@ -153,7 +153,7 @@ Règle de lecture transversale :
 ### Cas transverses fréquents
 - **Input Audio vs Hybrid** → Z2 + Z3 + Z5
 - **Master/Buffer** → Z1 + Z2 + Z3 + Z4 + Z5
-- **Master/FX UI-only** → Z2 + Z3 + Z5, puis Z1 seulement quand le routing/DSP sera cable
+- **Master/FX MacroFX** → Z1 + Z2 + Z3 + Z5
 - **Master/Buffer timestretch** → Z1 d'abord, puis Z3/Z4/Z5 selon param/sync/UI
 - **bug track-aware transversal** → commencer par Z2
 - **bug après load/restore** → Z6 puis Z2/Z3/Z4/Z5 selon symptôme

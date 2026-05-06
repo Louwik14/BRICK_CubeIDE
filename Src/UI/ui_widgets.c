@@ -52,46 +52,50 @@ static uint8_t uiw_label_starts_with(const char *label, const char *prefix)
     return 1U;
 }
 
-void uiw_draw_knob(int x, int y, int w, int h, int value, int vmin, int vmax)
+void uiw_draw_knob(int x, int y, int w, int h, float value, float vmin, float vmax)
 {
-    static const int8_t indicator_x[7] = {-5, -4, -2, 0, 2, 4, 5};
-    static const int8_t indicator_y[7] = {2, -2, -4, -5, -4, -2, 2};
+    static const int8_t outline_x[16] = {0, 3, 5, 6, 7, 6, 5, 3, 0, -3, -5, -6, -7, -6, -5, -3};
+    static const int8_t outline_y[16] = {-7, -6, -5, -3, 0, 3, 5, 6, 7, 6, 5, 3, 0, -3, -5, -6};
+    static const int8_t indicator_x[33] = {-4, -5, -5, -6, -6, -6, -6, -6, -6, -5, -5, -4, -3, -3, -2, -1, 0,
+                                            1, 2, 3, 3, 4, 5, 5, 6, 6, 6, 6, 6, 6, 5, 5, 4};
+    static const int8_t indicator_y[33] = {4, 4, 3, 2, 1, 0, -1, -1, -2, -3, -4, -4, -5, -5, -6, -6, -6,
+                                           -6, -6, -5, -5, -4, -4, -3, -2, -1, -1, 0, 1, 2, 3, 4, 4};
 
     const int cx = x + (w / 2);
     const int cy = y + 18;
-    const int r = 6;
-    int idx;
+    int idx = 16;
 
     (void)h;
 
-    drv_display_draw_line(cx - r, cy, cx - 4, cy - 4);
-    drv_display_draw_line(cx - 4, cy - 4, cx, cy - r);
-    drv_display_draw_line(cx, cy - r, cx + 4, cy - 4);
-    drv_display_draw_line(cx + 4, cy - 4, cx + r, cy);
-    drv_display_draw_line(cx + r, cy, cx + 4, cy + 4);
-    drv_display_draw_line(cx + 4, cy + 4, cx, cy + r);
-    drv_display_draw_line(cx, cy + r, cx - 4, cy + 4);
-    drv_display_draw_line(cx - 4, cy + 4, cx - r, cy);
+    for (uint8_t i = 0U; i < 16U; i++)
+    {
+        const uint8_t next = (uint8_t)((i + 1U) & 15U);
+        drv_display_draw_line(cx + outline_x[i],
+                              cy + outline_y[i],
+                              cx + outline_x[next],
+                              cy + outline_y[next]);
+    }
 
     if (vmax <= vmin)
     {
-        idx = 3;
+        idx = 16;
     }
     else
     {
-        int scaled = ((value - vmin) * 6) / (vmax - vmin);
-        if (scaled < 0)
+        float norm = (value - vmin) / (vmax - vmin);
+        if (norm < 0.0f)
         {
-            scaled = 0;
+            norm = 0.0f;
         }
-        if (scaled > 6)
+        if (norm > 1.0f)
         {
-            scaled = 6;
+            norm = 1.0f;
         }
-        idx = scaled;
+        idx = (int)(norm * 32.0f + 0.5f);
     }
 
     drv_display_draw_line(cx, cy, cx + indicator_x[idx], cy + indicator_y[idx]);
+    drv_display_draw_rect(cx - 1, cy - 1, 3, 3);
 }
 
 void uiw_draw_switch(int x, int y, int w, int h, uint8_t on)

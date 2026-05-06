@@ -7,9 +7,8 @@
 
 typedef struct
 {
-    uint8_t bank;
-    uint8_t macro;
-    uint8_t slot;
+    uint8_t scene;
+    uint8_t lock;
     uint8_t track;
     param_id_t param;
     float base_value;
@@ -25,6 +24,12 @@ void param_macro_sync_active_bank(void);
 uint8_t param_macro_set_amount(uint8_t macro, float amount);
 uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta);
 float param_macro_get_amount(uint8_t macro);
+uint8_t param_macro_set_scene_source_amount(uint8_t scene, float amount);
+void param_macro_release_scene_source(uint8_t scene);
+uint8_t param_macro_get_ui_held_scene(uint8_t macro, uint8_t *out_scene);
+uint8_t param_macro_resolve_lock(uint8_t scene,
+                                 uint8_t lock,
+                                 param_macro_resolution_t *out_resolution);
 uint8_t param_macro_resolve_slot(uint8_t bank,
                                  uint8_t macro,
                                  uint8_t slot,

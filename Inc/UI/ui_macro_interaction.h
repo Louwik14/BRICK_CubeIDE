@@ -9,10 +9,16 @@ void ui_macro_interaction_init(void);
 void ui_macro_interaction_reset(void);
 void ui_macro_interaction_note_hall_press(uint8_t hall);
 void ui_macro_interaction_note_hall_release(uint8_t hall);
+void ui_macro_interaction_service_hall(uint8_t hall, uint8_t pressed);
 uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_encoder_context_t *ctx,
                                                             uint8_t encoder,
                                                             int16_t delta);
 uint8_t ui_macro_interaction_note_encoder_delta(uint8_t encoder, int16_t delta);
+uint8_t ui_macro_interaction_get_held_scene(uint8_t *out_scene);
+uint8_t ui_macro_interaction_param_is_locked(param_id_t param);
+uint8_t ui_macro_interaction_get_param_lock_value(param_id_t param,
+                                                  uint8_t *out_track,
+                                                  float *out_scene_value);
 uint8_t ui_macro_interaction_get_active_slot_lock(param_id_t *out_param);
 uint8_t ui_macro_interaction_get_active_slot_target(uint8_t *out_bank,
                                                     uint8_t *out_macro,

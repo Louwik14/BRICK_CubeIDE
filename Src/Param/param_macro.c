@@ -12,11 +12,31 @@
 typedef struct
 {
     float amount;
-    uint8_t last_valid;
-    param_macro_resolution_t last_resolution[PROJECT_V1_MACRO_SLOT_COUNT];
-} param_macro_pot_state_t;
+    uint8_t scene;
+    uint8_t active;
+    uint32_t touch_seq;
+    uint8_t last_count;
+    param_macro_resolution_t last_resolution[PROJECT_V1_MACRO_SCENE_LOCK_COUNT];
+} param_macro_source_state_t;
 
-static param_macro_pot_state_t g_param_macro_pots[PROJECT_V1_MACRO_PER_BANK];
+#define PARAM_MACRO_POT_SOURCE_COUNT PROJECT_V1_MACRO_POT_COUNT
+#define PARAM_MACRO_HALL_SOURCE_COUNT PROJECT_V1_MACRO_SCENE_COUNT
+#define PARAM_MACRO_SOURCE_COUNT (PARAM_MACRO_POT_SOURCE_COUNT + PARAM_MACRO_HALL_SOURCE_COUNT)
+
+static param_macro_source_state_t g_param_macro_sources[PARAM_MACRO_SOURCE_COUNT];
+static uint32_t g_param_macro_touch_seq;
+
+uint8_t param_macro_resolve_lock(uint8_t scene,
+                                 uint8_t lock,
+                                 param_macro_resolution_t *out_resolution);
+uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution);
+
+__attribute__((weak)) uint8_t param_macro_get_ui_held_scene(uint8_t macro, uint8_t *out_scene)
+{
+    (void)macro;
+    (void)out_scene;
+    return 0U;
+}
 
 static float param_macro_clamp_amount(float amount)
 {
@@ -61,7 +81,17 @@ static uint8_t param_macro_plock_set_for_domain(track_runtime_param_domain_t dom
 
 void param_macro_init(void)
 {
-    memset(g_param_macro_pots, 0, sizeof(g_param_macro_pots));
+    memset(g_param_macro_sources, 0, sizeof(g_param_macro_sources));
+    g_param_macro_touch_seq = 0U;
+    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
+    {
+        g_param_macro_sources[macro].scene = project_v1_macro_get_macro_scene(macro);
+    }
+
+    for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
+    {
+        g_param_macro_sources[PARAM_MACRO_POT_SOURCE_COUNT + scene].scene = scene;
+    }
 }
 
 float param_macro_lerp(float base_value, float scene_value, float amount)
@@ -169,28 +199,16 @@ static uint8_t param_macro_apply_preview_value(uint8_t track, param_id_t param, 
     return param_backend_apply_track_value(track, param, value, 0U);
 }
 
-uint8_t param_macro_resolve_slot(uint8_t bank,
-                                 uint8_t macro,
-                                 uint8_t slot,
-                                 param_macro_resolution_t *out_resolution);
-uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution);
-
-static void param_macro_release_pot(uint8_t macro)
+static void param_macro_release_source(param_macro_source_state_t *source)
 {
-    if (macro >= PROJECT_V1_MACRO_PER_BANK)
+    if ((source == NULL) || (source->last_count == 0U))
     {
         return;
     }
 
-    param_macro_pot_state_t *const pot = &g_param_macro_pots[macro];
-    if (pot->last_valid == 0U)
+    for (uint8_t i = 0U; i < source->last_count; ++i)
     {
-        return;
-    }
-
-    for (uint8_t slot = 0U; slot < PROJECT_V1_MACRO_SLOT_COUNT; ++slot)
-    {
-        const param_macro_resolution_t *const last = &pot->last_resolution[slot];
+        const param_macro_resolution_t *const last = &source->last_resolution[i];
         if ((last->track >= SEQ_TRACK_COUNT)
                 || (last->param >= PARAM_COUNT)
                 || (last->resolved_value == last->base_value))
@@ -201,53 +219,111 @@ static void param_macro_release_pot(uint8_t macro)
         (void)param_macro_apply_preview_value(last->track, last->param, last->base_value);
     }
 
-    memset(pot->last_resolution, 0, sizeof(pot->last_resolution));
-    pot->last_valid = 0U;
+    memset(source->last_resolution, 0, sizeof(source->last_resolution));
+    source->last_count = 0U;
 }
 
-static uint8_t param_macro_apply_pot(uint8_t bank, uint8_t macro, float amount)
+static uint8_t param_macro_apply_source(param_macro_source_state_t *source)
 {
-    param_macro_pot_state_t *const pot = (macro < PROJECT_V1_MACRO_PER_BANK) ? &g_param_macro_pots[macro] : NULL;
     uint8_t any_applied = 0U;
 
-    if (pot == NULL)
+    if ((source == NULL) || (source->active == 0U) || (source->amount <= 0.0f))
     {
         return 0U;
     }
 
-    amount = param_macro_clamp_amount(amount);
-    param_macro_release_pot(macro);
-
-    pot->amount = amount;
-    for (uint8_t slot = 0U; slot < PROJECT_V1_MACRO_SLOT_COUNT; ++slot)
+    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
     {
         param_macro_resolution_t resolution;
-        if (param_macro_resolve_slot(bank, macro, slot, &resolution) == 0U)
+        if (param_macro_resolve_lock(source->scene, lock, &resolution) == 0U)
         {
             continue;
         }
 
-        resolution.amount = amount;
-        resolution.resolved_value = param_macro_lerp(resolution.base_value, resolution.scene_value, amount);
+        resolution.amount = source->amount;
+        resolution.resolved_value = param_macro_lerp(resolution.base_value, resolution.scene_value, source->amount);
         if (param_macro_apply_resolution(&resolution) == 0U)
         {
             continue;
         }
 
-        pot->last_resolution[slot] = resolution;
-        pot->last_valid = 1U;
+        if (source->last_count < PROJECT_V1_MACRO_SCENE_LOCK_COUNT)
+        {
+            source->last_resolution[source->last_count++] = resolution;
+        }
         any_applied = 1U;
     }
 
     return any_applied;
 }
 
-uint8_t param_macro_resolve_slot(uint8_t bank,
-                                 uint8_t macro,
-                                 uint8_t slot,
+static void param_macro_recompute_sources(void)
+{
+    uint32_t last_applied_seq = 0U;
+
+    for (uint8_t source = 0U; source < PARAM_MACRO_SOURCE_COUNT; ++source)
+    {
+        param_macro_release_source(&g_param_macro_sources[source]);
+    }
+
+    for (;;)
+    {
+        uint8_t best = PARAM_MACRO_SOURCE_COUNT;
+        uint32_t best_seq = 0xFFFFFFFFUL;
+        for (uint8_t source = 0U; source < PARAM_MACRO_SOURCE_COUNT; ++source)
+        {
+            const param_macro_source_state_t *const s = &g_param_macro_sources[source];
+            if ((s->active == 0U) || (s->amount <= 0.0f) || (s->touch_seq <= last_applied_seq))
+            {
+                continue;
+            }
+
+            if (s->touch_seq < best_seq)
+            {
+                best_seq = s->touch_seq;
+                best = source;
+            }
+        }
+
+        if (best >= PARAM_MACRO_SOURCE_COUNT)
+        {
+            break;
+        }
+
+        (void)param_macro_apply_source(&g_param_macro_sources[best]);
+        last_applied_seq = best_seq;
+    }
+}
+
+static uint8_t param_macro_set_source_amount(uint8_t source_index, uint8_t scene, float amount)
+{
+    const float clamped = param_macro_clamp_amount(amount);
+    const uint8_t active = (clamped > 0.0f) ? 1U : 0U;
+
+    if ((source_index >= PARAM_MACRO_SOURCE_COUNT) || (scene >= PROJECT_V1_MACRO_SCENE_COUNT))
+    {
+        return 0U;
+    }
+
+    param_macro_source_state_t *const source = &g_param_macro_sources[source_index];
+    if ((source->scene == scene) && (source->amount == clamped) && (source->active == active))
+    {
+        return source->active;
+    }
+
+    source->scene = scene;
+    source->amount = clamped;
+    source->active = active;
+    source->touch_seq = ++g_param_macro_touch_seq;
+    param_macro_recompute_sources();
+    return source->active;
+}
+
+uint8_t param_macro_resolve_lock(uint8_t scene,
+                                 uint8_t lock,
                                  param_macro_resolution_t *out_resolution)
 {
-    project_v1_macro_slot_t macro_slot;
+    project_v1_macro_lock_t macro_lock;
     float base_value = 0.0f;
 
     if (out_resolution == NULL)
@@ -257,33 +333,41 @@ uint8_t param_macro_resolve_slot(uint8_t bank,
 
     memset(out_resolution, 0, sizeof(*out_resolution));
 
-    if (project_v1_macro_get_slot(bank, macro, slot, &macro_slot) == 0U)
+    if (project_v1_macro_get_scene_lock(scene, lock, &macro_lock) == 0U)
     {
         return 0U;
     }
 
-    if ((macro_slot.track == PROJECT_V1_MACRO_SLOT_TRACK_NONE)
-            || (macro_slot.param == PROJECT_V1_MACRO_SLOT_PARAM_NONE)
-            || (param_macro_slot_target_is_supported(macro_slot.track, macro_slot.param) == 0U))
+    if ((macro_lock.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
+            || (macro_lock.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE)
+            || (param_macro_slot_target_is_supported(macro_lock.track, macro_lock.param) == 0U))
     {
         return 0U;
     }
 
-    if (param_registry_get_track_value(macro_slot.param, macro_slot.track, &base_value) == 0U)
+    if (param_registry_get_track_value(macro_lock.param, macro_lock.track, &base_value) == 0U)
     {
         return 0U;
     }
 
-    out_resolution->bank = bank;
-    out_resolution->macro = macro;
-    out_resolution->slot = slot;
-    out_resolution->track = macro_slot.track;
-    out_resolution->param = macro_slot.param;
+    out_resolution->scene = scene;
+    out_resolution->lock = lock;
+    out_resolution->track = macro_lock.track;
+    out_resolution->param = macro_lock.param;
     out_resolution->base_value = base_value;
-    out_resolution->scene_value = macro_slot.scene_value;
+    out_resolution->scene_value = macro_lock.scene_value;
     out_resolution->amount = 0.0f;
     out_resolution->resolved_value = base_value;
     return 1U;
+}
+
+uint8_t param_macro_resolve_slot(uint8_t bank,
+                                 uint8_t macro,
+                                 uint8_t slot,
+                                 param_macro_resolution_t *out_resolution)
+{
+    (void)macro;
+    return param_macro_resolve_lock(bank, slot, out_resolution);
 }
 
 uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
@@ -303,45 +387,73 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
 
 void param_macro_sync_active_bank(void)
 {
-    const uint8_t bank = project_v1_macro_get_active_bank();
-
-    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_PER_BANK; ++macro)
+    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
     {
-        (void)param_macro_apply_pot(bank, macro, g_param_macro_pots[macro].amount);
+        g_param_macro_sources[macro].scene = project_v1_macro_get_macro_scene(macro);
     }
+    param_macro_recompute_sources();
 }
 
 uint8_t param_macro_set_amount(uint8_t macro, float amount)
 {
-    if (macro >= PROJECT_V1_MACRO_PER_BANK)
+    uint8_t held_scene = 0U;
+
+    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
     {
         return 0U;
     }
 
-    return param_macro_apply_pot(project_v1_macro_get_active_bank(), macro, amount);
+    if (param_macro_get_ui_held_scene(macro, &held_scene) != 0U)
+    {
+        project_v1_macro_set_macro_scene_no_sync(macro, held_scene);
+        g_param_macro_sources[macro].scene = project_v1_macro_get_macro_scene(macro);
+        return 1U;
+    }
+
+    return param_macro_set_source_amount(macro, project_v1_macro_get_macro_scene(macro), amount);
 }
 
 uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta)
 {
     float next_amount = 0.0f;
 
-    if (macro >= PROJECT_V1_MACRO_PER_BANK)
+    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
     {
         return 0U;
     }
 
-    next_amount = g_param_macro_pots[macro].amount + ((float)delta * 0.015625f);
+    next_amount = g_param_macro_sources[macro].amount + ((float)delta * 0.015625f);
     return param_macro_set_amount(macro, next_amount);
 }
 
 float param_macro_get_amount(uint8_t macro)
 {
-    if (macro >= PROJECT_V1_MACRO_PER_BANK)
+    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
     {
         return 0.0f;
     }
 
-    return g_param_macro_pots[macro].amount;
+    return g_param_macro_sources[macro].amount;
+}
+
+uint8_t param_macro_set_scene_source_amount(uint8_t scene, float amount)
+{
+    if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+    {
+        return 0U;
+    }
+
+    return param_macro_set_source_amount((uint8_t)(PARAM_MACRO_POT_SOURCE_COUNT + scene), scene, amount);
+}
+
+void param_macro_release_scene_source(uint8_t scene)
+{
+    if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+    {
+        return;
+    }
+
+    (void)param_macro_set_source_amount((uint8_t)(PARAM_MACRO_POT_SOURCE_COUNT + scene), scene, 0.0f);
 }
 
 uint8_t param_macro_apply_slot(uint8_t bank, uint8_t macro, uint8_t slot, float amount)

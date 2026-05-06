@@ -90,6 +90,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         {
             ui_macro_interaction_note_hall_release(hall);
         }
+        ui_macro_interaction_service_hall(hall, pressed);
     }
 
     if ((action != UI_HALL_DIRECT_ACTION_TRACK_SELECT) || (mute_active != 0U))

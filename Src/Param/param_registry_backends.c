@@ -396,7 +396,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         {
-            uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
+            uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
 
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
             {
@@ -413,7 +413,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
             else
             {
-                stretch_mode = 1U;
+                stretch_mode = (stretch_mode == 2U) ? 1U : 3U;
             }
 
             if ((update_base_state != 0U) && (state != NULL))

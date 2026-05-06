@@ -47,8 +47,8 @@ static uint8_t ui_page_template_macro_virtual_slot_text(uint8_t slot,
     }
 
     const char *const value =
-        (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_BANK) ? "Bank" : "Slot";
-    (void)snprintf(out_name, out_name_len, "Hall Switch Mode");
+        (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_SWITCH) ? "Switch" : "Scene";
+    (void)snprintf(out_name, out_name_len, "Mode");
     (void)snprintf(out_value, out_value_len, "%s", value);
     return 1U;
 }
@@ -84,12 +84,12 @@ void ui_page_template_macro_handle_encoder(uint8_t encoder, int16_t delta)
 
     if (delta > 0)
     {
-        project_v1_macro_set_hall_switch_mode(PROJECT_V1_MACRO_HALL_SWITCH_BANK);
+        project_v1_macro_set_hall_switch_mode(PROJECT_V1_MACRO_HALL_SWITCH_SWITCH);
         ui_macro_interaction_reset();
         return;
     }
 
-    project_v1_macro_set_hall_switch_mode(PROJECT_V1_MACRO_HALL_SWITCH_SLOT);
+    project_v1_macro_set_hall_switch_mode(PROJECT_V1_MACRO_HALL_SWITCH_SCENE);
     ui_macro_interaction_reset();
 }
 

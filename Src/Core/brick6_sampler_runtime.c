@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "Audio/audio_float.h"
+#include "Core/brick6_clip_shifter.h"
 #include "Core/brick6_clip_stretch.h"
 #include "Storage/memory_layout.h"
 #include "Sampler/sample_cache.h"
@@ -80,8 +81,8 @@ typedef struct
     uint8_t stretch_mode;
     uint8_t state;
     uint8_t use_stretch_engine;
+    uint8_t use_shifter_engine;
     uint8_t clip_slot_index;
-    uint8_t reserved0;
     uint32_t timing_ratio_q16;
     uint32_t pitch_ratio_q16;
 } brick6_sampler_clip_runtime_t;
@@ -90,6 +91,7 @@ typedef struct
 {
     uint8_t owner_track_id;
     brick6_clip_stretch_t stretch;
+    brick6_clip_shifter_t shifter;
     float stretch_render_l[AUDIO_BLOCK_SIZE];
     float stretch_render_r[AUDIO_BLOCK_SIZE];
 } brick6_sampler_clip_slot_t;
@@ -173,7 +175,9 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
                                                                      uint32_t *out_region_begin,
                                                                      uint32_t *out_region_end);
 static uint8_t brick6_sampler_runtime_clip_uses_stretch(const brick6_sampler_clip_runtime_t *clip);
+static uint8_t brick6_sampler_runtime_clip_uses_shifter(const brick6_sampler_clip_runtime_t *clip);
 static uint16_t brick6_sampler_runtime_clip_sanitize_grain_size(uint16_t grain_size);
+static uint16_t brick6_sampler_runtime_clip_shifter_window_frames(uint16_t grain_size);
 static uint16_t brick6_sampler_runtime_clip_sanitize_hop_size(uint16_t hop_size, uint16_t grain_size);
 static uint16_t brick6_sampler_runtime_clip_sanitize_search_frames(uint16_t search_frames);
 static brick6_sampler_clip_slot_t *brick6_sampler_runtime_clip_get_slot(uint8_t track_id);
@@ -181,7 +185,11 @@ static brick6_sampler_clip_slot_t *brick6_sampler_runtime_clip_ensure_slot(uint8
 static void brick6_sampler_runtime_clip_release_slot(uint8_t track_id);
 static void brick6_sampler_runtime_clip_configure_stretch(const brick6_sampler_clip_runtime_t *clip,
                                                           brick6_sampler_clip_slot_t *slot);
+static void brick6_sampler_runtime_clip_configure_shifter(const brick6_sampler_clip_runtime_t *clip,
+                                                          brick6_sampler_clip_slot_t *slot);
 static void brick6_sampler_runtime_clip_reset_stretch(const brick6_sampler_clip_runtime_t *clip,
+                                                      brick6_sampler_clip_slot_t *slot);
+static void brick6_sampler_runtime_clip_reset_shifter(const brick6_sampler_clip_runtime_t *clip,
                                                       brick6_sampler_clip_slot_t *slot);
 static void brick6_sampler_runtime_clip_reset(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id);
@@ -196,6 +204,16 @@ static void brick6_sampler_runtime_clip_render_stretch(brick6_sampler_voice_t *v
                                                        float *out_l,
                                                        float *out_r,
                                                        uint32_t frames);
+static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *voice,
+                                                       brick6_sampler_clip_runtime_t *clip,
+                                                       brick6_sampler_clip_slot_t *slot,
+                                                       float *out_l,
+                                                       float *out_r,
+                                                       uint32_t frames);
+static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *voice,
+                                                        float *out_l,
+                                                        float *out_r,
+                                                        uint32_t frames);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
 
@@ -223,12 +241,17 @@ static uint8_t brick6_sampler_runtime_track_is_clip(uint8_t track_id)
 
 static uint8_t brick6_sampler_runtime_clip_mode_is_off(const brick6_sampler_clip_runtime_t *clip)
 {
-    return ((clip != NULL) && (clip->stretch_mode >= 2U)) ? 1U : 0U;
+    return ((clip != NULL) && (clip->stretch_mode == 2U)) ? 1U : 0U;
 }
 
 static uint8_t brick6_sampler_runtime_clip_mode_is_stretch(const brick6_sampler_clip_runtime_t *clip)
 {
     return ((clip != NULL) && (clip->stretch_mode == 1U)) ? 1U : 0U;
+}
+
+static uint8_t brick6_sampler_runtime_clip_mode_is_shifter(const brick6_sampler_clip_runtime_t *clip)
+{
+    return ((clip != NULL) && (clip->stretch_mode == 3U)) ? 1U : 0U;
 }
 
 static uint8_t brick6_sampler_runtime_clip_uses_stretch(const brick6_sampler_clip_runtime_t *clip)
@@ -239,6 +262,11 @@ static uint8_t brick6_sampler_runtime_clip_uses_stretch(const brick6_sampler_cli
     (void)clip;
     return 0U;
 #endif
+}
+
+static uint8_t brick6_sampler_runtime_clip_uses_shifter(const brick6_sampler_clip_runtime_t *clip)
+{
+    return (brick6_sampler_runtime_clip_mode_is_shifter(clip) != 0U) ? 1U : 0U;
 }
 
 static uint16_t brick6_sampler_runtime_clip_sanitize_grain_size(uint16_t grain_size)
@@ -255,6 +283,29 @@ static uint16_t brick6_sampler_runtime_clip_sanitize_grain_size(uint16_t grain_s
         default:
             return BRICK6_CLIP_STRETCH_DEFAULT_GRAIN_FRAMES;
     }
+}
+
+static uint16_t brick6_sampler_runtime_clip_shifter_window_frames(uint16_t grain_size)
+{
+    switch (brick6_sampler_runtime_clip_sanitize_grain_size(grain_size))
+    {
+        case 32U:
+            return 128U;
+        case 64U:
+            return 256U;
+        case 96U:
+            return 384U;
+        case 128U:
+            return 512U;
+        case 256U:
+            return 1024U;
+        case 512U:
+            return BRICK6_CLIP_SHIFTER_MAX_WINDOW_FRAMES;
+        default:
+            break;
+    }
+
+    return 1024U;
 }
 
 static uint16_t brick6_sampler_runtime_clip_sanitize_hop_size(uint16_t hop_size, uint16_t grain_size)
@@ -344,6 +395,7 @@ static brick6_sampler_clip_slot_t *brick6_sampler_runtime_clip_ensure_slot(uint8
         g_sampler_clip_slots[i].owner_track_id = track_id;
         g_sampler_clip_runtime[track_id].clip_slot_index = i;
         brick6_clip_stretch_init(&g_sampler_clip_slots[i].stretch);
+        brick6_clip_shifter_init(&g_sampler_clip_slots[i].shifter);
         return &g_sampler_clip_slots[i];
     }
 
@@ -407,6 +459,36 @@ static void brick6_sampler_runtime_clip_configure_stretch(const brick6_sampler_c
     brick6_clip_stretch_set_config(&slot->stretch, &config);
 }
 
+static void brick6_sampler_runtime_clip_configure_shifter(const brick6_sampler_clip_runtime_t *clip,
+                                                          brick6_sampler_clip_slot_t *slot)
+{
+    float timing_ratio = 1.0f;
+    float pitch_ratio = 1.0f;
+    float pitch_correction = 1.0f;
+
+    if ((clip == NULL) || (slot == NULL))
+    {
+        return;
+    }
+
+    if (clip->timing_ratio_q16 != 0U)
+    {
+        timing_ratio = (float)clip->timing_ratio_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+    }
+    if (clip->pitch_ratio_q16 != 0U)
+    {
+        pitch_ratio = (float)clip->pitch_ratio_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+    }
+    if (timing_ratio > 0.0f)
+    {
+        pitch_correction = pitch_ratio / timing_ratio;
+    }
+
+    brick6_clip_shifter_set_window_frames(&slot->shifter,
+                                          brick6_sampler_runtime_clip_shifter_window_frames(clip->grain_size));
+    brick6_clip_shifter_set_pitch_correction(&slot->shifter, pitch_correction);
+}
+
 static void brick6_sampler_runtime_clip_reset_stretch(const brick6_sampler_clip_runtime_t *clip,
                                                       brick6_sampler_clip_slot_t *slot)
 {
@@ -417,6 +499,18 @@ static void brick6_sampler_runtime_clip_reset_stretch(const brick6_sampler_clip_
 
     brick6_clip_stretch_reset(&slot->stretch);
     brick6_sampler_runtime_clip_configure_stretch(clip, slot);
+}
+
+static void brick6_sampler_runtime_clip_reset_shifter(const brick6_sampler_clip_runtime_t *clip,
+                                                      brick6_sampler_clip_slot_t *slot)
+{
+    if ((clip == NULL) || (slot == NULL))
+    {
+        return;
+    }
+
+    brick6_clip_shifter_reset(&slot->shifter);
+    brick6_sampler_runtime_clip_configure_shifter(clip, slot);
 }
 
 static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
@@ -440,6 +534,7 @@ static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
     g_sampler_clip_runtime[track_id].stretch_mode = 0U;
     g_sampler_clip_runtime[track_id].state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_IDLE;
     g_sampler_clip_runtime[track_id].use_stretch_engine = 0U;
+    g_sampler_clip_runtime[track_id].use_shifter_engine = 0U;
     g_sampler_clip_runtime[track_id].clip_slot_index = BRICK6_SAMPLER_CLIP_SLOT_NONE;
     g_sampler_clip_runtime[track_id].timing_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
     g_sampler_clip_runtime[track_id].pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
@@ -599,6 +694,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     uint32_t ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
     uint32_t pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
     uint8_t use_stretch = brick6_sampler_runtime_clip_uses_stretch(clip);
+    uint8_t use_shifter = brick6_sampler_runtime_clip_uses_shifter(clip);
     uint32_t step_q16 = BRICK6_SAMPLER_Q16_ONE;
     uint32_t region_begin = 0U;
     uint32_t region_end = 0U;
@@ -609,7 +705,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
             || (desc->length_frames == 0U)
             || (sample_cache_is_ready(clip->sample_id) == 0U))
     {
-        if (clip->use_stretch_engine != 0U)
+        if ((clip->use_stretch_engine != 0U) || (clip->use_shifter_engine != 0U))
         {
             brick6_sampler_runtime_clip_release_slot(track_id);
         }
@@ -618,12 +714,13 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
 
     memset((void *)&g_brick6_clip_stretch_diag_snapshot, 0, sizeof(g_brick6_clip_stretch_diag_snapshot));
 
-    if (use_stretch != 0U)
+    if ((use_stretch != 0U) || (use_shifter != 0U))
     {
         slot = brick6_sampler_runtime_clip_ensure_slot(track_id);
         if (slot == NULL)
         {
             use_stretch = 0U;
+            use_shifter = 0U;
         }
     }
     else
@@ -634,7 +731,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     ratio_q16 = brick6_sampler_runtime_clip_resolve_timing_ratio_q16(track_id, desc, clip, &region_begin, &region_end);
     clip->timing_ratio_q16 = ratio_q16;
     clip->pitch_ratio_q16 = BRICK6_SAMPLER_Q16_ONE;
-    if (use_stretch != 0U)
+    if ((use_stretch != 0U) || (use_shifter != 0U))
     {
         pitch_ratio_q16 = brick6_sampler_runtime_clip_pitch_ratio_q16(clip->pitch_semitones);
         clip->pitch_ratio_q16 = pitch_ratio_q16;
@@ -669,7 +766,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
 
     if (sample_cache_start_voice_at(clip->sample_id, cache_voice_id, region_begin) == 0U)
     {
-        if (use_stretch != 0U)
+        if ((use_stretch != 0U) || (use_shifter != 0U))
         {
             brick6_sampler_runtime_clip_release_slot(track_id);
         }
@@ -680,7 +777,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     {
         sample_cache_stop_voice(cache_voice_id);
         sample_voice_reader_reset(&voice->reader);
-        if (use_stretch != 0U)
+        if ((use_stretch != 0U) || (use_shifter != 0U))
         {
             brick6_sampler_runtime_clip_release_slot(track_id);
         }
@@ -716,9 +813,14 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     voice->use_segment_cursor = 1U;
     voice->play_plan = play_plan;
     clip->use_stretch_engine = use_stretch;
+    clip->use_shifter_engine = use_shifter;
     if ((clip->use_stretch_engine != 0U) && (slot != NULL))
     {
         brick6_sampler_runtime_clip_reset_stretch(clip, slot);
+    }
+    if ((clip->use_shifter_engine != 0U) && (slot != NULL))
+    {
+        brick6_sampler_runtime_clip_reset_shifter(clip, slot);
     }
     return 1U;
 }
@@ -735,6 +837,7 @@ static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id)
     g_sampler_voice[track_id].position = 0.0f;
     g_sampler_voice[track_id].sample = NULL;
     g_sampler_clip_runtime[track_id].use_stretch_engine = 0U;
+    g_sampler_clip_runtime[track_id].use_shifter_engine = 0U;
     brick6_sampler_runtime_clip_release_slot(track_id);
 }
 
@@ -1599,7 +1702,7 @@ void brick6_sampler_runtime_set_clip_stretch_mode(uint8_t track_id, uint8_t stre
         return;
     }
 
-    g_sampler_clip_runtime[track_id].stretch_mode = (stretch_mode <= 2U) ? stretch_mode : 0U;
+    g_sampler_clip_runtime[track_id].stretch_mode = (stretch_mode <= 3U) ? stretch_mode : 0U;
 }
 
 void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain_size)
@@ -2192,6 +2295,43 @@ static void brick6_sampler_runtime_clip_render_stretch(brick6_sampler_voice_t *v
     }
 }
 
+static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *voice,
+                                                       brick6_sampler_clip_runtime_t *clip,
+                                                       brick6_sampler_clip_slot_t *slot,
+                                                       float *out_l,
+                                                       float *out_r,
+                                                       uint32_t frames)
+{
+    if ((voice == NULL) || (clip == NULL) || (slot == NULL) || (out_l == NULL) || (out_r == NULL) || (frames == 0U))
+    {
+        return;
+    }
+
+    if (frames > AUDIO_BLOCK_SIZE)
+    {
+        frames = AUDIO_BLOCK_SIZE;
+    }
+
+    memset(slot->stretch_render_l, 0, sizeof(slot->stretch_render_l));
+    memset(slot->stretch_render_r, 0, sizeof(slot->stretch_render_r));
+
+    brick6_sampler_runtime_clip_configure_shifter(clip, slot);
+    brick6_sampler_render_sample_segment_cursor(voice,
+                                                slot->stretch_render_l,
+                                                slot->stretch_render_r,
+                                                frames);
+    brick6_clip_shifter_process_stereo(&slot->shifter,
+                                       slot->stretch_render_l,
+                                       slot->stretch_render_r,
+                                       frames);
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        out_l[i] += slot->stretch_render_l[i];
+        out_r[i] += slot->stretch_render_r[i];
+    }
+}
+
 static void brick6_sampler_render_sample(const sample_desc_t *desc,
                                          brick6_sampler_voice_t *voice,
                                          float *out_l,
@@ -2433,11 +2573,11 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
             return;
         }
 
-        if ((voice->sample == NULL)
-            || ((voice->active == 0U)
-                && ((clip->use_stretch_engine == 0U)
-                    || (slot == NULL)
-                    || ((slot->stretch.output_fill == 0U) && (slot->stretch.queued_frames == 0U)))))
+        const uint8_t stretch_tail_active =
+                (uint8_t)((clip->use_stretch_engine != 0U)
+                          && (slot != NULL)
+                          && ((slot->stretch.output_fill != 0U) || (slot->stretch.queued_frames != 0U)));
+        if ((voice->sample == NULL) || ((voice->active == 0U) && (stretch_tail_active == 0U)))
         {
             clip->state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
             return;
@@ -2453,6 +2593,18 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
             else
             {
                 brick6_sampler_runtime_clip_render_stretch(voice, clip, slot, out_l, out_r, frames);
+            }
+        }
+        else if (clip->use_shifter_engine != 0U)
+        {
+            if (slot == NULL)
+            {
+                clip->use_shifter_engine = 0U;
+                brick6_sampler_render_sample(voice->sample, voice, out_l, out_r, frames);
+            }
+            else
+            {
+                brick6_sampler_runtime_clip_render_shifter(voice, clip, slot, out_l, out_r, frames);
             }
         }
         else

@@ -20,12 +20,14 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
 - `Src/Core/brick6_clip_stretch.c` + `Inc/Core/brick6_clip_stretch.h` : seam local du futur timestretch `Sampler/Clip`, instanceable, stream-compatible, sans ownership `sample_pool`/`sample_cache`/`sample_page_cache`.
+- `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Clip` `Shifter`, port C borne sans import Clouds/FxEngine.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
 - Etat produit courant `sd_multitrack_recorder` : bypass temporaire via `SD_RECORDER_PRODUCT_ENABLED=0`. Les hooks audio SD peuvent rester appeles, mais `sd_recorder_request_start/stop/arm/disarm`, `sd_recorder_audio_block_begin()` et `sd_recorder_capture_tap_block()` retournent immediatement tant que le flag reste a `0`.
 - `Src/Core/brick6_master_buffer.c` + `Inc/Core/brick6_master_buffer.h` : preuve du branchement bloc debut/fin et read playback dans pipeline.
 - `Src/Core/brick6_master_buffer_stretch.c` + `Inc/Core/brick6_master_buffer_stretch.h` : seam local du futur timestretch playback Master/Buffer, borne a une instance unique et sans pipeline parallele.
+- `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER` et `PITCH`, et formants SVF legers pour `TALK`.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
@@ -38,6 +40,7 @@ Dependances de Z1 sans appartenir a Z1:
 - `sd_multitrack_recorder` = recorder SD/stems distinct du `Master/Buffer`; en etat produit courant il reste bypasse par flag compile-time local.
 - `brick6_master_buffer` (capture post-fader + lecture playback).
 - `brick6_master_buffer_stretch` (etat runtime local du timestretch playback, sans ownership du recorder brut).
+- `track_tone_sound_state` pour les valeurs `Master/FX` type/LVL/A/B lues par `fx_master_macro`.
 - `fx_chain`, `fx_reverb`, `env_adsr`, `fx_biquad_filter`.
 
 Exclusions explicites:
@@ -226,6 +229,7 @@ Flux nominal prouve par code:
 - submit post-fader vers master-buffer dans `mixer_process`.
 - commit master-buffer fin de mix.
 - post-mix: `brick6_audio_runtime_dsp` lit playback buffer et applique xfade live/recorded sur `tracks[0]`.
+- post-mix: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]` avant preview SD, playback `Master/Buffer` et tap master final.
 - tap final `SD_RECORDER_TAP_MASTER` (hook conserve, no-op immediat en produit tant que `SD_RECORDER_PRODUCT_ENABLED=0`).
 - Distinction structurante:
   - `sd_multitrack_recorder` = recorder SD/stems actuellement bypasse cote produit.
@@ -300,9 +304,12 @@ Granular / fx_pool:
 - Les autres modes (`slice`) restent provisoirement sur les chemins legacy `sample_cache_begin_read_block()` et `sample_voice_reader_render_pitch_forward()` jusqu'aux phases suivantes.
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
 - Master-buffer est dans le pipeline de bloc (`begin -> submit -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`.
+- Master/FX MacroFX est un insert master apres `mixer_process` et avant le blend playback `Master/Buffer`; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` ont un traitement DSP. `OFF` et tout type inconnu restent no-op exacts. `RING` et `CRUSH` ne lisent pas la mesure/position transport; `STUTTER` lit seulement le BPM courant pour dimensionner sa fenetre rythmique.
+- Les delays MacroFX sont monophoniques par slot, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `STUTTER` et `PITCH` reutilisent ce core mono: `STUTTER` capture une fenetre recente bornee avec crossfade court de boucle, `PITCH` utilise deux lectures delay/grain simples. `TALK` utilise des formants fixes/morphables bornes, sans FFT ni analyse vocale.
 - Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
 - Le futur stretch `Sampler/Clip` reste un seam local distinct: `brick6_clip_stretch` ne connait que son FIFO stereo local et laisse le pont cursor/page-cache/runtime au Sampler.
-- Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy sans nouvelle correction distribuee dans cette passe, et `Stretch Mode=Stretch` utilise le pipeline `sample_voice_reader -> brick6_clip_stretch FIFO -> render preserve-pitch -> mix`.
+- Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, `Stretch Mode=Stretch` utilise le pipeline `sample_voice_reader -> brick6_clip_stretch FIFO -> render preserve-pitch -> mix`, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
+- `brick6_clip_shifter` porte un shifter deux taps delay/crossfade local; le ratio de correction est isole dans `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la taille de fenetre, `Hop` et `Search` restent sans effet dans ce mode.
 - `brick6_clip_stretch` conserve le seam local et l'instrumentation de debug. Le mode `PRESERVE_PITCH` est actif par defaut (`BRICK6_CLIP_STRETCH_PRESERVE_PITCH_ENABLED=1`) et repose sur un WSOLA leger a grain fixe (`grain=256`, `hop=128`, `search=+-16`, correlation mono L+R, sans FFT/phase-vocoder) pilote par un accumulateur `ratio_q16`; `ratio>1` raccourcit la duree cible, `ratio<1` l'allonge, et la sortie zero-fill si le moteur est temporairement starved.
 - Le runtime lourd `Sampler/Clip` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Clip` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Stretch` retombe explicitement sur `Speed` sans crash.
 - Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.

@@ -19,23 +19,22 @@ static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
 
-static uint8_t project_v1_macro_slot_is_valid(uint8_t bank, uint8_t macro, uint8_t slot)
+static uint8_t project_v1_macro_scene_lock_is_valid(uint8_t scene, uint8_t lock)
 {
-    return (uint8_t)((bank < PROJECT_V1_MACRO_BANK_COUNT)
-            && (macro < PROJECT_V1_MACRO_PER_BANK)
-            && (slot < PROJECT_V1_MACRO_SLOT_COUNT));
+    return (uint8_t)((scene < PROJECT_V1_MACRO_SCENE_COUNT)
+            && (lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT));
 }
 
-static void project_v1_macro_clear_slot(project_v1_macro_slot_t *slot)
+static void project_v1_macro_clear_lock(project_v1_macro_lock_t *lock)
 {
-    if (slot == 0)
+    if (lock == 0)
     {
         return;
     }
 
-    slot->track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
-    slot->param = PROJECT_V1_MACRO_SLOT_PARAM_NONE;
-    slot->scene_value = 0.0f;
+    lock->track = PROJECT_V1_MACRO_LOCK_TRACK_NONE;
+    lock->param = PROJECT_V1_MACRO_LOCK_PARAM_NONE;
+    lock->scene_value = 0.0f;
 }
 
 static void project_v1_macro_sanitize_state(project_v1_macro_state_t *state)
@@ -47,12 +46,15 @@ static void project_v1_macro_sanitize_state(project_v1_macro_state_t *state)
 
     if ((uint8_t)state->hall_switch_mode >= (uint8_t)PROJECT_V1_MACRO_HALL_SWITCH_COUNT)
     {
-        state->hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SLOT;
+        state->hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SCENE;
     }
 
-    if (state->active_bank >= PROJECT_V1_MACRO_BANK_COUNT)
+    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
     {
-        state->active_bank = 0U;
+        if (state->macro_scene[macro] >= PROJECT_V1_MACRO_SCENE_COUNT)
+        {
+            state->macro_scene[macro] = macro;
+        }
     }
 }
 
@@ -79,17 +81,17 @@ static void project_boot_ctx_commit_current_state_if_valid(void)
 
 void project_v1_macro_init(void)
 {
-    g_project_macro_state.hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SLOT;
-    g_project_macro_state.active_bank = 0U;
-
-    for (uint8_t bank = 0U; bank < PROJECT_V1_MACRO_BANK_COUNT; ++bank)
+    g_project_macro_state.hall_switch_mode = PROJECT_V1_MACRO_HALL_SWITCH_SCENE;
+    for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_POT_COUNT; ++macro)
     {
-        for (uint8_t macro = 0U; macro < PROJECT_V1_MACRO_PER_BANK; ++macro)
+        g_project_macro_state.macro_scene[macro] = macro;
+    }
+
+    for (uint8_t scene = 0U; scene < PROJECT_V1_MACRO_SCENE_COUNT; ++scene)
+    {
+        for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
         {
-            for (uint8_t slot = 0U; slot < PROJECT_V1_MACRO_SLOT_COUNT; ++slot)
-            {
-                project_v1_macro_clear_slot(&g_project_macro_state.banks[bank].macros[macro].slots[slot]);
-            }
+            project_v1_macro_clear_lock(&g_project_macro_state.scenes[scene].locks[lock]);
         }
     }
 }
@@ -111,46 +113,232 @@ void project_v1_macro_set_hall_switch_mode(project_v1_macro_hall_switch_mode_t m
 
 uint8_t project_v1_macro_get_active_bank(void)
 {
-    return g_project_macro_state.active_bank;
+    return g_project_macro_state.macro_scene[0U];
 }
 
 void project_v1_macro_set_active_bank(uint8_t bank)
 {
-    if (bank >= PROJECT_V1_MACRO_BANK_COUNT)
+    if (bank >= PROJECT_V1_MACRO_SCENE_COUNT)
     {
         return;
     }
 
-    if (g_project_macro_state.active_bank == bank)
+    if (g_project_macro_state.macro_scene[0U] == bank)
     {
         return;
     }
 
-    g_project_macro_state.active_bank = bank;
+    g_project_macro_state.macro_scene[0U] = bank;
     param_macro_sync_active_bank();
 }
 
-uint8_t project_v1_macro_slot_is_empty(uint8_t bank, uint8_t macro, uint8_t slot)
+uint8_t project_v1_macro_get_macro_scene(uint8_t macro)
 {
-    project_v1_macro_slot_t current;
-    if (project_v1_macro_get_slot(bank, macro, slot, &current) == 0U)
-    {
-        return 1U;
-    }
-
-    return ((current.track == PROJECT_V1_MACRO_SLOT_TRACK_NONE)
-            || (current.param == PROJECT_V1_MACRO_SLOT_PARAM_NONE)) ? 1U : 0U;
-}
-
-uint8_t project_v1_macro_get_slot(uint8_t bank, uint8_t macro, uint8_t slot, project_v1_macro_slot_t *out_slot)
-{
-    if ((out_slot == 0) || (project_v1_macro_slot_is_valid(bank, macro, slot) == 0U))
+    if (macro >= PROJECT_V1_MACRO_POT_COUNT)
     {
         return 0U;
     }
 
-    *out_slot = g_project_macro_state.banks[bank].macros[macro].slots[slot];
+    if (g_project_macro_state.macro_scene[macro] >= PROJECT_V1_MACRO_SCENE_COUNT)
+    {
+        return macro;
+    }
+
+    return g_project_macro_state.macro_scene[macro];
+}
+
+static void project_v1_macro_set_macro_scene_impl(uint8_t macro, uint8_t scene, uint8_t sync_runtime)
+{
+    if ((macro >= PROJECT_V1_MACRO_POT_COUNT) || (scene >= PROJECT_V1_MACRO_SCENE_COUNT))
+    {
+        return;
+    }
+
+    if (g_project_macro_state.macro_scene[macro] == scene)
+    {
+        return;
+    }
+
+    g_project_macro_state.macro_scene[macro] = scene;
+    if (sync_runtime != 0U)
+    {
+        param_macro_sync_active_bank();
+    }
+}
+
+void project_v1_macro_set_macro_scene(uint8_t macro, uint8_t scene)
+{
+    project_v1_macro_set_macro_scene_impl(macro, scene, 1U);
+}
+
+void project_v1_macro_set_macro_scene_no_sync(uint8_t macro, uint8_t scene)
+{
+    project_v1_macro_set_macro_scene_impl(macro, scene, 0U);
+}
+
+uint8_t project_v1_macro_scene_has_locks(uint8_t scene)
+{
+    if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+    {
+        return 0U;
+    }
+
+    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    {
+        if (project_v1_macro_scene_lock_is_empty(scene, lock) == 0U)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t project_v1_macro_assign_scene_lock(uint8_t scene, uint8_t track, param_id_t param, float scene_value)
+{
+    project_v1_macro_lock_t next;
+
+    if ((scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+            || (track >= SEQ_TRACK_COUNT)
+            || (param >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    next.track = track;
+    next.param = param;
+    next.scene_value = scene_value;
+
+    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    {
+        project_v1_macro_lock_t current;
+        if (project_v1_macro_get_scene_lock(scene, lock, &current) == 0U)
+        {
+            continue;
+        }
+
+        if ((current.track == track) && (current.param == param))
+        {
+            return project_v1_macro_set_scene_lock(scene, lock, &next);
+        }
+    }
+
+    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    {
+        if (project_v1_macro_scene_lock_is_empty(scene, lock) != 0U)
+        {
+            return project_v1_macro_set_scene_lock(scene, lock, &next);
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t project_v1_macro_clear_scene_lock(uint8_t scene, uint8_t track, param_id_t param)
+{
+    project_v1_macro_lock_t empty;
+
+    if ((scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+            || (track >= SEQ_TRACK_COUNT)
+            || (param >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    project_v1_macro_clear_lock(&empty);
+    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    {
+        project_v1_macro_lock_t current;
+        if (project_v1_macro_get_scene_lock(scene, lock, &current) == 0U)
+        {
+            continue;
+        }
+
+        if ((current.track == track) && (current.param == param))
+        {
+            return project_v1_macro_set_scene_lock(scene, lock, &empty);
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t project_v1_macro_get_scene_lock_for_param(uint8_t scene,
+                                                  uint8_t track,
+                                                  param_id_t param,
+                                                  project_v1_macro_lock_t *out_lock)
+{
+    if ((out_lock == 0)
+            || (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
+            || (track >= SEQ_TRACK_COUNT)
+            || (param >= PARAM_COUNT))
+    {
+        return 0U;
+    }
+
+    for (uint8_t lock = 0U; lock < PROJECT_V1_MACRO_SCENE_LOCK_COUNT; ++lock)
+    {
+        project_v1_macro_lock_t current;
+        if (project_v1_macro_get_scene_lock(scene, lock, &current) == 0U)
+        {
+            continue;
+        }
+
+        if ((current.track == track) && (current.param == param))
+        {
+            *out_lock = current;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t project_v1_macro_scene_lock_is_empty(uint8_t scene, uint8_t lock)
+{
+    project_v1_macro_lock_t current;
+    if (project_v1_macro_get_scene_lock(scene, lock, &current) == 0U)
+    {
+        return 1U;
+    }
+
+    return ((current.track == PROJECT_V1_MACRO_LOCK_TRACK_NONE)
+            || (current.param == PROJECT_V1_MACRO_LOCK_PARAM_NONE)) ? 1U : 0U;
+}
+
+uint8_t project_v1_macro_get_scene_lock(uint8_t scene, uint8_t lock, project_v1_macro_lock_t *out_lock)
+{
+    if ((out_lock == 0) || (project_v1_macro_scene_lock_is_valid(scene, lock) == 0U))
+    {
+        return 0U;
+    }
+
+    *out_lock = g_project_macro_state.scenes[scene].locks[lock];
     return 1U;
+}
+
+uint8_t project_v1_macro_set_scene_lock(uint8_t scene, uint8_t lock, const project_v1_macro_lock_t *in_lock)
+{
+    if ((in_lock == 0) || (project_v1_macro_scene_lock_is_valid(scene, lock) == 0U))
+    {
+        return 0U;
+    }
+
+    g_project_macro_state.scenes[scene].locks[lock] = *in_lock;
+    param_macro_sync_active_bank();
+    return 1U;
+}
+
+uint8_t project_v1_macro_slot_is_empty(uint8_t bank, uint8_t macro, uint8_t slot)
+{
+    (void)macro;
+    return project_v1_macro_scene_lock_is_empty(bank, slot);
+}
+
+uint8_t project_v1_macro_get_slot(uint8_t bank, uint8_t macro, uint8_t slot, project_v1_macro_slot_t *out_slot)
+{
+    (void)macro;
+    return project_v1_macro_get_scene_lock(bank, slot, out_slot);
 }
 
 uint8_t project_v1_macro_set_slot(uint8_t bank,
@@ -158,17 +346,8 @@ uint8_t project_v1_macro_set_slot(uint8_t bank,
                                   uint8_t slot,
                                   const project_v1_macro_slot_t *in_slot)
 {
-    if ((in_slot == 0) || (project_v1_macro_slot_is_valid(bank, macro, slot) == 0U))
-    {
-        return 0U;
-    }
-
-    g_project_macro_state.banks[bank].macros[macro].slots[slot] = *in_slot;
-    if (bank == g_project_macro_state.active_bank)
-    {
-        param_macro_sync_active_bank();
-    }
-    return 1U;
+    (void)macro;
+    return project_v1_macro_set_scene_lock(bank, slot, in_slot);
 }
 
 void project_v1_init(void)

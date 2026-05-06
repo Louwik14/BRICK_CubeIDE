@@ -477,13 +477,6 @@ static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
         return 0U;
     }
 
-    if ((ui_page_get_id() != UI_PAGE_TEMPLATE_MACRO)
-            && (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_BANK)
-            && (ev->type == UI_EVENT_HALL_PRESS))
-    {
-        project_v1_macro_set_active_bank(ev->id);
-    }
-
     return 1U;
 }
 

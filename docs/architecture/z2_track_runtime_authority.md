@@ -252,9 +252,9 @@ Sorties de Z2:
 - Les params FILTER ADSR (`EG Amt`, `Atk`, `Dec`, `Sus`, `Rel`) sont des params `COLORS` / ressource `FILTER`, comme `Cutoff` et `Resonance`; ils sont p-lockables et macro-assignables quand le filter target runtime est autorise.
 - Les anciens params `COLORS/CRUNCH` (`Drive`, `Bits`, `Rate`, `Rate2`) ne sont plus dans le domaine COLORS effectif et ne doivent plus recevoir de rule p-lock/macro.
 
-## 20. Contrat Master/FX UI-only
+## 20. Contrat Master/FX MacroFX
 - Nouvelle identite structurelle: `TRACK_RUNTIME_FAMILY_MASTER` + `TRACK_RUNTIME_TYPE_MASTER_FX`.
-- Binding runtime volontairement sans moteur DSP actif: `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`, stockage param/UI autorise.
+- Binding runtime: `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`; Z2 reste l'autorite d'identite, tandis que l'insert DSP master est execute en Z1 via les params TONE stockes.
 - Ensembles exposes: `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `VCA`, `KEYBOARD`, `ARP/ROUT`, `SEQ`; `PLAY` reste masque.
-- Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes, sans projection audio.
+- Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` sont consommes par le DSP master.
 - Le mode `ARP` brut est projete en vue `ROUT` pour Master/FX comme pour Master/Buffer; le routing audio reel reste hors Z2.

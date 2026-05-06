@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "pages/ui_page_template_tone.h"
 
+#include "Audio/fx_master_macro.h"
 #include "Param/param_registry.h"
 #include "ui_core.h"
 #include "ui_template_page.h"
@@ -132,16 +133,18 @@ static const ui_template_family_t *ui_page_template_tone_resolve_family(void)
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_TONE);
 }
 
-static uint8_t ui_page_template_tone_virtual_slot_text(uint8_t slot,
-                                                       char *out_name,
-                                                       uint32_t out_name_len,
-                                                       char *out_value,
-                                                       uint32_t out_value_len);
+static uint8_t ui_page_template_tone_param_text(uint8_t slot,
+                                                param_id_t id,
+                                                float value,
+                                                char *out_name,
+                                                uint32_t out_name_len,
+                                                char *out_value,
+                                                uint32_t out_value_len);
 
 static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
     .family_resolver = ui_page_template_tone_resolve_family,
-    .virtual_slot_text = ui_page_template_tone_virtual_slot_text,
+    .param_text = ui_page_template_tone_param_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -180,16 +183,276 @@ static void ui_page_template_tone_master_fx_macro_labels(uint8_t fx_type,
     *out_b = k_labels[fx_type][1];
 }
 
-static uint8_t ui_page_template_tone_virtual_slot_text(uint8_t slot,
-                                                       char *out_name,
-                                                       uint32_t out_name_len,
-                                                       char *out_value,
-                                                       uint32_t out_value_len)
+static uint8_t ui_page_template_tone_master_fx_u7(float value)
+{
+    if (value < 0.0f)
+    {
+        return 0U;
+    }
+    if (value > 127.0f)
+    {
+        return 127U;
+    }
+    return (uint8_t)(value + 0.5f);
+}
+
+static uint8_t ui_page_template_tone_master_fx_index(uint8_t raw, uint8_t max_index)
+{
+    return (uint8_t)(((uint32_t)raw * (uint32_t)max_index + 63U) / 127U);
+}
+
+static uint8_t ui_page_template_tone_master_fx_percent(uint8_t raw, uint8_t max_percent)
+{
+    return (uint8_t)(((uint32_t)raw * (uint32_t)max_percent + 63U) / 127U);
+}
+
+static void ui_page_template_tone_master_fx_format_signed(uint8_t raw,
+                                                          int32_t min_value,
+                                                          int32_t max_value,
+                                                          const char *unit,
+                                                          char *out,
+                                                          uint32_t out_len)
+{
+    const int32_t span = max_value - min_value;
+    const int32_t value = min_value + (int32_t)(((uint32_t)raw * (uint32_t)span + 63U) / 127U);
+    (void)snprintf(out, out_len, "%+ld%s", (long)value, (unit != NULL) ? unit : "");
+}
+
+static void ui_page_template_tone_master_fx_format_percent(uint8_t raw,
+                                                           uint8_t max_percent,
+                                                           char *out,
+                                                           uint32_t out_len)
+{
+    (void)snprintf(out,
+                   out_len,
+                   "%u%%",
+                   (unsigned int)ui_page_template_tone_master_fx_percent(raw, max_percent));
+}
+
+static void ui_page_template_tone_master_fx_format_choice(uint8_t raw,
+                                                          const char *const *labels,
+                                                          uint8_t label_count,
+                                                          char *out,
+                                                          uint32_t out_len)
+{
+    const uint8_t idx = ui_page_template_tone_master_fx_index(raw, (uint8_t)(label_count - 1U));
+    (void)snprintf(out, out_len, "%s", labels[idx]);
+}
+
+static void ui_page_template_tone_master_fx_format_rate_div(uint8_t raw,
+                                                            char *out,
+                                                            uint32_t out_len)
+{
+    static const char *const k_labels[] = {
+        "4/1", "2/1", "1/1", "1/2", "1/3",
+        "1/4", "1/6", "1/8", "1/12", "1/16"
+    };
+    ui_page_template_tone_master_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
+}
+
+static void ui_page_template_tone_master_fx_format_time_div(uint8_t raw,
+                                                            char *out,
+                                                            uint32_t out_len)
+{
+    static const char *const k_labels[] = { "1/8", "1/4", "1/3", "1/2", "3/4", "1/1", "3/2", "2/1" };
+    ui_page_template_tone_master_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
+}
+
+static void ui_page_template_tone_master_fx_format_stutter_size(uint8_t raw,
+                                                                char *out,
+                                                                uint32_t out_len)
+{
+    static const char *const k_labels[] = { "1/32", "1/16", "1/8", "1/6", "1/4", "1/3", "1/2", "3/4" };
+    ui_page_template_tone_master_fx_format_choice(raw, k_labels, (uint8_t)(sizeof(k_labels) / sizeof(k_labels[0])), out, out_len);
+}
+
+static void ui_page_template_tone_master_fx_format_value(uint8_t fx_type,
+                                                         uint8_t slot,
+                                                         uint8_t raw,
+                                                         char *out,
+                                                         uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    if ((fx_type == FX_MASTER_MACRO_OFF) || (fx_type > FX_MASTER_MACRO_FREEZE))
+    {
+        (void)snprintf(out, out_len, "---");
+        return;
+    }
+
+    switch (fx_type)
+    {
+        case FX_MASTER_MACRO_DRIVE:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_signed(raw, -64, 63, "", out, out_len);
+            }
+            else
+            {
+                static const char *const k_shape[] = { "SOFT", "CLIP", "HARD", "FOLD" };
+                ui_page_template_tone_master_fx_format_choice(raw, k_shape, (uint8_t)(sizeof(k_shape) / sizeof(k_shape[0])), out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_CRUSH:
+            if (slot == 2U)
+            {
+                const uint8_t bits = (uint8_t)(16U - ui_page_template_tone_master_fx_index(raw, 12U));
+                (void)snprintf(out, out_len, "%ubit", (unsigned int)((bits < 4U) ? 4U : bits));
+            }
+            else
+            {
+                const uint32_t hold = 1U + (((uint32_t)raw * (uint32_t)raw * 95U + 8064U) / 16129U);
+                (void)snprintf(out, out_len, "%ux", (unsigned int)hold);
+            }
+            break;
+
+        case FX_MASTER_MACRO_RING:
+            if (slot == 2U)
+            {
+                const uint32_t freq = 1U + (((uint32_t)raw * (uint32_t)raw * 1499U + 8064U) / 16129U);
+                if (freq >= 1000U)
+                {
+                    (void)snprintf(out, out_len, "%lu.%luk", (unsigned long)(freq / 1000U), (unsigned long)((freq % 1000U) / 100U));
+                }
+                else
+                {
+                    (void)snprintf(out, out_len, "%luHz", (unsigned long)freq);
+                }
+            }
+            else
+            {
+                static const char *const k_color[] = { "SIN", "TRI", "SQR", "DIRT" };
+                ui_page_template_tone_master_fx_format_choice(raw, k_color, (uint8_t)(sizeof(k_color) / sizeof(k_color[0])), out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_CHOP:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_rate_div(raw, out, out_len);
+            }
+            else
+            {
+                static const char *const k_shape[] = { "SOFT", "GATE", "HARD" };
+                ui_page_template_tone_master_fx_format_choice(raw, k_shape, (uint8_t)(sizeof(k_shape) / sizeof(k_shape[0])), out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_PUMP:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_rate_div(raw, out, out_len);
+            }
+            else
+            {
+                ui_page_template_tone_master_fx_format_percent(raw, 100U, out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_COMB:
+            if (slot == 2U)
+            {
+                const uint32_t freq = 90U + (((uint32_t)raw * 4000U + 63U) / 127U);
+                (void)snprintf(out, out_len, "%luHz", (unsigned long)freq);
+            }
+            else
+            {
+                ui_page_template_tone_master_fx_format_percent(raw, 80U, out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_WOBBLE:
+            if (slot == 2U)
+            {
+                const uint32_t hz_x10 = 1U + (((uint32_t)raw * (uint32_t)raw * 75U + 8064U) / 16129U);
+                (void)snprintf(out, out_len, "%lu.%luHz", (unsigned long)(hz_x10 / 10U), (unsigned long)(hz_x10 % 10U));
+            }
+            else
+            {
+                ui_page_template_tone_master_fx_format_percent(raw, 100U, out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_ECHO:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_time_div(raw, out, out_len);
+            }
+            else
+            {
+                ui_page_template_tone_master_fx_format_percent(raw, 74U, out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_FREEZE:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_time_div(raw, out, out_len);
+            }
+            else
+            {
+                static const char *const k_hold[] = { "SHORT", "MID", "LONG", "INF" };
+                ui_page_template_tone_master_fx_format_choice(raw, k_hold, (uint8_t)(sizeof(k_hold) / sizeof(k_hold[0])), out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_STUTTER:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_stutter_size(raw, out, out_len);
+            }
+            else
+            {
+                static const char *const k_rate[] = { "0.5x", "0.75x", "1x", "1.5x", "2x", "3x", "4x", "6x" };
+                ui_page_template_tone_master_fx_format_choice(raw, k_rate, (uint8_t)(sizeof(k_rate) / sizeof(k_rate[0])), out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_TALK:
+            if (slot == 2U)
+            {
+                static const char *const k_vowels[] = { "A", "E", "I", "O", "U" };
+                ui_page_template_tone_master_fx_format_choice(raw, k_vowels, (uint8_t)(sizeof(k_vowels) / sizeof(k_vowels[0])), out, out_len);
+            }
+            else
+            {
+                ui_page_template_tone_master_fx_format_percent(raw, 100U, out, out_len);
+            }
+            break;
+
+        case FX_MASTER_MACRO_PITCH:
+            if (slot == 2U)
+            {
+                ui_page_template_tone_master_fx_format_signed(raw, -12, 12, "st", out, out_len);
+            }
+            else
+            {
+                ui_page_template_tone_master_fx_format_signed(raw, -100, 100, "ct", out, out_len);
+            }
+            break;
+
+        default:
+            (void)snprintf(out, out_len, "%u", (unsigned int)raw);
+            break;
+    }
+}
+
+static uint8_t ui_page_template_tone_param_text(uint8_t slot,
+                                                param_id_t id,
+                                                float value,
+                                                char *out_name,
+                                                uint32_t out_name_len,
+                                                char *out_value,
+                                                uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
     if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_MASTER)
             || (ui_get_track_type(active_track) != UI_TRACK_TYPE_MASTER_FX)
-            || (slot < 2U)
+            || (slot < 1U)
             || (slot > 3U)
             || (g_ui_template_tone_state.active_subpage >= 4U))
     {
@@ -198,23 +461,45 @@ static uint8_t ui_page_template_tone_virtual_slot_text(uint8_t slot,
 
     const param_id_t type_param = (param_id_t)(PARAM_MASTER_FX1_TYPE + (g_ui_template_tone_state.active_subpage * 4U));
     const param_id_t value_param = (param_id_t)(type_param + slot);
+    if (id != value_param)
+    {
+        return 0U;
+    }
+
     float fx_type_value = 0.0f;
-    float macro_value = 0.0f;
     const char *label_a = "A";
     const char *label_b = "B";
 
     (void)param_registry_get_track_value(type_param, active_track, &fx_type_value);
-    (void)param_registry_get_track_value(value_param, active_track, &macro_value);
     ui_page_template_tone_master_fx_macro_labels((uint8_t)(fx_type_value + 0.5f), &label_a, &label_b);
 
     if ((out_name != NULL) && (out_name_len > 0U))
     {
-        (void)snprintf(out_name, out_name_len, "%s", (slot == 2U) ? label_a : label_b);
+        if (slot == 1U)
+        {
+            (void)snprintf(out_name, out_name_len, "LVL");
+        }
+        else
+        {
+            (void)snprintf(out_name, out_name_len, "%s", (slot == 2U) ? label_a : label_b);
+        }
     }
 
     if ((out_value != NULL) && (out_value_len > 0U))
     {
-        (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(macro_value + 0.5f));
+        const uint8_t raw_value = ui_page_template_tone_master_fx_u7(value);
+        if (slot == 1U)
+        {
+            ui_page_template_tone_master_fx_format_percent(raw_value, 100U, out_value, out_value_len);
+        }
+        else
+        {
+            ui_page_template_tone_master_fx_format_value((uint8_t)(fx_type_value + 0.5f),
+                                                         slot,
+                                                         raw_value,
+                                                         out_value,
+                                                         out_value_len);
+        }
     }
 
     return 1U;

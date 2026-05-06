@@ -287,13 +287,12 @@ static float ui_renderer_template_get_param_display_value(param_id_t id)
 
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
                                                  const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
-                                                 param_id_t macro_slot_param,
                                                  uint8_t slot,
                                                  param_id_t id)
 {
     const int x = g_ui_template_frame_x[slot];
     const int y = UI_TEMPLATE_FRAME_Y;
-    const uint8_t slot_locked = (uint8_t)((macro_slot_param < PARAM_COUNT) && (macro_slot_param == id));
+    const uint8_t slot_locked = ui_macro_interaction_param_is_locked(id);
 
     if (slot_locked != 0U)
     {
@@ -342,16 +341,14 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     float value = ui_renderer_template_get_param_display_value(id);
     uint8_t draw_name_inverted = 0U;
     uint8_t macro_slot_track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
-    param_id_t macro_slot_value_param = PARAM_COUNT;
     float macro_slot_scene_value = 0.0f;
     const uint8_t has_macro_slot_value =
-        ui_macro_interaction_get_active_slot_value(&macro_slot_track,
-                                                   &macro_slot_value_param,
-                                                   &macro_slot_scene_value);
+        ui_macro_interaction_get_param_lock_value(id,
+                                                  &macro_slot_track,
+                                                  &macro_slot_scene_value);
     const uint8_t macro_value_visible =
         (uint8_t)((has_macro_slot_value != 0U)
-                && (macro_slot_track == ui_get_active_track())
-                && (macro_slot_value_param == id));
+                && (macro_slot_track == ui_get_active_track()));
 
     if (macro_value_visible != 0U)
     {
@@ -376,23 +373,36 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
 
     ui_renderer_template_format_value(id, value, value_txt, (uint32_t)sizeof(value_txt));
 
+    char name_txt[24];
+    (void)snprintf(name_txt, sizeof(name_txt), "%s", desc->name);
+    if ((state != NULL) && (state->param_text != NULL))
+    {
+        (void)state->param_text(slot,
+                                id,
+                                value,
+                                name_txt,
+                                (uint32_t)sizeof(name_txt),
+                                value_txt,
+                                (uint32_t)sizeof(value_txt));
+    }
+
     drv_display_set_font(&FONT_4X6);
     if (slot_locked != 0U)
     {
-        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name),
+        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
                               (uint8_t)(y + 3),
-                              desc->name);
+                              name_txt);
     }
     else if (draw_name_inverted != 0U)
     {
-        ui_renderer_template_draw_inverted_label((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name),
+        ui_renderer_template_draw_inverted_label((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
                                                  (uint8_t)(y + 2),
-                                                 desc->name,
+                                                 name_txt,
                                                  &FONT_4X6);
     }
     else
     {
-        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, desc->name), (uint8_t)(y + 3), desc->name);
+        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt), (uint8_t)(y + 3), name_txt);
     }
 
     const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label, value_txt);
@@ -481,10 +491,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            const int vmin = (int)(desc->min * 10.0f);
-            const int vmax = (int)(desc->max * 10.0f);
-            const int vint = (int)(value * 10.0f);
-            uiw_draw_knob(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, vint, vmin, vmax);
+            uiw_draw_knob(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, value, desc->min, desc->max);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -666,15 +673,13 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
 
     ui_param_seq_plock_feedback_frame_t plock_frame_ctx;
     ui_param_seq_plock_feedback_frame_begin(&plock_frame_ctx);
-    param_id_t macro_slot_param = PARAM_COUNT;
-    (void)ui_macro_interaction_get_active_slot_lock(&macro_slot_param);
 
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage != NULL)
     {
         for (uint8_t i = 0U; i < 4U; i++)
         {
-            ui_renderer_template_draw_param_slot(state, &plock_frame_ctx, macro_slot_param, i, subpage->param_bank.params[i]);
+            ui_renderer_template_draw_param_slot(state, &plock_frame_ctx, i, subpage->param_bank.params[i]);
         }
     }
 
