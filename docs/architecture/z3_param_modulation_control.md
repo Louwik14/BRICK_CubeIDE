@@ -695,3 +695,34 @@ Dette explicite post-passe 4:
 - Types DSP actifs: `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK`, `PITCH`.
 - Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `ECHO`, `WOBBLE`, `COMB`, `RING`, `PITCH`, `TALK`, `STUTTER`, `FREEZE`.
 - Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.
+
+## 30. Contrat tombstones Drum legacy
+
+- Les params `PARAM_DRUM_TRX_*` et `PARAM_DRUM_FM_*` restent dans `PARAM_COUNT` pour ne pas renumeroter le stockage projet/snapshot.
+- Le backend `drum_synth_set_param_for_instance` refuse maintenant ces writes: ils sont conserves comme tombstones de compatibilite, sans effet DSP.
+- La base canonique `track_tone_sound_state` peut encore stocker les valeurs legacy, mais aucune projection audio active n'en depend.
+- Les pages TONE Drum legacy sont neutralisees cote UI; elles ne presentent plus les params legacy comme surface produit active.
+
+## 31. Contrat BD_ANALOG TONE
+
+- `BD_ANALOG` reutilise uniquement quatre IDs tombstone-compatible du bloc `PARAM_DRUM_TRX_BD_*`, sans changer `PARAM_COUNT`:
+  - `PARAM_DRUM_TRX_BD_PITCH` -> pitch/f0 Plaits,
+  - `PARAM_DRUM_TRX_BD_DECAY` -> decay Plaits,
+  - `PARAM_DRUM_TRX_BD_HARMONICS` -> tone Plaits,
+  - `PARAM_DRUM_TRX_BD_PITCH_SWEEP` -> attack FM Plaits.
+- Autorite:
+  - `param_registry_apply_track_value` reste le point d'entree unique TONE,
+  - la base canonique reste `track_tone_sound_state`,
+  - `drum_synth` n'est que l'executant runtime et instancie `plaits::AnalogBassDrum` directement, sans `plaits::Voice`.
+- Frontieres:
+  - PLAY fournit `note_on`, note, velocity/accent et comportement de trigger,
+  - COLORS reste le chemin commun filtre/EQ de track,
+  - MIX reste niveau/pan/sends/mute,
+  - VCA reste amplitude/enveloppe dynamique mixer,
+  - MOD atteint TONE et COLORS via `track_runtime_tone_param_to_slot()` et `param_registry_apply_track_value_rt_fast`, sans chemin special dans `drum_synth`.
+
+## 32. Contrat MIX page 1 p-lock / LFO
+
+- Les IDs existants `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2` restent les seules cibles MIX page 1 exposees au p-lock et au LFO.
+- Autorite de base: `track_sound_state` par track; projection runtime via `param_registry_apply_track_value` / `param_registry_apply_track_value_rt_fast` vers la lane mixer resolue par Z2.
+- Exclusions conservees: `PARAM_MIX_MUTE`, `PARAM_HYBRID_GATE`, les params VCA, `Master/Buffer`, `Master/FX`, les globals reverb/delay et les params CFG structurels.

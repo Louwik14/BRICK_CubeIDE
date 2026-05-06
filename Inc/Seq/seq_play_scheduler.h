@@ -16,6 +16,7 @@ typedef struct
     uint8_t note;
     uint8_t velocity;
     uint16_t sample_offset_in_block;
+    uint32_t event_token;
 } seq_play_scheduler_audio_event_t;
 
 typedef struct

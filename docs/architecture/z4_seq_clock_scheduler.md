@@ -403,8 +403,9 @@ Etat live-rec runtime:
 - Lecture via getters et conditions de capture note on/off.
 
 Etat scheduler audio (`seq_play_scheduler.c`):
-- `g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP]` (`seq_play_scheduler_evt_t`: `due_sample_time`, `track`, `note`, `velocity`, `type`, `audio_dispatched`, `generation`).
+- `g_seq_play_events[SEQ_PLAY_SCHEDULER_EVENT_CAP]` (`seq_play_scheduler_evt_t`: `due_sample_time`, `track`, `note`, `velocity`, `type`, `audio_dispatched`, `generation`, `event_token`).
 - `g_seq_play_event_count`, `g_seq_play_generation`.
+- `g_seq_play_active_event_token[track][note]`: autorite locale d'occurrence active pour l'application note-on/note-off du scheduler.
 - Ecriture: `seq_play_scheduler_push`, `seq_play_scheduler_clear`, compaction dans `seq_play_scheduler_audio_collect_block_events`.
 - Lecture: collecte bloc et apply event.
 
@@ -457,6 +458,8 @@ Flux nominal prouve:
 7. Consommation aval audio/runtime/param
 - `audio.c` applique les events aux offsets via `seq_runtime_audio_apply_event`.
 - `seq_play_scheduler_audio_apply_event` envoie MIDI note et note engine + gate mixer.
+- Chaque couple NOTE_ON/NOTE_OFF planifie porte un `event_token`; un NOTE_OFF n'est applique que si son token correspond encore a l'occurrence active `track/note`.
+- Un retrig de meme pitch ferme explicitement l'occurrence precedente puis arme le nouveau token, donc la fin planifiee de l'ancien trig ne peut pas couper le nouveau.
 - Les locks de pas affectent domaine param via `seq_boundary_engine` + `seq_param_iface_apply_lock/restore_base`.
 - Le chemin live-rec/edit ne passe plus par `seq_runtime.c` pour muter le modele: cette autorite vit dans `seq_live_rec_session`.
 
@@ -604,3 +607,26 @@ Points factuels observes:
 - `seq_param_iface_get_base_value` / `seq_param_iface_get_play_base_value` ne seedent plus d'etat implicite; la base doit etre deja materialisee par les commandes d'ecriture ou par l'initialisation explicite.
 - Les call sites qui avaient besoin d'un runtime frais declenchent maintenant `track_runtime_refresh_track` explicitement avant lecture.
 - `Master/Buffer` ne devient pas owner temporel dans Z4: il lit explicitement `samples_per_step_q16` et `tempo_bpm_milli` comme miroirs runtime pour resoudre `SYNC_LEN` (`1/2/4 bars` ou `AUTO`), derive `target_frames` si necessaire, puis calcule son `ratio_q16` local au bord consumer du playback/capture.
+
+## 14. Contrat Drum stub temporaire
+
+- Le scheduler conserve le dispatch note track-aware vers `drum_synth_*` pour les tracks Drum afin de ne pas refondre Z4.
+- Depuis le retrait des moteurs `TRX_*`/`FM_*`, ces appels sont des no-op RT-safe.
+- Les gates mixer/VCA restent appliques selon le contrat existant, mais aucune voix Drum DSP ne produit de signal.
+- La future base Drum devra se brancher sur ce seam sans modifier l'autorite temporelle du scheduler.
+
+## Addendum 2026-05-06 - contrat resize length pendant RUNNING
+
+- Autorite longueur active: `seq_model.tracks[track].length_steps`, lue via `seq_model_get_track_playback_length()`.
+- Autorite curseur/playhead: `seq_runtime_exec` / `seq_runtime_state_t.play_step[]`.
+- Autorite wrap/modulo: `seq_boundary_engine_advance_one_step()`, au pulse musical suivant, avec la longueur active courante.
+- Changer `PARAM_SEQ_LENGTH` pendant RUNNING ne rotate pas les steps et ne rebase pas immediatement `play_step` / `prev_step`.
+- Si le curseur courant devient hors fenetre apres shrink, il reste une phase courante transitoire jusqu'au prochain pulse; le prochain advance wrappe via la nouvelle longueur sans mutation des donnees pattern.
+- Hors RUNNING, un curseur devenu hors fenetre est rabattu a 0 et `prev_step_valid` est invalide pour que la reprise reschedule proprement le step courant.
+- Les steps au-dela de la longueur active restent stockes dans `seq_model.steps[0..SEQ_MAX_STEPS-1]` et redeviennent audibles si la longueur est re-elargie.
+
+## Addendum 2026-05-06 - contrat p-lock MIX page 1
+
+- `seq_param_iface` expose un set p-lock `MIX` reserve aux quatre params track-aware `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1`, `PARAM_MIX_SEND2`.
+- Le slot p-lock reste local au set `MIX`; l'application/restauration passe par `param_registry_apply_track_value` sur la track cible.
+- Les autres params du domaine runtime `MIX` (`MUTE`, `HYBRID_GATE`, VCA) restent hors mapping p-lock.

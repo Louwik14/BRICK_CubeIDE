@@ -160,6 +160,19 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
         return (((dest >= PARAM_FILTER_TYPE) && (dest <= PARAM_FILTER_ENVDLY))
                 || ((dest >= PARAM_FILTER_EQ_LOW) && (dest <= PARAM_FILTER_EQ_HIGH))) ? 1U : 0U;
     }
+    if (domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+    {
+        if ((family == UI_TRACK_FAMILY_MASTER) || (ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+        {
+            return 0U;
+        }
+
+        return ((dest == PARAM_MIX_LEVEL)
+                || (dest == PARAM_MIX_PAN)
+                || (dest == PARAM_MIX_SEND1)
+                || (dest == PARAM_MIX_SEND2)) ? 1U : 0U;
+    }
+
 
     return 0U;
 }
@@ -202,6 +215,15 @@ static track_runtime_param_status_t mod_lfo_effective_status_from_ctx(const trac
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
+        case TRACK_RUNTIME_RESOURCE_MIX:
+            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
+                    || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            return TRACK_RUNTIME_PARAM_ALLOWED;
+
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
@@ -220,7 +242,8 @@ static uint8_t mod_lfo_dest_supported_fast(uint8_t track,
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(dest);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE))
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
     {
         return 0U;
     }

@@ -266,17 +266,6 @@ file(GLOB MUTABLE_STMLIB_UTILS_SRC
 # Exclusions
 # --------------------------------------------------------------------------
 set(EXCLUDED_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmClapModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmCowbellModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmCymbalModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmKickModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmRimshotModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmSnareModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/FmTomModel.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/TRXBassDrum.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/TRXClaves.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/TRXHiHat.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main/TRXSnareDrum.cpp"
 )
 
 set(ALL_USER_SOURCES
@@ -346,7 +335,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
-    ${CMAKE_CURRENT_SOURCE_DIR}/md-drum-synth-main
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb
 )
 

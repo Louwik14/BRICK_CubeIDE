@@ -72,6 +72,20 @@ static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
     return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
 }
 
+static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
+{
+    switch (param)
+    {
+        case PARAM_MIX_LEVEL:
+        case PARAM_MIX_PAN:
+        case PARAM_MIX_SEND1:
+        case PARAM_MIX_SEND2:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t domain, uint8_t *out_set_id)
 {
     if (out_set_id == 0)
@@ -92,6 +106,9 @@ static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t d
             return 1U;
         case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
             *out_set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
+            return 1U;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
+            *out_set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
             return 1U;
         default:
             return 0U;
@@ -120,6 +137,12 @@ static void seq_param_iface_rebuild_slot_maps(void)
             continue;
         }
 
+        if ((track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                && (seq_param_iface_is_mix_param_plockable(param) == 0U))
+        {
+            continue;
+        }
+
         uint8_t set_id = 0U;
         if (seq_param_iface_set_id_from_domain(track_runtime_get_param_rule(param).domain, &set_id) == 0U)
         {
@@ -141,9 +164,15 @@ static void seq_param_iface_rebuild_slot_maps(void)
 static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+            && (seq_param_iface_is_mix_param_plockable(param) == 0U))
+    {
+        return 0U;
+    }
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY))
     {
         return 0U;
@@ -162,6 +191,10 @@ static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id
         return 0U;
     }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) && (set_id != (uint8_t)SEQ_PLOCK_SET_MOD))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX) && (set_id != (uint8_t)SEQ_PLOCK_SET_MIX))
     {
         return 0U;
     }

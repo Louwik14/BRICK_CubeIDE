@@ -57,9 +57,15 @@ typedef struct
 } ui_param_live_rec_ctx_t;
 
 static uint8_t ui_param_is_track_scoped(param_id_t param);
+static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param);
+static uint8_t ui_param_resolve_seq_slot(uint8_t track,
+                                         param_id_t param,
+                                         uint8_t *out_set_id,
+                                         seq_param_slot_t *out_param_slot);
 static uint32_t ui_param_make_encoder_group_gesture_key(const ui_param_encoder_context_t *ctx);
 static uint32_t ui_param_get_active_undo_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track);
 static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, uint8_t active_track);
+static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, float *out_min, float *out_max);
 static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
                                                 param_id_t param,
                                                 float current_value,
@@ -552,6 +558,40 @@ static uint8_t ui_param_is_track_scoped(param_id_t param)
             && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
+static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (param >= PARAM_COUNT) || (ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER))
+    {
+        return 0U;
+    }
+
+    track_runtime_refresh_track(track);
+    if (track_runtime_get_effective_param_status(track, param) != TRACK_RUNTIME_PARAM_ALLOWED)
+    {
+        return 0U;
+    }
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS))
+    {
+        uint8_t set_id = 0U;
+        seq_param_slot_t param_slot = 0U;
+        return ui_param_resolve_seq_slot(track, param, &set_id, &param_slot);
+    }
+
+    return 1U;
+}
+
 static uint32_t ui_param_make_gesture_key(uint8_t encoder, param_id_t param, uint8_t active_track)
 {
     const uint32_t hall_mode = (uint32_t)ui_get_hall_mode();
@@ -603,6 +643,36 @@ static void ui_param_ensure_undo_transaction(uint8_t encoder, param_id_t param, 
                                     UNDO_V2_TX_MODE_DELTA);
 }
 
+static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, float *out_min, float *out_max)
+{
+    if ((param >= PARAM_COUNT) || (out_min == 0) || (out_max == 0))
+    {
+        return 0U;
+    }
+
+    const param_desc_t *desc = &param_registry[param];
+    *out_min = desc->min;
+    *out_max = desc->max;
+
+    if (param == PARAM_CFG_TRACK)
+    {
+        *out_max = (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U);
+    }
+    else if (param == PARAM_CFG_TRACK_TYPE)
+    {
+        const ui_track_family_t active_family = ui_get_track_family(track);
+        const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
+        *out_max = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
+    }
+    else if ((param == PARAM_LFO1_DEST) || (param == PARAM_LFO2_DEST))
+    {
+        const uint16_t count = mod_lfo_v1_dest_count(track);
+        *out_max = (count > 0U) ? (float)(count - 1U) : 0.0f;
+    }
+
+    return 1U;
+}
+
 static float ui_param_get_active_track_value(param_id_t param, uint8_t active_track)
 {
     if (ui_param_is_track_scoped(param) == 0U)
@@ -611,6 +681,27 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     }
 
     return param_store_get_active(param);
+}
+
+static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint8_t active_track)
+{
+    if ((param >= PARAM_COUNT)
+            || (active_track >= SEQ_TRACK_COUNT)
+            || (ui_param_is_track_scoped(param) == 0U)
+            || (ui_get_track_family(active_track) == UI_TRACK_FAMILY_MASTER))
+    {
+        return 0U;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER))
+    {
+        return 0U;
+    }
+
+    return ui_param_track_accepts_relative_param(active_track, param);
 }
 
 static uint8_t ui_param_resolve_seq_slot(uint8_t track,
@@ -638,6 +729,9 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
             break;
         case TRACK_RUNTIME_PARAM_DOMAIN_MOD:
             set_id = (uint8_t)SEQ_PLOCK_SET_MOD;
+            break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
+            set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
             break;
         default:
             return 0U;
@@ -694,7 +788,11 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
     return 1U;
 }
 
-static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param, float value, uint8_t active_track)
+static uint8_t ui_param_set_track_value(uint8_t encoder,
+                                        param_id_t param,
+                                        float value,
+                                        uint8_t track,
+                                        uint8_t update_active_mirror)
 {
     if (ui_param_is_track_scoped(param) == 0U)
     {
@@ -706,7 +804,7 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
             return 1U;
         }
 
-        ui_param_ensure_undo_transaction(encoder, param, active_track);
+        ui_param_ensure_undo_transaction(encoder, param, track);
         param_set(param, clamped);
         if (undo_v2_is_transaction_open() != 0U)
         {
@@ -719,19 +817,22 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
     const float clamped = ui_param_clamp(value, desc->min, desc->max);
     float current_value = 0.0f;
 
-    if ((param_registry_get_track_value(param, active_track, &current_value) != 0U)
+    if ((param_registry_get_track_value(param, track, &current_value) != 0U)
             && (ui_param_value_is_same(current_value, clamped) != 0U))
     {
         /* Query check before command: avoid redundant apply when the effective value is unchanged. */
-        param_store_set_active(param, clamped);
+        if (update_active_mirror != 0U)
+        {
+            param_store_set_active(param, clamped);
+        }
         return 1U;
     }
 
-    ui_param_ensure_undo_transaction(encoder, param, active_track);
+    ui_param_ensure_undo_transaction(encoder, param, track);
 
     const param_registry_track_edit_cmd_t edit_cmd = {
         .id = param,
-        .track = active_track,
+        .track = track,
         .value = clamped
     };
     if (param_registry_apply_track_edit(&edit_cmd) == 0U)
@@ -741,13 +842,13 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
 
     uint8_t set_id = 0U;
     seq_param_slot_t param_slot = 0U;
-    if (ui_param_resolve_seq_slot(active_track, param, &set_id, &param_slot) != 0U)
+    if (ui_param_resolve_seq_slot(track, param, &set_id, &param_slot) != 0U)
     {
         const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
         const seq_param_iface_base_commit_cmd_t cmd = {
             .source = SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT,
             .authoritative_apply_done = 1U,
-            .target_track = active_track,
+            .target_track = track,
             .set_id = set_id,
             .param_slot = param_slot,
             .value16 = encoded
@@ -756,12 +857,72 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
     }
 
     /* Track-scoped contract: active[] mirrors the UI edit context; runtime authority is apply_track_value(track,...). */
-    param_store_set_active(param, clamped);
+    if (update_active_mirror != 0U)
+    {
+        param_store_set_active(param, clamped);
+    }
     if (undo_v2_is_transaction_open() != 0U)
     {
-        (void)undo_v2_record_param_change(param, 1U, active_track, current_value, clamped);
+        (void)undo_v2_record_param_change(param, 1U, track, current_value, clamped);
     }
     return 1U;
+}
+
+static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param, float value, uint8_t active_track)
+{
+    return ui_param_set_track_value(encoder, param, value, active_track, 1U);
+}
+
+static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
+                                                             param_id_t param,
+                                                             int16_t delta,
+                                                             uint8_t active_track)
+{
+    if ((delta == 0) || (ui_is_track_modifier_held() == 0U)
+            || (ui_param_is_relative_multi_track_candidate(param, active_track) == 0U))
+    {
+        return 0U;
+    }
+
+    const param_desc_t *const desc = &param_registry[param];
+    const float requested_delta = (float)delta * desc->step;
+    uint8_t applied = 0U;
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if ((track == active_track) || (ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER))
+        {
+            continue;
+        }
+
+        if (ui_param_track_accepts_relative_param(track, param) == 0U)
+        {
+            continue;
+        }
+
+        float current_value = 0.0f;
+        float min_value = 0.0f;
+        float max_value = 0.0f;
+        if ((param_registry_get_track_value(param, track, &current_value) == 0U)
+                || (ui_param_resolve_edit_bounds(param, track, &min_value, &max_value) == 0U))
+        {
+            continue;
+        }
+
+        float next_value = current_value + requested_delta;
+        next_value = ui_param_clamp(next_value, min_value, max_value);
+        if (ui_param_value_is_same(next_value, current_value) != 0U)
+        {
+            continue;
+        }
+
+        if (ui_param_set_track_value(encoder, param, next_value, track, 0U) != 0U)
+        {
+            applied = 1U;
+        }
+    }
+
+    return applied;
 }
 
 static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
@@ -1042,24 +1203,9 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     }
 
     const param_desc_t *desc = &param_registry[param];
-    float min_value = desc->min;
-    float max_value = desc->max;
-
-    if (param == PARAM_CFG_TRACK)
-    {
-        max_value = (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U);
-    }
-    else if (param == PARAM_CFG_TRACK_TYPE)
-    {
-        const ui_track_family_t active_family = ui_get_track_family(ctx->active_track);
-        const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
-        max_value = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
-    }
-    else if ((param == PARAM_LFO1_DEST) || (param == PARAM_LFO2_DEST))
-    {
-        const uint16_t count = mod_lfo_v1_dest_count(ctx->active_track);
-        max_value = (count > 0U) ? (float)(count - 1U) : 0.0f;
-    }
+    float min_value = 0.0f;
+    float max_value = 0.0f;
+    (void)ui_param_resolve_edit_bounds(param, ctx->active_track, &min_value, &max_value);
 
     if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, min_value, max_value, ctx->active_track) != 0U)
     {
@@ -1113,11 +1259,17 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
         if (ui_param_value_is_same(value, current_value) != 0U)
         {
-            return 0U;
+            const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->active_track);
+            if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
+            {
+                (void)undo_v2_commit_transaction();
+            }
+            return applied;
         }
     }
 
     ui_param_set_active_track_value(encoder, param, value, ctx->active_track);
+    (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->active_track);
     if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
     {
         (void)undo_v2_commit_transaction();

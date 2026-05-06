@@ -141,6 +141,12 @@ Entrees directes:
 Entrees evenementielles:
 - `ui_event_from_inputs` (buttons + hall) alimente queue lue par `ui_core_tick`.
 - Les deltas encodeur sont pris sur un snapshot local du bank/track actif au debut du tick UI, pour que plusieurs edits arrives dans la meme passe restent deterministes si un edit reconfigure le contexte.
+- Control All relatif:
+  - quand `TRACK` est maintenu, un edit encodeur de base sur un parametre track-aware applique le meme delta demande aux autres tracks compatibles,
+  - le point d'insertion reste `ui_param_handle_encoder_with_context` apres resolution du parametre/bank actif; Z3 reste l'autorite d'apply via `param_registry_apply_track_edit`,
+  - le delta est relatif (`delta * step`) et chaque track clamp individuellement selon ses bornes effectives; une track active deja en butee n'empeche pas les autres tracks de bouger,
+  - seules les tracks ou le meme `param_id` est autorise par `track_runtime_get_effective_param_status` et, pour `COLORS`/`TONE`/`PLAY`/`MOD`, resolu par `seq_param_iface` sont touchees,
+  - les tracks `Master`, les params globaux, les params `BUFFER`, les edits CFG structurels, les p-locks de steps et le live-rec p-lock restent exclus.
 - `ui_core_tick` materialise la politique des stages consommants via `k_event_stages[]` (ordre stabilise): mute -> consommations hall track-select -> master-buffer routing -> transport -> settings -> global shortcuts -> pattern mode -> seq mode.
 - `track_selection` reste hors table et execute en amont.
 - `navigation` puis `active_page->handle_event` restent en fin de chaine.
@@ -516,3 +522,11 @@ Points factuels:
 ## 10. Contrat transport explicite
 - Le seam transport du runtime bridge est d�sormais d�coup� en commandes explicites PLAY / REC / pattern shortcut.
 - L'arbritrage reste c�t� UI; le bridge porte seulement l'ex�cution des commandes et leurs feedbacks associ�s.
+
+## 18. Contrat UI Drum Plaits direct
+
+- Les types Drum legacy restent presents dans `CFG` pour compatibilite avec les tracks/projets existants.
+- La page TONE Drum est neutralisee: elle garde une sous-page vide pour ne pas casser la navigation, mais n'expose plus les params `TRX_*`/`FM_*` comme controles produit actifs.
+- `BD Analog` est le premier type Drum propre et experimental; il est ajoute apres les tombstones dans le catalogue `Drum`, donc il n'est pas le default tant que les projets existants gardent leur premier type legacy.
+- Pour `BD Analog`, `TONE` expose une sous-page legere `BD`: `Pitch`, `Decay`, `Tone`, `FM`.
+- `PLAY`, `COLORS`, `MIX`, `MOD` et `VCA` restent les ensembles communs existants; aucune page UI lourde ni chemin de modulation local n'est ajoute.

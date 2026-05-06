@@ -487,7 +487,9 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
     if (update_base_state != 0U)
     {
         track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-        if ((state != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
+        if ((state != NULL)
+                && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
+                    || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
                 && (id >= PARAM_DRUM_TRX_BD_PITCH)
                 && (id <= PARAM_DRUM_TRX_BD_DRIVE))
         {

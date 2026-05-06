@@ -53,6 +53,7 @@ typedef enum
     UI_TRACK_TYPE_MIDI,
     UI_TRACK_TYPE_CLIP,
     UI_TRACK_TYPE_MASTER_FX,
+    UI_TRACK_TYPE_DRUM_BD_ANALOG,
     UI_TRACK_TYPE_COUNT
 } ui_track_type_t;
 

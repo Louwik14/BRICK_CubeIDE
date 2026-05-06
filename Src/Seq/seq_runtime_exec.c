@@ -63,6 +63,7 @@ static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_
     out_event->note = scheduler_event->note;
     out_event->velocity = scheduler_event->velocity;
     out_event->sample_offset_in_block = scheduler_event->sample_offset_in_block;
+    out_event->event_token = scheduler_event->event_token;
 }
 
 void seq_runtime_exec_reset_audio_timeline(uint64_t start_sample)

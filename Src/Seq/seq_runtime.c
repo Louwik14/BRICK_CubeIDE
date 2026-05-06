@@ -102,6 +102,7 @@ static void seq_runtime_copy_audio_event(seq_play_scheduler_audio_event_t *sched
     scheduler_event->note = event->note;
     scheduler_event->velocity = event->velocity;
     scheduler_event->sample_offset_in_block = event->sample_offset_in_block;
+    scheduler_event->event_token = event->event_token;
 }
 
 static void seq_runtime_send_transport_start(void)
@@ -655,22 +656,22 @@ void seq_runtime_on_track_length_changed(seq_track_id_t track)
     }
 
     const uint8_t length = seq_model_get_track_playback_length(track);
-    const uint8_t play_step_out_of_range = (g_seq_runtime.play_step[track] >= length) ? 1U : 0U;
-
-    if (play_step_out_of_range != 0U)
+    if (g_seq_runtime.running != 0U)
     {
         /*
-         * Runtime shrink while playing:
-         * keep step 0 as the *next* boundary hit (not immediately skipped).
-         * If we clamp to step 0 here, the next step pulse advances to step 1
-         * and step 0 never retriggers on the first loop after the shrink.
+         * Do not rebase the phase while transport is running: length is model
+         * authority, play_step remains the current musical cursor until the
+         * next scheduled pulse wraps it through the new playback window.
          */
-        g_seq_runtime.play_step[track] = (uint8_t)(length - 1U);
+        return;
     }
-    if (g_seq_runtime.prev_step[track] >= length)
+
+    if (g_seq_runtime.play_step[track] >= length)
     {
-        g_seq_runtime.prev_step[track] = g_seq_runtime.play_step[track];
+        g_seq_runtime.play_step[track] = 0U;
     }
+    g_seq_runtime.prev_step[track] = g_seq_runtime.play_step[track];
+    g_seq_runtime.prev_step_valid[track] = 0U;
 }
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)

@@ -18,7 +18,8 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
         UI_TRACK_TYPE_DRUM_FM_RIMSHOT,
         UI_TRACK_TYPE_DRUM_FM_CLAP,
         UI_TRACK_TYPE_DRUM_FM_COWBELL,
-        UI_TRACK_TYPE_DRUM_FM_CYMBAL
+        UI_TRACK_TYPE_DRUM_FM_CYMBAL,
+        UI_TRACK_TYPE_DRUM_BD_ANALOG
     };
 
     if (out_count == 0)
@@ -538,6 +539,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "FM Cow";
         case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
             return "FM Cym";
+        case UI_TRACK_TYPE_DRUM_BD_ANALOG:
+            return "BD Analog";
         case UI_TRACK_TYPE_MIDI:
             return "MIDI";
 
@@ -599,6 +602,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "FMW";
         case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
             return "FMY";
+        case UI_TRACK_TYPE_DRUM_BD_ANALOG:
+            return "BDA";
         case UI_TRACK_TYPE_MIDI:
             return "MID";
 

@@ -117,6 +117,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_MIDI;
         case UI_TRACK_TYPE_MASTER_FX:
             return TRACK_RUNTIME_TYPE_MASTER_FX;
+        case UI_TRACK_TYPE_DRUM_BD_ANALOG:
+            return TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
@@ -138,6 +140,7 @@ static uint8_t track_runtime_type_is_drum_model(track_runtime_type_t type)
         case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
         case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
         case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
+        case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
             return 1U;
         default:
             return 0U;
@@ -340,6 +343,13 @@ static const param_id_t g_track_runtime_tone_slots_master_fx[] = {
     PARAM_MASTER_FX4_TYPE, PARAM_MASTER_FX4_LEVEL, PARAM_MASTER_FX4_A, PARAM_MASTER_FX4_B
 };
 
+static const param_id_t g_track_runtime_tone_slots_drum_bd_analog[] = {
+    PARAM_DRUM_TRX_BD_PITCH,
+    PARAM_DRUM_TRX_BD_DECAY,
+    PARAM_DRUM_TRX_BD_HARMONICS,
+    PARAM_DRUM_TRX_BD_PITCH_SWEEP
+};
+
 static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
                                                  const param_id_t **out_table,
                                                  uint8_t *out_count)
@@ -389,6 +399,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_MASTER_FX:
             *out_table = g_track_runtime_tone_slots_master_fx;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_master_fx) / sizeof(g_track_runtime_tone_slots_master_fx[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
+            *out_table = g_track_runtime_tone_slots_drum_bd_analog;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_drum_bd_analog) / sizeof(g_track_runtime_tone_slots_drum_bd_analog[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
@@ -1688,7 +1703,8 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_MIX:
-            if (ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
+            if ((ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
+                    || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }

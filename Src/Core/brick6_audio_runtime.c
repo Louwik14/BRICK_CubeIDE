@@ -72,30 +72,10 @@ static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_typ
 {
     switch ((track_runtime_type_t)runtime_type)
     {
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
-            return DRUM_MODEL_ID_TRX_BD;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
-            return DRUM_MODEL_ID_TRX_CLAVES;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
-            return DRUM_MODEL_ID_TRX_HIHAT;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
-            return DRUM_MODEL_ID_TRX_SNARE;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
-            return DRUM_MODEL_ID_FM_KICK;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
-            return DRUM_MODEL_ID_FM_SNARE;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
-            return DRUM_MODEL_ID_FM_TOM;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
-            return DRUM_MODEL_ID_FM_RIMSHOT;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
-            return DRUM_MODEL_ID_FM_CLAP;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
-            return DRUM_MODEL_ID_FM_COWBELL;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
-            return DRUM_MODEL_ID_FM_CYMBAL;
+        case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
+            return DRUM_MODEL_ID_BD_ANALOG;
         default:
-            return DRUM_MODEL_ID_COUNT;
+            return DRUM_MODEL_ID_NONE;
     }
 }
 
@@ -118,12 +98,11 @@ static void brick6_render_synth_tracks(uint32_t frames,
         if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
         {
             const drum_model_id_t model_id = brick6_map_runtime_type_to_drum_model(ctx->type);
-            if (model_id == DRUM_MODEL_ID_COUNT)
+            if ((model_id == DRUM_MODEL_ID_COUNT) || (model_id == DRUM_MODEL_ID_NONE))
             {
-                continue;
+                (void)drum_synth_set_model_for_instance(ctx->instance_id, DRUM_MODEL_ID_NONE);
             }
-
-            if (drum_synth_set_model_for_instance(ctx->instance_id, model_id) == 0U)
+            else if (drum_synth_set_model_for_instance(ctx->instance_id, model_id) == 0U)
             {
                 continue;
             }

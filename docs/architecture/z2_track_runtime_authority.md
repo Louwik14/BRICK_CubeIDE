@@ -258,3 +258,16 @@ Sorties de Z2:
 - Ensembles exposes: `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `VCA`, `KEYBOARD`, `ARP/ROUT`, `SEQ`; `PLAY` reste masque.
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` sont consommes par le DSP master.
 - Le mode `ARP` brut est projete en vue `ROUT` pour Master/FX comme pour Master/Buffer; le routing audio reel reste hors Z2.
+
+## 21. Contrat Drum Plaits direct
+
+- La family/type UI `Drum` reste bindee par Z2 pour compatibilite track/pattern/projet.
+- Les types legacy `TRX_*` et `FM_*` restent des identites runtime/tombstones, mais ne selectionnent plus de moteur DSP actif.
+- `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` est le premier type Drum propre; il reste resolu par `track_runtime`, expose `TRACK_RUNTIME_ENGINE_DRUM`, et mappe en Z1 vers `DRUM_MODEL_ID_BD_ANALOG`.
+- `TRACK_RUNTIME_ENGINE_DRUM` peut encore etre resolu et audio-routable pour les tombstones legacy, mais l'execution Z1 les force vers `DRUM_MODEL_ID_NONE` et produit zero.
+- Le mapping TONE de `BD_ANALOG` est local au `track_runtime_type` effectif via `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`.
+- Aucune nouvelle autorite Drum n'est introduite: PLAY, TONE, COLORS, MIX, MOD et VCA restent resolus par les autorites track-runtime existantes.
+
+## 22. Contrat MIX p-lock/mod hors Master
+- Les params MIX track-aware `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1`, `PARAM_MIX_SEND2` sont autorises uniquement pour les tracks audio non-`Master` disposant d'une lane mixer effective.
+- Les tracks `Master/Buffer` et `Master/FX` peuvent exposer des pages MIX globales/contextuelles, mais ne sont pas des cibles valides pour les params MIX track-aware p-lock/mod.
