@@ -425,11 +425,11 @@ Points factuels:
   - `PLAY`: `Sample`, `Gain`, `Src BPM`,
   - `CLIP`: `Play Mode`, `Loop`, `Stretch`,
   - `SYNC`: `Sync Len`,
-  - `STR`: `Grain`, `Hop`, `Search`, visible seulement quand `Stretch=Stretch` ou `Stretch=Shifter`.
+  - `STR`: `Grain`; `Hop` et `Search` restent reserves/non exposes produit.
 - `Stretch=Off` lit le clip a vitesse/pitch d'origine sans tempo-sync ni moteur stretch.
-- `Stretch=Speed` conserve le varispeed courant; `Stretch=Stretch` active le moteur preserve-pitch local `brick6_clip_stretch`; `Stretch=Shifter` conserve le cursor Speed puis applique le shifter stereo local.
-- En `Shifter`, `Grain` pilote la taille de fenetre; `Hop` et `Search` restent visibles/stockes par compat mais sans effet DSP dans cette passe.
-- `STR` utilise les valeurs bornees `Grain/Hop = 32/64/96/128/256/512` et `Search = 0/4/8/12/16`, avec defaults `Grain=256`, `Hop=128`, `Search=16`.
+- `Stretch=Speed` conserve le varispeed courant; `Stretch=Shifter` conserve le cursor Speed puis applique le shifter stereo local.
+- En `Shifter`, `Grain` pilote la taille de fenetre; `Hop` et `Search` restent stockes mais non exposes et sans effet DSP.
+- `STR` utilise les valeurs bornees `Grain = 384/512/768/1024/1536/2048`, avec default `Grain=1536`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
 - `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.
 - `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.
@@ -475,6 +475,7 @@ Points factuels:
   - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
   - `REV2`: `Type`, `Surr`,
   - `REV3`: `HPF`, `LPF`.
+- Le champ `REV2/Type` expose `DRUMBOY`, `RevB`, `GVERB` et `OLIVERB`; `DRUMBOY` reste le default, `RevB`, `GVERB` et `OLIVERB` sont experimentaux et ne changent pas la surface UI.
 - Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI.
 - `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
 - Le delay global expose une surface `MIX 2/2` contextuelle selon `TYPE`:

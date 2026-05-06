@@ -16,7 +16,7 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    16U /* MACRO scenes now persist 16 scenes * 32 locks; legacy project files are intentionally refused in prototype phase */
+#define PROJECT_V1_FILE_VERSION    17U /* Clip Stretch mode was renumbered to Off/Speed/Shifter; legacy project files are intentionally refused in prototype phase */
 
 typedef enum
 {

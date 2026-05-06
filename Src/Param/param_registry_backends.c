@@ -37,16 +37,16 @@ static uint16_t param_backend_clip_size_value(uint8_t index)
     return values[(index <= 5U) ? index : 5U];
 }
 
+static uint16_t param_backend_clip_grain_size_value(uint8_t index)
+{
+    static const uint16_t values[] = {384U, 512U, 768U, 1024U, 1536U, 2048U};
+    return values[(index <= 5U) ? index : 5U];
+}
+
 static uint8_t param_backend_clip_search_index(float value)
 {
     const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f);
     return (index <= 4U) ? index : 4U;
-}
-
-static uint16_t param_backend_clip_search_value(uint8_t index)
-{
-    static const uint16_t values[] = {0U, 4U, 8U, 12U, 16U};
-    return values[(index <= 4U) ? index : 4U];
 }
 
 uint8_t param_backend_apply_tone_opal(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
@@ -396,24 +396,11 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         {
-            uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
+            const uint8_t stretch_mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f);
 
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
             {
                 return 0U;
-            }
-
-            if (stretch_mode == 0U)
-            {
-                stretch_mode = 2U;
-            }
-            else if (stretch_mode == 1U)
-            {
-                stretch_mode = 0U;
-            }
-            else
-            {
-                stretch_mode = (stretch_mode == 2U) ? 1U : 3U;
             }
 
             if ((update_base_state != 0U) && (state != NULL))
@@ -426,7 +413,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
         case PARAM_SAMPLER_CLIP_GRAIN:
         {
             uint8_t grain_index;
-            uint8_t hop_index;
 
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
             {
@@ -434,20 +420,13 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
 
             grain_index = param_backend_clip_size_index(value);
-            hop_index = (state != NULL) ? param_backend_clip_size_index(state->clip.hop_size) : 3U;
-            if (param_backend_clip_size_value(hop_index) > param_backend_clip_size_value(grain_index))
-            {
-                hop_index = grain_index;
-            }
 
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->clip.grain_size = (float)grain_index;
-                state->clip.hop_size = (float)hop_index;
             }
 
-            brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_size_value(grain_index));
-            brick6_sampler_runtime_set_clip_hop_size(track, param_backend_clip_size_value(hop_index));
+            brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_grain_size_value(grain_index));
             return 1U;
         }
         case PARAM_SAMPLER_CLIP_HOP:
@@ -472,9 +451,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                 state->clip.grain_size = (float)grain_index;
                 state->clip.hop_size = (float)hop_index;
             }
-
-            brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_size_value(grain_index));
-            brick6_sampler_runtime_set_clip_hop_size(track, param_backend_clip_size_value(hop_index));
             return 1U;
         }
         case PARAM_SAMPLER_CLIP_SEARCH:
@@ -490,8 +466,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 state->clip.search_size = (float)search_index;
             }
-
-            brick6_sampler_runtime_set_clip_search_frames(track, param_backend_clip_search_value(search_index));
             return 1U;
         }
         default:

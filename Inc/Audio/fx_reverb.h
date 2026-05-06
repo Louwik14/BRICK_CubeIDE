@@ -32,8 +32,12 @@ void fx_reverb_set_bypass(fx_reverb_t *rev, uint8_t bypass);
 
 typedef enum
 {
-    FX_REVERB_GLOBAL_TYPE_MONO = 0,   /* Drumboy */
-    FX_REVERB_GLOBAL_TYPE_STEREO = 1, /* legacy compat tombstone */
+    FX_REVERB_GLOBAL_TYPE_DRUMBOY = 0,
+    FX_REVERB_GLOBAL_TYPE_REVB = 1,
+    FX_REVERB_GLOBAL_TYPE_GVERB = 2,
+    FX_REVERB_GLOBAL_TYPE_OLIVERB = 3,
+    FX_REVERB_GLOBAL_TYPE_MONO = FX_REVERB_GLOBAL_TYPE_DRUMBOY,
+    FX_REVERB_GLOBAL_TYPE_STEREO = FX_REVERB_GLOBAL_TYPE_REVB,
 } fx_reverb_global_type_t;
 
 void fx_reverb_global_init(float sample_rate);
@@ -43,7 +47,10 @@ void fx_reverb_global_set_size(float size);
 void fx_reverb_global_set_decay(float decay);
 void fx_reverb_global_set_predelay(float predelay_s);
 void fx_reverb_global_set_surround(float surround_s);
+void fx_reverb_global_set_lpf(float lpf);
 uint8_t fx_reverb_global_is_active(void);
+uint32_t fx_reverb_global_get_last_cycles(void);
+uint32_t fx_reverb_global_get_max_cycles(void);
 void fx_reverb_global_process_block(float *in_l,
                                     float *in_r,
                                     float *out_l,

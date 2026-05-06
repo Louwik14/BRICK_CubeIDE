@@ -19,7 +19,6 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
-- `Src/Core/brick6_clip_stretch.c` + `Inc/Core/brick6_clip_stretch.h` : seam local du futur timestretch `Sampler/Clip`, instanceable, stream-compatible, sans ownership `sample_pool`/`sample_cache`/`sample_page_cache`.
 - `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Clip` `Shifter`, port C borne sans import Clouds/FxEngine.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
@@ -307,11 +306,9 @@ Granular / fx_pool:
 - Master/FX MacroFX est un insert master apres `mixer_process` et avant le blend playback `Master/Buffer`; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` ont un traitement DSP. `OFF` et tout type inconnu restent no-op exacts. `RING` et `CRUSH` ne lisent pas la mesure/position transport; `STUTTER` lit seulement le BPM courant pour dimensionner sa fenetre rythmique.
 - Les delays MacroFX sont monophoniques par slot, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `STUTTER` et `PITCH` reutilisent ce core mono: `STUTTER` capture une fenetre recente bornee avec crossfade court de boucle, `PITCH` utilise deux lectures delay/grain simples. `TALK` utilise des formants fixes/morphables bornes, sans FFT ni analyse vocale.
 - Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
-- Le futur stretch `Sampler/Clip` reste un seam local distinct: `brick6_clip_stretch` ne connait que son FIFO stereo local et laisse le pont cursor/page-cache/runtime au Sampler.
-- Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, `Stretch Mode=Stretch` utilise le pipeline `sample_voice_reader -> brick6_clip_stretch FIFO -> render preserve-pitch -> mix`, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
+- Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
 - `brick6_clip_shifter` porte un shifter deux taps delay/crossfade local; le ratio de correction est isole dans `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la taille de fenetre, `Hop` et `Search` restent sans effet dans ce mode.
-- `brick6_clip_stretch` conserve le seam local et l'instrumentation de debug. Le mode `PRESERVE_PITCH` est actif par defaut (`BRICK6_CLIP_STRETCH_PRESERVE_PITCH_ENABLED=1`) et repose sur un WSOLA leger a grain fixe (`grain=256`, `hop=128`, `search=+-16`, correlation mono L+R, sans FFT/phase-vocoder) pilote par un accumulateur `ratio_q16`; `ratio>1` raccourcit la duree cible, `ratio<1` l'allonge, et la sortie zero-fill si le moteur est temporairement starved.
-- Le runtime lourd `Sampler/Clip` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Clip` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Stretch` retombe explicitement sur `Speed` sans crash.
+- Le runtime lourd `Sampler/Clip` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Clip` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Shifter` retombe explicitement sur `Speed` sans crash.
 - Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.
 - Le lifecycle du stretch buffer reste pilote par `brick6_master_buffer`: invalidation sur clear/debut de record, republication explicite de la source sur fin auto ou stop manuel.
 - L'analyse stretch (metadata/transients/anchors) reste hors IRQ et est servicee depuis la superloop via `brick6_app_process()`, par slices bornees et reliees a une `source_generation` explicite.
@@ -415,6 +412,36 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `SWING` et `ACCENT` sont retires du backend DUAL produit V1; les IDs param restent reserves pour ne pas renumeroter le stockage indexe par `PARAM_COUNT`.
 - Fonctions explicitement hors scope du backend DUAL: pitch, shimmer, reverse, diffusion, drive, ducking, phaser, EQ param complete, lo-fi.
 - Les buffers longs DUAL sont statiques en `AUDIO_COLD_SDRAM`; aucune allocation runtime audio n'est introduite.
+
+## 14.b Addendum - reverb send TYPE DRUMBOY/RevB/GVERB/OLIVERB
+
+- `PARAM_MIX_REVERB_TYPE` choisit le backend global send1:
+  - `DRUMBOY` garde le moteur existant `fx_reverb_drumboy.*` et reste le default.
+  - `RevB` route le meme bus reverb send vers le moteur experimental porte depuis `Inspiration/reverb.h`.
+  - `GVERB` route le meme bus reverb send vers le moteur experimental derive de `Inspiration/gverb.c`, `gverb.h`, `gverbdsp.c`, `gverbdsp.h` et `ladspa-util.h`.
+  - `OLIVERB` route le meme bus reverb send vers le moteur experimental porte depuis `Inspiration/oliverb.h`.
+- La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique HPF/LPF d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
+- `RevB` utilise une API locale stable dans `fx_reverb_revb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
+- `RevB` downmixe l'entree send stereo en mono avant tank, puis sort un wet stereo decorrele; `Wet=0` conserve le bypass cout nul cote mixer.
+- `GVERB` utilise une API locale stable dans `fx_reverb_gverb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
+- `GVERB` conserve la structure FDN/diffusers/tapdelay source, mais remplace toutes les allocations dynamiques par des buffers statiques.
+- `OLIVERB` utilise une API locale stable dans `fx_reverb_oliverb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
+- `OLIVERB` conserve la topologie `FxEngine<32768, FORMAT_32_BIT>` d'origine, sans dry interne dans le return produit; pitch/shimmer/modulation restent fixes a des valeurs neutres dans cette passe.
+- Params mappes:
+  - `Wet` -> gain d'entree wet-only,
+  - `Size` -> diffusion + modulation lente pour `RevB`, room size pour `GVERB`, size/diffusion pour `OLIVERB`,
+  - `Decay` -> feedback/time pour `RevB`, reverb time pour `GVERB`, feedback decay pour `OLIVERB`,
+  - `PreD` -> predelay local pour `RevB`; neutre pour `GVERB` et `OLIVERB`,
+  - `LPF` -> damping interne en plus du prefiltre d'entree global pour `RevB`, `GVERB` et `OLIVERB`,
+  - `Surr` reste sans effet direct sur `RevB`/`GVERB`/`OLIVERB` et conserve son sens Drumboy.
+- RAM statique ajoutee: `fx_revb_engine_buffer[32768]` en `AUDIO_COLD_SDRAM` soit environ 128 KiB, plus predelay `RevB` environ 17 KiB en D1 et scratch bloc DTCM.
+- RAM statique ajoutee pour `GVERB`: 4 lignes FDN de 43360 floats, 1 tapdelay de 44000 floats et 8 diffusers de 12288 floats, soit environ 1.28 MiB en `AUDIO_COLD_SDRAM`, plus etat runtime DTCM.
+- RAM statique ajoutee pour `OLIVERB`: `g_oliverb_engine_buffer[32768]` en `AUDIO_COLD_SDRAM`, soit environ 128 KiB, plus scratch bloc et petit etat runtime DTCM.
+- Cout IRQ attendu: superieur a `DRUMBOY`; `RevB` execute deux boucles feedback stereo avec interpolation/LFO par sample, `GVERB` execute FDN 4x + tapdelay + diffusers en SDRAM par sample, et `OLIVERB` execute la topologie `FxEngine` avec interpolations Hermite et limiteurs par sample. `DRUMBOY` reste le default tant que les backends experimentaux ne sont pas mesures sur cible.
+- Un point de mesure DWT local est expose par `fx_reverb_global_get_last_cycles()` / `fx_reverb_global_get_max_cycles()` autour du process reverb global.
+- Limites connues: `RevB`, `GVERB` et `OLIVERB` sont experimentaux, non mesures sur cible et sans integration UI additionnelle.
+- Licence source `GVERB`: les fichiers d'origine portent GPL-2.0-or-later; le port local conserve cette mention dans `fx_reverb_gverb.c`.
+- Licence source `OLIVERB`: `oliverb.h`, `fx_engine.h` et les shims locaux derives portent MIT; le port conserve la mention dans `fx_oliverb_model.h`.
 
 ## 15. Addendum - retrait COLORS/CRUNCH
 

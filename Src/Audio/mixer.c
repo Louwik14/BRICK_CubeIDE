@@ -190,7 +190,7 @@ typedef struct
 } mixer_reverb_input_filter_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
-    .type = FX_REVERB_GLOBAL_TYPE_MONO,
+    .type = FX_REVERB_GLOBAL_TYPE_DRUMBOY,
     .wet = 0.0f,
     .size = 0.0f,
     .decay = 0.50f,
@@ -1062,6 +1062,7 @@ void mixer_init(void)
     fx_reverb_global_set_decay(g_reverb.decay);
     fx_reverb_global_set_predelay(mixer_reverb_predelay_ui_to_seconds(g_reverb.pre_delay));
     fx_reverb_global_set_surround(mixer_reverb_surround_ui_to_seconds(g_reverb.surround));
+    fx_reverb_global_set_lpf(g_reverb.lpf);
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
@@ -1357,8 +1358,14 @@ void mixer_set_reverb_surround(float surround)
 
 void mixer_set_reverb_type(uint8_t type)
 {
-    (void)type;
-    g_reverb.type = FX_REVERB_GLOBAL_TYPE_MONO;
+    if(type == 1U)
+        g_reverb.type = FX_REVERB_GLOBAL_TYPE_REVB;
+    else if(type == 2U)
+        g_reverb.type = FX_REVERB_GLOBAL_TYPE_GVERB;
+    else if(type == 3U)
+        g_reverb.type = FX_REVERB_GLOBAL_TYPE_OLIVERB;
+    else
+        g_reverb.type = FX_REVERB_GLOBAL_TYPE_DRUMBOY;
     fx_reverb_global_set_type(g_reverb.type);
 }
 
@@ -1370,6 +1377,7 @@ void mixer_set_reverb_hpf(float hpf)
 void mixer_set_reverb_lpf(float lpf)
 {
     g_reverb.lpf = clamp01(lpf);
+    fx_reverb_global_set_lpf(g_reverb.lpf);
 }
 
 void mixer_set_delay_type(uint8_t type)

@@ -110,12 +110,11 @@ This separation is intentional. Do not add a second authority for the same state
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
 - `OneShot` currently exposes only `Shot`, `RevShot`, `Loop`, and `PingPong`
 - `Clip` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, and `Sync Len`
-- `Clip` supports forward `Gate`/`Launch` playback with four stretch modes:
+- `Clip` supports forward `Gate`/`Launch` playback with three stretch modes:
   - `Off`: 1x playback
   - `Speed`: varispeed (`ratio = project_bpm / source_bpm`), pitch changes
-  - `Stretch`: preserve-pitch via the local `brick6_clip_stretch` OLA path
   - `Shifter`: varispeed cursor followed by the local stereo pitch-shifter
-- `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, `Stretch=Stretch` keeps the existing WSOLA path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
+- `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
 - legacy slice handling remains internal compatibility, not a product mode
 
 ### Sequencer

@@ -1,5 +1,11 @@
 #include "fx_reverb.h"
+#include "audio_float.h"
 #include "fx_reverb_drumboy.h"
+#include "fx_reverb_gverb.h"
+#include "fx_reverb_oliverb.h"
+#include "fx_reverb_revb.h"
+#include "Storage/memory_layout.h"
+#include "stm32h7xx.h"
 #include <string.h>
 
 static inline float fx_reverb_clamp01(float v)
@@ -109,28 +115,66 @@ typedef struct
 {
     fx_reverb_global_storage_t storage;
     volatile uint8_t backend_valid;
+    fx_reverb_global_type_t type;
     float sample_rate;
     float wet;
     float size;
     float decay;
     float predelay_s;
     float surround_s;
+    float lpf;
+    volatile uint32_t last_cycles;
+    volatile uint32_t max_cycles;
 } fx_reverb_global_state_t;
 
 static fx_reverb_global_state_t g_reverb_global = {
     .backend_valid = 0U,
+    .type = FX_REVERB_GLOBAL_TYPE_DRUMBOY,
     .sample_rate = 48000.0f,
     .wet = 0.0f,
     .size = 0.0f,
     .decay = 0.50f,
     .predelay_s = 0.045f,
     .surround_s = 0.009f,
+    .lpf = 0.0f,
+    .last_cycles = 0U,
+    .max_cycles = 0U,
 };
+
+AUDIO_HOT ALIGN32 static float g_reverb_global_mono[AUDIO_BLOCK_SIZE];
 
 static void fx_reverb_global_apply_params(void)
 {
     if(g_reverb_global.backend_valid == 0U)
         return;
+
+    if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_REVB)
+    {
+        fx_reverb_revb_global_set_wet(g_reverb_global.wet);
+        fx_reverb_revb_global_set_size(g_reverb_global.size);
+        fx_reverb_revb_global_set_decay(g_reverb_global.decay);
+        fx_reverb_revb_global_set_predelay(g_reverb_global.predelay_s);
+        fx_reverb_revb_global_set_lpf(g_reverb_global.lpf);
+        return;
+    }
+
+    if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_GVERB)
+    {
+        fx_reverb_gverb_global_set_wet(g_reverb_global.wet);
+        fx_reverb_gverb_global_set_size(g_reverb_global.size);
+        fx_reverb_gverb_global_set_decay(g_reverb_global.decay);
+        fx_reverb_gverb_global_set_lpf(g_reverb_global.lpf);
+        return;
+    }
+
+    if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_OLIVERB)
+    {
+        fx_reverb_oliverb_global_set_wet(g_reverb_global.wet);
+        fx_reverb_oliverb_global_set_size(g_reverb_global.size);
+        fx_reverb_oliverb_global_set_decay(g_reverb_global.decay);
+        fx_reverb_oliverb_global_set_lpf(g_reverb_global.lpf);
+        return;
+    }
 
     fx_reverb_drumboy_t *const rev = &g_reverb_global.storage.drumboy;
     fx_reverb_drumboy_set_wet(rev, g_reverb_global.wet);
@@ -145,13 +189,36 @@ void fx_reverb_global_init(float sample_rate)
     g_reverb_global.sample_rate = (sample_rate > 0.0f) ? sample_rate : 48000.0f;
     memset(&g_reverb_global.storage.drumboy, 0, sizeof(g_reverb_global.storage.drumboy));
     fx_reverb_drumboy_init(&g_reverb_global.storage.drumboy, g_reverb_global.sample_rate);
+    fx_reverb_revb_global_init(g_reverb_global.sample_rate);
+    fx_reverb_gverb_global_init(g_reverb_global.sample_rate);
+    fx_reverb_oliverb_global_init(g_reverb_global.sample_rate);
+    g_reverb_global.type = FX_REVERB_GLOBAL_TYPE_DRUMBOY;
     g_reverb_global.backend_valid = 1U;
     fx_reverb_global_apply_params();
 }
 
 void fx_reverb_global_set_type(fx_reverb_global_type_t type)
 {
-    (void)type;
+    fx_reverb_global_type_t next = FX_REVERB_GLOBAL_TYPE_DRUMBOY;
+    if(type == FX_REVERB_GLOBAL_TYPE_REVB)
+        next = FX_REVERB_GLOBAL_TYPE_REVB;
+    else if(type == FX_REVERB_GLOBAL_TYPE_GVERB)
+        next = FX_REVERB_GLOBAL_TYPE_GVERB;
+    else if(type == FX_REVERB_GLOBAL_TYPE_OLIVERB)
+        next = FX_REVERB_GLOBAL_TYPE_OLIVERB;
+    if(g_reverb_global.type == next)
+        return;
+
+    g_reverb_global.type = next;
+    if(next == FX_REVERB_GLOBAL_TYPE_REVB)
+        fx_reverb_revb_global_reset();
+    else if(next == FX_REVERB_GLOBAL_TYPE_GVERB)
+        fx_reverb_gverb_global_reset();
+    else if(next == FX_REVERB_GLOBAL_TYPE_OLIVERB)
+        fx_reverb_oliverb_global_reset();
+    else
+        fx_reverb_drumboy_reset(&g_reverb_global.storage.drumboy);
+    fx_reverb_global_apply_params();
 }
 
 void fx_reverb_global_set_wet(float wet)
@@ -184,9 +251,25 @@ void fx_reverb_global_set_surround(float surround_s)
     fx_reverb_global_apply_params();
 }
 
+void fx_reverb_global_set_lpf(float lpf)
+{
+    g_reverb_global.lpf = fx_reverb_clamp01(lpf);
+    fx_reverb_global_apply_params();
+}
+
 uint8_t fx_reverb_global_is_active(void)
 {
     return (g_reverb_global.wet > 0.0f) ? 1U : 0U;
+}
+
+uint32_t fx_reverb_global_get_last_cycles(void)
+{
+    return g_reverb_global.last_cycles;
+}
+
+uint32_t fx_reverb_global_get_max_cycles(void)
+{
+    return g_reverb_global.max_cycles;
 }
 
 void fx_reverb_global_process_block(float *in_l,
@@ -208,5 +291,37 @@ void fx_reverb_global_process_block(float *in_l,
         return;
     }
 
-    fx_reverb_drumboy_process_block(&g_reverb_global.storage.drumboy, in_l, in_r, out_l, out_r, frames);
+    const uint32_t t0 = DWT->CYCCNT;
+    if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_REVB)
+    {
+        if(frames > AUDIO_BLOCK_SIZE)
+            frames = AUDIO_BLOCK_SIZE;
+        for(uint32_t i = 0U; i < frames; ++i)
+            g_reverb_global_mono[i] = 0.5f * (in_l[i] + in_r[i]);
+        fx_reverb_revb_global_process_send_mono_to_stereo_wet(g_reverb_global_mono, out_l, out_r, frames);
+    }
+    else if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_GVERB)
+    {
+        if(frames > AUDIO_BLOCK_SIZE)
+            frames = AUDIO_BLOCK_SIZE;
+        for(uint32_t i = 0U; i < frames; ++i)
+            g_reverb_global_mono[i] = 0.5f * (in_l[i] + in_r[i]);
+        fx_reverb_gverb_global_process_send_mono_to_stereo_wet(g_reverb_global_mono, out_l, out_r, frames);
+    }
+    else if(g_reverb_global.type == FX_REVERB_GLOBAL_TYPE_OLIVERB)
+    {
+        if(frames > AUDIO_BLOCK_SIZE)
+            frames = AUDIO_BLOCK_SIZE;
+        for(uint32_t i = 0U; i < frames; ++i)
+            g_reverb_global_mono[i] = 0.5f * (in_l[i] + in_r[i]);
+        fx_reverb_oliverb_global_process_send_mono_to_stereo_wet(g_reverb_global_mono, out_l, out_r, frames);
+    }
+    else
+    {
+        fx_reverb_drumboy_process_block(&g_reverb_global.storage.drumboy, in_l, in_r, out_l, out_r, frames);
+    }
+    const uint32_t elapsed = DWT->CYCCNT - t0;
+    g_reverb_global.last_cycles = elapsed;
+    if(elapsed > g_reverb_global.max_cycles)
+        g_reverb_global.max_cycles = elapsed;
 }

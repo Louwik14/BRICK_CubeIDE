@@ -56,8 +56,6 @@ void brick6_sampler_runtime_set_clip_play_mode(uint8_t track_id, uint8_t play_mo
 void brick6_sampler_runtime_set_clip_loop(uint8_t track_id, uint8_t loop_enabled);
 void brick6_sampler_runtime_set_clip_stretch_mode(uint8_t track_id, uint8_t stretch_mode);
 void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain_size);
-void brick6_sampler_runtime_set_clip_hop_size(uint8_t track_id, uint16_t hop_size);
-void brick6_sampler_runtime_set_clip_search_frames(uint8_t track_id, uint16_t search_frames);
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);

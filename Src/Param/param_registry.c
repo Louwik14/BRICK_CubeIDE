@@ -278,22 +278,7 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
             *out_value = state->clip.loop;
             return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
-            if (state->clip.stretch_mode >= 2.5f)
-            {
-                *out_value = 3.0f;
-            }
-            else if (state->clip.stretch_mode >= 1.5f)
-            {
-                *out_value = 0.0f;
-            }
-            else if (state->clip.stretch_mode >= 0.5f)
-            {
-                *out_value = 2.0f;
-            }
-            else
-            {
-                *out_value = 1.0f;
-            }
+            *out_value = clamp_value(state->clip.stretch_mode, 0.0f, 2.0f);
             return 1U;
         case PARAM_SAMPLER_CLIP_GRAIN:
             *out_value = state->clip.grain_size;
@@ -726,22 +711,7 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             state->clip.loop = value;
             return 1U;
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
-            if (value < 0.5f)
-            {
-                state->clip.stretch_mode = 2.0f;
-            }
-            else if (value < 1.5f)
-            {
-                state->clip.stretch_mode = 0.0f;
-            }
-            else if (value < 2.5f)
-            {
-                state->clip.stretch_mode = 1.0f;
-            }
-            else
-            {
-                state->clip.stretch_mode = 3.0f;
-            }
+            state->clip.stretch_mode = clamp_value(value, 0.0f, 2.0f);
             return 1U;
         case PARAM_SAMPLER_CLIP_GRAIN:
             state->clip.grain_size = value;

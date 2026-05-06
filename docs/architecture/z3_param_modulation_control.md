@@ -258,15 +258,14 @@ Call-sites critiques:
   - `Sample`, `Gain`, `Src BPM`,
   - `Play Mode`, `Loop`, `Stretch`,
   - `Sync Len`,
-  - `Grain`, `Hop`, `Search` exposes seulement quand `Stretch=Stretch` ou `Stretch=Shifter`,
+  - `Grain` expose pour `Stretch=Shifter`; `Hop` et `Search` restent des params reserves non exposes produit,
   - `Clip` reste borne produit a `BRICK6_MAX_CLIP_TRACKS=4`; au-dela, le catalogue UI ne propose plus ce type aux tracks non deja `Clip`.
-  - `Stretch=Off` force une lecture clip a vitesse/pitch d'origine (`ratio=1.0`, pas de tempo-sync, pas de WSOLA),
+  - `Stretch=Off` force une lecture clip a vitesse/pitch d'origine (`ratio=1.0`, pas de tempo-sync),
   - `Stretch=Speed` garde le varispeed courant (`ratio = project_bpm / source_bpm`, pitch non preserve), sans nouvelle correction distribuee dans cette passe,
-  - `Stretch=Stretch` utilise le pipeline `brick6_clip_stretch` preserve-pitch local, borne en WSOLA leger (`grain/hop` exposes via enums `32/64/96/128/256/512`, defaults `256/128`, `search` expose via `0/4/8/12/16`, default `16`, correlation mono L+R) quand `BRICK6_CLIP_STRETCH_PRESERVE_PITCH_ENABLED=1`,
   - `Stretch=Shifter` garde le cursor varispeed `Speed`, puis applique le pitch-shifter stereo local `brick6_clip_shifter`; `Pitch` et le ratio tempo alimentent `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la fenetre, `Hop/Search` restent stockes mais sans effet dans ce mode,
-  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..3`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Clip),
-  - compat anciens projets: la valeur canonique runtime existante `0=Speed / 1=Stretch / 2=Off` est conservee dans l'etat track-aware; `3=Shifter` est ajoute sans nouveau parametre, et l'UI remappe l'ordre visible vers `Off / Speed / Stretch / Shifter`,
-  - `Grain/Hop/Search` restent des setters passifs track-aware; les couples invalides sont normalises localement avec `hop <= grain`, `search in {0,4,8,12,16}`, puis pris en compte au prochain start/restart Clip,
+  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..2`: `0=Off`, `1=Speed`, `2=Shifter`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Clip),
+  - aucune retrocompatibilite n'est conservee pour les anciens projets utilisant l'ancien mode `Stretch`/WSOLA; `PROJECT_V1_FILE_VERSION` refuse ces fichiers,
+  - `Grain` reste un setter passif track-aware pris en compte au prochain start/restart `Shifter`; `Hop/Search` ne pilotent plus aucun runtime Sampler/Clip,
   - `Sync Len` reste track-aware et stocke la longueur musicale clip exposee au niveau produit.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
@@ -571,7 +570,11 @@ Call-sites critiques:
 - Le delay n'est pas un `fx_pool` slot et ne cree pas d'autorite par track.
 - `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont globaux et filtrent l'entree stereo de la reverb globale en pre-reverb.
 - Leur apply passe par `apply_mix_reverb_hpf/lpf` puis `mixer_set_reverb_hpf/lpf`; `0.0` reste neutre pour les deux params.
-- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `Type=0/Mono`, `Surr=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` et `Surr` sont convertis en secondes par les setters mixer.
+- `PARAM_MIX_REVERB_TYPE` est global et choisit le backend send1: `0/DRUMBOY` default, `1/RevB` experimental, `2/GVERB` experimental, `3/OLIVERB` experimental.
+- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `Type=0/DRUMBOY`, `Surr=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` et `Surr` sont convertis en secondes par les setters mixer.
+- `RevB` consomme les memes params globaux utiles (`Wet`, `Size`, `Decay`, `PreD`, `LPF`) sans nouveau slot `PARAM_COUNT`; `Surr` reste neutre pour ce backend.
+- `GVERB` consomme les memes params globaux utiles (`Wet`, `Size`, `Decay`, `LPF`) sans nouveau slot `PARAM_COUNT`; `PreD` et `Surr` restent neutres pour ce backend.
+- `OLIVERB` consomme les memes params globaux utiles (`Wet`, `Size`, `Decay`, `LPF`) sans nouveau slot `PARAM_COUNT`; `PreD` et `Surr` restent neutres, et pitch/shimmer/modulation sont fixes a des valeurs neutres.
 
 ## 28. Contrat send2 delay DUAL
 

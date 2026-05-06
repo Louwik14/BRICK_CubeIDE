@@ -94,6 +94,9 @@ file(GLOB SRC_AUDIO_SRC
 
 list(APPEND SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_gverb.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_oliverb.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
 )
 
 file(GLOB SRC_CORE_SRC
@@ -104,7 +107,6 @@ file(GLOB SRC_CORE_SRC
 list(APPEND SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_clip_stretch.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
 )
 
