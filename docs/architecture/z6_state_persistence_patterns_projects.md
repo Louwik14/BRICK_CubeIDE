@@ -148,10 +148,14 @@ Points de lecture principaux:
 
 ### `project_v1.c`
 - `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet et le bloc MACRO projet.
-- `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (scenes/pots/locks + `Mode`), distinct du payload pattern et du `undo_v1`.
+- `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (scenes/pots/locks + `Mode`), distinct du payload pattern et du `undo_v1`; placement `UI_SDRAM` car etat froid projet/persistence non audio et non DMA.
 - `g_project_active_slot_valid`, `g_project_active_slot`: slot projet actif logique.
 - `g_project_save_counter`: compteur de version save.
 - `g_project_last_error`, `g_project_last_sd_error`: etat erreur expose API.
+
+### `wav_loader.c`
+- `g_wav_pcm` reste en `AUDIO_COLD_SDRAM` pour le buffer PCM charge.
+- `g_wav_catalog` (`wav_loader_catalog_entry_t[WAV_LOADER_CATALOG_MAX]`) est place en `UI_SDRAM`: catalogue storage/UI froid, rafraichi par scan FatFs et consulte hors IRQ audio; ce n'est pas un payload DMA ni le ring preview SD critique.
 
 ### `project_sd_bank.c`
 - `g_project_slot_has_data[16]`: presence des slots projet.

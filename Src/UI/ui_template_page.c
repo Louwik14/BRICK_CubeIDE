@@ -4,10 +4,11 @@
 #include <string.h>
 
 #include "buttons.h"
+#include "Storage/memory_layout.h"
 #include "ui_page_manager.h"
 #include "ui_renderer_template.h"
 
-static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
+UI_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
 
 static ui_template_page_state_t *ui_template_page_get_active_state(void)
 {

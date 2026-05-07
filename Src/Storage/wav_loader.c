@@ -30,7 +30,7 @@
 #define WAV_BUFFER_SAMPLES (WAV_BUFFER_FRAMES * 2U)
 
 static AUDIO_COLD_SDRAM float g_wav_pcm[WAV_BUFFER_SAMPLES];
-static wav_loader_catalog_entry_t g_wav_catalog[WAV_LOADER_CATALOG_MAX];
+UI_SDRAM static wav_loader_catalog_entry_t g_wav_catalog[WAV_LOADER_CATALOG_MAX];
 static uint8_t g_wav_catalog_count;
 static uint8_t g_wav_catalog_ready;
 

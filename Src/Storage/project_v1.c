@@ -12,7 +12,7 @@
 #include "stm32h7xx_hal.h"
 
 UI_SDRAM static ProjectSaveV1 g_project_work;
-static project_v1_macro_state_t g_project_macro_state;
+UI_SDRAM static project_v1_macro_state_t g_project_macro_state;
 static uint8_t g_project_active_slot_valid;
 static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
