@@ -1,0 +1,11 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:30:22:float* comb_buffer_ptr(fx_reverb_drumboy_t*, uint32_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:48:22:float* apass_buffer_ptr(fx_reverb_drumboy_t*, uint32_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:62:6:void fx_reverb_drumboy_reset(fx_reverb_drumboy_t*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:122:6:void fx_reverb_drumboy_set_size(fx_reverb_drumboy_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:131:6:void fx_reverb_drumboy_set_decay(fx_reverb_drumboy_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:102:6:void fx_reverb_drumboy_init(fx_reverb_drumboy_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:141:6:void fx_reverb_drumboy_set_predelay(fx_reverb_drumboy_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:154:6:void fx_reverb_drumboy_set_surround(fx_reverb_drumboy_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:167:6:void fx_reverb_drumboy_set_wet(fx_reverb_drumboy_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:175:6:void fx_reverb_drumboy_set_bypass(fx_reverb_drumboy_t*, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_drumboy.cpp:183:6:void fx_reverb_drumboy_process_block(fx_reverb_drumboy_t*, const float*, const float*, float*, float*, uint32_t)	48	static

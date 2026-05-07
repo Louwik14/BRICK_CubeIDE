@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/noise/dust.h:36:14:float plaits::Dust(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/string_voice.cc:43:6:void plaits::StringVoice::Init(stmlib::BufferAllocator*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/string_voice.cc:49:6:void plaits::StringVoice::Reset()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:223:15:void stmlib::Svf::set_f_q(float, float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_DIRTY]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:280:15:void stmlib::Svf::Process(const float*, float*, size_t) [with stmlib::FilterMode mode = stmlib::FILTER_MODE_LOW_PASS]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/string_voice.cc:53:6:void plaits::StringVoice::Render(bool, bool, float, float, float, float, float, float*, float*, float*, size_t)	64	static

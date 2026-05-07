@@ -1,0 +1,38 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:18:18:virtual void DrumModel::RenderControls()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:25:18:virtual void DrumModel::saveParameters(std::ostream&) const	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:28:18:virtual void DrumModel::loadParameters(std::istream&)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:33:18:virtual bool DrumModel::SetParamByIndex(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:125:14:float drum_synth_map_linear(float, float, float, float, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:138:39:const drum_pitch_offset_map_t* drum_synth_find_pitch_offset_map(param_id_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:184:16:uint8_t drum_synth_model_is_drum(drum_model_id_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:205:19:DrumModel* drum_synth_resolve_model(drum_synth_instance_t*, drum_model_id_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:236:16:uint8_t drum_synth_set_direct_param(DrumModel*, uint8_t, uint8_t, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:48:13:void drum_synth_reset_runtime_state(drum_synth_instance_t*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:150:14:float drum_synth_note_pitch_factor(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:156:14:float drum_synth_velocity_to_gain(uint8_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:163:14:float drum_synth_map_ui_to_dsp(param_id_t, float, float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/TRXBassDrum.h:5:7:constexpr TRXBassDrum::TRXBassDrum()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/TRXSnareDrum.h:4:7:constexpr TRXSnareDrum::TRXSnareDrum()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmKickModel.h:6:7:FmKickModel::FmKickModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmSnareModel.h:6:7:FmSnareModel::FmSnareModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmRimshotModel.h:5:7:constexpr FmRimshotModel::FmRimshotModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmClapModel.h:5:7:constexpr FmClapModel::FmClapModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:5:7:constexpr FmCowbellModel::FmCowbellModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCymbalModel.h:5:7:constexpr FmCymbalModel::FmCymbalModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:261:9:uint8_t drum_synth_set_model_for_instance(uint8_t, drum_model_id_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:250:6:void drum_synth_init(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:301:17:drum_model_id_t drum_synth_get_model_for_instance(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:383:6:void drum_synth_note_off_for_instance(uint8_t, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:389:6:void drum_synth_all_notes_off_for_instance(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:405:6:void drum_synth_process_block_for_instance(uint8_t, float*, uint32_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:425:9:uint8_t drum_synth_set_param_for_instance(uint8_t, param_id_t, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:311:6:void drum_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:594:6:void drum_synth_all_notes_off_all()	8	static
+C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin\../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/include/c++/13.3.1/bits/random.tcc:118:5:void std::linear_congruential_engine<_UIntType, __a, __c, __m>::seed(result_type) [with _UIntType = unsigned int; _UIntType __a = 16807; _UIntType __c = 0; _UIntType __m = 2147483647]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/TRXHiHat.h:6:7:TRXHiHat::TRXHiHat()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:44:3:drum_synth_instance_t::drum_synth_instance_t()	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:600:1:void __static_initialization_and_destruction_0()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:44:3:drum_synth_instance_t::~drum_synth_instance_t()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:600:1:void __static_initialization_and_destruction_1()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:600:1:cpp)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:600:1:cpp)	8	static

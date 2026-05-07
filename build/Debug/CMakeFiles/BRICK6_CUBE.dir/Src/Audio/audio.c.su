@@ -1,0 +1,9 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Storage/cache_maintenance.h:21:20:dcache_clean_by_addr_aligned	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Storage/cache_maintenance.h:45:20:dcache_invalidate_by_addr_aligned	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:106:13:process_half	800	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:201:6:audio_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:234:6:audio_start	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:249:6:audio_seq_diag_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:254:6:audio_seq_diag_snapshot	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:291:6:HAL_SAI_RxHalfCpltCallback	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:329:6:HAL_SAI_RxCpltCallback	8	static

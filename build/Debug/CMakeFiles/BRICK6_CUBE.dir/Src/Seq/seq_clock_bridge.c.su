@@ -1,0 +1,15 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:15:17:seq_clock_bridge_clamp_tempo	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:30:13:seq_clock_bridge_reset_external_tempo_state	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:44:13:seq_clock_bridge_internal_step_period_recompute	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:80:9:seq_clock_bridge_is_external_source	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:85:6:seq_clock_bridge_reset_external_tempo	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:66:6:seq_clock_bridge_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:90:6:seq_clock_bridge_on_process	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:128:6:seq_clock_bridge_prepare_internal_run	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:107:6:seq_clock_bridge_set_source	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:138:9:seq_clock_bridge_consume_internal_step_due	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:170:9:seq_clock_bridge_on_external_clock_pulse	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:230:6:seq_clock_bridge_set_internal_tempo	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:245:10:seq_clock_bridge_get_internal_tempo_bpm_milli	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:250:9:seq_clock_bridge_is_external_tempo_valid	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_clock_bridge.c:255:10:seq_clock_bridge_get_external_tempo_bpm_milli	0	static

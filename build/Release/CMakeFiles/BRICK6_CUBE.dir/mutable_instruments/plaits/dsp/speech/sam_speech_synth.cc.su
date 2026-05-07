@@ -1,0 +1,3 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/sam_speech_synth.cc:45:6:void plaits::SAMSpeechSynth::Init()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/sam_speech_synth.cc:88:6:void plaits::SAMSpeechSynth::InterpolatePhonemeData(float, float, uint32_t*, float*)	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/sam_speech_synth.cc:112:6:void plaits::SAMSpeechSynth::Render(bool, float, float, float, float*, float*, size_t)	72	static

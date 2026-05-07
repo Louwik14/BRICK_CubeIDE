@@ -1,0 +1,13 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:491:13:recorder_build_wav_header	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:943:6:sd_recorder_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:968:6:sd_recorder_set_writer_budget	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:988:9:sd_recorder_request_start	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1018:9:sd_recorder_request_stop	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1050:9:sd_recorder_request_arm_stem	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1094:9:sd_recorder_request_disarm_stem	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1133:6:sd_recorder_audio_block_begin	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1249:6:sd_recorder_capture_tap_block	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1291:6:sd_recorder_writer_service	176	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1406:6:sd_recorder_get_ring_fill	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1436:21:sd_recorder_get_state	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sd_multitrack_recorder.c:1452:6:sd_recorder_get_debug	24	static

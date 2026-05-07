@@ -1,0 +1,9 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:116:13:ui_page_template_tone_set_subpage	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:104:36:ui_page_template_tone_resolve_family	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:125:13:ui_page_template_tone_sync_drum_family	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:300:13:ui_page_template_tone_render	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:293:13:ui_page_template_tone_sync_active_context	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:286:13:ui_page_template_tone_tick	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:278:13:ui_page_template_tone_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:272:13:ui_page_template_tone_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_tone.c:220:6:ui_page_template_tone_register_families	16	static

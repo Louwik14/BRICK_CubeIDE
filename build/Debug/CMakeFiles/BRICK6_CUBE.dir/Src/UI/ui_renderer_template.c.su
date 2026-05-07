@@ -1,0 +1,16 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:64:14:ui_renderer_template_clamp	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:52:13:ui_renderer_template_format_semitones	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:275:12:ui_renderer_template_center_x	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:218:13:ui_renderer_template_format_dbfs_1dp	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:235:13:ui_renderer_template_format_cpu_avg	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:286:13:ui_renderer_template_draw_open_corner_frame	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:303:13:ui_renderer_template_draw_note_icon	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:313:13:ui_renderer_template_draw_inverted_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:31:13:ui_renderer_template_format_active_pattern_label	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:573:13:ui_renderer_template_draw_header	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:339:14:ui_renderer_template_get_param_display_value	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:79:13:ui_renderer_template_format_value	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:322:26:ui_renderer_template_resolve_widget_type	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:351:13:ui_renderer_template_draw_param_slot	136	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:649:13:ui_renderer_template_draw_footer	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:705:6:ui_renderer_template_draw	32	static

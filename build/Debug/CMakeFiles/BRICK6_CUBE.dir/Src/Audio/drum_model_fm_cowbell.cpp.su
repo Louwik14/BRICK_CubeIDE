@@ -1,0 +1,15 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:18:18:virtual void DrumModel::RenderControls()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:25:18:virtual void DrumModel::saveParameters(std::ostream&) const	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:28:18:virtual void DrumModel::loadParameters(std::istream&)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/DrumModel.h:33:18:virtual bool DrumModel::SetParamByIndex(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:23:10:virtual bool FmCowbellModel::SetParamByIndex(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:16:14:float WrapPhase(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:26:6:virtual void FmCowbellModel::Init()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:35:6:virtual void FmCowbellModel::Trigger()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:66:6:virtual void FmCowbellModel::RenderControls()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:5:7:FmCowbellModel::~FmCowbellModel()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:22:14:float ExpDecay(float, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.cpp:39:7:virtual float FmCowbellModel::Process()	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:17:10:virtual void FmCowbellModel::loadParameters(std::istream&)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:12:10:virtual void FmCowbellModel::saveParameters(std::ostream&) const	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/../../md-drum-synth-main/FmCowbellModel.h:5:7:virtual FmCowbellModel::~FmCowbellModel()	8	static

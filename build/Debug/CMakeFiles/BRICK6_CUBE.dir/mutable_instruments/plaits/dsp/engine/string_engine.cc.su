@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/string_engine.h:46:16:virtual void plaits::StringEngine::LoadUserData(const uint8_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/string_engine.cc:38:6:virtual void plaits::StringEngine::Init(stmlib::BufferAllocator*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/string_engine.cc:48:6:virtual void plaits::StringEngine::Reset()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/delay_line.h:71:18:const T plaits::DelayLine<T, max_delay>::Read(float) const [with T = float; unsigned int max_delay = 16]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/string_engine.cc:55:6:virtual void plaits::StringEngine::Render(const plaits::EngineParameters&, float*, float*, size_t, bool*)	48	static

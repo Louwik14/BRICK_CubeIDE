@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/limiter.h:50:8:void stmlib::Limiter::Process(float, float*, size_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/engine.h:39:14:float plaits::NoteToFrequency(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/hysteresis_quantizer.h:101:14:int stmlib::HysteresisQuantizer2::Process(int, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/envelope.h:68:15:void plaits::LPGEnvelope::ProcessLP(float, float, float, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/envelope.h:53:15:void plaits::LPGEnvelope::ProcessPing(float, float, float, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.h:186:16:float plaits::Voice::ApplyModulations(float, float, bool, float, bool, float, float, float, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.cc:37:6:void plaits::Voice::Init(stmlib::BufferAllocator*)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:223:15:void stmlib::Svf::set_f_q(float, float) [with stmlib::FrequencyApproximation approximation = stmlib::FREQUENCY_DIRTY]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/filter.h:230:16:float stmlib::Svf::Process(float) [with stmlib::FilterMode mode = stmlib::FILTER_MODE_LOW_PASS]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/fx/low_pass_gate.h:65:8:void plaits::LowPassGate::Process(float, float, float, float*, short int*, size_t, size_t)	64	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.h:90:8:void plaits::ChannelPostProcessor::Process(float, bool, float, float, float, float*, short int*, size_t, size_t)	56	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/delay_line.h:71:18:const T plaits::DelayLine<T, max_delay>::Read(float) const [with T = float; unsigned int max_delay = 8]	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.cc:90:6:void plaits::Voice::Render(const plaits::Patch&, const plaits::Modulations&, Frame*, size_t)	112	static

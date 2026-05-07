@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_param_test.c:79:13:ui_page_param_test_leave	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_param_test.c:182:13:ui_page_param_test_tick	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_param_test.c:194:13:ui_page_param_test_render	104	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_param_test.c:159:13:ui_page_param_test_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_param_test.c:64:13:ui_page_param_test_enter	8	static

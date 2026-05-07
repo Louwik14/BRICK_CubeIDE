@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:206:14:fxmm_time_samples_from_macro	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:347:14:fxmm_talk_process	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:447:14:fxmm_process_drive	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:248:13:fxmm_delay_write	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:216:14:fxmm_delay_read.part.0.isra	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:394:14:fxmm_pitch_voice	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:824:6:fx_master_macro_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_master_macro.c:830:6:fx_master_macro_process_block	144	static

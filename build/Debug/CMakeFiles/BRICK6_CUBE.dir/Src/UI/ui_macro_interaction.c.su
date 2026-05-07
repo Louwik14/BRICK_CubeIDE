@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:28:16:ui_macro_interaction_is_capture_mode	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:35:16:ui_macro_interaction_is_assignable_param	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:151:16:ui_macro_interaction_resolve_slot_target	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:96:16:ui_macro_interaction_resolve_slot_value	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:46:16:ui_macro_interaction_resolve_slot_param	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:187:6:ui_macro_interaction_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:182:6:ui_macro_interaction_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:199:6:ui_macro_interaction_note_hall_press	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:216:9:ui_macro_interaction_note_encoder_delta_with_context	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:295:9:ui_macro_interaction_note_encoder_delta	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:302:6:ui_macro_interaction_note_hall_release	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:359:9:ui_macro_interaction_get_active_slot_lock	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:364:9:ui_macro_interaction_get_active_slot_target	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_macro_interaction.c:371:9:ui_macro_interaction_get_active_slot_value	8	static

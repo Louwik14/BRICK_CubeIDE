@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/stmlib/dsp/units.h:40:14:float stmlib::SemitonesToRatio(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/noise/dust.h:36:14:float plaits::Dust(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/modal_voice.cc:47:6:void plaits::ModalVoice::Init()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/resonator.h:54:8:void plaits::ResonatorSvf<batch_size>::Process(const float*, const float*, const float*, const float*, float*, size_t) [with stmlib::FilterMode mode = stmlib::FILTER_MODE_LOW_PASS; bool add = false; int batch_size = 1]	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/physical_modelling/modal_voice.cc:52:6:void plaits::ModalVoice::Render(bool, bool, float, float, float, float, float, float*, float*, float*, size_t)	104	static

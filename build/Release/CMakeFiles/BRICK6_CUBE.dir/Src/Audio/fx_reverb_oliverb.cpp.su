@@ -1,0 +1,10 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:48:13:0()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Audio/fx_oliverb_model.h:129:10:void mifx::Oliverb::Process(clouds::FloatFrame*, size_t)	96	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:72:6:void fx_reverb_oliverb_global_init(float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:85:6:void fx_reverb_oliverb_global_reset()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:93:6:void fx_reverb_oliverb_global_set_wet(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:99:6:void fx_reverb_oliverb_global_set_size(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:105:6:void fx_reverb_oliverb_global_set_decay(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:111:6:void fx_reverb_oliverb_global_set_lpf(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:117:6:void fx_reverb_oliverb_global_process_send_mono_to_stereo_wet(const float*, float*, float*, uint32_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb_oliverb.cpp:149:1:cpp)	4	static

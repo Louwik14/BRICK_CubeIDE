@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_system_sync_internal.c:32:26:ui_system_sync_make_request_restore_bulk	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_system_sync_internal.c:42:26:ui_system_sync_make_request_track_family_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_system_sync_internal.c:52:26:ui_system_sync_make_request_track_type_change	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_system_sync_internal.c:61:6:ui_system_sync_apply_track_context_change	16	static

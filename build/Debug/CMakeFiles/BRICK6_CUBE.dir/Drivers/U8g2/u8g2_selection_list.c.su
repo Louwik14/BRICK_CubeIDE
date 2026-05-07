@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/U8g2/u8g2_selection_list.c:52:6:u8g2_DrawUTF8Line	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/U8g2/u8g2_selection_list.c:156:20:u8g2_draw_selection_list_line	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/U8g2/u8g2_selection_list.c:133:13:u8g2_DrawUTF8Lines	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/U8g2/u8g2_selection_list.c:187:6:u8g2_DrawSelectionList	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/U8g2/u8g2_selection_list.c:208:9:u8g2_UserInterfaceSelectionList	48	static

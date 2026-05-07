@@ -1,0 +1,11 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:25:20:ui_page_user_calibration_stage_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:52:13:ui_page_calibration_leave	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:56:13:ui_page_calibration_handle_event	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:135:13:ui_page_user_calibration_leave	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:139:13:ui_page_user_calibration_handle_event	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:84:13:ui_page_calibration_render	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:61:13:ui_page_calibration_tick	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:45:13:ui_page_calibration_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:180:13:ui_page_user_calibration_render	96	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:144:13:ui_page_user_calibration_tick	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_calibration.c:128:13:ui_page_user_calibration_enter	8	static

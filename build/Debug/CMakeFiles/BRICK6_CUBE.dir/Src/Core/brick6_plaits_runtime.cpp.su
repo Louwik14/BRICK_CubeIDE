@@ -1,0 +1,36 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:30:14:float {anonymous}::brick6_plaits_runtime_clamp(float, float, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:43:16:uint8_t {anonymous}::brick6_plaits_runtime_map_model(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:74:14:float {anonymous}::brick6_plaits_runtime_pitch_offset(const brick6_plaits_runtime_voice_t*)	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:110:42:{anonymous}::brick6_plaits_runtime_instance_t* {anonymous}::brick6_plaits_runtime_get_instance_mut(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:120:48:const {anonymous}::brick6_plaits_runtime_instance_t* {anonymous}::brick6_plaits_runtime_get_instance(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:82:13:void {anonymous}::brick6_plaits_runtime_init_instance(brick6_plaits_runtime_instance_t*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/chord_engine.h:44:3:plaits::ChordEngine::~ChordEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/grain_engine.h:44:3:plaits::GrainEngine::~GrainEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/noise_engine.h:42:3:plaits::NoiseEngine::~NoiseEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine/particle_engine.h:43:3:plaits::ParticleEngine::~ParticleEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/drums/analog_snare_drum.h:48:3:plaits::AnalogSnareDrum::~AnalogSnareDrum()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/six_op_engine.h:90:3:plaits::SixOpEngine::~SixOpEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.h:41:3:plaits::StringMachineEngine::StringMachineEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/engine2/string_machine_engine.h:42:3:plaits::StringMachineEngine::~StringMachineEngine()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.h:164:3:plaits::Voice::Voice()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:343:1:void __static_initialization_and_destruction_0()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/voice.h:165:3:plaits::Voice::~Voice()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:343:1:void __static_initialization_and_destruction_1()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:134:6:void brick6_plaits_runtime_init()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:142:6:void brick6_plaits_runtime_reset_instance(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:147:6:void brick6_plaits_runtime_set_model(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:156:6:void brick6_plaits_runtime_set_coarse_frequency(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:165:6:void brick6_plaits_runtime_set_harmonics(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:174:6:void brick6_plaits_runtime_set_timbre(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:183:6:void brick6_plaits_runtime_set_morph(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:192:6:void brick6_plaits_runtime_set_lpg_response(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:201:6:void brick6_plaits_runtime_set_decay(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:210:6:void brick6_plaits_runtime_set_frequency_range(uint8_t, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:242:6:void brick6_plaits_runtime_note_off(uint8_t, uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:219:6:void brick6_plaits_runtime_note_on(uint8_t, float, float)	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:258:6:void brick6_plaits_runtime_all_notes_off(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:269:6:void brick6_plaits_runtime_clear_trigger(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:278:6:void brick6_plaits_runtime_render_instance(uint8_t, float*, uint32_t)	216	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:337:38:const brick6_plaits_runtime_voice_t* brick6_plaits_runtime_get_voice(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:343:1:cpp)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_plaits_runtime.cpp:343:1:cpp)	8	static

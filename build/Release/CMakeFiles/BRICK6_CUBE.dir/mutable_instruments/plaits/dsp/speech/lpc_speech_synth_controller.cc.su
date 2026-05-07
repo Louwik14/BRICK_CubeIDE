@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:113:6:void plaits::LPCSpeechSynthWordBank::Init(const plaits::LPCSpeechSynthWordBankData*, int, stmlib::BufferAllocator*)	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:125:6:void plaits::LPCSpeechSynthWordBank::Reset()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:134:8:size_t plaits::LPCSpeechSynthWordBank::LoadNextWord(const uint8_t*)	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:183:6:bool plaits::LPCSpeechSynthWordBank::Load(int)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:207:6:void plaits::LPCSpeechSynthController::Init(plaits::LPCSpeechSynthWordBank*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/mutable_instruments/plaits/dsp/speech/lpc_speech_synth_controller.cc:223:6:void plaits::LPCSpeechSynthController::Render(bool, bool, int, float, float, float, float, float, float, float*, float*, size_t)	96	static

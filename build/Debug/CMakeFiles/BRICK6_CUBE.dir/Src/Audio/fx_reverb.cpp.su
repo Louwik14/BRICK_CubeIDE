@@ -1,0 +1,18 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:130:13:void fx_reverb_global_apply_params()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:14:6:void fx_reverb_init(fx_reverb_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:23:6:void fx_reverb_process_block(fx_reverb_t*, float*, float*, float*, float*, uint32_t)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:46:6:void fx_reverb_set_wet_ui(fx_reverb_t*, uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:61:6:void fx_reverb_set_wet(fx_reverb_t*, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:71:6:void fx_reverb_set_room_size(fx_reverb_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:79:6:void fx_reverb_set_damping(fx_reverb_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:87:6:void fx_reverb_set_width(fx_reverb_t*, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:95:6:void fx_reverb_set_bypass(fx_reverb_t*, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:143:6:void fx_reverb_global_init(float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:152:6:void fx_reverb_global_set_type(fx_reverb_global_type_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:157:6:void fx_reverb_global_set_wet(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:163:6:void fx_reverb_global_set_size(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:169:6:void fx_reverb_global_set_decay(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:175:6:void fx_reverb_global_set_predelay(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:181:6:void fx_reverb_global_set_surround(float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:187:9:uint8_t fx_reverb_global_is_active()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_reverb.cpp:192:6:void fx_reverb_global_process_block(float*, float*, float*, float*, uint32_t)	24	static

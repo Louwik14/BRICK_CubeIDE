@@ -1,0 +1,12 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:189:13:sample_pool_clear_entry	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:200:13:sample_pool_set_missing_entry	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:217:6:sample_pool_clear	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:278:6:sample_pool_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:293:6:sample_pool_capture_project_snapshot	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:352:6:sample_pool_load	720	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:314:6:sample_pool_restore_project_snapshot	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:502:22:sample_pool_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:510:6:sample_pool_is_loaded	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:517:26:sample_pool_get_state	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:552:26:sample_pool_get_last_load_error	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_pool.c:557:9:sample_pool_get_last_sd_error_code	0	static

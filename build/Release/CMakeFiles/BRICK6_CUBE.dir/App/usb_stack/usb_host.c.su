@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/usb_stack/usb_host.c:104:13:USBH_UserProcess	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/usb_stack/usb_host.c:44:6:MX_USB_HOST_Init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/usb_stack/usb_host.c:73:6:MX_USB_HOST_Process	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/App/usb_stack/usb_host.c:78:6:usb_host_tasklet_poll_bounded	16	static
