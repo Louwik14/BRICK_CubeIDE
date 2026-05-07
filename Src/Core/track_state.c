@@ -48,6 +48,7 @@ static void track_state_normalize_config(ui_track_config_t *config)
     {
         return;
     }
+
 }
 
 static void track_state_bump_revision(uint8_t track)
@@ -400,7 +401,11 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
             track_state_normalize_config(&normalized);
             if (!ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
             {
-                return false;
+                normalized.type = ui_track_catalog_default_type_for_family(normalized.family);
+                if (!ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
+                {
+                    return false;
+                }
             }
 
             next_configs[track].family = normalized.family;

@@ -66,6 +66,7 @@ Compat prototype:
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
 - Le service conserve une session SD exclusive et alimente un ring buffer audio pre-rendu hors IRQ.
+- Placement memoire courant: `g_sd_preview_ring` est en `AUDIO_COLD_SDRAM` pour liberer 16 KiB de D1; le risque accepte est limite au cout SDRAM en IRQ pendant la preview UI. `g_sd_preview_io` reste en `AUDIO_WARM` / D1 car il est passe a `f_read` et le risque SDMMC/cache n'est pas valide pour SDRAM.
 
 Autorite boot context flash:
 - `boot_context_flash_load()`, `boot_context_flash_commit()`, `boot_context_flash_clear()`.
@@ -264,6 +265,7 @@ Effets aval:
 - Pas de malloc observe dans les fichiers Z6; buffers statiques (`UI_SDRAM`, `DMA_BUFFER`, globals).
 - Coordination SD via `sd_access_gate` evite collisions clients heterogenes (pattern/project/preview vs autres clients).
 - La preview SD lit les formats source WAV et ne touche jamais le pool projet 64 slots.
+- La preview SD ne participe pas au sample streaming principal: son ring SDRAM est seulement une audition temporaire vers MAIN, tandis que son buffer I/O FatFs reste en D1.
 
 ## 8. Invariants a ne pas casser
 
@@ -378,6 +380,7 @@ Plus petite prochaine passe utile:
 - `PATTERN_VERSION=12` et `PROJECT_V1_FILE_VERSION=15` marquent la rupture prototype DUAL send2 delay.
 - Le retrait produit V1 de `SWING`/`ACCENT` ne change pas `PARAM_COUNT`; aucun bump pattern/projet supplementaire n'est requis.
 - `PROJECT_V1_FILE_VERSION=16` marque la rupture prototype MACRO Scene/Switch 32 locks par scene: `ProjectSaveV1.macro` grossit, les anciens projets sont refuses proprement par version/payload_size, sans migration legacy.
+- `PATTERN_VERSION=13` et `PROJECT_V1_FILE_VERSION=18` marquent le retrait des IDs/type/params `TB3`; aucun remap ni preservation des anciens projets/configs `TB3` ou `DX7` n'est conserve.
 - `PatternSaveV1` ne change pas pour cette passe MACRO: les scenes/locks restent projet-only.
 
 

@@ -75,6 +75,7 @@ Familles d'autorite:
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
   - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
+  - les wrappers ARP ecrivent maintenant l'etat ARP de la track active via `keyboard_runtime`; l'autorite runtime ARP est une config par track dans `keyboard_arp`, pas `param_store.active[]`.
 - `track_sound_state.*`:
   - premiere base canonique par track pour les blocs sonores extraits du runtime,
   - contient actuellement les blocs communs MIX, MOD, FILTER et VCA comme premier noyau du modele parametrique par track,
@@ -82,7 +83,7 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - contient le noyau Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track,
+  - contient le noyau Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD reserve et BD Analog par track,
   - le bloc Opal est borne a 3 params TONE: `PATCH`, `INDEX`, `TIME`,
   - le bloc Braids est borne a 7 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`,
   - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
@@ -199,7 +200,7 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
-  - sert de base canonique Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD, TRX Claves, TRX HiHat, FM Kick, FM Snare, FM Tom, FM Rimshot, FM Clap, FM Cowbell et FM Cymbal par track, distincte de `track_sound_state`.
+  - sert de base canonique Sampler, Opal, Braids, Master/Buffer stretch, MIDI simple, TRX BD reserve et BD Analog par track, distincte de `track_sound_state`.
   - pour `Opal`, la surface publique TONE est strictement limitee a `PARAM_OPAL_PATCH`, `PARAM_OPAL_INDEX`, `PARAM_OPAL_TIME`.
 - Les params stretch Master/Buffer sont des params BUFFER track-aware (`TStr`, `Grain`, `Hop`, `Sync Len`, `Src BPM`, `Pitch`) gates par Z2; ils ne doivent pas devenir des globals ni utiliser `param_store.active[]` comme verite track-scoped.
 - Leur apply ecrit la base canonique `track_tone_sound_state.buffer`, puis projette explicitement la configuration vers l'etat runtime local de `brick6_master_buffer`; `live_recorder` reste backend stockage/lecture brute.
@@ -293,9 +294,12 @@ Call-sites critiques:
   - aucune logique Drum/Hybrid/routage audio n'entre dans ce bloc,
   - aucune seconde autorite runtime n'est introduite.
 
-## 12. Contrat TRX BD Tone
+## 12. Contrat Drum Tone final
 
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_TRX_BD`:
+- Types Drum produit:
+  - `UI_TRACK_TYPE_DRUM_TRX_BD`: slot reserve/futur, expose en UI, silencieux tant que le moteur n'est pas reinstalle,
+  - `UI_TRACK_TYPE_DRUM_BD_ANALOG`: moteur actif Plaits `AnalogBassDrum`.
+- Params Drum restants dans `PARAM_COUNT`:
   - `PARAM_DRUM_TRX_BD_PITCH`,
   - `PARAM_DRUM_TRX_BD_DECAY`,
   - `PARAM_DRUM_TRX_BD_PITCH_SWEEP`,
@@ -304,196 +308,19 @@ Call-sites critiques:
   - `PARAM_DRUM_TRX_BD_NOISE`,
   - `PARAM_DRUM_TRX_BD_HARMONICS`,
   - `PARAM_DRUM_TRX_BD_DRIVE`.
+- `BD_ANALOG` expose seulement quatre controles TONE via la table runtime:
+  - `PARAM_DRUM_TRX_BD_PITCH` -> pitch/f0 Plaits,
+  - `PARAM_DRUM_TRX_BD_DECAY` -> decay Plaits,
+  - `PARAM_DRUM_TRX_BD_HARMONICS` -> tone Plaits,
+  - `PARAM_DRUM_TRX_BD_PITCH_SWEEP` -> attack FM Plaits.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
+  - la base canonique est `track_tone_sound_state.trx_bd`,
+  - `drum_synth` est seulement l'executant runtime.
 - Invariants:
-  - TRX BD garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
-
-## 13. Contrat TRX Claves Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_TRX_CLAVES`:
-  - `PARAM_DRUM_TRX_CLAVES_PITCH`,
-  - `PARAM_DRUM_TRX_CLAVES_INTERVAL`,
-  - `PARAM_DRUM_TRX_CLAVES_DECAY`,
-  - `PARAM_DRUM_TRX_CLAVES_BALANCE`,
-  - `PARAM_DRUM_TRX_CLAVES_DRIVE`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - TRX Claves garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun Ã©tat runtime n'est pousse dans la base canonique.
-
-## 14. Contrat TRX HiHat Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_TRX_HIHAT`:
-  - `PARAM_DRUM_TRX_HIHAT_DECAY`,
-  - `PARAM_DRUM_TRX_HIHAT_METAL`,
-  - `PARAM_DRUM_TRX_HIHAT_HP_TONE`,
-  - `PARAM_DRUM_TRX_HIHAT_LP_TONE`,
-  - `PARAM_DRUM_TRX_HIHAT_GAP`,
-  - `PARAM_DRUM_TRX_HIHAT_PEAK`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - TRX HiHat garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 15. Contrat FM Kick Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_KICK`:
-  - `PARAM_DRUM_FM_KICK_PITCH`,
-  - `PARAM_DRUM_FM_KICK_DECAY`,
-  - `PARAM_DRUM_FM_KICK_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_KICK_PITCH_SWEEP`,
-  - `PARAM_DRUM_FM_KICK_FEEDBACK`,
-  - `PARAM_DRUM_FM_KICK_MOD_FREQ`,
-  - `PARAM_DRUM_FM_KICK_MOD_DECAY`,
-  - `PARAM_DRUM_FM_KICK_SWEEP_DECAY`,
-  - `PARAM_DRUM_FM_KICK_RATIO_MODE`,
-  - `PARAM_DRUM_FM_KICK_RATIO_INDEX`,
-  - `PARAM_DRUM_FM_KICK_MOD_ENV_SYNC`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Kick garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 16. Contrat FM Snare Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_SNARE`:
-  - `PARAM_DRUM_FM_SNARE_PITCH`,
-  - `PARAM_DRUM_FM_SNARE_DECAY`,
-  - `PARAM_DRUM_FM_SNARE_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_SNARE_NOISE`,
-  - `PARAM_DRUM_FM_SNARE_HP_TONE`,
-  - `PARAM_DRUM_FM_SNARE_MOD_FREQ`,
-  - `PARAM_DRUM_FM_SNARE_MOD_DECAY`,
-  - `PARAM_DRUM_FM_SNARE_NOISE_DECAY`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Snare garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 17. Contrat FM Tom Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_TOM`:
-  - `PARAM_DRUM_FM_TOM_PITCH`,
-  - `PARAM_DRUM_FM_TOM_DECAY`,
-  - `PARAM_DRUM_FM_TOM_PITCH_SWEEP`,
-  - `PARAM_DRUM_FM_TOM_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_TOM_MOD_FREQ`,
-  - `PARAM_DRUM_FM_TOM_MOD_DECAY`,
-  - `PARAM_DRUM_FM_TOM_SWEEP_DECAY`,
-  - `PARAM_DRUM_FM_TOM_START_PHASE`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Tom garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 18. Contrat FM Rimshot Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_RIMSHOT`:
-  - `PARAM_DRUM_FM_RIMSHOT_RIM_PITCH`,
-  - `PARAM_DRUM_FM_RIMSHOT_RIM_DECAY`,
-  - `PARAM_DRUM_FM_RIMSHOT_BODY_MIX`,
-  - `PARAM_DRUM_FM_RIMSHOT_HP_TONE`,
-  - `PARAM_DRUM_FM_RIMSHOT_RIM_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_RIMSHOT_BODY_PITCH`,
-  - `PARAM_DRUM_FM_RIMSHOT_BODY_DECAY`,
-  - `PARAM_DRUM_FM_RIMSHOT_BODY_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_RIMSHOT_MOD_DECAY`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Rimshot garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 19. Contrat FM Clap Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_CLAP`:
-  - `PARAM_DRUM_FM_CLAP_CLAP_COUNT`,
-  - `PARAM_DRUM_FM_CLAP_CLAP_SPACING`,
-  - `PARAM_DRUM_FM_CLAP_TAIL_DECAY`,
-  - `PARAM_DRUM_FM_CLAP_HP_TONE`,
-  - `PARAM_DRUM_FM_CLAP_FEEDBACK`,
-  - `PARAM_DRUM_FM_CLAP_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_CLAP_BASE_FREQ`,
-  - `PARAM_DRUM_FM_CLAP_MOD_FREQ`,
-  - `PARAM_DRUM_FM_CLAP_MOD_DECAY`,
-  - `PARAM_DRUM_FM_CLAP_CLAP_DECAY`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Clap garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 20. Contrat FM Cowbell Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_COWBELL`:
-  - `PARAM_DRUM_FM_COWBELL_PITCH`,
-  - `PARAM_DRUM_FM_COWBELL_DECAY_SHORT`,
-  - `PARAM_DRUM_FM_COWBELL_DECAY_LONG`,
-  - `PARAM_DRUM_FM_COWBELL_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_COWBELL_FEEDBACK`,
-  - `PARAM_DRUM_FM_COWBELL_ENV_MIX`,
-  - `PARAM_DRUM_FM_COWBELL_MOD_DECAY`,
-  - `PARAM_DRUM_FM_COWBELL_MOD_FREQ`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Cowbell garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
-## 21. Contrat FM Cymbal Tone
-
-- Params track-aware exposes pour `UI_TRACK_TYPE_DRUM_FM_CYMBAL`:
-  - `PARAM_DRUM_FM_CYMBAL_DECAY`,
-  - `PARAM_DRUM_FM_CYMBAL_SUSTAIN`,
-  - `PARAM_DRUM_FM_CYMBAL_FM_AMOUNT`,
-  - `PARAM_DRUM_FM_CYMBAL_HP_TONE`,
-  - `PARAM_DRUM_FM_CYMBAL_FEEDBACK`,
-  - `PARAM_DRUM_FM_CYMBAL_BASE_CARRIER`,
-  - `PARAM_DRUM_FM_CYMBAL_BASE_MOD`,
-  - `PARAM_DRUM_FM_CYMBAL_MOD_DECAY`.
-- Autorite:
-  - `param_registry_apply_track_value` reste point d'entree unique,
-  - la base canonique est stockee dans `track_tone_sound_state`,
-  - le runtime Drum reste l'executant via `drum_synth_set_param_for_instance`.
-- Invariants:
-  - FM Cymbal garde sa propre base track-aware,
-  - aucun autre sous-moteur Drum n'entre dans ce bloc,
-  - aucun ÃƒÂ©tat runtime n'est pousse dans la base canonique.
-
+  - aucun autre type ou param Drum n'est conserve,
+  - aucun chemin de compatibilite ancien projet Drum n'est maintenu,
+  - les types Drum numeriques inconnus passent par la validation catalogue generique et ne recreent pas de moteur.
 ## 22. Contrat MIDI TONE (tranche fonctionnelle)
 
 - Nouveaux params track-aware TONE:
@@ -694,16 +521,17 @@ Dette explicite post-passe 4:
 - Liste FX exposee: `OFF`, `DRIVE`, `CRUSH`, `PUMP`, `CHOP`, `ECHO`, `WOBBLE`, `COMB`, `RING`, `PITCH`, `TALK`, `STUTTER`, `FREEZE`.
 - Risque documente: `PARAM_COUNT` augmente; les snapshots/projets binaires produits par cette passe changent de layout parametre.
 
-## 30. Contrat tombstones Drum legacy
+## 30. Contrat Drum params finaux
 
-- Les params `PARAM_DRUM_TRX_*` et `PARAM_DRUM_FM_*` restent dans `PARAM_COUNT` pour ne pas renumeroter le stockage projet/snapshot.
-- Le backend `drum_synth_set_param_for_instance` refuse maintenant ces writes: ils sont conserves comme tombstones de compatibilite, sans effet DSP.
-- La base canonique `track_tone_sound_state` peut encore stocker les valeurs legacy, mais aucune projection audio active n'en depend.
-- Les pages TONE Drum legacy sont neutralisees cote UI; elles ne presentent plus les params legacy comme surface produit active.
+- Le bloc Drum ne conserve que les huit `PARAM_DRUM_TRX_BD_*` utiles au slot futur `TRX BD` et au moteur actif `BD_ANALOG`.
+- Les anciens params Drum retires ne sont plus presents dans `PARAM_COUNT`.
+- Les anciens params `PARAM_TB3_*` sont retires de `PARAM_COUNT`; aucun tombstone ni compatibilite projet/config `TB3` n'est conserve.
+- `PARAM_COUNT` est reduit par cette suppression; aucun maintien de compatibilite ancien projet Drum n'est requis.
+- `BD_ANALOG` utilise la projection TONE runtime limitee a `Pitch`, `Decay`, `Tone` et `FM`.
 
 ## 31. Contrat BD_ANALOG TONE
 
-- `BD_ANALOG` reutilise uniquement quatre IDs tombstone-compatible du bloc `PARAM_DRUM_TRX_BD_*`, sans changer `PARAM_COUNT`:
+- `BD_ANALOG` utilise quatre IDs du bloc `PARAM_DRUM_TRX_BD_*`:
   - `PARAM_DRUM_TRX_BD_PITCH` -> pitch/f0 Plaits,
   - `PARAM_DRUM_TRX_BD_DECAY` -> decay Plaits,
   - `PARAM_DRUM_TRX_BD_HARMONICS` -> tone Plaits,

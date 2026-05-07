@@ -109,7 +109,7 @@ Catalogue produit des families/types :
 
 Exemples de familles/types actuels :
 - `Synth -> Sampler`
-- `Drum -> TRX/FM variants`
+- `Drum -> TRX BD reserve / BD Analog`
 - `Master -> Buffer`
 - `MIDI -> MIDI`
 

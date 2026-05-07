@@ -81,6 +81,17 @@ SECTIONS
     _etext = .;        /* define a global symbols at end of code */
   } >RAM_EXEC
 
+  .itcm_text :
+  {
+    . = ALIGN(4);
+    __itcm_text_start__ = .;
+    *(.itcm_text)
+    *(.itcm_text*)
+    . = ALIGN(4);
+    __itcm_text_end__ = .;
+  } >ITCMRAM AT> RAM_EXEC
+  __itcm_text_load__ = LOADADDR(.itcm_text);
+
   /* Constant data goes into RAM_EXEC */
   .rodata :
   {

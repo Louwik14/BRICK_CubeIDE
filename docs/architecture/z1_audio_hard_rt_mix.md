@@ -229,6 +229,7 @@ Flux nominal prouve par code:
 - commit master-buffer fin de mix.
 - post-mix: `brick6_audio_runtime_dsp` lit playback buffer et applique xfade live/recorded sur `tracks[0]`.
 - post-mix: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]` avant preview SD, playback `Master/Buffer` et tap master final.
+- La preview SD est un chemin d'audition UI temporaire: `sd_preview_render_main()` lit `g_sd_preview_ring` place en `AUDIO_COLD_SDRAM`; le cout SDRAM en IRQ n'existe que pendant une preview active et ne concerne pas le playback principal ni le streaming Sampler.
 - tap final `SD_RECORDER_TAP_MASTER` (hook conserve, no-op immediat en produit tant que `SD_RECORDER_PRODUCT_ENABLED=0`).
 - Distinction structurante:
   - `sd_multitrack_recorder` = recorder SD/stems actuellement bypasse cote produit.
@@ -268,6 +269,12 @@ Placement memoire valide pour la reverb SEND runtime:
 - `g_revb_engine_buffer[32768]` et le predelay RevB restent en D1 via `AUDIO_WARM`.
 - Les anciens buffers runtime Drumboy (feedback DTCM, predelay/surround RAM_D2), GVerb et Oliverb sont retires.
 - Le code dormant Mutable/Inspiration non compile n'appartient pas au backend SEND runtime et n'est pas concerne par ce retrait.
+
+Placement code ITCM:
+- `ITCMRAM` est disponible comme region linker dediee au code hot.
+- La macro explicite `AUDIO_CODE_HOT` cible la section `.itcm_text`.
+- Aucune fonction audio n'est placee en ITCM pour l'instant; la passe RevB ITCM a ete retiree faute de gain IRQ attendu.
+- Avant toute future annotation, le mecanisme de copie boot de `.itcm_text` devra etre reinstalle et valide explicitement.
 
 Granular / fx_pool:
 - `g_granular_state_storage` n'est plus en DTCM; il est place hors D1 via `AUDIO_COLD_SDRAM`.
@@ -439,10 +446,12 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La policy boot ne pre-active plus le slot `FX_SAT` en slot 1.
 - `fx_saturation.*` reste present comme code legacy/global non expose par COLORS; il n'est plus branche par le runtime COLORS track-aware.
 
-## 16. Addendum - retrait moteurs Drum legacy
+## 16. Addendum - modele Drum final
 
-- Les moteurs DSP Drum legacy `TRX_*` et `FM_*` sont retires du build.
+- L'autorite des modeles Drum runtime est reduite a `DRUM_MODEL_ID_NONE`, `DRUM_MODEL_ID_TRX_BD` et `DRUM_MODEL_ID_BD_ANALOG`.
+- `DRUM_MODEL_ID_TRX_BD` reste un slot produit reserve/futur; il ne selectionne pas de moteur actif et reste silencieux.
 - `drum_synth` reste la facade RT-safe Drum: `DRUM_MODEL_ID_NONE` rend zero, `DRUM_MODEL_ID_BD_ANALOG` instancie directement `plaits::AnalogBassDrum` en etat statique par instance, sans `plaits::Voice`, sans CTAG et sans allocation dynamique.
-- `brick6_audio_runtime` conserve le chemin track-aware Drum vers le mixer; les types legacy restent mappes vers `DRUM_MODEL_ID_NONE`, tandis que `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` mappe vers `DRUM_MODEL_ID_BD_ANALOG`.
+- `brick6_audio_runtime` conserve le chemin track-aware Drum vers le mixer; seul `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` mappe vers `DRUM_MODEL_ID_BD_ANALOG`, les autres cas restent `DRUM_MODEL_ID_NONE`.
 - Sortie Drum active: mono-native vers `mixer_submit_external_mono_native`, zero tant que le modele est `NONE` ou tant qu'aucun `note_on` PLAY n'a arme le moteur.
 - Cout IRQ attendu: un rendu `AnalogBassDrum::Render()` par track `BD_ANALOG` active et par bloc audio, avec SVF/one-pole/sine oscillator par sample. Le point de mesure existant reste `cpu_load` autour de l'IRQ audio; il n'existe pas encore de compteur DWT local dedie Drum.
+- Les anciens moteurs/types `TB3` et `DX7` ne font pas partie du runtime audio produit. Aucune compatibilite projet/config n'est conservee pour ces labels ou IDs.

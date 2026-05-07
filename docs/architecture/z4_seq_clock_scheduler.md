@@ -611,9 +611,9 @@ Points factuels observes:
 ## 14. Contrat Drum stub temporaire
 
 - Le scheduler conserve le dispatch note track-aware vers `drum_synth_*` pour les tracks Drum afin de ne pas refondre Z4.
-- Depuis le retrait des moteurs `TRX_*`/`FM_*`, ces appels sont des no-op RT-safe.
-- Les gates mixer/VCA restent appliques selon le contrat existant, mais aucune voix Drum DSP ne produit de signal.
-- La future base Drum devra se brancher sur ce seam sans modifier l'autorite temporelle du scheduler.
+- `TRX BD` est un slot reserve/futur et reste no-op RT-safe.
+- `BD Analog` est le moteur Drum actif et produit via `drum_synth` quand PLAY arme un `note_on`.
+- Les gates mixer/VCA restent appliques selon le contrat existant.
 
 ## Addendum 2026-05-06 - contrat resize length pendant RUNNING
 
@@ -621,6 +621,7 @@ Points factuels observes:
 - Autorite curseur/playhead: `seq_runtime_exec` / `seq_runtime_state_t.play_step[]`.
 - Autorite wrap/modulo: `seq_boundary_engine_advance_one_step()`, au pulse musical suivant, avec la longueur active courante.
 - Changer `PARAM_SEQ_LENGTH` pendant RUNNING ne rotate pas les steps et ne rebase pas immediatement `play_step` / `prev_step`.
+- Cote UI, `PARAM_SEQ_LENGTH` est un parametre par track: le miroir actif doit relire `seq_model_get_track_length(track)` au changement de track, et les edits ecrivent `seq_model_set_track_length(track, value)` puis notifient `seq_runtime_on_track_length_changed(track)`.
 - Si le curseur courant devient hors fenetre apres shrink, il reste une phase courante transitoire jusqu'au prochain pulse; le prochain advance wrappe via la nouvelle longueur sans mutation des donnees pattern.
 - Hors RUNNING, un curseur devenu hors fenetre est rabattu a 0 et `prev_step_valid` est invalide pour que la reprise reschedule proprement le step courant.
 - Les steps au-dela de la longueur active restent stockes dans `seq_model.steps[0..SEQ_MAX_STEPS-1]` et redeviennent audibles si la longueur est re-elargie.

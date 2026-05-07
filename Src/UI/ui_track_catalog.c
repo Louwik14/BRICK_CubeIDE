@@ -9,16 +9,6 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_TRX_BD,
-        UI_TRACK_TYPE_DRUM_TRX_CLAVES,
-        UI_TRACK_TYPE_DRUM_TRX_HIHAT,
-        UI_TRACK_TYPE_DRUM_TRX_SNARE,
-        UI_TRACK_TYPE_DRUM_FM_KICK,
-        UI_TRACK_TYPE_DRUM_FM_SNARE,
-        UI_TRACK_TYPE_DRUM_FM_TOM,
-        UI_TRACK_TYPE_DRUM_FM_RIMSHOT,
-        UI_TRACK_TYPE_DRUM_FM_CLAP,
-        UI_TRACK_TYPE_DRUM_FM_COWBELL,
-        UI_TRACK_TYPE_DRUM_FM_CYMBAL,
         UI_TRACK_TYPE_DRUM_BD_ANALOG
     };
 
@@ -519,26 +509,6 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TRX BD";
-        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
-            return "TRX Claves";
-        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
-            return "TRX HiHat";
-        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
-            return "TRX Snare";
-        case UI_TRACK_TYPE_DRUM_FM_KICK:
-            return "FM Kick";
-        case UI_TRACK_TYPE_DRUM_FM_SNARE:
-            return "FM Snare";
-        case UI_TRACK_TYPE_DRUM_FM_TOM:
-            return "FM Tom";
-        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
-            return "FM Rim";
-        case UI_TRACK_TYPE_DRUM_FM_CLAP:
-            return "FM Clap";
-        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
-            return "FM Cow";
-        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
-            return "FM Cym";
         case UI_TRACK_TYPE_DRUM_BD_ANALOG:
             return "BD Analog";
         case UI_TRACK_TYPE_MIDI:
@@ -582,26 +552,6 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return "TBD";
-        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
-            return "TCL";
-        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
-            return "THH";
-        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
-            return "TSN";
-        case UI_TRACK_TYPE_DRUM_FM_KICK:
-            return "FMK";
-        case UI_TRACK_TYPE_DRUM_FM_SNARE:
-            return "FMS";
-        case UI_TRACK_TYPE_DRUM_FM_TOM:
-            return "FMT";
-        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
-            return "FMR";
-        case UI_TRACK_TYPE_DRUM_FM_CLAP:
-            return "FMC";
-        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
-            return "FMW";
-        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
-            return "FMY";
         case UI_TRACK_TYPE_DRUM_BD_ANALOG:
             return "BDA";
         case UI_TRACK_TYPE_MIDI:

@@ -171,16 +171,7 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 
 #### Pour `Drum`
 - `TRX BD`
-- `TRX Claves`
-- `TRX HiHat`
-- `TRX Snare`
-- `FM Kick`
-- `FM Snare`
-- `FM Tom`
-- `FM Rimshot`
-- `FM Clap`
-- `FM Cowbell`
-- `FM Cymbal`
+- `BD Analog`
 
 #### Pour `Master`
 - `Buffer`

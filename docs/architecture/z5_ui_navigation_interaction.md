@@ -146,6 +146,8 @@ Entrees evenementielles:
   - le point d'insertion reste `ui_param_handle_encoder_with_context` apres resolution du parametre/bank actif; Z3 reste l'autorite d'apply via `param_registry_apply_track_edit`,
   - le delta est relatif (`delta * step`) et chaque track clamp individuellement selon ses bornes effectives; une track active deja en butee n'empeche pas les autres tracks de bouger,
   - seules les tracks ou le meme `param_id` est autorise par `track_runtime_get_effective_param_status` et, pour `COLORS`/`TONE`/`PLAY`/`MOD`, resolu par `seq_param_iface` sont touchees,
+  - exception SEQ per-track hors `track_runtime`: `PARAM_SEQ_LENGTH`, `PARAM_SEQ_DIV`, `PARAM_SEQ_QUANT`, `PARAM_SEQ_SWING` passent par l'autorite `seq_model_get/set_track_length` ou `seq_runtime_set/get_track_*` avec le meme delta UI (`delta * step`),
+  - les params ARP sont des reglages par track portes par `keyboard_arp` sous forme de config par track; la lecture/ecriture UI passe par `keyboard_runtime_*_for_track`,
   - les tracks `Master`, les params globaux, les params `BUFFER`, les edits CFG structurels, les p-locks de steps et le live-rec p-lock restent exclus.
 - `ui_core_tick` materialise la politique des stages consommants via `k_event_stages[]` (ordre stabilise): mute -> consommations hall track-select -> master-buffer routing -> transport -> settings -> global shortcuts -> pattern mode -> seq mode.
 - `track_selection` reste hors table et execute en amont.
@@ -422,6 +424,7 @@ Points factuels:
 - `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
 - `UI_TRACK_TYPE_ONE_SHOT` est le type canonique de cette famille; `UI_TRACK_TYPE_SAMPLER` reste un alias de compat snapshot.
 - `UI_TRACK_TYPE_CLIP` est expose comme type produit distinct dans la meme famille.
+- Les anciens labels/types UI `TB3` et `DX7` ne sont plus exposes ni conserves comme compat catalogue.
 - `UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Clip`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Clip`.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
   - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
@@ -526,8 +529,11 @@ Points factuels:
 
 ## 18. Contrat UI Drum Plaits direct
 
-- Les types Drum legacy restent presents dans `CFG` pour compatibilite avec les tracks/projets existants.
-- La page TONE Drum est neutralisee: elle garde une sous-page vide pour ne pas casser la navigation, mais n'expose plus les params `TRX_*`/`FM_*` comme controles produit actifs.
-- `BD Analog` est le premier type Drum propre et experimental; il est ajoute apres les tombstones dans le catalogue `Drum`, donc il n'est pas le default tant que les projets existants gardent leur premier type legacy.
+- L'autorite de la liste active des types Drum `CFG` est `ui_track_catalog`.
+- La liste active Drum expose seulement `TRX BD` et `BD Analog`.
+- `TRX BD` reste visible comme entree reservee/future; a date il n'a pas de moteur runtime actif et reste silencieux via le mapping Drum `NONE`.
+- Aucun autre type Drum n'est expose ou conserve par la liste UI active.
+- La page TONE Drum reservee garde une sous-page vide pour ne pas casser la navigation.
+- `BD Analog` est le premier type Drum propre et experimental; il reste selectionnable dans le catalogue `Drum`.
 - Pour `BD Analog`, `TONE` expose une sous-page legere `BD`: `Pitch`, `Decay`, `Tone`, `FM`.
 - `PLAY`, `COLORS`, `MIX`, `MOD` et `VCA` restent les ensembles communs existants; aucune page UI lourde ni chemin de modulation local n'est ajoute.

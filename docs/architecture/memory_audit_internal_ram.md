@@ -94,6 +94,7 @@ Les macros principales dans `Inc/Storage/memory_layout.h` sont :
 | Macro | Section cible | Rôle déclaré | Alignement macro |
 |---|---|---|---:|
 | `AUDIO_HOT` | `.dtcm_audio` | IRQ critical data/state | aucun |
+| `AUDIO_CODE_HOT` | `.itcm_text` | opt-in code hot audio futur en ITCM | aucun |
 | `AUDIO_WARM` | `.ram_d1_audio` | block DSP state not directly DMA-owned | aucun |
 | `DMA_BUFFER` | `.ram_d2_dma` | CPU↔DMA shared payload | `ALIGN32` |
 | `AUDIO_DMA_BUFFER_CACHEABLE` | `.ram_d2_lut` | buffers audio RX/TX DMA cacheables | `ALIGN32` |
@@ -108,6 +109,10 @@ Les macros principales dans `Inc/Storage/memory_layout.h` sont :
 Observation linker importante :
 
 - `AUDIO_WARM` cible `.ram_d1_audio`.
+- `AUDIO_CODE_HOT` cible `.itcm_text`.
+- `.itcm_text` est cablee vers `ITCMRAM` dans les scripts linker maintenus, avec une LMA en image de chargement (`FLASH` ou `RAM_EXEC` selon le script).
+- `.RamFunc` reste inchangee et ne cible pas `ITCMRAM`.
+- Aucune fonction n'est annotee avec `AUDIO_CODE_HOT`; la pose RevB ITCM a ete retiree faute de gain IRQ attendu.
 - Mais la section de sortie `.ram_d1` capture `*(.ram_d1*)` avant la section `.ram_d1_audio`.
 - Les objets `.ram_d1_audio` sont donc placés dans la section de sortie `.ram_d1`.
 - La section de sortie `.ram_d1_audio` apparaît vide dans le map Release disponible.
@@ -385,8 +390,8 @@ D1 mélange :
 | `g_revb_engine_buffer` | 131 072 B | `fx_reverb_revb.cpp` | buffer moteur RevB | garder D1 | explicitement validé en Z1 |
 | `g_revb_predelay_buffer` | 17 288 B | `fx_reverb_revb.cpp` | predelay RevB | garder D1 | audio runtime RevB |
 | `g_sample_cache_io_storage` | 4 097 B | `sample_cache.c` | scratch I/O sample import | vérification SD/cache | non audio IRQ direct, FatFs scratch path |
-| `g_sd_preview_ring` | 16 384 B | `sd_preview.c` | ring preview SD vers MAIN | garder interne/vérifier | lu par `sd_preview_render_main()` dans DSP audio |
-| `g_sd_preview_io` | 4 096 B | `sd_preview.c` | scratch I/O preview | vérification SD/cache | hors D2 DMA, alimente preview |
+| `g_sd_preview_ring` | 16 384 B | `sd_preview.c` | ring preview SD vers MAIN | deplace SDRAM pour test | lu par `sd_preview_render_main()` dans DSP audio, cout SDRAM uniquement pendant preview |
+| `g_sd_preview_io` | 4 096 B | `sd_preview.c` | scratch I/O preview | garder D1 | passe a `f_read`, conserve en D1 pour eviter risque SDMMC/cache |
 | fill | 31 B | linker | alignement | N/A | padding |
 
 ## 9.4 Gros blocs `.bss` D1
@@ -436,7 +441,7 @@ Gain potentiel faible. Les opportunités `.data` relèvent plus de `const` corre
 |---|---:|---|
 | DMA/periph payload | 0 B | les payloads DMA sont D2 |
 | Audio hard-RT / mix / engines | >270 KiB | garder interne |
-| Audio warm effects | ~173 KiB | RevB + SD preview/sample scratch |
+| Audio warm effects | ~157 KiB | RevB + SD preview I/O/sample scratch ; ring preview sorti vers SDRAM |
 | UI/display | ~16 KiB | bons candidats hors D1 |
 | Storage/SD | ~52 KiB | très bons candidats D3/SDRAM |
 | Control/runtime | ~22 KiB | D3 possible |
@@ -754,8 +759,56 @@ Symboles explicitement exclus et inchanges dans cette passe : `g_sample_cache_fi
 
 Risques restants : revalider le gain avec un map post-link exact, car les tailles ci-dessus viennent de l'audit/map disponible ; verifier la latence SDRAM UI si une interaction clipboard/template est fortement sollicitee, sans risque audio hard-RT attendu.
 
+## 13.7 Passe appliquee — cache runtime param track-scoped D2 vers D3
+
+Passe appliquee sans build et sans toucher aux buffers DMA, aux buffers audio, aux gros blocs sequenceur/p-lock, a DTCM, ni aux etats track sonores canoniques.
+
+| Symbole | Ancienne region | Nouvelle region | Macro | Gain D2 estime | Cout D3 estime | Justification |
+|---|---|---|---|---:|---:|---|
+| `g_param_runtime_track_values` | `RAM_D2` / `.ram_d2_lut` | `RAM_D3` / `.ram_d3_ctrl` | `CTRL_STATE` | ~19 264 B | ~19 264 B | cache runtime non-DMA, non per-sample, fallback param/event/mod boundary |
+| `g_param_runtime_track_valid` | `RAM_D2` / `.ram_d2_lut` | `RAM_D3` / `.ram_d3_ctrl` | `CTRL_STATE` | ~4 816 B | ~4 816 B | cache runtime non-DMA, non per-sample, fallback param/event/mod boundary |
+
+Gain RAM_D2 estime total : ~24 080 B (~24.1 KiB), hors effets d'alignement linker.
+
+Cout RAM_D3 estime total : ~24 080 B (~24.1 KiB). Avec la passe D1 precedente, la marge D3 restante estimee est ~10.8 KiB.
+
+Symboles explicitement exclus et inchanges dans cette passe : `g_track_sound_state`, `g_track_tone_sound_state`, `g_seq_project`, `g_seq_param_state`, `tx_buffer`, `rx_buffer`, `.ram_d2_dma`, tous payloads DMA, tous buffers audio, DTCM, RevB, delay, mixer et Sampler audio hot.
+
+Risques restants : revalider l'adresse et la marge avec un map post-link exact ; aucune logique runtime/cache ni `PARAM_COUNT` n'a ete modifie.
+
 
 ---
+
+## 13.8 Passe appliquee - infrastructure code ITCM
+
+Passe appliquee sans build, sans deplacement de fonction et sans deplacement data.
+
+Infrastructure ajoutee:
+
+| Element | Valeur |
+|---|---|
+| Macro code hot | `AUDIO_CODE_HOT` |
+| Section input/output | `.itcm_text` |
+| Region VMA | `ITCMRAM` |
+| Scripts cables | `STM32H743IITX_FLASH.ld`, `STM32H743IITX_RAM.ld`, `STM32H743XX_FLASH.ld` |
+
+Contrats:
+
+- `ITCMRAM` est reservee aux futurs tests de code audio hot opt-in.
+- `.RamFunc` reste dans son corridor existant et n'est pas modifiee.
+- Aucun buffer ni symbole data ne change de section par cette passe.
+- Aucune fonction n'est placee en ITCM pour l'instant.
+- Avant toute future annotation, le mecanisme de copie boot `.itcm_text` devra etre reinstalle et valide explicitement.
+
+## 13.9 Passe appliquee - ring SD preview D1 vers SDRAM
+
+Passe appliquee sans build, sans changement de logique audio/UI, sans deplacement de buffer DMA, sans toucher au sample streaming principal, a `g_sample_cache_file`, RevB, delay, mixer ou runtime Sampler.
+
+| Symbole | Ancienne region | Nouvelle region | Macro | Gain D1 estime | Justification | Risque restant |
+|---|---|---|---|---:|---|---|
+| `g_sd_preview_ring` | `RAM_D1` / `.ram_d1_audio` | `SDRAM` / `.sdram_audio_cold` | `AUDIO_COLD_SDRAM` | 16 384 B | ring preview SD vers MAIN, ecrit en superloop par `sd_preview_process()`, lu en IRQ audio par `sd_preview_render_main()` uniquement pendant preview UI/audition temporaire | cout SDRAM en IRQ uniquement pendant preview ; test preview audio requis |
+
+Symboles explicitement inchanges : `g_sd_preview_io` reste en `AUDIO_WARM` / D1 pour eviter le risque SDMMC/cache lie a `f_read`; `g_sample_cache_file`, sample streaming principal, buffers DMA/cache, RevB, delay, mixer et runtime Sampler ne sont pas touches.
 
 # 14. Synthèse finale
 
@@ -779,7 +832,7 @@ Risques restants : revalider le gain avec un map post-link exact, car les taille
 - déplacer des buffers DTCM audio hot vers SDRAM ;
 - déplacer `g_seq_project` ou `g_seq_param_state` vers SDRAM sans profiling/redesign ;
 - déplacer des payloads DMA D2 hors de la fenêtre MPU sans preuve DMA/cache ;
-- déplacer `g_sd_preview_ring` sans mesurer l'impact audio ;
+- generaliser le deplacement de rings audio IRQ vers SDRAM sans mesure ; le cas `g_sd_preview_ring` est limite a une preview UI non critique et doit etre valide par test audio cible ;
 - considérer D3 comme non-cacheable ou DMA-safe sans configuration explicite.
 
 ## 14.4 Gain réaliste global hors hard-RT

@@ -93,26 +93,6 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
-        case UI_TRACK_TYPE_DRUM_TRX_CLAVES:
-            return TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES;
-        case UI_TRACK_TYPE_DRUM_TRX_HIHAT:
-            return TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT;
-        case UI_TRACK_TYPE_DRUM_TRX_SNARE:
-            return TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE;
-        case UI_TRACK_TYPE_DRUM_FM_KICK:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_KICK;
-        case UI_TRACK_TYPE_DRUM_FM_SNARE:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_SNARE;
-        case UI_TRACK_TYPE_DRUM_FM_TOM:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_TOM;
-        case UI_TRACK_TYPE_DRUM_FM_RIMSHOT:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT;
-        case UI_TRACK_TYPE_DRUM_FM_CLAP:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_CLAP;
-        case UI_TRACK_TYPE_DRUM_FM_COWBELL:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL;
-        case UI_TRACK_TYPE_DRUM_FM_CYMBAL:
-            return TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL;
         case UI_TRACK_TYPE_MIDI:
             return TRACK_RUNTIME_TYPE_MIDI;
         case UI_TRACK_TYPE_MASTER_FX:
@@ -130,16 +110,6 @@ static uint8_t track_runtime_type_is_drum_model(track_runtime_type_t type)
     switch (type)
     {
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
             return 1U;
         default:
@@ -410,46 +380,6 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
             *out_table = NULL;
             *out_count = 8U;
             return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
-            *out_table = NULL;
-            *out_count = 5U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
-            *out_table = NULL;
-            *out_count = 6U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
-            *out_table = NULL;
-            *out_count = 8U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
-            *out_table = NULL;
-            *out_count = 11U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
-            *out_table = NULL;
-            *out_count = 8U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
-            *out_table = NULL;
-            *out_count = 8U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
-            *out_table = NULL;
-            *out_count = 9U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
-            *out_table = NULL;
-            *out_count = 10U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
-            *out_table = NULL;
-            *out_count = 8U;
-            return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
-            *out_table = NULL;
-            *out_count = 9U;
-            return 1U;
 
         default:
             return 0U;
@@ -467,26 +397,6 @@ static uint8_t track_runtime_tone_drum_range(track_runtime_type_t type, param_id
     {
         case TRACK_RUNTIME_TYPE_DRUM_TRX_BD:
             *out_first = PARAM_DRUM_TRX_BD_PITCH; *out_count = 8U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_CLAVES:
-            *out_first = PARAM_DRUM_TRX_CLAVES_PITCH; *out_count = 5U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_HIHAT:
-            *out_first = PARAM_DRUM_TRX_HIHAT_DECAY; *out_count = 6U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_TRX_SNARE:
-            *out_first = PARAM_DRUM_TRX_SNARE_PITCH; *out_count = 8U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_KICK:
-            *out_first = PARAM_DRUM_FM_KICK_PITCH; *out_count = 11U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_SNARE:
-            *out_first = PARAM_DRUM_FM_SNARE_PITCH; *out_count = 8U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_TOM:
-            *out_first = PARAM_DRUM_FM_TOM_PITCH; *out_count = 8U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_RIMSHOT:
-            *out_first = PARAM_DRUM_FM_RIMSHOT_RIM_PITCH; *out_count = 9U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CLAP:
-            *out_first = PARAM_DRUM_FM_CLAP_CLAP_COUNT; *out_count = 10U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_COWBELL:
-            *out_first = PARAM_DRUM_FM_COWBELL_PITCH; *out_count = 8U; return 1U;
-        case TRACK_RUNTIME_TYPE_DRUM_FM_CYMBAL:
-            *out_first = PARAM_DRUM_FM_CYMBAL_DECAY; *out_count = 9U; return 1U;
         default:
             return 0U;
     }
@@ -589,7 +499,6 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_OPAL:
         case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_MASTER_BUFFER:
-        case TRACK_RUNTIME_ENGINE_TB3:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return 1U;
@@ -1302,87 +1211,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_TRX_BD_NOISE:
         case PARAM_DRUM_TRX_BD_HARMONICS:
         case PARAM_DRUM_TRX_BD_DRIVE:
-        case PARAM_DRUM_TRX_CLAVES_PITCH:
-        case PARAM_DRUM_TRX_CLAVES_INTERVAL:
-        case PARAM_DRUM_TRX_CLAVES_DECAY:
-        case PARAM_DRUM_TRX_CLAVES_BALANCE:
-        case PARAM_DRUM_TRX_CLAVES_DRIVE:
-        case PARAM_DRUM_TRX_HIHAT_DECAY:
-        case PARAM_DRUM_TRX_HIHAT_METAL:
-        case PARAM_DRUM_TRX_HIHAT_HP_TONE:
-        case PARAM_DRUM_TRX_HIHAT_LP_TONE:
-        case PARAM_DRUM_TRX_HIHAT_GAP:
-        case PARAM_DRUM_TRX_HIHAT_PEAK:
-        case PARAM_DRUM_TRX_SNARE_PITCH:
-        case PARAM_DRUM_TRX_SNARE_DECAY:
-        case PARAM_DRUM_TRX_SNARE_SNAP:
-        case PARAM_DRUM_TRX_SNARE_NOISE:
-        case PARAM_DRUM_TRX_SNARE_TONE_MIX:
-        case PARAM_DRUM_TRX_SNARE_DRIVE:
-        case PARAM_DRUM_TRX_SNARE_TUNE_INTERVAL:
-        case PARAM_DRUM_TRX_SNARE_BUMP:
-        case PARAM_DRUM_FM_KICK_PITCH:
-        case PARAM_DRUM_FM_KICK_DECAY:
-        case PARAM_DRUM_FM_KICK_FM_AMOUNT:
-        case PARAM_DRUM_FM_KICK_PITCH_SWEEP:
-        case PARAM_DRUM_FM_KICK_FEEDBACK:
-        case PARAM_DRUM_FM_KICK_MOD_FREQ:
-        case PARAM_DRUM_FM_KICK_MOD_DECAY:
-        case PARAM_DRUM_FM_KICK_SWEEP_DECAY:
-        case PARAM_DRUM_FM_KICK_RATIO_MODE:
-        case PARAM_DRUM_FM_KICK_RATIO_INDEX:
-        case PARAM_DRUM_FM_KICK_MOD_ENV_SYNC:
-        case PARAM_DRUM_FM_SNARE_PITCH:
-        case PARAM_DRUM_FM_SNARE_DECAY:
-        case PARAM_DRUM_FM_SNARE_FM_AMOUNT:
-        case PARAM_DRUM_FM_SNARE_NOISE:
-        case PARAM_DRUM_FM_SNARE_HP_TONE:
-        case PARAM_DRUM_FM_SNARE_MOD_FREQ:
-        case PARAM_DRUM_FM_SNARE_MOD_DECAY:
-        case PARAM_DRUM_FM_SNARE_NOISE_DECAY:
-        case PARAM_DRUM_FM_TOM_PITCH:
-        case PARAM_DRUM_FM_TOM_DECAY:
-        case PARAM_DRUM_FM_TOM_PITCH_SWEEP:
-        case PARAM_DRUM_FM_TOM_FM_AMOUNT:
-        case PARAM_DRUM_FM_TOM_MOD_FREQ:
-        case PARAM_DRUM_FM_TOM_MOD_DECAY:
-        case PARAM_DRUM_FM_TOM_SWEEP_DECAY:
-        case PARAM_DRUM_FM_TOM_START_PHASE:
-        case PARAM_DRUM_FM_RIMSHOT_RIM_PITCH:
-        case PARAM_DRUM_FM_RIMSHOT_RIM_DECAY:
-        case PARAM_DRUM_FM_RIMSHOT_BODY_MIX:
-        case PARAM_DRUM_FM_RIMSHOT_HP_TONE:
-        case PARAM_DRUM_FM_RIMSHOT_RIM_FM_AMOUNT:
-        case PARAM_DRUM_FM_RIMSHOT_BODY_PITCH:
-        case PARAM_DRUM_FM_RIMSHOT_BODY_DECAY:
-        case PARAM_DRUM_FM_RIMSHOT_BODY_FM_AMOUNT:
-        case PARAM_DRUM_FM_RIMSHOT_MOD_DECAY:
-        case PARAM_DRUM_FM_CLAP_CLAP_COUNT:
-        case PARAM_DRUM_FM_CLAP_CLAP_SPACING:
-        case PARAM_DRUM_FM_CLAP_TAIL_DECAY:
-        case PARAM_DRUM_FM_CLAP_HP_TONE:
-        case PARAM_DRUM_FM_CLAP_FEEDBACK:
-        case PARAM_DRUM_FM_CLAP_FM_AMOUNT:
-        case PARAM_DRUM_FM_CLAP_BASE_FREQ:
-        case PARAM_DRUM_FM_CLAP_MOD_FREQ:
-        case PARAM_DRUM_FM_CLAP_MOD_DECAY:
-        case PARAM_DRUM_FM_CLAP_CLAP_DECAY:
-        case PARAM_DRUM_FM_COWBELL_PITCH:
-        case PARAM_DRUM_FM_COWBELL_DECAY_SHORT:
-        case PARAM_DRUM_FM_COWBELL_DECAY_LONG:
-        case PARAM_DRUM_FM_COWBELL_FM_AMOUNT:
-        case PARAM_DRUM_FM_COWBELL_FEEDBACK:
-        case PARAM_DRUM_FM_COWBELL_ENV_MIX:
-        case PARAM_DRUM_FM_COWBELL_MOD_DECAY:
-        case PARAM_DRUM_FM_COWBELL_MOD_FREQ:
-        case PARAM_DRUM_FM_CYMBAL_DECAY:
-        case PARAM_DRUM_FM_CYMBAL_SUSTAIN:
-        case PARAM_DRUM_FM_CYMBAL_FM_AMOUNT:
-        case PARAM_DRUM_FM_CYMBAL_HP_TONE:
-        case PARAM_DRUM_FM_CYMBAL_FEEDBACK:
-        case PARAM_DRUM_FM_CYMBAL_BASE_CARRIER:
-        case PARAM_DRUM_FM_CYMBAL_BASE_MOD:
-        case PARAM_DRUM_FM_CYMBAL_MOD_DECAY:
         case PARAM_OPAL_PATCH:
         case PARAM_OPAL_INDEX:
         case PARAM_OPAL_TIME:

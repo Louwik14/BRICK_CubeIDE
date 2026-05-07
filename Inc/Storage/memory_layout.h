@@ -16,6 +16,9 @@
 #define ALIGN32 __attribute__((aligned(32)))
 #define ALIGN64 __attribute__((aligned(64)))
 
+/* HOT code: explicit opt-in for future audio code placement in ITCM. */
+#define AUDIO_CODE_HOT SEC_ATTR(".itcm_text")
+
 /* HOT: IRQ critical data/state */
 #define AUDIO_HOT SEC_ATTR(".dtcm_audio")
 

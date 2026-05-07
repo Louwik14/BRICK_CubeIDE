@@ -5,6 +5,9 @@
 #include "Core/engine_tasklet.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
+#include "Seq/seq_model.h"
+#include "Seq/seq_runtime_control.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "Storage/memory_layout.h"
 #include "main.h"
 
@@ -334,6 +337,67 @@ static uint8_t undo_v2_apply_param_value(const undo_v2_param_delta_t *delta, uin
     {
         param_set(delta->param_id, value);
         return 1U;
+    }
+
+    switch (delta->param_id)
+    {
+        case PARAM_SEQ_LENGTH:
+            seq_model_set_track_length(delta->track, (uint8_t)(value + 0.5f));
+            seq_runtime_on_track_length_changed(delta->track);
+            return 1U;
+        case PARAM_SEQ_DIV:
+            seq_runtime_set_track_div(delta->track, (value < 0.5f) ? 1U : (value < 1.5f) ? 2U : (value < 2.5f) ? 4U : 8U);
+            return 1U;
+        case PARAM_SEQ_QUANT:
+            seq_runtime_set_track_quant(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_SEQ_SWING:
+            seq_runtime_set_track_swing(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_HOLD:
+            keyboard_runtime_set_arp_hold_for_track(delta->track, value >= 0.5f);
+            return 1U;
+        case PARAM_ARP_RATE:
+            keyboard_runtime_set_arp_rate_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_OCT:
+            keyboard_runtime_set_arp_oct_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_PATTERN:
+            keyboard_runtime_set_arp_pattern_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_GATE:
+            keyboard_runtime_set_arp_gate_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_SWING:
+            keyboard_runtime_set_arp_swing_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_ACCENT:
+            keyboard_runtime_set_arp_accent_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_VEL_ACC:
+            keyboard_runtime_set_arp_vel_acc_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_STRUM:
+            keyboard_runtime_set_arp_strum_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_OFFSET:
+            keyboard_runtime_set_arp_offset_for_track(delta->track, (int8_t)(value + ((value >= 0.0f) ? 0.5f : -0.5f)));
+            return 1U;
+        case PARAM_ARP_TRANS:
+            keyboard_runtime_set_arp_transpose_for_track(delta->track, (int8_t)(value + ((value >= 0.0f) ? 0.5f : -0.5f)));
+            return 1U;
+        case PARAM_ARP_SPREAD:
+            keyboard_runtime_set_arp_spread_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_DIR:
+            keyboard_runtime_set_arp_dir_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        case PARAM_ARP_SYNC:
+            keyboard_runtime_set_arp_sync_for_track(delta->track, (uint8_t)(value + 0.5f));
+            return 1U;
+        default:
+            break;
     }
 
     return param_registry_apply_track_value(delta->param_id, delta->track, value);

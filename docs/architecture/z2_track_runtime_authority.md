@@ -261,11 +261,13 @@ Sorties de Z2:
 
 ## 21. Contrat Drum Plaits direct
 
-- La family/type UI `Drum` reste bindee par Z2 pour compatibilite track/pattern/projet.
-- Les types legacy `TRX_*` et `FM_*` restent des identites runtime/tombstones, mais ne selectionnent plus de moteur DSP actif.
+- La family/type UI `Drum` reste bindee par Z2 pour les types produit actuels.
+- Types Drum valides: `TRACK_RUNTIME_TYPE_DRUM_TRX_BD` comme slot reserve/futur silencieux, et `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` comme moteur actif.
 - `TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG` est le premier type Drum propre; il reste resolu par `track_runtime`, expose `TRACK_RUNTIME_ENGINE_DRUM`, et mappe en Z1 vers `DRUM_MODEL_ID_BD_ANALOG`.
-- `TRACK_RUNTIME_ENGINE_DRUM` peut encore etre resolu et audio-routable pour les tombstones legacy, mais l'execution Z1 les force vers `DRUM_MODEL_ID_NONE` et produit zero.
+- `TRACK_RUNTIME_TYPE_DRUM_TRX_BD` peut etre resolu et audio-routable, mais l'execution Z1 le force vers `DRUM_MODEL_ID_NONE` et produit zero.
 - Le mapping TONE de `BD_ANALOG` est local au `track_runtime_type` effectif via `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`.
+- Les anciens IDs/types Drum ne sont plus conserves; un type numerique inconnu passe par la validation catalogue generique.
+- Les anciens IDs/types `TB3` et `DX7` ne sont plus conserves dans les enums UI/runtime et ne sont pas remappes au restore.
 - Aucune nouvelle autorite Drum n'est introduite: PLAY, TONE, COLORS, MIX, MOD et VCA restent resolus par les autorites track-runtime existantes.
 
 ## 22. Contrat MIX p-lock/mod hors Master

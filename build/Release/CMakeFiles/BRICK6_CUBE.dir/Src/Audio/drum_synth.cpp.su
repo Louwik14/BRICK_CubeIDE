@@ -1,9 +1,9 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:81:6:void drum_synth_init(float)	12	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:91:9:uint8_t drum_synth_set_model_for_instance(uint8_t, drum_model_id_t)	12	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:117:17:drum_model_id_t drum_synth_get_model_for_instance(uint8_t)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:129:6:void drum_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:149:6:void drum_synth_note_off_for_instance(uint8_t, uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:155:6:void drum_synth_all_notes_off_for_instance(uint8_t)	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:169:6:void drum_synth_process_block_for_instance(uint8_t, float*, uint32_t)	52	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:212:9:uint8_t drum_synth_set_param_for_instance(uint8_t, param_id_t, float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:245:6:void drum_synth_all_notes_off_all()	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:119:17:drum_model_id_t drum_synth_get_model_for_instance(uint8_t)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:131:6:void drum_synth_note_on_for_instance(uint8_t, uint8_t, uint8_t)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:151:6:void drum_synth_note_off_for_instance(uint8_t, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:157:6:void drum_synth_all_notes_off_for_instance(uint8_t)	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:171:6:void drum_synth_process_block_for_instance(uint8_t, float*, uint32_t)	52	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:214:9:uint8_t drum_synth_set_param_for_instance(uint8_t, param_id_t, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/drum_synth.cpp:247:6:void drum_synth_all_notes_off_all()	12	static

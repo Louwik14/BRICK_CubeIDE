@@ -12,9 +12,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_ban
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:362:6:project_sd_bank_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:386:9:project_sd_bank_slot_has_data	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:398:9:project_sd_bank_load_slot	776	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:494:9:project_sd_bank_commit_slot_patterns	204568	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:494:9:project_sd_bank_commit_slot_patterns	191664	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:613:9:project_sd_bank_store_slot	816	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:788:9:project_sd_bank_is_slot_equivalent_to_live	204528	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:788:9:project_sd_bank_is_slot_equivalent_to_live	191632	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:882:9:project_sd_bank_delete_slot	56	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:929:25:project_sd_bank_get_last_error	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_sd_bank.c:934:13:project_sd_bank_error_to_string	16	static

@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 void keyboard_arp_init(void);
+void keyboard_arp_sync_track(uint8_t track);
 void keyboard_arp_tick(void);
 void keyboard_arp_note_on(uint8_t note, uint8_t velocity);
 void keyboard_arp_note_off(uint8_t note);
@@ -28,6 +29,36 @@ void keyboard_arp_set_transpose(int8_t value);
 void keyboard_arp_set_spread(uint8_t value);
 void keyboard_arp_set_dir(uint8_t value);
 void keyboard_arp_set_sync(uint8_t value);
+
+void keyboard_arp_set_hold_for_track(uint8_t track, bool enabled);
+void keyboard_arp_set_rate_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_oct_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_pattern_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_gate_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_swing_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_accent_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_vel_acc_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_strum_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_offset_for_track(uint8_t track, int8_t value);
+void keyboard_arp_set_transpose_for_track(uint8_t track, int8_t value);
+void keyboard_arp_set_spread_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_dir_for_track(uint8_t track, uint8_t value);
+void keyboard_arp_set_sync_for_track(uint8_t track, uint8_t value);
+
+bool keyboard_arp_get_hold_for_track(uint8_t track);
+uint8_t keyboard_arp_get_rate_for_track(uint8_t track);
+uint8_t keyboard_arp_get_oct_for_track(uint8_t track);
+uint8_t keyboard_arp_get_pattern_for_track(uint8_t track);
+uint8_t keyboard_arp_get_gate_for_track(uint8_t track);
+uint8_t keyboard_arp_get_swing_for_track(uint8_t track);
+uint8_t keyboard_arp_get_accent_for_track(uint8_t track);
+uint8_t keyboard_arp_get_vel_acc_for_track(uint8_t track);
+uint8_t keyboard_arp_get_strum_for_track(uint8_t track);
+int8_t keyboard_arp_get_offset_for_track(uint8_t track);
+int8_t keyboard_arp_get_transpose_for_track(uint8_t track);
+uint8_t keyboard_arp_get_spread_for_track(uint8_t track);
+uint8_t keyboard_arp_get_dir_for_track(uint8_t track);
+uint8_t keyboard_arp_get_sync_for_track(uint8_t track);
 
 void keyboard_arp_on_mode_enter(void);
 void keyboard_arp_on_mode_enter_silent(void);

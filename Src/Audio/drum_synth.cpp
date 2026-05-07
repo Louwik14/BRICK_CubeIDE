@@ -98,7 +98,9 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t m
 
     drum_instance_ensure_init(instance);
 
-    if ((model_type != DRUM_MODEL_ID_NONE) && (model_type != DRUM_MODEL_ID_BD_ANALOG))
+    if ((model_type != DRUM_MODEL_ID_NONE)
+            && (model_type != DRUM_MODEL_ID_TRX_BD)
+            && (model_type != DRUM_MODEL_ID_BD_ANALOG))
     {
         return 0U;
     }

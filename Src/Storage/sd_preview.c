@@ -66,7 +66,7 @@ typedef struct
  * These buffers are CPU-managed, not DMA-owned. Keep them out of the D2 DMA
  * MPU window so startup remains within the explicit coverage check in main().
  */
-static AUDIO_WARM float g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
+static AUDIO_COLD_SDRAM float g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
 static AUDIO_WARM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 static sd_preview_ctx_t g_sd_preview;
 static uint32_t g_sd_preview_ring_read;
