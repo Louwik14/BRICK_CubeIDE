@@ -26121,16 +26121,14 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x240438d4                        _ebss = .
                 0x240438d4                        __bss_end__ = _ebss
 
-.ram_d1         0x240438e0    0x263c0 load address 0x08070fc8
+.ram_d1         0x240438e0    0x253c0 load address 0x08070fc8
                 0x240438e0                        . = ALIGN (0x20)
  *(.ram_d1)
  *(.ram_d1*)
  .ram_d1_audio  0x240438e0    0x243a0 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_reverb_revb.cpp.obj
  .ram_d1_audio  0x24067c80     0x1001 CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sample_cache.c.obj
- *fill*         0x24068c81        0x3 
- .ram_d1_audio  0x24068c84     0x1000 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/sd_preview.c.obj
-                0x24069ca0                        . = ALIGN (0x20)
- *fill*         0x24069c84       0x1c 
+                0x24068ca0                        . = ALIGN (0x20)
+ *fill*         0x24068c81       0x1f 
 
 .dtcm_audio     0x20000000    0x11b40
                 0x20000000                        . = ALIGN (0x20)
@@ -26150,11 +26148,11 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
  *(.dtcm_audio*)
                 0x20011b40                        . = ALIGN (0x20)
 
-.ram_d1_audio   0x24069ca0        0x0
-                0x24069ca0                        . = ALIGN (0x20)
+.ram_d1_audio   0x24068ca0        0x0
+                0x24068ca0                        . = ALIGN (0x20)
  *(.ram_d1_audio)
  *(.ram_d1_audio*)
-                0x24069ca0                        . = ALIGN (0x20)
+                0x24068ca0                        . = ALIGN (0x20)
 
 .ram_d2_dma     0x30000000     0x1f40
                 0x30000000                        . = ALIGN (0x20)
@@ -26200,7 +26198,7 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x3800bd60                        . = ALIGN (0x20)
  *fill*         0x3800bd4a       0x16 
 
-.sdram          0xc0000000  0x1759060
+.sdram          0xc0000000  0x175a060
                 0xc0000000                        . = ALIGN (0x20)
  *(.sdram)
  .sdram         0xc0000000      0x400 CMakeFiles/BRICK6_CUBE.dir/Drivers/Drv_app/Src/drv_display.c.obj
@@ -26234,51 +26232,51 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
  .sdram_ui      0xc15bbce0    0x2f9e8 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/project_v1.c.obj
  *fill*         0xc15eb6c8       0x18 
  .sdram_audio_cold
-                0xc15eb6e0     0x4000 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/sd_preview.c.obj
- .sdram_ui      0xc15ef6e0   0x165c50 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/undo_v2.c.obj
- *fill*         0xc1755330       0x10 
- .sdram_ui      0xc1755340     0x1840 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj
- .sdram_ui      0xc1756b80     0x1214 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
- *fill*         0xc1757d94        0xc 
- .sdram_ui      0xc1757da0     0x12c0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_template_page.c.obj
-                0xc1759060                        . = ALIGN (0x20)
+                0xc15eb6e0     0x5000 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/sd_preview.c.obj
+ .sdram_ui      0xc15f06e0   0x165c50 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/undo_v2.c.obj
+ *fill*         0xc1756330       0x10 
+ .sdram_ui      0xc1756340     0x1840 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj
+ .sdram_ui      0xc1757b80     0x1214 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_clipboard.c.obj
+ *fill*         0xc1758d94        0xc 
+ .sdram_ui      0xc1758da0     0x12c0 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_template_page.c.obj
+                0xc175a060                        . = ALIGN (0x20)
 
-.sdram_ui       0xc1759060        0x0
-                0xc1759060                        . = ALIGN (0x20)
+.sdram_ui       0xc175a060        0x0
+                0xc175a060                        . = ALIGN (0x20)
  *(.sdram_ui)
  *(.sdram_ui*)
-                0xc1759060                        . = ALIGN (0x20)
+                0xc175a060                        . = ALIGN (0x20)
 
-.sdram_samples  0xc1759060        0x0
-                0xc1759060                        . = ALIGN (0x20)
+.sdram_samples  0xc175a060        0x0
+                0xc175a060                        . = ALIGN (0x20)
  *(.sdram_samples)
  *(.sdram_samples*)
-                0xc1759060                        . = ALIGN (0x20)
+                0xc175a060                        . = ALIGN (0x20)
 
 .sdram_recorder
-                0xc1759060        0x0
-                0xc1759060                        . = ALIGN (0x20)
+                0xc175a060        0x0
+                0xc175a060                        . = ALIGN (0x20)
  *(.sdram_recorder)
  *(.sdram_recorder*)
-                0xc1759060                        . = ALIGN (0x20)
+                0xc175a060                        . = ALIGN (0x20)
 
 .sdram_audio_cold
-                0xc1759060        0x0
-                0xc1759060                        . = ALIGN (0x20)
+                0xc175a060        0x0
+                0xc175a060                        . = ALIGN (0x20)
  *(.sdram_audio_cold)
  *(.sdram_audio_cold*)
-                0xc1759060                        . = ALIGN (0x20)
+                0xc175a060                        . = ALIGN (0x20)
 
 ._user_heap_stack
-                0x24069ca0      0x600
-                0x24069ca0                        . = ALIGN (0x8)
+                0x24068ca0      0x600
+                0x24068ca0                        . = ALIGN (0x8)
                 [!provide]                        PROVIDE (end = .)
-                0x24069ca0                        PROVIDE (_end = .)
-                0x24069ea0                        . = (. + _Min_Heap_Size)
- *fill*         0x24069ca0      0x200 
-                0x2406a2a0                        . = (. + _Min_Stack_Size)
- *fill*         0x24069ea0      0x400 
-                0x2406a2a0                        . = ALIGN (0x8)
+                0x24068ca0                        PROVIDE (_end = .)
+                0x24068ea0                        . = (. + _Min_Heap_Size)
+ *fill*         0x24068ca0      0x200 
+                0x240692a0                        . = (. + _Min_Stack_Size)
+ *fill*         0x24068ea0      0x400 
+                0x240692a0                        . = ALIGN (0x8)
 
 /DISCARD/
  libc.a(*)

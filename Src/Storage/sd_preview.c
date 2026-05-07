@@ -67,7 +67,7 @@ typedef struct
  * MPU window so startup remains within the explicit coverage check in main().
  */
 static AUDIO_COLD_SDRAM float g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
-static AUDIO_WARM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
+static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 static sd_preview_ctx_t g_sd_preview;
 static uint32_t g_sd_preview_ring_read;
 static uint32_t g_sd_preview_ring_write;
