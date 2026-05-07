@@ -6,6 +6,7 @@
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_filter_asc.h"
+#include "Storage/memory_layout.h"
 
 #define CALIBRATION_PRESS_ADC                 50000U
 #define CALIBRATION_RELEASE_ADC               48000U
@@ -71,8 +72,8 @@ static hall_key_state_t g_key_state[HALL_KEY_COUNT];
 static uint8_t g_calibration_done = 0U;
 
 static uint32_t g_hold_start_tick[HALL_KEY_COUNT];
-static hall_median_buffer_t g_min_buffer[HALL_KEY_COUNT];
-static hall_median_buffer_t g_max_buffer[HALL_KEY_COUNT];
+CTRL_STATE static hall_median_buffer_t g_min_buffer[HALL_KEY_COUNT];
+CTRL_STATE static hall_median_buffer_t g_max_buffer[HALL_KEY_COUNT];
 static hall_user_calibration_state_t g_user_calibration;
 
 static void hall_median_buffer_reset(hall_median_buffer_t *buffer)

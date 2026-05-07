@@ -186,7 +186,7 @@ Etat global UI:
 - Lectures: getters UI, renderer template, hall keyboard bridge, logique shortcuts.
 
 Etat clipboard:
-- `g_ui_clipboard` (`ui_clipboard_state_t`) dans `ui_core_clipboard.c` avec sous-etats track/ensemble/page.
+- `g_ui_clipboard` (`ui_clipboard_state_t`) dans `ui_core_clipboard.c` avec sous-etats track/ensemble/page; placement `UI_SDRAM` car etat froid UI non audio et non DMA.
 - Ecriture: copy handlers dans `ui_core_clipboard.c`.
 - Lecture: paste/clear handlers dans `ui_core_clipboard.c`.
 
@@ -196,7 +196,7 @@ Etat page active:
 - Lecture: `ui_page_get`, `ui_page_get_id`, navigation/settings.
 
 Etat template families/subpages:
-- `g_ui_template_family_registry[...]` dans `ui_template_page.c`.
+- `g_ui_template_family_registry[...]` dans `ui_template_page.c`; placement `UI_SDRAM` car registry metadata UI non audio et non DMA.
 - Etat courant par page template: `ui_template_page_state_t` (dans chaque page concrete `Src/UI/pages/*`).
 - Ecriture: register families, `ui_template_page_select_subpage`, `ui_template_page_normalize_active_subpage`, enter handlers.
 - Lecture: renderer template, clipboard active page.
@@ -513,6 +513,7 @@ Points factuels:
     - succes -> bascule vers `CFG`,
     - echec -> conserve `CALIBRATION`.
 - Aucun fallback renderer n'est utilise pour masquer un etat UI invalide.
+- Les buffers median de calibration Hall (`g_min_buffer`, `g_max_buffer`) restent utilises uniquement par la page calibration / `hall_calibration_process()` et sont places en `CTRL_STATE` D3; ils ne sont ni audio hard-RT ni DMA-owned.
 
 
 ## 9. Contrat query stricte - filter target

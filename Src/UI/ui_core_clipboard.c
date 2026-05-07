@@ -10,6 +10,7 @@
 #include "ui_macro_interaction.h"
 #include "Storage/undo_v2.h"
 #include "Storage/project_v1.h"
+#include "Storage/memory_layout.h"
 #include "Core/engine_tasklet.h"
 #include "param_registry.h"
 #include "Core/track_runtime.h"
@@ -104,7 +105,7 @@ static void ui_core_clipboard_finish_snapshot_undo(uint8_t started)
     (void)undo_v2_commit_transaction();
 }
 
-static ui_clipboard_state_t g_ui_clipboard;
+UI_SDRAM static ui_clipboard_state_t g_ui_clipboard;
 
 static uint32_t ui_core_clipboard_make_undo_gesture_key(uint8_t op, uint8_t track, uint8_t extra)
 {
