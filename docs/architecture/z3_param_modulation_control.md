@@ -570,11 +570,9 @@ Call-sites critiques:
 - Le delay n'est pas un `fx_pool` slot et ne cree pas d'autorite par track.
 - `PARAM_MIX_REVERB_HPF` et `PARAM_MIX_REVERB_LPF` sont globaux et filtrent l'entree stereo de la reverb globale en pre-reverb.
 - Leur apply passe par `apply_mix_reverb_hpf/lpf` puis `mixer_set_reverb_hpf/lpf`; `0.0` reste neutre pour les deux params.
-- `PARAM_MIX_REVERB_TYPE` est global et choisit le backend send1: `0/DRUMBOY` default, `1/RevB` experimental, `2/GVERB` experimental, `3/OLIVERB` experimental.
-- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `Type=0/DRUMBOY`, `Surr=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` et `Surr` sont convertis en secondes par les setters mixer.
-- `RevB` consomme les memes params globaux utiles (`Wet`, `Size`, `Decay`, `PreD`, `LPF`) sans nouveau slot `PARAM_COUNT`; `Surr` reste neutre pour ce backend.
-- `GVERB` consomme les memes params globaux utiles (`Wet`, `Size`, `Decay`, `LPF`) sans nouveau slot `PARAM_COUNT`; `PreD` et `Surr` restent neutres pour ce backend.
-- `OLIVERB` consomme les memes params globaux utiles (`Wet`, `Size`, `Decay`, `LPF`) sans nouveau slot `PARAM_COUNT`; `PreD` et `Surr` restent neutres, et pitch/shimmer/modulation sont fixes a des valeurs neutres.
+- `PARAM_MIX_REVERB_TYPE` reste un tombstone global `0/RevB` pour ne pas renumeroter `PARAM_COUNT`; il ne choisit plus de backend runtime.
+- Les defaults reverb boot/catalog sont `Wet=0.0`, `Size=0.0`, `Decay=0.5`, `PreD=0.5`, `Type=0/RevB`, `Surr=0.5`, `HPF=0.0`, `LPF=0.0`; `PreD` est converti en secondes par le setter mixer.
+- `RevB` consomme les params globaux utiles (`Wet`, `Size`, `Decay`, `PreD`, `LPF`) sans nouveau slot `PARAM_COUNT`; `Surr` reste reserve et neutre pour ce backend.
 
 ## 28. Contrat send2 delay DUAL
 
@@ -726,3 +724,4 @@ Dette explicite post-passe 4:
 - Les IDs existants `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2` restent les seules cibles MIX page 1 exposees au p-lock et au LFO.
 - Autorite de base: `track_sound_state` par track; projection runtime via `param_registry_apply_track_value` / `param_registry_apply_track_value_rt_fast` vers la lane mixer resolue par Z2.
 - Exclusions conservees: `PARAM_MIX_MUTE`, `PARAM_HYBRID_GATE`, les params VCA, `Master/Buffer`, `Master/FX`, les globals reverb/delay et les params CFG structurels.
+- Stockage p-lock MIX: `seq_param_iface` garde un etat compact dedie a 4 slots reels, sans reserver la table 256 slots pour ce set.

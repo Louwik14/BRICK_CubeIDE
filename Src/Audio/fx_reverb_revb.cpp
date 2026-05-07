@@ -13,7 +13,7 @@ constexpr uint32_t kEngineBufferSize = 32768U;
 constexpr float kPredelayMaxSeconds = 0.090f;
 constexpr uint32_t kPredelayBufferSize = 4322U;
 
-AUDIO_COLD_SDRAM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
+AUDIO_WARM ALIGN32 static float g_revb_engine_buffer[kEngineBufferSize];
 AUDIO_WARM ALIGN32 static float g_revb_predelay_buffer[kPredelayBufferSize];
 AUDIO_HOT ALIGN32 static float g_revb_predelayed[AUDIO_BLOCK_SIZE];
 

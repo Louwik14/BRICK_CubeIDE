@@ -263,12 +263,11 @@ Memoire:
 - Scratch bus dans `mixer_process` en statique fonction.
 - Lanes externes mixer `g_external_track_l/r` dimensionnees `MIXER_MAX_TRACKS x AUDIO_BLOCK_SIZE`.
 
-Placement memoire valide pour la reverb Drumboy:
-- `g_reverb` et l'etat hot Drumboy restent en DTCM.
-- `comb_buffer0..7` et `apass_buffer0..3` restent en DTCM via `AUDIO_HOT`.
-- `predelay_buffer` et `surround_buffer` sont places en RAM_D2 via `AUDIO_LUT_D2`.
-- Ce compromis est retenu car le full DTCM est trop serre, tandis que le passage complet en SDRAM degrade trop l'IRQ reverb.
-- Ne pas remonter les delay lines Drumboy en SDRAM ni sortir les boucles feedback de DTCM sans nouvelle mesure.
+Placement memoire valide pour la reverb SEND runtime:
+- `RevB` est l'unique backend reverb runtime compile.
+- `g_revb_engine_buffer[32768]` et le predelay RevB restent en D1 via `AUDIO_WARM`.
+- Les anciens buffers runtime Drumboy (feedback DTCM, predelay/surround RAM_D2), GVerb et Oliverb sont retires.
+- Le code dormant Mutable/Inspiration non compile n'appartient pas au backend SEND runtime et n'est pas concerne par ce retrait.
 
 Granular / fx_pool:
 - `g_granular_state_storage` n'est plus en DTCM; il est place hors D1 via `AUDIO_COLD_SDRAM`.
@@ -413,35 +412,25 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Fonctions explicitement hors scope du backend DUAL: pitch, shimmer, reverse, diffusion, drive, ducking, phaser, EQ param complete, lo-fi.
 - Les buffers longs DUAL sont statiques en `AUDIO_COLD_SDRAM`; aucune allocation runtime audio n'est introduite.
 
-## 14.b Addendum - reverb send TYPE DRUMBOY/RevB/GVERB/OLIVERB
+## 14.b Addendum - reverb send RevB unique
 
-- `PARAM_MIX_REVERB_TYPE` choisit le backend global send1:
-  - `DRUMBOY` garde le moteur existant `fx_reverb_drumboy.*` et reste le default.
-  - `RevB` route le meme bus reverb send vers le moteur experimental porte depuis `Inspiration/reverb.h`.
-  - `GVERB` route le meme bus reverb send vers le moteur experimental derive de `Inspiration/gverb.c`, `gverb.h`, `gverbdsp.c`, `gverbdsp.h` et `ladspa-util.h`.
-  - `OLIVERB` route le meme bus reverb send vers le moteur experimental porte depuis `Inspiration/oliverb.h`.
+- `RevB` est l'unique backend global send1 runtime compile; Drumboy, GVerb et Oliverb runtime sont retires.
+- `PARAM_MIX_REVERB_TYPE` reste un tombstone de stockage (`0/RevB`) pour ne pas renumeroter `PARAM_COUNT`; il n'est plus expose dans la page MIX active.
 - La reverb reste un SEND global wet-only: `mixer_process()` accumule `send index 0`, applique HPF/LPF d'entree, appelle `fx_reverb_global_process_block()`, puis additionne uniquement le wet stereo au MAIN.
 - `RevB` utilise une API locale stable dans `fx_reverb_revb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
 - `RevB` downmixe l'entree send stereo en mono avant tank, puis sort un wet stereo decorrele; `Wet=0` conserve le bypass cout nul cote mixer.
-- `GVERB` utilise une API locale stable dans `fx_reverb_gverb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
-- `GVERB` conserve la structure FDN/diffusers/tapdelay source, mais remplace toutes les allocations dynamiques par des buffers statiques.
-- `OLIVERB` utilise une API locale stable dans `fx_reverb_oliverb.*`: init/reset, setters, puis `process_send_mono_to_stereo_wet()`.
-- `OLIVERB` conserve la topologie `FxEngine<32768, FORMAT_32_BIT>` d'origine, sans dry interne dans le return produit; pitch/shimmer/modulation restent fixes a des valeurs neutres dans cette passe.
 - Params mappes:
   - `Wet` -> gain d'entree wet-only,
-  - `Size` -> diffusion + modulation lente pour `RevB`, room size pour `GVERB`, size/diffusion pour `OLIVERB`,
-  - `Decay` -> feedback/time pour `RevB`, reverb time pour `GVERB`, feedback decay pour `OLIVERB`,
-  - `PreD` -> predelay local pour `RevB`; neutre pour `GVERB` et `OLIVERB`,
-  - `LPF` -> damping interne en plus du prefiltre d'entree global pour `RevB`, `GVERB` et `OLIVERB`,
-  - `Surr` reste sans effet direct sur `RevB`/`GVERB`/`OLIVERB` et conserve son sens Drumboy.
-- RAM statique ajoutee: `fx_revb_engine_buffer[32768]` en `AUDIO_COLD_SDRAM` soit environ 128 KiB, plus predelay `RevB` environ 17 KiB en D1 et scratch bloc DTCM.
-- RAM statique ajoutee pour `GVERB`: 4 lignes FDN de 43360 floats, 1 tapdelay de 44000 floats et 8 diffusers de 12288 floats, soit environ 1.28 MiB en `AUDIO_COLD_SDRAM`, plus etat runtime DTCM.
-- RAM statique ajoutee pour `OLIVERB`: `g_oliverb_engine_buffer[32768]` en `AUDIO_COLD_SDRAM`, soit environ 128 KiB, plus scratch bloc et petit etat runtime DTCM.
-- Cout IRQ attendu: superieur a `DRUMBOY`; `RevB` execute deux boucles feedback stereo avec interpolation/LFO par sample, `GVERB` execute FDN 4x + tapdelay + diffusers en SDRAM par sample, et `OLIVERB` execute la topologie `FxEngine` avec interpolations Hermite et limiteurs par sample. `DRUMBOY` reste le default tant que les backends experimentaux ne sont pas mesures sur cible.
+  - `Size` -> diffusion + modulation lente,
+  - `Decay` -> feedback/time,
+  - `PreD` -> predelay local,
+  - `LPF` -> damping interne en plus du prefiltre d'entree global.
+- `Surr` reste reserve/tombstone et n'a pas d'effet runtime RevB.
+- RAM conservee pour RevB: `g_revb_engine_buffer[32768]` en D1 via `AUDIO_WARM` soit environ 128 KiB, plus predelay environ 17 KiB en D1 et scratch bloc DTCM.
+- RAM liberee estimee par retrait runtime: Drumboy environ 60 KiB DTCM + 21 KiB RAM_D2, GVerb environ 1.28 MiB SDRAM + petit etat DTCM, Oliverb environ 128 KiB SDRAM + scratch/etat DTCM.
+- Cout IRQ attendu: environ 3% avec le buffer RevB en `AUDIO_WARM`.
 - Un point de mesure DWT local est expose par `fx_reverb_global_get_last_cycles()` / `fx_reverb_global_get_max_cycles()` autour du process reverb global.
-- Limites connues: `RevB`, `GVERB` et `OLIVERB` sont experimentaux, non mesures sur cible et sans integration UI additionnelle.
-- Licence source `GVERB`: les fichiers d'origine portent GPL-2.0-or-later; le port local conserve cette mention dans `fx_reverb_gverb.c`.
-- Licence source `OLIVERB`: `oliverb.h`, `fx_engine.h` et les shims locaux derives portent MIT; le port conserve la mention dans `fx_oliverb_model.h`.
+- Les sources Mutable/Inspiration dormantes (`clouds/*`, `rings/*`, `braids/*`, `plaits/*`, `stmlib/*`, `Inspiration/*`) ne sont pas supprimees par ce retrait car elles peuvent servir d'autres ports ou references non-runtime.
 
 ## 15. Addendum - retrait COLORS/CRUNCH
 

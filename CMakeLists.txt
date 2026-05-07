@@ -94,8 +94,6 @@ file(GLOB SRC_AUDIO_SRC
 
 list(APPEND SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_gverb.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_oliverb.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"
 )
 

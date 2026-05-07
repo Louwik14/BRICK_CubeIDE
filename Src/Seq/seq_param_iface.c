@@ -21,12 +21,24 @@ typedef struct
     uint8_t runtime_locked;
 } seq_param_slot_state_t;
 
-SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
-SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_COUNT][PARAM_COUNT];
-SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_COUNT][256U];
+SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_MIX][256U];
+SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_mix_state[SEQ_TRACK_COUNT][4U];
+SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_MIX][PARAM_COUNT];
+SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_MIX][256U];
+
+static const param_id_t g_seq_param_mix_slot_to_id[4U] = {
+    PARAM_MIX_LEVEL,
+    PARAM_MIX_PAN,
+    PARAM_MIX_SEND1,
+    PARAM_MIX_SEND2
+};
 
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
 #define SEQ_PARAM_ID_UNMAPPED ((param_id_t)0xFFFFU)
+
+static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track,
+                                                        uint8_t set_id,
+                                                        seq_param_slot_t param_slot);
 
 static uint8_t seq_param_iface_is_play_param(param_id_t param)
 {
@@ -53,7 +65,11 @@ static void seq_param_iface_seed_play_defaults(void)
                 continue;
             }
 
-            state = &g_seq_param_state[track][set_id][param_slot];
+            state = seq_param_iface_state_at(track, set_id, param_slot);
+            if (state == 0)
+            {
+                continue;
+            }
             if (state->base_valid == 0U)
             {
                 const float default_value = param_registry[param].default_value;
@@ -84,6 +100,56 @@ static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
         default:
             return 0U;
     }
+}
+
+static uint8_t seq_param_iface_mix_param_to_slot(param_id_t param, seq_param_slot_t *out_slot)
+{
+    if (out_slot == 0)
+    {
+        return 0U;
+    }
+
+    for (seq_param_slot_t slot = 0U; slot < 4U; ++slot)
+    {
+        if (g_seq_param_mix_slot_to_id[slot] == param)
+        {
+            *out_slot = slot;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static uint8_t seq_param_iface_mix_slot_to_param(seq_param_slot_t slot, param_id_t *out_param)
+{
+    if ((out_param == 0) || (slot >= 4U))
+    {
+        return 0U;
+    }
+
+    *out_param = g_seq_param_mix_slot_to_id[slot];
+    return 1U;
+}
+
+static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
+{
+    if (seq_param_iface_track_is_valid(track) == 0U)
+    {
+        return 0;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        return (param_slot < 4U) ? &g_seq_param_mix_state[track][param_slot] : 0;
+    }
+
+    if (set_id >= (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        return 0;
+    }
+
+    return &g_seq_param_state[track][set_id][param_slot];
 }
 
 static uint8_t seq_param_iface_set_id_from_domain(track_runtime_param_domain_t domain, uint8_t *out_set_id)
@@ -119,7 +185,7 @@ static void seq_param_iface_rebuild_slot_maps(void)
 {
     memset(g_seq_param_id_to_slot, SEQ_PARAM_SLOT_UNMAPPED, sizeof(g_seq_param_id_to_slot));
 
-    for (uint8_t set_id = 0U; set_id < (uint8_t)SEQ_PLOCK_SET_COUNT; ++set_id)
+    for (uint8_t set_id = 0U; set_id < (uint8_t)SEQ_PLOCK_SET_MIX; ++set_id)
     {
         for (uint16_t slot = 0U; slot < 256U; ++slot)
         {
@@ -127,7 +193,7 @@ static void seq_param_iface_rebuild_slot_maps(void)
         }
     }
 
-    uint16_t next_slot[(uint8_t)SEQ_PLOCK_SET_COUNT] = {0U};
+    uint16_t next_slot[(uint8_t)SEQ_PLOCK_SET_MIX] = {0U};
 
     for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
     {
@@ -137,8 +203,7 @@ static void seq_param_iface_rebuild_slot_maps(void)
             continue;
         }
 
-        if ((track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-                && (seq_param_iface_is_mix_param_plockable(param) == 0U))
+        if (track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
         {
             continue;
         }
@@ -219,10 +284,6 @@ static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track, t
     return 1U;
 }
 
-uint8_t seq_param_iface_map_param(param_id_t param,
-                                  uint8_t *out_set_id,
-                                  seq_param_slot_t *out_param_slot);
-
 static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
                                                    uint8_t set_id,
                                                    seq_param_slot_t param_slot)
@@ -249,6 +310,7 @@ static uint8_t seq_param_iface_is_slot_addressable(seq_track_id_t track,
 void seq_param_iface_init(void)
 {
     memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
+    memset(&g_seq_param_mix_state, 0, sizeof(g_seq_param_mix_state));
     track_runtime_init();
     seq_param_iface_rebuild_slot_maps();
     seq_param_iface_seed_play_defaults();
@@ -305,6 +367,25 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
         *out_param_id = tone_param;
         return 1U;
     }
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        param_id_t mix_param = PARAM_COUNT;
+        if (seq_param_iface_mix_slot_to_param(param_slot, &mix_param) == 0U)
+        {
+            return 0U;
+        }
+        if (seq_param_iface_param_matches_set_domain(set_id, mix_param) == 0U)
+        {
+            return 0U;
+        }
+        *out_param_id = mix_param;
+        return 1U;
+    }
+
+    if (set_id >= (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        return 0U;
+    }
 
     const param_id_t param = g_seq_param_slot_to_id[set_id][param_slot];
     if (param >= PARAM_COUNT)
@@ -353,6 +434,11 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
         *out_param_slot = (seq_param_slot_t)tone_slot;
         return 1U;
     }
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        return seq_param_iface_mix_param_to_slot(param_id, out_param_slot);
+    }
+
 
     uint8_t mapped_set_id = 0U;
     seq_param_slot_t slot = 0U;
@@ -409,7 +495,11 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
         return 0U;
     }
 
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
+    seq_param_slot_state_t *const state = seq_param_iface_state_at(track, set_id, param_slot);
+    if (state == 0)
+    {
+        return 0U;
+    }
     if (state->base_valid == 0U)
     {
         param_id_t param = PARAM_COUNT;
@@ -439,7 +529,11 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
     {
         return 0U;
     }
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
+    seq_param_slot_state_t *const state = seq_param_iface_state_at(track, set_id, param_slot);
+    if (state == 0)
+    {
+        return 0U;
+    }
     state->base_value = value16;
     state->base_valid = 1U;
 
@@ -492,7 +586,11 @@ uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_if
         return 0U;
     }
 
-    seq_param_slot_state_t *const state = &g_seq_param_state[cmd->target_track][cmd->set_id][cmd->param_slot];
+    seq_param_slot_state_t *const state = seq_param_iface_state_at(cmd->target_track, cmd->set_id, cmd->param_slot);
+    if (state == 0)
+    {
+        return 0U;
+    }
     state->base_value = cmd->value16;
     state->base_valid = 1U;
 
@@ -514,7 +612,11 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     {
         return 0U;
     }
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
+    seq_param_slot_state_t *const state = seq_param_iface_state_at(track, set_id, param_slot);
+    if (state == 0)
+    {
+        return 0U;
+    }
     if (state->base_valid == 0U)
     {
         state->base_value = state->runtime_value;
@@ -560,7 +662,11 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     {
         return 0U;
     }
-    seq_param_slot_state_t *const state = &g_seq_param_state[track][set_id][param_slot];
+    seq_param_slot_state_t *const state = seq_param_iface_state_at(track, set_id, param_slot);
+    if (state == 0)
+    {
+        return 0U;
+    }
     param_id_t param = PARAM_COUNT;
     if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
     {
@@ -613,6 +719,23 @@ uint8_t seq_param_iface_map_param(param_id_t param,
     }
 
     if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        seq_param_slot_t mix_slot = 0U;
+        if (seq_param_iface_mix_param_to_slot(param, &mix_slot) == 0U)
+        {
+            return 0U;
+        }
+        *out_set_id = set_id;
+        *out_param_slot = mix_slot;
+        return 1U;
+    }
+
+    if (set_id >= (uint8_t)SEQ_PLOCK_SET_MIX)
     {
         return 0U;
     }

@@ -24,8 +24,7 @@
 //
 // -----------------------------------------------------------------------------
 //
-// Base class for building reverb.
-// Additions for Oliverb
+// Base class for building RevB.
 
 #pragma once
 

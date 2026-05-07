@@ -3,11 +3,10 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-#include "fx_reverb_drumboy.h"
 
 struct fx_reverb_t {
-    fx_reverb_drumboy_t model;
     uint8_t bypass;
+    float wet;
 };
 
 extern "C" {
@@ -32,11 +31,8 @@ void fx_reverb_set_bypass(fx_reverb_t *rev, uint8_t bypass);
 
 typedef enum
 {
-    FX_REVERB_GLOBAL_TYPE_DRUMBOY = 0,
-    FX_REVERB_GLOBAL_TYPE_REVB = 1,
-    FX_REVERB_GLOBAL_TYPE_GVERB = 2,
-    FX_REVERB_GLOBAL_TYPE_OLIVERB = 3,
-    FX_REVERB_GLOBAL_TYPE_MONO = FX_REVERB_GLOBAL_TYPE_DRUMBOY,
+    FX_REVERB_GLOBAL_TYPE_REVB = 0,
+    FX_REVERB_GLOBAL_TYPE_MONO = FX_REVERB_GLOBAL_TYPE_REVB,
     FX_REVERB_GLOBAL_TYPE_STEREO = FX_REVERB_GLOBAL_TYPE_REVB,
 } fx_reverb_global_type_t;
 

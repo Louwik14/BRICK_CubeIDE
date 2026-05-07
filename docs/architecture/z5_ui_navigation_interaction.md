@@ -479,9 +479,9 @@ Points factuels:
 - `MIX 1/2` expose:
   - `MIX`: `Level`, `Pan`, `Send1`, `Send2`,
   - `REVB`: `Wet`, `Size`, `Decay`, `PreD`,
-  - `REV2`: `Type`, `Surr`,
+  - `REV2`: reservee/vide,
   - `REV3`: `HPF`, `LPF`.
-- Le champ `REV2/Type` expose `DRUMBOY`, `RevB`, `GVERB` et `OLIVERB`; `DRUMBOY` reste le default, `RevB`, `GVERB` et `OLIVERB` sont experimentaux et ne changent pas la surface UI.
+- La page active MIX n'expose plus `REV2/Type`; `PARAM_MIX_REVERB_TYPE` reste reserve en stockage avec `0/RevB`, et `RevB` est l'unique reverb SEND runtime.
 - Les params delay globaux sont exposes dans `MIX 2/2`, sans nouveau mode UI.
 - `Send2` reste le niveau par track vers le delay global; `VOL` reste le niveau global de retour wet master et `REV` le send wet delay vers la reverb globale.
 - Le delay global expose une surface `MIX 2/2` contextuelle selon `TYPE`:

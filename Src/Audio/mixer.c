@@ -190,7 +190,7 @@ typedef struct
 } mixer_reverb_input_filter_state_t;
 
 static AUDIO_HOT mixer_reverb_state_t g_reverb = {
-    .type = FX_REVERB_GLOBAL_TYPE_DRUMBOY,
+    .type = FX_REVERB_GLOBAL_TYPE_REVB,
     .wet = 0.0f,
     .size = 0.0f,
     .decay = 0.50f,
@@ -1358,14 +1358,8 @@ void mixer_set_reverb_surround(float surround)
 
 void mixer_set_reverb_type(uint8_t type)
 {
-    if(type == 1U)
-        g_reverb.type = FX_REVERB_GLOBAL_TYPE_REVB;
-    else if(type == 2U)
-        g_reverb.type = FX_REVERB_GLOBAL_TYPE_GVERB;
-    else if(type == 3U)
-        g_reverb.type = FX_REVERB_GLOBAL_TYPE_OLIVERB;
-    else
-        g_reverb.type = FX_REVERB_GLOBAL_TYPE_DRUMBOY;
+    (void)type;
+    g_reverb.type = FX_REVERB_GLOBAL_TYPE_REVB;
     fx_reverb_global_set_type(g_reverb.type);
 }
 

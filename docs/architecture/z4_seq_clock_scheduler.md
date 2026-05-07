@@ -630,3 +630,4 @@ Points factuels observes:
 - `seq_param_iface` expose un set p-lock `MIX` reserve aux quatre params track-aware `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1`, `PARAM_MIX_SEND2`.
 - Le slot p-lock reste local au set `MIX`; l'application/restauration passe par `param_registry_apply_track_value` sur la track cible.
 - Les autres params du domaine runtime `MIX` (`MUTE`, `HYBRID_GATE`, VCA) restent hors mapping p-lock.
+- Le set `MIX` est stocke dans `seq_param_iface` comme 4 slots reels (`0=LEVEL`, `1=PAN`, `2=SEND1`, `3=SEND2`), hors tables communes 256 slots.
