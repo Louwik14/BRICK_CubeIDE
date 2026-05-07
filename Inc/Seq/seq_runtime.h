@@ -5,6 +5,8 @@
 
 #include "Seq/seq_types.h"
 
+#define SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE 0xF0U
+
 typedef struct
 {
     uint8_t active;

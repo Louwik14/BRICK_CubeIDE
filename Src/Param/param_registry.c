@@ -289,29 +289,8 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_CLIP_SEARCH:
             *out_value = state->clip.search_size;
             return 1U;
-        case PARAM_BUFFER_TSTR:
-            *out_value = state->buffer.stretch_mode;
-            return 1U;
         case PARAM_BUFFER_GRAIN:
             *out_value = state->buffer.grain_size;
-            return 1U;
-        case PARAM_BUFFER_HOP:
-            *out_value = state->buffer.hop_size;
-            return 1U;
-        case PARAM_BUFFER_QUALITY:
-            *out_value = 0.0f;
-            return 1U;
-        case PARAM_BUFFER_SYNC_LEN:
-            *out_value = state->buffer.sync_len;
-            return 1U;
-        case PARAM_BUFFER_SRC_BPM:
-            *out_value = state->buffer.source_bpm;
-            return 1U;
-        case PARAM_BUFFER_RATIO_Q16:
-            *out_value = state->buffer.ratio_q16;
-            return 1U;
-        case PARAM_BUFFER_TSNS:
-            *out_value = state->buffer.transient_sensitivity;
             return 1U;
         case PARAM_BUFFER_PRESERVE_PITCH:
             *out_value = state->buffer.preserve_pitch;
@@ -503,29 +482,8 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_CLIP_SEARCH:
             state->clip.search_size = value;
             return 1U;
-        case PARAM_BUFFER_TSTR:
-            state->buffer.stretch_mode = value;
-            return 1U;
         case PARAM_BUFFER_GRAIN:
             state->buffer.grain_size = value;
-            return 1U;
-        case PARAM_BUFFER_HOP:
-            state->buffer.hop_size = value;
-            return 1U;
-        case PARAM_BUFFER_QUALITY:
-            return 1U;
-            return 1U;
-        case PARAM_BUFFER_SYNC_LEN:
-            state->buffer.sync_len = value;
-            return 1U;
-        case PARAM_BUFFER_SRC_BPM:
-            state->buffer.source_bpm = value;
-            return 1U;
-        case PARAM_BUFFER_RATIO_Q16:
-            state->buffer.ratio_q16 = value;
-            return 1U;
-        case PARAM_BUFFER_TSNS:
-            state->buffer.transient_sensitivity = value;
             return 1U;
         case PARAM_BUFFER_PRESERVE_PITCH:
             state->buffer.preserve_pitch = value;

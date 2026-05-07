@@ -406,7 +406,7 @@ D1 mÃ©lange :
 |---|---:|---|---|---|---|
 | `g_sampler_clip_slots` | 67 664 B | `brick6_sampler_runtime.c` | slots clip/shifter Sampler | garder interne / redesign | audio render Sampler |
 | `g_sample_cache_file` | 38 400 B | `sample_cache.c` | 64 objets `FIL` FatFs | Ã  auditer | touche FatFs/streaming, ne pas marquer safe immÃ©diat |
-| `g_master_buffer_stretch` | 36 448 B | `brick6_master_buffer_stretch.c` | timestretch Master/Buffer | garder interne | audio render/stretch |
+| `g_pitch_shifter` | 16 396 B | `brick6_master_buffer.c` | shifter Master/Buffer partage `brick6_clip_shifter` | garder interne | audio playback |
 | `g_mod_lfo_dest_cache` | 19 432 B | `mod_lfo_v1.c` | cache destinations LFO | D3 possible avec vÃ©rification | modulation processÃ©e par bloc audio |
 | `g_param_macro_sources` | 15 680 B | `param_macro.c` | sources macro param | D3 possible avec vÃ©rification | control/param |
 | `g_keyboard_engine_group_note_track` | 14 336 B | `keyboard_engine.c` | runtime keyboard notes | D3 possible avec vÃ©rification | live performance state |
@@ -475,7 +475,7 @@ Gain avec hall calibration et vÃ©rifications : environ 80â€“100 KiB.
 | Bloc | Taille | Raison |
 |---|---:|---|
 | RevB buffers | 148 360 B | explicitement validÃ©s D1 en Z1 |
-| `g_master_buffer_stretch` | 36 448 B | audio render/stretch |
+| `g_pitch_shifter` | 16 396 B | audio playback shifter |
 | `g_sampler_clip_slots` | 67 664 B | audio render Sampler Clip/Shifter |
 | `g_track_filters` | 11 648 B | mix final IRQ |
 | `g_seq_play_*` | ~13 KiB | scheduler audio-block |
@@ -638,7 +638,7 @@ Combinaisons possibles :
 | `g_seq_project` | D2 | 121 968 B | rÃ©duire budget p-lock, compresser, sparse storage |
 | `g_seq_param_state` | D2 | 86 016 B | structure sparse ou lazy, rÃ©duire dimensions |
 | `g_sampler_clip_slots` | D1 | 67 664 B | sÃ©parer Ã©tat hot/froid, allocation statique par capacitÃ© active |
-| `g_master_buffer_stretch` | D1 | 36 448 B | sÃ©parer analyse froide / render hot |
+| `g_pitch_shifter` | D1 | 16 396 B | reuse `brick6_clip_shifter`, sans analyse separee |
 | `g_haas_l/r` | DTCM | 19 216 B | D1 aprÃ¨s mesure, ou rÃ©duire taille Haas |
 | `g_external_track_*` | DTCM | 10 752 B | mutualiser mono/stereo si possible |
 | `previous_filters.0` | D1 | 11 648 B | Ã©viter snapshot complet ou stocker temporaire ailleurs |
@@ -761,7 +761,7 @@ Passe appliquee sans build et sans toucher DTCM, streaming SD critique, buffers 
 
 Gain D1 estime total : ~42 128 B, hors effets d'alignement linker.
 
-Symboles explicitement exclus et inchanges dans cette passe : `g_sample_cache_file`, `g_sample_cache_io_storage`, `g_sd_preview_ring`, `g_sd_preview_io`, `g_revb_engine_buffer`, `g_revb_predelay_buffer`, `g_sampler_clip_slots`, `g_master_buffer_stretch`, `g_track_filters`, `g_seq_project`, `g_seq_param_state`, tous buffers DTCM et tous buffers D2 DMA/audio DMA.
+Symboles explicitement exclus et inchanges dans cette passe : `g_sample_cache_file`, `g_sample_cache_io_storage`, `g_sd_preview_ring`, `g_sd_preview_io`, `g_revb_engine_buffer`, `g_revb_predelay_buffer`, `g_sampler_clip_slots`, `g_track_filters`, `g_seq_project`, `g_seq_param_state`, tous buffers DTCM et tous buffers D2 DMA/audio DMA.
 
 Risques restants : revalider le gain avec un map post-link exact, car les tailles ci-dessus viennent de l'audit/map disponible ; verifier la latence SDRAM UI si une interaction clipboard/template est fortement sollicitee, sans risque audio hard-RT attendu.
 
@@ -833,7 +833,7 @@ Symboles explicitement inchanges : `g_sample_cache_file`, sample streaming princ
 ## 14.1 Ce qui doit rester en interne rapide
 
 - DTCM audio hot : `tracks`, gains, scratch mix, engines runtime, voix Sampler.
-- D1 audio warm : RevB engine/predelay, Master/Buffer stretch, Sampler clip slots, mixer filters.
+- D1 audio warm : RevB engine/predelay, Master/Buffer shifter, Sampler clip slots, mixer filters.
 - D2 DMA : OLED/SPI DMA, LED/TIM DMA, ADC DMA, SAI RX/TX cacheable avec maintenance.
 - D2 seq runtime : modÃ¨le sÃ©quenceur et p-locks tant qu'aucun redesign/profiling n'existe.
 

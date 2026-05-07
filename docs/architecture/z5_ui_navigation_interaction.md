@@ -1,4 +1,4 @@
-# Z5 - UI / Navigation / Interaction
+﻿# Z5 - UI / Navigation / Interaction
 
 ## 1. Perimetre
 
@@ -278,9 +278,9 @@ Flux nominal prouve:
   - le hall de la track `Master/Buffer` active est affiche en vert fonce comme destination courante et son toggle est ignore.
 - Resolution contextuelle `Master/Buffer -> TONE`:
   - la famille template buffer garde `REC` et `FADE`,
-  - les controles stretch restent dans `TONE` via sous-pages buffer-specifiques `STR` et `SYNC`,
-  - `STR` expose `TStr`, `Grain` et `Hop` pour `Master/Buffer`,
-  - `SYNC` expose `Sync Len` et `Src BPM` uniquement pour `Master/Buffer`,
+  - les controles shifter restent dans `TONE` via sous-page buffer-specifique `SHFT`,
+  - `SHFT` expose `Grain` et `Pitch` pour `Master/Buffer`,
+  - `Pitch=ON` garde le label UI existant mais active aussi le suivi BPM du playback buffer via le shifter partage,
   - aucun nouveau hall mode ni deplacement de `ROUT`.
 
 5. Appels vers param/runtime/seq/storage

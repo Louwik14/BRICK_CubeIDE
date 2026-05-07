@@ -27,15 +27,14 @@
 #include "fx_delay_dual.h"
 #include "fx_delay_stereo.h"
 #include "fx_reverb.h"
+#include "Core/brick6_master_buffer.h"
+#include "Core/track_runtime.h"
 
 #include <math.h>
 #include <string.h>
 
 #include "fx_chain.h"
 #include "fx_pool.h"
-#include "Core/brick6_master_buffer.h"
-#include "Core/track_runtime.h"
-#include "sd_multitrack_recorder.h"
 #include "memory_layout.h"
 
 typedef struct {
@@ -163,10 +162,6 @@ static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 #define MIXER_REVERB_INPUT_LPF_MAX_ALPHA 0.85f
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
 #define MIXER_EQ3_NUM_STAGES 3U
-// Nominal per-track trim for dry summing headroom.
-// 0 dBFS remains the hard ceiling; tracks are kept below it before summing.
-#define MIXER_TRACK_NOMINAL_TRIM 0.125f
-
 typedef struct
 {
     fx_reverb_global_type_t type;
@@ -1868,8 +1863,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
 
-    brick6_master_buffer_begin_block(frames);
-
     uint8_t send_fx_active = 0U;
     for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
     {
@@ -1990,12 +1983,11 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             R = ext_mono_r;
         }
 
-        uint8_t source_track = (uint8_t)t;
-        if (track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track) == 0U)
         {
-            source_track = (uint8_t)t;
+            uint8_t source_track = (uint8_t)t;
+            (void)track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track);
+            brick6_master_buffer_submit_track_post_fader(source_track, L, R, frames);
         }
-        brick6_master_buffer_submit_track_post_fader(source_track, L, R, frames);
 
         if(send_bus_active != 0U)
         {
@@ -2065,7 +2057,6 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         }
     }
 
-    brick6_master_buffer_commit_block(frames);
     mixer_external_inputs_clear();
 
     if(send_bus_active != 0U)

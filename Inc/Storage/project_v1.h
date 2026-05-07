@@ -16,7 +16,7 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    18U /* Track type/param layout cleanup; legacy project files are intentionally refused in prototype phase. */
+#define PROJECT_V1_FILE_VERSION    19U /* Master/Buffer stretch removal; legacy project files are intentionally refused in prototype phase. */
 
 typedef enum
 {

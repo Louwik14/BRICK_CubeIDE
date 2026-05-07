@@ -29,6 +29,8 @@
 #define MIXER_MAX_TRACKS SEQ_TRACK_COUNT
 #define MIXER_NUM_SENDS 2U
 #define MIXER_INSERTS_PER_TRACK 2U
+/* Nominal per-track trim for dry bus summing headroom. */
+#define MIXER_TRACK_NOMINAL_TRIM 0.125f
 
 typedef enum
 {

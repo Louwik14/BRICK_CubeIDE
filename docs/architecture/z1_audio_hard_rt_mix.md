@@ -25,7 +25,6 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
 - Etat produit courant `sd_multitrack_recorder` : bypass temporaire via `SD_RECORDER_PRODUCT_ENABLED=0`. Les hooks audio SD peuvent rester appeles, mais `sd_recorder_request_start/stop/arm/disarm`, `sd_recorder_audio_block_begin()` et `sd_recorder_capture_tap_block()` retournent immediatement tant que le flag reste a `0`.
 - `Src/Core/brick6_master_buffer.c` + `Inc/Core/brick6_master_buffer.h` : preuve du branchement bloc debut/fin et read playback dans pipeline.
-- `Src/Core/brick6_master_buffer_stretch.c` + `Inc/Core/brick6_master_buffer_stretch.h` : seam local du futur timestretch playback Master/Buffer, borne a une instance unique et sans pipeline parallele.
 - `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER` et `PITCH`, et formants SVF legers pour `TALK`.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
@@ -38,7 +37,6 @@ Dependances de Z1 sans appartenir a Z1:
 - `sd_multitrack_recorder` (taps et writer hors IRQ).
 - `sd_multitrack_recorder` = recorder SD/stems distinct du `Master/Buffer`; en etat produit courant il reste bypasse par flag compile-time local.
 - `brick6_master_buffer` (capture post-fader + lecture playback).
-- `brick6_master_buffer_stretch` (etat runtime local du timestretch playback, sans ownership du recorder brut).
 - `track_tone_sound_state` pour les valeurs `Master/FX` type/LVL/A/B lues par `fx_master_macro`.
 - `fx_chain`, `fx_reverb`, `env_adsr`, `fx_biquad_filter`.
 
@@ -89,13 +87,13 @@ Entrees de la zone Z1:
 
 Entrees de configuration runtime (hors Z1 mais consommees par Z1):
 - Etat mixer (`mixer_set_track_*`, `mixer_set_send_fx_slot`, etc.) via Param/UI.
-- Etat track runtime (`track_runtime_*`) lu dans `brick6_audio_runtime` et `mixer`.
+- Etat track runtime (`track_runtime_*`) lu dans `brick6_audio_runtime`; `mixer` lit uniquement le remap `mix_track -> logical_track` pour filtrer la capture `Master/Buffer`.
 - Evenements sequenceur audio (`seq_runtime_audio_collect_block_events`, `seq_runtime_audio_apply_event`).
 - Etat master buffer (`brick6_master_buffer_get_xfade`, state recorder).
 
 Contrats implicites critiques:
 - `AUDIO_FRAMES_PER_HALF` dans `audio.c` doit rester coherent avec `AUDIO_BLOCK_SIZE` (`audio_float.h`).
-- Les offsets d'evenements de `seq_runtime_audio_collect_block_events` sont supposes dans `[0..frames]` (code clamp a `AUDIO_FRAMES_PER_HALF`).
+- Les offsets d'evenements de `seq_runtime_audio_collect_block_events`, markers boundary inclus, sont supposes dans `[0..frames]` (code clamp a `AUDIO_FRAMES_PER_HALF`).
 - Le callback DSP (`dsp_engine`) doit etre O(1) borne et sans blocage.
 
 ## 4. API sortantes
@@ -104,11 +102,13 @@ Sorties directes de Z1:
 - Vers DMA TX: buffer `tx_buffer` via `HAL_SAI_Transmit_DMA` (data preparee dans `process_half`).
 - Vers scheduler systeme: `engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF)`.
 - Vers runtime sequenceur: `seq_runtime_audio_apply_event()` au sample offset.
+- Vers master buffer timing: `audio.c` consomme les markers `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` au meme offset sample que les events scheduler et appelle `brick6_master_buffer_on_boundary_edge`.
 - Vers recorder taps:
   - `SD_RECORDER_TAP_TRACK_RAW` et `SD_RECORDER_TAP_MASTER` dans `brick6_audio_runtime`.
   - Les anciens taps track intermediaires `POST_INSERT` / `POST_FADER` / `POST_SEND` ne sont plus emis par `mixer`.
 - Vers master buffer:
-  - `brick6_master_buffer_begin_block`, `submit_track_post_fader`, `commit_block` dans `mixer`.
+  - `brick6_master_buffer_begin_block` et `commit_block` dans `brick6_audio_runtime`.
+  - `brick6_master_buffer_submit_track_post_fader` dans `mixer_process`, avec filtrage ROUT/source par track logique.
   - `brick6_master_buffer_read_playback` + blend final dans `brick6_audio_runtime`.
 
 Contrats timing sortants:
@@ -180,6 +180,7 @@ Possession du routage main/cue/send:
 
 Taps recorder et master-buffer:
 - Oui, implementes directement dans Z1 (`brick6_audio_runtime.c` + `mixer.c`) comme appels de service synchrones bloc.
+- Le buffer interne capture un bus dedie source-filtre dans `mixer_process`: tracks activees par ROUT/source, post gain/pan/VCA track et post `MIXER_TRACK_NOMINAL_TRIM`, avant playback `Master/Buffer`, avant `Master/FX`, avant preview SD et avant pack de sortie.
 
 ## 6. Flux runtime
 
@@ -190,7 +191,7 @@ Flux nominal prouve par code:
 
 2) Decoupe half/block
 - `process_half(half_index)` calcule offset half et invalidation D-cache RX.
-- Recupere evenements bloc via `seq_runtime_audio_collect_block_events`.
+- Recupere evenements bloc et markers boundary via `seq_runtime_audio_collect_block_events`.
 - Ce call consomme aussi les pulses step du sequencer (interne + externes pending) en domaine sample avant extraction des events dus du bloc.
 - Coupe le half en sous-segments selon offsets events, appelle `audio_process_block_int32` par segment.
 
@@ -200,7 +201,7 @@ Flux nominal prouve par code:
   - lane 3 (interne) est explicitement zeroee.
 
 4) Collecte des events/sources
-- Avant chaque sous-segment, `seq_runtime_audio_apply_event` applique les events a l'offset.
+- Avant chaque sous-segment, `audio.c` applique les markers boundary `Master/Buffer`, puis `seq_runtime_audio_apply_event` applique les events scheduler au meme offset.
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
 - rendu engines externes (Drum/Opal mono-instance, Braids mono par instance, Sampler stereo) -> `mixer_submit_external_*`
@@ -221,14 +222,16 @@ Flux nominal prouve par code:
   - `EQ3` mono est un bloc mono reel pris directement par le `lane_plan`; une lane mono-native avec `EQ3` actif ne doit plus etre promue stereo pour appeler `EQ3` stereo avec `L/R` dupliques
   - la projection `mono -> L/R` reste tardive et centralisee: taps `POST_INSERT`, boucle commune `VCA+gain+pan`, puis consommation `POST_FADER`, sends et bus
   - le chemin stereo reste la reference fonctionnelle et ne met plus a jour les etats mono auxiliaires (`biquad_mono`, `eq3_mono`) quand la lane execute deja en stereo
+  - capture le bus dedie `Master/Buffer` par track routee/source active, post gain/pan/VCA et trim nominal
   - returns reverb/send FX
   - ecrit resultat dans `tracks[0]` (MAIN) et `tracks[1]` (CUE)
 
 7) Taps recorder / master-buffer
-- submit post-fader vers master-buffer dans `mixer_process`.
-- commit master-buffer fin de mix.
-- post-mix: `brick6_audio_runtime_dsp` lit playback buffer et applique xfade live/recorded sur `tracks[0]`.
-- post-mix: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]` avant preview SD, playback `Master/Buffer` et tap master final.
+- `brick6_audio_runtime_dsp` arme le bloc master-buffer, appelle `mixer_process`, puis le commit master-buffer consomme le bus capture source-filtre accumule dans le mixer.
+- Les starts Q Rec/Q Play ne lisent plus le miroir de playhead: ils sont declenches par `brick6_master_buffer_on_boundary_edge(track)` appele au debut exact du segment boundary.
+- commit master-buffer avant toute lecture playback, avec troncature du dernier segment a `record_target_frames`.
+- post-capture: `brick6_audio_runtime_dsp` lit playback buffer et applique xfade live/recorded sur `tracks[0]`.
+- post-playback: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]`, puis preview SD, puis tap master final.
 - La preview SD est un chemin d'audition UI temporaire: `sd_preview_render_main()` lit `g_sd_preview_ring` place en `AUDIO_COLD_SDRAM`; le cout SDRAM en IRQ n'existe que pendant une preview active et ne concerne pas le playback principal ni le streaming Sampler.
 - tap final `SD_RECORDER_TAP_MASTER` (hook conserve, no-op immediat en produit tant que `SD_RECORDER_PRODUCT_ENABLED=0`).
 - Distinction structurante:
@@ -308,25 +311,17 @@ Granular / fx_pool:
 - Sur ce chemin Phase 1/2/3/4/5A/5B/6A/6B, aucun `request_page` n'est emis depuis le kernel audio. Le prefetch stream est queue hors IRQ par `sample_cache_service()` a partir des voix actives, et la transition de page du cursor se limite a un acquire/release RAM-only au boundary; en reverse, les demandes se font sur `current-1/current-2`. La loop forward 1x reste un wrap de cursor local (`loop_end -> loop_begin`), le ping-pong 1x une inversion locale de direction/kernels aux bounces, et le pitch simple forward/reverse/loop/ping-pong consomme des segments prepares avec voisin d'interpolation deja acquis.
 - Les autres modes (`slice`) restent provisoirement sur les chemins legacy `sample_cache_begin_read_block()` et `sample_voice_reader_render_pitch_forward()` jusqu'aux phases suivantes.
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
-- Master-buffer est dans le pipeline de bloc (`begin -> submit -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`.
-- Master/FX MacroFX est un insert master apres `mixer_process` et avant le blend playback `Master/Buffer`; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` ont un traitement DSP. `OFF` et tout type inconnu restent no-op exacts. `RING` et `CRUSH` ne lisent pas la mesure/position transport; `STUTTER` lit seulement le BPM courant pour dimensionner sa fenetre rythmique.
+- Master-buffer est dans le pipeline de bloc (`begin -> capture bus source-filtre -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`, avant `Master/FX`.
+- Master/FX MacroFX est un insert master apres le blend playback `Master/Buffer`; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` ont un traitement DSP. `OFF` et tout type inconnu restent no-op exacts. `RING` et `CRUSH` ne lisent pas la mesure/position transport; `STUTTER` lit seulement le BPM courant pour dimensionner sa fenetre rythmique.
 - Les delays MacroFX sont monophoniques par slot, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `STUTTER` et `PITCH` reutilisent ce core mono: `STUTTER` capture une fenetre recente bornee avec crossfade court de boucle, `PITCH` utilise deux lectures delay/grain simples. `TALK` utilise des formants fixes/morphables bornes, sans FFT ni analyse vocale.
-- Le futur stretch Master/Buffer reste un seam local du playback buffer: `brick6_master_buffer` garde l'ownership du buffer et `live_recorder` garde l'ownership du stockage/lecture brute.
 - Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
 - `brick6_clip_shifter` porte un shifter deux taps delay/crossfade local; le ratio de correction est isole dans `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la taille de fenetre, `Hop` et `Search` restent sans effet dans ce mode.
 - Le runtime lourd `Sampler/Clip` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Clip` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Shifter` retombe explicitement sur `Speed` sans crash.
-- Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, moteur stretch local uniquement quand il est explicitement pret.
-- Le lifecycle du stretch buffer reste pilote par `brick6_master_buffer`: invalidation sur clear/debut de record, republication explicite de la source sur fin auto ou stop manuel.
-- L'analyse stretch (metadata/transients/anchors) reste hors IRQ et est servicee depuis la superloop via `brick6_app_process()`, par slices bornees et reliees a une `source_generation` explicite.
-- Le moteur stretch playback `Master/Buffer` reste local a `brick6_master_buffer_stretch`, mais il n'utilise plus de phase-vocoder spectral: il repose sur une lecture time-domain par grains fenetres, OLA et ring de sortie statique.
-- Les profils de qualite visibles ont disparu; le moteur est maintenant regle explicitement par `Grain` et `Hop` dans le seam local.
-- `Pitch=Off` force un fallback varispeed local tres leger; `Pitch=On` active l'OLA time-domain borne.
-- Criteres de validation manuelle a conserver pour `Master/Buffer` timestretch:
-  - `OFF` doit retomber sur la lecture brute existante,
-  - `NORMAL` doit conserver le pitch en variation de `SYNC_LEN`/`Src BPM`,
-  - les changements `Grain/Hop` ne doivent pas casser la stabilite du seam local,
-  - `REC/CLEAR/stop manuel/start transport` doivent invalider ou republier explicitement la source stretch,
-  - `XFade`, `Fade In/Out`, `Q Rec`, `Q Play` et restore pattern/project ne doivent pas contourner le seam local `brick6_master_buffer_read_playback()`.
+- Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, shifter local uniquement quand `Pitch` est actif et que le ratio effectif de lecture differe de 1.0.
+- `Master/Buffer` lit toujours via `brick6_master_buffer_read_playback()`: en `Pitch=ON`, la vitesse effective vaut `Rate * recorded_samples_per_step / current_samples_per_step`, puis `brick6_clip_shifter_process_stereo()` compense le pitch sur le bloc deja lu; en `Pitch=OFF`, `Rate` conserve le comportement manuel existant.
+- Capture `Master/Buffer`: bus dedie MAIN dry, source-filtre par toggles ROUT track, post track gain/pan/VCA, post `MIXER_TRACK_NOMINAL_TRIM`, sans CUE, avant playback buffer, Master/FX, preview SD et output pack. Les returns send ne sont pas captures par ce bus dedie.
+- Le shifter partage le meme DSP que `Sampler/Clip`; `Grain` pilote la fenetre, aucun moteur d'analyse separe ne reste pour `Master/Buffer`.
+- `REC/CLEAR/stop manuel/start transport` reset uniquement l'etat du shifter et conservent l'ownership brut `live_recorder`.
 
 ## 9. Dependances inter-zones
 
@@ -348,12 +343,12 @@ Points factuels:
 - Responsabilites concentrees: `brick6_audio_runtime_dsp` cumule orchestration engines + modulation + sampler + taps + blend buffer.
 - Ordre d'appel tres contraint:
   - `mixer_external_inputs_clear` appele a la fois dans runtime et mixer (redondance defensive).
-  - Le blend master-buffer est applique apres `mixer_process`, donc hors logique de bus mixer.
+  - Le blend master-buffer est applique apres le commit du bus capture source-filtre, donc hors logique de bus mixer.
 - Branche speciale Master/Buffer presente dans Z1 mais bornee:
-  - capture: `mixer_process` (`brick6_master_buffer_begin_block` -> `brick6_master_buffer_submit_track_post_fader` -> `brick6_master_buffer_commit_block`).
+  - capture: `brick6_audio_runtime_dsp` arme/commit le bloc (`brick6_master_buffer_begin_block` -> `mixer_process` -> `brick6_master_buffer_commit_block`), et `mixer_process` alimente le bus par `brick6_master_buffer_submit_track_post_fader`.
   - ownership runtime capture/playback: `brick6_master_buffer.c` (etat recorder, sources, quantize, loop/read).
   - lecture playback + point de blend: `brick6_audio_runtime_dsp` apres `mixer_process` et avant `SD_RECORDER_TAP_MASTER`.
-  - autorite routage source capture: mapping `mix_track -> logical_track` via `track_runtime_get_logical_track_for_mix_track` dans `mixer_process`.
+  - autorite source capture: bus dedie dans `mixer_process`, avec mapping `mix_track -> logical_track` via `track_runtime_get_logical_track_for_mix_track`; le routage source par track filtre la capture.
   - aucun second backend recorder concurrent observe in-tree.
 - Etat courant recorder SD/stems:
   - bypass produit local par `SD_RECORDER_PRODUCT_ENABLED=0` dans `sd_multitrack_recorder.c`,

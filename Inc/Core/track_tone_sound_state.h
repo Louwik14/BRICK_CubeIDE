@@ -32,13 +32,7 @@ typedef struct
     } clip;
     struct
     {
-        float stretch_mode;
-        float sync_len;
         float grain_size;
-        float hop_size;
-        float source_bpm;
-        float ratio_q16;
-        float transient_sensitivity;
         float preserve_pitch;
     } buffer;
     struct

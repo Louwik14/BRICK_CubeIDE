@@ -18,15 +18,9 @@ typedef enum
 
 typedef struct
 {
-    uint8_t stretch_mode;
-    uint8_t sync_len;
     uint16_t grain_size;
-    uint16_t hop_size;
-    uint32_t source_bpm_milli;
-    uint32_t ratio_q16;
-    uint8_t transient_sensitivity;
     uint8_t preserve_pitch;
-} brick6_master_buffer_stretch_config_t;
+} brick6_master_buffer_shifter_config_t;
 
 void brick6_master_buffer_init(live_recorder_t *rec,
                                float *storage,
@@ -42,8 +36,8 @@ void brick6_master_buffer_set_fade_in(uint32_t frames);
 void brick6_master_buffer_set_fade_out(uint32_t frames);
 void brick6_master_buffer_set_xfade(float xfade);
 float brick6_master_buffer_get_xfade(void);
-void brick6_master_buffer_set_stretch_config(const brick6_master_buffer_stretch_config_t *config);
-void brick6_master_buffer_get_stretch_config(brick6_master_buffer_stretch_config_t *out_config);
+void brick6_master_buffer_set_shifter_config(const brick6_master_buffer_shifter_config_t *config);
+void brick6_master_buffer_get_shifter_config(brick6_master_buffer_shifter_config_t *out_config);
 
 void brick6_master_buffer_set_source_enabled(uint8_t track, uint8_t enabled);
 void brick6_master_buffer_set_all_sources(uint8_t enabled);
@@ -60,6 +54,7 @@ uint32_t brick6_master_buffer_get_recorded_frames(void);
 uint32_t brick6_master_buffer_get_record_target_frames(void);
 
 void brick6_master_buffer_begin_block(uint32_t frames);
+void brick6_master_buffer_on_boundary_edge(uint8_t track);
 void brick6_master_buffer_submit_track_post_fader(uint32_t track_id,
                                                   const float *left,
                                                   const float *right,

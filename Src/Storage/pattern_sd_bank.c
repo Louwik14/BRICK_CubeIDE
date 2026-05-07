@@ -10,9 +10,7 @@
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
 #define PATTERN_MAGIC      0x31544150UL /* PAT1 */
-#define PATTERN_VERSION    13U
-#define PATTERN_VERSION_LEGACY 6U
-#define PATTERN_LEGACY_PAYLOAD_SIZE (sizeof(PatternSaveV1) - SEQ_TRACK_COUNT)
+#define PATTERN_VERSION    14U
 #define PATTERN_WRITE_CHUNK_BYTES (512U * 8U)
 
 typedef struct __attribute__((packed))
@@ -69,11 +67,6 @@ static uint8_t pattern_sd_header_is_supported(const pattern_sd_slot_header_t *hd
     }
 
     if ((hdr->version == PATTERN_VERSION) && (hdr->payload_size == sizeof(PatternSaveV1)))
-    {
-        return 1U;
-    }
-
-    if ((hdr->version == PATTERN_VERSION_LEGACY) && (hdr->payload_size == PATTERN_LEGACY_PAYLOAD_SIZE))
     {
         return 1U;
     }

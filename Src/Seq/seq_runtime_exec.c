@@ -19,14 +19,30 @@
 #include "Seq/seq_transport_fsm.h"
 #include "midi.h"
 
+#define SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP 32U
+
+typedef struct
+{
+    uint64_t due_sample_time;
+    uint8_t track;
+} seq_runtime_exec_boundary_event_t;
+
 static seq_runtime_state_t g_seq_runtime_exec_state;
 static uint64_t g_seq_runtime_exec_audio_timeline_sample;
 static uint8_t g_seq_runtime_exec_midi_clock_audio_enabled;
 static uint32_t g_seq_runtime_exec_midi_clock_period_q16;
 static uint64_t g_seq_runtime_exec_midi_clock_next_sample_q16;
 static volatile uint16_t g_seq_runtime_exec_external_step_pulses_pending;
+static seq_runtime_exec_boundary_event_t g_seq_runtime_exec_boundary_events[SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP];
+static uint8_t g_seq_runtime_exec_boundary_event_count;
 static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_t *out_event,
                                                         const seq_play_scheduler_audio_event_t *scheduler_event);
+static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t due_sample_time);
+static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event_t *out_events,
+                                                         uint16_t max_events,
+                                                         uint16_t block_frames,
+                                                         uint64_t block_start_sample);
+static void seq_runtime_exec_sort_audio_events(seq_runtime_audio_event_t *events, uint16_t count);
 
 seq_runtime_state_t *seq_runtime_exec_state(void)
 {
@@ -48,6 +64,7 @@ void seq_runtime_exec_init(void)
     g_seq_runtime_exec_midi_clock_period_q16 = 1U;
     g_seq_runtime_exec_midi_clock_next_sample_q16 = 0U;
     g_seq_runtime_exec_external_step_pulses_pending = 0U;
+    g_seq_runtime_exec_boundary_event_count = 0U;
 }
 
 static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_t *out_event,
@@ -64,6 +81,71 @@ static void seq_runtime_exec_copy_scheduler_audio_event(seq_runtime_audio_event_
     out_event->velocity = scheduler_event->velocity;
     out_event->sample_offset_in_block = scheduler_event->sample_offset_in_block;
     out_event->event_token = scheduler_event->event_token;
+}
+
+static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t due_sample_time)
+{
+    if (g_seq_runtime_exec_boundary_event_count >= SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP)
+    {
+        return;
+    }
+
+    seq_runtime_exec_boundary_event_t *const event =
+            &g_seq_runtime_exec_boundary_events[g_seq_runtime_exec_boundary_event_count++];
+    event->due_sample_time = due_sample_time;
+    event->track = track;
+}
+
+static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event_t *out_events,
+                                                         uint16_t max_events,
+                                                         uint16_t block_frames,
+                                                         uint64_t block_start_sample)
+{
+    if ((out_events == 0) || (max_events == 0U))
+    {
+        return 0U;
+    }
+
+    if (block_frames == 0U)
+    {
+        block_frames = 1U;
+    }
+
+    const uint64_t block_end_sample = block_start_sample + (uint64_t)block_frames;
+    uint16_t count = 0U;
+    for (uint8_t i = 0U; (i < g_seq_runtime_exec_boundary_event_count) && (count < max_events); ++i)
+    {
+        const seq_runtime_exec_boundary_event_t *const marker = &g_seq_runtime_exec_boundary_events[i];
+        if ((marker->due_sample_time < block_start_sample) || (marker->due_sample_time >= block_end_sample))
+        {
+            continue;
+        }
+
+        seq_runtime_audio_event_t *const out = &out_events[count++];
+        out->type = SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE;
+        out->track = marker->track;
+        out->note = 0U;
+        out->velocity = 0U;
+        out->sample_offset_in_block = (uint16_t)(marker->due_sample_time - block_start_sample);
+        out->event_token = 0U;
+    }
+
+    return count;
+}
+
+static void seq_runtime_exec_sort_audio_events(seq_runtime_audio_event_t *events, uint16_t count)
+{
+    for (uint16_t i = 1U; i < count; ++i)
+    {
+        const seq_runtime_audio_event_t key = events[i];
+        uint16_t j = i;
+        while ((j > 0U) && (events[j - 1U].sample_offset_in_block > key.sample_offset_in_block))
+        {
+            events[j] = events[j - 1U];
+            j--;
+        }
+        events[j] = key;
+    }
 }
 
 void seq_runtime_exec_reset_audio_timeline(uint64_t start_sample)
@@ -200,6 +282,10 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
 
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
+            if (hits[i].step == 0U)
+            {
+                seq_runtime_exec_push_boundary_edge(hits[i].track, (state->step_sample_q16 >> 16));
+            }
             seq_play_scheduler_schedule_step(hits[i].track,
                                              hits[i].step,
                                              state->ticks_per_step,
@@ -327,6 +413,10 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
             const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
+            if (hits[i].step == 0U)
+            {
+                seq_runtime_exec_push_boundary_edge(hits[i].track, scheduled_sample_time);
+            }
             seq_play_scheduler_schedule_step(hits[i].track,
                                              hits[i].step,
                                              state->ticks_per_step,
@@ -471,6 +561,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
         return 0U;
     }
 
+    g_seq_runtime_exec_boundary_event_count = 0U;
     const uint64_t block_start_sample = seq_runtime_exec_begin_audio_block(block_frames);
     const uint32_t now_tick = 0U;
     /* Progression guard: audio block collection drives cadence first, then exports due events. */
@@ -493,7 +584,10 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
                                                     block_frames);
     seq_runtime_exec_emit_midi_clock_for_block(block_start_sample, block_frames, clock_src, running);
 
-    uint16_t total = 0U;
+    uint16_t total = seq_runtime_exec_collect_boundary_events(out_events,
+                                                              max_events,
+                                                              block_frames,
+                                                              block_start_sample);
     seq_play_scheduler_audio_event_t scheduler_events[16];
     while (total < max_events)
     {
@@ -517,6 +611,8 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
             break;
         }
     }
+
+    seq_runtime_exec_sort_audio_events(out_events, total);
 
     return total;
 }

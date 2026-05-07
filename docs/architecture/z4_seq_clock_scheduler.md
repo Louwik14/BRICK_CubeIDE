@@ -111,6 +111,7 @@ Notifications:
 
 Projection / miroir:
 - `seq_runtime_audio_collect_block_events` comme projection bloc audio lisible par l'IRQ audio
+- markers `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` comme projection edge-based des boundaries reelles, avec offset sample dans le bloc audio
 - `seq_runtime_get_samples_per_step_q16` comme miroir scalaire explicite pour les conversions step->frames
 - `seq_runtime_exec_state_const` comme miroir readonly de la timeline et de la progression
 
@@ -123,7 +124,7 @@ Lectures runtime explicites, sans autorite locale de mutation:
 - `seq_live_rec_capture`: lit `track_runtime_get_midi_source`, `track_runtime_get_midi_channel_zero_based` et `track_runtime_get_effective_param_status` comme gardes de capture.
 - `seq_led`: lit `seq_runtime_is_running` et `seq_runtime_get_playhead_step` comme projections de cursor.
 - `seq_output_guard`: lit `track_runtime_get_midi_channel_zero_based` et la projection runtime resolue pour le panic/cleanup.
-- `brick6_master_buffer`: lit `seq_runtime_get_samples_per_step_q16` comme miroir d'execution pour les conversions step -> frames et les gardes de preroll.
+- `brick6_master_buffer`: lit `seq_runtime_get_samples_per_step_q16` comme miroir d'execution pour les conversions step -> frames, et consomme les markers boundary edge-based via Z1 pour Q Rec/Q Play.
 
 Contrat:
 - ces consumers ne font pas de refresh implicite;
@@ -325,6 +326,7 @@ Autorite scheduling d'evenements:
 
 Autorite collecte evenements audio par bloc:
 - `seq_runtime_audio_collect_block_events` (met a jour timeline audio et rapatrie les evenements dus dans le bloc).
+- Les markers boundary edge-based emis par `seq_runtime_exec` utilisent le meme champ `sample_offset_in_block` que les events scheduler; ils servent a segmenter Z1 sans etre appliques par le scheduler.
 - Application evenement: `seq_runtime_audio_apply_event` -> `seq_play_scheduler_audio_apply_event`.
 
 Seconde autorite concurrente:
@@ -429,6 +431,7 @@ Flux nominal prouve:
 3. Progression temporelle
 - Interne: `seq_runtime_exec_drive_internal_steps_for_block` produit les pulses strictement dans la timeline audio absolue.
 - Externe: `seq_runtime_midi_clock_from_source` met en file des pending step-pulses; `seq_runtime_exec_drive_external_steps_for_block` les consomme dans le domaine audio bloc.
+- Dette explicite: ces pulses externes pending ne portent pas encore leur timestamp sample d'arrivee; les markers boundary externes restent donc cales sur `block_start_sample`.
 - L'avance step (interne/externe) converge sur `seq_runtime_exec_process_step_pulse_at_sample_q16`.
 
 4. Detection boundary / advance pattern
@@ -454,9 +457,11 @@ Flux nominal prouve:
   - incremente `audio_timeline_sample += block_frames`.
   - emet clocks MIDI audio-alignes (`seq_runtime_exec_emit_midi_clock_for_block`).
   - collecte depuis `seq_play_scheduler_audio_collect_block_events` les events dus dans `[block_start, block_end)` avec `sample_offset_in_block`.
+  - ajoute les markers `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` produits uniquement sur edge reel `step==0`, a l'offset sample du pulse.
 
 7. Consommation aval audio/runtime/param
 - `audio.c` applique les events aux offsets via `seq_runtime_audio_apply_event`.
+- `audio.c` consomme les markers boundary au meme offset avant DSP de segment; ces markers ne passent pas par `seq_runtime_audio_apply_event`.
 - `seq_play_scheduler_audio_apply_event` envoie MIDI note et note engine + gate mixer.
 - Chaque couple NOTE_ON/NOTE_OFF planifie porte un `event_token`; un NOTE_OFF n'est applique que si son token correspond encore a l'occurrence active `track/note`.
 - Un retrig de meme pitch ferme explicitement l'occurrence precedente puis arme le nouveau token, donc la fin planifiee de l'ancien trig ne peut pas couper le nouveau.
@@ -495,6 +500,7 @@ Invariants prouves par le code:
 - Conditions de boundary explicites:
   - boundary hit si `prev_step_valid==0` ou `prev_step != current_step`.
   - `seq_boundary_engine_process` fait apply/restore locks avant emission hit.
+  - les markers Q Rec/Q Play sont edge-based: seulement quand un `boundary_hit` expose `step==0`, jamais parce qu'un getter playhead reste a 0.
 - Integrite de parcours p-lock:
   - les parcours de listes p-lock cote modele (`find/mask/get_at`) sont bornes par la capacite pool track pour eviter toute boucle non bornee en presence de structure corrompue.
   - le modele Seq stocke `set_id + param_slot + value16`; `param_slot` est un slot local et jamais un `param_id` tronque.
@@ -606,7 +612,7 @@ Points factuels observes:
 - `seq_param_iface_is_param_supported` reste une query pure et ne refresh plus le runtime.
 - `seq_param_iface_get_base_value` / `seq_param_iface_get_play_base_value` ne seedent plus d'etat implicite; la base doit etre deja materialisee par les commandes d'ecriture ou par l'initialisation explicite.
 - Les call sites qui avaient besoin d'un runtime frais declenchent maintenant `track_runtime_refresh_track` explicitement avant lecture.
-- `Master/Buffer` ne devient pas owner temporel dans Z4: il lit explicitement `samples_per_step_q16` et `tempo_bpm_milli` comme miroirs runtime pour resoudre `SYNC_LEN` (`1/2/4 bars` ou `AUTO`), derive `target_frames` si necessaire, puis calcule son `ratio_q16` local au bord consumer du playback/capture.
+- `Master/Buffer` ne devient pas owner temporel dans Z4: il lit explicitement `samples_per_step_q16` comme miroir runtime pour deriver la longueur cible d'enregistrement depuis `Rec Len`, memoriser le timing source de la prise, appliquer le ratio tempo-sync en playback `Pitch=ON`, et demarrer Q Rec/Q Play sur les markers boundary edge-based projetes par Z4 vers Z1; le playback reste owner local de `Rate` et de l'option `Pitch` via le shifter partage `brick6_clip_shifter`.
 
 ## 14. Contrat Drum stub temporaire
 

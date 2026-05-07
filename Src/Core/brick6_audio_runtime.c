@@ -291,12 +291,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
             frames);
     }
 
+    brick6_master_buffer_begin_block(frames);
     mixer_process(tracks, track_count, frames);
-    if (track_count > 0U)
-    {
-        fx_master_macro_process_block(tracks[0].L, tracks[0].R, frames);
-        (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
-    }
+    brick6_master_buffer_commit_block(frames);
 
     const float xfade_end = brick6_audio_runtime_get_buffer_xfade();
     if ((track_count > 0U) && ((g_buffer_xfade_prev > 0.0f) || (xfade_end > 0.0f)))
@@ -341,6 +338,12 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     else
     {
         g_buffer_xfade_prev = xfade_end;
+    }
+
+    if (track_count > 0U)
+    {
+        fx_master_macro_process_block(tracks[0].L, tracks[0].R, frames);
+        (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
     }
 
     if(track_count > 0U)

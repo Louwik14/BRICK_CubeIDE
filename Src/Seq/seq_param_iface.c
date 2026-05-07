@@ -17,12 +17,17 @@ typedef struct
 {
     seq_value16_t base_value;
     seq_value16_t runtime_value;
-    uint8_t base_valid;
-    uint8_t runtime_locked;
 } seq_param_slot_state_t;
+
+#define SEQ_PARAM_NON_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * (uint32_t)SEQ_PLOCK_SET_MIX * 256U)
+#define SEQ_PARAM_MIX_SLOT_COUNT (SEQ_TRACK_COUNT * 4U)
+#define SEQ_PARAM_FLAG_BIT_COUNT (SEQ_PARAM_NON_MIX_SLOT_COUNT + SEQ_PARAM_MIX_SLOT_COUNT)
+#define SEQ_PARAM_FLAG_BYTE_COUNT ((SEQ_PARAM_FLAG_BIT_COUNT + 7U) / 8U)
 
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_state[SEQ_TRACK_COUNT][(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 SEQ_STATE_D2 static seq_param_slot_state_t g_seq_param_mix_state[SEQ_TRACK_COUNT][4U];
+SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
+SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static seq_param_slot_t g_seq_param_id_to_slot[(uint8_t)SEQ_PLOCK_SET_MIX][PARAM_COUNT];
 SEQ_STATE_D2 static param_id_t g_seq_param_slot_to_id[(uint8_t)SEQ_PLOCK_SET_MIX][256U];
 
@@ -39,6 +44,77 @@ static const param_id_t g_seq_param_mix_slot_to_id[4U] = {
 static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track,
                                                         uint8_t set_id,
                                                         seq_param_slot_t param_slot);
+static uint32_t seq_param_state_linear_index(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
+{
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_MIX)
+    {
+        return SEQ_PARAM_NON_MIX_SLOT_COUNT + ((uint32_t)track * 4U) + (uint32_t)param_slot;
+    }
+
+    return (((uint32_t)track * (uint32_t)SEQ_PLOCK_SET_MIX + (uint32_t)set_id) * 256U) + (uint32_t)param_slot;
+}
+
+static uint8_t seq_param_get_flag(const uint8_t *bits,
+                                  seq_track_id_t track,
+                                  uint8_t set_id,
+                                  seq_param_slot_t param_slot)
+{
+    const uint32_t index = seq_param_state_linear_index(track, set_id, param_slot);
+    const uint32_t byte_index = index >> 3U;
+    const uint8_t bit_mask = (uint8_t)(1U << (index & 7U));
+    return ((bits[byte_index] & bit_mask) != 0U) ? 1U : 0U;
+}
+
+static void seq_param_set_flag(uint8_t *bits,
+                               seq_track_id_t track,
+                               uint8_t set_id,
+                               seq_param_slot_t param_slot,
+                               uint8_t value)
+{
+    const uint32_t index = seq_param_state_linear_index(track, set_id, param_slot);
+    const uint32_t byte_index = index >> 3U;
+    const uint8_t bit_mask = (uint8_t)(1U << (index & 7U));
+    if (value != 0U)
+    {
+        bits[byte_index] |= bit_mask;
+    }
+    else
+    {
+        bits[byte_index] &= (uint8_t)~bit_mask;
+    }
+}
+
+static uint8_t seq_param_get_base_valid(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
+{
+    return seq_param_get_flag(g_seq_param_base_valid_bits, track, set_id, param_slot);
+}
+
+static void seq_param_set_base_valid(seq_track_id_t track,
+                                     uint8_t set_id,
+                                     seq_param_slot_t param_slot,
+                                     uint8_t value)
+{
+    seq_param_set_flag(g_seq_param_base_valid_bits, track, set_id, param_slot, value);
+}
+
+static uint8_t seq_param_get_runtime_locked(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
+{
+    return seq_param_get_flag(g_seq_param_runtime_locked_bits, track, set_id, param_slot);
+}
+
+static void seq_param_set_runtime_locked(seq_track_id_t track,
+                                         uint8_t set_id,
+                                         seq_param_slot_t param_slot,
+                                         uint8_t value)
+{
+    seq_param_set_flag(g_seq_param_runtime_locked_bits, track, set_id, param_slot, value);
+}
+
+static void seq_param_clear_flags(void)
+{
+    memset(&g_seq_param_base_valid_bits, 0, sizeof(g_seq_param_base_valid_bits));
+    memset(&g_seq_param_runtime_locked_bits, 0, sizeof(g_seq_param_runtime_locked_bits));
+}
 
 static uint8_t seq_param_iface_is_play_param(param_id_t param)
 {
@@ -70,14 +146,14 @@ static void seq_param_iface_seed_play_defaults(void)
             {
                 continue;
             }
-            if (state->base_valid == 0U)
+            if (seq_param_get_base_valid(track, set_id, param_slot) == 0U)
             {
                 const float default_value = param_registry[param].default_value;
                 const seq_value16_t encoded = seq_param_iface_encode_param_value(param, default_value);
                 state->base_value = encoded;
                 state->runtime_value = encoded;
-                state->base_valid = 1U;
-                state->runtime_locked = 0U;
+                seq_param_set_base_valid(track, set_id, param_slot, 1U);
+                seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
             }
         }
     }
@@ -311,6 +387,7 @@ void seq_param_iface_init(void)
 {
     memset(&g_seq_param_state, 0, sizeof(g_seq_param_state));
     memset(&g_seq_param_mix_state, 0, sizeof(g_seq_param_mix_state));
+    seq_param_clear_flags();
     track_runtime_init();
     seq_param_iface_rebuild_slot_maps();
     seq_param_iface_seed_play_defaults();
@@ -500,7 +577,7 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
     {
         return 0U;
     }
-    if (state->base_valid == 0U)
+    if (seq_param_get_base_valid(track, set_id, param_slot) == 0U)
     {
         param_id_t param = PARAM_COUNT;
         float value = 0.0f;
@@ -535,9 +612,9 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
         return 0U;
     }
     state->base_value = value16;
-    state->base_valid = 1U;
+    seq_param_set_base_valid(track, set_id, param_slot, 1U);
 
-    if (state->runtime_locked == 0U)
+    if (seq_param_get_runtime_locked(track, set_id, param_slot) == 0U)
     {
         state->runtime_value = value16;
     }
@@ -592,9 +669,9 @@ uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_if
         return 0U;
     }
     state->base_value = cmd->value16;
-    state->base_valid = 1U;
+    seq_param_set_base_valid(cmd->target_track, cmd->set_id, cmd->param_slot, 1U);
 
-    if (state->runtime_locked == 0U)
+    if (seq_param_get_runtime_locked(cmd->target_track, cmd->set_id, cmd->param_slot) == 0U)
     {
         state->runtime_value = cmd->value16;
     }
@@ -617,10 +694,10 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     {
         return 0U;
     }
-    if (state->base_valid == 0U)
+    if (seq_param_get_base_valid(track, set_id, param_slot) == 0U)
     {
         state->base_value = state->runtime_value;
-        state->base_valid = 1U;
+        seq_param_set_base_valid(track, set_id, param_slot, 1U);
     }
 
     param_id_t param = PARAM_COUNT;
@@ -637,7 +714,7 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         }
 
         state->runtime_value = value16;
-        state->runtime_locked = 1U;
+        seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
         return 1U;
     }
 
@@ -648,7 +725,7 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     state->runtime_value = value16;
-    state->runtime_locked = 1U;
+    seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
     return 1U;
 }
 
@@ -681,9 +758,9 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         }
 
         state->base_value = base_value16;
-        state->base_valid = 1U;
+        seq_param_set_base_valid(track, set_id, param_slot, 1U);
         state->runtime_value = base_value16;
-        state->runtime_locked = 0U;
+        seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
         return 1U;
     }
 
@@ -694,9 +771,9 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     }
 
     state->base_value = base_value16;
-    state->base_valid = 1U;
+    seq_param_set_base_valid(track, set_id, param_slot, 1U);
     state->runtime_value = base_value16;
-    state->runtime_locked = 0U;
+    seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
 
     return 1U;
 }

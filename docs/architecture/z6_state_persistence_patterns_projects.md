@@ -1,4 +1,4 @@
-# Z6 - State / Persistence / Patterns / Projects
+﻿# Z6 - State / Persistence / Patterns / Projects
 
 ## 1. Perimetre
 
@@ -381,6 +381,7 @@ Plus petite prochaine passe utile:
 - Le retrait produit V1 de `SWING`/`ACCENT` ne change pas `PARAM_COUNT`; aucun bump pattern/projet supplementaire n'est requis.
 - `PROJECT_V1_FILE_VERSION=16` marque la rupture prototype MACRO Scene/Switch 32 locks par scene: `ProjectSaveV1.macro` grossit, les anciens projets sont refuses proprement par version/payload_size, sans migration legacy.
 - `PATTERN_VERSION=13` et `PROJECT_V1_FILE_VERSION=18` marquent le retrait des IDs/type/params `TB3`; aucun remap ni preservation des anciens projets/configs `TB3` ou `DX7` n'est conserve.
+- `PATTERN_VERSION=14` et `PROJECT_V1_FILE_VERSION=19` marquent le retrait du moteur temporel Master/Buffer et de ses anciens params; les anciens payloads prototype sont refuses sans migration.
 - `PatternSaveV1` ne change pas pour cette passe MACRO: les scenes/locks restent projet-only.
 
 

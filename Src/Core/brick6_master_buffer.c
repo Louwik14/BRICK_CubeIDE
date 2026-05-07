@@ -3,8 +3,8 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Audio/audio_float.h"
-#include "Core/brick6_master_buffer_stretch.h"
+#include "Audio/mixer.h"
+#include "Core/brick6_clip_shifter.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -29,24 +29,20 @@ static uint8_t g_record_waiting_boundary = 0U;
 static uint8_t g_play_waiting_boundary = 0U;
 static uint32_t g_record_frames_written = 0U;
 static uint32_t g_record_target_frames = 0U;
-static uint32_t g_buffer_source_generation = 0U;
 static uint32_t g_record_len_steps = 16U;
+static uint32_t g_recording_samples_per_step_q16 = 0U;
+static uint32_t g_recorded_samples_per_step_q16 = 0U;
 static uint8_t g_quantize_record = 1U;
 static uint8_t g_quantize_play = 1U;
 static float g_rate = 1.0f;
 static float g_xfade = 0.0f;
 static uint32_t g_fade_in_amount = 0U;
 static uint32_t g_fade_out_amount = 0U;
-static brick6_master_buffer_stretch_config_t g_stretch_config = {
-    .stretch_mode = 0U,
-    .sync_len = 0U,
-    .grain_size = 256U,
-    .hop_size = 128U,
-    .source_bpm_milli = 120000U,
-    .ratio_q16 = 65536U,
-    .transient_sensitivity = 64U,
+static brick6_master_buffer_shifter_config_t g_shifter_config = {
+    .grain_size = 1536U,
     .preserve_pitch = 1U,
 };
+static brick6_clip_shifter_t g_pitch_shifter;
 static ALIGN32 float g_capture_l[AUDIO_BLOCK_SIZE];
 static ALIGN32 float g_capture_r[AUDIO_BLOCK_SIZE];
 
@@ -83,63 +79,62 @@ static uint32_t brick6_master_buffer_refresh_record_target(void)
     return target_frames;
 }
 
-static uint32_t brick6_master_buffer_resolve_stretch_target_steps(uint8_t sync_len)
+static float brick6_master_buffer_clamp_rate(float rate)
 {
-    switch (sync_len)
+    if (rate < 0.25f)
     {
-        case 1U:
-            return 16U;
-        case 2U:
-            return 32U;
-        case 3U:
-            return 64U;
-        case 4U:
-            return (g_record_len_steps == 0U) ? 16U : g_record_len_steps;
-        default:
-            return 0U;
+        return 0.25f;
     }
+    if (rate > 4.0f)
+    {
+        return 4.0f;
+    }
+    return rate;
 }
 
-static uint32_t brick6_master_buffer_clamp_ratio_q16(uint32_t ratio_q16)
+static float brick6_master_buffer_tempo_sync_ratio(void)
 {
-    if (ratio_q16 < 16384U)
+    const uint32_t current_samples_per_step_q16 = seq_runtime_get_samples_per_step_q16();
+
+    if ((g_shifter_config.preserve_pitch == 0U)
+            || (g_recorded_samples_per_step_q16 == 0U)
+            || (current_samples_per_step_q16 == 0U))
     {
-        return 16384U;
+        return 1.0f;
     }
-    if (ratio_q16 > 262144U)
-    {
-        return 262144U;
-    }
-    return ratio_q16;
+
+    return (float)g_recorded_samples_per_step_q16 / (float)current_samples_per_step_q16;
 }
 
-static void brick6_master_buffer_push_stretch_config(void)
+static float brick6_master_buffer_effective_play_rate(void)
 {
-    brick6_master_buffer_stretch_config_t runtime_config = g_stretch_config;
+    return brick6_master_buffer_clamp_rate(g_rate * brick6_master_buffer_tempo_sync_ratio());
+}
 
-    if (runtime_config.sync_len != 0U)
+static float brick6_master_buffer_shifter_pitch_correction(float effective_rate)
+{
+    if (effective_rate <= 0.001f)
     {
-        if ((runtime_config.sync_len == 4U)
-                && (runtime_config.source_bpm_milli >= 40000U)
-                && (seq_runtime_get_tempo_bpm_milli() >= 40000U))
-        {
-            const uint32_t tempo_bpm_milli = seq_runtime_get_tempo_bpm_milli();
-            runtime_config.ratio_q16 = brick6_master_buffer_clamp_ratio_q16(
-                    (uint32_t)(((uint64_t)tempo_bpm_milli << 16) / runtime_config.source_bpm_milli));
-        }
-        else if ((g_buffer_recorder != NULL) && (g_buffer_recorder->recorded_frames >= 2U))
-        {
-            const uint32_t target_steps = brick6_master_buffer_resolve_stretch_target_steps(runtime_config.sync_len);
-            const uint32_t target_frames = brick6_master_buffer_steps_to_frames(target_steps);
-            if (target_frames != 0U)
-            {
-                runtime_config.ratio_q16 = brick6_master_buffer_clamp_ratio_q16(
-                        (uint32_t)(((uint64_t)g_buffer_recorder->recorded_frames << 16) / target_frames));
-            }
-        }
+        return 1.0f;
     }
+    return 1.0f / effective_rate;
+}
 
-    brick6_master_buffer_stretch_set_config(&runtime_config);
+static void brick6_master_buffer_push_shifter_config(void)
+{
+    const float effective_rate = brick6_master_buffer_effective_play_rate();
+    brick6_clip_shifter_set_window_frames(&g_pitch_shifter, g_shifter_config.grain_size);
+    brick6_clip_shifter_set_pitch_correction(&g_pitch_shifter,
+                                             brick6_master_buffer_shifter_pitch_correction(effective_rate));
+}
+
+static void brick6_master_buffer_apply_play_rate(void)
+{
+    if (g_buffer_recorder != NULL)
+    {
+        live_recorder_set_play_rate(g_buffer_recorder, brick6_master_buffer_effective_play_rate());
+    }
+    brick6_master_buffer_push_shifter_config();
 }
 
 static void brick6_master_buffer_apply_record_target_to_recorder(void)
@@ -153,7 +148,8 @@ static void brick6_master_buffer_apply_record_target_to_recorder(void)
 
     live_recorder_set_loop_length(g_buffer_recorder, target_frames);
 }
-static uint8_t brick6_master_buffer_is_boundary_reached(void)
+
+static uint8_t brick6_master_buffer_is_master_boundary_track(uint8_t edge_track)
 {
     uint32_t longest_duration = 0U;
 
@@ -179,31 +175,67 @@ static uint8_t brick6_master_buffer_is_boundary_reached(void)
         return 1U;
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    if (edge_track >= UI_TRACK_COUNT)
     {
-        if (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF)
-        {
-            continue;
-        }
+        return 0U;
+    }
 
-        uint8_t div = 1U;
-        /* Projection read: track div is a runtime mirror used to derive buffer boundary length. */
-        (void)seq_runtime_get_track_div(track, &div);
-        const uint32_t duration = (uint32_t)seq_model_get_track_playback_length(track) * (uint32_t)div;
-        if (duration != longest_duration)
-        {
-            continue;
-        }
+    if (ui_get_track_family(edge_track) == UI_TRACK_FAMILY_OFF)
+    {
+        return 0U;
+    }
 
-        seq_step_id_t playhead = 0U;
-        /* Projection read: playhead is consumed as a runtime mirror for preroll/boundary gating. */
-        if ((seq_runtime_get_playhead_step(track, &playhead) != 0U) && (playhead == 0U))
-        {
-            return 1U;
-        }
+    uint8_t div = 1U;
+    /* Projection read: track div is a runtime mirror used to derive buffer boundary length. */
+    (void)seq_runtime_get_track_div(edge_track, &div);
+    const uint32_t duration = (uint32_t)seq_model_get_track_playback_length(edge_track) * (uint32_t)div;
+    if (duration == longest_duration)
+    {
+        return 1U;
     }
 
     return 0U;
+}
+
+static void brick6_master_buffer_start_record_now(void)
+{
+    if (g_buffer_recorder == NULL)
+    {
+        return;
+    }
+
+    brick6_master_buffer_apply_record_target_to_recorder();
+    live_recorder_stop_play(g_buffer_recorder);
+    brick6_clip_shifter_reset(&g_pitch_shifter);
+    brick6_master_buffer_push_shifter_config();
+    g_play_waiting_boundary = 0U;
+    live_recorder_start_record(g_buffer_recorder);
+    g_recording = 1U;
+    g_record_armed = 0U;
+    g_record_waiting_boundary = 0U;
+    g_record_frames_written = 0U;
+    g_recording_samples_per_step_q16 = seq_runtime_get_samples_per_step_q16();
+}
+
+static void brick6_master_buffer_commit_recorded_timing(void)
+{
+    g_recorded_samples_per_step_q16 = (g_recording_samples_per_step_q16 != 0U)
+            ? g_recording_samples_per_step_q16
+            : seq_runtime_get_samples_per_step_q16();
+    g_recording_samples_per_step_q16 = 0U;
+    brick6_master_buffer_apply_play_rate();
+}
+
+static void brick6_master_buffer_start_play_now(void)
+{
+    if ((g_buffer_recorder == NULL) || (g_buffer_recorder->recorded_frames < 2U))
+    {
+        return;
+    }
+
+    brick6_master_buffer_apply_play_rate();
+    live_recorder_start_play(g_buffer_recorder);
+    g_play_waiting_boundary = 0U;
 }
 
 static uint8_t brick6_master_buffer_is_preroll_active(void)
@@ -214,42 +246,10 @@ static uint8_t brick6_master_buffer_is_preroll_active(void)
             || (seq_runtime_get_rec_count_in_remaining_steps() > 0U)) ? 1U : 0U;
 }
 
-static void brick6_master_buffer_reset_stretch_config(void)
+static void brick6_master_buffer_reset_shifter_config(void)
 {
-    g_stretch_config.stretch_mode = 0U;
-    g_stretch_config.sync_len = 0U;
-    g_stretch_config.grain_size = 256U;
-    g_stretch_config.hop_size = 128U;
-    g_stretch_config.source_bpm_milli = 120000U;
-    g_stretch_config.ratio_q16 = 65536U;
-    g_stretch_config.transient_sensitivity = 64U;
-    g_stretch_config.preserve_pitch = 1U;
-}
-
-static void brick6_master_buffer_publish_stretch_source(void)
-{
-    if (g_buffer_recorder == NULL)
-    {
-        return;
-    }
-
-    brick6_master_buffer_stretch_notify_record_finished(g_buffer_recorder->buffer,
-                                                        g_buffer_recorder->recorded_frames,
-                                                        g_buffer_recorder->max_frames,
-                                                        g_buffer_source_generation);
-}
-
-static void brick6_master_buffer_publish_stretch_source_stopped(void)
-{
-    if (g_buffer_recorder == NULL)
-    {
-        return;
-    }
-
-    brick6_master_buffer_stretch_notify_record_stopped(g_buffer_recorder->buffer,
-                                                       g_buffer_recorder->recorded_frames,
-                                                       g_buffer_recorder->max_frames,
-                                                       g_buffer_source_generation);
+    g_shifter_config.grain_size = 1536U;
+    g_shifter_config.preserve_pitch = 1U;
 }
 
 void brick6_master_buffer_init(live_recorder_t *rec,
@@ -265,17 +265,18 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
-    g_buffer_source_generation = 0U;
     g_record_len_steps = 16U;
+    g_recording_samples_per_step_q16 = 0U;
+    g_recorded_samples_per_step_q16 = 0U;
     g_quantize_record = 1U;
     g_quantize_play = 1U;
     g_rate = 1.0f;
     g_xfade = 0.0f;
     g_fade_in_amount = 0U;
     g_fade_out_amount = 0U;
-    brick6_master_buffer_reset_stretch_config();
-    brick6_master_buffer_stretch_init(max_frames);
-    brick6_master_buffer_push_stretch_config();
+    brick6_master_buffer_reset_shifter_config();
+    brick6_clip_shifter_init(&g_pitch_shifter);
+    brick6_master_buffer_push_shifter_config();
     memset(g_source_enabled, 0, sizeof(g_source_enabled));
     for (uint8_t track = 0U; track < BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS; ++track)
     {
@@ -292,7 +293,7 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     live_recorder_init(g_buffer_recorder);
     live_recorder_set_buffer(g_buffer_recorder, g_buffer_storage, g_buffer_max_frames);
     (void)brick6_master_buffer_refresh_record_target();
-    live_recorder_set_play_rate(g_buffer_recorder, g_rate);
+    brick6_master_buffer_apply_play_rate();
     live_recorder_start_play(g_buffer_recorder);
     live_recorder_clear(g_buffer_recorder);
 }
@@ -300,22 +301,23 @@ void brick6_master_buffer_init(live_recorder_t *rec,
 void brick6_master_buffer_reset(void)
 {
     brick6_master_buffer_clear();
-    brick6_master_buffer_stretch_reset();
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
     g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
-    g_buffer_source_generation = 0U;
+    g_recording_samples_per_step_q16 = 0U;
+    g_recorded_samples_per_step_q16 = 0U;
     g_quantize_record = 1U;
     g_quantize_play = 1U;
     g_rate = 1.0f;
     g_xfade = 0.0f;
     g_fade_in_amount = 0U;
     g_fade_out_amount = 0U;
-    brick6_master_buffer_reset_stretch_config();
-    brick6_master_buffer_push_stretch_config();
+    brick6_master_buffer_reset_shifter_config();
+    brick6_clip_shifter_reset(&g_pitch_shifter);
+    brick6_master_buffer_push_shifter_config();
     memset(g_source_enabled, 0, sizeof(g_source_enabled));
     for (uint8_t track = 0U; track < BRICK6_MASTER_BUFFER_MAX_SOURCE_TRACKS; ++track)
     {
@@ -323,27 +325,30 @@ void brick6_master_buffer_reset(void)
     }
     if (g_buffer_recorder != NULL)
     {
-        live_recorder_set_play_rate(g_buffer_recorder, g_rate);
+        brick6_master_buffer_apply_play_rate();
         (void)brick6_master_buffer_refresh_record_target();
     }
 }
 
 void brick6_master_buffer_clear(void)
 {
-    g_buffer_source_generation++;
     g_record_armed = 0U;
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
     g_play_waiting_boundary = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
+    g_recording_samples_per_step_q16 = 0U;
+    g_recorded_samples_per_step_q16 = 0U;
     memset(g_capture_l, 0, sizeof(g_capture_l));
     memset(g_capture_r, 0, sizeof(g_capture_r));
-    brick6_master_buffer_stretch_clear();
+    brick6_clip_shifter_reset(&g_pitch_shifter);
+    brick6_master_buffer_push_shifter_config();
 
     if (g_buffer_recorder != NULL)
     {
         live_recorder_clear(g_buffer_recorder);
+        brick6_master_buffer_apply_play_rate();
         live_recorder_start_play(g_buffer_recorder);
     }
 }
@@ -361,7 +366,6 @@ void brick6_master_buffer_set_record_len(uint32_t steps)
 
     g_record_len_steps = steps;
     (void)brick6_master_buffer_refresh_record_target();
-    brick6_master_buffer_push_stretch_config();
 }
 
 void brick6_master_buffer_set_quantize_record(uint8_t enabled)
@@ -376,11 +380,8 @@ void brick6_master_buffer_set_quantize_play(uint8_t enabled)
 
 void brick6_master_buffer_set_rate(float rate)
 {
-    g_rate = rate;
-    if (g_buffer_recorder != NULL)
-    {
-        live_recorder_set_play_rate(g_buffer_recorder, rate);
-    }
+    g_rate = brick6_master_buffer_clamp_rate(rate);
+    brick6_master_buffer_apply_play_rate();
 }
 
 void brick6_master_buffer_set_xfade(float xfade)
@@ -412,63 +413,35 @@ void brick6_master_buffer_set_fade_out(uint32_t frames)
     g_fade_out_amount = frames;
 }
 
-void brick6_master_buffer_set_stretch_config(const brick6_master_buffer_stretch_config_t *config)
+void brick6_master_buffer_set_shifter_config(const brick6_master_buffer_shifter_config_t *config)
 {
     if (config == NULL)
     {
         return;
     }
 
-    g_stretch_config.stretch_mode = (config->stretch_mode > 1U) ? 1U : config->stretch_mode;
-    g_stretch_config.sync_len = (config->sync_len > 4U) ? 4U : config->sync_len;
-    g_stretch_config.grain_size = config->grain_size;
-    if ((g_stretch_config.grain_size != 128U)
-            && (g_stretch_config.grain_size != 256U)
-            && (g_stretch_config.grain_size != 384U)
-            && (g_stretch_config.grain_size != 512U))
+    g_shifter_config.grain_size = config->grain_size;
+    if ((g_shifter_config.grain_size != 384U)
+            && (g_shifter_config.grain_size != 512U)
+            && (g_shifter_config.grain_size != 768U)
+            && (g_shifter_config.grain_size != 1024U)
+            && (g_shifter_config.grain_size != 1536U)
+            && (g_shifter_config.grain_size != 2048U))
     {
-        g_stretch_config.grain_size = 256U;
+        g_shifter_config.grain_size = 1536U;
     }
-    g_stretch_config.hop_size = config->hop_size;
-    if ((g_stretch_config.hop_size != 64U)
-            && (g_stretch_config.hop_size != 128U)
-            && (g_stretch_config.hop_size != 192U)
-            && (g_stretch_config.hop_size != 256U))
-    {
-        g_stretch_config.hop_size = 128U;
-    }
-    if (g_stretch_config.hop_size > g_stretch_config.grain_size)
-    {
-        g_stretch_config.hop_size = g_stretch_config.grain_size;
-    }
-    g_stretch_config.source_bpm_milli = config->source_bpm_milli;
-    if (g_stretch_config.source_bpm_milli != 0U)
-    {
-        if (g_stretch_config.source_bpm_milli < 40000U)
-        {
-            g_stretch_config.source_bpm_milli = 40000U;
-        }
-        else if (g_stretch_config.source_bpm_milli > 300000U)
-        {
-            g_stretch_config.source_bpm_milli = 300000U;
-        }
-    }
-    g_stretch_config.ratio_q16 = brick6_master_buffer_clamp_ratio_q16(config->ratio_q16);
-    g_stretch_config.transient_sensitivity = (config->transient_sensitivity > 127U)
-            ? 127U
-            : config->transient_sensitivity;
-    g_stretch_config.preserve_pitch = (config->preserve_pitch != 0U) ? 1U : 0U;
-    brick6_master_buffer_push_stretch_config();
+    g_shifter_config.preserve_pitch = (config->preserve_pitch != 0U) ? 1U : 0U;
+    brick6_master_buffer_apply_play_rate();
 }
 
-void brick6_master_buffer_get_stretch_config(brick6_master_buffer_stretch_config_t *out_config)
+void brick6_master_buffer_get_shifter_config(brick6_master_buffer_shifter_config_t *out_config)
 {
     if (out_config == NULL)
     {
         return;
     }
 
-    *out_config = g_stretch_config;
+    *out_config = g_shifter_config;
 }
 
 void brick6_master_buffer_set_source_enabled(uint8_t track, uint8_t enabled)
@@ -509,6 +482,7 @@ void brick6_master_buffer_request_record(void)
             live_recorder_stop_record(g_buffer_recorder);
             if (g_buffer_recorder->recorded_frames >= 2U)
             {
+                brick6_master_buffer_commit_recorded_timing();
                 if ((g_quantize_play != 0U) && (seq_runtime_is_running() != 0U))
                 {
                     g_play_waiting_boundary = 1U;
@@ -522,10 +496,11 @@ void brick6_master_buffer_request_record(void)
             else
             {
                 g_play_waiting_boundary = 0U;
+                g_recording_samples_per_step_q16 = 0U;
             }
 
-            brick6_master_buffer_publish_stretch_source_stopped();
-            brick6_master_buffer_push_stretch_config();
+            brick6_clip_shifter_reset(&g_pitch_shifter);
+            brick6_master_buffer_push_shifter_config();
         }
         g_recording = 0U;
         g_record_armed = 0U;
@@ -607,45 +582,33 @@ void brick6_master_buffer_begin_block(uint32_t frames)
 {
     (void)frames;
 
-    if ((g_stretch_config.stretch_mode != 0U) && (g_stretch_config.sync_len != 0U))
-    {
-        brick6_master_buffer_push_stretch_config();
-    }
-
     memset(g_capture_l, 0, sizeof(g_capture_l));
     memset(g_capture_r, 0, sizeof(g_capture_r));
 
     if ((g_record_armed != 0U) && (g_recording == 0U) && (g_buffer_recorder != NULL))
     {
-        const uint8_t seq_running = (seq_runtime_is_running() != 0U) ? 1U : 0U;
-        const uint8_t should_start_now = ((g_record_waiting_boundary == 0U)
-                                          || ((seq_running != 0U)
-                                              && (brick6_master_buffer_is_boundary_reached() != 0U)))
-                                                 ? 1U
-                                                 : 0U;
-        if (should_start_now != 0U)
+        if (g_record_waiting_boundary == 0U)
         {
-            brick6_master_buffer_apply_record_target_to_recorder();
-            live_recorder_stop_play(g_buffer_recorder);
-            g_buffer_source_generation++;
-            brick6_master_buffer_stretch_notify_record_started(g_buffer_source_generation);
-            g_play_waiting_boundary = 0U;
-            live_recorder_start_record(g_buffer_recorder);
-            g_recording = 1U;
-            g_record_armed = 0U;
-            g_record_waiting_boundary = 0U;
-            g_record_frames_written = 0U;
+            brick6_master_buffer_start_record_now();
         }
     }
+}
 
-    if ((g_play_waiting_boundary != 0U)
-            && (g_buffer_recorder != NULL)
-            && (seq_runtime_is_running() != 0U)
-            && (brick6_master_buffer_is_boundary_reached() != 0U)
-            && (g_buffer_recorder->recorded_frames >= 2U))
+void brick6_master_buffer_on_boundary_edge(uint8_t track)
+{
+    if ((seq_runtime_is_running() == 0U) || (brick6_master_buffer_is_master_boundary_track(track) == 0U))
     {
-        live_recorder_start_play(g_buffer_recorder);
-        g_play_waiting_boundary = 0U;
+        return;
+    }
+
+    if ((g_record_armed != 0U) && (g_recording == 0U) && (g_record_waiting_boundary != 0U))
+    {
+        brick6_master_buffer_start_record_now();
+    }
+
+    if (g_play_waiting_boundary != 0U)
+    {
+        brick6_master_buffer_start_play_now();
     }
 }
 
@@ -670,8 +633,8 @@ void brick6_master_buffer_submit_track_post_fader(uint32_t track_id,
 
     for (uint32_t i = 0U; i < frames; ++i)
     {
-        g_capture_l[i] += left[i];
-        g_capture_r[i] += right[i];
+        g_capture_l[i] += left[i] * MIXER_TRACK_NOMINAL_TRIM;
+        g_capture_r[i] += right[i] * MIXER_TRACK_NOMINAL_TRIM;
     }
 }
 
@@ -687,13 +650,35 @@ void brick6_master_buffer_commit_block(uint32_t frames)
         frames = AUDIO_BLOCK_SIZE;
     }
 
-    live_recorder_write(g_buffer_recorder, g_capture_l, g_capture_r, frames);
-    g_record_frames_written += frames;
+    uint32_t frames_to_write = frames;
+    if (g_record_target_frames != 0U)
+    {
+        if (g_record_frames_written >= g_record_target_frames)
+        {
+            frames_to_write = 0U;
+        }
+        else
+        {
+            const uint32_t remaining = g_record_target_frames - g_record_frames_written;
+            if (frames_to_write > remaining)
+            {
+                frames_to_write = remaining;
+            }
+        }
+    }
+
+    if (frames_to_write != 0U)
+    {
+        live_recorder_write(g_buffer_recorder, g_capture_l, g_capture_r, frames_to_write);
+        g_record_frames_written += frames_to_write;
+    }
+
     if ((g_record_target_frames != 0U) && (g_record_frames_written >= g_record_target_frames))
     {
         live_recorder_stop_record(g_buffer_recorder);
         if (g_buffer_recorder->recorded_frames >= 2U)
         {
+            brick6_master_buffer_commit_recorded_timing();
             if ((g_quantize_play != 0U) && (seq_runtime_is_running() != 0U))
             {
                 g_play_waiting_boundary = 1U;
@@ -707,9 +692,10 @@ void brick6_master_buffer_commit_block(uint32_t frames)
         else
         {
             g_play_waiting_boundary = 0U;
+            g_recording_samples_per_step_q16 = 0U;
         }
-        brick6_master_buffer_publish_stretch_source();
-        brick6_master_buffer_push_stretch_config();
+        brick6_clip_shifter_reset(&g_pitch_shifter);
+        brick6_master_buffer_push_shifter_config();
         g_recording = 0U;
         g_record_armed = 0U;
         g_record_waiting_boundary = 0U;
@@ -734,19 +720,16 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
     }
     uint32_t sample_pos = g_buffer_recorder->read_pos;
     uint32_t sample_frac_q16 = g_buffer_recorder->read_pos_q16 & 0xFFFFU;
+    brick6_master_buffer_apply_play_rate();
     const uint32_t read_step_q16 = (g_buffer_recorder->read_step_q16 == 0U) ? (1U << 16) : g_buffer_recorder->read_step_q16;
-    const uint8_t use_stretch = ((g_stretch_config.stretch_mode != 0U)
-                                 && (brick6_master_buffer_stretch_is_ready() != 0U))
-                                        ? 1U
-                                        : 0U;
+    const float effective_rate = brick6_master_buffer_effective_play_rate();
 
-    if (use_stretch != 0U)
+    live_recorder_read(g_buffer_recorder, left, right, frames);
+
+    if ((g_shifter_config.preserve_pitch != 0U) && ((effective_rate < 0.999f) || (effective_rate > 1.001f)))
     {
-        brick6_master_buffer_stretch_render_block(left, right, frames);
-    }
-    else
-    {
-        live_recorder_read(g_buffer_recorder, left, right, frames);
+        brick6_master_buffer_push_shifter_config();
+        brick6_clip_shifter_process_stereo(&g_pitch_shifter, left, right, frames);
     }
 
     const uint32_t fade_in_frames = (g_fade_in_amount == 0U)

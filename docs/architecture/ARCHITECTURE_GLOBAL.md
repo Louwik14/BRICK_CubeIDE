@@ -1,4 +1,4 @@
-# ARCHITECTURE_GLOBAL.md
+﻿# ARCHITECTURE_GLOBAL.md
 
 ## 1. Rôle
 
@@ -49,7 +49,7 @@ Lit ce document si le sujet touche :
 - callback DSP
 - mixage
 - taps recorder / buffer dans le pipeline audio
-- timestretch local du playback `Master/Buffer`
+- pitch-shifter local du playback `Master/Buffer` via `brick6_clip_shifter`
 
 Doc :
 - `docs/architecture/z1_audio_hard_rt_mix.md`
@@ -154,7 +154,7 @@ Règle de lecture transversale :
 - **Input Audio vs Hybrid** → Z2 + Z3 + Z5
 - **Master/Buffer** → Z1 + Z2 + Z3 + Z4 + Z5
 - **Master/FX MacroFX** → Z1 + Z2 + Z3 + Z5
-- **Master/Buffer timestretch** → Z1 d'abord, puis Z3/Z4/Z5 selon param/sync/UI
+- **Master/Buffer shifter** → Z1 d'abord, puis Z3/Z5 selon param/UI
 - **bug track-aware transversal** → commencer par Z2
 - **bug après load/restore** → Z6 puis Z2/Z3/Z4/Z5 selon symptôme
 

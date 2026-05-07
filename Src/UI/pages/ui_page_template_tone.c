@@ -9,12 +9,12 @@
 
 static const ui_template_family_t g_ui_template_tone_family_buffer = {
     .family_title = "TONE",
-    .nav_labels = { "REC", "FADE", "STR", "SYNC" },
+    .nav_labels = { "REC", "FADE", "SHFT", "-" },
     .subpages = {
         { .title = "REC", .param_bank = { .params = { PARAM_BUFFER_REC_LEN, PARAM_BUFFER_Q_REC, PARAM_BUFFER_Q_PLAY, PARAM_BUFFER_RATE } } },
-        { .title = "FADE", .param_bank = { .params = { PARAM_BUFFER_FADE_IN, PARAM_BUFFER_FADE_OUT, PARAM_BUFFER_XFADE, PARAM_BUFFER_PRESERVE_PITCH } } },
-        { .title = "STR", .param_bank = { .params = { PARAM_BUFFER_TSTR, PARAM_BUFFER_GRAIN, PARAM_BUFFER_HOP, PARAM_COUNT } } },
-        { .title = "SYNC", .param_bank = { .params = { PARAM_BUFFER_SYNC_LEN, PARAM_BUFFER_SRC_BPM, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "FADE", .param_bank = { .params = { PARAM_BUFFER_FADE_IN, PARAM_BUFFER_FADE_OUT, PARAM_BUFFER_XFADE, PARAM_COUNT } } },
+        { .title = "SHFT", .param_bank = { .params = { PARAM_BUFFER_GRAIN, PARAM_BUFFER_PRESERVE_PITCH, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };

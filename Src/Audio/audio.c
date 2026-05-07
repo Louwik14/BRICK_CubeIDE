@@ -24,6 +24,7 @@
 #include "cpu_load.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
+#include "Core/brick6_master_buffer.h"
 #include "Seq/seq_runtime.h"
 
 #include <string.h>
@@ -150,8 +151,15 @@ static void process_half(uint32_t half_index)
         while ((event_index < event_count)
                && (block_events[event_index].sample_offset_in_block == event_offset))
         {
-            /* Audio apply seam: runtime event dispatch stays separate from block scheduling and block DSP. */
-            seq_runtime_audio_apply_event(&block_events[event_index]);
+            if (block_events[event_index].type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+            {
+                brick6_master_buffer_on_boundary_edge(block_events[event_index].track);
+            }
+            else
+            {
+                /* Audio apply seam: runtime event dispatch stays separate from block scheduling and block DSP. */
+                seq_runtime_audio_apply_event(&block_events[event_index]);
+            }
             event_index++;
         }
     }
