@@ -44,6 +44,7 @@
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/multi_record_writer.h"
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -100,6 +101,7 @@ void brick6_app_init(void)
 
     sd_access_gate_init();
     sd_preview_init();
+    multi_record_writer_init();
     sample_page_cache_init();
 
     brick6_sampler_bootstrap_load_pool();
@@ -178,6 +180,7 @@ void brick6_app_process(void)
      */
     seq_runtime_time_adapter_process();
     sample_cache_service(32768U);
+    multi_record_writer_service(8192U);
     pattern_load_service(4096U);
     pattern_live_service();
     sd_preview_process();
@@ -190,7 +193,4 @@ void brick6_app_process(void)
     voice_manager_service();
 
     midi_poll();
-
-    /* Service writer SD hors IRQ */
-    brick6_recorder_runtime_service_writer();
 }

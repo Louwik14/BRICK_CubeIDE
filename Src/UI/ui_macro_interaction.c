@@ -9,8 +9,12 @@
 #include "Param/param_registry.h"
 #include "Storage/project_v1.h"
 #include "ui_core.h"
-#include "ui_page_manager.h"
 #include "ui_param.h"
+
+#define HALL_PRESSURE_RAW_NOISE_FLOOR 400U
+#define HALL_PRESSURE_RAW_NOISE_MARGIN 200U
+#define HALL_PRESSURE_HYST 150U
+#define HALL_PRESSURE_AMOUNT_DEADZONE 25U
 
 typedef struct
 {
@@ -25,19 +29,126 @@ typedef struct
 } ui_macro_interaction_state_t;
 
 static ui_macro_interaction_state_t g_ui_macro_interaction;
+static uint8_t g_hall_pressure_active[HALL_KEY_COUNT];
+
+static float ui_macro_interaction_clampf(float value, float min_value, float max_value)
+{
+    if (value < min_value)
+    {
+        return min_value;
+    }
+
+    if (value > max_value)
+    {
+        return max_value;
+    }
+
+    return value;
+}
+
+static uint16_t hall_pressure_delta(uint8_t hall)
+{
+    const uint16_t min_value = hall_engine_get_min(hall);
+    const uint16_t raw_value = hall_engine_get_raw(hall);
+
+    return (raw_value > min_value) ? (uint16_t)(raw_value - min_value) : 0U;
+}
+
+static uint8_t hall_pressure_update(uint8_t hall)
+{
+    uint16_t min_value = 0U;
+    uint16_t max_value = 0U;
+    uint16_t delta = 0U;
+    const uint16_t on_delta = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR + HALL_PRESSURE_RAW_NOISE_MARGIN);
+    const uint16_t off_delta = (on_delta > HALL_PRESSURE_HYST) ? (uint16_t)(on_delta - HALL_PRESSURE_HYST) : 0U;
+
+    if (hall >= HALL_KEY_COUNT)
+    {
+        return 0U;
+    }
+
+    min_value = hall_engine_get_min(hall);
+    max_value = hall_engine_get_max(hall);
+    delta = hall_pressure_delta(hall);
+
+    if ((max_value <= min_value) || ((uint16_t)(max_value - min_value) <= on_delta))
+    {
+        g_hall_pressure_active[hall] = 0U;
+        return 0U;
+    }
+
+    if (g_hall_pressure_active[hall] == 0U)
+    {
+        if (delta >= on_delta)
+        {
+            g_hall_pressure_active[hall] = 1U;
+        }
+    }
+    else if (delta <= off_delta)
+    {
+        g_hall_pressure_active[hall] = 0U;
+    }
+
+    return g_hall_pressure_active[hall];
+}
+
+static float hall_pressure_amount(uint8_t hall)
+{
+    uint16_t min_value = 0U;
+    uint16_t max_value = 0U;
+    uint16_t range = 0U;
+    uint16_t amount_start = 0U;
+    uint16_t delta = 0U;
+    float start = 0.0f;
+    float amount = 0.0f;
+
+    if (hall >= HALL_KEY_COUNT)
+    {
+        return 0.0f;
+    }
+
+    min_value = hall_engine_get_min(hall);
+    max_value = hall_engine_get_max(hall);
+    if (max_value <= min_value)
+    {
+        return 0.0f;
+    }
+
+    range = (uint16_t)(max_value - min_value);
+    amount_start = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR
+                              + HALL_PRESSURE_RAW_NOISE_MARGIN
+                              + HALL_PRESSURE_AMOUNT_DEADZONE);
+    if (range <= amount_start)
+    {
+        return 0.0f;
+    }
+
+    delta = hall_pressure_delta(hall);
+    start = (float)amount_start;
+    amount = ((float)delta - start) / ((float)range - start);
+    return ui_macro_interaction_clampf(amount, 0.0f, 1.0f);
+}
 
 static uint8_t ui_macro_interaction_is_scene_mode(void)
 {
-    return (uint8_t)((ui_get_hall_mode() == UI_HALL_MODE_MACRO)
-            && (ui_page_get_id() != UI_PAGE_TEMPLATE_MACRO)
-            && (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_SCENE));
+    ui_macro_overlay_submode_t overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
+    if (ui_macro_overlay_get_submode(&overlay_submode) != 0U)
+    {
+        return (overlay_submode == UI_MACRO_OVERLAY_SUBMODE_ASSIGN) ? 1U : 0U;
+    }
+
+    return 0U;
 }
 
 static uint8_t ui_macro_interaction_is_switch_mode(void)
 {
-    return (uint8_t)((ui_get_hall_mode() == UI_HALL_MODE_MACRO)
-            && (ui_page_get_id() != UI_PAGE_TEMPLATE_MACRO)
-            && (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_SWITCH));
+    ui_macro_overlay_submode_t overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
+    if (ui_macro_overlay_get_submode(&overlay_submode) != 0U)
+    {
+        return (overlay_submode == UI_MACRO_OVERLAY_SUBMODE_CTRL) ? 1U : 0U;
+    }
+
+    return 0U;
 }
 
 static uint8_t ui_macro_interaction_is_assignable_param(param_id_t param)
@@ -252,6 +363,11 @@ void ui_macro_interaction_reset(void)
         param_macro_release_scene_source(scene);
     }
 
+    for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; ++hall)
+    {
+        g_hall_pressure_active[hall] = 0U;
+    }
+
     g_ui_macro_interaction.armed = 0U;
     g_ui_macro_interaction.hall = 0U;
     g_ui_macro_interaction.encoder = 0U;
@@ -271,7 +387,6 @@ void ui_macro_interaction_note_hall_press(uint8_t hall)
 
     if (ui_macro_interaction_is_switch_mode() != 0U)
     {
-        (void)param_macro_set_scene_source_amount(hall, ((float)hall_engine_get_value(hall)) * 0.01f);
         return;
     }
 
@@ -419,7 +534,6 @@ void ui_macro_interaction_note_hall_release(uint8_t hall)
 
     if (ui_macro_interaction_is_switch_mode() != 0U)
     {
-        param_macro_release_scene_source(hall);
         return;
     }
 
@@ -459,14 +573,20 @@ void ui_macro_interaction_note_hall_release(uint8_t hall)
 
 void ui_macro_interaction_service_hall(uint8_t hall, uint8_t pressed)
 {
+    (void)pressed;
+
     if ((hall >= HALL_KEY_COUNT) || (ui_macro_interaction_is_switch_mode() == 0U))
     {
         return;
     }
 
-    if (pressed != 0U)
+    if (hall_pressure_update(hall) != 0U)
     {
-        (void)param_macro_set_scene_source_amount(hall, ((float)hall_engine_get_value(hall)) * 0.01f);
+        (void)param_macro_set_scene_source_amount(hall, hall_pressure_amount(hall));
+    }
+    else
+    {
+        param_macro_release_scene_source(hall);
     }
 }
 

@@ -15,6 +15,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
 - `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
+- `Src/Core/brick6_app_init.c`: init et service cooperatif du squelette `multi_record_writer`, hors IRQ et sans client actif par defaut.
 
 Sous-roles internes dans `brick6_app_init.c`:
 - Orchestrateur boot produit: initialisation ordered des sous-systemes applicatifs.
@@ -194,7 +195,11 @@ Z0 appelle principalement:
 6. Runtime continu `brick6_app_process()` ordre observe:
 - `engine_tasklet_poll()`
 - `seq_runtime_time_adapter_process()`
+- `sample_cache_service(32768U)`
+- `multi_record_writer_service(8192U)`
+- `pattern_load_service(4096U)`
 - `pattern_live_service()`
+- `sd_preview_process()`
 - `brick6_master_control_process()`
 - `hall_loop_process()`
 - `ui_core_service_track_selection_inputs()`
@@ -202,7 +207,6 @@ Z0 appelle principalement:
 - `brick6_recorder_runtime_process_transport()`
 - `voice_manager_service()`
 - `midi_poll()`
-- `brick6_recorder_runtime_service_writer()`.
 
 7. Points critiques periodiques hors superloop direct:
 - IRQ TIM12 appele en parallele de la superloop (adaptateur temps seq depuis IRQ).
@@ -216,7 +220,7 @@ Z0 appelle principalement:
 - Pas de RTOS observe: ordonnanceur cooperatif superloop + IRQ HAL.
 - Separation hard-RT audio vs services non-IRQ:
   - audio IRQ traite pipeline hard-RT,
-  - Z0 orchestre services bornes/bounded hors IRQ (USB host poll bounded, writer recorder hors IRQ).
+  - Z0 orchestre services bornes/bounded hors IRQ (USB host poll bounded, services SD hors IRQ).
 - Dependance forte a l'ordre d'init et au hardware clock/timer configure.
 - `engine_tasklet_poll()` utilise section critique IRQ courte pour transfert frames->ticks.
 - Buffers globaux statiques (`g_live_recorder_buffer`, `g_live_recorder`), pas de malloc dans Z0 observe.
@@ -238,13 +242,12 @@ Z0 appelle principalement:
   - externe: pulses MIDI recueillies hors IRQ audio puis consommees en domaine audio bloc,
   - TIM12: ticker auxiliaire interne uniquement.
 - Service MIDI host autoritatif unique: `midi_host_poll_bounded(8)` appele dans `main()`; `midi_host_poll()` reste un wrapper API sans second scheduler.
-- `brick6_recorder_runtime_service_writer()` reste hors IRQ.
 
 ## 9. Dependances inter-zones
 
 - Vers Z1: wiring callback DSP (`audio_set_float_callback(brick6_audio_runtime_dsp)`), start audio, source de ticks via IRQ audio->engine tasklet.
 - Vers Z4: init seq runtime + service superloop transport/bridge; l'avance step (interne/externe) est consommee cote Z1 audio bloc.
-- Vers Z6: init pattern/project/undo et appel `pattern_live_service` en runtime.
+- Vers Z6: init pattern/project/undo, service `multi_record_writer_service` et appel `pattern_live_service` en runtime.
 - Vers Z5: init/tick UI via `ui_tasklet_poll`, service selection inputs dans app process.
 - Vers Z3/Z2: init param defaults et effets indirects via init/runtime des autres zones.
 
@@ -268,4 +271,16 @@ Z0 appelle principalement:
 - Z0 est confirme comme zone d'orchestration (boot + wiring + cadence non-RTOS), pas zone de logique metier.
 - Frontiere Z0/Z1 reste nette: Z0 demarre et cadence, Z1 execute hard-RT audio IRQ.
 - Z0 met en evidence une sous-frontiere "cadence" (engine tasklet + timers TIM12/TIM5 + superloop gating UI) utile pour maintenance future.
+
+## 12. Addendum - ordre de service SD recording produit
+
+- Z0 porte uniquement l'ordre de service cooperatif hors IRQ; il ne devient pas l'autorite SD metier.
+- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` appelle `multi_record_writer_service(8192U)` juste apres `sample_cache_service(32768U)` et avant `pattern_load_service(4096U)`.
+- Ordre cible pour la cohabitation SD audio:
+  1. `sample_cache_service(...)` prioritaire pour playback sample streaming.
+  2. `multi_record_writer_service(...)` pour drainer les rings record, priorite par watermark.
+  3. `pattern_save_service(...)` opportuniste, seulement si les rings record ne sont pas critiques.
+  4. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
+- Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
+- Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
 

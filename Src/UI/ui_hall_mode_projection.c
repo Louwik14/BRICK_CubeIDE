@@ -82,6 +82,12 @@ const char *ui_get_hall_mode_short_label(void)
 {
     const uint8_t active_track = ui_get_active_track();
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
+    ui_macro_overlay_submode_t macro_overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
+
+    if (ui_macro_overlay_get_submode(&macro_overlay_submode) != 0U)
+    {
+        return (macro_overlay_submode == UI_MACRO_OVERLAY_SUBMODE_ASSIGN) ? "M-Assign" : "M-Ctrl";
+    }
 
     if (ui_is_track_modifier_held() != 0U)
     {
@@ -103,6 +109,11 @@ const char *ui_get_hall_mode_suffix_label(void)
     static char label[6];
     const uint8_t active_track = ui_get_active_track();
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
+
+    if (ui_macro_overlay_is_active() != 0U)
+    {
+        return "";
+    }
 
     if (ui_is_track_modifier_held() != 0U)
     {

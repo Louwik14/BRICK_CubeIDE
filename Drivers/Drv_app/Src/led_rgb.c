@@ -69,6 +69,8 @@
 #define LED_FIXED_RED_R           LED_FIXED_HALF_BRIGHTNESS
 #define LED_FIXED_RED_G           0U
 #define LED_FIXED_RED_B           0U
+#define LED_MACRO_PRESSURE_RAW_NOISE_FLOOR 400U
+#define LED_MACRO_PRESSURE_LED_MARGIN 75U
 
 static uint8_t led_seq_collect_held_plock_set_mask(void)
 {
@@ -146,6 +148,8 @@ static const led_rgb_color_t g_led_macro_scene_colors[PROJECT_V1_MACRO_SCENE_COU
     { 48U, 96U, 128U }
 };
 
+static uint8_t g_led_macro_pressure_scale[PROJECT_V1_MACRO_SCENE_COUNT];
+
 static led_rgb_color_t led_macro_scene_color(uint8_t scene)
 {
     if (scene >= PROJECT_V1_MACRO_SCENE_COUNT)
@@ -162,6 +166,83 @@ static led_rgb_color_t led_scale_color(led_rgb_color_t color, uint8_t scale)
     color.g = (uint8_t)(((uint16_t)color.g * (uint16_t)scale) / 255U);
     color.b = (uint8_t)(((uint16_t)color.b * (uint16_t)scale) / 255U);
     return color;
+}
+
+static uint8_t led_macro_pressure_depth_scale(uint8_t hall, uint8_t base_scale)
+{
+    uint16_t min_value = 0U;
+    uint16_t max_value = 0U;
+    uint16_t raw_value = 0U;
+    uint16_t range = 0U;
+    uint16_t delta = 0U;
+    uint16_t amount_start = 0U;
+    uint8_t amount_u8 = 0U;
+    uint8_t target_scale = base_scale;
+    uint8_t current_scale = 0U;
+
+    if (hall >= PROJECT_V1_MACRO_SCENE_COUNT)
+    {
+        return base_scale;
+    }
+
+    min_value = hall_engine_get_min(hall);
+    max_value = hall_engine_get_max(hall);
+    raw_value = hall_engine_get_raw(hall);
+    if (max_value > min_value)
+    {
+        range = (uint16_t)(max_value - min_value);
+        delta = (raw_value > min_value) ? (uint16_t)(raw_value - min_value) : 0U;
+        amount_start = (uint16_t)(LED_MACRO_PRESSURE_RAW_NOISE_FLOOR
+                                  + LED_MACRO_PRESSURE_LED_MARGIN);
+        if (range > amount_start)
+        {
+            if (delta > amount_start)
+            {
+                uint32_t amount =
+                    (((uint32_t)(delta - amount_start) * 255UL)
+                     / (uint32_t)(range - amount_start));
+                if (amount > 255UL)
+                {
+                    amount = 255UL;
+                }
+                amount_u8 = (uint8_t)amount;
+            }
+        }
+
+        target_scale = (uint8_t)((uint16_t)base_scale
+                                 + ((((uint16_t)255U - (uint16_t)base_scale)
+                                     * (uint16_t)amount_u8) / 255U));
+    }
+
+    current_scale = g_led_macro_pressure_scale[hall];
+    if (current_scale == 0U)
+    {
+        current_scale = base_scale;
+    }
+
+    if (target_scale > current_scale)
+    {
+        current_scale = (uint8_t)(current_scale + (((uint16_t)(target_scale - current_scale) + 1U) / 2U));
+    }
+    else if (target_scale < current_scale)
+    {
+        uint8_t step = (uint8_t)(((uint16_t)(current_scale - target_scale) + 3U) / 4U);
+        if (step == 0U)
+        {
+            step = 1U;
+        }
+        current_scale = (step >= (uint8_t)(current_scale - target_scale))
+            ? target_scale
+            : (uint8_t)(current_scale - step);
+    }
+
+    if (current_scale < base_scale)
+    {
+        current_scale = base_scale;
+    }
+
+    g_led_macro_pressure_scale[hall] = current_scale;
+    return current_scale;
 }
 
 static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets, button_id_t macro_button)
@@ -393,20 +474,7 @@ static void led_apply_macro_switch_hall_scene(uint8_t hall)
     const led_id_t led = led_remap_led_for_hall(hall);
     led_rgb_color_t color = led_macro_scene_color(hall);
     uint8_t scale = (project_v1_macro_scene_has_locks(hall) != 0U) ? 170U : 45U;
-    const uint16_t hall_amount = hall_engine_get_value(hall);
-
-    if (hall_amount != 0U)
-    {
-        uint32_t active_scale = 80UL + (((uint32_t)hall_amount * 175UL) / 100UL);
-        if (active_scale > 255U)
-        {
-            active_scale = 255U;
-        }
-        if (active_scale > scale)
-        {
-            scale = (uint8_t)active_scale;
-        }
-    }
+    scale = led_macro_pressure_depth_scale(hall, scale);
 
     color = led_scale_color(color, scale);
     led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
@@ -581,7 +649,25 @@ static void led_apply_fixed_scene(void)
         macro_button = led_macro_param_to_button(macro_param);
     }
 
-    if (ui_is_track_modifier_held() != 0U)
+    if (ui_macro_overlay_is_active() != 0U)
+    {
+        ui_macro_overlay_submode_t overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
+        (void)ui_macro_overlay_get_submode(&overlay_submode);
+        const uint8_t switch_mode =
+            (uint8_t)(overlay_submode == UI_MACRO_OVERLAY_SUBMODE_CTRL);
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+        {
+            if (switch_mode != 0U)
+            {
+                led_apply_macro_switch_hall_scene(hall);
+            }
+            else
+            {
+                led_apply_macro_scene_hall_scene(hall);
+            }
+        }
+    }
+    else if (ui_is_track_modifier_held() != 0U)
     {
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
@@ -617,17 +703,6 @@ static void led_apply_fixed_scene(void)
             else if (led_hall_mode_uses_keyboard_scene())
             {
                 led_apply_keyboard_hall_scene(hall);
-            }
-            else if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
-            {
-                if (project_v1_macro_get_hall_switch_mode() == PROJECT_V1_MACRO_HALL_SWITCH_SWITCH)
-                {
-                    led_apply_macro_switch_hall_scene(hall);
-                }
-                else
-                {
-                    led_apply_macro_scene_hall_scene(hall);
-                }
             }
             else
             {

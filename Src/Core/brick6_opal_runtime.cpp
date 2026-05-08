@@ -19,6 +19,7 @@ namespace {
 
 constexpr size_t kPlaitsAllocatorBytes = 8192U;
 constexpr float kOpalFixedPitchOffset = 0.0f;
+constexpr float OPAL_OUTPUT_TRIM = 0.30f;
 typedef struct
 {
     brick6_opal_runtime_voice_t voice;
@@ -238,7 +239,7 @@ void brick6_opal_runtime_render_instance(uint8_t instance_id, float *out_mono, u
         {
             (void)aux_block;
             (void)already_enveloped;
-            out_mono[offset + i] = -out_block[i];
+            out_mono[offset + i] = -out_block[i] * OPAL_OUTPUT_TRIM;
         }
 
         offset += (uint32_t)block;

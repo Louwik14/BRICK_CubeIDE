@@ -69,7 +69,7 @@ Familles d'autorite:
 - `param_macro.*`:
   - seam Z3 dedie au MACRO runtime,
   - interpolation `base -> scene`, validation track-aware des 32 locks par scene, et handoff explicite vers `param_registry_apply_track_value`,
-  - contrat produit: toute cible p-lockable selon `seq_param_iface_param_to_slot` + `seq_param_iface_param_is_supported` est assignable au Hall Mode Macro,
+  - contrat produit: toute cible p-lockable selon `seq_param_iface_param_to_slot` + `seq_param_iface_param_is_supported` est assignable a l'overlay MACRO,
   - runtime source-state borne a 4 macro pots + 16 sources hall momentanees, chaque source parcourant au plus `PROJECT_V1_MACRO_SCENE_LOCK_COUNT` locks de la scene cible,
   - pas d'autorite canonique propre, pas de stockage projet, pas de second cache runtime.
 - `param_registry_apply_wrappers.*`:
@@ -168,8 +168,8 @@ Call-sites critiques:
 - Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Opal, Braids, MIX et BUFFER.
 - Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres locks.
 - Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`; chaque pot pointe vers une scene projet.
-- Pendant un maintien de scene en `Mode=Scene`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
-- Les sources hall `Switch` utilisent `param_macro_set_scene_source_amount` / `param_macro_release_scene_source`, restent momentanees et ne changent jamais la base canonique.
+- Pendant un maintien de scene en overlay `M-Assign`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
+- Les sources hall en overlay `M-Ctrl` utilisent `param_macro_set_scene_source_amount` / `param_macro_release_scene_source`, restent momentanees et ne changent jamais la base canonique.
 - L'arbitrage multi-source est borne et statique: toutes les sources actives sont relâchees vers leur base puis reappliquees dans l'ordre de dernier toucher; si plusieurs sources ciblent le meme parametre, la derniere touchee gagne et une source precedente encore active reprend apres release de la gagnante.
 - La capacite MACRO runtime est `16 scenes * 32 locks`; les 4 pots ne possedent pas les locks, ils pointent seulement vers une scene.
 - Worst-case control-rate: une recomposition peut relacher puis reappliquer les 20 sources statiques, avec au plus 32 resolutions/applies par source active; ce parcours reste hors IRQ audio, sans malloc et borne par constantes compile-time.

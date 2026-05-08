@@ -1,18 +1,18 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:103:16:int16_t {anonymous}::brick6_braids_runtime_pitch_to_q7(const brick6_braids_runtime_voice_t*)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:147:13:0(brick6_braids_runtime_instance_t*)	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:183:6:void brick6_braids_runtime_init()	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:191:6:void brick6_braids_runtime_reset_instance(uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:196:6:void brick6_braids_runtime_set_edit(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:206:6:void brick6_braids_runtime_set_fine(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:215:6:void brick6_braids_runtime_set_coarse(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:224:6:void brick6_braids_runtime_set_fm(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:233:6:void brick6_braids_runtime_set_timbre(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:242:6:void brick6_braids_runtime_set_modulation(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:251:6:void brick6_braids_runtime_set_color(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:260:6:void brick6_braids_runtime_set_vca_release_seconds(uint8_t, float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:295:6:void brick6_braids_runtime_note_off(uint8_t, uint8_t)	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:269:6:void brick6_braids_runtime_note_on(uint8_t, float, float)	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:314:6:void brick6_braids_runtime_all_notes_off(uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:328:6:void brick6_braids_runtime_clear_trigger(uint8_t)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:337:6:void brick6_braids_runtime_render_instance(uint8_t, float*, uint32_t)	104	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:401:38:const brick6_braids_runtime_voice_t* brick6_braids_runtime_get_voice(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:104:16:int16_t {anonymous}::brick6_braids_runtime_pitch_to_q7(const brick6_braids_runtime_voice_t*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:148:13:0(brick6_braids_runtime_instance_t*)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:184:6:void brick6_braids_runtime_init()	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:192:6:void brick6_braids_runtime_reset_instance(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:197:6:void brick6_braids_runtime_set_edit(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:207:6:void brick6_braids_runtime_set_fine(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:216:6:void brick6_braids_runtime_set_coarse(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:225:6:void brick6_braids_runtime_set_fm(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:234:6:void brick6_braids_runtime_set_timbre(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:243:6:void brick6_braids_runtime_set_modulation(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:252:6:void brick6_braids_runtime_set_color(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:261:6:void brick6_braids_runtime_set_vca_release_seconds(uint8_t, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:296:6:void brick6_braids_runtime_note_off(uint8_t, uint8_t)	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:270:6:void brick6_braids_runtime_note_on(uint8_t, float, float)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:315:6:void brick6_braids_runtime_all_notes_off(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:329:6:void brick6_braids_runtime_clear_trigger(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:338:6:void brick6_braids_runtime_render_instance(uint8_t, float*, uint32_t)	104	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_braids_runtime.cpp:402:38:const brick6_braids_runtime_voice_t* brick6_braids_runtime_get_voice(uint8_t)	0	static

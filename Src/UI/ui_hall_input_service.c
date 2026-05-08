@@ -64,8 +64,16 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                                 was_pressed,
                                                 pressed);
     const uint32_t now_ms = HAL_GetTick();
+    const uint8_t track_select_without_shift =
+        (uint8_t)((action == UI_HALL_DIRECT_ACTION_TRACK_SELECT) && (shift_down == 0U));
+    const uint8_t macro_overlay_hall_context =
+        (uint8_t)((ui_macro_overlay_is_active() != 0U)
+                  && (track_select_without_shift == 0U)
+                  && !((ui_macro_overlay_is_latched() != 0U)
+                       && (shift_down != 0U)
+                       && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
 
-    if (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
+    if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE) && (macro_overlay_hall_context == 0U))
     {
         const ui_mute_submode_t mute_submode = ui_core_mute_get_submode();
         const uint8_t allow_shift_mode_redirect =
@@ -80,20 +88,28 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
         return;
     }
 
-    if ((hall_mode == UI_HALL_MODE_MACRO) && (mute_active == 0U))
+    (void)hall_mode;
+
+    if ((macro_overlay_hall_context != 0U) && (mute_active == 0U))
     {
         if ((was_pressed == 0U) && (pressed != 0U))
         {
             ui_macro_interaction_note_hall_press(hall);
+            hall_note_suppressed[hall] = 1U;
         }
         else if ((was_pressed != 0U) && (pressed == 0U))
         {
             ui_macro_interaction_note_hall_release(hall);
         }
         ui_macro_interaction_service_hall(hall, pressed);
+
+        if (macro_overlay_hall_context != 0U)
+        {
+            return;
+        }
     }
 
-    if ((action != UI_HALL_DIRECT_ACTION_TRACK_SELECT) || (mute_active != 0U))
+    if ((action != UI_HALL_DIRECT_ACTION_TRACK_SELECT) || (mute_active != 0U) || (shift_down != 0U))
     {
         return;
     }

@@ -18,6 +18,7 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Storage/sd_access_gate.c` + `Inc/Storage/sd_access_gate.h`: arbitrage d'acces SD entre clients PATTERN/PROJECT/PREVIEW.
 - `Src/Storage/sd_preview.c` + `Inc/Storage/sd_preview.h`: facade preview SD dediee, separee de l'import projet.
 - `Src/Storage/wav_audio_codec.c` + `Inc/Storage/wav_audio_codec.h`: decode PCM partage pour import et preview.
+- `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: squelette proprietaire du futur writer SD audio multi-client; rings RAM statiques et state machine stub, sans FatFs branche.
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
 - `Src/UI/ui_core.c`: preuve des appels UI vers `pattern_live_capture_to_slot` et `pattern_live_queue_slot`.
 - `Src/UI/pages/ui_page_settings.c`: preuve des appels UI vers `project_v1_save_slot/load_slot/delete_slot`.
@@ -68,6 +69,13 @@ Autorite preview SD:
 - Le service conserve une session SD exclusive et alimente un ring buffer audio pre-rendu hors IRQ.
 - Placement memoire courant: `g_sd_preview_ring` et `g_sd_preview_io` sont en `AUDIO_COLD_SDRAM` avec alignement 32. Gain D1 attendu: 16 KiB pour le ring et 4 KiB pour l'I/O. Le risque accepte cote ring est limite au cout SDRAM en IRQ pendant la preview UI; le risque restant cote I/O est SDMMC/FatFs/cache a valider par preview WAV/SD.
 
+Autorite writer SD audio multi-client:
+- `multi_record_writer_*`.
+- Phase courante: interface produit, etats, diagnostics et rings RAM `int32_t` stereo statiques seulement.
+- Le service superloop draine de facon simulee sous budget et ne possede pas encore de session FatFs.
+- `commit` et `delete_temp` sont des placeholders explicites: ils exposent `NOT_IMPLEMENTED` et ne declarent pas de succes produit.
+- Les producteurs audio futurs pousseront uniquement vers les rings RAM; aucun hook Z1 n'est branche dans cette passe.
+
 Autorite boot context flash:
 - `boot_context_flash_load()`, `boot_context_flash_commit()`, `boot_context_flash_clear()`.
 
@@ -79,7 +87,8 @@ Seconde autorite concurrente:
 
 Entrees depuis init/runtime global:
 - `brick6_app_init.c` appelle `pattern_live_init()`, `project_v1_init()`, `project_v1_restore_boot_context()`.
-- Boucle superloop appelle `pattern_live_service()`.
+- `brick6_app_init.c` appelle `multi_record_writer_init()`.
+- Boucle superloop appelle `multi_record_writer_service(8192U)` puis `pattern_live_service()`.
 
 Entrees depuis UI:
 - `ui_core.c` appelle `pattern_live_capture_to_slot()` et `pattern_live_queue_slot()`.
@@ -169,7 +178,7 @@ Points de lecture principaux:
 
 ### `project_v1` macro RAM
 - `project_v1_macro_state_t` porte le modele MACRO projet-level en RAM:
-  - `hall_switch_mode` (`Scene` / `Switch`),
+  - `hall_switch_mode` conserve comme tombstone de layout projet (`Scene` / `Switch`), sans autorite UI active depuis le retrait du mode Hall MACRO,
   - `macro_scene[4]` pour lier chaque macro pot a une scene,
   - `scenes[16]` porte les 16 scenes MACRO; chaque scene contient `locks[32]`.
 - Les locks vides utilisent une convention sentinel explicite:
@@ -412,3 +421,189 @@ TODO policy SD/projet:
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont ajoutes en fin d'enum et entrent dans les tableaux `PARAM_COUNT` existants.
 - Les nouveaux snapshots/projets peuvent stocker ces valeurs via les flux parametres existants, mais le layout binaire `PARAM_COUNT` augmente.
 - L'etat ROUT Master/FX reste UI-only local dans cette passe; il n'est pas encore persiste en pattern/projet.
+
+## Addendum 2026-05-08 - contrat SD audio recording multi-client
+
+Ce contrat documente la cible produit pour l'enregistrement audio vers SD. Il ne decrit pas un code deja implemente.
+
+### Autorites
+
+- Z1 reste l'autorite des producteurs audio hard-RT:
+  - taps/captures depuis le pipeline audio,
+  - copie vers ring RAM uniquement,
+  - aucun acces FatFs, SDMMC, allocation dynamique ou lock bloquant.
+- Z0 reste l'autorite de cadence des services hors IRQ:
+  - ordre de service superloop,
+  - budgets cooperatifs,
+  - aucun scheduler SD parallele implicite.
+- Z4 reste l'autorite transport/REC/boundaries:
+  - stop de record a frontiere musicale quand demande produit,
+  - `pattern load` pendant record passe par stop/finalize avant load/apply.
+- Z6 reste l'autorite SD/persistence:
+  - `sd_access_gate` est l'arbitre SD effectif,
+  - FatFs n'est pas reentrant (`_FS_REENTRANT=0`), donc un seul owner SD reel a la fois,
+  - pattern/project/preview/import doivent cohabiter avec le futur writer audio global.
+- Z2/Z5 restent les autorites track-aware/UI pour une future track looper:
+  - choix family/type/capacite exposee via les contrats runtime/UI existants,
+  - le looper n'est pas une architecture SD speciale, seulement un client du writer multi-record.
+
+### Modele cible
+
+- Format record produit unique: WAV PCM stereo 24-bit / 48 kHz.
+- Modele cible:
+  - `N producteurs audio -> rings RAM alignes int32 stereo par client -> multi_record_writer_service global -> fichiers WAV SD`.
+- Le writer packe en PCM 24-bit hors IRQ juste avant `f_write`.
+- Un record client peut representer:
+  - une prise looper,
+  - une track stem,
+  - un bus/session recorder futur.
+- Il ne doit pas exister un writer FatFs par track qui arbitre directement via `sd_access_gate`; l'arbitrage des fichiers record appartient au writer global multi-client.
+
+### Ordre de service SD
+
+Ordre produit attendu dans la superloop, sous budgets explicites:
+
+1. `sample_cache_service(...)`
+   - priorite absolue pour playback streaming.
+   - Charge les pages RAM du Sampler; l'audio ne lit que RAM.
+2. `multi_record_writer_service(...)`
+   - draine les rings record.
+   - choisit le client par watermark/pression, avec fairness borne pour eviter starvation.
+3. `pattern_save_service(...)`
+   - autorise pendant active recording seulement si les rings record ne sont pas critiques.
+   - ecrit en temp + commit/rename avec queue limitee.
+4. `pattern_load`
+   - pendant record: queue l'intention, stop records a frontiere musicale si possible, finalize, puis load/apply.
+5. Operations interdites ou differees pendant active recording/finalizing:
+   - project save/load,
+   - preset load,
+   - preview SD,
+   - scan library,
+   - imports/loads non musicaux.
+
+### Ring writer
+
+- Chaque client record possede un ring RAM dedie.
+- Format interne ring: stereo `int32_t` aligne, 48 kHz.
+- Le push audio est borne:
+  - copie bloc vers ring,
+  - avance index atomique/volatile,
+  - update counters simples.
+- Aucun acces SD cote audio IRQ:
+  - pas de FatFs,
+  - pas de malloc,
+  - pas de lock bloquant,
+  - pas de formatage WAV,
+  - pas de `f_open/f_write/f_sync/f_lseek/f_rename/f_unlink/f_expand`.
+- Diagnostics obligatoires par client:
+  - high watermark,
+  - overflow count,
+  - dropped frames,
+  - failed/degraded take,
+  - bytes written,
+  - last FatFs error.
+
+### Debits et RAM
+
+Debit WAV PCM stereo 24-bit / 48 kHz:
+- 1 record: 288000 octets/s.
+- 4 records: environ 1.15 MB/s write.
+- 8 records: environ 2.30 MB/s write.
+- 16 records: environ 4.61 MB/s write.
+
+Pression RAM ring interne `int32_t stereo`:
+- 1 record: 384000 octets/s.
+- 0.5 s par client: 192000 octets.
+- 1 s par client: 384000 octets.
+- 2 s par client: 768000 octets.
+
+Exemples de RAM ring brute:
+- 4 clients: environ 768 KB pour 0.5 s, 1.54 MB pour 1 s, 3.07 MB pour 2 s.
+- 8 clients: environ 1.54 MB pour 0.5 s, 3.07 MB pour 1 s, 6.14 MB pour 2 s.
+- 16 clients: environ 3.07 MB pour 0.5 s, 6.14 MB pour 1 s, 12.29 MB pour 2 s.
+
+Ces chiffres n'incluent pas:
+- buffers de pack PCM24,
+- structures de fichiers,
+- cache sample,
+- fragmentation/latence SD,
+- pression read `sample_cache_service` en parallele.
+
+Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte cible avec:
+- playback sample_cache actif,
+- carte fragmentee et carte fraiche,
+- pattern save opportuniste,
+- cas de finalisation WAV,
+- mesures high watermark/drop par client.
+
+### Politique writer
+
+- L'ecriture disque se fait par chunks alignes secteur quand possible.
+- Le choix du prochain client combine:
+  - watermark le plus haut en priorite,
+  - round-robin/aging pour eviter qu'un client bas debit soit bloque indefiniment,
+  - mode finalizing prioritaire uniquement apres protection du playback sample_cache.
+- Si un client overflow:
+  - marquer la prise `degraded` ou `failed`,
+  - incrementer dropped frames,
+  - ne jamais bloquer l'audio.
+- Si plusieurs clients overflow:
+  - escalader vers stop/finalize global ou fail des clients les plus critiques selon mode produit,
+  - exposer l'etat a l'UI/diagnostics.
+- Une carte lente ou bloquee ne doit jamais remonter en attente bloquante vers Z1.
+
+### Contrat looper
+
+- Le looper est un client du writer multi-record.
+- `REC` cree/ecrit un fichier WAV temporaire.
+- `STOP` draine le ring et finalise le header WAV.
+- `SAVE` commit/rename vers un fichier durable.
+- `DELETE` retire immediatement la prise cote UI/audio; `f_unlink` SD est differe par service.
+- Spam `REC/DELETE/SAVE`:
+  - replace/cancel controle,
+  - pas de creation infinie de fichiers durables,
+  - un seul etat courant explicite par client looper.
+- Boot/projet:
+  - cleanup des fichiers temporaires abandonnes,
+  - aucune restauration de temp comme prise durable sans commit explicite.
+
+### Contrat stem recorder
+
+- Le stem recorder est aussi un ensemble de clients du writer multi-record.
+- Start/stop global.
+- Plusieurs clients record simultanes.
+- Fichiers durables de session.
+- Finalisation globale apres stop.
+- Overflow marque par client:
+  - un stem peut etre failed/degraded sans invalider automatiquement tous les autres,
+  - overflow multiple ou ring global critique peut forcer stop/finalize session.
+
+### Pattern save/load pendant record
+
+- `SAVE PATTERN` pendant record est autorise.
+- Capture RAM immediate:
+  - le snapshot doit etre complet en RAM avant toute ecriture SD,
+  - l'action musicale ne doit pas attendre l'ecriture disque.
+- Ecriture SD:
+  - temp file,
+  - chunks budgetes,
+  - sync/commit/rename opportunistes,
+  - queue limitee (par exemple une demande pending, remplacement ou refus explicite).
+- Etats UI possibles:
+  - queued,
+  - saving,
+  - saved,
+  - failed.
+- `LOAD PATTERN` pendant record:
+  - queue intention,
+  - stop/finalize des records actifs a frontiere musicale si possible,
+  - ensuite seulement load/apply pattern.
+
+### Risques connus
+
+- Latence non bornee de `f_open`, `f_write`, `f_sync`, `f_lseek`, `f_rename`, `f_unlink`, `f_expand`.
+- Carte lente ou fragmentee.
+- Starvation de `sample_cache_service` si `sd_access_gate` ou l'ordre de service est mal arbitre.
+- Overflow rings si la SD reste bloquee trop longtemps.
+- Usure et latence en cas de spam `REC/STOP/SAVE/DELETE`.
+- `f_expand` peut reduire la fragmentation mais reste lui-meme une operation longue; il ne doit pas etre appele depuis une phase qui menace playback ou hard-RT.

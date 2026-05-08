@@ -46,7 +46,7 @@ Dependances de Z5 sans appartenir a Z5:
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
 - Autorite param/modele seq hors UI (Z3/Z4), seulement pilotees depuis Z5.
-- `sd_multitrack_recorder` hors integration UI/produit a date: aucun workflow UI canonique start/stop/arm n'est expose tant que le bypass compile-time `SD_RECORDER_PRODUCT_ENABLED=0` reste actif. `Master/Buffer` reste un flux distinct et demeure expose.
+- Aucun workflow UI recorder SD/stems n'est expose a date. `Master/Buffer` reste un flux distinct et demeure expose.
 
 Sous-roles concentres dans `ui_core.c`:
 - Etat UI global courant (track, hall mode, feedback, states pattern/mute).
@@ -81,17 +81,23 @@ Autorite hall modes:
 - Chemin central: `ui_set_hall_mode` (validation transition + forced clears mute/pattern + callback keyboard runtime + commit mode).
 - Les transitions mute/pattern passent par `ui_set_hall_mode`; pas de chemin local direct autoritatif concurrent.
 - Triggers SHIFT+HALL dans `ui_core_handle_shift_hall_action`.
-- Mode hall natif `MACRO` (raw mode) expose en Z5:
-  - trigger: `SHIFT + HALL 15`,
-  - double tap `SHIFT + HALL 15`: ouvre la page hall mode dediee `Macro CFG` via la cible de contrat hall mode,
-  - page `Macro CFG` UI-only:
-    - une seule page `MODE`,
-    - parametre local unique `Mode` (`Scene`/`Switch`),
-    - valeur par defaut `Scene`,
-    - rendu via le meme pipeline template natif (`ui_template_page` + `ui_renderer_template`) que les autres ensembles,
-    - aucun write runtime/persistence/undo.
-  - vitrine `Macro` = `Macro CFG` du systeme natif, sans owner local.
-  - scope borne UI-only (aucune autorite runtime macro, aucune persistence macro).
+- Ancien mode hall natif `MACRO` neutralise:
+  - aucun trigger hall (`SHIFT + HALL 15` ne cible plus MACRO),
+  - `Macro CFG` reste enregistre pour ne pas decaler les IDs de pages, mais n'a plus de chemin utilisateur,
+  - `UI_HALL_MODE_MACRO` reste un tombstone enum local non selectionne par contrat hall mode,
+  - `hall_switch_mode` projet reste un tombstone de layout Z6, sans autorite UI active.
+- Overlay MACRO transitoire:
+  - trigger: `SHIFT + clic TRACK`,
+  - si l'overlay est deja actif, `SHIFT + clic TRACK` alterne le sous-mode local `Ctrl` / `Assign`,
+  - `Ctrl` reutilise le chemin Switch/pressure de `ui_macro_interaction`,
+  - `Assign` reutilise le chemin Scene/Assign de `ui_macro_interaction`,
+  - l'overlay momentane reste actif tant que `SHIFT` ou `TRACK` est maintenu,
+  - `TRACK` maintenu + release/repress de `SHIFT` latch l'overlay,
+  - `SHIFT + TRACK + HALL` est reserve a l'overlay MACRO et ne change pas la track focus,
+  - en latch, `SHIFT + HALL` sans `TRACK` reste disponible pour selectionner tout hall mode valide, y compris le mode brut deja courant,
+  - en latch, `TRACK + HALL` sans `SHIFT` garde la selection focus track-aware normale,
+  - toute selection d'un autre hall mode sort du latch et reset `ui_macro_interaction`,
+  - labels visibles: `M-Ctrl` en sous-mode `Ctrl`, `M-Assign` en sous-mode `Assign`.
 - Le geste d'assignation MACRO vit dans `ui_macro_interaction`:
   - `SHIFT` absent,
   - `Scene` mode: maintien hall -> selection de la scene 0..15 -> capture encoder sans write live -> relâchement -> écriture/mise à jour d'un lock dans la scene projet,
@@ -100,16 +106,18 @@ Autorite hall modes:
   - le feedback template teste chaque parametre visible contre tous les locks de la scene maintenue; plusieurs params lockes visibles peuvent donc etre encadres simultanement,
   - pendant un maintien de scene MACRO, tourner un macro pot lie ce pot a cette scene sans appliquer le morph audio du pot,
   - `Switch` mode: maintien hall -> morph momentane base -> scene 0..15 selon la position hall; relâchement -> retrait de cette source,
+  - `Switch` mode mappe la pression avec un detecteur local generique: seuils raw ON/OFF dedies avec hysteresis et marge au-dessus du bruit, amount `0..1` depuis le seuil pressure, sans reutiliser la profondeur brute KBD ni modifier les seuils KBD `trig_hi/trig_lo`,
   - pendant un maintien de scene MACRO, la grammaire visuelle réutilise le modèle p-lock: paramètre présent sur la page = cadre slot-lock inversé, sinon fallback LED orange sur l'ensemble cible,
-  - état de capture purement transitoire, reset aux changements de hall mode, de `Mode`, ou à l'ouverture de `Macro CFG`.
-- En mode brut `MACRO`, l'UI standard reste intacte; la surcouche MACRO ne prend pas le contrôle global des encodeurs ni du track-select.
-- La capture MACRO ne s'active que pendant un maintien de scene en `Mode=Scene`, puis se finalise au relâchement.
+  - état de capture purement transitoire, reset aux changements de hall mode ou de sous-mode overlay.
+- Hors overlay MACRO actif, la surcouche MACRO ne prend pas le contrôle global des encodeurs ni du track-select.
+- La capture MACRO ne s'active que pendant un maintien de scene en sous-mode `M-Assign`, puis se finalise au relâchement.
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
 - Les contextes `ROUT` visibles sont resolus par `ui_hall_mode_resolve_rout_context`: `Master/Buffer` et `Master/FX` partagent le label `ROUT`, mais gardent des etats/actions/renderers LED distincts.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
 - Le feedback LED MACRO lit directement `project_v1` pour l'etat vide/non vide des scenes et `ui_macro_interaction` pour la scene maintenue; la couleur de base vient d'une table stable scene -> couleur dans `led_rgb.c`, sans encoder les locks ni revenir au mapping pot/slot.
+- L'overlay MACRO reutilise le meme renderer LED avec priorite sur le rendu track-select tant que l'overlay est actif: `M-Ctrl` affiche une intensite continue par scene, lissee cote LED depuis la profondeur Hall raw calibree avec un seuil LED dedie bas (`min + bruit + marge`) independant du seuil audio pressure, `M-Assign` suit le feedback Scene vide/faible, non-vide/normal, held/fort.
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
@@ -233,8 +241,11 @@ Flux nominal prouve:
 - Buttons/hall lus dans `ui_event_from_inputs` + `ui_core_service_track_selection_inputs` (path direct track-select/shift/hall).
 
 2. Resolution navigation / raccourci
-- Dans `ui_core_service_track_selection_inputs`: SHIFT+HALL => mode trigger; TRACK_MOD+HALL => active track.
+- Dans `ui_core_service_track_selection_inputs`: SHIFT+HALL => mode trigger; TRACK_MOD+HALL sans SHIFT => active track.
 - Contrat explicite track halls sous `TRACK`:
+  - `TRACK + HALL` ne change la track que si `SHIFT` est absent.
+  - en overlay MACRO latche, `TRACK + HALL` sans `SHIFT` conserve ce contrat de focus track-aware.
+  - `SHIFT + TRACK + HALL` reste consomme par l'overlay MACRO.
   - `TRACK` + tap track seul = focus/select track-aware historique uniquement.
   - `TRACK` + simple tap ne demande jamais `CFG`; l'ouverture `CFG` sous `TRACK` reste reservee au double tap explicite sur la track deja focus.
   - la mutation de chaine de voix ne s'arme que si une autre hall track est deja maintenue au moment du nouvel appui:
@@ -242,11 +253,11 @@ Flux nominal prouve:
   - sans seconde hall maintenue, aucun role `Solo/Master/Slave` ne change.
   - le geste groupe conserve les validations locales existantes: ajout contigu a droite, retrait uniquement sur la derniere slave, refus sans auto-fill ni mutation.
   - ajout special sur target `Off`: avant de devenir `Slave`, la target recoit une copie ponctuelle de l'etat instrument/per-track de la master candidate (family/type, config MIDI et params track-aware hors domaine `PLAY`), sans copie de sequence/trigs/steps/plocks `PLAY`.
-- Contrat specifique `MACRO`: `SHIFT+HALL15` arme le raw mode `MACRO`; double tap ouvre la page dediee `Macro` (cible de contrat), sans effet runtime cache.
-- Grammaire visuelle halls en `MACRO`:
+- Contrat specifique `MACRO`: l'ancien `SHIFT+HALL15` ne cible plus de mode; l'acces utilisateur passe par l'overlay `SHIFT+TRACK`.
+- Grammaire visuelle halls en overlay `MACRO`:
   - les 16 halls adressent les 16 scenes et chaque scene a une couleur stable dediee,
-  - `Mode = Scene`: scene vide=couleur dediee faible, scene non vide=couleur dediee normale, scene maintenue=couleur dediee forte,
-  - `Mode = Switch`: scene vide/non vide garde la meme identite couleur, avec intensite liee a la pression hall quand disponible,
+  - `M-Assign`: scene vide=couleur dediee faible, scene non vide=couleur dediee normale, scene maintenue=couleur dediee forte,
+  - `M-Ctrl`: scene vide/non vide garde la meme identite couleur; l'intensite LED interpole continument de l'intensite de repos vers fort selon une profondeur Hall raw calibree, avec seuil LED dedie au-dessus du bruit, lissage local LED, montee rapide et descente douce, sans blink ni lecture de `hall_engine_get_value()` brut,
   - les Hall LEDs n'affichent jamais les 32 locks d'une scene, ni leur nombre, ni leur type.
 - Dans `ui_core_tick`: resolution priorisee mute/transport/shortcuts/pattern/seq/navigation.
 
@@ -355,7 +366,7 @@ Points factuels:
 - Couplage fort a `param_registry`, `seq_*`, `pattern_live_*` depuis Z5; les lectures runtime restantes passent maintenant par `ui_core_runtime_bridge`.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
 - Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC), transverse mais restant dans frontiere Z5 comme logique d'interaction.
-- Le recorder SD/stems n'est pas un cas special UI actif dans l'etat produit courant: sa reactivation devra passer par une integration UI/produit explicite, puis par validation start/stop/arm et revalidation IRQ/audio.
+- Le recorder SD/stems legacy n'est plus un cas special UI: un futur record SD devra passer par le contrat multi-client, sans reactiver l'ancien workflow start/stop/arm.
 - Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` avec contexte explicite (`MASTER/BUFFER` ou `MASTER/FX`) et gardes locaux separes.
 - Fragilites restantes prouvees:
   - priorites de consommation toujours tres centralisees dans `ui_core_tick` (desormais explicites via table locale),

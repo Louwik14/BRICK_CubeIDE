@@ -239,6 +239,10 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
     const uint8_t is_double_tap = ((last_tap != 0U)
                                    && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
     mode_tap_ms[target_mode] = now_ms;
+    if (ui_macro_overlay_is_active() != 0U)
+    {
+        ui_macro_overlay_on_hall_mode_changed();
+    }
     ui_set_hall_mode(target_mode);
     ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
 }

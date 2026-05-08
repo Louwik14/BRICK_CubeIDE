@@ -638,3 +638,15 @@ Points factuels observes:
 - Le slot p-lock reste local au set `MIX`; l'application/restauration passe par `param_registry_apply_track_value` sur la track cible.
 - Les autres params du domaine runtime `MIX` (`MUTE`, `HYBRID_GATE`, VCA) restent hors mapping p-lock.
 - Le set `MIX` est stocke dans `seq_param_iface` comme 4 slots reels (`0=LEVEL`, `1=PAN`, `2=SEND1`, `3=SEND2`), hors tables communes 256 slots.
+
+## Addendum 2026-05-08 - record SD et pattern load
+
+- Z4 reste l'autorite transport/boundary pour les transitions musicales associees au futur recording SD.
+- `pattern load` demande pendant active recording ne doit pas appliquer le snapshot immediatement.
+- Contrat cible:
+  - enregistrer l'intention de load,
+  - demander l'arret des records actifs a une frontiere musicale si possible,
+  - attendre drain/finalize cote writer Z6,
+  - ensuite seulement autoriser load/apply pattern.
+- Cette politique ne donne pas a Z4 l'autorite FatFs ou fichier; Z4 fournit seulement le seam temporel musical.
+- Si aucune frontiere musicale fiable n'est disponible, le systeme doit choisir explicitement entre stop immediat borne ou refus/differ de load, sans mutation partielle de pattern.

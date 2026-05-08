@@ -108,6 +108,13 @@ typedef enum
     UI_PATTERN_MODE_STORE
 } ui_pattern_mode_t;
 
+typedef enum
+{
+    UI_MACRO_OVERLAY_SUBMODE_CTRL = 0,
+    UI_MACRO_OVERLAY_SUBMODE_ASSIGN,
+    UI_MACRO_OVERLAY_SUBMODE_COUNT
+} ui_macro_overlay_submode_t;
+
 typedef struct
 {
     uint8_t active_bank;
@@ -175,6 +182,10 @@ uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led);
 void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state);
 uint8_t ui_core_request_undo(void);
 uint8_t ui_is_track_modifier_held(void);
+uint8_t ui_macro_overlay_is_active(void);
+uint8_t ui_macro_overlay_is_latched(void);
+uint8_t ui_macro_overlay_get_submode(ui_macro_overlay_submode_t *out_submode);
+void ui_macro_overlay_on_hall_mode_changed(void);
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
 void ui_core_clear_hall_note_suppression(uint8_t hall);
 

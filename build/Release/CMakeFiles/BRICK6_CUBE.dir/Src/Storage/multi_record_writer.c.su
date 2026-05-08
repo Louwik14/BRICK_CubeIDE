@@ -1,0 +1,17 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:36:16:client_id_valid	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:41:17:ring_pending_frames	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:48:13:ring_reset	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:54:13:set_error	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:59:16:copy_path	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:77:16:pick_most_filled_client	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:102:13:drain_client_frames	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:110:6:multi_record_writer_init	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:122:9:multi_record_writer_prepare_temp	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:155:9:multi_record_writer_start	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:172:9:multi_record_writer_request_stop	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:188:9:multi_record_writer_push_audio_block_from_irq	56	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:232:6:multi_record_writer_service	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:276:9:multi_record_writer_commit	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:298:9:multi_record_writer_delete_temp	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:318:9:multi_record_writer_get_status	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/multi_record_writer.c:337:9:multi_record_writer_any_active	16	static

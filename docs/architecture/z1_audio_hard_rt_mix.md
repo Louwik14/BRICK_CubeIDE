@@ -22,8 +22,6 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Clip` `Shifter`, port C borne sans import Clouds/FxEngine.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
-- `Src/Audio/sd_multitrack_recorder.c` + `Inc/Audio/sd_multitrack_recorder.h` : preuve des taps recorder dans le chemin audio.
-- Etat produit courant `sd_multitrack_recorder` : bypass temporaire via `SD_RECORDER_PRODUCT_ENABLED=0`. Les hooks audio SD peuvent rester appeles, mais `sd_recorder_request_start/stop/arm/disarm`, `sd_recorder_audio_block_begin()` et `sd_recorder_capture_tap_block()` retournent immediatement tant que le flag reste a `0`.
 - `Src/Core/brick6_master_buffer.c` + `Inc/Core/brick6_master_buffer.h` : preuve du branchement bloc debut/fin et read playback dans pipeline.
 - `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER` et `PITCH`, et formants SVF legers pour `TALK`.
 - `Src/Seq/seq_runtime.c` + `Inc/Seq/seq_runtime.h` : preuve collecte/apply des evenements audio sample-accurate.
@@ -34,8 +32,6 @@ Dependances de Z1 sans appartenir a Z1:
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
-- `sd_multitrack_recorder` (taps et writer hors IRQ).
-- `sd_multitrack_recorder` = recorder SD/stems distinct du `Master/Buffer`; en etat produit courant il reste bypasse par flag compile-time local.
 - `brick6_master_buffer` (capture post-fader + lecture playback).
 - `track_tone_sound_state` pour les valeurs `Master/FX` type/LVL/A/B lues par `fx_master_macro`.
 - `fx_chain`, `fx_reverb`, `env_adsr`, `fx_biquad_filter`.
@@ -63,7 +59,7 @@ Autorite de rendu DSP principal:
 
 Autorite de rendu runtime applicatif:
 - `brick6_audio_runtime_dsp()` dans `Src/Core/brick6_audio_runtime.c`.
-- Ordonne render engines externes (Drum, Sampler, Opal, Braids), modulation bloc, sampler, mixer, crossfade master/buffer, taps master.
+- Ordonne render engines externes (Drum, Sampler, Opal, Braids), modulation bloc, sampler, mixer et crossfade master/buffer.
 
 Autorite de mixage final:
 - `mixer_process()` dans `Src/Audio/mixer.c`.
@@ -103,18 +99,14 @@ Sorties directes de Z1:
 - Vers scheduler systeme: `engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF)`.
 - Vers runtime sequenceur: `seq_runtime_audio_apply_event()` au sample offset.
 - Vers master buffer timing: `audio.c` consomme les markers `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` au meme offset sample que les events scheduler et appelle `brick6_master_buffer_on_boundary_edge`.
-- Vers recorder taps:
-  - `SD_RECORDER_TAP_TRACK_RAW` et `SD_RECORDER_TAP_MASTER` dans `brick6_audio_runtime`.
-  - Les anciens taps track intermediaires `POST_INSERT` / `POST_FADER` / `POST_SEND` ne sont plus emis par `mixer`.
 - Vers master buffer:
   - `brick6_master_buffer_begin_block` et `commit_block` dans `brick6_audio_runtime`.
   - `brick6_master_buffer_submit_track_post_fader` dans `mixer_process`, avec filtrage ROUT/source par track logique.
   - `brick6_master_buffer_read_playback` + blend final dans `brick6_audio_runtime`.
 
 Contrats timing sortants:
-- Taps et master-buffer sont synchrones du bloc audio courant (dans IRQ).
-- Ecriture SD n'est pas faite dans Z1 IRQ (writer service hors IRQ), Z1 ne fait que pousser/capturer.
-- Etat produit courant recorder SD: les hooks IRQ `sd_recorder_audio_block_begin()` et `sd_recorder_capture_tap_block()` peuvent rester presents au call-site, mais ils sont des no-op immediats quand `SD_RECORDER_PRODUCT_ENABLED=0`.
+- Master-buffer est synchrone du bloc audio courant (dans IRQ).
+- Ecriture SD record future interdite dans Z1 IRQ: Z1 pourra seulement exposer des producteurs vers rings RAM prealloues.
 
 ## 5. Etats structurants possedes
 
@@ -178,8 +170,8 @@ Contrats timing sortants:
 Possession du routage main/cue/send:
 - Oui, c'est porte dans `mixer.c` (routes track, sends, returns, copie vers `tracks[0]` et `tracks[1]`).
 
-Taps recorder et master-buffer:
-- Oui, implementes directement dans Z1 (`brick6_audio_runtime.c` + `mixer.c`) comme appels de service synchrones bloc.
+Capture master-buffer:
+- Oui, implementee directement dans Z1 (`brick6_audio_runtime.c` + `mixer.c`) comme appels de service synchrones bloc.
 - Le buffer interne capture un bus dedie source-filtre dans `mixer_process`: tracks activees par ROUT/source, post gain/pan/VCA track et post `MIXER_TRACK_NOMINAL_TRIM`, avant playback `Master/Buffer`, avant `Master/FX`, avant preview SD et avant pack de sortie.
 
 ## 6. Flux runtime
@@ -207,7 +199,6 @@ Flux nominal prouve par code:
 - rendu engines externes (Drum/Opal mono-instance, Braids mono par instance, Sampler stereo) -> `mixer_submit_external_*`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
-  - tap `SD_RECORDER_TAP_TRACK_RAW` (no-op immediat en produit tant que `SD_RECORDER_PRODUCT_ENABLED=0`)
 
 5) Rendu engines/tracks
 - Le callback DSP effectif est `brick6_audio_runtime_dsp` (via `dsp_engine`).
@@ -226,17 +217,14 @@ Flux nominal prouve par code:
   - returns reverb/send FX
   - ecrit resultat dans `tracks[0]` (MAIN) et `tracks[1]` (CUE)
 
-7) Taps recorder / master-buffer
+7) Capture master-buffer
 - `brick6_audio_runtime_dsp` arme le bloc master-buffer, appelle `mixer_process`, puis le commit master-buffer consomme le bus capture source-filtre accumule dans le mixer.
 - Les starts Q Rec/Q Play ne lisent plus le miroir de playhead: ils sont declenches par `brick6_master_buffer_on_boundary_edge(track)` appele au debut exact du segment boundary.
 - commit master-buffer avant toute lecture playback, avec troncature du dernier segment a `record_target_frames`.
 - post-capture: `brick6_audio_runtime_dsp` lit playback buffer et applique xfade live/recorded sur `tracks[0]`.
-- post-playback: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]`, puis preview SD, puis tap master final.
+- post-playback: `fx_master_macro_process_block` applique les slots `Master/FX` legers sur `tracks[0]`, puis preview SD.
 - La preview SD est un chemin d'audition UI temporaire: `sd_preview_render_main()` lit `g_sd_preview_ring` place en `AUDIO_COLD_SDRAM`; le cout SDRAM en IRQ n'existe que pendant une preview active et ne concerne pas le playback principal ni le streaming Sampler.
-- tap final `SD_RECORDER_TAP_MASTER` (hook conserve, no-op immediat en produit tant que `SD_RECORDER_PRODUCT_ENABLED=0`).
-- Distinction structurante:
-  - `sd_multitrack_recorder` = recorder SD/stems actuellement bypasse cote produit.
-  - `brick6_master_buffer` = recorder/buffer interne distinct, conserve actif.
+- `brick6_master_buffer` = recorder/buffer interne actif, conserve distinct du futur writer SD multi-client.
 
 8) Pack / sortie
 - `audio_process_block_int32` -> `audio_io_pack_ramped`:
@@ -293,8 +281,7 @@ Granular / fx_pool:
   4) clean TX cache
 - `AUDIO_FRAMES_PER_HALF` doit rester coherent avec `AUDIO_BLOCK_SIZE`.
 - `audio_io_unpack` reserve lane 3 comme source interne (pas de mapping TDM physique direct).
-- Z1 ne doit pas faire d'I/O SD bloquante: seulement captures/taps; writer hors IRQ.
-- Tant que `SD_RECORDER_PRODUCT_ENABLED=0`, le recorder SD ne doit pas redevenir actif par simple presence des call-sites IRQ: la reactivation impose explicitement integration UI/produit, remise du flag a `1`, validation start/stop/arm et revalidation audio/IRQ.
+- Z1 ne doit pas faire d'I/O SD bloquante; le futur record SD doit passer par des rings RAM prealloues et un writer hors IRQ.
 - Le Sampler track-aware lit via `sample_cache` en RAM. `sample_pool` reste catalogue/projet/metadata; `sample_desc->data` est une compat legacy hors autorite audio principale.
 - La sortie principale Sampler reste stereo de bout en bout: pas de downmix L/R->mono avant injection mixer; les samples mono restent dupliques identiquement sur L/R.
 - Chemin mono-native mixer: si la source externe est mono-native et si tous les blocs track-level actifs ont une variante mono reelle, `mixer_process()` conserve le signal en mono jusqu'au dernier moment utile; le fallback stereo reste la reference fonctionnelle.
@@ -340,21 +327,17 @@ Granular / fx_pool:
 ## 10. Dette technique observee
 
 Points factuels:
-- Responsabilites concentrees: `brick6_audio_runtime_dsp` cumule orchestration engines + modulation + sampler + taps + blend buffer.
+- Responsabilites concentrees: `brick6_audio_runtime_dsp` cumule orchestration engines + modulation + sampler + blend buffer.
 - Ordre d'appel tres contraint:
   - `mixer_external_inputs_clear` appele a la fois dans runtime et mixer (redondance defensive).
   - Le blend master-buffer est applique apres le commit du bus capture source-filtre, donc hors logique de bus mixer.
 - Branche speciale Master/Buffer presente dans Z1 mais bornee:
   - capture: `brick6_audio_runtime_dsp` arme/commit le bloc (`brick6_master_buffer_begin_block` -> `mixer_process` -> `brick6_master_buffer_commit_block`), et `mixer_process` alimente le bus par `brick6_master_buffer_submit_track_post_fader`.
   - ownership runtime capture/playback: `brick6_master_buffer.c` (etat recorder, sources, quantize, loop/read).
-  - lecture playback + point de blend: `brick6_audio_runtime_dsp` apres `mixer_process` et avant `SD_RECORDER_TAP_MASTER`.
+  - lecture playback + point de blend: `brick6_audio_runtime_dsp` apres `mixer_process` et avant `Master/FX`.
   - autorite source capture: bus dedie dans `mixer_process`, avec mapping `mix_track -> logical_track` via `track_runtime_get_logical_track_for_mix_track`; le routage source par track filtre la capture.
   - aucun second backend recorder concurrent observe in-tree.
-- Etat courant recorder SD/stems:
-  - bypass produit local par `SD_RECORDER_PRODUCT_ENABLED=0` dans `sd_multitrack_recorder.c`,
-  - call-sites IRQ conserves pour `sd_recorder_audio_block_begin`, `SD_RECORDER_TAP_TRACK_RAW` et `SD_RECORDER_TAP_MASTER`,
-  - retour immediat des hooks publics principaux tant que le flag reste a `0`,
-  - reactivation future conditionnee a une integration UI/produit et a une validation IRQ/audio dediee.
+- Le legacy recorder SD/stems a ete retire: aucun hook IRQ ni writer hors IRQ historique ne reste comme reference pour le futur record SD multi-client.
 - Cout CPU variable par bloc observe:
   - segmentation en sous-segments selon nombre d'evenements seq dans `process_half`.
   - render synth conditionnel selon nombre de tracks bindees.
@@ -450,3 +433,21 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Sortie Drum active: mono-native vers `mixer_submit_external_mono_native`, zero tant que le modele est `NONE` ou tant qu'aucun `note_on` PLAY n'a arme le moteur.
 - Cout IRQ attendu: un rendu `AnalogBassDrum::Render()` par track `BD_ANALOG` active et par bloc audio, avec SVF/one-pole/sine oscillator par sample. Le point de mesure existant reste `cpu_load` autour de l'IRQ audio; il n'existe pas encore de compteur DWT local dedie Drum.
 - Les anciens moteurs/types `TB3` et `DX7` ne font pas partie du runtime audio produit. Aucune compatibilite projet/config n'est conservee pour ces labels ou IDs.
+
+## 17. Addendum - producteurs record SD multi-client
+
+- Z1 reste l'autorite des taps/producteurs audio hard-RT pour le futur recording SD multi-client.
+- Le format de capture transmis au writer est stereo `int32_t` aligne, 48 kHz, par client record.
+- Le format fichier produit est WAV PCM stereo 24-bit / 48 kHz, mais le packing 24-bit appartient au writer hors IRQ, pas au pipeline audio.
+- Le looper n'est pas un chemin SD special dans Z1: il expose un producteur/tap comme les stems futurs.
+- Invariant hard-RT:
+  - le callback audio peut seulement copier le bloc courant vers un ring RAM prealloue,
+  - aucun FatFs,
+  - aucun malloc,
+  - aucun lock bloquant,
+  - aucun `f_open/f_write/f_sync/f_lseek/f_rename/f_unlink/f_expand`,
+  - aucun formatage/header WAV.
+- En cas de ring plein, Z1 ne bloque pas:
+  - drop/overflow est compte par le client record,
+  - la prise est marquee failed/degraded par le writer/control plane hors IRQ.
+- Aucun module legacy recorder SD/stems ne doit servir de reference d'implementation; la cible produit reste un writer global multi-client arbitre en Z6/Z0, compatible avec `sample_cache_service`.

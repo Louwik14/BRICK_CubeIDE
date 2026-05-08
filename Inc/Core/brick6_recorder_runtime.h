@@ -3,7 +3,7 @@
  * @brief Recorder runtime orchestration API.
  *
  * Rôle du module:
- * - Exposer les hooks boot/runtime du live recorder + transport + SD writer.
+ * - Exposer les hooks boot/runtime du live recorder + transport.
  *
  * Frontière:
  * - Ne contient pas les implémentations DSP internes des recorders.
@@ -25,8 +25,6 @@ void brick6_recorder_runtime_boot_init(live_recorder_t *rec,
                                        uint32_t max_frames);
 
 void brick6_recorder_runtime_process_transport(live_recorder_t *rec);
-
-void brick6_recorder_runtime_service_writer(void);
 
 #ifdef __cplusplus
 }

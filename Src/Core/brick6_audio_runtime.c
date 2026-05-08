@@ -3,7 +3,7 @@
  * @brief Callback DSP runtime extrait de brick6_app_init.
  *
  * Rôle du module:
- * - Regrouper le traitement audio bloc (synth, sampler, mixer, taps recorder).
+ * - Regrouper le traitement audio bloc (synth, sampler, mixer, master buffer).
  *
  * Frontière:
  * - Ne fait pas l'init applicative globale.
@@ -19,7 +19,6 @@
 #include "Audio/live_recorder.h"
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
-#include "Audio/sd_multitrack_recorder.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/brick6_opal_runtime.h"
@@ -282,13 +281,6 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {
         voice_manager_process(tracks[0].L, tracks[0].R, frames);
-
-        sd_recorder_capture_tap_block(
-            SD_RECORDER_TAP_TRACK_RAW,
-            0U,
-            tracks[0].L,
-            tracks[0].R,
-            frames);
     }
 
     brick6_master_buffer_begin_block(frames);
@@ -346,13 +338,4 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
     }
 
-    if(track_count > 0U)
-    {
-        sd_recorder_capture_tap_block(
-            SD_RECORDER_TAP_MASTER,
-            0U,
-            tracks[0].L,
-            tracks[0].R,
-            frames);
-    }
 }

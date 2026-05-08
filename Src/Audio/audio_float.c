@@ -41,7 +41,6 @@
 #include "memory_layout.h"
 #include "audio_io.h"
 #include "dsp_engine.h"
-#include "sd_multitrack_recorder.h"
 #include "fx_pool.h"
 #include "control_events.h"
 #include "fx_daisy_comp.h"
@@ -576,8 +575,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     }
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
-
-    sd_recorder_audio_block_begin(frames);
 
     const float out_gain_start = output_adjust * master_gain_smoothed;
     master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.25f;

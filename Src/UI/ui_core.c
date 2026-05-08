@@ -44,8 +44,6 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
-#include "pages/ui_page_template_macro.h"
-#include "Storage/project_v1.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "App/Hall/hall_engine.h"
@@ -61,6 +59,13 @@ typedef struct
     uint32_t cfg_tap_ms[UI_TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_KEY_COUNT];
     uint8_t hall_note_suppressed[HALL_KEY_COUNT];
+    uint8_t macro_overlay_active;
+    uint8_t macro_overlay_latched;
+    ui_macro_overlay_submode_t macro_overlay_submode;
+    ui_macro_overlay_submode_t macro_overlay_last_submode;
+    uint8_t macro_overlay_latch_repress_armed;
+    uint8_t macro_overlay_shift_prev_down;
+    uint8_t macro_overlay_track_prev_down;
 } ui_track_state_t;
 
 static ui_track_state_t g_ui_track_state = {
@@ -71,6 +76,13 @@ static ui_track_state_t g_ui_track_state = {
     .cfg_tap_ms = { 0U },
     .hall_prev_pressed = { 0U },
     .hall_note_suppressed = { 0U },
+    .macro_overlay_active = 0U,
+    .macro_overlay_latched = 0U,
+    .macro_overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL,
+    .macro_overlay_last_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL,
+    .macro_overlay_latch_repress_armed = 0U,
+    .macro_overlay_shift_prev_down = 0U,
+    .macro_overlay_track_prev_down = 0U,
 };
 
 static void ui_core_set_active_track(uint8_t track);
@@ -324,6 +336,84 @@ static void ui_core_update_track_modifier_state(uint8_t track_modifier_down)
     g_ui_track_state.track_select_armed = (track_modifier_down != 0U) ? 1U : 0U;
 }
 
+static void ui_core_macro_overlay_reset(void)
+{
+    if (g_ui_track_state.macro_overlay_active != 0U)
+    {
+        ui_macro_interaction_reset();
+    }
+
+    g_ui_track_state.macro_overlay_active = 0U;
+    g_ui_track_state.macro_overlay_latched = 0U;
+    g_ui_track_state.macro_overlay_latch_repress_armed = 0U;
+}
+
+static void ui_core_macro_overlay_cycle_submode(void)
+{
+    g_ui_track_state.macro_overlay_submode =
+        (g_ui_track_state.macro_overlay_submode == UI_MACRO_OVERLAY_SUBMODE_CTRL)
+            ? UI_MACRO_OVERLAY_SUBMODE_ASSIGN
+            : UI_MACRO_OVERLAY_SUBMODE_CTRL;
+    g_ui_track_state.macro_overlay_last_submode = g_ui_track_state.macro_overlay_submode;
+    ui_macro_interaction_reset();
+}
+
+static void ui_core_macro_overlay_activate_last_submode(void)
+{
+    g_ui_track_state.macro_overlay_submode = g_ui_track_state.macro_overlay_last_submode;
+    g_ui_track_state.macro_overlay_active = 1U;
+}
+
+static void ui_core_service_macro_overlay_inputs(uint8_t shift_down, uint8_t track_modifier_down)
+{
+    const uint8_t shift_pressed =
+        ((shift_down != 0U) && (g_ui_track_state.macro_overlay_shift_prev_down == 0U)) ? 1U : 0U;
+    const uint8_t shift_released =
+        ((shift_down == 0U) && (g_ui_track_state.macro_overlay_shift_prev_down != 0U)) ? 1U : 0U;
+    const uint8_t track_pressed =
+        ((track_modifier_down != 0U) && (g_ui_track_state.macro_overlay_track_prev_down == 0U)) ? 1U : 0U;
+
+    if ((shift_down != 0U) && (track_pressed != 0U))
+    {
+        if (g_ui_track_state.macro_overlay_active != 0U)
+        {
+            ui_core_macro_overlay_cycle_submode();
+        }
+        else
+        {
+            ui_core_macro_overlay_activate_last_submode();
+        }
+    }
+
+    if ((track_modifier_down != 0U)
+            && (shift_released != 0U)
+            && (g_ui_track_state.macro_overlay_active != 0U))
+    {
+        g_ui_track_state.macro_overlay_latch_repress_armed = 1U;
+    }
+
+    if ((track_modifier_down != 0U)
+            && (shift_pressed != 0U)
+            && (g_ui_track_state.macro_overlay_latch_repress_armed != 0U))
+    {
+        g_ui_track_state.macro_overlay_active = 1U;
+        g_ui_track_state.macro_overlay_latched = 1U;
+        g_ui_track_state.macro_overlay_latch_repress_armed = 0U;
+    }
+
+    if ((track_modifier_down == 0U) && (shift_down == 0U))
+    {
+        g_ui_track_state.macro_overlay_latch_repress_armed = 0U;
+        if (g_ui_track_state.macro_overlay_latched == 0U)
+        {
+            ui_core_macro_overlay_reset();
+        }
+    }
+
+    g_ui_track_state.macro_overlay_shift_prev_down = shift_down;
+    g_ui_track_state.macro_overlay_track_prev_down = track_modifier_down;
+}
+
 static void ui_core_handle_track_selection_event(const ui_event_t *ev)
 {
     /*
@@ -395,6 +485,7 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
     if ((ev == 0)
         || (ui_core_mute_is_active() != 0U)
         || (g_ui_track_state.track_select_armed == 0U)
+        || (g_ui_track_state.shift_down != 0U)
         || (ui_get_hall_mode() == UI_HALL_MODE_PATTERN))
     {
         return 0U;
@@ -462,7 +553,10 @@ static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 
 static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
 {
-    if ((ev == 0) || (ui_get_hall_mode() != UI_HALL_MODE_MACRO))
+    const uint8_t macro_context =
+        (uint8_t)((g_ui_track_state.macro_overlay_active != 0U)
+                  && (ui_core_mute_is_active() == 0U));
+    if ((ev == 0) || (macro_context == 0U))
     {
         return 0U;
     }
@@ -490,6 +584,13 @@ void ui_core_init(void)
     g_ui_track_state.active_track = 0U;
     g_ui_track_state.shift_down = 0U;
     g_ui_track_state.track_select_armed = 0U;
+    g_ui_track_state.macro_overlay_active = 0U;
+    g_ui_track_state.macro_overlay_latched = 0U;
+    g_ui_track_state.macro_overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
+    g_ui_track_state.macro_overlay_last_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
+    g_ui_track_state.macro_overlay_latch_repress_armed = 0U;
+    g_ui_track_state.macro_overlay_shift_prev_down = 0U;
+    g_ui_track_state.macro_overlay_track_prev_down = 0U;
     ui_core_mute_init();
     ui_core_set_feedback(0);
     for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
@@ -518,15 +619,18 @@ void ui_core_service_track_selection_inputs(void)
      *   button state, so downstream queued handlers read fresh flags.
      */
     const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
-    ui_core_update_shift_state(button_down(BTN_SHIFT));
+    const uint8_t shift_down = button_down(BTN_SHIFT);
+    const uint8_t track_modifier_down = (mute_active == 0U) ? button_down(UI_TRACK_MOD_BUTTON) : 0U;
+    ui_core_update_shift_state(shift_down);
     if (mute_active == 0U)
     {
-        ui_core_update_track_modifier_state(button_down(UI_TRACK_MOD_BUTTON));
+        ui_core_update_track_modifier_state(track_modifier_down);
     }
     else
     {
         g_ui_track_state.track_select_armed = 0U;
     }
+    ui_core_service_macro_overlay_inputs(shift_down, track_modifier_down);
 
     for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
     {
@@ -601,10 +705,6 @@ void ui_core_tick(void)
         if (ui_page_settings_is_open() != 0U)
         {
             ui_page_settings_handle_encoder(encoder, delta);
-        }
-        else if (ui_page_get_id() == UI_PAGE_TEMPLATE_MACRO)
-        {
-            ui_page_template_macro_handle_encoder(encoder, delta);
         }
         else
         {
@@ -908,6 +1008,32 @@ uint8_t ui_get_mute_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
 uint8_t ui_is_track_modifier_held(void)
 {
     return g_ui_track_state.track_select_armed;
+}
+
+uint8_t ui_macro_overlay_is_active(void)
+{
+    return g_ui_track_state.macro_overlay_active;
+}
+
+uint8_t ui_macro_overlay_is_latched(void)
+{
+    return g_ui_track_state.macro_overlay_latched;
+}
+
+uint8_t ui_macro_overlay_get_submode(ui_macro_overlay_submode_t *out_submode)
+{
+    if ((out_submode == 0) || (g_ui_track_state.macro_overlay_active == 0U))
+    {
+        return 0U;
+    }
+
+    *out_submode = g_ui_track_state.macro_overlay_submode;
+    return 1U;
+}
+
+void ui_macro_overlay_on_hall_mode_changed(void)
+{
+    ui_core_macro_overlay_reset();
 }
 
 uint8_t ui_core_hall_note_is_suppressed(uint8_t hall)

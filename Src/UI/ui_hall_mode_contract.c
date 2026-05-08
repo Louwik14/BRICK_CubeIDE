@@ -12,7 +12,6 @@ typedef struct
 #define UI_HALL_KEYBOARD_MODE_TRIGGER 8U
 #define UI_HALL_ARP_MODE_TRIGGER 9U
 #define UI_HALL_SEQ_MODE_TRIGGER 10U
-#define UI_HALL_MACRO_MODE_TRIGGER 15U
 static const ui_hall_mode_contract_t g_ui_hall_mode_contracts[UI_HALL_MODE_COUNT] = {
     [UI_HALL_MODE_SEQ] = {
         .trigger_hall = UI_HALL_SEQ_MODE_TRIGGER,
@@ -30,8 +29,8 @@ static const ui_hall_mode_contract_t g_ui_hall_mode_contracts[UI_HALL_MODE_COUNT
         .base_label = "ARP"
     },
     [UI_HALL_MODE_MACRO] = {
-        .trigger_hall = UI_HALL_MACRO_MODE_TRIGGER,
-        .target_page = UI_PAGE_TEMPLATE_MACRO,
+        .trigger_hall = UI_HALL_MODE_TRIGGER_NONE,
+        .target_page = UI_HALL_MODE_TARGET_PAGE_NONE,
         .base_label = "MACRO"
     },
     [UI_HALL_MODE_PATTERN] = {

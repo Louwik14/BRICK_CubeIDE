@@ -26,6 +26,7 @@ constexpr float kBraidsTailMinSeconds = 0.001f;
 constexpr float kBraidsTailMaxSeconds = 5.0f;
 constexpr float kBraidsTailSafetyMultiplier = 6.0f;
 constexpr float kBraidsTailSafetyFloorSeconds = 0.050f;
+constexpr float BRAIDS_OUTPUT_TRIM = 0.30f;
 
 static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
     braids::MACRO_OSC_SHAPE_CSAW,
@@ -380,7 +381,7 @@ void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono,
         {
             const float coeff = (gate_target > instance->level) ? 0.05f : (1.0f - kBraidsReleaseCoeff);
             instance->level += (gate_target - instance->level) * coeff;
-            out_mono[offset + i] = brick6_braids_runtime_clamp(((float)sample_block[i] / 32768.0f) * instance->level, -1.0f, 1.0f);
+            out_mono[offset + i] = brick6_braids_runtime_clamp(((float)sample_block[i] / 32768.0f) * instance->level, -1.0f, 1.0f) * BRAIDS_OUTPUT_TRIM;
             if ((instance->voice.gate == 0U) && (instance->tail_samples_remaining > 0U))
             {
                 instance->tail_samples_remaining--;
