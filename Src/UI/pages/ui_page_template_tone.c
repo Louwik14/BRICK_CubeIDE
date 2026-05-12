@@ -67,6 +67,18 @@ static const ui_template_family_t g_ui_template_tone_family_clip = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_looper = {
+    .family_title = "TONE",
+    .nav_labels = { "LOOP", "-", "-", "-" },
+    .subpages = {
+        { .title = "LOOP", .param_bank = { .params = { PARAM_LOOPER_ARM, PARAM_LOOPER_LEN, PARAM_LOOPER_PLAY, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static const ui_template_family_t g_ui_template_tone_family_opal = {
     .family_title = "TONE",
     .nav_labels = { "OPAL", "-", "-", "-" },
@@ -625,6 +637,10 @@ void ui_page_template_tone_register_families(void)
             else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_CLIP))
             {
                 family_template = &g_ui_template_tone_family_clip;
+            }
+            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_LOOPER))
+            {
+                family_template = &g_ui_template_tone_family_looper;
             }
             else if ((track_family == UI_TRACK_FAMILY_MIDI) && (track_type == UI_TRACK_TYPE_MIDI))
             {

@@ -650,3 +650,31 @@ Points factuels observes:
   - ensuite seulement autoriser load/apply pattern.
 - Cette politique ne donne pas a Z4 l'autorite FatFs ou fichier; Z4 fournit seulement le seam temporel musical.
 - Si aucune frontiere musicale fiable n'est disponible, le systeme doit choisir explicitement entre stop immediat borne ou refus/differ de load, sans mutation partielle de pattern.
+
+## Addendum 2026-05-08 - Sampler/Looper skeleton sans hook transport
+
+- `Sampler/Looper` est declare cote track/runtime/UI.
+- Le bouton `REC` global conserve le flux Z4 normal (`seq_runtime_set_pattern_rec_target_track` puis `seq_runtime_rec_toggle_arm`) quelle que soit la track focus.
+- Le demarrage Looper est observe hors Z4 par le seam transport/control Z5: un writer Looper ne demarre que si le transport est running, le REC global est arme, et une unique track `Sampler/Looper` est eligible (`ARM=Rec`, `ROUT` non vide).
+- Le focus UI n'est pas une condition de demarrage Looper.
+- STOP transport ou desarmement REC demande l'arret/finalisation du writer Looper actif via Z5, sans donner a Z4 l'autorite FatFs.
+- STOP transport notifie aussi localement `brick6_master_buffer_on_transport_stop()` depuis `seq_runtime_stop` apres le lifecycle sequencer: Master/Buffer coupe playback transport, record actif et pending Q Rec/Q Play sans FatFs, sans effacer la prise ni son flag local `has_take`, et sans redemarrage implicite au PLAY suivant. XFADE seul ne redemarre pas une prise arretee; le redemarrage passe par `brick6_master_buffer_request_play()`, qui rearme Q Play sur un prochain marker boundary musical/input si le transport tourne et `Q Play=On`. Les tracks `Master` sont ignorees par le choix de boundary Master/Buffer pour ne pas transformer les slots master en horloge de relance.
+- Z4 ne possede pas FatFs, ne pousse pas d'audio et ne branche aucun hook Z1.
+- `LEN` fixe du `Sampler/Looper` est applique hors Z4 par le seam Z5, via un compteur local en steps derive de la timeline audio `seq_runtime_exec` et de `seq_runtime_get_samples_per_step_q16`; Z4 fournit seulement la projection temporelle, pas l'autorite writer.
+- `LEN=Free` ne demande aucun auto-stop; `LEN=1/2/4/8/16` demande l'arret du writer apres 1/2/4/8/16 mesures de 16 steps depuis le sample de demarrage writer memorise par Z5.
+- Limite explicite: l'auto-stop Looper n'est pas encore cale sur un marker boundary edge sample-accurate; la decision est prise en superloop/UI tick, donc le stop request peut arriver avec une latence de service hors IRQ.
+- `ARM=Overd` est accepte comme contrat produit continu mais reste non eligible au demarrage writer dans cette passe tant que l'overdub audio n'est pas implemente.
+
+## Addendum 2026-05-09 - Sampler/Looper playback transport
+
+- Z4 ne devient pas owner du fichier Looper ni du buffer audio; `brick6_looper_runtime` reste l'autorite playback transient.
+- Le transport fournit seulement la condition temporelle produit: START/PLAY autorise la lecture des prises `PLAY=Auto` deja pretes ou en cours de chargement, STOP coupe la lecture.
+- Au restart transport, le Looper ne demarre pas depuis le tick UI/superloop: Z4 conserve le marker `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` de start transport jusqu'a la collecte audio suivante, et Z1 appelle le runtime Looper a l'offset sample du marker avant le rendu du segment suivant.
+- Les notes PLAY du sequencer ne declenchent pas le Looper dans cette passe; le Looper suit le transport global, pas les trigs de pas.
+- `ARM=Overd` reste no-op borne; aucune logique d'overdub audio n'est ajoutee au scheduler.
+
+## Addendum 2026-05-12 - start transport atomique
+
+- `seq_runtime_start` ne doit pas exposer un transport `RUNNING` a l'IRQ audio avant que `seq_runtime_exec_begin_running_at_sample_q16` ait seed le step 0, les markers boundary et les events PLAY initiaux.
+- Pour un PLAY depuis STOP sans count-in, la transition FSM `RUNNING` et le seed execution restent dans la meme section critique: le premier collect audio voit soit STOPPED, soit un etat RUNNING complet.
+- Le premier marker `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` et les trigs du step 0 partagent le meme `step_sample_q16`; la segmentation Z1 applique ensuite le marker puis les notes au meme offset sample.

@@ -2,6 +2,7 @@
 
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -468,6 +469,40 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
             return 1U;
         }
+        default:
+            return 0U;
+    }
+}
+
+uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+{
+    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+
+    if ((ctx == NULL)
+            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+    {
+        return 0U;
+    }
+
+    if ((update_base_state == 0U) || (state == NULL))
+    {
+        return ((id == PARAM_LOOPER_ARM) || (id == PARAM_LOOPER_LEN) || (id == PARAM_LOOPER_PLAY)) ? 1U : 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_LOOPER_ARM:
+            state->looper.arm = param_backend_clamp_value(value, 0.0f, 2.0f);
+            return 1U;
+        case PARAM_LOOPER_LEN:
+            state->looper.len = param_backend_clamp_value(value, 0.0f, 5.0f);
+            return 1U;
+        case PARAM_LOOPER_PLAY:
+            state->looper.play = param_backend_clamp_value(value, 0.0f, 1.0f);
+            brick6_looper_runtime_set_play_auto(track, (state->looper.play >= 0.5f) ? 1U : 0U);
+            return 1U;
         default:
             return 0U;
     }

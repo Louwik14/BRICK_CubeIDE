@@ -18,6 +18,7 @@
 #define SAMPLE_PAGE_BYTES_PER_FRAME           (SAMPLE_PAGE_CHANNELS * SAMPLE_PAGE_SAMPLE_BYTES)
 #define SAMPLE_PAGE_BYTES                     (SAMPLE_PAGE_FRAMES * SAMPLE_PAGE_BYTES_PER_FRAME)
 #define SAMPLE_PAGE_MAX_COUNT                 (SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES / SAMPLE_PAGE_BYTES)
+#define SAMPLE_PAGE_CACHE_PATH_MAX            (96U)
 
 /*
  * Page-cache contract sizing. This is intentionally independent from the

@@ -15,6 +15,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_pool.h"
 #include "Sampler/sample_voice_reader.h"
+#include "Seq/seq_runtime_exec.h"
 #include "Seq/seq_runtime.h"
 #include "UI/ui_track_catalog.h"
 
@@ -101,8 +102,8 @@ static AUDIO_HOT brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
 
-#if BRICK6_SAMPLER_DIAG_ENABLE
 static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
+#if BRICK6_SAMPLER_DIAG_ENABLE
 #define BRICK6_SAMPLER_RUNTIME_DIAG_INC(field) (++g_brick6_sampler_runtime_diag.field)
 #else
 #define BRICK6_SAMPLER_RUNTIME_DIAG_INC(field) ((void)0)
@@ -203,6 +204,60 @@ static uint8_t brick6_sampler_runtime_track_is_slicer(uint8_t track_id)
     }
 
     return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_SLICER) ? 1U : 0U;
+}
+
+static void brick6_sampler_runtime_diag_note_trigger(uint8_t track_id,
+                                                     const brick6_sampler_voice_t *voice,
+                                                     uint32_t start_frame,
+                                                     uint32_t sample_length_frames)
+{
+    if (voice == NULL)
+    {
+        return;
+    }
+
+    g_brick6_sampler_runtime_diag.trigger_audio_timeline_sample =
+        seq_runtime_exec_get_audio_timeline_sample();
+    g_brick6_sampler_runtime_diag.first_output_audio_timeline_sample = 0U;
+    g_brick6_sampler_runtime_diag.first_output_frame_offset = 0U;
+    g_brick6_sampler_runtime_diag.first_output_valid = 0U;
+    g_brick6_sampler_runtime_diag.start_frame = start_frame;
+    g_brick6_sampler_runtime_diag.region_begin = voice->region_begin;
+    g_brick6_sampler_runtime_diag.region_end = voice->region_end;
+    g_brick6_sampler_runtime_diag.sample_length_frames = sample_length_frames;
+    g_brick6_sampler_runtime_diag.fade_in_frames = voice->fade_in_frames;
+    g_brick6_sampler_runtime_diag.fade_out_frames = voice->fade_out_frames;
+    g_brick6_sampler_runtime_diag.sample_id = voice->sample_id;
+    g_brick6_sampler_runtime_diag.track_id = track_id;
+    g_brick6_sampler_runtime_diag.note = voice->note;
+    g_brick6_sampler_runtime_diag.velocity = voice->velocity;
+    g_brick6_sampler_runtime_diag.mode = voice->mode;
+    g_brick6_sampler_runtime_diag.use_segment_cursor = voice->use_segment_cursor;
+}
+
+static void brick6_sampler_runtime_diag_note_first_output(uint8_t track_id,
+                                                          const float *out_l,
+                                                          const float *out_r,
+                                                          uint32_t frames)
+{
+    if ((out_l == NULL) || (out_r == NULL) || (frames == 0U)
+            || (g_brick6_sampler_runtime_diag.first_output_valid != 0U)
+            || (g_brick6_sampler_runtime_diag.track_id != track_id))
+    {
+        return;
+    }
+
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        if ((out_l[i] != 0.0f) || (out_r[i] != 0.0f))
+        {
+            g_brick6_sampler_runtime_diag.first_output_audio_timeline_sample =
+                seq_runtime_exec_get_audio_timeline_sample();
+            g_brick6_sampler_runtime_diag.first_output_frame_offset = i;
+            g_brick6_sampler_runtime_diag.first_output_valid = 1U;
+            return;
+        }
+    }
 }
 
 static uint8_t brick6_sampler_runtime_track_is_clip(uint8_t track_id)
@@ -1619,6 +1674,8 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
                                                                   voice->region_end,
                                                                   voice->reverse);
         const uint32_t start_frame = (uint32_t)voice->position;
+        const uint32_t sample_length_frames =
+            (voice->sample != NULL) ? voice->sample->length_frames : 0U;
         if (sample_cache_start_voice_at(voice->sample_id,
                                         brick6_sampler_runtime_cache_voice_id(track_id),
                                         start_frame) != 0U)
@@ -1649,6 +1706,10 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
             else
             {
                 voice->trigger_velocity_gain = trigger_velocity_gain;
+                brick6_sampler_runtime_diag_note_trigger(track_id,
+                                                         voice,
+                                                         start_frame,
+                                                         sample_length_frames);
             }
         }
         else
@@ -1726,9 +1787,7 @@ void brick6_sampler_runtime_stop(uint8_t track_id)
 
 void brick6_sampler_runtime_diag_reset(void)
 {
-#if BRICK6_SAMPLER_DIAG_ENABLE
     memset(&g_brick6_sampler_runtime_diag, 0, sizeof(g_brick6_sampler_runtime_diag));
-#endif
 }
 
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot)
@@ -1738,9 +1797,8 @@ void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapsh
         return;
     }
 
-    memset(out_snapshot, 0, sizeof(*out_snapshot));
-#if BRICK6_SAMPLER_DIAG_ENABLE
     *out_snapshot = g_brick6_sampler_runtime_diag;
+#if BRICK6_SAMPLER_DIAG_ENABLE
     out_snapshot->active_voices = brick6_sampler_runtime_diag_count_active_voices();
     if (out_snapshot->active_voices > out_snapshot->max_active_voices)
     {
@@ -2227,4 +2285,5 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
     }
 
     brick6_sampler_render_sample(desc, voice, out_l, out_r, frames);
+    brick6_sampler_runtime_diag_note_first_output(ctx->track_id, out_l, out_r, frames);
 }

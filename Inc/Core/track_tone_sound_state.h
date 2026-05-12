@@ -37,6 +37,12 @@ typedef struct
     } buffer;
     struct
     {
+        float arm;
+        float len;
+        float play;
+    } looper;
+    struct
+    {
         float type[4];
         float level[4];
         float macro_a[4];

@@ -14,12 +14,19 @@ ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_
         return UI_HALL_ROUT_CONTEXT_NONE;
     }
 
-    if (ui_get_track_family(track) != UI_TRACK_FAMILY_MASTER)
+    const ui_track_family_t family = ui_get_track_family(track);
+    const ui_track_type_t type = ui_get_track_type(track);
+
+    if ((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_LOOPER))
+    {
+        return UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER;
+    }
+
+    if (family != UI_TRACK_FAMILY_MASTER)
     {
         return UI_HALL_ROUT_CONTEXT_NONE;
     }
 
-    const ui_track_type_t type = ui_get_track_type(track);
     if (type == UI_TRACK_TYPE_BUFFER)
     {
         return UI_HALL_ROUT_CONTEXT_MASTER_BUFFER;

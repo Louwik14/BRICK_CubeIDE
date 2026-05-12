@@ -273,3 +273,13 @@ Sorties de Z2:
 ## 22. Contrat MIX p-lock/mod hors Master
 - Les params MIX track-aware `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1`, `PARAM_MIX_SEND2` sont autorises uniquement pour les tracks audio non-`Master` disposant d'une lane mixer effective.
 - Les tracks `Master/Buffer` et `Master/FX` peuvent exposer des pages MIX globales/contextuelles, mais ne sont pas des cibles valides pour les params MIX track-aware p-lock/mod.
+
+## 23. Contrat Sampler/Looper skeleton
+- `Sampler/Looper` est un nouveau type dans la famille existante `Sampler`; aucune nouvelle family n'est introduite.
+- Z2 expose `TRACK_RUNTIME_TYPE_LOOPER`, bind `BOUND` avec `TRACK_RUNTIME_ENGINE_LOOPER`: le playback est audio-routable via une lane mixer normale, sans sample_pool projet et sans slot Sampler detourne.
+- Le hook Z1 record Looper reste un producteur externe pilote par ROUT + writer actif; le playback transient est l'executant runtime dedie `brick6_looper_runtime`.
+- `brick6_looper_runtime` garde l'autorite playback par track Looper et utilise des ids page-cache transients hors `sample_pool` (`SAMPLE_POOL_SIZE + track_id`) uniquement comme cles RAM/SD internes.
+- Les params TONE propres au type sont `PARAM_LOOPER_ARM`, `PARAM_LOOPER_LEN`, `PARAM_LOOPER_PLAY`, mappes localement par `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`.
+- `ARM/LEN/PLAY` sont autorises uniquement pour `Sampler/Looper`; ils restent hors p-lock PLAY et hors destination LFO tant que le workflow record musical n'est pas branche.
+- Le mode `ARP` brut est projete en vue `ROUT` pour `Sampler/Looper`; le routing selectionne des tracks logiques sources et ne cree pas d'autorite audio speciale.
+- `PLAY=Off/Auto` reste un parametre de workflow: il ne passe pas par le scheduler note, il pilote seulement l'armement playback Looper au transport via le runtime dedie.

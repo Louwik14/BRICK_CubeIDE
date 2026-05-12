@@ -22,6 +22,8 @@
 #include <string.h>
 
 #include "memory_layout.h"
+#include "Storage/looper_storage.h"
+#include "Storage/multi_record_writer.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_audio_stream.h"
 #include "wav_parser.h"
@@ -111,16 +113,18 @@ static void wav_loader_catalog_clear(void)
     g_wav_catalog_ready = 0U;
 }
 
-static void wav_loader_catalog_add(const char *name)
+static void wav_loader_catalog_add(const char *display_name, const char *path)
 {
-    if ((name == 0) || (name[0] == '\0') || (g_wav_catalog_count >= WAV_LOADER_CATALOG_MAX))
+    if ((display_name == 0) || (display_name[0] == '\0')
+        || (path == 0) || (path[0] == '\0')
+        || (g_wav_catalog_count >= WAV_LOADER_CATALOG_MAX))
     {
         return;
     }
 
     wav_loader_catalog_entry_t *entry = &g_wav_catalog[g_wav_catalog_count];
-    const int name_len = snprintf(entry->name, sizeof(entry->name), "%s", name);
-    const int path_len = snprintf(entry->path, sizeof(entry->path), "0:/%s", name);
+    const int name_len = snprintf(entry->name, sizeof(entry->name), "%s", display_name);
+    const int path_len = snprintf(entry->path, sizeof(entry->path), "%s", path);
     if ((name_len < 0) || (path_len < 0)
         || ((uint32_t)name_len >= sizeof(entry->name))
         || ((uint32_t)path_len >= sizeof(entry->path)))
@@ -131,34 +135,22 @@ static void wav_loader_catalog_add(const char *name)
     g_wav_catalog_count++;
 }
 
-void wav_loader_catalog_refresh(void)
+static void wav_loader_catalog_scan_dir(const char *dir_path, const char *display_prefix)
 {
-#if WAV_LOADER_HAS_FATFS
     DIR dir;
     FILINFO fno;
-    FRESULT fr;
-
-    wav_loader_catalog_clear();
-
-    if (g_wav_fs_mounted == 0U)
-    {
-        fr = f_mount(&g_wav_fs, "0:", 1U);
-        if (fr != FR_OK)
-        {            return;
-        }
-        g_wav_fs_mounted = 1U;
-    }
-
-    fr = f_opendir(&dir, "0:/");
+    FRESULT fr = f_opendir(&dir, dir_path);
     if (fr != FR_OK)
-    {        return;
+    {
+        return;
     }
 
-    while (1)
+    while (g_wav_catalog_count < WAV_LOADER_CATALOG_MAX)
     {
         fr = f_readdir(&dir, &fno);
         if (fr != FR_OK)
-        {            break;
+        {
+            break;
         }
 
         if (fno.fname[0] == '\0')
@@ -171,10 +163,51 @@ void wav_loader_catalog_refresh(void)
             continue;
         }
 
-        wav_loader_catalog_add(fno.fname);
+        char display_name[32];
+        char path[64];
+        const int name_len = ((display_prefix != 0) && (display_prefix[0] != '\0'))
+            ? snprintf(display_name, sizeof(display_name), "%s/%s", display_prefix, fno.fname)
+            : snprintf(display_name, sizeof(display_name), "%s", fno.fname);
+        const size_t dir_len = strlen(dir_path);
+        const char *const separator = ((dir_len != 0U) && (dir_path[dir_len - 1U] == '/')) ? "" : "/";
+        const int path_len = snprintf(path, sizeof(path), "%s%s%s", dir_path, separator, fno.fname);
+        if ((name_len < 0) || (path_len < 0)
+            || ((uint32_t)name_len >= sizeof(display_name))
+            || ((uint32_t)path_len >= sizeof(path)))
+        {
+            continue;
+        }
+
+        wav_loader_catalog_add(display_name, path);
     }
 
     (void)f_closedir(&dir);
+}
+
+void wav_loader_catalog_refresh(void)
+{
+#if WAV_LOADER_HAS_FATFS
+    FRESULT fr;
+
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        return;
+    }
+
+    wav_loader_catalog_clear();
+
+    if (g_wav_fs_mounted == 0U)
+    {
+        fr = f_mount(&g_wav_fs, "0:", 1U);
+        if (fr != FR_OK)
+        {            return;
+        }
+        g_wav_fs_mounted = 1U;
+    }
+
+    wav_loader_catalog_scan_dir("0:/", "");
+    wav_loader_catalog_scan_dir("0:/PROJECT/LOOPS", "LOOPS");
     g_wav_catalog_ready = 1U;
 #else
     wav_loader_catalog_clear();
@@ -255,6 +288,12 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
     uint32_t i;
     wav_info_t local_info;
     wav_info_t *const out_info = (info != 0) ? info : &local_info;
+
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        return false;
+    }
 
     for(i = 0U; i < WAV_BUFFER_SAMPLES; i++)
         g_wav_pcm[i] = 0.0f;
@@ -367,4 +406,3 @@ bool wav_loader_load_to_sdram(const char *path, wav_info_t *info)
     (void)path;    return false;
 #endif
 }
-

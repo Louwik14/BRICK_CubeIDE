@@ -145,6 +145,7 @@ void sample_cache_init(void);
 void sample_cache_clear(uint16_t sample_id);
 uint8_t sample_cache_prepare(uint16_t sample_id, const char *path);
 void sample_cache_service(uint32_t byte_budget);
+uint8_t sample_cache_has_pending_sd_work(void);
 uint8_t sample_cache_is_ready(uint16_t sample_id);
 sample_cache_state_t sample_cache_get_state(uint16_t sample_id);
 uint8_t sample_cache_get_last_error(uint16_t sample_id);

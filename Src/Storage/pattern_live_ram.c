@@ -3,10 +3,13 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Storage/looper_storage.h"
+#include "Storage/multi_record_writer.h"
 #include "Storage/undo_v2.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "UI/ui_core.h"
+#include "UI/ui_core_runtime_bridge.h"
 #include "UI/ui_active_track_sync.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -61,6 +64,11 @@ static pattern_load_state_t g_pattern_load_state;
 static uint8_t g_pattern_load_bank;
 static uint8_t g_pattern_load_pattern;
 static uint8_t g_pattern_load_last_error;
+
+#define PATTERN_LOAD_ERR_INVALID_SLOT 1U
+#define PATTERN_LOAD_ERR_SD_LOAD 2U
+#define PATTERN_LOAD_ERR_RECORD_ACTIVE 3U
+
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern);
 static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_block_t *track_cfg);
 static uint8_t pattern_live_voice_roles_are_valid(const uint8_t role[SEQ_TRACK_COUNT]);
@@ -136,6 +144,17 @@ static uint8_t pattern_live_apply_track_config_block(const pattern_v1_track_cfg_
                                             track_cfg->midi_source) == false)
     {
         return 0U;
+    }
+
+    for (uint8_t looper_track = 0U; looper_track < SEQ_TRACK_COUNT; ++looper_track)
+    {
+        for (uint8_t source_track = 0U; source_track < SEQ_TRACK_COUNT; ++source_track)
+        {
+            ui_core_runtime_bridge_set_looper_route_enabled(
+                looper_track,
+                source_track,
+                track_cfg->looper_route_enabled[looper_track][source_track]);
+        }
     }
 
     return (track_state_apply_voice_group_roles_bulk(role_sanitized) != false) ? 1U : 0U;
@@ -440,6 +459,11 @@ uint8_t pattern_live_capture_current(PatternSaveV1 *out_pattern)
         out_pattern->track_cfg.midi_channel[track] = ui_get_track_midi_channel(track);
         out_pattern->track_cfg.midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
         out_pattern->track_cfg.voice_group_role[track] = (uint8_t)track_state_get_voice_group_role(track);
+        for (uint8_t source_track = 0U; source_track < SEQ_TRACK_COUNT; ++source_track)
+        {
+            out_pattern->track_cfg.looper_route_enabled[track][source_track] =
+                ui_core_runtime_bridge_get_looper_route_enabled(track, source_track);
+        }
 
         out_pattern->seq.tracks[track].length_steps = project->tracks[track].length_steps;
         out_pattern->seq.tracks[track].ui_page = project->tracks[track].ui_page;
@@ -826,7 +850,15 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
-        g_pattern_load_last_error = 1U;
+        g_pattern_load_last_error = PATTERN_LOAD_ERR_INVALID_SLOT;
+        return 0U;
+    }
+
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        g_pattern_load_state = PATTERN_LOAD_ERROR;
+        g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
         return 0U;
     }
 
@@ -868,12 +900,20 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        g_pattern_load_state = PATTERN_LOAD_ERROR;
+        g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
+        return;
+    }
+
     g_pattern_load_state = PATTERN_LOAD_LOADING;
 
     if (pattern_sd_bank_load_slot(g_pattern_load_bank, g_pattern_load_pattern, &g_pattern_load_work) == 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
-        g_pattern_load_last_error = 2U;
+        g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
         return;
     }
 
@@ -940,6 +980,13 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 
     if (pattern_live_capture_current(&g_current_pattern) == 0U)
     {
+        return 0U;
+    }
+
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        /* TODO pending budgeted pattern save: defer the SD store instead of blocking record drain. */
         return 0U;
     }
 
@@ -1255,4 +1302,3 @@ uint8_t pattern_live_is_apply_in_progress(void)
 {
     return g_apply_in_progress;
 }
-

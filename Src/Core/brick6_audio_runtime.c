@@ -20,6 +20,7 @@
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -149,6 +150,36 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
     }
 }
 
+static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tracks)
+{
+    static float looper_tmp_l[AUDIO_BLOCK_SIZE];
+    static float looper_tmp_r[AUDIO_BLOCK_SIZE];
+    uint8_t looper_tracks = 0U;
+
+    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+        if ((ctx == NULL)
+                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
+                || (track_runtime_is_audio_routable(track) == 0U))
+        {
+            continue;
+        }
+
+        memset(looper_tmp_l, 0, frames * sizeof(float));
+        memset(looper_tmp_r, 0, frames * sizeof(float));
+        brick6_looper_runtime_render_track(ctx, looper_tmp_l, looper_tmp_r, frames);
+        mixer_submit_external_stereo(ctx->mix_track_id, looper_tmp_l, looper_tmp_r, frames);
+        looper_tracks++;
+    }
+
+    if (out_looper_tracks != NULL)
+    {
+        *out_looper_tracks = looper_tracks;
+    }
+}
+
 static void brick6_render_opal_tracks(uint32_t frames, uint8_t *out_opal_tracks)
 {
     static float opal_tmp[AUDIO_BLOCK_SIZE];
@@ -262,6 +293,12 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t sampler_tracks = 0U;
         brick6_render_sampler_tracks(frames, &sampler_tracks);
         (void)sampler_tracks;
+    }
+
+    {
+        uint8_t looper_tracks = 0U;
+        brick6_render_looper_tracks(frames, &looper_tracks);
+        (void)looper_tracks;
     }
 
     {

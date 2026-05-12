@@ -32,6 +32,22 @@ typedef struct
     uint32_t render_track_calls;
     uint32_t active_voices;
     uint32_t max_active_voices;
+    uint64_t trigger_audio_timeline_sample;
+    uint64_t first_output_audio_timeline_sample;
+    uint32_t first_output_frame_offset;
+    uint32_t start_frame;
+    uint32_t region_begin;
+    uint32_t region_end;
+    uint32_t sample_length_frames;
+    uint32_t fade_in_frames;
+    uint32_t fade_out_frames;
+    uint16_t sample_id;
+    uint8_t track_id;
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t mode;
+    uint8_t use_segment_cursor;
+    uint8_t first_output_valid;
 } brick6_sampler_runtime_diag_snapshot_t;
 
 extern volatile sample_cache_diag_snapshot_t g_sample_cache_diag_snapshot;

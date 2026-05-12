@@ -4,6 +4,8 @@
 
 #include "Storage/memory_layout.h"
 #include "Storage/boot_context_flash.h"
+#include "Storage/looper_storage.h"
+#include "Storage/multi_record_writer.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
 #include "Storage/undo_v2.h"
@@ -67,6 +69,19 @@ static void project_v1_set_sd_operation_error(project_v1_error_t err)
 {
     g_project_last_sd_error = project_sd_bank_get_last_error();
     project_v1_set_error(err);
+}
+
+static uint8_t project_v1_record_active_guard(void)
+{
+    if ((multi_record_writer_any_active() == 0U)
+            && (looper_storage_raw_export_is_active() == 0U))
+    {
+        return 0U;
+    }
+
+    g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
+    project_v1_set_error(PROJECT_V1_ERR_RECORD_ACTIVE);
+    return 1U;
 }
 
 static void project_boot_ctx_commit_current_state_if_valid(void)
@@ -446,6 +461,10 @@ uint8_t project_v1_save_slot(uint8_t project_slot)
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
+    if (project_v1_record_active_guard() != 0U)
+    {
+        return 0U;
+    }
 
     if (project_v1_capture_current(&g_project_work) == 0U)
     {
@@ -473,6 +492,10 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
                                                                                         : PROJECT_V1_ERR_ISR_CONTEXT));
         return 0U;
     }
+    if (project_v1_record_active_guard() != 0U)
+    {
+        return 0U;
+    }
 
     const uint32_t next_counter = g_project_save_counter + 1U;
     if (project_sd_bank_store_slot(project_slot, project, next_counter) == 0U)
@@ -496,6 +519,10 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
 {    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
+        return 0U;
+    }
+    if (project_v1_record_active_guard() != 0U)
+    {
         return 0U;
     }
 
@@ -532,6 +559,10 @@ uint8_t project_v1_load_blank(void)
         project_v1_set_error(PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
     }
+    if (project_v1_record_active_guard() != 0U)
+    {
+        return 0U;
+    }
 
     sample_pool_init();
     project_v1_macro_init();
@@ -559,6 +590,10 @@ uint8_t project_v1_delete_slot(uint8_t project_slot)
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
+        return 0U;
+    }
+    if (project_v1_record_active_guard() != 0U)
+    {
         return 0U;
     }
 
@@ -601,6 +636,10 @@ uint8_t project_v1_slot_has_data(uint8_t project_slot)
         project_v1_set_error(PROJECT_V1_ERR_INVALID_SLOT);
         return 0U;
     }
+    if (project_v1_record_active_guard() != 0U)
+    {
+        return 0U;
+    }
 
     const uint8_t has_data = project_sd_bank_slot_has_data(project_slot);
     g_project_last_sd_error = project_sd_bank_get_last_error();
@@ -616,6 +655,11 @@ uint8_t project_v1_slot_has_data(uint8_t project_slot)
 
 void project_v1_refresh_slots(void)
 {
+    if (project_v1_record_active_guard() != 0U)
+    {
+        return;
+    }
+
     project_sd_bank_refresh_slots();
     g_project_last_sd_error = project_sd_bank_get_last_error();
     if (g_project_last_sd_error != PROJECT_SD_BANK_ERR_NONE)
@@ -629,6 +673,11 @@ void project_v1_refresh_slots(void)
 
 uint8_t project_v1_list_slots(uint8_t *out_slots, uint8_t max_slots)
 {
+    if (project_v1_record_active_guard() != 0U)
+    {
+        return 0U;
+    }
+
     const uint8_t count = project_sd_bank_list_slots(out_slots, max_slots);
     g_project_last_sd_error = project_sd_bank_get_last_error();
     if (g_project_last_sd_error != PROJECT_SD_BANK_ERR_NONE)
@@ -661,6 +710,7 @@ const char *project_v1_error_to_string(project_v1_error_t err)
         case PROJECT_V1_ERR_SD_LOAD_FAIL: return "SD_LOAD_FAIL";
         case PROJECT_V1_ERR_SD_STORE_FAIL: return "SD_STORE_FAIL";
         case PROJECT_V1_ERR_SD_DELETE_FAIL: return "SD_DELETE_FAIL";
+        case PROJECT_V1_ERR_RECORD_ACTIVE: return "RECORD_ACTIVE";
         default: return "UNKNOWN";
     }
 }

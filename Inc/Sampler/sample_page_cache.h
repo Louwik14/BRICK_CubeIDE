@@ -107,6 +107,8 @@ uint8_t sample_page_cache_begin_read_block(uint16_t sample_id,
                                            sample_page_block_t *out_block);
 void sample_page_cache_commit_read_block(uint16_t sample_id,
                                          uint32_t page_index);
+uint8_t sample_page_cache_has_queued_range(uint16_t first_sample_id,
+                                           uint16_t sample_count);
 
 /*
  * Command API: queues or records explicit intent only.
@@ -133,6 +135,9 @@ uint8_t sample_page_cache_register_stream_sample(uint16_t sample_id,
                                                  const wav_info_t *info,
                                                  uint32_t total_frames,
                                                  uint32_t data_offset);
+uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
+                                                           const char *path,
+                                                           uint32_t total_frames);
 
 /*
  * Service API: the only place where queued stream page loads may touch FatFs.
@@ -140,6 +145,10 @@ uint8_t sample_page_cache_register_stream_sample(uint16_t sample_id,
  * `sd_access_gate` for the sample-cache client.
  */
 void sample_page_cache_service(uint32_t byte_budget);
+void sample_page_cache_service_sample_pool(uint32_t byte_budget);
+void sample_page_cache_service_range(uint16_t first_sample_id,
+                                     uint16_t sample_count,
+                                     uint32_t byte_budget);
 
 #ifdef __cplusplus
 }

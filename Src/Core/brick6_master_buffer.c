@@ -27,6 +27,7 @@ static uint8_t g_record_armed = 0U;
 static uint8_t g_recording = 0U;
 static uint8_t g_record_waiting_boundary = 0U;
 static uint8_t g_play_waiting_boundary = 0U;
+static uint8_t g_has_take = 0U;
 static uint32_t g_record_frames_written = 0U;
 static uint32_t g_record_target_frames = 0U;
 static uint32_t g_record_len_steps = 16U;
@@ -155,7 +156,8 @@ static uint8_t brick6_master_buffer_is_master_boundary_track(uint8_t edge_track)
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
-        if (ui_get_track_family(track) == UI_TRACK_FAMILY_OFF)
+        const ui_track_family_t family = ui_get_track_family(track);
+        if ((family == UI_TRACK_FAMILY_OFF) || (family == UI_TRACK_FAMILY_MASTER))
         {
             continue;
         }
@@ -180,7 +182,8 @@ static uint8_t brick6_master_buffer_is_master_boundary_track(uint8_t edge_track)
         return 0U;
     }
 
-    if (ui_get_track_family(edge_track) == UI_TRACK_FAMILY_OFF)
+    const ui_track_family_t edge_family = ui_get_track_family(edge_track);
+    if ((edge_family == UI_TRACK_FAMILY_OFF) || (edge_family == UI_TRACK_FAMILY_MASTER))
     {
         return 0U;
     }
@@ -210,6 +213,7 @@ static void brick6_master_buffer_start_record_now(void)
     brick6_master_buffer_push_shifter_config();
     g_play_waiting_boundary = 0U;
     live_recorder_start_record(g_buffer_recorder);
+    g_has_take = 0U;
     g_recording = 1U;
     g_record_armed = 0U;
     g_record_waiting_boundary = 0U;
@@ -219,6 +223,7 @@ static void brick6_master_buffer_start_record_now(void)
 
 static void brick6_master_buffer_commit_recorded_timing(void)
 {
+    g_has_take = ((g_buffer_recorder != NULL) && (g_buffer_recorder->recorded_frames >= 2U)) ? 1U : 0U;
     g_recorded_samples_per_step_q16 = (g_recording_samples_per_step_q16 != 0U)
             ? g_recording_samples_per_step_q16
             : seq_runtime_get_samples_per_step_q16();
@@ -228,11 +233,12 @@ static void brick6_master_buffer_commit_recorded_timing(void)
 
 static void brick6_master_buffer_start_play_now(void)
 {
-    if ((g_buffer_recorder == NULL) || (g_buffer_recorder->recorded_frames < 2U))
+    if ((g_buffer_recorder == NULL) || (g_has_take == 0U) || (g_buffer_recorder->recorded_frames < 2U))
     {
         return;
     }
 
+    brick6_clip_shifter_reset(&g_pitch_shifter);
     brick6_master_buffer_apply_play_rate();
     live_recorder_start_play(g_buffer_recorder);
     g_play_waiting_boundary = 0U;
@@ -263,6 +269,7 @@ void brick6_master_buffer_init(live_recorder_t *rec,
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
     g_play_waiting_boundary = 0U;
+    g_has_take = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
     g_record_len_steps = 16U;
@@ -305,6 +312,7 @@ void brick6_master_buffer_reset(void)
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
     g_play_waiting_boundary = 0U;
+    g_has_take = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
     g_recording_samples_per_step_q16 = 0U;
@@ -336,6 +344,7 @@ void brick6_master_buffer_clear(void)
     g_recording = 0U;
     g_record_waiting_boundary = 0U;
     g_play_waiting_boundary = 0U;
+    g_has_take = 0U;
     g_record_frames_written = 0U;
     g_record_target_frames = 0U;
     g_recording_samples_per_step_q16 = 0U;
@@ -527,6 +536,51 @@ void brick6_master_buffer_request_clear(void)
     brick6_master_buffer_clear();
 }
 
+void brick6_master_buffer_request_play(void)
+{
+    if ((g_buffer_recorder == NULL) || (g_has_take == 0U) || (g_buffer_recorder->recorded_frames < 2U))
+    {
+        g_play_waiting_boundary = 0U;
+        return;
+    }
+
+    g_record_armed = 0U;
+    g_record_waiting_boundary = 0U;
+    if ((g_quantize_play != 0U) && (seq_runtime_is_running() != 0U))
+    {
+        g_play_waiting_boundary = 1U;
+        return;
+    }
+
+    brick6_master_buffer_start_play_now();
+}
+
+void brick6_master_buffer_on_transport_stop(void)
+{
+    g_record_armed = 0U;
+    g_record_waiting_boundary = 0U;
+    g_play_waiting_boundary = 0U;
+
+    if (g_buffer_recorder != NULL)
+    {
+        live_recorder_stop_play(g_buffer_recorder);
+        if (g_recording != 0U)
+        {
+            live_recorder_stop_record(g_buffer_recorder);
+            if (g_buffer_recorder->recorded_frames >= 2U)
+            {
+                brick6_master_buffer_commit_recorded_timing();
+            }
+            else
+            {
+                g_recording_samples_per_step_q16 = 0U;
+            }
+        }
+    }
+
+    g_recording = 0U;
+}
+
 brick6_master_buffer_state_t brick6_master_buffer_get_state(void)
 {
     if (g_recording != 0U)
@@ -561,6 +615,21 @@ uint8_t brick6_master_buffer_is_waiting_start(void)
 
     return ((g_record_waiting_boundary != 0U)
             || (brick6_master_buffer_is_preroll_active() != 0U)) ? 1U : 0U;
+}
+
+uint8_t brick6_master_buffer_has_take(void)
+{
+    return g_has_take;
+}
+
+uint8_t brick6_master_buffer_is_playing(void)
+{
+    if (g_buffer_recorder == NULL)
+    {
+        return 0U;
+    }
+
+    return g_buffer_recorder->playing;
 }
 
 uint32_t brick6_master_buffer_get_recorded_frames(void)
@@ -712,7 +781,7 @@ void brick6_master_buffer_read_playback(float *left, float *right, uint32_t fram
     }
 
     const uint32_t loop_frames = g_buffer_recorder->recorded_frames;
-    if (loop_frames < 2U)
+    if ((g_has_take == 0U) || (loop_frames < 2U) || (g_buffer_recorder->playing == 0U))
     {
         memset(left, 0, sizeof(float) * frames);
         memset(right, 0, sizeof(float) * frames);

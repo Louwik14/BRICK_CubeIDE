@@ -44,12 +44,16 @@ void brick6_master_buffer_set_all_sources(uint8_t enabled);
 uint8_t brick6_master_buffer_get_source_enabled(uint8_t track);
 
 void brick6_master_buffer_request_record(void);
+void brick6_master_buffer_request_play(void);
 void brick6_master_buffer_request_clear(void);
+void brick6_master_buffer_on_transport_stop(void);
 
 brick6_master_buffer_state_t brick6_master_buffer_get_state(void);
 uint8_t brick6_master_buffer_is_recording(void);
 uint8_t brick6_master_buffer_is_armed(void);
 uint8_t brick6_master_buffer_is_waiting_start(void);
+uint8_t brick6_master_buffer_has_take(void);
+uint8_t brick6_master_buffer_is_playing(void);
 uint32_t brick6_master_buffer_get_recorded_frames(void);
 uint32_t brick6_master_buffer_get_record_target_frames(void);
 

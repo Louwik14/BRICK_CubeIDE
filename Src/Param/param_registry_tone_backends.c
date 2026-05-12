@@ -52,6 +52,11 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     {
         applied = param_backend_apply_master_fx_track(ctx, track, id, value, update_base_state);
     }
+    else if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+    {
+        applied = param_backend_apply_tone_looper(track, id, value, update_base_state);
+    }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         applied = param_backend_apply_tone_sampler(track, id, value, update_base_state);

@@ -140,6 +140,10 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
         {
             return 0U;
         }
+        if ((dest == PARAM_LOOPER_ARM) || (dest == PARAM_LOOPER_LEN) || (dest == PARAM_LOOPER_PLAY))
+        {
+            return 0U;
+        }
 
         uint8_t tone_slot = 0U;
         if (track_runtime_tone_param_to_slot((track_runtime_type_t)ctx->type, dest, &tone_slot) == 0U)

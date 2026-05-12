@@ -149,6 +149,8 @@ static const char *ui_page_settings_preview_error_label(sd_preview_error_t error
             return "WAV UNSUPP";
         case SD_PREVIEW_ERROR_READ_FAIL:
             return "SD READ FAIL";
+        case SD_PREVIEW_ERROR_RECORD_ACTIVE:
+            return "REC ACTIVE";
         default:
             return "PREVIEW FAIL";
     }

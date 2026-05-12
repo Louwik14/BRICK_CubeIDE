@@ -13,6 +13,8 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Storage/looper_storage.h"
+#include "Storage/multi_record_writer.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "stm32h7xx_hal.h"
@@ -459,6 +461,13 @@ const wav_info_t *sd_preview_get_source_info(void)
 
 uint8_t sd_preview_begin(const char *path)
 {
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        sd_preview_set_error(SD_PREVIEW_ERROR_RECORD_ACTIVE);
+        return 0U;
+    }
+
     if ((path == NULL) || (path[0] == '\0'))
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_INVALID_PATH);

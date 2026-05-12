@@ -755,6 +755,9 @@ next_event:
         ;
     }
 
+    ui_core_runtime_bridge_service_looper_record_control(0);
+    ui_core_runtime_bridge_service_looper_export_feedback(ui_core_set_feedback);
+
     const ui_page_t *active_page = ui_page_get();
     if ((active_page != 0) && (active_page->tick != 0))
     {

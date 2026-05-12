@@ -274,7 +274,10 @@ static void seq_param_iface_rebuild_slot_maps(void)
     for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
     {
         const param_id_t param = (param_id_t)param_raw;
-        if (param == PARAM_SAMPLER_SLICE_COUNT)
+        if ((param == PARAM_SAMPLER_SLICE_COUNT)
+                || (param == PARAM_LOOPER_ARM)
+                || (param == PARAM_LOOPER_LEN)
+                || (param == PARAM_LOOPER_PLAY))
         {
             continue;
         }

@@ -50,6 +50,9 @@ static const char *const g_sampler_clip_stretch_mode_labels[] = {"Off", "Speed",
 static const char *const g_sampler_clip_grain_labels[] = {"384", "512", "768", "1024", "1536", "2048", NULL};
 static const char *const g_sampler_clip_hop_labels[] = {"32", "64", "96", "128", "256", "512", NULL};
 static const char *const g_sampler_clip_search_labels[] = {"0", "4", "8", "12", "16", NULL};
+static const char *const g_looper_arm_labels[] = {"Off", "Rec", "Overd", NULL};
+static const char *const g_looper_len_labels[] = {"Free", "1", "2", "4", "8", "16", NULL};
+static const char *const g_looper_play_labels[] = {"Off", "Auto", NULL};
 
 
 static const char *const g_braids_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Toy", "Vosim", "Vowel", "FOF", "Harm", "FM", "FB FM", "Chaos", "Bell", "Drum", "Kick", "Cymbal", "Snare", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};
@@ -318,6 +321,9 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_MASTER_FX4_LEVEL, "LVL", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX4_A, "A", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_MASTER_FX4_B, "B", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, NULL),
+    PARAM_DESC_EX(PARAM_LOOPER_ARM, "ARM", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_looper_arm_labels, NULL),
+    PARAM_DESC_EX(PARAM_LOOPER_LEN, "LEN", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_looper_len_labels, NULL),
+    PARAM_DESC_EX(PARAM_LOOPER_PLAY, "PLAY", PARAM_TYPE_ENUM, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_looper_play_labels, NULL),
     PARAM_DESC_EX(PARAM_OPAL_PATCH, "Patch", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_OPAL_INDEX, "Index", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_OPAL_TIME, "Time", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),

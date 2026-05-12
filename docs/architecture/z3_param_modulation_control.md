@@ -554,3 +554,14 @@ Dette explicite post-passe 4:
 - Autorite de base: `track_sound_state` par track; projection runtime via `param_registry_apply_track_value` / `param_registry_apply_track_value_rt_fast` vers la lane mixer resolue par Z2.
 - Exclusions conservees: `PARAM_MIX_MUTE`, `PARAM_HYBRID_GATE`, les params VCA, `Master/Buffer`, `Master/FX`, les globals reverb/delay et les params CFG structurels.
 - Stockage p-lock MIX: `seq_param_iface` garde un etat compact dedie a 4 slots reels, sans reserver la table 256 slots pour ce set.
+
+## 33. Contrat Sampler/Looper TONE skeleton
+
+- `track_tone_sound_state` porte un bloc `looper` par track: `arm`, `len`, `play`.
+- Params ajoutes en fin d'enum: `PARAM_LOOPER_ARM`, `PARAM_LOOPER_LEN`, `PARAM_LOOPER_PLAY`.
+- Surface TONE visible pour `Sampler/Looper`:
+  - `ARM`: `Off` / `Rec` / `Overd`,
+  - `LEN`: `Free` / `1` / `2` / `4` / `8` / `16`,
+  - `PLAY`: `Off` / `Auto`.
+- Ces params sont stockes/restaurables via les flux `PARAM_COUNT`; `ARM=Rec` pilote le record simple existant cote Z5, `ARM=Overd` reste borne/no-op pour l'audio overdub non implemente, et `PLAY` est stocke sans lancer de playback Looper.
+- `seq_param_iface` et `mod_lfo_v1` excluent ces params du p-lock/LFO: ce sont des commandes de workflow, pas des modulations audio continues.

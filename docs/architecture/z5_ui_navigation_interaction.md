@@ -114,7 +114,7 @@ Autorite hall modes:
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
-- Les contextes `ROUT` visibles sont resolus par `ui_hall_mode_resolve_rout_context`: `Master/Buffer` et `Master/FX` partagent le label `ROUT`, mais gardent des etats/actions/renderers LED distincts.
+- Les contextes `ROUT` visibles sont resolus par `ui_hall_mode_resolve_rout_context`: `Master/Buffer`, `Master/FX` et `Sampler/Looper` partagent le label `ROUT`, mais gardent des etats/actions/renderers LED distincts.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
 - Le feedback LED MACRO lit directement `project_v1` pour l'etat vide/non vide des scenes et `ui_macro_interaction` pour la scene maintenue; la couleur de base vient d'une table stable scene -> couleur dans `led_rgb.c`, sans encoder les locks ni revenir au mapping pot/slot.
 - L'overlay MACRO reutilise le meme renderer LED avec priorite sur le rendu track-select tant que l'overlay est actif: `M-Ctrl` affiche une intensite continue par scene, lissee cote LED depuis la profondeur Hall raw calibree avec un seuil LED dedie bas (`min + bruit + marge`) independant du seuil audio pressure, `M-Assign` suit le feedback Scene vide/faible, non-vide/normal, held/fort.
@@ -180,6 +180,8 @@ Sorties vers autres zones:
 - Z4: `seq_runtime_toggle_play_stop`, `seq_runtime_rec_toggle_arm`, `seq_runtime_set_track_div/quant/swing`, `seq_edit_*`, `seq_model_*`.
 - Storage: `pattern_live_queue_slot`, `pattern_live_capture_to_slot`, `undo_v1_restore`.
 - Master buffer: `brick6_master_buffer_*` (routing hall en mode ARP master-buffer, REC shortcuts).
+- Disponibilite visible Master/Buffer: les chemins UI doivent lire `brick6_master_buffer_has_take()` pour l'existence d'une prise, pas `brick6_master_buffer_is_playing()`; `playing` indique seulement la lecture active.
+- Relance visible Master/Buffer: `TRACK + PLAY` cible l'unique instance `Master/Buffer`; si une prise existe, Z5 appelle `brick6_master_buffer_request_play()` au lieu de toggler le transport, sinon feedback `NO BUF`.
 
 Getters non-mutants vs mutables:
 - Non-mutants: `ui_get_active_track`, `ui_get_track_*`, `ui_get_hall_mode`, `ui_get_pattern_stub_state`, `ui_get_mute_state`, `ui_get_mute_hall_led`.
@@ -365,7 +367,7 @@ Points factuels:
 - Logique de navigation distribuee entre `ui_navigation`, `ui_template_page`, et cas speciaux dans `ui_core`.
 - Couplage fort a `param_registry`, `seq_*`, `pattern_live_*` depuis Z5; les lectures runtime restantes passent maintenant par `ui_core_runtime_bridge`.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
-- Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC), transverse mais restant dans frontiere Z5 comme logique d'interaction.
+- Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC/PLAY), transverse mais restant dans frontiere Z5 comme logique d'interaction.
 - Le recorder SD/stems legacy n'est plus un cas special UI: un futur record SD devra passer par le contrat multi-client, sans reactiver l'ancien workflow start/stop/arm.
 - Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` avec contexte explicite (`MASTER/BUFFER` ou `MASTER/FX`) et gardes locaux separes.
 - Fragilites restantes prouvees:
@@ -548,3 +550,42 @@ Points factuels:
 - `BD Analog` est le premier type Drum propre et experimental; il reste selectionnable dans le catalogue `Drum`.
 - Pour `BD Analog`, `TONE` expose une sous-page legere `BD`: `Pitch`, `Decay`, `Tone`, `FM`.
 - `PLAY`, `COLORS`, `MIX`, `MOD` et `VCA` restent les ensembles communs existants; aucune page UI lourde ni chemin de modulation local n'est ajoute.
+
+## 19. Contrat UI Sampler/Looper skeleton
+
+- Le catalogue `CFG` expose `Looper` comme type de la family existante `Sampler`.
+- La page `TONE` de `Sampler/Looper` expose uniquement `ARM`, `LEN`, `PLAY` sur une sous-page `LOOP`.
+- Pour `Sampler/Looper`, le hall mode brut `ARP` est projete visuellement en `ROUT`.
+- `ROUT` toggle une selection de tracks logiques sources par looper track dans `ui_core_runtime_bridge`; la source peut etre focus UI ou non.
+- La page ARP resolve `Sampler/Looper` en famille template `ROUT` avant tout proxy de role de voice group. Pour les autres contextes, le proxy ARP slave garde sa priorite historique avant la projection ROUT `Master/Buffer` / `Master/FX`. Le renderer LED `Sampler/Looper` lit la matrice `g_looper_route_enabled[looper][source]` et ne retombe pas sur la scene clavier/ARP.
+- `REC` global ne demarre jamais directement le Looper et ne devient pas focus-based: il garde le flux transport normal (`seq_runtime_set_pattern_rec_target_track` + `seq_runtime_rec_toggle_arm`) meme si la track active est `Sampler/Looper`, `ARM=Off`, `ARM=Overd` ou `ROUT` vide.
+- Demarrage Looper: le bridge observe `transport running + REC global arme`; si une unique track `Sampler/Looper` est eligible (`ARM=Rec`, au moins une source `ROUT`) et qu'aucun writer actif/finalizing/export ne bloque, il rafraichit explicitement la projection runtime, resolve le slot RAW systeme via Z6/storage, appelle `multi_record_writer_prepare_raw`, puis `multi_record_writer_start`.
+- Les refus RAW visibles distinguent les causes simples: `RAW MISS`, `RAW SIZE`, `RAW SLOT`, `RAW MOUNT`, `RAW BUSY`, `RAW STAT` ou `RAW INIT`.
+- Apres demarrage writer reussi, `ARM=Rec` est consomme et repasse `Off` pour eviter tout redemarrage automatique sans nouveau geste utilisateur.
+- Le demarrage `ARM=Rec` applique le contrat replace: l'ancien playback Looper de la track cible est arrete/detache et ses pages transient sont invalidees avant que le writer passe en `RECORDING`; l'ancienne loop ne reste pas audible pendant la nouvelle prise.
+- Le focus UI n'est pas une condition d'eligibilite Looper.
+- Politique multi-looper temporaire: si plusieurs tracks `Sampler/Looper` sont eligibles, aucun writer Looper n'est demarre; le controle utilisateur explicite devra reduire l'eligibilite a une seule track.
+- `ARM=Overd` reste visible mais non fonctionnel pour l'audio overdub: la track est ignoree par le demarrage writer tant que l'overdub audio n'est pas implemente.
+- `PLAY=Off/Auto` pilote maintenant le playback transient apres capture:
+  - `Off`: la prise finalisee est chargee en runtime mais reste muette,
+  - `Auto`: la prise suit le transport; si le transport tourne deja quand le chargement finit, la lecture demarre.
+- Au STOP puis PLAY transport, Z5 ne relance pas directement la lecture Looper: il arme seulement l'intention `PLAY=Auto`; le redemarrage effectif est consomme cote Z1 au marker boundary edge sample-accurate fourni par Z4.
+- STOP transport, transport non-running ou desarmement REC global demande l'arret/finalisation via `multi_record_writer_request_stop` si un record Looper est actif; sinon le transport conserve son comportement existant.
+- `LEN=Free` ne declenche aucun auto-stop Looper.
+- `LEN=1/2/4/8/16` arme un suivi local au demarrage effectif du writer: Z5 memorise la timeline audio courante exposee par `seq_runtime_exec`, convertit la cible en 16/32/64/128/256 steps via `seq_runtime_get_samples_per_step_q16`, puis demande `multi_record_writer_request_stop` quand la duree est atteinte.
+- L'auto-stop Looper ne stoppe pas le transport global et ne desarme pas REC global; STOP manuel, transport stopped ou desarmement REC restent prioritaires et gagnent avant LEN.
+- Apres auto-stop LEN, le demarrage Looper reste verrouille tant que transport et REC restent tous deux actifs, pour eviter de supprimer la temp finalisee et relancer une prise sans geste utilisateur.
+- Si le writer est deja `STOP_REQUESTED`/`DRAINING`/`FINALIZING`, Z5 ne redemande pas un stop LEN.
+- `SHIFT+SETTINGS` sur la track active `Sampler/Looper` est intercepte avant l'ouverture SETTINGS normale et demande le SAVE Looper:
+  - accepte uniquement une prise writer `TAKE_READY`,
+  - refuse `RECORDING` / `STOP_REQUESTED` / `DRAINING` / `FINALIZING` par feedback court `LOOP BUSY`,
+  - refuse l'absence de prise finalisee pour cette track par `NO LOOP`,
+  - demande le path durable a Z6/storage,
+  - demarre `looper_storage_raw_export_start()` sur `raw_path + recorded_frames`,
+  - laisse le playback transient RAW courant attache au reservoir RAW; le fichier durable sera retrouve par scan lazy Settings,
+  - feedback visible borne a `LOOP SAVED` / `LOOP BUSY` / `NO LOOP` / `LOOP FAIL`.
+- Le SAVE Looper ne lance plus de refresh catalogue WAV immediat: le scan Settings reste lazy/demande par la page Sampler afin d'eviter un freeze UI juste apres commit pendant playback Auto.
+- Le bridge UI ne possede pas la nomenclature fichier Looper, le scan de path SD ni la creation du dossier durable; cette autorite appartient a Z6/storage.
+- SETTINGS normal reste inchangé hors `Sampler/Looper`.
+- Cette passe ne modifie pas `brick6_master_buffer`, n'ajoute pas de source input/master speciale et ne cree pas de parametre SAVE/STAT Looper.
+- Le bridge conserve l'identite de la looper active pendant le record; Z1 consomme cette identite et la matrice ROUT par lectures bornees pour alimenter le ring RAM du writer, sans decision UI dans l'IRQ.

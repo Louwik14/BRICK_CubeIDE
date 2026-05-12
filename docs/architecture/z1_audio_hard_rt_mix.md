@@ -296,6 +296,7 @@ Granular / fx_pool:
 - `sample_cache_read_voice()`, `sample_cache_read_voice_frame()`, `sample_cache_peek_frame()`, `sample_cache_begin_read_block()` et `sample_cache_commit_read_block()` sont RAM-only. FatFs reste limite a `sample_cache_prepare()` et `sample_cache_service()`.
 - Phase 1/2/3/4/5A/5B/6A/6B refonte locale Sampler: les modes `Shot` forward 1x (`mode=0`), `RevShot` reverse 1x (`mode=1`), `Loop` forward 1x (`mode=2`), `PingPong` 1x (`mode=3`), le `Shot` forward pitche simple (`mode=0`, `step != 1`, sans loop), le `RevShot` reverse pitche simple (`mode=1`, `step != 1`, sans loop), la `Loop` forward pitchee simple (`mode=2`, `step != 1`, sans ping-pong) et le `PingPong` pitche simple (`mode=3`, `step != 1`) ne passent plus par `sample_cache_begin_read_block()` dans l'IRQ. `brick6_sampler_runtime` construit un `play_plan` au trigger, `sample_voice_reader` porte un cursor audio local par voix, et l'IRQ consomme des segments page-bounds deja acquis via `sample_page_cache`.
 - Sur ce chemin Phase 1/2/3/4/5A/5B/6A/6B, aucun `request_page` n'est emis depuis le kernel audio. Le prefetch stream est queue hors IRQ par `sample_cache_service()` a partir des voix actives, et la transition de page du cursor se limite a un acquire/release RAM-only au boundary; en reverse, les demandes se font sur `current-1/current-2`. La loop forward 1x reste un wrap de cursor local (`loop_end -> loop_begin`), le ping-pong 1x une inversion locale de direction/kernels aux bounces, et le pitch simple forward/reverse/loop/ping-pong consomme des segments prepares avec voisin d'interpolation deja acquis.
+- Les samples longs en `READY_PARTIAL` prechargent et pin maintenant les deux pages de depart reverse (`last_page-1`, `last_page`) en plus du depart forward, afin que `RevShot` ne depinde pas d'un refill SD dans les premiers millisecondes d'un long fichier. Les pages stream non pinnees peuvent etre reclamees avant un chargement `READY_FULL`, mais les pages de samples full deja chargees ne doivent pas etre evincees par le stream.
 - Les autres modes (`slice`) restent provisoirement sur les chemins legacy `sample_cache_begin_read_block()` et `sample_voice_reader_render_pitch_forward()` jusqu'aux phases suivantes.
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
 - Master-buffer est dans le pipeline de bloc (`begin -> capture bus source-filtre -> commit`) et son playback est blend apres mixer dans `brick6_audio_runtime_dsp`, avant `Master/FX`.
@@ -307,8 +308,10 @@ Granular / fx_pool:
 - Le dispatch playback reste local a `brick6_master_buffer_read_playback()`: lecture brute `live_recorder_read()` en bypass/fallback, shifter local uniquement quand `Pitch` est actif et que le ratio effectif de lecture differe de 1.0.
 - `Master/Buffer` lit toujours via `brick6_master_buffer_read_playback()`: en `Pitch=ON`, la vitesse effective vaut `Rate * recorded_samples_per_step / current_samples_per_step`, puis `brick6_clip_shifter_process_stereo()` compense le pitch sur le bloc deja lu; en `Pitch=OFF`, `Rate` conserve le comportement manuel existant.
 - Capture `Master/Buffer`: bus dedie MAIN dry, source-filtre par toggles ROUT track, post track gain/pan/VCA, post `MIXER_TRACK_NOMINAL_TRIM`, sans CUE, avant playback buffer, Master/FX, preview SD et output pack. Les returns send ne sont pas captures par ce bus dedie.
+- Capture `Sampler/Looper`: producteur minimal dans `mixer_process`, au point post traitement/gain/pan/VCA track mais avant `MIXER_TRACK_NOMINAL_TRIM`, avant bus master final, sends/returns, playback `Master/Buffer`, `Master/FX`, preview SD et pack sortie. Les sources sont les tracks logiques selectionnees par ROUT pour la looper active, hors track looper elle-meme; le bloc stereo somme est converti en `int32_t` interleaved PCM24-range puis pousse vers `multi_record_writer_push_audio_block_from_irq`.
 - Le shifter partage le meme DSP que `Sampler/Clip`; `Grain` pilote la fenetre, aucun moteur d'analyse separe ne reste pour `Master/Buffer`.
 - `REC/CLEAR/stop manuel/start transport` reset uniquement l'etat du shifter et conservent l'ownership brut `live_recorder`.
+- STOP transport appelle `brick6_master_buffer_on_transport_stop()` hors IRQ via Z4: playback transport, record actif et attentes Q Rec/Q Play sont coupes sans FatFs; la prise, `recorded_frames`, loop/timing et contenu buffer restent conserves. L'existence de prise est portee par `brick6_master_buffer_has_take()`, separee de `live_recorder.playing`; XFADE mixe uniquement une lecture deja active et ne re-arme pas `live_recorder.playing`. `brick6_master_buffer_request_play()` est la relance explicite: elle rearme Q Play si le transport tourne et `Q Play=On`, sinon elle reset le shifter, remet le read head a zero via `live_recorder_start_play()` et rend la prise audible. Les boundaries Q Rec/Q Play ignorent les tracks `Master` et se calent sur les tracks musicales/input les plus longues; les slots master ne doivent pas retarder ou bloquer la relance buffer. PLAY transport seul ne redemarre pas le Master/Buffer par lui-meme.
 
 ## 9. Dependances inter-zones
 
@@ -439,7 +442,9 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Z1 reste l'autorite des taps/producteurs audio hard-RT pour le futur recording SD multi-client.
 - Le format de capture transmis au writer est stereo `int32_t` aligne, 48 kHz, par client record.
 - Le format fichier produit est WAV PCM stereo 24-bit / 48 kHz, mais le packing 24-bit appartient au writer hors IRQ, pas au pipeline audio.
-- Le looper n'est pas un chemin SD special dans Z1: il expose un producteur/tap comme les stems futurs.
+- Le looper n'est pas un chemin SD special dans Z1: il expose un producteur/tap dans `mixer_process`, juste apres traitement track individuel et avant master/buffer/fx/preview.
+- Le producteur Looper v1 ne gere que la copie IRQ vers ring RAM du writer client 0 quand l'etat writer est `RECORDING`; pas de SAVE, pas de LEN auto-stop, pas d'Overdub.
+- La selection de sources vient de la matrice ROUT `looper_track -> source_track` deja portee par le seam UI/Z6; la track looper active est ignoree cote capture pour eviter un feedback involontaire. Z1 ne cree pas de source master/input speciale et ne touche pas a `brick6_master_buffer`.
 - Invariant hard-RT:
   - le callback audio peut seulement copier le bloc courant vers un ring RAM prealloue,
   - aucun FatFs,
@@ -447,7 +452,24 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
   - aucun lock bloquant,
   - aucun `f_open/f_write/f_sync/f_lseek/f_rename/f_unlink/f_expand`,
   - aucun formatage/header WAV.
-- En cas de ring plein, Z1 ne bloque pas:
-  - drop/overflow est compte par le client record,
-  - la prise est marquee failed/degraded par le writer/control plane hors IRQ.
+- Le ring plein reste un diagnostic critique uniquement: Z1 ne bloque jamais l'IRQ, mais le dimensionnement produit doit rendre l'overflow non atteignable en usage supporte.
+- Dimensionnement courant du producteur Looper: ring writer 4 s utiles par client a 48 kHz stereo `int32_t`; une page SD lente, une allocation FAT ou une carte busy courte doivent etre absorbees hors IRQ par le ring et le service Z0/Z6.
 - Aucun module legacy recorder SD/stems ne doit servir de reference d'implementation; la cible produit reste un writer global multi-client arbitre en Z6/Z0, compatible avec `sample_cache_service`.
+
+## 18. Addendum - playback runtime Sampler/Looper transient
+
+- `Sampler/Looper` est maintenant une source audio track-aware via `brick6_looper_runtime`, rendue dans `brick6_audio_runtime_dsp` puis injectee dans le mixer avec `mixer_submit_external_stereo`.
+- Le mixer reste l'unique autorite de sommation; aucun second mixer ni chemin master special n'est ajoute.
+- Le playback Looper lit uniquement les pages RAM pretes du `sample_page_cache`; l'IRQ audio ne fait aucun FatFs, aucun `f_read`, aucune allocation et aucun lock bloquant.
+- La preparation de prise RAW Looper et le refill des pages sont faits hors IRQ par `brick6_looper_runtime_service`, apres notification de prise RAW finalisee. Le runtime transient Looper lit le reservoir RAW via `sample_page_cache`; il ne repasse plus par parsing WAV.
+- Le refill Looper utilise une plage `sample_page_cache` separee des ids `sample_pool`; `sample_cache_service` ne charge pas les pages Looper avant le writer record.
+- Pour une prise RAW, `sample_page_cache` enregistre un stream PCM24 stereo interleaved 48 kHz sans header: offset disque `frame * 6`, decode signed little-endian vers float, et longueur unique `recorded_frames`.
+- Si une page manque pendant le render, le runtime produit un silence local pour le reste du bloc disponible et attend le refill hors IRQ; il ne bloque jamais l'audio.
+- Une page Looper manquante n'arrete pas le curseur audio: le playhead avance sur le silence local, et le refill hors IRQ prefetch une fenetre de pages en avance, avec wrap modulo vers le debut avant le retour a zero.
+- `multi_record_writer_push_audio_block_from_irq` reste limite au producteur Looper existant dans `mixer_process`.
+- `PLAY=Off` prepare la prise mais la garde muette; `PLAY=Auto` lance la lecture sur transport running apres que la premiere page soit prete, et STOP transport arrete la lecture.
+- Apres une prise LEN fixe, `PLAY=Auto` ne demarre plus sur disponibilite flottante du cache: Z5 transmet un sample absolu de base `record_start + LEN_frames`; si la finalisation/preload arrive apres ce sample, le runtime le reporte par multiples de la longueur de prise vers le prochain cycle futur, puis Z1 segmente le half-buffer a cet offset et appelle `brick6_looper_runtime_on_scheduled_start()` avant le rendu du segment suivant.
+- Apres STOP puis PLAY transport, une prise Looper deja READY ne redemarre pas depuis la superloop: Z1 consomme le marker `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` conserve par Z4, appelle `brick6_looper_runtime_on_boundary_edge()` au meme offset sample que `brick6_master_buffer_on_boundary_edge()`, puis rend le segment suivant avec le playhead Looper remis a zero.
+- SAVE RAW export est branche hors IRQ: Z5 refuse transport running, Z6 lit uniquement `recorded_frames` du reservoir RAW et ecrit un WAV final par chunks budgetes apres les services sample/writer/refill Looper. Aucun chemin Looper actif ne depend d'un fichier intermediaire ni d'un `f_rename` de prise.
+- En `ARM=Rec`, le demarrage d'une nouvelle prise Looper est un replace: le reader playback precedent est detache, les pages transient du cache Looper sont invalidees et les metadonnees de prise sont remises a zero avant le passage writer en `RECORDING`.
+- Le playback IRQ Looper conserve une reference de page courante acquise et ne rappelle plus `sample_page_cache_begin_read_block()` a chaque bloc audio; les requetes de prefetch/lookahead restent hors IRQ dans `brick6_looper_runtime_service()`. Une page manquante rend du silence local, avance le playhead et n'emet aucune requete page depuis l'audio.

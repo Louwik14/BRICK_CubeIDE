@@ -49,6 +49,7 @@ Lit ce document si le sujet touche :
 - callback DSP
 - mixage
 - taps recorder / buffer dans le pipeline audio
+- playback Looper via pages RAM pretes dans le pipeline mixer
 - pitch-shifter local du playback `Master/Buffer` via `brick6_clip_shifter`
 
 Doc :
@@ -113,6 +114,7 @@ Lit ce document si le sujet touche :
 - save/load project
 - boot context
 - restore global d’état
+- writer Looper, reservoirs RAW systeme, export SAVE RAW -> WAV durable, paths finaux
 
 Doc :
 - `docs/architecture/z6_state_persistence_patterns_projects.md`

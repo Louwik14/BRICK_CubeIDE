@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "Core/brick6_looper_runtime.h"
 #include "ui_core.h"
 #include "ui_event.h"
 
@@ -12,6 +13,18 @@ typedef void (*ui_core_runtime_bridge_pattern_enter_fn)(ui_pattern_mode_t mode);
 typedef uint8_t (*ui_core_runtime_bridge_undo_request_fn)(void);
 typedef void (*ui_core_runtime_bridge_suppress_hall_note_fn)(uint8_t hall);
 typedef void (*ui_core_runtime_bridge_post_sync_fn)(uint8_t sync_active_track_ui_context);
+
+typedef struct
+{
+    brick6_looper_runtime_diag_snapshot_t before_success;
+    brick6_looper_runtime_diag_snapshot_t after_success;
+    uint32_t recorded_frames;
+    uint8_t raw_slot;
+    uint8_t valid;
+    uint8_t playback_unchanged;
+    char raw_path[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX];
+    char wav_path[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX];
+} ui_core_runtime_bridge_looper_save_diag_t;
 
 bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
                                                       ui_track_family_t family,
@@ -35,6 +48,9 @@ uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event
                                                                    uint8_t track_select_armed,
                                                                    ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note);
 uint8_t ui_core_runtime_bridge_get_master_fx_route_enabled(uint8_t track);
+uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, uint8_t source_track);
+void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8_t source_track, uint8_t enabled);
+uint8_t ui_core_runtime_bridge_get_active_looper_record_track(uint8_t *out_track);
 
 uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
                                                       uint8_t mute_active,
@@ -42,6 +58,9 @@ uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
                                                       uint8_t track_select_armed,
                                                       ui_core_runtime_bridge_pattern_enter_fn pattern_enter,
                                                       ui_core_runtime_bridge_feedback_fn feedback);
+void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge_feedback_fn feedback);
+void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridge_feedback_fn feedback);
+void ui_core_runtime_bridge_get_looper_save_diag(ui_core_runtime_bridge_looper_save_diag_t *out_diag);
 
 uint8_t ui_core_runtime_bridge_request_undo(ui_core_runtime_bridge_feedback_fn feedback);
 

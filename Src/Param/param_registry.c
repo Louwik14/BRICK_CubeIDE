@@ -289,6 +289,15 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_CLIP_SEARCH:
             *out_value = state->clip.search_size;
             return 1U;
+        case PARAM_LOOPER_ARM:
+            *out_value = state->looper.arm;
+            return 1U;
+        case PARAM_LOOPER_LEN:
+            *out_value = state->looper.len;
+            return 1U;
+        case PARAM_LOOPER_PLAY:
+            *out_value = state->looper.play;
+            return 1U;
         case PARAM_BUFFER_GRAIN:
             *out_value = state->buffer.grain_size;
             return 1U;
@@ -481,6 +490,15 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_SAMPLER_CLIP_SEARCH:
             state->clip.search_size = value;
+            return 1U;
+        case PARAM_LOOPER_ARM:
+            state->looper.arm = clamp_value(value, 0.0f, 2.0f);
+            return 1U;
+        case PARAM_LOOPER_LEN:
+            state->looper.len = clamp_value(value, 0.0f, 5.0f);
+            return 1U;
+        case PARAM_LOOPER_PLAY:
+            state->looper.play = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_BUFFER_GRAIN:
             state->buffer.grain_size = value;

@@ -10,6 +10,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:786:6:ui_core_clipboard_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:791:9:ui_core_clipboard_handle_macro_slot_event	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:843:9:ui_core_clipboard_handle_track_event	136	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:893:9:ui_core_clipboard_handle_ensemble_event	544	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:978:9:ui_core_clipboard_handle_page_event	536	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:893:9:ui_core_clipboard_handle_ensemble_event	552	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:978:9:ui_core_clipboard_handle_page_event	544	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:1055:9:ui_core_clipboard_handle_seq_track_event	104	static

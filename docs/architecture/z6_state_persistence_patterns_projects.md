@@ -18,7 +18,9 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Storage/sd_access_gate.c` + `Inc/Storage/sd_access_gate.h`: arbitrage d'acces SD entre clients PATTERN/PROJECT/PREVIEW.
 - `Src/Storage/sd_preview.c` + `Inc/Storage/sd_preview.h`: facade preview SD dediee, separee de l'import projet.
 - `Src/Storage/wav_audio_codec.c` + `Inc/Storage/wav_audio_codec.h`: decode PCM partage pour import et preview.
-- `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: squelette proprietaire du futur writer SD audio multi-client; rings RAM statiques et state machine stub, sans FatFs branche.
+- `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: writer SD audio multi-client RAW-only cote Looper; rings RAM statiques, push IRQ RAM-only, drain SD hors IRQ vers reservoir RAW.
+- `Src/Storage/looper_storage.c` + `Inc/Storage/looper_storage.h`: autorite des paths Looper; validation des reservoirs RAW systeme, creation dossier durable, scan borne et reservation anti-ecrasement du nom final.
+- `Src/Storage/wav_loader.c`: scan catalogue et import WAV refuses pendant record audio actif/finalizing.
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
 - `Src/UI/ui_core.c`: preuve des appels UI vers `pattern_live_capture_to_slot` et `pattern_live_queue_slot`.
 - `Src/UI/pages/ui_page_settings.c`: preuve des appels UI vers `project_v1_save_slot/load_slot/delete_slot`.
@@ -71,10 +73,49 @@ Autorite preview SD:
 
 Autorite writer SD audio multi-client:
 - `multi_record_writer_*`.
-- Phase courante: interface produit, etats, diagnostics et rings RAM `int32_t` stereo statiques seulement.
-- Le service superloop draine de facon simulee sous budget et ne possede pas encore de session FatFs.
-- `commit` et `delete_temp` sont des placeholders explicites: ils exposent `NOT_IMPLEMENTED` et ne declarent pas de succes produit.
-- Les producteurs audio futurs pousseront uniquement vers les rings RAM; aucun hook Z1 n'est branche dans cette passe.
+- Phase courante: interface produit, etats, diagnostics, rings RAM `int32_t` stereo statiques et backend RAW Looper REC; les anciennes APIs de fichier temporaire du writer sont retirees.
+- Backend RAW Looper REC: `multi_record_writer_prepare_raw(client, raw_slot, raw_path, expected_frames)` ouvre un reservoir RAW existant, seek offset `0`, ecrit PCM24 stereo interleaved sans header, puis fixe `recorded_frames` apres STOP/drain/finalize.
+- Le backend RAW n'ecrit aucun header WAV, n'appelle pas `f_expand` et ne passe pas par `f_rename`.
+- `multi_record_writer_get_last_raw_take()` expose `raw_slot`, `raw_path` et `recorded_frames` de la derniere prise RAW finalisee; le controle Looper transmet ces metadonnees au runtime transient pour le playback RAW et les utilise comme source de SAVE RAW -> WAV durable.
+- `multi_record_writer_service(byte_budget)` acquiert le gate sans bloquer seulement si le sample cache n'a pas de travail SD pending, packe `int32_t` stereo vers PCM 24-bit interleaved par chunk borne de 1024 frames, execute au plus un `f_write` audio par passage, puis relache le gate.
+- `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`.
+- Les producteurs audio poussent uniquement vers les rings RAM; le hook Z1 actuel est limite a `Sampler/Looper` et appelle `multi_record_writer_push_audio_block_from_irq` depuis `mixer_process` lorsque le client Looper est en `RECORDING`.
+- `multi_record_writer_any_active()` et `looper_storage_raw_export_is_active()` gardent les operations SD incompatibles avec record/finalize/export Looper.
+
+Politique SD pendant record audio actif/finalizing:
+- Refuse: project save/load/delete, blank load projet, refresh/list/has-data projet.
+- Refuse: pattern load/request/service et apply queue associe tant que la politique stop/finalize musicale n'est pas implementee.
+- Refuse temporairement: pattern save direct, car le chemin courant ecrit encore en SD synchrone; TODO `pending budgeted pattern save`.
+- Refuse: preview WAV SD, scan catalogue WAV et import/load WAV vers SDRAM.
+- Le cleanup/finalize du writer reste proprietaire du writer et continue via `sd_access_gate`.
+
+Autorite paths Looper:
+- `looper_storage_raw_init()`, `looper_storage_raw_validate()`, `looper_storage_raw_is_available()`.
+- `looper_storage_raw_get_slot_for_track(track, &slot)` calcule le mapping deterministe depuis la projection `track_runtime` deja rafraichie par le caller.
+- `looper_storage_raw_track_is_available(track)` combine mapping valide et reservoirs RAW valides.
+- Les reservoirs RAW systeme obligatoires sont:
+  - `0:/SYSTEM/LOOPER/LPR00.RAW`
+  - `0:/SYSTEM/LOOPER/LPR01.RAW`
+  - `0:/SYSTEM/LOOPER/LPR02.RAW`
+  - `0:/SYSTEM/LOOPER/LPR03.RAW`
+- Format logique RAW cible: PCM stereo 24-bit / 48 kHz, little-endian, interleaved L/R, sans header.
+- Taille exacte par reservoir: `999999996` octets, soit `166666666` frames a 6 octets/frame.
+- Les reservoirs sont crees hors firmware live par outil PC/setup SD; le firmware ne fait que valider presence et taille par `f_stat`.
+- Si un reservoir est absent ou de taille invalide, `looper_storage_raw_is_available()` reste faux et le storage Looper RAW est indisponible au niveau systeme.
+- La validation conserve le dernier diagnostic RAW: slot fautif, `FRESULT` FatFs et taille observee quand disponible, exposes par getters pour distinguer missing/stat/size/mount/busy sans refaire un acces SD.
+- Ces reservoirs ne passent jamais par `sample_pool`, catalogue WAV, browser ou slots Sampler projet.
+- Mapping RAW cible:
+  - premiere track `Sampler/Looper` logique -> slot RAW `0`,
+  - deuxieme -> slot RAW `1`,
+  - troisieme -> slot RAW `2`,
+  - quatrieme -> slot RAW `3`,
+  - cinquieme et suivantes -> indisponibles/refus propre.
+- Ce mapping n'est pas un allocateur: il est recalcule par scan des tracks logiques et suit les changements family/type/load projet apres refresh runtime explicite.
+- `looper_storage_make_next_path(track_id, out_path, out_len)`.
+- Cree `0:/PROJECT` puis `0:/PROJECT/LOOPS` a la demande via le client SD recorder.
+- Scanne au plus `LOOPER_STORAGE_SAVE_PATH_TRIES` noms `0:/PROJECT/LOOPS/LPRtt_nnnn.WAV` par `f_stat`.
+- Ne retourne un path final que si le fichier cible est absent; un fichier existant n'est jamais choisi silencieusement.
+- Mappe l'indisponibilite du gate SD vers `LOOPER_STORAGE_PATH_BUSY`; les fautes mount/mkdir/stat/path vers `LOOPER_STORAGE_PATH_FAIL`.
 
 Autorite boot context flash:
 - `boot_context_flash_load()`, `boot_context_flash_commit()`, `boot_context_flash_clear()`.
@@ -88,7 +129,8 @@ Seconde autorite concurrente:
 Entrees depuis init/runtime global:
 - `brick6_app_init.c` appelle `pattern_live_init()`, `project_v1_init()`, `project_v1_restore_boot_context()`.
 - `brick6_app_init.c` appelle `multi_record_writer_init()`.
-- Boucle superloop appelle `multi_record_writer_service(8192U)` puis `pattern_live_service()`.
+- `brick6_app_init.c` appelle `looper_storage_raw_init()` puis `looper_storage_raw_validate()` hors IRQ; cette validation ne cree aucun dossier/fichier RAW.
+- Boucle superloop appelle `multi_record_writer_service(16384U)` puis `brick6_looper_runtime_service(8192U)` et `pattern_live_service()`.
 
 Entrees depuis UI:
 - `ui_core.c` appelle `pattern_live_capture_to_slot()` et `pattern_live_queue_slot()`.
@@ -166,6 +208,7 @@ Points de lecture principaux:
 ### `wav_loader.c`
 - `g_wav_pcm` reste en `AUDIO_COLD_SDRAM` pour le buffer PCM charge.
 - `g_wav_catalog` (`wav_loader_catalog_entry_t[WAV_LOADER_CATALOG_MAX]`) est place en `UI_SDRAM`: catalogue storage/UI froid, rafraichi par scan FatFs et consulte hors IRQ audio; ce n'est pas un payload DMA ni le ring preview SD critique.
+- Le catalogue scanne les WAV a la racine `0:/` et les prises Looper durables sous `0:/PROJECT/LOOPS`, exposees avec un prefixe visible `LOOPS/`.
 
 ### `project_sd_bank.c`
 - `g_project_slot_has_data[16]`: presence des slots projet.
@@ -414,6 +457,8 @@ TODO policy SD/projet:
 - Project save/load pendant playback reste a refuser ou differer explicitement.
 - Project save/load ne doit pas preempter `sample_cache_service()` quand un stream sample a besoin de refill.
 - Project load ne doit jamais appliquer un etat partiel.
+- Pendant `multi_record_writer_any_active()` ou `looper_storage_raw_export_is_active()`, les entrees SD lourdes sont refusees: project save/load/delete/refresh, pattern load, pattern save direct, preview, scan catalogue et import WAV.
+- Reste a faire: pattern save pending budgete et pattern load avec stop/finalize musical avant load/apply.
 - Politique finale SD attendue: SAMPLE_CACHE prioritaire, PATTERN_LOAD entre refills, PATTERN_SAVE differe, PROJECT hors playback, PREVIEW exclusif, sans scheduler SD generique.
 
 ## Addendum 2026-05-06 - Master/FX UI-only
@@ -424,7 +469,7 @@ TODO policy SD/projet:
 
 ## Addendum 2026-05-08 - contrat SD audio recording multi-client
 
-Ce contrat documente la cible produit pour l'enregistrement audio vers SD. Il ne decrit pas un code deja implemente.
+Ce contrat documente la cible produit pour l'enregistrement audio vers SD. La phase courante branche le REC `Sampler/Looper` sur reservoir RAW; le writer Looper ne conserve plus de flux temporaire.
 
 ### Autorites
 
@@ -449,7 +494,7 @@ Ce contrat documente la cible produit pour l'enregistrement audio vers SD. Il ne
 
 ### Modele cible
 
-- Format record produit unique: WAV PCM stereo 24-bit / 48 kHz.
+- Format durable produit: WAV PCM stereo 24-bit / 48 kHz; format REC Looper courant: RAW systeme PCM24 stereo interleaved sans header.
 - Modele cible:
   - `N producteurs audio -> rings RAM alignes int32 stereo par client -> multi_record_writer_service global -> fichiers WAV SD`.
 - Le writer packe en PCM 24-bit hors IRQ juste avant `f_write`.
@@ -467,19 +512,14 @@ Ordre produit attendu dans la superloop, sous budgets explicites:
    - priorite absolue pour playback streaming.
    - Charge les pages RAM du Sampler; l'audio ne lit que RAM.
 2. `multi_record_writer_service(...)`
-   - draine les rings record.
-   - choisit le client par watermark/pression, avec fairness borne pour eviter starvation.
-3. `pattern_save_service(...)`
-   - autorise pendant active recording seulement si les rings record ne sont pas critiques.
-   - ecrit en temp + commit/rename avec queue limitee.
-4. `pattern_load`
-   - pendant record: queue l'intention, stop records a frontiere musicale si possible, finalize, puis load/apply.
-5. Operations interdites ou differees pendant active recording/finalizing:
+   - budget courant 16384 octets par appel apres `sample_cache_service(32768U)`.
+   - draine les rings record, par client le plus rempli, en tranche courte pour ne pas monopoliser la superloop/UI.
+3. Operations interdites ou differees pendant active recording/finalizing:
    - project save/load,
-   - preset load,
+   - pattern load/save direct,
    - preview SD,
-   - scan library,
-   - imports/loads non musicaux.
+   - scan library/catalogue,
+   - imports/loads WAV non musicaux.
 
 ### Ring writer
 
@@ -499,7 +539,7 @@ Ordre produit attendu dans la superloop, sous budgets explicites:
   - high watermark,
   - overflow count,
   - dropped frames,
-  - failed/degraded take,
+  - failed/degraded take comme garde critique interne seulement,
   - bytes written,
   - last FatFs error.
 
@@ -516,9 +556,11 @@ Pression RAM ring interne `int32_t stereo`:
 - 0.5 s par client: 192000 octets.
 - 1 s par client: 384000 octets.
 - 2 s par client: 768000 octets.
+- 4 s utiles par client: 1536000 octets utiles, 1536008 octets alloues avec frame sentinel.
 
 Exemples de RAM ring brute:
 - 4 clients: environ 768 KB pour 0.5 s, 1.54 MB pour 1 s, 3.07 MB pour 2 s.
+- 4 clients produit courant: `192001` frames allouees/client, environ 6.144 MB pour 4 s utiles.
 - 8 clients: environ 1.54 MB pour 0.5 s, 3.07 MB pour 1 s, 6.14 MB pour 2 s.
 - 16 clients: environ 3.07 MB pour 0.5 s, 6.14 MB pour 1 s, 12.29 MB pour 2 s.
 
@@ -539,33 +581,32 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ### Politique writer
 
 - L'ecriture disque se fait par chunks alignes secteur quand possible.
-- Le choix du prochain client combine:
-  - watermark le plus haut en priorite,
-  - round-robin/aging pour eviter qu'un client bas debit soit bloque indefiniment,
-  - mode finalizing prioritaire uniquement apres protection du playback sample_cache.
+- Le choix du prochain client prend le ring le plus rempli; ce point reste suffisant pour le client Looper unique courant.
 - Si un client overflow:
-  - marquer la prise `degraded` ou `failed`,
-  - incrementer dropped frames,
-  - ne jamais bloquer l'audio.
+  - incrementer les diagnostics critiques `overflow_count` / `dropped_frames`,
+  - ne jamais bloquer l'audio,
+  - traiter l'evenement comme bug d'architecture en usage supporte, pas comme workflow produit normal.
 - Si plusieurs clients overflow:
   - escalader vers stop/finalize global ou fail des clients les plus critiques selon mode produit,
   - exposer l'etat a l'UI/diagnostics.
 - Une carte lente ou bloquee ne doit jamais remonter en attente bloquante vers Z1.
+- Pour LEN fixe Looper, la taille attendue est transmise au writer avant start pour borne dure d'ecriture; aucune preallocation monolithique n'est faite avant record, et le ring 4 s reste la garde contre une pause SD initiale. `f_sync` reste limite a la finalisation apres drainage.
+- La finalisation WAV reste hors IRQ mais ne chaine plus toutes les operations metadata dans un seul appel service; chaque passage `multi_record_writer_service` execute au plus une phase de finalisation pour limiter le freeze UI/superloop.
 
 ### Contrat looper
 
 - Le looper est un client du writer multi-record.
-- `REC` cree/ecrit un fichier WAV temporaire.
-- `STOP` draine le ring et finalise le header WAV.
-- `SAVE` commit/rename vers un fichier durable.
-- `DELETE` retire immediatement la prise cote UI/audio; `f_unlink` SD est differe par service.
+- `REC` utilise le slot RAW deterministe de la track Looper quand le storage RAW systeme est disponible; sinon le demarrage REC est refuse proprement.
+- Si la validation boot des reservoirs RAW n'a pas encore abouti, le controle Looper retente `looper_storage_raw_validate()` hors IRQ au moment du REC avant de refuser avec une cause courte (`RAW MISS`, `RAW SIZE`, `RAW SLOT`, `RAW MOUNT`, `RAW BUSY`, `RAW STAT` ou `RAW INIT`).
+- `STOP` draine le ring; en RAW il sync/close et fixe `recorded_frames`.
+- `SAVE` RAW exporte `recorded_frames` vers un WAV durable STOP-only; il ne commit/rename aucun fichier temporaire Looper.
+- `DELETE` futur retire immediatement la prise cote UI/audio; `f_unlink` SD est differe par service.
 - Spam `REC/DELETE/SAVE`:
   - replace/cancel controle,
   - pas de creation infinie de fichiers durables,
   - un seul etat courant explicite par client looper.
 - Boot/projet:
-  - cleanup des fichiers temporaires abandonnes,
-  - aucune restauration de temp comme prise durable sans commit explicite.
+  - aucune restauration de reservoir RAW comme prise durable sans SAVE explicite.
 
 ### Contrat stem recorder
 
@@ -601,9 +642,48 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ### Risques connus
 
-- Latence non bornee de `f_open`, `f_write`, `f_sync`, `f_lseek`, `f_rename`, `f_unlink`, `f_expand`.
+- Latence non bornee de `f_open`, `f_write`, `f_sync`, `f_lseek`, `f_rename`, `f_unlink`.
 - Carte lente ou fragmentee.
 - Starvation de `sample_cache_service` si `sd_access_gate` ou l'ordre de service est mal arbitre.
 - Overflow rings si la SD reste bloquee trop longtemps.
 - Usure et latence en cas de spam `REC/STOP/SAVE/DELETE`.
-- `f_expand` peut reduire la fragmentation mais reste lui-meme une operation longue; il ne doit pas etre appele depuis une phase qui menace playback ou hard-RT.
+- Sans preallocation monolithique, une carte lente ou fragmentee peut encore faire monter le watermark ring; tout overflow doit etre traite comme defaut critique de debit/ring, pas masque par une allocation FAT bloquante.
+
+## Addendum 2026-05-08 - Sampler/Looper persistence skeleton
+
+- `Sampler/Looper` est un client de `multi_record_writer`, pas une architecture SD speciale et pas un writer par track.
+- Le controle Looper appelle le writer uniquement hors IRQ depuis le seam transport/control Z5: slot/path RAW via `looper_storage_raw_get_slot_for_track` et `multi_record_writer_prepare_raw/start` quand `transport running + REC global arme` et une unique Looper est eligible, `request_stop` quand le transport s'arrete, quand REC global est desarme ou quand un STOP transport intervient.
+- Le bouton `REC` ne demarre pas directement le writer Looper; il conserve l'armement REC global du sequenceur, et le focus UI n'est pas une condition pour enregistrer une Looper armee.
+- Si plusieurs Loopers sont eligibles, Z5 refuse de demarrer le client Looper unique courant plutot que de choisir silencieusement plusieurs sources de prise.
+- Le push IRQ minimal est branche: `mixer_process` somme les sources ROUT de la looper active, hors track looper elle-meme, au point post traitement/gain/pan/VCA track, avant trim nominal, avant master/buffer/fx/preview, puis pousse un bloc stereo `int32_t` interleaved vers le ring du client writer Looper.
+- Le SAVE Looper RAW est l'unique chemin actif: `SHIFT+SETTINGS` en Z5 refuse transport running, puis demarre `looper_storage_raw_export_start()` quand la prise courante est RAW `TAKE_READY`.
+- Le path durable courant est fourni par `looper_storage_make_next_path`: `0:/PROJECT/LOOPS/LPRtt_nnnn.WAV`, avec `tt` = track Looper active et `nnnn` = compteur local scanne par `f_stat`.
+- Le dossier `0:/PROJECT/LOOPS` est cree a la demande par `looper_storage_make_next_path` via le meme client SD recorder avant l'export.
+- Apres un SAVE Looper reussi, Z5 ne lance pas de refresh catalogue WAV immediat: le fichier durable reste relu par le scan lazy de `Settings > SAMPLER > SD`, pour ne pas chainer un scan SD monolithique juste apres SAVE.
+- Les etats `RECORDING`, `STOP_REQUESTED`, `DRAINING` et `FINALIZING` restent des refus SAVE; `IDLE`, `FAILED`, une prise vide ou une prise finalisee appartenant a une autre track Looper sont traites comme absence de boucle sauvegardable.
+- `LEN=Free` ne declenche aucun auto-stop.
+- `LEN=1/2/4/8/16` est branche cote controle Z5: le writer reste le client Z6 unique, et l'arret automatique passe uniquement par `multi_record_writer_request_stop(client 0)` sans SAVE, commit, rename ou acces FatFs supplementaire.
+- Pour `PLAY=Auto` apres LEN fixe, le controle Z5 calcule le sample absolu de base avec l'autorite timeline Z4 (`record_start_sample + expected_LEN_frames`) et le transmet au runtime Looper; si ce sample est deja passe quand la prise devient prete, le runtime le reporte par multiples de la longueur de prise jusqu'au prochain cycle futur. Le runtime ne demarre pas la lecture simplement parce que le cache devient pret.
+- Apres auto-stop LEN, Z5 inhibe un redemarrage automatique tant que REC global et transport restent actifs, afin de conserver la prise RAW finalisee pour SAVE et de ne pas relancer/effacer une prise sans transition utilisateur.
+- La precision de duree depend du tick de service hors IRQ qui observe la timeline Z4; Z6 ne porte pas l'autorite musicale et ne calcule pas les mesures.
+- `ARM=Overd` reste borne/no-op: aucun overdub audio reel n'est branche.
+- `PATTERN_VERSION=15` et `PROJECT_V1_FILE_VERSION=20` marquent le changement de layout `PARAM_COUNT`, l'ajout du type `Looper` et l'ajout de `PatternSaveV1.track_cfg.looper_route_enabled`.
+- `PATTERN_VERSION=16` et `PROJECT_V1_FILE_VERSION=21` marquent la rupture prototype du contrat TONE Looper: `MODE` est retire, `ARM` devient `Off/Rec/Overd`, `PLAY Off/Auto` remplace l'ancien slot; les anciens fichiers sont refuses par version/payload stricts.
+- La selection ROUT `Sampler/Looper` est capturee/restauree par matrice `looper track -> source track` dans le snapshot pattern; les projets la portent via leur snapshot live embarque.
+- Les etats internes writer (`TAKE_READY`, `FINALIZING`, etc.) restent caches; aucun etat `Temp/Saved/Finalizing` n'est expose comme param utilisateur Looper.
+- Aucun parametre SAVE/STAT Looper n'est expose en TONE.
+
+## Addendum 2026-05-09 - Sampler/Looper runtime transient
+
+- Le REC Looper courant produit une prise RAW avec `raw_slot`, `raw_path` et `recorded_frames`; apres finalisation RAW OK, le controle notifie `brick6_looper_runtime_notify_raw_take_ready()`.
+- `brick6_looper_runtime` ne garde plus de chemin WAV transient Looper actif: le REC RAW alimente le chemin RAW dedie sans parsing WAV.
+- Les ids transients Looper commencent a `SAMPLE_POOL_SIZE` et ne sont pas des slots projet ni des entrees catalogue.
+- `TAKE_READY` RAW envoie au runtime le path du reservoir et `recorded_frames`; `PLAY=Off` prepare la prise muette, `PLAY=Auto` demarre selon la logique existante apres premiere page prete.
+- Un nouveau `ARM=Rec` reste un replace destructif cote controle: l'ancien reader transient est detache avant le start writer RAW. La nouvelle longueur utile est `recorded_frames`, consommee par le playback et utilisee pour le wrap.
+- SAVE RAW export lit uniquement `recorded_frames` depuis le reservoir RAW, ecrit un header WAV final PCM24 stereo 48 kHz, copie par chunks bornes dans `looper_storage_raw_export_service()` et expose une progression UI `SAVE n%`. Il ne renomme ni ne supprime le RAW et ne passe pas par sample_pool/catalogue/slot projet.
+- La finalisation SAVE RAW verifie hors IRQ la taille data ecrite, l'offset data WAV fixe a 44 octets, puis compare les 16 premieres et 16 dernieres frames RAW contre la zone data WAV; un mismatch bascule l'export en erreur `VERIFY_FAIL` et conserve un snapshot diagnostic.
+- Le SAVE RAW exporte directement le reservoir RAW vers le path final et laisse le playback transient RAW courant attache au reservoir.
+- Le refresh catalogue apres SAVE reste seulement pour l'affichage `Settings > SAMPLER > SD`; il ne devient pas l'autorite du playback Looper.
+- Le service SD reste ordonne apres `sample_cache_service` et apres le writer record dans `brick6_app_process`: samples prioritaires, finalisation record ensuite, refill Looper apres, export RAW -> WAV ensuite seulement si le refill Looper n'a pas de travail pending. Le writer record et l'export cedent leur passage si `sample_cache_has_pending_sd_work()` detecte des pages/refill sample a traiter. `sample_cache_service` ne service que la plage `0..SAMPLE_POOL_SIZE-1`; le Looper service la plage transient `SAMPLE_POOL_SIZE..SAMPLE_POOL_SIZE+SEQ_TRACK_COUNT-1`.
+- Limite restante: le refill Looper partage le budget global du `sample_page_cache`; une page manquante produit un silence local jusqu'au prochain refill.
+- Le silence de page manquante ne bloque pas la position de lecture Looper: le playhead continue, et la demande de pages couvre une fenetre ahead modulo pour anticiper les pages suivantes et le wrap de boucle.

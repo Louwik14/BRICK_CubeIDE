@@ -16,7 +16,7 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    19U /* Master/Buffer stretch removal; legacy project files are intentionally refused in prototype phase. */
+#define PROJECT_V1_FILE_VERSION    21U /* Sampler/Looper ARM/PLAY contract; legacy project files are intentionally refused in prototype phase. */
 
 typedef enum
 {
@@ -40,7 +40,8 @@ typedef enum
     PROJECT_V1_ERR_APPLY_FAIL,
     PROJECT_V1_ERR_SD_LOAD_FAIL,
     PROJECT_V1_ERR_SD_STORE_FAIL,
-    PROJECT_V1_ERR_SD_DELETE_FAIL
+    PROJECT_V1_ERR_SD_DELETE_FAIL,
+    PROJECT_V1_ERR_RECORD_ACTIVE
 } project_v1_error_t;
 
 typedef struct

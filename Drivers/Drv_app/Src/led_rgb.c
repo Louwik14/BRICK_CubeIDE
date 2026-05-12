@@ -413,6 +413,30 @@ static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destina
     led_layer_set(LED_LAYER_UI, led, 0U, LED_FIXED_LIGHT_BLUE_G, LED_FIXED_LIGHT_BLUE_B);
 }
 
+static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t destination_track)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    if (hall >= UI_TRACK_COUNT)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    if (hall == destination_track)
+    {
+        led_apply_route_destination_hall_scene(led);
+        return;
+    }
+
+    if (ui_core_runtime_bridge_get_looper_route_enabled(destination_track, hall) == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
+        return;
+    }
+
+    led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_ORANGE_G, 0U);
+}
+
 static void led_apply_pattern_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
@@ -699,6 +723,10 @@ static void led_apply_fixed_scene(void)
             else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_FX)
             {
                 led_apply_master_fx_routing_hall_scene(hall, ui_get_active_track());
+            }
+            else if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
+            {
+                led_apply_sampler_looper_routing_hall_scene(hall, ui_get_active_track());
             }
             else if (led_hall_mode_uses_keyboard_scene())
             {

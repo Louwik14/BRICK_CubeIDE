@@ -99,6 +99,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_MASTER_FX;
         case UI_TRACK_TYPE_DRUM_BD_ANALOG:
             return TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG;
+        case UI_TRACK_TYPE_LOOPER:
+            return TRACK_RUNTIME_TYPE_LOOPER;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
@@ -243,6 +245,13 @@ static uint8_t track_runtime_param_is_clip_only(param_id_t param)
                      || (param == PARAM_SAMPLER_CLIP_SEARCH));
 }
 
+static uint8_t track_runtime_param_is_looper_only(param_id_t param)
+{
+    return (uint8_t)((param == PARAM_LOOPER_ARM)
+                     || (param == PARAM_LOOPER_LEN)
+                     || (param == PARAM_LOOPER_PLAY));
+}
+
 static const param_id_t g_track_runtime_tone_slots_opal[] = {
     PARAM_OPAL_PATCH,
     PARAM_OPAL_INDEX,
@@ -289,6 +298,12 @@ static const param_id_t g_track_runtime_tone_slots_clip[] = {
     PARAM_SAMPLER_CLIP_GRAIN,
     PARAM_SAMPLER_CLIP_HOP,
     PARAM_SAMPLER_CLIP_SEARCH
+};
+
+static const param_id_t g_track_runtime_tone_slots_looper[] = {
+    PARAM_LOOPER_ARM,
+    PARAM_LOOPER_LEN,
+    PARAM_LOOPER_PLAY
 };
 
 static const param_id_t g_track_runtime_tone_slots_midi[] = {
@@ -356,6 +371,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_clip) / sizeof(g_track_runtime_tone_slots_clip[0]));
             return 1U;
 
+        case TRACK_RUNTIME_TYPE_LOOPER:
+            *out_table = g_track_runtime_tone_slots_looper;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_looper) / sizeof(g_track_runtime_tone_slots_looper[0]));
+            return 1U;
+
         case TRACK_RUNTIME_TYPE_MIDI:
             *out_table = g_track_runtime_tone_slots_midi;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_midi) / sizeof(g_track_runtime_tone_slots_midi[0]));
@@ -421,7 +441,11 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     }
 
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_TONE);
-    mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
+    if (!(((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_LOOPER)))
+    {
+        mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MOD);
+    }
 
     if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_MASTER)
             && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_MASTER_FX)))
@@ -448,7 +472,8 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
     }
 
     if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SYNTH)
-            || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_LOOPER))
             || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_DRUM))
             || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_INPUT)
                 && ((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_HYBRID)))
@@ -469,6 +494,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
     switch ((track_runtime_engine_t)ctx->engine)
     {
         case TRACK_RUNTIME_ENGINE_SAMPLER:
+        case TRACK_RUNTIME_ENGINE_LOOPER:
         case TRACK_RUNTIME_ENGINE_OPAL:
         case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_NONE:
@@ -496,6 +522,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_SAMPLER:
+        case TRACK_RUNTIME_ENGINE_LOOPER:
         case TRACK_RUNTIME_ENGINE_OPAL:
         case TRACK_RUNTIME_ENGINE_BRAIDS:
         case TRACK_RUNTIME_ENGINE_MASTER_BUFFER:
@@ -662,6 +689,12 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
             || (type == TRACK_RUNTIME_TYPE_CLIP))
     {
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_SAMPLER, ctx->track_id);
+        return;
+    }
+
+    if (type == TRACK_RUNTIME_TYPE_LOOPER)
+    {
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_LOOPER, ctx->track_id);
         return;
     }
 
@@ -1272,6 +1305,9 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_CLIP_GRAIN:
         case PARAM_SAMPLER_CLIP_HOP:
         case PARAM_SAMPLER_CLIP_SEARCH:
+        case PARAM_LOOPER_ARM:
+        case PARAM_LOOPER_LEN:
+        case PARAM_LOOPER_PLAY:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;
@@ -1491,6 +1527,15 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
+            if (track_runtime_param_is_looper_only(param) != 0U)
+            {
+                if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                        || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+                {
+                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                }
+                return TRACK_RUNTIME_PARAM_ALLOWED;
+            }
             if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

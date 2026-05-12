@@ -76,7 +76,7 @@ Current families:
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
 - `Synth`: `Opal`
-- `Sampler`: `OneShot`, `Slicer`, `Clip`
+- `Sampler`: `OneShot`, `Slicer`, `Clip`, `Looper`
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`, `FX`
 
@@ -115,6 +115,7 @@ This separation is intentional. Do not add a second authority for the same state
   - `Speed`: varispeed (`ratio = project_bpm / source_bpm`), pitch changes
   - `Shifter`: varispeed cursor followed by the local stereo pitch-shifter
 - `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
+- `Looper` TONE exposes `ARM` (`Off`/`Rec`/`Overd`), `LEN` (`Free`/`1`/`2`/`4`/`8`/`16`), and `PLAY` (`Off`/`Auto`); current implementation records simple `ARM=Rec` takes, keeps `ARM=Overd` as a bounded no-op until audio overdub exists, and streams playback from transient page-cache pages when `PLAY=Auto`
 - legacy slice handling remains internal compatibility, not a product mode
 
 ### Sequencer
@@ -156,6 +157,7 @@ Current intent:
 - no second concurrent recorder architecture
 
 Current exposed controls:
+- `TRACK + PLAY` -> relaunch an existing buffer take
 - `TRACK + REC` -> record/start buffer workflow
 - `TRACK + SHIFT + REC` -> clear buffer
 - `ARP` context becomes `ROUT` for source selection
@@ -175,6 +177,17 @@ The project should keep these rules visible in new work:
 - reuse existing authorities before creating new ones
 
 When adding a feature, hall mode, engine, UI behavior, or runtime seam, prefer the smallest change that preserves these boundaries.
+
+## 7.1 Sampler/Looper
+
+`Sampler/Looper` is an audio-routable Sampler type with a dedicated transient runtime:
+- `ARM=Rec` records/replaces one loop take, then returns to `Off`
+- `ARM=Overd` is visible but remains no-op in this pass
+- `PLAY=Off` keeps the captured loop ready but silent
+- `PLAY=Auto` starts playback with transport after the take is finalized and its first page is ready
+- `SAVE` commits the temp WAV to `PROJECT/LOOPS` without routing playback through project sample slots
+
+Looper playback does not full-load the WAV, does not use the project `sample_pool`, does not depend on the WAV catalogue, and does not reuse normal Sampler slots. It streams temp/final WAV files through transient `sample_page_cache` ids; audio IRQ reads only ready RAM pages and falls silent locally if a page is missing.
 
 ## 8. What this repo is optimizing for
 

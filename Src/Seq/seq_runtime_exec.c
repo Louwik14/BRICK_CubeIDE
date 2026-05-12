@@ -561,7 +561,6 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
         return 0U;
     }
 
-    g_seq_runtime_exec_boundary_event_count = 0U;
     const uint64_t block_start_sample = seq_runtime_exec_begin_audio_block(block_frames);
     const uint32_t now_tick = 0U;
     /* Progression guard: audio block collection drives cadence first, then exports due events. */
@@ -588,6 +587,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
                                                               max_events,
                                                               block_frames,
                                                               block_start_sample);
+    g_seq_runtime_exec_boundary_event_count = 0U;
     seq_play_scheduler_audio_event_t scheduler_events[16];
     while (total < max_events)
     {

@@ -234,6 +234,9 @@ Cas transverses fréquents :
 - `TRACK + REC` :
   - cible l’unique instance `Master/Buffer`
   - ne doit pas dépendre du focus courant d’une autre track
+- `TRACK + PLAY` :
+  - relance explicitement l’unique prise `Master/Buffer` conservée
+  - doit tester l’existence via `has_take`, pas via `playing`
 - `TRACK + SHIFT + REC` :
   - clear du contenu buffer
 - `ARP` sur `Master/Buffer` :

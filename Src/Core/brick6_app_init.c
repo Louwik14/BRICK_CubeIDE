@@ -32,6 +32,7 @@
 #include "Core/brick6_master_buffer.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_braids_runtime.h"
+#include "brick6_looper_runtime.h"
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
@@ -44,6 +45,7 @@
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
 #include "Core/brick6_sd_config.h"
 
@@ -101,6 +103,8 @@ void brick6_app_init(void)
 
     sd_access_gate_init();
     sd_preview_init();
+    looper_storage_raw_init();
+    (void)looper_storage_raw_validate();
     multi_record_writer_init();
     sample_page_cache_init();
 
@@ -118,6 +122,7 @@ void brick6_app_init(void)
 
     brick6_sampler_bootstrap_init_voices();
     brick6_sampler_runtime_init();
+    brick6_looper_runtime_init();
     brick6_braids_runtime_init();
     brick6_opal_runtime_init();
 
@@ -180,7 +185,12 @@ void brick6_app_process(void)
      */
     seq_runtime_time_adapter_process();
     sample_cache_service(32768U);
-    multi_record_writer_service(8192U);
+    multi_record_writer_service(16384U);
+    brick6_looper_runtime_service(8192U);
+    if (brick6_looper_runtime_has_pending_sd_work() == 0U)
+    {
+        looper_storage_raw_export_service(8192U);
+    }
     pattern_load_service(4096U);
     pattern_live_service();
     sd_preview_process();

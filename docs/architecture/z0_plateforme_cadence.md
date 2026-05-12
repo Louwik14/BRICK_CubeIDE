@@ -16,6 +16,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
 - `Src/Core/brick6_app_init.c`: init et service cooperatif du squelette `multi_record_writer`, hors IRQ et sans client actif par defaut.
+- `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
 
 Sous-roles internes dans `brick6_app_init.c`:
 - Orchestrateur boot produit: initialisation ordered des sous-systemes applicatifs.
@@ -168,6 +169,7 @@ Z0 appelle principalement:
   - mixer/fx policy,
   - audio float tracks,
   - gate SD,
+  - validation reservoirs RAW Looper systeme,
   - sampler/recorder/master buffer,
   - synths/hall bridge,
   - runtime audio + wiring callback DSP,
@@ -196,7 +198,7 @@ Z0 appelle principalement:
 - `engine_tasklet_poll()`
 - `seq_runtime_time_adapter_process()`
 - `sample_cache_service(32768U)`
-- `multi_record_writer_service(8192U)`
+- `multi_record_writer_service(16384U)`
 - `pattern_load_service(4096U)`
 - `pattern_live_service()`
 - `sd_preview_process()`
@@ -275,12 +277,15 @@ Z0 appelle principalement:
 ## 12. Addendum - ordre de service SD recording produit
 
 - Z0 porte uniquement l'ordre de service cooperatif hors IRQ; il ne devient pas l'autorite SD metier.
-- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` appelle `multi_record_writer_service(8192U)` juste apres `sample_cache_service(32768U)` et avant `pattern_load_service(4096U)`.
+- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` appelle `multi_record_writer_service(16384U)` juste apres `sample_cache_service(32768U)`, puis `brick6_looper_runtime_service(8192U)`, puis `looper_storage_raw_export_service(8192U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
 - Ordre cible pour la cohabitation SD audio:
   1. `sample_cache_service(...)` prioritaire pour playback sample streaming.
   2. `multi_record_writer_service(...)` pour drainer les rings record, priorite par watermark.
-  3. `pattern_save_service(...)` opportuniste, seulement si les rings record ne sont pas critiques.
-  4. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
+  3. `brick6_looper_runtime_service(...)` pour refill transient RAW/WAV.
+  4. `looper_storage_raw_export_service(...)` opportuniste pour SAVE RAW -> WAV, apres les refills sample/Looper.
+  5. `pattern_save_service(...)` opportuniste, seulement si les rings record ne sont pas critiques.
+  6. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
 - Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
 - Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
+- Dimensionnement Looper record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 6.144 MiB pour les 4 clients statiques. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
 

@@ -57,6 +57,27 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
     {
+        uint8_t master_buffer_track = 0U;
+        const uint8_t has_master_buffer = ui_core_find_unique_master_buffer_track(&master_buffer_track);
+        (void)master_buffer_track;
+
+        if ((shift_down == 0U) && (track_select_armed != 0U) && (has_master_buffer != 0U))
+        {
+            if (brick6_master_buffer_has_take() != 0U)
+            {
+                brick6_master_buffer_request_play();
+                if (feedback != 0)
+                {
+                    feedback("BUF PLAY");
+                }
+            }
+            else if (feedback != 0)
+            {
+                feedback("NO BUF");
+            }
+            return 1U;
+        }
+
         /* Command surface: transport toggle is an explicit runtime command, not a query side effect. */
         seq_runtime_toggle_play_stop();
         return 1U;

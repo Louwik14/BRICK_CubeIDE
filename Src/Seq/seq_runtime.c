@@ -13,6 +13,7 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
 #include "Storage/memory_layout.h"
+#include "Core/brick6_master_buffer.h"
 #include "Core/engine_tasklet.h"
 #include "midi.h"
 
@@ -47,7 +48,6 @@ SEQ_STATE_D2 static seq_runtime_diag_t g_seq_runtime_diag;
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
-static void seq_runtime_begin_running_at_sample_q16(uint64_t start_sample_q16);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
 static uint64_t seq_runtime_get_now_sample(void);
@@ -163,20 +163,6 @@ static void seq_runtime_exit_critical(uint32_t primask)
     }
 }
 
-static void seq_runtime_begin_running_now(void)
-{
-    seq_runtime_begin_running_at_sample_q16((uint64_t)seq_runtime_exec_get_audio_timeline_sample() << 16);
-}
-
-static void seq_runtime_begin_running_at_sample_q16(uint64_t start_sample_q16)
-{
-    seq_runtime_exec_begin_running_at_sample_q16(&g_seq_runtime,
-                                                 &g_seq_transport_fsm,
-                                                 &g_seq_clock_bridge,
-                                                 seq_runtime_get_now_tick(),
-                                                 start_sample_q16);
-    seq_runtime_send_transport_start();
-}
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
@@ -294,11 +280,19 @@ void seq_runtime_start(void)
     }
 
     begin_running_now = (seq_transport_fsm_is_running(&g_seq_transport_fsm) != 0U) ? 1U : 0U;
+    if (begin_running_now != 0U)
+    {
+        seq_runtime_exec_begin_running_at_sample_q16(&g_seq_runtime,
+                                                     &g_seq_transport_fsm,
+                                                     &g_seq_clock_bridge,
+                                                     seq_runtime_get_now_tick(),
+                                                     (uint64_t)seq_runtime_exec_get_audio_timeline_sample() << 16);
+    }
     seq_runtime_exit_critical(primask);
 
     if (begin_running_now != 0U)
     {
-        seq_runtime_begin_running_now();
+        seq_runtime_send_transport_start();
     }
 }
 
@@ -332,6 +326,7 @@ void seq_runtime_stop(void)
     if (apply_stop_lifecycle != 0U)
     {
         seq_runtime_stop_lifecycle_apply(emit_transport_stop_and_panic);
+        brick6_master_buffer_on_transport_stop();
     }
 }
 

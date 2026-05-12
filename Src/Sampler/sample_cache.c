@@ -572,7 +572,7 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
         return 0U;
     }
 
-    sample_page_cache_service(SAMPLE_CACHE_STREAM_START_PAGES * SAMPLE_PAGE_FRAMES * desc->info.block_align);
+    sample_page_cache_service_sample_pool(SAMPLE_CACHE_STREAM_START_PAGES * SAMPLE_PAGE_FRAMES * desc->info.block_align);
     if (sample_page_cache_get_page_state(sample_id, 0U) != SAMPLE_PAGE_READY)
     {
         desc->last_error = 12U;
@@ -583,26 +583,32 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     const uint32_t last_page = sample_cache_stream_last_page_index(desc);
     if (last_page != 0U)
     {
-        const uint32_t last_page_start_frame = last_page * SAMPLE_PAGE_FRAMES;
-        const uint32_t last_page_frames = desc->total_frames - last_page_start_frame;
-        if (sample_page_cache_request_page(sample_id, last_page) == 0U)
+        const uint32_t reverse_first_page = (last_page > 0U) ? (last_page - 1U) : last_page;
+        for (uint32_t page_index = reverse_first_page; page_index <= last_page; ++page_index)
         {
-            desc->last_error = 8U;
-            g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
-            return 0U;
-        }
-        if (sample_page_cache_pin_page(sample_id, last_page) == 0U)
-        {
-            desc->last_error = 8U;
-            g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
-            return 0U;
-        }
-        sample_page_cache_service(last_page_frames * desc->info.block_align);
-        if (sample_page_cache_get_page_state(sample_id, last_page) != SAMPLE_PAGE_READY)
-        {
-            desc->last_error = 12U;
-            g_sample_cache_last_fresult[sample_id] = FR_DISK_ERR;
-            return 0U;
+            const uint32_t page_start_frame = page_index * SAMPLE_PAGE_FRAMES;
+            const uint32_t page_frames = desc->total_frames - page_start_frame;
+            const uint32_t service_frames =
+                (page_frames > SAMPLE_PAGE_FRAMES) ? SAMPLE_PAGE_FRAMES : page_frames;
+            if (sample_page_cache_request_page(sample_id, page_index) == 0U)
+            {
+                desc->last_error = 8U;
+                g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
+                return 0U;
+            }
+            if (sample_page_cache_pin_page(sample_id, page_index) == 0U)
+            {
+                desc->last_error = 8U;
+                g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
+                return 0U;
+            }
+            sample_page_cache_service_sample_pool(service_frames * desc->info.block_align);
+            if (sample_page_cache_get_page_state(sample_id, page_index) != SAMPLE_PAGE_READY)
+            {
+                desc->last_error = 12U;
+                g_sample_cache_last_fresult[sample_id] = FR_DISK_ERR;
+                return 0U;
+            }
         }
     }
 
@@ -1100,7 +1106,7 @@ static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_b
         return 0U;
     }
 
-    sample_page_cache_service(byte_budget);
+    sample_page_cache_service_sample_pool(byte_budget);
     if (sample_page_cache_get_page_state(sample_id, start_frame / SAMPLE_PAGE_FRAMES) != SAMPLE_PAGE_READY)
     {
         desc->state = SAMPLE_CACHE_ERROR;
@@ -1315,7 +1321,7 @@ void sample_cache_service(uint32_t byte_budget)
     }
 
     sample_cache_queue_active_stream_pages();
-    sample_page_cache_service(byte_budget);
+    sample_page_cache_service_sample_pool(byte_budget);
 
     uint32_t remaining = byte_budget;
     while (remaining != 0U)
@@ -1349,6 +1355,17 @@ void sample_cache_service(uint32_t byte_budget)
     }
 
     sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+}
+
+uint8_t sample_cache_has_pending_sd_work(void)
+{
+    sample_cache_queue_active_stream_pages();
+    if (sample_page_cache_has_queued_range(0U, SAMPLE_POOL_SIZE) != 0U)
+    {
+        return 1U;
+    }
+
+    return (sample_cache_pick_refill_candidate() < SAMPLE_POOL_SIZE) ? 1U : 0U;
 }
 
 uint8_t sample_cache_is_ready(uint16_t sample_id)

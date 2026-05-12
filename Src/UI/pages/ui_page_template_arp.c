@@ -77,6 +77,14 @@ static const ui_template_family_t g_ui_template_arp_family_slave_proxy = {
 static const ui_template_family_t *ui_page_template_arp_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_track();
+    const ui_hall_rout_context_t rout_context =
+        ui_hall_mode_resolve_rout_context(active_track, UI_HALL_MODE_ARP);
+
+    if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
+    {
+        return &g_ui_template_arp_family_buffer;
+    }
+
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
     (void)track_runtime_get_voice_group_role(active_track, &role_u8);
     if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
@@ -84,10 +92,7 @@ static const ui_template_family_t *ui_page_template_arp_resolve_family(void)
         return &g_ui_template_arp_family_slave_proxy;
     }
 
-    const ui_hall_mode_effective_view_t effective_view =
-        ui_hall_mode_resolve_effective_view(active_track, UI_HALL_MODE_ARP);
-
-    if (effective_view == UI_HALL_MODE_VIEW_ROUT)
+    if (rout_context != UI_HALL_ROUT_CONTEXT_NONE)
     {
         return &g_ui_template_arp_family_buffer;
     }
@@ -97,9 +102,22 @@ static const ui_template_family_t *ui_page_template_arp_resolve_family(void)
 
 static uint8_t ui_page_template_arp_subpage_enabled(uint8_t subpage_index)
 {
+    const ui_hall_rout_context_t rout_context =
+        ui_hall_mode_resolve_rout_context(ui_get_active_track(), UI_HALL_MODE_ARP);
+
+    if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
+    {
+        return (subpage_index == 0U) ? 1U : 0U;
+    }
+
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
     (void)track_runtime_get_voice_group_role(ui_get_active_track(), &role_u8);
     if (role_u8 == (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
+    {
+        return (subpage_index == 0U) ? 1U : 0U;
+    }
+
+    if (rout_context != UI_HALL_ROUT_CONTEXT_NONE)
     {
         return (subpage_index == 0U) ? 1U : 0U;
     }
@@ -114,6 +132,12 @@ static uint8_t ui_page_template_arp_virtual_slot_text(uint8_t slot,
                                                        uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
+    if (ui_hall_mode_resolve_rout_context(active_track, UI_HALL_MODE_ARP)
+        == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
+    {
+        return 0U;
+    }
+
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
     (void)track_runtime_get_voice_group_role(active_track, &role_u8);
     if (role_u8 != (uint8_t)TRACK_VOICE_GROUP_ROLE_SLAVE)
