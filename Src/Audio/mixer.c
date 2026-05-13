@@ -28,6 +28,7 @@
 #include "fx_delay_stereo.h"
 #include "fx_reverb.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/brick6_looper_runtime.h"
 #include "Core/track_runtime.h"
 #include "Storage/multi_record_writer.h"
 #include "UI/ui_core_runtime_bridge.h"
@@ -260,12 +261,9 @@ static int32_t mixer_looper_float_to_pcm24(float sample)
 
 static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
 {
-    multi_record_writer_status_t status;
     if((out_looper_track == NULL)
-            || (ui_core_runtime_bridge_get_active_looper_record_track(out_looper_track) == 0U)
-            || (*out_looper_track >= MIXER_MAX_TRACKS)
-            || (multi_record_writer_get_status(MIXER_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
-            || (status.state != MULTI_RECORD_WRITER_STATE_RECORDING))
+            || (brick6_looper_runtime_get_record_capture_track(out_looper_track) == 0U)
+            || (*out_looper_track >= MIXER_MAX_TRACKS))
     {
         return 0U;
     }
@@ -2121,6 +2119,9 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
             looper_record_i32[out] = mixer_looper_float_to_pcm24(looper_record_l[i]);
             looper_record_i32[out + 1U] = mixer_looper_float_to_pcm24(looper_record_r[i]);
         }
+        brick6_looper_runtime_preroll_capture_from_irq(looper_record_track,
+                                                       looper_record_i32,
+                                                       frames);
         (void)multi_record_writer_push_audio_block_from_irq(MIXER_LOOPER_RECORD_CLIENT_ID,
                                                             looper_record_i32,
                                                             frames);

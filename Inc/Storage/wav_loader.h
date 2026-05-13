@@ -34,6 +34,7 @@ typedef struct
 bool wav_loader_load_to_sdram(const char *path, wav_info_t *info);
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len);
 void wav_loader_catalog_refresh(void);
+uint8_t wav_loader_catalog_notify_file_created(const char *path);
 uint8_t wav_loader_catalog_count(void);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint8_t index);
 const float *wav_loader_get_interleaved_buffer(void);

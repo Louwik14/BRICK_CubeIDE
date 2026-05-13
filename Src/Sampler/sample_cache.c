@@ -13,6 +13,7 @@
 #define SAMPLE_CACHE_MAX_VOICES (16U)
 #define SAMPLE_CACHE_IO_BYTES (4096U)
 #define SAMPLE_CACHE_STREAM_START_PAGES (2U)
+#define SAMPLE_CACHE_STREAM_REVERSE_PAGES (4U)
 
 SDRAM_SAMPLES static sample_cache_desc_t g_sample_cache[SAMPLE_POOL_SIZE];
 static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
@@ -583,7 +584,10 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     const uint32_t last_page = sample_cache_stream_last_page_index(desc);
     if (last_page != 0U)
     {
-        const uint32_t reverse_first_page = (last_page > 0U) ? (last_page - 1U) : last_page;
+        const uint32_t reverse_span = (last_page + 1U < SAMPLE_CACHE_STREAM_REVERSE_PAGES)
+                                          ? (last_page + 1U)
+                                          : SAMPLE_CACHE_STREAM_REVERSE_PAGES;
+        const uint32_t reverse_first_page = (last_page + 1U) - reverse_span;
         for (uint32_t page_index = reverse_first_page; page_index <= last_page; ++page_index)
         {
             const uint32_t page_start_frame = page_index * SAMPLE_PAGE_FRAMES;
@@ -952,7 +956,10 @@ static void sample_cache_queue_active_stream_pages(void)
         }
 
         const uint32_t current_page = voice->frame_pos / SAMPLE_PAGE_FRAMES;
-        for (uint32_t ahead = 1U; ahead <= 2U; ++ahead)
+        const uint32_t lookahead_pages = (voice->direction < 0)
+                                             ? SAMPLE_CACHE_STREAM_REVERSE_PAGES
+                                             : SAMPLE_CACHE_STREAM_START_PAGES;
+        for (uint32_t ahead = 1U; ahead <= lookahead_pages; ++ahead)
         {
             uint32_t page_index = UINT32_MAX;
             if (voice->direction < 0)

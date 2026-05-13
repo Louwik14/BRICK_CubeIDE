@@ -2,6 +2,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Core/brick6_looper_runtime.h"
+#include "Core/looper_raw_debug.h"
 #include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -14,6 +15,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/undo_v2.h"
+#include "Storage/wav_loader.h"
 #include "Storage/pattern_live_ram.h"
 #include "audio_float.h"
 #include "buttons.h"
@@ -57,9 +59,6 @@ static uint8_t g_master_fx_route_enabled[UI_TRACK_COUNT];
 static uint8_t g_looper_route_enabled[UI_TRACK_COUNT][UI_TRACK_COUNT];
 static uint8_t g_active_looper_record_track = 0xFFU;
 static uint8_t g_looper_take_track = 0xFFU;
-static uint64_t g_looper_record_start_sample = 0U;
-static uint64_t g_looper_record_auto_start_sample = 0U;
-static uint32_t g_looper_record_target_steps = UI_LOOPER_LEN_UNLIMITED_STEPS;
 static uint8_t g_looper_record_auto_stop_latched = 0U;
 static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
@@ -68,7 +67,7 @@ static ui_core_runtime_bridge_looper_save_diag_t g_looper_save_diag;
 
 static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track);
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
-static uint8_t ui_core_runtime_bridge_looper_auto_stop_if_due(void);
+static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_resolve_raw_slot(uint8_t track, uint8_t *out_raw_slot);
 static const char *ui_core_runtime_bridge_looper_raw_feedback(uint8_t slot_failed);
@@ -343,6 +342,17 @@ static uint32_t ui_core_runtime_bridge_looper_track_len_steps(uint8_t track)
     return ui_core_runtime_bridge_looper_len_to_steps(len);
 }
 
+static uint8_t ui_core_runtime_bridge_looper_len_mode(uint8_t track)
+{
+    float len = 0.0f;
+    if (param_registry_get_track_value(PARAM_LOOPER_LEN, track, &len) == 0U)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(len + 0.5f);
+}
+
 static uint32_t ui_core_runtime_bridge_looper_expected_record_frames(uint8_t track)
 {
     const uint32_t target_steps = ui_core_runtime_bridge_looper_track_len_steps(track);
@@ -366,8 +376,20 @@ static uint32_t ui_core_runtime_bridge_looper_expected_record_frames(uint8_t tra
     return (uint32_t)frames;
 }
 
+static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track)
+{
+    float play = 0.0f;
+    return (uint8_t)(((param_registry_get_track_value(PARAM_LOOPER_PLAY, track, &play) != 0U)
+            && ((uint8_t)(play + 0.5f) == 1U)) ? 1U : 0U);
+}
+
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void)
 {
+    if(brick6_looper_runtime_record_is_active_or_armed() != 0U)
+    {
+        return 1U;
+    }
+
     multi_record_writer_status_t status;
     if (multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
     {
@@ -375,53 +397,6 @@ static uint8_t ui_core_runtime_bridge_looper_record_is_active(void)
     }
 
     return ui_core_runtime_bridge_looper_state_is_active(status.state);
-}
-
-static uint8_t ui_core_runtime_bridge_looper_auto_stop_if_due(void)
-{
-    if ((g_active_looper_record_track >= UI_TRACK_COUNT)
-        || (g_looper_record_target_steps == UI_LOOPER_LEN_UNLIMITED_STEPS)
-        || (seq_runtime_is_running() == 0U))
-    {
-        return 0U;
-    }
-
-    multi_record_writer_status_t status;
-    if ((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
-        || (status.state != MULTI_RECORD_WRITER_STATE_RECORDING))
-    {
-        return 0U;
-    }
-
-    const uint32_t samples_per_step_q16 = seq_runtime_get_samples_per_step_q16();
-    if (samples_per_step_q16 == 0U)
-    {
-        return 0U;
-    }
-
-    const uint64_t now_sample = seq_runtime_exec_get_audio_timeline_sample();
-    if (now_sample < g_looper_record_start_sample)
-    {
-        return 0U;
-    }
-
-    const uint64_t elapsed_steps =
-        ((now_sample - g_looper_record_start_sample) << 16) / (uint64_t)samples_per_step_q16;
-    if (elapsed_steps < (uint64_t)g_looper_record_target_steps)
-    {
-        return 0U;
-    }
-
-    if (multi_record_writer_request_stop(UI_LOOPER_RECORD_CLIENT_ID) != 0U)
-    {
-        g_active_looper_record_track = 0xFFU;
-        g_looper_record_start_sample = 0U;
-        g_looper_record_target_steps = UI_LOOPER_LEN_UNLIMITED_STEPS;
-        g_looper_record_auto_stop_latched = 1U;
-        return 1U;
-    }
-
-    return 0U;
 }
 
 static uint8_t ui_core_runtime_bridge_looper_track_has_route(uint8_t track)
@@ -449,13 +424,6 @@ static void ui_core_runtime_bridge_looper_clear_take_metadata(multi_record_write
     g_looper_take_notified = 0U;
 }
 
-static void ui_core_runtime_bridge_looper_clear_record_timing(void)
-{
-    g_looper_record_start_sample = 0U;
-    g_looper_record_auto_start_sample = 0U;
-    g_looper_record_target_steps = UI_LOOPER_LEN_UNLIMITED_STEPS;
-}
-
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback)
 {
     if (ui_core_runtime_bridge_looper_record_is_active() == 0U)
@@ -463,10 +431,20 @@ static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_
         return 0U;
     }
 
-    if (multi_record_writer_request_stop(UI_LOOPER_RECORD_CLIENT_ID) != 0U)
+    brick6_looper_runtime_arm_record_stop(seq_runtime_exec_get_audio_timeline_sample());
+    if (brick6_looper_runtime_record_is_active_or_armed() != 0U)
     {
-        g_active_looper_record_track = 0xFFU;
-        ui_core_runtime_bridge_looper_clear_record_timing();
+        if (feedback != 0)
+        {
+            feedback("LOOP STOP");
+        }
+        return 1U;
+    }
+
+    multi_record_writer_status_t status;
+    if((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) != 0U)
+            && (ui_core_runtime_bridge_looper_state_is_active(status.state) != 0U))
+    {
         if (feedback != 0)
         {
             feedback("LOOP STOP");
@@ -764,10 +742,11 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     }
 
     const uint32_t expected_frames = ui_core_runtime_bridge_looper_expected_record_frames(track);
+    const uint64_t rec_request_sample = seq_runtime_exec_get_audio_timeline_sample();
     if (multi_record_writer_prepare_raw(UI_LOOPER_RECORD_CLIENT_ID,
                                         raw_slot,
                                         raw_path,
-                                        expected_frames) == 0U)
+                                        0U) == 0U)
     {
         if (feedback != 0)
         {
@@ -777,25 +756,15 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     }
 
     brick6_looper_runtime_prepare_replace(track);
-    if (multi_record_writer_start(UI_LOOPER_RECORD_CLIENT_ID) == 0U)
-    {
-        g_active_looper_record_track = 0xFFU;
-        g_looper_take_track = 0xFFU;
-        ui_core_runtime_bridge_looper_clear_record_timing();
-        if (feedback != 0)
-        {
-            feedback("LOOP ERR");
-        }
-        return 1U;
-    }
-
     g_active_looper_record_track = track;
     g_looper_take_track = track;
     g_looper_take_notified = 0U;
-    g_looper_record_start_sample = seq_runtime_exec_get_audio_timeline_sample();
-    g_looper_record_auto_start_sample = (expected_frames != 0U) ?
-        (g_looper_record_start_sample + (uint64_t)expected_frames) : 0U;
-    g_looper_record_target_steps = ui_core_runtime_bridge_looper_track_len_steps(track);
+    brick6_looper_runtime_arm_record_start(track,
+                                           raw_slot,
+                                           ui_core_runtime_bridge_looper_len_mode(track),
+                                           expected_frames,
+                                           ui_core_runtime_bridge_looper_play_is_auto(track),
+                                           rec_request_sample);
     (void)param_registry_apply_track_value(PARAM_LOOPER_ARM, track, 0.0f);
     if (feedback != 0)
     {
@@ -816,6 +785,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         brick6_looper_runtime_on_transport_stop();
     }
     g_looper_transport_was_running = transport_running;
+    looper_raw_debug_service_uart();
 
     multi_record_writer_status_t status;
     if ((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) != 0U)
@@ -825,10 +795,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         && (g_looper_take_track < UI_TRACK_COUNT)
         && (g_looper_take_notified == 0U))
     {
-        float play = 0.0f;
-        const uint8_t play_auto =
-            ((param_registry_get_track_value(PARAM_LOOPER_PLAY, g_looper_take_track, &play) != 0U)
-             && ((uint8_t)(play + 0.5f) == 1U)) ? 1U : 0U;
+        const uint8_t play_auto = ui_core_runtime_bridge_looper_play_is_auto(g_looper_take_track);
         if(status.raw_slot != MULTI_RECORD_WRITER_RAW_SLOT_NONE)
         {
             uint8_t raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
@@ -839,12 +806,17 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
                                                      &raw_path,
                                                      &recorded_frames) != 0U)
             {
+                looper_raw_debug_note_rec_final(g_looper_take_track,
+                                                raw_slot,
+                                                recorded_frames,
+                                                (uint8_t)status.state);
                 brick6_looper_runtime_notify_raw_take_ready(g_looper_take_track,
                                                             raw_slot,
                                                             raw_path,
                                                             recorded_frames,
                                                             play_auto,
-                                                            g_looper_record_auto_start_sample);
+                                                            0U);
+                looper_raw_debug_dump_uart();
                 g_looper_take_notified = 1U;
             }
         }
@@ -859,7 +831,6 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
 
     if (ui_core_runtime_bridge_looper_record_is_active() != 0U)
     {
-        (void)ui_core_runtime_bridge_looper_auto_stop_if_due();
         return;
     }
 
@@ -924,6 +895,7 @@ void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridg
     if (state == LOOPER_STORAGE_RAW_EXPORT_DONE)
     {
         brick6_looper_runtime_diag_get_snapshot(&g_looper_save_diag.before_success);
+        (void)wav_loader_catalog_notify_file_created(looper_storage_raw_export_get_final_path());
         feedback("LOOP SAVED");
         g_looper_export_last_progress = 0xFFU;
         looper_storage_raw_export_clear_finished();

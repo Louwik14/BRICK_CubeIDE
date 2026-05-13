@@ -61,12 +61,31 @@ void brick6_looper_runtime_notify_raw_take_ready(uint8_t track_id,
                                                  uint32_t recorded_frames,
                                                  uint8_t play_auto,
                                                  uint64_t scheduled_start_sample);
+void brick6_looper_runtime_notify_preroll_take_ready(uint8_t track_id,
+                                                     uint8_t raw_slot,
+                                                     uint32_t expected_frames,
+                                                     uint8_t play_auto,
+                                                     uint64_t scheduled_start_sample);
 void brick6_looper_runtime_stop_playback(uint8_t track_id);
 void brick6_looper_runtime_prepare_replace(uint8_t track_id);
+void brick6_looper_runtime_arm_record_start(uint8_t track_id,
+                                            uint8_t raw_slot,
+                                            uint8_t len_mode,
+                                            uint32_t expected_frames,
+                                            uint8_t play_auto,
+                                            uint64_t request_sample);
+void brick6_looper_runtime_arm_record_stop(uint64_t request_sample);
+uint8_t brick6_looper_runtime_record_is_active_or_armed(void);
+uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track);
+void brick6_looper_runtime_preroll_begin(uint8_t track_id, uint8_t raw_slot);
+void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
+                                                    const int32_t *lr_interleaved,
+                                                    uint32_t frames);
 void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto);
 void brick6_looper_runtime_on_transport_start(void);
 void brick6_looper_runtime_on_transport_stop(void);
 void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_time);
+void brick6_looper_runtime_debug_set_render_segment_start(uint64_t sample_time);
 uint8_t brick6_looper_runtime_next_start_offset(uint64_t block_start_sample,
                                                 uint32_t block_frames,
                                                 uint16_t *out_offset);

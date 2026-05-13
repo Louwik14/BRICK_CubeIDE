@@ -85,7 +85,7 @@ Familles d'autorite:
   - base canonique par track pour les blocs TONE specifiques moteur,
   - contient le noyau Sampler, Opal, Braids, Master/Buffer shifter, MIDI simple, TRX BD reserve et BD Analog par track,
   - le bloc Opal est borne a 3 params TONE: `PATCH`, `INDEX`, `TIME`,
-  - le bloc Braids est borne a 7 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`,
+  - le bloc Braids est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
   - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
 
@@ -565,3 +565,13 @@ Dette explicite post-passe 4:
   - `PLAY`: `Off` / `Auto`.
 - Ces params sont stockes/restaurables via les flux `PARAM_COUNT`; `ARM=Rec` pilote le record simple existant cote Z5, `ARM=Overd` reste borne/no-op pour l'audio overdub non implemente, et `PLAY` est stocke sans lancer de playback Looper.
 - `seq_param_iface` et `mod_lfo_v1` excluent ces params du p-lock/LFO: ce sont des commandes de workflow, pas des modulations audio continues.
+
+## 34. Contrat Braids Phase Reset
+
+- `PARAM_BRAIDS_PHASE_RESET` est un param TONE track-aware `Off/On`, default `Off`, stocke dans `track_tone_sound_state.braids.phase_reset`.
+- L'apply Braids met a jour la base canonique puis projette l'option vers `brick6_braids_runtime_set_phase_reset(instance_id, enabled)`.
+- `Off` conserve le comportement historique: aucun reset de phase force au note-on.
+- `On` arme un reset phase one-shot au prochain `note_on`; l'execution audio passe par `sync_block[0]=1` sur le premier sous-bloc rendu.
+- Aucun reset random ni reinit locale complexe du moteur Mutable n'est associe a ce param.
+- `mod_lfo_v1` exclut `PARAM_BRAIDS_PHASE_RESET` des destinations LFO; ce param est une option de comportement de trigger, pas une modulation continue.
+- `PARAM_COUNT` augmente; les snapshots/patterns/projets binaires produits par cette passe changent de layout parametre.

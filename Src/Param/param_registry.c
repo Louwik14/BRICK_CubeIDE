@@ -358,6 +358,9 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_BRAIDS_COLOR:
             *out_value = state->braids.color;
             return 1U;
+        case PARAM_BRAIDS_PHASE_RESET:
+            *out_value = state->braids.phase_reset;
+            return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
             return 1U;
@@ -559,6 +562,9 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_BRAIDS_COLOR:
             state->braids.color = value;
+            return 1U;
+        case PARAM_BRAIDS_PHASE_RESET:
+            state->braids.phase_reset = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

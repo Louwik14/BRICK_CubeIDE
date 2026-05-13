@@ -185,6 +185,16 @@ uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float valu
             brick6_braids_runtime_set_color(instance_id, clamped);
             return 1U;
         }
+        case PARAM_BRAIDS_PHASE_RESET:
+        {
+            const float clamped = (value >= 0.5f) ? 1.0f : 0.0f;
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->braids.phase_reset = clamped;
+            }
+            brick6_braids_runtime_set_phase_reset(instance_id, (clamped >= 0.5f) ? 1U : 0U);
+            return 1U;
+        }
         default:
             return 0U;
     }

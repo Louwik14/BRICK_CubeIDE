@@ -26,7 +26,9 @@
 #include "cache_maintenance.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_master_buffer.h"
+#include "Core/looper_raw_debug.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
 
 #include <string.h>
@@ -82,6 +84,12 @@ static audio_seq_diag_t g_audio_seq_diag;
    INTERNAL PROCESSING
    Hardware layer only: calls float engine
    ============================================================ */
+
+static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
+{
+    brick6_looper_runtime_debug_set_render_segment_start(sample_time);
+    audio_process_block_int32(rx, tx, frames);
+}
 
 /**
  * @brief Traite une demi-zone DMA (half-buffer index 0 ou 1).
@@ -151,9 +159,10 @@ static void process_half(uint32_t half_index)
                                                         &start_offset) == 0U)
             {
                 const uint32_t segment_frames = remaining_to_event;
-                audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                          &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                          segment_frames);
+                process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                      block_start_sample + (uint64_t)cursor,
+                                      segment_frames);
                 cursor = (uint32_t)event_offset;
                 segment_count++;
                 break;
@@ -162,9 +171,10 @@ static void process_half(uint32_t half_index)
             if (start_offset != 0U)
             {
                 const uint32_t segment_frames = (uint32_t)start_offset;
-                audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                          &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                          segment_frames);
+                process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                      block_start_sample + (uint64_t)cursor,
+                                      segment_frames);
                 cursor += segment_frames;
                 segment_count++;
             }
@@ -174,9 +184,10 @@ static void process_half(uint32_t half_index)
         if ((uint32_t)event_offset > cursor)
         {
             const uint32_t segment_frames = (uint32_t)event_offset - cursor;
-            audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      segment_frames);
+            process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  block_start_sample + (uint64_t)cursor,
+                                  segment_frames);
             cursor = (uint32_t)event_offset;
             segment_count++;
         }
@@ -186,6 +197,13 @@ static void process_half(uint32_t half_index)
         {
             if (block_events[event_index].type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
             {
+                seq_step_id_t step = 0U;
+                (void)seq_runtime_get_playhead_step(block_events[event_index].track, &step);
+                looper_raw_debug_note_boundary(block_events[event_index].track,
+                                               step,
+                                               block_start_sample + (uint64_t)event_offset,
+                                               event_offset,
+                                               seq_runtime_get_samples_per_step_q16());
                 brick6_master_buffer_on_boundary_edge(block_events[event_index].track);
                 brick6_looper_runtime_on_boundary_edge(block_events[event_index].track,
                                                        block_start_sample + (uint64_t)event_offset);
@@ -207,9 +225,10 @@ static void process_half(uint32_t half_index)
                                                     remaining,
                                                     &start_offset) == 0U)
         {
-            audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      remaining);
+            process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  block_start_sample + (uint64_t)cursor,
+                                  remaining);
             cursor = AUDIO_FRAMES_PER_HALF;
             segment_count++;
             break;
@@ -217,9 +236,10 @@ static void process_half(uint32_t half_index)
 
         if (start_offset != 0U)
         {
-            audio_process_block_int32(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      (uint32_t)start_offset);
+            process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                                  block_start_sample + (uint64_t)cursor,
+                                  (uint32_t)start_offset);
             cursor += (uint32_t)start_offset;
             segment_count++;
         }

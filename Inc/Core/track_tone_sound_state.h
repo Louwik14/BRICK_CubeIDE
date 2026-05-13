@@ -63,6 +63,7 @@ typedef struct
         float timbre;
         float modulation;
         float color;
+        float phase_reset;
     } braids;
     float midi_program;
     float midi_cc[12];

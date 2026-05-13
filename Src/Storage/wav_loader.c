@@ -135,6 +135,70 @@ static void wav_loader_catalog_add(const char *display_name, const char *path)
     g_wav_catalog_count++;
 }
 
+uint8_t wav_loader_catalog_notify_file_created(const char *path)
+{
+    if ((path == 0) || (path[0] == '\0') || (!wav_ext_is_wav(path)))
+    {
+        return 0U;
+    }
+
+    if ((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+    {
+        return 0U;
+    }
+
+    if (g_wav_catalog_ready == 0U)
+    {
+        return 1U;
+    }
+
+    for (uint8_t i = 0U; i < g_wav_catalog_count; ++i)
+    {
+        if (strcmp(g_wav_catalog[i].path, path) == 0)
+        {
+            return 1U;
+        }
+    }
+
+    if (g_wav_catalog_count >= WAV_LOADER_CATALOG_MAX)
+    {
+        return 0U;
+    }
+
+    const char *display_name = path;
+    const char *const loops_prefix = "0:/PROJECT/LOOPS/";
+    const size_t loops_prefix_len = strlen(loops_prefix);
+    const uint8_t previous_count = g_wav_catalog_count;
+    if (strncmp(path, loops_prefix, loops_prefix_len) == 0)
+    {
+        char loop_name[32];
+        const int written = snprintf(loop_name,
+                                     sizeof(loop_name),
+                                     "LOOPS/%s",
+                                     path + loops_prefix_len);
+        if ((written < 0) || ((uint32_t)written >= sizeof(loop_name)))
+        {
+            return 0U;
+        }
+        wav_loader_catalog_add(loop_name, path);
+    }
+    else
+    {
+        const char *slash = strrchr(path, '/');
+        if (slash != 0)
+        {
+            display_name = slash + 1;
+        }
+        wav_loader_catalog_add(display_name, path);
+    }
+
+    return ((g_wav_catalog_count > previous_count)
+            && (strcmp(g_wav_catalog[g_wav_catalog_count - 1U].path, path) == 0))
+        ? 1U
+        : 0U;
+}
+
 static void wav_loader_catalog_scan_dir(const char *dir_path, const char *display_prefix)
 {
     DIR dir;

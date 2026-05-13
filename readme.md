@@ -75,7 +75,7 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Opal`
+- `Synth`: `Opal`, `Braids`
 - `Sampler`: `OneShot`, `Slicer`, `Clip`, `Looper`
 - `Drum`: dedicated drum catalog
 - `Master`: `Buffer`, `FX`
@@ -117,6 +117,13 @@ This separation is intentional. Do not add a second authority for the same state
 - `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
 - `Looper` TONE exposes `ARM` (`Off`/`Rec`/`Overd`), `LEN` (`Free`/`1`/`2`/`4`/`8`/`16`), and `PLAY` (`Off`/`Auto`); current implementation records simple `ARM=Rec` takes, keeps `ARM=Overd` as a bounded no-op until audio overdub exists, and streams playback from transient page-cache pages when `PLAY=Auto`
 - legacy slice handling remains internal compatibility, not a product mode
+
+### Braids
+- `Synth/Braids` is a track-aware mono engine exposed on `TONE`
+- `TONE/EDIT`: `Edit`, `Fine`, `Coarse`, `FM`
+- `TONE/TONE`: `Timbre`, `Modulation`, `Color`, `Phase Reset`
+- `Phase Reset=Off` preserves the current Braids behavior
+- `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Braids models that consume sync; random state is not reset
 
 ### Sequencer
 - integrated sequencer

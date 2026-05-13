@@ -475,15 +475,16 @@ Points factuels:
 
 ## 14.b Contrat UI Braids
 - `Synth/Braids` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
-- La famille template `TONE` Braids expose exactement 7 params dans l'ordre runtime:
-  - `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`.
+- La famille template `TONE` Braids expose exactement 8 params dans l'ordre runtime:
+  - `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`.
 - Le layout UI suit deux sous-pages:
   - `EDIT`: `EDIT`, `FINE`, `COARSE`, `FM`
-  - `TONE`: `TIMBRE`, `MODULATION`, `COLOR`
+  - `TONE`: `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`
 - L'ordre visible doit rester aligné avec `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()` pour le type runtime `Braids`.
 - Le clavier live réutilise le même seam track-aware que le scheduler:
   - `note on/off` Braids passent par `keyboard_engine` puis `brick6_braids_runtime`
   - aucun chemin UI local parallèle n'est autorisé pour le jeu de notes.
+- `PHASE RESET=Off` conserve le comportement historique; `On` force une sync phase au premier sample rendu apres note-on pour les moteurs Braids sensibles a `sync_block`, sans reset random.
 
 
 ## 14.c Contrat MIX send2 delay
@@ -559,7 +560,7 @@ Points factuels:
 - `ROUT` toggle une selection de tracks logiques sources par looper track dans `ui_core_runtime_bridge`; la source peut etre focus UI ou non.
 - La page ARP resolve `Sampler/Looper` en famille template `ROUT` avant tout proxy de role de voice group. Pour les autres contextes, le proxy ARP slave garde sa priorite historique avant la projection ROUT `Master/Buffer` / `Master/FX`. Le renderer LED `Sampler/Looper` lit la matrice `g_looper_route_enabled[looper][source]` et ne retombe pas sur la scene clavier/ARP.
 - `REC` global ne demarre jamais directement le Looper et ne devient pas focus-based: il garde le flux transport normal (`seq_runtime_set_pattern_rec_target_track` + `seq_runtime_rec_toggle_arm`) meme si la track active est `Sampler/Looper`, `ARM=Off`, `ARM=Overd` ou `ROUT` vide.
-- Demarrage Looper: le bridge observe `transport running + REC global arme`; si une unique track `Sampler/Looper` est eligible (`ARM=Rec`, au moins une source `ROUT`) et qu'aucun writer actif/finalizing/export ne bloque, il rafraichit explicitement la projection runtime, resolve le slot RAW systeme via Z6/storage, appelle `multi_record_writer_prepare_raw`, puis `multi_record_writer_start`.
+- Demarrage Looper: le bridge observe `transport running + REC global arme`; si une unique track `Sampler/Looper` est eligible (`ARM=Rec`, au moins une source `ROUT`) et qu'aucun writer actif/finalizing/export ne bloque, il rafraichit explicitement la projection runtime, resolve le slot RAW systeme via Z6/storage, appelle `multi_record_writer_prepare_raw`, puis arme `brick6_looper_runtime_arm_record_start`. `multi_record_writer_start` est consomme ensuite par Z1 au marker boundary audio.
 - Les refus RAW visibles distinguent les causes simples: `RAW MISS`, `RAW SIZE`, `RAW SLOT`, `RAW MOUNT`, `RAW BUSY`, `RAW STAT` ou `RAW INIT`.
 - Apres demarrage writer reussi, `ARM=Rec` est consomme et repasse `Off` pour eviter tout redemarrage automatique sans nouveau geste utilisateur.
 - Le demarrage `ARM=Rec` applique le contrat replace: l'ancien playback Looper de la track cible est arrete/detache et ses pages transient sont invalidees avant que le writer passe en `RECORDING`; l'ancienne loop ne reste pas audible pendant la nouvelle prise.
@@ -568,11 +569,12 @@ Points factuels:
 - `ARM=Overd` reste visible mais non fonctionnel pour l'audio overdub: la track est ignoree par le demarrage writer tant que l'overdub audio n'est pas implemente.
 - `PLAY=Off/Auto` pilote maintenant le playback transient apres capture:
   - `Off`: la prise finalisee est chargee en runtime mais reste muette,
-  - `Auto`: la prise suit le transport; si le transport tourne deja quand le chargement finit, la lecture demarre.
+  - `Auto`: sur une prise LEN fixe, Z5 arme le playback live START_RAM des le stop musical Looper avec la longueur LEN connue; `TAKE_READY` ne sert ensuite qu'a attacher le RAW finalise/backing storage.
 - Au STOP puis PLAY transport, Z5 ne relance pas directement la lecture Looper: il arme seulement l'intention `PLAY=Auto`; le redemarrage effectif est consomme cote Z1 au marker boundary edge sample-accurate fourni par Z4.
-- STOP transport, transport non-running ou desarmement REC global demande l'arret/finalisation via `multi_record_writer_request_stop` si un record Looper est actif; sinon le transport conserve son comportement existant.
+- STOP transport, transport non-running ou desarmement REC global arme l'arret via `brick6_looper_runtime_arm_record_stop` si un record Looper est actif; `multi_record_writer_request_stop` est consomme ensuite par Z1 au marker boundary audio quand le transport fournit encore une boundary.
 - `LEN=Free` ne declenche aucun auto-stop Looper.
-- `LEN=1/2/4/8/16` arme un suivi local au demarrage effectif du writer: Z5 memorise la timeline audio courante exposee par `seq_runtime_exec`, convertit la cible en 16/32/64/128/256 steps via `seq_runtime_get_samples_per_step_q16`, puis demande `multi_record_writer_request_stop` quand la duree est atteinte.
+- `LEN=1/2/4/8/16` calcule une longueur cible en frames et la transmet comme intention a `brick6_looper_runtime_arm_record_start`; le demarrage effectif du writer, le sample start, l'auto-stop et le sample stop appartiennent ensuite au domaine audio/boundary.
+- Sur le stop LEN, si `PLAY=Auto`, Z1/`brick6_looper_runtime` utilise le span exact `REC_STOP - REC_START` et le preroll RAM pour armer le depart START_RAM; il ne depend pas de l'etat writer `TAKE_READY` pour ce premier depart live.
 - L'auto-stop Looper ne stoppe pas le transport global et ne desarme pas REC global; STOP manuel, transport stopped ou desarmement REC restent prioritaires et gagnent avant LEN.
 - Apres auto-stop LEN, le demarrage Looper reste verrouille tant que transport et REC restent tous deux actifs, pour eviter de supprimer la temp finalisee et relancer une prise sans geste utilisateur.
 - Si le writer est deja `STOP_REQUESTED`/`DRAINING`/`FINALIZING`, Z5 ne redemande pas un stop LEN.
@@ -582,10 +584,10 @@ Points factuels:
   - refuse l'absence de prise finalisee pour cette track par `NO LOOP`,
   - demande le path durable a Z6/storage,
   - demarre `looper_storage_raw_export_start()` sur `raw_path + recorded_frames`,
-  - laisse le playback transient RAW courant attache au reservoir RAW; le fichier durable sera retrouve par scan lazy Settings,
+  - laisse le playback transient RAW courant attache au reservoir RAW; le fichier durable est notifie au catalogue WAV si celui-ci est deja charge, sinon il sera retrouve par scan lazy Settings,
   - feedback visible borne a `LOOP SAVED` / `LOOP BUSY` / `NO LOOP` / `LOOP FAIL`.
-- Le SAVE Looper ne lance plus de refresh catalogue WAV immediat: le scan Settings reste lazy/demande par la page Sampler afin d'eviter un freeze UI juste apres commit pendant playback Auto.
+- Le SAVE Looper ne lance pas de scan catalogue WAV global: apres export termine, Z5 ajoute seulement le path final au cache catalogue deja charge via `wav_loader_catalog_notify_file_created()`, sinon le scan Settings reste lazy/demande par la page Sampler.
 - Le bridge UI ne possede pas la nomenclature fichier Looper, le scan de path SD ni la creation du dossier durable; cette autorite appartient a Z6/storage.
 - SETTINGS normal reste inchangé hors `Sampler/Looper`.
 - Cette passe ne modifie pas `brick6_master_buffer`, n'ajoute pas de source input/master speciale et ne cree pas de parametre SAVE/STAT Looper.
-- Le bridge conserve l'identite de la looper active pendant le record; Z1 consomme cette identite et la matrice ROUT par lectures bornees pour alimenter le ring RAM du writer, sans decision UI dans l'IRQ.
+- Le bridge conserve l'intention de looper active pendant le record; `brick6_looper_runtime` devient l'autorite sample-exacte de l'identite de capture active exposee a Z1, tandis que la matrice ROUT reste lue par bornes pour alimenter le ring RAM du writer.

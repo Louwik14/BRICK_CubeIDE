@@ -74,6 +74,8 @@ typedef struct
 {
     brick6_braids_runtime_voice_t voice;
     uint8_t has_note;
+    uint8_t phase_reset_enabled;
+    uint8_t phase_reset_pending;
     float level;
     float vca_release_s;
     uint32_t tail_samples_remaining;
@@ -166,6 +168,8 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
     instance->voice.gate = 0U;
     instance->voice.trigger = 0U;
     instance->has_note = 0U;
+    instance->phase_reset_enabled = 0U;
+    instance->phase_reset_pending = 0U;
     instance->level = 0.0f;
     instance->vca_release_s = 0.001f;
     instance->tail_samples_remaining = 0U;
@@ -258,6 +262,19 @@ void brick6_braids_runtime_set_color(uint8_t instance_id, float color)
     }
 }
 
+void brick6_braids_runtime_set_phase_reset(uint8_t instance_id, uint8_t enabled)
+{
+    brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
+    if (instance != NULL)
+    {
+        instance->phase_reset_enabled = (enabled != 0U) ? 1U : 0U;
+        if (instance->phase_reset_enabled == 0U)
+        {
+            instance->phase_reset_pending = 0U;
+        }
+    }
+}
+
 void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s)
 {
     brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
@@ -289,6 +306,10 @@ void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float veloci
     instance->voice.has_active_note = 1U;
     instance->voice.gate = 1U;
     instance->voice.trigger = 1U;
+    if (instance->phase_reset_enabled != 0U)
+    {
+        instance->phase_reset_pending = 1U;
+    }
     instance->has_note = 1U;
     instance->tail_samples_remaining = 0U;
 }
@@ -323,6 +344,7 @@ void brick6_braids_runtime_all_notes_off(uint8_t instance_id)
     instance->voice.has_active_note = 0U;
     instance->voice.gate = 0U;
     instance->voice.trigger = 0U;
+    instance->phase_reset_pending = 0U;
     instance->tail_samples_remaining = 0U;
 }
 
@@ -332,6 +354,7 @@ void brick6_braids_runtime_clear_trigger(uint8_t instance_id)
     if (instance != NULL)
     {
         instance->voice.trigger = 0U;
+        instance->phase_reset_pending = 0U;
     }
 }
 
@@ -369,12 +392,20 @@ void brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mono,
     }
 
     uint32_t offset = 0U;
-    static const uint8_t sync_block[kBraidsRenderBlockSize] = { 0 };
+    uint8_t sync_block[kBraidsRenderBlockSize];
     int16_t sample_block[kBraidsRenderBlockSize];
+    uint8_t phase_reset_pending = instance->phase_reset_pending;
 
     while (offset < frames)
     {
         const size_t block = ((frames - offset) > kBraidsRenderBlockSize) ? (size_t)kBraidsRenderBlockSize : (size_t)(frames - offset);
+        memset(sync_block, 0, sizeof(sync_block));
+        if (phase_reset_pending != 0U)
+        {
+            sync_block[0] = 1U;
+            phase_reset_pending = 0U;
+            instance->phase_reset_pending = 0U;
+        }
         instance->oscillator.Render(sync_block, sample_block, block);
 
         for (size_t i = 0U; i < block; ++i)

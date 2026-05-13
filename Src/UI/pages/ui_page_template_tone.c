@@ -96,7 +96,7 @@ static const ui_template_family_t g_ui_template_tone_family_braids = {
     .nav_labels = { "EDIT", "TONE", "-", "-" },
     .subpages = {
         { .title = "EDIT", .param_bank = { .params = { PARAM_BRAIDS_EDIT, PARAM_BRAIDS_FINE, PARAM_BRAIDS_COARSE, PARAM_BRAIDS_FM } } },
-        { .title = "TONE", .param_bank = { .params = { PARAM_BRAIDS_TIMBRE, PARAM_BRAIDS_MODULATION, PARAM_BRAIDS_COLOR, PARAM_COUNT } } },
+        { .title = "TONE", .param_bank = { .params = { PARAM_BRAIDS_TIMBRE, PARAM_BRAIDS_MODULATION, PARAM_BRAIDS_COLOR, PARAM_BRAIDS_PHASE_RESET } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },

@@ -265,7 +265,8 @@ static const param_id_t g_track_runtime_tone_slots_braids[] = {
     PARAM_BRAIDS_FM,
     PARAM_BRAIDS_TIMBRE,
     PARAM_BRAIDS_MODULATION,
-    PARAM_BRAIDS_COLOR
+    PARAM_BRAIDS_COLOR,
+    PARAM_BRAIDS_PHASE_RESET
 };
 
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
@@ -1254,6 +1255,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_BRAIDS_TIMBRE:
         case PARAM_BRAIDS_MODULATION:
         case PARAM_BRAIDS_COLOR:
+        case PARAM_BRAIDS_PHASE_RESET:
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX1_LEVEL:
         case PARAM_MASTER_FX1_A:

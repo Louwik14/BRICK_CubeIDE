@@ -3,9 +3,10 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:6
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:92:12:wav_ext_is_wav	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:109:13:wav_loader_catalog_clear	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:116:13:wav_loader_catalog_add	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:138:13:wav_loader_catalog_scan_dir	512	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:187:6:wav_loader_catalog_refresh	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:217:9:wav_loader_catalog_count	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:227:35:wav_loader_catalog_get	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:253:6:wav_loader_find_first_wav	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:286:6:wav_loader_load_to_sdram	4928	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:138:9:wav_loader_catalog_notify_file_created	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:202:13:wav_loader_catalog_scan_dir	512	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:251:6:wav_loader_catalog_refresh	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:281:9:wav_loader_catalog_count	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:291:35:wav_loader_catalog_get	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:317:6:wav_loader_find_first_wav	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/wav_loader.c:350:6:wav_loader_load_to_sdram	4928	static
