@@ -1766,6 +1766,28 @@ void brick6_sampler_runtime_note_off(uint8_t track_id)
     brick6_sampler_runtime_stop(track_id);
 }
 
+void brick6_sampler_runtime_note_off_note(uint8_t track_id, uint8_t note)
+{
+    if (track_id >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
+    {
+        brick6_sampler_runtime_note_off(track_id);
+        return;
+    }
+
+    const brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    if ((voice->active == 0U) || (voice->note != note))
+    {
+        return;
+    }
+
+    brick6_sampler_runtime_stop(track_id);
+}
+
 void brick6_sampler_runtime_stop(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT)

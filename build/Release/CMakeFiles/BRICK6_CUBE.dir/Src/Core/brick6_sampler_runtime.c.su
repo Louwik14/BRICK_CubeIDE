@@ -10,8 +10,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_ru
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:769:13:brick6_sampler_runtime_prepare_slicer_entry_pages	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:394:13:brick6_sampler_runtime_clip_configure_shifter	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:732:13:brick6_sampler_runtime_clip_stop_playback	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1829:13:brick6_sampler_render_sample_segment_cursor	408	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:2003:13:brick6_sampler_render_sample	392	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1851:13:brick6_sampler_render_sample_segment_cursor	408	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:2025:13:brick6_sampler_render_sample	392	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:598:16:brick6_sampler_runtime_clip_start_playback	104	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1413:6:brick6_sampler_runtime_reset_track	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1433:6:brick6_sampler_runtime_set_sample	16	static
@@ -33,10 +33,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_ru
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1623:6:brick6_sampler_runtime_trigger	96	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1735:6:brick6_sampler_runtime_trigger_note_velocity	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1730:6:brick6_sampler_runtime_trigger_note	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1769:6:brick6_sampler_runtime_stop	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1791:6:brick6_sampler_runtime_stop	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1747:6:brick6_sampler_runtime_note_off	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1788:6:brick6_sampler_runtime_diag_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1769:6:brick6_sampler_runtime_note_off_note	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1810:6:brick6_sampler_runtime_diag_reset	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1387:6:brick6_sampler_runtime_init	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1793:6:brick6_sampler_runtime_diag_get_snapshot	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1810:6:sampler_perf_diag_capture	216	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:2204:6:brick6_sampler_runtime_render_track	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1815:6:brick6_sampler_runtime_diag_get_snapshot	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1832:6:sampler_perf_diag_capture	216	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:2226:6:brick6_sampler_runtime_render_track	48	static

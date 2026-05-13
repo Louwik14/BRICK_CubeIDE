@@ -278,7 +278,7 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
         }
         else
         {
-            brick6_sampler_runtime_note_off(track);
+            brick6_sampler_runtime_note_off_note(track, note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)

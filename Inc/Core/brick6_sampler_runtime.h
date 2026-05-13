@@ -75,6 +75,7 @@ void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
+void brick6_sampler_runtime_note_off_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_note_off(uint8_t track_id);
 void brick6_sampler_runtime_stop(uint8_t track_id);
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,

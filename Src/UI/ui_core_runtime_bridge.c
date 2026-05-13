@@ -61,6 +61,7 @@ static uint8_t g_looper_take_track = 0xFFU;
 static uint8_t g_looper_record_auto_stop_latched = 0U;
 static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
+static uint8_t g_looper_transport_start_prearmed = 0U;
 static uint8_t g_looper_export_last_progress = 0xFFU;
 static looper_storage_raw_export_phase_t g_looper_export_last_phase =
     LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
@@ -71,6 +72,8 @@ static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_resolve_raw_slot(uint8_t track, uint8_t *out_raw_slot);
 static const char *ui_core_runtime_bridge_looper_raw_feedback(uint8_t slot_failed);
+static uint8_t ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(
+    ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
                                                          ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_feedback_fn feedback);
@@ -174,6 +177,13 @@ static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *e
 
     (void)shift_down;
     (void)track_select_armed;
+    if ((seq_runtime_is_running() == 0U) && (seq_runtime_is_start_pending() == 0U))
+    {
+        (void)ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(feedback);
+        brick6_looper_runtime_on_transport_start();
+        g_looper_transport_was_running = 1U;
+        g_looper_transport_start_prearmed = 1U;
+    }
     seq_runtime_toggle_play_stop();
     ui_core_runtime_bridge_service_looper_record_control(feedback);
     return 1U;
@@ -592,6 +602,56 @@ static uint8_t ui_core_runtime_bridge_looper_find_single_record_eligible(uint8_t
     return (count == 1U) ? 1U : 0U;
 }
 
+static uint8_t ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(
+    ui_core_runtime_bridge_feedback_fn feedback)
+{
+    if (seq_runtime_rec_is_armed() == 0U)
+    {
+        return 0U;
+    }
+
+    if (ui_core_runtime_bridge_looper_record_is_active() != 0U)
+    {
+        return 1U;
+    }
+
+    if (g_looper_record_auto_stop_latched != 0U)
+    {
+        return 0U;
+    }
+
+    if (multi_record_writer_any_active() != 0U)
+    {
+        if (feedback != 0)
+        {
+            feedback("REC BUSY");
+        }
+        return 0U;
+    }
+
+    if (looper_storage_raw_export_is_active() != 0U)
+    {
+        if (feedback != 0)
+        {
+            feedback("SAVE BUSY");
+        }
+        return 0U;
+    }
+
+    uint8_t eligible_track = 0U;
+    uint8_t eligible_count = 0U;
+    if (ui_core_runtime_bridge_looper_find_single_record_eligible(&eligible_track, &eligible_count) == 0U)
+    {
+        if ((eligible_count > 1U) && (feedback != 0))
+        {
+            feedback("LOOP MULTI");
+        }
+        return 0U;
+    }
+
+    return ui_core_runtime_bridge_looper_start_track(eligible_track, feedback);
+}
+
 static uint8_t ui_core_runtime_bridge_looper_resolve_raw_slot(uint8_t track, uint8_t *out_raw_slot)
 {
     if ((track >= UI_TRACK_COUNT) || (out_raw_slot == 0))
@@ -718,15 +778,30 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
 void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge_feedback_fn feedback)
 {
     const uint8_t transport_running = seq_runtime_is_running();
+    const uint8_t transport_start_pending = seq_runtime_is_start_pending();
+    uint8_t keep_prearmed_running_mirror = 0U;
     if ((transport_running != 0U) && (g_looper_transport_was_running == 0U))
     {
         brick6_looper_runtime_on_transport_start();
     }
     else if ((transport_running == 0U) && (g_looper_transport_was_running != 0U))
     {
-        brick6_looper_runtime_on_transport_stop();
+        if ((g_looper_transport_start_prearmed != 0U) && (transport_start_pending != 0U))
+        {
+            keep_prearmed_running_mirror = 1U;
+        }
+        else
+        {
+            brick6_looper_runtime_on_transport_stop();
+            g_looper_transport_start_prearmed = 0U;
+        }
     }
-    g_looper_transport_was_running = transport_running;
+    if (transport_running != 0U)
+    {
+        g_looper_transport_start_prearmed = 0U;
+    }
+    g_looper_transport_was_running =
+        (keep_prearmed_running_mirror != 0U) ? 1U : transport_running;
 
     multi_record_writer_status_t status;
     if ((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) != 0U)
@@ -758,7 +833,9 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         }
     }
 
-    if ((transport_running == 0U) || (seq_runtime_rec_is_armed() == 0U))
+    if ((((transport_running == 0U)
+            && ((transport_start_pending == 0U) || (g_looper_transport_start_prearmed == 0U))))
+            || (seq_runtime_rec_is_armed() == 0U))
     {
         (void)ui_core_runtime_bridge_looper_handle_stop(feedback);
         g_looper_record_auto_stop_latched = 0U;
