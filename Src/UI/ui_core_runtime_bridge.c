@@ -2,8 +2,6 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/looper_raw_debug.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -65,7 +63,6 @@ static uint8_t g_looper_transport_was_running = 0U;
 static uint8_t g_looper_export_last_progress = 0xFFU;
 static ui_core_runtime_bridge_looper_save_diag_t g_looper_save_diag;
 
-static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track);
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
 static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
@@ -92,17 +89,6 @@ static void ui_core_runtime_bridge_init_bulk_track_transition_ctx(ui_core_runtim
                                                                   const uint8_t midi_channel[UI_TRACK_COUNT],
                                                                   const uint8_t midi_source[UI_TRACK_COUNT],
                                                                   ui_core_runtime_bridge_post_sync_fn post_sync);
-
-static uint8_t ui_core_runtime_bridge_track_is_master_buffer(uint8_t track)
-{
-    if (track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_MASTER)
-            && (track_state_get_type(track) == UI_TRACK_TYPE_BUFFER));
-}
 
 static void ui_core_runtime_bridge_looper_copy_diag_path(char *dst, const char *src)
 {
@@ -183,27 +169,8 @@ static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *e
         return 0U;
     }
 
-    uint8_t master_buffer_track = 0U;
-    const uint8_t has_master_buffer = ui_core_runtime_bridge_find_unique_master_buffer_track(&master_buffer_track);
-    (void)master_buffer_track;
-
-    if ((shift_down == 0U) && (track_select_armed != 0U) && (has_master_buffer != 0U))
-    {
-        if (brick6_master_buffer_has_take() != 0U)
-        {
-            brick6_master_buffer_request_play();
-            if (feedback != 0)
-            {
-                feedback("BUF PLAY");
-            }
-        }
-        else if (feedback != 0)
-        {
-            feedback("NO BUF");
-        }
-        return 1U;
-    }
-
+    (void)shift_down;
+    (void)track_select_armed;
     seq_runtime_toggle_play_stop();
     ui_core_runtime_bridge_service_looper_record_control(feedback);
     return 1U;
@@ -245,41 +212,7 @@ static uint8_t ui_core_runtime_bridge_transport_rec_command(const ui_event_t *ev
         return 0U;
     }
 
-    uint8_t master_buffer_track = 0U;
-    const uint8_t has_master_buffer = ui_core_runtime_bridge_find_unique_master_buffer_track(&master_buffer_track);
-
-    if ((track_select_armed != 0U) && (has_master_buffer != 0U))
-    {
-        if (shift_down != 0U)
-        {
-            brick6_master_buffer_request_clear();
-            if (feedback != 0)
-            {
-                feedback("BUF CLR");
-            }
-        }
-        else
-        {
-            brick6_master_buffer_request_record();
-            if (feedback != 0)
-            {
-                if (brick6_master_buffer_is_recording() != 0U)
-                {
-                    feedback("BUF REC");
-                }
-                else if (brick6_master_buffer_is_armed() != 0U)
-                {
-                    feedback("BUF ARM");
-                }
-                else
-                {
-                    feedback("BUF STOP");
-                }
-            }
-        }
-        return 1U;
-    }
-
+    (void)track_select_armed;
     if (shift_down != 0U)
     {
         ui_core_navigation_bridge_open_rec_cfg_page();
@@ -785,7 +718,6 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         brick6_looper_runtime_on_transport_stop();
     }
     g_looper_transport_was_running = transport_running;
-    looper_raw_debug_service_uart();
 
     multi_record_writer_status_t status;
     if ((multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) != 0U)
@@ -806,17 +738,12 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
                                                      &raw_path,
                                                      &recorded_frames) != 0U)
             {
-                looper_raw_debug_note_rec_final(g_looper_take_track,
-                                                raw_slot,
-                                                recorded_frames,
-                                                (uint8_t)status.state);
                 brick6_looper_runtime_notify_raw_take_ready(g_looper_take_track,
                                                             raw_slot,
                                                             raw_path,
                                                             recorded_frames,
                                                             play_auto,
                                                             0U);
-                looper_raw_debug_dump_uart();
                 g_looper_take_notified = 1U;
             }
         }
@@ -923,37 +850,6 @@ void ui_core_runtime_bridge_get_looper_save_diag(ui_core_runtime_bridge_looper_s
     }
 
     *out_diag = g_looper_save_diag;
-}
-
-static uint8_t ui_core_runtime_bridge_find_unique_master_buffer_track(uint8_t *out_track)
-{
-    uint8_t found = 0U;
-    uint8_t found_track = 0U;
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        if ((ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_BUFFER))
-        {
-            if (found != 0U)
-            {
-                return 0U;
-            }
-            found = 1U;
-            found_track = track;
-        }
-    }
-
-    if (found == 0U)
-    {
-        return 0U;
-    }
-
-    if (out_track != 0)
-    {
-        *out_track = found_track;
-    }
-    return 1U;
 }
 
 static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sync_request_t *request,
@@ -1245,18 +1141,17 @@ bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TR
     return true;
 }
 
-uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event_t *ev,
-                                                                  uint8_t active_track,
-                                                                  ui_hall_mode_t hall_mode,
-                                                                  uint8_t track_select_armed,
-                                                                  ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note)
+uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
+                                                    uint8_t active_track,
+                                                    ui_hall_mode_t hall_mode,
+                                                    uint8_t track_select_armed,
+                                                    ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note)
 {
-    const uint8_t is_master_buffer = ui_core_runtime_bridge_track_is_master_buffer(active_track);
     const uint8_t is_master_fx = ui_core_runtime_bridge_track_is_master_fx(active_track);
     const uint8_t is_sampler_looper = ui_core_runtime_bridge_track_is_sampler_looper(active_track);
 
     if ((ev == 0)
-            || ((is_master_buffer == 0U) && (is_master_fx == 0U) && (is_sampler_looper == 0U))
+            || ((is_master_fx == 0U) && (is_sampler_looper == 0U))
             || (hall_mode != UI_HALL_MODE_ARP)
             || (track_select_armed != 0U)
             || (ev->type != UI_EVENT_HALL_PRESS)
@@ -1283,11 +1178,6 @@ uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event
     {
         g_looper_route_enabled[active_track][hall] =
             (g_looper_route_enabled[active_track][hall] == 0U) ? 1U : 0U;
-    }
-    else
-    {
-        const uint8_t enabled = brick6_master_buffer_get_source_enabled(hall);
-        brick6_master_buffer_set_source_enabled(hall, (enabled == 0U) ? 1U : 0U);
     }
     if (suppress_hall_note != 0)
     {

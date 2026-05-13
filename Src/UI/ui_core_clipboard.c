@@ -483,13 +483,8 @@ static uint8_t ui_core_clipboard_clear_track(uint8_t track)
 
 static uint8_t ui_core_clipboard_track_is_simple_exclusive(const ui_track_clipboard_t *cb)
 {
-    if (cb == 0)
-    {
-        return 0U;
-    }
-
-    return (uint8_t)((cb->config.family == UI_TRACK_FAMILY_MASTER)
-                         && (cb->config.type == UI_TRACK_TYPE_BUFFER));
+    (void)cb;
+    return 0U;
 }
 
 static uint8_t ui_core_clipboard_track_is_input_exclusive(const ui_track_clipboard_t *cb)

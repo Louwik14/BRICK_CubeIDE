@@ -3,43 +3,11 @@
 #include "buttons.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_template_cfg.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_clipboard.h"
-
-static uint8_t ui_core_find_unique_master_buffer_track(uint8_t *out_track)
-{
-    uint8_t found = 0U;
-    uint8_t found_track = 0U;
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        if ((ui_get_track_family(track) == UI_TRACK_FAMILY_MASTER)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_BUFFER))
-        {
-            if (found != 0U)
-            {
-                return 0U;
-            }
-            found = 1U;
-            found_track = track;
-        }
-    }
-
-    if (found == 0U)
-    {
-        return 0U;
-    }
-
-    if (out_track != 0)
-    {
-        *out_track = found_track;
-    }
-    return 1U;
-}
 
 uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
                                                      uint8_t mute_active,
@@ -57,27 +25,6 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_PLAY))
     {
-        uint8_t master_buffer_track = 0U;
-        const uint8_t has_master_buffer = ui_core_find_unique_master_buffer_track(&master_buffer_track);
-        (void)master_buffer_track;
-
-        if ((shift_down == 0U) && (track_select_armed != 0U) && (has_master_buffer != 0U))
-        {
-            if (brick6_master_buffer_has_take() != 0U)
-            {
-                brick6_master_buffer_request_play();
-                if (feedback != 0)
-                {
-                    feedback("BUF PLAY");
-                }
-            }
-            else if (feedback != 0)
-            {
-                feedback("NO BUF");
-            }
-            return 1U;
-        }
-
         /* Command surface: transport toggle is an explicit runtime command, not a query side effect. */
         seq_runtime_toggle_play_stop();
         return 1U;
@@ -85,42 +32,6 @@ uint8_t ui_core_seq_transport_handle_transport_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_REC))
     {
-        uint8_t master_buffer_track = 0U;
-        const uint8_t has_master_buffer = ui_core_find_unique_master_buffer_track(&master_buffer_track);
-        (void)master_buffer_track;
-
-        if ((track_select_armed != 0U) && (has_master_buffer != 0U))
-        {
-            if (shift_down != 0U)
-            {
-                brick6_master_buffer_request_clear();
-                if (feedback != 0)
-                {
-                    feedback("BUF CLR");
-                }
-            }
-            else
-            {
-                brick6_master_buffer_request_record();
-                if (feedback != 0)
-                {
-                    if (brick6_master_buffer_is_recording() != 0U)
-                    {
-                        feedback("BUF REC");
-                    }
-                    else if (brick6_master_buffer_is_armed() != 0U)
-                    {
-                        feedback("BUF ARM");
-                    }
-                    else
-                    {
-                        feedback("BUF STOP");
-                    }
-                }
-            }
-            return 1U;
-        }
-
         if (shift_down != 0U)
         {
             ui_page_template_rec_cfg_open_main();

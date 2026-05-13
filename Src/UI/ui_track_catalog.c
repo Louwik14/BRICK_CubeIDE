@@ -10,7 +10,7 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
         UI_TRACK_TYPE_CLIP,
         UI_TRACK_TYPE_LOOPER
     };
-    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_BUFFER, UI_TRACK_TYPE_MASTER_FX };
+    static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_MASTER_FX };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
     static const ui_track_type_t k_drum_types[] = {
         UI_TRACK_TYPE_DRUM_TRX_BD,
@@ -509,8 +509,6 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
         case UI_TRACK_TYPE_BRAIDS:
             return "Braids";
 
-        case UI_TRACK_TYPE_BUFFER:
-            return "Buffer";
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";
 
@@ -554,8 +552,6 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
         case UI_TRACK_TYPE_BRAIDS:
             return "Brd";
 
-        case UI_TRACK_TYPE_BUFFER:
-            return "Buf";
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";
 

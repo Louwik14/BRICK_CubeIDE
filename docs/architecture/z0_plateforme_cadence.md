@@ -17,6 +17,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
 - `Src/Core/brick6_app_init.c`: init et service cooperatif du squelette `multi_record_writer`, hors IRQ et sans client actif par defaut.
 - `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
+- `Src/Core/brick6_app_init.c`: le recorder legacy `live_recorder` / `recorder_transport` n'est plus initialise ni servi; le record produit passe par Looper RAW + `multi_record_writer`.
 
 Sous-roles internes dans `brick6_app_init.c`:
 - Orchestrateur boot produit: initialisation ordered des sous-systemes applicatifs.
@@ -114,19 +115,13 @@ Z0 appelle principalement:
   - Role: cadence de `ui_tasklet_poll` (1 appel par tick engine detecte).
 
 ### `Src/Core/brick6_app_init.c`
-- `g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2]` (AUDIO_COLD_SDRAM float array):
-  - Ecriture/lecture: modules recorder/master_buffer/audio runtime apres init.
-  - Role: buffer global de recorder/master buffer branche au boot.
 - `g_sample_pool_data[...]` (SDRAM_SAMPLES float array):
   - Ecriture: `sample_pool` lors du chargement WAV ou du restore projet.
   - Role: arena residante des samples projet, dimensionnee pour absorber le reste disponible de la SDRAM apres les reserves fixes; le boot n'injecte plus de sample par defaut.
-- `g_rec_ring_storage[...]` + `g_live_recorder_buffer[...]` (SDRAM_RECORDER float arrays):
-  - Ecriture/lecture: recorder/master buffer.
-  - Role: historique/loop recorder partage.
-- `g_live_recorder` (`live_recorder_t`):
-  - Ecriture: `brick6_recorder_runtime_boot_init`.
-  - Lecture/mutation: runtime recorder et audio runtime.
-  - Role: instance recorder partagee.
+- `g_record_rings[...]` dans `multi_record_writer.c` (SDRAM_RECORDER int32 stereo):
+  - Role: rings RAM du writer Looper RAW multi-client, draines hors IRQ.
+- `g_looper_preroll_pcm[...]` dans `brick6_looper_runtime.c` (SDRAM_RECORDER int32 stereo):
+  - Role: tampon de demarrage 1 s post-REC Looper avant disponibilite RAW/page-cache.
 
 ### `Src/Core/engine_tasklet.c` (cadence non-RTOS rattachee Z0)
 - `volatile uint32_t engine_tick_count`:
@@ -170,7 +165,6 @@ Z0 appelle principalement:
   - audio float tracks,
   - gate SD,
   - validation reservoirs RAW Looper systeme,
-  - sampler/recorder/master buffer,
   - synths/hall bridge,
   - runtime audio + wiring callback DSP,
   - engine_tasklet/param defaults,
@@ -206,7 +200,6 @@ Z0 appelle principalement:
 - `hall_loop_process()`
 - `ui_core_service_track_selection_inputs()`
 - `hall_keyboard_bridge_process()`
-- `brick6_recorder_runtime_process_transport()`
 - `voice_manager_service()`
 - `midi_poll()`
 
@@ -225,7 +218,7 @@ Z0 appelle principalement:
   - Z0 orchestre services bornes/bounded hors IRQ (USB host poll bounded, services SD hors IRQ).
 - Dependance forte a l'ordre d'init et au hardware clock/timer configure.
 - `engine_tasklet_poll()` utilise section critique IRQ courte pour transfert frames->ticks.
-- Buffers globaux statiques (`g_live_recorder_buffer`, `g_live_recorder`), pas de malloc dans Z0 observe.
+- Buffers globaux statiques Looper/writer (`g_record_rings`, `g_looper_preroll_pcm`), pas de malloc dans Z0 observe.
 
 ## 8. Invariants a ne pas casser
 
@@ -266,6 +259,7 @@ Z0 appelle principalement:
   - TIM12 conserve un role de ticker auxiliaire.
 - API `brick6_app_get_stats()` retiree de `brick6_app_init.h` (reliquat sans call site ni implementation).
 - Reliquat supprime et contrat fige: aucune API stats Z0 exposee tant qu'une autorite de metriques n'est pas definie.
+- Recorder legacy `live_recorder` / `recorder_transport` retire de l'init et de la superloop: il ne reste pas d'autorite capture/playback historique en Z0.
 - Melange plateforme et logique produit dans `main.c`/`brick6_app_init.c` (timers HAL, USB host loop, UI cadence, orchestration metier).
 
 ## 11. Impact eventuel sur la cartographie globale

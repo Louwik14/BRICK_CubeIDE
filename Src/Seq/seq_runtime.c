@@ -13,7 +13,6 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
 #include "Storage/memory_layout.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/engine_tasklet.h"
 #include "midi.h"
 
@@ -326,7 +325,6 @@ void seq_runtime_stop(void)
     if (apply_stop_lifecycle != 0U)
     {
         seq_runtime_stop_lifecycle_apply(emit_transport_stop_and_panic);
-        brick6_master_buffer_on_transport_stop();
     }
 }
 

@@ -108,9 +108,10 @@ Catalogue produit des families/types :
 - `Src/UI/ui_track_catalog.c`
 
 Exemples de familles/types actuels :
-- `Synth -> Sampler`
+- `Synth -> Opal / Braids`
+- `Sampler -> OneShot / Clip / Looper`
 - `Drum -> TRX BD reserve / BD Analog`
-- `Master -> Buffer`
+- `Master -> FX`
 - `MIDI -> MIDI`
 
 Projection runtime :
@@ -141,7 +142,6 @@ Cas observés :
 - `Input` -> `TRACK_RUNTIME_ENGINE_AUDIO_TRACK`
 - `MIDI` -> `TRACK_RUNTIME_ENGINE_NONE` mais track valide et `CAN_PLAY`
 - `Drum` -> `TRACK_RUNTIME_ENGINE_DRUM`, `instance_id = track_id`
-- `Master/Buffer` -> `TRACK_RUNTIME_ENGINE_MASTER_BUFFER`
 - `Synth/Sampler` -> `TRACK_RUNTIME_ENGINE_SAMPLER`
 
 Le `mix_track_id` est résolu séparément :

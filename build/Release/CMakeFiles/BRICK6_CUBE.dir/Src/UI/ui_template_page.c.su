@@ -4,7 +4,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:92:16:ui_template_page_get_first_selectable_subpage	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:105:6:ui_template_page_normalize_active_subpage	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:120:13:ui_template_page_sync_resolved_family	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:150:6:ui_template_family_registry_init	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:150:6:ui_template_family_registry_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:164:6:ui_template_family_register	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:180:29:ui_template_family_resolve	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_template_page.c:198:29:ui_template_family_resolve_active_track	24	static

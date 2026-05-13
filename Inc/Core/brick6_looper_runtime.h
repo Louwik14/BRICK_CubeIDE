@@ -85,7 +85,6 @@ void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto);
 void brick6_looper_runtime_on_transport_start(void);
 void brick6_looper_runtime_on_transport_stop(void);
 void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_time);
-void brick6_looper_runtime_debug_set_render_segment_start(uint64_t sample_time);
 uint8_t brick6_looper_runtime_next_start_offset(uint64_t block_start_sample,
                                                 uint32_t block_frames,
                                                 uint16_t *out_offset);

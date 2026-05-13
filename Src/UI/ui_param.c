@@ -879,8 +879,7 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER))
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE))
     {
         return 0U;
     }
@@ -1036,8 +1035,7 @@ static uint8_t ui_param_is_relative_multi_track_candidate(param_id_t param, uint
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER))
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE))
     {
         return 0U;
     }

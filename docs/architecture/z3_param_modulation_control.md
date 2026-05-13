@@ -60,7 +60,7 @@ Familles d'autorite:
 - `param_filter.*`:
   - domaine FILTER complet: resolution cible, conversions, apply runtime, shadow-state UI, orchestration normal/rt_fast.
 - `param_registry_backends.*`:
-  - details backend par ressource/famille (mix, buffer, colors) consommes par le coeur Z3.
+  - details backend par ressource/famille (mix, colors, engines TONE) consommes par le coeur Z3.
 - `param_registry_tone_backends.*`:
   - exécuteur backend central pour le flux d'apply track-aware normal,
   - dispatch tone/mix-aware par engine/family stable.
@@ -83,7 +83,6 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - contient le noyau Sampler, Opal, Braids, Master/Buffer shifter, MIDI simple, TRX BD reserve et BD Analog par track,
   - le bloc Opal est borne a 3 params TONE: `PATCH`, `INDEX`, `TIME`,
   - le bloc Braids est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
   - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
@@ -164,8 +163,8 @@ Call-sites critiques:
 - Handoff d'ecriture via `param_macro_apply_resolution` vers le chemin track-aware standard.
 - La source d'autorite d'assignabilite MACRO est volontairement la meme que les p-locks: domaine Z2 -> set `SEQ_PLOCK_SET_*`, puis `seq_param_iface_param_is_supported(track,set,param)`.
 - Contrat produit: `p-lockable => macro-assignable`; aucune table MACRO separee ne doit retirer un parametre p-lockable.
-- Les assignations MACRO deja existantes hors p-lock (`MIX`, `BUFFER`) restent conservees par compatibilite produit, sans devenir p-lockables.
-- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Opal, Braids, MIX et BUFFER.
+- Les assignations MACRO deja existantes hors p-lock (`MIX`) restent conservees par compatibilite produit, sans devenir p-lockables.
+- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Opal, Braids et MIX.
 - Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres locks.
 - Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`; chaque pot pointe vers une scene projet.
 - Pendant un maintien de scene en overlay `M-Assign`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
@@ -200,11 +199,7 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
-  - sert de base canonique Sampler, Opal, Braids, Master/Buffer shifter, MIDI simple, TRX BD reserve et BD Analog par track, distincte de `track_sound_state`.
   - pour `Opal`, la surface publique TONE est strictement limitee a `PARAM_OPAL_PATCH`, `PARAM_OPAL_INDEX`, `PARAM_OPAL_TIME`.
-- Les params shifter Master/Buffer sont des params BUFFER track-aware (`Grain`, `Pitch`) gates par Z2; ils ne doivent pas devenir des globals ni utiliser `param_store.active[]` comme verite track-scoped.
-- Leur apply ecrit la base canonique `track_tone_sound_state.buffer`, puis projette explicitement la configuration vers `brick6_master_buffer_set_shifter_config`; `live_recorder` reste backend stockage/lecture brute.
-- `Pitch=ON` active le contrat shifter du playback `Master/Buffer`: le tempo-sync est calcule dans Z1 depuis le timing musical memorise a l'enregistrement, sans ajouter de param `Src BPM` cote BUFFER.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
@@ -510,7 +505,6 @@ Dette explicite post-passe 4:
 ## 14. Contrat commandes explicites - apply track-aware
 - `param_registry_apply_track_value` porte maintenant le refresh runtime explicite avant resolution et execution track-aware.
 - `param_track_exec_ctx_build` redevient un helper de contexte pur; il ne fait plus de maintenance cache/runtime au passage.
-- Les params `Master/Buffer` du domaine runtime `BUFFER` transitent par le meme seam d'apply track-aware que `TONE/MIX`; ils ne doivent pas etre filtres en amont par un gate limite a `TONE/MIX` sous peine de bloquer l'edition UI de l'ensemble `TONE` pour la track buffer.
 
 ## 29. Contrat Master/FX MacroFX
 - `track_tone_sound_state` porte un bloc `master_fx` par track: 4 slots, chacun avec `type`, `level`, `macro_a`, `macro_b`.
@@ -552,7 +546,6 @@ Dette explicite post-passe 4:
 
 - Les IDs existants `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2` restent les seules cibles MIX page 1 exposees au p-lock et au LFO.
 - Autorite de base: `track_sound_state` par track; projection runtime via `param_registry_apply_track_value` / `param_registry_apply_track_value_rt_fast` vers la lane mixer resolue par Z2.
-- Exclusions conservees: `PARAM_MIX_MUTE`, `PARAM_HYBRID_GATE`, les params VCA, `Master/Buffer`, `Master/FX`, les globals reverb/delay et les params CFG structurels.
 - Stockage p-lock MIX: `seq_param_iface` garde un etat compact dedie a 4 slots reels, sans reserver la table 256 slots pour ce set.
 
 ## 33. Contrat Sampler/Looper TONE skeleton
@@ -562,7 +555,7 @@ Dette explicite post-passe 4:
 - Surface TONE visible pour `Sampler/Looper`:
   - `ARM`: `Off` / `Rec` / `Overd`,
   - `LEN`: `Free` / `1` / `2` / `4` / `8` / `16`,
-  - `PLAY`: `Off` / `Auto`.
+  - `PLAY`: `Off` / `Auto`,
 - Ces params sont stockes/restaurables via les flux `PARAM_COUNT`; `ARM=Rec` pilote le record simple existant cote Z5, `ARM=Overd` reste borne/no-op pour l'audio overdub non implemente, et `PLAY` est stocke sans lancer de playback Looper.
 - `seq_param_iface` et `mod_lfo_v1` excluent ces params du p-lock/LFO: ce sont des commandes de workflow, pas des modulations audio continues.
 
@@ -575,3 +568,9 @@ Dette explicite post-passe 4:
 - Aucun reset random ni reinit locale complexe du moteur Mutable n'est associe a ce param.
 - `mod_lfo_v1` exclut `PARAM_BRAIDS_PHASE_RESET` des destinations LFO; ce param est une option de comportement de trigger, pas une modulation continue.
 - `PARAM_COUNT` augmente; les snapshots/patterns/projets binaires produits par cette passe changent de layout parametre.
+
+## 35. Contrat XFade Looper apres retrait buffer master
+
+- Les anciens params buffer master sont retires de `PARAM_COUNT` sans tombstones.
+- `PARAM_LOOPER_XFADE` remplace l'ancien alias de stockage et pilote uniquement l'etat neutre `audio_xfade` pour `Sampler/Looper`.
+- `track_tone_sound_state.looper` porte `arm`, `len`, `play` et `xfade`; aucun bloc TONE buffer dedie ne reste.

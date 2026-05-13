@@ -186,7 +186,6 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - une vraie family `MIDI` viendra plus tard
 - `runtime_target` est un shim legacy de compat, hors chemin opérationnel in-tree
 - `Master` est une family spéciale non standard
-- `Master/Buffer` est une vraie identité runtime track-aware, pas un mode global générique
 
 ---
 
@@ -208,67 +207,18 @@ Raccourcis utiles :
 
 Cas transverses fréquents :
 - `Input Audio vs Hybrid` -> Z2 + Z3 + Z5
-- `Master/Buffer` -> Z1 + Z2 + Z3 + Z4 + Z5
 - bug track-aware transversal -> commencer par Z2
 - bug après load/restore -> Z6 puis zones impactées
 
 ---
 
-## 7. Master/Buffer : invariants à respecter
 
-`Master/Buffer` est une intégration spéciale encore en stabilisation.
 
-### Identité
-- family `Master`
-- type `Buffer`
-- instance unique dans le projet
-- traitée comme une vraie identité de track dans le runtime et l’UI
+## 7. Master
 
-### Backend
-- réutilise le backend buffer / recorder existant
-- pas de second recorder concurrent
-- pas de double backend buffer parallèle
-- tout patch doit vérifier l’autorité réelle entre wrapper `Master/Buffer` et backend recorder existant
-
-### Contrôles attendus
-- `TRACK + REC` :
-  - cible l’unique instance `Master/Buffer`
-  - ne doit pas dépendre du focus courant d’une autre track
-- `TRACK + PLAY` :
-  - relance explicitement l’unique prise `Master/Buffer` conservée
-  - doit tester l’existence via `has_take`, pas via `playing`
-- `TRACK + SHIFT + REC` :
-  - clear du contenu buffer
-- `ARP` sur `Master/Buffer` :
-  - devient `ROUT`
-  - sert à choisir quelles tracks logiques alimentent le buffer
-- `KBD` :
-  - reste conservateur / classique tant qu’aucune logique dédiée supplémentaire n’est stabilisée
-
-### TONE sur `Master/Buffer`
-#### Page 1
-- `Rec Len`
-- `Q Rec`
-- `Q Play`
-- `Rate`
-
-#### Page 2
-- `Fade In`
-- `Fade Out`
-- `XFade`
-
-### Discipline de debug sur `Master/Buffer`
-Pour tout bug buffer, distinguer explicitement :
-1. capacité max allouée
-2. longueur cible d’enregistrement
-3. longueur réellement enregistrée valide
-4. longueur de loop appliquée au recorder
-5. longueur réellement lue
-6. conditions de start/stop rec
-7. conditions de start/stop play
-8. éventuel désalignement écriture / lecture / loop
-
-Ne jamais déclarer “corrigé” sans traçabilité dans le code réel.
+- La family `Master` expose uniquement `Master/FX`.
+- Ne pas recréer de type, backend, page ou chemin runtime buffer pour `Master`.
+- Le XFade produit restant appartient à `Sampler/Looper` via `PARAM_LOOPER_XFADE` et `audio_xfade`.
 
 ---
 
@@ -279,7 +229,6 @@ Ne jamais déclarer “corrigé” sans traçabilité dans le code réel.
 - paramètres moteur sonore / oscillateurs : `TONE`
 - jeu clavier : `KEYBOARD`
 - arpégiateur : `ARP`
-- paramètres dédiés `Master/Buffer` : domaine contextuel `TONE` de la track `Master/Buffer`
 - routage des sources buffer : contexte `ROUT` via réemploi de `ARP`
 
 Ne pas créer un nouvel ensemble si un ensemble existant est déjà le bon point d’entrée.
@@ -297,7 +246,6 @@ Toujours penser :
 - family
 - type
 - capacité runtime effective
-- identité spéciale éventuelle (`Master/Buffer`)
 
 ### Ensembles importants
 - `CFG`
@@ -316,7 +264,6 @@ Toujours penser :
 - `SHIFT` doit être pressé avant le hall
 - `ARP` est un sous-mode du `KEYBOARD`
 - `ARP` ne doit jamais casser l’activation explicite de `KEYBOARD`
-- sur `Master/Buffer`, le comportement visible peut être `ROUT` mais l’invariant structurel `ARP` / `KEYBOARD` reste intact
 
 ### MUTE / PATTERN
 - `SHIFT + -` => `PATTERN RECALL`
@@ -463,3 +410,8 @@ Principe directeur :
 - si ça risque la stabilité audio : rejeter
 - si ça complique le worst-case : repenser
 - si ça aide le jeu live sans casser les invariants : prioriser
+
+## Retrait buffer master
+
+- Ne pas recreer de backend buffer master dedie.
+- `audio_xfade` appartient au flux `Sampler/Looper` courant via `PARAM_LOOPER_XFADE`.

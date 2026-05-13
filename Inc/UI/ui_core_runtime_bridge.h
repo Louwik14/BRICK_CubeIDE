@@ -42,11 +42,11 @@ bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TR
                                                       const uint8_t midi_source[UI_TRACK_COUNT],
                                                       ui_core_runtime_bridge_post_sync_fn post_sync);
 
-uint8_t ui_core_runtime_bridge_handle_master_buffer_routing_event(const ui_event_t *ev,
-                                                                   uint8_t active_track,
-                                                                   ui_hall_mode_t hall_mode,
-                                                                   uint8_t track_select_armed,
-                                                                   ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note);
+uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
+                                                    uint8_t active_track,
+                                                    ui_hall_mode_t hall_mode,
+                                                    uint8_t track_select_armed,
+                                                    ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note);
 uint8_t ui_core_runtime_bridge_get_master_fx_route_enabled(uint8_t track);
 uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, uint8_t source_track);
 void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8_t source_track, uint8_t enabled);

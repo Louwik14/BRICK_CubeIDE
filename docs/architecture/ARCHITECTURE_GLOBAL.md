@@ -48,9 +48,8 @@ Lit ce document si le sujet touche :
 - conversion I/O audio
 - callback DSP
 - mixage
-- taps recorder / buffer dans le pipeline audio
+- taps recorder Looper dans le pipeline audio
 - playback Looper via pages RAM pretes dans le pipeline mixer
-- pitch-shifter local du playback `Master/Buffer` via `brick6_clip_shifter`
 
 Doc :
 - `docs/architecture/z1_audio_hard_rt_mix.md`
@@ -154,9 +153,7 @@ Règle de lecture transversale :
 
 ### Cas transverses fréquents
 - **Input Audio vs Hybrid** → Z2 + Z3 + Z5
-- **Master/Buffer** → Z1 + Z2 + Z3 + Z4 + Z5
 - **Master/FX MacroFX** → Z1 + Z2 + Z3 + Z5
-- **Master/Buffer shifter** → Z1 d'abord, puis Z3/Z5 selon param/UI
 - **bug track-aware transversal** → commencer par Z2
 - **bug après load/restore** → Z6 puis Z2/Z3/Z4/Z5 selon symptôme
 
@@ -189,3 +186,9 @@ Documents conserves pour tracabilite uniquement:
 - docs/architecture/historique_z3_param_write_map_audit_2026-04-14.md (passe d'audit ciblee).
 - docs/architecture/historique_z4_quant_swing_runtime_contract_2026-04-14.md (note de chantier pre-consolidation).
 - docs/architecture/historique_z5_ui_orchestration_cartographie_2026-04-14.md (cartographie de passe initiale).
+
+## 7. Addendum 2026-05-13
+
+- Le buffer master dedie est retire des zones Z1/Z2/Z3/Z5/Z6.
+- `audio_xfade` reste rattache au Looper, sans backend buffer master.
+- Le recorder legacy dormant `live_recorder` / `recorder_transport` est retire de Z0/Z1; le record produit conserve uniquement Looper RAW + `multi_record_writer`.

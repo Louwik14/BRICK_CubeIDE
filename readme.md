@@ -78,7 +78,7 @@ Current families:
 - `Synth`: `Opal`, `Braids`
 - `Sampler`: `OneShot`, `Slicer`, `Clip`, `Looper`
 - `Drum`: dedicated drum catalog
-- `Master`: `Buffer`, `FX`
+- `Master`: `FX`
 
 ### Ownership model
 
@@ -151,27 +151,7 @@ This separation is intentional. Do not add a second authority for the same state
 - project save/load
 - boot context restore
 
-## 6. Current special case: Master/Buffer
 
-`Master/Buffer` is a special track identity.
-
-Current intent:
-- unique `Master` family / `Buffer` type
-- single instance in a project
-- reuse of the existing buffer backend
-- capture selected logical track sources
-- replay through the normal track-aware system
-- no second concurrent recorder architecture
-
-Current exposed controls:
-- `TRACK + PLAY` -> relaunch an existing buffer take
-- `TRACK + REC` -> record/start buffer workflow
-- `TRACK + SHIFT + REC` -> clear buffer
-- `ARP` context becomes `ROUT` for source selection
-- `TONE` exposes buffer-specific parameters
-- `TONE` buffer pages now include local timestretch controls (`TStr`, `Grain`, `Hop`, `Sync Len`, `Src BPM`, `Pitch`) on the recorded-buffer playback path only
-
-`Master/Buffer` is an explicit track identity, not a global mode.
 
 ## 7. What must stay true
 
@@ -240,7 +220,6 @@ The codebase already contains:
 - sequencer / clock / scheduler foundations
 - parameter and modulation infrastructure
 - persistence layers
-- ongoing `Master/Buffer` integration
 
 Some areas are stable, others are still under active stabilization.
 When in doubt, trust the code and the architecture zone documents before broad assumptions.
@@ -248,3 +227,7 @@ When in doubt, trust the code and the architecture zone documents before broad a
 ## 11. Principle
 
 Keep it simple, deterministic, and playable.
+
+## Master track status
+
+`Master/FX` is the only exposed Master track type. The former buffer workflow has been removed; Looper XFade remains available on `Sampler/Looper`.

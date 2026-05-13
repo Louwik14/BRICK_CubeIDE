@@ -1,6 +1,5 @@
 #include "Core/brick6_looper_runtime.h"
 
-#include "Core/looper_raw_debug.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_pool.h"
 #include "Seq/seq_runtime.h"
@@ -81,12 +80,8 @@ SDRAM_RECORDER static int32_t
     g_looper_preroll_pcm[BRICK6_LOOPER_PREROLL_FRAMES * BRICK6_LOOPER_PREROLL_CHANNELS];
 static brick6_looper_preroll_state_t g_looper_preroll;
 static brick6_looper_record_boundary_state_t g_looper_record_boundary;
-static uint64_t g_looper_render_segment_start_sample;
 
 static void looper_request_playhead_pages(const brick6_looper_track_state_t *state);
-static uint8_t looper_debug_source_for_playhead(const brick6_looper_track_state_t *state,
-                                                uint32_t playhead,
-                                                uint8_t *out_cache_hit);
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
                                        uint32_t playhead);
 
@@ -342,47 +337,6 @@ static void looper_request_playhead_pages(const brick6_looper_track_state_t *sta
     }
 }
 
-static uint8_t looper_debug_source_for_playhead(const brick6_looper_track_state_t *state,
-                                                uint32_t playhead,
-                                                uint8_t *out_cache_hit)
-{
-    if(out_cache_hit != 0)
-    {
-        *out_cache_hit = 0U;
-    }
-
-    if((state == 0) || (state->frames_total == 0U))
-    {
-        return (uint8_t)LOOPER_RAW_DEBUG_SOURCE_NONE;
-    }
-
-    if(looper_preroll_can_read(state, playhead) != 0U)
-    {
-        if(out_cache_hit != 0)
-        {
-            *out_cache_hit = 1U;
-        }
-        return (uint8_t)LOOPER_RAW_DEBUG_SOURCE_PREROLL_RAM;
-    }
-
-    if(state->cache_registered == 0U)
-    {
-        return (uint8_t)LOOPER_RAW_DEBUG_SOURCE_RAW_PAGE_MISS;
-    }
-
-    const uint32_t page_index = playhead / SAMPLE_PAGE_FRAMES;
-    if(sample_page_cache_get_page_state(state->cache_id, page_index) == SAMPLE_PAGE_READY)
-    {
-        if(out_cache_hit != 0)
-        {
-            *out_cache_hit = 1U;
-        }
-        return (uint8_t)LOOPER_RAW_DEBUG_SOURCE_RAW_PAGE_CACHE;
-    }
-
-    return (uint8_t)LOOPER_RAW_DEBUG_SOURCE_RAW_PAGE_MISS;
-}
-
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
                                        uint32_t playhead)
 {
@@ -442,16 +396,6 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
     g_looper_runtime_diag.raw_slot = state->raw_slot;
     g_looper_runtime_diag.play_auto = state->play_auto;
     g_looper_runtime_diag.scheduled_start_valid = start_was_scheduled;
-    uint8_t start_cache_hit = 0U;
-    const uint8_t start_source =
-        looper_debug_source_for_playhead(state, initial_playhead, &start_cache_hit);
-    looper_raw_debug_note_play_start(track_id,
-                                     state->raw_slot,
-                                     state->frames_total,
-                                     g_looper_runtime_diag.actual_start_sample,
-                                     initial_playhead,
-                                     start_source,
-                                     start_cache_hit);
     looper_request_playhead_pages(state);
 }
 
@@ -560,10 +504,6 @@ static void looper_record_stop_at_boundary(uint64_t sample_time)
 
     const uint8_t track = g_looper_record_boundary.track_id;
     const uint8_t raw_slot = status.raw_slot;
-    const uint64_t request_sample =
-        (g_looper_record_boundary.request_stop_sample != 0U)
-            ? g_looper_record_boundary.request_stop_sample
-            : sample_time;
     const uint32_t span_frames =
         (sample_time > g_looper_record_boundary.actual_start_sample)
             ? (uint32_t)(sample_time - g_looper_record_boundary.actual_start_sample)
@@ -572,18 +512,10 @@ static void looper_record_stop_at_boundary(uint64_t sample_time)
     if(multi_record_writer_request_stop(0U) == 0U)
         return;
 
-    looper_raw_debug_note_rec_stop(track,
-                                   raw_slot,
-                                   request_sample,
-                                   sample_time);
     if((g_looper_record_boundary.play_auto != 0U)
             && (span_frames != 0U)
             && (raw_slot != MULTI_RECORD_WRITER_RAW_SLOT_NONE))
     {
-        looper_raw_debug_note_rec_final(track,
-                                        raw_slot,
-                                        span_frames,
-                                        (uint8_t)MULTI_RECORD_WRITER_STATE_STOP_REQUESTED);
         brick6_looper_runtime_notify_preroll_take_ready(track,
                                                         raw_slot,
                                                         span_frames,
@@ -622,22 +554,13 @@ static void looper_record_start_at_boundary(uint64_t sample_time)
         (g_looper_record_boundary.expected_frames != 0U)
             ? (sample_time + (uint64_t)g_looper_record_boundary.expected_frames)
             : 0U;
-
-    looper_raw_debug_note_rec_start(track,
-                                    raw_slot,
-                                    g_looper_record_boundary.len_mode,
-                                    g_looper_record_boundary.request_start_sample,
-                                    sample_time,
-                                    g_looper_record_boundary.expected_frames);
 }
 
 void brick6_looper_runtime_init(void)
 {
     memset(g_looper_tracks, 0, sizeof(g_looper_tracks));
     memset(&g_looper_runtime_diag, 0, sizeof(g_looper_runtime_diag));
-    g_looper_render_segment_start_sample = 0U;
     looper_record_clear_boundary_state();
-    looper_raw_debug_reset();
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         g_looper_tracks[track].cache_id = looper_cache_id(track);
@@ -1053,11 +976,6 @@ void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_ti
     }
 }
 
-void brick6_looper_runtime_debug_set_render_segment_start(uint64_t sample_time)
-{
-    g_looper_render_segment_start_sample = sample_time;
-}
-
 uint8_t brick6_looper_runtime_next_start_offset(uint64_t block_start_sample,
                                                 uint32_t block_frames,
                                                 uint16_t *out_offset)
@@ -1189,7 +1107,6 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
         {
             if(state->raw_relay_done != 0U)
             {
-                looper_raw_debug_note_preroll_reused_after_wrap(track, state->raw_slot);
                 state->preroll_consumed = 1U;
                 continue;
             }
@@ -1201,7 +1118,6 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
             }
             if(state->preroll_used_reported == 0U)
             {
-                looper_raw_debug_note_preroll_used(track, state->raw_slot);
                 state->preroll_used_reported = 1U;
             }
 
@@ -1216,36 +1132,10 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
             const uint32_t playhead_before_preroll = state->playhead;
             const uint8_t wraps_on_preroll =
                 ((playhead_before_preroll + preroll_frames) >= state->frames_total) ? 1U : 0U;
-            const uint64_t wrap_sample =
-                g_looper_render_segment_start_sample
-                + (uint64_t)produced
-                + (uint64_t)(state->frames_total - playhead_before_preroll);
             looper_advance_playhead(state, preroll_frames);
             if(wraps_on_preroll != 0U)
             {
                 state->preroll_consumed = 1U;
-                uint8_t cache_hit_after = 0U;
-                const uint8_t source_after =
-                    looper_debug_source_for_playhead(state, state->playhead, &cache_hit_after);
-                looper_raw_debug_note_wrap_ex(track,
-                                              state->raw_slot,
-                                              state->frames_total,
-                                              wrap_sample,
-                                              playhead_before_preroll,
-                                              state->playhead,
-                                              LOOPER_RAW_DEBUG_SOURCE_PREROLL_RAM,
-                                              source_after,
-                                              state->frames_total - 1U,
-                                              state->playhead,
-                                              (state->frames_total - 1U) / SAMPLE_PAGE_FRAMES,
-                                              state->playhead / SAMPLE_PAGE_FRAMES,
-                                              1U,
-                                              cache_hit_after,
-                                              0U,
-                                              0U,
-                                              0U,
-                                              0U,
-                                              0U);
             }
             looper_diag_update_take(track, state);
             produced += preroll_frames;
@@ -1256,47 +1146,13 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
         {
             g_looper_runtime_diag.page_miss_seen = 1U;
             looper_diag_update_take(track, state);
-            looper_raw_debug_note_cache_miss(track, state->raw_slot);
             if((state->preroll_valid != 0U)
                     && (state->preroll_consumed == 0U)
                     && (state->playhead >= state->preroll_frames))
             {
-                looper_raw_debug_note_preroll_underrun(track, state->raw_slot);
                 break;
             }
-            const uint32_t playhead_before_miss = state->playhead;
-            const uint8_t wraps_on_miss =
-                ((playhead_before_miss + request_frames) >= state->frames_total) ? 1U : 0U;
-            const uint64_t wrap_sample =
-                g_looper_render_segment_start_sample
-                + (uint64_t)produced
-                + (uint64_t)(state->frames_total - playhead_before_miss);
             looper_advance_playhead(state, request_frames);
-            if(wraps_on_miss != 0U)
-            {
-                uint8_t cache_hit_after = 0U;
-                const uint8_t source_after =
-                    looper_debug_source_for_playhead(state, state->playhead, &cache_hit_after);
-                looper_raw_debug_note_wrap_ex(track,
-                                              state->raw_slot,
-                                              state->frames_total,
-                                              wrap_sample,
-                                              playhead_before_miss,
-                                              state->playhead,
-                                              LOOPER_RAW_DEBUG_SOURCE_RAW_PAGE_MISS,
-                                              source_after,
-                                              state->frames_total - 1U,
-                                              state->playhead,
-                                              (state->frames_total - 1U) / SAMPLE_PAGE_FRAMES,
-                                              state->playhead / SAMPLE_PAGE_FRAMES,
-                                              0U,
-                                              cache_hit_after,
-                                              0U,
-                                              0U,
-                                              0U,
-                                              0U,
-                                              0U);
-            }
             produced += request_frames;
             continue;
         }
@@ -1313,13 +1169,6 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
 
         const float *const src_base =
             &state->current_base[page_offset * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
-        if(state->raw_relay_done == 0U)
-        {
-            looper_raw_debug_note_raw_relay_done(track,
-                                                 state->raw_slot,
-                                                 state->playhead,
-                                                 state->playhead / SAMPLE_PAGE_FRAMES);
-        }
         state->raw_relay_done = 1U;
         state->preroll_consumed = 1U;
         for(uint32_t i = 0U; i < block_frames; ++i)
@@ -1331,45 +1180,13 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
                     && ((src_base[src] != 0.0f) || (src_base[src + 1U] != 0.0f)))
             {
                 g_looper_runtime_diag.first_output_audio_timeline_sample =
-                    g_looper_render_segment_start_sample + (uint64_t)produced + (uint64_t)i;
+                    (uint64_t)produced + (uint64_t)i;
                 g_looper_runtime_diag.first_output_frame_offset = produced + i;
                 g_looper_runtime_diag.first_output_valid = 1U;
             }
         }
 
-        const uint32_t playhead_before = state->playhead;
-        const uint8_t wraps =
-            ((playhead_before + block_frames) >= state->frames_total) ? 1U : 0U;
-        const uint64_t wrap_sample =
-            g_looper_render_segment_start_sample
-            + (uint64_t)produced
-            + (uint64_t)(state->frames_total - playhead_before);
         looper_advance_playhead(state, block_frames);
-        if(wraps != 0U)
-        {
-            uint8_t cache_hit_after = 0U;
-            const uint8_t source_after =
-                looper_debug_source_for_playhead(state, state->playhead, &cache_hit_after);
-            looper_raw_debug_note_wrap_ex(track,
-                                          state->raw_slot,
-                                          state->frames_total,
-                                          wrap_sample,
-                                          playhead_before,
-                                          state->playhead,
-                                          LOOPER_RAW_DEBUG_SOURCE_RAW_PAGE_CACHE,
-                                          source_after,
-                                          state->frames_total - 1U,
-                                          state->playhead,
-                                          (state->frames_total - 1U) / SAMPLE_PAGE_FRAMES,
-                                          state->playhead / SAMPLE_PAGE_FRAMES,
-                                          1U,
-                                          cache_hit_after,
-                                          0U,
-                                          0U,
-                                          0U,
-                                          0U,
-                                          0U);
-        }
         looper_diag_update_take(track, state);
         produced += block_frames;
         if((block_frames == 0U)

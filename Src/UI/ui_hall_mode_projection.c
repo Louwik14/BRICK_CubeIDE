@@ -27,11 +27,6 @@ ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_
         return UI_HALL_ROUT_CONTEXT_NONE;
     }
 
-    if (type == UI_TRACK_TYPE_BUFFER)
-    {
-        return UI_HALL_ROUT_CONTEXT_MASTER_BUFFER;
-    }
-
     if (type == UI_TRACK_TYPE_MASTER_FX)
     {
         return UI_HALL_ROUT_CONTEXT_MASTER_FX;

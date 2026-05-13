@@ -46,7 +46,6 @@ Dependances de Z5 sans appartenir a Z5:
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
 - Autorite param/modele seq hors UI (Z3/Z4), seulement pilotees depuis Z5.
-- Aucun workflow UI recorder SD/stems n'est expose a date. `Master/Buffer` reste un flux distinct et demeure expose.
 
 Sous-roles concentres dans `ui_core.c`:
 - Etat UI global courant (track, hall mode, feedback, states pattern/mute).
@@ -113,8 +112,6 @@ Autorite hall modes:
 - La capture MACRO ne s'active que pendant un maintien de scene en sous-mode `M-Assign`, puis se finalise au relâchement.
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
-- `ARP` sur track `Master/Buffer` est expose comme `ROUT_VIEW` via le resolver central `ui_hall_mode_resolve_effective_view`.
-- Les contextes `ROUT` visibles sont resolus par `ui_hall_mode_resolve_rout_context`: `Master/Buffer`, `Master/FX` et `Sampler/Looper` partagent le label `ROUT`, mais gardent des etats/actions/renderers LED distincts.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
 - Le feedback LED MACRO lit directement `project_v1` pour l'etat vide/non vide des scenes et `ui_macro_interaction` pour la scene maintenue; la couleur de base vient d'une table stable scene -> couleur dans `led_rgb.c`, sans encoder les locks ni revenir au mapping pot/slot.
 - L'overlay MACRO reutilise le meme renderer LED avec priorite sur le rendu track-select tant que l'overlay est actif: `M-Ctrl` affiche une intensite continue par scene, lissee cote LED depuis la profondeur Hall raw calibree avec un seuil LED dedie bas (`min + bruit + marge`) independant du seuil audio pressure, `M-Assign` suit le feedback Scene vide/faible, non-vide/normal, held/fort.
@@ -156,8 +153,7 @@ Entrees evenementielles:
   - seules les tracks ou le meme `param_id` est autorise par `track_runtime_get_effective_param_status` et, pour `COLORS`/`TONE`/`PLAY`/`MOD`, resolu par `seq_param_iface` sont touchees,
   - exception SEQ per-track hors `track_runtime`: `PARAM_SEQ_LENGTH`, `PARAM_SEQ_DIV`, `PARAM_SEQ_QUANT`, `PARAM_SEQ_SWING` passent par l'autorite `seq_model_get/set_track_length` ou `seq_runtime_set/get_track_*` avec le meme delta UI (`delta * step`),
   - les params ARP sont des reglages par track portes par `keyboard_arp` sous forme de config par track; la lecture/ecriture UI passe par `keyboard_runtime_*_for_track`,
-  - les tracks `Master`, les params globaux, les params `BUFFER`, les edits CFG structurels, les p-locks de steps et le live-rec p-lock restent exclus.
-- `ui_core_tick` materialise la politique des stages consommants via `k_event_stages[]` (ordre stabilise): mute -> consommations hall track-select -> master-buffer routing -> transport -> settings -> global shortcuts -> pattern mode -> seq mode.
+  - les tracks `Master`, les params globaux, les edits CFG structurels, les p-locks de steps et le live-rec p-lock restent exclus.
 - `track_selection` reste hors table et execute en amont.
 - `navigation` puis `active_page->handle_event` restent en fin de chaine.
 
@@ -165,7 +161,6 @@ Contrats implicites d'ordre:
 - L'ordre `ui_core_service_track_selection_inputs()` puis `hall_keyboard_bridge_process()` (dans `brick6_app_process`) garantit que suppression hall est fixee avant emission notes clavier.
 - Dans `ui_core_tick`, la table de stages + blocage aval (equivalent `continue`) impose la priorite de consommation.
 - `ui_navigation_handle_event` est volontairement execute avant `ui_page_get()->handle_event` pour que le meme event soit traite par la page active apres navigation.
-- Le contrat `Master/Buffer -> ROUT` repose aussi sur cette mise a jour mode/track avant bridge (etat lu dans le meme tour par `hall_keyboard_bridge_process`).
 
 ## 4. API sortantes
 
@@ -179,9 +174,6 @@ Sorties vers autres zones:
 - Z3: `param_set`, `param_registry_apply_track_edit`, `param_registry_apply_track_structure_transition`, `param_registry_batch_*`, `param_store_set_active`.
 - Z4: `seq_runtime_toggle_play_stop`, `seq_runtime_rec_toggle_arm`, `seq_runtime_set_track_div/quant/swing`, `seq_edit_*`, `seq_model_*`.
 - Storage: `pattern_live_queue_slot`, `pattern_live_capture_to_slot`, `undo_v1_restore`.
-- Master buffer: `brick6_master_buffer_*` (routing hall en mode ARP master-buffer, REC shortcuts).
-- Disponibilite visible Master/Buffer: les chemins UI doivent lire `brick6_master_buffer_has_take()` pour l'existence d'une prise, pas `brick6_master_buffer_is_playing()`; `playing` indique seulement la lecture active.
-- Relance visible Master/Buffer: `TRACK + PLAY` cible l'unique instance `Master/Buffer`; si une prise existe, Z5 appelle `brick6_master_buffer_request_play()` au lieu de toggler le transport, sinon feedback `NO BUF`.
 
 Getters non-mutants vs mutables:
 - Non-mutants: `ui_get_active_track`, `ui_get_track_*`, `ui_get_hall_mode`, `ui_get_pattern_stub_state`, `ui_get_mute_state`, `ui_get_mute_hall_led`.
@@ -284,22 +276,13 @@ Flux nominal prouve:
   - les boutons de page ne peuvent pas selectionner une subpage vide,
   - l'entree/reload d'ecran, le tick template, la sync active-track et les changements de famille/resolver normalisent le focus vers une subpage selectionnable,
   - les contextes dynamiques (`COLORS` EQ3/ADSR, `MIX 2/2` delay CLASSIC/DUAL, pages moteur/type track-aware) passent par cette normalisation centrale apres recomposition de leurs familles.
-- Resolution contextuelle `Master/Buffer -> ROUT` (propre):
   - page/template ARP: `ui_page_template_arp_resolve_family` lit `ui_hall_mode_resolve_effective_view(...)` pour choisir ARP vs ROUT,
   - label mode hall: `ui_get_hall_mode_short_label` et suffixe s'appuient sur `effective_view`.
-  - renderer LED: `led_rgb` lit le contexte ROUT explicite, puis garde le renderer existant `Master/Buffer` base sur `brick6_master_buffer_get_source_enabled`.
-  - le hall de la track `Master/Buffer` active est affiche en vert fonce comme destination courante et son toggle est ignore.
-- Resolution contextuelle `Master/Buffer -> TONE`:
-  - la famille template buffer garde `REC` et `FADE`,
-  - les controles shifter restent dans `TONE` via sous-page buffer-specifique `SHFT`,
-  - `SHFT` expose `Grain` et `Pitch` pour `Master/Buffer`,
-  - `Pitch=ON` garde le label UI existant mais active aussi le suivi BPM du playback buffer via le shifter partage,
+  - aucun template Buffer ni sous-page TONE Buffer ne reste actif.
   - aucun nouveau hall mode ni deplacement de `ROUT`.
 
 5. Appels vers param/runtime/seq/storage
-- Selon handler: apply params, track config, seq edits, pattern queue/store, undo, settings, master buffer routing/record.
 - Cas speciaux locaux `ui_core` (non resolver):
-  - `ui_core_handle_master_buffer_routing_event`: en `ARP` + `MASTER/BUFFER`, les `HALL_PRESS` togglent `brick6_master_buffer_set_source_enabled` et sont consommes,
   - `ui_core_handle_transport_event`: shortcut REC/CLEAR buffer sous conditions (`track_select_armed` + track buffer unique).
 
 6. Feedback / consommation aval
@@ -340,7 +323,6 @@ Invariants prouves:
 - Contrat d'ordre stabilise: `global_shortcuts` est prioritaire sur `pattern/seq/navigation/page` pour un event consomme.
 - Navigation et logique runtime ne sont pas separees strictement: `ui_core` appelle directement seq/param/track_runtime/storage.
 - Cohabitation hall modes / ensembles UI maintenue par resolver family/subpage et label suffix selon mode.
-- Deviation `Master/Buffer` en ARP est centralisee par `effective_view`:
   - page/label/template lisent la meme projection,
   - gardes runtime keyboard/hall consomment les helpers centraux.
 - Contrat d'ordre utile confirme: `ui_core_service_track_selection_inputs` precede `hall_keyboard_bridge_process`; sur les cas frontiere audites, pas de fuite hall/note/arp prouvee.
@@ -355,7 +337,6 @@ Sorties de Z5:
 - Z3 Param/Control: ecritures globales et track-aware, sync UI active.
 - Z4 Seq/Clock: transport, edit seq, pattern operations.
 - Z6 Storage: recall/store pattern, undo.
-- Z1 indirect via commandes runtime (ex: master buffer routing/record).
 
 ## 10. Dette technique observee
 
@@ -367,9 +348,7 @@ Points factuels:
 - Logique de navigation distribuee entre `ui_navigation`, `ui_template_page`, et cas speciaux dans `ui_core`.
 - Couplage fort a `param_registry`, `seq_*`, `pattern_live_*` depuis Z5; les lectures runtime restantes passent maintenant par `ui_core_runtime_bridge`.
 - Dependance implicite a l'ordre d'appel superloop (`service_track_selection_inputs` avant `hall_keyboard_bridge_process`) pour suppression hall coherent.
-- Cas speciaux Master/Buffer reels dans UI (routing hall en mode ARP + shortcuts REC/PLAY), transverse mais restant dans frontiere Z5 comme logique d'interaction.
 - Le recorder SD/stems legacy n'est plus un cas special UI: un futur record SD devra passer par le contrat multi-client, sans reactiver l'ancien workflow start/stop/arm.
-- Le comportement `ROUT` n'est pas une sous-machine dediee: c'est une interpretation contextuelle de `ARP` avec contexte explicite (`MASTER/BUFFER` ou `MASTER/FX`) et gardes locaux separes.
 - Fragilites restantes prouvees:
   - priorites de consommation toujours tres centralisees dans `ui_core_tick` (desormais explicites via table locale),
   - contrat hors queue (`ui_core_service_track_selection_inputs`) restant critique pour la coherence mode/track avant bridge hall.
@@ -378,7 +357,6 @@ Points factuels:
 
 - Z5 est confirmee comme zone d'orchestration interactionnelle centrale, avec sous-composants internes: event queue, page manager, template resolver.
 - `ui_page_manager` et `ui_event` doivent etre rattaches explicitement a Z5 dans la carte globale (pas des utilitaires neutres).
-- Le cas Master/Buffer reste transverse Z5<->Z1/Z2/Z4 mais ne justifie pas une zone UI separee.
 
 ## 17. Contrat UI Master/FX
 - `Master/FX` est un type de la family `Master` expose en `CFG`.
@@ -393,7 +371,6 @@ Points factuels:
 - Les macros Master/FX labelisees discretes sont editees par steps UI locaux dans `ui_param`: l'encodeur convertit step discret vers valeur raw canonique `0..127`, puis le chemin param track-aware standard applique la valeur.
 - `LVL` et les macros A/B gardent le rendu parametre standard du template, avec widget potard normal; la contextualisation ne doit remplacer que le nom et le texte de valeur.
 - `ARP` brut est projete en `ROUT` pour Master/FX. L'etat ROUT Master/FX est UI-only local et ne modifie pas le routing audio.
-- Le renderer LED Master/FX ROUT utilise l'etat UI-only `g_master_fx_route_enabled[]` via le runtime bridge; il n'utilise pas le renderer ARP ni l'etat `Master/Buffer`.
 - Le hall de la track `Master/FX` active est affiche en vert fonce comme destination courante et son toggle est ignore.
 - Les series DSP Master/FX cablees en Z1 sont `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH`. Les labels UI existants restent l'autorite visible de mapping A/B; `FILTER`, `REVERB` et `REVERSE` restent absents de la grammaire MacroFX.
 
@@ -555,10 +532,8 @@ Points factuels:
 ## 19. Contrat UI Sampler/Looper skeleton
 
 - Le catalogue `CFG` expose `Looper` comme type de la family existante `Sampler`.
-- La page `TONE` de `Sampler/Looper` expose uniquement `ARM`, `LEN`, `PLAY` sur une sous-page `LOOP`.
 - Pour `Sampler/Looper`, le hall mode brut `ARP` est projete visuellement en `ROUT`.
 - `ROUT` toggle une selection de tracks logiques sources par looper track dans `ui_core_runtime_bridge`; la source peut etre focus UI ou non.
-- La page ARP resolve `Sampler/Looper` en famille template `ROUT` avant tout proxy de role de voice group. Pour les autres contextes, le proxy ARP slave garde sa priorite historique avant la projection ROUT `Master/Buffer` / `Master/FX`. Le renderer LED `Sampler/Looper` lit la matrice `g_looper_route_enabled[looper][source]` et ne retombe pas sur la scene clavier/ARP.
 - `REC` global ne demarre jamais directement le Looper et ne devient pas focus-based: il garde le flux transport normal (`seq_runtime_set_pattern_rec_target_track` + `seq_runtime_rec_toggle_arm`) meme si la track active est `Sampler/Looper`, `ARM=Off`, `ARM=Overd` ou `ROUT` vide.
 - Demarrage Looper: le bridge observe `transport running + REC global arme`; si une unique track `Sampler/Looper` est eligible (`ARM=Rec`, au moins une source `ROUT`) et qu'aucun writer actif/finalizing/export ne bloque, il rafraichit explicitement la projection runtime, resolve le slot RAW systeme via Z6/storage, appelle `multi_record_writer_prepare_raw`, puis arme `brick6_looper_runtime_arm_record_start`. `multi_record_writer_start` est consomme ensuite par Z1 au marker boundary audio.
 - Les refus RAW visibles distinguent les causes simples: `RAW MISS`, `RAW SIZE`, `RAW SLOT`, `RAW MOUNT`, `RAW BUSY`, `RAW STAT` ou `RAW INIT`.
@@ -589,5 +564,10 @@ Points factuels:
 - Le SAVE Looper ne lance pas de scan catalogue WAV global: apres export termine, Z5 ajoute seulement le path final au cache catalogue deja charge via `wav_loader_catalog_notify_file_created()`, sinon le scan Settings reste lazy/demande par la page Sampler.
 - Le bridge UI ne possede pas la nomenclature fichier Looper, le scan de path SD ni la creation du dossier durable; cette autorite appartient a Z6/storage.
 - SETTINGS normal reste inchangé hors `Sampler/Looper`.
-- Cette passe ne modifie pas `brick6_master_buffer`, n'ajoute pas de source input/master speciale et ne cree pas de parametre SAVE/STAT Looper.
 - Le bridge conserve l'intention de looper active pendant le record; `brick6_looper_runtime` devient l'autorite sample-exacte de l'identite de capture active exposee a Z1, tandis que la matrice ROUT reste lue par bornes pour alimenter le ring RAM du writer.
+
+## 20. Contrat UI apres retrait buffer master
+
+- Le catalogue `Master` expose seulement `FX`.
+- Les shortcuts `TRACK+REC`, `TRACK+PLAY` et `TRACK+SHIFT+REC` ne ciblent plus de backend buffer dedie; ils reviennent au transport/REC existant.
+- `ROUT` reste une projection de `ARP` pour `Master/FX` et `Sampler/Looper`; `Sampler/Looper` expose `ARM`, `LEN`, `PLAY`, `XFade` via `PARAM_LOOPER_XFADE`.

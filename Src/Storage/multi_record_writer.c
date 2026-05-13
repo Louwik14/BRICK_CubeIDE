@@ -1,6 +1,5 @@
 #include "Storage/multi_record_writer.h"
 
-#include "Core/looper_raw_debug.h"
 #include "Sampler/sample_cache.h"
 #include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
@@ -292,7 +291,6 @@ static uint8_t finalize_client_step(uint32_t client_id)
             MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW;
         client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
         client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
-        looper_raw_debug_note_writer_state((uint8_t)client->state);
     }
 
     return 1U;
@@ -416,7 +414,6 @@ raw_prepare_done:
         client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
         ring_reset(client);
         client->state = MULTI_RECORD_WRITER_STATE_PREPARED;
-        looper_raw_debug_note_writer_state((uint8_t)client->state);
     }
     else
     {
@@ -442,7 +439,6 @@ uint8_t multi_record_writer_start(uint8_t client_id)
 
     ring_reset(client);
     client->state = MULTI_RECORD_WRITER_STATE_RECORDING;
-    looper_raw_debug_note_writer_state((uint8_t)client->state);
     return 1U;
 }
 
@@ -467,7 +463,6 @@ uint8_t multi_record_writer_request_stop(uint8_t client_id)
     }
 
     client->state = MULTI_RECORD_WRITER_STATE_STOP_REQUESTED;
-    looper_raw_debug_note_writer_state((uint8_t)client->state);
     return 1U;
 }
 
@@ -535,7 +530,6 @@ void multi_record_writer_service(uint32_t byte_budget)
         if(g_record_clients[i].state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
         {
             g_record_clients[i].state = MULTI_RECORD_WRITER_STATE_DRAINING;
-            looper_raw_debug_note_writer_state((uint8_t)g_record_clients[i].state);
         }
     }
 
@@ -566,7 +560,6 @@ void multi_record_writer_service(uint32_t byte_budget)
                (ring_pending_frames(client) == 0U))
             {
                 client->state = MULTI_RECORD_WRITER_STATE_FINALIZING;
-                looper_raw_debug_note_writer_state((uint8_t)client->state);
             }
 
             if((client->state == MULTI_RECORD_WRITER_STATE_FINALIZING) && (finalized_one == 0U))

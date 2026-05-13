@@ -433,7 +433,6 @@ Plus petite prochaine passe utile:
 - Le retrait produit V1 de `SWING`/`ACCENT` ne change pas `PARAM_COUNT`; aucun bump pattern/projet supplementaire n'est requis.
 - `PROJECT_V1_FILE_VERSION=16` marque la rupture prototype MACRO Scene/Switch 32 locks par scene: `ProjectSaveV1.macro` grossit, les anciens projets sont refuses proprement par version/payload_size, sans migration legacy.
 - `PATTERN_VERSION=13` et `PROJECT_V1_FILE_VERSION=18` marquent le retrait des IDs/type/params `TB3`; aucun remap ni preservation des anciens projets/configs `TB3` ou `DX7` n'est conserve.
-- `PATTERN_VERSION=14` et `PROJECT_V1_FILE_VERSION=19` marquent le retrait du moteur temporel Master/Buffer et de ses anciens params; les anciens payloads prototype sont refuses sans migration.
 - `PatternSaveV1` ne change pas pour cette passe MACRO: les scenes/locks restent projet-only.
 
 
@@ -655,7 +654,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le controle Looper prepare le writer hors IRQ depuis le seam transport/control Z5: slot/path RAW via `looper_storage_raw_get_slot_for_track` et `multi_record_writer_prepare_raw` quand `transport running + REC global arme` et une unique Looper est eligible. START/STOP effectifs (`multi_record_writer_start` / `multi_record_writer_request_stop`) sont armes comme intentions et consommes par `brick6_looper_runtime` au boundary audio.
 - Le bouton `REC` ne demarre pas directement le writer Looper; il conserve l'armement REC global du sequenceur, et le focus UI n'est pas une condition pour enregistrer une Looper armee.
 - Si plusieurs Loopers sont eligibles, Z5 refuse de demarrer le client Looper unique courant plutot que de choisir silencieusement plusieurs sources de prise.
-- Le push IRQ minimal est branche: `mixer_process` somme les sources ROUT de la looper active exposee par `brick6_looper_runtime_get_record_capture_track`, hors track looper elle-meme, au point post traitement/gain/pan/VCA track, avant trim nominal, avant master/buffer/fx/preview, puis pousse un bloc stereo `int32_t` interleaved vers le ring du client writer Looper.
 - Le SAVE Looper RAW est l'unique chemin actif: `SHIFT+SETTINGS` en Z5 refuse transport running, puis demarre `looper_storage_raw_export_start()` quand la prise courante est RAW `TAKE_READY`.
 - Le path durable courant est fourni par `looper_storage_make_next_path`: `0:/PROJECT/LOOPS/LPRtt_nnnn.WAV`, avec `tt` = track Looper active et `nnnn` = compteur local scanne par `f_stat`.
 - Le dossier `0:/PROJECT/LOOPS` est cree a la demande par `looper_storage_make_next_path` via le meme client SD recorder avant l'export.
@@ -690,3 +688,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le silence de page manquante ne bloque pas la position de lecture Looper: le playhead continue, et la demande de pages couvre une fenetre ahead modulo pour anticiper les pages suivantes et le wrap de boucle.
 - Le premier playback `PLAY=Auto` post-REC ne rattrape plus un retard par avance de playhead et ne depend plus de `TAKE_READY` quand START_RAM est disponible. Un preroll RAM statique de 1 s stereo `int32_t`, capture pendant le REC depuis le flux deja envoye au writer, sert de source de depart pendant que le RAW/page-cache se prepare. Le RAW systeme reste l'autorite complete/backing storage; si la page RAW n'est pas prete a la sortie du preroll, l'audio ne bloque pas et le playhead n'avance plus jusqu'a disponibilite.
 - Le preroll RAM n'est pas une source de boucle permanente: apres le premier bloc lu depuis le RAW/page-cache, le runtime marque le relais RAW comme effectue et interdit toute reutilisation du preroll aux wraps suivants. La frame 0 apres wrap doit donc venir du RAW/page-cache.
+
+## Addendum 2026-05-13 - rupture stockage retrait buffer master
+
+- `PATTERN_VERSION=18` et `PROJECT_V1_FILE_VERSION=23` marquent le retrait du type UI/runtime buffer master et des anciens params buffer de `PARAM_COUNT`.
+- Aucune migration legacy n'est conservee: les anciens patterns/projets prototype sont refuses par version/payload stricts.
+- Le XFade Looper persiste via `PARAM_LOOPER_XFADE` dans le layout courant.

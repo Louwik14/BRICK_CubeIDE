@@ -26,10 +26,7 @@
 #include "Sampler/voice_manager.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
-#include "Audio/live_recorder.h"
-#include "Audio/live_recorder_config.h"
 #include "Storage/memory_layout.h"
-#include "Core/brick6_master_buffer.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_braids_runtime.h"
 #include "brick6_looper_runtime.h"
@@ -37,7 +34,6 @@
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
 #include "brick6_opal_runtime.h"
-#include "brick6_recorder_runtime.h"
 #include "brick6_sampler_runtime.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
@@ -53,9 +49,6 @@
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
-
-SDRAM_RECORDER static float g_live_recorder_buffer[LIVE_RECORDER_MAX_FRAMES * 2U];
-static live_recorder_t g_live_recorder;
 
 static void brick6_process_hall_ui_keyboard_chain(void)
 {
@@ -110,13 +103,6 @@ void brick6_app_init(void)
 
     brick6_sampler_bootstrap_load_pool();
 
-    brick6_recorder_runtime_boot_init(&g_live_recorder,
-                                      g_live_recorder_buffer,
-                                      LIVE_RECORDER_MAX_FRAMES);
-    brick6_master_buffer_init(&g_live_recorder,
-                              g_live_recorder_buffer,
-                              LIVE_RECORDER_MAX_FRAMES);
-
     drum_synth_init(48000.0f);
     hall_keyboard_bridge_init();
 
@@ -128,7 +114,7 @@ void brick6_app_init(void)
 
     mixer_set_master(0.0f);
 
-    brick6_audio_runtime_init(&g_live_recorder);
+    brick6_audio_runtime_init();
 
     audio_init(&hsai_BlockA2, &hsai_BlockB2);
     audio_set_float_callback(brick6_audio_runtime_dsp);
@@ -197,8 +183,6 @@ void brick6_app_process(void)
     brick6_master_control_process();
 
     brick6_process_hall_ui_keyboard_chain();
-
-    brick6_recorder_runtime_process_transport(&g_live_recorder);
 
     voice_manager_service();
 

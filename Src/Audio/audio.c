@@ -25,8 +25,6 @@
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_master_buffer.h"
-#include "Core/looper_raw_debug.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
@@ -87,7 +85,7 @@ static audio_seq_diag_t g_audio_seq_diag;
 
 static void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
-    brick6_looper_runtime_debug_set_render_segment_start(sample_time);
+    (void)sample_time;
     audio_process_block_int32(rx, tx, frames);
 }
 
@@ -197,14 +195,6 @@ static void process_half(uint32_t half_index)
         {
             if (block_events[event_index].type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
             {
-                seq_step_id_t step = 0U;
-                (void)seq_runtime_get_playhead_step(block_events[event_index].track, &step);
-                looper_raw_debug_note_boundary(block_events[event_index].track,
-                                               step,
-                                               block_start_sample + (uint64_t)event_offset,
-                                               event_offset,
-                                               seq_runtime_get_samples_per_step_q16());
-                brick6_master_buffer_on_boundary_edge(block_events[event_index].track);
                 brick6_looper_runtime_on_boundary_edge(block_events[event_index].track,
                                                        block_start_sample + (uint64_t)event_offset);
             }

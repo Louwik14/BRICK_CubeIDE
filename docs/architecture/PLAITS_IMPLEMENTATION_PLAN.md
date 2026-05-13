@@ -288,7 +288,6 @@ Verifications / build checks:
 - build compile
 - verification navigation TONE sur track Plaits
 - verification changement track -> page correcte
-- verification absence de regression sur Sampler/Drum/Master Buffer
 
 Dependance:
 - Etape 3 minimum, idealement Etape 7
@@ -350,7 +349,6 @@ Verifications / build checks:
 - verification p-locks uniquement sur les parametres declares p-lockables
 - verification navigation UI TONE
 - verification save/load pattern et projet
-- verification absence de regression Drum/Sampler/Master Buffer
 
 Dependance:
 - Etapes 1 a 9

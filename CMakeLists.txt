@@ -264,6 +264,9 @@ file(GLOB MUTABLE_STMLIB_UTILS_SRC
 # Exclusions
 # --------------------------------------------------------------------------
 set(EXCLUDED_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/live_recorder.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/recorder_transport.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_recorder_runtime.c"
 )
 
 set(ALL_USER_SOURCES

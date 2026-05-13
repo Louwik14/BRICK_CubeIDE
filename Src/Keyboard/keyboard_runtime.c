@@ -285,12 +285,6 @@ void keyboard_runtime_all_notes_off(void)
     keyboard_arp_all_notes_off();
 }
 
-uint8_t keyboard_runtime_is_master_buffer_route_context(void)
-{
-    return (uint8_t)(ui_hall_mode_resolve_effective_view(ui_get_active_track(),
-                                                          ui_get_hall_mode()) == UI_HALL_MODE_VIEW_ROUT);
-}
-
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
 {
     const uint8_t active_track = ui_get_active_track();

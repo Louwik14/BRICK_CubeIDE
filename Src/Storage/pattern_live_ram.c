@@ -165,7 +165,6 @@ static uint8_t pattern_live_is_param_in_sound_domain(param_id_t id)
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     return (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_COLORS)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY);
 }
 

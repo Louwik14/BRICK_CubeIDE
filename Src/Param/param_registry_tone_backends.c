@@ -7,7 +7,6 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_BUFFER)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
     {
         return 0U;
@@ -42,10 +41,6 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
     {
         applied = param_backend_apply_mix_track(ctx, track, id, value, update_base_state);
-    }
-    else if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
-    {
-        applied = param_backend_apply_buffer_track(ctx, track, id, value);
     }
     else if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MASTER_FX))

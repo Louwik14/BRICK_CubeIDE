@@ -3,7 +3,7 @@
  * @brief Callback DSP runtime extrait de brick6_app_init.
  *
  * Rôle du module:
- * - Regrouper le traitement audio bloc (synth, sampler, mixer, master buffer).
+ * - Regrouper le traitement audio bloc (synth, sampler, looper, mixer, master FX).
  *
  * Frontière:
  * - Ne fait pas l'init applicative globale.
@@ -12,16 +12,13 @@
 
 #include "brick6_audio_runtime.h"
 
-#include <math.h>
 #include <stddef.h>
 #include <string.h>
 
-#include "Audio/live_recorder.h"
 #include "Audio/drum_synth.h"
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/voice_manager.h"
@@ -31,13 +28,9 @@
 #include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 
-#define HALFPI_F 1.57079632679489661923f
-
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
 static uint8_t g_runtime_last_ui_active_track = 0xFFU;
-static float g_buffer_xfade_smoothed = 0.0f;
-static float g_buffer_xfade_prev = 0.0f;
 typedef struct
 {
     uint8_t drum_tracks;
@@ -162,7 +155,8 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
-                || (track_runtime_is_audio_routable(track) == 0U))
+                || (track_runtime_is_audio_routable(track) == 0U)
+                || (brick6_looper_runtime_is_playing(track) == 0U))
         {
             continue;
         }
@@ -234,30 +228,10 @@ static void brick6_render_braids_tracks(uint32_t frames, uint8_t *out_braids_tra
     }
 }
 
-void brick6_audio_runtime_init(live_recorder_t *live_recorder)
+void brick6_audio_runtime_init(void)
 {
-    (void)live_recorder;
     g_runtime_track_enabled = 1U;
-    g_buffer_xfade_smoothed = 0.0f;
-    g_buffer_xfade_prev = 0.0f;
     fx_master_macro_init(48000.0f);
-}
-
-static float brick6_audio_runtime_get_buffer_xfade(void)
-{
-    const float target = brick6_master_buffer_get_xfade();
-    g_buffer_xfade_smoothed += (target - g_buffer_xfade_smoothed) * 0.25f;
-
-    if (g_buffer_xfade_smoothed < 0.0f)
-    {
-        g_buffer_xfade_smoothed = 0.0f;
-    }
-    else if (g_buffer_xfade_smoothed > 1.0f)
-    {
-        g_buffer_xfade_smoothed = 1.0f;
-    }
-
-    return g_buffer_xfade_smoothed;
 }
 
 void brick6_audio_runtime_dsp(StereoTrack *tracks,
@@ -320,54 +294,7 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         voice_manager_process(tracks[0].L, tracks[0].R, frames);
     }
 
-    brick6_master_buffer_begin_block(frames);
     mixer_process(tracks, track_count, frames);
-    brick6_master_buffer_commit_block(frames);
-
-    const float xfade_end = brick6_audio_runtime_get_buffer_xfade();
-    if ((track_count > 0U) && ((g_buffer_xfade_prev > 0.0f) || (xfade_end > 0.0f)))
-    {
-        static float recL[AUDIO_BLOCK_SIZE];
-        static float recR[AUDIO_BLOCK_SIZE];
-
-        const float xfade_start = g_buffer_xfade_prev;
-        g_buffer_xfade_prev = xfade_end;
-
-        brick6_master_buffer_read_playback(recL, recR, frames);
-
-        for (uint32_t i = 0U; i < frames; i++)
-        {
-            float xfade;
-            if (frames > 1U)
-            {
-                const float t = (float)i / (float)(frames - 1U);
-                xfade = xfade_start + ((xfade_end - xfade_start) * t);
-            }
-            else
-            {
-                xfade = xfade_end;
-            }
-
-            if (xfade < 0.0f)
-            {
-                xfade = 0.0f;
-            }
-            else if (xfade > 1.0f)
-            {
-                xfade = 1.0f;
-            }
-
-            const float gain_live = 1.0f - xfade;
-            const float gain_rec  = xfade;
-
-            tracks[0].L[i] = (tracks[0].L[i] * gain_live) + (recL[i] * gain_rec);
-            tracks[0].R[i] = (tracks[0].R[i] * gain_live) + (recR[i] * gain_rec);
-        }
-    }
-    else
-    {
-        g_buffer_xfade_prev = xfade_end;
-    }
 
     if (track_count > 0U)
     {

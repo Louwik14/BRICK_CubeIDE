@@ -54,7 +54,6 @@ Source: `Src/UI/ui_core.c:743-805`.
 1. `ui_core_handle_track_selection_event(&ev)` (toujours execute, non bloquant)
 2. `ui_core_mute_handle_event(&ev)` (consume+block)
 3. `ui_core_is_track_hall_event_consumed(&ev)` (consume+block)
-4. `ui_core_handle_master_buffer_routing_event(&ev)` (consume+block)
 5. `ui_core_handle_transport_event(&ev)` (consume+block)
 6. `ui_page_settings_handle_event(&ev)` (consume+block si settings ouverte)
 7. `ui_core_handle_global_shortcuts(&ev)` (consume+block)
@@ -69,8 +68,6 @@ Source: `Src/UI/ui_core.c:743-805`.
 | `track_selection_event` | `ev!=0`, mute inactif pour agir | lit `ev`; ecrit `shift_down`, `track_select_armed` | Non (void) | Aucun | Aucun direct; prepare les flags utilises par stages suivants |
 | `mute` | voir gestures mute; entree quick exige `shift_down=1`, `track_select_armed=0`, `BTN_TRANSPOSE_UP` press; hold quick et prepare sont reconnus localement dans le meme handler | lit/ecrit `mute_active/submode/prev_mode`, `mute_hold_quick_prepare_armed`, `hall_mode`, `hall_note_suppressed` | Oui si match (`return 1`) | Tous (stages 3..11) | appels runtime mute (`track_runtime_refresh_track`, `mixer_set_track_mute`, `param_set`) |
 | `track_hall_consume` | `mute_active=0`, `track_select_armed=1`, `hall_mode!=PATTERN`, event hall press/release valide | lit flags mode/modifier | Oui (predicat de gate) | Tous (stages 4..11) | Aucun; role de barriere d'orchestration |
-| `master_buffer_routing` | track actif master-buffer, `hall_mode==ARP`, `track_select_armed=0`, hall press track | lit track config/mode; ecrit source enabled buffer + `hall_note_suppressed` | Oui si match | Tous (stages 5..11) | Z2 buffer runtime (`brick6_master_buffer_set_source_enabled`) |
-| `transport` | `ev!=0`, mute inactif | lit boutons + `shift_down`/`track_select_armed`; peut entrer pattern | Oui si match | Tous (stages 6..11) | Z4 transport seq, Z2 master buffer requests, Z5 page open rec cfg, entree PATTERN |
 | `settings_gate` | settings ouverte (`ui_page_settings_is_open()!=0`) | lit open-state; delegue event settings interne | Oui (tous events) | Tous (stages 7..11) | Z5 settings workflow |
 | `global_shortcuts` | `ev!=0` | lit combos/clipboard flags; ecrit clipboard/feedback | Oui si match | Tous (stages 8..11) | Z3/Z4/Z6 via copy/paste/undo + open settings |
 | `pattern_mode` | `hall_mode==PATTERN` | lit/ecrit pattern substate/prev_mode, `hall_mode` via exit | Oui sur cancel et hall actions pattern | Tous (stages 9..11) | Z6 pattern capture/queue; sortie via `ui_set_hall_mode` |

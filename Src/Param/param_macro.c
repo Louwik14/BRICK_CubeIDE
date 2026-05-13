@@ -132,8 +132,7 @@ uint8_t param_macro_slot_target_is_supported(uint8_t track, param_id_t param)
             return seq_param_iface_param_is_supported(track, set_id, param);
         }
 
-        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-                || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_BUFFER))
+        if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
         {
             return (track_runtime_get_effective_param_status(track, param) == TRACK_RUNTIME_PARAM_ALLOWED) ? 1U : 0U;
         }
@@ -192,11 +191,6 @@ static uint8_t param_macro_apply_preview_value(uint8_t track, param_id_t param, 
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
     {
         return param_backend_apply_mix_track(track_runtime_get_ctx(track), track, param, value, 0U);
-    }
-
-    if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
-    {
-        return param_backend_apply_buffer_track(track_runtime_get_ctx(track), track, param, value);
     }
 
     return param_backend_apply_track_value(track, param, value, 0U);

@@ -7,18 +7,6 @@
 #include "ui_core.h"
 #include "ui_template_page.h"
 
-static const ui_template_family_t g_ui_template_tone_family_buffer = {
-    .family_title = "TONE",
-    .nav_labels = { "REC", "FADE", "SHFT", "-" },
-    .subpages = {
-        { .title = "REC", .param_bank = { .params = { PARAM_BUFFER_REC_LEN, PARAM_BUFFER_Q_REC, PARAM_BUFFER_Q_PLAY, PARAM_BUFFER_RATE } } },
-        { .title = "FADE", .param_bank = { .params = { PARAM_BUFFER_FADE_IN, PARAM_BUFFER_FADE_OUT, PARAM_BUFFER_XFADE, PARAM_COUNT } } },
-        { .title = "SHFT", .param_bank = { .params = { PARAM_BUFFER_GRAIN, PARAM_BUFFER_PRESERVE_PITCH, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-    .default_subpage = 0U,
-};
-
 static const ui_template_family_t g_ui_template_tone_family_master_fx = {
     .family_title = "TONE",
     .nav_labels = { "FX1", "FX2", "FX3", "FX4" },
@@ -71,7 +59,7 @@ static const ui_template_family_t g_ui_template_tone_family_looper = {
     .family_title = "TONE",
     .nav_labels = { "LOOP", "-", "-", "-" },
     .subpages = {
-        { .title = "LOOP", .param_bank = { .params = { PARAM_LOOPER_ARM, PARAM_LOOPER_LEN, PARAM_LOOPER_PLAY, PARAM_COUNT } } },
+        { .title = "LOOP", .param_bank = { .params = { PARAM_LOOPER_ARM, PARAM_LOOPER_LEN, PARAM_LOOPER_PLAY, PARAM_LOOPER_XFADE } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -610,11 +598,7 @@ void ui_page_template_tone_register_families(void)
             }
 
             const ui_template_family_t *family_template = NULL;
-            if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_BUFFER))
-            {
-                family_template = &g_ui_template_tone_family_buffer;
-            }
-            else if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_MASTER_FX))
+            if ((track_family == UI_TRACK_FAMILY_MASTER) && (track_type == UI_TRACK_TYPE_MASTER_FX))
             {
                 family_template = &g_ui_template_tone_family_master_fx;
             }

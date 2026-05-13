@@ -499,13 +499,13 @@ static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
     return (ev->id < HALL_KEY_COUNT) ? 1U : 0U;
 }
 
-static uint8_t ui_core_handle_master_buffer_routing_event(const ui_event_t *ev)
+static uint8_t ui_core_handle_routing_event(const ui_event_t *ev)
 {
-    return ui_core_runtime_bridge_handle_master_buffer_routing_event(ev,
-                                                                     ui_get_active_track(),
-                                                                     ui_get_hall_mode(),
-                                                                     g_ui_track_state.track_select_armed,
-                                                                     ui_core_mute_suppress_hall_note);
+    return ui_core_runtime_bridge_handle_routing_event(ev,
+                                                       ui_get_active_track(),
+                                                       ui_get_hall_mode(),
+                                                       g_ui_track_state.track_select_armed,
+                                                       ui_core_mute_suppress_hall_note);
 }
 
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
@@ -681,7 +681,7 @@ void ui_core_tick(void)
     static const ui_core_tick_stage_t k_event_stages[] = {
         { ui_core_handle_mute_event, 1U, 1U },
         { ui_core_is_track_hall_event_consumed, 1U, 1U },
-        { ui_core_handle_master_buffer_routing_event, 1U, 1U },
+        { ui_core_handle_routing_event, 1U, 1U },
         { ui_core_handle_transport_event, 1U, 1U },
         { ui_page_settings_handle_event, 1U, 1U },
         /* Intentionally before pattern/seq: global shortcuts can fully mask them. */
@@ -962,12 +962,6 @@ void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_le
     if (config.family == UI_TRACK_FAMILY_OFF)
     {
         (void)snprintf(out, out_len, "Off");
-        return;
-    }
-
-    if ((config.family == UI_TRACK_FAMILY_MASTER) && (config.type == UI_TRACK_TYPE_BUFFER))
-    {
-        (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(config.family, config.type));
         return;
     }
 

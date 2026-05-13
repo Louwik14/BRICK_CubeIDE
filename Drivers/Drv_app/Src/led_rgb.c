@@ -26,7 +26,6 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "buttons.h"
@@ -365,30 +364,6 @@ static void led_apply_route_destination_hall_scene(led_id_t led)
     led_layer_set(LED_LAYER_UI, led, 0U, (uint8_t)(LED_FIXED_GREEN_G / 2U), 0U);
 }
 
-static void led_apply_master_buffer_routing_hall_scene(uint8_t hall, uint8_t destination_track)
-{
-    const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_TRACK_COUNT)
-    {
-        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
-        return;
-    }
-
-    if (hall == destination_track)
-    {
-        led_apply_route_destination_hall_scene(led);
-        return;
-    }
-
-    if (brick6_master_buffer_get_source_enabled(hall) == 0U)
-    {
-        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
-        return;
-    }
-
-    led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, 0U, LED_FIXED_BLUE_B);
-}
-
 static void led_apply_master_fx_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
@@ -628,40 +603,6 @@ static void led_apply_normal_rec_scene(led_id_t led)
     led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
 }
 
-static uint8_t led_apply_master_buffer_rec_scene(led_id_t led)
-{
-    const brick6_master_buffer_state_t buffer_state = brick6_master_buffer_get_state();
-    const uint8_t normal_rec_armed = (seq_runtime_rec_is_armed() != 0U) ? 1U : 0U;
-    const uint8_t waiting = brick6_master_buffer_is_waiting_start();
-    const uint8_t use_violet = (normal_rec_armed != 0U) ? 1U : 0U;
-    uint8_t blink = 0U;
-
-    if (buffer_state == BRICK6_MASTER_BUFFER_STATE_IDLE)
-    {
-        return 0U;
-    }
-
-    if (buffer_state == BRICK6_MASTER_BUFFER_STATE_RECORDING)
-    {
-        led_layer_set(LED_LAYER_UI,
-                      led,
-                      use_violet ? LED_FIXED_RED_R : 0U,
-                      0U,
-                      LED_FIXED_BLUE_B);
-        return 1U;
-    }
-
-    blink = (uint8_t)(((HAL_GetTick() / 150U) & 0x1U) != 0U ? 1U : 0U);
-    led_layer_set(LED_LAYER_UI,
-                  led,
-                  use_violet ? (blink ? LED_FIXED_RED_R : 0U) : 0U,
-                  0U,
-                  waiting != 0U
-                      ? (blink ? LED_FIXED_BLUE_B : 0U)
-                      : LED_FIXED_BLUE_B);
-    return 1U;
-}
-
 static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
@@ -716,10 +657,6 @@ static void led_apply_fixed_scene(void)
             {
                 led_apply_pattern_hall_scene(hall);
             }
-            else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_BUFFER)
-            {
-                led_apply_master_buffer_routing_hall_scene(hall, ui_get_active_track());
-            }
             else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_FX)
             {
                 led_apply_master_fx_routing_hall_scene(hall, ui_get_active_track());
@@ -753,10 +690,7 @@ static void led_apply_fixed_scene(void)
         {
             if ((led_id_t)led == LED_REC)
             {
-                if (led_apply_master_buffer_rec_scene((led_id_t)led) == 0U)
-                {
-                    led_apply_normal_rec_scene((led_id_t)led);
-                }
+                led_apply_normal_rec_scene((led_id_t)led);
             }
             else
             {

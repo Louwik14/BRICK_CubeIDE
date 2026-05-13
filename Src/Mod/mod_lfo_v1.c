@@ -256,11 +256,6 @@ static uint8_t mod_lfo_dest_supported_fast(uint8_t track,
         return 0U;
     }
 
-    if (rule.resource == TRACK_RUNTIME_RESOURCE_BUFFER)
-    {
-        return 0U;
-    }
-
     if (mod_lfo_param_matches_track_context(family, dest, rule.domain, ctx) == 0U)
     {
         return 0U;

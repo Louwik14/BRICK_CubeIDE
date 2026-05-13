@@ -151,7 +151,6 @@ Dans `Src/Core/brick6_audio_runtime.c::brick6_audio_runtime_dsp()`:
 - modulation bloc via `mod_lfo_v1_process_block()`
 - rendu du moteur clavier/voices via `voice_manager_process(tracks[0].L, tracks[0].R, frames)`
 - sommation/routing principal via `mixer_process(tracks, frames)`
-- ajout playback master-buffer via `brick6_master_buffer_render_playback(...)` puis sommation sur `tracks[0].L/R`
 
 ### 4.3 Mono, stereo or mixed?
 
@@ -202,12 +201,9 @@ Voice manager:
 - `Src/Sampler/voice_manager.c::voice_manager_process(float* out_l, float* out_r, uint32_t frames)`
 - ecrit directement dans le bus sortie stereo principal, sans passer par le seam d'injection track-aware Drum/Sampler
 
-### 4.6 Taps, recorder, master buffer
 
 Le rendu mixer aval est stereo:
 - les taps post-insert/post-fader/send sont stereo dans `mixer_process()`
-- `brick6_master_buffer_submit_track_post_fader(source_track, L, R, frames)` recoit deja du stereo
-- le playback du master buffer est additionne sur `tracks[0].L/R`
 
 Point important:
 - le support stereo existe apres injection
@@ -274,7 +270,6 @@ Analyse:
 - complexite: moyenne
 - cout IRQ BRICK: augmente
 - impact mixer: local mais reel
-- impact sends/cue/taps/recorder/master buffer: structurellement compatible une fois injecte, car l'aval est deja stereo
 - compatibilite architecture track-aware: bonne si le binding reste `track_runtime` et si le mixer reste l'autorite
 - risque principal: sur-interpreter `AUX` comme un canal stereo alors qu'il est souvent une seconde sortie non-stereo
 
@@ -338,7 +333,6 @@ Dans le contexte BRICK:
   - sequencer audio-block events
   - modulation
   - mixer
-  - sends / FX / cue / taps / master buffer
 
 Donc:
 - une integration dual-output augmente le cout fixe BRICK par track Plaits
@@ -444,7 +438,6 @@ Tests manuels a faire:
 - plusieurs tracks Plaits simultanees
 - sequencer dense avec p-locks et modulations
 - verification cue/main/sends
-- verification taps/recorder/master buffer
 - verification niveaux et absence de saturation au mixdown
 - comparaison `OUT-only` vs `OUT+AUX` sur modeles `String Machine`, `Bass Drum`, `Snare Drum`, `Hi Hat`, `Virtual Analog VCF`
 

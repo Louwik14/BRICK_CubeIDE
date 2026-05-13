@@ -1,9 +1,9 @@
 #include "Param/param_registry_backends.h"
 
+#include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_tone_sound_state.h"
@@ -496,23 +496,40 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
         return 0U;
     }
 
-    if ((update_base_state == 0U) || (state == NULL))
-    {
-        return ((id == PARAM_LOOPER_ARM) || (id == PARAM_LOOPER_LEN) || (id == PARAM_LOOPER_PLAY)) ? 1U : 0U;
-    }
-
     switch (id)
     {
         case PARAM_LOOPER_ARM:
+            if ((update_base_state == 0U) || (state == NULL))
+            {
+                return 1U;
+            }
             state->looper.arm = param_backend_clamp_value(value, 0.0f, 2.0f);
             return 1U;
         case PARAM_LOOPER_LEN:
+            if ((update_base_state == 0U) || (state == NULL))
+            {
+                return 1U;
+            }
             state->looper.len = param_backend_clamp_value(value, 0.0f, 5.0f);
             return 1U;
         case PARAM_LOOPER_PLAY:
+            if ((update_base_state == 0U) || (state == NULL))
+            {
+                return 1U;
+            }
             state->looper.play = param_backend_clamp_value(value, 0.0f, 1.0f);
             brick6_looper_runtime_set_play_auto(track, (state->looper.play >= 0.5f) ? 1U : 0U);
             return 1U;
+        case PARAM_LOOPER_XFADE:
+        {
+            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->looper.xfade = clamped;
+            }
+            audio_xfade_set(clamped);
+            return 1U;
+        }
         default:
             return 0U;
     }
@@ -571,76 +588,6 @@ uint8_t param_backend_apply_tone_drum(uint8_t track,
     }
 
     return drum_synth_set_param_for_instance(ctx->instance_id, id, value);
-}
-
-uint8_t param_backend_apply_buffer_track(const track_runtime_ctx_t *ctx, uint8_t track, param_id_t id, float value)
-{
-    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-
-    if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
-            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_BUFFER))
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_BUFFER_REC_LEN:
-            brick6_master_buffer_set_record_len((uint32_t)(param_backend_clamp_value(value, 1.0f, 64.0f) + 0.5f));
-            return 1U;
-        case PARAM_BUFFER_Q_REC:
-            brick6_master_buffer_set_quantize_record((value >= 0.5f) ? 1U : 0U);
-            return 1U;
-        case PARAM_BUFFER_Q_PLAY:
-            brick6_master_buffer_set_quantize_play((value >= 0.5f) ? 1U : 0U);
-            return 1U;
-        case PARAM_BUFFER_RATE:
-            brick6_master_buffer_set_rate(value);
-            return 1U;
-        case PARAM_BUFFER_FADE_IN:
-            brick6_master_buffer_set_fade_in((uint32_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f));
-            return 1U;
-        case PARAM_BUFFER_FADE_OUT:
-            brick6_master_buffer_set_fade_out((uint32_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f));
-            return 1U;
-        case PARAM_BUFFER_XFADE:
-            brick6_master_buffer_set_xfade(param_backend_clamp_value(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_BUFFER_GRAIN:
-        case PARAM_BUFFER_PRESERVE_PITCH:
-        {
-            brick6_master_buffer_shifter_config_t config;
-            brick6_master_buffer_get_shifter_config(&config);
-
-            switch (id)
-            {
-                case PARAM_BUFFER_GRAIN:
-                    config.grain_size = param_backend_clip_grain_size_value(param_backend_clip_size_index(value));
-                    if (state != NULL)
-                    {
-                        state->buffer.grain_size = param_backend_clamp_value(value, 0.0f, 5.0f);
-                    }
-                    break;
-                case PARAM_BUFFER_PRESERVE_PITCH:
-                    config.preserve_pitch = (value >= 0.5f) ? 1U : 0U;
-                    if (state != NULL)
-                    {
-                        state->buffer.preserve_pitch = (float)config.preserve_pitch;
-                    }
-                    break;
-                default:
-                    break;
-            }
-
-            brick6_master_buffer_set_shifter_config(&config);
-            return 1U;
-        }
-        default:
-            (void)track;
-            return 0U;
-    }
 }
 
 uint8_t param_backend_apply_master_fx_track(const track_runtime_ctx_t *ctx,

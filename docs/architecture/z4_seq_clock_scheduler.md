@@ -124,7 +124,6 @@ Lectures runtime explicites, sans autorite locale de mutation:
 - `seq_live_rec_capture`: lit `track_runtime_get_midi_source`, `track_runtime_get_midi_channel_zero_based` et `track_runtime_get_effective_param_status` comme gardes de capture.
 - `seq_led`: lit `seq_runtime_is_running` et `seq_runtime_get_playhead_step` comme projections de cursor.
 - `seq_output_guard`: lit `track_runtime_get_midi_channel_zero_based` et la projection runtime resolue pour le panic/cleanup.
-- `brick6_master_buffer`: lit `seq_runtime_get_samples_per_step_q16` comme miroir d'execution pour les conversions step -> frames, et consomme les markers boundary edge-based via Z1 pour Q Rec/Q Play.
 
 Contrat:
 - ces consumers ne font pas de refresh implicite;
@@ -374,7 +373,6 @@ Etat runtime principal (`seq_runtime.c`):
 - `g_seq_runtime` (`seq_runtime_state_t`, stockage porte par `seq_runtime_exec.c`, defini dans `Inc/Seq/seq_runtime.h`)
   - Champs structurants: `running`, `play_step[]`, `prev_step[]`, `prev_step_valid[]`, `track_div_phase[]`, `tick_accum`, `ticks_per_step`, `ext_clock_tick_accum`, `step_sample_q16`, `samples_per_step_q16`, `audio_block_start_sample`, `audio_timeline_sample`, `active_locks[][]`, `active_lock_count[]`.
   - Ecriture: `seq_runtime_init/start/stop/process_core/process_step_pulse`, `seq_boundary_engine_process/advance_one_step/restore_all_active_locks`, setters track.*.
-  - Lecture: getters runtime, scheduler/boundary internes, `brick6_master_buffer`, UI/param/storage (etat expose).
 
 Etat de controle runtime:
 - `g_seq_runtime_control` (interne `seq_runtime.c`)
@@ -612,7 +610,6 @@ Points factuels observes:
 - `seq_param_iface_is_param_supported` reste une query pure et ne refresh plus le runtime.
 - `seq_param_iface_get_base_value` / `seq_param_iface_get_play_base_value` ne seedent plus d'etat implicite; la base doit etre deja materialisee par les commandes d'ecriture ou par l'initialisation explicite.
 - Les call sites qui avaient besoin d'un runtime frais declenchent maintenant `track_runtime_refresh_track` explicitement avant lecture.
-- `Master/Buffer` ne devient pas owner temporel dans Z4: il lit explicitement `samples_per_step_q16` comme miroir runtime pour deriver la longueur cible d'enregistrement depuis `Rec Len`, memoriser le timing source de la prise, appliquer le ratio tempo-sync en playback `Pitch=ON`, et demarrer Q Rec/Q Play sur les markers boundary edge-based projetes par Z4 vers Z1; le playback reste owner local de `Rate` et de l'option `Pitch` via le shifter partage `brick6_clip_shifter`.
 
 ## 14. Contrat Drum stub temporaire
 
@@ -658,7 +655,6 @@ Points factuels observes:
 - Le demarrage Looper est observe hors Z4 par le seam transport/control Z5: un writer Looper ne demarre que si le transport est running, le REC global est arme, et une unique track `Sampler/Looper` est eligible (`ARM=Rec`, `ROUT` non vide).
 - Le focus UI n'est pas une condition de demarrage Looper.
 - STOP transport ou desarmement REC demande l'arret/finalisation du writer Looper actif via Z5, sans donner a Z4 l'autorite FatFs.
-- STOP transport notifie aussi localement `brick6_master_buffer_on_transport_stop()` depuis `seq_runtime_stop` apres le lifecycle sequencer: Master/Buffer coupe playback transport, record actif et pending Q Rec/Q Play sans FatFs, sans effacer la prise ni son flag local `has_take`, et sans redemarrage implicite au PLAY suivant. XFADE seul ne redemarre pas une prise arretee; le redemarrage passe par `brick6_master_buffer_request_play()`, qui rearme Q Play sur un prochain marker boundary musical/input si le transport tourne et `Q Play=On`. Les tracks `Master` sont ignorees par le choix de boundary Master/Buffer pour ne pas transformer les slots master en horloge de relance.
 - Z4 ne possede pas FatFs, ne pousse pas d'audio et ne branche aucun hook Z1.
 - `LEN` fixe du `Sampler/Looper` est applique hors Z4 par le seam Z5, via un compteur local en steps derive de la timeline audio `seq_runtime_exec` et de `seq_runtime_get_samples_per_step_q16`; Z4 fournit seulement la projection temporelle, pas l'autorite writer.
 - `LEN=Free` ne demande aucun auto-stop; `LEN=1/2/4/8/16` demande l'arret du writer apres 1/2/4/8/16 mesures de 16 steps depuis le sample de demarrage writer memorise par Z5.

@@ -118,8 +118,6 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - Invalidation explicite; refresh explicite par les call sites avant lecture runtime.
 - Interdiction de refresh implicite dans les wrappers de convenance (UI/Param/Seq/Audio): la discipline reste centralisee au call site appelant.
 - Résolution strictement track-aware.
-- Master/Buffer reste un bind runtime dédié (family master/type buffer).
-- Les paramètres BUFFER incluent les contrôles existants du recorder/playback et les futurs contrôles stretch Master/Buffer; ils restent gates par `TRACK_RUNTIME_RESOURCE_BUFFER` et ne sont autorisés que sur `TRACK_RUNTIME_FAMILY_MASTER` / `TRACK_RUNTIME_TYPE_BUFFER`.
 - Le contrat "track -> capacités -> ensembles UI exposables" est matérialisé dans Z2 (`track_runtime_descriptor_t` + `ui_ensemble_mask`) et consommé par Z5 sans redécision distribuée.
 - Les couches d'exécution (scheduler/param apply) lisent le channel MIDI via Z2 (`track_runtime_get_midi_channel_*`) au lieu d'un couplage direct à l'état UI.
 - Le resolver structurel pur est explicite: `track_runtime_resolve_track()` renvoie une vue résolue (descriptor + cibles runtime valides) sans logique UI contextuelle.
@@ -146,7 +144,6 @@ Sorties de Z2:
 - Z2 confirme comme noyau d'autorite transversal.
 - `track_state` devient la source de verite structurelle par track.
 - Pas de split necessaire.
-- Master/Buffer ne justifie pas une zone separee: il consomme la politique de bind de Z2.
 
 ## 11. Contrat MIDI (passe 2 bornee)
 - Source de verite structurelle: `track_state` porte family/type/midi; Z5 expose les edits et les labels.
@@ -257,7 +254,6 @@ Sorties de Z2:
 - Binding runtime: `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`; Z2 reste l'autorite d'identite, tandis que l'insert DSP master est execute en Z1 via les params TONE stockes.
 - Ensembles exposes: `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `VCA`, `KEYBOARD`, `ARP/ROUT`, `SEQ`; `PLAY` reste masque.
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` sont consommes par le DSP master.
-- Le mode `ARP` brut est projete en vue `ROUT` pour Master/FX comme pour Master/Buffer; le routing audio reel reste hors Z2.
 
 ## 21. Contrat Drum Plaits direct
 
@@ -272,14 +268,18 @@ Sorties de Z2:
 
 ## 22. Contrat MIX p-lock/mod hors Master
 - Les params MIX track-aware `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1`, `PARAM_MIX_SEND2` sont autorises uniquement pour les tracks audio non-`Master` disposant d'une lane mixer effective.
-- Les tracks `Master/Buffer` et `Master/FX` peuvent exposer des pages MIX globales/contextuelles, mais ne sont pas des cibles valides pour les params MIX track-aware p-lock/mod.
 
 ## 23. Contrat Sampler/Looper skeleton
 - `Sampler/Looper` est un nouveau type dans la famille existante `Sampler`; aucune nouvelle family n'est introduite.
 - Z2 expose `TRACK_RUNTIME_TYPE_LOOPER`, bind `BOUND` avec `TRACK_RUNTIME_ENGINE_LOOPER`: le playback est audio-routable via une lane mixer normale, sans sample_pool projet et sans slot Sampler detourne.
 - Le hook Z1 record Looper reste un producteur externe pilote par ROUT + writer actif; le playback transient est l'executant runtime dedie `brick6_looper_runtime`.
 - `brick6_looper_runtime` garde l'autorite playback par track Looper et utilise des ids page-cache transients hors `sample_pool` (`SAMPLE_POOL_SIZE + track_id`) uniquement comme cles RAM/SD internes.
-- Les params TONE propres au type sont `PARAM_LOOPER_ARM`, `PARAM_LOOPER_LEN`, `PARAM_LOOPER_PLAY`, mappes localement par `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()`.
 - `ARM/LEN/PLAY` sont autorises uniquement pour `Sampler/Looper`; ils restent hors p-lock PLAY et hors destination LFO tant que le workflow record musical n'est pas branche.
 - Le mode `ARP` brut est projete en vue `ROUT` pour `Sampler/Looper`; le routing selectionne des tracks logiques sources et ne cree pas d'autorite audio speciale.
 - `PLAY=Off/Auto` reste un parametre de workflow: il ne passe pas par le scheduler note, il pilote seulement l'armement playback Looper au transport via le runtime dedie.
+
+## 24. Contrat retrait buffer master
+
+- La family `Master` ne conserve plus que le type produit `Master/FX`.
+- Le type runtime buffer master, son engine dedie et sa ressource param dediee sont retires.
+- Le XFade Looper est maintenant `PARAM_LOOPER_XFADE`, mappe dans les slots TONE de `Sampler/Looper`; son etat DSP reste `audio_xfade`.

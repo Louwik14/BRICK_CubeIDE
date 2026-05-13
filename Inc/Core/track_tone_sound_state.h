@@ -32,14 +32,10 @@ typedef struct
     } clip;
     struct
     {
-        float grain_size;
-        float preserve_pitch;
-    } buffer;
-    struct
-    {
         float arm;
         float len;
         float play;
+        float xfade;
     } looper;
     struct
     {

@@ -88,9 +88,6 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         case UI_TRACK_TYPE_BRAIDS:
             return TRACK_RUNTIME_TYPE_BRAIDS;
 
-        case UI_TRACK_TYPE_BUFFER:
-            return TRACK_RUNTIME_TYPE_BUFFER;
-
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
         case UI_TRACK_TYPE_MIDI:
@@ -203,8 +200,7 @@ static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
     if ((family == TRACK_RUNTIME_FAMILY_INPUT)
             || (family == TRACK_RUNTIME_FAMILY_SYNTH)
             || (family == TRACK_RUNTIME_FAMILY_SAMPLER)
-            || (family == TRACK_RUNTIME_FAMILY_DRUM)
-            || (family == TRACK_RUNTIME_FAMILY_MASTER))
+            || (family == TRACK_RUNTIME_FAMILY_DRUM))
     {
         flags |= TRACK_RUNTIME_FLAG_CAN_FILTER;
     }
@@ -304,7 +300,8 @@ static const param_id_t g_track_runtime_tone_slots_clip[] = {
 static const param_id_t g_track_runtime_tone_slots_looper[] = {
     PARAM_LOOPER_ARM,
     PARAM_LOOPER_LEN,
-    PARAM_LOOPER_PLAY
+    PARAM_LOOPER_PLAY,
+    PARAM_LOOPER_XFADE
 };
 
 static const param_id_t g_track_runtime_tone_slots_midi[] = {
@@ -526,7 +523,6 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_LOOPER:
         case TRACK_RUNTIME_ENGINE_OPAL:
         case TRACK_RUNTIME_ENGINE_BRAIDS:
-        case TRACK_RUNTIME_ENGINE_MASTER_BUFFER:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return 1U;
@@ -675,13 +671,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
             return;
         }
 
-        if (type != TRACK_RUNTIME_TYPE_BUFFER)
-        {
-            track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
-            return;
-        }
-
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_MASTER_BUFFER, ctx->track_id);
+        track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
         return;
     }
 
@@ -1310,6 +1300,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_LOOPER_ARM:
         case PARAM_LOOPER_LEN:
         case PARAM_LOOPER_PLAY:
+        case PARAM_LOOPER_XFADE:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;
@@ -1326,19 +1317,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_VCA_RELEASE:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MIX;
             rule.resource = TRACK_RUNTIME_RESOURCE_MIX;
-            return rule;
-
-        case PARAM_BUFFER_REC_LEN:
-        case PARAM_BUFFER_Q_REC:
-        case PARAM_BUFFER_Q_PLAY:
-        case PARAM_BUFFER_RATE:
-        case PARAM_BUFFER_FADE_IN:
-        case PARAM_BUFFER_FADE_OUT:
-        case PARAM_BUFFER_XFADE:
-        case PARAM_BUFFER_GRAIN:
-        case PARAM_BUFFER_PRESERVE_PITCH:
-            rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_BUFFER;
-            rule.resource = TRACK_RUNTIME_RESOURCE_BUFFER;
             return rule;
 
         case PARAM_SEQ_PLAY_V1_NOTE:
@@ -1579,15 +1557,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return (track_runtime_is_audio_routable(track) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-
-        case TRACK_RUNTIME_RESOURCE_BUFFER:
-            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                    || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_MASTER)
-                    || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_BUFFER))
-            {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-            }
-            return TRACK_RUNTIME_PARAM_ALLOWED;
 
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;

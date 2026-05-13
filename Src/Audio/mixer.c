@@ -22,12 +22,12 @@
 #include "mixer.h"
 
 #include "adsr_daisy_c.h"
+#include "Audio/audio_xfade.h"
 #include "env_adsr.h"
 #include "fx_biquad_filter.h"
 #include "fx_delay_dual.h"
 #include "fx_delay_stereo.h"
 #include "fx_reverb.h"
-#include "Core/brick6_master_buffer.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/track_runtime.h"
 #include "Storage/multi_record_writer.h"
@@ -121,6 +121,8 @@ static AUDIO_HOT float g_external_track_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 static uint8_t g_external_track_format[MIXER_MAX_TRACKS];
 static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
+static float g_looper_xfade_smoothed = 0.0f;
+static float g_looper_xfade_prev = 0.0f;
 
 static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
                                                            float *left,
@@ -154,6 +156,7 @@ enum
 #define MIXER_LOOPER_RECORD_CLIENT_ID 0U
 #define MIXER_LOOPER_RECORD_PCM24_MAX 8388607.0f
 #define MIXER_LOOPER_RECORD_PCM24_MIN (-8388608.0f)
+#define MIXER_LOOPER_XFADE_EPS 0.0001f
 
 typedef enum
 {
@@ -269,6 +272,37 @@ static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
     }
 
     return 1U;
+}
+
+static uint8_t mixer_track_is_looper(uint8_t logical_track)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
+    return (uint8_t)((ctx != 0)
+            && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER));
+}
+
+static float mixer_get_looper_xfade(void)
+{
+    const float target = audio_xfade_get();
+    return audio_xfade_smooth_next(target, &g_looper_xfade_smoothed);
+}
+
+static uint8_t mixer_looper_xfade_value_is_zero(float value)
+{
+    return (value <= MIXER_LOOPER_XFADE_EPS) ? 1U : 0U;
+}
+
+static uint8_t mixer_looper_xfade_value_is_full(float value)
+{
+    return (value >= (1.0f - MIXER_LOOPER_XFADE_EPS)) ? 1U : 0U;
+}
+
+static uint8_t mixer_looper_xfade_values_are_stable(float a, float b)
+{
+    const float delta = a - b;
+    return ((delta <= MIXER_LOOPER_XFADE_EPS) && (delta >= -MIXER_LOOPER_XFADE_EPS)) ? 1U : 0U;
 }
 
 static void mixer_process_reverb_input_filter(float *left, float *right, uint32_t frames)
@@ -1894,7 +1928,12 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
     AUDIO_HOT ALIGN32 static float delay_reverb_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_record_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_record_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float looper_bus_main_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float looper_bus_main_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float looper_bus_cue_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float looper_bus_cue_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static int32_t looper_record_i32[AUDIO_BLOCK_SIZE * MULTI_RECORD_WRITER_CHANNELS];
+    static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
@@ -1927,10 +1966,75 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         memset(send_l, 0, sizeof(send_l));
         memset(send_r, 0, sizeof(send_r));
     }
+    memset(looper_output_active, 0, sizeof(looper_output_active));
 
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
+    const float looper_xfade_target = audio_xfade_get();
+    const uint8_t looper_xfade_process_active =
+        ((looper_xfade_target > MIXER_LOOPER_XFADE_EPS)
+                || (g_looper_xfade_prev > MIXER_LOOPER_XFADE_EPS)
+                || (g_looper_xfade_smoothed > MIXER_LOOPER_XFADE_EPS)) ? 1U : 0U;
+    float looper_xfade_start = g_looper_xfade_prev;
+    float looper_xfade_end = g_looper_xfade_prev;
+    uint8_t looper_xfade_apply_active = 0U;
+    if(looper_xfade_process_active != 0U)
+    {
+        looper_xfade_end = mixer_get_looper_xfade();
+        looper_xfade_start = g_looper_xfade_prev;
+        g_looper_xfade_prev = looper_xfade_end;
+
+        if((mixer_looper_xfade_value_is_zero(looper_xfade_start) == 0U)
+                || (mixer_looper_xfade_value_is_zero(looper_xfade_end) == 0U))
+        {
+            looper_xfade_apply_active = 1U;
+        }
+        else
+        {
+            g_looper_xfade_prev = 0.0f;
+            g_looper_xfade_smoothed = 0.0f;
+            looper_xfade_start = 0.0f;
+            looper_xfade_end = 0.0f;
+        }
+    }
+    uint8_t looper_playback_active = 0U;
+    uint8_t looper_playback_mix_active = 0U;
+    uint8_t looper_playback_routes_main = 0U;
+    uint8_t looper_playback_routes_cue = 0U;
+    for(uint8_t logical_track = 0U; logical_track < MIXER_MAX_TRACKS; ++logical_track)
+    {
+        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(logical_track);
+        if((ctx != 0)
+                && (ctx->mix_track_id < MIXER_MAX_TRACKS)
+                && (mixer_track_is_looper(logical_track) != 0U)
+                && (g_tracks[ctx->mix_track_id].mute == 0U)
+                && (brick6_looper_runtime_is_playing(logical_track) != 0U))
+        {
+            looper_output_active[logical_track] = 1U;
+            looper_playback_active = 1U;
+            if(g_tracks[ctx->mix_track_id].route_master != 0U)
+            {
+                looper_playback_routes_main = 1U;
+            }
+            if(g_tracks[ctx->mix_track_id].route_cue != 0U)
+            {
+                looper_playback_routes_cue = 1U;
+            }
+        }
+    }
+    looper_playback_mix_active =
+        ((looper_playback_active != 0U) && (looper_xfade_apply_active != 0U)) ? 1U : 0U;
     uint8_t looper_record_track = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
+    if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
+    {
+        memset(looper_bus_main_l, 0, sizeof(looper_bus_main_l));
+        memset(looper_bus_main_r, 0, sizeof(looper_bus_main_r));
+    }
+    if((looper_playback_mix_active != 0U) && (looper_playback_routes_cue != 0U))
+    {
+        memset(looper_bus_cue_l, 0, sizeof(looper_bus_cue_l));
+        memset(looper_bus_cue_r, 0, sizeof(looper_bus_cue_r));
+    }
     if(looper_record_active != 0U)
     {
         memset(looper_record_l, 0, sizeof(looper_record_l));
@@ -2029,7 +2133,29 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
         {
             uint8_t source_track = (uint8_t)t;
             (void)track_runtime_get_logical_track_for_mix_track((uint8_t)t, &source_track);
-            brick6_master_buffer_submit_track_post_fader(source_track, L, R, frames);
+            if((source_track < MIXER_MAX_TRACKS) && (mixer_track_is_looper(source_track) != 0U))
+            {
+                if((looper_playback_mix_active != 0U) && (looper_output_active[source_track] != 0U))
+                {
+                    if(mt->route_master != 0U)
+                    {
+                        for(uint32_t i = 0U; i < frames; ++i)
+                        {
+                            looper_bus_main_l[i] += L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                            looper_bus_main_r[i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                        }
+                    }
+                    if(mt->route_cue != 0U)
+                    {
+                        for(uint32_t i = 0U; i < frames; ++i)
+                        {
+                            looper_bus_cue_l[i] += L[i] * MIXER_TRACK_NOMINAL_TRIM;
+                            looper_bus_cue_r[i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
+                        }
+                    }
+                }
+                continue;
+            }
             if((looper_record_active != 0U)
                     && (source_track < MIXER_MAX_TRACKS)
                     && (source_track != looper_record_track)
@@ -2195,6 +2321,101 @@ void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t frames)
                     bus_main_l[i] += send_l[s][i];
                     bus_main_r[i] += send_r[s][i];
                 }
+            }
+        }
+    }
+
+    if(looper_xfade_apply_active != 0U)
+    {
+        const uint8_t cue_xfade_active =
+            ((looper_playback_mix_active != 0U) && (looper_playback_routes_cue != 0U)) ? 1U : 0U;
+
+        if((mixer_looper_xfade_value_is_full(looper_xfade_start) != 0U)
+                && (mixer_looper_xfade_value_is_full(looper_xfade_end) != 0U))
+        {
+            if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
+            {
+                memcpy(bus_main_l, looper_bus_main_l, sizeof(float) * frames);
+                memcpy(bus_main_r, looper_bus_main_r, sizeof(float) * frames);
+            }
+            else
+            {
+                memset(bus_main_l, 0, sizeof(float) * frames);
+                memset(bus_main_r, 0, sizeof(float) * frames);
+            }
+            if(cue_xfade_active != 0U)
+            {
+                memcpy(bus_cue_l, looper_bus_cue_l, sizeof(float) * frames);
+                memcpy(bus_cue_r, looper_bus_cue_r, sizeof(float) * frames);
+            }
+        }
+        else if(mixer_looper_xfade_values_are_stable(looper_xfade_start, looper_xfade_end) != 0U)
+        {
+            float xfade = looper_xfade_end;
+            if(xfade < 0.0f)
+            {
+                xfade = 0.0f;
+            }
+            else if(xfade > 1.0f)
+            {
+                xfade = 1.0f;
+            }
+
+            const float live_gain = 1.0f - xfade;
+            const float loop_gain = xfade;
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                const float loop_main_l = ((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
+                    ? looper_bus_main_l[i]
+                    : 0.0f;
+                const float loop_main_r = ((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
+                    ? looper_bus_main_r[i]
+                    : 0.0f;
+                bus_main_l[i] = (bus_main_l[i] * live_gain) + (loop_main_l * loop_gain);
+                bus_main_r[i] = (bus_main_r[i] * live_gain) + (loop_main_r * loop_gain);
+            }
+
+            if(cue_xfade_active != 0U)
+            {
+                for(uint32_t i = 0U; i < frames; ++i)
+                {
+                    bus_cue_l[i] = (bus_cue_l[i] * live_gain) + (looper_bus_cue_l[i] * loop_gain);
+                    bus_cue_r[i] = (bus_cue_r[i] * live_gain) + (looper_bus_cue_r[i] * loop_gain);
+                }
+            }
+        }
+        else
+        {
+            const float xfade_step = (frames > 1U)
+                ? ((looper_xfade_end - looper_xfade_start) / (float)(frames - 1U))
+                : 0.0f;
+            float xfade = (frames > 1U) ? looper_xfade_start : looper_xfade_end;
+            for(uint32_t i = 0U; i < frames; ++i)
+            {
+                if(xfade < 0.0f)
+                {
+                    xfade = 0.0f;
+                }
+                else if(xfade > 1.0f)
+                {
+                    xfade = 1.0f;
+                }
+
+                const float live_gain = 1.0f - xfade;
+                const float loop_main_l = ((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
+                    ? looper_bus_main_l[i]
+                    : 0.0f;
+                const float loop_main_r = ((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
+                    ? looper_bus_main_r[i]
+                    : 0.0f;
+                bus_main_l[i] = (bus_main_l[i] * live_gain) + (loop_main_l * xfade);
+                bus_main_r[i] = (bus_main_r[i] * live_gain) + (loop_main_r * xfade);
+                if(cue_xfade_active != 0U)
+                {
+                    bus_cue_l[i] = (bus_cue_l[i] * live_gain) + (looper_bus_cue_l[i] * xfade);
+                    bus_cue_r[i] = (bus_cue_r[i] * live_gain) + (looper_bus_cue_r[i] * xfade);
+                }
+                xfade += xfade_step;
             }
         }
     }

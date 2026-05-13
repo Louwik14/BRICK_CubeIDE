@@ -109,7 +109,6 @@ Les macros principales dans `Inc/Storage/memory_layout.h` sont :
 | `CTRL_STATE` | `.ram_d3_ctrl` | low-rate control/flags | aucun |
 | `UI_SDRAM` | `.sdram_ui` | UI / bulk non real-time | `ALIGN32` |
 | `SDRAM_SAMPLES` | `.sdram_samples` | arena samples rÃ©sidents | `ALIGN32` |
-| `SDRAM_RECORDER` | `.sdram_recorder` | recorder/master-buffer history | `ALIGN32` |
 | `AUDIO_COLD_SDRAM` | `.sdram_audio_cold` | large cold audio history | `ALIGN32` |
 
 Observation linker importante :
@@ -406,7 +405,6 @@ D1 mÃ©lange :
 |---|---:|---|---|---|---|
 | `g_sampler_clip_slots` | 67 664 B | `brick6_sampler_runtime.c` | slots clip/shifter Sampler | garder interne / redesign | audio render Sampler |
 | `g_sample_cache_file` | 38 400 B | `sample_cache.c` | 64 objets `FIL` FatFs | Ã  auditer | touche FatFs/streaming, ne pas marquer safe immÃ©diat |
-| `g_pitch_shifter` | 16 396 B | `brick6_master_buffer.c` | shifter Master/Buffer partage `brick6_clip_shifter` | garder interne | audio playback |
 | `g_mod_lfo_dest_cache` | 19 432 B | `mod_lfo_v1.c` | cache destinations LFO | D3 possible avec vÃ©rification | modulation processÃ©e par bloc audio |
 | `g_param_macro_sources` | 15 680 B | `param_macro.c` | sources macro param | D3 possible avec vÃ©rification | control/param |
 | `g_keyboard_engine_group_note_track` | 14 336 B | `keyboard_engine.c` | runtime keyboard notes | D3 possible avec vÃ©rification | live performance state |
@@ -833,7 +831,6 @@ Symboles explicitement inchanges : `g_sample_cache_file`, sample streaming princ
 ## 14.1 Ce qui doit rester en interne rapide
 
 - DTCM audio hot : `tracks`, gains, scratch mix, engines runtime, voix Sampler.
-- D1 audio warm : RevB engine/predelay, Master/Buffer shifter, Sampler clip slots, mixer filters.
 - D2 DMA : OLED/SPI DMA, LED/TIM DMA, ADC DMA, SAI RX/TX cacheable avec maintenance.
 - D2 seq runtime : modÃ¨le sÃ©quenceur et p-locks tant qu'aucun redesign/profiling n'existe.
 

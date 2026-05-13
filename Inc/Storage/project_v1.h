@@ -16,7 +16,7 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    22U /* Braids Phase Reset param changes PARAM_COUNT-indexed project layout. */
+#define PROJECT_V1_FILE_VERSION    23U /* Track type and PARAM_COUNT-indexed project layout changed. */
 
 typedef enum
 {
