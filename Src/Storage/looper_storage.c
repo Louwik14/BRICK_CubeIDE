@@ -13,7 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define LOOPER_STORAGE_WAV_HEADER_BYTES 44U
+#define LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES 512U
+#define LOOPER_STORAGE_WAV_JUNK_BYTES 460U
 #define LOOPER_STORAGE_EXPORT_CHUNK_BYTES 32256U
 #define LOOPER_STORAGE_EXPORT_IO_BYTES LOOPER_STORAGE_EXPORT_CHUNK_BYTES
 #define LOOPER_STORAGE_EXPORT_WAIT_LIMIT 1000U
@@ -132,8 +133,10 @@ static void looper_storage_build_wav_header(uint8_t *header, uint32_t data_bytes
     const uint16_t block_align = (uint16_t)LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
     const uint32_t byte_rate = LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ * (uint32_t)block_align;
 
+    memset(header, 0, LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES);
     memcpy(&header[0], "RIFF", 4U);
-    looper_storage_write_le32(&header[4], 36U + data_bytes);
+    looper_storage_write_le32(&header[4],
+                              (LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES - 8U) + data_bytes);
     memcpy(&header[8], "WAVE", 4U);
     memcpy(&header[12], "fmt ", 4U);
     looper_storage_write_le32(&header[16], 16U);
@@ -143,8 +146,10 @@ static void looper_storage_build_wav_header(uint8_t *header, uint32_t data_bytes
     looper_storage_write_le32(&header[28], byte_rate);
     looper_storage_write_le16(&header[32], block_align);
     looper_storage_write_le16(&header[34], LOOPER_STORAGE_RAW_BITS_PER_SAMPLE);
-    memcpy(&header[36], "data", 4U);
-    looper_storage_write_le32(&header[40], data_bytes);
+    memcpy(&header[36], "JUNK", 4U);
+    looper_storage_write_le32(&header[40], LOOPER_STORAGE_WAV_JUNK_BYTES);
+    memcpy(&header[504], "data", 4U);
+    looper_storage_write_le32(&header[508], data_bytes);
 }
 
 static uint8_t looper_storage_copy_path_local(char *dst, uint32_t dst_len, const char *src)
@@ -372,7 +377,7 @@ static uint8_t looper_storage_raw_export_compare_window(uint32_t start_frame,
 
     const uint32_t bytes = frame_count * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
     const FSIZE_t raw_offset = (FSIZE_t)start_frame * (FSIZE_t)LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
-    const FSIZE_t wav_offset = (FSIZE_t)LOOPER_STORAGE_WAV_HEADER_BYTES + raw_offset;
+    const FSIZE_t wav_offset = (FSIZE_t)LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES + raw_offset;
 
     if ((f_lseek(&g_looper_raw_export.src, raw_offset) != FR_OK)
             || (f_lseek(&g_looper_raw_export.dst, wav_offset) != FR_OK))
@@ -428,7 +433,7 @@ static uint8_t looper_storage_raw_export_verify(void)
     g_looper_raw_export_diag.raw_bytes_expected = data_bytes;
     g_looper_raw_export_diag.wav_data_bytes_written =
         g_looper_raw_export.frames_done * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
-    g_looper_raw_export_diag.wav_data_offset = LOOPER_STORAGE_WAV_HEADER_BYTES;
+    g_looper_raw_export_diag.wav_data_offset = LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES;
     g_looper_raw_export_diag.first_compare_frames = first_frames;
     g_looper_raw_export_diag.last_compare_frames = last_frames;
     g_looper_raw_export_diag.first_compare_start_frame = 0U;
@@ -437,7 +442,7 @@ static uint8_t looper_storage_raw_export_verify(void)
 
     if ((g_looper_raw_export_diag.wav_data_bytes_written != data_bytes)
             || (f_size(&g_looper_raw_export.dst)
-                != ((FSIZE_t)LOOPER_STORAGE_WAV_HEADER_BYTES + (FSIZE_t)data_bytes)))
+                != ((FSIZE_t)LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES + (FSIZE_t)data_bytes)))
     {
         g_looper_raw_export_diag.first_mismatch_data_offset = data_bytes;
         return 0U;
@@ -686,12 +691,13 @@ uint8_t looper_storage_raw_export_start(uint8_t track_id,
     g_looper_raw_export.error = LOOPER_STORAGE_RAW_EXPORT_ERROR_NONE;
     g_looper_raw_export.state = LOOPER_STORAGE_RAW_EXPORT_ACTIVE;
     looper_storage_raw_export_log(
-        "[LSAVE] START track=%u slot=%u frames=%lu bytes=%lu chunk=%lu raw=%s wav=%s\r\n",
+        "[LSAVE] START track=%u slot=%u frames=%lu bytes=%lu chunk=%lu data_offset=%lu raw=%s wav=%s\r\n",
         (unsigned)track_id,
         (unsigned)raw_slot,
         (unsigned long)recorded_frames,
         (unsigned long)(recorded_frames * LOOPER_STORAGE_RAW_BYTES_PER_FRAME),
         (unsigned long)LOOPER_STORAGE_EXPORT_CHUNK_BYTES,
+        (unsigned long)LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES,
         g_looper_raw_export.raw_path,
         g_looper_raw_export.final_path);
     looper_storage_raw_export_log_phase();
@@ -781,13 +787,13 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
 
     if (g_looper_raw_export.phase == LOOPER_STORAGE_EXPORT_PHASE_WRITE_HEADER)
     {
-        if (byte_budget < LOOPER_STORAGE_WAV_HEADER_BYTES)
+        if (byte_budget < LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES)
         {
             sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
             return;
         }
 
-        uint8_t header[LOOPER_STORAGE_WAV_HEADER_BYTES];
+        uint8_t header[LOOPER_STORAGE_WAV_DATA_OFFSET_BYTES];
         UINT bw = 0U;
         looper_storage_build_wav_header(header,
                                         g_looper_raw_export.recorded_frames
