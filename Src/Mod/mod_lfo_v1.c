@@ -140,7 +140,12 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
         {
             return 0U;
         }
-        if ((dest == PARAM_LOOPER_ARM) || (dest == PARAM_LOOPER_LEN) || (dest == PARAM_LOOPER_PLAY))
+        if ((dest == PARAM_LOOPER_ARM)
+                || (dest == PARAM_LOOPER_LEN)
+                || (dest == PARAM_LOOPER_PLAY)
+                || (dest == PARAM_LOOPER_STRETCH)
+                || (dest == PARAM_LOOPER_PITCH)
+                || (dest == PARAM_LOOPER_GRAIN))
         {
             return 0U;
         }

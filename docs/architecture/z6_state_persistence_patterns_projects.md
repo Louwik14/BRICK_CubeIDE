@@ -684,7 +684,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le SAVE RAW exporte directement le reservoir RAW vers le path final et laisse le playback transient RAW courant attache au reservoir.
 - La notification catalogue apres SAVE reste seulement pour l'affichage `Settings > SAMPLER > SD`; elle ne devient pas l'autorite du playback Looper.
 - Le service SD reste ordonne par `brick6_app_process`: le writer record est servi avant tout pour terminer un drain/finalize deja actif; quand un SAVE RAW -> WAV est actif, l'export devient prioritaire avec budget `516096U` et suspend sample cache, refill Looper, pattern load et preview SD. Hors export actif, l'ordre normal redevient sample cache, refill Looper, export opportuniste si aucun refill Looper n'est pending, puis pattern load. `sample_cache_service` ne service que la plage `0..SAMPLE_POOL_SIZE-1`; le Looper service la plage transient `SAMPLE_POOL_SIZE..SAMPLE_POOL_SIZE+SEQ_TRACK_COUNT-1`.
-- Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
+- Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le buffer I/O SAVE `g_looper_raw_export_io` est froid, hors IRQ, place en `UI_SDRAM` et aligne 32 pour preserver RAM_D1 aux etats audio hot. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
 - Les logs UART SAVE Looper sont actifs par defaut hors IRQ audio sur USART1, prefixe `[LSAVE]`: reservation de path, start avec `data_offset`, phases, lignes COPY par service, DONE/FAIL avec resume read/write/sync/verify/close.
 - Le demarrage SAVE refuse un writer recording/finalizing, refuse transport running cote UI, stoppe une preview SD active avant reservation du path final, puis bloque les entrees project/pattern/import/scan via `looper_storage_raw_export_is_active()`. L'export ne cede plus a `sample_cache_has_pending_sd_work()`; un refus prolonge avant ouverture bascule en erreur `WAIT_TIMEOUT` pour ne pas laisser l'etat actif indefiniment.
 - Limite restante: le refill Looper partage le budget global du `sample_page_cache`; une page manquante produit un silence local jusqu'au prochain refill.
@@ -697,3 +697,15 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `PATTERN_VERSION=18` et `PROJECT_V1_FILE_VERSION=23` marquent le retrait du type UI/runtime buffer master et des anciens params buffer de `PARAM_COUNT`.
 - Aucune migration legacy n'est conservee: les anciens patterns/projets prototype sont refuses par version/payload stricts.
 - Le XFade Looper persiste via `PARAM_LOOPER_XFADE` dans le layout courant.
+
+## Addendum 2026-05-13 - metadata musicale Looper transient
+
+- La prise Looper RAW transient porte maintenant une metadata runtime minimale pour un futur stretch Looper: frames enregistrees, duree musicale Q16, cadence source au REC et samples absolus start/stop.
+- Cette metadata reste runtime/transient dans cette passe: le RAW systeme n'est pas restaure comme prise durable au load projet, et SAVE RAW -> WAV continue de lire uniquement `recorded_frames` pour exporter l'audio.
+- Aucun changement de layout `PARAM_COUNT`, `PatternSaveV1` ou `ProjectSaveV1` n'est introduit par cette passe; aucun bump `PATTERN_VERSION` / `PROJECT_V1_FILE_VERSION` n'est requis.
+
+## Addendum 2026-05-13 - params Looper STRETCH UI/state
+
+- `PATTERN_VERSION=19` et `PROJECT_V1_FILE_VERSION=24` marquent l'ajout de `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` au layout `PARAM_COUNT`.
+- Les anciens patterns/projets prototype sont refuses proprement par version/payload stricts; aucune migration legacy ni tombstone n'est conserve.
+- Les nouveaux params Looper persistent via les flux `PARAM_COUNT` existants, mais restent UI/state uniquement: aucun etat REC/PLAY/WRAP/SAVE/XFADE/ROUT ni metadata RAW n'est modifie par cette passe.

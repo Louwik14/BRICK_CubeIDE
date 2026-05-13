@@ -574,3 +574,10 @@ Points factuels:
 - Le catalogue `Master` expose seulement `FX`.
 - Les shortcuts `TRACK+REC`, `TRACK+PLAY` et `TRACK+SHIFT+REC` ne ciblent plus de backend buffer dedie; ils reviennent au transport/REC existant.
 - `ROUT` reste une projection de `ARP` pour `Master/FX` et `Sampler/Looper`; `Sampler/Looper` expose `ARM`, `LEN`, `PLAY`, `XFade` via `PARAM_LOOPER_XFADE`.
+
+## 21. Contrat UI Looper STRETCH
+
+- La page TONE `Sampler/Looper` garde la sous-page `LOOP` inchangee: `ARM`, `LEN`, `PLAY`, `XFade`.
+- Une sous-page `STR` expose `Stretch`, `Pitch` et `Grain`; le quatrieme slot reste vide.
+- La surface Looper n'expose pas `SRC BPM` ni `SYNC LEN`.
+- Ces controles sont stockes/UI-only dans cette passe; aucun changement audible de playback n'est associe a leur edition.

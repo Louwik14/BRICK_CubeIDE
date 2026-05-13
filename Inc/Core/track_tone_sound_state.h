@@ -36,6 +36,9 @@ typedef struct
         float len;
         float play;
         float xfade;
+        float stretch;
+        float pitch;
+        float grain;
     } looper;
     struct
     {

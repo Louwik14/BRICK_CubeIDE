@@ -460,3 +460,21 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Les etats stables ont des fast paths: `100%` stable remplace/mute par `memcpy`/`memset`, et les valeurs intermediaires stables calculent les gains une seule fois par bloc.
 - Les diagnostics temporaires Looper RAW ne sont plus appeles depuis l'IRQ audio ni depuis les transitions writer/UI; les compteurs CPU/perf existants restent conserves.
 - Le recorder legacy dormant `live_recorder` / `recorder_transport` est retire avec son buffer SDRAM_RECORDER; le record actif reste uniquement Looper RAW via `multi_record_writer`.
+
+## Addendum 2026-05-13 - metadata musicale Looper REC
+
+- `brick6_looper_runtime` memorise maintenant une metadata musicale minimale par prise RAW transient: `recorded_frames`, `recorded_steps_q16`, `source_samples_per_step_q16`, `source_bpm_milli`, `record_start_sample` et `record_stop_sample`.
+- `REC_START` reste consomme sur marker boundary audio; le runtime capture alors la cadence source via `seq_runtime_get_samples_per_step_q16()` et le BPM projet courant.
+- `REC_STOP` reste consomme sur marker boundary audio: pour `LEN` fixe, `recorded_steps_q16` vient du mode LEN; pour `LEN=Free`, il est mesure depuis le span sample exact `REC_STOP - REC_START` et la cadence source capturee au start.
+- Cette metadata ne branche pas encore le stretch/pitchshifter Looper et ne modifie pas le rendu PLAY/WRAP/RAW/page-cache/XFade/SAVE.
+
+## Addendum 2026-05-13 - Looper STRETCH runtime
+
+- `Sampler/Looper` consomme maintenant `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` dans `brick6_looper_runtime`, sans lookup `param_registry` depuis l'IRQ audio.
+- `Off + Pitch=0` conserve le chemin entier existant: lecture PREROLL/RAW page-cache, wrap entier, avance playhead entiere et XFade/ROUT/SAVE inchanges.
+- `Off + Pitch != 0` utilise le lecteur Looper varispeed Q16/fractionnaire avec interpolation lineaire stereo; il transpose la boucle sans time-stretch.
+- `Speed` utilise la metadata de prise: `timing_ratio = source_samples_per_step_q16 / current_samples_per_step_q16`, clamp `0.5..2.0`, puis increment de lecture `timing_ratio * pitch_ratio`.
+- `Shifter` rend d'abord le Looper en varispeed `timing_ratio` dans un scratch stereo bloc, puis applique `brick6_clip_shifter_process_stereo()` avec correction `pitch_ratio / timing_ratio` et fenetre `Grain`.
+- Le pool shifter Looper est dedie et separe du pool Clip prive: 4 instances bornees en RAM_D1, avec reset explicite au start playback et au changement mode/grain. Le scratch stereo bloc Looper Shifter (`g_looper_stretch_l/r`) reste aussi en RAM_D1 pour eviter les lectures/ecritures shifter par sample en SDRAM cold.
+- Si la metadata musicale est invalide (`recorded_frames`, `recorded_steps_q16`, `source_samples_per_step_q16` ou cadence courante nuls), `Speed/Shifter` retombent sur `Off`.
+- Si `Shifter` est demande mais qu'aucune instance Looper dediee n'est disponible, le runtime retombe sur `Speed` si la metadata est valide, sinon `Off`.

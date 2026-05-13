@@ -85,7 +85,7 @@ typedef struct
 
 static looper_storage_raw_export_ctx_t g_looper_raw_export;
 static looper_storage_raw_export_diag_t g_looper_raw_export_diag;
-static ALIGN32 uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
+UI_SDRAM static uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
 
 static void looper_storage_raw_export_log(const char *fmt, ...)
 {

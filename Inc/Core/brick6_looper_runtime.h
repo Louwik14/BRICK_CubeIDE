@@ -37,8 +37,13 @@ typedef struct
     uint32_t start_playhead;
     uint32_t playhead;
     uint32_t recorded_frames;
+    uint32_t recorded_steps_q16;
+    uint32_t source_samples_per_step_q16;
+    uint32_t source_bpm_milli;
     uint32_t current_page_start_frame;
     uint32_t current_page_frame_count;
+    uint64_t record_start_sample;
+    uint64_t record_stop_sample;
     uint16_t cache_id;
     uint8_t track_id;
     uint8_t raw_slot;
@@ -82,6 +87,10 @@ void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
                                                     const int32_t *lr_interleaved,
                                                     uint32_t frames);
 void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto);
+void brick6_looper_runtime_set_stretch(uint8_t track_id,
+                                       uint8_t mode,
+                                       float pitch_semitones,
+                                       uint16_t grain_frames);
 void brick6_looper_runtime_on_transport_start(void);
 void brick6_looper_runtime_on_transport_stop(void);
 void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_time);

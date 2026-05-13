@@ -58,6 +58,9 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->looper.len = param_registry[PARAM_LOOPER_LEN].default_value;
     state->looper.play = param_registry[PARAM_LOOPER_PLAY].default_value;
     state->looper.xfade = param_registry[PARAM_LOOPER_XFADE].default_value;
+    state->looper.stretch = param_registry[PARAM_LOOPER_STRETCH].default_value;
+    state->looper.pitch = param_registry[PARAM_LOOPER_PITCH].default_value;
+    state->looper.grain = param_registry[PARAM_LOOPER_GRAIN].default_value;
     for (uint8_t slot = 0U; slot < 4U; ++slot)
     {
         state->master_fx.type[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_TYPE + (slot * 4U))].default_value;

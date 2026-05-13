@@ -245,7 +245,10 @@ static uint8_t track_runtime_param_is_looper_only(param_id_t param)
 {
     return (uint8_t)((param == PARAM_LOOPER_ARM)
                      || (param == PARAM_LOOPER_LEN)
-                     || (param == PARAM_LOOPER_PLAY));
+                     || (param == PARAM_LOOPER_PLAY)
+                     || (param == PARAM_LOOPER_STRETCH)
+                     || (param == PARAM_LOOPER_PITCH)
+                     || (param == PARAM_LOOPER_GRAIN));
 }
 
 static const param_id_t g_track_runtime_tone_slots_opal[] = {
@@ -301,7 +304,10 @@ static const param_id_t g_track_runtime_tone_slots_looper[] = {
     PARAM_LOOPER_ARM,
     PARAM_LOOPER_LEN,
     PARAM_LOOPER_PLAY,
-    PARAM_LOOPER_XFADE
+    PARAM_LOOPER_XFADE,
+    PARAM_LOOPER_STRETCH,
+    PARAM_LOOPER_PITCH,
+    PARAM_LOOPER_GRAIN
 };
 
 static const param_id_t g_track_runtime_tone_slots_midi[] = {
@@ -1301,6 +1307,9 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_LOOPER_LEN:
         case PARAM_LOOPER_PLAY:
         case PARAM_LOOPER_XFADE:
+        case PARAM_LOOPER_STRETCH:
+        case PARAM_LOOPER_PITCH:
+        case PARAM_LOOPER_GRAIN:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

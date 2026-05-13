@@ -301,6 +301,15 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_LOOPER_XFADE:
             *out_value = state->looper.xfade;
             return 1U;
+        case PARAM_LOOPER_STRETCH:
+            *out_value = clamp_value(state->looper.stretch, 0.0f, 2.0f);
+            return 1U;
+        case PARAM_LOOPER_PITCH:
+            *out_value = state->looper.pitch;
+            return 1U;
+        case PARAM_LOOPER_GRAIN:
+            *out_value = state->looper.grain;
+            return 1U;
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX2_TYPE:
         case PARAM_MASTER_FX3_TYPE:
@@ -502,6 +511,15 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
             return 1U;
         case PARAM_LOOPER_XFADE:
             state->looper.xfade = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_LOOPER_STRETCH:
+            state->looper.stretch = clamp_value(value, 0.0f, 2.0f);
+            return 1U;
+        case PARAM_LOOPER_PITCH:
+            state->looper.pitch = clamp_value(value, -12.0f, 12.0f);
+            return 1U;
+        case PARAM_LOOPER_GRAIN:
+            state->looper.grain = clamp_value(value, 0.0f, 5.0f);
             return 1U;
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX2_TYPE:

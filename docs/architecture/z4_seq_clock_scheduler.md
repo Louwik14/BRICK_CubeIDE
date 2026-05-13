@@ -674,3 +674,9 @@ Points factuels observes:
 - `seq_runtime_start` ne doit pas exposer un transport `RUNNING` a l'IRQ audio avant que `seq_runtime_exec_begin_running_at_sample_q16` ait seed le step 0, les markers boundary et les events PLAY initiaux.
 - Pour un PLAY depuis STOP sans count-in, la transition FSM `RUNNING` et le seed execution restent dans la meme section critique: le premier collect audio voit soit STOPPED, soit un etat RUNNING complet.
 - Le premier marker `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE` et les trigs du step 0 partagent le meme `step_sample_q16`; la segmentation Z1 applique ensuite le marker puis les notes au meme offset sample.
+
+## Addendum 2026-05-13 - projection musicale pour metadata Looper
+
+- Z4 reste seulement fournisseur de projection temporelle: marker `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE`, `seq_runtime_get_samples_per_step_q16()` et BPM courant.
+- La quantification musicale de `LEN=Free` Looper appartient au runtime Looper cote Z1/Z5: STOP arme un `REC_STOP`, puis le marker boundary audio fournit l'echantillon exact de fin.
+- Z4 ne persiste aucune prise Looper et ne branche aucun stretch; il expose uniquement la cadence necessaire au calcul `recorded_steps_q16`.

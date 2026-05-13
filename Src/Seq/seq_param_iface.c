@@ -277,7 +277,10 @@ static void seq_param_iface_rebuild_slot_maps(void)
         if ((param == PARAM_SAMPLER_SLICE_COUNT)
                 || (param == PARAM_LOOPER_ARM)
                 || (param == PARAM_LOOPER_LEN)
-                || (param == PARAM_LOOPER_PLAY))
+                || (param == PARAM_LOOPER_PLAY)
+                || (param == PARAM_LOOPER_STRETCH)
+                || (param == PARAM_LOOPER_PITCH)
+                || (param == PARAM_LOOPER_GRAIN))
         {
             continue;
         }
@@ -308,6 +311,12 @@ static void seq_param_iface_rebuild_slot_maps(void)
 static uint8_t seq_param_iface_param_matches_set_domain(uint8_t set_id, param_id_t param)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+    if ((param == PARAM_LOOPER_STRETCH)
+            || (param == PARAM_LOOPER_PITCH)
+            || (param == PARAM_LOOPER_GRAIN))
+    {
+        return 0U;
+    }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
             && (seq_param_iface_is_mix_param_plockable(param) == 0U))
     {

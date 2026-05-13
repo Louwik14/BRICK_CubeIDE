@@ -44,6 +44,40 @@ static uint16_t param_backend_clip_grain_size_value(uint8_t index)
     return values[(index <= 5U) ? index : 5U];
 }
 
+static void param_backend_project_looper_stretch(uint8_t track,
+                                                 const track_tone_sound_state_t *state,
+                                                 param_id_t override_id,
+                                                 float override_value)
+{
+    if (state == NULL)
+    {
+        return;
+    }
+
+    float stretch = state->looper.stretch;
+    float pitch = state->looper.pitch;
+    float grain = state->looper.grain;
+    if (override_id == PARAM_LOOPER_STRETCH)
+    {
+        stretch = override_value;
+    }
+    else if (override_id == PARAM_LOOPER_PITCH)
+    {
+        pitch = override_value;
+    }
+    else if (override_id == PARAM_LOOPER_GRAIN)
+    {
+        grain = override_value;
+    }
+
+    const uint8_t mode = (uint8_t)(param_backend_clamp_value(stretch, 0.0f, 2.0f) + 0.5f);
+    const uint8_t grain_index = (uint8_t)(param_backend_clamp_value(grain, 0.0f, 5.0f) + 0.5f);
+    brick6_looper_runtime_set_stretch(track,
+                                      mode,
+                                      param_backend_clamp_value(pitch, -12.0f, 12.0f),
+                                      param_backend_clip_grain_size_value(grain_index));
+}
+
 static uint8_t param_backend_clip_search_index(float value)
 {
     const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f);
@@ -530,6 +564,27 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
             audio_xfade_set(clamped);
             return 1U;
         }
+        case PARAM_LOOPER_STRETCH:
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->looper.stretch = param_backend_clamp_value(value, 0.0f, 2.0f);
+            }
+            param_backend_project_looper_stretch(track, state, id, value);
+            return 1U;
+        case PARAM_LOOPER_PITCH:
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->looper.pitch = param_backend_clamp_value(value, -12.0f, 12.0f);
+            }
+            param_backend_project_looper_stretch(track, state, id, value);
+            return 1U;
+        case PARAM_LOOPER_GRAIN:
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->looper.grain = param_backend_clamp_value(value, 0.0f, 5.0f);
+            }
+            param_backend_project_looper_stretch(track, state, id, value);
+            return 1U;
         default:
             return 0U;
     }
