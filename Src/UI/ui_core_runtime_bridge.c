@@ -12,6 +12,7 @@
 #include "Seq/seq_runtime_exec.h"
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
+#include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_loader.h"
 #include "Storage/pattern_live_ram.h"
@@ -61,6 +62,8 @@ static uint8_t g_looper_record_auto_stop_latched = 0U;
 static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
 static uint8_t g_looper_export_last_progress = 0xFFU;
+static looper_storage_raw_export_phase_t g_looper_export_last_phase =
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
 static ui_core_runtime_bridge_looper_save_diag_t g_looper_save_diag;
 
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
@@ -423,6 +426,11 @@ static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_
         return 1U;
     }
 
+    if (sd_preview_is_active() != 0U)
+    {
+        sd_preview_stop();
+    }
+
     multi_record_writer_status_t status;
     if (multi_record_writer_get_status(UI_LOOPER_RECORD_CLIENT_ID, &status) == 0U)
     {
@@ -501,9 +509,10 @@ static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_
         ui_core_runtime_bridge_looper_copy_diag_path(g_looper_save_diag.raw_path, raw_path);
         ui_core_runtime_bridge_looper_copy_diag_path(g_looper_save_diag.wav_path, final_path);
         g_looper_export_last_progress = 0U;
+        g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT;
         if (feedback != 0)
         {
-            feedback("SAVE 0%");
+            feedback("SAVE WAIT");
         }
         return 1U;
     }
@@ -679,7 +688,7 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     if (multi_record_writer_prepare_raw(UI_LOOPER_RECORD_CLIENT_ID,
                                         raw_slot,
                                         raw_path,
-                                        0U) == 0U)
+                                        expected_frames) == 0U)
     {
         if (feedback != 0)
         {
@@ -808,12 +817,29 @@ void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridg
     const looper_storage_raw_export_state_t state = looper_storage_raw_export_get_state();
     if (state == LOOPER_STORAGE_RAW_EXPORT_ACTIVE)
     {
+        const looper_storage_raw_export_phase_t phase = looper_storage_raw_export_get_phase();
         const uint8_t progress = looper_storage_raw_export_get_progress_percent();
-        if (progress != g_looper_export_last_progress)
+        if ((phase != g_looper_export_last_phase) || (progress != g_looper_export_last_progress))
         {
             char msg[16];
             g_looper_export_last_progress = progress;
-            (void)snprintf(msg, sizeof(msg), "SAVE %u%%", (unsigned)progress);
+            g_looper_export_last_phase = phase;
+            switch (phase)
+            {
+                case LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT:
+                    (void)snprintf(msg, sizeof(msg), "SAVE WAIT");
+                    break;
+                case LOOPER_STORAGE_RAW_EXPORT_PHASE_OPEN:
+                    (void)snprintf(msg, sizeof(msg), "SAVE OPEN");
+                    break;
+                case LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY:
+                    (void)snprintf(msg, sizeof(msg), "SAVE VERIFY");
+                    break;
+                case LOOPER_STORAGE_RAW_EXPORT_PHASE_WRITE:
+                default:
+                    (void)snprintf(msg, sizeof(msg), "SAVE %u%%", (unsigned)progress);
+                    break;
+            }
             feedback(msg);
         }
         return;
@@ -825,6 +851,7 @@ void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridg
         (void)wav_loader_catalog_notify_file_created(looper_storage_raw_export_get_final_path());
         feedback("LOOP SAVED");
         g_looper_export_last_progress = 0xFFU;
+        g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
         looper_storage_raw_export_clear_finished();
         brick6_looper_runtime_diag_get_snapshot(&g_looper_save_diag.after_success);
         g_looper_save_diag.valid = 1U;
@@ -838,6 +865,7 @@ void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridg
     {
         feedback("SAVE FAIL");
         g_looper_export_last_progress = 0xFFU;
+        g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
         looper_storage_raw_export_clear_finished();
     }
 }

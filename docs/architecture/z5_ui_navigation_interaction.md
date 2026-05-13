@@ -555,12 +555,14 @@ Points factuels:
 - Si le writer est deja `STOP_REQUESTED`/`DRAINING`/`FINALIZING`, Z5 ne redemande pas un stop LEN.
 - `SHIFT+SETTINGS` sur la track active `Sampler/Looper` est intercepte avant l'ouverture SETTINGS normale et demande le SAVE Looper:
   - accepte uniquement une prise writer `TAKE_READY`,
+  - refuse transport running par `STOP SAVE`,
   - refuse `RECORDING` / `STOP_REQUESTED` / `DRAINING` / `FINALIZING` par feedback court `LOOP BUSY`,
+  - stoppe une preview SD active avant de reserver le path durable,
   - refuse l'absence de prise finalisee pour cette track par `NO LOOP`,
   - demande le path durable a Z6/storage,
   - demarre `looper_storage_raw_export_start()` sur `raw_path + recorded_frames`,
   - laisse le playback transient RAW courant attache au reservoir RAW; le fichier durable est notifie au catalogue WAV si celui-ci est deja charge, sinon il sera retrouve par scan lazy Settings,
-  - feedback visible borne a `LOOP SAVED` / `LOOP BUSY` / `NO LOOP` / `LOOP FAIL`.
+  - feedback visible par phase `SAVE WAIT` / `SAVE OPEN` / `SAVE n%` / `SAVE VERIFY`, puis `LOOP SAVED` ou `SAVE FAIL`.
 - Le SAVE Looper ne lance pas de scan catalogue WAV global: apres export termine, Z5 ajoute seulement le path final au cache catalogue deja charge via `wav_loader_catalog_notify_file_created()`, sinon le scan Settings reste lazy/demande par la page Sampler.
 - Le bridge UI ne possede pas la nomenclature fichier Looper, le scan de path SD ni la creation du dossier durable; cette autorite appartient a Z6/storage.
 - SETTINGS normal reste inchangé hors `Sampler/Looper`.

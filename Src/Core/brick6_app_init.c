@@ -170,16 +170,23 @@ void brick6_app_process(void)
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
-    sample_cache_service(32768U);
     multi_record_writer_service(16384U);
-    brick6_looper_runtime_service(8192U);
-    if (brick6_looper_runtime_has_pending_sd_work() == 0U)
+    if (looper_storage_raw_export_is_active() != 0U)
     {
-        looper_storage_raw_export_service(8192U);
+        looper_storage_raw_export_service(131072U);
     }
-    pattern_load_service(4096U);
+    else
+    {
+        sample_cache_service(32768U);
+        brick6_looper_runtime_service(8192U);
+        if (brick6_looper_runtime_has_pending_sd_work() == 0U)
+        {
+            looper_storage_raw_export_service(8192U);
+        }
+        pattern_load_service(4096U);
+        sd_preview_process();
+    }
     pattern_live_service();
-    sd_preview_process();
     brick6_master_control_process();
 
     brick6_process_hall_ui_keyboard_chain();

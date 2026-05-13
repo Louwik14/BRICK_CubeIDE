@@ -271,12 +271,12 @@ Z0 appelle principalement:
 ## 12. Addendum - ordre de service SD recording produit
 
 - Z0 porte uniquement l'ordre de service cooperatif hors IRQ; il ne devient pas l'autorite SD metier.
-- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` appelle `multi_record_writer_service(16384U)` juste apres `sample_cache_service(32768U)`, puis `brick6_looper_runtime_service(8192U)`, puis `looper_storage_raw_export_service(8192U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
+- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` sert toujours `multi_record_writer_service(16384U)` en premier pour terminer un drain/finalize deja actif. Si un SAVE Looper RAW -> WAV est actif, la superloop suspend ensuite `sample_cache_service`, `brick6_looper_runtime_service`, `pattern_load_service` et `sd_preview_process`, puis appelle `looper_storage_raw_export_service(131072U)` comme operation SD prioritaire. Hors export actif, l'ordre reste `sample_cache_service(32768U)`, `brick6_looper_runtime_service(8192U)`, puis `looper_storage_raw_export_service(8192U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
 - Ordre cible pour la cohabitation SD audio:
-  1. `sample_cache_service(...)` prioritaire pour playback sample streaming.
-  2. `multi_record_writer_service(...)` pour drainer les rings record, priorite par watermark.
-  3. `brick6_looper_runtime_service(...)` pour refill transient RAW/WAV.
-  4. `looper_storage_raw_export_service(...)` opportuniste pour SAVE RAW -> WAV, apres les refills sample/Looper.
+  1. `multi_record_writer_service(...)` pour drainer/finaliser les rings record deja actifs.
+  2. `looper_storage_raw_export_service(...)` prioritaire pendant SAVE RAW -> WAV, car SAVE n'est autorise que transport arrete.
+  3. `sample_cache_service(...)` prioritaire hors export pour playback sample streaming.
+  4. `brick6_looper_runtime_service(...)` pour refill transient RAW/WAV hors export.
   5. `pattern_save_service(...)` opportuniste, seulement si les rings record ne sont pas critiques.
   6. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
 - Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.

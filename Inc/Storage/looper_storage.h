@@ -56,8 +56,20 @@ typedef enum
     LOOPER_STORAGE_RAW_EXPORT_ERROR_WRITE_FAIL,
     LOOPER_STORAGE_RAW_EXPORT_ERROR_SYNC_FAIL,
     LOOPER_STORAGE_RAW_EXPORT_ERROR_CLOSE_FAIL,
-    LOOPER_STORAGE_RAW_EXPORT_ERROR_VERIFY_FAIL
+    LOOPER_STORAGE_RAW_EXPORT_ERROR_VERIFY_FAIL,
+    LOOPER_STORAGE_RAW_EXPORT_ERROR_WAIT_TIMEOUT
 } looper_storage_raw_export_error_t;
+
+typedef enum
+{
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE = 0,
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT,
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_OPEN,
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_WRITE,
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY,
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_DONE,
+    LOOPER_STORAGE_RAW_EXPORT_PHASE_FAIL
+} looper_storage_raw_export_phase_t;
 
 typedef struct
 {
@@ -74,6 +86,14 @@ typedef struct
     uint8_t first_wav_bytes[16U * LOOPER_STORAGE_RAW_BYTES_PER_FRAME];
     uint8_t last_raw_bytes[16U * LOOPER_STORAGE_RAW_BYTES_PER_FRAME];
     uint8_t last_wav_bytes[16U * LOOPER_STORAGE_RAW_BYTES_PER_FRAME];
+    uint32_t chunks_copied;
+    uint32_t bytes_copied;
+    uint32_t gate_acquire_count;
+    uint32_t open_ms;
+    uint32_t copy_ms;
+    uint32_t sync_ms;
+    uint32_t verify_ms;
+    uint32_t close_ms;
     uint8_t verified;
 } looper_storage_raw_export_diag_t;
 
@@ -97,6 +117,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget);
 uint8_t looper_storage_raw_export_is_active(void);
 looper_storage_raw_export_state_t looper_storage_raw_export_get_state(void);
 looper_storage_raw_export_error_t looper_storage_raw_export_get_last_error(void);
+looper_storage_raw_export_phase_t looper_storage_raw_export_get_phase(void);
 void looper_storage_raw_export_get_diag(looper_storage_raw_export_diag_t *out_diag);
 uint8_t looper_storage_raw_export_get_progress_percent(void);
 const char *looper_storage_raw_export_get_final_path(void);

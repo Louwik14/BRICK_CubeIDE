@@ -74,7 +74,7 @@ typedef struct
     uint64_t target_stop_sample;
 } brick6_looper_record_boundary_state_t;
 
-static brick6_looper_track_state_t g_looper_tracks[BRICK6_LOOPER_TRACK_CAP];
+static AUDIO_HOT brick6_looper_track_state_t g_looper_tracks[BRICK6_LOOPER_TRACK_CAP];
 static brick6_looper_runtime_diag_snapshot_t g_looper_runtime_diag;
 SDRAM_RECORDER static int32_t
     g_looper_preroll_pcm[BRICK6_LOOPER_PREROLL_FRAMES * BRICK6_LOOPER_PREROLL_CHANNELS];
