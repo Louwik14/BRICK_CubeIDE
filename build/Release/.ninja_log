@@ -927,3 +927,13 @@
 34	1004	8003922373904916	CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sample_page_cache.c.obj	ca5eec3118d925c8
 84	1045	8003922374324935	CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj	dba3aba97c41af4
 1046	1672	8003922380492600	BRICK6_CUBE.elf	723cc2239186e0d3
+44	639	8003929682952467	CMakeFiles/BRICK6_CUBE.dir/Src/Storage/pattern_live_ram.c.obj	f0234ae5f4f810c6
+49	734	8003929683957664	CMakeFiles/BRICK6_CUBE.dir/Src/Storage/project_v1.c.obj	6674f9596f621268
+55	759	8003929684207663	CMakeFiles/BRICK6_CUBE.dir/Src/Storage/sd_preview.c.obj	c52e61107d429c4a
+40	792	8003929684577683	CMakeFiles/BRICK6_CUBE.dir/Src/Storage/multi_record_writer.c.obj	88db9f48ca380953
+60	799	8003929684657635	CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj	b06628456920bce5
+37	850	8003929685157616	CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj	7cd1aba2840e4e81
+28	895	8003929685617631	CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_app_init.c.obj	4468e32991cb7fc1
+33	952	8003929686192781	CMakeFiles/BRICK6_CUBE.dir/Src/Sampler/sample_page_cache.c.obj	ca5eec3118d925c8
+73	997	8003929686642741	CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj	dba3aba97c41af4
+997	1572	8003929692290851	BRICK6_CUBE.elf	723cc2239186e0d3

@@ -88,12 +88,21 @@ typedef struct
     uint8_t last_wav_bytes[16U * LOOPER_STORAGE_RAW_BYTES_PER_FRAME];
     uint32_t chunks_copied;
     uint32_t bytes_copied;
+    uint32_t service_calls;
     uint32_t gate_acquire_count;
     uint32_t open_ms;
+    uint32_t read_calls;
+    uint32_t read_bytes;
+    uint32_t read_ms;
+    uint32_t write_calls;
+    uint32_t write_bytes;
+    uint32_t write_ms;
     uint32_t copy_ms;
     uint32_t sync_ms;
     uint32_t verify_ms;
     uint32_t close_ms;
+    uint32_t total_ms;
+    uint32_t last_fresult;
     uint8_t verified;
 } looper_storage_raw_export_diag_t;
 

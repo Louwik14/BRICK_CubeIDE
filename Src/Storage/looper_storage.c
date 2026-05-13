@@ -3,16 +3,21 @@
 #include "Core/track_runtime.h"
 #include "Seq/seq_types.h"
 #include "Storage/multi_record_writer.h"
+#include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
+#include "usart.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 #define LOOPER_STORAGE_WAV_HEADER_BYTES 44U
-#define LOOPER_STORAGE_EXPORT_IO_BYTES 32768U
+#define LOOPER_STORAGE_EXPORT_CHUNK_BYTES 32256U
+#define LOOPER_STORAGE_EXPORT_IO_BYTES LOOPER_STORAGE_EXPORT_CHUNK_BYTES
 #define LOOPER_STORAGE_EXPORT_WAIT_LIMIT 1000U
+#define LOOPER_STORAGE_EXPORT_UART_LOG 1U
 
 #define LOOPER_STORAGE_EXPORT_PHASE_OPEN_SRC 0U
 #define LOOPER_STORAGE_EXPORT_PHASE_OPEN_DST 1U
@@ -49,17 +54,28 @@ typedef struct
     uint8_t dst_open;
     uint8_t track_id;
     uint8_t waiting;
+    uint8_t last_logged_phase;
     uint32_t recorded_frames;
     uint32_t frames_done;
     uint32_t wait_count;
     uint32_t chunks_copied;
     uint32_t bytes_copied;
+    uint32_t service_calls;
     uint32_t gate_acquire_count;
     uint32_t open_ms;
+    uint32_t read_calls;
+    uint32_t read_bytes;
+    uint32_t read_ms;
+    uint32_t write_calls;
+    uint32_t write_bytes;
+    uint32_t write_ms;
     uint32_t copy_ms;
     uint32_t sync_ms;
     uint32_t verify_ms;
     uint32_t close_ms;
+    uint32_t total_start_ms;
+    uint32_t total_ms;
+    uint32_t last_fresult;
     char raw_path[96U];
     char final_path[96U];
     FIL src;
@@ -68,7 +84,34 @@ typedef struct
 
 static looper_storage_raw_export_ctx_t g_looper_raw_export;
 static looper_storage_raw_export_diag_t g_looper_raw_export_diag;
-static uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
+static ALIGN32 uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
+
+static void looper_storage_raw_export_log(const char *fmt, ...)
+{
+#if LOOPER_STORAGE_EXPORT_UART_LOG
+    char line[256];
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(line, sizeof(line), fmt, args);
+    va_end(args);
+    if (n <= 0)
+    {
+        return;
+    }
+    if ((uint32_t)n >= sizeof(line))
+    {
+        n = (int)sizeof(line) - 1;
+    }
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)n, 50U);
+#else
+    (void)fmt;
+#endif
+}
+
+static looper_storage_raw_export_phase_t looper_storage_raw_export_phase_public(void);
+static void looper_storage_raw_export_copy_stats_to_diag(void);
+static void looper_storage_raw_export_log_phase(void);
+static void looper_storage_raw_export_log_final(const char *tag);
 
 static void looper_storage_write_le16(uint8_t *dst, uint16_t value)
 {
@@ -130,17 +173,27 @@ static void looper_storage_raw_export_set_failed(looper_storage_raw_export_error
 {
     if (g_looper_raw_export.src_open != 0U)
     {
-        (void)f_close(&g_looper_raw_export.src);
+        const uint32_t t0 = HAL_GetTick();
+        const FRESULT fr = f_close(&g_looper_raw_export.src);
+        g_looper_raw_export.close_ms += HAL_GetTick() - t0;
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.src_open = 0U;
     }
     if (g_looper_raw_export.dst_open != 0U)
     {
-        (void)f_close(&g_looper_raw_export.dst);
+        const uint32_t t0 = HAL_GetTick();
+        const FRESULT fr = f_close(&g_looper_raw_export.dst);
+        g_looper_raw_export.close_ms += HAL_GetTick() - t0;
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.dst_open = 0U;
     }
 
     g_looper_raw_export.error = error;
     g_looper_raw_export.state = LOOPER_STORAGE_RAW_EXPORT_FAILED;
+    g_looper_raw_export.total_ms = HAL_GetTick() - g_looper_raw_export.total_start_ms;
+    looper_storage_raw_export_copy_stats_to_diag();
+    looper_storage_raw_export_log_phase();
+    looper_storage_raw_export_log_final("FAIL");
 }
 
 static uint8_t looper_storage_raw_export_read_exact(FIL *fp, uint8_t *dst, uint32_t bytes)
@@ -167,8 +220,7 @@ static void looper_storage_raw_export_mark_waiting(void)
             && (g_looper_raw_export.src_open == 0U)
             && (g_looper_raw_export.dst_open == 0U))
     {
-        g_looper_raw_export.error = LOOPER_STORAGE_RAW_EXPORT_ERROR_WAIT_TIMEOUT;
-        g_looper_raw_export.state = LOOPER_STORAGE_RAW_EXPORT_FAILED;
+        looper_storage_raw_export_set_failed(LOOPER_STORAGE_RAW_EXPORT_ERROR_WAIT_TIMEOUT);
     }
 }
 
@@ -182,12 +234,129 @@ static void looper_storage_raw_export_copy_stats_to_diag(void)
 {
     g_looper_raw_export_diag.chunks_copied = g_looper_raw_export.chunks_copied;
     g_looper_raw_export_diag.bytes_copied = g_looper_raw_export.bytes_copied;
+    g_looper_raw_export_diag.service_calls = g_looper_raw_export.service_calls;
     g_looper_raw_export_diag.gate_acquire_count = g_looper_raw_export.gate_acquire_count;
     g_looper_raw_export_diag.open_ms = g_looper_raw_export.open_ms;
+    g_looper_raw_export_diag.read_calls = g_looper_raw_export.read_calls;
+    g_looper_raw_export_diag.read_bytes = g_looper_raw_export.read_bytes;
+    g_looper_raw_export_diag.read_ms = g_looper_raw_export.read_ms;
+    g_looper_raw_export_diag.write_calls = g_looper_raw_export.write_calls;
+    g_looper_raw_export_diag.write_bytes = g_looper_raw_export.write_bytes;
+    g_looper_raw_export_diag.write_ms = g_looper_raw_export.write_ms;
     g_looper_raw_export_diag.copy_ms = g_looper_raw_export.copy_ms;
     g_looper_raw_export_diag.sync_ms = g_looper_raw_export.sync_ms;
     g_looper_raw_export_diag.verify_ms = g_looper_raw_export.verify_ms;
     g_looper_raw_export_diag.close_ms = g_looper_raw_export.close_ms;
+    g_looper_raw_export_diag.total_ms = g_looper_raw_export.total_ms;
+    g_looper_raw_export_diag.last_fresult = g_looper_raw_export.last_fresult;
+}
+
+static looper_storage_raw_export_phase_t looper_storage_raw_export_phase_public(void)
+{
+    if (g_looper_raw_export.state == LOOPER_STORAGE_RAW_EXPORT_DONE)
+    {
+        return LOOPER_STORAGE_RAW_EXPORT_PHASE_DONE;
+    }
+    if (g_looper_raw_export.state == LOOPER_STORAGE_RAW_EXPORT_FAILED)
+    {
+        return LOOPER_STORAGE_RAW_EXPORT_PHASE_FAIL;
+    }
+    if (g_looper_raw_export.state != LOOPER_STORAGE_RAW_EXPORT_ACTIVE)
+    {
+        return LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
+    }
+    if (g_looper_raw_export.waiting != 0U)
+    {
+        return LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT;
+    }
+
+    switch (g_looper_raw_export.phase)
+    {
+        case LOOPER_STORAGE_EXPORT_PHASE_OPEN_SRC:
+        case LOOPER_STORAGE_EXPORT_PHASE_OPEN_DST:
+        case LOOPER_STORAGE_EXPORT_PHASE_WRITE_HEADER:
+            return LOOPER_STORAGE_RAW_EXPORT_PHASE_OPEN;
+        case LOOPER_STORAGE_EXPORT_PHASE_COPY:
+            return LOOPER_STORAGE_RAW_EXPORT_PHASE_WRITE;
+        case LOOPER_STORAGE_EXPORT_PHASE_SYNC:
+            return LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY;
+        case LOOPER_STORAGE_EXPORT_PHASE_VERIFY:
+            return LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY;
+        case LOOPER_STORAGE_EXPORT_PHASE_CLOSE_DST:
+        case LOOPER_STORAGE_EXPORT_PHASE_CLOSE_SRC:
+            return LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY;
+        default:
+            break;
+    }
+
+    return LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT;
+}
+
+static const char *looper_storage_raw_export_phase_label(looper_storage_raw_export_phase_t phase)
+{
+    switch (phase)
+    {
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT:
+            return "WAIT";
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_OPEN:
+            return "OPEN";
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_WRITE:
+            return "COPY";
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY:
+            return "VERIFY";
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_DONE:
+            return "DONE";
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_FAIL:
+            return "FAIL";
+        case LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE:
+        default:
+            return "IDLE";
+    }
+}
+
+static void looper_storage_raw_export_log_phase(void)
+{
+    const looper_storage_raw_export_phase_t phase = looper_storage_raw_export_phase_public();
+    if ((uint8_t)phase == g_looper_raw_export.last_logged_phase)
+    {
+        return;
+    }
+
+    g_looper_raw_export.last_logged_phase = (uint8_t)phase;
+    looper_storage_raw_export_log("[LSAVE] PHASE %s ms=%lu bytes=%lu/%lu chunks=%lu svc=%lu gate=%lu\r\n",
+                                  looper_storage_raw_export_phase_label(phase),
+                                  (unsigned long)(HAL_GetTick() - g_looper_raw_export.total_start_ms),
+                                  (unsigned long)g_looper_raw_export.bytes_copied,
+                                  (unsigned long)(g_looper_raw_export.recorded_frames
+                                      * LOOPER_STORAGE_RAW_BYTES_PER_FRAME),
+                                  (unsigned long)g_looper_raw_export.chunks_copied,
+                                  (unsigned long)g_looper_raw_export.service_calls,
+                                  (unsigned long)g_looper_raw_export.gate_acquire_count);
+}
+
+static void looper_storage_raw_export_log_final(const char *tag)
+{
+    looper_storage_raw_export_log(
+        "[LSAVE] %s total_ms=%lu bytes=%lu chunks=%lu svc=%lu gate=%lu open_ms=%lu read_calls=%lu read_bytes=%lu read_ms=%lu write_calls=%lu write_bytes=%lu write_ms=%lu copy_ms=%lu sync_ms=%lu verify_ms=%lu close_ms=%lu fr=%lu err=%u\r\n",
+        tag,
+        (unsigned long)g_looper_raw_export.total_ms,
+        (unsigned long)g_looper_raw_export.bytes_copied,
+        (unsigned long)g_looper_raw_export.chunks_copied,
+        (unsigned long)g_looper_raw_export.service_calls,
+        (unsigned long)g_looper_raw_export.gate_acquire_count,
+        (unsigned long)g_looper_raw_export.open_ms,
+        (unsigned long)g_looper_raw_export.read_calls,
+        (unsigned long)g_looper_raw_export.read_bytes,
+        (unsigned long)g_looper_raw_export.read_ms,
+        (unsigned long)g_looper_raw_export.write_calls,
+        (unsigned long)g_looper_raw_export.write_bytes,
+        (unsigned long)g_looper_raw_export.write_ms,
+        (unsigned long)g_looper_raw_export.copy_ms,
+        (unsigned long)g_looper_raw_export.sync_ms,
+        (unsigned long)g_looper_raw_export.verify_ms,
+        (unsigned long)g_looper_raw_export.close_ms,
+        (unsigned long)g_looper_raw_export.last_fresult,
+        (unsigned)g_looper_raw_export.error);
 }
 
 static uint8_t looper_storage_raw_export_compare_window(uint32_t start_frame,
@@ -208,12 +377,14 @@ static uint8_t looper_storage_raw_export_compare_window(uint32_t start_frame,
     if ((f_lseek(&g_looper_raw_export.src, raw_offset) != FR_OK)
             || (f_lseek(&g_looper_raw_export.dst, wav_offset) != FR_OK))
     {
+        g_looper_raw_export.last_fresult = (uint32_t)FR_DISK_ERR;
         return 0U;
     }
 
     if ((looper_storage_raw_export_read_exact(&g_looper_raw_export.src, raw_dst, bytes) == 0U)
             || (looper_storage_raw_export_read_exact(&g_looper_raw_export.dst, wav_dst, bytes) == 0U))
     {
+        g_looper_raw_export.last_fresult = (uint32_t)FR_DISK_ERR;
         return 0U;
     }
 
@@ -508,8 +679,22 @@ uint8_t looper_storage_raw_export_start(uint8_t track_id,
     g_looper_raw_export.raw_slot = raw_slot;
     g_looper_raw_export.recorded_frames = recorded_frames;
     g_looper_raw_export.phase = LOOPER_STORAGE_EXPORT_PHASE_OPEN_SRC;
+    g_looper_raw_export.last_logged_phase = 0xFFU;
+    g_looper_raw_export.total_start_ms = HAL_GetTick();
+    g_looper_raw_export.total_ms = 0U;
+    g_looper_raw_export.last_fresult = (uint32_t)FR_OK;
     g_looper_raw_export.error = LOOPER_STORAGE_RAW_EXPORT_ERROR_NONE;
     g_looper_raw_export.state = LOOPER_STORAGE_RAW_EXPORT_ACTIVE;
+    looper_storage_raw_export_log(
+        "[LSAVE] START track=%u slot=%u frames=%lu bytes=%lu chunk=%lu raw=%s wav=%s\r\n",
+        (unsigned)track_id,
+        (unsigned)raw_slot,
+        (unsigned long)recorded_frames,
+        (unsigned long)(recorded_frames * LOOPER_STORAGE_RAW_BYTES_PER_FRAME),
+        (unsigned long)LOOPER_STORAGE_EXPORT_CHUNK_BYTES,
+        g_looper_raw_export.raw_path,
+        g_looper_raw_export.final_path);
+    looper_storage_raw_export_log_phase();
     return 1U;
 }
 
@@ -519,23 +704,28 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
     {
         return;
     }
+    g_looper_raw_export.service_calls++;
 
     if (multi_record_writer_any_active() != 0U)
     {
         looper_storage_raw_export_mark_waiting();
+        looper_storage_raw_export_log_phase();
         return;
     }
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
     {
         looper_storage_raw_export_mark_waiting();
+        looper_storage_raw_export_log_phase();
         return;
     }
     looper_storage_raw_export_clear_waiting();
     g_looper_raw_export.gate_acquire_count++;
+    looper_storage_raw_export_log_phase();
 
     if (sd_access_fs_mount_if_needed() == 0U)
     {
+        g_looper_raw_export.last_fresult = (uint32_t)FR_NOT_READY;
         looper_storage_raw_export_set_failed(LOOPER_STORAGE_RAW_EXPORT_ERROR_MOUNT_FAIL);
         sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         return;
@@ -545,6 +735,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
     {
         const uint32_t t0 = HAL_GetTick();
         FRESULT fr = f_open(&g_looper_raw_export.src, g_looper_raw_export.raw_path, FA_READ);
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         if (fr != FR_OK)
         {
             g_looper_raw_export.open_ms += HAL_GetTick() - t0;
@@ -554,6 +745,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
         }
         g_looper_raw_export.src_open = 1U;
         fr = f_lseek(&g_looper_raw_export.src, 0U);
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.open_ms += HAL_GetTick() - t0;
         if (fr != FR_OK)
         {
@@ -562,6 +754,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             return;
         }
         g_looper_raw_export.phase = LOOPER_STORAGE_EXPORT_PHASE_OPEN_DST;
+        looper_storage_raw_export_log_phase();
         sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         return;
     }
@@ -572,6 +765,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
         const FRESULT fr = f_open(&g_looper_raw_export.dst,
                                   g_looper_raw_export.final_path,
                                   FA_CREATE_NEW | FA_WRITE | FA_READ);
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.open_ms += HAL_GetTick() - t0;
         if (fr != FR_OK)
         {
@@ -598,7 +792,13 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
         looper_storage_build_wav_header(header,
                                         g_looper_raw_export.recorded_frames
                                             * LOOPER_STORAGE_RAW_BYTES_PER_FRAME);
+        uint32_t tw = HAL_GetTick();
         const FRESULT fr = f_write(&g_looper_raw_export.dst, header, sizeof(header), &bw);
+        tw = HAL_GetTick() - tw;
+        g_looper_raw_export.write_calls++;
+        g_looper_raw_export.write_bytes += bw;
+        g_looper_raw_export.write_ms += tw;
+        g_looper_raw_export.last_fresult = (uint32_t)((fr != FR_OK) ? fr : ((bw == sizeof(header)) ? FR_OK : FR_DISK_ERR));
         if ((fr != FR_OK) || (bw != sizeof(header)))
         {
             looper_storage_raw_export_set_failed(LOOPER_STORAGE_RAW_EXPORT_ERROR_WRITE_FAIL);
@@ -606,12 +806,17 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             return;
         }
         g_looper_raw_export.phase = LOOPER_STORAGE_EXPORT_PHASE_COPY;
+        looper_storage_raw_export_log_phase();
         sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         return;
     }
 
     if (g_looper_raw_export.phase == LOOPER_STORAGE_EXPORT_PHASE_COPY)
     {
+        uint32_t chunks_this_service = 0U;
+        uint32_t bytes_this_service = 0U;
+        uint32_t read_ms_this_service = 0U;
+        uint32_t write_ms_this_service = 0U;
         const uint32_t t0 = HAL_GetTick();
         while (byte_budget >= LOOPER_STORAGE_RAW_BYTES_PER_FRAME)
         {
@@ -641,10 +846,18 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             request_frames = request_bytes / LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
 
             UINT br = 0U;
+            uint32_t tr = HAL_GetTick();
             FRESULT fr = f_read(&g_looper_raw_export.src,
                                 g_looper_raw_export_io,
                                 request_bytes,
                                 &br);
+            tr = HAL_GetTick() - tr;
+            g_looper_raw_export.read_calls++;
+            g_looper_raw_export.read_bytes += br;
+            g_looper_raw_export.read_ms += tr;
+            read_ms_this_service += tr;
+            g_looper_raw_export.last_fresult =
+                (uint32_t)((fr != FR_OK) ? fr : ((br == request_bytes) ? FR_OK : FR_DISK_ERR));
             if ((fr != FR_OK) || (br != request_bytes))
             {
                 g_looper_raw_export.copy_ms += HAL_GetTick() - t0;
@@ -654,7 +867,15 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             }
 
             UINT bw = 0U;
+            uint32_t tw = HAL_GetTick();
             fr = f_write(&g_looper_raw_export.dst, g_looper_raw_export_io, request_bytes, &bw);
+            tw = HAL_GetTick() - tw;
+            g_looper_raw_export.write_calls++;
+            g_looper_raw_export.write_bytes += bw;
+            g_looper_raw_export.write_ms += tw;
+            write_ms_this_service += tw;
+            g_looper_raw_export.last_fresult =
+                (uint32_t)((fr != FR_OK) ? fr : ((bw == request_bytes) ? FR_OK : FR_DISK_ERR));
             if ((fr != FR_OK) || (bw != request_bytes))
             {
                 g_looper_raw_export.copy_ms += HAL_GetTick() - t0;
@@ -666,9 +887,28 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             g_looper_raw_export.frames_done += request_frames;
             g_looper_raw_export.chunks_copied++;
             g_looper_raw_export.bytes_copied += request_bytes;
+            chunks_this_service++;
+            bytes_this_service += request_bytes;
             byte_budget -= request_bytes;
         }
         g_looper_raw_export.copy_ms += HAL_GetTick() - t0;
+        if (chunks_this_service != 0U)
+        {
+            looper_storage_raw_export_log(
+                "[LSAVE] COPY svc=%lu chunks=%lu bytes=%lu total=%lu pct=%lu read_ms=%lu write_ms=%lu gate=%lu\r\n",
+                (unsigned long)g_looper_raw_export.service_calls,
+                (unsigned long)chunks_this_service,
+                (unsigned long)bytes_this_service,
+                (unsigned long)g_looper_raw_export.bytes_copied,
+                (unsigned long)looper_storage_raw_export_get_progress_percent(),
+                (unsigned long)read_ms_this_service,
+                (unsigned long)write_ms_this_service,
+                (unsigned long)g_looper_raw_export.gate_acquire_count);
+        }
+        if (g_looper_raw_export.phase == LOOPER_STORAGE_EXPORT_PHASE_SYNC)
+        {
+            looper_storage_raw_export_log_phase();
+        }
         sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         return;
     }
@@ -677,6 +917,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
     {
         const uint32_t t0 = HAL_GetTick();
         const FRESULT fr = f_sync(&g_looper_raw_export.dst);
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.sync_ms += HAL_GetTick() - t0;
         if (fr != FR_OK)
         {
@@ -685,6 +926,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
             return;
         }
         g_looper_raw_export.phase = LOOPER_STORAGE_EXPORT_PHASE_VERIFY;
+        looper_storage_raw_export_log_phase();
         sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         return;
     }
@@ -695,6 +937,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
         if (looper_storage_raw_export_verify() == 0U)
         {
             g_looper_raw_export.verify_ms += HAL_GetTick() - t0;
+            g_looper_raw_export.last_fresult = (uint32_t)FR_DISK_ERR;
             looper_storage_raw_export_set_failed(LOOPER_STORAGE_RAW_EXPORT_ERROR_VERIFY_FAIL);
             sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
             return;
@@ -709,6 +952,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
     {
         const uint32_t t0 = HAL_GetTick();
         const FRESULT fr = f_close(&g_looper_raw_export.dst);
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.close_ms += HAL_GetTick() - t0;
         g_looper_raw_export.dst_open = 0U;
         if (fr != FR_OK)
@@ -726,6 +970,7 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
     {
         const uint32_t t0 = HAL_GetTick();
         const FRESULT fr = f_close(&g_looper_raw_export.src);
+        g_looper_raw_export.last_fresult = (uint32_t)fr;
         g_looper_raw_export.close_ms += HAL_GetTick() - t0;
         g_looper_raw_export.src_open = 0U;
         if (fr != FR_OK)
@@ -736,6 +981,10 @@ void looper_storage_raw_export_service(uint32_t byte_budget)
         }
         g_looper_raw_export.error = LOOPER_STORAGE_RAW_EXPORT_ERROR_NONE;
         g_looper_raw_export.state = LOOPER_STORAGE_RAW_EXPORT_DONE;
+        g_looper_raw_export.total_ms = HAL_GetTick() - g_looper_raw_export.total_start_ms;
+        looper_storage_raw_export_copy_stats_to_diag();
+        looper_storage_raw_export_log_phase();
+        looper_storage_raw_export_log_final("DONE");
         sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
     }
 }
@@ -757,41 +1006,7 @@ looper_storage_raw_export_error_t looper_storage_raw_export_get_last_error(void)
 
 looper_storage_raw_export_phase_t looper_storage_raw_export_get_phase(void)
 {
-    if (g_looper_raw_export.state == LOOPER_STORAGE_RAW_EXPORT_DONE)
-    {
-        return LOOPER_STORAGE_RAW_EXPORT_PHASE_DONE;
-    }
-    if (g_looper_raw_export.state == LOOPER_STORAGE_RAW_EXPORT_FAILED)
-    {
-        return LOOPER_STORAGE_RAW_EXPORT_PHASE_FAIL;
-    }
-    if (g_looper_raw_export.state != LOOPER_STORAGE_RAW_EXPORT_ACTIVE)
-    {
-        return LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
-    }
-    if (g_looper_raw_export.waiting != 0U)
-    {
-        return LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT;
-    }
-
-    switch (g_looper_raw_export.phase)
-    {
-        case LOOPER_STORAGE_EXPORT_PHASE_OPEN_SRC:
-        case LOOPER_STORAGE_EXPORT_PHASE_OPEN_DST:
-        case LOOPER_STORAGE_EXPORT_PHASE_WRITE_HEADER:
-            return LOOPER_STORAGE_RAW_EXPORT_PHASE_OPEN;
-        case LOOPER_STORAGE_EXPORT_PHASE_COPY:
-            return LOOPER_STORAGE_RAW_EXPORT_PHASE_WRITE;
-        case LOOPER_STORAGE_EXPORT_PHASE_SYNC:
-        case LOOPER_STORAGE_EXPORT_PHASE_VERIFY:
-        case LOOPER_STORAGE_EXPORT_PHASE_CLOSE_DST:
-        case LOOPER_STORAGE_EXPORT_PHASE_CLOSE_SRC:
-            return LOOPER_STORAGE_RAW_EXPORT_PHASE_VERIFY;
-        default:
-            break;
-    }
-
-    return LOOPER_STORAGE_RAW_EXPORT_PHASE_WAIT;
+    return looper_storage_raw_export_phase_public();
 }
 
 void looper_storage_raw_export_get_diag(looper_storage_raw_export_diag_t *out_diag)
@@ -863,29 +1078,40 @@ looper_storage_path_result_t looper_storage_make_next_path(uint8_t track_id,
                                                            char *out_path,
                                                            uint32_t out_len)
 {
+    const uint32_t t0 = HAL_GetTick();
     if ((out_path == 0) || (out_len == 0U) || (track_id >= SEQ_TRACK_COUNT))
     {
+        looper_storage_raw_export_log("[LSAVE] PATH result=FAIL attempts=0 ms=0 fr=%lu path=\r\n",
+                                      (unsigned long)FR_INVALID_PARAMETER);
         return LOOPER_STORAGE_PATH_FAIL;
     }
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
     {
+        looper_storage_raw_export_log("[LSAVE] PATH result=BUSY attempts=0 ms=%lu fr=%lu path=\r\n",
+                                      (unsigned long)(HAL_GetTick() - t0),
+                                      (unsigned long)FR_LOCKED);
         return LOOPER_STORAGE_PATH_BUSY;
     }
 
     looper_storage_path_result_t result = LOOPER_STORAGE_PATH_FAIL;
+    uint32_t attempts = 0U;
+    FRESULT last_fr = FR_OK;
     if (sd_access_fs_mount_if_needed() == 0U)
     {
+        last_fr = FR_NOT_READY;
         goto done;
     }
 
     FRESULT fr = f_mkdir("0:/PROJECT");
+    last_fr = fr;
     if ((fr != FR_OK) && (fr != FR_EXIST))
     {
         goto done;
     }
 
     fr = f_mkdir("0:/PROJECT/LOOPS");
+    last_fr = fr;
     if ((fr != FR_OK) && (fr != FR_EXIST))
     {
         goto done;
@@ -902,7 +1128,9 @@ looper_storage_path_result_t looper_storage_make_next_path(uint8_t track_id,
         }
 
         FILINFO info;
+        attempts++;
         fr = f_stat(out_path, &info);
+        last_fr = fr;
         if (fr == FR_NO_FILE)
         {
             result = LOOPER_STORAGE_PATH_OK;
@@ -917,5 +1145,11 @@ looper_storage_path_result_t looper_storage_make_next_path(uint8_t track_id,
 
 done:
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
+    looper_storage_raw_export_log("[LSAVE] PATH result=%s attempts=%lu ms=%lu fr=%lu path=%s\r\n",
+                                  (result == LOOPER_STORAGE_PATH_OK) ? "OK" : "FAIL",
+                                  (unsigned long)attempts,
+                                  (unsigned long)(HAL_GetTick() - t0),
+                                  (unsigned long)last_fr,
+                                  (result == LOOPER_STORAGE_PATH_OK) ? out_path : "");
     return result;
 }
