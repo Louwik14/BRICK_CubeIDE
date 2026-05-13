@@ -173,7 +173,7 @@ void brick6_app_process(void)
     multi_record_writer_service(16384U);
     if (looper_storage_raw_export_is_active() != 0U)
     {
-        looper_storage_raw_export_service(129024U);
+        looper_storage_raw_export_service(516096U);
     }
     else
     {
