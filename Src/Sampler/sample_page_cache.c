@@ -10,6 +10,8 @@
 _Static_assert(sizeof(float) == SAMPLE_PAGE_SAMPLE_BYTES, "sample_page_cache expects 32-bit float");
 #endif
 
+#define SAMPLE_PAGE_INDEX_SIZE (SAMPLE_PAGE_MAX_COUNT * 2U)
+
 typedef struct
 {
     uint8_t initialized;
@@ -31,12 +33,158 @@ typedef struct
     uint8_t raw_pcm24;
 } sample_page_sample_desc_t;
 
+typedef struct
+{
+    uint8_t used;
+    uint16_t sample_id;
+    uint16_t slot_index;
+    uint32_t page_index;
+} sample_page_index_entry_t;
+
 SDRAM_SAMPLES static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
 SDRAM_SAMPLES static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_FRAMES
                                                                      * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
 static CTRL_STATE sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+static sample_page_index_entry_t g_sample_page_index[SAMPLE_PAGE_INDEX_SIZE];
+static CTRL_STATE uint16_t g_sample_page_queued_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+static CTRL_STATE uint16_t g_sample_page_free_cursor;
+static CTRL_STATE uint16_t g_sample_page_evict_cursor;
+static CTRL_STATE sample_page_cache_diag_snapshot_t g_sample_page_cache_diag;
+
+static void sample_page_cache_diag_max(uint32_t *field, uint32_t value)
+{
+    if ((field != 0) && (value > *field))
+    {
+        *field = value;
+    }
+}
+
+static uint32_t sample_page_cache_hash(uint16_t sample_id, uint32_t page_index)
+{
+    return (((uint32_t)sample_id * 2654435761UL) ^ (page_index * 2246822519UL))
+           % SAMPLE_PAGE_INDEX_SIZE;
+}
+
+static uint8_t sample_page_cache_index_find_slot(uint16_t sample_id,
+                                                 uint32_t page_index,
+                                                 uint16_t *out_slot)
+{
+    const uint32_t start = sample_page_cache_hash(sample_id, page_index);
+
+    for (uint32_t probe = 0U; probe < SAMPLE_PAGE_INDEX_SIZE; ++probe)
+    {
+        const uint32_t index = (start + probe) % SAMPLE_PAGE_INDEX_SIZE;
+        const sample_page_index_entry_t *const entry = &g_sample_page_index[index];
+        if (entry->used == 0U)
+        {
+            g_sample_page_cache_diag.lookup_misses++;
+            sample_page_cache_diag_max(&g_sample_page_cache_diag.max_lookup_scan, probe + 1U);
+            return 0U;
+        }
+
+        if ((entry->used == 1U) && (entry->sample_id == sample_id)
+            && (entry->page_index == page_index))
+        {
+            if (out_slot != 0)
+            {
+                *out_slot = entry->slot_index;
+            }
+            g_sample_page_cache_diag.lookup_hits++;
+            sample_page_cache_diag_max(&g_sample_page_cache_diag.max_lookup_scan, probe + 1U);
+            return 1U;
+        }
+    }
+
+    g_sample_page_cache_diag.lookup_misses++;
+    g_sample_page_cache_diag.bounded_scan_yield++;
+    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_lookup_scan, SAMPLE_PAGE_INDEX_SIZE);
+    return 0U;
+}
+
+static void sample_page_cache_index_put(uint16_t sample_id, uint32_t page_index, uint16_t slot_index)
+{
+    const uint32_t start = sample_page_cache_hash(sample_id, page_index);
+    uint32_t first_deleted = UINT32_MAX;
+
+    for (uint32_t probe = 0U; probe < SAMPLE_PAGE_INDEX_SIZE; ++probe)
+    {
+        const uint32_t index = (start + probe) % SAMPLE_PAGE_INDEX_SIZE;
+        sample_page_index_entry_t *const entry = &g_sample_page_index[index];
+        if ((entry->used == 1U) && (entry->sample_id == sample_id)
+            && (entry->page_index == page_index))
+        {
+            entry->slot_index = slot_index;
+            return;
+        }
+        if ((entry->used == 2U) && (first_deleted == UINT32_MAX))
+        {
+            first_deleted = index;
+        }
+        if (entry->used == 0U)
+        {
+            sample_page_index_entry_t *const dst =
+                (first_deleted != UINT32_MAX) ? &g_sample_page_index[first_deleted] : entry;
+            dst->used = 1U;
+            dst->sample_id = sample_id;
+            dst->page_index = page_index;
+            dst->slot_index = slot_index;
+            return;
+        }
+    }
+
+    if (first_deleted != UINT32_MAX)
+    {
+        sample_page_index_entry_t *const dst = &g_sample_page_index[first_deleted];
+        dst->used = 1U;
+        dst->sample_id = sample_id;
+        dst->page_index = page_index;
+        dst->slot_index = slot_index;
+    }
+}
+
+static void sample_page_cache_index_remove(uint16_t sample_id, uint32_t page_index)
+{
+    const uint32_t start = sample_page_cache_hash(sample_id, page_index);
+    for (uint32_t probe = 0U; probe < SAMPLE_PAGE_INDEX_SIZE; ++probe)
+    {
+        const uint32_t index = (start + probe) % SAMPLE_PAGE_INDEX_SIZE;
+        sample_page_index_entry_t *const entry = &g_sample_page_index[index];
+        if (entry->used == 0U)
+        {
+            return;
+        }
+        if ((entry->used == 1U) && (entry->sample_id == sample_id)
+            && (entry->page_index == page_index))
+        {
+            entry->used = 2U;
+            return;
+        }
+    }
+}
+
+static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_state_t state)
+{
+    if (page == 0)
+    {
+        return;
+    }
+
+    if ((page->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES) && (page->state != state))
+    {
+        if ((page->state == SAMPLE_PAGE_QUEUED) && (g_sample_page_queued_count[page->sample_id] != 0U))
+        {
+            g_sample_page_queued_count[page->sample_id]--;
+        }
+        if (state == SAMPLE_PAGE_QUEUED)
+        {
+            g_sample_page_queued_count[page->sample_id]++;
+        }
+    }
+
+    page->state = state;
+}
 
 static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot_index)
 {
@@ -44,6 +192,17 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     {
         return;
     }
+
+    if ((page->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+        && (g_sample_page_last_slot[page->sample_id] == slot_index))
+    {
+        g_sample_page_last_slot[page->sample_id] = UINT16_MAX;
+    }
+    if ((page->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES) && (page->page_index != UINT32_MAX))
+    {
+        sample_page_cache_index_remove(page->sample_id, page->page_index);
+    }
+    sample_page_cache_set_state(page, SAMPLE_PAGE_EMPTY);
 
     memset(page, 0, sizeof(*page));
     page->sample_id = UINT16_MAX;
@@ -55,6 +214,7 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
 
 static sample_page_desc_t *sample_page_cache_find_page_mut(uint16_t sample_id, uint32_t page_index)
 {
+    uint16_t slot = UINT16_MAX;
     if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
     {
         const uint16_t last_slot = g_sample_page_last_slot[sample_id];
@@ -66,18 +226,16 @@ static sample_page_desc_t *sample_page_cache_find_page_mut(uint16_t sample_id, u
                 return last_page;
             }
         }
-    }
 
-    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
-    {
-        sample_page_desc_t *const page = &g_sample_page_desc[i];
-        if ((page->sample_id == sample_id) && (page->page_index == page_index))
+        if (sample_page_cache_index_find_slot(sample_id, page_index, &slot) != 0U)
         {
-            if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            sample_page_desc_t *const page = &g_sample_page_desc[slot];
+            if ((page->sample_id == sample_id) && (page->page_index == page_index)
+                && (page->state != SAMPLE_PAGE_EMPTY))
             {
-                g_sample_page_last_slot[sample_id] = (uint16_t)i;
+                g_sample_page_last_slot[sample_id] = slot;
+                return page;
             }
-            return page;
         }
     }
 
@@ -128,18 +286,68 @@ static uint32_t sample_page_cache_stream_page_frame_count(uint16_t sample_id, ui
     return SAMPLE_PAGE_FRAMES;
 }
 
+static uint8_t sample_page_cache_sample_is_stream_loadable(uint16_t sample_id)
+{
+    if (sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        return 0U;
+    }
+
+    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[sample_id];
+    return ((sample->valid != 0U) && (sample->fully_loaded == 0U)
+            && (sample->path[0] != '\0')) ? 1U : 0U;
+}
+
+static uint16_t sample_page_cache_repair_queued_count(uint16_t sample_id)
+{
+    if (sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        return 0U;
+    }
+
+    uint16_t queued_count = 0U;
+    const uint8_t loadable = sample_page_cache_sample_is_stream_loadable(sample_id);
+
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->sample_id != sample_id) || (page->state != SAMPLE_PAGE_QUEUED))
+        {
+            continue;
+        }
+
+        if ((loadable == 0U) || (page->data == 0) || (page->frame_count == 0U))
+        {
+            sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
+            continue;
+        }
+
+        if (queued_count != UINT16_MAX)
+        {
+            queued_count++;
+        }
+    }
+
+    g_sample_page_queued_count[sample_id] = queued_count;
+    return queued_count;
+}
+
 static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id, uint32_t page_index)
 {
     sample_page_desc_t *evict_page = 0;
+    uint32_t free_scan = 0U;
+    uint32_t evict_scan = 0U;
     const uint32_t frame_count = sample_page_cache_stream_page_frame_count(sample_id, page_index);
     if (frame_count == 0U)
     {
         return 0;
     }
 
-    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    for (uint32_t scan = 0U; scan < SAMPLE_PAGE_MAX_COUNT; ++scan)
     {
+        const uint32_t i = ((uint32_t)g_sample_page_free_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
         sample_page_desc_t *const page = &g_sample_page_desc[i];
+        free_scan = scan + 1U;
         if (page->state == SAMPLE_PAGE_EMPTY)
         {
             page->sample_id = sample_id;
@@ -150,10 +358,24 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
             page->pin_count = 0U;
             page->use_count = 0U;
-            page->state = SAMPLE_PAGE_QUEUED;
+            sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
+            if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            {
+                sample_page_cache_index_put(sample_id, page_index, (uint16_t)i);
+                g_sample_page_last_slot[sample_id] = (uint16_t)i;
+            }
+            g_sample_page_free_cursor = (uint16_t)((i + 1U) % SAMPLE_PAGE_MAX_COUNT);
+            sample_page_cache_diag_max(&g_sample_page_cache_diag.max_free_scan, free_scan);
             return page;
         }
+    }
+    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_free_scan, free_scan);
 
+    for (uint32_t scan = 0U; scan < SAMPLE_PAGE_MAX_COUNT; ++scan)
+    {
+        const uint32_t i = ((uint32_t)g_sample_page_evict_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        evict_scan = scan + 1U;
         if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U) || (page->pin_count != 0U)
             || (page->sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
         {
@@ -174,8 +396,11 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id
 
     if (evict_page == 0)
     {
+        g_sample_page_cache_diag.evict_fail++;
+        sample_page_cache_diag_max(&g_sample_page_cache_diag.max_evict_scan, evict_scan);
         return 0;
     }
+    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_evict_scan, evict_scan);
 
     const uint32_t slot_index = (uint32_t)(evict_page - g_sample_page_desc);
     sample_page_cache_clear_desc(evict_page, slot_index);
@@ -187,7 +412,13 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot(uint16_t sample_id
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
     evict_page->pin_count = 0U;
     evict_page->use_count = 0U;
-    evict_page->state = SAMPLE_PAGE_QUEUED;
+    sample_page_cache_set_state(evict_page, SAMPLE_PAGE_QUEUED);
+    if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        sample_page_cache_index_put(sample_id, page_index, (uint16_t)slot_index);
+        g_sample_page_last_slot[sample_id] = (uint16_t)slot_index;
+    }
+    g_sample_page_evict_cursor = (uint16_t)((slot_index + 1U) % SAMPLE_PAGE_MAX_COUNT);
     return evict_page;
 }
 
@@ -289,7 +520,12 @@ static sample_page_desc_t *sample_page_cache_assign_slot(uint32_t slot_index,
     page->frame_count = frame_count;
     page->generation = ++g_sample_page_cache_state.generation_counter;
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
-    page->state = SAMPLE_PAGE_QUEUED;
+    sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
+    if (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        sample_page_cache_index_put(sample_id, page_index, (uint16_t)slot_index);
+        g_sample_page_last_slot[sample_id] = (uint16_t)slot_index;
+    }
     return page;
 }
 
@@ -352,7 +588,7 @@ static sample_page_load_result_t sample_page_cache_decode_page(FIL *fp,
         }
     }
 
-    page->state = SAMPLE_PAGE_READY;
+    sample_page_cache_set_state(page, SAMPLE_PAGE_READY);
     return SAMPLE_PAGE_LOAD_OK;
 }
 
@@ -421,7 +657,7 @@ static sample_page_load_result_t sample_page_cache_decode_raw_pcm24_page(FIL *fp
         }
     }
 
-    page->state = SAMPLE_PAGE_READY;
+    sample_page_cache_set_state(page, SAMPLE_PAGE_READY);
     return SAMPLE_PAGE_LOAD_OK;
 }
 
@@ -435,6 +671,11 @@ void sample_page_cache_reset(void)
 {
     memset(&g_sample_page_cache_state, 0, sizeof(g_sample_page_cache_state));
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
+    memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
+    memset(g_sample_page_queued_count, 0, sizeof(g_sample_page_queued_count));
+    memset(&g_sample_page_cache_diag, 0, sizeof(g_sample_page_cache_diag));
+    g_sample_page_free_cursor = 0U;
+    g_sample_page_evict_cursor = 0U;
     for (uint32_t i = 0U; i < SAMPLE_PAGE_CACHE_MAX_SAMPLES; ++i)
     {
         g_sample_page_last_slot[i] = UINT16_MAX;
@@ -443,6 +684,16 @@ void sample_page_cache_reset(void)
     {
         sample_page_cache_clear_desc(&g_sample_page_desc[i], i);
     }
+}
+
+void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot)
+{
+    if (out_snapshot == 0)
+    {
+        return;
+    }
+
+    *out_snapshot = g_sample_page_cache_diag;
 }
 
 void sample_page_cache_clear_sample(uint16_t sample_id)
@@ -673,18 +924,124 @@ uint8_t sample_page_cache_has_queued_range(uint16_t first_sample_id,
         end_sample_id = SAMPLE_PAGE_CACHE_MAX_SAMPLES;
     }
 
-    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    for (uint32_t sample_id = first_sample_id; sample_id < end_sample_id; ++sample_id)
     {
-        const sample_page_desc_t *const page = &g_sample_page_desc[i];
-        if ((page->state == SAMPLE_PAGE_QUEUED)
-                && (page->sample_id >= first_sample_id)
-                && ((uint32_t)page->sample_id < end_sample_id))
+        if ((g_sample_page_queued_count[sample_id] != 0U)
+            && (sample_page_cache_repair_queued_count((uint16_t)sample_id) != 0U))
         {
             return 1U;
         }
     }
 
     return 0U;
+}
+
+uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
+                                          sample_page_stream_info_t *out_info)
+{
+    if ((sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (out_info == 0))
+    {
+        return 0U;
+    }
+
+    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[sample_id];
+    if (sample_page_cache_sample_is_stream_loadable(sample_id) == 0U)
+    {
+        return 0U;
+    }
+
+    memset(out_info, 0, sizeof(*out_info));
+    memcpy(out_info->path, sample->path, sizeof(out_info->path));
+    out_info->info = sample->info;
+    out_info->total_frames = sample->total_frames;
+    out_info->data_offset = sample->data_offset;
+    out_info->raw_pcm24 = sample->raw_pcm24;
+    return 1U;
+}
+
+uint8_t sample_page_cache_find_queued_load_target(uint16_t first_sample_id,
+                                                  uint16_t sample_count,
+                                                  sample_page_load_target_t *out_target)
+{
+    if ((first_sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (sample_count == 0U)
+        || (out_target == 0))
+    {
+        return 0U;
+    }
+
+    uint32_t end_sample_id = (uint32_t)first_sample_id + (uint32_t)sample_count;
+    if (end_sample_id > SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        end_sample_id = SAMPLE_PAGE_CACHE_MAX_SAMPLES;
+    }
+
+    for (uint16_t sample_id = first_sample_id; sample_id < end_sample_id; ++sample_id)
+    {
+        if (sample_page_cache_sample_is_stream_loadable(sample_id) == 0U)
+        {
+            continue;
+        }
+
+        for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+        {
+            sample_page_desc_t *const page = &g_sample_page_desc[i];
+            if ((page->sample_id != sample_id) || (page->state != SAMPLE_PAGE_QUEUED)
+                || (page->data == 0))
+            {
+                continue;
+            }
+
+            memset(out_target, 0, sizeof(*out_target));
+            out_target->sample_id = sample_id;
+            out_target->slot_index = (uint16_t)i;
+            out_target->page_index = page->page_index;
+            out_target->start_frame = page->start_frame;
+            out_target->frame_count = page->frame_count;
+            out_target->frames_interleaved = page->data;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
+                                          uint32_t page_index,
+                                          sample_page_load_target_t *out_target)
+{
+    if ((sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (out_target == 0))
+    {
+        return 0U;
+    }
+
+    sample_page_desc_t *const page = sample_page_cache_find_page_mut(sample_id, page_index);
+    if ((page == 0) || (page->state != SAMPLE_PAGE_QUEUED) || (page->data == 0))
+    {
+        return 0U;
+    }
+
+    memset(out_target, 0, sizeof(*out_target));
+    out_target->sample_id = sample_id;
+    out_target->slot_index = (uint16_t)(page - g_sample_page_desc);
+    out_target->page_index = page->page_index;
+    out_target->start_frame = page->start_frame;
+    out_target->frame_count = page->frame_count;
+    out_target->frames_interleaved = page->data;
+    return 1U;
+}
+
+uint8_t sample_page_cache_set_page_state(uint16_t sample_id,
+                                         uint32_t page_index,
+                                         sample_page_state_t state)
+{
+    sample_page_desc_t *const page = sample_page_cache_find_page_mut(sample_id, page_index);
+    if (page == 0)
+    {
+        return 0U;
+    }
+
+    sample_page_cache_set_state(page, state);
+    return 1U;
 }
 
 uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index)
@@ -701,13 +1058,13 @@ uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index)
 
     if (page->state == SAMPLE_PAGE_EMPTY)
     {
-        page->state = SAMPLE_PAGE_QUEUED;
+        sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
     }
 
     page->frame_count = sample_page_cache_stream_page_frame_count(sample_id, page_index);
     if (page->frame_count == 0U)
     {
-        page->state = SAMPLE_PAGE_ERROR;
+        sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
         return 0U;
     }
 
@@ -731,13 +1088,13 @@ uint8_t sample_page_cache_request_page_ref(uint16_t sample_id,
 
     if (page->state == SAMPLE_PAGE_EMPTY)
     {
-        page->state = SAMPLE_PAGE_QUEUED;
+        sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
     }
 
     page->frame_count = sample_page_cache_stream_page_frame_count(sample_id, page_index);
     if (page->frame_count == 0U)
     {
-        page->state = SAMPLE_PAGE_ERROR;
+        sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
         return 0U;
     }
 
@@ -859,12 +1216,12 @@ sample_page_load_result_t sample_page_cache_load_full_sample(uint16_t sample_id,
             return SAMPLE_PAGE_LOAD_NO_SPACE;
         }
 
-        page->state = SAMPLE_PAGE_LOADING;
+        sample_page_cache_set_state(page, SAMPLE_PAGE_LOADING);
         const sample_page_load_result_t load_result =
             sample_page_cache_decode_page(fp, info, page, io_buffer, io_buffer_size);
         if (load_result != SAMPLE_PAGE_LOAD_OK)
         {
-            page->state = SAMPLE_PAGE_ERROR;
+            sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
             sample_page_cache_clear_sample(sample_id);
             return load_result;
         }
@@ -943,8 +1300,8 @@ void sample_page_cache_service_range(uint16_t first_sample_id,
                                      uint32_t byte_budget)
 {
     /*
-     * FatFs access is intentionally centralized here for stream-page loads.
-     * Callers must already hold `sd_access_gate` for the sample-cache client.
+     * Legacy/transient range loader. Sampler pool STREAM service is routed
+     * through sample_stream_manager; callers here must already own the SD gate.
      */
     if ((byte_budget == 0U) || (first_sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
         || (sample_count == 0U))
@@ -980,7 +1337,7 @@ void sample_page_cache_service_range(uint16_t first_sample_id,
             const FRESULT open_fr = f_open(&fp, sample->path, FA_READ);
             if (open_fr != FR_OK)
             {
-                page->state = SAMPLE_PAGE_ERROR;
+                sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
                 return;
             }
 
@@ -989,11 +1346,11 @@ void sample_page_cache_service_range(uint16_t first_sample_id,
             if (f_lseek(&fp, offset) != FR_OK)
             {
                 (void)f_close(&fp);
-                page->state = SAMPLE_PAGE_ERROR;
+                sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
                 return;
             }
 
-            page->state = SAMPLE_PAGE_LOADING;
+            sample_page_cache_set_state(page, SAMPLE_PAGE_LOADING);
             const sample_page_load_result_t load_result =
                 (sample->raw_pcm24 != 0U)
                     ? sample_page_cache_decode_raw_pcm24_page(&fp, page, io_buffer, sizeof(io_buffer))
@@ -1005,7 +1362,7 @@ void sample_page_cache_service_range(uint16_t first_sample_id,
             (void)f_close(&fp);
             if (load_result != SAMPLE_PAGE_LOAD_OK)
             {
-                page->state = SAMPLE_PAGE_ERROR;
+                sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
                 return;
             }
 
@@ -1021,14 +1378,4 @@ void sample_page_cache_service_range(uint16_t first_sample_id,
             }
         }
     }
-}
-
-void sample_page_cache_service_sample_pool(uint32_t byte_budget)
-{
-    sample_page_cache_service_range(0U, SAMPLE_POOL_SIZE, byte_budget);
-}
-
-void sample_page_cache_service(uint32_t byte_budget)
-{
-    sample_page_cache_service_range(0U, SAMPLE_PAGE_CACHE_MAX_SAMPLES, byte_budget);
 }

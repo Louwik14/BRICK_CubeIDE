@@ -1,3 +1,8 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:8:25:ui_hall_mode_flow_resolve_direct_action	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:29:6:ui_hall_mode_flow_handle_shift_hall_action	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:69:6:ui_hall_mode_flow_handle_track_hall_action	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:24:16:ui_hall_mode_flow_capture_track_sound_copy	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:74:16:ui_hall_mode_flow_apply_track_sound_copy	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:124:16:ui_hall_mode_flow_prepare_off_target_for_group_add	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:144:16:ui_hall_mode_flow_apply_group_role_add	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:168:16:ui_hall_mode_flow_apply_group_role_remove	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:185:25:ui_hall_mode_flow_resolve_direct_action	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:206:6:ui_hall_mode_flow_handle_shift_hall_action	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_flow.c:250:6:ui_hall_mode_flow_handle_track_hall_action	1536	static

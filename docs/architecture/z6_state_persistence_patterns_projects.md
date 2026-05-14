@@ -213,6 +213,7 @@ Points de lecture principaux:
 ### `project_sd_bank.c`
 - `g_project_slot_has_data[16]`: presence des slots projet.
 - `g_project_slot_buffer` (`PatternSaveV1`): buffer temporaire records pattern lors save/load.
+- `g_project_io_buffer` (`ProjectSaveV1`): buffer I/O projet froid en `UI_SDRAM`, utilise pour revalidation/compare sans allouer le payload projet massif sur la stack.
 - `g_project_sd_last_error`: erreur SD detaillee.
 
 ### `boot_context_flash.c`

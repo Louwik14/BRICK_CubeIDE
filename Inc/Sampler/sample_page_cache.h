@@ -73,6 +73,25 @@ typedef struct
     sample_page_block_status_t status;
 } sample_page_block_t;
 
+typedef struct
+{
+    char path[SAMPLE_PAGE_CACHE_PATH_MAX];
+    wav_info_t info;
+    uint32_t total_frames;
+    uint32_t data_offset;
+    uint8_t raw_pcm24;
+} sample_page_stream_info_t;
+
+typedef struct
+{
+    uint16_t sample_id;
+    uint16_t slot_index;
+    uint32_t page_index;
+    uint32_t start_frame;
+    uint32_t frame_count;
+    float *frames_interleaved;
+} sample_page_load_target_t;
+
 typedef enum
 {
     SAMPLE_PAGE_LOAD_OK = 0,
@@ -84,11 +103,23 @@ typedef enum
     SAMPLE_PAGE_LOAD_DECODE_FAILED
 } sample_page_load_result_t;
 
+typedef struct
+{
+    uint32_t lookup_hits;
+    uint32_t lookup_misses;
+    uint32_t max_lookup_scan;
+    uint32_t max_free_scan;
+    uint32_t max_evict_scan;
+    uint32_t evict_fail;
+    uint32_t bounded_scan_yield;
+} sample_page_cache_diag_snapshot_t;
+
 /*
  * Query API: RAM-only, no SD side effect, no implicit page request.
  */
 void sample_page_cache_init(void);
 void sample_page_cache_reset(void);
+void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot);
 void sample_page_cache_clear_sample(uint16_t sample_id);
 sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_t page_index);
 const sample_page_desc_t *sample_page_cache_get_page_desc(uint32_t slot_index);
@@ -109,6 +140,17 @@ void sample_page_cache_commit_read_block(uint16_t sample_id,
                                          uint32_t page_index);
 uint8_t sample_page_cache_has_queued_range(uint16_t first_sample_id,
                                            uint16_t sample_count);
+uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
+                                          sample_page_stream_info_t *out_info);
+uint8_t sample_page_cache_find_queued_load_target(uint16_t first_sample_id,
+                                                  uint16_t sample_count,
+                                                  sample_page_load_target_t *out_target);
+uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
+                                          uint32_t page_index,
+                                          sample_page_load_target_t *out_target);
+uint8_t sample_page_cache_set_page_state(uint16_t sample_id,
+                                         uint32_t page_index,
+                                         sample_page_state_t state);
 
 /*
  * Command API: queues or records explicit intent only.
@@ -140,12 +182,9 @@ uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
                                                            uint32_t total_frames);
 
 /*
- * Service API: the only place where queued stream page loads may touch FatFs.
- * Must stay outside audio and be called only while the caller already owns
- * `sd_access_gate` for the sample-cache client.
+ * Legacy/transient range service kept for non-Sampler-pool users.
+ * Sampler STREAM pool service is owned by sample_stream_manager.
  */
-void sample_page_cache_service(uint32_t byte_budget);
-void sample_page_cache_service_sample_pool(uint32_t byte_budget);
 void sample_page_cache_service_range(uint16_t first_sample_id,
                                      uint16_t sample_count,
                                      uint32_t byte_budget);

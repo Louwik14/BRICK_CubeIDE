@@ -10,6 +10,8 @@
 
 static uint8_t g_project_slot_has_data[PROJECT_V1_SLOT_COUNT];
 UI_SDRAM static PatternSaveV1 g_project_slot_buffer;
+/* ProjectSaveV1 is too large for stack; project SD access is serialized by sd_access_gate. */
+UI_SDRAM static ProjectSaveV1 g_project_io_buffer;
 static project_sd_bank_error_t g_project_sd_last_error;
 static const uint32_t k_project_pattern_payload_legacy_size = (uint32_t)(sizeof(PatternSaveV1) - SEQ_TRACK_COUNT);
 
@@ -512,7 +514,6 @@ uint8_t project_sd_bank_commit_slot_patterns(uint8_t project_slot)
     char path[32];
     uint32_t checksum = 0U;
     uint8_t has_pattern_changes = 0U;
-    ProjectSaveV1 project_state;
 
     if (project_sd_mount_if_needed() == 0U)
     {
@@ -542,13 +543,16 @@ uint8_t project_sd_bank_commit_slot_patterns(uint8_t project_slot)
         goto done;
     }
 
-    if ((f_read(&fp, &project_state, sizeof(project_state), &br) != FR_OK) || (br != sizeof(project_state)))
+    if ((f_read(&fp, &g_project_io_buffer, sizeof(g_project_io_buffer), &br) != FR_OK)
+        || (br != sizeof(g_project_io_buffer)))
     {
         project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);        (void)f_close(&fp);
         goto done;
     }
 
-    checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)&project_state, sizeof(project_state));
+    checksum = project_sd_checksum_accumulate(checksum,
+                                              (const uint8_t *)&g_project_io_buffer,
+                                              sizeof(g_project_io_buffer));
     if (project_sd_walk_pattern_records(&fp, 0U, 0, &checksum, &has_pattern_changes) == 0U)
     {        (void)f_close(&fp);
         goto done;
@@ -803,7 +807,6 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
     FIL fp;
     UINT br = 0U;
     project_v1_file_header_t hdr;
-    ProjectSaveV1 project_state;
     char path[32];
     uint32_t checksum = 0U;
     uint8_t has_pattern_changes = 1U;
@@ -846,14 +849,17 @@ uint8_t project_sd_bank_is_slot_equivalent_to_live(uint8_t project_slot)
         goto done;
     }
 
-    if ((f_read(&fp, &project_state, sizeof(project_state), &br) != FR_OK) || (br != sizeof(project_state)))
+    if ((f_read(&fp, &g_project_io_buffer, sizeof(g_project_io_buffer), &br) != FR_OK)
+        || (br != sizeof(g_project_io_buffer)))
     {
         project_sd_set_error(PROJECT_SD_BANK_ERR_READ_FAIL);
         (void)f_close(&fp);
         goto done;
     }
 
-    checksum = project_sd_checksum_accumulate(checksum, (const uint8_t *)&project_state, sizeof(project_state));
+    checksum = project_sd_checksum_accumulate(checksum,
+                                              (const uint8_t *)&g_project_io_buffer,
+                                              sizeof(g_project_io_buffer));
     has_pattern_changes = 0U;
     if (project_sd_walk_pattern_records(&fp, 0U, 0, &checksum, &has_pattern_changes) == 0U)
     {

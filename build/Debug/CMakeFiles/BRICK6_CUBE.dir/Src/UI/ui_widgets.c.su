@@ -2,10 +2,10 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:19:13:
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:29:16:uiw_label_starts_with	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:8:12:uiw_center_x	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:55:6:uiw_draw_knob	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:97:6:uiw_draw_switch	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:117:6:uiw_draw_wave_icon	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:152:6:uiw_draw_filter_icon	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:176:6:uiw_draw_enum_text	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:210:6:uiw_draw_jack_icon	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:226:6:uiw_draw_keyboard_icon	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:248:19:uiw_pick_widget_type	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:101:6:uiw_draw_switch	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:121:6:uiw_draw_wave_icon	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:156:6:uiw_draw_filter_icon	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:180:6:uiw_draw_enum_text	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:214:6:uiw_draw_jack_icon	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:230:6:uiw_draw_keyboard_icon	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_widgets.c:252:19:uiw_pick_widget_type	8	static

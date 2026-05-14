@@ -1,0 +1,24 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:62:13:void {anonymous}::delay_line_init(delay_line_t*, float*, uint32_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:78:13:void {anonymous}::delay_line_resize(delay_line_t*, uint32_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:121:21:float {anonymous}::delay_line_read_linear(const delay_line_t*, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:139:20:void {anonymous}::delay_line_write(delay_line_t*, float, uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:171:21:float {anonymous}::feedback_filter_process(feedback_filter_t*, float, uint8_t, uint8_t, float, float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:222:20:void {anonymous}::apply_width(float, float, float, float*, float*)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:70:13:void {anonymous}::delay_line_clear(delay_line_t*)	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:262:13:void {anonymous}::resize_runtime_lines(uint8_t, float, float)	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:303:17:void fx_delay_dual_global_clear()	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:286:17:void fx_delay_dual_global_init(float)	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:317:17:void fx_delay_dual_global_set_mode(uint8_t)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:324:17:void fx_delay_dual_global_set_time_l(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:329:17:void fx_delay_dual_global_set_time_r(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:334:17:void fx_delay_dual_global_set_feedback(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:339:17:void fx_delay_dual_global_set_hpf(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:344:17:void fx_delay_dual_global_set_lpf(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:349:17:void fx_delay_dual_global_set_width(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:354:17:void fx_delay_dual_global_set_feedback_width(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:359:17:void fx_delay_dual_global_set_mod_depth(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:364:17:void fx_delay_dual_global_set_mod_rate(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:369:17:void fx_delay_dual_global_set_reverb_send(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:374:17:void fx_delay_dual_global_set_volume(float)	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:379:20:uint8_t fx_delay_dual_global_is_active()	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/fx_delay_dual.cpp:384:17:void fx_delay_dual_global_process_block(const float*, const float*, float*, float*, float*, float*, uint32_t)	176	static

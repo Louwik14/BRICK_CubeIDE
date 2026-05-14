@@ -60,6 +60,52 @@ static void ui_renderer_template_format_semitones(float value, char *out, uint32
     (void)snprintf(out, out_len, "%+ld st", (long)semitones);
 }
 
+static void ui_renderer_template_format_fixed(float value, uint8_t decimals, const char *unit, char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    int32_t scale = 1;
+    for (uint8_t i = 0U; i < decimals; ++i)
+    {
+        scale *= 10;
+    }
+
+    float scaled_f = value * (float)scale;
+    if (scaled_f > 2147483647.0f)
+    {
+        scaled_f = 2147483647.0f;
+    }
+    else if (scaled_f < -2147483647.0f)
+    {
+        scaled_f = -2147483647.0f;
+    }
+
+    int32_t scaled = (int32_t)((scaled_f >= 0.0f) ? (scaled_f + 0.5f) : (scaled_f - 0.5f));
+    const char *sign = "";
+    if (scaled < 0)
+    {
+        sign = "-";
+        scaled = -scaled;
+    }
+
+    const int32_t whole = scaled / scale;
+    const int32_t frac = scaled % scale;
+    const char *suffix = (unit != NULL) ? unit : "";
+
+    /* No printf float in the embedded renderer: newlib float formatting allocates heap. */
+    if (decimals == 1U)
+    {
+        (void)snprintf(out, out_len, "%s%ld.%01ld%s", sign, (long)whole, (long)frac, suffix);
+    }
+    else
+    {
+        (void)snprintf(out, out_len, "%s%ld.%02ld%s", sign, (long)whole, (long)frac, suffix);
+    }
+}
+
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
 {
     const param_desc_t *desc = &param_registry[id];
@@ -163,15 +209,15 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
             break;
 
         case PARAM_DISPLAY_DB:
-            (void)snprintf(out, out_len, "%.1f%s", (double)value, (desc->unit != NULL) ? desc->unit : "");
+            ui_renderer_template_format_fixed(value, 1U, desc->unit, out, out_len);
             break;
 
         case PARAM_DISPLAY_TIME_MS:
-            (void)snprintf(out, out_len, "%.1fms", (double)(value * 1000.0f));
+            ui_renderer_template_format_fixed(value * 1000.0f, 1U, "ms", out, out_len);
             break;
 
         case PARAM_DISPLAY_RATIO:
-            (void)snprintf(out, out_len, "%.2f", (double)value);
+            ui_renderer_template_format_fixed(value, 2U, "", out, out_len);
             break;
 
         case PARAM_DISPLAY_INT:
@@ -179,14 +225,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
             break;
 
         default:
-            if ((desc->unit != NULL) && (desc->unit[0] != '\0'))
-            {
-                (void)snprintf(out, out_len, "%.2f%s", (double)value, desc->unit);
-            }
-            else
-            {
-                (void)snprintf(out, out_len, "%.2f", (double)value);
-            }
+            ui_renderer_template_format_fixed(value, 2U, desc->unit, out, out_len);
             break;
     }
 }

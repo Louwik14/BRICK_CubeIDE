@@ -1,4 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:104:23:f2s24_fast	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:162:6:audio_io_unpack	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:291:6:audio_io_pack_ramped	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:273:6:audio_io_pack	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:103:23:f2s24_fast	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:161:6:audio_io_unpack	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:290:6:audio_io_pack_ramped	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_io.c:272:6:audio_io_pack	16	static

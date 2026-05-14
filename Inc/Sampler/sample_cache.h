@@ -139,6 +139,9 @@ typedef struct
     uint32_t average_span_frames;
     uint32_t active_voices;
     uint32_t max_active_voices;
+    uint32_t prepare_stream_async;
+    uint32_t prepare_stream_initial_queued;
+    uint32_t prepare_stream_page0_not_ready;
 } sample_cache_diag_snapshot_t;
 
 void sample_cache_init(void);

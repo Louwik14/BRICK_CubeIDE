@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:15:14:brick6_clip_shifter_clampf	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:28:14:brick6_clip_shifter_read_interp	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:67:6:brick6_clip_shifter_reset	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:55:6:brick6_clip_shifter_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:80:6:brick6_clip_shifter_set_window_frames	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:99:6:brick6_clip_shifter_set_pitch_correction	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_clip_shifter.c:111:6:brick6_clip_shifter_process_stereo	64	static
