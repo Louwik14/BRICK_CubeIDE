@@ -574,6 +574,7 @@ Points factuels:
 - Le catalogue `Master` expose seulement `FX`.
 - Les shortcuts `TRACK+REC`, `TRACK+PLAY` et `TRACK+SHIFT+REC` ne ciblent plus de backend buffer dedie; ils reviennent au transport/REC existant.
 - `ROUT` reste une projection de `ARP` pour `Master/FX` et `Sampler/Looper`; `Sampler/Looper` expose `ARM`, `LEN`, `PLAY`, `XFade` via `PARAM_LOOPER_XFADE`.
+- `XFade` Looper suit le contrat TONE normal de capture: il peut etre p-locke et assigne a une scene MACRO depuis la page `TONE/LOOP`.
 
 ## 21. Contrat UI Looper STRETCH
 

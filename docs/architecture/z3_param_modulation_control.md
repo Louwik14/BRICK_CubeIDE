@@ -574,6 +574,8 @@ Dette explicite post-passe 4:
 - Les anciens params buffer master sont retires de `PARAM_COUNT` sans tombstones.
 - `PARAM_LOOPER_XFADE` remplace l'ancien alias de stockage et pilote uniquement l'etat neutre `audio_xfade` pour `Sampler/Looper`.
 - `track_tone_sound_state.looper` porte `arm`, `len`, `play` et `xfade`; aucun bloc TONE buffer dedie ne reste.
+- `PARAM_LOOPER_XFADE` est un param TONE track-aware Looper: visible sur `TONE/LOOP`, p-lockable via `SEQ_PLOCK_SET_TONE`, et assignable MACRO par le contrat `p-lockable => macro-assignable`.
+- Les params Looper de workflow restent explicitement separes de ce contrat; `XFade` est le morph audio continu, pas une commande `ARM`/`PLAY`/`SAVE`.
 
 ## 36. Contrat Looper STRETCH UI/state
 
@@ -582,6 +584,7 @@ Dette explicite post-passe 4:
 - `track_tone_sound_state.looper` porte maintenant `arm`, `len`, `play`, `xfade`, `stretch`, `pitch` et `grain`.
 - L'apply Looper projette `stretch`, `pitch` et `grain` vers `brick6_looper_runtime_set_stretch()` depuis le backend param, hors IRQ audio; l'IRQ lit seulement l'etat runtime Looper deja projete.
 - L'execution audio est en Z1: `Off` garde la lecture brute si `Pitch=0`, `Speed` applique le ratio tempo + pitch au read increment, et `Shifter` reutilise `brick6_clip_shifter` via un pool Looper dedie separe du pool Clip.
+- L'apply de `PARAM_LOOPER_STRETCH` / `PARAM_LOOPER_PITCH` projette seulement l'etat runtime et peut armer un resync one-shot quand `Pitch` arrive sur un point stable `-12`, `0` ou `+12`; il ne repositionne jamais directement le playhead hors IRQ audio.
 - Si la metadata de prise Looper est invalide, le runtime retombe sur `Off`; si le pool Shifter Looper est plein, il retombe sur `Speed`.
 - `seq_param_iface` et `mod_lfo_v1` excluent `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` du p-lock/LFO: ces controles restent projetes par write param autoritatif, pas par modulation continue.
 - `SRC BPM` et `SYNC LEN` restent des params Clip uniquement; le stretch Looper utilise la metadata de prise REC.

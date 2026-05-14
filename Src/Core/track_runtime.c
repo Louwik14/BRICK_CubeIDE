@@ -246,6 +246,7 @@ static uint8_t track_runtime_param_is_looper_only(param_id_t param)
     return (uint8_t)((param == PARAM_LOOPER_ARM)
                      || (param == PARAM_LOOPER_LEN)
                      || (param == PARAM_LOOPER_PLAY)
+                     || (param == PARAM_LOOPER_XFADE)
                      || (param == PARAM_LOOPER_STRETCH)
                      || (param == PARAM_LOOPER_PITCH)
                      || (param == PARAM_LOOPER_GRAIN));

@@ -11,6 +11,7 @@
 
 #include "Core/track_runtime.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
 #include "midi.h"
@@ -128,6 +129,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
 
     uint8_t drum_killed[SEQ_TRACK_COUNT] = { 0U };
     track_runtime_refresh_all();
+    brick6_sampler_runtime_stop_transport_clips();
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         /* Non-UI projection consumer: panic only needs resolved routing/engine state. */

@@ -1807,6 +1807,17 @@ void brick6_sampler_runtime_stop(uint8_t track_id)
     sample_voice_reader_stop(&g_sampler_voice[track_id].reader);
 }
 
+void brick6_sampler_runtime_stop_transport_clips(void)
+{
+    for (uint8_t track_id = 0U; track_id < SEQ_TRACK_COUNT; ++track_id)
+    {
+        if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
+        {
+            brick6_sampler_runtime_stop(track_id);
+        }
+    }
+}
+
 void brick6_sampler_runtime_diag_reset(void)
 {
     memset(&g_brick6_sampler_runtime_diag, 0, sizeof(g_brick6_sampler_runtime_diag));

@@ -28,6 +28,10 @@
 #define BRICK6_LOOPER_STRETCH_SPEED 1U
 #define BRICK6_LOOPER_STRETCH_SHIFTER 2U
 #define BRICK6_LOOPER_DEFAULT_GRAIN_FRAMES 1536U
+#define BRICK6_LOOPER_PITCH_STABLE_EPSILON 0.001f
+#define BRICK6_LOOPER_TIMING_NEUTRAL_EPSILON 0.001f
+#define BRICK6_LOOPER_RESYNC_STABLE_BLOCKS 2U
+#define BRICK6_LOOPER_RESYNC_XFADE_FRAMES 96U
 
 #if ((BRICK6_LOOPER_CACHE_ID_BASE + BRICK6_LOOPER_TRACK_CAP) > SAMPLE_PAGE_CACHE_MAX_SAMPLES)
 #error "sample_page_cache transient id range is too small for Looper tracks"
@@ -44,8 +48,11 @@ typedef struct
     uint32_t source_bpm_milli;
     uint64_t record_start_sample;
     uint64_t record_stop_sample;
+    uint64_t playback_start_sample;
     volatile uint32_t playhead;
     uint32_t playhead_frac_q16;
+    uint32_t resync_old_playhead;
+    uint32_t resync_old_frac_q16;
     sample_page_ref_t current_page_ref;
     const float *current_base;
     uint32_t current_start_frame;
@@ -60,6 +67,9 @@ typedef struct
     uint8_t scheduled_start_valid;
     uint8_t is_raw;
     uint8_t raw_slot;
+    uint8_t resync_pending;
+    uint8_t resync_stable_blocks;
+    uint8_t resync_xfade_remaining;
     uint8_t preroll_valid;
     uint8_t preroll_used_reported;
     uint8_t preroll_consumed;
@@ -118,6 +128,7 @@ static brick6_looper_record_boundary_state_t g_looper_record_boundary;
 static void looper_request_playhead_pages(const brick6_looper_track_state_t *state);
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
                                        uint32_t playhead);
+static uint8_t looper_try_enter_normal_playback(brick6_looper_track_state_t *state);
 
 static uint32_t looper_len_mode_to_steps(uint8_t len_mode)
 {
@@ -307,6 +318,93 @@ static uint8_t looper_metadata_valid(const brick6_looper_track_state_t *state,
             && (current_samples_per_step_q16 != 0U)) ? 1U : 0U);
 }
 
+static int8_t looper_pitch_to_int(float pitch_semitones)
+{
+    pitch_semitones = looper_clampf(pitch_semitones, -12.0f, 12.0f);
+    return (int8_t)((pitch_semitones >= 0.0f)
+        ? (pitch_semitones + 0.5f)
+        : (pitch_semitones - 0.5f));
+}
+
+static uint8_t looper_pitch_stable_ratio(float pitch_semitones, float *out_ratio)
+{
+    const int8_t pitch_int = looper_pitch_to_int(pitch_semitones);
+    if((pitch_int != -12) && (pitch_int != 0) && (pitch_int != 12))
+    {
+        return 0U;
+    }
+
+    const float delta = pitch_semitones - (float)pitch_int;
+    if((delta <= -BRICK6_LOOPER_PITCH_STABLE_EPSILON)
+            || (delta >= BRICK6_LOOPER_PITCH_STABLE_EPSILON))
+    {
+        return 0U;
+    }
+
+    if(out_ratio != 0)
+    {
+        if(pitch_int == -12)
+        {
+            *out_ratio = 0.5f;
+        }
+        else if(pitch_int == 12)
+        {
+            *out_ratio = 2.0f;
+        }
+        else
+        {
+            *out_ratio = 1.0f;
+        }
+    }
+    return 1U;
+}
+
+static uint8_t looper_pitch_is_zero(float pitch_semitones)
+{
+    return (looper_pitch_to_int(pitch_semitones) == 0) ? 1U : 0U;
+}
+
+static uint8_t looper_timing_is_neutral(float timing_ratio)
+{
+    const float delta = timing_ratio - 1.0f;
+    return (uint8_t)(((delta > -BRICK6_LOOPER_TIMING_NEUTRAL_EPSILON)
+            && (delta < BRICK6_LOOPER_TIMING_NEUTRAL_EPSILON)) ? 1U : 0U);
+}
+
+static uint8_t looper_effective_ratio_is_stable(const brick6_looper_track_state_t *state,
+                                                 uint8_t mode,
+                                                 float pitch_semitones,
+                                                 uint32_t current_samples_per_step_q16,
+                                                 float *out_ratio)
+{
+    float pitch_ratio = 1.0f;
+    if(state == 0)
+    {
+        return 1U;
+    }
+
+    if(mode == BRICK6_LOOPER_STRETCH_SHIFTER)
+    {
+        return 0U;
+    }
+
+    if(looper_pitch_stable_ratio(pitch_semitones, &pitch_ratio) == 0U)
+    {
+        return 0U;
+    }
+
+    if(mode == BRICK6_LOOPER_STRETCH_SPEED)
+    {
+        pitch_ratio *= looper_timing_ratio(state, current_samples_per_step_q16);
+    }
+
+    if(out_ratio != 0)
+    {
+        *out_ratio = pitch_ratio;
+    }
+    return 1U;
+}
+
 static uint8_t looper_effective_mode(const brick6_looper_track_state_t *state,
                                      uint32_t current_samples_per_step_q16)
 {
@@ -479,6 +577,12 @@ static void looper_reset_take_state(brick6_looper_track_state_t *state)
     looper_store_take_metadata(state, 0U, 0U, 0U, 0U, 0U, 0U);
     state->playhead = 0U;
     state->playhead_frac_q16 = 0U;
+    state->playback_start_sample = 0U;
+    state->resync_pending = 0U;
+    state->resync_stable_blocks = 0U;
+    state->resync_xfade_remaining = 0U;
+    state->resync_old_playhead = 0U;
+    state->resync_old_frac_q16 = 0U;
     state->play_auto = 0U;
     state->want_play_when_ready = 0U;
     state->scheduled_start_valid = 0U;
@@ -500,6 +604,12 @@ static void looper_fail(brick6_looper_track_state_t *state)
     looper_store_take_metadata(state, 0U, 0U, 0U, 0U, 0U, 0U);
     state->playhead = 0U;
     state->playhead_frac_q16 = 0U;
+    state->playback_start_sample = 0U;
+    state->resync_pending = 0U;
+    state->resync_stable_blocks = 0U;
+    state->resync_xfade_remaining = 0U;
+    state->resync_old_playhead = 0U;
+    state->resync_old_frac_q16 = 0U;
 }
 
 static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
@@ -604,6 +714,7 @@ static void looper_advance_playhead(brick6_looper_track_state_t *state, uint32_t
     if(playhead >= state->frames_total)
     {
         playhead %= state->frames_total;
+        g_looper_runtime_diag.wrap_count++;
     }
     state->playhead = playhead;
 }
@@ -628,6 +739,12 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
     state->state = BRICK6_LOOPER_RUNTIME_STATE_PLAYING;
     state->playhead = initial_playhead;
     state->playhead_frac_q16 = 0U;
+    state->playback_start_sample = start_sample;
+    state->resync_pending = 0U;
+    state->resync_stable_blocks = 0U;
+    state->resync_xfade_remaining = 0U;
+    state->resync_old_playhead = initial_playhead;
+    state->resync_old_frac_q16 = 0U;
     const uint8_t track_id = (uint8_t)(state - g_looper_tracks);
     brick6_looper_shifter_slot_t *const slot = looper_shifter_get(track_id);
     if(slot != 0)
@@ -700,6 +817,23 @@ static uint8_t looper_acquire_current_page(brick6_looper_track_state_t *state)
         return 0U;
     }
     return looper_acquire_page_for_frame(state, state->playhead);
+}
+
+static uint8_t looper_try_enter_normal_playback(brick6_looper_track_state_t *state)
+{
+    if((state == 0) || (state->cache_registered == 0U) || (state->frames_total == 0U))
+    {
+        return 0U;
+    }
+
+    if(looper_acquire_current_page(state) == 0U)
+    {
+        return 0U;
+    }
+
+    state->raw_relay_done = 1U;
+    state->preroll_consumed = 1U;
+    return 1U;
 }
 
 static void looper_update_ready_state(brick6_looper_track_state_t *state)
@@ -1077,6 +1211,10 @@ void brick6_looper_runtime_stop_playback(uint8_t track_id)
         state->state = BRICK6_LOOPER_RUNTIME_STATE_READY;
         state->playhead = 0U;
         state->playhead_frac_q16 = 0U;
+        state->playback_start_sample = 0U;
+        state->resync_pending = 0U;
+        state->resync_stable_blocks = 0U;
+        state->resync_xfade_remaining = 0U;
     }
     looper_release_reader(state);
     state->want_play_when_ready = 0U;
@@ -1252,11 +1390,44 @@ void brick6_looper_runtime_set_stretch(uint8_t track_id,
     }
 
     brick6_looper_track_state_t *state = &g_looper_tracks[track_id];
-    const uint8_t mode_changed = (state->stretch_mode != mode) ? 1U : 0U;
+    const uint8_t old_mode = state->stretch_mode;
+    const uint8_t mode_changed = (old_mode != mode) ? 1U : 0U;
     const uint8_t grain_changed = (state->stretch_grain_frames != grain_frames) ? 1U : 0U;
+    const uint32_t current_samples_per_step_q16 =
+        ((old_mode == BRICK6_LOOPER_STRETCH_SPEED)
+            || (mode == BRICK6_LOOPER_STRETCH_SPEED))
+            ? seq_runtime_get_samples_per_step_q16()
+            : 0U;
+    const uint8_t old_stable =
+        looper_effective_ratio_is_stable(state,
+                                         old_mode,
+                                         state->stretch_pitch_semitones,
+                                         current_samples_per_step_q16,
+                                         0);
+    const float new_pitch = looper_clampf(pitch_semitones, -12.0f, 12.0f);
+    const uint8_t new_stable =
+        looper_effective_ratio_is_stable(state,
+                                         mode,
+                                         new_pitch,
+                                         current_samples_per_step_q16,
+                                         0);
     state->stretch_mode = mode;
-    state->stretch_pitch_semitones = looper_clampf(pitch_semitones, -12.0f, 12.0f);
+    state->stretch_pitch_semitones = new_pitch;
     state->stretch_grain_frames = grain_frames;
+
+    if((state->state == BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
+            && (old_stable == 0U)
+            && (new_stable != 0U)
+            && (old_mode != BRICK6_LOOPER_STRETCH_SHIFTER)
+            && (mode != BRICK6_LOOPER_STRETCH_SHIFTER))
+    {
+        state->resync_pending = 1U;
+        state->resync_stable_blocks = 0U;
+    }
+    else if(new_stable == 0U)
+    {
+        state->resync_stable_blocks = 0U;
+    }
 
     if((mode_changed != 0U) || (grain_changed != 0U))
     {
@@ -1408,10 +1579,10 @@ uint8_t brick6_looper_runtime_is_playing(uint8_t track_id)
     return (g_looper_tracks[track_id].state == BRICK6_LOOPER_RUNTIME_STATE_PLAYING) ? 1U : 0U;
 }
 
-static uint8_t looper_read_frame_raw(brick6_looper_track_state_t *state,
-                                     uint32_t frame,
-                                     float *out_l,
-                                     float *out_r)
+static uint8_t looper_read_frame_normal(brick6_looper_track_state_t *state,
+                                        uint32_t frame,
+                                        float *out_l,
+                                        float *out_r)
 {
     if((state == 0) || (out_l == 0) || (out_r == 0) || (state->frames_total == 0U))
     {
@@ -1421,20 +1592,6 @@ static uint8_t looper_read_frame_raw(brick6_looper_track_state_t *state,
     if(frame >= state->frames_total)
     {
         frame %= state->frames_total;
-    }
-
-    if(looper_preroll_can_read(state, frame) != 0U)
-    {
-        if(state->raw_relay_done == 0U)
-        {
-            const uint32_t src = frame * BRICK6_LOOPER_PREROLL_CHANNELS;
-            *out_l = looper_pcm24_to_float(g_looper_preroll_pcm[src]);
-            *out_r = looper_pcm24_to_float(g_looper_preroll_pcm[src + 1U]);
-            state->preroll_used_reported = 1U;
-            return 1U;
-        }
-
-        state->preroll_consumed = 1U;
     }
 
     if(looper_acquire_page_for_frame(state, frame) == 0U)
@@ -1452,11 +1609,11 @@ static uint8_t looper_read_frame_raw(brick6_looper_track_state_t *state,
     return 1U;
 }
 
-static uint8_t looper_read_interp(brick6_looper_track_state_t *state,
-                                  uint32_t frame,
-                                  uint32_t frac_q16,
-                                  float *out_l,
-                                  float *out_r)
+static uint8_t looper_read_interp_normal(brick6_looper_track_state_t *state,
+                                         uint32_t frame,
+                                         uint32_t frac_q16,
+                                         float *out_l,
+                                         float *out_r)
 {
     float l0 = 0.0f;
     float r0 = 0.0f;
@@ -1468,7 +1625,7 @@ static uint8_t looper_read_interp(brick6_looper_track_state_t *state,
         return 0U;
     }
 
-    if(looper_read_frame_raw(state, frame, &l0, &r0) == 0U)
+    if(looper_read_frame_normal(state, frame, &l0, &r0) == 0U)
     {
         return 0U;
     }
@@ -1485,7 +1642,7 @@ static uint8_t looper_read_interp(brick6_looper_track_state_t *state,
     {
         next_frame = 0U;
     }
-    if(looper_read_frame_raw(state, next_frame, &l1, &r1) == 0U)
+    if(looper_read_frame_normal(state, next_frame, &l1, &r1) == 0U)
     {
         return 0U;
     }
@@ -1511,6 +1668,7 @@ static void looper_advance_playhead_q16(brick6_looper_track_state_t *state,
     if(pos_q16 >= loop_q16)
     {
         pos_q16 %= loop_q16;
+        g_looper_runtime_diag.wrap_count++;
     }
     state->playhead = (uint32_t)(pos_q16 >> 16);
     state->playhead_frac_q16 = (uint32_t)(pos_q16 & 0xFFFFU);
@@ -1524,6 +1682,7 @@ static void looper_render_varispeed(brick6_looper_track_state_t *state,
                                     uint32_t increment_q16)
 {
     uint32_t produced = 0U;
+    g_looper_runtime_diag.playback_normal_used++;
 
     while(produced < frames)
     {
@@ -1535,20 +1694,15 @@ static void looper_render_varispeed(brick6_looper_track_state_t *state,
 
         float sample_l = 0.0f;
         float sample_r = 0.0f;
-        if(looper_read_interp(state,
-                              state->playhead,
-                              state->playhead_frac_q16,
-                              &sample_l,
-                              &sample_r) == 0U)
+        if(looper_read_interp_normal(state,
+                                     state->playhead,
+                                     state->playhead_frac_q16,
+                                     &sample_l,
+                                     &sample_r) == 0U)
         {
             g_looper_runtime_diag.page_miss_seen = 1U;
+            g_looper_runtime_diag.fallback_miss++;
             looper_diag_update_take(track, state);
-            if((state->preroll_valid != 0U)
-                    && (state->preroll_consumed == 0U)
-                    && (state->playhead >= state->preroll_frames))
-            {
-                break;
-            }
             looper_advance_playhead_q16(state, increment_q16);
             produced++;
             continue;
@@ -1578,6 +1732,261 @@ static void looper_render_varispeed(brick6_looper_track_state_t *state,
     looper_diag_update_take(track, state);
 }
 
+static uint32_t looper_render_preroll_bridge(brick6_looper_track_state_t *state,
+                                             uint8_t track,
+                                             float *out_l,
+                                             float *out_r,
+                                             uint32_t frames)
+{
+    if((state == 0) || (out_l == 0) || (out_r == 0) || (frames == 0U)
+            || (looper_preroll_can_read(state, state->playhead) == 0U))
+    {
+        return 0U;
+    }
+
+    uint32_t bridge_frames = state->preroll_frames - state->playhead;
+    if(bridge_frames > frames)
+    {
+        bridge_frames = frames;
+    }
+
+    const uint32_t base = state->playhead * BRICK6_LOOPER_PREROLL_CHANNELS;
+    for(uint32_t i = 0U; i < bridge_frames; ++i)
+    {
+        const uint32_t src = base + (i * BRICK6_LOOPER_PREROLL_CHANNELS);
+        out_l[i] += looper_pcm24_to_float(g_looper_preroll_pcm[src]);
+        out_r[i] += looper_pcm24_to_float(g_looper_preroll_pcm[src + 1U]);
+    }
+
+    state->preroll_used_reported = 1U;
+    g_looper_runtime_diag.preroll_bridge_active++;
+    const uint32_t playhead_before = state->playhead;
+    const uint8_t wraps_on_preroll =
+        ((playhead_before + bridge_frames) >= state->frames_total) ? 1U : 0U;
+    looper_advance_playhead(state, bridge_frames);
+    if((wraps_on_preroll != 0U)
+            || ((playhead_before + bridge_frames) >= state->preroll_frames))
+    {
+        state->preroll_consumed = 1U;
+    }
+    looper_diag_update_take(track, state);
+    return bridge_frames;
+}
+
+static void looper_render_normal_raw(brick6_looper_track_state_t *state,
+                                     uint8_t track,
+                                     float *out_l,
+                                     float *out_r,
+                                     uint32_t frames)
+{
+    uint32_t produced = 0U;
+
+    while(produced < frames)
+    {
+        if(state->playhead >= state->frames_total)
+        {
+            state->playhead = 0U;
+            g_looper_runtime_diag.wrap_count++;
+        }
+
+        uint32_t request_frames = frames - produced;
+        const uint32_t loop_remaining = state->frames_total - state->playhead;
+        if(request_frames > loop_remaining)
+        {
+            request_frames = loop_remaining;
+        }
+
+        if(looper_acquire_current_page(state) == 0U)
+        {
+            g_looper_runtime_diag.page_miss_seen = 1U;
+            g_looper_runtime_diag.fallback_miss++;
+            looper_diag_update_take(track, state);
+            looper_advance_playhead(state, request_frames);
+            produced += request_frames;
+            continue;
+        }
+
+        const uint32_t page_offset = state->playhead - state->current_start_frame;
+        g_looper_runtime_diag.current_page_start_frame = state->current_start_frame;
+        g_looper_runtime_diag.current_page_frame_count = state->current_frame_count;
+        uint32_t block_frames = state->current_frame_count - page_offset;
+        if(block_frames > request_frames)
+        {
+            block_frames = request_frames;
+        }
+
+        const float *const src_base =
+            &state->current_base[page_offset * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
+        for(uint32_t i = 0U; i < block_frames; ++i)
+        {
+            const uint32_t src = i * SAMPLE_PAGE_FRAME_STRIDE_FLOATS;
+            out_l[produced + i] += src_base[src];
+            out_r[produced + i] += src_base[src + 1U];
+            if((g_looper_runtime_diag.first_output_valid == 0U)
+                    && ((src_base[src] != 0.0f) || (src_base[src + 1U] != 0.0f)))
+            {
+                g_looper_runtime_diag.first_output_audio_timeline_sample =
+                    (uint64_t)produced + (uint64_t)i;
+                g_looper_runtime_diag.first_output_frame_offset = produced + i;
+                g_looper_runtime_diag.first_output_valid = 1U;
+            }
+        }
+
+        state->raw_relay_done = 1U;
+        state->preroll_consumed = 1U;
+        g_looper_runtime_diag.playback_normal_used++;
+        looper_advance_playhead(state, block_frames);
+        looper_diag_update_take(track, state);
+        produced += block_frames;
+        if((block_frames == 0U)
+                || ((page_offset + block_frames) >= state->current_frame_count)
+                || (state->playhead == 0U))
+        {
+            looper_release_reader(state);
+        }
+    }
+}
+
+static uint32_t looper_expected_frame_from_timeline(const brick6_looper_track_state_t *state,
+                                                    float stable_ratio)
+{
+    if((state == 0) || (state->frames_total == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t now_sample = seq_runtime_exec_get_audio_timeline_sample();
+    const uint64_t elapsed =
+        (now_sample > state->playback_start_sample)
+            ? (now_sample - state->playback_start_sample)
+            : 0ULL;
+    if(stable_ratio < 0.25f)
+    {
+        stable_ratio = 0.25f;
+    }
+    else if(stable_ratio > 4.0f)
+    {
+        stable_ratio = 4.0f;
+    }
+    const uint64_t expected = (uint64_t)(((double)elapsed * (double)stable_ratio) + 0.5);
+    return (uint32_t)(expected % (uint64_t)state->frames_total);
+}
+
+static void looper_try_consume_resync(brick6_looper_track_state_t *state,
+                                      uint8_t stable_now,
+                                      float stable_ratio)
+{
+    if((state == 0) || (state->resync_pending == 0U))
+    {
+        return;
+    }
+
+    if(stable_now == 0U)
+    {
+        state->resync_pending = 0U;
+        state->resync_stable_blocks = 0U;
+        return;
+    }
+
+    if(state->resync_stable_blocks < BRICK6_LOOPER_RESYNC_STABLE_BLOCKS)
+    {
+        state->resync_stable_blocks++;
+        if(state->resync_stable_blocks < BRICK6_LOOPER_RESYNC_STABLE_BLOCKS)
+        {
+            return;
+        }
+    }
+
+    const uint32_t expected_frame = looper_expected_frame_from_timeline(state, stable_ratio);
+    if((state->playhead == expected_frame) && (state->playhead_frac_q16 == 0U))
+    {
+        state->resync_pending = 0U;
+        state->resync_stable_blocks = 0U;
+        return;
+    }
+
+    state->resync_old_playhead = state->playhead;
+    state->resync_old_frac_q16 = state->playhead_frac_q16;
+    looper_release_reader(state);
+    state->playhead = expected_frame;
+    state->playhead_frac_q16 = 0U;
+    state->resync_xfade_remaining =
+        (state->frames_total < BRICK6_LOOPER_RESYNC_XFADE_FRAMES)
+            ? (uint8_t)state->frames_total
+            : (uint8_t)BRICK6_LOOPER_RESYNC_XFADE_FRAMES;
+    state->resync_pending = 0U;
+    state->resync_stable_blocks = 0U;
+    looper_request_playhead_pages(state);
+}
+
+static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
+                                           uint8_t track,
+                                           float *out_l,
+                                           float *out_r,
+                                           uint32_t frames)
+{
+    if((state == 0) || (out_l == 0) || (out_r == 0) || (frames == 0U)
+            || (state->resync_xfade_remaining == 0U))
+    {
+        return 0U;
+    }
+
+    uint32_t old_playhead = state->resync_old_playhead;
+    uint32_t old_frac_q16 = state->resync_old_frac_q16;
+    uint32_t produced = 0U;
+    while((produced < frames) && (state->resync_xfade_remaining != 0U))
+    {
+        float old_l = 0.0f;
+        float old_r = 0.0f;
+        float new_l = 0.0f;
+        float new_r = 0.0f;
+        const uint8_t old_ok =
+            looper_read_interp_normal(state, old_playhead, old_frac_q16, &old_l, &old_r);
+        const uint8_t new_ok =
+            looper_read_frame_normal(state, state->playhead, &new_l, &new_r);
+
+        if((old_ok == 0U) || (new_ok == 0U))
+        {
+            g_looper_runtime_diag.page_miss_seen = 1U;
+            g_looper_runtime_diag.fallback_miss++;
+        }
+
+        const uint32_t phase =
+            BRICK6_LOOPER_RESYNC_XFADE_FRAMES - (uint32_t)state->resync_xfade_remaining;
+        const float wet = (float)(phase + 1U) * (1.0f / (float)BRICK6_LOOPER_RESYNC_XFADE_FRAMES);
+        const float dry = 1.0f - wet;
+        out_l[produced] += (old_l * dry) + (new_l * wet);
+        out_r[produced] += (old_r * dry) + (new_r * wet);
+
+        uint64_t old_pos_q16 = ((uint64_t)old_playhead << 16)
+            + (uint64_t)old_frac_q16
+            + (uint64_t)BRICK6_LOOPER_Q16_ONE;
+        const uint64_t loop_q16 = (uint64_t)state->frames_total << 16;
+        if(old_pos_q16 >= loop_q16)
+        {
+            old_pos_q16 %= loop_q16;
+        }
+        old_playhead = (uint32_t)(old_pos_q16 >> 16);
+        old_frac_q16 = (uint32_t)(old_pos_q16 & 0xFFFFU);
+
+        looper_advance_playhead(state, 1U);
+        produced++;
+        state->resync_xfade_remaining--;
+        if((state->current_acquired != 0U)
+                && ((state->playhead == 0U)
+                    || (state->playhead < state->current_start_frame)
+                    || (state->playhead >= (state->current_start_frame + state->current_frame_count))))
+        {
+            looper_release_reader(state);
+        }
+    }
+
+    state->resync_old_playhead = old_playhead;
+    state->resync_old_frac_q16 = old_frac_q16;
+    looper_diag_update_take(track, state);
+    return produced;
+}
+
 void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
                                         float *out_l,
                                         float *out_r,
@@ -1598,17 +2007,49 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
         return;
     }
 
+    if((state->raw_relay_done == 0U)
+            && (looper_preroll_can_read(state, state->playhead) != 0U))
+    {
+        if(looper_try_enter_normal_playback(state) == 0U)
+        {
+            const uint32_t bridged =
+                looper_render_preroll_bridge(state, track, out_l, out_r, frames);
+            if(bridged >= frames)
+            {
+                return;
+            }
+
+            if(looper_try_enter_normal_playback(state) == 0U)
+            {
+                g_looper_runtime_diag.page_miss_seen = 1U;
+                g_looper_runtime_diag.fallback_miss++;
+                looper_diag_update_take(track, state);
+                return;
+            }
+
+            out_l += bridged;
+            out_r += bridged;
+            frames -= bridged;
+        }
+    }
+
+    if(state->cache_registered == 0U)
+    {
+        return;
+    }
+
     const uint32_t current_samples_per_step_q16 =
         ((state->stretch_mode == BRICK6_LOOPER_STRETCH_SPEED)
             || (state->stretch_mode == BRICK6_LOOPER_STRETCH_SHIFTER))
             ? seq_runtime_get_samples_per_step_q16()
             : 0U;
     uint8_t mode = looper_effective_mode(state, current_samples_per_step_q16);
-    const uint8_t pitch_neutral =
-        ((state->stretch_pitch_semitones > -0.0001f)
-            && (state->stretch_pitch_semitones < 0.0001f)) ? 1U : 0U;
+    float stable_ratio = 1.0f;
+    const uint8_t pitch_zero = looper_pitch_is_zero(state->stretch_pitch_semitones);
+    const uint8_t pitch_stable =
+        looper_pitch_stable_ratio(state->stretch_pitch_semitones, &stable_ratio);
     const float pitch_ratio =
-        (pitch_neutral != 0U) ? 1.0f : looper_pitch_ratio(state->stretch_pitch_semitones);
+        (pitch_stable != 0U) ? stable_ratio : looper_pitch_ratio(state->stretch_pitch_semitones);
     float timing_ratio = 1.0f;
 
     if(mode != BRICK6_LOOPER_STRETCH_OFF)
@@ -1617,10 +2058,32 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
     }
 
     if((mode == BRICK6_LOOPER_STRETCH_SHIFTER)
-            && (timing_ratio == 1.0f)
-            && (pitch_neutral != 0U))
+            && (looper_timing_is_neutral(timing_ratio) != 0U)
+            && (pitch_zero != 0U))
     {
         mode = BRICK6_LOOPER_STRETCH_OFF;
+    }
+
+    float effective_stable_ratio = stable_ratio;
+    if(mode == BRICK6_LOOPER_STRETCH_SPEED)
+    {
+        effective_stable_ratio *= timing_ratio;
+    }
+    const uint8_t ratio_stable =
+        (uint8_t)(((mode == BRICK6_LOOPER_STRETCH_OFF) && (pitch_stable != 0U))
+            || ((mode == BRICK6_LOOPER_STRETCH_SPEED) && (pitch_stable != 0U)));
+    looper_try_consume_resync(state, ratio_stable, effective_stable_ratio);
+    if(state->resync_xfade_remaining != 0U)
+    {
+        const uint32_t xfade_frames =
+            looper_render_resync_xfade(state, track, out_l, out_r, frames);
+        if(xfade_frames >= frames)
+        {
+            return;
+        }
+        out_l += xfade_frames;
+        out_r += xfade_frames;
+        frames -= xfade_frames;
     }
 
     if(mode == BRICK6_LOOPER_STRETCH_SHIFTER)
@@ -1678,7 +2141,7 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
         return;
     }
 
-    if((mode == BRICK6_LOOPER_STRETCH_OFF) && (pitch_neutral == 0U))
+    if((mode == BRICK6_LOOPER_STRETCH_OFF) && (pitch_zero == 0U))
     {
         looper_render_varispeed(state,
                                 track,
@@ -1689,114 +2152,7 @@ void brick6_looper_runtime_render_track(const track_runtime_ctx_t *ctx,
         return;
     }
 
-    uint32_t produced = 0U;
-    while(produced < frames)
-    {
-        if(state->playhead >= state->frames_total)
-        {
-            state->playhead = 0U;
-        }
-
-        uint32_t request_frames = frames - produced;
-        const uint32_t loop_remaining = state->frames_total - state->playhead;
-        if(request_frames > loop_remaining)
-        {
-            request_frames = loop_remaining;
-        }
-
-        if(looper_preroll_can_read(state, state->playhead) != 0U)
-        {
-            if(state->raw_relay_done != 0U)
-            {
-                state->preroll_consumed = 1U;
-                continue;
-            }
-
-            uint32_t preroll_frames = state->preroll_frames - state->playhead;
-            if(preroll_frames > request_frames)
-            {
-                preroll_frames = request_frames;
-            }
-            if(state->preroll_used_reported == 0U)
-            {
-                state->preroll_used_reported = 1U;
-            }
-
-            const uint32_t base = state->playhead * BRICK6_LOOPER_PREROLL_CHANNELS;
-            for(uint32_t i = 0U; i < preroll_frames; ++i)
-            {
-                const uint32_t src = base + (i * BRICK6_LOOPER_PREROLL_CHANNELS);
-                out_l[produced + i] += looper_pcm24_to_float(g_looper_preroll_pcm[src]);
-                out_r[produced + i] += looper_pcm24_to_float(g_looper_preroll_pcm[src + 1U]);
-            }
-
-            const uint32_t playhead_before_preroll = state->playhead;
-            const uint8_t wraps_on_preroll =
-                ((playhead_before_preroll + preroll_frames) >= state->frames_total) ? 1U : 0U;
-            looper_advance_playhead(state, preroll_frames);
-            if(wraps_on_preroll != 0U)
-            {
-                state->preroll_consumed = 1U;
-            }
-            looper_diag_update_take(track, state);
-            produced += preroll_frames;
-            continue;
-        }
-
-        if(looper_acquire_current_page(state) == 0U)
-        {
-            g_looper_runtime_diag.page_miss_seen = 1U;
-            looper_diag_update_take(track, state);
-            if((state->preroll_valid != 0U)
-                    && (state->preroll_consumed == 0U)
-                    && (state->playhead >= state->preroll_frames))
-            {
-                break;
-            }
-            looper_advance_playhead(state, request_frames);
-            produced += request_frames;
-            continue;
-        }
-
-        const uint32_t page_offset = state->playhead - state->current_start_frame;
-        g_looper_runtime_diag.current_page_start_frame = state->current_start_frame;
-        g_looper_runtime_diag.current_page_frame_count = state->current_frame_count;
-        looper_diag_update_take(track, state);
-        uint32_t block_frames = state->current_frame_count - page_offset;
-        if(block_frames > request_frames)
-        {
-            block_frames = request_frames;
-        }
-
-        const float *const src_base =
-            &state->current_base[page_offset * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
-        state->raw_relay_done = 1U;
-        state->preroll_consumed = 1U;
-        for(uint32_t i = 0U; i < block_frames; ++i)
-        {
-            const uint32_t src = i * SAMPLE_PAGE_FRAME_STRIDE_FLOATS;
-            out_l[produced + i] += src_base[src];
-            out_r[produced + i] += src_base[src + 1U];
-            if ((g_looper_runtime_diag.first_output_valid == 0U)
-                    && ((src_base[src] != 0.0f) || (src_base[src + 1U] != 0.0f)))
-            {
-                g_looper_runtime_diag.first_output_audio_timeline_sample =
-                    (uint64_t)produced + (uint64_t)i;
-                g_looper_runtime_diag.first_output_frame_offset = produced + i;
-                g_looper_runtime_diag.first_output_valid = 1U;
-            }
-        }
-
-        looper_advance_playhead(state, block_frames);
-        looper_diag_update_take(track, state);
-        produced += block_frames;
-        if((block_frames == 0U)
-                || ((page_offset + block_frames) >= state->current_frame_count)
-                || (state->playhead == 0U))
-        {
-            looper_release_reader(state);
-        }
-    }
+    looper_render_normal_raw(state, track, out_l, out_r, frames);
 }
 
 void brick6_looper_runtime_diag_get_snapshot(brick6_looper_runtime_diag_snapshot_t *out_snapshot)

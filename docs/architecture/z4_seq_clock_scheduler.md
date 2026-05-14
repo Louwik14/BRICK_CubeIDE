@@ -680,3 +680,9 @@ Points factuels observes:
 - Z4 reste seulement fournisseur de projection temporelle: marker `SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE`, `seq_runtime_get_samples_per_step_q16()` et BPM courant.
 - La quantification musicale de `LEN=Free` Looper appartient au runtime Looper cote Z1/Z5: STOP arme un `REC_STOP`, puis le marker boundary audio fournit l'echantillon exact de fin.
 - Z4 ne persiste aucune prise Looper et ne branche aucun stretch; il expose uniquement la cadence necessaire au calcul `recorded_steps_q16`.
+
+## Addendum 2026-05-14 - STOP transport et Clip Launch
+
+- STOP transport reste l'autorite de coupure globale cote sequenceur via `seq_output_guard_panic()`.
+- Pour les tracks `Sampler/Clip`, le panic appelle `brick6_sampler_runtime_stop_transport_clips()`: seuls les clips sont stoppes, leur reader/playhead est remis au debut, et le PLAY suivant repart du debut du fichier/clip.
+- OneShot/Slicer gardent leur contrat note/scheduler existant; Looper reste hors de ce chemin.

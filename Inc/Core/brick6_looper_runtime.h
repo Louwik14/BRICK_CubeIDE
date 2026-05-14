@@ -54,6 +54,10 @@ typedef struct
     uint8_t state;
     uint8_t source;
     uint8_t cache_registered;
+    uint32_t preroll_bridge_active;
+    uint32_t playback_normal_used;
+    uint32_t fallback_miss;
+    uint32_t wrap_count;
     char active_path[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX];
 } brick6_looper_runtime_diag_snapshot_t;
 
