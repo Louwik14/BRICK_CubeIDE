@@ -282,6 +282,7 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
     }
 
     out_result->multi_sample_id = best_zone->multi_sample_id;
+    out_result->zone_id = (uint16_t)(best_zone - &g_multi_zones[0]);
     out_result->root_note = best_zone->root_note;
     out_result->pitch_semitones = (int8_t)((int16_t)note - (int16_t)best_zone->root_note);
     out_result->vel_low = best_zone->vel_low;

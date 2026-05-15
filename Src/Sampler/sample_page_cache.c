@@ -143,6 +143,18 @@ static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t reques
     return 1U;
 }
 
+static uint8_t sample_page_cache_page_is_multi_ready_anchor(const sample_page_desc_t *page)
+{
+    if (page == 0)
+    {
+        return 0U;
+    }
+
+    return ((page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI) && (page->page_index < 2U))
+               ? 1U
+               : 0U;
+}
+
 static uint32_t sample_page_cache_hash_key(sample_audio_key_t key, uint32_t page_index)
 {
     return ((((uint32_t)key.object_id * 2654435761UL)
@@ -482,6 +494,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
         evict_scan = scan + 1U;
         if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U) || (page->pin_count != 0U)
             || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            || (sample_page_cache_page_is_multi_ready_anchor(page) != 0U)
             || (sample_page_cache_can_evict_for_request(key, page->key) == 0U))
         {
             continue;

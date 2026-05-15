@@ -61,6 +61,7 @@ typedef struct
 typedef struct
 {
     uint16_t multi_sample_id;
+    uint16_t zone_id;
     uint8_t root_note;
     int8_t pitch_semitones;
     uint8_t vel_low;

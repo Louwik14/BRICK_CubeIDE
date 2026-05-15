@@ -11,6 +11,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_p
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:185:9:multi_sample_pool_set_index_path	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:198:9:multi_sample_pool_clear_instrument	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:235:9:multi_sample_pool_resolve	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:292:9:multi_sample_pool_debug_define_instrument	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:319:9:multi_sample_pool_debug_add_sample	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:381:9:multi_sample_pool_debug_add_zone	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:293:9:multi_sample_pool_debug_define_instrument	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:320:9:multi_sample_pool_debug_add_sample	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_pool.c:382:9:multi_sample_pool_debug_add_zone	16	static

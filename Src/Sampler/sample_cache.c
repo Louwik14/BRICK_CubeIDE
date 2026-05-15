@@ -944,38 +944,18 @@ static void sample_cache_queue_active_stream_pages(void)
             continue;
         }
 
-        const uint32_t current_page = voice->frame_pos / SAMPLE_PAGE_FRAMES;
-        const uint32_t lookahead_pages = (voice->direction < 0)
-                                             ? SAMPLE_CACHE_STREAM_REVERSE_PAGES
-                                             : SAMPLE_CACHE_STREAM_START_PAGES;
-        for (uint32_t ahead = 1U; ahead <= lookahead_pages; ++ahead)
-        {
-            uint32_t page_index = UINT32_MAX;
-            if (voice->direction < 0)
-            {
-                if (current_page < ahead)
-                {
-                    break;
-                }
-
-                page_index = current_page - ahead;
-            }
-            else
-            {
-                page_index = current_page + ahead;
-                if ((page_index * SAMPLE_PAGE_FRAMES) >= desc->total_frames)
-                {
-                    break;
-                }
-            }
-
-            if (page_index == UINT32_MAX)
-            {
-                break;
-            }
-
-            (void)sample_stream_manager_request_page(voice->sample_id, page_index);
-        }
+        const sample_stream_active_desc_t stream_desc = {
+            .key = sample_audio_key_classic(voice->sample_id),
+            .current_frame = voice->frame_pos,
+            .end_frame = desc->total_frames,
+            .direction = voice->direction,
+            .lookahead_pages = (voice->direction < 0)
+                                   ? SAMPLE_CACHE_STREAM_REVERSE_PAGES
+                                   : SAMPLE_CACHE_STREAM_START_PAGES,
+            .request_current_page = 0U,
+            .state = 0,
+        };
+        (void)sample_stream_manager_queue_active_pages(&stream_desc);
     }
 }
 

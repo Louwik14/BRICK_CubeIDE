@@ -529,6 +529,12 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
         return TRACK_RUNTIME_VOICE_MODE_MONO;
     }
 
+    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
+    {
+        return TRACK_RUNTIME_VOICE_MODE_POLY;
+    }
+
     switch ((track_runtime_engine_t)ctx->engine)
     {
         case TRACK_RUNTIME_ENGINE_SAMPLER:
@@ -553,6 +559,12 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
     if (descriptor == NULL)
     {
         return 1U;
+    }
+
+    if ((descriptor->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (descriptor->type == TRACK_RUNTIME_TYPE_MULTI))
+    {
+        return 4U;
     }
 
     switch ((track_runtime_engine_t)descriptor->engine)

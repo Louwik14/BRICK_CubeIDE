@@ -18,6 +18,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:732:9:sample_stream_manager_request_page_normal_key	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:749:9:sample_stream_manager_request_range_key	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:740:9:sample_stream_manager_request_range	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:777:6:sample_stream_manager_service	4976	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:988:9:sample_stream_manager_has_pending_sd_work	72	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:1033:6:sample_stream_manager_diag_get_snapshot	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:777:6:sample_stream_manager_active_state_reset	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:838:9:sample_stream_manager_queue_active_pages	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:900:6:sample_stream_manager_service	4976	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:1111:9:sample_stream_manager_has_pending_sd_work	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_manager.c:1156:6:sample_stream_manager_diag_get_snapshot	8	static

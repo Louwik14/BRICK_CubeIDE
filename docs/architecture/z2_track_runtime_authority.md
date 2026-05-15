@@ -285,3 +285,9 @@ Sorties de Z2:
 - La family `Master` ne conserve plus que le type produit `Master/FX`.
 - Le type runtime buffer master, son engine dedie et sa ressource param dediee sont retires.
 - Le XFade Looper est maintenant `PARAM_LOOPER_XFADE`, mappe dans les slots TONE de `Sampler/Looper`; son etat DSP reste `audio_xfade`.
+
+## 25. Contrat Sampler/Multi PLAY
+
+- `Sampler/Multi` reste bind via `TRACK_RUNTIME_ENGINE_SAMPLER`, sans second backend runtime.
+- Z2 expose une capacite PLAY polyphonique de 4 voix pour `TRACK_RUNTIME_TYPE_MULTI`: les quatre sous-pages PLAY `V1..V4` deviennent autorisees et p-lockables.
+- Cette capacite est une projection de grammaire sequencer uniquement; les limites audio restent portees par `brick6_sampler_runtime` (`4` voix Multi par track, `16` voix Multi globales).

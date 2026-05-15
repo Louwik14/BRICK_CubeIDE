@@ -409,6 +409,19 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
     }
     else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_SAMPLER)
     {
+        if (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
+        {
+            if (is_note_on != 0U)
+            {
+                (void)brick6_sampler_runtime_trigger_multi_track_note_velocity(track, note, velocity);
+            }
+            else
+            {
+                brick6_sampler_runtime_note_off_multi_track_note(track, note);
+            }
+            return;
+        }
+
         if (is_note_on != 0U)
         {
             brick6_sampler_runtime_trigger_note_velocity(track, note, velocity);
@@ -924,4 +937,3 @@ void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
 
     seq_play_scheduler_send_program_if_needed(track, program_f, 1U);
 }
-

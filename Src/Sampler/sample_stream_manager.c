@@ -774,6 +774,129 @@ uint8_t sample_stream_manager_request_range_key(sample_audio_key_t key,
     return ok;
 }
 
+void sample_stream_manager_active_state_reset(sample_stream_active_state_t *state)
+{
+    if (state == 0)
+    {
+        return;
+    }
+
+    state->last_urgent_page = SAMPLE_STREAM_ACTIVE_PAGE_NONE;
+    state->last_normal_page = SAMPLE_STREAM_ACTIVE_PAGE_NONE;
+}
+
+static uint8_t sample_stream_manager_active_state_allows(
+    const sample_stream_active_state_t *state,
+    uint32_t page_index,
+    sample_stream_priority_t priority)
+{
+    if (state == 0)
+    {
+        return 1U;
+    }
+
+    if (priority == SAMPLE_STREAM_PRIORITY_URGENT)
+    {
+        return ((state->last_urgent_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
+                || (page_index > state->last_urgent_page))
+                   ? 1U
+                   : 0U;
+    }
+
+    return ((state->last_normal_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
+            || (page_index > state->last_normal_page))
+               ? 1U
+               : 0U;
+}
+
+static void sample_stream_manager_active_state_note(sample_stream_active_state_t *state,
+                                                    uint32_t page_index,
+                                                    sample_stream_priority_t priority)
+{
+    if (state == 0)
+    {
+        return;
+    }
+
+    if (priority == SAMPLE_STREAM_PRIORITY_URGENT)
+    {
+        if ((state->last_urgent_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
+            || (page_index > state->last_urgent_page))
+        {
+            state->last_urgent_page = page_index;
+        }
+        return;
+    }
+
+    if ((state->last_normal_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
+        || (page_index > state->last_normal_page))
+    {
+        state->last_normal_page = page_index;
+    }
+}
+
+uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc_t *desc)
+{
+    if ((desc == 0) || (desc->end_frame == 0U) || (desc->current_frame >= desc->end_frame))
+    {
+        return 0U;
+    }
+
+    const uint32_t current_page = desc->current_frame / SAMPLE_PAGE_FRAMES;
+    const uint32_t last_page = (desc->end_frame - 1U) / SAMPLE_PAGE_FRAMES;
+    const uint32_t first_ahead = (desc->request_current_page != 0U) ? 0U : 1U;
+    uint8_t requested = 0U;
+    uint8_t urgent_assigned = 0U;
+
+    for (uint32_t ahead = first_ahead; ahead <= (uint32_t)desc->lookahead_pages; ++ahead)
+    {
+        uint32_t page_index = UINT32_MAX;
+        if (desc->direction < 0)
+        {
+            if (current_page < ahead)
+            {
+                break;
+            }
+            page_index = current_page - ahead;
+        }
+        else
+        {
+            page_index = current_page + ahead;
+            if (page_index > last_page)
+            {
+                break;
+            }
+        }
+
+        if (sample_page_cache_get_page_state_key(desc->key, page_index) == SAMPLE_PAGE_READY)
+        {
+            continue;
+        }
+
+        const sample_stream_priority_t priority =
+            (urgent_assigned == 0U) ? SAMPLE_STREAM_PRIORITY_URGENT
+                                    : SAMPLE_STREAM_PRIORITY_NORMAL;
+        urgent_assigned = 1U;
+
+        if (sample_stream_manager_active_state_allows(desc->state, page_index, priority) == 0U)
+        {
+            continue;
+        }
+
+        const uint8_t ok =
+            (priority == SAMPLE_STREAM_PRIORITY_URGENT)
+                ? sample_stream_manager_request_page_urgent_key(desc->key, page_index)
+                : sample_stream_manager_request_page_normal_key(desc->key, page_index);
+        if (ok != 0U)
+        {
+            sample_stream_manager_active_state_note(desc->state, page_index, priority);
+            requested = 1U;
+        }
+    }
+
+    return requested;
+}
+
 void sample_stream_manager_service(uint32_t byte_budget)
 {
     g_sample_stream_manager_diag.service_calls++;
