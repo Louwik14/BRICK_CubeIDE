@@ -17,8 +17,10 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Braids multi-instances (une instance mono par track Braids) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
-- `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par sample STREAM actif, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
-- `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream, et le stockage/acquire/release des pages reste ici. Le lookup hot `sample_id/page_index` passe par un index statique borne; les scans free/evict conservent un passage borne avec curseur.
+- `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
+- `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare page0 et page1 pour les samples longs via le `sample_page_cache`/`sample_stream_manager` uniques.
+- `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
+- `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream, et le stockage/acquire/release des pages reste ici. Le lookup hot passe par un index statique borne keyed par `sample_audio_key_t {domain, object_id}` + `page_index`; les scans free/evict conservent un passage borne avec curseur.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
 - `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Clip` `Shifter`, port C borne sans import Clouds/FxEngine.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
@@ -39,6 +41,17 @@ Exclusions explicites:
 - UI (`Src/UI/*`) : pilote config mais n'execute pas le flux hard-RT.
 - Persistence (`Src/Storage/*`) : hors chemin IRQ audio.
 - Shim legacy `runtime_target` : hors autorite du pipeline hard-RT.
+
+Contrat page-cache/streamer:
+- L'identite cache audio est `sample_audio_key_t {domain, object_id}` + `page_index`, pas un `sample_id` brut.
+- Domaines prevus: `CLASSIC` pour les samples Sampler existants, `LOOPER` pour les transients Looper, `MULTI` reserve au futur Sampler/Multi.
+- Les APIs historiques par `sample_id` restent des wrappers `CLASSIC` temporaires pour limiter le diff cote OneShot/Clip/Slicer.
+- `sample_stream_manager` porte la meme cle pour readers, pending requests et load targets; il reste l'unique streamer FatFs et reste hors IRQ.
+- `Sampler/Looper` utilise `domain=LOOPER`; son `cache_id` restant est un identifiant legacy/diagnostic, pas l'autorite cache.
+- Capacites logiques: `CLASSIC` garde 64 ids, `LOOPER` garde une fenetre 64 ids, `MULTI` reserve 512 ids (`object_id 0..511`) sans reserver physiquement 512 pages au boot.
+- Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 16 MiB / pages stereo float de 1024 frames, le plafond theorique est 2048 pages; charger page0+page1 pour 512 samples Multi longs consomme au maximum 1024 pages, soit 8 MiB, et laisse environ 1024 pages / 8 MiB pour Classic/Looper/lookahead.
+- L'extension a 2048 pages est permise par les nettoyages SDRAM locaux: rings recorder 250 ms et retrait du backend granular legacy `fx_pool`. La marge estimee reste de l'ordre de 5.5 MiB apres metadata de pages.
+- Une requete `MULTI` ne peut pas evincer une page non-`MULTI`; si le pool est plein a cause de Classic/Looper, l'allocation Multi echoue proprement au lieu de degrader les comportements existants.
 
 ## 2. Autorite(s) de verite
 
@@ -246,8 +259,8 @@ Placement code ITCM:
 - Avant toute future annotation, le mecanisme de copie boot de `.itcm_text` devra etre reinstalle et valide explicitement.
 
 Granular / fx_pool:
-- `g_granular_state_storage` n'est plus en DTCM; il est place hors D1 via `AUDIO_COLD_SDRAM`.
-- Granular reste hors chemin critique prioritaire du produit.
+- Le backend granular legacy de `fx_pool` est retire du produit: plus de buffers `grain_buffer_l/r`, plus de storage granular SDRAM, et `FX_GRANULAR` reste seulement un tombstone refuse par `fx_pool_activate_slot()`.
+- Les params historiques `PARAM_GRAN_*` restent des tombstones no-op pour conserver les IDs tant qu'aucune rupture explicite de layout param n'est faite.
 
 ## 8. Invariants a ne pas casser
 
@@ -270,7 +283,7 @@ Granular / fx_pool:
 - Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`.
 - La memoire audio runtime Sampler reste locale au sous-systeme Sampler: `sample_page_cache` est l'owner memoire audio runtime, `sample_cache` garde la facade produit/orchestration prepare-service-compat, et `sample_voice_reader` porte la lecture musicale. `READY_FULL` est materialise par pages contigues en SDRAM; `READY_PARTIAL` signifie STREAM enregistre + pages initiales queuees, puis chargees hors audio par le `sample_stream_manager` via `sample_cache_service()`.
 - Retrigger Sampler track-aware: `brick6_sampler_runtime_trigger()` coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` jugé rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.
-- Limitations actuelles `READY_PARTIAL`: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24-bit, forward simple, pitch lineaire, reverse simple, loop forward simple, ping-pong simple, slices v1 par note, partage multi-voix meme sample autorise en phase actuelle.
+- Limitations actuelles `READY_PARTIAL`: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24/32-bit, forward simple, pitch lineaire, reverse simple, loop forward simple, ping-pong simple, slices v1 par note, partage multi-voix meme sample autorise en phase actuelle.
 - `sample_cache_read_voice()`, `sample_cache_read_voice_frame()`, `sample_cache_peek_frame()`, `sample_cache_begin_read_block()` et `sample_cache_commit_read_block()` sont RAM-only. FatFs reste limite a `sample_cache_prepare()` et `sample_cache_service()`.
 - Phase 1/2/3/4/5A/5B/6A/6B refonte locale Sampler: les modes `Shot` forward 1x (`mode=0`), `RevShot` reverse 1x (`mode=1`), `Loop` forward 1x (`mode=2`), `PingPong` 1x (`mode=3`), le `Shot` forward pitche simple (`mode=0`, `step != 1`, sans loop), le `RevShot` reverse pitche simple (`mode=1`, `step != 1`, sans loop), la `Loop` forward pitchee simple (`mode=2`, `step != 1`, sans ping-pong) et le `PingPong` pitche simple (`mode=3`, `step != 1`) ne passent plus par `sample_cache_begin_read_block()` dans l'IRQ. `brick6_sampler_runtime` construit un `play_plan` au trigger, `sample_voice_reader` porte un cursor audio local par voix, et l'IRQ consomme des segments page-bounds deja acquis via `sample_page_cache`.
 - Sur ce chemin Phase 1/2/3/4/5A/5B/6A/6B, aucun `request_page` n'est emis depuis le kernel audio. Le prefetch stream est queue hors IRQ par `sample_cache_service()` a partir des voix actives, et la transition de page du cursor se limite a un acquire/release RAM-only au boundary; en reverse, les demandes se font sur une fenetre precedente bornee (`current-1..current-4`). La loop forward 1x reste un wrap de cursor local (`loop_end -> loop_begin`), le ping-pong 1x une inversion locale de direction/kernels aux bounces, et le pitch simple forward/reverse/loop/ping-pong consomme des segments prepares avec voisin d'interpolation deja acquis.
@@ -484,3 +497,20 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le resync est consomme cote audio uniquement apres une courte stabilite du ratio effectif stable: `Off` utilise le ratio pitch stable (`0.5`, `1.0`, `2.0`), `Speed` multiplie ce ratio par le `timing_ratio` courant.
 - La position attendue vient de la timeline audio depuis `playback_start_sample`, multipliee par le ratio stable effectif puis modulo `recorded_frames`; le jump relache la page courante, demande les pages autour du nouveau playhead et applique un mini crossfade local de 96 frames.
 - `Shifter`, Clip, REC/PLAY/WRAP/SAVE/XFADE/ROUT restent hors comportement de resync dans cette passe.
+
+## Addendum 2026-05-15 - Sampler/Multi playback sans UI
+
+- `brick6_sampler_runtime` expose un hook interne `brick6_sampler_runtime_trigger_multi_note_velocity()` pour declencher un instrument Multi deja `READY`, sans UI ni persistence projet.
+- Le playback Multi reutilise `sample_voice_reader` et le `sample_page_cache` key-based avec `domain=MULTI`; aucun second reader/cache/streamer n'est ajoute.
+- La capacite produit Multi finale est 512 samples max. Un instrument `READY` garantit page0 pour tous les samples et page1 pour tous les samples longs (`total_frames > SAMPLE_PAGE_FRAMES`).
+- La voix Multi est forward simple, sans loop/reverse/pingpong/stretch, avec varispeed lineaire derive de l'ecart note/root retourne par `multi_sample_pool_resolve()`.
+- L'IRQ audio lit uniquement les pages RAM READY. Une page manquante stoppe localement la voix et incremente le diagnostic underrun; aucun FatFs n'est appele depuis le rendu.
+- Le prefetch continu Multi est entretenu hors IRQ par `brick6_sampler_runtime_service()` depuis la superloop avant `sample_cache_service()`: chaque voix Multi active demande jusqu'a 4 pages futures via `sample_stream_manager_request_range_key(domain=MULTI, object_id=multi_sample_id, start_frame=current_frame + SAMPLE_PAGE_FRAMES, page_count)`.
+- `sample_stream_manager_has_pending_sd_work()` tient compte des pending key-based, donc les requetes `MULTI` restent visibles au service SD/cache et ne dependent plus du scan legacy `CLASSIC`.
+- Le modele de voix Multi est borne a `SAMPLER_MULTI_MAX_VOICES_PER_TRACK = 4` par track. Une cinquieme note Multi sur la meme track vole la plus ancienne voix Multi de cette track.
+- Le stockage hot des voix Multi est un pool global DTCM de `SAMPLER_MULTI_MAX_GLOBAL_VOICES = 16` entrees, chaque entree portant son `owner_track_id`; le rendu parcourt le pool global et route chaque voix vers sa track proprietaire.
+- La limite globale volable du Sampler/Multi est `SAMPLER_MULTI_MAX_GLOBAL_VOICES = 16`: si elle est atteinte, Multi vole d'abord la plus ancienne voix Multi globale, puis la plus ancienne voix OneShot volable. Clip et Looper restent proteges.
+- L'etat produit minimal par track Multi est porte par `brick6_sampler_runtime`: `multi_instrument_id` et `gain`. `multi_sample_pool` reste l'autorite globale des instruments/samples/zones, mais ne porte pas l'assignation track.
+- En absence d'UI/persistence Multi, le controle passe par les APIs runtime `set/get_multi_instrument`, `set/get_multi_gain`, `multi_instrument_is_ready` et le trigger track-aware qui utilise l'instrument assigne quand l'appelant passe `MULTI_SAMPLE_POOL_INVALID_ID`.
+- `Sampler/Multi` consomme maintenant le note-off clavier via `brick6_sampler_runtime_note_off_multi_track_note(track,note)`: les voix Multi actives du meme couple track/note passent en release pending et continuent a fournir du signal RAM/page-cache jusqu'a extinction du VCA mixer existant, puis sont stoppees/reset avec diagnostic `REL_DONE`. Aucun FatFs, malloc ni UART n'est ajoute en IRQ; les logs restent flushes hors IRQ.
+- Le prefetch continu Multi reste hors IRQ et devient monotone par voix: chaque voix memorise la derniere page de lookahead demandee, demande seulement les nouvelles pages jusqu'a `current_page + 4`, et reset cet etat au trigger/steal/stop/release done.

@@ -35,6 +35,7 @@
 #include "Core/track_state.h"
 #include "param_store.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Storage/undo_v2.h"
 typedef struct
 {
@@ -979,6 +980,13 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     {
         const uint16_t count = mod_lfo_v1_dest_count(track);
         *out_max = (count > 0U) ? (float)(count - 1U) : 0.0f;
+    }
+    else if ((param == PARAM_SAMPLER_SAMPLE)
+             && (ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
+             && (ui_get_track_type(track) == UI_TRACK_TYPE_MULTI))
+    {
+        *out_min = 0.0f;
+        *out_max = (float)multi_sample_pool_get_instrument_count();
     }
 
     return 1U;

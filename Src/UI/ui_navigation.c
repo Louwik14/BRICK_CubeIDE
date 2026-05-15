@@ -246,6 +246,23 @@ void ui_navigation_handle_event(const ui_event_t *event)
     }
 }
 
+uint8_t ui_navigation_is_ensemble_button_available(button_id_t button)
+{
+    ui_navigation_refresh_active_track_runtime();
+
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
+    {
+        const ui_nav_rule_t *rule = &g_ui_nav_rules[i];
+
+        if (rule->button == button)
+        {
+            return ui_navigation_is_page_available(rule->target_page);
+        }
+    }
+
+    return 1U;
+}
+
 button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 {
     ui_navigation_refresh_active_track_runtime();

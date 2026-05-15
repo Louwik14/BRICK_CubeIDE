@@ -47,6 +47,8 @@ sd_preview_error_t sd_preview_get_last_error(void);
 uint8_t sd_preview_is_active(void);
 const char *sd_preview_get_path(void);
 const wav_info_t *sd_preview_get_source_info(void);
+void sd_preview_set_gain(float gain);
+float sd_preview_get_gain(void);
 
 /*
  * Future MAIN insertion point.

@@ -18,6 +18,8 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Storage/sd_access_gate.c` + `Inc/Storage/sd_access_gate.h`: arbitrage d'acces SD entre clients PATTERN/PROJECT/PREVIEW.
 - `Src/Storage/sd_preview.c` + `Inc/Storage/sd_preview.h`: facade preview SD dediee, separee de l'import projet.
 - `Src/Storage/wav_audio_codec.c` + `Inc/Storage/wav_audio_codec.h`: decode PCM partage pour import et preview.
+- `Src/Storage/wav_convert.c` + `Inc/Storage/wav_convert.h`: conversion destructive hors IRQ des WAV PCM incompatibles vers WAV PCM24 stereo 48 kHz pour import Sampler.
+- `Src/Sampler/multi_sample_index.c` + `Inc/Sampler/multi_sample_index.h`: format durable `.brickmulti` du futur `Sampler/Multi`; lecture/ecriture d'index metadata hors IRQ, sans scan dossier, sans parsing WAV, sans page-cache et sans playback.
 - `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: writer SD audio multi-client RAW-only cote Looper; rings RAM statiques, push IRQ RAM-only, drain SD hors IRQ vers reservoir RAW.
 - `Src/Storage/looper_storage.c` + `Inc/Storage/looper_storage.h`: autorite des paths Looper; validation des reservoirs RAW systeme, creation dossier durable, scan borne et reservation anti-ecrasement du nom final.
 - `Src/Storage/wav_loader.c`: scan catalogue et import WAV refuses pendant record audio actif/finalizing.
@@ -69,7 +71,39 @@ Compat prototype:
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
 - Le service conserve une session SD exclusive et alimente un ring buffer audio pre-rendu hors IRQ.
-- Placement memoire courant: `g_sd_preview_ring` et `g_sd_preview_io` sont en `AUDIO_COLD_SDRAM` avec alignement 32. Gain D1 attendu: 16 KiB pour le ring et 4 KiB pour l'I/O. Le risque accepte cote ring est limite au cout SDRAM en IRQ pendant la preview UI; le risque restant cote I/O est SDMMC/FatFs/cache a valider par preview WAV/SD.
+- Placement memoire courant: `g_sd_preview_ring` et `g_sd_preview_io` sont en `AUDIO_COLD_SDRAM` avec alignement 32; le contexte froid `g_sd_preview` est en `STORAGE_STATE_SDRAM`. Gain D1 attendu: 16 KiB pour le ring, 4 KiB pour l'I/O et ~760 B pour le contexte. Le risque accepte cote ring est limite au cout SDRAM en IRQ pendant la preview UI; le risque restant cote I/O est SDMMC/FatFs/cache a valider par preview WAV/SD.
+
+Autorite conversion WAV import Sampler:
+- `wav_convert_*`.
+- Conversion hors IRQ uniquement, demarree depuis le browser Settings/Samples quand un load slot detecte un WAV PCM convertible mais non compatible avec le cache Sampler 48 kHz.
+- Format cible unique: WAV PCM 24-bit, stereo, 48 kHz, data alignee apres un header 512 octets avec chunk `JUNK`, comme le chemin SAVE Looper durable.
+- Pipeline: source WAV -> `wav_audio_stream` decode/SRC lineaire 48 kHz -> fichier temporaire meme path avec extension `.B6T` -> verification parse/taille -> original renomme `.B6B` -> temp renomme original -> suppression `.B6B`.
+- `sd_access_gate` utilise le client exclusif `SD_ACCESS_CLIENT_WAV_CONVERT` tenu pendant toute la conversion; preview, sample cache et autres clients SD sont exclus pendant cette fenetre.
+- Refus de demarrage si record/finalize/export Looper actif, si `sample_cache` a du travail SD pending, ou si le gate SD n'est pas disponible.
+- La conversion ne modifie pas `sample_cache`, `sample_page_cache`, le streamer ou le runtime audio; apres conversion, l'import relance `sample_pool_load()` sur le path original.
+- Placement memoire: le contexte `g_wav_convert` et le pack buffer `g_wav_convert_pack` sont en SDRAM dediee `STORAGE_SCRATCH_SDRAM`; ils sont froids, FatFs/SD uniquement, hors IRQ audio et non DMA-owned.
+
+Autorite index Sampler/Multi:
+- `multi_sample_index_*`.
+- Format durable courant: fichier binaire little-endian `.brickmulti`, magic `BRKMULTI`, version `1`, header 96 octets, CRC32 sur header avec champ CRC nul + tables + string table.
+- Le fichier porte uniquement des metadonnees: instrument, samples, zones et paths WAV relatifs au dossier instrument; aucun audio brut, aucun path absolu obligatoire.
+- Tables bornees: 512 samples, 2048 zones, string table 65536 octets. Les WAV source restent directement sur SD dans le dossier instrument, typiquement `0:/Multi/<Instrument>/`.
+- `multi_sample_index_load()` lit et valide l'index hors IRQ via `sd_access_gate`; `multi_sample_index_apply_to_pool()` peuple `multi_sample_pool` en etat `INDEXED` uniquement. Il ne charge pas les page0, ne touche pas `sample_page_cache`, ne touche pas le streamer et ne branche pas le playback.
+- Le byte metadata du record sample `.brickmulti` trace la source root/velocity (`smpl`, `inst`, filename ou alpha) et est propage vers le champ `flags` du `multi_sample_pool`.
+
+Autorite import Sampler/Multi:
+- `multi_sample_import_folder()`.
+- Importe uniquement `instrument_dir/*.wav`, hors IRQ, via `sd_access_gate`, ignore les sous-dossiers et refuse si record/export Looper ou travail SD `sample_cache` est actif.
+- Le mapping import suit l'ordre `filename numerique -> smpl -> inst -> filename legacy -> alpha` pour le root MIDI: le suffixe `prefix_NNN_VVV.wav` donne directement note MIDI `0..127` et centre velocite `1..127`; les centres d'une meme note sont ensuite etendus en plages par midpoint. Le filename legacy `prefix-NoteMidi-VelLow-VelHigh.wav` ou `prefix_NoteMidi_VelLow_VelHigh.wav` reste supporte, puis le fallback alpha demarre a C2/MIDI 36 avec velocite `1..127`.
+- Validation WAV import: PCM ou extensible PCM via `wav_parser`, 48 kHz obligatoire, mono/stereo, 16/24/32-bit, frames non nulles.
+- L'import genere les zones par layers de velocite, roots tries et bornes note par midpoint, refuse les doublons root+vel et les chevauchements note+velocity ambigus, puis ecrit `<instrument_dir>/<Instrument>.brickmulti`.
+
+Autorite LOAD Sampler/Multi:
+- `multi_sample_load_instrument()` + `multi_sample_service_load()`.
+- LOAD lit un `.brickmulti`, applique l'index au `multi_sample_pool`, enregistre chaque WAV relatif comme stream `sample_audio_key_t {domain=MULTI, object_id=multi_sample_id}`, queue page0 pour tous les samples reels et page1 pour les samples longs.
+- Le chargement page0/page1 est cooperatif hors IRQ via le `sample_stream_manager` unique et le `sample_page_cache` unique; `multi_sample_service_load(byte_budget)` tient `SD_ACCESS_CLIENT_SAMPLE_CACHE` pendant le service.
+- L'instrument reste `LOADING` tant que toutes les pages requises ne sont pas `READY`; toute page `ERROR`, tout manque de cache ou toute erreur d'enregistrement bascule l'instrument en `ERROR` avec diagnostic minimal. Budget maximal READY Multi: 512 * 2 pages = 1024 pages = 8 MiB; marge cache restante: 1024 pages = 8 MiB.
+- Placement memoire: la queue froide `g_multi_load_queue` est en SDRAM dediee `MULTI_LOAD_SDRAM`; elle n'est pas lue par l'IRQ audio et sert uniquement au LOAD cooperatif hors IRQ.
 
 Autorite writer SD audio multi-client:
 - `multi_record_writer_*`.
@@ -80,6 +114,7 @@ Autorite writer SD audio multi-client:
 - `multi_record_writer_service(byte_budget)` acquiert le gate sans bloquer seulement si le sample cache n'a pas de travail SD pending, packe `int32_t` stereo vers PCM 24-bit interleaved par chunk borne de 1024 frames, execute au plus un `f_write` audio par passage, puis relache le gate.
 - `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`.
 - Les producteurs audio poussent uniquement vers les rings RAM; le hook Z1 actuel est limite a `Sampler/Looper` et appelle `multi_record_writer_push_audio_block_from_irq` depuis `mixer_process` lorsque le client Looper est en `RECORDING` et que `brick6_looper_runtime` a valide la capture active au boundary audio.
+- Placement memoire: les rings producteurs restent en `SDRAM_RECORDER`; le buffer pack PCM24 `g_pcm24_pack`, utilise seulement par `multi_record_writer_service()` hors IRQ, est en SDRAM dediee `RECORDER_SCRATCH_SDRAM`.
 - `multi_record_writer_any_active()` et `looper_storage_raw_export_is_active()` gardent les operations SD incompatibles avec record/finalize/export Looper.
 
 Politique SD pendant record audio actif/finalizing:
@@ -194,12 +229,14 @@ Points de lecture principaux:
 - undo via `undo_v1_*`.
 
 ### `pattern_sd_bank.c`
-- `g_slot_has_data[16][16]`, `g_slot_meta_cache_valid[16][16]`, `g_slot_checksum_cache[16][16]`: cache presence/checksum pattern slots.
+- `g_slot_has_data[16][16]`, `g_slot_meta_cache_valid[16][16]`: cache presence pattern slots en D1.
+- `g_slot_checksum_cache[16][16]`: cache checksum pattern slots en `STORAGE_STATE_SDRAM`, metadata froide hors IRQ audio et non DMA-owned.
 - `g_boot_pattern` + `g_boot_pattern_valid`: fallback de chargement si fichier slot absent.
 - `g_pattern_write_chunk[4096]`: tampon chunk write pour payload pattern.
 
 ### `project_v1.c`
 - `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet et le bloc MACRO projet.
+- `g_project_multi_assign[SEQ_TRACK_COUNT]`: verite durable RAM projet pour l'assignation `Sampler/Multi` par track (`path .brickmulti` borne + gain); `instrument_id` reste runtime et n'est pas persiste.
 - `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (scenes/pots/locks + `Mode`), distinct du payload pattern et du `undo_v1`; placement `UI_SDRAM` car etat froid projet/persistence non audio et non DMA.
 - `g_project_active_slot_valid`, `g_project_active_slot`: slot projet actif logique.
 - `g_project_save_counter`: compteur de version save.
@@ -208,6 +245,7 @@ Points de lecture principaux:
 ### `wav_loader.c`
 - `g_wav_pcm` reste en `AUDIO_COLD_SDRAM` pour le buffer PCM charge.
 - `g_wav_catalog` (`wav_loader_catalog_entry_t[WAV_LOADER_CATALOG_MAX]`) est place en `UI_SDRAM`: catalogue storage/UI froid, rafraichi par scan FatFs et consulte hors IRQ audio; ce n'est pas un payload DMA ni le ring preview SD critique.
+- `g_wav_fs` est place en `STORAGE_STATE_SDRAM`: handle FatFs froid, non DMA-owned, monte par service storage hors IRQ audio.
 - Le catalogue scanne les WAV a la racine `0:/` et les prises Looper durables sous `0:/PROJECT/LOOPS`, exposees avec un prefixe visible `LOOPS/`.
 
 ### `project_sd_bank.c`
@@ -215,6 +253,11 @@ Points de lecture principaux:
 - `g_project_slot_buffer` (`PatternSaveV1`): buffer temporaire records pattern lors save/load.
 - `g_project_io_buffer` (`ProjectSaveV1`): buffer I/O projet froid en `UI_SDRAM`, utilise pour revalidation/compare sans allouer le payload projet massif sur la stack.
 - `g_project_sd_last_error`: erreur SD detaillee.
+
+### Placement SDRAM froid storage/control
+- `CONTROL_STATE_SDRAM` / `.control_state_sdram`: etat control low-rate non IRQ audio; utilise pour `g_param_macro_sources`.
+- `STORAGE_STATE_SDRAM` / `.storage_state_sdram`: metadata/handles storage non DMA-owned et hors IRQ audio; utilise pour `g_slot_checksum_cache`, `g_pattern_slot_meta`, `g_sd_preview`, `g_wav_fs`, `g_sd_fs`, `g_sample_pool_fs`.
+- `UI_STATE_SDRAM` reste reserve aux etats UI explicites; `g_looper_save_diag` y est place car diagnostic UI froid.
 
 ### `boot_context_flash.c`
 - `g_boot_ctx_cache` (`boot_context_flash_data_t {version, valid, crc, active_project_slot}`): cache dernier contexte valide.
@@ -279,6 +322,7 @@ Points de lecture principaux:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
   - capture aussi le snapshot `sample_pool` courant du projet,
+  - capture les assignations `Sampler/Multi` par track: path `.brickmulti` et gain Multi; aucun `instrument_id` runtime n'est sauvegarde,
   - capture le bloc MACRO projet (`Mode`, scenes liees aux pots, scenes/locks),
   - force active slot dans snapshot,
   - stocke via `project_v1_store_snapshot_to_slot` -> `project_sd_bank_store_slot`,
@@ -291,6 +335,7 @@ Points de lecture principaux:
   - restaure le `sample_pool` du projet avant l'apply live,
   - restaure le bloc MACRO projet depuis `ProjectSaveV1`,
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
+  - restaure ensuite les assignations `Sampler/Multi`: gain par track, allocation runtime d'un `instrument_id`, appel `multi_sample_load_instrument(path, instrument_id)` hors IRQ, et track non jouable tant que `multi_sample_is_ready()` reste faux,
   - commit ensuite le pattern-bank SD via `project_sd_bank_commit_slot_patterns`,
   - met a jour slot actif/counter,
   - commit boot context.
@@ -309,6 +354,7 @@ Effets aval:
 - Z3: runtime params/LFO sont remutes via registry/mod.
 - Z4: transport/clock/seq state est restaure et repositionne.
 - Z2: binding runtime rafraichi avant apply param track.
+- Z1/Sampler Multi: le restore projet ne bloque pas sur les pages audio; le chargement page0 reste cooperatif via `multi_sample_service_load(byte_budget)` en superloop. Plusieurs tracks pointant le meme `.brickmulti` partagent le meme `instrument_id` runtime restaure; des paths differents sont queues par le loader Multi.
 
 ## 7. Contraintes RT/CPU/memoire
 
@@ -452,6 +498,8 @@ Contrat Sampler persistence/cache:
 - `sample_pool` est catalogue/projet/metadata: slot, path, metadata et etat de restauration.
 - La memoire audio runtime appartient a `sample_page_cache`; `sample_cache` reste la facade/orchestration prepare-service-compat, et `sample_desc->data` est une compat legacy qui ne doit pas redevenir owner.
 - Les snapshots projet persistent les paths WAV, pas l'audio brut.
+- Les slots Sampler acceptent les WAV PCM ou extensible PCM compatible, 48 kHz uniquement, mono/stereo, 16/24/32-bit; les autres sample rates, WAV float/compresses et fichiers >2 canaux restent refuses avant prepare cache.
+- `sample_pool_load()` ne publie plus de path/metadata de slot avant validation WAV compatible et preparation cache reussie; un WAV incompatible ou une conversion annulee/echouee ne doit donc pas creer de slot fantome.
 
 TODO policy SD/projet:
 - Project save/load pendant playback reste a refuser ou differer explicitement.
@@ -553,6 +601,7 @@ Debit WAV PCM stereo 24-bit / 48 kHz:
 
 Pression RAM ring interne `int32_t stereo`:
 - 1 record: 384000 octets/s.
+- 250 ms par client: 96000 octets.
 - 0.5 s par client: 192000 octets.
 - 1 s par client: 384000 octets.
 - 2 s par client: 768000 octets.
@@ -560,7 +609,7 @@ Pression RAM ring interne `int32_t stereo`:
 
 Exemples de RAM ring brute:
 - 4 clients: environ 768 KB pour 0.5 s, 1.54 MB pour 1 s, 3.07 MB pour 2 s.
-- 4 clients produit courant: `192001` frames allouees/client, environ 6.144 MB pour 4 s utiles.
+- 4 clients produit courant: `12001` frames allouees/client, environ 384 KB pour 250 ms utiles.
 - 8 clients: environ 1.54 MB pour 0.5 s, 3.07 MB pour 1 s, 6.14 MB pour 2 s.
 - 16 clients: environ 3.07 MB pour 0.5 s, 6.14 MB pour 1 s, 12.29 MB pour 2 s.
 
@@ -677,15 +726,15 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - Le REC Looper courant produit une prise RAW avec `raw_slot`, `raw_path` et `recorded_frames`; apres finalisation RAW OK, le controle notifie `brick6_looper_runtime_notify_raw_take_ready()`.
 - `brick6_looper_runtime` ne garde plus de chemin WAV transient Looper actif: le REC RAW alimente le chemin RAW dedie sans parsing WAV.
-- Les ids transients Looper commencent a `SAMPLE_POOL_SIZE` et ne sont pas des slots projet ni des entrees catalogue.
+- Les ids transients Looper commencent a `SAMPLE_PAGE_CACHE_LOOPER_ID_BASE` et ne sont pas des slots projet ni des entrees catalogue. La base est decouplee de la capacite projet; elle suit la plage hot/page-cache reservee au Sampler.
 - `TAKE_READY` RAW envoie au runtime le path du reservoir et `recorded_frames`; si le playback START_RAM post-REC est deja arme ou en cours, cette notification attache seulement le backing RAW/page-cache sans reinitialiser le playhead ni redemarrer la prise.
 - Un nouveau `ARM=Rec` reste un replace destructif cote controle: l'ancien reader transient est detache avant le start writer RAW. La nouvelle longueur utile est `recorded_frames`, consommee par le playback et utilisee pour le wrap.
 - SAVE RAW export lit uniquement `recorded_frames` depuis le reservoir RAW, ecrit un WAV final PCM24 stereo 48 kHz avec `fmt `, chunk `JUNK` de padding et chunk `data` aligne a l'offset 512, copie par chunks bornes dans `looper_storage_raw_export_service()` et expose une progression UI par phase (`SAVE WAIT`, `SAVE OPEN`, `SAVE n%`, `SAVE VERIFY`, puis done/fail). Il ne renomme ni ne supprime le RAW et ne passe pas par sample_pool/catalogue/slot projet.
 - La finalisation SAVE RAW verifie hors IRQ la taille data ecrite, l'offset data WAV fixe a 512 octets, puis compare les 16 premieres et 16 dernieres frames RAW contre la zone data WAV; un mismatch bascule l'export en erreur `VERIFY_FAIL` et conserve un snapshot diagnostic.
 - Le SAVE RAW exporte directement le reservoir RAW vers le path final et laisse le playback transient RAW courant attache au reservoir.
 - La notification catalogue apres SAVE reste seulement pour l'affichage `Settings > SAMPLER > SD`; elle ne devient pas l'autorite du playback Looper.
-- Le service SD reste ordonne par `brick6_app_process`: le writer record est servi avant tout pour terminer un drain/finalize deja actif; quand un SAVE RAW -> WAV est actif, l'export devient prioritaire avec budget `516096U` et suspend sample cache, refill Looper, pattern load et preview SD. Hors export actif, l'ordre normal redevient sample cache, refill Looper, export opportuniste si aucun refill Looper n'est pending, puis pattern load. `sample_cache_service` ne service que la plage `0..SAMPLE_POOL_SIZE-1`; le Looper service la plage transient `SAMPLE_POOL_SIZE..SAMPLE_POOL_SIZE+SEQ_TRACK_COUNT-1`.
-- Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le buffer I/O SAVE `g_looper_raw_export_io` est froid, hors IRQ, place en `UI_SDRAM` et aligne 32 pour preserver RAM_D1 aux etats audio hot. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
+- Le service SD reste ordonne par `brick6_app_process`: le writer record est servi avant tout pour terminer un drain/finalize deja actif; quand un SAVE RAW -> WAV est actif, l'export devient prioritaire avec budget `516096U` et suspend sample cache, refill Looper, pattern load et preview SD. Hors export actif, l'ordre normal redevient sample cache, refill Looper, export opportuniste si aucun refill Looper n'est pending, puis pattern load. `sample_cache_service` ne service que la plage hot `0..SAMPLE_CACHE_HOT_SAMPLE_CAPACITY-1`; le Looper service la plage transient `SAMPLE_PAGE_CACHE_LOOPER_ID_BASE..SAMPLE_PAGE_CACHE_LOOPER_ID_BASE+SEQ_TRACK_COUNT-1`.
+- Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le contexte `g_looper_raw_export`, le buffer I/O SAVE `g_looper_raw_export_io` et le diagnostic `g_looper_raw_export_diag` sont froids, hors IRQ, places en SDRAM dediee `RECORDER_SCRATCH_SDRAM` et alignes 32 pour preserver RAM_D1 aux etats audio hot. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
 - Les logs UART SAVE Looper sont actifs par defaut hors IRQ audio sur USART1, prefixe `[LSAVE]`: reservation de path, start avec `data_offset`, phases, lignes COPY par service, DONE/FAIL avec resume read/write/sync/verify/close.
 - Le demarrage SAVE refuse un writer recording/finalizing, refuse transport running cote UI, stoppe une preview SD active avant reservation du path final, puis bloque les entrees project/pattern/import/scan via `looper_storage_raw_export_is_active()`. L'export ne cede plus a `sample_cache_has_pending_sd_work()`; un refus prolonge avant ouverture bascule en erreur `WAIT_TIMEOUT` pour ne pas laisser l'etat actif indefiniment.
 - Limite restante: le refill Looper partage le budget global du `sample_page_cache`; une page manquante produit un silence local jusqu'au prochain refill.
@@ -710,3 +759,22 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `PATTERN_VERSION=19` et `PROJECT_V1_FILE_VERSION=24` marquent l'ajout de `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` au layout `PARAM_COUNT`.
 - Les anciens patterns/projets prototype sont refuses proprement par version/payload stricts; aucune migration legacy ni tombstone n'est conserve.
 - Les nouveaux params Looper persistent via les flux `PARAM_COUNT` existants, mais restent UI/state uniquement: aucun etat REC/PLAY/WRAP/SAVE/XFADE/ROUT ni metadata RAW n'est modifie par cette passe.
+- `PROJECT_V1_FILE_VERSION=25` marque l'ajout du bloc projet `Sampler/Multi` par track (`path .brickmulti` + gain). Les anciens projets prototype sont refuses proprement par version/payload stricts.
+
+## Addendum 2026-05-15 - browser Samples split
+
+- Le browser Settings/Samples liste la bibliotheque durable sous `0:/Samples` avec navigation dossier locale a Z5.
+- Les paths WAV complets restent transmis a `sample_pool_load()` et `sd_preview_begin()`; seul le label UI retire `.wav`.
+- Les slots projet affiches a droite restent les slots `sample_pool` existants et continuent d'etre captures/restaures par `ProjectSaveV1.sample_pool`.
+- Le clear de slot appelle seulement `sample_pool_clear()` et ne supprime jamais le fichier SD source.
+- Aucun changement de layout `PatternSaveV1`, `ProjectSaveV1`, `PARAM_COUNT`, `PATTERN_VERSION` ou `PROJECT_V1_FILE_VERSION` n'est requis.
+
+## Addendum 2026-05-15 - browser Multi-Sample Settings
+
+- Le browser Settings/Multi-Sample expose les dossiers instruments sous `0:/Multi/` et n'affiche pas les WAV internes.
+- La preparation d'un dossier non indexe appelle `multi_sample_import_folder()` et produit/met a jour `<instrument>/<instrument>.brickmulti`.
+- Le load de slot appelle `multi_sample_load_instrument()` sur le `.brickmulti` et s'appuie sur `multi_sample_service_load()` en superloop pour le chargement cooperatif page0.
+- Le pool projet affiche et borne la consommation `multi_sample_pool` en samples sur `MULTI_SAMPLE_POOL_MAX_SAMPLES=512`; un index/import dont le nombre de samples depasse 512 est refuse avant load.
+- Les slots instruments portent maintenant le path `.brickmulti` en RAM froide pour eviter les doublons dans la session projet courante; ce path ne modifie pas le layout fichier projet.
+- L'assignation durable `track Sampler/Multi -> path .brickmulti` est mise a jour par le browser Settings/Multi-Sample lorsqu'un slot est charge ou reutilise pour la track active Multi; le restore recharge ce path puis rebranche l'id instrument runtime.
+- Aucun changement `PatternSaveV1`, `ProjectSaveV1`, `PARAM_COUNT`, `PATTERN_VERSION` ou `PROJECT_V1_FILE_VERSION` n'est requis.

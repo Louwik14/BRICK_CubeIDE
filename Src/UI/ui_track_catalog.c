@@ -8,7 +8,8 @@ static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_fam
         UI_TRACK_TYPE_ONE_SHOT,
         UI_TRACK_TYPE_SLICER,
         UI_TRACK_TYPE_CLIP,
-        UI_TRACK_TYPE_LOOPER
+        UI_TRACK_TYPE_LOOPER,
+        UI_TRACK_TYPE_MULTI
     };
     static const ui_track_type_t k_master_types[] = { UI_TRACK_TYPE_MASTER_FX };
     static const ui_track_type_t k_midi_types[] = { UI_TRACK_TYPE_MIDI };
@@ -504,6 +505,8 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Clip";
         case UI_TRACK_TYPE_LOOPER:
             return "Looper";
+        case UI_TRACK_TYPE_MULTI:
+            return "Multi";
         case UI_TRACK_TYPE_OPAL:
             return "Opal";
         case UI_TRACK_TYPE_BRAIDS:
@@ -547,6 +550,8 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Clip";
         case UI_TRACK_TYPE_LOOPER:
             return "Loop";
+        case UI_TRACK_TYPE_MULTI:
+            return "Mult";
         case UI_TRACK_TYPE_OPAL:
             return "Opl";
         case UI_TRACK_TYPE_BRAIDS:

@@ -7,6 +7,7 @@
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_param_iface.h"
+#include "Storage/memory_layout.h"
 #include "Storage/project_v1.h"
 
 typedef struct
@@ -23,7 +24,7 @@ typedef struct
 #define PARAM_MACRO_HALL_SOURCE_COUNT PROJECT_V1_MACRO_SCENE_COUNT
 #define PARAM_MACRO_SOURCE_COUNT (PARAM_MACRO_POT_SOURCE_COUNT + PARAM_MACRO_HALL_SOURCE_COUNT)
 
-static param_macro_source_state_t g_param_macro_sources[PARAM_MACRO_SOURCE_COUNT];
+CONTROL_STATE_SDRAM static param_macro_source_state_t g_param_macro_sources[PARAM_MACRO_SOURCE_COUNT];
 static uint32_t g_param_macro_touch_seq;
 
 uint8_t param_macro_resolve_lock(uint8_t scene,

@@ -146,6 +146,7 @@ typedef struct
 
 void sample_cache_init(void);
 void sample_cache_clear(uint16_t sample_id);
+uint8_t sample_cache_wav_format_supported(const wav_info_t *info);
 uint8_t sample_cache_prepare(uint16_t sample_id, const char *path);
 void sample_cache_service(uint32_t byte_budget);
 uint8_t sample_cache_has_pending_sd_work(void);

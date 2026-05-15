@@ -3,7 +3,6 @@
 #include "Audio/audio_float.h"
 #include "Core/brick6_clip_shifter.h"
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Storage/multi_record_writer.h"
@@ -16,7 +15,7 @@
 #define BRICK6_LOOPER_TRACK_CAP SEQ_TRACK_COUNT
 #define BRICK6_LOOPER_SHIFTER_CAP 4U
 #define BRICK6_LOOPER_SHIFTER_SLOT_NONE 0xFFU
-#define BRICK6_LOOPER_CACHE_ID_BASE SAMPLE_POOL_SIZE
+#define BRICK6_LOOPER_CACHE_ID_BASE SAMPLE_PAGE_CACHE_LOOPER_ID_BASE
 #define BRICK6_LOOPER_PREFETCH_PAGES 12U
 #define BRICK6_LOOPER_PREROLL_FRAMES MULTI_RECORD_WRITER_SAMPLE_RATE_HZ
 #define BRICK6_LOOPER_PREROLL_CHANNELS MULTI_RECORD_WRITER_CHANNELS
@@ -33,8 +32,13 @@
 #define BRICK6_LOOPER_RESYNC_STABLE_BLOCKS 2U
 #define BRICK6_LOOPER_RESYNC_XFADE_FRAMES 96U
 
-#if ((BRICK6_LOOPER_CACHE_ID_BASE + BRICK6_LOOPER_TRACK_CAP) > SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+#if ((BRICK6_LOOPER_CACHE_ID_BASE + BRICK6_LOOPER_TRACK_CAP) > SAMPLE_PAGE_CACHE_ID_CAPACITY)
 #error "sample_page_cache transient id range is too small for Looper tracks"
+#endif
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert((SAMPLE_PAGE_CACHE_LOOPER_ID_BASE + SEQ_TRACK_COUNT) <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
+               "Looper transient ids must fit in page-cache id capacity");
 #endif
 
 typedef struct
@@ -53,6 +57,7 @@ typedef struct
     uint32_t playhead_frac_q16;
     uint32_t resync_old_playhead;
     uint32_t resync_old_frac_q16;
+    sample_audio_key_t cache_key;
     sample_page_ref_t current_page_ref;
     const float *current_base;
     uint32_t current_start_frame;
@@ -264,6 +269,11 @@ static void looper_diag_update_take(uint8_t track_id,
 static uint16_t looper_cache_id(uint8_t track_id)
 {
     return (uint16_t)(BRICK6_LOOPER_CACHE_ID_BASE + track_id);
+}
+
+static sample_audio_key_t looper_cache_key(uint8_t track_id)
+{
+    return sample_audio_key_looper(track_id);
 }
 
 static float looper_pcm24_to_float(int32_t sample)
@@ -547,7 +557,7 @@ static void looper_release_reader(brick6_looper_track_state_t *state)
         return;
     }
 
-    sample_page_cache_release_page_ref(state->cache_id, &state->current_page_ref);
+    sample_page_cache_release_page_ref_key(state->cache_key, &state->current_page_ref);
     memset(&state->current_page_ref, 0, sizeof(state->current_page_ref));
     state->current_base = 0;
     state->current_start_frame = 0U;
@@ -561,7 +571,7 @@ static void looper_clear_stream(brick6_looper_track_state_t *state)
         return;
 
     looper_release_reader(state);
-    sample_page_cache_clear_sample(state->cache_id);
+    sample_page_cache_clear_key(state->cache_key);
     state->cache_registered = 0U;
 }
 
@@ -621,9 +631,9 @@ static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
     }
 
     looper_release_reader(state);
-    if(sample_page_cache_register_raw_pcm24_stereo_sample(state->cache_id,
-                                                          state->path,
-                                                          state->frames_total) == 0U)
+    if(sample_page_cache_register_raw_pcm24_stereo_sample_key(state->cache_key,
+                                                              state->path,
+                                                              state->frames_total) == 0U)
     {
         return 0U;
     }
@@ -635,7 +645,7 @@ static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
     {
         page_count = BRICK6_LOOPER_PREFETCH_PAGES;
     }
-    (void)sample_page_cache_request_start_pages(state->cache_id, 0U, page_count);
+    (void)sample_page_cache_request_start_pages_key(state->cache_key, 0U, page_count);
     looper_request_playhead_pages(state);
     return 1U;
 }
@@ -688,7 +698,7 @@ static void looper_request_playhead_pages(const brick6_looper_track_state_t *sta
     const uint32_t first_page = playhead / SAMPLE_PAGE_FRAMES;
     for(uint32_t i = 0U; i < BRICK6_LOOPER_PREFETCH_PAGES; ++i)
     {
-        (void)sample_page_cache_request_page(state->cache_id, (first_page + i) % page_count);
+        (void)sample_page_cache_request_page_key(state->cache_key, (first_page + i) % page_count);
     }
 }
 
@@ -793,9 +803,9 @@ static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
     looper_release_reader(state);
 
     sample_page_span_t span;
-    if(sample_page_cache_try_acquire_page(state->cache_id,
-                                          frame / SAMPLE_PAGE_FRAMES,
-                                          &span) == 0U)
+    if(sample_page_cache_try_acquire_page_key(state->cache_key,
+                                              frame / SAMPLE_PAGE_FRAMES,
+                                              &span) == 0U)
     {
         return 0U;
     }
@@ -841,7 +851,7 @@ static void looper_update_ready_state(brick6_looper_track_state_t *state)
     if((state == 0) || (state->state != BRICK6_LOOPER_RUNTIME_STATE_LOADING))
         return;
 
-    if(sample_page_cache_get_page_state(state->cache_id, 0U) == SAMPLE_PAGE_READY)
+    if(sample_page_cache_get_page_state_key(state->cache_key, 0U) == SAMPLE_PAGE_READY)
     {
         state->playhead = 0U;
         if(state->want_play_when_ready == 0U)
@@ -991,6 +1001,7 @@ void brick6_looper_runtime_init(void)
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         g_looper_tracks[track].cache_id = looper_cache_id(track);
+        g_looper_tracks[track].cache_key = looper_cache_key(track);
         g_looper_tracks[track].state = BRICK6_LOOPER_RUNTIME_STATE_EMPTY;
         g_looper_tracks[track].raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
         g_looper_tracks[track].stretch_mode = BRICK6_LOOPER_STRETCH_OFF;
@@ -1039,9 +1050,10 @@ void brick6_looper_runtime_service(uint32_t byte_budget)
         }
     }
 
-    sample_page_cache_service_range(BRICK6_LOOPER_CACHE_ID_BASE,
-                                    BRICK6_LOOPER_TRACK_CAP,
-                                    byte_budget);
+    sample_page_cache_service_domain_range(SAMPLE_AUDIO_DOMAIN_LOOPER,
+                                           0U,
+                                           BRICK6_LOOPER_TRACK_CAP,
+                                           byte_budget);
     sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
 
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
@@ -1062,8 +1074,9 @@ uint8_t brick6_looper_runtime_has_pending_sd_work(void)
         }
     }
 
-    return sample_page_cache_has_queued_range(BRICK6_LOOPER_CACHE_ID_BASE,
-                                              BRICK6_LOOPER_TRACK_CAP);
+    return sample_page_cache_has_queued_domain_range(SAMPLE_AUDIO_DOMAIN_LOOPER,
+                                                     0U,
+                                                     BRICK6_LOOPER_TRACK_CAP);
 }
 
 void brick6_looper_runtime_notify_raw_take_ready(uint8_t track_id,

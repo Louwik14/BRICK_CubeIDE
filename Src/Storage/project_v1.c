@@ -9,12 +9,16 @@
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
 #include "Storage/undo_v2.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Param/param_macro.h"
+#include "Sampler/multi_sample_loader.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
 
 UI_SDRAM static ProjectSaveV1 g_project_work;
 UI_SDRAM static project_v1_macro_state_t g_project_macro_state;
+UI_SDRAM static project_v1_multi_track_t g_project_multi_assign[SEQ_TRACK_COUNT];
+UI_SDRAM static project_v1_multi_restore_diag_t g_project_multi_restore_diag;
 static uint8_t g_project_active_slot_valid;
 static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
@@ -63,6 +67,175 @@ static void project_v1_macro_sanitize_state(project_v1_macro_state_t *state)
 static void project_v1_set_error(project_v1_error_t err)
 {
     g_project_last_error = err;
+}
+
+static uint8_t project_v1_copy_text(char *dst, uint32_t dst_size, const char *src)
+{
+    if ((dst == 0) || (dst_size == 0U))
+    {
+        return 0U;
+    }
+
+    dst[0] = '\0';
+    if (src == 0)
+    {
+        return 1U;
+    }
+
+    uint32_t i = 0U;
+    while ((i + 1U) < dst_size)
+    {
+        dst[i] = src[i];
+        if (src[i] == '\0')
+        {
+            return 1U;
+        }
+        i++;
+    }
+
+    dst[i] = '\0';
+    return (src[i] == '\0') ? 1U : 0U;
+}
+
+static uint8_t project_v1_text_equal(const char *a, const char *b)
+{
+    if ((a == 0) || (b == 0))
+    {
+        return 0U;
+    }
+
+    for (uint32_t i = 0U; i < PROJECT_V1_MULTI_PATH_MAX; ++i)
+    {
+        if (a[i] != b[i])
+        {
+            return 0U;
+        }
+        if (a[i] == '\0')
+        {
+            return 1U;
+        }
+    }
+
+    return 1U;
+}
+
+static void project_v1_multi_clear_assignments(void)
+{
+    memset(&g_project_multi_assign, 0, sizeof(g_project_multi_assign));
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        g_project_multi_assign[track].gain = 1.0f;
+        brick6_sampler_runtime_set_multi_gain(track, 1.0f);
+        brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+    }
+}
+
+static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *project,
+                                                          uint8_t track)
+{
+    if ((project == 0) || (track >= SEQ_TRACK_COUNT)
+        || (project->multi[track].path[0] == '\0'))
+    {
+        return MULTI_SAMPLE_POOL_INVALID_ID;
+    }
+
+    for (uint8_t prev = 0U; prev < track; ++prev)
+    {
+        if ((project->multi[prev].path[0] != '\0')
+            && (project_v1_text_equal(project->multi[prev].path,
+                                      project->multi[track].path) != 0U))
+        {
+            uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+            if (brick6_sampler_runtime_get_multi_instrument(prev, &instrument_id) != 0U)
+            {
+                return instrument_id;
+            }
+        }
+    }
+
+    return track;
+}
+
+static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
+{
+    memset(&g_project_multi_restore_diag, 0, sizeof(g_project_multi_restore_diag));
+    if (project == 0)
+    {
+        return;
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const project_v1_multi_track_t *const src = &project->multi[track];
+        project_v1_multi_track_t *const dst = &g_project_multi_assign[track];
+
+        dst->gain = src->gain;
+        if (dst->gain < 0.0f)
+        {
+            dst->gain = 0.0f;
+        }
+        else if (dst->gain > 4.0f)
+        {
+            dst->gain = 4.0f;
+        }
+        brick6_sampler_runtime_set_multi_gain(track, dst->gain);
+
+        if (src->path[0] == '\0')
+        {
+            dst->path[0] = '\0';
+            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+            continue;
+        }
+
+        if (project_v1_copy_text(dst->path, sizeof(dst->path), src->path) == 0U)
+        {
+            dst->path[0] = '\0';
+            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+            g_project_multi_restore_diag.restore_missing_path = 1U;
+            continue;
+        }
+
+        const uint16_t instrument_id = project_v1_multi_find_restored_instrument(project, track);
+        if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        {
+            brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+            g_project_multi_restore_diag.restore_load_error = 1U;
+            continue;
+        }
+
+        brick6_sampler_runtime_set_multi_instrument(track, instrument_id);
+        (void)project_v1_copy_text(g_project_multi_restore_diag.restored_multi_path,
+                                   sizeof(g_project_multi_restore_diag.restored_multi_path),
+                                   dst->path);
+        g_project_multi_restore_diag.restored_track = track;
+
+        uint8_t shared_with_previous = 0U;
+        for (uint8_t prev = 0U; prev < track; ++prev)
+        {
+            if ((project->multi[prev].path[0] != '\0')
+                && (project_v1_text_equal(project->multi[prev].path, dst->path) != 0U))
+            {
+                shared_with_previous = 1U;
+                break;
+            }
+        }
+
+        if (shared_with_previous == 0U)
+        {
+            const multi_sample_load_result_t result =
+                multi_sample_load_instrument(dst->path, instrument_id);
+            if ((result == MULTI_SAMPLE_LOAD_OK)
+                || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
+            {
+                g_project_multi_restore_diag.restore_load_requested = 1U;
+            }
+            else
+            {
+                brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+                g_project_multi_restore_diag.restore_load_error = 1U;
+            }
+        }
+    }
 }
 
 static void project_v1_set_sd_operation_error(project_v1_error_t err)
@@ -369,6 +542,8 @@ void project_v1_init(void)
 {
     memset(&g_project_work, 0, sizeof(g_project_work));
     project_v1_macro_init();
+    project_v1_multi_clear_assignments();
+    memset(&g_project_multi_restore_diag, 0, sizeof(g_project_multi_restore_diag));
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
@@ -388,6 +563,11 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
 
     memset(out_project, 0, sizeof(*out_project));
     sample_pool_capture_project_snapshot(&out_project->sample_pool);
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        out_project->multi[track] = g_project_multi_assign[track];
+        out_project->multi[track].gain = brick6_sampler_runtime_get_multi_gain(track);
+    }
 
     if (pattern_live_capture_current(&out_project->live) == 0U)
     {
@@ -445,6 +625,8 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
                                   project->state.queued_pattern_bank,
                                   project->state.queued_pattern_slot);
 
+    project_v1_multi_restore_from_snapshot(project);
+
     g_project_macro_state = project->macro;
     project_v1_macro_sanitize_state(&g_project_macro_state);
     param_macro_sync_active_bank();
@@ -452,6 +634,57 @@ uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_t
     g_project_active_slot = project->state.active_project_slot;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
     return 1U;
+}
+
+uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_INVALID_ARG);
+        return 0U;
+    }
+
+    if ((path == 0) || (path[0] == '\0'))
+    {
+        g_project_multi_assign[track].path[0] = '\0';
+        brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
+        project_v1_set_error(PROJECT_V1_ERR_NONE);
+        return 1U;
+    }
+
+    if (project_v1_copy_text(g_project_multi_assign[track].path,
+                             sizeof(g_project_multi_assign[track].path),
+                             path)
+        == 0U)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_INVALID_ARG);
+        return 0U;
+    }
+
+    project_v1_set_error(PROJECT_V1_ERR_NONE);
+    return 1U;
+}
+
+uint8_t project_v1_get_track_multi_path(uint8_t track, char *out_path, uint32_t out_size)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (out_path == 0) || (out_size == 0U))
+    {
+        project_v1_set_error(PROJECT_V1_ERR_INVALID_ARG);
+        return 0U;
+    }
+
+    const uint8_t ok =
+        project_v1_copy_text(out_path, out_size, g_project_multi_assign[track].path);
+    project_v1_set_error((ok != 0U) ? PROJECT_V1_ERR_NONE : PROJECT_V1_ERR_INVALID_ARG);
+    return ok;
+}
+
+void project_v1_get_multi_restore_diag(project_v1_multi_restore_diag_t *out_diag)
+{
+    if (out_diag != 0)
+    {
+        *out_diag = g_project_multi_restore_diag;
+    }
 }
 
 uint8_t project_v1_save_slot(uint8_t project_slot)
@@ -566,6 +799,8 @@ uint8_t project_v1_load_blank(void)
 
     sample_pool_init();
     project_v1_macro_init();
+    project_v1_multi_clear_assignments();
+    memset(&g_project_multi_restore_diag, 0, sizeof(g_project_multi_restore_diag));
     if (pattern_live_apply_boot_snapshot(0U) == 0U)
     {
         project_v1_set_error(PROJECT_V1_ERR_APPLY_FAIL);

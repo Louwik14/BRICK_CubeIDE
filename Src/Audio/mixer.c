@@ -1770,6 +1770,18 @@ void mixer_track_vca_all_notes_off(uint32_t track_id)
     adsr_daisy_c_reset(&filter->vca_env);
 }
 
+uint8_t mixer_track_vca_is_running(uint32_t track_id)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return 0U;
+
+    const mixer_track_filter_t *const filter = &g_track_filters[track_id];
+    if (filter->vca_enabled == 0U)
+        return 0U;
+
+    return adsr_daisy_c_is_running(&filter->vca_env);
+}
+
 void mixer_track_filter_note_off(uint32_t track_id, uint8_t midi_note)
 {
     if(track_id >= MIXER_MAX_TRACKS)

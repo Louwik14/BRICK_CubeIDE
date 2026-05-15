@@ -22,7 +22,6 @@
 #include "fx_pool.h"
 
 #include "fx_dj_eq3_cmsis.h"
-#include "fx_granular.h"
 #include "fx_saturation.h"
 #include "fx_daisy_comp.h"
 #include "mixer.h"
@@ -37,13 +36,6 @@ static fx_slot_t g_slots[FX_POOL_SIZE];
 AUDIO_HOT static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
 AUDIO_HOT static fx_saturation_t g_track_sat[FX_POOL_TRACK_SAT_COUNT];
-
-/* Large granular history buffers: keep out of D1 to free fast internal RAM. */
-AUDIO_COLD_SDRAM ALIGN32 static float grain_buffer_l[48000];
-AUDIO_COLD_SDRAM ALIGN32 static float grain_buffer_r[48000];
-AUDIO_COLD_SDRAM ALIGN32 static uint8_t g_granular_state_storage[2048];
-
-static uint8_t g_granular_in_use;
 
 /**
  * @brief Point d'entrée fx_pool_init.
@@ -63,8 +55,6 @@ void fx_pool_init(void)
         g_slots[i].type = FX_NONE;
         g_slots[i].state = NULL;
     }
-
-    g_granular_in_use = 0u;
 
     for (uint32_t track = 0u; track < FX_POOL_TRACK_SAT_COUNT; ++track)
     {
@@ -112,23 +102,7 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
             break;
 
         case FX_GRANULAR:
-        {
-            const size_t state_size = fx_granular_state_size();
-            if ((state_size > sizeof(g_granular_state_storage)) || (g_granular_in_use != 0u))
-                return 0;
-
-            fx_granular_state_t* state = (fx_granular_state_t*)g_granular_state_storage;
-
-            fx_granular_init(state,
-                             48000.0f,
-                             grain_buffer_l,
-                             grain_buffer_r,
-                             48000u);
-
-            g_granular_in_use = 1u;
-            slot->state = state;
-            break;
-        }
+            return 0;
 
         case FX_DAISY_COMP:
             slot->state = fx_daisy_comp_get_instance();
@@ -168,23 +142,8 @@ void fx_pool_deactivate_slot(uint32_t index)
     slot->active = 0u;
     __DMB();
 
-    switch ((fx_type_t)slot->type)
-    {
-        case FX_GRANULAR:
-        {
-            slot->state = NULL;
-            slot->type = FX_NONE;
-            g_granular_in_use = 0u;
-
-            __DMB();
-            break;
-        }
-
-        default:
-            slot->state = NULL;
-            slot->type = FX_NONE;
-            break;
-    }
+    slot->state = NULL;
+    slot->type = FX_NONE;
 
     __DSB();
 }

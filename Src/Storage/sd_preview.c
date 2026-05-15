@@ -57,6 +57,7 @@ typedef struct
     float prev_r;
     float curr_l;
     float curr_r;
+    float gain;
     double phase;
     double phase_step;
 #if SD_PREVIEW_HAS_FATFS
@@ -70,7 +71,7 @@ typedef struct
  */
 static AUDIO_COLD_SDRAM float g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
 static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
-static sd_preview_ctx_t g_sd_preview;
+STORAGE_STATE_SDRAM static sd_preview_ctx_t g_sd_preview;
 static uint32_t g_sd_preview_ring_read;
 static uint32_t g_sd_preview_ring_write;
 static uint32_t g_sd_preview_ring_count;
@@ -429,6 +430,7 @@ void sd_preview_init(void)
     memset(&g_sd_preview, 0, sizeof(g_sd_preview));
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
+    g_sd_preview.gain = 1.0f;
     sd_preview_ring_reset();
     sd_preview_reset_source_state();
 }
@@ -457,6 +459,25 @@ const char *sd_preview_get_path(void)
 const wav_info_t *sd_preview_get_source_info(void)
 {
     return &g_sd_preview.info;
+}
+
+void sd_preview_set_gain(float gain)
+{
+    if (gain < 0.0f)
+    {
+        gain = 0.0f;
+    }
+    else if (gain > 1.0f)
+    {
+        gain = 1.0f;
+    }
+
+    g_sd_preview.gain = gain;
+}
+
+float sd_preview_get_gain(void)
+{
+    return g_sd_preview.gain;
 }
 
 uint8_t sd_preview_begin(const char *path)
@@ -625,8 +646,9 @@ uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t fr
             break;
         }
 
-        out_main_l[i] += left;
-        out_main_r[i] += right;
+        const float gain = g_sd_preview.gain;
+        out_main_l[i] += left * gain;
+        out_main_r[i] += right * gain;
         mixed = 1U;
     }
 

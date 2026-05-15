@@ -108,6 +108,12 @@ Les macros principales dans `Inc/Storage/memory_layout.h` sont :
 | `SEQ_STATE_D2` | `.ram_d2_lut` | Ã©tat sÃ©quenceur/runtime interne non-SDRAM | aucun |
 | `CTRL_STATE` | `.ram_d3_ctrl` | low-rate control/flags | aucun |
 | `UI_SDRAM` | `.sdram_ui` | UI / bulk non real-time | `ALIGN32` |
+| `UI_STATE_SDRAM` | `.ui_state_sdram` | UI-owned state froid hors D1 | `ALIGN32` |
+| `CONTROL_STATE_SDRAM` | `.control_state_sdram` | etat control low-rate hors IRQ audio | `ALIGN32` |
+| `STORAGE_STATE_SDRAM` | `.storage_state_sdram` | metadata/handles storage hors IRQ audio et non DMA-owned | `ALIGN32` |
+| `MULTI_LOAD_SDRAM` | `.multi_load_sdram` | files/etat LOAD Multi cooperatif hors IRQ audio | `ALIGN32` |
+| `STORAGE_SCRATCH_SDRAM` | `.storage_scratch_sdram` | scratch conversion/storage FatFs hors IRQ audio | `ALIGN32` |
+| `RECORDER_SCRATCH_SDRAM` | `.recorder_scratch_sdram` | scratch recorder/export hors IRQ producteurs | `ALIGN32` |
 | `SDRAM_SAMPLES` | `.sdram_samples` | arena samples rÃ©sidents | `ALIGN32` |
 | `AUDIO_COLD_SDRAM` | `.sdram_audio_cold` | large cold audio history | `ALIGN32` |
 

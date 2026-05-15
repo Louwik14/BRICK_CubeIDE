@@ -3,7 +3,9 @@
 #include "pages/ui_page_template_tone.h"
 
 #include "Audio/fx_master_macro.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Param/param_registry.h"
+#include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
 #include "ui_template_page.h"
 
@@ -61,6 +63,18 @@ static const ui_template_family_t g_ui_template_tone_family_looper = {
     .subpages = {
         { .title = "LOOP", .param_bank = { .params = { PARAM_LOOPER_ARM, PARAM_LOOPER_LEN, PARAM_LOOPER_PLAY, PARAM_LOOPER_XFADE } } },
         { .title = "STR", .param_bank = { .params = { PARAM_LOOPER_STRETCH, PARAM_LOOPER_PITCH, PARAM_LOOPER_GRAIN, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_tone_family_multi = {
+    .family_title = "TONE",
+    .nav_labels = { "INST", "-", "-", "-" },
+    .subpages = {
+        { .title = "INST", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -450,6 +464,80 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_value_len)
 {
     const uint8_t active_track = ui_get_active_track();
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
+    {
+        if (id == PARAM_SAMPLER_SAMPLE)
+        {
+            uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+            const multi_sample_instrument_t *instrument = NULL;
+
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "INST");
+            }
+
+            (void)brick6_sampler_runtime_get_multi_instrument(active_track, &instrument_id);
+            if (instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            {
+                instrument = multi_sample_pool_get_instrument(instrument_id);
+            }
+
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                if (instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
+                {
+                    (void)snprintf(out_value, out_value_len, "NONE");
+                }
+                else if (instrument == NULL)
+                {
+                    (void)snprintf(out_value, out_value_len, "LOAD");
+                }
+                else if (instrument->state == MULTI_SAMPLE_INSTRUMENT_ERROR)
+                {
+                    (void)snprintf(out_value, out_value_len, "ERR");
+                }
+                else if (instrument->state == MULTI_SAMPLE_INSTRUMENT_READY)
+                {
+                    (void)snprintf(out_value,
+                                   out_value_len,
+                                   "%s",
+                                   (instrument->name[0] != '\0') ? instrument->name : "READY");
+                }
+                else
+                {
+                    (void)snprintf(out_value, out_value_len, "LOAD");
+                }
+            }
+
+            (void)slot;
+            (void)value;
+            return 1U;
+        }
+
+        if (id == PARAM_SAMPLER_GAIN)
+        {
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "GAIN");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                float display = value;
+                if (display < 0.0f)
+                {
+                    display = 0.0f;
+                }
+                else if (display > 2.0f)
+                {
+                    display = 2.0f;
+                }
+                (void)snprintf(out_value, out_value_len, "%u%%", (unsigned int)(display * 100.0f + 0.5f));
+            }
+            return 1U;
+        }
+    }
+
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_BD_ANALOG))
     {
@@ -625,6 +713,10 @@ void ui_page_template_tone_register_families(void)
             else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_LOOPER))
             {
                 family_template = &g_ui_template_tone_family_looper;
+            }
+            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_MULTI))
+            {
+                family_template = &g_ui_template_tone_family_multi;
             }
             else if ((track_family == UI_TRACK_FAMILY_MIDI) && (track_type == UI_TRACK_TYPE_MIDI))
             {

@@ -26,11 +26,13 @@
 #include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_param_iface.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
 #include "Core/track_state.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Sampler/multi_sample_pool.h"
 #include "UI/ui_track_catalog.h"
 #include <stddef.h>
 #include <string.h>
@@ -40,6 +42,43 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        float clamped,
                                                        uint8_t rt_fast);
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
+
+static uint8_t param_registry_track_is_sampler_multi(uint8_t track)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    return (uint8_t)((ctx != NULL)
+                     && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
+}
+
+static float param_registry_multi_instrument_selector_value(uint8_t track)
+{
+    uint16_t instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    if (brick6_sampler_runtime_get_multi_instrument(track, &instrument_id) == 0U)
+    {
+        return 0.0f;
+    }
+    if (instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
+    {
+        return 0.0f;
+    }
+
+    uint8_t selector = 1U;
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
+    {
+        if (multi_sample_pool_get_instrument(id) == NULL)
+        {
+            continue;
+        }
+        if (id == instrument_id)
+        {
+            return (float)selector;
+        }
+        selector++;
+    }
+
+    return 0.0f;
+}
 
 /**
  * @brief Point d'entrée clamp_value.
@@ -236,11 +275,24 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
     switch (id)
     {
         case PARAM_SAMPLER_SAMPLE:
+            if (param_registry_track_is_sampler_multi(track) != 0U)
+            {
+                *out_value = param_registry_multi_instrument_selector_value(track);
+                return 1U;
+            }
             *out_value = state->sample;
             return 1U;
         case PARAM_SAMPLER_GAIN:
+        {
+            const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
+            {
+                *out_value = brick6_sampler_runtime_get_multi_gain(track);
+                return 1U;
+            }
             *out_value = state->gain;
             return 1U;
+        }
         case PARAM_SAMPLER_START:
             *out_value = state->start;
             return 1U;

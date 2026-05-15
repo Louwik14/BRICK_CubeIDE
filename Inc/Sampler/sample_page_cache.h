@@ -25,8 +25,22 @@ typedef enum
     SAMPLE_PAGE_ERROR
 } sample_page_state_t;
 
+typedef enum
+{
+    SAMPLE_AUDIO_DOMAIN_CLASSIC = 0,
+    SAMPLE_AUDIO_DOMAIN_LOOPER,
+    SAMPLE_AUDIO_DOMAIN_MULTI
+} sample_audio_domain_t;
+
 typedef struct
 {
+    sample_audio_domain_t domain;
+    uint16_t object_id;
+} sample_audio_key_t;
+
+typedef struct
+{
+    sample_audio_key_t key;
     uint16_t sample_id;
     uint16_t reserved;
     uint32_t page_index;
@@ -75,6 +89,7 @@ typedef struct
 
 typedef struct
 {
+    sample_audio_key_t key;
     char path[SAMPLE_PAGE_CACHE_PATH_MAX];
     wav_info_t info;
     uint32_t total_frames;
@@ -84,6 +99,7 @@ typedef struct
 
 typedef struct
 {
+    sample_audio_key_t key;
     uint16_t sample_id;
     uint16_t slot_index;
     uint32_t page_index;
@@ -120,51 +136,94 @@ typedef struct
 void sample_page_cache_init(void);
 void sample_page_cache_reset(void);
 void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot);
+sample_audio_key_t sample_audio_key_classic(uint16_t sample_id);
+sample_audio_key_t sample_audio_key_looper(uint16_t looper_id);
+sample_audio_key_t sample_audio_key_multi(uint16_t multi_sample_id);
+uint8_t sample_audio_key_equal(const sample_audio_key_t *a, const sample_audio_key_t *b);
+void sample_page_cache_clear_key(sample_audio_key_t key);
 void sample_page_cache_clear_sample(uint16_t sample_id);
+sample_page_state_t sample_page_cache_get_page_state_key(sample_audio_key_t key,
+                                                         uint32_t page_index);
 sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_t page_index);
 const sample_page_desc_t *sample_page_cache_get_page_desc(uint32_t slot_index);
+uint8_t sample_page_cache_try_acquire_page_key(sample_audio_key_t key,
+                                               uint32_t page_index,
+                                               sample_page_span_t *out_span);
 uint8_t sample_page_cache_try_acquire_page(uint16_t sample_id,
                                            uint32_t page_index,
                                            sample_page_span_t *out_span);
+uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
+                                                   const sample_page_ref_t *ref,
+                                                   sample_page_span_t *out_span);
 uint8_t sample_page_cache_try_acquire_page_ref(uint16_t sample_id,
                                                const sample_page_ref_t *ref,
                                                sample_page_span_t *out_span);
+void sample_page_cache_release_page_key(sample_audio_key_t key, uint32_t page_index);
 void sample_page_cache_release_page(uint16_t sample_id, uint32_t page_index);
+void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample_page_ref_t *ref);
 void sample_page_cache_release_page_ref(uint16_t sample_id, const sample_page_ref_t *ref);
+const float *sample_page_cache_get_full_sample_base_key(sample_audio_key_t key,
+                                                        uint32_t *out_frames);
 const float *sample_page_cache_get_full_sample_base(uint16_t sample_id, uint32_t *out_frames);
+uint8_t sample_page_cache_begin_read_block_key(sample_audio_key_t key,
+                                               uint32_t frame_index,
+                                               uint32_t max_frames,
+                                               sample_page_block_t *out_block);
 uint8_t sample_page_cache_begin_read_block(uint16_t sample_id,
                                            uint32_t frame_index,
                                            uint32_t max_frames,
                                            sample_page_block_t *out_block);
+void sample_page_cache_commit_read_block_key(sample_audio_key_t key,
+                                             uint32_t page_index);
 void sample_page_cache_commit_read_block(uint16_t sample_id,
                                          uint32_t page_index);
 uint8_t sample_page_cache_has_queued_range(uint16_t first_sample_id,
                                            uint16_t sample_count);
+uint8_t sample_page_cache_has_queued_domain_range(sample_audio_domain_t domain,
+                                                  uint16_t first_object_id,
+                                                  uint16_t object_count);
 uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
                                           sample_page_stream_info_t *out_info);
+uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
+                                              sample_page_stream_info_t *out_info);
 uint8_t sample_page_cache_find_queued_load_target(uint16_t first_sample_id,
                                                   uint16_t sample_count,
                                                   sample_page_load_target_t *out_target);
 uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
                                           uint32_t page_index,
                                           sample_page_load_target_t *out_target);
+uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
+                                              uint32_t page_index,
+                                              sample_page_load_target_t *out_target);
 uint8_t sample_page_cache_set_page_state(uint16_t sample_id,
                                          uint32_t page_index,
                                          sample_page_state_t state);
+uint8_t sample_page_cache_set_page_state_key(sample_audio_key_t key,
+                                             uint32_t page_index,
+                                             sample_page_state_t state);
 
 /*
  * Command API: queues or records explicit intent only.
  * Audio callers must never use these commands.
  */
 uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index);
+uint8_t sample_page_cache_request_page_key(sample_audio_key_t key, uint32_t page_index);
 uint8_t sample_page_cache_request_page_ref(uint16_t sample_id,
                                            uint32_t page_index,
                                            sample_page_ref_t *out_ref);
+uint8_t sample_page_cache_request_page_ref_key(sample_audio_key_t key,
+                                               uint32_t page_index,
+                                               sample_page_ref_t *out_ref);
 uint8_t sample_page_cache_request_start_pages(uint16_t sample_id,
                                               uint32_t start_frame,
                                               uint32_t page_count);
+uint8_t sample_page_cache_request_start_pages_key(sample_audio_key_t key,
+                                                  uint32_t start_frame,
+                                                  uint32_t page_count);
 uint8_t sample_page_cache_pin_page(uint16_t sample_id, uint32_t page_index);
+uint8_t sample_page_cache_pin_page_key(sample_audio_key_t key, uint32_t page_index);
 void sample_page_cache_unpin_page(uint16_t sample_id, uint32_t page_index);
+void sample_page_cache_unpin_page_key(sample_audio_key_t key, uint32_t page_index);
 sample_page_load_result_t sample_page_cache_load_full_sample(uint16_t sample_id,
                                                              FIL *fp,
                                                              const wav_info_t *info,
@@ -172,14 +231,29 @@ sample_page_load_result_t sample_page_cache_load_full_sample(uint16_t sample_id,
                                                              uint32_t data_offset,
                                                              uint8_t *io_buffer,
                                                              uint32_t io_buffer_size);
+sample_page_load_result_t sample_page_cache_load_full_sample_key(sample_audio_key_t key,
+                                                                 FIL *fp,
+                                                                 const wav_info_t *info,
+                                                                 uint32_t total_frames,
+                                                                 uint32_t data_offset,
+                                                                 uint8_t *io_buffer,
+                                                                 uint32_t io_buffer_size);
 uint8_t sample_page_cache_register_stream_sample(uint16_t sample_id,
                                                  const char *path,
                                                  const wav_info_t *info,
                                                  uint32_t total_frames,
                                                  uint32_t data_offset);
+uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
+                                                     const char *path,
+                                                     const wav_info_t *info,
+                                                     uint32_t total_frames,
+                                                     uint32_t data_offset);
 uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
                                                            const char *path,
                                                            uint32_t total_frames);
+uint8_t sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_t key,
+                                                               const char *path,
+                                                               uint32_t total_frames);
 
 /*
  * Legacy/transient range service kept for non-Sampler-pool users.
@@ -188,6 +262,10 @@ uint8_t sample_page_cache_register_raw_pcm24_stereo_sample(uint16_t sample_id,
 void sample_page_cache_service_range(uint16_t first_sample_id,
                                      uint16_t sample_count,
                                      uint32_t byte_budget);
+void sample_page_cache_service_domain_range(sample_audio_domain_t domain,
+                                            uint16_t first_object_id,
+                                            uint16_t object_count,
+                                            uint32_t byte_budget);
 
 #ifdef __cplusplus
 }

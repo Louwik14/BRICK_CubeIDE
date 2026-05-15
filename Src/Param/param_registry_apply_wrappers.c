@@ -5,7 +5,6 @@
 #include "audio_float.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "fx_daisy_comp.h"
-#include "fx_granular.h"
 #include "fx_pool.h"
 #include "mixer.h"
 #include "ui_core.h"
@@ -45,21 +44,6 @@ static void apply_tone_live_track(param_id_t id, float value)
 {
     /* Explicit apply seam: live UI edits route to the track-aware mutation surface. */
     (void)param_registry_apply_track_value(id, ui_get_active_track(), value);
-}
-
-static fx_granular_state_t *get_active_granular_state(void)
-{
-    for (uint32_t i = 0U;; ++i)
-    {
-        fx_slot_t *slot = fx_pool_get_slot(i);
-        if (slot == NULL)
-            break;
-
-        if ((slot->active != 0U) && ((fx_type_t)slot->type == FX_GRANULAR) && (slot->state != NULL))
-            return (fx_granular_state_t *)slot->state;
-    }
-
-    return NULL;
 }
 
 static uint8_t seq_div_ui_to_runtime(float v)
@@ -178,38 +162,32 @@ void apply_midi_cc3_4(float v) { apply_tone_live_track(PARAM_MIDI_CC3_4, v); }
 
 void apply_gran_density(float v)
 {
-    fx_granular_state_t *state = get_active_granular_state();
-    if (state != NULL) fx_granular_set_density(state, v);
+    (void)v;
 }
 
 void apply_gran_pitch(float v)
 {
-    fx_granular_state_t *state = get_active_granular_state();
-    if (state != NULL) fx_granular_set_pitch(state, v);
+    (void)v;
 }
 
 void apply_gran_mix(float v)
 {
-    fx_granular_state_t *state = get_active_granular_state();
-    if (state != NULL) fx_granular_set_mix(state, v);
+    (void)v;
 }
 
 void apply_gran_freeze(float v)
 {
-    fx_granular_state_t *state = get_active_granular_state();
-    if (state != NULL) fx_granular_set_freeze(state, (v >= 0.5f));
+    (void)v;
 }
 
 void apply_gran_spread(float v)
 {
-    fx_granular_state_t *state = get_active_granular_state();
-    if (state != NULL) fx_granular_set_spread(state, v);
+    (void)v;
 }
 
 void apply_gran_stereo(float v)
 {
-    fx_granular_state_t *state = get_active_granular_state();
-    if (state != NULL) fx_granular_set_stereo_offset(state, v);
+    (void)v;
 }
 
 void apply_eq_low_db(float v) { audio_float_set_dj_eq_low_db(v); }

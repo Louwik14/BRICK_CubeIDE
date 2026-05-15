@@ -16,7 +16,9 @@ static sample_voice_reader_diag_snapshot_t g_sample_voice_reader_diag;
 typedef struct
 {
     uint8_t cache_voice_id;
+    uint8_t cache_voice_valid;
     uint16_t sample_id;
+    sample_audio_key_t key;
     float position;
     float step;
     uint32_t frame_pos;
@@ -38,14 +40,14 @@ static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t
         return;
     }
 
-    if ((state->audio_cursor.neighbor_acquired != 0U) && (state->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES))
+    if (state->audio_cursor.neighbor_acquired != 0U)
     {
-        sample_page_cache_release_page_ref(state->sample_id, &state->audio_cursor.neighbor_page_ref);
+        sample_page_cache_release_page_ref_key(state->key, &state->audio_cursor.neighbor_page_ref);
     }
 
-    if ((state->audio_cursor.current_acquired != 0U) && (state->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES))
+    if (state->audio_cursor.current_acquired != 0U)
     {
-        sample_page_cache_release_page_ref(state->sample_id, &state->audio_cursor.current_page_ref);
+        sample_page_cache_release_page_ref_key(state->key, &state->audio_cursor.current_page_ref);
     }
 
     memset(&state->audio_cursor, 0, sizeof(state->audio_cursor));
@@ -54,13 +56,15 @@ static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t
 static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_t *state,
                                                       uint32_t frame_pos)
 {
-    if ((state == 0) || (state->sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
+    if (state == 0)
     {
         return 0U;
     }
 
     sample_page_span_t span;
-    if (sample_page_cache_try_acquire_page(state->sample_id, frame_pos / SAMPLE_PAGE_FRAMES, &span) == 0U)
+    if (sample_page_cache_try_acquire_page_key(state->key,
+                                               frame_pos / SAMPLE_PAGE_FRAMES,
+                                               &span) == 0U)
     {
         return 0U;
     }
@@ -80,7 +84,7 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
 static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_state_t *state,
                                                          uint32_t page_index)
 {
-    if ((state == 0) || (state->sample_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
+    if (state == 0)
     {
         return 0U;
     }
@@ -93,7 +97,7 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
 
     if (state->audio_cursor.neighbor_acquired != 0U)
     {
-        sample_page_cache_release_page_ref(state->sample_id, &state->audio_cursor.neighbor_page_ref);
+        sample_page_cache_release_page_ref_key(state->key, &state->audio_cursor.neighbor_page_ref);
         state->audio_cursor.neighbor_acquired = 0U;
         state->audio_cursor.neighbor_base = 0;
         state->audio_cursor.neighbor_start_frame = 0U;
@@ -101,7 +105,7 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
     }
 
     sample_page_span_t span;
-    if (sample_page_cache_try_acquire_page(state->sample_id, page_index, &span) == 0U)
+    if (sample_page_cache_try_acquire_page_key(state->key, page_index, &span) == 0U)
     {
         return 0U;
     }
@@ -439,7 +443,9 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
 
     sample_voice_reader_reset(reader);
     reader->sample_id = sample_id;
+    reader->key = sample_audio_key_classic(sample_id);
     reader->cache_voice_id = cache_voice_id;
+    reader->cache_voice_valid = 1U;
     reader->position = (float)start_frame;
     reader->step = 1.0f;
     reader->frame_pos = start_frame;
@@ -458,14 +464,19 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
     sample_voice_reader_reset(reader);
     state->sample_id = plan->sample_id;
+    state->key = plan->key;
     state->cache_voice_id = cache_voice_id;
+    state->cache_voice_valid = (cache_voice_id != UINT8_MAX) ? 1U : 0U;
     state->position = (float)plan->start_frame;
     state->step = (float)plan->step_q16 / (float)SAMPLE_Q16_ONE;
     state->frame_pos = plan->start_frame;
     state->active = 1U;
     state->plan = *plan;
     state->plan_valid = 1U;
-    sample_cache_set_voice_direction(cache_voice_id, (plan->direction != 0U) ? -1 : 1);
+    if (state->cache_voice_valid != 0U)
+    {
+        sample_cache_set_voice_direction(cache_voice_id, (plan->direction != 0U) ? -1 : 1);
+    }
 
     if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)
     {
@@ -500,7 +511,10 @@ void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos)
     reader->frame_pos = frame_pos;
     reader->position = (float)frame_pos;
     SAMPLE_VOICE_READER_DIAG_INC(seek_calls);
-    sample_cache_set_voice_frame_pos(reader->cache_voice_id, frame_pos);
+    if (reader->cache_voice_valid != 0U)
+    {
+        sample_cache_set_voice_frame_pos(reader->cache_voice_id, frame_pos);
+    }
 }
 
 void sample_voice_reader_stop(sample_voice_reader_t *reader)
@@ -510,7 +524,7 @@ void sample_voice_reader_stop(sample_voice_reader_t *reader)
         return;
     }
 
-    if (reader->active != 0U)
+    if ((reader->active != 0U) && (reader->cache_voice_valid != 0U))
     {
         sample_cache_stop_voice(reader->cache_voice_id);
     }
@@ -521,7 +535,8 @@ uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,
                                         uint32_t max_frames,
                                         sample_cache_block_t *out_block)
 {
-    if ((reader == 0) || (out_block == 0) || (reader->active == 0U))
+    if ((reader == 0) || (out_block == 0) || (reader->active == 0U)
+        || (reader->cache_voice_valid == 0U))
     {
         return 0U;
     }
@@ -537,7 +552,10 @@ void sample_voice_reader_commit_block(sample_voice_reader_t *reader,
         return;
     }
 
-    sample_cache_commit_read_block(reader->cache_voice_id, consumed_frames);
+    if (reader->cache_voice_valid != 0U)
+    {
+        sample_cache_commit_read_block(reader->cache_voice_id, consumed_frames);
+    }
     reader->frame_pos += consumed_frames;
     reader->position = (float)reader->frame_pos;
 }
@@ -686,7 +704,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                 state->position = ((2.0f * loop_end) - state->position) - 1.0f;
                 state->plan.direction = 1U;
                 state->plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
-                sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                if (state->cache_voice_valid != 0U)
+                {
+                    sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                }
                 bounced_pingpong = 1U;
             }
             while (state->position < loop_begin)
@@ -694,7 +715,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                 state->position = (2.0f * loop_begin) - state->position;
                 state->plan.direction = 0U;
                 state->plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                if (state->cache_voice_valid != 0U)
+                {
+                    sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                }
                 bounced_pingpong = 1U;
             }
             state->frame_pos = (uint32_t)state->position;
@@ -710,7 +734,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
             state->frame_pos = (uint32_t)state->position;
         }
 
-        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+        if (state->cache_voice_valid != 0U)
+        {
+            sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+        }
         if (state->active == 0U)
         {
             sample_voice_reader_release_audio_cursor(state);
@@ -745,7 +772,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                 state->position = (2.0f * loop_begin) - state->position;
                 state->plan.direction = 0U;
                 state->plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                if (state->cache_voice_valid != 0U)
+                {
+                    sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                }
                 bounced_pingpong = 1U;
             }
             while (state->position >= (float)state->plan.region_end)
@@ -753,7 +783,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                 state->position = ((2.0f * (float)state->plan.region_end) - state->position) - 1.0f;
                 state->plan.direction = 1U;
                 state->plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
-                sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                if (state->cache_voice_valid != 0U)
+                {
+                    sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                }
                 bounced_pingpong = 1U;
             }
             state->frame_pos = (uint32_t)state->position;
@@ -769,7 +802,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
             state->frame_pos = (uint32_t)state->position;
         }
 
-        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+        if (state->cache_voice_valid != 0U)
+        {
+            sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+        }
         if (state->active == 0U)
         {
             sample_voice_reader_release_audio_cursor(state);
@@ -804,7 +840,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                 state->frame_pos = state->plan.loop_begin + 1U;
                 state->plan.direction = 0U;
                 state->plan.kernel_type = SAMPLE_KERNEL_FWD_1X;
-                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                if (state->cache_voice_valid != 0U)
+                {
+                    sample_cache_set_voice_direction(state->cache_voice_id, 1);
+                }
                 state->position = (float)state->frame_pos;
                 bounced_pingpong = 1U;
             }
@@ -831,7 +870,10 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                 state->frame_pos = forward_end - 2U;
                 state->plan.direction = 1U;
                 state->plan.kernel_type = SAMPLE_KERNEL_REV_1X;
-                sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                if (state->cache_voice_valid != 0U)
+                {
+                    sample_cache_set_voice_direction(state->cache_voice_id, -1);
+                }
                 state->position = (float)state->frame_pos;
                 bounced_pingpong = 1U;
             }
@@ -846,14 +888,20 @@ void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
         {
             state->frame_pos = state->plan.loop_begin;
             wrapped_loop = 1U;
-            sample_cache_set_voice_direction(state->cache_voice_id, 1);
+            if (state->cache_voice_valid != 0U)
+            {
+                sample_cache_set_voice_direction(state->cache_voice_id, 1);
+            }
         }
         if ((wrapped_loop == 0U) && (bounced_pingpong == 0U))
         {
             state->position = (float)state->frame_pos;
         }
     }
-    sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+    if (state->cache_voice_valid != 0U)
+    {
+        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+    }
 
     if (state->audio_cursor.current_acquired == 0U)
     {
@@ -1303,7 +1351,10 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         reader->position = position;
         reverse = segment_reverse;
         reader->frame_pos = (uint32_t)reader->position;
-        sample_cache_update_voice_frame_pos(reader->cache_voice_id, reader->frame_pos);
+        if (reader->cache_voice_valid != 0U)
+        {
+            sample_cache_update_voice_frame_pos(reader->cache_voice_id, reader->frame_pos);
+        }
         produced += segment_frames;
     }
 

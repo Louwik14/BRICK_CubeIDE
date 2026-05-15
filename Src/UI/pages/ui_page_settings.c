@@ -1,16 +1,31 @@
 ﻿#include "pages/ui_page_settings.h"
 
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 
 #include "stm32h7xx_hal.h"
 #include "buttons.h"
 #include "buttons_ids.h"
+#include "ff.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/memory_layout.h"
+#include "Storage/wav_convert.h"
+#include "Storage/looper_storage.h"
+#include "Storage/multi_record_writer.h"
 #include "Storage/project_v1.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Sampler/sample_pool.h"
+#include "Sampler/multi_sample_import.h"
+#include "Sampler/multi_sample_index.h"
+#include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Storage/wav_loader.h"
+#include "Seq/seq_runtime.h"
 #include "drv_display.h"
+#include "font.h"
+#include "ui_core.h"
 #include "ui_page_manager.h"
 
 typedef enum
@@ -18,6 +33,7 @@ typedef enum
     UI_SETTINGS_VIEW_ROOT = 0,
     UI_SETTINGS_VIEW_PROJECT,
     UI_SETTINGS_VIEW_SAMPLER,
+    UI_SETTINGS_VIEW_MULTI_SAMPLE,
     UI_SETTINGS_VIEW_SAMPLER_SLOT,
     UI_SETTINGS_VIEW_SAMPLER_CATALOG,
     UI_SETTINGS_VIEW_PROJECT_LOAD,
@@ -53,6 +69,29 @@ typedef enum
 
 typedef enum
 {
+    UI_SETTINGS_SAMPLE_FOCUS_LIBRARY = 0,
+    UI_SETTINGS_SAMPLE_FOCUS_SLOTS
+} ui_settings_sample_focus_t;
+
+typedef enum
+{
+    UI_SETTINGS_SAMPLE_ENTRY_FILE = 0,
+    UI_SETTINGS_SAMPLE_ENTRY_DIR
+} ui_settings_sample_entry_type_t;
+
+typedef enum
+{
+    UI_SETTINGS_SAMPLE_CONFIRM_NONE = 0,
+    UI_SETTINGS_SAMPLE_CONFIRM_REPLACE,
+    UI_SETTINGS_SAMPLE_CONFIRM_CLEAR,
+    UI_SETTINGS_SAMPLE_CONFIRM_CONVERT,
+    UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE,
+    UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE,
+    UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD
+} ui_settings_sample_confirm_t;
+
+typedef enum
+{
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE = 0,
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER,
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT
@@ -68,13 +107,51 @@ typedef struct
 #define UI_SETTINGS_STATUS_DURATION_MS 1000U
 #define UI_SETTINGS_ENCODER_DIVIDER 4
 #define UI_SETTINGS_ENCODER_COUNT 4U
+#define UI_SETTINGS_SAMPLE_BROWSER_MAX 64U
+#define UI_SETTINGS_SAMPLE_ROOT "0:/Samples"
+#define UI_SETTINGS_MULTI_ROOT "0:/Multi"
 
 typedef struct
 {
+    char path[SAMPLE_POOL_PATH_MAX];
+    char label[24];
+    ui_settings_sample_entry_type_t type;
+    uint8_t _pad[3];
+} ui_settings_sample_entry_t;
+
+typedef struct
+{
+    char path[MULTI_SAMPLE_POOL_PATH_MAX];
+    char index_path[MULTI_SAMPLE_POOL_PATH_MAX];
+    char label[MULTI_SAMPLE_POOL_NAME_MAX];
+    uint16_t sample_count;
+    uint16_t zone_count;
+    uint8_t prepared;
+    uint8_t _pad;
+} ui_settings_multi_entry_t;
+
+typedef struct
+{
+    ui_settings_sample_entry_t sample_entries[UI_SETTINGS_SAMPLE_BROWSER_MAX];
+    ui_settings_multi_entry_t multi_entries[UI_SETTINGS_SAMPLE_BROWSER_MAX];
+    char sample_dir[SAMPLE_POOL_PATH_MAX];
+    char confirm_path[MULTI_SAMPLE_POOL_PATH_MAX];
+    char convert_path[SAMPLE_POOL_PATH_MAX];
+    char status_line[24];
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
     ui_settings_sampler_catalog_mode_t sampler_catalog_mode;
+    uint8_t sample_entry_count;
+    uint8_t multi_entry_count;
+    uint8_t sample_selected;
+    uint8_t sample_slot_selected;
+    uint8_t sample_left_scroll;
+    uint8_t sample_right_scroll;
+    uint8_t sample_focus;
+    uint8_t sample_confirm;
+    uint8_t confirm_slot;
+    uint8_t sample_preview_volume;
     uint8_t sampler_slots[SAMPLE_POOL_SIZE];
     uint8_t sampler_slot_count;
     uint8_t project_slots[PROJECT_V1_SLOT_COUNT];
@@ -82,12 +159,36 @@ typedef struct
     uint8_t return_page_id;
     uint8_t preview_was_active;
     uint8_t preview_stop_origin;
-    char status_line[20];
+    uint8_t convert_slot_valid;
+    uint8_t convert_slot;
     uint32_t status_until_ms;
     int16_t encoder_accum[UI_SETTINGS_ENCODER_COUNT];
 } ui_settings_state_t;
 
-static ui_settings_state_t g_ui_settings;
+#define UI_SETTINGS_STATIC_ASSERT(name, cond) typedef char ui_settings_static_assert_##name[(cond) ? 1 : -1]
+#define UI_SETTINGS_OFFSET_ALIGNED(type, field) ((offsetof(type, field) % 4U) == 0U)
+
+UI_SETTINGS_STATIC_ASSERT(sample_entry_stride_aligned, (sizeof(ui_settings_sample_entry_t) % 4U) == 0U);
+UI_SETTINGS_STATIC_ASSERT(sample_entry_path_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_sample_entry_t, path));
+UI_SETTINGS_STATIC_ASSERT(sample_entry_label_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_sample_entry_t, label));
+UI_SETTINGS_STATIC_ASSERT(sample_entries_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, sample_entries));
+UI_SETTINGS_STATIC_ASSERT(multi_entries_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, multi_entries));
+UI_SETTINGS_STATIC_ASSERT(sample_dir_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, sample_dir));
+UI_SETTINGS_STATIC_ASSERT(confirm_path_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, confirm_path));
+UI_SETTINGS_STATIC_ASSERT(convert_path_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, convert_path));
+UI_SETTINGS_STATIC_ASSERT(status_line_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, status_line));
+
+UI_STATE_SDRAM static ui_settings_state_t g_ui_settings;
+
+static void ui_page_settings_status(const char *status);
+static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin);
+static const char *ui_page_settings_preview_error_label(sd_preview_error_t error);
+static void ui_page_settings_back(void);
+static void ui_page_settings_sample_load_to_slot(uint8_t slot, const char *path);
+static void ui_page_settings_copy_bounded(char *out, uint32_t out_size, const char *src);
+static const ui_settings_multi_entry_t *ui_page_settings_multi_find_entry_by_path(const char *path);
+static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry);
+static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry);
 
 static const char *ui_page_settings_sampler_load_error_label(void)
 {
@@ -156,6 +257,37 @@ static const char *ui_page_settings_preview_error_label(sd_preview_error_t error
     }
 }
 
+static const char *ui_page_settings_convert_error_label(wav_convert_error_t error)
+{
+    switch (error)
+    {
+        case WAV_CONVERT_ERROR_NO_SPACE:
+            return "SD FULL";
+        case WAV_CONVERT_ERROR_BUSY:
+            return "SD BUSY";
+        case WAV_CONVERT_ERROR_UNSUPPORTED:
+            return "WAV UNSUPP";
+        case WAV_CONVERT_ERROR_MOUNT_FAIL:
+            return "SD UNAVAILABLE";
+        case WAV_CONVERT_ERROR_OPEN_FAIL:
+            return "OPEN FAIL";
+        case WAV_CONVERT_ERROR_READ_FAIL:
+            return "SD READ FAIL";
+        case WAV_CONVERT_ERROR_WRITE_FAIL:
+            return "SD WRITE FAIL";
+        case WAV_CONVERT_ERROR_SYNC_FAIL:
+            return "SD SYNC FAIL";
+        case WAV_CONVERT_ERROR_VERIFY_FAIL:
+            return "VERIFY FAIL";
+        case WAV_CONVERT_ERROR_REPLACE_FAIL:
+            return "REPLACE FAIL";
+        case WAV_CONVERT_ERROR_CLOSE_FAIL:
+            return "CLOSE FAIL";
+        default:
+            return "CONVERT FAIL";
+    }
+}
+
 static void ui_page_settings_refresh_project_slots(void)
 {
     project_v1_refresh_slots();
@@ -171,6 +303,1068 @@ static void ui_page_settings_refresh_sampler_slots(void)
     g_ui_settings.sampler_slot_count = SAMPLE_POOL_SIZE;
 }
 
+static uint8_t ui_page_settings_wav_ext_is_wav(const char *name)
+{
+    const size_t len = (name != 0) ? strlen(name) : 0U;
+    if (len < 4U)
+    {
+        return 0U;
+    }
+
+    return ((name[len - 4U] == '.')
+            && ((name[len - 3U] == 'w') || (name[len - 3U] == 'W'))
+            && ((name[len - 2U] == 'a') || (name[len - 2U] == 'A'))
+            && ((name[len - 1U] == 'v') || (name[len - 1U] == 'V')))
+        ? 1U
+        : 0U;
+}
+
+static void ui_page_settings_make_sample_label(char *out, uint32_t out_size, const char *name, uint8_t is_dir)
+{
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    if (name == 0)
+    {
+        return;
+    }
+
+    uint32_t len = (uint32_t)strlen(name);
+    if ((is_dir == 0U) && (len > 4U) && (ui_page_settings_wav_ext_is_wav(name) != 0U))
+    {
+        len -= 4U;
+    }
+
+    if (len >= out_size)
+    {
+        len = out_size - 1U;
+    }
+
+    (void)memcpy(out, name, len);
+    out[len] = '\0';
+}
+
+static uint8_t ui_page_settings_join_path(char *out,
+                                          uint32_t out_size,
+                                          const char *dir,
+                                          const char *name)
+{
+    if ((out == 0) || (out_size == 0U) || (dir == 0) || (name == 0))
+    {
+        return 0U;
+    }
+
+    const size_t dir_len = strlen(dir);
+    const char *const sep = ((dir_len != 0U) && (dir[dir_len - 1U] == '/')) ? "" : "/";
+    const int written = snprintf(out, out_size, "%s%s%s", dir, sep, name);
+    return ((written >= 0) && ((uint32_t)written < out_size)) ? 1U : 0U;
+}
+
+static void ui_page_settings_copy_bytes(char *out, const char *src, uint32_t len)
+{
+    if ((out == 0) || (src == 0))
+    {
+        return;
+    }
+
+    volatile char *const dst = (volatile char *)out;
+    for (uint32_t i = 0U; i < len; ++i)
+    {
+        dst[i] = src[i];
+    }
+}
+
+static uint8_t ui_page_settings_multi_index_name(const char *folder_path,
+                                                 char *out,
+                                                 uint32_t out_size)
+{
+    char folder[MULTI_SAMPLE_POOL_PATH_MAX];
+    char name_copy[MULTI_SAMPLE_POOL_NAME_MAX];
+
+    if ((folder_path == 0) || (out == 0) || (out_size == 0U))
+    {
+        return 0U;
+    }
+
+    const char *name = strrchr(folder_path, '/');
+    name = (name != 0) ? (name + 1) : folder_path;
+    if ((name == 0) || (name[0] == '\0'))
+    {
+        return 0U;
+    }
+
+    if ((strlen(folder_path) >= sizeof(folder)) || (strlen(name) >= sizeof(name_copy)))
+    {
+        return 0U;
+    }
+
+    const uint32_t folder_len = (uint32_t)strlen(folder_path);
+    const uint32_t name_len = (uint32_t)strlen(name);
+    ui_page_settings_copy_bytes(folder, folder_path, folder_len);
+    folder[folder_len] = '\0';
+    ui_page_settings_copy_bytes(name_copy, name, name_len);
+    name_copy[name_len] = '\0';
+
+    static const char k_suffix[] = ".brickmulti";
+    const uint32_t suffix_len = (uint32_t)(sizeof(k_suffix) - 1U);
+    const uint32_t total = folder_len + 1U + name_len + suffix_len;
+    if (total >= out_size)
+    {
+        return 0U;
+    }
+
+    uint32_t pos = 0U;
+    ui_page_settings_copy_bytes(&out[pos], folder, folder_len);
+    pos += folder_len;
+    out[pos++] = '/';
+    ui_page_settings_copy_bytes(&out[pos], name_copy, name_len);
+    pos += name_len;
+    ui_page_settings_copy_bytes(&out[pos], k_suffix, suffix_len);
+    pos += suffix_len;
+    out[pos] = '\0';
+    return 1U;
+}
+
+static uint8_t ui_page_settings_sample_browser_refresh(void)
+{
+    DIR dir;
+    FILINFO fno;
+
+    g_ui_settings.sample_entry_count = 0U;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    {
+        ui_page_settings_status("SD BUSY");
+        return 0U;
+    }
+
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        ui_page_settings_status("SD UNAVAILABLE");
+        return 0U;
+    }
+
+    FRESULT fr = f_opendir(&dir, g_ui_settings.sample_dir);
+    if (fr != FR_OK)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        ui_page_settings_status("NO SAMPLES");
+        return 0U;
+    }
+
+    while (g_ui_settings.sample_entry_count < UI_SETTINGS_SAMPLE_BROWSER_MAX)
+    {
+        fr = f_readdir(&dir, &fno);
+        if ((fr != FR_OK) || (fno.fname[0] == '\0'))
+        {
+            break;
+        }
+
+        if (fno.fname[0] == '.')
+        {
+            continue;
+        }
+
+        const uint8_t is_dir = ((fno.fattrib & AM_DIR) != 0U) ? 1U : 0U;
+        if ((is_dir == 0U) && (ui_page_settings_wav_ext_is_wav(fno.fname) == 0U))
+        {
+            continue;
+        }
+
+        ui_settings_sample_entry_t *const entry =
+            &g_ui_settings.sample_entries[g_ui_settings.sample_entry_count];
+        const size_t dir_len = strlen(g_ui_settings.sample_dir);
+        const char *const sep = ((dir_len != 0U) && (g_ui_settings.sample_dir[dir_len - 1U] == '/')) ? "" : "/";
+        const int path_len = snprintf(entry->path,
+                                      sizeof(entry->path),
+                                      "%s%s%s",
+                                      g_ui_settings.sample_dir,
+                                      sep,
+                                      fno.fname);
+        if ((path_len < 0) || ((uint32_t)path_len >= sizeof(entry->path)))
+        {
+            continue;
+        }
+
+        ui_page_settings_make_sample_label(entry->label, sizeof(entry->label), fno.fname, is_dir);
+        entry->type = (is_dir != 0U) ? UI_SETTINGS_SAMPLE_ENTRY_DIR : UI_SETTINGS_SAMPLE_ENTRY_FILE;
+        g_ui_settings.sample_entry_count++;
+    }
+
+    (void)f_closedir(&dir);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+
+    if (g_ui_settings.sample_selected >= g_ui_settings.sample_entry_count)
+    {
+        g_ui_settings.sample_selected = (g_ui_settings.sample_entry_count == 0U)
+            ? 0U
+            : (uint8_t)(g_ui_settings.sample_entry_count - 1U);
+    }
+
+    if (g_ui_settings.sample_left_scroll >= g_ui_settings.sample_entry_count)
+    {
+        g_ui_settings.sample_left_scroll = 0U;
+    }
+
+    return 1U;
+}
+
+static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entry)
+{
+    if (entry == 0)
+    {
+        return;
+    }
+
+    entry->prepared = 0U;
+    entry->sample_count = 0U;
+    entry->zone_count = 0U;
+    if (entry->index_path[0] == '\0')
+    {
+        return;
+    }
+
+    multi_sample_index_t index;
+    if (multi_sample_index_load(entry->index_path, &index) == MULTI_SAMPLE_INDEX_OK)
+    {
+        entry->prepared = 1U;
+        entry->sample_count = index.sample_count;
+        entry->zone_count = index.zone_count;
+        if (index.instrument_name[0] != '\0')
+        {
+            ui_page_settings_copy_bounded(entry->label,
+                                          sizeof(entry->label),
+                                          index.instrument_name);
+        }
+    }
+}
+
+static uint8_t ui_page_settings_multi_browser_refresh(void)
+{
+    DIR dir;
+    FILINFO fno;
+
+    g_ui_settings.multi_entry_count = 0U;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    {
+        ui_page_settings_status("SD BUSY");
+        return 0U;
+    }
+
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        ui_page_settings_status("SD UNAVAILABLE");
+        return 0U;
+    }
+
+    FRESULT fr = f_opendir(&dir, UI_SETTINGS_MULTI_ROOT);
+    if (fr != FR_OK)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        ui_page_settings_status("NO MULTI");
+        return 0U;
+    }
+
+    while (g_ui_settings.multi_entry_count < UI_SETTINGS_SAMPLE_BROWSER_MAX)
+    {
+        fr = f_readdir(&dir, &fno);
+        if ((fr != FR_OK) || (fno.fname[0] == '\0'))
+        {
+            break;
+        }
+        if ((fno.fname[0] == '.') || ((fno.fattrib & AM_DIR) == 0U))
+        {
+            continue;
+        }
+
+        ui_settings_multi_entry_t *const entry =
+            &g_ui_settings.multi_entries[g_ui_settings.multi_entry_count];
+        memset(entry, 0, sizeof(*entry));
+        if (ui_page_settings_join_path(entry->path, sizeof(entry->path), UI_SETTINGS_MULTI_ROOT, fno.fname) == 0U)
+        {
+            continue;
+        }
+        ui_page_settings_make_sample_label(entry->label, sizeof(entry->label), fno.fname, 1U);
+        (void)ui_page_settings_multi_index_name(entry->path, entry->index_path, sizeof(entry->index_path));
+        g_ui_settings.multi_entry_count++;
+    }
+
+    (void)f_closedir(&dir);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+
+    for (uint8_t i = 0U; i < g_ui_settings.multi_entry_count; ++i)
+    {
+        ui_page_settings_multi_load_metadata(&g_ui_settings.multi_entries[i]);
+    }
+
+    if (g_ui_settings.sample_selected >= g_ui_settings.multi_entry_count)
+    {
+        g_ui_settings.sample_selected = (g_ui_settings.multi_entry_count == 0U)
+            ? 0U
+            : (uint8_t)(g_ui_settings.multi_entry_count - 1U);
+    }
+    if (g_ui_settings.sample_left_scroll >= g_ui_settings.multi_entry_count)
+    {
+        g_ui_settings.sample_left_scroll = 0U;
+    }
+
+    return 1U;
+}
+
+static void ui_page_settings_sample_browser_enter_root(void)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", UI_SETTINGS_SAMPLE_ROOT);
+    g_ui_settings.sample_selected = 0U;
+    g_ui_settings.sample_slot_selected = 0U;
+    g_ui_settings.sample_left_scroll = 0U;
+    g_ui_settings.sample_right_scroll = 0U;
+    g_ui_settings.sample_focus = (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY;
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+    g_ui_settings.confirm_slot = 0U;
+    g_ui_settings.sample_preview_volume = 100U;
+    g_ui_settings.confirm_path[0] = '\0';
+    sd_preview_set_gain(1.0f);
+    (void)ui_page_settings_sample_browser_refresh();
+}
+
+static void ui_page_settings_multi_browser_enter_root(void)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    g_ui_settings.sample_selected = 0U;
+    g_ui_settings.sample_slot_selected = 0U;
+    g_ui_settings.sample_left_scroll = 0U;
+    g_ui_settings.sample_right_scroll = 0U;
+    g_ui_settings.sample_focus = (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY;
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+    g_ui_settings.confirm_slot = 0U;
+    g_ui_settings.confirm_path[0] = '\0';
+    (void)ui_page_settings_multi_browser_refresh();
+}
+
+static void ui_page_settings_sample_browser_parent_or_exit(void)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (strcmp(g_ui_settings.sample_dir, UI_SETTINGS_SAMPLE_ROOT) == 0)
+    {
+        ui_page_settings_back();
+        return;
+    }
+
+    char *slash = strrchr(g_ui_settings.sample_dir, '/');
+    if ((slash == 0) || (slash <= (g_ui_settings.sample_dir + strlen(UI_SETTINGS_SAMPLE_ROOT))))
+    {
+        (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", UI_SETTINGS_SAMPLE_ROOT);
+    }
+    else
+    {
+        *slash = '\0';
+    }
+
+    g_ui_settings.sample_selected = 0U;
+    g_ui_settings.sample_left_scroll = 0U;
+    (void)ui_page_settings_sample_browser_refresh();
+}
+
+static int16_t ui_page_settings_sample_find_free_slot(void)
+{
+    for (uint8_t slot = 0U; slot < SAMPLE_POOL_SIZE; ++slot)
+    {
+        if (sample_pool_get_state(slot) == SAMPLE_POOL_SLOT_EMPTY)
+        {
+            return (int16_t)slot;
+        }
+    }
+    return -1;
+}
+
+static const ui_settings_sample_entry_t *ui_page_settings_sample_selected_entry(void)
+{
+    if (g_ui_settings.sample_selected >= g_ui_settings.sample_entry_count)
+    {
+        return 0;
+    }
+    return &g_ui_settings.sample_entries[g_ui_settings.sample_selected];
+}
+
+static void ui_page_settings_sample_confirm_convert(uint8_t slot, const char *path)
+{
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CONVERT;
+    g_ui_settings.confirm_slot = slot;
+    (void)snprintf(g_ui_settings.confirm_path, sizeof(g_ui_settings.confirm_path), "%s", path);
+    ui_page_settings_status("CONVERT TO 48K ?");
+}
+
+static void ui_page_settings_sample_load_to_slot(uint8_t slot, const char *path)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (sample_pool_load(slot, path) != 0U)
+    {
+        ui_page_settings_refresh_sampler_slots();
+        ui_page_settings_status("LOAD OK");
+    }
+    else
+    {
+        if ((sample_pool_get_last_load_error() == SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT)
+            && (wav_convert_path_needs_48k(path, 0) != 0U))
+        {
+            ui_page_settings_sample_confirm_convert(slot, path);
+            return;
+        }
+        ui_page_settings_status(ui_page_settings_sampler_load_error_label());
+    }
+}
+
+static void ui_page_settings_sample_preview_left(void)
+{
+    const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
+    if ((entry == 0) || (entry->type != UI_SETTINGS_SAMPLE_ENTRY_FILE))
+    {
+        return;
+    }
+
+    if ((sd_preview_is_active() != 0U) && (strcmp(sd_preview_get_path(), entry->path) == 0))
+    {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
+        return;
+    }
+
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (sd_preview_begin(entry->path) != 0U)
+    {
+        g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
+        g_ui_settings.preview_was_active = sd_preview_is_active();
+        ui_page_settings_status("PREVIEW ON");
+    }
+    else
+    {
+        ui_page_settings_status(ui_page_settings_preview_error_label(sd_preview_get_last_error()));
+    }
+}
+
+static void ui_page_settings_sample_preview_right(void)
+{
+    const sample_pool_slot_state_t state = sample_pool_get_state(g_ui_settings.sample_slot_selected);
+    if (state == SAMPLE_POOL_SLOT_EMPTY)
+    {
+        ui_page_settings_status("SLOT EMPTY");
+        return;
+    }
+
+    const sample_desc_t *const desc = sample_pool_get(g_ui_settings.sample_slot_selected);
+    if ((desc == 0) || (desc->path[0] == '\0'))
+    {
+        ui_page_settings_status("NO PATH");
+        return;
+    }
+
+    if ((sd_preview_is_active() != 0U) && (strcmp(sd_preview_get_path(), desc->path) == 0))
+    {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
+        return;
+    }
+
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (sd_preview_begin(desc->path) != 0U)
+    {
+        g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
+        g_ui_settings.preview_was_active = sd_preview_is_active();
+        ui_page_settings_status("PREVIEW ON");
+    }
+    else
+    {
+        ui_page_settings_status(ui_page_settings_preview_error_label(sd_preview_get_last_error()));
+    }
+}
+
+static void ui_page_settings_sample_preview_current(void)
+{
+    if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+    {
+        ui_page_settings_sample_preview_left();
+        return;
+    }
+
+    ui_page_settings_sample_preview_right();
+}
+
+static void ui_page_settings_sample_confirm_replace(uint8_t slot, const char *path)
+{
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_REPLACE;
+    g_ui_settings.confirm_slot = slot;
+    (void)snprintf(g_ui_settings.confirm_path, sizeof(g_ui_settings.confirm_path), "%s", path);
+    ui_page_settings_status("COPY YES PASTE NO");
+}
+
+static void ui_page_settings_sample_request_replace(uint8_t slot, const char *path)
+{
+    if ((path == 0) || (path[0] == '\0'))
+    {
+        return;
+    }
+
+    if (sample_pool_get_state(slot) == SAMPLE_POOL_SLOT_EMPTY)
+    {
+        ui_page_settings_sample_load_to_slot(slot, path);
+        return;
+    }
+
+    ui_page_settings_sample_confirm_replace(slot, path);
+}
+
+static void ui_page_settings_sample_confirm_clear(uint8_t slot)
+{
+    if (sample_pool_get_state(slot) == SAMPLE_POOL_SLOT_EMPTY)
+    {
+        ui_page_settings_status("SLOT EMPTY");
+        return;
+    }
+
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR;
+    g_ui_settings.confirm_slot = slot;
+    g_ui_settings.confirm_path[0] = '\0';
+    ui_page_settings_status("COPY YES PASTE NO");
+}
+
+static void ui_page_settings_sample_confirm_accept(void)
+{
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CONVERT)
+    {
+        const uint8_t slot = g_ui_settings.confirm_slot;
+        char path[SAMPLE_POOL_PATH_MAX];
+        if (strlen(g_ui_settings.confirm_path) >= sizeof(path))
+        {
+            g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+            g_ui_settings.confirm_path[0] = '\0';
+            ui_page_settings_status("PATH TOO LONG");
+            return;
+        }
+        ui_page_settings_copy_bounded(path, sizeof(path), g_ui_settings.confirm_path);
+        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+        g_ui_settings.confirm_path[0] = '\0';
+
+        if ((seq_runtime_is_running() != 0U)
+            || (seq_runtime_is_start_pending() != 0U)
+            || (multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U))
+        {
+            ui_page_settings_status("STOP AUDIO TO CONVERT");
+            return;
+        }
+
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+        if (wav_convert_start_destructive_48k(path) == 0U)
+        {
+            ui_page_settings_status("CONVERT FAIL");
+            return;
+        }
+
+        g_ui_settings.convert_slot_valid = 1U;
+        g_ui_settings.convert_slot = slot;
+        (void)snprintf(g_ui_settings.convert_path, sizeof(g_ui_settings.convert_path), "%s", path);
+        ui_page_settings_status("CONVERT 0%");
+        return;
+    }
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_REPLACE)
+    {
+        const uint8_t slot = g_ui_settings.confirm_slot;
+        char path[SAMPLE_POOL_PATH_MAX];
+        if (strlen(g_ui_settings.confirm_path) >= sizeof(path))
+        {
+            g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+            g_ui_settings.confirm_path[0] = '\0';
+            ui_page_settings_status("PATH TOO LONG");
+            return;
+        }
+        ui_page_settings_copy_bounded(path, sizeof(path), g_ui_settings.confirm_path);
+        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+        g_ui_settings.confirm_path[0] = '\0';
+        ui_page_settings_sample_load_to_slot(slot, path);
+        return;
+    }
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CLEAR)
+    {
+        sample_pool_clear(g_ui_settings.confirm_slot);
+        ui_page_settings_refresh_sampler_slots();
+        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+        ui_page_settings_status("CLEAR OK");
+        return;
+    }
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE)
+    {
+        const uint8_t slot = g_ui_settings.confirm_slot;
+        char path[MULTI_SAMPLE_POOL_PATH_MAX];
+        (void)snprintf(path, sizeof(path), "%s", g_ui_settings.confirm_path);
+        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+        g_ui_settings.confirm_path[0] = '\0';
+
+        const ui_settings_multi_entry_t *entry = ui_page_settings_multi_find_entry_by_path(path);
+        if ((entry == 0) || (ui_page_settings_multi_prepare_entry(entry) == 0U))
+        {
+            return;
+        }
+        entry = ui_page_settings_multi_find_entry_by_path(path);
+        ui_page_settings_multi_load_entry_to_slot(slot, entry);
+        return;
+    }
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE)
+    {
+        const uint8_t slot = g_ui_settings.confirm_slot;
+        char path[MULTI_SAMPLE_POOL_PATH_MAX];
+        (void)snprintf(path, sizeof(path), "%s", g_ui_settings.confirm_path);
+        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+        g_ui_settings.confirm_path[0] = '\0';
+
+        const ui_settings_multi_entry_t *entry = ui_page_settings_multi_find_entry_by_path(path);
+        if (entry == 0)
+        {
+            ui_page_settings_status("NO MULTI");
+            return;
+        }
+        if ((entry->prepared == 0U) && (ui_page_settings_multi_prepare_entry(entry) == 0U))
+        {
+            return;
+        }
+        entry = ui_page_settings_multi_find_entry_by_path(path);
+        ui_page_settings_multi_load_entry_to_slot(slot, entry);
+        return;
+    }
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD)
+    {
+        if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
+        {
+            ui_page_settings_status("UNLOAD OK");
+        }
+        else
+        {
+            ui_page_settings_status("UNLOAD FAIL");
+        }
+        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+        return;
+    }
+
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+}
+
+static void ui_page_settings_sample_confirm_cancel(void)
+{
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+    g_ui_settings.confirm_path[0] = '\0';
+    ui_page_settings_status("CANCEL");
+}
+
+static void ui_page_settings_sample_copy_left(uint8_t shift_down)
+{
+    const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
+    if (entry == 0)
+    {
+        ui_page_settings_status("NO WAV");
+        return;
+    }
+
+    if (entry->type == UI_SETTINGS_SAMPLE_ENTRY_DIR)
+    {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+        (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", entry->path);
+        g_ui_settings.sample_selected = 0U;
+        (void)ui_page_settings_sample_browser_refresh();
+        return;
+    }
+
+    if (shift_down != 0U)
+    {
+        ui_page_settings_sample_request_replace(g_ui_settings.sample_slot_selected, entry->path);
+        return;
+    }
+
+    const int16_t free_slot = ui_page_settings_sample_find_free_slot();
+    if (free_slot < 0)
+    {
+        ui_page_settings_status("POOL FULL");
+        return;
+    }
+
+    ui_page_settings_sample_load_to_slot((uint8_t)free_slot, entry->path);
+    g_ui_settings.sample_slot_selected = (uint8_t)free_slot;
+}
+
+static void ui_page_settings_sample_copy_right(uint8_t shift_down)
+{
+    if (shift_down != 0U)
+    {
+        const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
+        if ((entry == 0) || (entry->type != UI_SETTINGS_SAMPLE_ENTRY_FILE))
+        {
+            ui_page_settings_status("SELECT WAV");
+            return;
+        }
+        ui_page_settings_sample_request_replace(g_ui_settings.sample_slot_selected, entry->path);
+        return;
+    }
+
+    ui_page_settings_sample_confirm_clear(g_ui_settings.sample_slot_selected);
+}
+
+static const ui_settings_multi_entry_t *ui_page_settings_multi_selected_entry(void)
+{
+    if (g_ui_settings.sample_selected >= g_ui_settings.multi_entry_count)
+    {
+        return 0;
+    }
+    return &g_ui_settings.multi_entries[g_ui_settings.sample_selected];
+}
+
+static const ui_settings_multi_entry_t *ui_page_settings_multi_find_entry_by_path(const char *path)
+{
+    if ((path == 0) || (path[0] == '\0'))
+    {
+        return 0;
+    }
+    for (uint8_t i = 0U; i < g_ui_settings.multi_entry_count; ++i)
+    {
+        if (strcmp(g_ui_settings.multi_entries[i].path, path) == 0)
+        {
+            return &g_ui_settings.multi_entries[i];
+        }
+    }
+    return 0;
+}
+
+static uint16_t ui_page_settings_multi_pool_used(void)
+{
+    return multi_sample_pool_get_sample_capacity_used();
+}
+
+static void ui_page_settings_append_u16(char *out, uint32_t out_size, uint16_t value)
+{
+    char digits[5];
+    uint8_t digit_count = 0U;
+
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    do
+    {
+        digits[digit_count++] = (char)('0' + (value % 10U));
+        value = (uint16_t)(value / 10U);
+    } while ((value != 0U) && (digit_count < sizeof(digits)));
+
+    const uint32_t len = (uint32_t)strlen(out);
+    uint32_t pos = len;
+    while ((digit_count != 0U) && ((pos + 1U) < out_size))
+    {
+        out[pos++] = digits[--digit_count];
+    }
+    out[pos] = '\0';
+}
+
+static int16_t ui_page_settings_multi_find_free_slot(void)
+{
+    for (uint8_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
+    {
+        if (multi_sample_pool_get_state(slot) == MULTI_SAMPLE_INSTRUMENT_EMPTY)
+        {
+            return (int16_t)slot;
+        }
+    }
+    return -1;
+}
+
+static int16_t ui_page_settings_multi_find_loaded_path(const char *index_path)
+{
+    if ((index_path == 0) || (index_path[0] == '\0'))
+    {
+        return -1;
+    }
+
+    for (uint8_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
+    {
+        const multi_sample_instrument_t *const instrument = multi_sample_pool_get_instrument(slot);
+        if ((instrument != 0) && (instrument->index_path[0] != '\0')
+            && (strcmp(instrument->index_path, index_path) == 0))
+        {
+            return (int16_t)slot;
+        }
+    }
+    return -1;
+}
+
+static uint8_t ui_page_settings_multi_assign_active_track(uint16_t instrument_id, const char *index_path)
+{
+    const uint8_t track = ui_get_active_track();
+
+    if ((index_path == 0)
+        || (index_path[0] == '\0')
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (ui_get_track_family(track) != UI_TRACK_FAMILY_SAMPLER)
+        || (ui_get_track_type(track) != UI_TRACK_TYPE_MULTI))
+    {
+        return 0U;
+    }
+
+    if (project_v1_set_track_multi_path(track, index_path) == 0U)
+    {
+        return 0U;
+    }
+
+    brick6_sampler_runtime_set_multi_instrument(track, instrument_id);
+    return 1U;
+}
+
+static const char *ui_page_settings_multi_import_error_label(multi_sample_import_result_t result)
+{
+    switch (result)
+    {
+        case MULTI_SAMPLE_IMPORT_SD_BUSY:
+            return "SD BUSY";
+        case MULTI_SAMPLE_IMPORT_SD_MOUNT_FAIL:
+            return "SD UNAVAILABLE";
+        case MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL:
+            return "NO SAMPLES";
+        case MULTI_SAMPLE_IMPORT_NO_WAV:
+            return "NO WAV";
+        case MULTI_SAMPLE_IMPORT_TOO_MANY_SAMPLES:
+            return "TOO MANY";
+        case MULTI_SAMPLE_IMPORT_PATH_TOO_LONG:
+            return "PATH LONG";
+        case MULTI_SAMPLE_IMPORT_WAV_OPEN_FAIL:
+            return "OPEN FAIL";
+        case MULTI_SAMPLE_IMPORT_WAV_PARSE_FAIL:
+            return "WAV INVALID";
+        case MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED:
+            return "WAV UNSUPP";
+        case MULTI_SAMPLE_IMPORT_DUPLICATE_ZONE:
+        {
+            const char *const diag = multi_sample_import_get_last_diagnostic();
+            return ((diag != 0) && (diag[0] != '\0')) ? diag : "DUP ZONE";
+        }
+        case MULTI_SAMPLE_IMPORT_ZONE_LIMIT:
+            return "ZONE FULL";
+        case MULTI_SAMPLE_IMPORT_INDEX_WRITE_FAIL:
+            return "INDEX FAIL";
+        default:
+            return "PREP FAIL";
+    }
+}
+
+static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result)
+{
+    switch (result)
+    {
+        case MULTI_SAMPLE_LOAD_ALREADY_READY:
+            return "ALREADY";
+        case MULTI_SAMPLE_LOAD_SD_BUSY:
+            return "SD BUSY";
+        case MULTI_SAMPLE_LOAD_INDEX_FAIL:
+            return "INDEX FAIL";
+        case MULTI_SAMPLE_LOAD_POOL_FAIL:
+            return "POOL FAIL";
+        case MULTI_SAMPLE_LOAD_PATH_TOO_LONG:
+            return "PATH LONG";
+        case MULTI_SAMPLE_LOAD_REGISTER_FAIL:
+            return "REGISTER FAIL";
+        case MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE:
+            return "CACHE FULL";
+        case MULTI_SAMPLE_LOAD_PAGE_ERROR:
+            return "PAGE FAIL";
+        default:
+            return "LOAD FAIL";
+    }
+}
+
+static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry)
+{
+    if (entry == 0)
+    {
+        return 0U;
+    }
+    if (entry->prepared != 0U)
+    {
+        return 1U;
+    }
+
+    const multi_sample_import_result_t result = multi_sample_import_folder(entry->path);
+    if (result != MULTI_SAMPLE_IMPORT_OK)
+    {
+        ui_page_settings_status(ui_page_settings_multi_import_error_label(result));
+        return 0U;
+    }
+
+    (void)ui_page_settings_multi_browser_refresh();
+    ui_page_settings_status("PREP OK");
+    return 1U;
+}
+
+static void ui_page_settings_multi_confirm_prepare(uint8_t slot)
+{
+    const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
+    if (entry == 0)
+    {
+        return;
+    }
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE;
+    g_ui_settings.confirm_slot = slot;
+    ui_page_settings_copy_bounded(g_ui_settings.confirm_path,
+                                  sizeof(g_ui_settings.confirm_path),
+                                  entry->path);
+    ui_page_settings_status("COPY=YES PASTE=NO");
+}
+
+static void ui_page_settings_multi_confirm_replace(uint8_t slot)
+{
+    const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
+    if (entry == 0)
+    {
+        return;
+    }
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE;
+    g_ui_settings.confirm_slot = slot;
+    ui_page_settings_copy_bounded(g_ui_settings.confirm_path,
+                                  sizeof(g_ui_settings.confirm_path),
+                                  entry->path);
+    ui_page_settings_status("COPY=YES PASTE=NO");
+}
+
+static void ui_page_settings_multi_confirm_unload(uint8_t slot)
+{
+    if (multi_sample_pool_get_state(slot) == MULTI_SAMPLE_INSTRUMENT_EMPTY)
+    {
+        ui_page_settings_status("SLOT EMPTY");
+        return;
+    }
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD;
+    g_ui_settings.confirm_slot = slot;
+    g_ui_settings.confirm_path[0] = '\0';
+    ui_page_settings_status("COPY=YES PASTE=NO");
+}
+
+static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry)
+{
+    if ((entry == 0) || (entry->index_path[0] == '\0'))
+    {
+        ui_page_settings_status("NO INDEX");
+        return;
+    }
+
+    const int16_t existing = ui_page_settings_multi_find_loaded_path(entry->index_path);
+    if (existing >= 0)
+    {
+        g_ui_settings.sample_slot_selected = (uint8_t)existing;
+        (void)ui_page_settings_multi_assign_active_track((uint16_t)existing, entry->index_path);
+        ui_page_settings_status("REUSED");
+        return;
+    }
+
+    if (entry->sample_count > (uint16_t)(MULTI_SAMPLE_POOL_MAX_SAMPLES - ui_page_settings_multi_pool_used()))
+    {
+        char status[24];
+        ui_page_settings_copy_bounded(status, sizeof(status), "FULL need ");
+        ui_page_settings_append_u16(status, sizeof(status), entry->sample_count);
+        ui_page_settings_status(status);
+        return;
+    }
+
+    if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
+    {
+        (void)multi_sample_pool_clear_instrument(slot);
+    }
+
+    const multi_sample_load_result_t result = multi_sample_load_instrument(entry->index_path, slot);
+    if ((result == MULTI_SAMPLE_LOAD_OK) || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
+    {
+        (void)multi_sample_pool_set_index_path(slot, entry->index_path);
+        g_ui_settings.sample_slot_selected = slot;
+        (void)ui_page_settings_multi_assign_active_track(slot, entry->index_path);
+        ui_page_settings_status("LOAD QUEUED");
+    }
+    else
+    {
+        ui_page_settings_status(ui_page_settings_multi_load_error_label(result));
+    }
+}
+
+static void ui_page_settings_multi_load_selected_to_slot(uint8_t slot)
+{
+    const ui_settings_multi_entry_t *entry = ui_page_settings_multi_selected_entry();
+    if (entry == 0)
+    {
+        ui_page_settings_status("NO MULTI");
+        return;
+    }
+
+    if (entry->prepared == 0U)
+    {
+        ui_page_settings_multi_confirm_prepare(slot);
+        return;
+    }
+    ui_page_settings_multi_load_entry_to_slot(slot, entry);
+}
+
+static void ui_page_settings_multi_copy_left(uint8_t shift_down)
+{
+    const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
+    if (entry == 0)
+    {
+        ui_page_settings_status("NO MULTI");
+        return;
+    }
+
+    if (shift_down != 0U)
+    {
+        if (multi_sample_pool_get_state(g_ui_settings.sample_slot_selected) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
+        {
+            ui_page_settings_multi_confirm_replace(g_ui_settings.sample_slot_selected);
+            return;
+        }
+        ui_page_settings_multi_load_selected_to_slot(g_ui_settings.sample_slot_selected);
+        return;
+    }
+
+    const int16_t existing = ui_page_settings_multi_find_loaded_path(entry->index_path);
+    if (existing >= 0)
+    {
+        g_ui_settings.sample_slot_selected = (uint8_t)existing;
+        (void)ui_page_settings_multi_assign_active_track((uint16_t)existing, entry->index_path);
+        ui_page_settings_status("REUSED");
+        return;
+    }
+
+    const int16_t free_slot = ui_page_settings_multi_find_free_slot();
+    if (free_slot < 0)
+    {
+        ui_page_settings_status("POOL FULL");
+        return;
+    }
+    ui_page_settings_multi_load_selected_to_slot((uint8_t)free_slot);
+}
+
+static void ui_page_settings_multi_copy_right(uint8_t shift_down)
+{
+    if (shift_down != 0U)
+    {
+        if (multi_sample_pool_get_state(g_ui_settings.sample_slot_selected) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
+        {
+            ui_page_settings_multi_confirm_replace(g_ui_settings.sample_slot_selected);
+            return;
+        }
+        ui_page_settings_multi_load_selected_to_slot(g_ui_settings.sample_slot_selected);
+        return;
+    }
+
+    ui_page_settings_multi_confirm_unload(g_ui_settings.sample_slot_selected);
+}
+
 static const char *ui_page_settings_view_title(ui_settings_view_t view)
 {
     switch (view)
@@ -180,7 +1374,9 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_PROJECT:
             return "PROJECT";
         case UI_SETTINGS_VIEW_SAMPLER:
-            return "SAMPLER";
+            return "SAMPLES";
+        case UI_SETTINGS_VIEW_MULTI_SAMPLE:
+            return "MULTI";
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
             return "SAMPLER > SLOT";
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
@@ -203,11 +1399,12 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return 2U;
+            return 3U;
         case UI_SETTINGS_VIEW_PROJECT:
             return 3U;
         case UI_SETTINGS_VIEW_SAMPLER:
-            return g_ui_settings.sampler_slot_count;
+        case UI_SETTINGS_VIEW_MULTI_SAMPLE:
+            return 0U;
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
             return (uint8_t)UI_SETTINGS_SAMPLER_ACTION_COUNT;
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
@@ -231,7 +1428,15 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return (index == 0U) ? "PROJECT" : "SAMPLER";
+            if (index == 0U)
+            {
+                return "SAMPLE";
+            }
+            if (index == 1U)
+            {
+                return "MULTI-SAMPLE";
+            }
+            return "PROJECT";
         case UI_SETTINGS_VIEW_PROJECT:
             if (index == 0U)
             {
@@ -415,6 +1620,11 @@ static void ui_page_settings_push(ui_settings_view_t view)
 static void ui_page_settings_back(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if ((level != 0) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
+    {
+        sd_preview_set_gain(1.0f);
+    }
 
     if (g_ui_settings.depth <= 1U)
     {
@@ -438,12 +1648,18 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_ROOT:
             if (level->selected_index == 0U)
             {
-                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
+                ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_sample_browser_enter_root();
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
+            }
+            else if (level->selected_index == 1U)
+            {
+                ui_page_settings_multi_browser_enter_root();
+                ui_page_settings_push(UI_SETTINGS_VIEW_MULTI_SAMPLE);
             }
             else
             {
-                ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
+                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
             }
             break;
 
@@ -540,10 +1756,24 @@ static void ui_page_settings_apply_action(void)
             break;
 
         case UI_SETTINGS_VIEW_SAMPLER:
-            if (level->selected_index < g_ui_settings.sampler_slot_count)
+            if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
             {
-                g_ui_settings.selected_slot = g_ui_settings.sampler_slots[level->selected_index];
-                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER_SLOT);
+                ui_page_settings_sample_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
+            }
+            else
+            {
+                ui_page_settings_sample_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
+            }
+            break;
+
+        case UI_SETTINGS_VIEW_MULTI_SAMPLE:
+            if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+            {
+                ui_page_settings_multi_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
+            }
+            else
+            {
+                ui_page_settings_multi_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
             }
             break;
 
@@ -638,6 +1868,9 @@ static void ui_page_settings_enter(void)
     g_ui_settings.project_slot_count = 0U;
     g_ui_settings.preview_was_active = 0U;
     g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
+    g_ui_settings.convert_slot_valid = 0U;
+    g_ui_settings.convert_slot = 0U;
+    g_ui_settings.convert_path[0] = '\0';
     for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
     {
         g_ui_settings.encoder_accum[i] = 0;
@@ -651,13 +1884,78 @@ static void ui_page_settings_enter(void)
 static void ui_page_settings_leave(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    sd_preview_set_gain(1.0f);
     g_ui_settings.depth = 0U;
 }
 
 static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
+    if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
+    {
+        return;
+    }
+
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
     {
+        if ((ev != 0)
+            && (ev->type == UI_EVENT_HALL_PRESS)
+            && (ui_page_settings_current_level() != 0)
+            && (ui_page_settings_current_level()->view == UI_SETTINGS_VIEW_SAMPLER))
+        {
+            ui_page_settings_sample_preview_current();
+        }
+        return;
+    }
+
+    ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if ((level != 0)
+        && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
+            || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)))
+    {
+        if (g_ui_settings.sample_confirm != (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE)
+        {
+            if (ev->id == (uint8_t)BTN_COPY)
+            {
+                ui_page_settings_sample_confirm_accept();
+                return;
+            }
+            if (ev->id == (uint8_t)BTN_PASTE)
+            {
+                ui_page_settings_sample_confirm_cancel();
+                return;
+            }
+        }
+
+        if (ev->id == (uint8_t)BTN_COPY)
+        {
+            ui_page_settings_apply_action();
+            return;
+        }
+
+        if (ev->id == (uint8_t)BTN_PASTE)
+        {
+            if (button_down(BTN_SHIFT) != 0U)
+            {
+                return;
+            }
+
+            if (level->view == UI_SETTINGS_VIEW_SAMPLER)
+            {
+                ui_page_settings_sample_browser_parent_or_exit();
+            }
+            else
+            {
+                ui_page_settings_back();
+            }
+            return;
+        }
+
+        if (ev->id == (uint8_t)BTN_SETTINGS)
+        {
+            ui_page_settings_back();
+            return;
+        }
+
         return;
     }
 
@@ -681,6 +1979,42 @@ static void ui_page_settings_handle_event_page(const ui_event_t *ev)
 
 static void ui_page_settings_tick(void)
 {
+    if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
+    {
+        wav_convert_service(65536U);
+        const wav_convert_state_t convert_state = wav_convert_get_state();
+        if (convert_state == WAV_CONVERT_STATE_ACTIVE)
+        {
+            (void)snprintf(g_ui_settings.status_line,
+                           sizeof(g_ui_settings.status_line),
+                           "CONVERT %u%%",
+                           (unsigned)wav_convert_get_progress_percent());
+            g_ui_settings.status_until_ms = HAL_GetTick() + UI_SETTINGS_STATUS_DURATION_MS;
+            return;
+        }
+        if (convert_state == WAV_CONVERT_STATE_DONE)
+        {
+            const uint8_t slot = g_ui_settings.convert_slot;
+            char path[SAMPLE_POOL_PATH_MAX];
+            (void)snprintf(path, sizeof(path), "%s", g_ui_settings.convert_path);
+            g_ui_settings.convert_slot_valid = 0U;
+            g_ui_settings.convert_path[0] = '\0';
+            wav_convert_clear_finished();
+            ui_page_settings_sample_load_to_slot(slot, path);
+            return;
+        }
+        if (convert_state == WAV_CONVERT_STATE_FAILED)
+        {
+            const char *const label =
+                ui_page_settings_convert_error_label(wav_convert_get_last_error());
+            g_ui_settings.convert_slot_valid = 0U;
+            g_ui_settings.convert_path[0] = '\0';
+            wav_convert_clear_finished();
+            ui_page_settings_status(label);
+            return;
+        }
+    }
+
     ui_page_settings_preview_apply_termination_status();
 
     if ((g_ui_settings.status_line[0] != '\0')
@@ -690,6 +2024,464 @@ static void ui_page_settings_tick(void)
     }
 }
 
+static void ui_page_settings_copy_bounded(char *out, uint32_t out_size, const char *src)
+{
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    if (src == 0)
+    {
+        return;
+    }
+
+    uint32_t len = (uint32_t)strlen(src);
+    if (len >= out_size)
+    {
+        len = out_size - 1U;
+    }
+
+    (void)memcpy(out, src, len);
+    out[len] = '\0';
+}
+
+static void ui_page_settings_build_middle_ellipsis(char *out,
+                                                   uint32_t out_size,
+                                                   const char *src,
+                                                   uint32_t keep_chars)
+{
+    static const char k_ellipsis[] = "~";
+
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    if ((src == 0) || (keep_chars == 0U))
+    {
+        return;
+    }
+
+    const uint32_t src_len = (uint32_t)strlen(src);
+    if (src_len <= keep_chars)
+    {
+        ui_page_settings_copy_bounded(out, out_size, src);
+        return;
+    }
+
+    if (keep_chars + 2U > out_size)
+    {
+        keep_chars = (out_size > 2U) ? (out_size - 2U) : 0U;
+    }
+
+    const uint32_t prefix_len = (keep_chars + 1U) / 2U;
+    const uint32_t suffix_len = keep_chars - prefix_len;
+    uint32_t pos = 0U;
+
+    if (prefix_len != 0U)
+    {
+        (void)memcpy(&out[pos], src, prefix_len);
+        pos += prefix_len;
+    }
+
+    (void)memcpy(&out[pos], k_ellipsis, 1U);
+    pos += 1U;
+
+    if (suffix_len != 0U)
+    {
+        (void)memcpy(&out[pos], &src[src_len - suffix_len], suffix_len);
+        pos += suffix_len;
+    }
+
+    out[pos] = '\0';
+}
+
+static void ui_page_settings_fit_label(char *out, uint32_t out_size, const char *src, uint8_t max_px)
+{
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    if (src == 0)
+    {
+        return;
+    }
+
+    ui_page_settings_copy_bounded(out, out_size, src);
+    if (drv_display_text_width(out) <= max_px)
+    {
+        return;
+    }
+
+    const uint32_t src_len = (uint32_t)strlen(src);
+    uint32_t max_keep = (out_size > 2U) ? (out_size - 2U) : 0U;
+    if (max_keep > src_len)
+    {
+        max_keep = src_len;
+    }
+
+    for (uint32_t keep = max_keep; keep > 0U; --keep)
+    {
+        ui_page_settings_build_middle_ellipsis(out, out_size, src, keep);
+        if (drv_display_text_width(out) <= max_px)
+        {
+            return;
+        }
+    }
+
+    ui_page_settings_copy_bounded(out, out_size, "~");
+    while ((out[0] != '\0') && (drv_display_text_width(out) > max_px))
+    {
+        const uint32_t len = (uint32_t)strlen(out);
+        out[len - 1U] = '\0';
+    }
+}
+
+static void ui_page_settings_sample_slot_label(uint8_t slot, char *out, uint32_t out_size, uint8_t max_px)
+{
+    char sample_name[SAMPLE_POOL_PATH_MAX];
+    static const char k_empty[] = "--";
+    static const char k_loaded[] = "LOADED";
+    static const char k_prep[] = "PREP";
+    static const char k_error[] = "ERROR";
+    static const char k_missing[] = "MISS";
+
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    if (out_size < 4U)
+    {
+        return;
+    }
+
+    const sample_pool_slot_state_t state = sample_pool_get_state(slot);
+    out[0] = (char)('0' + (((slot + 1U) / 10U) % 10U));
+    out[1] = (char)('0' + ((slot + 1U) % 10U));
+    out[2] = ' ';
+    out[3] = '\0';
+
+    const uint8_t prefix_px = drv_display_text_width(out);
+    const uint8_t name_px = (max_px > prefix_px) ? (uint8_t)(max_px - prefix_px) : 0U;
+
+    if (state == SAMPLE_POOL_SLOT_EMPTY)
+    {
+        ui_page_settings_fit_label(&out[3], (out_size > 3U) ? (out_size - 3U) : 0U, k_empty, name_px);
+        return;
+    }
+
+    const sample_desc_t *const desc = sample_pool_get(slot);
+    const char *name = (desc != 0) ? strrchr(desc->path, '/') : 0;
+    name = (name != 0) ? (name + 1) : ((desc != 0) ? desc->path : "");
+
+    ui_page_settings_make_sample_label(sample_name, sizeof(sample_name), name, 0U);
+    if (sample_name[0] == '\0')
+    {
+        const char *state_label = (state == SAMPLE_POOL_SLOT_LOADED) ? k_loaded
+                                 : (state == SAMPLE_POOL_SLOT_PREPARING) ? k_prep
+                                 : (state == SAMPLE_POOL_SLOT_ERROR) ? k_error
+                                 : k_missing;
+        ui_page_settings_fit_label(&out[3], (out_size > 3U) ? (out_size - 3U) : 0U, state_label, name_px);
+        return;
+    }
+
+    ui_page_settings_fit_label(&out[3], (out_size > 3U) ? (out_size - 3U) : 0U, sample_name, name_px);
+}
+
+static void ui_page_settings_multi_left_label(const ui_settings_multi_entry_t *entry,
+                                              char *out,
+                                              uint32_t out_size,
+                                              uint8_t max_px)
+{
+    char raw[48];
+    if ((entry == 0) || (out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    if (entry->prepared != 0U)
+    {
+        (void)snprintf(raw, sizeof(raw), "%s %03u", entry->label, (unsigned)entry->sample_count);
+    }
+    else
+    {
+        (void)snprintf(raw, sizeof(raw), "%s NEW", entry->label);
+    }
+    ui_page_settings_fit_label(out, out_size, raw, max_px);
+}
+
+static void ui_page_settings_multi_slot_label(uint8_t slot, char *out, uint32_t out_size, uint8_t max_px)
+{
+    char raw[48];
+    const multi_sample_instrument_t *const instrument = multi_sample_pool_get_instrument(slot);
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    if (instrument == 0)
+    {
+        (void)snprintf(raw, sizeof(raw), "M%02u ---", (unsigned)(slot + 1U));
+    }
+    else
+    {
+        (void)snprintf(raw,
+                       sizeof(raw),
+                       "M%02u %s %03u",
+                       (unsigned)(slot + 1U),
+                       instrument->name,
+                       (unsigned)instrument->sample_count);
+    }
+    ui_page_settings_fit_label(out, out_size, raw, max_px);
+}
+
+static uint8_t ui_page_settings_clamp_scroll(uint8_t scroll, uint8_t selected, uint8_t count, uint8_t visible_lines)
+{
+    if ((count == 0U) || (count <= visible_lines))
+    {
+        return 0U;
+    }
+
+    const uint8_t max_start = (uint8_t)(count - visible_lines);
+    if (scroll > max_start)
+    {
+        scroll = max_start;
+    }
+    if (selected < scroll)
+    {
+        scroll = selected;
+    }
+    else if (selected >= (uint8_t)(scroll + visible_lines))
+    {
+        scroll = (uint8_t)(selected - (visible_lines - 1U));
+    }
+
+    return scroll;
+}
+
+static void ui_page_settings_render_multi_browser(void)
+{
+    enum
+    {
+        UI_SETTINGS_SAMPLE_LEFT_TEXT_X = 1,
+        UI_SETTINGS_SAMPLE_LEFT_TEXT_W = 58,
+        UI_SETTINGS_SAMPLE_RIGHT_TEXT_X = 64,
+        UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
+    };
+
+    char header[32];
+    (void)snprintf(header,
+                   sizeof(header),
+                   "MULTI %u/%u",
+                   (unsigned)ui_page_settings_multi_pool_used(),
+                   (unsigned)MULTI_SAMPLE_POOL_MAX_SAMPLES);
+    drv_display_draw_text(0U, 0U, header);
+    drv_display_draw_line(0, 9, 127, 9);
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE)
+    {
+        const ui_settings_multi_entry_t *const entry =
+            ui_page_settings_multi_find_entry_by_path(g_ui_settings.confirm_path);
+        drv_display_set_font(&FONT_4X6);
+        drv_display_draw_text(0U, 14U, "PREPARE?");
+        if (entry != 0)
+        {
+            char name_line[32];
+            ui_page_settings_fit_label(name_line, sizeof(name_line), entry->label, 124U);
+            drv_display_draw_text(0U, 26U, name_line);
+        }
+        drv_display_draw_text(0U, 38U, "COPY=YES");
+        drv_display_draw_text(0U, 50U, "PASTE=NO");
+        drv_display_set_font(&FONT_5X7);
+        return;
+    }
+
+    drv_display_draw_line(60, 10, 60, 51);
+    drv_display_set_font(&FONT_4X6);
+
+    const uint8_t visible_lines = 4U;
+    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
+                                                                     g_ui_settings.sample_selected,
+                                                                     g_ui_settings.multi_entry_count,
+                                                                     visible_lines);
+    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
+                                                                      g_ui_settings.sample_slot_selected,
+                                                                      MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,
+                                                                      visible_lines);
+
+    for (uint8_t line = 0U; line < visible_lines; ++line)
+    {
+        const uint8_t y = (uint8_t)(12U + (line * 10U));
+        const uint8_t left_index = (uint8_t)(g_ui_settings.sample_left_scroll + line);
+        const uint8_t right_index = (uint8_t)(g_ui_settings.sample_right_scroll + line);
+
+        if (left_index < g_ui_settings.multi_entry_count)
+        {
+            char left[32];
+            ui_page_settings_multi_left_label(&g_ui_settings.multi_entries[left_index],
+                                              left,
+                                              sizeof(left),
+                                              (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_W);
+            if ((left_index == g_ui_settings.sample_selected)
+                && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
+            {
+                drv_display_fill_rect(0, y - 1U, 58, 9);
+                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+            }
+            else
+            {
+                drv_display_draw_text((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+            }
+        }
+
+        if (right_index < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        {
+            char right[32];
+            ui_page_settings_multi_slot_label(right_index,
+                                              right,
+                                              sizeof(right),
+                                              (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_W);
+            if ((right_index == g_ui_settings.sample_slot_selected)
+                && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
+            {
+                drv_display_fill_rect(62, y - 1U, 66, 9);
+                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+            }
+            else
+            {
+                drv_display_draw_text((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+            }
+        }
+    }
+
+    if (g_ui_settings.status_line[0] != '\0')
+    {
+        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
+        drv_display_set_font(&FONT_5X7);
+        return;
+    }
+
+    drv_display_draw_text(0U,
+                          54U,
+                          (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+                              ? "COPY LOAD"
+                              : "COPY UNLOAD");
+    drv_display_set_font(&FONT_5X7);
+}
+
+static void ui_page_settings_render_sample_browser(void)
+{
+    enum
+    {
+        UI_SETTINGS_SAMPLE_LEFT_TEXT_X = 1,
+        UI_SETTINGS_SAMPLE_LEFT_TEXT_W = 58,
+        UI_SETTINGS_SAMPLE_RIGHT_TEXT_X = 64,
+        UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
+    };
+
+    drv_display_draw_text(0U, 0U, "SAMPLES");
+    drv_display_draw_line(0, 9, 127, 9);
+    drv_display_draw_line(60, 10, 60, 51);
+    drv_display_set_font(&FONT_4X6);
+
+    const uint8_t visible_lines = 4U;
+    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
+                                                                     g_ui_settings.sample_selected,
+                                                                     g_ui_settings.sample_entry_count,
+                                                                     visible_lines);
+    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
+                                                                      g_ui_settings.sample_slot_selected,
+                                                                      SAMPLE_POOL_SIZE,
+                                                                      visible_lines);
+    const uint8_t left_start = g_ui_settings.sample_left_scroll;
+    const uint8_t right_start = g_ui_settings.sample_right_scroll;
+
+    for (uint8_t line = 0U; line < visible_lines; ++line)
+    {
+        const uint8_t y = (uint8_t)(12U + (line * 10U));
+        const uint8_t left_index = (uint8_t)(left_start + line);
+        const uint8_t right_index = (uint8_t)(right_start + line);
+
+        if (left_index < g_ui_settings.sample_entry_count)
+        {
+            char left[32];
+            char raw_left[SAMPLE_POOL_PATH_MAX];
+            const ui_settings_sample_entry_t *const entry = &g_ui_settings.sample_entries[left_index];
+            const char *left_name = strrchr(entry->path, '/');
+            left_name = (left_name != 0) ? (left_name + 1) : entry->path;
+            ui_page_settings_make_sample_label(raw_left,
+                                               sizeof(raw_left),
+                                               left_name,
+                                               (entry->type == UI_SETTINGS_SAMPLE_ENTRY_DIR) ? 1U : 0U);
+            ui_page_settings_fit_label(left,
+                                       sizeof(left),
+                                       raw_left,
+                                       (uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_W);
+            if ((left_index == g_ui_settings.sample_selected)
+                && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
+            {
+                drv_display_fill_rect(0, y - 1U, 58, 9);
+                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+            }
+            else
+            {
+                drv_display_draw_text((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
+            }
+        }
+
+        if (right_index < SAMPLE_POOL_SIZE)
+        {
+            char right[32];
+            ui_page_settings_sample_slot_label(right_index,
+                                               right,
+                                               sizeof(right),
+                                               (uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_W);
+            if ((right_index == g_ui_settings.sample_slot_selected)
+                && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
+            {
+                drv_display_fill_rect(62, y - 1U, 66, 9);
+                drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+            }
+            else
+            {
+                drv_display_draw_text((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
+            }
+        }
+    }
+
+    if (g_ui_settings.status_line[0] != '\0')
+    {
+        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
+        drv_display_set_font(&FONT_5X7);
+        return;
+    }
+
+    char footer[20];
+    if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+    {
+        (void)snprintf(footer,
+                       sizeof(footer),
+                       "COPY LOAD V%03u",
+                       (unsigned int)g_ui_settings.sample_preview_volume);
+    }
+    else
+    {
+        (void)snprintf(footer,
+                       sizeof(footer),
+                       "COPY CLR V%03u",
+                       (unsigned int)g_ui_settings.sample_preview_volume);
+    }
+    drv_display_draw_text(0U, 54U, footer);
+    drv_display_set_font(&FONT_5X7);
+}
+
 static void ui_page_settings_render(void)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
@@ -697,6 +2489,17 @@ static void ui_page_settings_render(void)
     {
         drv_display_draw_text(0U, 0U, "SETTINGS");
         drv_display_draw_text(0U, 12U, "EMPTY");
+        return;
+    }
+
+    if (level->view == UI_SETTINGS_VIEW_SAMPLER)
+    {
+        ui_page_settings_render_sample_browser();
+        return;
+    }
+    if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+    {
+        ui_page_settings_render_multi_browser();
         return;
     }
 
@@ -800,9 +2603,114 @@ uint8_t ui_page_settings_is_open(void)
 
 void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 {
+    if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
+    {
+        return;
+    }
+
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if ((level == 0) || (delta == 0) || (encoder >= UI_SETTINGS_ENCODER_COUNT))
     {
+        return;
+    }
+
+    if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
+        || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE))
+    {
+        g_ui_settings.encoder_accum[encoder] = (int16_t)(g_ui_settings.encoder_accum[encoder] + delta);
+        const int16_t step = (int16_t)(g_ui_settings.encoder_accum[encoder] / UI_SETTINGS_ENCODER_DIVIDER);
+        g_ui_settings.encoder_accum[encoder] = (int16_t)(g_ui_settings.encoder_accum[encoder] - (step * UI_SETTINGS_ENCODER_DIVIDER));
+        if (step == 0)
+        {
+            return;
+        }
+
+        if (encoder == 0U)
+        {
+            g_ui_settings.sample_focus = (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY;
+            const uint8_t entry_count = (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+                ? g_ui_settings.multi_entry_count
+                : g_ui_settings.sample_entry_count;
+            if (entry_count == 0U)
+            {
+                g_ui_settings.sample_selected = 0U;
+                return;
+            }
+            int32_t index = g_ui_settings.sample_selected;
+            index += step;
+            if (index < 0)
+            {
+                index = 0;
+            }
+            else if (index >= entry_count)
+            {
+                index = (int32_t)entry_count - 1;
+            }
+            if ((uint8_t)index != g_ui_settings.sample_selected)
+            {
+                if (level->view == UI_SETTINGS_VIEW_SAMPLER)
+                {
+                    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+                }
+            }
+            g_ui_settings.sample_selected = (uint8_t)index;
+            return;
+        }
+
+        if (encoder == 1U)
+        {
+            g_ui_settings.sample_focus = (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS;
+            int32_t index = g_ui_settings.sample_slot_selected;
+            const int32_t slot_count = (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+                ? (int32_t)MULTI_SAMPLE_POOL_MAX_INSTRUMENTS
+                : (int32_t)SAMPLE_POOL_SIZE;
+            index += step;
+            if (index < 0)
+            {
+                index = 0;
+            }
+            else if (index >= slot_count)
+            {
+                index = slot_count - 1;
+            }
+            if ((uint8_t)index != g_ui_settings.sample_slot_selected)
+            {
+                if (level->view == UI_SETTINGS_VIEW_SAMPLER)
+                {
+                    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+                }
+            }
+            g_ui_settings.sample_slot_selected = (uint8_t)index;
+            return;
+        }
+
+        if (encoder == 2U)
+        {
+            return;
+        }
+
+        if ((encoder == 3U) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
+        {
+            int32_t volume = (int32_t)g_ui_settings.sample_preview_volume + ((int32_t)step * 5);
+            if (volume < 0)
+            {
+                volume = 0;
+            }
+            else if (volume > 100)
+            {
+                volume = 100;
+            }
+
+            g_ui_settings.sample_preview_volume = (uint8_t)volume;
+            sd_preview_set_gain((float)g_ui_settings.sample_preview_volume * 0.01f);
+
+            char status[20];
+            (void)snprintf(status,
+                           sizeof(status),
+                           "PVOL %03u",
+                           (unsigned int)g_ui_settings.sample_preview_volume);
+            ui_page_settings_status(status);
+        }
         return;
     }
 

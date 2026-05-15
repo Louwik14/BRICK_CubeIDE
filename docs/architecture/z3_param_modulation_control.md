@@ -71,6 +71,7 @@ Familles d'autorite:
   - interpolation `base -> scene`, validation track-aware des 32 locks par scene, et handoff explicite vers `param_registry_apply_track_value`,
   - contrat produit: toute cible p-lockable selon `seq_param_iface_param_to_slot` + `seq_param_iface_param_is_supported` est assignable a l'overlay MACRO,
   - runtime source-state borne a 4 macro pots + 16 sources hall momentanees, chaque source parcourant au plus `PROJECT_V1_MACRO_SCENE_LOCK_COUNT` locks de la scene cible,
+  - `g_param_macro_sources` est place en `CONTROL_STATE_SDRAM`: etat control low-rate, hors IRQ audio, non DMA-owned, initialise par `param_macro_init`,
   - pas d'autorite canonique propre, pas de stockage projet, pas de second cache runtime.
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
@@ -264,6 +265,10 @@ Call-sites critiques:
   - aucune retrocompatibilite n'est conservee pour les anciens projets utilisant l'ancien mode `Stretch`/WSOLA; `PROJECT_V1_FILE_VERSION` refuse ces fichiers,
   - `Grain` reste un setter passif track-aware pris en compte au prochain start/restart `Shifter`; `Hop/Search` ne pilotent plus aucun runtime Sampler/Clip,
   - `Sync Len` reste track-aware et stocke la longueur musicale clip exposee au niveau produit.
+- Params TONE exposes pour `UI_TRACK_TYPE_MULTI`:
+  - `INST`, selecteur track-aware parmi `NONE` et les instruments deja presents dans le `multi_sample_pool`, sans browser, import, scan SD ni reload,
+  - `GAIN`, applique via `brick6_sampler_runtime_set_multi_gain`.
+  - `INST` reutilise le slot param existant `PARAM_SAMPLER_SAMPLE` avec un chemin specialise `Sampler/Multi`: la valeur UI `0` desassigne la track, les valeurs `1..N` parcourent les instruments charges du pool, et l'apply ecrit `brick6_sampler_runtime_set_multi_instrument`; aucun changement de sample OneShot/Clip/Slicer n'est declenche en mode Multi.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
   - le backend Sampler track-aware met a jour `track_tone_sound_state` puis `brick6_sampler_runtime`.
@@ -539,7 +544,7 @@ Dette explicite post-passe 4:
   - PLAY fournit `note_on`, note, velocity/accent et comportement de trigger,
   - COLORS reste le chemin commun filtre/EQ de track,
   - MIX reste niveau/pan/sends/mute,
-  - VCA reste amplitude/enveloppe dynamique mixer,
+  - VCA reste amplitude/enveloppe dynamique mixer pour les types qui l'exposent encore; `Sampler/Clip` et `Sampler/Looper` bloquent `PARAM_VCA_*` et neutralisent tout state VCA stale,
   - MOD atteint TONE et COLORS via `track_runtime_tone_param_to_slot()` et `param_registry_apply_track_value_rt_fast`, sans chemin special dans `drum_synth`.
 
 ## 32. Contrat MIX page 1 p-lock / LFO

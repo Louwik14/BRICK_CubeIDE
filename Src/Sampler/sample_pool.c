@@ -171,7 +171,7 @@ static void sample_pool_release_slot(uint16_t sample_id)
 }
 
 #if SAMPLE_POOL_HAS_FATFS
-static FATFS g_sample_pool_fs;
+STORAGE_STATE_SDRAM static FATFS g_sample_pool_fs;
 static uint8_t g_sample_pool_fs_mounted;
 #endif
 
@@ -195,23 +195,6 @@ static void sample_pool_clear_entry(sample_desc_t *desc)
     desc->data = NULL;
     desc->valid = 0U;
     desc->data_start_frame = 0U;
-}
-
-static void sample_pool_set_missing_entry(sample_desc_t *desc, const char *path)
-{
-    if (desc == NULL)
-    {
-        return;
-    }
-
-    memset(desc, 0, sizeof(*desc));
-
-    if ((path != NULL) && (path[0] != '\0'))
-    {
-        const size_t path_len = strlen(path);
-        memcpy(desc->path, path, path_len);
-        desc->path[path_len] = '\0';
-    }
 }
 
 void sample_pool_clear(uint16_t id)
@@ -361,8 +344,6 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    sample_pool_release_slot(id);
-
     if((path == NULL) || (path[0] == '\0'))
     {        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
@@ -379,9 +360,6 @@ bool sample_pool_load(uint16_t id, const char *path)
     {        sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, FR_INVALID_NAME);
         return false;
     }
-
-    sample_desc_t *desc = &g_sample_pool[id];
-    sample_pool_set_missing_entry(desc, trimmed_path);
 
 #if SAMPLE_POOL_HAS_FATFS
     uint8_t sd_gate_held = 0U;
@@ -407,7 +385,7 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     FIL fp;
     sd_access_trace_begin("sample_pool_f_open");
-    const FRESULT open_fr = f_open(&fp, desc->path, FA_READ);
+    const FRESULT open_fr = f_open(&fp, trimmed_path, FA_READ);
     sd_access_trace_end("sample_pool_f_open", (int)open_fr, 0U);
     if(open_fr != FR_OK)
     {        if (open_fr == FR_NO_FILE)
@@ -432,11 +410,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
-    if(!((info.audio_format == 1U) || (info.audio_format == 65534U)) ||
-       ((info.channels != 1U) && (info.channels != 2U)) ||
-       ((info.bits_per_sample != 16U) && (info.bits_per_sample != 24U)) ||
-       (info.block_align == 0U) ||
-       (info.sample_rate != 48000U))
+    if (sample_cache_wav_format_supported(&info) == 0U)
     {        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
         (void)f_close(&fp);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
@@ -446,14 +420,17 @@ bool sample_pool_load(uint16_t id, const char *path)
     const uint32_t bytes_per_frame = (uint32_t)info.block_align;
     const uint32_t data_size_aligned = info.data_size - (info.data_size % bytes_per_frame);
 
-    desc->data_offset = info.data_offset;
-    desc->length_frames = data_size_aligned / bytes_per_frame;
-    desc->bytes_per_frame = bytes_per_frame;
-    desc->data_start_frame = 0U;
-    desc->sample_rate = info.sample_rate;
-    desc->channels = info.channels;
-    desc->bits_per_sample = info.bits_per_sample;
-    desc->data = NULL;
+    sample_desc_t next_desc;
+    memset(&next_desc, 0, sizeof(next_desc));
+    (void)memcpy(next_desc.path, trimmed_path, path_len + 1U);
+    next_desc.data_offset = info.data_offset;
+    next_desc.length_frames = data_size_aligned / bytes_per_frame;
+    next_desc.bytes_per_frame = bytes_per_frame;
+    next_desc.data_start_frame = 0U;
+    next_desc.sample_rate = info.sample_rate;
+    next_desc.channels = info.channels;
+    next_desc.bits_per_sample = info.bits_per_sample;
+    next_desc.data = NULL;
 
     (void)f_close(&fp);
     if (sd_gate_held != 0U)
@@ -461,22 +438,23 @@ bool sample_pool_load(uint16_t id, const char *path)
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     }
 
-    if (desc->length_frames == 0U)
+    if (next_desc.length_frames == 0U)
     {
         sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
-        sample_pool_clear_entry(desc);
-        sample_pool_set_missing_entry(desc, trimmed_path);
         return false;
     }
 
-    if (sample_cache_prepare(id, desc->path) == 0U)
+    sample_desc_t *desc = &g_sample_pool[id];
+    sample_pool_release_slot(id);
+    if (sample_cache_prepare(id, next_desc.path) == 0U)
     {
         sample_pool_set_error_from_cache(sample_cache_get_last_error(id),
                                          (FRESULT)sample_cache_get_last_fresult(id));
         sample_pool_clear_entry(desc);
-        sample_pool_set_missing_entry(desc, trimmed_path);
         return false;
     }
+
+    *desc = next_desc;
 
     uint32_t cached_frames = 0U;
     desc->data = (float *)sample_cache_get_legacy_data(id, &cached_frames);

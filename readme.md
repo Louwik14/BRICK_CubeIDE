@@ -76,7 +76,7 @@ Current families:
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
 - `Synth`: `Opal`, `Braids`
-- `Sampler`: `OneShot`, `Slicer`, `Clip`, `Looper`
+- `Sampler`: `OneShot`, `Slicer`, `Clip`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
 
@@ -116,6 +116,7 @@ This separation is intentional. Do not add a second authority for the same state
   - `Shifter`: varispeed cursor followed by the local stereo pitch-shifter
 - `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
 - `Looper` TONE exposes `ARM` (`Off`/`Rec`/`Overd`), `LEN` (`Free`/`1`/`2`/`4`/`8`/`16`), and `PLAY` (`Off`/`Auto`); current implementation records simple `ARM=Rec` takes, keeps `ARM=Overd` as a bounded no-op until audio overdub exists, and streams playback from transient page-cache pages when `PLAY=Auto`
+- `Multi` exposes minimal TONE `INST` / `GAIN`; `INST` is display-only until the Multi browser/import UI is connected
 - legacy slice handling remains internal compatibility, not a product mode
 
 ### Braids

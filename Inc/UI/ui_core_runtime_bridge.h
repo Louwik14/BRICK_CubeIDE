@@ -26,6 +26,7 @@ typedef struct
     char wav_path[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX];
 } ui_core_runtime_bridge_looper_save_diag_t;
 
+void ui_core_runtime_bridge_init(void);
 bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
                                                       ui_track_family_t family,
                                                       uint8_t active_track_touched,

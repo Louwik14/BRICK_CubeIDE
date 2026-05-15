@@ -232,6 +232,54 @@ SECTIONS
     . = ALIGN(32);
   } >RAM_D3
 
+  .multi_load_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.multi_load_sdram)
+    *(.multi_load_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .storage_scratch_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.storage_scratch_sdram)
+    *(.storage_scratch_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .recorder_scratch_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.recorder_scratch_sdram)
+    *(.recorder_scratch_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .ui_state_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.ui_state_sdram)
+    *(.ui_state_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .control_state_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.control_state_sdram)
+    *(.control_state_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .storage_state_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.storage_state_sdram)
+    *(.storage_state_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);

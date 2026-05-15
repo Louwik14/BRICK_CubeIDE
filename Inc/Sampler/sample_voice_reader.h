@@ -23,6 +23,7 @@ typedef enum
 
 typedef struct
 {
+    sample_audio_key_t key;
     uint16_t sample_id;
     uint32_t start_frame;
     uint32_t region_begin;
@@ -87,7 +88,9 @@ typedef struct
 typedef struct
 {
     uint8_t cache_voice_id;
+    uint8_t cache_voice_valid;
     uint16_t sample_id;
+    sample_audio_key_t key;
     float position;
     float step;
     uint32_t frame_pos;

@@ -83,9 +83,9 @@ typedef struct
     FIL dst;
 } looper_storage_raw_export_ctx_t;
 
-static looper_storage_raw_export_ctx_t g_looper_raw_export;
-static looper_storage_raw_export_diag_t g_looper_raw_export_diag;
-UI_SDRAM static uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
+RECORDER_SCRATCH_SDRAM static looper_storage_raw_export_ctx_t g_looper_raw_export;
+RECORDER_SCRATCH_SDRAM static looper_storage_raw_export_diag_t g_looper_raw_export_diag;
+RECORDER_SCRATCH_SDRAM static uint8_t g_looper_raw_export_io[LOOPER_STORAGE_EXPORT_IO_BYTES];
 
 static void looper_storage_raw_export_log(const char *fmt, ...)
 {
@@ -472,6 +472,7 @@ static uint8_t looper_storage_raw_export_verify(void)
 
 void looper_storage_raw_init(void)
 {
+    memset(&g_looper_raw_export_diag, 0, sizeof(g_looper_raw_export_diag));
     g_looper_storage_raw_available = 0U;
     g_looper_storage_raw_last_error = LOOPER_STORAGE_RAW_ERROR_NOT_VALIDATED;
     g_looper_storage_raw_last_failed_slot = 0xFFU;

@@ -26,6 +26,8 @@
 #include "Sampler/voice_manager.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_braids_runtime.h"
@@ -100,6 +102,7 @@ void brick6_app_init(void)
     (void)looper_storage_raw_validate();
     multi_record_writer_init();
     sample_page_cache_init();
+    multi_sample_pool_init();
 
     brick6_sampler_bootstrap_load_pool();
 
@@ -177,11 +180,13 @@ void brick6_app_process(void)
     }
     else
     {
+        brick6_sampler_runtime_service();
         sample_cache_service(32768U);
         brick6_looper_runtime_service(8192U);
         if (brick6_looper_runtime_has_pending_sd_work() == 0U)
         {
             looper_storage_raw_export_service(8192U);
+            multi_sample_service_load(32768U);
         }
         pattern_load_service(4096U);
         sd_preview_process();

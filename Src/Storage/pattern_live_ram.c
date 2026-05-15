@@ -45,7 +45,7 @@ UI_SDRAM static PatternSaveV1 g_next_pattern;
 UI_SDRAM static PatternSaveV1 g_boot_pattern;
 UI_SDRAM static PatternSaveV1 g_pattern_load_work;
 UI_SDRAM static PatternSaveV1 g_pattern_load_ready;
-static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
+STORAGE_STATE_SDRAM static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
 
 static uint8_t g_active_bank;
 static uint8_t g_active_pattern;

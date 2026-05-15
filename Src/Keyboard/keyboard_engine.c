@@ -272,6 +272,19 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
+        if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)
+        {
+            if (is_note_on != 0U)
+            {
+                (void)brick6_sampler_runtime_trigger_multi_track_note_velocity(track, note, velocity);
+            }
+            else
+            {
+                brick6_sampler_runtime_note_off_multi_track_note(track, note);
+            }
+            return;
+        }
+
         if (is_note_on != 0U)
         {
             brick6_sampler_runtime_trigger_note_velocity(track, note, velocity);

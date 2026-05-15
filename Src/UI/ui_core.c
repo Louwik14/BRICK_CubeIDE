@@ -579,6 +579,7 @@ void ui_core_init(void)
     ui_core_clipboard_init();
     ui_core_feedback_init();
     ui_core_pattern_init();
+    ui_core_runtime_bridge_init();
     ui_macro_interaction_init();
     track_state_init();
     g_ui_track_state.active_track = 0U;

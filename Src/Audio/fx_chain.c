@@ -8,7 +8,7 @@
  *
  * Architecture:
  * - Appelé par: mixer.c, audio_float.c (compat historique).
- * - Appelle: fx_pool_get_slot, processeurs FX (EQ/SAT/GRANULAR).
+ * - Appelle: fx_pool_get_slot, processeurs FX (EQ/SAT/COMP).
  *
  * Contraintes temps réel:
  * - IRQ: oui.
@@ -23,7 +23,6 @@
 #include "fx_pool.h"
 #include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
-#include "fx_granular.h"
 #include "fx_daisy_comp.h"
 
 /**
@@ -70,10 +69,6 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
 
         case FX_SAT:
             fx_saturation_process_block((fx_saturation_t*)s->state, L, R, frames);
-            break;
-
-        case FX_GRANULAR:
-            fx_granular_process_block((fx_granular_state_t*)s->state, L, R, L, R, frames);
             break;
 
         case FX_DAISY_COMP:

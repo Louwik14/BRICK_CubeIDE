@@ -73,7 +73,7 @@ uint32_t wav_loader_get_capacity_frames(void)
 
 
 #if WAV_LOADER_HAS_FATFS
-static FATFS g_wav_fs;
+STORAGE_STATE_SDRAM static FATFS g_wav_fs;
 static uint8_t g_wav_fs_mounted;
 
 /**

@@ -5,6 +5,7 @@
 
 #include "Storage/pattern_live_ram.h"
 #include "Sampler/sample_pool.h"
+#include "Sampler/multi_sample_pool.h"
 
 #define PROJECT_V1_BANK_COUNT      16U
 #define PROJECT_V1_PATTERN_COUNT   16U
@@ -16,7 +17,8 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    24U /* Looper stretch params changed PARAM_COUNT-indexed project layout. */
+#define PROJECT_V1_FILE_VERSION    25U /* Adds project-level Sampler/Multi assignment paths and gains. */
+#define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
 
 typedef enum
 {
@@ -88,8 +90,24 @@ typedef struct
 
 typedef struct
 {
+    char path[PROJECT_V1_MULTI_PATH_MAX];
+    float gain;
+} project_v1_multi_track_t;
+
+typedef struct
+{
+    char restored_multi_path[PROJECT_V1_MULTI_PATH_MAX];
+    uint8_t restored_track;
+    uint8_t restore_load_requested;
+    uint8_t restore_missing_path;
+    uint8_t restore_load_error;
+} project_v1_multi_restore_diag_t;
+
+typedef struct
+{
     project_v1_state_block_t state;
     sample_pool_project_snapshot_t sample_pool;
+    project_v1_multi_track_t multi[SEQ_TRACK_COUNT];
     project_v1_macro_state_t macro;
     PatternSaveV1 live;
 } ProjectSaveV1;
@@ -144,6 +162,9 @@ uint8_t project_v1_macro_set_slot(uint8_t bank,
                                   uint8_t macro,
                                   uint8_t slot,
                                   const project_v1_macro_slot_t *in_slot);
+uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path);
+uint8_t project_v1_get_track_multi_path(uint8_t track, char *out_path, uint32_t out_size);
+void project_v1_get_multi_restore_diag(project_v1_multi_restore_diag_t *out_diag);
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project);
 uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_transport);
 uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,

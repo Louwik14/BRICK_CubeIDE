@@ -2,9 +2,13 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_page_cache.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define SAMPLE_STREAM_MAX_ACTIVE (16U)
 
 typedef struct
 {
@@ -57,8 +61,15 @@ typedef struct
  */
 void sample_stream_manager_init(void);
 void sample_stream_manager_reset(void);
+void sample_stream_manager_release_key(sample_audio_key_t key);
 void sample_stream_manager_release_sample(uint16_t sample_id);
+uint8_t sample_stream_manager_request_page_key(sample_audio_key_t key, uint32_t page_index);
+uint8_t sample_stream_manager_request_page_urgent_key(sample_audio_key_t key, uint32_t page_index);
+uint8_t sample_stream_manager_request_page_normal_key(sample_audio_key_t key, uint32_t page_index);
 uint8_t sample_stream_manager_request_page(uint16_t sample_id, uint32_t page_index);
+uint8_t sample_stream_manager_request_range_key(sample_audio_key_t key,
+                                                uint32_t start_frame,
+                                                uint32_t page_count);
 uint8_t sample_stream_manager_request_range(uint16_t sample_id,
                                             uint32_t start_frame,
                                             uint32_t page_count);

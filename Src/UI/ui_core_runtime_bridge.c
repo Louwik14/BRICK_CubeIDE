@@ -11,6 +11,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Storage/looper_storage.h"
+#include "Storage/memory_layout.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
@@ -65,7 +66,7 @@ static uint8_t g_looper_transport_start_prearmed = 0U;
 static uint8_t g_looper_export_last_progress = 0xFFU;
 static looper_storage_raw_export_phase_t g_looper_export_last_phase =
     LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;
-static ui_core_runtime_bridge_looper_save_diag_t g_looper_save_diag;
+UI_STATE_SDRAM static ui_core_runtime_bridge_looper_save_diag_t g_looper_save_diag;
 
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
 static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
@@ -95,6 +96,11 @@ static void ui_core_runtime_bridge_init_bulk_track_transition_ctx(ui_core_runtim
                                                                   const uint8_t midi_channel[UI_TRACK_COUNT],
                                                                   const uint8_t midi_source[UI_TRACK_COUNT],
                                                                   ui_core_runtime_bridge_post_sync_fn post_sync);
+
+void ui_core_runtime_bridge_init(void)
+{
+    memset(&g_looper_save_diag, 0, sizeof(g_looper_save_diag));
+}
 
 static void ui_core_runtime_bridge_looper_copy_diag_path(char *dst, const char *src)
 {

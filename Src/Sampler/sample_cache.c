@@ -16,12 +16,17 @@
 #define SAMPLE_CACHE_STREAM_START_PAGES (2U)
 #define SAMPLE_CACHE_STREAM_REVERSE_PAGES (4U)
 
-SDRAM_SAMPLES static sample_cache_desc_t g_sample_cache[SAMPLE_POOL_SIZE];
+SDRAM_SAMPLES static sample_cache_desc_t g_sample_cache[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
 static AUDIO_WARM uint8_t g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + 1U];
-static FIL g_sample_cache_file[SAMPLE_POOL_SIZE];
-static CTRL_STATE uint8_t g_sample_cache_file_open[SAMPLE_POOL_SIZE];
-static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_POOL_SIZE];
+static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+_Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
+               "hot sample cache ids must fit in the page-cache id space");
+_Static_assert(SAMPLE_POOL_PROJECT_CAPACITY >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
+               "project sample capacity must cover the hot cache capacity");
+#endif
 
 #if BRICK6_SAMPLER_DIAG_ENABLE
 static CTRL_STATE sample_cache_diag_snapshot_t g_sample_cache_diag;
@@ -34,10 +39,10 @@ static CTRL_STATE sample_cache_diag_snapshot_t g_sample_cache_diag;
 #define SAMPLE_CACHE_DIAG_ADD64(field, value) ((void)0)
 #endif
 
-static uint8_t sample_cache_open_source(uint16_t sample_id);
-static void sample_cache_close_stream_file(uint16_t sample_id);
+static uint8_t sample_cache_open_source(uint16_t sample_id, FIL *fp);
 static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
-                                                            sample_cache_desc_t *desc);
+                                                            sample_cache_desc_t *desc,
+                                                            FIL *fp);
 static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
                                                            sample_cache_desc_t *desc);
 static void sample_cache_cursor_reset(sample_stream_cursor_t *cursor);
@@ -66,7 +71,9 @@ static uint8_t sample_cache_voice_cursor_prepare(sample_cache_voice_t *voice,
                                                  const sample_cache_desc_t *desc,
                                                  uint32_t frame_index);
 static void sample_cache_invalidate_voices_for_sample(uint16_t sample_id);
+#if BRICK6_SAMPLER_DIAG_ENABLE
 static uint32_t sample_cache_diag_count_active_voices(void);
+#endif
 static void sample_cache_queue_active_stream_pages(void);
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
 static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
@@ -460,7 +467,7 @@ static uint8_t sample_cache_voice_cursor_prepare(sample_cache_voice_t *voice,
 
 static void sample_cache_release_slot(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return;
     }
@@ -468,25 +475,21 @@ static void sample_cache_release_slot(uint16_t sample_id)
     sample_cache_invalidate_voices_for_sample(sample_id);
     sample_stream_manager_release_sample(sample_id);
     sample_page_cache_clear_sample(sample_id);
-
-    if (g_sample_cache_file_open[sample_id] != 0U)
-    {
-        (void)f_close(&g_sample_cache_file[sample_id]);
-        g_sample_cache_file_open[sample_id] = 0U;
-    }
 }
 
 static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
-                                                            sample_cache_desc_t *desc)
+                                                            sample_cache_desc_t *desc,
+                                                            FIL *fp)
 {
-    if ((desc == 0) || (desc->total_frames == 0U) || (desc->mode != SAMPLE_CACHE_MODE_FULL))
+    if ((desc == 0) || (fp == 0) || (desc->total_frames == 0U)
+        || (desc->mode != SAMPLE_CACHE_MODE_FULL))
     {
         return 0U;
     }
 
     const sample_page_load_result_t page_result =
         sample_page_cache_load_full_sample(sample_id,
-                                           &g_sample_cache_file[sample_id],
+                                           fp,
                                            &desc->info,
                                            desc->total_frames,
                                            desc->data_offset,
@@ -651,7 +654,7 @@ static uint32_t sample_cache_trim_path_copy(char *dst, uint32_t dst_size, const 
     return len;
 }
 
-static uint8_t sample_cache_format_supported(const wav_info_t *info)
+uint8_t sample_cache_wav_format_supported(const wav_info_t *info)
 {
     if (info == 0)
     {
@@ -660,40 +663,35 @@ static uint8_t sample_cache_format_supported(const wav_info_t *info)
 
     return (((info->audio_format == 1U) || (info->audio_format == 65534U))
             && ((info->channels == 1U) || (info->channels == 2U))
-            && ((info->bits_per_sample == 16U) || (info->bits_per_sample == 24U))
+            && ((info->bits_per_sample == 16U)
+                || (info->bits_per_sample == 24U)
+                || (info->bits_per_sample == 32U))
             && (info->sample_rate == 48000U)
             && (info->block_align != 0U)) ? 1U : 0U;
 }
 
-static uint8_t sample_cache_open_source(uint16_t sample_id)
+static uint8_t sample_cache_open_source(uint16_t sample_id, FIL *fp)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (fp == 0))
     {
         return 0U;
-    }
-
-    if (g_sample_cache_file_open[sample_id] != 0U)
-    {
-        return 1U;
     }
 
     sample_cache_desc_t *const desc = &g_sample_cache[sample_id];
-    FRESULT fr = f_open(&g_sample_cache_file[sample_id], desc->path, FA_READ);
+    FRESULT fr = f_open(fp, desc->path, FA_READ);
     if (fr != FR_OK)
     {
         g_sample_cache_last_fresult[sample_id] = fr;
         return 0U;
     }
 
-    g_sample_cache_file_open[sample_id] = 1U;
     const FSIZE_t offset = (FSIZE_t)desc->data_offset
                          + ((FSIZE_t)desc->source_read_frame * (FSIZE_t)desc->info.block_align);
-    fr = f_lseek(&g_sample_cache_file[sample_id], offset);
+    fr = f_lseek(fp, offset);
     if (fr != FR_OK)
     {
         g_sample_cache_last_fresult[sample_id] = fr;
-        (void)f_close(&g_sample_cache_file[sample_id]);
-        g_sample_cache_file_open[sample_id] = 0U;
+        (void)f_close(fp);
         return 0U;
     }
 
@@ -744,7 +742,7 @@ static sample_cache_block_status_t sample_cache_inspect_voice_block(uint8_t voic
     }
 
     const sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         return SAMPLE_CACHE_BLOCK_NOT_READY;
     }
@@ -848,7 +846,7 @@ static sample_cache_block_status_t sample_cache_inspect_voice_block(uint8_t voic
 
 static uint8_t sample_cache_start_frame_available(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return 0U;
     }
@@ -875,7 +873,7 @@ static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *d
 static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
                                                         const sample_cache_desc_t *desc)
 {
-    if ((sample_id >= SAMPLE_POOL_SIZE) || (desc == 0))
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (desc == 0))
     {
         return 0U;
     }
@@ -899,13 +897,14 @@ static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
     return (sample_page_cache_get_page_state(sample_id, last_page) == SAMPLE_PAGE_READY) ? 1U : 0U;
 }
 
+#if BRICK6_SAMPLER_DIAG_ENABLE
 static uint32_t sample_cache_diag_count_active_voices(void)
 {
     uint32_t active = 0U;
     for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
     {
         if ((g_sample_cache_voice[i].active != 0U)
-            && (g_sample_cache_voice[i].sample_id < SAMPLE_POOL_SIZE))
+            && (g_sample_cache_voice[i].sample_id < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
         {
             active++;
         }
@@ -913,6 +912,7 @@ static uint32_t sample_cache_diag_count_active_voices(void)
 
     return active;
 }
+#endif
 
 static uint8_t sample_cache_any_voice_active(uint16_t sample_id)
 {
@@ -933,7 +933,7 @@ static void sample_cache_queue_active_stream_pages(void)
     for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
     {
         const sample_cache_voice_t *const voice = &g_sample_cache_voice[i];
-        if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+        if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
         {
             continue;
         }
@@ -979,15 +979,6 @@ static void sample_cache_queue_active_stream_pages(void)
     }
 }
 
-static void sample_cache_close_stream_file(uint16_t sample_id)
-{
-    if ((sample_id < SAMPLE_POOL_SIZE) && (g_sample_cache_file_open[sample_id] != 0U))
-    {
-        (void)f_close(&g_sample_cache_file[sample_id]);
-        g_sample_cache_file_open[sample_id] = 0U;
-    }
-}
-
 static void sample_cache_finish_playback(sample_cache_desc_t *desc,
                                          sample_cache_voice_t *voice,
                                          sample_cache_state_t state)
@@ -1013,7 +1004,6 @@ static void sample_cache_finish_playback(sample_cache_desc_t *desc,
     }
     else if (desc->mode == SAMPLE_CACHE_MODE_STREAM)
     {
-        sample_cache_close_stream_file(sample_id);
         desc->state = (state == SAMPLE_CACHE_UNDERRUN) ? SAMPLE_CACHE_UNDERRUN : SAMPLE_CACHE_NEEDS_REPREPARE;
         desc->reprepare_start_frame = 0U;
     }
@@ -1025,7 +1015,7 @@ static void sample_cache_finish_playback(sample_cache_desc_t *desc,
 
 static uint16_t sample_cache_pick_refill_candidate(void)
 {
-    for (uint16_t sample_id = 0U; sample_id < SAMPLE_POOL_SIZE; ++sample_id)
+    for (uint16_t sample_id = 0U; sample_id < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY; ++sample_id)
     {
         const sample_cache_desc_t *const desc = &g_sample_cache[sample_id];
         if (desc->mode != SAMPLE_CACHE_MODE_STREAM)
@@ -1041,12 +1031,12 @@ static uint16_t sample_cache_pick_refill_candidate(void)
         }
     }
 
-    return SAMPLE_POOL_SIZE;
+    return SAMPLE_CACHE_HOT_SAMPLE_CAPACITY;
 }
 
 static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_budget)
 {
-    if ((sample_id >= SAMPLE_POOL_SIZE) || (byte_budget < g_sample_cache[sample_id].info.block_align))
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (byte_budget < g_sample_cache[sample_id].info.block_align))
     {
         return 0U;
     }
@@ -1126,14 +1116,9 @@ void sample_cache_init(void)
     sample_stream_manager_init();
     sample_cache_diag_reset();
 
-    for (uint32_t i = 0U; i < SAMPLE_POOL_SIZE; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY; ++i)
     {
-        if (g_sample_cache_file_open[i] != 0U)
-        {
-            (void)f_close(&g_sample_cache_file[i]);
-        }
         sample_cache_clear_desc(&g_sample_cache[i]);
-        g_sample_cache_file_open[i] = 0U;
         g_sample_cache_last_fresult[i] = FR_OK;
     }
 
@@ -1177,7 +1162,7 @@ void sample_cache_diag_get_snapshot(sample_cache_diag_snapshot_t *out_snapshot)
 
 void sample_cache_clear(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return;
     }
@@ -1189,7 +1174,7 @@ void sample_cache_clear(uint16_t sample_id)
 
 uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return 0U;
     }
@@ -1219,6 +1204,8 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
     }
 
     uint8_t ok = 0U;
+    uint8_t fp_open = 0U;
+    FIL fp;
     if (sd_access_fs_mount_if_needed() == 0U)
     {
         desc->last_error = 3U;
@@ -1226,20 +1213,21 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
         goto done;
     }
 
-    if (sample_cache_open_source(sample_id) == 0U)
+    if (sample_cache_open_source(sample_id, &fp) == 0U)
     {
         desc->last_error = 4U;
         goto done;
     }
+    fp_open = 1U;
 
-    if (wav_parser_parse_info(&g_sample_cache_file[sample_id], &desc->info) == 0U)
+    if (wav_parser_parse_info(&fp, &desc->info) == 0U)
     {
         desc->last_error = 5U;
         g_sample_cache_last_fresult[sample_id] = FR_INVALID_OBJECT;
         goto done;
     }
 
-    if (sample_cache_format_supported(&desc->info) == 0U)
+    if (sample_cache_wav_format_supported(&desc->info) == 0U)
     {
         desc->last_error = 6U;
         g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
@@ -1266,17 +1254,12 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
         desc->cache = 0;
         desc->cache_window_start_frame = 0U;
         desc->state = SAMPLE_CACHE_PREFILLING;
-        if (sample_cache_try_prepare_full_via_page_cache(sample_id, desc) == 0U)
+        if (sample_cache_try_prepare_full_via_page_cache(sample_id, desc, &fp) == 0U)
         {
             goto done;
         }
 
         ok = 1U;
-        if (g_sample_cache_file_open[sample_id] != 0U)
-        {
-            (void)f_close(&g_sample_cache_file[sample_id]);
-            g_sample_cache_file_open[sample_id] = 0U;
-        }
         goto done;
     }
 
@@ -1289,13 +1272,12 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
     }
 
     ok = 1U;
-    if (g_sample_cache_file_open[sample_id] != 0U)
-    {
-        (void)f_close(&g_sample_cache_file[sample_id]);
-        g_sample_cache_file_open[sample_id] = 0U;
-    }
 
 done:
+    if (fp_open != 0U)
+    {
+        (void)f_close(&fp);
+    }
     if (ok == 0U)
     {
         sample_cache_release_slot(sample_id);
@@ -1329,7 +1311,7 @@ void sample_cache_service(uint32_t byte_budget)
     while (remaining != 0U)
     {
         const uint16_t sample_id = sample_cache_pick_refill_candidate();
-        if (sample_id >= SAMPLE_POOL_SIZE)
+        if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
         {
             break;
         }
@@ -1367,12 +1349,12 @@ uint8_t sample_cache_has_pending_sd_work(void)
         return 1U;
     }
 
-    return (sample_cache_pick_refill_candidate() < SAMPLE_POOL_SIZE) ? 1U : 0U;
+    return (sample_cache_pick_refill_candidate() < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) ? 1U : 0U;
 }
 
 uint8_t sample_cache_is_ready(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return 0U;
     }
@@ -1393,7 +1375,7 @@ uint8_t sample_cache_is_ready(uint16_t sample_id)
 
 sample_cache_state_t sample_cache_get_state(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return SAMPLE_CACHE_ERROR;
     }
@@ -1403,7 +1385,7 @@ sample_cache_state_t sample_cache_get_state(uint16_t sample_id)
 
 uint8_t sample_cache_get_last_error(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return 1U;
     }
@@ -1413,7 +1395,7 @@ uint8_t sample_cache_get_last_error(uint16_t sample_id)
 
 uint8_t sample_cache_get_last_fresult(uint16_t sample_id)
 {
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return (uint8_t)FR_INVALID_PARAMETER;
     }
@@ -1423,7 +1405,7 @@ uint8_t sample_cache_get_last_fresult(uint16_t sample_id)
 
 uint8_t sample_cache_start_voice_at(uint16_t sample_id, uint8_t voice_id, uint32_t frame_index)
 {
-    if ((sample_id >= SAMPLE_POOL_SIZE) || (voice_id >= SAMPLE_CACHE_MAX_VOICES))
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (voice_id >= SAMPLE_CACHE_MAX_VOICES))
     {
         return 0U;
     }
@@ -1492,7 +1474,7 @@ void sample_cache_commit_read_block(uint8_t voice_id, uint32_t consumed_frames)
     }
 
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         return;
     }
@@ -1609,7 +1591,7 @@ uint8_t sample_cache_try_acquire_span(uint16_t sample_id,
     }
 
     memset(out_span, 0, sizeof(*out_span));
-    if ((sample_id >= SAMPLE_POOL_SIZE) || (max_frames == 0U))
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (max_frames == 0U))
     {
         return 0U;
     }
@@ -1716,7 +1698,7 @@ void sample_cache_set_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos)
     }
 
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         return;
     }
@@ -1732,7 +1714,7 @@ void sample_cache_update_voice_frame_pos(uint8_t voice_id, uint32_t frame_pos)
     }
 
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         return;
     }
@@ -1764,7 +1746,7 @@ void sample_cache_set_voice_direction(uint8_t voice_id, int8_t direction)
     }
 
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         return;
     }
@@ -1815,7 +1797,7 @@ uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, fl
     }
 
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         return 0U;
     }
@@ -1873,7 +1855,7 @@ uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, fl
 uint8_t sample_cache_peek_frame(uint16_t sample_id, uint32_t frame_index, float *out_l, float *out_r)
 {
     SAMPLE_CACHE_DIAG_INC(peek_frame_calls);
-    if ((sample_id >= SAMPLE_POOL_SIZE) || (out_l == 0) || (out_r == 0))
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (out_l == 0) || (out_r == 0))
     {
         return 0U;
     }
@@ -1926,7 +1908,7 @@ const float *sample_cache_get_legacy_data(uint16_t sample_id, uint32_t *out_fram
         *out_frames = 0U;
     }
 
-    if (sample_id >= SAMPLE_POOL_SIZE)
+    if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
         return 0;
     }
@@ -1952,7 +1934,7 @@ void sample_cache_stop_voice(uint8_t voice_id)
     }
 
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
-    if ((voice->active != 0U) && (voice->sample_id < SAMPLE_POOL_SIZE))
+    if ((voice->active != 0U) && (voice->sample_id < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
     {
         sample_cache_desc_t *const desc = &g_sample_cache[voice->sample_id];
         const uint16_t sample_id = voice->sample_id;
@@ -1960,7 +1942,6 @@ void sample_cache_stop_voice(uint8_t voice_id)
         desc->stream_active = sample_cache_any_voice_active(sample_id);
         if ((desc->state == SAMPLE_CACHE_PLAYING) && (desc->stream_active == 0U))
         {
-            sample_cache_close_stream_file(sample_id);
             if (desc->fully_cached != 0U)
             {
                 desc->state = SAMPLE_CACHE_READY_FULL;

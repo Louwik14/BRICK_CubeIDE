@@ -9,6 +9,7 @@
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
 #include "Param/param_filter.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_pool.h"
 #include "midi.h"
 #include "mixer.h"
@@ -24,6 +25,26 @@ static float param_backend_clamp_value(float v, float lo, float hi)
         return hi;
     }
     return v;
+}
+
+static uint8_t param_backend_is_vca_param(param_id_t id)
+{
+    return (uint8_t)((id == PARAM_VCA_ATTACK)
+                     || (id == PARAM_VCA_DECAY)
+                     || (id == PARAM_VCA_SUSTAIN)
+                     || (id == PARAM_VCA_RELEASE));
+}
+
+static uint8_t param_backend_ctx_is_sampler_clip_or_looper(const track_runtime_ctx_t *ctx)
+{
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP)
+                          || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))) ? 1U : 0U);
 }
 
 static uint8_t param_backend_clip_size_index(float value)
@@ -42,6 +63,38 @@ static uint16_t param_backend_clip_grain_size_value(uint8_t index)
 {
     static const uint16_t values[] = {384U, 512U, 768U, 1024U, 1536U, 2048U};
     return values[(index <= 5U) ? index : 5U];
+}
+
+static uint16_t param_backend_multi_instrument_from_selector(float value)
+{
+    if (value < 0.5f)
+    {
+        return MULTI_SAMPLE_POOL_INVALID_ID;
+    }
+
+    const uint8_t selector = (uint8_t)(param_backend_clamp_value(value,
+                                                                 0.0f,
+                                                                 (float)MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+                                      + 0.5f);
+    uint8_t current = 1U;
+    uint16_t last_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+
+    for (uint16_t id = 0U; id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++id)
+    {
+        if (multi_sample_pool_get_instrument(id) == NULL)
+        {
+            continue;
+        }
+
+        last_instrument_id = id;
+        if (current == selector)
+        {
+            return id;
+        }
+        current++;
+    }
+
+    return last_instrument_id;
 }
 
 static void param_backend_project_looper_stretch(uint8_t track,
@@ -303,6 +356,12 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
     switch (id)
     {
         case PARAM_SAMPLER_SAMPLE:
+            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
+            {
+                brick6_sampler_runtime_set_multi_instrument(track,
+                                                            param_backend_multi_instrument_from_selector(value));
+                return 1U;
+            }
             if (sample_pool_is_loaded((uint16_t)(param_backend_clamp_value(value, 0.0f, 63.0f) + 0.5f)) == 0U)
             {
                 brick6_sampler_runtime_stop(track);
@@ -315,6 +374,16 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_sample(track, (uint16_t)(param_backend_clamp_value(value, 0.0f, 63.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_GAIN:
+            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
+            {
+                const float gain = param_backend_clamp_value(value, 0.0f, 2.0f);
+                if ((update_base_state != 0U) && (state != NULL))
+                {
+                    state->gain = gain;
+                }
+                brick6_sampler_runtime_set_multi_gain(track, gain);
+                return 1U;
+            }
             if ((update_base_state != 0U) && (state != NULL))
             {
                 state->gain = param_backend_clamp_value(value, 0.0f, 2.0f);
@@ -698,6 +767,14 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
 {
     if ((ctx == NULL) || (track_runtime_is_audio_routable(track) == 0U))
     {
+        return 0U;
+    }
+
+    if ((param_backend_is_vca_param(id) != 0U)
+            && (param_backend_ctx_is_sampler_clip_or_looper(ctx) != 0U))
+    {
+        mixer_track_vca_all_notes_off((uint32_t)ctx->mix_track_id);
+        mixer_set_track_vca_enabled((uint32_t)ctx->mix_track_id, 0U);
         return 0U;
     }
 

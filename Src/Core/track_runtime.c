@@ -98,6 +98,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG;
         case UI_TRACK_TYPE_LOOPER:
             return TRACK_RUNTIME_TYPE_LOOPER;
+        case UI_TRACK_TYPE_MULTI:
+            return TRACK_RUNTIME_TYPE_MULTI;
 
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
@@ -252,6 +254,26 @@ static uint8_t track_runtime_param_is_looper_only(param_id_t param)
                      || (param == PARAM_LOOPER_GRAIN));
 }
 
+static uint8_t track_runtime_param_is_vca(param_id_t param)
+{
+    return (uint8_t)((param == PARAM_VCA_ATTACK)
+                     || (param == PARAM_VCA_DECAY)
+                     || (param == PARAM_VCA_SUSTAIN)
+                     || (param == PARAM_VCA_RELEASE));
+}
+
+static uint8_t track_runtime_ctx_is_sampler_clip_or_looper(const track_runtime_ctx_t *ctx)
+{
+    if (ctx == NULL)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                      && ((ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP)
+                          || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))) ? 1U : 0U);
+}
+
 static const param_id_t g_track_runtime_tone_slots_opal[] = {
     PARAM_OPAL_PATCH,
     PARAM_OPAL_INDEX,
@@ -309,6 +331,11 @@ static const param_id_t g_track_runtime_tone_slots_looper[] = {
     PARAM_LOOPER_STRETCH,
     PARAM_LOOPER_PITCH,
     PARAM_LOOPER_GRAIN
+};
+
+static const param_id_t g_track_runtime_tone_slots_multi[] = {
+    PARAM_SAMPLER_SAMPLE,
+    PARAM_SAMPLER_GAIN
 };
 
 static const param_id_t g_track_runtime_tone_slots_midi[] = {
@@ -379,6 +406,11 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
         case TRACK_RUNTIME_TYPE_LOOPER:
             *out_table = g_track_runtime_tone_slots_looper;
             *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_looper) / sizeof(g_track_runtime_tone_slots_looper[0]));
+            return 1U;
+
+        case TRACK_RUNTIME_TYPE_MULTI:
+            *out_table = g_track_runtime_tone_slots_multi;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_multi) / sizeof(g_track_runtime_tone_slots_multi[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_MIDI:
@@ -478,6 +510,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(const track_runtime_ctx_t
 
     if ((((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SYNTH)
             || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_SAMPLER)
+                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_CLIP)
                 && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_LOOPER))
             || ((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_DRUM))
             || (((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_INPUT)
@@ -539,6 +572,11 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 {
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    {
+        return 0U;
+    }
+
+    if (track_runtime_ctx_is_sampler_clip_or_looper(ctx) != 0U)
     {
         return 0U;
     }
@@ -684,7 +722,8 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
 
     if ((type == TRACK_RUNTIME_TYPE_SAMPLER)
             || (type == TRACK_RUNTIME_TYPE_SLICER)
-            || (type == TRACK_RUNTIME_TYPE_CLIP))
+            || (type == TRACK_RUNTIME_TYPE_CLIP)
+            || (type == TRACK_RUNTIME_TYPE_MULTI))
     {
         track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_SAMPLER, ctx->track_id);
         return;
@@ -1561,6 +1600,11 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MASTER))
+            {
+                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            }
+            if ((track_runtime_param_is_vca(param) != 0U)
+                    && (track_runtime_ctx_is_sampler_clip_or_looper(ctx) != 0U))
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }

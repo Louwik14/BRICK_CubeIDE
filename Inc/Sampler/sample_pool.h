@@ -3,7 +3,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define SAMPLE_POOL_SIZE (64U)
+#define SAMPLE_POOL_PROJECT_CAPACITY (1024U)
+#define SAMPLE_CACHE_HOT_SAMPLE_CAPACITY (64U)
+
+/*
+ * Temporary compatibility alias: the visible project/UI/persistence path is
+ * still capped at the hot cache size in this pass.
+ */
+#define SAMPLE_POOL_SIZE (SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
 #define SAMPLE_POOL_PATH_MAX (64U)
 
 typedef enum

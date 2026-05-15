@@ -182,7 +182,8 @@ Sorties de Z2:
   - autorite conservee dans `track_runtime`,
   - le backend Sampler existant reste reutilise tel quel.
 - Gate note/mix:
-  - le helper central `track_runtime_supports_vca_gate()` inclut le sampler, pour reutiliser le gate VCA mixer sans autorite parallele.
+  - le helper central `track_runtime_supports_vca_gate()` inclut `Sampler/OneShot` et `Sampler/Slicer`, mais exclut explicitement `Sampler/Clip` et `Sampler/Looper`.
+  - `Sampler/Clip` utilise `brick6_sampler_runtime_note_off()` pour son contrat `Trig`/`Launch`; il ne passe pas par le gate VCA mixer.
 - Invariants conserves:
   - pas de pipeline audio parallele,
   - pas de seconde autorite runtime,
@@ -273,10 +274,11 @@ Sorties de Z2:
 - `Sampler/Looper` est un nouveau type dans la famille existante `Sampler`; aucune nouvelle family n'est introduite.
 - Z2 expose `TRACK_RUNTIME_TYPE_LOOPER`, bind `BOUND` avec `TRACK_RUNTIME_ENGINE_LOOPER`: le playback est audio-routable via une lane mixer normale, sans sample_pool projet et sans slot Sampler detourne.
 - Le hook Z1 record Looper reste un producteur externe pilote par ROUT + writer actif; le playback transient est l'executant runtime dedie `brick6_looper_runtime`.
-- `brick6_looper_runtime` garde l'autorite playback par track Looper et utilise des ids page-cache transients hors `sample_pool` (`SAMPLE_POOL_SIZE + track_id`) uniquement comme cles RAM/SD internes.
+- `brick6_looper_runtime` garde l'autorite playback par track Looper et utilise des ids page-cache transients hors `sample_pool` (`SAMPLE_PAGE_CACHE_LOOPER_ID_BASE + track_id`) uniquement comme cles RAM/SD internes.
 - `ARM/LEN/PLAY` sont autorises uniquement pour `Sampler/Looper`; ils restent hors p-lock PLAY et hors destination LFO tant que le workflow record musical n'est pas branche.
 - Le mode `ARP` brut est projete en vue `ROUT` pour `Sampler/Looper`; le routing selectionne des tracks logiques sources et ne cree pas d'autorite audio speciale.
 - `PLAY=Off/Auto` reste un parametre de workflow: il ne passe pas par le scheduler note, il pilote seulement l'armement playback Looper au transport via le runtime dedie.
+- `Sampler/Looper` n'expose pas et n'applique pas VCA; son niveau reste porte par `PARAM_MIX_LEVEL`.
 
 ## 24. Contrat retrait buffer master
 

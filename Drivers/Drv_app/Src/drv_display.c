@@ -370,13 +370,32 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 
 const font_t FONT_5X7 = { .id = 0U };
 const font_t FONT_4X6 = { .id = 1U };
+const font_t FONT_MINIMAL3X3 = { .id = 2U };
+const font_t FONT_3X3BASIC = { .id = 3U };
+const font_t FONT_PEAR = { .id = 4U };
 
 void drv_display_set_font(const font_t *font)
 {
     if (font == &FONT_4X6)
+    {
         g_active_font = u8g2_font_tom_thumb_4x6_tr;
+    }
+    else if (font == &FONT_MINIMAL3X3)
+    {
+        g_active_font = u8g2_font_minimal3x3_tu;
+    }
+    else if (font == &FONT_3X3BASIC)
+    {
+        g_active_font = u8g2_font_3x3basic_tr;
+    }
+    else if (font == &FONT_PEAR)
+    {
+        g_active_font = u8g2_font_pearfont_tr;
+    }
     else
+    {
         g_active_font = u8g2_font_5x7_tr;
+    }
 
     u8g2_SetFont(&g_u8g2, g_active_font);
 }

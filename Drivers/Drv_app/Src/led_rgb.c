@@ -244,8 +244,17 @@ static uint8_t led_macro_pressure_depth_scale(uint8_t hall, uint8_t base_scale)
     return current_scale;
 }
 
+static button_id_t led_param_button_for_led(led_id_t led);
+
 static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets, button_id_t macro_button)
 {
+    const button_id_t button = led_param_button_for_led(led);
+    if (ui_navigation_is_ensemble_button_available(button) == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
     uint8_t r = LED_FIXED_GREEN_R;
     uint8_t g = LED_FIXED_GREEN_G;
     uint8_t b = LED_FIXED_GREEN_B;
@@ -319,6 +328,19 @@ static button_id_t led_macro_param_to_button(param_id_t param)
         default:
             return BTN_COUNT;
     }
+}
+
+static button_id_t led_param_button_for_led(led_id_t led)
+{
+    for (button_id_t button = BTN_PARAM_1; button <= BTN_PARAM_8; ++button)
+    {
+        if (led_remap_param_led_for_button(button) == led)
+        {
+            return button;
+        }
+    }
+
+    return BTN_COUNT;
 }
 
 static void led_apply_default_hall_scene(uint8_t hall)

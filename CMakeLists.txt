@@ -92,6 +92,10 @@ file(GLOB SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.cpp"
 )
 
+list(REMOVE_ITEM SRC_AUDIO_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_granular.cpp"
+)
+
 list(APPEND SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_reverb_revb.cpp"

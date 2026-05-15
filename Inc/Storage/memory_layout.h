@@ -52,6 +52,24 @@
 /* UI / non real-time bulk buffers */
 #define UI_SDRAM SEC_ATTR(".sdram_ui") ALIGN32
 
+/* UI-owned state that is cold enough to keep out of D1. */
+#define UI_STATE_SDRAM SEC_ATTR(".ui_state_sdram") ALIGN32
+
+/* Low-rate control state that is not audio IRQ-owned. */
+#define CONTROL_STATE_SDRAM SEC_ATTR(".control_state_sdram") ALIGN32
+
+/* Storage metadata/state, not DMA-owned and not audio IRQ-owned. */
+#define STORAGE_STATE_SDRAM SEC_ATTR(".storage_state_sdram") ALIGN32
+
+/* Cooperative Sampler/Multi load queues and state, never audio IRQ-owned. */
+#define MULTI_LOAD_SDRAM SEC_ATTR(".multi_load_sdram") ALIGN32
+
+/* Storage conversion/scratch state used only by SD/FatFs services. */
+#define STORAGE_SCRATCH_SDRAM SEC_ATTR(".storage_scratch_sdram") ALIGN32
+
+/* Recorder/export scratch used by SD writer/export services, not IRQ producers. */
+#define RECORDER_SCRATCH_SDRAM SEC_ATTR(".recorder_scratch_sdram") ALIGN32
+
 /* Dedicated SDRAM arena for resident samples. */
 #define SDRAM_SAMPLES SEC_ATTR(".sdram_samples") ALIGN32
 

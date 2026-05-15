@@ -414,6 +414,7 @@ Points factuels:
 - `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
 - `UI_TRACK_TYPE_ONE_SHOT` est le type canonique de cette famille; `UI_TRACK_TYPE_SAMPLER` reste un alias de compat snapshot.
 - `UI_TRACK_TYPE_CLIP` est expose comme type produit distinct dans la meme famille.
+- `UI_TRACK_TYPE_MULTI` est expose comme type produit distinct dans la meme famille; le workflow de gestion/import du pool projet passe par `Settings > Multi-Sample`.
 - Les anciens labels/types UI `TB3` et `DX7` ne sont plus exposes ni conserves comme compat catalogue.
 - `UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Clip`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Clip`.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
@@ -429,6 +430,11 @@ Points factuels:
 - `Stretch=Speed` conserve le varispeed courant; `Stretch=Shifter` conserve le cursor Speed puis applique le shifter stereo local.
 - En `Shifter`, `Grain` pilote la taille de fenetre; `Hop` et `Search` restent stockes mais non exposes et sans effet DSP.
 - `STR` utilise les valeurs bornees `Grain = 384/512/768/1024/1536/2048`, avec default `Grain=1536`.
+- Le rendu UI `Multi` expose une page TONE minimale:
+  - `INST`: selecteur local parmi `NONE` et les instruments deja presents dans le `multi_sample_pool`, sans scan SD, import, reload ni browser; l'edition assigne seulement l'id instrument a la track `Sampler/Multi` active,
+  - `GAIN`: edition du gain Multi runtime.
+- Le clavier live `Sampler/Multi` reutilise le dispatch track-aware `keyboard_engine`: note-on appelle le trigger Multi runtime de la track, note-off appelle `brick6_sampler_runtime_note_off_multi_track_note(track,note)` pour raccorder les voix Multi au lifecycle VCA existant.
+- `VCA` n'est pas expose pour `Sampler/Clip`; le niveau utilisateur passe par `MIX/Level`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
 - `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.
 - `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.
@@ -491,6 +497,62 @@ Points factuels:
 - `TIME_R` et `WID` sont visibles uniquement en DUAL; en `Tap`, `TIME_R` sert de temps principal.
 - `SWING` et `ACCENT` sont retires de la surface delay produit V1.
 
+## 14.d Contrat Settings Samples split browser
+
+- `Settings > SAMPLES` ouvre directement le browser Sampler split, sans passer par l'ancien detail `Slot > Load/Preview/Clear`.
+- Surface OLED permanente:
+  - colonne gauche: bibliotheque SD depuis `0:/Samples`, fichiers WAV et dossiers;
+  - colonne droite: slots projet `sample_pool` existants;
+  - les labels visibles retirent l'extension `.wav`, les paths internes conservent le nom complet.
+- Controles:
+  - `Enc1`: navigation bibliotheque gauche;
+  - `Enc2`: navigation slots droite;
+  - `Enc3`: focus gauche/droite borne, sans wrap;
+  - `Enc4`: volume preview `sd_preview`;
+  - focus gauche par defaut.
+- Actions focus gauche:
+  - `COPY` charge un fichier dans le premier slot libre; si la selection est un dossier, entre dans ce dossier;
+  - `SHIFT+COPY` remplace le slot selectionne a droite, avec confirmation si le slot est non vide;
+  - `PASTE` remonte au dossier parent ou sort du browser depuis `0:/Samples`;
+  - `SHIFT+PASTE` est ignore.
+- Actions focus droite:
+  - `COPY` clear le slot selectionne avec confirmation `COPY=YES / PASTE=NO`;
+  - `PASTE` remonte au dossier parent ou sort du browser depuis `0:/Samples`;
+  - `SHIFT+COPY` remplace le slot selectionne par le fichier gauche courant, avec confirmation si le slot est non vide;
+  - `SHIFT+PASTE` est ignore.
+- Les appuis Hall dans ce browser declenchent la preview de la selection surlignee: fichier gauche si focus bibliotheque, sample du slot si focus slots; aucun acces FatFs n'est ajoute au chemin audio IRQ.
+- Le clear de slot ne supprime jamais le fichier SD. Les operations delete/rename/move de fichiers SD restent hors contrat UI.
+- Si un load vers slot Sampler refuse un WAV PCM convertible car incompatible avec le format runtime 48 kHz, le browser propose `CONVERT TO 48K ?`.
+- `COPY` confirme la conversion; `PASTE` annule.
+- Si transport, start pending, record writer ou export Looper est actif au moment du YES, l'UI affiche `STOP AUDIO TO CONVERT` et annule: l'utilisateur doit stopper l'audio lui-meme.
+- Conversion acceptee: la preview est stoppee, `wav_convert` convertit destructivement le fichier source en WAV PCM24 stereo 48 kHz avec progression `CONVERT n%`, puis l'UI relance le load du slot cible sur le meme path.
+- Pendant la conversion, les events du browser sont ignores pour eviter navigation/load concurrente; le chemin preview et le runtime audio restent inchanges.
+
+## 14.e Contrat Settings Multi-Sample split browser
+
+- `Settings > Multi-Sample` ouvre un browser split dedie au pool projet `Sampler/Multi`, sans modifier la page TONE `INST | GAIN`.
+- Surface OLED:
+  - header `MULTI used/512`, base sur la capacite sample du `multi_sample_pool`;
+  - colonne gauche: dossiers instruments sous `0:/Multi/`, sans exposition des WAV internes;
+  - colonne droite: slots instruments `multi_sample_pool` `M01..M32`;
+  - la colonne gauche affiche le nom instrument et le nombre de samples si `.brickmulti` existe, sinon `NEW`;
+  - la colonne droite affiche slot, nom instrument et samples consommes.
+- Controles:
+  - `Enc1`: navigation colonne gauche + focus gauche;
+  - `Enc2`: navigation colonne droite + focus droite;
+  - `Enc3` et `Enc4`: reserves/inutilises dans cette passe.
+- Actions:
+  - focus gauche `COPY`: prepare si besoin puis charge dans le premier slot Multi libre;
+  - focus gauche `SHIFT+COPY`: prepare si besoin puis charge/remplace le slot droit selectionne;
+  - focus droit `COPY`: unload du slot Multi selectionne avec confirmation `COPY=YES / PASTE=NO`;
+  - focus droit `SHIFT+COPY`: remplace le slot droit par l'instrument gauche, avec confirmation si le slot est occupe;
+  - `PASTE`: retour; `SHIFT+PASTE` ignore.
+- Si le dossier n'a pas encore d'index, la confirmation visible est `PREPARE <name>?`, `COPY=YES`, `PASTE=NO`; l'action appelle l'import Multi existant pour creer/mettre a jour `.brickmulti`.
+- Le load appelle le loader Multi cooperatif existant et reutilise un slot deja charge si le meme path `.brickmulti` est deja present; aucun nouveau cache, streamer ou acces FatFs IRQ n'est ajoute.
+- Quand la track active est `Sampler/Multi`, un load/reuse depuis ce browser assigne le slot instrument a cette track et enregistre le path projet associe; le pool global reste l'autorite des instruments charges.
+- Un manque de capacite sample du pool est refuse par feedback court `FULL need X`.
+- L'unload retire le slot du pool projet; il ne supprime, renomme ni deplace aucun WAV SD.
+
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.
 - Action associee: appel direct `project_v1_load_blank()`.
@@ -532,6 +594,7 @@ Points factuels:
 ## 19. Contrat UI Sampler/Looper skeleton
 
 - Le catalogue `CFG` expose `Looper` comme type de la family existante `Sampler`.
+- `VCA` n'est pas expose pour `Sampler/Looper`; le niveau utilisateur passe par `MIX/Level`.
 - Pour `Sampler/Looper`, le hall mode brut `ARP` est projete visuellement en `ROUT`.
 - `ROUT` toggle une selection de tracks logiques sources par looper track dans `ui_core_runtime_bridge`; la source peut etre focus UI ou non.
 - `REC` global ne demarre jamais directement le Looper et ne devient pas focus-based: il garde le flux transport normal (`seq_runtime_set_pattern_rec_target_track` + `seq_runtime_rec_toggle_arm`) meme si la track active est `Sampler/Looper`, `ARM=Off`, `ARM=Overd` ou `ROUT` vide.
