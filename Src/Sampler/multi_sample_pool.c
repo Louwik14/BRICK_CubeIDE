@@ -60,6 +60,40 @@ static uint8_t multi_sample_abs_note_delta(uint8_t a, uint8_t b)
     return (a >= b) ? (uint8_t)(a - b) : (uint8_t)(b - a);
 }
 
+static uint8_t multi_sample_count_velocity_layers_for_note_root(
+    const multi_sample_instrument_t *instrument,
+    uint8_t note,
+    uint8_t root_note)
+{
+    if ((instrument == 0) || (instrument->zone_count == 0U)
+        || (instrument->first_zone_id >= MULTI_SAMPLE_POOL_MAX_ZONES))
+    {
+        return 0U;
+    }
+
+    uint16_t count = 0U;
+    const uint32_t end_zone = (uint32_t)instrument->first_zone_id + instrument->zone_count;
+    for (uint32_t zone_id = instrument->first_zone_id;
+         (zone_id < end_zone) && (zone_id < MULTI_SAMPLE_POOL_MAX_ZONES);
+         ++zone_id)
+    {
+        const multi_sample_zone_t *const zone = &g_multi_zones[zone_id];
+        if ((zone->multi_sample_id >= g_multi_sample_count)
+            || (zone->root_note != root_note)
+            || (multi_sample_range_contains(zone->note_low, zone->note_high, note) == 0U))
+        {
+            continue;
+        }
+
+        if (count < UINT8_MAX)
+        {
+            count++;
+        }
+    }
+
+    return (uint8_t)count;
+}
+
 static void multi_sample_instrument_recompute_note_range(multi_sample_instrument_t *instrument)
 {
     if ((instrument == 0) || (instrument->zone_count == 0U)
@@ -254,7 +288,9 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
     }
 
     const multi_sample_zone_t *best_zone = 0;
+    const multi_sample_zone_t *fallback_zone = 0;
     uint8_t best_delta = UINT8_MAX;
+    uint8_t fallback_delta = UINT8_MAX;
     const uint32_t end_zone = (uint32_t)instrument->first_zone_id + instrument->zone_count;
     for (uint32_t zone_id = instrument->first_zone_id;
          (zone_id < end_zone) && (zone_id < MULTI_SAMPLE_POOL_MAX_ZONES);
@@ -262,13 +298,23 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
     {
         const multi_sample_zone_t *const zone = &g_multi_zones[zone_id];
         if ((zone->multi_sample_id >= g_multi_sample_count)
-            || (multi_sample_range_contains(zone->note_low, zone->note_high, note) == 0U)
-            || (multi_sample_range_contains(zone->vel_low, zone->vel_high, velocity) == 0U))
+            || (multi_sample_range_contains(zone->note_low, zone->note_high, note) == 0U))
         {
             continue;
         }
 
         const uint8_t delta = multi_sample_abs_note_delta(zone->root_note, note);
+        if ((fallback_zone == 0) || (delta < fallback_delta))
+        {
+            fallback_zone = zone;
+            fallback_delta = delta;
+        }
+
+        if (multi_sample_range_contains(zone->vel_low, zone->vel_high, velocity) == 0U)
+        {
+            continue;
+        }
+
         if ((best_zone == 0) || (delta < best_delta))
         {
             best_zone = zone;
@@ -278,8 +324,27 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
 
     if (best_zone == 0)
     {
-        return 0U;
+        if (fallback_zone == 0)
+        {
+            return 0U;
+        }
+
+        const uint8_t fallback_layer_count =
+            multi_sample_count_velocity_layers_for_note_root(instrument,
+                                                             note,
+                                                             fallback_zone->root_note);
+        if (fallback_layer_count != 1U)
+        {
+            return 0U;
+        }
+
+        best_zone = fallback_zone;
     }
+
+    const uint8_t velocity_layer_count =
+        multi_sample_count_velocity_layers_for_note_root(instrument,
+                                                         note,
+                                                         best_zone->root_note);
 
     out_result->multi_sample_id = best_zone->multi_sample_id;
     out_result->zone_id = (uint16_t)(best_zone - &g_multi_zones[0]);
@@ -287,6 +352,8 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
     out_result->pitch_semitones = (int8_t)((int16_t)note - (int16_t)best_zone->root_note);
     out_result->vel_low = best_zone->vel_low;
     out_result->vel_high = best_zone->vel_high;
+    out_result->velocity_layer_count_for_note = velocity_layer_count;
+    out_result->zone_is_single_velocity_layer = (velocity_layer_count == 1U) ? 1U : 0U;
     return 1U;
 }
 

@@ -76,7 +76,8 @@ Familles d'autorite:
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
   - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
-  - les wrappers ARP ecrivent maintenant l'etat ARP de la track active via `keyboard_runtime`; l'autorite runtime ARP est une config par track dans `keyboard_arp`, pas `param_store.active[]`.
+  - les wrappers ARP ecrivent maintenant l'etat ARP de la track active via `keyboard_runtime`; l'autorite config ARP est par track dans `keyboard_arp`, pas `param_store.active[]`.
+  - le runtime de jeu ARP est aussi par track cote `keyboard_arp`; les writes HOLD/ARP ne doivent pas couper les autres tracks.
 - `track_sound_state.*`:
   - premiere base canonique par track pour les blocs sonores extraits du runtime,
   - contient actuellement les blocs communs MIX, MOD, FILTER et VCA comme premier noyau du modele parametrique par track,

@@ -13,7 +13,11 @@ void keyboard_arp_sync_track(uint8_t track);
 void keyboard_arp_tick(void);
 void keyboard_arp_note_on(uint8_t note, uint8_t velocity);
 void keyboard_arp_note_off(uint8_t note);
+void keyboard_arp_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity);
+void keyboard_arp_note_off_for_track(uint8_t track, uint8_t note);
+void keyboard_arp_all_notes_off_track(uint8_t track);
 void keyboard_arp_all_notes_off(void);
+uint8_t keyboard_arp_has_hold_activity(void);
 
 void keyboard_arp_set_hold(bool enabled);
 void keyboard_arp_set_rate(uint8_t value);
@@ -64,6 +68,7 @@ void keyboard_arp_on_mode_enter(void);
 void keyboard_arp_on_mode_enter_silent(void);
 void keyboard_arp_on_mode_leave(void);
 void keyboard_arp_on_mode_leave_silent(void);
+void keyboard_arp_clear_track(uint8_t track);
 void keyboard_arp_clear_state_silent(void);
 
 #ifdef __cplusplus

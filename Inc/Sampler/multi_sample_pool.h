@@ -66,6 +66,8 @@ typedef struct
     int8_t pitch_semitones;
     uint8_t vel_low;
     uint8_t vel_high;
+    uint8_t velocity_layer_count_for_note;
+    uint8_t zone_is_single_velocity_layer;
 } multi_sample_resolve_result_t;
 
 void multi_sample_pool_init(void);

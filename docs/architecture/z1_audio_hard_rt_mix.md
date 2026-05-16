@@ -524,3 +524,12 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - L'anti-spam monotone par voix Multi vit dans `sample_stream_active_state_t` et reste hors IRQ. READY Multi reste page0 + page1 pour les samples longs, sans préchargement global page2.
 - L'IRQ audio continue de lire uniquement RAM/page-cache via `sample_voice_reader`; aucune SD/FatFs/malloc/UART n'est ajoutée au rendu.
 - Quand une voix Multi s'arrête, la fermeture du reader STREAM et le nettoyage des pending associés sont différés vers `brick6_sampler_runtime_service()` hors IRQ; le rendu ne ferme jamais de `FIL` et ne touche pas FatFs.
+
+## Addendum 2026-05-15 - Sampler/Multi velocity single-layer
+
+- `multi_sample_pool_resolve()` reste l'autorite de selection note/velocity du Sampler/Multi et retourne maintenant le nombre borne de layers velocity pour le couple note/root retenu.
+- Si une note/root ne possede qu'un seul layer velocity, ce layer est resolu meme si sa plage metadata ne contient pas la velocity du NOTE ON; le sample couvre donc implicitement `1..127`.
+- Le gain de voix Multi single-layer est applique au demarrage par `brick6_sampler_runtime_velocity_gain(velocity)`, soit `velocity / 127.0f`, dans `brick6_sampler_runtime` uniquement.
+- Les instruments multi-layer gardent la selection de zone par velocity existante et ne recoivent pas de gain velocity additionnel.
+- `velocity=0` sur le trigger Multi track-aware est traite comme un note-off local, sans demarrer de voix a gain nul.
+- Aucun changement de format `.brickmulti`, de parsing filename, de streaming/cache, de persistence ou de chemin SD n'est introduit.

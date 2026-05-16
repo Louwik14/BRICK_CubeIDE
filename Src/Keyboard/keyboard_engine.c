@@ -105,9 +105,31 @@ static bool keyboard_engine_active_track_has_midi_note_path(void)
     return (ui_track_family_is_engine(config.family) != 0) || (config.type == UI_TRACK_TYPE_HYBRID);
 }
 
+static bool keyboard_engine_track_has_midi_note_path(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return false;
+    }
+
+    const ui_track_config_t config = ui_get_track_config(track);
+    return (ui_track_family_is_engine(config.family) != 0) || (config.type == UI_TRACK_TYPE_HYBRID);
+}
+
 static bool keyboard_engine_active_track_accepts_internal_source(void)
 {
     const ui_track_midi_source_t source = ui_get_track_midi_source(keyboard_engine_get_play_owner_track());
+    return (source == UI_TRACK_MIDI_SRC_INT) || (source == UI_TRACK_MIDI_SRC_ALL);
+}
+
+static bool keyboard_engine_track_accepts_internal_source(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return false;
+    }
+
+    const ui_track_midi_source_t source = ui_get_track_midi_source(track);
     return (source == UI_TRACK_MIDI_SRC_INT) || (source == UI_TRACK_MIDI_SRC_ALL);
 }
 
@@ -158,7 +180,7 @@ static uint8_t keyboard_engine_group_note_pop(uint8_t owner_track, uint8_t note,
     return (track < UI_TRACK_COUNT) ? track : fallback_track;
 }
 
-static void keyboard_engine_all_notes_off_for_track(uint8_t track)
+static void keyboard_engine_all_notes_off_local_track(uint8_t track)
 {
     uint8_t filter_track = 0U;
     uint8_t mix_track = 0U;
@@ -207,12 +229,12 @@ static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
     {
         for (uint8_t i = 0U; i < member_count; ++i)
         {
-            keyboard_engine_all_notes_off_for_track(members[i]);
+            keyboard_engine_all_notes_off_local_track(members[i]);
         }
         return;
     }
 
-    keyboard_engine_all_notes_off_for_track(owner_track);
+    keyboard_engine_all_notes_off_local_track(owner_track);
 }
 
 static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on)
@@ -664,6 +686,97 @@ void keyboard_engine_note_off(uint8_t note)
 {
     const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track());
     keyboard_engine_note_off_internal(SEQ_LIVE_REC_SRC_INTERNAL, active_channel, note);
+}
+
+void keyboard_engine_note_on_for_track(uint8_t track, uint8_t note, uint8_t velocity)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return;
+    }
+
+    uint8_t owner_track = track;
+    (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
+    if (owner_track >= UI_TRACK_COUNT)
+    {
+        owner_track = track;
+    }
+
+    const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
+    keyboard_engine_live_rec_push_internal_channel(note, channel);
+    seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, channel, note, velocity);
+
+    if (keyboard_engine_track_has_midi_note_path(owner_track))
+    {
+        midi_note_on(MIDI_DEST_USB, channel, note, velocity);
+    }
+
+    if ((keyboard_engine_track_has_midi_note_path(owner_track) == false)
+            || (keyboard_engine_track_accepts_internal_source(owner_track) == false))
+    {
+        return;
+    }
+
+    keyboard_engine_send_note_for_owner_track(owner_track, note, velocity, 1U);
+}
+
+void keyboard_engine_note_off_for_track(uint8_t track, uint8_t note)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return;
+    }
+
+    uint8_t owner_track = track;
+    (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
+    if (owner_track >= UI_TRACK_COUNT)
+    {
+        owner_track = track;
+    }
+
+    const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
+    const uint8_t note_on_channel = keyboard_engine_live_rec_pop_internal_channel(note, channel);
+    seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL, note_on_channel, note);
+
+    if (keyboard_engine_track_has_midi_note_path(owner_track))
+    {
+        midi_note_off(MIDI_DEST_USB, channel, note, 0U);
+    }
+
+    if ((keyboard_engine_track_has_midi_note_path(owner_track) == false)
+            || (keyboard_engine_track_accepts_internal_source(owner_track) == false))
+    {
+        return;
+    }
+
+    keyboard_engine_send_note_for_owner_track(owner_track, note, 0U, 0U);
+}
+
+void keyboard_engine_all_notes_off_for_track(uint8_t track)
+{
+    if (track >= UI_TRACK_COUNT)
+    {
+        return;
+    }
+
+    uint8_t owner_track = track;
+    (void)track_runtime_get_voice_group_effective_master(track, &owner_track);
+    if (owner_track >= UI_TRACK_COUNT)
+    {
+        owner_track = track;
+    }
+
+    keyboard_engine_mono_clear();
+    keyboard_engine_all_notes_off_for_owner(owner_track);
+    const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
+    if (keyboard_engine_track_has_midi_note_path(owner_track))
+    {
+        midi_all_notes_off(MIDI_DEST_USB, channel);
+    }
+    g_keyboard_engine_sounding_active = false;
+    g_keyboard_engine_sounding_engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
+    g_keyboard_engine_sounding_drum_instance = 0U;
+    memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
 }
 
 void keyboard_engine_all_notes_off(void)

@@ -30,7 +30,7 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 
     if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
     {
-        keyboard_arp_note_on(note, velocity);
+        keyboard_arp_note_on_for_track(active_track, note, velocity);
         return;
     }
 
@@ -51,7 +51,7 @@ static void keyboard_input_note_off_sink(uint8_t note)
 
     if (ui_hall_uses_arp_engine(active_track, hall_mode) != 0U)
     {
-        keyboard_arp_note_off(note);
+        keyboard_arp_note_off_for_track(active_track, note);
         return;
     }
 

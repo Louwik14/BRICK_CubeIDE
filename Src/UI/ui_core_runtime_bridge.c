@@ -1192,6 +1192,7 @@ bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
                                                      track,
                                                      post_sync);
     transition_ctx.family = family;
+    keyboard_runtime_clear_arp_track(track);
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_family_change_mutate,
                                                               (void *)&transition_ctx) == 0U)
@@ -1216,6 +1217,7 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
                                                      track,
                                                      post_sync);
     transition_ctx.type = type;
+    keyboard_runtime_clear_arp_track(track);
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_type_change_mutate,
                                                               (void *)&transition_ctx) == 0U)

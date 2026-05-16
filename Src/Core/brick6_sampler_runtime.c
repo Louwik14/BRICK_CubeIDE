@@ -3026,6 +3026,12 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
         return 0U;
     }
 
+    if (velocity == 0U)
+    {
+        brick6_sampler_runtime_note_off_multi_track_note(track_id, note);
+        return 1U;
+    }
+
     if (instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
     {
         instrument_id = g_sampler_multi_track_state[track_id].instrument_id;
@@ -3217,7 +3223,10 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     multi_voice->velocity = velocity;
     multi_voice->mode = 0U;
     multi_voice->gain = g_sampler_multi_track_state[track_id].gain * gain;
-    multi_voice->trigger_velocity_gain = brick6_sampler_runtime_velocity_gain(velocity);
+    multi_voice->trigger_velocity_gain =
+        (resolved.zone_is_single_velocity_layer != 0U)
+            ? brick6_sampler_runtime_velocity_gain(velocity)
+            : 1.0f;
     multi_voice->region_begin = 0U;
     multi_voice->region_end = sample->total_frames;
     multi_voice->loop_frames = sample->total_frames;

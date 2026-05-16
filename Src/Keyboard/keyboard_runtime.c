@@ -141,7 +141,8 @@ void keyboard_runtime_tick(void)
 {
     ui_keyboard_app_tick(0U);
 
-    if (keyboard_runtime_hall_mode_uses_arp_engine(ui_get_hall_mode()) == 0U)
+    if ((keyboard_runtime_hall_mode_uses_arp_engine(ui_get_hall_mode()) == 0U)
+            && (keyboard_arp_has_hold_activity() == 0U))
     {
         return;
     }
@@ -285,6 +286,11 @@ void keyboard_runtime_all_notes_off(void)
     keyboard_arp_all_notes_off();
 }
 
+void keyboard_runtime_clear_arp_track(uint8_t track)
+{
+    keyboard_arp_all_notes_off_track(track);
+}
+
 uint8_t keyboard_runtime_active_track_is_plain_input_audio(void)
 {
     const uint8_t active_track = ui_get_active_track();
@@ -320,12 +326,16 @@ void keyboard_runtime_sync_track_focus_context(void)
      * des relâchements tardifs d'anciens halls pilotent la nouvelle track.
      */
     ui_keyboard_app_clear_state_silent();
-    keyboard_arp_clear_state_silent();
+    if (keyboard_arp_has_hold_activity() == 0U)
+    {
+        keyboard_arp_clear_state_silent();
+        keyboard_engine_clear_state_silent();
+    }
     keyboard_arp_sync_track(ui_get_active_track());
-    keyboard_engine_clear_state_silent();
     keyboard_runtime_reset_midi_state();
 
-    if (keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
+    if ((keyboard_runtime_hall_mode_uses_arp_engine(hall_mode) != 0U)
+            && (keyboard_arp_has_hold_activity() == 0U))
     {
         keyboard_arp_on_mode_enter_silent();
     }
@@ -335,7 +345,7 @@ void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall
 {
     if (keyboard_runtime_hall_mode_uses_arp_engine(previous_mode) != 0U)
     {
-        keyboard_arp_clear_state_silent();
+        keyboard_arp_on_mode_leave();
     }
 
     if ((previous_mode == UI_HALL_MODE_ARP) && (new_mode != UI_HALL_MODE_ARP))

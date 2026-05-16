@@ -113,6 +113,12 @@ Autorite hall modes:
 - `ui_macro_ui` n'est plus un owner de fait; les call-sites UI passent par `project_v1` pour le modele MACRO.
 - `KEYBOARD` reste un mode brut normal.
 - Le mode brut persiste en `ARP`; `ROUT` n'est jamais un mode brut stocke.
+- ARP HOLD:
+  - la config ARP reste par track via `keyboard_arp`,
+  - le runtime ARP est hybride: clavier physique/UI global, etats ARP de jeu par track dans `keyboard_arp`,
+  - chaque track possede ses notes tenues/latched, pending notes, notes emises, phase et timers,
+  - un changement de focus UI ne vide pas les HOLD des autres tracks et le tick scanne les tracks actives,
+  - un nouveau note-on ARP sur une autre track alimente seulement cette track, sans reprendre d'owner global.
 - Le feedback LED MACRO lit directement `project_v1` pour l'etat vide/non vide des scenes et `ui_macro_interaction` pour la scene maintenue; la couleur de base vient d'une table stable scene -> couleur dans `led_rgb.c`, sans encoder les locks ni revenir au mapping pot/slot.
 - L'overlay MACRO reutilise le meme renderer LED avec priorite sur le rendu track-select tant que l'overlay est actif: `M-Ctrl` affiche une intensite continue par scene, lissee cote LED depuis la profondeur Hall raw calibree avec un seuil LED dedie bas (`min + bruit + marge`) independant du seuil audio pressure, `M-Assign` suit le feedback Scene vide/faible, non-vide/normal, held/fort.
 
@@ -291,7 +297,7 @@ Flux nominal prouve:
 - `hall_keyboard_bridge` consomme hall mode + flags suppression pour autoriser/bloquer emission note hall.
 - Gardes runtime explicites en contexte `ROUT`:
   - `hall_keyboard_bridge_process` utilise `ui_hall_allows_injection(...)`,
-  - `keyboard_runtime_tick` utilise `ui_hall_uses_arp_engine(...)`,
+  - `keyboard_runtime_tick` utilise `ui_hall_uses_arp_engine(...)` ou un HOLD ARP par-track actif pour continuer le tick hors focus,
   - `keyboard_input_note_on/off/all_notes_off` s'aligne sur `ui_hall_uses_arp_engine(...)` + `effective_view`.
 
 ## 7. Contraintes RT/CPU/memoire
