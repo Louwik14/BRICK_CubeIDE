@@ -20,7 +20,7 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Storage/wav_audio_codec.c` + `Inc/Storage/wav_audio_codec.h`: decode PCM partage pour import et preview.
 - `Src/Storage/wav_convert.c` + `Inc/Storage/wav_convert.h`: conversion destructive hors IRQ des WAV PCM incompatibles vers WAV PCM24 stereo 48 kHz pour import Sampler.
 - `Src/Sampler/multi_sample_index.c` + `Inc/Sampler/multi_sample_index.h`: format durable `.brickmulti` du futur `Sampler/Multi`; lecture/ecriture d'index metadata hors IRQ, sans scan dossier, sans parsing WAV, sans page-cache et sans playback.
-- `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: writer SD audio multi-client RAW-only cote Looper; rings RAM statiques, push IRQ RAM-only, drain SD hors IRQ vers reservoir RAW.
+- `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: writer SD audio multi-client avec backend `LOOPER_RAW` actif cote Looper et backend distinct `SAMPLE_WAV` actif cote Audio Rec; rings RAM statiques, push IRQ RAM-only, drain SD hors IRQ vers le backend client.
 - `Src/Storage/looper_storage.c` + `Inc/Storage/looper_storage.h`: autorite des paths Looper; validation des reservoirs RAW systeme, creation dossier durable, scan borne et reservation anti-ecrasement du nom final.
 - `Src/Storage/wav_loader.c`: scan catalogue et import WAV refuses pendant record audio actif/finalizing.
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
@@ -107,19 +107,31 @@ Autorite LOAD Sampler/Multi:
 
 Autorite writer SD audio multi-client:
 - `multi_record_writer_*`.
-- Phase courante: interface produit, etats, diagnostics, rings RAM `int32_t` stereo statiques et backend RAW Looper REC; les anciennes APIs de fichier temporaire du writer sont retirees.
+- Phase courante: interface produit, etats, diagnostics, rings RAM `int32_t` stereo statiques, backend `LOOPER_RAW` Looper REC et backend `SAMPLE_WAV` branche au hall mode Audio Rec minimal.
 - Backend RAW Looper REC: `multi_record_writer_prepare_raw(client, raw_slot, raw_path, expected_frames)` ouvre un reservoir RAW existant, seek offset `0`, ecrit PCM24 stereo interleaved sans header, puis fixe `recorded_frames` apres STOP/drain/finalize.
 - Le backend RAW n'ecrit aucun header WAV, n'appelle pas `f_expand` et ne passe pas par `f_rename`.
+- Backend SAMPLE_WAV: `multi_record_writer_prepare_sample_wav(client, temp_path, final_path, frame_limit)` ouvre un fichier temporaire WAV, ecrit un header placeholder 512 octets, puis le record ecrit directement la data PCM24 stereo interleaved. STOP draine le ring, patch le header WAV, sync/close, puis renomme le temporaire vers le path final. Aucun reservoir RAW ni export massif post-STOP n'est implique.
+- Le writer reste unique: pas de second writer FatFs concurrent. La separation se fait par `backend` + client, avec etat, ring, diagnostics et paths par client.
+- `sample_capture_*` est le modele produit minimal Audio Rec / Rec Edit pour `SAMPLE_WAV`: il reserve le client writer `SAMPLE_CAPTURE_RECORD_CLIENT_ID = 1`, distinct du client Looper RAW `0`, et expose arm/len/quant/routage, prepare/start/push IRQ/request stop/status, trim SAVE et ASSIGN.
 - `multi_record_writer_get_last_raw_take()` expose `raw_slot`, `raw_path` et `recorded_frames` de la derniere prise RAW finalisee; le controle Looper transmet ces metadonnees au runtime transient pour le playback RAW et les utilise comme source de SAVE RAW -> WAV durable.
+- `multi_record_writer_get_last_sample_wav_take()` expose le path final et `recorded_frames` d'une prise `SAMPLE_WAV` finalisee pour l'auto-ouverture Rec Edit restreint.
+- `sample_capture` porte maintenant le modele produit minimal Audio Rec / Rec Edit: etat arm/len/quant, matrice de routage sources, path temporaire, buckets waveform RAM min/max signes non persistants, trim START/END, SAVE auto vers `0:/Samples/RECnnnn.WAV` et ASSIGN vers le premier slot libre `sample_pool`. `ARM=REC` est une autorisation UI seulement: aucune ouverture de temp WAV, aucun push IRQ et aucun demarrage writer ne se produisent avant REC global actif + transport/quant valide. `LEN=1..64` est compte en steps Audio Rec.
+- La prise temporaire `SAMPLE_WAV` reste un WAV temporaire sous `0:/PROJECT/REC`; SAVE/ASSIGN cree un nouveau WAV final trimme et ne cree aucun sidecar.
+- L'audition Rec Edit utilise `sd_preview_begin_range(path, start_frame, end_frame)` pour lire la fenetre `START..END` depuis le WAV temporaire finalise/ferme, sans charger la prise dans `sample_pool` et sans cache waveform persistant.
+- La waveform live/Rec Edit reste volatile: buckets RAM min/max signes `int16` issus des blocs audio captures PCM24, compression min/max en RAM quand la resolution est pleine, puis affichage frame-aware par fenetre zoom/scroll. L'overview RAM utilise un bucket initial court afin de reduire la perte visible en REC live et comme fallback Rec Edit tant qu'aucune line n'est disponible. Le renderer affiche toujours la ligne zero; en REC live il dessine les buckets en traits verticaux fins, y compris pour `min=max=0`. En Rec Edit, `sample_capture` demande un cache line separe des `edit_zoom=0`, sans sidecar ni cache persistant, directement depuis la fenetre WAV visible: vue globale = prise complete, zooms superieurs = fenetre scroll/zoom. Pour les fenetres courtes, la line lit un bloc PCM24 borne et interpole des points proches des samples reels; pour les fenetres larges, elle attend quelques ticks stables avant de demarrer, puis construit progressivement les points par chunks WAV sequentiels bornes, accumule par segment des valeurs representatives ordonnees qui conservent enveloppe et texture, puis publie le cache quand la fenetre est complete. L'ancien cache line n'est plus invalide a la demande d'une nouvelle fenetre: il reste affichable pendant le settle/rebuild pour stabiliser le rendu. L'echelle verticale Rec Edit est stable sur la prise courante et vise une marge d'environ 4 px haut/bas pour les pics forts. Le zoom maximum est borne vers une fenetre courte proche de la resolution line afin de permettre une vue detaillee meme sur une prise longue. Si la fenetre demandee correspond au cache line courant/deja demande/en construction, aucune nouvelle lecture SD n'est planifiee; une nouvelle fenetre remplace le build line en cours avant publication.
+- Le cache detail waveform Rec Edit est opportuniste: il ne se construit pas pendant record/finalize, preview active, export Looper, pattern load pending ou travail SD sample-cache pending; si le gate SD est occupe par un client prioritaire, le rendu garde l'overview RAM.
+- `sd_preview_begin_range()` refuse tout record/finalize writer actif et tout export Looper. Les operations Audio Rec qui doivent reprendre la main sur le fichier temporaire (`nouveau REC`, RETURN, SAVE, ASSIGN) stoppent la preview avant de continuer; un changement START/END s'applique a la prochaine audition declenchee.
+- Priorite SD effective dans la superloop: `multi_record_writer_service` draine/finalise d'abord; hors export Looper, `sample_cache_service`, refill Looper, load Multi et `pattern_load_service` passent avant `sd_preview_process`. Une preview active est stoppee si un travail sample cache devient pending, et `pattern_load_request/service` stoppe la preview avant son acces SD.
+- Le writer interdit le demarrage simultane de deux clients actifs: Looper RAW actif bloque Sample Rec et Sample Rec actif bloque Looper REC. Le playback Looper peut rester source routee d'Audio Rec.
 - `multi_record_writer_service(byte_budget)` acquiert le gate sans bloquer seulement si le sample cache n'a pas de travail SD pending, packe `int32_t` stereo vers PCM 24-bit interleaved par chunk borne de 1024 frames, execute au plus un `f_write` audio par passage, puis relache le gate.
-- `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`.
-- Les producteurs audio poussent uniquement vers les rings RAM; le hook Z1 actuel est limite a `Sampler/Looper` et appelle `multi_record_writer_push_audio_block_from_irq` depuis `mixer_process` lorsque le client Looper est en `RECORDING` et que `brick6_looper_runtime` a valide la capture active au boundary audio.
+- `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`; en SAMPLE_WAV, elle patch le header puis sync/close/rename.
+- Les producteurs audio poussent uniquement vers les rings RAM; le hook Z1 appelle `multi_record_writer_push_audio_block_from_irq` depuis `mixer_process` seulement quand le client concerne est en `RECORDING` et que son autorite runtime a active la capture. Pour Audio Rec, `sample_capture_audio_hook_is_enabled()` devient vrai uniquement apres REC global + transport/quant, jamais sur le seul `ARM=REC`.
 - Placement memoire: les rings producteurs restent en `SDRAM_RECORDER`; le buffer pack PCM24 `g_pcm24_pack`, utilise seulement par `multi_record_writer_service()` hors IRQ, est en SDRAM dediee `RECORDER_SCRATCH_SDRAM`.
-- `multi_record_writer_any_active()` et `looper_storage_raw_export_is_active()` gardent les operations SD incompatibles avec record/finalize/export Looper.
+- `multi_record_writer_any_active()` garde les operations globales incompatibles avec toute prise/finalisation audio; les guards pattern utilisent le filtre backend Looper RAW pour laisser Audio Rec `SAMPLE_WAV` cohabiter avec `pattern_load_request/service`.
 
 Politique SD pendant record audio actif/finalizing:
 - Refuse: project save/load/delete, blank load projet, refresh/list/has-data projet.
-- Refuse: pattern load/request/service et apply queue associe tant que la politique stop/finalize musicale n'est pas implementee.
+- Refuse courant: pattern load/request/service pendant Looper RAW actif ou export Looper. Le record `SAMPLE_WAV` ne bloque plus `pattern_load_request/service` par principe; le gate SD reste arbitre par tranches hors IRQ.
 - Refuse temporairement: pattern save direct, car le chemin courant ecrit encore en SD synchrone; TODO `pending budgeted pattern save`.
 - Refuse: preview WAV SD, scan catalogue WAV et import/load WAV vers SDRAM.
 - Le cleanup/finalize du writer reste proprietaire du writer et continue via `sd_access_gate`.
@@ -505,7 +517,7 @@ TODO policy SD/projet:
 - Project save/load pendant playback reste a refuser ou differer explicitement.
 - Project save/load ne doit pas preempter `sample_cache_service()` quand un stream sample a besoin de refill.
 - Project load ne doit jamais appliquer un etat partiel.
-- Pendant `multi_record_writer_any_active()` ou `looper_storage_raw_export_is_active()`, les entrees SD lourdes sont refusees: project save/load/delete/refresh, pattern load, pattern save direct, preview, scan catalogue et import WAV.
+- Pendant Looper RAW record/finalize ou `looper_storage_raw_export_is_active()`, les entrees SD lourdes sont refusees: project save/load/delete/refresh, pattern load, pattern save direct, preview, scan catalogue et import WAV. Audio Rec `SAMPLE_WAV` ne bloque pas `pattern_load_request/service` par principe.
 - Reste a faire: pattern save pending budgete et pattern load avec stop/finalize musical avant load/apply.
 - Politique finale SD attendue: SAMPLE_CACHE prioritaire, PATTERN_LOAD entre refills, PATTERN_SAVE differe, PROJECT hors playback, PREVIEW exclusif, sans scheduler SD generique.
 
@@ -531,7 +543,7 @@ Ce contrat documente la cible produit pour l'enregistrement audio vers SD. La ph
   - aucun scheduler SD parallele implicite.
 - Z4 reste l'autorite transport/REC/boundaries:
   - stop de record a frontiere musicale quand demande produit,
-  - `pattern load` pendant record passe par stop/finalize avant load/apply.
+  - `pattern load` pendant Looper RAW record/export passe par stop/finalize avant load/apply; Audio Rec `SAMPLE_WAV` le laisse cadence et s'en remet au gate SD.
 - Z6 reste l'autorite SD/persistence:
   - `sd_access_gate` est l'arbitre SD effectif,
   - FatFs n'est pas reentrant (`_FS_REENTRANT=0`), donc un seul owner SD reel a la fois,
@@ -562,7 +574,7 @@ Ordre produit attendu dans la superloop, sous budgets explicites:
 2. `multi_record_writer_service(...)`
    - budget courant 16384 octets par appel apres `sample_cache_service(32768U)`.
    - draine les rings record, par client le plus rempli, en tranche courte pour ne pas monopoliser la superloop/UI.
-3. Operations interdites ou differees pendant active recording/finalizing:
+3. Operations interdites ou differees pendant Looper RAW active recording/finalizing:
    - project save/load,
    - pattern load/save direct,
    - preview SD,

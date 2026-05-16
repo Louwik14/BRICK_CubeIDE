@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:89:20:ui_page_audio_rec_phase_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:105:20:ui_page_audio_rec_quant_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:116:20:ui_page_audio_rec_error_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:135:16:ui_page_audio_rec_route_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:174:13:ui_page_audio_rec_render	288	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:78:13:ui_page_audio_rec_tick	256	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:22:13:ui_page_audio_rec_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:12:13:ui_page_audio_rec_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:17:13:ui_page_rec_edit_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:148:13:ui_page_audio_rec_draw_marker_bar	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:205:13:ui_page_rec_edit_render	296	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:35:13:ui_page_rec_edit_handle_event	256	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:239:9:ui_page_audio_rec_handle_encoder	264	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:266:9:ui_page_audio_rec_is_open	8	static

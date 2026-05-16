@@ -15,7 +15,12 @@ void ui_core_navigation_bridge_request_hall_mode_page(ui_hall_mode_t target_mode
                                                       uint8_t target_page,
                                                       uint8_t open_target_page)
 {
-    (void)target_mode;
+    if ((target_mode == UI_HALL_MODE_AUDIO_REC)
+            && (target_page != UI_CORE_NAVIGATION_BRIDGE_TARGET_PAGE_NONE))
+    {
+        ui_navigation_request_page_with_availability(target_page);
+        return;
+    }
 
     if ((open_target_page != 0U) && (target_page != UI_CORE_NAVIGATION_BRIDGE_TARGET_PAGE_NONE))
     {

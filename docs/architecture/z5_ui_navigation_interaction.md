@@ -651,3 +651,21 @@ Points factuels:
 - Une sous-page `STR` expose `Stretch`, `Pitch` et `Grain`; le quatrieme slot reste vide.
 - La surface Looper n'expose pas `SRC BPM` ni `SYNC LEN`.
 - Ces controles sont stockes/UI-only dans cette passe; aucun changement audible de playback n'est associe a leur edition.
+
+## 22. Contrat UI Audio Rec / Rec Edit restreint
+
+- `SHIFT + HALL 14` ouvre immediatement le hall mode special `Audio Rec`, hors template classique et sans double-tap.
+- Les halls du mode Audio Rec togglent le routage des tracks sources vers `sample_capture`; hall allume = source routee, hall eteint = source exclue. Les LEDs lisent ce routage `sample_capture` directement, sans reutiliser les routages Looper/Master/Buffer.
+- Encodeurs Audio Rec:
+  - E1 `ARM`: `OFF/REC`
+  - E2 `LEN`: `FREE` ou `1..64` steps
+  - E3 `QUANT`: `NOW/BAR/PATTERN`
+  - E4 reserve
+- `ARM=REC` autorise seulement une prise `SAMPLE_WAV`; il n'ouvre aucun fichier, ne pousse aucun audio et ne demarre pas le writer tant que le REC global n'est pas arme.
+- Quand `ARM=REC` et le REC global sont actifs, depuis STOP le demarrage attend le transport PLAY; pendant PLAY il suit `QUANT`. Si le REC global est coupe pendant `RECORDING`, la prise demande STOP/finalize par le chemin writer normal.
+- Les editions `ARM`, `LEN` et `QUANT` sont bornees, sans wrap circulaire; E4 Audio Rec reste no-op. `LEN=1..64` est une duree en steps, pas en mesures.
+- Pendant `RECORDING`, l'ecran Audio Rec dessine une waveform live RAM alimentee par des buckets min/max signes issus des blocs deja pousses vers le ring `SAMPLE_WAV`; aucune lecture du WAV en cours ni FatFs n'est faite. La vue live garde toute la prise visible entre gauche et droite, compresse les buckets en RAM quand la prise depasse la resolution disponible, et utilise une echelle verticale fixe full-scale `int16` sans normalisation locale de la fenetre. Le renderer affiche toujours la ligne zero au centre et dessine les buckets en traits verticaux fins; le zoom Rec Edit utilise une progression de fenetre plus douce que les seuls paliers puissance de deux.
+- Apres finalisation writer `TAKE_READY`, l'UI bascule vers `Rec Edit` restreint.
+- `Rec Edit` n'est pas le Sample Editor complet: E1/E2 reglent zoom/scroll UI bornes sans mutation audio persistante, E3/E4 reglent `START/END`, et un appui hall toggle l'audition de la fenetre `START..END` via le chemin preview SD existant. Cette audition n'est autorisee que sur une prise temporaire finalisee/fermee (`TAKE_READY` deja passe). La waveform Rec Edit demande un cache line volatile des `edit_zoom=0`: le zoom global couvre toute la prise et les zooms superieurs couvrent la fenetre visible. Le cache line est construit hors IRQ depuis le WAV temporaire finalise, stocke des points signes ordonnes dimensionnes a la largeur ecran et devient le renderer normal Rec Edit sous forme de polyline; les buckets min/max RAM/detail ne sont que fallback visible tant qu'aucune line n'est disponible. Pendant le rebuild d'une nouvelle fenetre, l'ancienne line reste affichable pour eviter un saut de scale. L'echelle verticale Rec Edit est stable sur la prise courante, avec occupation accrue visant environ 4 px de marge haut/bas pour les pics forts. Au zoom maximum, la fenetre vise une zone courte bornee par la resolution line plutot qu'une fraction longue de toute la prise.
+- PAGE 1 retourne a Audio Rec en conservant la prise temporaire et stoppe la preview active; PAGE 2 sauvegarde un WAV final trimme a nom automatique borne apres avoir stoppe la preview; PAGE 3 stoppe la preview, sauvegarde puis assigne au premier slot libre `sample_pool`; PAGE 4 reste reserve.
+- Aucune UI de nommage improvisee, aucun sidecar asset, aucune loop point et aucun cache waveform persistant ne sont ajoutes.

@@ -22,6 +22,9 @@
 /* HOT: IRQ critical data/state */
 #define AUDIO_HOT SEC_ATTR(".dtcm_audio")
 
+/* CPU-only hot UI/control state. Never use for FatFs/SD/DMA payload buffers. */
+#define UI_HOT_DTCM SEC_ATTR(".dtcm_audio")
+
 /* WARM: block DSP state not directly DMA-owned */
 #define AUDIO_WARM SEC_ATTR(".ram_d1_audio")
 

@@ -29,6 +29,8 @@
 #include "buttons.h"
 #include "encoders.h"
 #include "pages/ui_page_settings.h"
+#include "pages/ui_page_audio_rec.h"
+#include "Storage/sample_capture.h"
 #include "ui_bootstrap.h"
 #include "ui_event.h"
 #include "ui_core_navigation_bridge.h"
@@ -580,6 +582,7 @@ void ui_core_init(void)
     ui_core_feedback_init();
     ui_core_pattern_init();
     ui_core_runtime_bridge_init();
+    sample_capture_model_init();
     ui_macro_interaction_init();
     track_state_init();
     g_ui_track_state.active_track = 0U;
@@ -707,6 +710,10 @@ void ui_core_tick(void)
         {
             ui_page_settings_handle_encoder(encoder, delta);
         }
+        else if (ui_page_audio_rec_is_open() != 0U)
+        {
+            (void)ui_page_audio_rec_handle_encoder(encoder, delta);
+        }
         else
         {
             if (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U)
@@ -758,6 +765,7 @@ next_event:
 
     ui_core_runtime_bridge_service_looper_record_control(0);
     ui_core_runtime_bridge_service_looper_export_feedback(ui_core_set_feedback);
+    sample_capture_model_service();
 
     const ui_page_t *active_page = ui_page_get();
     if ((active_page != 0) && (active_page->tick != 0))

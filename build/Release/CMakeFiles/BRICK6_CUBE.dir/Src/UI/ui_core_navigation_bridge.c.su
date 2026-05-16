@@ -1,5 +1,5 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:9:6:ui_core_navigation_bridge_handle_event	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:14:6:ui_core_navigation_bridge_request_hall_mode_page	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:26:6:ui_core_navigation_bridge_request_cfg_page	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:31:6:ui_core_navigation_bridge_open_rec_cfg_page	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:37:6:ui_core_navigation_bridge_sync_active_track_ensemble	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:31:6:ui_core_navigation_bridge_request_cfg_page	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:36:6:ui_core_navigation_bridge_open_rec_cfg_page	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_navigation_bridge.c:42:6:ui_core_navigation_bridge_sync_active_track_ensemble	8	static

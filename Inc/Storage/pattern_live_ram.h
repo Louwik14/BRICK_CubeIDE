@@ -95,6 +95,7 @@ void pattern_live_init(void);
 uint8_t pattern_live_capture_boot_snapshot(void);
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern);
 void pattern_load_service(uint32_t byte_budget);
+uint8_t pattern_load_is_pending(void);
 uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern);
 uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, PatternSaveV1 *out_snapshot);
 void pattern_load_cancel(void);

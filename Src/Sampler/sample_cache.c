@@ -10,11 +10,14 @@
 #include "Sampler/sample_stream_manager.h"
 #include "ff.h"
 
-#define SAMPLE_CACHE_SLOT_FRAMES (65536U)
 #define SAMPLE_CACHE_MAX_VOICES (16U)
 #define SAMPLE_CACHE_IO_BYTES (4096U)
 #define SAMPLE_CACHE_STREAM_START_PAGES (2U)
 #define SAMPLE_CACHE_STREAM_REVERSE_PAGES (4U)
+#define SAMPLE_CACHE_STREAM_STATIC_PAGES (SAMPLE_CACHE_STREAM_START_PAGES \
+                                          + SAMPLE_CACHE_STREAM_REVERSE_PAGES)
+#define SAMPLE_CACHE_FULL_MAX_BYTES (SAMPLE_CACHE_STREAM_STATIC_PAGES * SAMPLE_PAGE_BYTES)
+#define SAMPLE_CACHE_FULL_MAX_FRAMES (SAMPLE_CACHE_STREAM_STATIC_PAGES * SAMPLE_PAGE_FRAMES)
 
 SDRAM_SAMPLES static sample_cache_desc_t g_sample_cache[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
@@ -26,6 +29,9 @@ _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY
                "hot sample cache ids must fit in the page-cache id space");
 _Static_assert(SAMPLE_POOL_PROJECT_CAPACITY >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
                "project sample capacity must cover the hot cache capacity");
+_Static_assert(SAMPLE_CACHE_FULL_MAX_BYTES
+                   == (SAMPLE_CACHE_FULL_MAX_FRAMES * SAMPLE_PAGE_BYTES_PER_FRAME),
+               "FULL frame threshold must match decoded stereo float bytes");
 #endif
 
 #if BRICK6_SAMPLER_DIAG_ENABLE
@@ -1216,7 +1222,7 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
 
     desc->total_frames = desc->info.data_size / desc->info.block_align;
     desc->data_offset = desc->info.data_offset;
-    desc->cache_capacity_frames = SAMPLE_CACHE_SLOT_FRAMES;
+    desc->cache_capacity_frames = SAMPLE_CACHE_FULL_MAX_FRAMES;
     if (desc->total_frames == 0U)
     {
         desc->last_error = 7U;

@@ -5,6 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
+#include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -846,6 +847,11 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
 {
+    if(sd_preview_is_active() != 0U)
+    {
+        sd_preview_stop();
+    }
+
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
@@ -853,7 +859,7 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if ((multi_record_writer_any_active() != 0U)
+    if ((multi_record_writer_any_active_backend(MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW) != 0U)
             || (looper_storage_raw_export_is_active() != 0U))
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
@@ -899,7 +905,7 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
-    if ((multi_record_writer_any_active() != 0U)
+    if ((multi_record_writer_any_active_backend(MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW) != 0U)
             || (looper_storage_raw_export_is_active() != 0U))
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
@@ -908,6 +914,11 @@ void pattern_load_service(uint32_t byte_budget)
     }
 
     g_pattern_load_state = PATTERN_LOAD_LOADING;
+
+    if(sd_preview_is_active() != 0U)
+    {
+        sd_preview_stop();
+    }
 
     if (pattern_sd_bank_load_slot(g_pattern_load_bank, g_pattern_load_pattern, &g_pattern_load_work) == 0U)
     {
@@ -919,6 +930,12 @@ void pattern_load_service(uint32_t byte_budget)
     memcpy(&g_pattern_load_ready, &g_pattern_load_work, sizeof(g_pattern_load_ready));
     g_pattern_load_state = PATTERN_LOAD_READY;
     g_pattern_load_last_error = 0U;
+}
+
+uint8_t pattern_load_is_pending(void)
+{
+    return ((g_pattern_load_state == PATTERN_LOAD_REQUESTED)
+            || (g_pattern_load_state == PATTERN_LOAD_LOADING)) ? 1U : 0U;
 }
 
 uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern)

@@ -3,6 +3,7 @@
 #include "Sampler/sample_cache.h"
 #include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
+#include "Storage/sample_capture.h"
 #include "Storage/sd_access_gate.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
@@ -13,13 +14,19 @@
 #define MRW_PACK_FRAMES 1024U
 
 #define MRW_FINALIZE_PHASE_BEGIN 0U
-#define MRW_FINALIZE_PHASE_SYNC 1U
-#define MRW_FINALIZE_PHASE_CLOSE 2U
+#define MRW_FINALIZE_PHASE_PATCH_WAV_HEADER 1U
+#define MRW_FINALIZE_PHASE_SYNC 2U
+#define MRW_FINALIZE_PHASE_CLOSE 3U
+#define MRW_FINALIZE_PHASE_RENAME_WAV 4U
+#define MRW_WAV_JUNK_BYTES (MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 52U)
+#define MRW_WAV_MAX_FRAMES \
+    ((UINT32_MAX - (MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 8U)) / MULTI_RECORD_WRITER_BYTES_PER_FRAME)
 
 typedef struct
 {
     volatile uint32_t write_index;
     volatile uint32_t read_index;
+    multi_record_writer_backend_t backend;
     multi_record_writer_state_t state;
     multi_record_writer_error_t error;
     multi_record_writer_operation_t last_operation;
@@ -28,6 +35,7 @@ typedef struct
     uint8_t finalize_phase;
     uint8_t raw_slot;
     uint8_t raw_take_valid;
+    uint8_t degraded;
     uint32_t high_watermark;
     uint32_t overflow_count;
     uint32_t dropped_frames;
@@ -39,6 +47,7 @@ typedef struct
     uint32_t recorded_frames;
     FIL file;
     char raw_path[MULTI_RECORD_WRITER_PATH_MAX];
+    char final_path[MULTI_RECORD_WRITER_PATH_MAX];
 } multi_record_writer_client_t;
 
 SDRAM_RECORDER static int32_t
@@ -46,12 +55,17 @@ SDRAM_RECORDER static int32_t
 static multi_record_writer_client_t g_record_clients[MULTI_RECORD_WRITER_MAX_CLIENTS];
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_pcm24_pack[MRW_PACK_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
-
 _Static_assert(MULTI_RECORD_WRITER_MAX_CLIENTS > 0U, "record writer needs at least one client");
 _Static_assert(MULTI_RECORD_WRITER_RING_FRAMES > 1U, "record writer ring needs spare frame");
 _Static_assert(MULTI_RECORD_WRITER_SAMPLE_RATE_HZ == 48000U, "record writer target rate is fixed");
 _Static_assert(MULTI_RECORD_WRITER_CHANNELS == 2U, "record writer target is stereo");
 _Static_assert(MULTI_RECORD_WRITER_BITS_PER_SAMPLE == 24U, "record writer target is PCM24");
+_Static_assert(MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES >= 52U,
+               "record writer WAV data offset must fit header and JUNK chunk");
+_Static_assert(SAMPLE_CAPTURE_RECORD_CLIENT_ID < MULTI_RECORD_WRITER_MAX_CLIENTS,
+               "sample capture needs a dedicated multi_record_writer client");
+_Static_assert(SAMPLE_CAPTURE_RECORD_CLIENT_ID != 0U,
+               "sample capture must not share the Looper RAW writer client");
 
 static uint8_t client_id_valid(uint8_t client_id)
 {
@@ -102,6 +116,64 @@ static uint8_t copy_path(char *dst, const char *src)
 
     dst[0] = '\0';
     return 0U;
+}
+
+static void write_le16(uint8_t *dst, uint16_t value)
+{
+    dst[0] = (uint8_t)(value & 0xFFU);
+    dst[1] = (uint8_t)((value >> 8) & 0xFFU);
+}
+
+static void write_le32(uint8_t *dst, uint32_t value)
+{
+    dst[0] = (uint8_t)(value & 0xFFU);
+    dst[1] = (uint8_t)((value >> 8) & 0xFFU);
+    dst[2] = (uint8_t)((value >> 16) & 0xFFU);
+    dst[3] = (uint8_t)((value >> 24) & 0xFFU);
+}
+
+static void build_wav_header(uint8_t *header, uint32_t data_bytes)
+{
+    const uint16_t block_align = MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    const uint32_t byte_rate = MULTI_RECORD_WRITER_SAMPLE_RATE_HZ * (uint32_t)block_align;
+
+    memset(header, 0, MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES);
+    memcpy(&header[0], "RIFF", 4U);
+    write_le32(&header[4], (MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 8U) + data_bytes);
+    memcpy(&header[8], "WAVE", 4U);
+    memcpy(&header[12], "fmt ", 4U);
+    write_le32(&header[16], 16U);
+    write_le16(&header[20], 1U);
+    write_le16(&header[22], MULTI_RECORD_WRITER_CHANNELS);
+    write_le32(&header[24], MULTI_RECORD_WRITER_SAMPLE_RATE_HZ);
+    write_le32(&header[28], byte_rate);
+    write_le16(&header[32], block_align);
+    write_le16(&header[34], MULTI_RECORD_WRITER_BITS_PER_SAMPLE);
+    memcpy(&header[36], "JUNK", 4U);
+    write_le32(&header[40], MRW_WAV_JUNK_BYTES);
+    memcpy(&header[MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 8U], "data", 4U);
+    write_le32(&header[MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES - 4U], data_bytes);
+}
+
+static uint8_t write_wav_header_at_current_pos(multi_record_writer_client_t *client,
+                                               uint32_t data_bytes,
+                                               multi_record_writer_operation_t operation)
+{
+    uint8_t header[MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES];
+    UINT bw = 0U;
+
+    build_wav_header(header, data_bytes);
+    client->last_operation = operation;
+    sd_access_trace_begin("multi_record_wav_header");
+    const FRESULT fr = f_write(&client->file, header, sizeof(header), &bw);
+    sd_access_trace_end("multi_record_wav_header", (int)fr, 0U);
+    if((fr != FR_OK) || (bw != sizeof(header)))
+    {
+        set_sd_error(client, operation, (fr != FR_OK) ? fr : FR_DISK_ERR);
+        return 0U;
+    }
+
+    return 1U;
 }
 
 static int32_t pick_most_filled_client(void)
@@ -179,6 +251,24 @@ static void drain_client_frames(uint32_t client_id, uint32_t frames)
     client->bytes_written += frames * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
 }
 
+static void reset_client_take_fields(multi_record_writer_client_t *client)
+{
+    client->error = MULTI_RECORD_WRITER_ERROR_NONE;
+    client->last_sd_error = FR_OK;
+    client->high_watermark = 0U;
+    client->overflow_count = 0U;
+    client->dropped_frames = 0U;
+    client->degraded = 0U;
+    client->frames_received = 0U;
+    client->frames_drained = 0U;
+    client->frames_written = 0U;
+    client->bytes_written = 0U;
+    client->recorded_frames = 0U;
+    client->raw_take_valid = 0U;
+    client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
+    ring_reset(client);
+}
+
 static uint8_t close_file_if_open(multi_record_writer_client_t *client)
 {
     if(client->file_open == 0U)
@@ -241,7 +331,8 @@ static uint8_t finalize_client_step(uint32_t client_id)
 {
     multi_record_writer_client_t *client = &g_record_clients[client_id];
 
-    if(client->file_open == 0U)
+    if((client->file_open == 0U)
+            && (client->finalize_phase != MRW_FINALIZE_PHASE_RENAME_WAV))
     {
         set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
         client->state = MULTI_RECORD_WRITER_STATE_FAILED;
@@ -252,7 +343,43 @@ static uint8_t finalize_client_step(uint32_t client_id)
 
     if(client->finalize_phase == MRW_FINALIZE_PHASE_BEGIN)
     {
+        client->finalize_phase =
+            (client->backend == MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV) ?
+                MRW_FINALIZE_PHASE_PATCH_WAV_HEADER : MRW_FINALIZE_PHASE_SYNC;
+    }
+
+    if(client->finalize_phase == MRW_FINALIZE_PHASE_PATCH_WAV_HEADER)
+    {
+        sd_access_trace_begin("multi_record_wav_seek0");
+        FRESULT fr = f_lseek(&client->file, 0U);
+        sd_access_trace_end("multi_record_wav_seek0", (int)fr, 0U);
+        if(fr != FR_OK)
+        {
+            set_sd_error(client, MULTI_RECORD_WRITER_OP_PATCH_WAV_HEADER, fr);
+            client->state = MULTI_RECORD_WRITER_STATE_FAILED;
+            (void)close_file_if_open(client);
+            return 0U;
+        }
+
+        if(client->frames_written > MRW_WAV_MAX_FRAMES)
+        {
+            set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+            client->state = MULTI_RECORD_WRITER_STATE_FAILED;
+            (void)close_file_if_open(client);
+            return 0U;
+        }
+
+        if(write_wav_header_at_current_pos(client,
+                                           client->frames_written * MULTI_RECORD_WRITER_BYTES_PER_FRAME,
+                                           MULTI_RECORD_WRITER_OP_PATCH_WAV_HEADER) == 0U)
+        {
+            client->state = MULTI_RECORD_WRITER_STATE_FAILED;
+            (void)close_file_if_open(client);
+            return 0U;
+        }
+
         client->finalize_phase = MRW_FINALIZE_PHASE_SYNC;
+        return 1U;
     }
 
     if(client->finalize_phase == MRW_FINALIZE_PHASE_SYNC)
@@ -285,11 +412,44 @@ static uint8_t finalize_client_step(uint32_t client_id)
         }
 
         client->recorded_frames = client->frames_written;
-        client->raw_take_valid = (client->recorded_frames != 0U) ? 1U : 0U;
+        client->raw_take_valid =
+            ((client->backend == MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW)
+             && (client->recorded_frames != 0U)) ? 1U : 0U;
         client->last_sd_error = FR_OK;
         client->error = (client->overflow_count == 0U) ?
             MULTI_RECORD_WRITER_ERROR_NONE :
             MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW;
+        client->degraded = (client->overflow_count == 0U) ? 0U : 1U;
+        client->finalize_phase =
+            (client->backend == MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV) ?
+                MRW_FINALIZE_PHASE_RENAME_WAV : MRW_FINALIZE_PHASE_BEGIN;
+        if(client->backend != MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV)
+        {
+            client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
+        }
+        return 1U;
+    }
+
+    if(client->finalize_phase == MRW_FINALIZE_PHASE_RENAME_WAV)
+    {
+        if(strncmp(client->raw_path, client->final_path, MULTI_RECORD_WRITER_PATH_MAX) == 0)
+        {
+            client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
+            client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
+            return 1U;
+        }
+
+        client->last_operation = MULTI_RECORD_WRITER_OP_RENAME_WAV;
+        sd_access_trace_begin("multi_record_wav_rename");
+        const FRESULT fr = f_rename(client->raw_path, client->final_path);
+        sd_access_trace_end("multi_record_wav_rename", (int)fr, 0U);
+        if(fr != FR_OK)
+        {
+            set_sd_error(client, MULTI_RECORD_WRITER_OP_RENAME_WAV, fr);
+            client->state = MULTI_RECORD_WRITER_STATE_FAILED;
+            return 0U;
+        }
+
         client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
         client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
     }
@@ -306,6 +466,7 @@ void multi_record_writer_init(void)
     for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
     {
         g_record_clients[i].state = MULTI_RECORD_WRITER_STATE_IDLE;
+        g_record_clients[i].backend = MULTI_RECORD_WRITER_BACKEND_NONE;
         g_record_clients[i].error = MULTI_RECORD_WRITER_ERROR_NONE;
         g_record_clients[i].last_operation = MULTI_RECORD_WRITER_OP_NONE;
         g_record_clients[i].last_sd_error = FR_OK;
@@ -397,23 +558,102 @@ raw_prepare_done:
     if(ok != 0U)
     {
         client->error = MULTI_RECORD_WRITER_ERROR_NONE;
+        client->backend = MULTI_RECORD_WRITER_BACKEND_LOOPER_RAW;
         client->last_operation = MULTI_RECORD_WRITER_OP_PREPARE_RAW;
         client->last_sd_error = FR_OK;
-        client->high_watermark = 0U;
-        client->overflow_count = 0U;
-        client->dropped_frames = 0U;
-        client->frames_received = 0U;
-        client->frames_drained = 0U;
-        client->frames_written = 0U;
-        client->bytes_written = 0U;
         const uint32_t raw_capacity = looper_storage_raw_get_capacity_frames();
         client->frame_limit = ((expected_frames != 0U) && (expected_frames < raw_capacity)) ?
             expected_frames : raw_capacity;
-        client->recorded_frames = 0U;
         client->raw_slot = raw_slot;
-        client->raw_take_valid = 0U;
-        client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
-        ring_reset(client);
+        client->final_path[0] = '\0';
+        reset_client_take_fields(client);
+        client->state = MULTI_RECORD_WRITER_STATE_PREPARED;
+    }
+    else
+    {
+        (void)close_file_if_open(client);
+        client->state = MULTI_RECORD_WRITER_STATE_FAILED;
+    }
+
+    sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
+    return ok;
+}
+
+uint8_t multi_record_writer_prepare_sample_wav(uint8_t client_id,
+                                               const char *temp_path,
+                                               const char *final_path,
+                                               uint32_t frame_limit)
+{
+    if((client_id_valid(client_id) == 0U)
+            || (temp_path == 0)
+            || (temp_path[0] == '\0')
+            || (final_path == 0)
+            || (final_path[0] == '\0'))
+        return 0U;
+
+    multi_record_writer_client_t *client = &g_record_clients[client_id];
+    if((client->state != MULTI_RECORD_WRITER_STATE_IDLE) &&
+       (client->state != MULTI_RECORD_WRITER_STATE_PREPARED) &&
+       (client->state != MULTI_RECORD_WRITER_STATE_TAKE_READY) &&
+       (client->state != MULTI_RECORD_WRITER_STATE_FAILED))
+    {
+        set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+        return 0U;
+    }
+
+    if(close_file_if_open(client) == 0U)
+    {
+        return 0U;
+    }
+
+    if((copy_path(client->raw_path, temp_path) == 0U)
+            || (copy_path(client->final_path, final_path) == 0U))
+    {
+        set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_PATH);
+        return 0U;
+    }
+
+    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
+    {
+        set_error(client, MULTI_RECORD_WRITER_ERROR_SD_BUSY);
+        client->last_operation = MULTI_RECORD_WRITER_OP_PREPARE_SAMPLE_WAV;
+        return 0U;
+    }
+
+    uint8_t ok = 0U;
+    if(sd_access_fs_mount_if_needed() != 0U)
+    {
+        (void)f_unlink(client->raw_path);
+        sd_access_trace_begin("multi_record_open_wav_tmp");
+        FRESULT fr = f_open(&client->file, client->raw_path, FA_CREATE_NEW | FA_WRITE | FA_READ);
+        sd_access_trace_end("multi_record_open_wav_tmp", (int)fr, 0U);
+        if(fr == FR_OK)
+        {
+            client->file_open = 1U;
+            ok = write_wav_header_at_current_pos(client,
+                                                 0U,
+                                                 MULTI_RECORD_WRITER_OP_PREPARE_SAMPLE_WAV);
+        }
+        else
+        {
+            set_sd_error(client, MULTI_RECORD_WRITER_OP_PREPARE_SAMPLE_WAV, fr);
+        }
+    }
+    else
+    {
+        set_sd_error(client, MULTI_RECORD_WRITER_OP_PREPARE_SAMPLE_WAV, FR_NOT_READY);
+    }
+
+    if(ok != 0U)
+    {
+        client->backend = MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV;
+        client->last_operation = MULTI_RECORD_WRITER_OP_PREPARE_SAMPLE_WAV;
+        client->last_sd_error = FR_OK;
+        client->frame_limit =
+            ((frame_limit != 0U) && (frame_limit < MRW_WAV_MAX_FRAMES)) ?
+                frame_limit : MRW_WAV_MAX_FRAMES;
+        client->raw_slot = MULTI_RECORD_WRITER_RAW_SLOT_NONE;
+        reset_client_take_fields(client);
         client->state = MULTI_RECORD_WRITER_STATE_PREPARED;
     }
     else
@@ -436,6 +676,24 @@ uint8_t multi_record_writer_start(uint8_t client_id)
     {
         set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
         return 0U;
+    }
+
+    for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
+    {
+        if(i == client_id)
+        {
+            continue;
+        }
+
+        const multi_record_writer_state_t other_state = g_record_clients[i].state;
+        if((other_state == MULTI_RECORD_WRITER_STATE_RECORDING)
+                || (other_state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
+                || (other_state == MULTI_RECORD_WRITER_STATE_DRAINING)
+                || (other_state == MULTI_RECORD_WRITER_STATE_FINALIZING))
+        {
+            set_error(client, MULTI_RECORD_WRITER_ERROR_INVALID_STATE);
+            return 0U;
+        }
     }
 
     ring_reset(client);
@@ -495,6 +753,7 @@ uint8_t multi_record_writer_push_audio_block_from_irq(uint8_t client_id,
     {
         client->overflow_count++;
         client->dropped_frames += frames_to_store;
+        client->degraded = 1U;
         client->error = MULTI_RECORD_WRITER_ERROR_RING_OVERFLOW;
         return 0U;
     }
@@ -582,9 +841,11 @@ uint8_t multi_record_writer_get_status(uint8_t client_id,
 
     const multi_record_writer_client_t *client = &g_record_clients[client_id];
     out_status->state = client->state;
+    out_status->backend = client->backend;
     out_status->error = client->error;
     out_status->last_operation = client->last_operation;
     out_status->last_sd_error = (uint32_t)client->last_sd_error;
+    out_status->degraded = client->degraded;
     out_status->frames_pending = ring_pending_frames(client);
     out_status->high_watermark = client->high_watermark;
     out_status->overflow_count = client->overflow_count;
@@ -626,6 +887,33 @@ uint8_t multi_record_writer_get_last_raw_take(uint8_t client_id,
     return 1U;
 }
 
+uint8_t multi_record_writer_get_last_sample_wav_take(uint8_t client_id,
+                                                     const char **out_path,
+                                                     uint32_t *out_recorded_frames)
+{
+    if(client_id_valid(client_id) == 0U)
+        return 0U;
+
+    const multi_record_writer_client_t *client = &g_record_clients[client_id];
+    if((client->backend != MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV)
+            || (client->state != MULTI_RECORD_WRITER_STATE_TAKE_READY)
+            || (client->recorded_frames == 0U)
+            || (client->final_path[0] == '\0'))
+    {
+        return 0U;
+    }
+
+    if(out_path != 0)
+    {
+        *out_path = client->final_path;
+    }
+    if(out_recorded_frames != 0)
+    {
+        *out_recorded_frames = client->recorded_frames;
+    }
+    return 1U;
+}
+
 uint8_t multi_record_writer_any_active(void)
 {
     for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
@@ -635,6 +923,25 @@ uint8_t multi_record_writer_any_active(void)
            (state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED) ||
            (state == MULTI_RECORD_WRITER_STATE_DRAINING) ||
            (state == MULTI_RECORD_WRITER_STATE_FINALIZING))
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+uint8_t multi_record_writer_any_active_backend(multi_record_writer_backend_t backend)
+{
+    for(uint32_t i = 0U; i < MULTI_RECORD_WRITER_MAX_CLIENTS; ++i)
+    {
+        const multi_record_writer_client_t *const client = &g_record_clients[i];
+        const multi_record_writer_state_t state = client->state;
+        if((client->backend == backend)
+                && ((state == MULTI_RECORD_WRITER_STATE_RECORDING)
+                    || (state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
+                    || (state == MULTI_RECORD_WRITER_STATE_DRAINING)
+                    || (state == MULTI_RECORD_WRITER_STATE_FINALIZING)))
         {
             return 1U;
         }

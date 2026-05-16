@@ -33,6 +33,7 @@
 #include "led_anim.h"
 #include "led_layer.h"
 #include "Storage/project_v1.h"
+#include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_runtime_bridge.h"
 #include "UI/ui_hall_mode_projection.h"
@@ -434,6 +435,24 @@ static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t de
     led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_ORANGE_G, 0U);
 }
 
+static void led_apply_audio_rec_hall_scene(uint8_t hall)
+{
+    const led_id_t led = led_remap_led_for_hall(hall);
+    if (hall >= UI_TRACK_COUNT)
+    {
+        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
+        return;
+    }
+
+    if (sample_capture_model_source_track_is_enabled(hall) == 0U)
+    {
+        led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
+        return;
+    }
+
+    led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, 0U, LED_FIXED_RED_B);
+}
+
 static void led_apply_pattern_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
@@ -678,6 +697,10 @@ static void led_apply_fixed_scene(void)
             if (ui_get_hall_mode() == UI_HALL_MODE_PATTERN)
             {
                 led_apply_pattern_hall_scene(hall);
+            }
+            else if (ui_get_hall_mode() == UI_HALL_MODE_AUDIO_REC)
+            {
+                led_apply_audio_rec_hall_scene(hall);
             }
             else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_FX)
             {

@@ -15,7 +15,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
 - `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
-- `Src/Core/brick6_app_init.c`: init et service cooperatif du squelette `multi_record_writer`, hors IRQ et sans client actif par defaut.
+- `Src/Core/brick6_app_init.c`: init et service cooperatif du `multi_record_writer` global, hors IRQ et sans client actif par defaut; le writer porte maintenant `LOOPER_RAW` et le backend `SAMPLE_WAV` utilise par Audio Rec.
 - `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
 - `Src/Core/brick6_app_init.c`: le recorder legacy `live_recorder` / `recorder_transport` n'est plus initialise ni servi; le record produit passe par Looper RAW + `multi_record_writer`.
 
@@ -272,6 +272,7 @@ Z0 appelle principalement:
 
 - Z0 porte uniquement l'ordre de service cooperatif hors IRQ; il ne devient pas l'autorite SD metier.
 - Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` sert toujours `multi_record_writer_service(16384U)` en premier pour terminer un drain/finalize deja actif. Si un SAVE Looper RAW -> WAV est actif, la superloop suspend ensuite `sample_cache_service`, `brick6_looper_runtime_service`, `pattern_load_service` et `sd_preview_process`, puis appelle `looper_storage_raw_export_service(516096U)` comme operation SD prioritaire. Hors export actif, l'ordre reste `sample_cache_service(32768U)`, `brick6_looper_runtime_service(8192U)`, puis `looper_storage_raw_export_service(8192U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
+- `SAMPLE_WAV` reutilise ce meme service writer global; aucun second scheduler SD ni second writer FatFs n'est ajoute. `pattern_load_service()` reste cadence pendant Audio Rec; seuls les records/finalisations Looper RAW et exports Looper gardent les refus SD historiques.
 - Ordre cible pour la cohabitation SD audio:
   1. `multi_record_writer_service(...)` pour drainer/finaliser les rings record deja actifs.
   2. `looper_storage_raw_export_service(...)` prioritaire pendant SAVE RAW -> WAV, car SAVE n'est autorise que transport arrete.
@@ -282,4 +283,10 @@ Z0 appelle principalement:
 - Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
 - Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
 - Dimensionnement Looper record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 6.144 MiB pour les 4 clients statiques. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
+
+## 13. Addendum - Audio Rec / Rec Edit skeleton
+
+- Z0 cadence le meme writer SD global pour `SAMPLE_WAV`: aucun service FatFs supplementaire ni second writer n'est ajoute.
+- `sample_capture_model_service()` est appele cote UI/superloop; il orchestre arm/start/stop/finalisation sans toucher au chemin IRQ.
+- `pattern_load_service()` reste cadence pendant un record `SAMPLE_WAV`; les operations project globales restent refusees via les guards writer existants.
 

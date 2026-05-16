@@ -11,7 +11,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bri
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1104:16:ui_core_runtime_bridge_track_type_change_mutate	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1135:16:ui_core_runtime_bridge_track_transition_mutate_bulk_restore	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:100:6:ui_core_runtime_bridge_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:784:6:ui_core_runtime_bridge_service_looper_record_control	144	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:784:6:ui_core_runtime_bridge_service_looper_record_control	152	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:893:6:ui_core_runtime_bridge_service_looper_export_feedback	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:956:6:ui_core_runtime_bridge_get_looper_save_diag	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1181:6:ui_core_runtime_bridge_apply_track_family_change	88	static
@@ -25,7 +25,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bri
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1343:9:ui_core_runtime_bridge_handle_transport_event	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1368:9:ui_core_runtime_bridge_request_undo	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1386:9:ui_core_runtime_bridge_handle_pattern_mode_event	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1401:9:ui_core_runtime_bridge_handle_global_shortcuts	184	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1401:9:ui_core_runtime_bridge_handle_global_shortcuts	192	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1427:9:ui_core_runtime_bridge_handle_seq_mode_event	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1438:6:ui_core_runtime_bridge_step_octave	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:1443:6:ui_core_runtime_bridge_notify_hall_mode_changed	16	static

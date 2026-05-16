@@ -53,6 +53,9 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
         case UI_HALL_MODE_MACRO:
             return UI_HALL_MODE_VIEW_MACRO;
 
+        case UI_HALL_MODE_AUDIO_REC:
+            return UI_HALL_MODE_VIEW_AUDIO_REC;
+
         case UI_HALL_MODE_PATTERN:
             return UI_HALL_MODE_VIEW_PATTERN;
 

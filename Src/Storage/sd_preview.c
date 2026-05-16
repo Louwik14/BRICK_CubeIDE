@@ -12,6 +12,7 @@
 
 #include <string.h>
 
+#include "Sampler/sample_cache.h"
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
@@ -49,6 +50,8 @@ typedef struct
     uint8_t source_curr_valid;
     uint8_t io_error;
     uint32_t data_remaining;
+    uint32_t range_start_frame;
+    uint32_t range_frame_count;
     uint32_t io_pos;
     uint32_t io_len;
     uint32_t prev_index;
@@ -285,7 +288,8 @@ static uint8_t sd_preview_prepare_stream(void)
     }
 
 #if SD_PREVIEW_HAS_FATFS
-    if (f_lseek(&g_sd_preview.fp, g_sd_preview.info.data_offset) != FR_OK)
+    const uint32_t start_byte = g_sd_preview.range_start_frame * g_sd_preview.info.block_align;
+    if (f_lseek(&g_sd_preview.fp, g_sd_preview.info.data_offset + start_byte) != FR_OK)
     {
         return 0U;
     }
@@ -293,7 +297,23 @@ static uint8_t sd_preview_prepare_stream(void)
 
     sd_preview_ring_reset();
     sd_preview_reset_source_state();
-    g_sd_preview.data_remaining = g_sd_preview.info.data_size - (g_sd_preview.info.data_size % g_sd_preview.info.block_align);
+    const uint32_t aligned_data_size = g_sd_preview.info.data_size
+                                     - (g_sd_preview.info.data_size % g_sd_preview.info.block_align);
+    const uint32_t source_frames = aligned_data_size / g_sd_preview.info.block_align;
+    if (g_sd_preview.range_start_frame >= source_frames)
+    {
+        return 0U;
+    }
+    uint32_t range_frames = source_frames - g_sd_preview.range_start_frame;
+    if ((g_sd_preview.range_frame_count != 0U) && (g_sd_preview.range_frame_count < range_frames))
+    {
+        range_frames = g_sd_preview.range_frame_count;
+    }
+    if (range_frames == 0U)
+    {
+        return 0U;
+    }
+    g_sd_preview.data_remaining = range_frames * g_sd_preview.info.block_align;
     g_sd_preview.phase_step = (g_sd_preview.info.sample_rate == 0U)
                                   ? 1.0
                                   : ((double)g_sd_preview.info.sample_rate / (double)SD_PREVIEW_TARGET_RATE);
@@ -480,7 +500,7 @@ float sd_preview_get_gain(void)
     return g_sd_preview.gain;
 }
 
-uint8_t sd_preview_begin(const char *path)
+uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame)
 {
     if ((multi_record_writer_any_active() != 0U)
             || (looper_storage_raw_export_is_active() != 0U))
@@ -503,6 +523,8 @@ uint8_t sd_preview_begin(const char *path)
     sd_preview_clear_session(0U, 1U);
     g_sd_preview.state = SD_PREVIEW_STATE_OPENING;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
+    g_sd_preview.range_start_frame = start_frame;
+    g_sd_preview.range_frame_count = (end_frame > start_frame) ? (end_frame - start_frame) : 0U;
 
     {
         const size_t path_len = strlen(path);
@@ -567,10 +589,26 @@ uint8_t sd_preview_begin(const char *path)
     {
         const uint32_t aligned_data_size = g_sd_preview.info.data_size
                                          - (g_sd_preview.info.data_size % g_sd_preview.info.block_align);
-        g_sd_preview.data_remaining = aligned_data_size;
+        const uint32_t source_frames = aligned_data_size / g_sd_preview.info.block_align;
+        if ((start_frame >= source_frames)
+                || ((end_frame != 0U) && (end_frame <= start_frame)))
+        {
+            sd_preview_set_error(SD_PREVIEW_ERROR_UNSUPPORTED_FORMAT);
+            sd_preview_clear_session(0U, 0U);
+            return 0U;
+        }
+        if ((end_frame != 0U) && (end_frame < source_frames))
+        {
+            g_sd_preview.data_remaining = (end_frame - start_frame) * g_sd_preview.info.block_align;
+        }
+        else
+        {
+            g_sd_preview.data_remaining = aligned_data_size - (start_frame * g_sd_preview.info.block_align);
+        }
     }
 
-    if (f_lseek(&g_sd_preview.fp, g_sd_preview.info.data_offset) != FR_OK)
+    if (f_lseek(&g_sd_preview.fp,
+                g_sd_preview.info.data_offset + (start_frame * g_sd_preview.info.block_align)) != FR_OK)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_OPEN_FAIL);
         sd_preview_clear_session(0U, 0U);
@@ -585,6 +623,11 @@ uint8_t sd_preview_begin(const char *path)
     return 1U;
 }
 
+uint8_t sd_preview_begin(const char *path)
+{
+    return sd_preview_begin_range(path, 0U, 0U);
+}
+
 void sd_preview_stop(void)
 {
     g_sd_preview.state = SD_PREVIEW_STATE_STOPPING;
@@ -596,6 +639,12 @@ void sd_preview_process(void)
     if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
         && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))
     {
+        return;
+    }
+
+    if (sample_cache_has_pending_sd_work() != 0U)
+    {
+        sd_preview_stop();
         return;
     }
 
