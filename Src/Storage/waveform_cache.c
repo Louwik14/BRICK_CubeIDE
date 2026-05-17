@@ -31,8 +31,12 @@
 
 #if defined(__GNUC__)
 #define WAVEFORM_CACHE_PACKED __attribute__((packed))
+#define WAVEFORM_CACHE_ALIGNED4 __attribute__((aligned(4)))
+#define WAVEFORM_CACHE_ALIGNED8 __attribute__((aligned(8)))
 #else
 #define WAVEFORM_CACHE_PACKED
+#define WAVEFORM_CACHE_ALIGNED4
+#define WAVEFORM_CACHE_ALIGNED8
 #endif
 
 typedef struct WAVEFORM_CACHE_PACKED
@@ -101,8 +105,8 @@ typedef struct
     waveform_cache_reason_t reason;
     char wav_path[96U];
     char cache_path[96U];
-    waveform_cache_file_header_t header;
-    waveform_cache_file_level_t table[WAVEFORM_CACHE_FORMAT_LEVEL_COUNT];
+    WAVEFORM_CACHE_ALIGNED8 waveform_cache_file_header_t header;
+    WAVEFORM_CACHE_ALIGNED4 waveform_cache_file_level_t table[WAVEFORM_CACHE_FORMAT_LEVEL_COUNT];
     waveform_cache_build_level_t levels[WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT];
     uint32_t next_frame;
     uint8_t header_written;
@@ -468,6 +472,7 @@ static uint8_t waveform_cache_build_identity(const char *path,
     FIL fp;
     FILINFO fno;
     wav_info_t info;
+    WAVEFORM_CACHE_ALIGNED8 waveform_cache_file_header_t header;
     uint8_t ok = 0U;
 
     if((path == 0) || (path[0] == '\0') || (out_header == 0)
@@ -476,7 +481,7 @@ static uint8_t waveform_cache_build_identity(const char *path,
         return 0U;
     }
 
-    memset(out_header, 0, sizeof(*out_header));
+    memset(&header, 0, sizeof(header));
     if(sd_access_fs_mount_if_needed() == 0U)
     {
         return 0U;
@@ -517,26 +522,26 @@ static uint8_t waveform_cache_build_identity(const char *path,
         const uint32_t tail_bytes = head_bytes;
         const uint32_t tail_offset = info.data_offset + hashable_data_size - tail_bytes;
 
-        memcpy(out_header->magic, "BRKWAVE", 7U);
-        out_header->version = WAVEFORM_CACHE_VERSION;
-        out_header->endian = WAVEFORM_CACHE_ENDIAN_LE;
-        out_header->header_size =
+        memcpy(header.magic, "BRKWAVE", 7U);
+        header.version = WAVEFORM_CACHE_VERSION;
+        header.endian = WAVEFORM_CACHE_ENDIAN_LE;
+        header.header_size =
             (uint16_t)(sizeof(waveform_cache_file_header_t)
                 + (sizeof(waveform_cache_file_level_t) * WAVEFORM_CACHE_FORMAT_LEVEL_COUNT));
-        out_header->state = (uint8_t)WAVEFORM_CACHE_STATE_BUILDING;
-        out_header->path_hash = waveform_cache_hash_path(path);
-        out_header->wav_size = wav_size;
-        out_header->data_offset = info.data_offset;
-        out_header->frame_count = info.data_size / (uint32_t)info.block_align;
-        out_header->sample_rate = info.sample_rate;
-        out_header->channels = info.channels;
-        out_header->bits_per_sample = info.bits_per_sample;
-        out_header->block_align = info.block_align;
-        out_header->level_count = WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT;
-        out_header->fat_date_time = ((uint32_t)fno.fdate << 16) | (uint32_t)fno.ftime;
+        header.state = (uint8_t)WAVEFORM_CACHE_STATE_BUILDING;
+        header.path_hash = waveform_cache_hash_path(path);
+        header.wav_size = wav_size;
+        header.data_offset = info.data_offset;
+        header.frame_count = info.data_size / (uint32_t)info.block_align;
+        header.sample_rate = info.sample_rate;
+        header.channels = info.channels;
+        header.bits_per_sample = info.bits_per_sample;
+        header.block_align = info.block_align;
+        header.level_count = WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT;
+        header.fat_date_time = ((uint32_t)fno.fdate << 16) | (uint32_t)fno.ftime;
         uint64_t head_hash = 0ULL;
         uint64_t tail_hash = 0ULL;
-        if((out_header->frame_count == 0U)
+        if((header.frame_count == 0U)
                 || (waveform_cache_hash_file_range(&fp,
                                                    info.data_offset,
                                                    head_bytes,
@@ -550,13 +555,21 @@ static uint8_t waveform_cache_build_identity(const char *path,
         {
             break;
         }
-        out_header->head_hash = head_hash;
-        out_header->tail_hash = tail_hash;
-        waveform_cache_make_sample_id(out_header);
+        header.head_hash = head_hash;
+        header.tail_hash = tail_hash;
+        waveform_cache_make_sample_id(&header);
         ok = 1U;
     } while(0);
 
     (void)f_close(&fp);
+    if(ok != 0U)
+    {
+        memcpy(out_header, &header, sizeof(header));
+    }
+    else
+    {
+        memset(out_header, 0, sizeof(*out_header));
+    }
     return ok;
 }
 
@@ -697,19 +710,21 @@ static uint8_t waveform_cache_read_ready_header(const uint8_t *sample_id,
     FIL fp;
     UINT br = 0U;
     uint8_t ok = 0U;
+    WAVEFORM_CACHE_ALIGNED8 waveform_cache_file_header_t header;
+    WAVEFORM_CACHE_ALIGNED4 waveform_cache_file_level_t table[WAVEFORM_CACHE_FORMAT_LEVEL_COUNT];
     if(f_open(&fp, cache_path, FA_READ) != FR_OK)
     {
         return 0U;
     }
     do
     {
-        if((f_read(&fp, out_header, sizeof(*out_header), &br) != FR_OK)
-                || (br != sizeof(*out_header)))
+        if((f_read(&fp, &header, sizeof(header), &br) != FR_OK)
+                || (br != sizeof(header)))
         {
             break;
         }
         if((f_read(&fp,
-                   out_table,
+                   table,
                    sizeof(waveform_cache_file_level_t) * WAVEFORM_CACHE_FORMAT_LEVEL_COUNT,
                    &br) != FR_OK)
                 || (br != (sizeof(waveform_cache_file_level_t)
@@ -717,14 +732,14 @@ static uint8_t waveform_cache_read_ready_header(const uint8_t *sample_id,
         {
             break;
         }
-        if((memcmp(out_header->magic, "BRKWAVE", 7U) != 0)
-                || (out_header->version != WAVEFORM_CACHE_VERSION)
-                || (out_header->endian != WAVEFORM_CACHE_ENDIAN_LE)
-                || (out_header->state != (uint8_t)WAVEFORM_CACHE_STATE_READY)
-                || (memcmp(out_header->sample_id,
+        if((memcmp(header.magic, "BRKWAVE", 7U) != 0)
+                || (header.version != WAVEFORM_CACHE_VERSION)
+                || (header.endian != WAVEFORM_CACHE_ENDIAN_LE)
+                || (header.state != (uint8_t)WAVEFORM_CACHE_STATE_READY)
+                || (memcmp(header.sample_id,
                            sample_id,
                            WAVEFORM_CACHE_SAMPLE_ID_BYTES) != 0)
-                || (out_header->level_count != WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT))
+                || (header.level_count != WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT))
         {
             break;
         }
@@ -732,10 +747,10 @@ static uint8_t waveform_cache_read_ready_header(const uint8_t *sample_id,
         ok = 1U;
         for(uint8_t i = 0U; i < WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT; ++i)
         {
-            if((out_table[i].level_id != i)
-                    || (out_table[i].frames_per_column != g_waveform_cache_level_frames[i])
-                    || (out_table[i].tile_columns != WAVEFORM_CACHE_TILE_COLUMNS)
-                    || ((out_table[i].data_offset + out_table[i].data_size) > file_size))
+            if((table[i].level_id != i)
+                    || (table[i].frames_per_column != g_waveform_cache_level_frames[i])
+                    || (table[i].tile_columns != WAVEFORM_CACHE_TILE_COLUMNS)
+                    || ((table[i].data_offset + table[i].data_size) > file_size))
             {
                 ok = 0U;
                 break;
@@ -744,6 +759,13 @@ static uint8_t waveform_cache_read_ready_header(const uint8_t *sample_id,
     } while(0);
 
     (void)f_close(&fp);
+    if(ok != 0U)
+    {
+        memcpy(out_header, &header, sizeof(header));
+        memcpy(out_table,
+               table,
+               sizeof(waveform_cache_file_level_t) * WAVEFORM_CACHE_FORMAT_LEVEL_COUNT);
+    }
     return ok;
 }
 

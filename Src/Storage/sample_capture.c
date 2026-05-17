@@ -46,6 +46,10 @@
 #define SAMPLE_CAPTURE_LINE_MIN_VISIBLE_FRAMES SAMPLE_CAPTURE_LINE_POINTS
 #define SAMPLE_CAPTURE_LINE_BUILD_CHUNK_FRAMES 2048U
 #define SAMPLE_CAPTURE_LINE_LARGE_SETTLE_TICKS 4U
+#define SAMPLE_CAPTURE_ZCROSS_SEARCH_FRAMES 2048U
+#define SAMPLE_CAPTURE_ZCROSS_SAME_GUARD_FRAMES 8U
+#define SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT 2U
+#define SAMPLE_CAPTURE_EDIT_VZOOM_MAX 8U
 #define SAMPLE_CAPTURE_EDITOR_TILE_COUNT 16U
 #define SAMPLE_CAPTURE_EDITOR_TILE_FRAMES (MULTI_RECORD_WRITER_SAMPLE_RATE_HZ / 2U)
 #define SAMPLE_CAPTURE_EDITOR_CACHE_FRAMES \
@@ -2289,16 +2293,35 @@ static uint32_t sample_capture_edit_scroll_step(void)
     return step;
 }
 
-static void sample_capture_clamp_edit_window(void)
+static uint32_t sample_capture_clamp_u32(uint32_t v, uint32_t lo, uint32_t hi)
+{
+    if(v < lo)
+    {
+        return lo;
+    }
+    if(v > hi)
+    {
+        return hi;
+    }
+    return v;
+}
+
+static void sample_capture_clamp_edit_markers(void)
 {
     if(g_sample_capture.state.recorded_frames == 0U)
     {
         g_sample_capture.state.edit_start_frame = 0U;
         g_sample_capture.state.edit_end_frame = 0U;
+        g_sample_capture.state.edit_loop_start_frame = 0U;
+        g_sample_capture.state.edit_loop_end_frame = 0U;
         g_sample_capture.state.edit_scroll_frame = 0U;
         return;
     }
 
+    if(g_sample_capture.state.edit_end_frame == 0U)
+    {
+        g_sample_capture.state.edit_end_frame = 1U;
+    }
     if(g_sample_capture.state.edit_end_frame > g_sample_capture.state.recorded_frames)
     {
         g_sample_capture.state.edit_end_frame = g_sample_capture.state.recorded_frames;
@@ -2307,6 +2330,18 @@ static void sample_capture_clamp_edit_window(void)
     {
         g_sample_capture.state.edit_start_frame = g_sample_capture.state.edit_end_frame - 1U;
     }
+    if(g_sample_capture.state.edit_loop_end_frame == 0U)
+    {
+        g_sample_capture.state.edit_loop_end_frame = g_sample_capture.state.edit_end_frame;
+    }
+    g_sample_capture.state.edit_loop_start_frame =
+        sample_capture_clamp_u32(g_sample_capture.state.edit_loop_start_frame,
+                                 g_sample_capture.state.edit_start_frame,
+                                 g_sample_capture.state.edit_end_frame - 1U);
+    g_sample_capture.state.edit_loop_end_frame =
+        sample_capture_clamp_u32(g_sample_capture.state.edit_loop_end_frame,
+                                 g_sample_capture.state.edit_loop_start_frame + 1U,
+                                 g_sample_capture.state.edit_end_frame);
 
     uint32_t visible_frames =
         sample_capture_model_visible_frames_for_zoom(g_sample_capture.state.recorded_frames,
@@ -2363,6 +2398,143 @@ static void sample_capture_set_zoom_preserve_center(uint8_t next_zoom)
         new_start = sample_capture_clamp_scroll_for_visible(new_start, new_visible);
     }
     g_sample_capture.state.edit_scroll_frame = new_start;
+}
+
+static uint8_t sample_capture_sign_crosses(int16_t a, int16_t b)
+{
+    return (uint8_t)(((a <= 0) && (b >= 0)) || ((a >= 0) && (b <= 0)));
+}
+
+static uint32_t sample_capture_add_saturate_u32(uint32_t a, uint32_t b)
+{
+    return (b > (0xFFFFFFFFUL - a)) ? 0xFFFFFFFFUL : (a + b);
+}
+
+static uint32_t sample_capture_snap_to_zcross(uint32_t current,
+                                              uint32_t candidate,
+                                              int16_t delta,
+                                              uint32_t min_frame,
+                                              uint32_t max_frame)
+{
+    if(g_sample_capture.state.edit_zcross_enabled == 0U)
+    {
+        return candidate;
+    }
+
+    if(min_frame > max_frame)
+    {
+        return candidate;
+    }
+
+    current = sample_capture_clamp_u32(current, min_frame, max_frame);
+    candidate = sample_capture_clamp_u32(candidate, min_frame, max_frame);
+    const uint8_t right = (delta > 0) ? 1U : 0U;
+    const uint32_t candidate_dist =
+        (candidate > current) ? (candidate - current) : (current - candidate);
+    uint32_t search_span = SAMPLE_CAPTURE_ZCROSS_SEARCH_FRAMES;
+    if(candidate_dist > search_span)
+    {
+        search_span = candidate_dist;
+    }
+
+    uint32_t search_start = min_frame;
+    uint32_t search_end = max_frame;
+    if(right != 0U)
+    {
+        search_start = sample_capture_add_saturate_u32(current,
+                                                       SAMPLE_CAPTURE_ZCROSS_SAME_GUARD_FRAMES);
+        search_end = sample_capture_add_saturate_u32(current, search_span);
+    }
+    else
+    {
+        search_start = (current > search_span) ? (current - search_span) : 0U;
+        search_end = (current > SAMPLE_CAPTURE_ZCROSS_SAME_GUARD_FRAMES)
+            ? (current - SAMPLE_CAPTURE_ZCROSS_SAME_GUARD_FRAMES)
+            : 0U;
+    }
+    search_start = sample_capture_clamp_u32(search_start, min_frame, max_frame);
+    search_end = sample_capture_clamp_u32(search_end, min_frame, max_frame);
+    if(search_end < search_start)
+    {
+        return candidate;
+    }
+
+    uint32_t cover_start = search_start;
+    if(cover_start > min_frame)
+    {
+        cover_start--;
+    }
+    if(sample_capture_editor_cache_covers(cover_start, (search_end - cover_start) + 1U) != 0U)
+    {
+        if(right != 0U)
+        {
+            int16_t prev = sample_capture_editor_sample_at(cover_start);
+            for(uint32_t frame = cover_start + 1U; frame <= search_end; ++frame)
+            {
+                const int16_t cur = sample_capture_editor_sample_at(frame);
+                if((frame >= search_start) && (sample_capture_sign_crosses(prev, cur) != 0U))
+                {
+                    return sample_capture_clamp_u32(frame, min_frame, max_frame);
+                }
+                prev = cur;
+                if(frame == 0xFFFFFFFFUL)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            for(uint32_t frame = search_end; frame > cover_start; --frame)
+            {
+                if(frame < search_start)
+                {
+                    continue;
+                }
+                const int16_t prev = sample_capture_editor_sample_at(frame - 1U);
+                const int16_t cur = sample_capture_editor_sample_at(frame);
+                if(sample_capture_sign_crosses(prev, cur) != 0U)
+                {
+                    return sample_capture_clamp_u32(frame, min_frame, max_frame);
+                }
+            }
+        }
+    }
+
+    if((g_sample_capture_line_hot.valid != 0U)
+            && (g_sample_capture_line_hot.count > 1U)
+            && (g_sample_capture_line_hot.frames != 0U)
+            && (search_start >= g_sample_capture_line_hot.start_frame)
+            && (search_end <= (g_sample_capture_line_hot.start_frame + g_sample_capture_line_hot.frames)))
+    {
+        uint32_t best_frame = candidate;
+        uint32_t best_dist = 0xFFFFFFFFUL;
+        uint16_t best_abs = 0xFFFFU;
+        for(uint16_t point = 0U; point < g_sample_capture_line_hot.count; ++point)
+        {
+            const uint32_t frame = g_sample_capture_line_hot.start_frame
+                + (uint32_t)(((uint64_t)point * (uint64_t)g_sample_capture_line_hot.frames)
+                    / (uint64_t)(g_sample_capture_line_hot.count - 1U));
+            if((frame < search_start) || (frame > search_end))
+            {
+                continue;
+            }
+            const uint16_t abs_v = sample_capture_abs_i16(g_sample_capture_line_hot.points[point]);
+            const uint32_t dist = (frame > current) ? (frame - current) : (current - frame);
+            if((abs_v < best_abs) || ((abs_v == best_abs) && (dist < best_dist)))
+            {
+                best_frame = frame;
+                best_dist = dist;
+                best_abs = abs_v;
+            }
+        }
+        if(best_dist != 0xFFFFFFFFUL)
+        {
+            return sample_capture_clamp_u32(best_frame, min_frame, max_frame);
+        }
+    }
+
+    return candidate;
 }
 
 static void sample_capture_capture_wait_baseline(void)
@@ -2576,7 +2748,11 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
     g_sample_capture.state.recorded_frames = frames;
     g_sample_capture.state.edit_start_frame = 0U;
     g_sample_capture.state.edit_end_frame = frames;
+    g_sample_capture.state.edit_loop_start_frame = 0U;
+    g_sample_capture.state.edit_loop_end_frame = frames;
     g_sample_capture.state.edit_zoom = 0U;
+    g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
+    g_sample_capture.state.edit_zcross_enabled = 0U;
     g_sample_capture.state.edit_scroll_frame = 0U;
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_REC_EDIT;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
@@ -2672,6 +2848,7 @@ void sample_capture_model_init(void)
     g_sample_capture.state.len_bars = 1U;
     g_sample_capture.state.quant = SAMPLE_CAPTURE_QUANT_NOW;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
+    g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
     sample_capture_waveform_reset();
     sample_capture_detail_reset();
 }
@@ -2847,7 +3024,7 @@ uint8_t sample_capture_model_step_quant(int16_t delta)
     return 1U;
 }
 
-uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
+uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held)
 {
     if((delta == 0) || (g_sample_capture.state.take_valid == 0U))
     {
@@ -2855,11 +3032,81 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
     }
 
     const uint32_t coarse = (delta > 0) ? (uint32_t)delta : (uint32_t)(-delta);
-    const uint32_t step = coarse * sample_capture_edit_marker_step();
+    uint32_t marker_step = sample_capture_edit_marker_step();
+    if((alt_held != 0U) && (encoder == 1U))
+    {
+        marker_step /= 8U;
+        if(marker_step == 0U)
+        {
+            marker_step = 1U;
+        }
+    }
+    const uint32_t step = coarse * marker_step;
     uint8_t changed = 0U;
 
-    if(encoder == 2U)
+    if((alt_held != 0U) && (encoder == 0U))
     {
+        int16_t next = (int16_t)g_sample_capture.state.edit_vzoom + ((delta > 0) ? 1 : -1);
+        if(next < 0)
+        {
+            next = 0;
+        }
+        if(next > (int16_t)SAMPLE_CAPTURE_EDIT_VZOOM_MAX)
+        {
+            next = (int16_t)SAMPLE_CAPTURE_EDIT_VZOOM_MAX;
+        }
+        g_sample_capture.state.edit_vzoom = (uint8_t)next;
+        changed = 1U;
+    }
+    else if((alt_held != 0U) && (encoder == 2U))
+    {
+        const uint32_t current = g_sample_capture.state.edit_loop_start_frame;
+        uint32_t next = current;
+        if(delta > 0)
+        {
+            next = (step > (0xFFFFFFFFUL - next)) ? 0xFFFFFFFFUL : (next + step);
+        }
+        else
+        {
+            next = (step < next) ? (next - step) : 0U;
+        }
+        next = sample_capture_clamp_u32(next,
+                                        g_sample_capture.state.edit_start_frame,
+                                        g_sample_capture.state.edit_loop_end_frame - 1U);
+        g_sample_capture.state.edit_loop_start_frame =
+            sample_capture_snap_to_zcross(current,
+                                          next,
+                                          delta,
+                                          g_sample_capture.state.edit_start_frame,
+                                          g_sample_capture.state.edit_loop_end_frame - 1U);
+        changed = 1U;
+    }
+    else if((alt_held != 0U) && (encoder == 3U))
+    {
+        const uint32_t current = g_sample_capture.state.edit_loop_end_frame;
+        uint32_t next = current;
+        if(delta > 0)
+        {
+            next = (step > (0xFFFFFFFFUL - next)) ? 0xFFFFFFFFUL : (next + step);
+        }
+        else
+        {
+            next = (step < next) ? (next - step) : 0U;
+        }
+        next = sample_capture_clamp_u32(next,
+                                        g_sample_capture.state.edit_loop_start_frame + 1U,
+                                        g_sample_capture.state.edit_end_frame);
+        g_sample_capture.state.edit_loop_end_frame =
+            sample_capture_snap_to_zcross(current,
+                                          next,
+                                          delta,
+                                          g_sample_capture.state.edit_loop_start_frame + 1U,
+                                          g_sample_capture.state.edit_end_frame);
+        changed = 1U;
+    }
+    else if(encoder == 2U)
+    {
+        const uint32_t current = g_sample_capture.state.edit_start_frame;
         if(delta > 0)
         {
             if(step > (0xFFFFFFFFUL - g_sample_capture.state.edit_start_frame))
@@ -2883,10 +3130,17 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
         {
             g_sample_capture.state.edit_start_frame = 0U;
         }
+        g_sample_capture.state.edit_start_frame =
+            sample_capture_snap_to_zcross(current,
+                                          g_sample_capture.state.edit_start_frame,
+                                          delta,
+                                          0U,
+                                          g_sample_capture.state.edit_end_frame - 1U);
         changed = 1U;
     }
     else if(encoder == 3U)
     {
+        const uint32_t current = g_sample_capture.state.edit_end_frame;
         if(delta > 0)
         {
             if(step > (0xFFFFFFFFUL - g_sample_capture.state.edit_end_frame))
@@ -2911,6 +3165,12 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
         {
             g_sample_capture.state.edit_end_frame = g_sample_capture.state.edit_start_frame + 1U;
         }
+        g_sample_capture.state.edit_end_frame =
+            sample_capture_snap_to_zcross(current,
+                                          g_sample_capture.state.edit_end_frame,
+                                          delta,
+                                          g_sample_capture.state.edit_start_frame + 1U,
+                                          g_sample_capture.state.recorded_frames);
         changed = 1U;
     }
     else if(encoder == 0U)
@@ -2949,7 +3209,16 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
     }
     else if(encoder == 1U)
     {
-        const uint32_t scroll_step = coarse * sample_capture_edit_scroll_step();
+        uint32_t scroll_unit = sample_capture_edit_scroll_step();
+        if(alt_held != 0U)
+        {
+            scroll_unit /= 8U;
+            if(scroll_unit == 0U)
+            {
+                scroll_unit = 1U;
+            }
+        }
+        const uint32_t scroll_step = coarse * scroll_unit;
         if(delta > 0)
         {
             if(scroll_step > (0xFFFFFFFFUL - g_sample_capture.state.edit_scroll_frame))
@@ -2974,7 +3243,7 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
 
     if(changed != 0U)
     {
-        sample_capture_clamp_edit_window();
+        sample_capture_clamp_edit_markers();
         if(g_sample_capture.state.final_path[0] != '\0')
         {
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
@@ -3864,5 +4133,50 @@ uint8_t sample_capture_model_assign_trimmed(void)
         return 0U;
     }
 
+    return 1U;
+}
+
+uint8_t sample_capture_model_assign_saved_take_to_pool(void)
+{
+    if(g_sample_capture.state.final_path[0] == '\0')
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_TAKE);
+        return 0U;
+    }
+
+    uint16_t slot = SAMPLE_POOL_SIZE;
+    for(uint16_t i = 0U; i < SAMPLE_POOL_SIZE; ++i)
+    {
+        if(sample_pool_get_state(i) == SAMPLE_POOL_SLOT_EMPTY)
+        {
+            slot = i;
+            break;
+        }
+    }
+
+    if(slot >= SAMPLE_POOL_SIZE)
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_SLOT);
+        return 0U;
+    }
+
+    if(sample_pool_load(slot, g_sample_capture.state.final_path) == false)
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+        return 0U;
+    }
+
+    g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+    if(g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ERROR)
+    {
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
+    }
+    return 1U;
+}
+
+uint8_t sample_capture_model_toggle_zcross(void)
+{
+    g_sample_capture.state.edit_zcross_enabled =
+        (g_sample_capture.state.edit_zcross_enabled == 0U) ? 1U : 0U;
     return 1U;
 }

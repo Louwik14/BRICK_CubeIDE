@@ -117,7 +117,11 @@ typedef struct
     uint32_t recorded_frames;
     uint32_t edit_start_frame;
     uint32_t edit_end_frame;
+    uint32_t edit_loop_start_frame;
+    uint32_t edit_loop_end_frame;
     uint8_t edit_zoom;
+    uint8_t edit_vzoom;
+    uint8_t edit_zcross_enabled;
     uint32_t edit_scroll_frame;
     uint16_t waveform_count;
     uint32_t waveform_bucket_frames;
@@ -160,7 +164,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm);
 uint8_t sample_capture_model_step_arm(int16_t delta);
 uint8_t sample_capture_model_step_len(int16_t delta);
 uint8_t sample_capture_model_step_quant(int16_t delta);
-uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta);
+uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
 uint32_t sample_capture_model_tile_cache_capacity_frames(void);
 uint8_t sample_capture_model_view_uses_tile_cache(uint32_t frame_count);
@@ -196,6 +200,8 @@ uint8_t sample_capture_model_return_to_audio_rec(void);
 uint8_t sample_capture_model_audition_trimmed(void);
 uint8_t sample_capture_model_save_trimmed(void);
 uint8_t sample_capture_model_assign_trimmed(void);
+uint8_t sample_capture_model_assign_saved_take_to_pool(void);
+uint8_t sample_capture_model_toggle_zcross(void);
 
 #ifdef __cplusplus
 }
