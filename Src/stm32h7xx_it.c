@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "cpu_load.h"
 #include "encoders_hw.h"
+#include "Core/rec_live_debug.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -406,7 +407,7 @@ void SAI2_IRQHandler(void)
 void hardfault_c(uint32_t *sp)
 {
   __disable_irq();
-  (void)sp;
+  rec_live_debug_hardfault(sp);
 
   while (1);
 }void OTG_HS_IRQHandler(void)

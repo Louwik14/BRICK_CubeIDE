@@ -15,7 +15,9 @@ typedef enum
     SD_ACCESS_CLIENT_SAMPLE_CACHE = 5,
     /* Preview is exclusive: no shared ownership with other SD clients. */
     SD_ACCESS_CLIENT_PREVIEW = 6,
-    SD_ACCESS_CLIENT_WAV_CONVERT = 7
+    SD_ACCESS_CLIENT_WAV_CONVERT = 7,
+    SD_ACCESS_CLIENT_EDITOR_CACHE = 8,
+    SD_ACCESS_CLIENT_WAVEFORM_CACHE = 9
 } sd_access_client_t;
 
 void sd_access_gate_init(void);

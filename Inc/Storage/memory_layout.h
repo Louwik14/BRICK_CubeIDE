@@ -73,6 +73,9 @@
 /* Recorder/export scratch used by SD writer/export services, not IRQ producers. */
 #define RECORDER_SCRATCH_SDRAM SEC_ATTR(".recorder_scratch_sdram") ALIGN32
 
+/* Volatile editor-owned audio focus cache, not sample-owned and never IRQ-owned. */
+#define EDITOR_AUDIO_CACHE_SDRAM SEC_ATTR(".editor_audio_cache_sdram") ALIGN32
+
 /* Dedicated SDRAM arena for resident samples. */
 #define SDRAM_SAMPLES SEC_ATTR(".sdram_samples") ALIGN32
 

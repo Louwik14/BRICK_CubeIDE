@@ -106,6 +106,13 @@ static int wav_ext_is_wav(const char *name)
            ((name[len - 1U] == 'v') || (name[len - 1U] == 'V'));
 }
 
+static uint8_t wav_loader_path_is_hidden_system_cache(const char *path)
+{
+    static const char prefix[] = "0:/BRICK/.wavecache/";
+    return (uint8_t)((path != 0)
+            && (strncmp(path, prefix, sizeof(prefix) - 1U) == 0));
+}
+
 static void wav_loader_catalog_clear(void)
 {
     memset(g_wav_catalog, 0, sizeof(g_wav_catalog));
@@ -117,6 +124,7 @@ static void wav_loader_catalog_add(const char *display_name, const char *path)
 {
     if ((display_name == 0) || (display_name[0] == '\0')
         || (path == 0) || (path[0] == '\0')
+        || (wav_loader_path_is_hidden_system_cache(path) != 0U)
         || (g_wav_catalog_count >= WAV_LOADER_CATALOG_MAX))
     {
         return;
@@ -137,7 +145,8 @@ static void wav_loader_catalog_add(const char *display_name, const char *path)
 
 uint8_t wav_loader_catalog_notify_file_created(const char *path)
 {
-    if ((path == 0) || (path[0] == '\0') || (!wav_ext_is_wav(path)))
+    if ((path == 0) || (path[0] == '\0') || (!wav_ext_is_wav(path))
+            || (wav_loader_path_is_hidden_system_cache(path) != 0U))
     {
         return 0U;
     }
@@ -203,6 +212,10 @@ static void wav_loader_catalog_scan_dir(const char *dir_path, const char *displa
 {
     DIR dir;
     FILINFO fno;
+    if(wav_loader_path_is_hidden_system_cache(dir_path) != 0U)
+    {
+        return;
+    }
     FRESULT fr = f_opendir(&dir, dir_path);
     if (fr != FR_OK)
     {

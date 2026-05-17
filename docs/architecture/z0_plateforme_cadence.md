@@ -290,3 +290,10 @@ Z0 appelle principalement:
 - `sample_capture_model_service()` est appele cote UI/superloop; il orchestre arm/start/stop/finalisation sans toucher au chemin IRQ.
 - `pattern_load_service()` reste cadence pendant un record `SAMPLE_WAV`; les operations project globales restent refusees via les guards writer existants.
 
+## Addendum - Waveform cache persistant
+
+- Z0 initialise `waveform_cache` apres `sd_access_gate_init()` et tente seulement de creer/verifier `0:/BRICK` puis `0:/BRICK/.wavecache` au boot.
+- Aucun sample n'est scanne au boot et aucun `.brkwave` n'est genere au boot; un echec SD/mkdir reste non bloquant.
+- La superloop cadence `waveform_cache_service()` hors IRQ, apres les services sample/writer/refill/pattern prioritaires et avant la preview opportuniste.
+- Apres une finalisation Audio Rec, les services SD Rec Edit et `.wavecache` sont explicitement differes de deux passes pour laisser `TAKE_READY -> Rec Edit` initialiser le modele et produire le premier rendu sans FatFs.
+

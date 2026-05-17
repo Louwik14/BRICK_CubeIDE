@@ -7,6 +7,9 @@
 #include "ui_event.h"
 #include "ui_page_manager.h"
 
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+#include "stm32h7xx_hal.h"
+#endif
 #include <stdio.h>
 
 typedef enum
@@ -14,6 +17,10 @@ typedef enum
     UI_AUDIO_REC_WAVE_VERTICAL_FIXED_FULL_SCALE = 0,
     UI_AUDIO_REC_WAVE_VERTICAL_LOCAL_VIEW_NORMALIZED
 } ui_audio_rec_wave_vertical_mode_t;
+
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+static uint32_t g_ui_page_audio_rec_last_waveform_ms;
+#endif
 
 static void ui_page_audio_rec_enter(void)
 {
@@ -244,6 +251,11 @@ static uint16_t ui_page_audio_rec_take_peak(const sample_capture_state_t *state)
     {
         peak = state->line_peak;
     }
+    const uint16_t global_peak = sample_capture_model_global_overview_peak();
+    if(global_peak > peak)
+    {
+        peak = global_peak;
+    }
     return peak;
 }
 
@@ -333,7 +345,8 @@ static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *s
                                                  int y,
                                                  int w,
                                                  int h,
-                                                 uint16_t vertical_ref)
+                                                 uint16_t vertical_ref,
+                                                 uint16_t *out_segments)
 {
     const int inner_x = x + 1;
     const int inner_y = y + 1;
@@ -344,9 +357,14 @@ static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *s
     if((inner_w <= 1) || (inner_h <= 2) || (state->line_valid == 0U)
             || (state->line_count < 2U) || (vertical_ref == 0U))
     {
+        if(out_segments != 0)
+        {
+            *out_segments = 0U;
+        }
         return;
     }
 
+    uint16_t segments = 0U;
     int prev_x = inner_x;
     int prev_y = ui_page_audio_rec_sample_to_y(state->line[0],
                                                inner_y,
@@ -367,9 +385,14 @@ static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *s
         if(draw_x != prev_x || draw_y != prev_y)
         {
             drv_display_draw_line(prev_x, prev_y, draw_x, draw_y);
+            segments++;
         }
         prev_x = draw_x;
         prev_y = draw_y;
+    }
+    if(out_segments != 0)
+    {
+        *out_segments = segments;
     }
 }
 
@@ -470,8 +493,258 @@ static void ui_page_audio_rec_draw_waveform_range(const sample_capture_state_t *
     }
 }
 
+static uint8_t ui_page_audio_rec_draw_global_overview(int x,
+                                                      int y,
+                                                      int w,
+                                                      int h,
+                                                      uint32_t view_start_frame,
+                                                      uint32_t view_frames,
+                                                      uint16_t vertical_ref)
+{
+    const int inner_x = x + 1;
+    const int inner_y = y + 1;
+    const int inner_w = w - 2;
+    const int inner_h = h - 2;
+    const int cy = y + (h / 2);
+
+    if((inner_w <= 0) || (inner_h <= 2) || (vertical_ref == 0U)
+            || (sample_capture_model_global_overview_ready() == 0U))
+    {
+        return 0U;
+    }
+    if(view_frames == 0U)
+    {
+        view_frames = 1U;
+    }
+
+    for(int col = 0; col < inner_w; ++col)
+    {
+        const uint32_t frame0 = view_start_frame
+            + (uint32_t)(((uint64_t)col * (uint64_t)view_frames) / (uint64_t)inner_w);
+        uint32_t frame1 = view_start_frame
+            + (uint32_t)(((uint64_t)(col + 1) * (uint64_t)view_frames) / (uint64_t)inner_w);
+        if(frame1 <= frame0)
+        {
+            frame1 = frame0 + 1U;
+        }
+
+        int16_t min_v = 0;
+        int16_t max_v = 0;
+        if(sample_capture_model_global_overview_minmax(frame0,
+                                                       frame1 - frame0,
+                                                       &min_v,
+                                                       &max_v) == 0U)
+        {
+            continue;
+        }
+        ui_page_audio_rec_draw_minmax_column(inner_x + col,
+                                             inner_y,
+                                             inner_h,
+                                             cy,
+                                             min_v,
+                                             max_v,
+                                             vertical_ref);
+    }
+    return 1U;
+}
+
+static uint8_t ui_page_audio_rec_wavecache_request_visible(const waveform_cache_handle_t *handle,
+                                                           waveform_cache_level_id_t level,
+                                                           uint32_t view_start_frame,
+                                                           uint32_t view_frames,
+                                                           uint16_t inner_w,
+                                                           uint32_t *out_tile_start,
+                                                           uint32_t *out_tile_count)
+{
+    uint32_t frames_per_column = 0U;
+    if((handle == 0)
+            || (inner_w == 0U)
+            || (waveform_cache_level_frames_per_column(level, &frames_per_column) == 0U)
+            || (frames_per_column == 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t view_end = view_start_frame + view_frames;
+    uint32_t col0 = view_start_frame / frames_per_column;
+    uint32_t col1 = (view_end + frames_per_column - 1U) / frames_per_column;
+    if(col1 <= col0)
+    {
+        col1 = col0 + 1U;
+    }
+    const uint32_t max_cols =
+        (handle->frame_count + frames_per_column - 1U) / frames_per_column;
+    if(max_cols == 0U)
+    {
+        return 0U;
+    }
+    if(col1 > max_cols)
+    {
+        col1 = max_cols;
+    }
+    const uint32_t tile0 = col0 / WAVEFORM_CACHE_TILE_COLUMNS;
+    uint32_t tile1 = (col1 + WAVEFORM_CACHE_TILE_COLUMNS - 1U)
+        / WAVEFORM_CACHE_TILE_COLUMNS;
+    if(tile1 <= tile0)
+    {
+        tile1 = tile0 + 1U;
+    }
+    const uint32_t max_tiles =
+        (max_cols + WAVEFORM_CACHE_TILE_COLUMNS - 1U) / WAVEFORM_CACHE_TILE_COLUMNS;
+    if(tile1 > max_tiles)
+    {
+        tile1 = max_tiles;
+    }
+
+    uint32_t req_start = tile0;
+    if(req_start > 0U)
+    {
+        req_start--;
+    }
+    uint32_t req_end = tile1;
+    if(req_end < max_tiles)
+    {
+        req_end++;
+    }
+    const uint32_t req_count = req_end - req_start;
+
+    (void)waveform_cache_request_tiles(handle,
+                                       level,
+                                       req_start,
+                                       req_count,
+                                       WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
+    if(out_tile_start != 0)
+    {
+        *out_tile_start = tile0;
+    }
+    if(out_tile_count != 0)
+    {
+        *out_tile_count = tile1 - tile0;
+    }
+    return waveform_cache_tiles_ready(handle, level, tile0, tile1 - tile0);
+}
+
+static uint8_t ui_page_audio_rec_draw_wavecache(int x,
+                                                int y,
+                                                int w,
+                                                int h,
+                                                uint32_t view_start_frame,
+                                                uint32_t view_frames,
+                                                uint32_t frames_per_pixel,
+                                                uint16_t vertical_ref,
+                                                uint32_t *out_frames_per_column)
+{
+    const int inner_x = x + 1;
+    const int inner_y = y + 1;
+    const int inner_w = w - 2;
+    const int inner_h = h - 2;
+    const int cy = y + (h / 2);
+
+    if((inner_w <= 0) || (inner_h <= 2) || (vertical_ref == 0U))
+    {
+        return 0U;
+    }
+
+    waveform_cache_handle_t handle;
+    if(sample_capture_model_waveform_cache_get_handle(&handle) == 0U)
+    {
+        return 0U;
+    }
+
+    waveform_cache_level_id_t level = WAVEFORM_CACHE_LEVEL_L3_FINE;
+    if(waveform_cache_choose_level(frames_per_pixel, &level) == 0U)
+    {
+        return 0U;
+    }
+    uint32_t visible_tile_start = 0U;
+    uint32_t visible_tile_count = 0U;
+    if(ui_page_audio_rec_wavecache_request_visible(&handle,
+                                                   level,
+                                                   view_start_frame,
+                                                   view_frames,
+                                                   (uint16_t)inner_w,
+                                                   &visible_tile_start,
+                                                   &visible_tile_count) == 0U)
+    {
+        for(int fallback = (int)level - 1; fallback >= 0; --fallback)
+        {
+            waveform_cache_level_id_t fb_level = (waveform_cache_level_id_t)fallback;
+            uint32_t fb_tile_start = 0U;
+            uint32_t fb_tile_count = 0U;
+            if(ui_page_audio_rec_wavecache_request_visible(&handle,
+                                                           fb_level,
+                                                           view_start_frame,
+                                                           view_frames,
+                                                           (uint16_t)inner_w,
+                                                           &fb_tile_start,
+                                                           &fb_tile_count) != 0U)
+            {
+                level = fb_level;
+                visible_tile_start = fb_tile_start;
+                visible_tile_count = fb_tile_count;
+                break;
+            }
+        }
+        if(waveform_cache_tiles_ready(&handle, level, visible_tile_start, visible_tile_count) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    uint32_t frames_per_column = 0U;
+    if((waveform_cache_level_frames_per_column(level, &frames_per_column) == 0U)
+            || (frames_per_column == 0U))
+    {
+        return 0U;
+    }
+    if(out_frames_per_column != 0)
+    {
+        *out_frames_per_column = frames_per_column;
+    }
+
+    for(int col = 0; col < inner_w; ++col)
+    {
+        uint32_t frame0 = view_start_frame
+            + (uint32_t)(((uint64_t)col * (uint64_t)view_frames) / (uint64_t)inner_w);
+        uint32_t frame1 = view_start_frame
+            + (uint32_t)(((uint64_t)(col + 1) * (uint64_t)view_frames) / (uint64_t)inner_w);
+        if(frame1 <= frame0)
+        {
+            frame1 = frame0 + 1U;
+        }
+        uint32_t column0 = frame0 / frames_per_column;
+        uint32_t column1 = (frame1 + frames_per_column - 1U) / frames_per_column;
+        if(column1 <= column0)
+        {
+            column1 = column0 + 1U;
+        }
+        int16_t min_v = 0;
+        int16_t max_v = 0;
+        if(waveform_cache_minmax_from_ram(&handle,
+                                          level,
+                                          column0,
+                                          column1 - column0,
+                                          &min_v,
+                                          &max_v) == 0U)
+        {
+            return 0U;
+        }
+        ui_page_audio_rec_draw_minmax_column(inner_x + col,
+                                             inner_y,
+                                             inner_h,
+                                             cy,
+                                             min_v,
+                                             max_v,
+                                             vertical_ref);
+    }
+    return 1U;
+}
+
 static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *state)
 {
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+    const uint32_t waveform_draw_start_ms = HAL_GetTick();
+#endif
     const int x = 0;
     const int y = 21;
     const int w = 128;
@@ -521,27 +794,90 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
     }
 
     uint8_t waveform_drawn = 0U;
+    sample_capture_renderer_debug_t renderer = SAMPLE_CAPTURE_RENDERER_EMPTY;
+    uint16_t draw_line_segments = 0U;
+    uint32_t wavecache_frames_per_column = 0U;
+    uint8_t fallback_reason = 0U;
     if((state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
             && (state->take_valid != 0U)
             && (state->recorded_frames != 0U))
     {
         const uint16_t line_columns = (uint16_t)((w > 2) ? (w - 2) : 0);
-        sample_capture_model_request_line_waveform(view_start_frame,
-                                                   view_frames,
-                                                   line_columns);
-        if((state->line_valid != 0U)
-                && (state->line_start_frame == view_start_frame)
-                && (state->line_frames == view_frames))
+        uint32_t samples_per_pixel = view_frames;
+        if(line_columns != 0U)
         {
-            ui_page_audio_rec_draw_line_waveform(state, x, y, w, h,
-                                                 ui_page_audio_rec_edit_vertical_ref(state));
-            waveform_drawn = 1U;
+            samples_per_pixel = (view_frames + (uint32_t)line_columns - 1U)
+                / (uint32_t)line_columns;
         }
-        else if(state->line_valid != 0U)
+        const uint8_t prefer_old_audio_tile =
+            (uint8_t)((samples_per_pixel < 128U)
+                && (sample_capture_model_view_uses_tile_cache(view_frames) != 0U));
+
+        sample_capture_state_t draw_state = *state;
+        if(prefer_old_audio_tile != 0U)
         {
-            ui_page_audio_rec_draw_line_waveform(state, x, y, w, h,
-                                                 ui_page_audio_rec_edit_vertical_ref(state));
+            sample_capture_model_request_line_waveform(view_start_frame,
+                                                       view_frames,
+                                                       line_columns);
+            sample_capture_model_get_state(&draw_state);
+        }
+
+        if((prefer_old_audio_tile != 0U)
+                && (draw_state.line_valid != 0U)
+                && (draw_state.line_start_frame == view_start_frame)
+                && (draw_state.line_frames == view_frames))
+        {
+            ui_page_audio_rec_draw_line_waveform(&draw_state, x, y, w, h,
+                                                 ui_page_audio_rec_edit_vertical_ref(&draw_state),
+                                                 &draw_line_segments);
             waveform_drawn = 1U;
+            renderer = SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE;
+        }
+
+        if((waveform_drawn == 0U)
+                && ui_page_audio_rec_draw_wavecache(x,
+                                                    y,
+                                                    w,
+                                                    h,
+                                                    view_start_frame,
+                                                    view_frames,
+                                                    samples_per_pixel,
+                                                    ui_page_audio_rec_edit_vertical_ref(state),
+                                                    &wavecache_frames_per_column) != 0U)
+        {
+            waveform_drawn = 1U;
+            renderer = SAMPLE_CAPTURE_RENDERER_BRKWAVE_TILE;
+        }
+
+        if((waveform_drawn == 0U)
+                && (prefer_old_audio_tile != 0U)
+                && (draw_state.line_valid != 0U)
+                && (((draw_state.line_start_frame <= view_start_frame)
+                     && ((draw_state.line_start_frame + draw_state.line_frames)
+                         >= (view_start_frame + view_frames)))
+                    || ((draw_state.line_frames == view_frames)
+                        && (((draw_state.line_start_frame > view_start_frame)
+                                ? (draw_state.line_start_frame - view_start_frame)
+                                : (view_start_frame - draw_state.line_start_frame))
+                            <= (view_frames / 4U)))))
+        {
+            ui_page_audio_rec_draw_line_waveform(&draw_state, x, y, w, h,
+                                                 ui_page_audio_rec_edit_vertical_ref(&draw_state),
+                                                 &draw_line_segments);
+            waveform_drawn = 1U;
+            renderer = SAMPLE_CAPTURE_RENDERER_OLD_LINE;
+            fallback_reason = 2U;
+        }
+
+        if(waveform_drawn == 0U
+                && ui_page_audio_rec_draw_global_overview(x, y, w, h,
+                                                          view_start_frame,
+                                                          view_frames,
+                                                          ui_page_audio_rec_edit_vertical_ref(state)) != 0U)
+        {
+            waveform_drawn = 1U;
+            renderer = SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW;
+            fallback_reason = (prefer_old_audio_tile != 0U) ? 3U : 1U;
         }
     }
 
@@ -560,6 +896,49 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
                                               view_start_frame, view_frames,
                                               vertical_mode,
                                               vertical_ref);
+        if(state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+        {
+            renderer = SAMPLE_CAPTURE_RENDERER_EMPTY;
+            fallback_reason = 4U;
+        }
+    }
+
+    if(state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+    {
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+        const uint32_t waveform_ms = HAL_GetTick() - waveform_draw_start_ms;
+        g_ui_page_audio_rec_last_waveform_ms = waveform_ms;
+#else
+        const uint32_t waveform_ms = 0U;
+#endif
+        if(state->error != SAMPLE_CAPTURE_ERROR_NONE)
+        {
+            renderer = SAMPLE_CAPTURE_RENDERER_ERROR;
+        }
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+        const uint16_t inner_w_dbg = (uint16_t)((w > 2) ? (w - 2) : 0);
+        uint32_t samples_per_pixel = view_frames;
+        if(inner_w_dbg != 0U)
+        {
+            samples_per_pixel = (view_frames + (uint32_t)inner_w_dbg - 1U) / (uint32_t)inner_w_dbg;
+        }
+        sample_capture_model_debug_note_renderer(renderer,
+                                                 state->edit_zoom,
+                                                 view_start_frame,
+                                                 view_frames,
+                                                 inner_w_dbg,
+                                                 samples_per_pixel,
+                                                 wavecache_frames_per_column,
+                                                 state->line_valid,
+                                                 state->line_count,
+                                                 draw_line_segments,
+                                                 fallback_reason);
+#endif
+        (void)waveform_ms;
+#if !(SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS)
+        (void)renderer;
+        (void)fallback_reason;
+#endif
     }
 
     if((state->take_valid != 0U) && (state->recorded_frames != 0U))
@@ -587,6 +966,9 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
 
 static void ui_page_audio_rec_render(void)
 {
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+    const uint32_t page_draw_start_ms = HAL_GetTick();
+#endif
     sample_capture_state_t state;
     char line[32];
     sample_capture_model_get_state(&state);
@@ -620,12 +1002,23 @@ static void ui_page_audio_rec_render(void)
     drv_display_draw_text(60U, 54U, "LEN");
     drv_display_draw_text(84U, 54U, "QUANT");
     drv_display_draw_text(120U, 54U, "-");
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+    if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+    {
+        sample_capture_model_debug_note_draw_cost(HAL_GetTick() - page_draw_start_ms,
+                                                  g_ui_page_audio_rec_last_waveform_ms);
+    }
+#endif
 }
 
 static void ui_page_rec_edit_render(void)
 {
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+    const uint32_t page_draw_start_ms = HAL_GetTick();
+#endif
     sample_capture_state_t state;
     sample_capture_model_get_state(&state);
+    sample_capture_model_note_rec_edit_first_render();
 
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text(0U, 0U, "REC EDIT");
@@ -646,6 +1039,10 @@ static void ui_page_rec_edit_render(void)
     drv_display_draw_text(34U, 54U, "SAVE");
     drv_display_draw_text(62U, 54U, "ASSIGN");
     drv_display_draw_text(120U, 54U, "-");
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+    sample_capture_model_debug_note_draw_cost(HAL_GetTick() - page_draw_start_ms,
+                                              g_ui_page_audio_rec_last_waveform_ms);
+#endif
 }
 
 uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)

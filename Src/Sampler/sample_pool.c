@@ -29,6 +29,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/wav_parser.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/waveform_cache.h"
 
 #include "ff.h"
 
@@ -446,6 +447,7 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     sample_desc_t *desc = &g_sample_pool[id];
     sample_pool_release_slot(id);
+    (void)waveform_cache_request_for_wav(next_desc.path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
     if (sample_cache_prepare(id, next_desc.path) == 0U)
     {
         sample_pool_set_error_from_cache(sample_cache_get_last_error(id),

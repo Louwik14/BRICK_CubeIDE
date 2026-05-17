@@ -1,5 +1,6 @@
 #include "Storage/multi_record_writer.h"
 
+#include "Core/rec_live_debug.h"
 #include "Sampler/sample_cache.h"
 #include "Storage/looper_storage.h"
 #include "Storage/memory_layout.h"
@@ -70,6 +71,31 @@ _Static_assert(SAMPLE_CAPTURE_RECORD_CLIENT_ID != 0U,
 static uint8_t client_id_valid(uint8_t client_id)
 {
     return (client_id < MULTI_RECORD_WRITER_MAX_CLIENTS) ? 1U : 0U;
+}
+
+static const char *client_debug_path(const multi_record_writer_client_t *client)
+{
+    if(client == 0)
+    {
+        return 0;
+    }
+    return (client->final_path[0] != '\0') ? client->final_path : client->raw_path;
+}
+
+static void writer_debug_mark(const multi_record_writer_client_t *client,
+                              rec_live_debug_code_t code,
+                              uint32_t frames)
+{
+    if(client == 0)
+    {
+        return;
+    }
+    rec_live_debug_mark((uint32_t)code,
+                        frames,
+                        rec_live_debug_path_hash(client_debug_path(client)),
+                        (uint32_t)client->state,
+                        0U,
+                        (uint32_t)client->error);
 }
 
 static uint32_t ring_pending_frames(const multi_record_writer_client_t *client)
@@ -426,6 +452,9 @@ static uint8_t finalize_client_step(uint32_t client_id)
         if(client->backend != MULTI_RECORD_WRITER_BACKEND_SAMPLE_WAV)
         {
             client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
+            writer_debug_mark(client,
+                              REC_LIVE_DEBUG_WRITER_FINAL_READY,
+                              client->recorded_frames);
         }
         return 1U;
     }
@@ -436,6 +465,9 @@ static uint8_t finalize_client_step(uint32_t client_id)
         {
             client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
             client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
+            writer_debug_mark(client,
+                              REC_LIVE_DEBUG_WRITER_FINAL_READY,
+                              client->recorded_frames);
             return 1U;
         }
 
@@ -452,6 +484,9 @@ static uint8_t finalize_client_step(uint32_t client_id)
 
         client->finalize_phase = MRW_FINALIZE_PHASE_BEGIN;
         client->state = MULTI_RECORD_WRITER_STATE_TAKE_READY;
+        writer_debug_mark(client,
+                          REC_LIVE_DEBUG_WRITER_FINAL_READY,
+                          client->recorded_frames);
     }
 
     return 1U;
@@ -722,6 +757,9 @@ uint8_t multi_record_writer_request_stop(uint8_t client_id)
     }
 
     client->state = MULTI_RECORD_WRITER_STATE_STOP_REQUESTED;
+    writer_debug_mark(client,
+                      REC_LIVE_DEBUG_REC_LIVE_STOP_REQUESTED,
+                      client->frames_received);
     return 1U;
 }
 
@@ -790,6 +828,9 @@ void multi_record_writer_service(uint32_t byte_budget)
         if(g_record_clients[i].state == MULTI_RECORD_WRITER_STATE_STOP_REQUESTED)
         {
             g_record_clients[i].state = MULTI_RECORD_WRITER_STATE_DRAINING;
+            writer_debug_mark(&g_record_clients[i],
+                              REC_LIVE_DEBUG_WRITER_DRAINING,
+                              g_record_clients[i].frames_written);
         }
     }
 
@@ -820,6 +861,9 @@ void multi_record_writer_service(uint32_t byte_budget)
                (ring_pending_frames(client) == 0U))
             {
                 client->state = MULTI_RECORD_WRITER_STATE_FINALIZING;
+                writer_debug_mark(client,
+                                  REC_LIVE_DEBUG_WRITER_FINALIZING,
+                                  client->frames_written);
             }
 
             if((client->state == MULTI_RECORD_WRITER_STATE_FINALIZING) && (finalized_one == 0U))

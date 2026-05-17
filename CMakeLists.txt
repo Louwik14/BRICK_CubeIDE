@@ -110,6 +110,7 @@ list(APPEND SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/rec_live_debug.c"
 )
 
 file(GLOB SRC_KEYBOARD_SRC
@@ -161,6 +162,7 @@ list(APPEND SRC_STORAGE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_preview.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
 )
 
 file(GLOB SRC_UI_SRC

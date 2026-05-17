@@ -5,7 +5,7 @@
 
 static volatile uint8_t g_sd_access_owner;
 static volatile uint8_t g_sd_access_total_count;
-static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_WAV_CONVERT + 1U];
+static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_WAVEFORM_CACHE + 1U];
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
 
@@ -13,7 +13,7 @@ void sd_access_gate_init(void)
 {
     g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
     g_sd_access_total_count = 0U;
-    for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_WAV_CONVERT; ++i)
+    for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_WAVEFORM_CACHE; ++i)
     {
         g_sd_access_client_count[i] = 0U;
     }
@@ -41,7 +41,7 @@ uint8_t sd_access_fs_mount_if_needed(void)
 
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 {
-    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_WAV_CONVERT))
+    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_WAVEFORM_CACHE))
     {
         return 0U;
     }
@@ -57,6 +57,10 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_PREVIEW)
             || (client == SD_ACCESS_CLIENT_WAV_CONVERT)
             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_WAV_CONVERT)
+            || (client == SD_ACCESS_CLIENT_EDITOR_CACHE)
+            || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_EDITOR_CACHE)
+            || (client == SD_ACCESS_CLIENT_WAVEFORM_CACHE)
+            || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_WAVEFORM_CACHE)
             || (client == SD_ACCESS_CLIENT_SAMPLE_CACHE)
             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_SAMPLE_CACHE))
         {
@@ -90,7 +94,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 void sd_access_gate_release(sd_access_client_t client)
 {
     __disable_irq();
-    if (((uint8_t)client <= (uint8_t)SD_ACCESS_CLIENT_WAV_CONVERT)
+    if (((uint8_t)client <= (uint8_t)SD_ACCESS_CLIENT_WAVEFORM_CACHE)
         && (g_sd_access_client_count[(uint8_t)client] != 0U)
         && (g_sd_access_total_count != 0U))
     {

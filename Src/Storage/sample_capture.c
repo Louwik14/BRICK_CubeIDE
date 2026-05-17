@@ -1,5 +1,6 @@
 #include "Storage/sample_capture.h"
 
+#include "Core/rec_live_debug.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_pool.h"
@@ -10,10 +11,23 @@
 #include "Storage/pattern_live_ram.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/waveform_cache.h"
 #include "ff.h"
 
+#if SAMPLE_CAPTURE_DEBUG_UART
+#include "stm32h7xx_hal.h"
+#include "usart.h"
+#include <stdarg.h>
+#endif
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
+
+#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+#define SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART 1U
+#else
+#define SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART 0U
+#endif
 
 #define SAMPLE_CAPTURE_TEMP_REC_DIR "0:/PROJECT/REC"
 #define SAMPLE_CAPTURE_TEMP_PATH "0:/PROJECT/REC/AUDIOREC_TMP.WAV"
@@ -21,7 +35,8 @@
 #define SAMPLE_CAPTURE_FINAL_TRIES 10000U
 #define SAMPLE_CAPTURE_COPY_FRAMES 1024U
 #define SAMPLE_CAPTURE_WAV_DATA_OFFSET MULTI_RECORD_WRITER_WAV_DATA_OFFSET_BYTES
-#define SAMPLE_CAPTURE_EDIT_ZOOM_MAX 24U
+#define SAMPLE_CAPTURE_EDIT_ZOOM_MAX 255U
+#define SAMPLE_CAPTURE_EDIT_MIN_VISIBLE_FRAMES 256U
 #define SAMPLE_CAPTURE_STEPS_PER_BAR 16U
 #define SAMPLE_CAPTURE_PCM24_PEAK 8388607UL
 #define SAMPLE_CAPTURE_WAVEFORM_INITIAL_BUCKET_FRAMES 16U
@@ -31,10 +46,34 @@
 #define SAMPLE_CAPTURE_LINE_MIN_VISIBLE_FRAMES SAMPLE_CAPTURE_LINE_POINTS
 #define SAMPLE_CAPTURE_LINE_BUILD_CHUNK_FRAMES 2048U
 #define SAMPLE_CAPTURE_LINE_LARGE_SETTLE_TICKS 4U
+#define SAMPLE_CAPTURE_EDITOR_TILE_COUNT 16U
+#define SAMPLE_CAPTURE_EDITOR_TILE_FRAMES (MULTI_RECORD_WRITER_SAMPLE_RATE_HZ / 2U)
+#define SAMPLE_CAPTURE_EDITOR_CACHE_FRAMES \
+    (SAMPLE_CAPTURE_EDITOR_TILE_COUNT * SAMPLE_CAPTURE_EDITOR_TILE_FRAMES)
+#define SAMPLE_CAPTURE_EDITOR_TILE_BUILD_CHUNK_FRAMES 2048U
+#define SAMPLE_CAPTURE_EDITOR_TILE_REQUEST_MAX 4U
+#define SAMPLE_CAPTURE_EDITOR_TILE_KEEP_RADIUS 2U
+#define SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES 16U
+#define SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES 64U
+#define SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES 256U
+#define SAMPLE_CAPTURE_EDITOR_LEVEL0_POINTS \
+    ((SAMPLE_CAPTURE_EDITOR_TILE_FRAMES + SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES - 1U) \
+        / SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES)
+#define SAMPLE_CAPTURE_EDITOR_LEVEL1_POINTS \
+    ((SAMPLE_CAPTURE_EDITOR_TILE_FRAMES + SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES - 1U) \
+        / SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES)
+#define SAMPLE_CAPTURE_EDITOR_LEVEL2_POINTS \
+    ((SAMPLE_CAPTURE_EDITOR_TILE_FRAMES + SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES - 1U) \
+        / SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES)
+#define SAMPLE_CAPTURE_EDITOR_DIRECT_SCAN_MAX_FRAMES 4096U
+#define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES 2048U
 
 typedef struct
 {
     sample_capture_state_t state;
+    waveform_cache_handle_t wave_cache_handle;
+    uint8_t wave_cache_ready;
+    uint8_t wave_cache_retry_countdown;
     sample_capture_waveform_bucket_t waveform_pending;
     uint32_t waveform_pending_frames;
     uint8_t detail_requested;
@@ -47,6 +86,8 @@ typedef struct
     uint8_t route_mask[SAMPLE_CAPTURE_TRACK_COUNT];
     uint8_t audio_hook_enabled;
     uint8_t last_take_notified;
+    uint8_t rec_edit_enter_deferred_services;
+    uint8_t rec_edit_first_render_pending;
     uint8_t transport_was_running;
     uint8_t wait_step_valid;
     uint8_t wait_last_step;
@@ -79,14 +120,194 @@ typedef struct
     uint16_t build_points;
 } sample_capture_line_hot_t;
 
+typedef struct
+{
+    int16_t min;
+    int16_t max;
+    int16_t first;
+    int16_t last;
+} sample_capture_editor_level_point_t;
+
+typedef enum
+{
+    SAMPLE_CAPTURE_EDITOR_CACHE_EMPTY = 0,
+    SAMPLE_CAPTURE_EDITOR_CACHE_LOADING,
+    SAMPLE_CAPTURE_EDITOR_CACHE_READY,
+    SAMPLE_CAPTURE_EDITOR_CACHE_STALE
+} sample_capture_editor_cache_state_t;
+
+typedef struct
+{
+    sample_capture_editor_cache_state_t state;
+    uint32_t start_frame;
+    uint32_t frame_count;
+    uint32_t load_next_frame;
+    uint32_t generation;
+    uint16_t level0_count;
+    uint16_t level1_count;
+    uint16_t level2_count;
+} sample_capture_editor_audio_tile_t;
+
+typedef struct
+{
+    char path[SAMPLE_CAPTURE_PATH_MAX];
+    uint32_t generation;
+    uint32_t focus_frame;
+    uint32_t last_view_start_frame;
+    uint32_t last_view_frames;
+    sample_capture_editor_audio_tile_t tiles[SAMPLE_CAPTURE_EDITOR_TILE_COUNT];
+} sample_capture_editor_audio_cache_t;
+
+typedef struct
+{
+    int16_t min;
+    int16_t max;
+} sample_capture_global_overview_point_t;
+
+typedef enum
+{
+    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_EMPTY = 0,
+    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING,
+    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY,
+    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR
+} sample_capture_global_overview_state_t;
+
+typedef struct
+{
+    sample_capture_global_overview_state_t state;
+    char path[SAMPLE_CAPTURE_PATH_MAX];
+    uint32_t frame_count;
+    uint32_t build_next_frame;
+    uint16_t point_count;
+    uint16_t peak;
+    uint32_t generation;
+} sample_capture_global_overview_t;
+
+#if SAMPLE_CAPTURE_DEBUG_UART
+typedef struct
+{
+    sample_capture_renderer_debug_t last_renderer;
+    uint8_t last_renderer_valid;
+    uint32_t last_summary_ms;
+    uint32_t draw_count;
+    uint32_t renderer_count[8U];
+    uint16_t last_draw_segments;
+    uint16_t max_draw_segments;
+    uint32_t cache_hit_count;
+    uint32_t cache_miss_count;
+    uint32_t last_miss_start;
+    uint32_t last_miss_frames;
+    uint32_t last_miss_ms;
+    uint8_t last_miss_valid;
+    uint32_t cache_request_count;
+    uint32_t cache_chunks;
+    uint32_t cache_gate_busy_count;
+    uint32_t cache_block_sample_count;
+    uint32_t cache_block_pattern_count;
+    uint32_t cache_block_preview_count;
+    uint32_t cache_block_writer_count;
+    uint32_t cache_block_export_count;
+    uint32_t fill_passes;
+    uint32_t fill_chunks;
+    uint32_t fill_start_ms;
+    uint32_t fill_last_ms;
+    uint32_t fill_max_ms;
+    uint32_t eline_count;
+    uint32_t eline_last_ms;
+    uint32_t eline_max_ms;
+    uint32_t draw_last_ms;
+    uint32_t draw_max_ms;
+    uint32_t waveform_last_ms;
+    uint32_t waveform_max_ms;
+    uint32_t flush_count;
+    uint32_t flush_cont_count;
+    uint32_t flush_last_ms;
+    uint32_t flush_max_ms;
+    uint32_t last_summary_draw_count;
+    uint32_t last_summary_eline_count;
+    uint32_t last_summary_flush_count;
+    uint8_t last_zoom;
+    uint8_t last_source_change_valid;
+    uint32_t last_view_start_frame;
+    uint32_t last_view_frames;
+    uint32_t last_samples_per_pixel;
+    uint32_t last_wavecache_frames_per_column;
+    uint8_t last_fallback_reason;
+    uint8_t fill_started_logged;
+} sample_capture_debug_t;
+#endif
+
 static sample_capture_model_t g_sample_capture;
 UI_HOT_DTCM static sample_capture_line_hot_t g_sample_capture_line_hot;
+STORAGE_STATE_SDRAM static sample_capture_editor_audio_cache_t g_sample_capture_editor_cache;
+STORAGE_STATE_SDRAM static sample_capture_global_overview_t g_sample_capture_global_overview;
+EDITOR_AUDIO_CACHE_SDRAM static int16_t
+    g_sample_capture_editor_audio[SAMPLE_CAPTURE_EDITOR_TILE_COUNT][SAMPLE_CAPTURE_EDITOR_TILE_FRAMES];
+EDITOR_AUDIO_CACHE_SDRAM static sample_capture_editor_level_point_t
+    g_sample_capture_editor_level0[SAMPLE_CAPTURE_EDITOR_TILE_COUNT][SAMPLE_CAPTURE_EDITOR_LEVEL0_POINTS];
+EDITOR_AUDIO_CACHE_SDRAM static sample_capture_editor_level_point_t
+    g_sample_capture_editor_level1[SAMPLE_CAPTURE_EDITOR_TILE_COUNT][SAMPLE_CAPTURE_EDITOR_LEVEL1_POINTS];
+EDITOR_AUDIO_CACHE_SDRAM static sample_capture_editor_level_point_t
+    g_sample_capture_editor_level2[SAMPLE_CAPTURE_EDITOR_TILE_COUNT][SAMPLE_CAPTURE_EDITOR_LEVEL2_POINTS];
+EDITOR_AUDIO_CACHE_SDRAM static sample_capture_global_overview_point_t
+    g_sample_capture_global_overview_points[SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS];
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_sample_capture_copy_buf[SAMPLE_CAPTURE_COPY_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_sample_capture_detail_buf[SAMPLE_CAPTURE_DETAIL_BUILD_CHUNK_FRAMES * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
 RECORDER_SCRATCH_SDRAM static int16_t
     g_sample_capture_line_source[SAMPLE_CAPTURE_LINE_MAX_SOURCE_FRAMES];
+#if SAMPLE_CAPTURE_DEBUG_UART
+STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
+#endif
+
+static void sample_capture_editor_cache_reset(void);
+static void sample_capture_global_overview_reset(void);
+
+#if SAMPLE_CAPTURE_DEBUG_UART
+static void sample_capture_debug_log(const char *fmt, ...)
+{
+    char line[256];
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(line, sizeof(line), fmt, args);
+    va_end(args);
+    if(n <= 0)
+    {
+        return;
+    }
+    if((uint32_t)n >= sizeof(line))
+    {
+        n = (int)sizeof(line) - 1;
+    }
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)n, 20U);
+}
+
+static void sample_capture_debug_reset(void)
+{
+    memset(&g_sample_capture_debug, 0, sizeof(g_sample_capture_debug));
+}
+#else
+#define sample_capture_debug_reset() ((void)0)
+#endif
+
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+static const char *sample_capture_debug_renderer_label(sample_capture_renderer_debug_t renderer)
+{
+    switch(renderer)
+    {
+        case SAMPLE_CAPTURE_RENDERER_EMPTY: return "EMPTY";
+        case SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW: return "GLOBAL_OVERVIEW";
+        case SAMPLE_CAPTURE_RENDERER_OLD_LINE: return "OLD_LINE";
+        case SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE: return "OLD_AUDIO_TILE";
+        case SAMPLE_CAPTURE_RENDERER_BRKWAVE_TILE: return "BRKWAVE_TILE";
+        case SAMPLE_CAPTURE_RENDERER_SD_LINE_FALLBACK: return "SD_LINE";
+        case SAMPLE_CAPTURE_RENDERER_BUILDING: return "BUILDING";
+        case SAMPLE_CAPTURE_RENDERER_ERROR: return "ERROR";
+        default: return "?";
+    }
+}
+#endif
 
 static void sample_capture_copy_path(char *dst, const char *src)
 {
@@ -109,6 +330,46 @@ static void sample_capture_copy_path(char *dst, const char *src)
         }
     }
     dst[SAMPLE_CAPTURE_PATH_MAX - 1U] = '\0';
+}
+
+static uint8_t sample_capture_path_is_temp(const char *path)
+{
+    if((path == 0) || (path[0] == '\0'))
+    {
+        return 1U;
+    }
+    if(strcmp(path, SAMPLE_CAPTURE_TEMP_PATH) == 0)
+    {
+        return 1U;
+    }
+    if((strstr(path, "_TMP") != 0) || (strstr(path, "_tmp") != 0))
+    {
+        return 1U;
+    }
+    return 0U;
+}
+
+static uint32_t sample_capture_debug_state_word(void)
+{
+    return ((uint32_t)g_sample_capture.state.phase & 0xFFU)
+        | (((uint32_t)g_sample_capture.state.view & 0xFFU) << 8)
+        | (((uint32_t)g_sample_capture.state.recording & 0x01U) << 16)
+        | (((uint32_t)g_sample_capture.state.armed_pending & 0x01U) << 17)
+        | (((uint32_t)g_sample_capture.state.take_valid & 0x01U) << 18);
+}
+
+static void sample_capture_debug_mark(rec_live_debug_code_t code,
+                                      const multi_record_writer_status_t *status,
+                                      const char *path,
+                                      uint32_t recorded_frames)
+{
+    rec_live_debug_mark((uint32_t)code,
+                        recorded_frames,
+                        rec_live_debug_path_hash(path),
+                        (status != 0) ? (uint32_t)status->state : 0U,
+                        sample_capture_debug_state_word(),
+                        (status != 0) ? (uint32_t)status->error
+                                      : (uint32_t)g_sample_capture.state.error);
 }
 
 static uint8_t sample_capture_has_route(void)
@@ -147,40 +408,46 @@ static uint32_t sample_capture_len_to_frames(uint8_t len_bars)
 
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom)
 {
-    static const uint16_t zoom_div_q8[] = {
-        256U, 322U, 406U, 512U, 645U, 813U, 1024U, 1290U,
-        1625U, 2048U, 2580U, 3251U, 4096U, 5161U, 6502U, 8192U,
-        10321U, 13004U, 16384U, 20643U, 26008U, 32768U, 41285U, 52016U, 65535U
-    };
-    const uint8_t max_zoom = (uint8_t)((sizeof(zoom_div_q8) / sizeof(zoom_div_q8[0])) - 1U);
     if(recorded_frames == 0U)
     {
         return 1U;
     }
-    if(zoom > max_zoom)
+    const uint32_t min_frames =
+        (recorded_frames < SAMPLE_CAPTURE_EDIT_MIN_VISIBLE_FRAMES)
+            ? recorded_frames
+            : SAMPLE_CAPTURE_EDIT_MIN_VISIBLE_FRAMES;
+    if((zoom == 0U) || (recorded_frames <= min_frames))
     {
-        zoom = max_zoom;
+        return recorded_frames;
+    }
+    if(zoom >= SAMPLE_CAPTURE_EDIT_ZOOM_MAX)
+    {
+        return (min_frames == 0U) ? 1U : min_frames;
     }
 
-    uint32_t frames = (uint32_t)(((uint64_t)recorded_frames * 256ULL
-            + ((uint64_t)zoom_div_q8[zoom] / 2ULL)) / (uint64_t)zoom_div_q8[zoom]);
-    const uint32_t min_frames =
-        (recorded_frames < SAMPLE_CAPTURE_LINE_MIN_VISIBLE_FRAMES)
-            ? recorded_frames
-            : SAMPLE_CAPTURE_LINE_MIN_VISIBLE_FRAMES;
-    if((zoom == max_zoom) && (frames > min_frames))
-    {
-        frames = min_frames;
-    }
+    const float total = (float)recorded_frames;
+    const float min_view = (float)min_frames;
+    const float zoom_norm = (float)zoom / (float)SAMPLE_CAPTURE_EDIT_ZOOM_MAX;
+    const float ratio = min_view / total;
+    uint32_t frames = (uint32_t)((total * powf(ratio, zoom_norm)) + 0.5f);
+    if(frames > recorded_frames) { frames = recorded_frames; }
+    if(frames < min_frames) { frames = min_frames; }
     if(frames == 0U)
     {
         frames = 1U;
     }
-    if(frames > recorded_frames)
-    {
-        frames = recorded_frames;
-    }
     return frames;
+}
+
+uint32_t sample_capture_model_tile_cache_capacity_frames(void)
+{
+    return SAMPLE_CAPTURE_EDITOR_CACHE_FRAMES;
+}
+
+uint8_t sample_capture_model_view_uses_tile_cache(uint32_t frame_count)
+{
+    return (uint8_t)((frame_count != 0U)
+            && (frame_count <= SAMPLE_CAPTURE_EDITOR_CACHE_FRAMES));
 }
 
 static void sample_capture_set_error(sample_capture_error_t error)
@@ -222,6 +489,11 @@ static void sample_capture_detail_reset(void)
     g_sample_capture.state.line_peak = 0U;
     memset(g_sample_capture.state.line, 0, sizeof(g_sample_capture.state.line));
     memset(&g_sample_capture_line_hot, 0, sizeof(g_sample_capture_line_hot));
+    sample_capture_editor_cache_reset();
+    sample_capture_global_overview_reset();
+    memset(&g_sample_capture.wave_cache_handle, 0, sizeof(g_sample_capture.wave_cache_handle));
+    g_sample_capture.wave_cache_ready = 0U;
+    g_sample_capture.wave_cache_retry_countdown = 0U;
 }
 
 static int16_t sample_capture_pcm24_to_waveform_i16(int32_t v)
@@ -336,6 +608,1137 @@ static uint16_t sample_capture_abs_i16(int16_t v)
         return 32768U;
     }
     return (uint16_t)(-v);
+}
+
+static int16_t sample_capture_line_sample_at(const int16_t *frames,
+                                             uint32_t frame_count,
+                                             uint32_t point,
+                                             uint32_t point_count);
+static void sample_capture_line_accumulate_frame(uint32_t rel_frame, int16_t sample);
+static int16_t sample_capture_line_point_from_accum(uint16_t point);
+
+static int16_t sample_capture_line_point_from_values(uint16_t point,
+                                                     uint16_t point_count,
+                                                     int16_t min_v,
+                                                     int16_t max_v,
+                                                     int16_t first_v,
+                                                     int16_t last_v)
+{
+    int16_t point_v = first_v;
+    if((min_v < 0) && (max_v > 0))
+    {
+        point_v = ((point & 1U) == 0U) ? max_v : min_v;
+    }
+    else
+    {
+        const uint16_t abs_min = sample_capture_abs_i16(min_v);
+        const uint16_t abs_max = sample_capture_abs_i16(max_v);
+        point_v = (abs_max >= abs_min) ? max_v : min_v;
+    }
+    if((point > 0U) && (point < (uint16_t)(point_count - 1U))
+            && (sample_capture_abs_i16(point_v) < sample_capture_abs_i16(last_v)))
+    {
+        point_v = last_v;
+    }
+    return point_v;
+}
+
+static void sample_capture_editor_cache_reset(void)
+{
+    memset(&g_sample_capture_editor_cache, 0, sizeof(g_sample_capture_editor_cache));
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        g_sample_capture_editor_cache.tiles[i].state = SAMPLE_CAPTURE_EDITOR_CACHE_EMPTY;
+    }
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    g_sample_capture_debug.fill_started_logged = 0U;
+#endif
+}
+
+static void sample_capture_global_overview_reset(void)
+{
+    memset(&g_sample_capture_global_overview, 0, sizeof(g_sample_capture_global_overview));
+    g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_EMPTY;
+}
+
+static uint8_t sample_capture_global_overview_path_matches(void)
+{
+    return (uint8_t)((g_sample_capture.state.temp_path[0] != '\0')
+            && (strncmp(g_sample_capture_global_overview.path,
+                        g_sample_capture.state.temp_path,
+                        SAMPLE_CAPTURE_PATH_MAX) == 0));
+}
+
+static void sample_capture_global_overview_request(void)
+{
+    if((g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.state.recorded_frames == 0U)
+            || (g_sample_capture.state.temp_path[0] == '\0'))
+    {
+        return;
+    }
+    if((g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY)
+            && (sample_capture_global_overview_path_matches() != 0U)
+            && (g_sample_capture_global_overview.frame_count == g_sample_capture.state.recorded_frames))
+    {
+        return;
+    }
+    if((g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
+            && (sample_capture_global_overview_path_matches() != 0U)
+            && (g_sample_capture_global_overview.frame_count == g_sample_capture.state.recorded_frames))
+    {
+        return;
+    }
+
+    sample_capture_copy_path(g_sample_capture_global_overview.path,
+                             g_sample_capture.state.temp_path);
+    g_sample_capture_global_overview.frame_count = g_sample_capture.state.recorded_frames;
+    g_sample_capture_global_overview.point_count =
+        (g_sample_capture.state.recorded_frames < SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS)
+            ? (uint16_t)g_sample_capture.state.recorded_frames
+            : (uint16_t)SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS;
+    if(g_sample_capture_global_overview.point_count == 0U)
+    {
+        g_sample_capture_global_overview.point_count = 1U;
+    }
+    g_sample_capture_global_overview.build_next_frame = 0U;
+    g_sample_capture_global_overview.peak = 0U;
+    g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING;
+    g_sample_capture_global_overview.generation++;
+    for(uint16_t i = 0U; i < SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS; ++i)
+    {
+        g_sample_capture_global_overview_points[i].min = 32767;
+        g_sample_capture_global_overview_points[i].max = (int16_t)-32768;
+    }
+}
+
+static uint8_t sample_capture_global_overview_can_build(void)
+{
+    if((g_sample_capture_global_overview.state != SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
+            || (g_sample_capture_global_overview.path[0] == '\0')
+            || (g_sample_capture_global_overview.frame_count == 0U)
+            || (g_sample_capture_global_overview.point_count == 0U)
+            || (g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.armed_pending != 0U)
+            || (sample_capture_global_overview_path_matches() == 0U))
+    {
+        return 0U;
+    }
+    if((multi_record_writer_any_active() != 0U)
+            || (looper_storage_raw_export_is_active() != 0U)
+            || (sd_preview_is_active() != 0U)
+            || (pattern_load_is_pending() != 0U)
+            || (sample_cache_has_pending_sd_work() != 0U))
+    {
+        return 0U;
+    }
+    return 1U;
+}
+
+static void sample_capture_global_overview_finish(void)
+{
+    uint16_t peak = 0U;
+    for(uint16_t i = 0U; i < g_sample_capture_global_overview.point_count; ++i)
+    {
+        if(g_sample_capture_global_overview_points[i].min == 32767
+                && g_sample_capture_global_overview_points[i].max == (int16_t)-32768)
+        {
+            g_sample_capture_global_overview_points[i].min = 0;
+            g_sample_capture_global_overview_points[i].max = 0;
+        }
+        const uint16_t abs_min =
+            sample_capture_abs_i16(g_sample_capture_global_overview_points[i].min);
+        const uint16_t abs_max =
+            sample_capture_abs_i16(g_sample_capture_global_overview_points[i].max);
+        if(abs_min > peak)
+        {
+            peak = abs_min;
+        }
+        if(abs_max > peak)
+        {
+            peak = abs_max;
+        }
+    }
+    g_sample_capture_global_overview.peak = peak;
+    g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    sample_capture_debug_log("GOVERVIEW DONE points=%u frames=%lu peak=%u\r\n",
+                             (unsigned)g_sample_capture_global_overview.point_count,
+                             (unsigned long)g_sample_capture_global_overview.frame_count,
+                             (unsigned)peak);
+#endif
+}
+
+static void sample_capture_global_overview_service(void)
+{
+    if(sample_capture_global_overview_can_build() == 0U)
+    {
+        return;
+    }
+
+    uint32_t frames_left = g_sample_capture_global_overview.frame_count
+        - g_sample_capture_global_overview.build_next_frame;
+    if(frames_left == 0U)
+    {
+        sample_capture_global_overview_finish();
+        return;
+    }
+    if(frames_left > SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES)
+    {
+        frames_left = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES;
+    }
+
+    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
+    {
+        return;
+    }
+
+    FIL fp;
+    uint8_t file_open = 0U;
+    uint8_t ok = 0U;
+    if(sd_access_fs_mount_if_needed() == 0U)
+    {
+        goto done;
+    }
+    if(f_open(&fp, g_sample_capture_global_overview.path, FA_READ) != FR_OK)
+    {
+        goto done;
+    }
+    file_open = 1U;
+
+    if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
+            + (g_sample_capture_global_overview.build_next_frame
+               * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+    {
+        goto done;
+    }
+
+    const uint32_t bytes_to_read = frames_left * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    UINT br = 0U;
+    if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
+            || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+    {
+        goto done;
+    }
+
+    const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    for(uint32_t i = 0U; i < frames_read; ++i)
+    {
+        const uint32_t frame_index = g_sample_capture_global_overview.build_next_frame + i;
+        uint32_t point = (uint32_t)(((uint64_t)frame_index
+                * (uint64_t)g_sample_capture_global_overview.point_count)
+            / (uint64_t)g_sample_capture_global_overview.frame_count);
+        if(point >= g_sample_capture_global_overview.point_count)
+        {
+            point = g_sample_capture_global_overview.point_count - 1U;
+        }
+
+        const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+        const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
+        const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
+        const int16_t sample_min = (l < r) ? l : r;
+        const int16_t sample_max = (l > r) ? l : r;
+        if(sample_min < g_sample_capture_global_overview_points[point].min)
+        {
+            g_sample_capture_global_overview_points[point].min = sample_min;
+        }
+        if(sample_max > g_sample_capture_global_overview_points[point].max)
+        {
+            g_sample_capture_global_overview_points[point].max = sample_max;
+        }
+    }
+
+    g_sample_capture_global_overview.build_next_frame += frames_read;
+    ok = 1U;
+    if((frames_read == 0U)
+            || (g_sample_capture_global_overview.build_next_frame
+                >= g_sample_capture_global_overview.frame_count))
+    {
+        sample_capture_global_overview_finish();
+    }
+
+done:
+    if(file_open != 0U)
+    {
+        (void)f_close(&fp);
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
+    if(ok == 0U)
+    {
+        g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR;
+    }
+}
+
+static uint16_t sample_capture_editor_level_count(uint32_t frames, uint32_t block_frames)
+{
+    if((frames == 0U) || (block_frames == 0U))
+    {
+        return 0U;
+    }
+    return (uint16_t)((frames + block_frames - 1U) / block_frames);
+}
+
+static void sample_capture_editor_tile_levels_reset(uint8_t tile_index)
+{
+    if(tile_index >= SAMPLE_CAPTURE_EDITOR_TILE_COUNT)
+    {
+        return;
+    }
+    memset(g_sample_capture_editor_level0[tile_index], 0, sizeof(g_sample_capture_editor_level0[tile_index]));
+    memset(g_sample_capture_editor_level1[tile_index], 0, sizeof(g_sample_capture_editor_level1[tile_index]));
+    memset(g_sample_capture_editor_level2[tile_index], 0, sizeof(g_sample_capture_editor_level2[tile_index]));
+    g_sample_capture_editor_cache.tiles[tile_index].level0_count = 0U;
+    g_sample_capture_editor_cache.tiles[tile_index].level1_count = 0U;
+    g_sample_capture_editor_cache.tiles[tile_index].level2_count = 0U;
+}
+
+static void sample_capture_editor_level_accumulate(sample_capture_editor_level_point_t *level,
+                                                   uint16_t level_count,
+                                                   uint32_t block_frames,
+                                                   uint32_t frame,
+                                                   int16_t sample)
+{
+    if((level == 0) || (block_frames == 0U))
+    {
+        return;
+    }
+    const uint32_t idx = frame / block_frames;
+    if(idx >= level_count)
+    {
+        return;
+    }
+    sample_capture_editor_level_point_t *const point = &level[idx];
+    if((frame % block_frames) == 0U)
+    {
+        point->min = sample;
+        point->max = sample;
+        point->first = sample;
+        point->last = sample;
+        return;
+    }
+    if(sample < point->min)
+    {
+        point->min = sample;
+    }
+    if(sample > point->max)
+    {
+        point->max = sample;
+    }
+    point->last = sample;
+}
+
+static void sample_capture_editor_tile_levels_begin(uint8_t tile_index, uint32_t frame_count)
+{
+    if(tile_index >= SAMPLE_CAPTURE_EDITOR_TILE_COUNT)
+    {
+        return;
+    }
+    sample_capture_editor_tile_levels_reset(tile_index);
+    g_sample_capture_editor_cache.tiles[tile_index].level0_count =
+        sample_capture_editor_level_count(frame_count,
+                                          SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES);
+    g_sample_capture_editor_cache.tiles[tile_index].level1_count =
+        sample_capture_editor_level_count(frame_count,
+                                          SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES);
+    g_sample_capture_editor_cache.tiles[tile_index].level2_count =
+        sample_capture_editor_level_count(frame_count,
+                                          SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES);
+}
+
+static void sample_capture_editor_tile_level_accumulate(uint8_t tile_index,
+                                                        uint32_t frame,
+                                                        int16_t sample)
+{
+    if(tile_index >= SAMPLE_CAPTURE_EDITOR_TILE_COUNT)
+    {
+        return;
+    }
+    sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[tile_index];
+    sample_capture_editor_level_accumulate(g_sample_capture_editor_level0[tile_index],
+                                               tile->level0_count,
+                                               SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES,
+                                               frame,
+                                               sample);
+    sample_capture_editor_level_accumulate(g_sample_capture_editor_level1[tile_index],
+                                               tile->level1_count,
+                                               SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES,
+                                               frame,
+                                               sample);
+    sample_capture_editor_level_accumulate(g_sample_capture_editor_level2[tile_index],
+                                               tile->level2_count,
+                                               SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES,
+                                               frame,
+                                               sample);
+}
+
+static uint8_t sample_capture_editor_cache_path_matches(void)
+{
+    return (uint8_t)((g_sample_capture.state.temp_path[0] != '\0')
+            && (strncmp(g_sample_capture_editor_cache.path,
+                        g_sample_capture.state.temp_path,
+                        SAMPLE_CAPTURE_PATH_MAX) == 0));
+}
+
+static uint32_t sample_capture_editor_tile_end(const sample_capture_editor_audio_tile_t *tile)
+{
+    if(tile == 0)
+    {
+        return 0U;
+    }
+    return tile->start_frame + tile->frame_count;
+}
+
+static int8_t sample_capture_editor_find_ready_tile(uint32_t frame)
+{
+    if(sample_capture_editor_cache_path_matches() == 0U)
+    {
+        return -1;
+    }
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        const sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[i];
+        if((tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_READY)
+                && (frame >= tile->start_frame)
+                && (frame < sample_capture_editor_tile_end(tile)))
+        {
+            return (int8_t)i;
+        }
+    }
+    return -1;
+}
+
+static int8_t sample_capture_editor_find_any_tile(uint32_t tile_start)
+{
+    if(sample_capture_editor_cache_path_matches() == 0U)
+    {
+        return -1;
+    }
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        const sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[i];
+        if((tile->state != SAMPLE_CAPTURE_EDITOR_CACHE_EMPTY)
+                && (tile->state != SAMPLE_CAPTURE_EDITOR_CACHE_STALE)
+                && (tile->start_frame == tile_start))
+        {
+            return (int8_t)i;
+        }
+    }
+    return -1;
+}
+
+static uint8_t sample_capture_editor_cache_covers(uint32_t start_frame,
+                                                  uint32_t frame_count)
+{
+    if((sample_capture_editor_cache_path_matches() == 0U) || (frame_count == 0U))
+    {
+        return 0U;
+    }
+    uint32_t cursor = start_frame;
+    const uint32_t end_frame = start_frame + frame_count;
+    if(end_frame < start_frame)
+    {
+        return 0U;
+    }
+    while(cursor < end_frame)
+    {
+        const int8_t idx = sample_capture_editor_find_ready_tile(cursor);
+        if(idx < 0)
+        {
+            return 0U;
+        }
+        const uint32_t tile_end = sample_capture_editor_tile_end(&g_sample_capture_editor_cache.tiles[(uint8_t)idx]);
+        if(tile_end <= cursor)
+        {
+            return 0U;
+        }
+        cursor = (tile_end < end_frame) ? tile_end : end_frame;
+    }
+    return 1U;
+}
+
+static uint32_t sample_capture_editor_align_tile_start(uint32_t frame)
+{
+    return (frame / SAMPLE_CAPTURE_EDITOR_TILE_FRAMES) * SAMPLE_CAPTURE_EDITOR_TILE_FRAMES;
+}
+
+static uint8_t sample_capture_editor_tile_start_in_list(uint32_t tile_start,
+                                                        const uint32_t *list,
+                                                        uint8_t count)
+{
+    for(uint8_t i = 0U; i < count; ++i)
+    {
+        if(list[i] == tile_start)
+        {
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+static void sample_capture_editor_add_tile_request(uint32_t tile_start,
+                                                   uint32_t *list,
+                                                   uint8_t *count)
+{
+    if((list == 0) || (count == 0) || (*count >= SAMPLE_CAPTURE_EDITOR_TILE_COUNT)
+            || (tile_start >= g_sample_capture.state.recorded_frames)
+            || (sample_capture_editor_tile_start_in_list(tile_start, list, *count) != 0U))
+    {
+        return;
+    }
+    list[*count] = tile_start;
+    (*count)++;
+}
+
+static int8_t sample_capture_editor_pick_tile_slot(uint32_t tile_start, uint32_t focus);
+
+static uint8_t sample_capture_editor_queue_tile_limited(uint32_t tile_start,
+                                                        uint32_t focus,
+                                                        uint8_t *queued_count)
+{
+    if((queued_count != 0) && (*queued_count >= SAMPLE_CAPTURE_EDITOR_TILE_REQUEST_MAX))
+    {
+        return 0U;
+    }
+    if(sample_capture_editor_find_any_tile(tile_start) >= 0)
+    {
+        return 0U;
+    }
+    const int8_t slot = sample_capture_editor_pick_tile_slot(tile_start, focus);
+    if(slot < 0)
+    {
+        return 0U;
+    }
+    sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[(uint8_t)slot];
+    tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_LOADING;
+    tile->start_frame = tile_start;
+    tile->frame_count = g_sample_capture.state.recorded_frames - tile_start;
+    if(tile->frame_count > SAMPLE_CAPTURE_EDITOR_TILE_FRAMES)
+    {
+        tile->frame_count = SAMPLE_CAPTURE_EDITOR_TILE_FRAMES;
+    }
+    tile->load_next_frame = 0U;
+    tile->generation = ++g_sample_capture_editor_cache.generation;
+    sample_capture_editor_tile_levels_begin((uint8_t)slot, tile->frame_count);
+    if(queued_count != 0)
+    {
+        (*queued_count)++;
+    }
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    g_sample_capture_debug.cache_request_count++;
+    sample_capture_debug_log("OLD_AUDIO_TILE_REQ slot=%u start=%lu frames=%lu focus=%lu\r\n",
+                             (unsigned)(uint8_t)slot,
+                             (unsigned long)tile->start_frame,
+                             (unsigned long)tile->frame_count,
+                             (unsigned long)focus);
+#endif
+    return 1U;
+}
+
+static uint32_t sample_capture_editor_distance_to_focus(uint32_t tile_start, uint32_t focus)
+{
+    if(focus < tile_start)
+    {
+        return tile_start - focus;
+    }
+    const uint32_t tile_end = tile_start + SAMPLE_CAPTURE_EDITOR_TILE_FRAMES;
+    if(focus >= tile_end)
+    {
+        return focus - tile_end + 1U;
+    }
+    return 0U;
+}
+
+static int8_t sample_capture_editor_pick_tile_slot(uint32_t tile_start, uint32_t focus)
+{
+    int8_t candidate = -1;
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        const sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[i];
+        if((tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_EMPTY)
+                || (tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_STALE))
+        {
+            return (int8_t)i;
+        }
+    }
+
+    uint32_t worst_distance = 0U;
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        const sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[i];
+        if(tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_LOADING)
+        {
+            continue;
+        }
+        const uint32_t distance = sample_capture_editor_distance_to_focus(tile->start_frame, focus);
+        if((candidate < 0) || (distance > worst_distance))
+        {
+            candidate = (int8_t)i;
+            worst_distance = distance;
+        }
+    }
+    (void)tile_start;
+    return candidate;
+}
+
+static void sample_capture_editor_cache_request(uint32_t view_start_frame,
+                                                uint32_t view_frames)
+{
+    if((g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.state.temp_path[0] == '\0')
+            || (g_sample_capture.state.recorded_frames == 0U)
+            || (view_frames == 0U))
+    {
+        return;
+    }
+
+    if(sample_capture_editor_cache_path_matches() == 0U)
+    {
+        sample_capture_editor_cache_reset();
+        sample_capture_copy_path(g_sample_capture_editor_cache.path,
+                                 g_sample_capture.state.temp_path);
+    }
+
+    const uint32_t view_end = view_start_frame + view_frames;
+    uint32_t focus = view_start_frame + (view_frames / 2U);
+    if((view_end < view_start_frame) || (focus >= g_sample_capture.state.recorded_frames))
+    {
+        focus = g_sample_capture.state.recorded_frames - 1U;
+    }
+    g_sample_capture_editor_cache.focus_frame = focus;
+    g_sample_capture_editor_cache.last_view_start_frame = view_start_frame;
+    g_sample_capture_editor_cache.last_view_frames = view_frames;
+
+    uint32_t required[SAMPLE_CAPTURE_EDITOR_TILE_COUNT];
+    uint32_t keep[SAMPLE_CAPTURE_EDITOR_TILE_COUNT];
+    uint32_t optional[SAMPLE_CAPTURE_EDITOR_TILE_COUNT];
+    uint8_t required_count = 0U;
+    uint8_t keep_count = 0U;
+    uint8_t optional_count = 0U;
+    uint8_t queued_count = 0U;
+
+    uint32_t visible_tiles = (view_frames + SAMPLE_CAPTURE_EDITOR_TILE_FRAMES - 1U)
+        / SAMPLE_CAPTURE_EDITOR_TILE_FRAMES;
+    if(visible_tiles == 0U)
+    {
+        visible_tiles = 1U;
+    }
+    if(visible_tiles > SAMPLE_CAPTURE_EDITOR_TILE_COUNT)
+    {
+        visible_tiles = SAMPLE_CAPTURE_EDITOR_TILE_COUNT;
+    }
+
+    const uint32_t focus_tile = sample_capture_editor_align_tile_start(focus);
+    sample_capture_editor_add_tile_request(focus_tile, required, &required_count);
+    sample_capture_editor_add_tile_request(focus_tile, keep, &keep_count);
+
+    uint32_t tile_start = sample_capture_editor_align_tile_start(view_start_frame);
+    for(uint32_t i = 0U; (i < visible_tiles) && (required_count < SAMPLE_CAPTURE_EDITOR_TILE_COUNT); ++i)
+    {
+        sample_capture_editor_add_tile_request(tile_start, required, &required_count);
+        sample_capture_editor_add_tile_request(tile_start, keep, &keep_count);
+        if(tile_start > (0xFFFFFFFFUL - SAMPLE_CAPTURE_EDITOR_TILE_FRAMES))
+        {
+            break;
+        }
+        tile_start += SAMPLE_CAPTURE_EDITOR_TILE_FRAMES;
+    }
+
+    if(view_start_frame >= SAMPLE_CAPTURE_EDITOR_TILE_FRAMES)
+    {
+        const uint32_t left_tile = sample_capture_editor_align_tile_start(view_start_frame - 1U);
+        sample_capture_editor_add_tile_request(left_tile, keep, &keep_count);
+        sample_capture_editor_add_tile_request(left_tile, optional, &optional_count);
+    }
+    const uint32_t right_tile = sample_capture_editor_align_tile_start(view_end);
+    sample_capture_editor_add_tile_request(right_tile, keep, &keep_count);
+    sample_capture_editor_add_tile_request(right_tile, optional, &optional_count);
+    if(focus_tile >= SAMPLE_CAPTURE_EDITOR_TILE_FRAMES)
+    {
+        sample_capture_editor_add_tile_request(focus_tile - SAMPLE_CAPTURE_EDITOR_TILE_FRAMES,
+                                              keep,
+                                              &keep_count);
+    }
+    sample_capture_editor_add_tile_request(focus_tile + SAMPLE_CAPTURE_EDITOR_TILE_FRAMES,
+                                          keep,
+                                          &keep_count);
+
+    for(uint8_t radius = 2U; radius <= SAMPLE_CAPTURE_EDITOR_TILE_KEEP_RADIUS; ++radius)
+    {
+        const uint32_t delta = SAMPLE_CAPTURE_EDITOR_TILE_FRAMES * (uint32_t)radius;
+        if(focus_tile >= delta)
+        {
+            sample_capture_editor_add_tile_request(focus_tile - delta, keep, &keep_count);
+        }
+        sample_capture_editor_add_tile_request(focus_tile + delta, keep, &keep_count);
+    }
+
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[i];
+        if((tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_LOADING)
+                && (sample_capture_editor_tile_start_in_list(tile->start_frame,
+                                                            keep,
+                                                            keep_count) == 0U))
+        {
+            tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_STALE;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+            sample_capture_debug_log("OLD_AUDIO_TILE_DROP slot=%u start=%lu\r\n",
+                                     (unsigned)i,
+                                     (unsigned long)tile->start_frame);
+#endif
+        }
+    }
+
+    for(uint8_t i = 0U; i < required_count; ++i)
+    {
+        (void)sample_capture_editor_queue_tile_limited(required[i], focus, &queued_count);
+    }
+    for(uint8_t i = 0U; i < optional_count; ++i)
+    {
+        (void)sample_capture_editor_queue_tile_limited(optional[i], focus, &queued_count);
+    }
+}
+
+static uint8_t sample_capture_editor_cache_can_fill(uint8_t *out_reason)
+{
+    if(out_reason != 0)
+    {
+        *out_reason = 0U;
+    }
+    if((g_sample_capture_editor_cache.path[0] == '\0')
+            || (g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.armed_pending != 0U)
+            || (sample_capture_editor_cache_path_matches() == 0U))
+    {
+        return 0U;
+    }
+    if(multi_record_writer_any_active() != 0U)
+    {
+        if(out_reason != 0) { *out_reason = 1U; }
+        return 0U;
+    }
+    if(looper_storage_raw_export_is_active() != 0U)
+    {
+        if(out_reason != 0) { *out_reason = 2U; }
+        return 0U;
+    }
+    if(sd_preview_is_active() != 0U)
+    {
+        if(out_reason != 0) { *out_reason = 3U; }
+        return 0U;
+    }
+    if(pattern_load_is_pending() != 0U)
+    {
+        if(out_reason != 0) { *out_reason = 4U; }
+        return 0U;
+    }
+    if(sample_cache_has_pending_sd_work() != 0U)
+    {
+        if(out_reason != 0) { *out_reason = 5U; }
+        return 0U;
+    }
+    return 1U;
+}
+
+static int8_t sample_capture_editor_next_loading_tile(void)
+{
+    int8_t best = -1;
+    uint32_t best_distance = 0xFFFFFFFFUL;
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
+    {
+        sample_capture_editor_audio_tile_t *const tile = &g_sample_capture_editor_cache.tiles[i];
+        if(tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_STALE)
+        {
+            tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_EMPTY;
+        }
+        if(tile->state != SAMPLE_CAPTURE_EDITOR_CACHE_LOADING)
+        {
+            continue;
+        }
+        const uint32_t distance =
+            sample_capture_editor_distance_to_focus(tile->start_frame,
+                                                    g_sample_capture_editor_cache.focus_frame);
+        if(distance < best_distance)
+        {
+            best = (int8_t)i;
+            best_distance = distance;
+        }
+    }
+    return best;
+}
+
+static void sample_capture_editor_cache_service(void)
+{
+    const int8_t load_idx = sample_capture_editor_next_loading_tile();
+    if(load_idx < 0)
+    {
+        return;
+    }
+
+    uint8_t block_reason = 0U;
+    if(sample_capture_editor_cache_can_fill(&block_reason) == 0U)
+    {
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+        if(block_reason == 1U) { g_sample_capture_debug.cache_block_writer_count++; }
+        else if(block_reason == 2U) { g_sample_capture_debug.cache_block_export_count++; }
+        else if(block_reason == 3U) { g_sample_capture_debug.cache_block_preview_count++; }
+        else if(block_reason == 4U) { g_sample_capture_debug.cache_block_pattern_count++; }
+        else if(block_reason == 5U) { g_sample_capture_debug.cache_block_sample_count++; }
+#endif
+        return;
+    }
+
+    sample_capture_editor_audio_tile_t *const tile =
+        &g_sample_capture_editor_cache.tiles[(uint8_t)load_idx];
+
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    const uint32_t service_start_ms = HAL_GetTick();
+    g_sample_capture_debug.fill_passes++;
+    if(g_sample_capture_debug.fill_started_logged == 0U)
+    {
+        g_sample_capture_debug.fill_started_logged = 1U;
+        g_sample_capture_debug.fill_start_ms = service_start_ms;
+        sample_capture_debug_log("OLD_AUDIO_TILE_START slot=%u start=%lu frames=%lu focus=%lu\r\n",
+                                 (unsigned)(uint8_t)load_idx,
+                                 (unsigned long)tile->start_frame,
+                                 (unsigned long)tile->frame_count,
+                                 (unsigned long)g_sample_capture_editor_cache.focus_frame);
+    }
+#endif
+
+    uint32_t frames_left = tile->frame_count - tile->load_next_frame;
+    if(frames_left == 0U)
+    {
+        tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_READY;
+        return;
+    }
+    if(frames_left > SAMPLE_CAPTURE_EDITOR_TILE_BUILD_CHUNK_FRAMES)
+    {
+        frames_left = SAMPLE_CAPTURE_EDITOR_TILE_BUILD_CHUNK_FRAMES;
+    }
+
+    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
+    {
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+        g_sample_capture_debug.cache_gate_busy_count++;
+#endif
+        return;
+    }
+
+    FIL fp;
+    uint8_t file_open = 0U;
+    uint8_t ok = 0U;
+    if(sd_access_fs_mount_if_needed() == 0U)
+    {
+        goto done;
+    }
+    if(f_open(&fp, g_sample_capture_editor_cache.path, FA_READ) != FR_OK)
+    {
+        goto done;
+    }
+    file_open = 1U;
+
+    const uint32_t absolute_frame = tile->start_frame + tile->load_next_frame;
+    if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
+            + (absolute_frame * MULTI_RECORD_WRITER_BYTES_PER_FRAME)) != FR_OK)
+    {
+        goto done;
+    }
+
+    const uint32_t bytes_to_read = frames_left * MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    UINT br = 0U;
+    if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
+            || (br < MULTI_RECORD_WRITER_BYTES_PER_FRAME))
+    {
+        goto done;
+    }
+
+    const uint32_t frames_read = br / MULTI_RECORD_WRITER_BYTES_PER_FRAME;
+    for(uint32_t i = 0U; i < frames_read; ++i)
+    {
+        const uint8_t *frame = &g_sample_capture_detail_buf[i * MULTI_RECORD_WRITER_BYTES_PER_FRAME];
+        const int16_t l = sample_capture_pcm24le_to_waveform_i16(frame);
+        const int16_t r = sample_capture_pcm24le_to_waveform_i16(&frame[3]);
+        const uint32_t rel = tile->load_next_frame + i;
+        const int16_t mono = (int16_t)(((int32_t)l + (int32_t)r) / 2);
+        g_sample_capture_editor_audio[(uint8_t)load_idx][rel] = mono;
+        sample_capture_editor_tile_level_accumulate((uint8_t)load_idx, rel, mono);
+    }
+
+    tile->load_next_frame += frames_read;
+    ok = 1U;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    g_sample_capture_debug.cache_chunks++;
+    g_sample_capture_debug.fill_chunks++;
+#endif
+    if((frames_read == 0U)
+            || (tile->load_next_frame >= tile->frame_count))
+    {
+        tile->frame_count = tile->load_next_frame;
+        tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_READY;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+        const uint32_t elapsed = HAL_GetTick() - g_sample_capture_debug.fill_start_ms;
+        sample_capture_debug_log("OLD_AUDIO_TILE_DONE slot=%u start=%lu frames=%lu chunks=%lu passes=%lu gate_busy=%lu ms=%lu\r\n",
+                                 (unsigned)(uint8_t)load_idx,
+                                 (unsigned long)tile->start_frame,
+                                 (unsigned long)tile->frame_count,
+                                 (unsigned long)g_sample_capture_debug.fill_chunks,
+                                 (unsigned long)g_sample_capture_debug.fill_passes,
+                                 (unsigned long)g_sample_capture_debug.cache_gate_busy_count,
+                                 (unsigned long)elapsed);
+        g_sample_capture_debug.fill_chunks = 0U;
+        g_sample_capture_debug.fill_passes = 0U;
+        g_sample_capture_debug.cache_gate_busy_count = 0U;
+        g_sample_capture_debug.fill_started_logged = 0U;
+#endif
+    }
+
+done:
+    if(file_open != 0U)
+    {
+        (void)f_close(&fp);
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
+    if(ok == 0U)
+    {
+        tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_EMPTY;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+        sample_capture_debug_log("OLD_AUDIO_TILE_ERR slot=%u start=%lu loaded=%lu req=%lu\r\n",
+                                 (unsigned)(uint8_t)load_idx,
+                                 (unsigned long)tile->start_frame,
+                                 (unsigned long)tile->load_next_frame,
+                                 (unsigned long)tile->frame_count);
+#endif
+    }
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    const uint32_t service_ms = HAL_GetTick() - service_start_ms;
+    g_sample_capture_debug.fill_last_ms = service_ms;
+    if(service_ms > g_sample_capture_debug.fill_max_ms)
+    {
+        g_sample_capture_debug.fill_max_ms = service_ms;
+    }
+#endif
+}
+
+static int16_t sample_capture_editor_sample_at(uint32_t frame)
+{
+    const int8_t idx = sample_capture_editor_find_ready_tile(frame);
+    if(idx < 0)
+    {
+        return 0;
+    }
+    const sample_capture_editor_audio_tile_t *const tile =
+        &g_sample_capture_editor_cache.tiles[(uint8_t)idx];
+    return g_sample_capture_editor_audio[(uint8_t)idx][frame - tile->start_frame];
+}
+
+static void sample_capture_editor_range_from_level(uint8_t tile_index,
+                                                   uint32_t rel_start,
+                                                   uint32_t rel_end,
+                                                   uint32_t block_frames,
+                                                   const sample_capture_editor_level_point_t *level,
+                                                   uint16_t level_count,
+                                                   uint8_t *seen,
+                                                   int16_t *min_v,
+                                                   int16_t *max_v,
+                                                   int16_t *first_v,
+                                                   int16_t *last_v)
+{
+    if((level == 0) || (seen == 0) || (min_v == 0) || (max_v == 0)
+            || (first_v == 0) || (last_v == 0) || (rel_end <= rel_start)
+            || (block_frames == 0U) || (level_count == 0U)
+            || (tile_index >= SAMPLE_CAPTURE_EDITOR_TILE_COUNT))
+    {
+        return;
+    }
+    uint32_t idx0 = rel_start / block_frames;
+    uint32_t idx1 = (rel_end + block_frames - 1U) / block_frames;
+    if(idx0 >= level_count)
+    {
+        return;
+    }
+    if(idx1 > level_count)
+    {
+        idx1 = level_count;
+    }
+    for(uint32_t idx = idx0; idx < idx1; ++idx)
+    {
+        const sample_capture_editor_level_point_t *const p = &level[idx];
+        if(*seen == 0U)
+        {
+            *min_v = p->min;
+            *max_v = p->max;
+            *first_v = p->first;
+            *last_v = p->last;
+            *seen = 1U;
+        }
+        else
+        {
+            if(p->min < *min_v) { *min_v = p->min; }
+            if(p->max > *max_v) { *max_v = p->max; }
+            *last_v = p->last;
+        }
+    }
+}
+
+static uint8_t sample_capture_editor_accumulate_range(uint32_t start_frame,
+                                                      uint32_t end_frame,
+                                                      uint32_t samples_per_point,
+                                                      int16_t *min_v,
+                                                      int16_t *max_v,
+                                                      int16_t *first_v,
+                                                      int16_t *last_v)
+{
+    uint8_t seen = 0U;
+    uint32_t cursor = start_frame;
+    while(cursor < end_frame)
+    {
+        const int8_t idx = sample_capture_editor_find_ready_tile(cursor);
+        if(idx < 0)
+        {
+            return 0U;
+        }
+        const sample_capture_editor_audio_tile_t *const tile =
+            &g_sample_capture_editor_cache.tiles[(uint8_t)idx];
+        uint32_t span_end = sample_capture_editor_tile_end(tile);
+        if(span_end > end_frame)
+        {
+            span_end = end_frame;
+        }
+        const uint32_t rel_start = cursor - tile->start_frame;
+        const uint32_t rel_end = span_end - tile->start_frame;
+        if(samples_per_point >= SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES)
+        {
+            sample_capture_editor_range_from_level((uint8_t)idx, rel_start, rel_end,
+                                                   SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES,
+                                                   g_sample_capture_editor_level2[(uint8_t)idx],
+                                                   tile->level2_count,
+                                                   &seen, min_v, max_v, first_v, last_v);
+        }
+        else if(samples_per_point >= SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES)
+        {
+            sample_capture_editor_range_from_level((uint8_t)idx, rel_start, rel_end,
+                                                   SAMPLE_CAPTURE_EDITOR_LEVEL1_BLOCK_FRAMES,
+                                                   g_sample_capture_editor_level1[(uint8_t)idx],
+                                                   tile->level1_count,
+                                                   &seen, min_v, max_v, first_v, last_v);
+        }
+        else if(samples_per_point >= SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES)
+        {
+            sample_capture_editor_range_from_level((uint8_t)idx, rel_start, rel_end,
+                                                   SAMPLE_CAPTURE_EDITOR_LEVEL0_BLOCK_FRAMES,
+                                                   g_sample_capture_editor_level0[(uint8_t)idx],
+                                                   tile->level0_count,
+                                                   &seen, min_v, max_v, first_v, last_v);
+        }
+        else
+        {
+            for(uint32_t frame = cursor; frame < span_end; ++frame)
+            {
+                const int16_t sample = sample_capture_editor_sample_at(frame);
+                if(seen == 0U)
+                {
+                    *min_v = sample;
+                    *max_v = sample;
+                    *first_v = sample;
+                    *last_v = sample;
+                    seen = 1U;
+                }
+                else
+                {
+                    if(sample < *min_v) { *min_v = sample; }
+                    if(sample > *max_v) { *max_v = sample; }
+                    *last_v = sample;
+                }
+            }
+        }
+        cursor = span_end;
+    }
+    return seen;
+}
+
+static void sample_capture_line_publish_from_editor_cache(uint32_t start_frame,
+                                                          uint32_t frame_count,
+                                                          uint16_t points)
+{
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    const uint32_t eline_start_ms = HAL_GetTick();
+    const char *eline_src = "OLD_AUDIO_TILE";
+#endif
+    if((points == 0U) || (points > SAMPLE_CAPTURE_LINE_POINTS)
+            || (sample_capture_editor_cache_covers(start_frame, frame_count) == 0U))
+    {
+        return;
+    }
+
+    uint16_t line_peak = 0U;
+    const uint32_t samples_per_point = (frame_count + (uint32_t)points - 1U) / (uint32_t)points;
+
+    g_sample_capture_line_hot.valid = 1U;
+    g_sample_capture_line_hot.start_frame = start_frame;
+    g_sample_capture_line_hot.frames = frame_count;
+    g_sample_capture_line_hot.count = points;
+    g_sample_capture_line_hot.requested = 0U;
+    g_sample_capture_line_hot.building = 0U;
+    g_sample_capture_line_hot.build_next_frame = 0U;
+
+    for(uint16_t point = 0U; point < points; ++point)
+    {
+        uint32_t frame0 = (uint32_t)(((uint64_t)point * (uint64_t)frame_count)
+            / (uint64_t)points);
+        uint32_t frame1 = (uint32_t)(((uint64_t)(point + 1U) * (uint64_t)frame_count)
+            / (uint64_t)points);
+        if(frame1 <= frame0)
+        {
+            frame1 = frame0 + 1U;
+        }
+        frame0 += start_frame;
+        frame1 += start_frame;
+        int16_t min_v = 0;
+        int16_t max_v = 0;
+        int16_t first_v = 0;
+        int16_t last_v = 0;
+        if(sample_capture_editor_accumulate_range(frame0, frame1, samples_per_point,
+                                                  &min_v, &max_v, &first_v, &last_v) == 0U)
+        {
+            g_sample_capture_line_hot.valid = 0U;
+            return;
+        }
+        const int16_t v = sample_capture_line_point_from_values(point,
+                                                                points,
+                                                                min_v,
+                                                                max_v,
+                                                                first_v,
+                                                                last_v);
+        g_sample_capture_line_hot.points[point] = v;
+        const uint16_t abs_v = sample_capture_abs_i16(v);
+        if(abs_v > line_peak)
+        {
+            line_peak = abs_v;
+        }
+    }
+    g_sample_capture_line_hot.peak = line_peak;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    const uint32_t eline_ms = HAL_GetTick() - eline_start_ms;
+    g_sample_capture_debug.eline_count++;
+    g_sample_capture_debug.eline_last_ms = eline_ms;
+    if(eline_ms > g_sample_capture_debug.eline_max_ms)
+    {
+        g_sample_capture_debug.eline_max_ms = eline_ms;
+    }
+    if(eline_ms != 0U)
+    {
+        sample_capture_debug_log("ELINE src=%s points=%u vf=%lu spp=%lu ms=%lu peak=%u\r\n",
+                                 eline_src,
+                                 (unsigned)points,
+                                 (unsigned long)frame_count,
+                                 (unsigned long)samples_per_point,
+                                 (unsigned long)eline_ms,
+                                 (unsigned)line_peak);
+    }
+#endif
 }
 
 static uint8_t sample_capture_detail_can_build(void)
@@ -624,23 +2027,12 @@ static int16_t sample_capture_line_point_from_accum(uint16_t point)
     const int16_t min_v = g_sample_capture_line_hot.min[point];
     const int16_t max_v = g_sample_capture_line_hot.max[point];
     const int16_t last_v = g_sample_capture_line_hot.last[point];
-    int16_t point_v = g_sample_capture_line_hot.first[point];
-    if((min_v < 0) && (max_v > 0))
-    {
-        point_v = ((point & 1U) == 0U) ? max_v : min_v;
-    }
-    else
-    {
-        const uint16_t abs_min = sample_capture_abs_i16(min_v);
-        const uint16_t abs_max = sample_capture_abs_i16(max_v);
-        point_v = (abs_max >= abs_min) ? max_v : min_v;
-    }
-    if((point > 0U) && (point < (uint16_t)(g_sample_capture_line_hot.build_points - 1U))
-            && (sample_capture_abs_i16(point_v) < sample_capture_abs_i16(last_v)))
-    {
-        point_v = last_v;
-    }
-    return point_v;
+    return sample_capture_line_point_from_values(point,
+                                                 g_sample_capture_line_hot.build_points,
+                                                 min_v,
+                                                 max_v,
+                                                 g_sample_capture_line_hot.first[point],
+                                                 last_v);
 }
 
 static void sample_capture_line_finish_build(void)
@@ -929,6 +2321,50 @@ static void sample_capture_clamp_edit_window(void)
     }
 }
 
+static uint32_t sample_capture_clamp_scroll_for_visible(uint32_t start_frame,
+                                                        uint32_t visible_frames)
+{
+    if((g_sample_capture.state.recorded_frames == 0U)
+            || (visible_frames >= g_sample_capture.state.recorded_frames))
+    {
+        return 0U;
+    }
+    const uint32_t max_start = g_sample_capture.state.recorded_frames - visible_frames;
+    return (start_frame > max_start) ? max_start : start_frame;
+}
+
+static void sample_capture_set_zoom_preserve_center(uint8_t next_zoom)
+{
+    const uint32_t old_visible =
+        sample_capture_model_visible_frames_for_zoom(g_sample_capture.state.recorded_frames,
+                                                     g_sample_capture.state.edit_zoom);
+    const uint32_t old_start =
+        sample_capture_clamp_scroll_for_visible(g_sample_capture.state.edit_scroll_frame,
+                                                old_visible);
+    uint64_t center = (uint64_t)old_start + ((uint64_t)old_visible / 2ULL);
+    if(center > g_sample_capture.state.recorded_frames)
+    {
+        center = g_sample_capture.state.recorded_frames;
+    }
+
+    g_sample_capture.state.edit_zoom = next_zoom;
+
+    const uint32_t new_visible =
+        sample_capture_model_visible_frames_for_zoom(g_sample_capture.state.recorded_frames,
+                                                     g_sample_capture.state.edit_zoom);
+    uint32_t new_start = 0U;
+    if(new_visible < g_sample_capture.state.recorded_frames)
+    {
+        if(center > ((uint64_t)new_visible / 2ULL))
+        {
+            const uint64_t centered = center - ((uint64_t)new_visible / 2ULL);
+            new_start = (centered > 0xFFFFFFFFULL) ? 0xFFFFFFFFUL : (uint32_t)centered;
+        }
+        new_start = sample_capture_clamp_scroll_for_visible(new_start, new_visible);
+    }
+    g_sample_capture.state.edit_scroll_frame = new_start;
+}
+
 static void sample_capture_capture_wait_baseline(void)
 {
     seq_step_id_t step = 0U;
@@ -1091,6 +2527,7 @@ static uint8_t sample_capture_start_now(void)
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_RECORDING;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     g_sample_capture.last_take_notified = 0U;
+    g_sample_capture.rec_edit_enter_deferred_services = 0U;
     sample_capture_waveform_reset();
     sample_capture_detail_reset();
     sample_capture_set_audio_hook_enabled(1U);
@@ -1110,6 +2547,7 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
     {
         return;
     }
+    sample_capture_debug_mark(REC_LIVE_DEBUG_TAKE_READY_ENTER, status, path, frames);
     if(frames == 0U)
     {
         sample_capture_set_audio_hook_enabled(0U);
@@ -1124,6 +2562,16 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
     g_sample_capture.state.recording = 0U;
     g_sample_capture.state.armed_pending = 0U;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+#if SAMPLE_CAPTURE_DEBUG_UART
+    sample_capture_debug_log("REC_LIVE_DONE frames=%lu\r\n", (unsigned long)frames);
+    sample_capture_debug_log("WRITER_FINAL_READY path=%s frames=%lu\r\n",
+                             path,
+                             (unsigned long)frames);
+#endif
+#if SAMPLE_CAPTURE_DEBUG_UART
+    sample_capture_debug_log("REC_EDIT_ENTER_REQUEST path=%s\r\n", path);
+#endif
+    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_ENTER_REQUEST, status, path, frames);
     g_sample_capture.state.take_valid = 1U;
     g_sample_capture.state.recorded_frames = frames;
     g_sample_capture.state.edit_start_frame = 0U;
@@ -1134,6 +2582,31 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
     sample_capture_detail_reset();
+    sample_capture_global_overview_request();
+    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_MODEL_INIT, status, path, frames);
+    uint8_t cache_queued = 0U;
+    if(sample_capture_path_is_temp(path) == 0U)
+    {
+        cache_queued = waveform_cache_request_for_wav(path, WAVEFORM_CACHE_REASON_POST_AUDIO_REC);
+        g_sample_capture.wave_cache_retry_countdown = 32U;
+    }
+    else
+    {
+        g_sample_capture.wave_cache_retry_countdown = 0U;
+    }
+    g_sample_capture.rec_edit_enter_deferred_services = 2U;
+    g_sample_capture.rec_edit_first_render_pending = 1U;
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    sample_capture_debug_log("WAVEFORM_CACHE_%s path=%s\r\n",
+                             (cache_queued != 0U) ? "JOB_QUEUED" : "DEFERRED",
+                             path);
+#else
+    (void)cache_queued;
+#endif
+#if SAMPLE_CAPTURE_DEBUG_UART
+    sample_capture_debug_log("REC_EDIT_ENTER_OK\r\n");
+#endif
+    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_ENTER_OK, status, path, frames);
     g_sample_capture.last_take_notified = 1U;
     (void)status;
 }
@@ -1164,6 +2637,14 @@ uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
 
 uint8_t sample_capture_request_stop(void)
 {
+    multi_record_writer_status_t status;
+    if(sample_capture_get_status(&status) != 0U)
+    {
+        sample_capture_debug_mark(REC_LIVE_DEBUG_REC_LIVE_STOP_REQUESTED,
+                                  &status,
+                                  g_sample_capture.state.temp_path,
+                                  status.frames_received);
+    }
     return multi_record_writer_request_stop(SAMPLE_CAPTURE_RECORD_CLIENT_ID);
 }
 
@@ -1185,6 +2666,7 @@ uint8_t sample_capture_audio_hook_is_enabled(void)
 void sample_capture_model_init(void)
 {
     memset(&g_sample_capture, 0, sizeof(g_sample_capture));
+    sample_capture_debug_reset();
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.len_bars = 1U;
@@ -1433,17 +2915,36 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta)
     }
     else if(encoder == 0U)
     {
+        uint8_t next_zoom = g_sample_capture.state.edit_zoom;
+        uint32_t zoom_step = coarse * 2U;
+        if(coarse >= 4U)
+        {
+            zoom_step += coarse;
+        }
+        if(zoom_step == 0U)
+        {
+            zoom_step = 1U;
+        }
         if(delta > 0)
         {
-            if(g_sample_capture.state.edit_zoom < SAMPLE_CAPTURE_EDIT_ZOOM_MAX)
+            if(zoom_step >= ((uint32_t)SAMPLE_CAPTURE_EDIT_ZOOM_MAX - (uint32_t)next_zoom))
             {
-                g_sample_capture.state.edit_zoom++;
+                next_zoom = SAMPLE_CAPTURE_EDIT_ZOOM_MAX;
+            }
+            else
+            {
+                next_zoom = (uint8_t)((uint32_t)next_zoom + zoom_step);
             }
         }
-        else if(g_sample_capture.state.edit_zoom > 0U)
+        else if(zoom_step >= next_zoom)
         {
-            g_sample_capture.state.edit_zoom--;
+            next_zoom = 0U;
         }
+        else
+        {
+            next_zoom = (uint8_t)((uint32_t)next_zoom - zoom_step);
+        }
+        sample_capture_set_zoom_preserve_center(next_zoom);
         changed = 1U;
     }
     else if(encoder == 1U)
@@ -1564,6 +3065,130 @@ void sample_capture_model_request_detail_waveform(uint32_t start_frame,
     g_sample_capture.detail_build_next_frame = 0U;
 }
 
+uint8_t sample_capture_model_global_overview_ready(void)
+{
+    return (uint8_t)((g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY)
+            && (sample_capture_global_overview_path_matches() != 0U)
+            && (g_sample_capture_global_overview.frame_count == g_sample_capture.state.recorded_frames)
+            && (g_sample_capture_global_overview.point_count != 0U));
+}
+
+uint16_t sample_capture_model_global_overview_peak(void)
+{
+    return sample_capture_model_global_overview_ready()
+        ? g_sample_capture_global_overview.peak
+        : 0U;
+}
+
+uint8_t sample_capture_model_global_overview_minmax(uint32_t start_frame,
+                                                    uint32_t frame_count,
+                                                    int16_t *out_min,
+                                                    int16_t *out_max)
+{
+    if(out_min != 0)
+    {
+        *out_min = 0;
+    }
+    if(out_max != 0)
+    {
+        *out_max = 0;
+    }
+    if((sample_capture_model_global_overview_ready() == 0U)
+            || (frame_count == 0U)
+            || (start_frame >= g_sample_capture_global_overview.frame_count))
+    {
+        return 0U;
+    }
+
+    uint32_t end_frame = start_frame + frame_count;
+    if((end_frame < start_frame) || (end_frame > g_sample_capture_global_overview.frame_count))
+    {
+        end_frame = g_sample_capture_global_overview.frame_count;
+    }
+    if(end_frame <= start_frame)
+    {
+        return 0U;
+    }
+
+    uint32_t idx0 = (uint32_t)(((uint64_t)start_frame
+            * (uint64_t)g_sample_capture_global_overview.point_count)
+        / (uint64_t)g_sample_capture_global_overview.frame_count);
+    uint32_t idx1 = (uint32_t)(((uint64_t)end_frame
+            * (uint64_t)g_sample_capture_global_overview.point_count
+            + (uint64_t)g_sample_capture_global_overview.frame_count - 1ULL)
+        / (uint64_t)g_sample_capture_global_overview.frame_count);
+    if(idx0 >= g_sample_capture_global_overview.point_count)
+    {
+        idx0 = g_sample_capture_global_overview.point_count - 1U;
+    }
+    if(idx1 <= idx0)
+    {
+        idx1 = idx0 + 1U;
+    }
+    if(idx1 > g_sample_capture_global_overview.point_count)
+    {
+        idx1 = g_sample_capture_global_overview.point_count;
+    }
+
+    int16_t min_v = g_sample_capture_global_overview_points[idx0].min;
+    int16_t max_v = g_sample_capture_global_overview_points[idx0].max;
+    for(uint32_t idx = idx0 + 1U; idx < idx1; ++idx)
+    {
+        if(g_sample_capture_global_overview_points[idx].min < min_v)
+        {
+            min_v = g_sample_capture_global_overview_points[idx].min;
+        }
+        if(g_sample_capture_global_overview_points[idx].max > max_v)
+        {
+            max_v = g_sample_capture_global_overview_points[idx].max;
+        }
+    }
+    if(out_min != 0)
+    {
+        *out_min = min_v;
+    }
+    if(out_max != 0)
+    {
+        *out_max = max_v;
+    }
+    return 1U;
+}
+
+uint8_t sample_capture_model_waveform_cache_ready(void)
+{
+    return g_sample_capture.wave_cache_ready;
+}
+
+uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle)
+{
+    if((out_handle == 0) || (g_sample_capture.wave_cache_ready == 0U))
+    {
+        return 0U;
+    }
+    *out_handle = g_sample_capture.wave_cache_handle;
+    return 1U;
+}
+
+void sample_capture_model_note_rec_edit_first_render(void)
+{
+    if(g_sample_capture.rec_edit_first_render_pending == 0U)
+    {
+        return;
+    }
+    g_sample_capture.rec_edit_first_render_pending = 0U;
+
+    multi_record_writer_status_t status;
+    const multi_record_writer_status_t *status_ptr = 0;
+    if(sample_capture_get_status(&status) != 0U)
+    {
+        status_ptr = &status;
+    }
+    sample_capture_debug_mark(REC_LIVE_DEBUG_REC_EDIT_FIRST_RENDER,
+                              status_ptr,
+                              g_sample_capture.state.temp_path,
+                              g_sample_capture.state.recorded_frames);
+}
+
 void sample_capture_model_request_line_waveform(uint32_t start_frame,
                                                 uint32_t frame_count,
                                                 uint16_t columns)
@@ -1586,6 +3211,61 @@ void sample_capture_model_request_line_waveform(uint32_t start_frame,
         points = SAMPLE_CAPTURE_LINE_POINTS;
     }
 
+    sample_capture_global_overview_request();
+    if(sample_capture_model_view_uses_tile_cache(frame_count) == 0U)
+    {
+        return;
+    }
+
+    if(sample_capture_editor_cache_covers(start_frame, frame_count) != 0U)
+    {
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+        g_sample_capture_debug.cache_hit_count++;
+        const uint32_t hit_now = HAL_GetTick();
+        if((g_sample_capture_debug.last_miss_start != start_frame)
+                || (g_sample_capture_debug.last_miss_frames != frame_count)
+                || ((hit_now - g_sample_capture_debug.last_miss_ms) >= 500U))
+        {
+            sample_capture_debug_log("OLD_AUDIO_TILE_HIT vs=%lu vf=%lu\r\n",
+                                     (unsigned long)start_frame,
+                                     (unsigned long)frame_count);
+            g_sample_capture_debug.last_miss_start = start_frame;
+            g_sample_capture_debug.last_miss_frames = frame_count;
+            g_sample_capture_debug.last_miss_ms = hit_now;
+        }
+#endif
+        if((g_sample_capture_line_hot.valid != 0U)
+                && (g_sample_capture_line_hot.start_frame == start_frame)
+                && (g_sample_capture_line_hot.frames == frame_count)
+                && (g_sample_capture_line_hot.count == points))
+        {
+            return;
+        }
+        sample_capture_line_publish_from_editor_cache(start_frame,
+                                                      frame_count,
+                                                      points);
+        return;
+    }
+
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    g_sample_capture_debug.cache_miss_count++;
+    const uint32_t miss_now = HAL_GetTick();
+    if((g_sample_capture_debug.last_miss_valid == 0U)
+            || (g_sample_capture_debug.last_miss_start != start_frame)
+            || (g_sample_capture_debug.last_miss_frames != frame_count)
+            || ((miss_now - g_sample_capture_debug.last_miss_ms) >= 500U))
+    {
+        sample_capture_debug_log("OLD_AUDIO_TILE_MISS vs=%lu vf=%lu\r\n",
+                                 (unsigned long)start_frame,
+                                 (unsigned long)frame_count);
+        g_sample_capture_debug.last_miss_start = start_frame;
+        g_sample_capture_debug.last_miss_frames = frame_count;
+        g_sample_capture_debug.last_miss_ms = miss_now;
+        g_sample_capture_debug.last_miss_valid = 1U;
+    }
+#endif
+    sample_capture_editor_cache_request(start_frame, frame_count);
+
     if((g_sample_capture_line_hot.valid != 0U)
             && (g_sample_capture_line_hot.start_frame == start_frame)
             && (g_sample_capture_line_hot.frames == frame_count)
@@ -1593,30 +3273,219 @@ void sample_capture_model_request_line_waveform(uint32_t start_frame,
     {
         return;
     }
-    if((g_sample_capture_line_hot.requested != 0U)
-            && (g_sample_capture_line_hot.request_start_frame == start_frame)
-            && (g_sample_capture_line_hot.request_frames == frame_count)
-            && (g_sample_capture_line_hot.request_points == points))
+}
+
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+static uint8_t sample_capture_editor_count_tiles(sample_capture_editor_cache_state_t state)
+{
+    uint8_t count = 0U;
+    for(uint8_t i = 0U; i < SAMPLE_CAPTURE_EDITOR_TILE_COUNT; ++i)
     {
-        return;
+        if(g_sample_capture_editor_cache.tiles[i].state == state)
+        {
+            count++;
+        }
     }
-    if((g_sample_capture_line_hot.building != 0U)
-            && (g_sample_capture_line_hot.build_start_frame == start_frame)
-            && (g_sample_capture_line_hot.build_frames == frame_count)
-            && (g_sample_capture_line_hot.build_points == points))
+    return count;
+}
+#endif
+
+void sample_capture_model_debug_note_renderer(sample_capture_renderer_debug_t renderer,
+                                              uint8_t zoom,
+                                              uint32_t view_start_frame,
+                                              uint32_t view_frames,
+                                              uint16_t inner_w,
+                                              uint32_t samples_per_pixel,
+                                              uint32_t wavecache_frames_per_column,
+                                              uint8_t line_valid,
+                                              uint16_t line_points,
+                                              uint16_t draw_line_segments,
+                                              uint8_t fallback_reason)
+{
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    const uint8_t cache_valid =
+        sample_capture_editor_count_tiles(SAMPLE_CAPTURE_EDITOR_CACHE_READY);
+    const uint8_t cache_loading =
+        sample_capture_editor_count_tiles(SAMPLE_CAPTURE_EDITOR_CACHE_LOADING);
+    const uint8_t covered = sample_capture_editor_cache_covers(view_start_frame, view_frames);
+    const uint32_t now = HAL_GetTick();
+
+    g_sample_capture_debug.draw_count++;
+    if((uint8_t)renderer < 8U)
+    {
+        g_sample_capture_debug.renderer_count[(uint8_t)renderer]++;
+    }
+    g_sample_capture_debug.last_draw_segments = draw_line_segments;
+    if(draw_line_segments > g_sample_capture_debug.max_draw_segments)
+    {
+        g_sample_capture_debug.max_draw_segments = draw_line_segments;
+    }
+
+    const uint8_t renderer_changed =
+        ((g_sample_capture_debug.last_renderer_valid == 0U)
+         || (g_sample_capture_debug.last_renderer != renderer)) ? 1U : 0U;
+    const uint8_t view_changed =
+        ((g_sample_capture_debug.last_source_change_valid == 0U)
+         || (g_sample_capture_debug.last_zoom != zoom)
+         || (g_sample_capture_debug.last_view_start_frame != view_start_frame)
+         || (g_sample_capture_debug.last_view_frames != view_frames)
+         || (g_sample_capture_debug.last_samples_per_pixel != samples_per_pixel)
+         || (g_sample_capture_debug.last_wavecache_frames_per_column
+             != wavecache_frames_per_column)
+         || (g_sample_capture_debug.last_fallback_reason != fallback_reason)) ? 1U : 0U;
+    const uint8_t summary_due =
+        ((now - g_sample_capture_debug.last_summary_ms) >= 1000U) ? 1U : 0U;
+
+    if((renderer_changed == 0U) && (view_changed == 0U) && (summary_due == 0U))
     {
         return;
     }
 
-    g_sample_capture_line_hot.building = 0U;
-    g_sample_capture_line_hot.requested = 1U;
-    g_sample_capture_line_hot.request_settle_ticks =
-        (frame_count > SAMPLE_CAPTURE_LINE_MAX_SOURCE_FRAMES)
-            ? SAMPLE_CAPTURE_LINE_LARGE_SETTLE_TICKS
-            : 0U;
-    g_sample_capture_line_hot.request_start_frame = start_frame;
-    g_sample_capture_line_hot.request_frames = frame_count;
-    g_sample_capture_line_hot.request_points = points;
+    const uint32_t sec_draws = g_sample_capture_debug.draw_count
+        - g_sample_capture_debug.last_summary_draw_count;
+    const uint32_t sec_elines = g_sample_capture_debug.eline_count
+        - g_sample_capture_debug.last_summary_eline_count;
+    const uint32_t sec_flushes = g_sample_capture_debug.flush_count
+        - g_sample_capture_debug.last_summary_flush_count;
+
+    if(wavecache_frames_per_column != 0U)
+    {
+        sample_capture_debug_log("RECEDIT R=%s z=%u vs=%lu vf=%lu w=%u spp=%lu wc=%lu fb=%u line=%u lp=%u old_ready=%u old_load=%u old_cov=%u seg=%u hit=%lu miss=%lu d/e/f=%lu/%lu/%lu\r\n",
+                                 sample_capture_debug_renderer_label(renderer),
+                                 (unsigned)zoom,
+                                 (unsigned long)view_start_frame,
+                                 (unsigned long)view_frames,
+                                 (unsigned)inner_w,
+                                 (unsigned long)samples_per_pixel,
+                                 (unsigned long)wavecache_frames_per_column,
+                                 (unsigned)fallback_reason,
+                                 (unsigned)line_valid,
+                                 (unsigned)line_points,
+                                 (unsigned)cache_valid,
+                                 (unsigned)cache_loading,
+                                 (unsigned)covered,
+                                 (unsigned)draw_line_segments,
+                                 (unsigned long)g_sample_capture_debug.cache_hit_count,
+                                 (unsigned long)g_sample_capture_debug.cache_miss_count,
+                                 (unsigned long)sec_draws,
+                                 (unsigned long)sec_elines,
+                                 (unsigned long)sec_flushes);
+    }
+    else
+    {
+        sample_capture_debug_log("RECEDIT R=%s z=%u vs=%lu vf=%lu w=%u spp=%lu wc=NONE fb=%u line=%u lp=%u old_ready=%u old_load=%u old_cov=%u seg=%u hit=%lu miss=%lu d/e/f=%lu/%lu/%lu\r\n",
+                                 sample_capture_debug_renderer_label(renderer),
+                                 (unsigned)zoom,
+                                 (unsigned long)view_start_frame,
+                                 (unsigned long)view_frames,
+                                 (unsigned)inner_w,
+                                 (unsigned long)samples_per_pixel,
+                                 (unsigned)fallback_reason,
+                                 (unsigned)line_valid,
+                                 (unsigned)line_points,
+                                 (unsigned)cache_valid,
+                                 (unsigned)cache_loading,
+                                 (unsigned)covered,
+                                 (unsigned)draw_line_segments,
+                                 (unsigned long)g_sample_capture_debug.cache_hit_count,
+                                 (unsigned long)g_sample_capture_debug.cache_miss_count,
+                                 (unsigned long)sec_draws,
+                                 (unsigned long)sec_elines,
+                                 (unsigned long)sec_flushes);
+    }
+
+    g_sample_capture_debug.last_renderer = renderer;
+    g_sample_capture_debug.last_renderer_valid = 1U;
+    g_sample_capture_debug.last_zoom = zoom;
+    g_sample_capture_debug.last_view_start_frame = view_start_frame;
+    g_sample_capture_debug.last_view_frames = view_frames;
+    g_sample_capture_debug.last_samples_per_pixel = samples_per_pixel;
+    g_sample_capture_debug.last_wavecache_frames_per_column = wavecache_frames_per_column;
+    g_sample_capture_debug.last_fallback_reason = fallback_reason;
+    g_sample_capture_debug.last_source_change_valid = 1U;
+    if(summary_due != 0U)
+    {
+        g_sample_capture_debug.last_summary_ms = now;
+        g_sample_capture_debug.last_summary_draw_count = g_sample_capture_debug.draw_count;
+        g_sample_capture_debug.last_summary_eline_count = g_sample_capture_debug.eline_count;
+        g_sample_capture_debug.last_summary_flush_count = g_sample_capture_debug.flush_count;
+    }
+#else
+    (void)renderer;
+    (void)zoom;
+    (void)view_start_frame;
+    (void)view_frames;
+    (void)inner_w;
+    (void)samples_per_pixel;
+    (void)wavecache_frames_per_column;
+    (void)line_valid;
+    (void)line_points;
+    (void)draw_line_segments;
+    (void)fallback_reason;
+#endif
+}
+
+void sample_capture_model_debug_note_draw_cost(uint32_t page_ms, uint32_t waveform_ms)
+{
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    g_sample_capture_debug.draw_last_ms = page_ms;
+    if(page_ms > g_sample_capture_debug.draw_max_ms)
+    {
+        g_sample_capture_debug.draw_max_ms = page_ms;
+    }
+    g_sample_capture_debug.waveform_last_ms = waveform_ms;
+    if(waveform_ms > g_sample_capture_debug.waveform_max_ms)
+    {
+        g_sample_capture_debug.waveform_max_ms = waveform_ms;
+    }
+#else
+    (void)page_ms;
+    (void)waveform_ms;
+#endif
+}
+
+void sample_capture_model_debug_note_flush_cost(uint32_t flush_ms, uint8_t continued_flush)
+{
+#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
+    g_sample_capture_debug.flush_count++;
+    if(continued_flush != 0U)
+    {
+        g_sample_capture_debug.flush_cont_count++;
+    }
+    g_sample_capture_debug.flush_last_ms = flush_ms;
+    if(flush_ms > g_sample_capture_debug.flush_max_ms)
+    {
+        g_sample_capture_debug.flush_max_ms = flush_ms;
+    }
+#else
+    (void)flush_ms;
+    (void)continued_flush;
+#endif
+}
+
+static void sample_capture_waveform_cache_service_handle(void)
+{
+    if((g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.armed_pending != 0U)
+            || (g_sample_capture.state.temp_path[0] == '\0')
+            || (sample_capture_path_is_temp(g_sample_capture.state.temp_path) != 0U)
+            || (g_sample_capture.wave_cache_ready != 0U))
+    {
+        return;
+    }
+    if(g_sample_capture.wave_cache_retry_countdown != 0U)
+    {
+        g_sample_capture.wave_cache_retry_countdown--;
+        return;
+    }
+    if(waveform_cache_open_for_wav(g_sample_capture.state.temp_path,
+                                   &g_sample_capture.wave_cache_handle) != 0U)
+    {
+        g_sample_capture.wave_cache_ready = 1U;
+        return;
+    }
+    g_sample_capture.wave_cache_retry_countdown = 32U;
 }
 
 void sample_capture_model_service(void)
@@ -1711,8 +3580,16 @@ void sample_capture_model_service(void)
     if(status.state == MULTI_RECORD_WRITER_STATE_TAKE_READY)
     {
         sample_capture_on_take_ready(&status);
+        if(g_sample_capture.rec_edit_enter_deferred_services != 0U)
+        {
+            g_sample_capture.rec_edit_enter_deferred_services--;
+            return;
+        }
     }
 
+    sample_capture_global_overview_service();
+    sample_capture_waveform_cache_service_handle();
+    sample_capture_editor_cache_service();
     sample_capture_detail_service();
     sample_capture_line_service();
 }
@@ -1943,6 +3820,7 @@ uint8_t sample_capture_model_save_trimmed(void)
 
     sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
+    (void)waveform_cache_request_for_wav(final_path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
     return 1U;
 }
 

@@ -2,6 +2,7 @@
 #define SAMPLE_CAPTURE_H
 
 #include "Storage/multi_record_writer.h"
+#include "Storage/waveform_cache.h"
 
 #include <stdint.h>
 
@@ -17,6 +18,15 @@ extern "C" {
 #define SAMPLE_CAPTURE_DETAIL_POINTS 384U
 #define SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS 126U
 #define SAMPLE_CAPTURE_LINE_POINTS 128U
+#define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS 4096U
+
+#ifndef SAMPLE_CAPTURE_DEBUG_UART
+#define SAMPLE_CAPTURE_DEBUG_UART 1U
+#endif
+
+#ifndef SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
+#define SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS 0U
+#endif
 
 typedef enum
 {
@@ -71,6 +81,18 @@ typedef enum
     SAMPLE_CAPTURE_ERROR_LOAD_FAIL,
     SAMPLE_CAPTURE_ERROR_PREVIEW_FAIL
 } sample_capture_error_t;
+
+typedef enum
+{
+    SAMPLE_CAPTURE_RENDERER_EMPTY = 0,
+    SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW,
+    SAMPLE_CAPTURE_RENDERER_OLD_LINE,
+    SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE,
+    SAMPLE_CAPTURE_RENDERER_BRKWAVE_TILE,
+    SAMPLE_CAPTURE_RENDERER_SD_LINE_FALLBACK,
+    SAMPLE_CAPTURE_RENDERER_BUILDING,
+    SAMPLE_CAPTURE_RENDERER_ERROR
+} sample_capture_renderer_debug_t;
 
 typedef struct
 {
@@ -140,12 +162,36 @@ uint8_t sample_capture_model_step_len(int16_t delta);
 uint8_t sample_capture_model_step_quant(int16_t delta);
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
+uint32_t sample_capture_model_tile_cache_capacity_frames(void);
+uint8_t sample_capture_model_view_uses_tile_cache(uint32_t frame_count);
+uint8_t sample_capture_model_global_overview_ready(void);
+uint16_t sample_capture_model_global_overview_peak(void);
+uint8_t sample_capture_model_global_overview_minmax(uint32_t start_frame,
+                                                    uint32_t frame_count,
+                                                    int16_t *out_min,
+                                                    int16_t *out_max);
+uint8_t sample_capture_model_waveform_cache_ready(void);
+uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle);
+void sample_capture_model_note_rec_edit_first_render(void);
 void sample_capture_model_request_detail_waveform(uint32_t start_frame,
                                                   uint32_t frame_count,
                                                   uint16_t columns);
 void sample_capture_model_request_line_waveform(uint32_t start_frame,
                                                 uint32_t frame_count,
                                                 uint16_t columns);
+void sample_capture_model_debug_note_renderer(sample_capture_renderer_debug_t renderer,
+                                              uint8_t zoom,
+                                              uint32_t view_start_frame,
+                                              uint32_t view_frames,
+                                              uint16_t inner_w,
+                                              uint32_t samples_per_pixel,
+                                              uint32_t wavecache_frames_per_column,
+                                              uint8_t line_valid,
+                                              uint16_t line_points,
+                                              uint16_t draw_line_segments,
+                                              uint8_t fallback_reason);
+void sample_capture_model_debug_note_draw_cost(uint32_t page_ms, uint32_t waveform_ms);
+void sample_capture_model_debug_note_flush_cost(uint32_t flush_ms, uint8_t continued_flush);
 uint8_t sample_capture_model_return_to_audio_rec(void);
 uint8_t sample_capture_model_audition_trimmed(void);
 uint8_t sample_capture_model_save_trimmed(void);

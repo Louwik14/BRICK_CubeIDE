@@ -16,6 +16,7 @@
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_loader.h"
+#include "Storage/waveform_cache.h"
 #include "Storage/pattern_live_ram.h"
 #include "audio_float.h"
 #include "buttons.h"
@@ -932,6 +933,8 @@ void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridg
     {
         brick6_looper_runtime_diag_get_snapshot(&g_looper_save_diag.before_success);
         (void)wav_loader_catalog_notify_file_created(looper_storage_raw_export_get_final_path());
+        (void)waveform_cache_request_for_wav(looper_storage_raw_export_get_final_path(),
+                                             WAVEFORM_CACHE_REASON_POST_LOOPER_SAVE);
         feedback("LOOP SAVED");
         g_looper_export_last_progress = 0xFFU;
         g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;

@@ -45,6 +45,7 @@
 #include "Storage/sd_preview.h"
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
+#include "Storage/waveform_cache.h"
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -97,6 +98,8 @@ void brick6_app_init(void)
     audio_tracks_init();
 
     sd_access_gate_init();
+    waveform_cache_init();
+    (void)waveform_cache_ensure_dirs();
     sd_preview_init();
     looper_storage_raw_init();
     (void)looper_storage_raw_validate();
@@ -189,6 +192,7 @@ void brick6_app_process(void)
             multi_sample_service_load(32768U);
         }
         pattern_load_service(4096U);
+        waveform_cache_service(8192U);
         sd_preview_process();
     }
     pattern_live_service();

@@ -256,6 +256,14 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .editor_audio_cache_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.editor_audio_cache_sdram)
+    *(.editor_audio_cache_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .ui_state_sdram (NOLOAD) :
   {
     . = ALIGN(32);
