@@ -444,7 +444,6 @@ Flux nominal prouve:
 - Quand aucun plock `PLAY` n'est present, la valeur de base vient maintenant de l'autorite seq canonique (`seq_param_iface_get_base_value`) et non d'un fallback default descriptor.
 - Le dispatch note moteur reste resolu par track runtime effectif:
   - `Sampler` -> `brick6_sampler_runtime`
-  - `Opal` -> runtime Opal interne (`brick6_opal_runtime`)
   - `Braids` -> `brick6_braids_runtime`
   - `Drum` -> `drum_synth`
 - Ce dispatch ne rederive pas de logique produit locale et reste borne a la projection Z2.

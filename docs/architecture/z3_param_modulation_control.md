@@ -1,4 +1,4 @@
-﻿# Z3 - Param / Modulation / Control
+# Z3 - Param / Modulation / Control
 
 ## 1. Perimetre
 
@@ -85,10 +85,10 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - le bloc Opal est borne a 3 params TONE: `PATCH`, `INDEX`, `TIME`,
   - le bloc Braids est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
   - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
-  - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime.
+  - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime,
+  - source unique de re-projection des params Braids apres reset/rebind d'instance runtime.
 
 ## 2.c Contrat public du seam `param_registry`
 
@@ -166,7 +166,7 @@ Call-sites critiques:
 - La source d'autorite d'assignabilite MACRO est volontairement la meme que les p-locks: domaine Z2 -> set `SEQ_PLOCK_SET_*`, puis `seq_param_iface_param_is_supported(track,set,param)`.
 - Contrat produit: `p-lockable => macro-assignable`; aucune table MACRO separee ne doit retirer un parametre p-lockable.
 - Les assignations MACRO deja existantes hors p-lock (`MIX`) restent conservees par compatibilite produit, sans devenir p-lockables.
-- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Opal, Braids et MIX.
+- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Braids et MIX.
 - Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres locks.
 - Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`; chaque pot pointe vers une scene projet.
 - Pendant un maintien de scene en overlay `M-Assign`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
@@ -201,7 +201,6 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
-  - pour `Opal`, la surface publique TONE est strictement limitee a `PARAM_OPAL_PATCH`, `PARAM_OPAL_INDEX`, `PARAM_OPAL_TIME`.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 

@@ -19,7 +19,6 @@
 #include "Audio/fx_master_macro.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
@@ -174,33 +173,6 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
     }
 }
 
-static void brick6_render_opal_tracks(uint32_t frames, uint8_t *out_opal_tracks)
-{
-    static float opal_tmp[AUDIO_BLOCK_SIZE];
-    uint8_t opal_tracks = 0U;
-
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL)
-                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
-                || (track_runtime_is_audio_routable(track) == 0U))
-        {
-            continue;
-        }
-
-        brick6_opal_runtime_render_instance(ctx->instance_id, opal_tmp, frames);
-        mixer_submit_external_mono_native(ctx->mix_track_id, opal_tmp, frames);
-        opal_tracks++;
-    }
-
-    if (out_opal_tracks != NULL)
-    {
-        *out_opal_tracks = opal_tracks;
-    }
-}
-
 static void brick6_render_braids_tracks(uint32_t frames, uint8_t *out_braids_tracks)
 {
     static float braids_tmp[AUDIO_BLOCK_SIZE];
@@ -273,12 +245,6 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t looper_tracks = 0U;
         brick6_render_looper_tracks(frames, &looper_tracks);
         (void)looper_tracks;
-    }
-
-    {
-        uint8_t opal_tracks = 0U;
-        brick6_render_opal_tracks(frames, &opal_tracks);
-        (void)opal_tracks;
     }
 
     {

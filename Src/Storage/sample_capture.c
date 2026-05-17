@@ -2763,8 +2763,19 @@ static void sample_capture_on_take_ready(const multi_record_writer_status_t *sta
     uint8_t cache_queued = 0U;
     if(sample_capture_path_is_temp(path) == 0U)
     {
-        cache_queued = waveform_cache_request_for_wav(path, WAVEFORM_CACHE_REASON_POST_AUDIO_REC);
-        g_sample_capture.wave_cache_retry_countdown = 32U;
+        if(frames >= WAVEFORM_CACHE_PERSIST_MIN_FRAMES)
+        {
+            cache_queued = waveform_cache_request_for_wav_known_duration(
+                path,
+                WAVEFORM_CACHE_REASON_POST_AUDIO_REC,
+                frames,
+                MULTI_RECORD_WRITER_SAMPLE_RATE_HZ);
+            g_sample_capture.wave_cache_retry_countdown = 32U;
+        }
+        else
+        {
+            g_sample_capture.wave_cache_retry_countdown = 0U;
+        }
     }
     else
     {
@@ -3739,6 +3750,7 @@ static void sample_capture_waveform_cache_service_handle(void)
             || (g_sample_capture.state.armed_pending != 0U)
             || (g_sample_capture.state.temp_path[0] == '\0')
             || (sample_capture_path_is_temp(g_sample_capture.state.temp_path) != 0U)
+            || (g_sample_capture.state.recorded_frames < WAVEFORM_CACHE_PERSIST_MIN_FRAMES)
             || (g_sample_capture.wave_cache_ready != 0U))
     {
         return;
@@ -4089,7 +4101,11 @@ uint8_t sample_capture_model_save_trimmed(void)
 
     sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
-    (void)waveform_cache_request_for_wav(final_path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
+    (void)waveform_cache_request_for_wav_known_duration(
+        final_path,
+        WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
+        g_sample_capture.state.edit_end_frame - g_sample_capture.state.edit_start_frame,
+        MULTI_RECORD_WRITER_SAMPLE_RATE_HZ);
     return 1U;
 }
 

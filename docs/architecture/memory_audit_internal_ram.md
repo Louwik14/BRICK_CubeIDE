@@ -1,4 +1,4 @@
-﻿# Audit mÃ©moire interne â€” DTCM / RAM_D1 / RAM_D2 / RAM_D3
+# Audit mÃ©moire interne â€” DTCM / RAM_D1 / RAM_D2 / RAM_D3
 
 ## 1. RÃ´le du document
 
@@ -515,7 +515,6 @@ Tous les symboles DTCM observÃ©s sont dans `.dtcm_audio` et relÃ¨vent du che
 | `Src/Audio/fx_reverb_revb.cpp.obj` | 256 B |
 | `Src/Audio/mixer.c.obj` | 14 904 B |
 | `Src/Core/brick6_braids_runtime.cpp.obj` | 9 072 B |
-| `Src/Core/brick6_opal_runtime.cpp.obj` | 12 528 B |
 | `Src/Core/brick6_sampler_runtime.c.obj` | 10 472 B |
 | `Src/Sampler/sample_cache.c.obj` | 1 216 B |
 | Total | 72 512 B |
@@ -546,7 +545,6 @@ Tous les symboles DTCM observÃ©s sont dans `.dtcm_audio` et relÃ¨vent du che
 | `g_external_track_l` | 3 584 B | `mixer.c` | ingress externe L | D1 possible avec mesure |
 | `g_external_track_mono` | 3 584 B | `mixer.c` | ingress externe mono | D1 possible avec mesure |
 | `g_braids_runtime` | 9 072 B | `brick6_braids_runtime.cpp` | runtime Braids | garder interne / D1 avec profiling |
-| `g_opal_runtime` | 12 528 B | `brick6_opal_runtime.cpp` | runtime Opal/SixOp | garder interne / D1 avec profiling |
 | `g_sampler_voice` | 10 472 B | `brick6_sampler_runtime.c` | voix Sampler | garder interne / D1-D3 avec profiling |
 | `g_sample_cache_voice` | 1 216 B | `sample_cache.c` | curseurs voix sample-cache | garder / D3 avec vÃ©rification |
 | fill | 24 B | linker | alignement | N/A |
@@ -559,7 +557,7 @@ Tous les symboles DTCM observÃ©s sont dans `.dtcm_audio` et relÃ¨vent du che
 | Audio I/O / frontiÃ¨re float | ~2,1 KiB | `tracks`, gains |
 | Scratch mix bloc | ~14 KiB | mixer bus/external track buffers |
 | FX delay/reverb/master macro | ~23 KiB | Haas = plus gros levier thÃ©orique |
-| Engines synth | ~21,6 KiB | Braids + Opal runtime |
+| Engines synth | Braids runtime |
 | Sampler runtime/cache | ~11,7 KiB | voix/cursors Sampler |
 | Fill | 24 B | alignement |
 
@@ -578,7 +576,6 @@ Aucun gros bloc DTCM n'est dÃ©plaÃ§able immÃ©diatement sans preuve audio.
 | `g_sampler_voice` | 10 472 B | D1 ou D3 | moyen/Ã©levÃ© |
 | `g_sample_cache_voice` | 1 216 B | D3 | moyen, faible gain |
 | `g_braids_runtime` | 9 072 B | D1 | Ã©levÃ© |
-| `g_opal_runtime` | 12 528 B | D1 | Ã©levÃ© |
 
 ### SDRAM dÃ©conseillÃ©e
 
@@ -731,7 +728,7 @@ Les meilleurs leviers DTCM observÃ©s sont :
 - `g_haas_l/r` ;
 - `g_external_track_*` ;
 - `g_sampler_voice` ;
-- engines Opal/Braids.
+- engine Braids.
 
 Mais tous sont audio hot. La sortie de DTCM doit Ãªtre validÃ©e par mesure CPU / underrun / worst-case.
 

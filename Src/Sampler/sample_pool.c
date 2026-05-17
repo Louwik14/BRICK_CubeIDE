@@ -447,7 +447,10 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     sample_desc_t *desc = &g_sample_pool[id];
     sample_pool_release_slot(id);
-    (void)waveform_cache_request_for_wav(next_desc.path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
+    (void)waveform_cache_request_for_wav_known_duration(next_desc.path,
+                                                        WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
+                                                        next_desc.length_frames,
+                                                        next_desc.sample_rate);
     if (sample_cache_prepare(id, next_desc.path) == 0U)
     {
         sample_pool_set_error_from_cache(sample_cache_get_last_error(id),

@@ -9,9 +9,9 @@
 #include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_PENDING_MAX SAMPLE_PAGE_MAX_COUNT
-#define SAMPLE_STREAM_SERVICE_MAX_PAGES (2U)
-#define SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS (8U)
-#define SAMPLE_STREAM_SERVICE_MAX_TICKS (1U)
+#define SAMPLE_STREAM_SERVICE_MAX_PAGES (4U)
+#define SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS (16U)
+#define SAMPLE_STREAM_SERVICE_MAX_TICKS (2U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -318,6 +318,23 @@ static void sample_stream_manager_note_pending_key(sample_audio_key_t key,
         free_slot->page_index = page_index;
         free_slot->requested_at = ++g_sample_stream_request_clock;
     }
+}
+
+static uint8_t sample_stream_manager_pending_exists_key(sample_audio_key_t key,
+                                                        uint32_t page_index)
+{
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        const sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
+        if ((pending->active != 0U)
+            && (sample_audio_key_equal(&pending->key, &key) != 0U)
+            && (pending->page_index == page_index))
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
 }
 
 static void sample_stream_manager_note_requested_page_key(sample_audio_key_t key,
@@ -837,16 +854,35 @@ static void sample_stream_manager_active_state_note(sample_stream_active_state_t
 
 uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc_t *desc)
 {
+    return sample_stream_manager_queue_active_pages_debug(desc, 0);
+}
+
+uint8_t sample_stream_manager_queue_active_pages_debug(const sample_stream_active_desc_t *desc,
+                                                       sample_stream_active_debug_t *out_debug)
+{
     if ((desc == 0) || (desc->end_frame == 0U) || (desc->current_frame >= desc->end_frame))
     {
+        if (out_debug != 0)
+        {
+            memset(out_debug, 0, sizeof(*out_debug));
+        }
         return 0U;
+    }
+
+    if (out_debug != 0)
+    {
+        memset(out_debug, 0, sizeof(*out_debug));
+        out_debug->key = desc->key;
+        out_debug->current_frame = desc->current_frame;
+        out_debug->end_frame = desc->end_frame;
+        out_debug->lookahead_pages = desc->lookahead_pages;
     }
 
     const uint32_t current_page = desc->current_frame / SAMPLE_PAGE_FRAMES;
     const uint32_t last_page = (desc->end_frame - 1U) / SAMPLE_PAGE_FRAMES;
     const uint32_t first_ahead = (desc->request_current_page != 0U) ? 0U : 1U;
     uint8_t requested = 0U;
-    uint8_t urgent_assigned = 0U;
+    uint8_t high_priority_assigned = 0U;
 
     for (uint32_t ahead = first_ahead; ahead <= (uint32_t)desc->lookahead_pages; ++ahead)
     {
@@ -868,29 +904,70 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
             }
         }
 
-        if (sample_page_cache_get_page_state_key(desc->key, page_index) == SAMPLE_PAGE_READY)
+        const sample_page_state_t state_before =
+            sample_page_cache_get_page_state_key(desc->key, page_index);
+        if (state_before == SAMPLE_PAGE_READY)
         {
             continue;
         }
 
-        const sample_stream_priority_t priority =
-            (urgent_assigned == 0U) ? SAMPLE_STREAM_PRIORITY_URGENT
-                                    : SAMPLE_STREAM_PRIORITY_NORMAL;
-        urgent_assigned = 1U;
+        sample_stream_priority_t priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
+        if (high_priority_assigned == 0U)
+        {
+            priority = SAMPLE_STREAM_PRIORITY_URGENT;
+        }
+        else if (high_priority_assigned == 1U)
+        {
+            priority = SAMPLE_STREAM_PRIORITY_NORMAL;
+        }
+        if (high_priority_assigned < UINT8_MAX)
+        {
+            high_priority_assigned++;
+        }
 
         if (sample_stream_manager_active_state_allows(desc->state, page_index, priority) == 0U)
         {
+            if (out_debug != 0)
+            {
+                out_debug->blocked_by_state = 1U;
+            }
             continue;
+        }
+
+        uint8_t debug_index = UINT8_MAX;
+        if ((out_debug != 0) && (out_debug->count < SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP))
+        {
+            debug_index = out_debug->count++;
+            out_debug->page_index[debug_index] = page_index;
+            out_debug->state_before[debug_index] = (uint8_t)state_before;
+            out_debug->was_pending[debug_index] =
+                sample_stream_manager_pending_exists_key(desc->key, page_index);
+            out_debug->priority[debug_index] = (uint8_t)priority;
         }
 
         const uint8_t ok =
             (priority == SAMPLE_STREAM_PRIORITY_URGENT)
                 ? sample_stream_manager_request_page_urgent_key(desc->key, page_index)
                 : sample_stream_manager_request_page_normal_key(desc->key, page_index);
+        if (debug_index != UINT8_MAX)
+        {
+            const sample_page_state_t state_after =
+                sample_page_cache_get_page_state_key(desc->key, page_index);
+            out_debug->request_ok[debug_index] = ok;
+            out_debug->state_after[debug_index] = (uint8_t)state_after;
+            if ((ok == 0U) && (state_before == SAMPLE_PAGE_EMPTY))
+            {
+                out_debug->alloc_fail = 1U;
+            }
+        }
         if (ok != 0U)
         {
             sample_stream_manager_active_state_note(desc->state, page_index, priority);
             requested = 1U;
+            if (out_debug != 0)
+            {
+                out_debug->requested_any = 1U;
+            }
         }
     }
 

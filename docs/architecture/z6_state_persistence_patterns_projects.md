@@ -1,4 +1,4 @@
-﻿# Z6 - State / Persistence / Patterns / Projects
+# Z6 - State / Persistence / Patterns / Projects
 
 ## 1. Perimetre
 
@@ -66,7 +66,6 @@ Autorite persistence projet SD:
 Compat prototype:
 - quand `PARAM_COUNT` change et modifie `PatternSaveV1` / `ProjectSaveV1`, Z6 peut bumper les versions fichier sans migration.
 - pour Braids, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
-- pour Opal, le remplacement de la surface publique `Plaits` par `PATCH/INDEX/TIME` suit la meme politique: bump de version fichier, aucun chemin de migration legacy requis.
 
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
@@ -478,7 +477,7 @@ Plus petite prochaine passe utile:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.
 - `PROJECT_V1_FILE_VERSION` a ete incremente pour refl�ter le payload Sampler v1 et le bloc MACRO projet.
-- `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquent la rupture prototype Opal; les anciens payloads incompatibles sont refuses via `version/payload_size`.
+- `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquaient une ancienne rupture prototype Synth historique; les anciens payloads incompatibles restent refuses via `version/payload_size`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
 
@@ -803,7 +802,13 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Le boot cree/verifie seulement `0:/BRICK` et `0:/BRICK/.wavecache`; aucun scan sample, aucune validation de cache par sample et aucune generation waveform ne sont faits au boot.
 - Le format V1 `.brkwave` contient un header `BRKWAVE`, etat `BUILDING/READY/INVALID`, `sample_id[16]`, hash de path normalise, taille WAV, `data_offset`, frames, format audio, hash debut/fin 64 KiB, puis une table de niveaux et des colonnes `{min,max}` `int16`.
 - Les niveaux generes par defaut sont fixes: 16384, 4096, 1024 et 256 frames/colonne. Le niveau 64 frames/colonne reste reserve dans le format mais n'est pas genere en V1.
-- Les demandes viennent de l'ouverture/chargement sample, de la finalisation Audio Rec et de la fin de SAVE Looper. Elles sont servies hors IRQ via `SD_ACCESS_CLIENT_WAVEFORM_CACHE`, apres sample streaming et writer/finalize critiques.
-- `waveform_cache_request_for_wav()` reste une demande RAM-only: copie du path dans la queue, aucun FatFs, aucun `sd_access_gate`, aucune validation WAV. Il refuse comme no-op non fatal les chemins temporaires (`AUDIOREC_TMP.WAV`, `_TMP`, `0:/PROJECT/REC/*`). Pour la raison `POST_AUDIO_REC`, le service est differe afin que Rec Edit n'attende jamais `.brkwave`.
+- Politique hybride V1: un `.brkwave` persistant n'est produit que pour les WAV de duree `>= 60 s`. Le seuil public est `WAVEFORM_CACHE_PERSIST_MIN_FRAMES = 48000 * 60` par defaut, ou `sample_rate * 60` quand le sample rate est connu.
+- Les demandes viennent de l'ouverture/chargement sample, de la finalisation Audio Rec et de la fin de SAVE Looper. Elles sont servies hors IRQ via `SD_ACCESS_CLIENT_WAVEFORM_CACHE`, apres sample streaming et writer/finalize critiques. Quand la duree est connue par le caller (`sample_pool_load`, SAVE/Rec Edit Audio Rec, SAVE Looper), `waveform_cache_request_for_wav_known_duration()` filtre les samples courts avant queue. Quand elle n'est pas connue, la validation WAV abandonne proprement les samples courts sans creer de fichier.
+- `waveform_cache_request_for_wav()` reste une demande RAM-only: copie du path dans la queue, aucun FatFs, aucun `sd_access_gate`, aucune validation WAV. Il refuse comme no-op non fatal les chemins temporaires (`AUDIOREC_TMP.WAV`, `_TMP`, `0:/PROJECT/REC/*`). Pour la raison `POST_AUDIO_REC`, le service est differe afin que Rec Edit n'attende jamais `.brkwave`. Les samples courts utilisent les caches volatils existants (`overview` RAM, cache editor tuile, `OLD_AUDIO_TILE`/fallback renderer) et ne declenchent pas de suppression automatique d'anciens `.brkwave`.
 - Un cache absent, perime, incomplet ou reste en `BUILDING` est supprime puis regenere; les projets/patterns ne dependent jamais de sa presence.
 - Le service expose un LRU RAM SDRAM de 64 tuiles `.brkwave` de 512 colonnes min/max, soit 128 KiB de donnees plus metadata froide. Les requetes de tuiles visibles sont servies hors IRQ/FatFs draw par le meme client SD et peuvent etre abandonnees visuellement sans bloquer l'editeur.
+
+## Addendum 2026-05-17 - retrait Synth historique
+
+- PATTERN_VERSION=20 et PROJECT_V1_FILE_VERSION=26 marquent le retrait du moteur Synth prototype retire et de ses anciens params TONE de PARAM_COUNT.
+- Aucune migration legacy n'est conservee: les anciens patterns/projets prototype sont refuses par version/payload stricts.

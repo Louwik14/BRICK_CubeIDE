@@ -35,7 +35,6 @@ typedef enum
     UI_TRACK_TYPE_SAMPLER, /* legacy compat value retained for old snapshots */
     UI_TRACK_TYPE_ONE_SHOT = UI_TRACK_TYPE_SAMPLER,
     UI_TRACK_TYPE_SLICER,
-    UI_TRACK_TYPE_OPAL,
     UI_TRACK_TYPE_BRAIDS,
     UI_TRACK_TYPE_DRUM_TRX_BD,
     UI_TRACK_TYPE_MIDI,

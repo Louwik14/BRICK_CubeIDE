@@ -1,5 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:63:13:ui_renderer_template_format_fixed	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:251:12:ui_renderer_template_center_x	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:262:13:ui_renderer_template_draw_open_corner_frame	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:289:13:ui_renderer_template_draw_inverted_label	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:702:6:ui_renderer_template_draw	176	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:62:13:ui_renderer_template_format_fixed	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:250:12:ui_renderer_template_center_x	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:261:13:ui_renderer_template_draw_open_corner_frame	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:288:13:ui_renderer_template_draw_inverted_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:701:6:ui_renderer_template_draw	176	static

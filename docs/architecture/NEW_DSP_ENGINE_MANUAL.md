@@ -108,7 +108,7 @@ Catalogue produit des families/types :
 - `Src/UI/ui_track_catalog.c`
 
 Exemples de familles/types actuels :
-- `Synth -> Opal / Braids`
+- `Synth -> Braids`
 - `Sampler -> OneShot / Clip / Looper`
 - `Drum -> TRX BD reserve / BD Analog`
 - `Master -> FX`

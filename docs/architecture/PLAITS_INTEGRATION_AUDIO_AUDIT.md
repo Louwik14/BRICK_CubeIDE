@@ -1,8 +1,8 @@
 # Plaits Integration Audio Audit
 
-> Historique: `Plaits` a ete remplace cote produit par `Opal`.
+> Historique: le moteur produit Plaits/6OP a ete retire.
 > Ce document ne decrit plus le moteur produit courant.
-> Le DSP Plaits peut rester une dependance interne d'Opal.
+> Le DSP Plaits peut rester une dependance interne des moteurs Drum actifs.
 
 ## 1. Scope
 

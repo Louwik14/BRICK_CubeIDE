@@ -386,15 +386,6 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_MASTER_FX4_B:
             *out_value = state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)];
             return 1U;
-        case PARAM_OPAL_PATCH:
-            *out_value = state->opal.patch;
-            return 1U;
-        case PARAM_OPAL_INDEX:
-            *out_value = state->opal.index;
-            return 1U;
-        case PARAM_OPAL_TIME:
-            *out_value = state->opal.time;
-            return 1U;
         case PARAM_BRAIDS_EDIT:
             *out_value = state->braids.edit;
             return 1U;
@@ -596,15 +587,6 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_MASTER_FX3_B:
         case PARAM_MASTER_FX4_B:
             state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)] = value;
-            return 1U;
-        case PARAM_OPAL_PATCH:
-            state->opal.patch = value;
-            return 1U;
-        case PARAM_OPAL_INDEX:
-            state->opal.index = value;
-            return 1U;
-        case PARAM_OPAL_TIME:
-            state->opal.time = value;
             return 1U;
         case PARAM_BRAIDS_EDIT:
             state->braids.edit = value;
@@ -1184,4 +1166,3 @@ void param_reset(param_id_t id)
 
     param_set(id, param_registry[id].default_value);
 }
-

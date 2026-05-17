@@ -933,8 +933,13 @@ void ui_core_runtime_bridge_service_looper_export_feedback(ui_core_runtime_bridg
     {
         brick6_looper_runtime_diag_get_snapshot(&g_looper_save_diag.before_success);
         (void)wav_loader_catalog_notify_file_created(looper_storage_raw_export_get_final_path());
-        (void)waveform_cache_request_for_wav(looper_storage_raw_export_get_final_path(),
-                                             WAVEFORM_CACHE_REASON_POST_LOOPER_SAVE);
+        looper_storage_raw_export_diag_t export_diag;
+        looper_storage_raw_export_get_diag(&export_diag);
+        (void)waveform_cache_request_for_wav_known_duration(
+            looper_storage_raw_export_get_final_path(),
+            WAVEFORM_CACHE_REASON_POST_LOOPER_SAVE,
+            export_diag.recorded_frames,
+            LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ);
         feedback("LOOP SAVED");
         g_looper_export_last_progress = 0xFFU;
         g_looper_export_last_phase = LOOPER_STORAGE_RAW_EXPORT_PHASE_IDLE;

@@ -56,10 +56,6 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     {
         applied = param_backend_apply_tone_sampler(track, id, value, update_base_state);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
-    {
-        applied = param_backend_apply_tone_opal(track, id, value, update_base_state);
-    }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
     {
         applied = param_backend_apply_tone_braids(track, id, value, update_base_state);

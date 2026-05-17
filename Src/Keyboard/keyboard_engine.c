@@ -19,7 +19,6 @@
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
 #include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "ui_core.h"
 #include "Core/track_runtime.h"
@@ -203,10 +202,6 @@ static void keyboard_engine_all_notes_off_local_track(uint8_t track)
     {
         brick6_sampler_runtime_stop(track);
     }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
-    {
-        brick6_opal_runtime_all_notes_off(ctx->instance_id);
-    }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
     {
         brick6_braids_runtime_all_notes_off(ctx->instance_id);
@@ -314,17 +309,6 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
         else
         {
             brick6_sampler_runtime_note_off_note(track, note);
-        }
-    }
-    else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_OPAL)
-    {
-        if (is_note_on != 0U)
-        {
-            brick6_opal_runtime_note_on(ctx->instance_id, (float)note, (float)velocity / 127.0f);
-        }
-        else
-        {
-            brick6_opal_runtime_note_off(ctx->instance_id, note);
         }
     }
     else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)

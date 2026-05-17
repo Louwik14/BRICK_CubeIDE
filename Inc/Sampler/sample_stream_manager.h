@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #define SAMPLE_STREAM_MAX_ACTIVE (16U)
+#define SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP (8U)
 
 typedef struct
 {
@@ -72,6 +73,24 @@ typedef struct
     sample_stream_active_state_t *state;
 } sample_stream_active_desc_t;
 
+typedef struct
+{
+    sample_audio_key_t key;
+    uint32_t current_frame;
+    uint32_t end_frame;
+    uint8_t lookahead_pages;
+    uint8_t count;
+    uint8_t requested_any;
+    uint8_t blocked_by_state;
+    uint8_t alloc_fail;
+    uint32_t page_index[SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP];
+    uint8_t state_before[SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP];
+    uint8_t state_after[SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP];
+    uint8_t was_pending[SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP];
+    uint8_t request_ok[SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP];
+    uint8_t priority[SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP];
+} sample_stream_active_debug_t;
+
 /*
  * STREAM facade.
  *
@@ -94,6 +113,8 @@ uint8_t sample_stream_manager_request_range(uint16_t sample_id,
                                             uint32_t page_count);
 void sample_stream_manager_active_state_reset(sample_stream_active_state_t *state);
 uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc_t *desc);
+uint8_t sample_stream_manager_queue_active_pages_debug(const sample_stream_active_desc_t *desc,
+                                                       sample_stream_active_debug_t *out_debug);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);
 void sample_stream_manager_diag_get_snapshot(sample_stream_manager_diag_snapshot_t *out_snapshot);

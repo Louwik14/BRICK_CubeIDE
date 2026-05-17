@@ -7,7 +7,6 @@
 #include "drv_display.h"
 #include "font.h"
 #include "param_registry.h"
-#include "param_store.h"
 #include "ui_core.h"
 #include "ui_macro_interaction.h"
 #include "ui_param.h"
@@ -321,7 +320,7 @@ static float ui_renderer_template_get_param_display_value(param_id_t id)
         return param_get(id);
     }
 
-    return param_store_get_active(id);
+    return ui_param_get_active_track_display_value(id, ui_get_active_track());
 }
 
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,

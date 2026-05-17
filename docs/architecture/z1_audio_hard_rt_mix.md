@@ -1,4 +1,4 @@
-﻿# Z1 - Audio Hard-RT et Mix
+# Z1 - Audio Hard-RT et Mix
 
 ## 1. Perimetre
 
@@ -13,7 +13,6 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_io.c` repacke MAIN/CUE sans calcul de VU/peak/clip produit; la saturation TX reste locale a la conversion int24.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
-- `Src/Core/brick6_opal_runtime.cpp` + `Inc/Core/brick6_opal_runtime.h` : backend runtime mono-instance Opal rendu en blocs puis injecte via `mixer_submit_external_mono_native`, contraint localement au moteur Plaits `6OP` et branche directement `plaits::SixOpEngine` sans repasser par `plaits::Voice`.
 - `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Braids multi-instances (une instance mono par track Braids) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
@@ -30,7 +29,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
 Dependances de Z1 sans appartenir a Z1:
-- Engines synth/sampler (`drum`, `voice_manager`, wrappers Opal/Braids/Sampler).
+- Engines synth/sampler (`drum`, `voice_manager`, wrappers Braids/Sampler).
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
@@ -195,7 +194,7 @@ Flux nominal prouve par code:
 4) Collecte des events/sources
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
-- rendu engines externes (Drum/Opal mono-instance, Braids mono par instance, Sampler stereo) -> `mixer_submit_external_*`
+- rendu engines externes (Drum, Braids mono par instance, Sampler stereo) -> `mixer_submit_external_*`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
 
@@ -507,7 +506,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La capacite produit Multi finale est 512 samples max. Un instrument `READY` garantit page0 pour tous les samples et page1 pour tous les samples longs (`total_frames > SAMPLE_PAGE_FRAMES`).
 - La voix Multi est forward simple, sans loop/reverse/pingpong/stretch, avec varispeed lineaire derive de l'ecart note/root retourne par `multi_sample_pool_resolve()`.
 - L'IRQ audio lit uniquement les pages RAM READY. Une page manquante stoppe localement la voix et incremente le diagnostic underrun; aucun FatFs n'est appele depuis le rendu.
-- Le prefetch continu Multi est entretenu hors IRQ par `brick6_sampler_runtime_service()` depuis la superloop avant `sample_cache_service()`: chaque voix Multi active expose sa position au noyau `sample_stream_manager_queue_active_pages()` avec une cle `domain=MULTI`, `object_id=multi_sample_id`, et demande jusqu'a `current_page + 2`.
+- Le prefetch continu Multi est entretenu hors IRQ par le seam explicite `brick6_sampler_runtime_queue_stream_pages()`, appele tot dans la superloop avant `sample_cache_service()` et avant le writer SD; `sample_cache_service()` sert ensuite le `sample_stream_manager` avant les clients SD moins critiques. `brick6_sampler_runtime_service()` continue de refaire la queue Multi et de traiter les releases/diagnostics hors IRQ. Chaque voix Multi active expose sa position au noyau `sample_stream_manager_queue_active_pages()` avec une cle `domain=MULTI`, `object_id=multi_sample_id`, et demande jusqu'a `current_page + 2`.
 - `sample_stream_manager_has_pending_sd_work()` tient compte des pending key-based, donc les requetes `MULTI` restent visibles au service SD/cache et ne dependent plus du scan legacy `CLASSIC`.
 - Le modele de voix Multi est borne a `SAMPLER_MULTI_MAX_VOICES_PER_TRACK = 4` par track. Une cinquieme note Multi sur la meme track vole la plus ancienne voix Multi de cette track.
 - Le stockage hot des voix Multi est un pool global DTCM de `SAMPLER_MULTI_MAX_GLOBAL_VOICES = 16` entrees, chaque entree portant son `owner_track_id`; le rendu parcourt le pool global et route chaque voix vers sa track proprietaire.

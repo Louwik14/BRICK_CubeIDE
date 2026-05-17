@@ -13,8 +13,6 @@ UI_SDRAM static PatternSaveV1 g_project_slot_buffer;
 /* ProjectSaveV1 is too large for stack; project SD access is serialized by sd_access_gate. */
 UI_SDRAM static ProjectSaveV1 g_project_io_buffer;
 static project_sd_bank_error_t g_project_sd_last_error;
-static const uint32_t k_project_pattern_payload_legacy_size = (uint32_t)(sizeof(PatternSaveV1) - SEQ_TRACK_COUNT);
-
 typedef struct
 {
     uint32_t total_ms;
@@ -46,10 +44,6 @@ static uint8_t project_sd_header_is_valid(const project_v1_file_header_t *hdr, u
         return 0U;
     }
 
-    const uint8_t pattern_payload_supported =
-        (uint8_t)((hdr->pattern_payload_size == sizeof(PatternSaveV1))
-                  || (hdr->pattern_payload_size == k_project_pattern_payload_legacy_size));
-
     return ((hdr->magic == PROJECT_V1_FILE_MAGIC)
             && (hdr->version == PROJECT_V1_FILE_VERSION)
             && (hdr->header_size == sizeof(project_v1_file_header_t))
@@ -57,7 +51,7 @@ static uint8_t project_sd_header_is_valid(const project_v1_file_header_t *hdr, u
             && (hdr->bank_count == PROJECT_V1_BANK_COUNT)
             && (hdr->pattern_count == PROJECT_V1_PATTERN_COUNT)
             && (hdr->slot_record_size == sizeof(project_v1_slot_record_t))
-            && (pattern_payload_supported != 0U)
+            && (hdr->pattern_payload_size == sizeof(PatternSaveV1))
             && (hdr->project_slot == (uint32_t)project_slot))
                ? 1U
                : 0U;
@@ -129,8 +123,7 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
 
             const uint8_t rec_has_payload = (rec.payload_size != 0U) ? 1U : 0U;
             if ((rec.payload_size != 0U)
-                    && (rec.payload_size != sizeof(PatternSaveV1))
-                    && (rec.payload_size != k_project_pattern_payload_legacy_size))
+                    && (rec.payload_size != sizeof(PatternSaveV1)))
             {
                 project_sd_set_error(PROJECT_SD_BANK_ERR_INVALID_SIZE);
                 return 0U;
@@ -157,8 +150,7 @@ static uint8_t project_sd_walk_pattern_records(FIL *fp,
                 {
                     unchanged = (slot_checksum == rec.checksum) ? 1U : 0U;
                     if ((unchanged != 0U)
-                            && (rec.payload_size != sizeof(PatternSaveV1))
-                            && (rec.payload_size != k_project_pattern_payload_legacy_size))
+                            && (rec.payload_size != sizeof(PatternSaveV1)))
                     {
                         unchanged = 0U;
                     }

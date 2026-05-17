@@ -1,4 +1,4 @@
-﻿# Z5 - UI / Navigation / Interaction
+# Z5 - UI / Navigation / Interaction
 
 ## 1. Perimetre
 
@@ -268,6 +268,7 @@ Flux nominal prouve:
 - Les edits `CFG_TRACK` / `CFG_TRACK_TYPE` passent maintenant par le meme corridor structurel complet que `restore bulk`:
   capture des mix targets -> mutation dans le pipeline -> rebind lanes -> reapply lane-bound -> neutralisation runtime -> sync UI structurelle.
 - Pour une mutation structurelle `CFG_TRACK` / `CFG_TRACK_TYPE` / restore bulk, Z5 delegue le corridor a Z3 via `param_registry_apply_track_structure_transition(...)`; la resync UI active-track reste explicite cote Z5 (`ui_param_sync_active_track_mirror_from_runtime` puis `ui_param_sync_active_bank_values`) apres finalisation runtime Z3.
+- Les valeurs visibles des params track-aware passent par `ui_param_get_active_track_display_value`: la lecture relit l'autorite track-scoped (`param_registry_get_track_value`, donc `track_tone_sound_state` pour TONE engines) et `param_store.active[]` reste seulement un miroir/fallback UI, jamais la verite d'affichage entre deux tracks.
 - Restore bulk track config:
   - validation snapshot all-or-nothing,
   - ecriture de `track_state` comme autorite par-track,
@@ -457,7 +458,7 @@ Points factuels:
   - pas de nouveau flux de navigation autonome.
 - Compat UI/restore:
   - un ancien couple `Synth/Sampler` est remappe vers `Sampler/OneShot`,
-  - la famille `Synth` propose `Opal` et `Braids`,
+  - la famille `Synth` propose `Braids`,
   - `Braids` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
 
 

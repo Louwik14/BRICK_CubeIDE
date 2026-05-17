@@ -3,7 +3,7 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_OPAL, UI_TRACK_TYPE_BRAIDS };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_BRAIDS };
     static const ui_track_type_t k_sampler_types[] = {
         UI_TRACK_TYPE_ONE_SHOT,
         UI_TRACK_TYPE_SLICER,
@@ -154,7 +154,7 @@ bool ui_track_catalog_type_is_available(uint8_t track,
         return false;
     }
 
-    if ((family != UI_TRACK_FAMILY_SYNTH) && (family != UI_TRACK_FAMILY_MASTER))
+    if (family != UI_TRACK_FAMILY_MASTER)
     {
         if ((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_CLIP))
         {
@@ -164,25 +164,6 @@ bool ui_track_catalog_type_is_available(uint8_t track,
             }
 
             return (ui_track_catalog_count_sampler_clip_tracks(track, track_configs) < BRICK6_MAX_CLIP_TRACKS);
-        }
-
-        return true;
-    }
-
-    if ((family == UI_TRACK_FAMILY_SYNTH)
-            && (type == UI_TRACK_TYPE_OPAL))
-    {
-        for (uint8_t other_track = 0U; other_track < UI_TRACK_COUNT; ++other_track)
-        {
-            if (other_track == track)
-            {
-                continue;
-            }
-
-            if (ui_track_catalog_track_uses_type(other_track, UI_TRACK_FAMILY_SYNTH, type, track_configs) != 0U)
-            {
-                return false;
-            }
         }
 
         return true;
@@ -507,8 +488,6 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Looper";
         case UI_TRACK_TYPE_MULTI:
             return "Multi";
-        case UI_TRACK_TYPE_OPAL:
-            return "Opal";
         case UI_TRACK_TYPE_BRAIDS:
             return "Braids";
 
@@ -552,8 +531,6 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Loop";
         case UI_TRACK_TYPE_MULTI:
             return "Mult";
-        case UI_TRACK_TYPE_OPAL:
-            return "Opl";
         case UI_TRACK_TYPE_BRAIDS:
             return "Brd";
 

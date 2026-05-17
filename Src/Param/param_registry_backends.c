@@ -4,7 +4,6 @@
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
-#include "Core/brick6_opal_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_tone_sound_state.h"
 #include "Core/track_sound_state.h"
@@ -137,56 +136,6 @@ static uint8_t param_backend_clip_search_index(float value)
     return (index <= 4U) ? index : 4U;
 }
 
-uint8_t param_backend_apply_tone_opal(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
-{
-    track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if ((ctx == NULL)
-            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_OPAL))
-    {
-        return 0U;
-    }
-
-    const uint8_t instance_id = ctx->instance_id;
-
-    switch (id)
-    {
-        case PARAM_OPAL_PATCH:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->opal.patch = clamped;
-            }
-            brick6_opal_runtime_set_harmonics(instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_OPAL_INDEX:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->opal.index = clamped;
-            }
-            brick6_opal_runtime_set_timbre(instance_id, clamped);
-            return 1U;
-        }
-        case PARAM_OPAL_TIME:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->opal.time = clamped;
-            }
-            brick6_opal_runtime_set_morph(instance_id, clamped);
-            return 1U;
-        }
-        default:
-            return 0U;
-    }
-}
-
 uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
@@ -285,6 +234,30 @@ uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float valu
         default:
             return 0U;
     }
+}
+
+uint8_t param_backend_reapply_tone_braids_runtime(uint8_t track)
+{
+    const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    if ((state == NULL)
+            || (ctx == NULL)
+            || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+    {
+        return 0U;
+    }
+
+    const uint8_t instance_id = ctx->instance_id;
+    brick6_braids_runtime_set_edit(instance_id, state->braids.edit);
+    brick6_braids_runtime_set_fine(instance_id, state->braids.fine);
+    brick6_braids_runtime_set_coarse(instance_id, state->braids.coarse);
+    brick6_braids_runtime_set_fm(instance_id, state->braids.fm);
+    brick6_braids_runtime_set_timbre(instance_id, state->braids.timbre);
+    brick6_braids_runtime_set_modulation(instance_id, state->braids.modulation);
+    brick6_braids_runtime_set_color(instance_id, state->braids.color);
+    brick6_braids_runtime_set_phase_reset(instance_id, (state->braids.phase_reset >= 0.5f) ? 1U : 0U);
+    return 1U;
 }
 
 uint8_t param_backend_is_midi_cc_id(param_id_t id)

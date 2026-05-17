@@ -35,7 +35,6 @@
 #include "brick6_boot_defaults.h"
 #include "brick6_boot_fx_policy.h"
 #include "brick6_master_control.h"
-#include "brick6_opal_runtime.h"
 #include "brick6_sampler_runtime.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
@@ -116,8 +115,6 @@ void brick6_app_init(void)
     brick6_sampler_runtime_init();
     brick6_looper_runtime_init();
     brick6_braids_runtime_init();
-    brick6_opal_runtime_init();
-
     mixer_set_master(0.0f);
 
     brick6_audio_runtime_init();
@@ -176,6 +173,8 @@ void brick6_app_process(void)
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
     seq_runtime_time_adapter_process();
+    brick6_sampler_runtime_queue_stream_pages();
+    sample_cache_service(32768U);
     multi_record_writer_service(16384U);
     if (looper_storage_raw_export_is_active() != 0U)
     {
@@ -184,7 +183,6 @@ void brick6_app_process(void)
     else
     {
         brick6_sampler_runtime_service();
-        sample_cache_service(32768U);
         brick6_looper_runtime_service(8192U);
         if (brick6_looper_runtime_has_pending_sd_work() == 0U)
         {

@@ -1009,7 +1009,17 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
         return param_get(param);
     }
 
+    if (ui_param_get_track_edit_value(param, active_track, &value) != 0U)
+    {
+        return value;
+    }
+
     return param_store_get_active(param);
+}
+
+float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track)
+{
+    return ui_param_get_active_track_value(param, active_track);
 }
 
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value)

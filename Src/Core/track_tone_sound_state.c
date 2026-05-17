@@ -8,9 +8,6 @@
 
 SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_TRACK_COUNT];
 
-#define TRACK_TONE_OPAL_DEFAULT_PATCH                0.5f
-#define TRACK_TONE_OPAL_DEFAULT_INDEX                0.5f
-#define TRACK_TONE_OPAL_DEFAULT_TIME                 0.5f
 #define TRACK_TONE_BRAIDS_DEFAULT_EDIT               0.0f
 #define TRACK_TONE_BRAIDS_DEFAULT_FINE               0.5f
 #define TRACK_TONE_BRAIDS_DEFAULT_COARSE             0.5f
@@ -68,9 +65,6 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
         state->master_fx.macro_a[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_A + (slot * 4U))].default_value;
         state->master_fx.macro_b[slot] = param_registry[(param_id_t)(PARAM_MASTER_FX1_B + (slot * 4U))].default_value;
     }
-    state->opal.patch = TRACK_TONE_OPAL_DEFAULT_PATCH;
-    state->opal.index = TRACK_TONE_OPAL_DEFAULT_INDEX;
-    state->opal.time = TRACK_TONE_OPAL_DEFAULT_TIME;
     state->braids.edit = TRACK_TONE_BRAIDS_DEFAULT_EDIT;
     state->braids.fine = TRACK_TONE_BRAIDS_DEFAULT_FINE;
     state->braids.coarse = TRACK_TONE_BRAIDS_DEFAULT_COARSE;

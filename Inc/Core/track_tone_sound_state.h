@@ -49,12 +49,6 @@ typedef struct
     } master_fx;
     struct
     {
-        float patch;
-        float index;
-        float time;
-    } opal;
-    struct
-    {
         float edit;
         float fine;
         float coarse;

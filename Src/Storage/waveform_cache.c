@@ -157,6 +157,24 @@ static const uint32_t g_waveform_cache_level_frames[WAVEFORM_CACHE_LEVEL_COUNT] 
     64U
 };
 
+static uint32_t waveform_cache_persist_min_frames_for_rate(uint32_t sample_rate)
+{
+    const uint32_t rate = (sample_rate != 0U)
+        ? sample_rate
+        : WAVEFORM_CACHE_PERSIST_DEFAULT_SAMPLE_RATE;
+    if(rate > (0xFFFFFFFFUL / WAVEFORM_CACHE_PERSIST_MIN_SECONDS))
+    {
+        return 0xFFFFFFFFUL;
+    }
+    return rate * WAVEFORM_CACHE_PERSIST_MIN_SECONDS;
+}
+
+static uint8_t waveform_cache_duration_is_persistable(uint32_t frame_count,
+                                                       uint32_t sample_rate)
+{
+    return (uint8_t)(frame_count >= waveform_cache_persist_min_frames_for_rate(sample_rate));
+}
+
 static uint64_t waveform_cache_hash_init(void)
 {
     return 1469598103934665603ULL;
@@ -1076,6 +1094,22 @@ uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t
     return waveform_cache_finish_request(path, reason, 0U);
 }
 
+uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
+                                                      waveform_cache_reason_t reason,
+                                                      uint32_t frame_count,
+                                                      uint32_t sample_rate)
+{
+    if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U))
+    {
+        return waveform_cache_finish_request(path, reason, 1U);
+    }
+    if(waveform_cache_duration_is_persistable(frame_count, sample_rate) == 0U)
+    {
+        return waveform_cache_finish_request(path, reason, 1U);
+    }
+    return waveform_cache_request_for_wav(path, reason);
+}
+
 static void waveform_cache_service_validate(void)
 {
     if(waveform_cache_path_is_temporary(g_waveform_cache.active.wav_path) != 0U)
@@ -1094,6 +1128,15 @@ static void waveform_cache_service_validate(void)
         g_waveform_cache.diag.last_fresult = (uint32_t)FR_INVALID_OBJECT;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         waveform_cache_fail_active();
+        return;
+    }
+    if(waveform_cache_duration_is_persistable(g_waveform_cache.active.header.frame_count,
+                                              g_waveform_cache.active.header.sample_rate) == 0U)
+    {
+        memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
+        g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_IDLE;
+        g_waveform_cache.diag.jobs_done++;
+        sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         return;
     }
     waveform_cache_make_cache_path(g_waveform_cache.active.header.sample_id,
@@ -1511,10 +1554,17 @@ uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *o
     waveform_cache_file_header_t cached;
     waveform_cache_file_level_t table[WAVEFORM_CACHE_FORMAT_LEVEL_COUNT];
     uint8_t ok = 0U;
+    uint8_t request_allowed = 1U;
     do
     {
         if(waveform_cache_build_identity(path, &identity) == 0U)
         {
+            break;
+        }
+        if(waveform_cache_duration_is_persistable(identity.frame_count,
+                                                  identity.sample_rate) == 0U)
+        {
+            request_allowed = 0U;
             break;
         }
         char cache_path[96U];
@@ -1538,7 +1588,7 @@ uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *o
     } while(0);
 
     sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
-    if(ok == 0U)
+    if((ok == 0U) && (request_allowed != 0U))
     {
         (void)waveform_cache_request_for_wav(path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
     }
