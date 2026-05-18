@@ -15,6 +15,7 @@
 #define SAMPLE_CACHE_STREAM_START_PAGES (2U)
 #define SAMPLE_CACHE_STREAM_TAIL_PAGES (1U)
 #define SAMPLE_CACHE_STREAM_REVERSE_PAGES SAMPLE_CACHE_STREAM_TAIL_PAGES
+#define SAMPLE_CACHE_STREAM_ACTIVE_LOOKAHEAD_PAGES (BRICK6_STREAM_ACTIVE_WINDOW_PAGES - 1U)
 #define SAMPLE_CACHE_STREAM_STATIC_PAGES (SAMPLE_CACHE_STREAM_START_PAGES \
                                           + SAMPLE_CACHE_STREAM_REVERSE_PAGES)
 #define SAMPLE_CACHE_FULL_MAX_BYTES (SAMPLE_CACHE_STREAM_STATIC_PAGES * SAMPLE_PAGE_BYTES)
@@ -963,8 +964,8 @@ static void sample_cache_queue_active_stream_pages(void)
             .direction = voice->direction,
             .lookahead_pages = (voice->direction < 0)
                                    ? SAMPLE_CACHE_STREAM_REVERSE_PAGES
-                                   : SAMPLE_CACHE_STREAM_START_PAGES,
-            .request_current_page = 0U,
+                                   : SAMPLE_CACHE_STREAM_ACTIVE_LOOKAHEAD_PAGES,
+            .request_current_page = (voice->direction < 0) ? 0U : 1U,
             .state = 0,
         };
         (void)sample_stream_manager_queue_active_pages(&stream_desc);

@@ -552,7 +552,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 ## Addendum 2026-05-18 - fenetre active streamer Sampler
 
 - Le page-cache Sampler reste un pool physique unique de 1024 pages / 16 MiB, mais les requetes issues de voix actives portent maintenant une marque de fenetre active runtime.
-- `BRICK6_STREAM_ACTIVE_WINDOW_PAGES` vaut 20: pour `Sampler/Multi`, la voix active demande la page courante plus 19 pages de fenetre active via le streamer commun. Cette fenetre concerne les voix actives, jamais tous les samples slotes.
+- `BRICK6_STREAM_ACTIVE_WINDOW_PAGES` vaut 20: pour `Sampler/OneShot` Classic forward et `Sampler/Multi`, une voix active demande la page courante plus 19 pages de fenetre active via le streamer commun. Cette fenetre concerne les voix actives, jamais tous les samples slotes.
 - Les requetes de pre-socle/load restent hors fenetre active et consomment uniquement la zone `PRESOCLE`; les pages de fonctionnement consomment uniquement la zone `ACTIVE`.
 - Le marquage actif est rafraichi hors IRQ une fois par tour de superloop avant les services streamer; l'IRQ audio continue de lire uniquement des pages RAM `READY`.
 - Les snapshots GDB lourds page-cache/stream-manager sont retires; seuls restent les guards runtime internes et le CPU load existant.
@@ -566,5 +566,5 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Les pages `ACTIVE` anciennes `READY` qui ne sont plus dans la fenetre active courante et ne sont ni acquises ni pinnees redeviennent libres lors de la prochaine pression d'allocation active. Elles ne constituent pas une garantie produit de cache chaud.
 - Le scheduler STREAM ne promeut plus de queue background contractuelle: les pages servies viennent de demandes explicites `PRESOCLE` ou de fenetres `ACTIVE`; le fallback de service sur anciennes pages `QUEUED` sans pending explicite est neutralise.
 - L'IRQ audio conserve le contrat RAM-only: elle acquiert uniquement des pages `READY` via `sample_page_cache_try_acquire_*`, incremente `use_count`, puis relache apres lecture. Les pages `QUEUED`, `LOADING` ou libres ne sont jamais lues comme audio valide.
-- `Classic` reste branche au meme noyau page-cache: ses pages de demarrage/tail pinnees consomment explicitement le page-cache au lieu de dependre d'un cache chaud. `Looper` borne maintenant sa fenetre sur `BRICK6_STREAM_ACTIVE_WINDOW_PAGES` et demande ces pages comme fenetre active, pas comme prefetch lointain.
+- `Classic` reste branche au meme noyau page-cache: ses pages de demarrage/tail pinnees consomment explicitement le page-cache au lieu de dependre d'un cache chaud, et ses voix forward actives utilisent maintenant la meme fenetre `ACTIVE` de 20 pages que Multi. `Looper` borne maintenant sa fenetre sur `BRICK6_STREAM_ACTIVE_WINDOW_PAGES` et demande ces pages comme fenetre active, pas comme prefetch lointain.
 - Les diagnostics temporaires GDB page-cache/stream-manager ne font plus partie du contrat produit. La validation Release repose sur l'ecoute a froid, le CPU load et les guards hard-RT conserves.
