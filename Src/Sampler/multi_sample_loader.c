@@ -13,6 +13,7 @@
 #include "Storage/wav_parser.h"
 
 #define MULTI_SAMPLE_LOADER_PATH_MAX SAMPLE_PAGE_CACHE_PATH_MAX
+#define MULTI_SAMPLE_LOADER_REQUIRED_PAGES BRICK6_MULTI_PRESOCLE_PAGES
 
 typedef struct
 {
@@ -188,8 +189,30 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
 
 static uint8_t multi_loader_sample_required_pages(uint32_t total_frames)
 {
-    (void)total_frames;
-    return 1U;
+    if (total_frames <= SAMPLE_PAGE_FRAMES)
+    {
+        return 1U;
+    }
+    return MULTI_SAMPLE_LOADER_REQUIRED_PAGES;
+}
+
+static uint8_t multi_loader_sample_presocle_pages(uint32_t total_frames)
+{
+    if (total_frames <= SAMPLE_PAGE_FRAMES)
+    {
+        return 1U;
+    }
+    return BRICK6_MULTI_PRESOCLE_PAGES;
+}
+
+static uint8_t multi_loader_page_is_protected(sample_audio_key_t key, uint8_t page_index)
+{
+    const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page_index);
+    return ((key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+            && (page_index < BRICK6_MULTI_PRESOCLE_PAGES)
+            && (state == SAMPLE_PAGE_READY))
+               ? 1U
+               : 0U;
 }
 
 static multi_sample_load_result_t multi_loader_start_instrument(const char *index_path,
@@ -253,6 +276,12 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         multi_loader_set_error(MULTI_SAMPLE_LOAD_POOL_FAIL, MULTI_SAMPLE_POOL_INVALID_ID);
         return MULTI_SAMPLE_LOAD_POOL_FAIL;
     }
+    if (instrument->sample_count > BRICK6_MULTI_MAX_PREPARED_SAMPLES)
+    {
+        multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE,
+                               MULTI_SAMPLE_POOL_INVALID_ID);
+        return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
+    }
 
     char base_dir[MULTI_SAMPLE_LOADER_PATH_MAX];
     if (multi_loader_parent_dir(index_path, base_dir, sizeof(base_dir)) == 0U)
@@ -298,12 +327,17 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
             multi_loader_sample_required_pages(sample->total_frames);
         for (uint8_t page = 0U; page < required_pages; ++page)
         {
-            if (sample_stream_manager_request_page_key(key, page) == 0U)
+            if (sample_stream_manager_request_presocle_page_key(key, page) == 0U)
             {
                 multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE, multi_sample_id);
                 return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
             }
             g_multi_load_diag.pages_requested++;
+        }
+
+        if (required_pages > 1U)
+        {
+            g_multi_load_diag.page1_requested++;
         }
     }
 
@@ -364,6 +398,11 @@ void multi_sample_service_load(uint32_t byte_budget)
 
     uint16_t ready_pages = 0U;
     uint16_t required_pages_total = 0U;
+    uint16_t page1_ready = 0U;
+    uint16_t page1_protected = 0U;
+    uint16_t page1_protect_failed = 0U;
+    uint16_t presocle_protected_pages = 0U;
+    uint16_t presocle_pages_current = 0U;
     for (uint16_t i = 0U; i < g_multi_load_diag.total_samples; ++i)
     {
         const uint16_t multi_sample_id = (uint16_t)(g_multi_load_first_sample_id + i);
@@ -387,6 +426,11 @@ void multi_sample_service_load(uint32_t byte_budget)
             if (state == SAMPLE_PAGE_READY)
             {
                 ready_pages++;
+                presocle_pages_current++;
+                if (multi_loader_page_is_protected(key, page) != 0U)
+                {
+                    presocle_protected_pages++;
+                }
             }
             else
             {
@@ -401,13 +445,51 @@ void multi_sample_service_load(uint32_t byte_budget)
             }
         }
 
-        if (sample_ready != 0U)
+        const uint8_t presocle_pages =
+            multi_loader_sample_presocle_pages(sample->total_frames);
+        uint8_t optional_pending = 0U;
+        for (uint8_t page = required_pages; page < presocle_pages; ++page)
+        {
+            const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page);
+            if (state == SAMPLE_PAGE_READY)
+            {
+                ready_pages++;
+                presocle_pages_current++;
+                if (multi_loader_page_is_protected(key, page) != 0U)
+                {
+                    presocle_protected_pages++;
+                }
+                if (page == 1U)
+                {
+                    page1_ready++;
+                    if (multi_loader_page_is_protected(key, page) != 0U)
+                    {
+                        page1_protected++;
+                    }
+                    else
+                    {
+                        page1_protect_failed++;
+                    }
+                }
+            }
+            else if ((state == SAMPLE_PAGE_QUEUED) || (state == SAMPLE_PAGE_LOADING))
+            {
+                optional_pending = 1U;
+            }
+        }
+
+        if ((sample_ready != 0U) && (optional_pending == 0U))
         {
             sample_stream_manager_release_key(key);
         }
     }
 
     g_multi_load_diag.pages_ready = ready_pages;
+    g_multi_load_diag.page1_ready = page1_ready;
+    g_multi_load_diag.page1_protected = page1_protected;
+    g_multi_load_diag.page1_protect_failed = page1_protect_failed;
+    g_multi_load_diag.multi_presocle_protected_pages = presocle_protected_pages;
+    g_multi_load_diag.multi_presocle_pages_current = presocle_pages_current;
     if ((required_pages_total != 0U) && (ready_pages >= required_pages_total))
     {
         g_multi_load_active = 0U;

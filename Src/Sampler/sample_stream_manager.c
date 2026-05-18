@@ -3,15 +3,23 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_sector_scratch.h"
+#include "Storage/sd_block_device.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_PENDING_MAX SAMPLE_PAGE_MAX_COUNT
-#define SAMPLE_STREAM_SERVICE_MAX_PAGES (4U)
-#define SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS (16U)
-#define SAMPLE_STREAM_SERVICE_MAX_TICKS (2U)
+#define SAMPLE_STREAM_SERVICE_MAX_PAGES (2U)
+#define SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS (8U)
+#define SAMPLE_STREAM_SERVICE_MAX_TICKS (1U)
+#define SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_NONE   (0U)
+#define SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_SECTOR (1U)
+#define SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_FATFS  (2U)
+
+#define SAMPLE_STREAM_MANAGER_SERVICE_RESULT_OK       (1U)
+#define SAMPLE_STREAM_MANAGER_SERVICE_RESULT_FAIL     (3U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -22,10 +30,15 @@ _Static_assert(SAMPLE_STREAM_MAX_ACTIVE <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
 
 typedef enum
 {
-    SAMPLE_STREAM_PRIORITY_PREFETCH = 0,
-    SAMPLE_STREAM_PRIORITY_NORMAL,
-    SAMPLE_STREAM_PRIORITY_URGENT
-} sample_stream_priority_t;
+    SAMPLE_STREAM_BACKEND_OK = 0,
+    SAMPLE_STREAM_BACKEND_FALLBACK,
+    SAMPLE_STREAM_BACKEND_READ_FAIL,
+    SAMPLE_STREAM_BACKEND_DECODE_FAIL,
+    SAMPLE_STREAM_BACKEND_INVALID_META,
+    SAMPLE_STREAM_BACKEND_UNSUPPORTED_FORMAT,
+    SAMPLE_STREAM_BACKEND_SCRATCH_TOO_SMALL,
+    SAMPLE_STREAM_BACKEND_FATFS_OK
+} sample_stream_backend_result_t;
 
 typedef struct
 {
@@ -45,19 +58,100 @@ typedef struct
 typedef struct
 {
     uint8_t active;
-    uint8_t priority;
     sample_audio_key_t key;
     uint16_t sample_id;
     uint32_t page_index;
     uint32_t requested_at;
+    uint16_t distance_pages;
 } sample_stream_pending_t;
 
-static CTRL_STATE sample_stream_manager_diag_snapshot_t g_sample_stream_manager_diag;
+typedef struct
+{
+    uint32_t read_start_us;
+    uint32_t read_end_us;
+    uint32_t decode_end_us;
+} sample_stream_page_timing_t;
+
+typedef struct
+{
+    uint32_t request_page_calls;
+    uint32_t request_range_calls;
+    uint32_t service_calls;
+    uint32_t has_pending_calls;
+    uint32_t pages_requested;
+    uint32_t pages_loaded;
+    uint32_t pages_failed;
+    uint32_t open_failures;
+    uint32_t seek_failures;
+    uint32_t read_failures;
+    uint32_t close_failures;
+    uint32_t reader_allocations;
+    uint32_t reader_full;
+    uint32_t reader_opens;
+    uint32_t reader_closes;
+    uint32_t sequential_reads;
+    uint32_t seek_reads;
+    uint32_t backend_sector_pages;
+    uint32_t backend_fatfs_pages;
+    uint32_t backend_fallback_pages;
+    uint32_t backend_sector_pages_by_domain[SAMPLE_AUDIO_DOMAIN_COUNT];
+    uint32_t backend_fatfs_pages_by_domain[SAMPLE_AUDIO_DOMAIN_COUNT];
+    uint32_t backend_fallback_pages_by_domain[SAMPLE_AUDIO_DOMAIN_COUNT];
+    uint32_t backend_sector_read_fail;
+    uint32_t backend_sector_decode_fail;
+    uint32_t backend_sector_invalid_meta;
+    uint32_t backend_sector_scratch_too_small;
+    uint32_t backend_sector_unsupported_format;
+    uint32_t backend_sector_last_lba;
+    uint32_t backend_sector_last_sector_count;
+    uint32_t backend_sector_last_sector_offset;
+    uint32_t backend_sector_last_payload_bytes;
+    uint32_t last_backend_result;
+    sample_audio_key_t last_backend_key;
+    sample_audio_key_t last_service_key;
+    uint32_t last_service_page;
+    uint32_t pending_count;
+    uint32_t last_service_pending_before;
+    uint32_t last_service_pending_after;
+    uint8_t last_service_backend;
+    uint8_t last_service_result;
+    uint8_t last_service_page_state;
+    uint32_t selected_sample_id;
+    uint32_t pick_scan_max;
+    uint32_t pick_no_work;
+    uint32_t pending_stale_dropped;
+    uint32_t pending_invalid_sample;
+    uint32_t pending_not_loadable;
+    uint32_t pending_dropped_ready;
+    uint32_t pending_dropped_loading;
+    uint32_t pending_dropped_non_stream;
+    uint32_t has_pending_stale_cleaned;
+    uint32_t service_no_loadable_work;
+    uint32_t service_time_max_ticks;
+    uint32_t gate_hold_time_max_ticks;
+    uint32_t service_budget_exhausted;
+    uint32_t service_time_yield;
+    uint32_t pages_per_call_max;
+    uint64_t bytes_read;
+} sample_stream_manager_counters_t;
+
+static CTRL_STATE sample_stream_manager_counters_t g_sample_stream_manager_diag;
 static sample_stream_reader_t g_sample_stream_readers[SAMPLE_STREAM_MAX_ACTIVE];
 static sample_stream_pending_t g_sample_stream_pending[SAMPLE_STREAM_PENDING_MAX];
 static uint32_t g_sample_stream_request_clock;
 static uint32_t g_sample_stream_service_fatfs_ops;
 static uint16_t g_sample_stream_next_sample_id;
+static volatile uint8_t *g_sample_stream_sector_scratch_anchor;
+static uint32_t sample_stream_manager_now_us(void)
+{
+    if (((DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk) != 0U) && (SystemCoreClock != 0U))
+    {
+        return (uint32_t)(((uint64_t)DWT->CYCCNT * 1000000ULL)
+                          / (uint64_t)SystemCoreClock);
+    }
+
+    return HAL_GetTick() * 1000U;
+}
 
 static void sample_stream_manager_diag_max_u32(uint32_t *field, uint32_t value)
 {
@@ -67,6 +161,81 @@ static void sample_stream_manager_diag_max_u32(uint32_t *field, uint32_t value)
     }
 }
 
+static uint8_t sample_stream_manager_domain_index(sample_audio_key_t key, uint32_t *out_index)
+{
+    if ((out_index == 0) || ((uint32_t)key.domain >= SAMPLE_AUDIO_DOMAIN_COUNT))
+    {
+        return 0U;
+    }
+
+    *out_index = (uint32_t)key.domain;
+    return 1U;
+}
+
+static void sample_stream_manager_diag_inc_domain(uint32_t counts[SAMPLE_AUDIO_DOMAIN_COUNT],
+                                                  sample_audio_key_t key)
+{
+    uint32_t domain_index = 0U;
+    if (sample_stream_manager_domain_index(key, &domain_index) != 0U)
+    {
+        counts[domain_index]++;
+    }
+}
+
+static uint32_t sample_stream_manager_pending_count(void)
+{
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        if (g_sample_stream_pending[i].active != 0U)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+static sample_stream_pending_t *sample_stream_manager_find_pending_key(sample_audio_key_t key,
+                                                                       uint32_t page_index)
+{
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
+    {
+        sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
+        if ((pending->active != 0U)
+            && (sample_audio_key_equal(&pending->key, &key) != 0U)
+            && (pending->page_index == page_index))
+        {
+            return pending;
+        }
+    }
+
+    return 0;
+}
+
+static void sample_stream_manager_note_multi_service(const sample_page_load_target_t *target,
+                                                     uint8_t backend,
+                                                     uint8_t result,
+                                                     sample_page_state_t page_state,
+                                                     uint32_t pending_before)
+{
+    if ((target == 0) || (target->key.domain != SAMPLE_AUDIO_DOMAIN_MULTI))
+    {
+        return;
+    }
+
+    g_sample_stream_manager_diag.last_service_key = target->key;
+    g_sample_stream_manager_diag.last_service_page = target->page_index;
+    g_sample_stream_manager_diag.last_service_backend = backend;
+    g_sample_stream_manager_diag.last_service_result = result;
+    g_sample_stream_manager_diag.last_service_page_state = (uint8_t)page_state;
+    g_sample_stream_manager_diag.last_service_pending_before = pending_before;
+    g_sample_stream_manager_diag.last_service_pending_after = sample_stream_manager_pending_count();
+    g_sample_stream_manager_diag.pending_count =
+        g_sample_stream_manager_diag.last_service_pending_after;
+    (void)backend;
+    (void)result;
+}
+
 static void sample_stream_manager_record_service_ticks(uint32_t start_tick)
 {
     const uint32_t elapsed_ticks = HAL_GetTick() - start_tick;
@@ -74,6 +243,22 @@ static void sample_stream_manager_record_service_ticks(uint32_t start_tick)
                                        elapsed_ticks);
     sample_stream_manager_diag_max_u32(&g_sample_stream_manager_diag.gate_hold_time_max_ticks,
                                        elapsed_ticks);
+}
+
+static uint8_t sample_stream_manager_service_should_yield(uint32_t start_tick,
+                                                          uint32_t pages_this_call)
+{
+    const uint32_t elapsed_ticks = HAL_GetTick() - start_tick;
+
+    if (pages_this_call >= SAMPLE_STREAM_SERVICE_MAX_PAGES)
+    {
+        return 1U;
+    }
+    if (g_sample_stream_service_fatfs_ops >= SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS)
+    {
+        return 1U;
+    }
+    return (elapsed_ticks >= SAMPLE_STREAM_SERVICE_MAX_TICKS) ? 1U : 0U;
 }
 
 static void sample_stream_manager_close_reader(sample_stream_reader_t *reader)
@@ -252,37 +437,20 @@ static void sample_stream_manager_drop_pending_slot(sample_stream_pending_t *pen
     g_sample_stream_manager_diag.pending_stale_dropped++;
 }
 
-static sample_stream_priority_t sample_stream_manager_classify_request_key(sample_audio_key_t key,
-                                                                       uint32_t page_index)
+static uint8_t sample_stream_manager_pending_would_improve(
+    const sample_stream_pending_t *pending,
+    uint16_t distance_pages)
 {
-    const sample_stream_reader_t *const reader = sample_stream_manager_find_reader_key(key);
-    if ((reader == 0) || (reader->in_use == 0U) || (reader->bytes_per_frame == 0U)
-        || (reader->current_file_offset < (FSIZE_t)reader->data_offset))
+    if (pending == 0)
     {
-        return SAMPLE_STREAM_PRIORITY_NORMAL;
+        return 1U;
     }
-
-    const uint32_t frames_from_start =
-        (uint32_t)((reader->current_file_offset - (FSIZE_t)reader->data_offset)
-                   / (FSIZE_t)reader->bytes_per_frame);
-    const uint32_t current_page = frames_from_start / SAMPLE_PAGE_FRAMES;
-    const uint32_t distance = (page_index > current_page) ? (page_index - current_page)
-                                                          : (current_page - page_index);
-
-    if (distance <= 1U)
-    {
-        return SAMPLE_STREAM_PRIORITY_URGENT;
-    }
-    if (distance <= 4U)
-    {
-        return SAMPLE_STREAM_PRIORITY_NORMAL;
-    }
-    return SAMPLE_STREAM_PRIORITY_PREFETCH;
+    return (distance_pages < pending->distance_pages) ? 1U : 0U;
 }
 
 static void sample_stream_manager_note_pending_key(sample_audio_key_t key,
                                                uint32_t page_index,
-                                               sample_stream_priority_t priority)
+                                               uint16_t distance_pages)
 {
     sample_stream_pending_t *free_slot = 0;
 
@@ -301,9 +469,9 @@ static void sample_stream_manager_note_pending_key(sample_audio_key_t key,
         if ((sample_audio_key_equal(&pending->key, &key) != 0U)
             && (pending->page_index == page_index))
         {
-            if ((uint8_t)priority > pending->priority)
+            if (sample_stream_manager_pending_would_improve(pending, distance_pages) != 0U)
             {
-                pending->priority = (uint8_t)priority;
+                pending->distance_pages = distance_pages;
             }
             return;
         }
@@ -312,40 +480,26 @@ static void sample_stream_manager_note_pending_key(sample_audio_key_t key,
     if (free_slot != 0)
     {
         free_slot->active = 1U;
-        free_slot->priority = (uint8_t)priority;
         free_slot->key = key;
         free_slot->sample_id = key.object_id;
         free_slot->page_index = page_index;
         free_slot->requested_at = ++g_sample_stream_request_clock;
+        free_slot->distance_pages = distance_pages;
+        return;
     }
-}
-
-static uint8_t sample_stream_manager_pending_exists_key(sample_audio_key_t key,
-                                                        uint32_t page_index)
-{
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
-    {
-        const sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
-        if ((pending->active != 0U)
-            && (sample_audio_key_equal(&pending->key, &key) != 0U)
-            && (pending->page_index == page_index))
-        {
-            return 1U;
-        }
-    }
-
-    return 0U;
 }
 
 static void sample_stream_manager_note_requested_page_key(sample_audio_key_t key,
                                                       uint32_t page_index,
-                                                      sample_stream_priority_t priority)
+                                                      uint16_t distance_pages)
 {
     const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page_index);
     if (state == SAMPLE_PAGE_QUEUED)
     {
         g_sample_stream_manager_diag.pages_requested++;
-        sample_stream_manager_note_pending_key(key, page_index, priority);
+        sample_stream_manager_note_pending_key(key,
+                                               page_index,
+                                               distance_pages);
     }
     else if (state == SAMPLE_PAGE_READY)
     {
@@ -361,99 +515,33 @@ static void sample_stream_manager_note_requested_page_key(sample_audio_key_t key
     }
 }
 
-static void sample_stream_manager_update_max_pending_age(void)
-{
-    uint32_t max_age = 0U;
-
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_PENDING_MAX; ++i)
-    {
-        const sample_stream_pending_t *const pending = &g_sample_stream_pending[i];
-        if (pending->active == 0U)
-        {
-            continue;
-        }
-
-        const uint32_t age = g_sample_stream_request_clock - pending->requested_at;
-        if (age > max_age)
-        {
-            max_age = age;
-        }
-    }
-
-    if (max_age > g_sample_stream_manager_diag.max_pending_age)
-    {
-        g_sample_stream_manager_diag.max_pending_age = max_age;
-    }
-}
-
-static uint16_t sample_stream_manager_fair_distance_key(sample_audio_key_t key)
-{
-    if (key.domain != SAMPLE_AUDIO_DOMAIN_CLASSIC)
-    {
-        return UINT16_MAX;
-    }
-
-    return (key.object_id >= g_sample_stream_next_sample_id)
-               ? (uint16_t)(key.object_id - g_sample_stream_next_sample_id)
-               : (uint16_t)(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY
-                            - g_sample_stream_next_sample_id
-                            + key.object_id);
-}
-
 static uint8_t sample_stream_manager_candidate_is_better(uint8_t have_best,
-                                                         sample_stream_priority_t priority,
-                                                         uint16_t fair_distance,
+                                                         uint16_t distance_pages,
                                                          uint32_t age,
-                                                         sample_stream_priority_t best_priority,
-                                                         uint16_t best_fair_distance,
+                                                         uint16_t best_distance_pages,
                                                          uint32_t best_age)
 {
     if (have_best == 0U)
     {
         return 1U;
     }
-    if (priority > best_priority)
+    if (distance_pages < best_distance_pages)
     {
         return 1U;
     }
-    if (priority < best_priority)
-    {
-        return 0U;
-    }
-    if (fair_distance < best_fair_distance)
-    {
-        return 1U;
-    }
-    if (fair_distance > best_fair_distance)
+    if (distance_pages > best_distance_pages)
     {
         return 0U;
     }
     return (age > best_age) ? 1U : 0U;
 }
 
-static uint8_t sample_stream_manager_pick_fallback(sample_page_load_target_t *out_target)
+static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_target)
 {
-    if (sample_page_cache_find_queued_load_target(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY, out_target) == 0U)
-    {
-        return 0U;
-    }
-
-    sample_stream_manager_note_pending_key(out_target->key,
-                                       out_target->page_index,
-                                       SAMPLE_STREAM_PRIORITY_NORMAL);
-    return 1U;
-}
-
-static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_target,
-                                               sample_stream_priority_t *out_priority)
-{
-    sample_stream_manager_update_max_pending_age();
-
     uint8_t found = 0U;
     uint32_t scan_count = 0U;
     uint32_t best_age = 0U;
-    uint16_t best_fair_distance = UINT16_MAX;
-    sample_stream_priority_t best_priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
+    uint16_t best_distance_pages = UINT16_MAX;
     sample_page_load_target_t best_target;
     uint8_t pending_seen = 0U;
 
@@ -477,29 +565,16 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
             continue;
         }
 
-        const sample_stream_priority_t priority =
-            (sample_stream_priority_t)pending->priority;
-        if (priority > SAMPLE_STREAM_PRIORITY_URGENT)
-        {
-            g_sample_stream_manager_diag.pending_not_loadable++;
-            sample_stream_manager_drop_pending_slot(pending);
-            continue;
-        }
-        const uint16_t fair_distance =
-            sample_stream_manager_fair_distance_key(pending->key);
         const uint32_t age = g_sample_stream_request_clock - pending->requested_at;
 
         if (sample_stream_manager_candidate_is_better(found,
-                                                      priority,
-                                                      fair_distance,
+                                                      pending->distance_pages,
                                                       age,
-                                                      best_priority,
-                                                      best_fair_distance,
+                                                      best_distance_pages,
                                                       best_age) != 0U)
         {
             best_target = target;
-            best_priority = priority;
-            best_fair_distance = fair_distance;
+            best_distance_pages = pending->distance_pages;
             best_age = age;
             found = 1U;
         }
@@ -513,10 +588,6 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
         {
             *out_target = best_target;
         }
-        if (out_priority != 0)
-        {
-            *out_priority = best_priority;
-        }
         g_sample_stream_next_sample_id =
             (uint16_t)((best_target.key.object_id + 1U) % SAMPLE_CACHE_HOT_SAMPLE_CAPACITY);
         return 1U;
@@ -526,17 +597,6 @@ static uint8_t sample_stream_manager_pick_next(sample_page_load_target_t *out_ta
     {
         g_sample_stream_manager_diag.pick_no_work++;
         return 0U;
-    }
-
-    if (sample_stream_manager_pick_fallback(out_target) != 0U)
-    {
-        if (out_priority != 0)
-        {
-            *out_priority = SAMPLE_STREAM_PRIORITY_NORMAL;
-        }
-        g_sample_stream_next_sample_id =
-            (uint16_t)((out_target->key.object_id + 1U) % SAMPLE_CACHE_HOT_SAMPLE_CAPACITY);
-        return 1U;
     }
 
     g_sample_stream_manager_diag.pick_no_work++;
@@ -551,6 +611,214 @@ static float sample_stream_manager_decode_s24_le(const uint8_t *src)
         value |= (int32_t)0xFF000000L;
     }
     return (float)value * (1.0f / 8388608.0f);
+}
+
+static uint8_t sample_stream_manager_wav_format_supported_direct(
+    const sample_page_stream_info_t *info)
+{
+    if (info == 0)
+    {
+        return 0U;
+    }
+
+    return (((info->info.audio_format == 1U) || (info->info.audio_format == 65534U))
+            && ((info->info.channels == 1U) || (info->info.channels == 2U))
+            && ((info->info.bits_per_sample == 16U)
+                || (info->info.bits_per_sample == 24U)
+                || (info->info.bits_per_sample == 32U))
+            && (info->info.sample_rate == 48000U)
+            && (info->info.block_align != 0U)) ? 1U : 0U;
+}
+
+static sample_stream_backend_result_t sample_stream_manager_load_contiguous_sector_page(
+    const sample_page_stream_info_t *info,
+    const sample_page_load_target_t *target,
+    uint8_t *sector_scratch,
+    uint32_t sector_scratch_size,
+    sample_stream_page_timing_t *out_timing)
+{
+    if (out_timing != 0)
+    {
+        memset(out_timing, 0, sizeof(*out_timing));
+    }
+
+    if ((info == 0) || (target == 0) || (target->frames_interleaved == 0)
+        || (sector_scratch == 0))
+    {
+        return SAMPLE_STREAM_BACKEND_INVALID_META;
+    }
+
+    if ((info->raw_pcm24 != 0U)
+        || (sample_stream_manager_wav_format_supported_direct(info) == 0U))
+    {
+        return SAMPLE_STREAM_BACKEND_UNSUPPORTED_FORMAT;
+    }
+
+    const sample_stream_source_meta_t *const source = &info->source;
+    if ((source->valid == 0U)
+        || (source->safe_state != (uint8_t)SAMPLE_STREAM_SAFE_CONTIGUOUS)
+        || (source->contig == 0U)
+        || (source->first_data_lba == 0U)
+        || (source->block_align == 0U)
+        || (source->bytes_per_frame == 0U)
+        || (source->block_align != info->info.block_align)
+        || (source->bytes_per_frame != info->info.block_align)
+        || (source->channels != info->info.channels)
+        || (source->bits_per_sample != info->info.bits_per_sample)
+        || (source->sample_rate != info->info.sample_rate)
+        || (source->total_frames != info->total_frames)
+        || (source->data_offset_bytes != info->data_offset)
+        || (source->data_size_bytes != info->info.data_size))
+    {
+        return SAMPLE_STREAM_BACKEND_INVALID_META;
+    }
+
+    if ((target->frame_count == 0U) || (target->start_frame >= source->total_frames)
+        || (target->frame_count > (source->total_frames - target->start_frame)))
+    {
+        return SAMPLE_STREAM_BACKEND_INVALID_META;
+    }
+
+    const uint32_t block_align = info->info.block_align;
+    if ((target->start_frame > (UINT32_MAX / block_align))
+        || (target->frame_count > (UINT32_MAX / block_align)))
+    {
+        return SAMPLE_STREAM_BACKEND_INVALID_META;
+    }
+
+    const uint32_t page_data_byte = target->start_frame * block_align;
+    const uint32_t payload_bytes = target->frame_count * block_align;
+    if ((page_data_byte > source->data_size_bytes)
+        || (payload_bytes > (source->data_size_bytes - page_data_byte))
+        || (source->data_sector_offset >= SD_BLOCK_DEVICE_SECTOR_BYTES)
+        || (page_data_byte > (UINT32_MAX - source->data_sector_offset)))
+    {
+        return SAMPLE_STREAM_BACKEND_INVALID_META;
+    }
+
+    const uint32_t absolute_data_byte = source->data_sector_offset + page_data_byte;
+    const uint32_t first_lba =
+        source->first_data_lba + (absolute_data_byte / SD_BLOCK_DEVICE_SECTOR_BYTES);
+    const uint32_t sector_offset = absolute_data_byte % SD_BLOCK_DEVICE_SECTOR_BYTES;
+    const uint32_t read_bytes = sector_offset + payload_bytes;
+    const uint32_t sector_count =
+        (read_bytes + SD_BLOCK_DEVICE_SECTOR_BYTES - 1U) / SD_BLOCK_DEVICE_SECTOR_BYTES;
+    const uint32_t sector_bytes = sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES;
+    g_sample_stream_manager_diag.backend_sector_last_lba = first_lba;
+    g_sample_stream_manager_diag.backend_sector_last_sector_count = sector_count;
+    g_sample_stream_manager_diag.backend_sector_last_sector_offset = sector_offset;
+    g_sample_stream_manager_diag.backend_sector_last_payload_bytes = payload_bytes;
+
+    if ((sector_count == 0U) || (sector_bytes > sector_scratch_size))
+    {
+        return SAMPLE_STREAM_BACKEND_SCRATCH_TOO_SMALL;
+    }
+
+    const uint32_t read_start_us = sample_stream_manager_now_us();
+    const sd_block_device_result_t read_result =
+        sd_block_device_read_sectors(first_lba, sector_count, sector_scratch, sector_bytes);
+    const uint32_t read_end_us = sample_stream_manager_now_us();
+    if (out_timing != 0)
+    {
+        out_timing->read_start_us = read_start_us;
+        out_timing->read_end_us = read_end_us;
+    }
+    if (read_result != SD_BLOCK_DEVICE_OK)
+    {
+        return SAMPLE_STREAM_BACKEND_READ_FAIL;
+    }
+
+    const uint8_t *src = &sector_scratch[sector_offset];
+    if ((sector_offset + payload_bytes) > sector_bytes)
+    {
+        return SAMPLE_STREAM_BACKEND_DECODE_FAIL;
+    }
+
+    for (uint32_t frame = 0U; frame < target->frame_count; ++frame)
+    {
+        float left = 0.0f;
+        float right = 0.0f;
+        wav_audio_codec_decode_stereo_frame(&src[frame * block_align],
+                                            info->info.channels,
+                                            info->info.bits_per_sample,
+                                            &left,
+                                            &right);
+        target->frames_interleaved[(frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS)] = left;
+        target->frames_interleaved[(frame * SAMPLE_PAGE_FRAME_STRIDE_FLOATS) + 1U] = right;
+    }
+
+    if (out_timing != 0)
+    {
+        out_timing->decode_end_us = sample_stream_manager_now_us();
+    }
+    g_sample_stream_manager_diag.bytes_read += (uint64_t)sector_bytes;
+    return SAMPLE_STREAM_BACKEND_OK;
+}
+
+static uint8_t sample_stream_manager_try_contiguous_sector_backend(
+    const sample_page_stream_info_t *info,
+    const sample_page_load_target_t *target)
+{
+    if ((info == 0) || (target == 0)
+        || (info->source.safe_state != (uint8_t)SAMPLE_STREAM_SAFE_CONTIGUOUS))
+    {
+        return 0U;
+    }
+
+    uint8_t *const scratch = sample_stream_sector_scratch_buffer();
+    const uint32_t scratch_size = sample_stream_sector_scratch_size_bytes();
+    sample_stream_page_timing_t timing;
+    (void)sample_page_cache_set_page_state_key(target->key,
+                                               target->page_index,
+                                               SAMPLE_PAGE_LOADING);
+    const sample_stream_backend_result_t result =
+        sample_stream_manager_load_contiguous_sector_page(info,
+                                                          target,
+                                                          scratch,
+                                                          scratch_size,
+                                                          &timing);
+    g_sample_stream_manager_diag.last_backend_result = (uint32_t)result;
+    g_sample_stream_manager_diag.last_backend_key = target->key;
+
+    if (result == SAMPLE_STREAM_BACKEND_OK)
+    {
+        g_sample_stream_manager_diag.backend_sector_pages++;
+        sample_stream_manager_diag_inc_domain(
+            g_sample_stream_manager_diag.backend_sector_pages_by_domain,
+            target->key);
+        return 1U;
+    }
+
+    g_sample_stream_manager_diag.backend_fallback_pages++;
+    sample_stream_manager_diag_inc_domain(
+        g_sample_stream_manager_diag.backend_fallback_pages_by_domain,
+        target->key);
+    switch (result)
+    {
+        case SAMPLE_STREAM_BACKEND_READ_FAIL:
+            g_sample_stream_manager_diag.backend_sector_read_fail++;
+            break;
+
+        case SAMPLE_STREAM_BACKEND_DECODE_FAIL:
+            g_sample_stream_manager_diag.backend_sector_decode_fail++;
+            break;
+
+        case SAMPLE_STREAM_BACKEND_INVALID_META:
+            g_sample_stream_manager_diag.backend_sector_invalid_meta++;
+            break;
+
+        case SAMPLE_STREAM_BACKEND_UNSUPPORTED_FORMAT:
+            g_sample_stream_manager_diag.backend_sector_unsupported_format++;
+            break;
+
+        case SAMPLE_STREAM_BACKEND_SCRATCH_TOO_SMALL:
+            g_sample_stream_manager_diag.backend_sector_scratch_too_small++;
+            break;
+
+        default:
+            break;
+    }
+    return 0U;
 }
 
 static sample_page_load_result_t sample_stream_manager_decode_wav_page(
@@ -680,6 +948,8 @@ static sample_page_load_result_t sample_stream_manager_decode_raw_pcm24_page(
 
 void sample_stream_manager_init(void)
 {
+    g_sample_stream_sector_scratch_anchor = sample_stream_sector_scratch_buffer();
+    (void)sample_stream_sector_scratch_size_bytes();
     sample_stream_manager_reset();
 }
 
@@ -716,42 +986,56 @@ uint8_t sample_stream_manager_request_page(uint16_t sample_id, uint32_t page_ind
     return sample_stream_manager_request_page_key(sample_audio_key_classic(sample_id), page_index);
 }
 
-static uint8_t sample_stream_manager_request_page_with_priority_key(
+static uint8_t sample_stream_manager_request_page_with_distance_key(
     sample_audio_key_t key,
     uint32_t page_index,
-    sample_stream_priority_t priority)
+    uint16_t distance_pages)
 {
     g_sample_stream_manager_diag.request_page_calls++;
-    const uint8_t ok = sample_page_cache_request_page_key(key, page_index);
+    const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page_index);
+    if (state == SAMPLE_PAGE_QUEUED)
+    {
+        sample_stream_pending_t *const pending =
+            sample_stream_manager_find_pending_key(key, page_index);
+        if (sample_stream_manager_pending_would_improve(pending, distance_pages) == 0U)
+        {
+            if (distance_pages < BRICK6_STREAM_ACTIVE_WINDOW_PAGES)
+            {
+                (void)sample_page_cache_request_active_window_page_key(key, page_index);
+            }
+            return 1U;
+        }
+    }
+
+    const uint8_t ok = (distance_pages < BRICK6_STREAM_ACTIVE_WINDOW_PAGES)
+                           ? sample_page_cache_request_active_window_page_key(key, page_index)
+                           : sample_page_cache_request_page_key(key, page_index);
     if (ok != 0U)
     {
-        sample_stream_manager_note_requested_page_key(key, page_index, priority);
+        sample_stream_manager_note_requested_page_key(key,
+                                                      page_index,
+                                                      distance_pages);
     }
     return ok;
 }
 
 uint8_t sample_stream_manager_request_page_key(sample_audio_key_t key, uint32_t page_index)
 {
-    return sample_stream_manager_request_page_with_priority_key(
-        key,
-        page_index,
-        sample_stream_manager_classify_request_key(key, page_index));
+    return sample_stream_manager_request_page_with_distance_key(key, page_index, UINT16_MAX);
 }
 
-uint8_t sample_stream_manager_request_page_urgent_key(sample_audio_key_t key, uint32_t page_index)
+uint8_t sample_stream_manager_request_presocle_page_key(sample_audio_key_t key, uint32_t page_index)
 {
-    return sample_stream_manager_request_page_with_priority_key(
-        key,
-        page_index,
-        SAMPLE_STREAM_PRIORITY_URGENT);
-}
-
-uint8_t sample_stream_manager_request_page_normal_key(sample_audio_key_t key, uint32_t page_index)
-{
-    return sample_stream_manager_request_page_with_priority_key(
-        key,
-        page_index,
-        SAMPLE_STREAM_PRIORITY_NORMAL);
+    g_sample_stream_manager_diag.request_page_calls++;
+    const sample_page_state_t state = sample_page_cache_get_page_state_key(key, page_index);
+    const uint8_t ok = sample_page_cache_request_presocle_page_key(key, page_index);
+    if ((ok != 0U) && (state != SAMPLE_PAGE_READY))
+    {
+        sample_stream_manager_note_requested_page_key(key,
+                                                      page_index,
+                                                      0U);
+    }
+    return ok;
 }
 
 uint8_t sample_stream_manager_request_range(uint16_t sample_id,
@@ -780,7 +1064,7 @@ uint8_t sample_stream_manager_request_range_key(sample_audio_key_t key,
             sample_stream_manager_note_requested_page_key(
                 key,
                 page_index,
-                (i == 0U) ? SAMPLE_STREAM_PRIORITY_URGENT : SAMPLE_STREAM_PRIORITY_NORMAL);
+                (i > UINT16_MAX) ? UINT16_MAX : (uint16_t)i);
         }
         if (request_ok == 0U)
         {
@@ -798,91 +1082,50 @@ void sample_stream_manager_active_state_reset(sample_stream_active_state_t *stat
         return;
     }
 
-    state->last_urgent_page = SAMPLE_STREAM_ACTIVE_PAGE_NONE;
-    state->last_normal_page = SAMPLE_STREAM_ACTIVE_PAGE_NONE;
+    state->last_page = SAMPLE_STREAM_ACTIVE_PAGE_NONE;
 }
 
 static uint8_t sample_stream_manager_active_state_allows(
     const sample_stream_active_state_t *state,
-    uint32_t page_index,
-    sample_stream_priority_t priority)
+    uint32_t page_index)
 {
     if (state == 0)
     {
         return 1U;
     }
 
-    if (priority == SAMPLE_STREAM_PRIORITY_URGENT)
-    {
-        return ((state->last_urgent_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
-                || (page_index > state->last_urgent_page))
-                   ? 1U
-                   : 0U;
-    }
-
-    return ((state->last_normal_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
-            || (page_index > state->last_normal_page))
+    return ((state->last_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
+            || (page_index > state->last_page))
                ? 1U
                : 0U;
 }
 
 static void sample_stream_manager_active_state_note(sample_stream_active_state_t *state,
-                                                    uint32_t page_index,
-                                                    sample_stream_priority_t priority)
+                                                    uint32_t page_index)
 {
     if (state == 0)
     {
         return;
     }
 
-    if (priority == SAMPLE_STREAM_PRIORITY_URGENT)
+    if ((state->last_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
+        || (page_index > state->last_page))
     {
-        if ((state->last_urgent_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
-            || (page_index > state->last_urgent_page))
-        {
-            state->last_urgent_page = page_index;
-        }
-        return;
-    }
-
-    if ((state->last_normal_page == SAMPLE_STREAM_ACTIVE_PAGE_NONE)
-        || (page_index > state->last_normal_page))
-    {
-        state->last_normal_page = page_index;
+        state->last_page = page_index;
     }
 }
 
 uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc_t *desc)
 {
-    return sample_stream_manager_queue_active_pages_debug(desc, 0);
-}
-
-uint8_t sample_stream_manager_queue_active_pages_debug(const sample_stream_active_desc_t *desc,
-                                                       sample_stream_active_debug_t *out_debug)
-{
     if ((desc == 0) || (desc->end_frame == 0U) || (desc->current_frame >= desc->end_frame))
     {
-        if (out_debug != 0)
-        {
-            memset(out_debug, 0, sizeof(*out_debug));
-        }
         return 0U;
-    }
-
-    if (out_debug != 0)
-    {
-        memset(out_debug, 0, sizeof(*out_debug));
-        out_debug->key = desc->key;
-        out_debug->current_frame = desc->current_frame;
-        out_debug->end_frame = desc->end_frame;
-        out_debug->lookahead_pages = desc->lookahead_pages;
     }
 
     const uint32_t current_page = desc->current_frame / SAMPLE_PAGE_FRAMES;
     const uint32_t last_page = (desc->end_frame - 1U) / SAMPLE_PAGE_FRAMES;
     const uint32_t first_ahead = (desc->request_current_page != 0U) ? 0U : 1U;
     uint8_t requested = 0U;
-    uint8_t high_priority_assigned = 0U;
 
     for (uint32_t ahead = first_ahead; ahead <= (uint32_t)desc->lookahead_pages; ++ahead)
     {
@@ -911,63 +1154,21 @@ uint8_t sample_stream_manager_queue_active_pages_debug(const sample_stream_activ
             continue;
         }
 
-        sample_stream_priority_t priority = SAMPLE_STREAM_PRIORITY_PREFETCH;
-        if (high_priority_assigned == 0U)
+        if (sample_stream_manager_active_state_allows(desc->state, page_index) == 0U)
         {
-            priority = SAMPLE_STREAM_PRIORITY_URGENT;
-        }
-        else if (high_priority_assigned == 1U)
-        {
-            priority = SAMPLE_STREAM_PRIORITY_NORMAL;
-        }
-        if (high_priority_assigned < UINT8_MAX)
-        {
-            high_priority_assigned++;
-        }
-
-        if (sample_stream_manager_active_state_allows(desc->state, page_index, priority) == 0U)
-        {
-            if (out_debug != 0)
-            {
-                out_debug->blocked_by_state = 1U;
-            }
             continue;
         }
 
-        uint8_t debug_index = UINT8_MAX;
-        if ((out_debug != 0) && (out_debug->count < SAMPLE_STREAM_ACTIVE_DEBUG_PAGE_CAP))
-        {
-            debug_index = out_debug->count++;
-            out_debug->page_index[debug_index] = page_index;
-            out_debug->state_before[debug_index] = (uint8_t)state_before;
-            out_debug->was_pending[debug_index] =
-                sample_stream_manager_pending_exists_key(desc->key, page_index);
-            out_debug->priority[debug_index] = (uint8_t)priority;
-        }
-
+        const uint16_t distance_pages =
+            (ahead > UINT16_MAX) ? UINT16_MAX : (uint16_t)ahead;
         const uint8_t ok =
-            (priority == SAMPLE_STREAM_PRIORITY_URGENT)
-                ? sample_stream_manager_request_page_urgent_key(desc->key, page_index)
-                : sample_stream_manager_request_page_normal_key(desc->key, page_index);
-        if (debug_index != UINT8_MAX)
-        {
-            const sample_page_state_t state_after =
-                sample_page_cache_get_page_state_key(desc->key, page_index);
-            out_debug->request_ok[debug_index] = ok;
-            out_debug->state_after[debug_index] = (uint8_t)state_after;
-            if ((ok == 0U) && (state_before == SAMPLE_PAGE_EMPTY))
-            {
-                out_debug->alloc_fail = 1U;
-            }
-        }
+            sample_stream_manager_request_page_with_distance_key(desc->key,
+                                                                 page_index,
+                                                                 distance_pages);
         if (ok != 0U)
         {
-            sample_stream_manager_active_state_note(desc->state, page_index, priority);
+            sample_stream_manager_active_state_note(desc->state, page_index);
             requested = 1U;
-            if (out_debug != 0)
-            {
-                out_debug->requested_any = 1U;
-            }
         }
     }
 
@@ -990,14 +1191,16 @@ void sample_stream_manager_service(uint32_t byte_budget)
     while (byte_budget != 0U)
     {
         sample_page_load_target_t target;
-        sample_stream_priority_t selected_priority = SAMPLE_STREAM_PRIORITY_NORMAL;
         sample_page_stream_info_t stream_info;
-        if (sample_stream_manager_pick_next(&target, &selected_priority) == 0U)
+        uint32_t pending_before = 0U;
+        if (sample_stream_manager_pick_next(&target) == 0U)
         {
             g_sample_stream_manager_diag.service_no_loadable_work++;
             break;
         }
         g_sample_stream_manager_diag.selected_sample_id = target.key.object_id;
+        pending_before = sample_stream_manager_pending_count();
+        g_sample_stream_manager_diag.pending_count = pending_before;
 
         if (sample_page_cache_get_stream_info_key(target.key, &stream_info) == 0U)
         {
@@ -1007,8 +1210,48 @@ void sample_stream_manager_service(uint32_t byte_budget)
             sample_stream_manager_clear_pending_key(target.key, target.page_index);
             g_sample_stream_manager_diag.pending_dropped_non_stream++;
             g_sample_stream_manager_diag.pages_failed++;
+            sample_stream_manager_note_multi_service(
+                &target,
+                SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_NONE,
+                SAMPLE_STREAM_MANAGER_SERVICE_RESULT_FAIL,
+                SAMPLE_PAGE_ERROR,
+                pending_before);
             sample_stream_manager_record_service_ticks(start_tick);
             return;
+        }
+
+        if (sample_stream_manager_try_contiguous_sector_backend(&stream_info, &target) != 0U)
+        {
+            (void)sample_page_cache_set_page_state_key(target.key,
+                                                       target.page_index,
+                                                       SAMPLE_PAGE_READY);
+            sample_stream_manager_clear_pending_key(target.key, target.page_index);
+            sample_stream_manager_note_multi_service(
+                &target,
+                SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_SECTOR,
+                SAMPLE_STREAM_MANAGER_SERVICE_RESULT_OK,
+                SAMPLE_PAGE_READY,
+                pending_before);
+            g_sample_stream_manager_diag.pages_loaded++;
+            pages_this_call++;
+            sample_stream_manager_diag_max_u32(&g_sample_stream_manager_diag.pages_per_call_max,
+                                               pages_this_call);
+
+            const uint32_t consumed = target.frame_count * stream_info.info.block_align;
+            if (consumed >= byte_budget)
+            {
+                g_sample_stream_manager_diag.service_budget_exhausted++;
+                break;
+            }
+            byte_budget -= consumed;
+
+            if (sample_stream_manager_service_should_yield(start_tick,
+                                                           pages_this_call) != 0U)
+            {
+                g_sample_stream_manager_diag.service_time_yield++;
+                break;
+            }
+            continue;
         }
 
         sample_stream_reader_t *const reader =
@@ -1026,6 +1269,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
                                                            SAMPLE_PAGE_ERROR);
                 sample_stream_manager_clear_pending_key(target.key, target.page_index);
                 g_sample_stream_manager_diag.pages_failed++;
+                sample_stream_manager_note_multi_service(
+                    &target,
+                    SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_FATFS,
+                    SAMPLE_STREAM_MANAGER_SERVICE_RESULT_FAIL,
+                    SAMPLE_PAGE_ERROR,
+                    pending_before);
                 sample_stream_manager_record_service_ticks(start_tick);
                 return;
             }
@@ -1043,6 +1292,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 sample_stream_manager_clear_pending_key(target.key, target.page_index);
                 g_sample_stream_manager_diag.open_failures++;
                 g_sample_stream_manager_diag.pages_failed++;
+                sample_stream_manager_note_multi_service(
+                    &target,
+                    SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_FATFS,
+                    SAMPLE_STREAM_MANAGER_SERVICE_RESULT_FAIL,
+                    SAMPLE_PAGE_ERROR,
+                    pending_before);
                 sample_stream_manager_record_service_ticks(start_tick);
                 return;
             }
@@ -1084,6 +1339,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 sample_stream_manager_clear_pending_key(target.key, target.page_index);
                 g_sample_stream_manager_diag.seek_failures++;
                 g_sample_stream_manager_diag.pages_failed++;
+                sample_stream_manager_note_multi_service(
+                    &target,
+                    SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_FATFS,
+                    SAMPLE_STREAM_MANAGER_SERVICE_RESULT_FAIL,
+                    SAMPLE_PAGE_ERROR,
+                    pending_before);
                 sample_stream_manager_record_service_ticks(start_tick);
                 return;
             }
@@ -1132,6 +1393,12 @@ void sample_stream_manager_service(uint32_t byte_budget)
                 reader->last_page_index = UINT32_MAX;
             }
             g_sample_stream_manager_diag.pages_failed++;
+            sample_stream_manager_note_multi_service(
+                &target,
+                SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_FATFS,
+                SAMPLE_STREAM_MANAGER_SERVICE_RESULT_FAIL,
+                SAMPLE_PAGE_ERROR,
+                pending_before);
             sample_stream_manager_record_service_ticks(start_tick);
             return;
         }
@@ -1140,19 +1407,19 @@ void sample_stream_manager_service(uint32_t byte_budget)
                                                target.page_index,
                                                SAMPLE_PAGE_READY);
         sample_stream_manager_clear_pending_key(target.key, target.page_index);
+        g_sample_stream_manager_diag.backend_fatfs_pages++;
+        sample_stream_manager_diag_inc_domain(
+            g_sample_stream_manager_diag.backend_fatfs_pages_by_domain,
+            target.key);
+        g_sample_stream_manager_diag.last_backend_result = (uint32_t)SAMPLE_STREAM_BACKEND_FATFS_OK;
+        g_sample_stream_manager_diag.last_backend_key = target.key;
+        sample_stream_manager_note_multi_service(
+            &target,
+            SAMPLE_STREAM_MANAGER_SERVICE_BACKEND_FATFS,
+            SAMPLE_STREAM_MANAGER_SERVICE_RESULT_OK,
+            SAMPLE_PAGE_READY,
+            pending_before);
         g_sample_stream_manager_diag.pages_loaded++;
-        if (selected_priority == SAMPLE_STREAM_PRIORITY_URGENT)
-        {
-            g_sample_stream_manager_diag.pages_served_urgent++;
-        }
-        else if (selected_priority == SAMPLE_STREAM_PRIORITY_NORMAL)
-        {
-            g_sample_stream_manager_diag.pages_served_normal++;
-        }
-        else
-        {
-            g_sample_stream_manager_diag.pages_served_prefetch++;
-        }
         if (reader != 0)
         {
             reader->current_file_offset =
@@ -1172,10 +1439,8 @@ void sample_stream_manager_service(uint32_t byte_budget)
         }
         byte_budget -= consumed;
 
-        const uint32_t elapsed_ticks = HAL_GetTick() - start_tick;
-        if ((pages_this_call >= SAMPLE_STREAM_SERVICE_MAX_PAGES)
-            || (g_sample_stream_service_fatfs_ops >= SAMPLE_STREAM_SERVICE_MAX_FATFS_OPS)
-            || (elapsed_ticks >= SAMPLE_STREAM_SERVICE_MAX_TICKS))
+        if (sample_stream_manager_service_should_yield(start_tick,
+                                                       pages_this_call) != 0U)
         {
             g_sample_stream_manager_diag.service_time_yield++;
             break;
@@ -1215,27 +1480,5 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
         g_sample_stream_manager_diag.has_pending_stale_cleaned++;
     }
 
-    if (sample_page_cache_has_queued_range(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) == 0U)
-    {
-        return 0U;
-    }
-
-    sample_page_load_target_t target;
-    if (sample_page_cache_find_queued_load_target(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY, &target) == 0U)
-    {
-        g_sample_stream_manager_diag.has_pending_stale_cleaned++;
-        return 0U;
-    }
-
-    return 1U;
-}
-
-void sample_stream_manager_diag_get_snapshot(sample_stream_manager_diag_snapshot_t *out_snapshot)
-{
-    if (out_snapshot == 0)
-    {
-        return;
-    }
-
-    *out_snapshot = g_sample_stream_manager_diag;
+    return 0U;
 }

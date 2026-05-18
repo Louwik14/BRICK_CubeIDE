@@ -4,7 +4,9 @@
 
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(float) == SAMPLE_PAGE_SAMPLE_BYTES, "sample_page_cache expects 32-bit float");
@@ -18,6 +20,7 @@ typedef struct
     uint8_t reserved[3];
     uint32_t generation_counter;
     uint32_t touch_counter;
+    uint32_t active_window_epoch;
 } sample_page_cache_state_t;
 
 typedef struct
@@ -32,6 +35,7 @@ typedef struct
     uint8_t valid;
     uint8_t fully_loaded;
     uint8_t raw_pcm24;
+    sample_stream_source_meta_t source;
 } sample_page_sample_desc_t;
 
 typedef struct
@@ -42,6 +46,36 @@ typedef struct
     uint32_t page_index;
 } sample_page_index_entry_t;
 
+typedef struct
+{
+    uint32_t lookup_hits;
+    uint32_t lookup_misses;
+    uint32_t max_lookup_scan;
+    uint32_t max_free_scan;
+    uint32_t max_evict_scan;
+    uint32_t evict_fail;
+    uint32_t bounded_scan_yield;
+    uint32_t stream_safe_scan_ok;
+    uint32_t stream_safe_scan_fail;
+    uint32_t stream_safe_contiguous;
+    uint32_t stream_safe_non_contiguous;
+    uint32_t stream_safe_reject_format;
+    uint32_t stream_safe_reject_fatfs;
+    uint32_t stream_safe_last_reject_reason;
+    uint32_t stream_safe_last_first_data_lba;
+    uint32_t stream_safe_last_data_sector_offset;
+    sample_audio_key_t stream_safe_last_key;
+    uint32_t active_window_miss_count;
+    uint32_t evict_fail_no_streamer_reserve;
+    uint32_t underrun_cache_pressure_pages;
+    uint32_t presocle_alloc_fail;
+    uint32_t active_alloc_fail;
+    uint32_t unexpected_ready_old_page_released;
+    uint32_t invalid_role_transition_count;
+    uint32_t audio_attempted_non_ready_page;
+    uint32_t page_recycled_while_used;
+} sample_page_cache_counters_t;
+
 SDRAM_SAMPLES static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
 SDRAM_SAMPLES static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_FRAMES
                                                                      * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
@@ -50,15 +84,88 @@ SDRAM_SAMPLES static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_
 static CTRL_STATE uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static sample_page_index_entry_t g_sample_page_index[SAMPLE_PAGE_INDEX_SIZE];
 static CTRL_STATE uint16_t g_sample_page_queued_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-static CTRL_STATE uint16_t g_sample_page_free_cursor;
-static CTRL_STATE uint16_t g_sample_page_evict_cursor;
-static CTRL_STATE sample_page_cache_diag_snapshot_t g_sample_page_cache_diag;
+static CTRL_STATE uint16_t g_sample_page_presocle_cursor;
+static CTRL_STATE uint16_t g_sample_page_active_cursor;
+static CTRL_STATE sample_page_cache_counters_t g_sample_page_cache_diag;
 
 static void sample_page_cache_diag_max(uint32_t *field, uint32_t value)
 {
     if ((field != 0) && (value > *field))
     {
         *field = value;
+    }
+}
+
+static sample_stream_source_meta_t sample_page_cache_make_default_source_meta(
+    const wav_info_t *info,
+    uint32_t total_frames,
+    uint32_t data_offset)
+{
+    sample_stream_source_meta_t meta;
+    memset(&meta, 0, sizeof(meta));
+    meta.valid = 1U;
+    meta.backend_kind = (uint8_t)SAMPLE_STREAM_BACKEND_FATFS;
+    meta.safe_state = (uint8_t)SAMPLE_STREAM_SAFE_NONE;
+    meta.reject_reason = (uint16_t)SAMPLE_STREAM_SAFE_REASON_NOT_SCANNED;
+    meta.total_frames = total_frames;
+    meta.data_offset_bytes = data_offset;
+    if (info != 0)
+    {
+        meta.data_size_bytes = info->data_size;
+        meta.bytes_per_frame = info->block_align;
+        meta.sample_rate = info->sample_rate;
+        meta.channels = info->channels;
+        meta.bits_per_sample = info->bits_per_sample;
+        meta.block_align = info->block_align;
+        meta.data_sector_offset = data_offset % 512U;
+    }
+    return meta;
+}
+
+static void sample_page_cache_note_stream_safe_diag(sample_audio_key_t key,
+                                                    const sample_stream_source_meta_t *meta)
+{
+    if (meta == 0)
+    {
+        return;
+    }
+
+    g_sample_page_cache_diag.stream_safe_last_key = key;
+    g_sample_page_cache_diag.stream_safe_last_reject_reason = meta->reject_reason;
+    g_sample_page_cache_diag.stream_safe_last_first_data_lba = meta->first_data_lba;
+    g_sample_page_cache_diag.stream_safe_last_data_sector_offset = meta->data_sector_offset;
+
+    if (meta->safe_state == (uint8_t)SAMPLE_STREAM_SAFE_CONTIGUOUS)
+    {
+        g_sample_page_cache_diag.stream_safe_scan_ok++;
+        g_sample_page_cache_diag.stream_safe_contiguous++;
+        return;
+    }
+
+    switch ((sample_stream_safe_reason_t)meta->reject_reason)
+    {
+        case SAMPLE_STREAM_SAFE_REASON_NON_CONTIGUOUS:
+            g_sample_page_cache_diag.stream_safe_scan_ok++;
+            g_sample_page_cache_diag.stream_safe_non_contiguous++;
+            break;
+
+        case SAMPLE_STREAM_SAFE_REASON_UNSUPPORTED_FORMAT:
+            g_sample_page_cache_diag.stream_safe_scan_ok++;
+            g_sample_page_cache_diag.stream_safe_reject_format++;
+            break;
+
+        case SAMPLE_STREAM_SAFE_REASON_FATFS_ERROR:
+            g_sample_page_cache_diag.stream_safe_scan_fail++;
+            g_sample_page_cache_diag.stream_safe_reject_fatfs++;
+            break;
+
+        case SAMPLE_STREAM_SAFE_REASON_SCAN_FAIL:
+            g_sample_page_cache_diag.stream_safe_scan_fail++;
+            break;
+
+        default:
+            g_sample_page_cache_diag.stream_safe_scan_ok++;
+            break;
     }
 }
 
@@ -131,28 +238,100 @@ static uint8_t sample_page_cache_key_valid(sample_audio_key_t key)
     return (sample_page_cache_key_slot(key) < SAMPLE_PAGE_CACHE_MAX_SAMPLES) ? 1U : 0U;
 }
 
-static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t request_key,
-                                                       sample_audio_key_t victim_key)
+static void sample_page_cache_scan_stream_source(sample_audio_key_t key,
+                                                 sample_page_sample_desc_t *sample)
 {
-    if ((request_key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-        && (victim_key.domain != SAMPLE_AUDIO_DOMAIN_MULTI))
+    if ((sample == 0) || (sample->path[0] == '\0')
+        || (key.domain == SAMPLE_AUDIO_DOMAIN_LOOPER))
     {
-        return 0U;
+        return;
     }
 
-    return 1U;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
+    {
+        sample->source.reject_reason = (uint16_t)SAMPLE_STREAM_SAFE_REASON_FATFS_ERROR;
+        sample_page_cache_note_stream_safe_diag(key, &sample->source);
+        return;
+    }
+
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+        sample->source.reject_reason = (uint16_t)SAMPLE_STREAM_SAFE_REASON_FATFS_ERROR;
+        sample_page_cache_note_stream_safe_diag(key, &sample->source);
+        return;
+    }
+
+    const sample_stream_fatfs_map_result_t scan =
+        sample_stream_fatfs_map_scan_wav(sample->path);
+    sample->source = scan.meta;
+    sample_page_cache_note_stream_safe_diag(key, &sample->source);
+    sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
 }
 
-static uint8_t sample_page_cache_page_is_multi_ready_anchor(const sample_page_desc_t *page)
+static uint8_t sample_page_cache_slot_in_presocle_zone(uint32_t slot_index)
 {
-    if (page == 0)
-    {
-        return 0U;
-    }
+    return (slot_index < BRICK6_PAGECACHE_PRESOCLE_PAGES) ? 1U : 0U;
+}
 
-    return ((page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI) && (page->page_index == 0U))
+static uint8_t sample_page_cache_slot_in_active_zone(uint32_t slot_index)
+{
+    return ((slot_index >= BRICK6_PAGECACHE_PRESOCLE_PAGES)
+            && (slot_index < (BRICK6_PAGECACHE_PRESOCLE_PAGES
+                              + BRICK6_PAGECACHE_ACTIVE_PAGES)))
                ? 1U
                : 0U;
+}
+
+static uint32_t sample_page_cache_zone_base(sample_page_role_t role)
+{
+    return (role == SAMPLE_PAGE_ROLE_ACTIVE) ? BRICK6_PAGECACHE_PRESOCLE_PAGES : 0U;
+}
+
+static uint32_t sample_page_cache_zone_count(sample_page_role_t role)
+{
+    if (role == SAMPLE_PAGE_ROLE_PRESOCLE)
+    {
+        return BRICK6_PAGECACHE_PRESOCLE_PAGES;
+    }
+    if (role == SAMPLE_PAGE_ROLE_ACTIVE)
+    {
+        return BRICK6_PAGECACHE_ACTIVE_PAGES;
+    }
+    return 0U;
+}
+
+static uint32_t sample_page_cache_count_free_or_stream_evictable(uint8_t include_active)
+{
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        const sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->state == SAMPLE_PAGE_EMPTY) && (page->role == SAMPLE_PAGE_ROLE_FREE)
+            && (sample_page_cache_slot_in_active_zone(i) != 0U))
+        {
+            count++;
+            continue;
+        }
+        if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U)
+            || (page->pin_count != 0U)
+            || (page->role != SAMPLE_PAGE_ROLE_ACTIVE)
+            || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            || ((include_active == 0U) && (page->active_window != 0U)
+                && (page->active_window_epoch == g_sample_page_cache_state.active_window_epoch)))
+        {
+            continue;
+        }
+
+        const sample_page_sample_desc_t *const sample =
+            &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
+        if ((sample->valid != 0U) && (sample->fully_loaded != 0U))
+        {
+            continue;
+        }
+        count++;
+    }
+    return count;
 }
 
 static uint32_t sample_page_cache_hash_key(sample_audio_key_t key, uint32_t page_index)
@@ -309,6 +488,7 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     page->start_frame = UINT32_MAX;
     page->data = &g_sample_page_data[slot_index][0];
     page->state = SAMPLE_PAGE_EMPTY;
+    page->role = SAMPLE_PAGE_ROLE_FREE;
 }
 
 static sample_page_desc_t *sample_page_cache_find_page_mut_key(sample_audio_key_t key, uint32_t page_index)
@@ -446,20 +626,69 @@ static uint16_t sample_page_cache_repair_queued_count_key(sample_audio_key_t key
     return queued_count;
 }
 
-static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_key_t key, uint32_t page_index)
+static void sample_page_cache_recycle_stale_active_pages(void)
 {
-    sample_page_desc_t *evict_page = 0;
+    for (uint32_t i = BRICK6_PAGECACHE_PRESOCLE_PAGES; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->role != SAMPLE_PAGE_ROLE_ACTIVE) || (page->state == SAMPLE_PAGE_EMPTY))
+        {
+            continue;
+        }
+        if ((page->active_window != 0U)
+            && (page->active_window_epoch == g_sample_page_cache_state.active_window_epoch))
+        {
+            continue;
+        }
+        if ((page->use_count != 0U) || (page->pin_count != 0U))
+        {
+            continue;
+        }
+        if ((page->state == SAMPLE_PAGE_QUEUED) || (page->state == SAMPLE_PAGE_LOADING))
+        {
+            continue;
+        }
+        if (page->state == SAMPLE_PAGE_READY)
+        {
+            g_sample_page_cache_diag.unexpected_ready_old_page_released++;
+        }
+        sample_page_cache_clear_desc(page, i);
+    }
+}
+
+static sample_page_desc_t *sample_page_cache_alloc_slot_key(sample_audio_key_t key,
+                                                            uint32_t page_index,
+                                                            sample_page_role_t role,
+                                                            uint8_t active_window)
+{
     uint32_t free_scan = 0U;
-    uint32_t evict_scan = 0U;
     const uint32_t frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (frame_count == 0U)
     {
         return 0;
     }
 
-    for (uint32_t scan = 0U; scan < SAMPLE_PAGE_MAX_COUNT; ++scan)
+    if ((role != SAMPLE_PAGE_ROLE_PRESOCLE) && (role != SAMPLE_PAGE_ROLE_ACTIVE))
     {
-        const uint32_t i = ((uint32_t)g_sample_page_free_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
+        g_sample_page_cache_diag.invalid_role_transition_count++;
+        return 0;
+    }
+
+    if (role == SAMPLE_PAGE_ROLE_ACTIVE)
+    {
+        sample_page_cache_recycle_stale_active_pages();
+    }
+
+    const uint32_t zone_base = sample_page_cache_zone_base(role);
+    const uint32_t zone_count = sample_page_cache_zone_count(role);
+    uint16_t *const cursor =
+        (role == SAMPLE_PAGE_ROLE_ACTIVE) ? &g_sample_page_active_cursor
+                                          : &g_sample_page_presocle_cursor;
+
+    for (uint32_t scan = 0U; scan < zone_count; ++scan)
+    {
+        const uint32_t zone_offset = ((uint32_t)(*cursor) + scan) % zone_count;
+        const uint32_t i = zone_base + zone_offset;
         sample_page_desc_t *const page = &g_sample_page_desc[i];
         free_scan = scan + 1U;
         if (page->state == SAMPLE_PAGE_EMPTY)
@@ -473,6 +702,11 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
             page->pin_count = 0U;
             page->use_count = 0U;
+            page->role = role;
+            page->active_window = active_window;
+            page->active_window_epoch = (active_window != 0U)
+                                            ? g_sample_page_cache_state.active_window_epoch
+                                            : 0U;
             sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
             const uint16_t key_slot = sample_page_cache_key_slot(key);
             if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
@@ -480,67 +714,23 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
                 sample_page_cache_index_put_key(key, page_index, (uint16_t)i);
                 g_sample_page_last_slot[key_slot] = (uint16_t)i;
             }
-            g_sample_page_free_cursor = (uint16_t)((i + 1U) % SAMPLE_PAGE_MAX_COUNT);
+            *cursor = (uint16_t)((zone_offset + 1U) % zone_count);
             sample_page_cache_diag_max(&g_sample_page_cache_diag.max_free_scan, free_scan);
             return page;
         }
     }
     sample_page_cache_diag_max(&g_sample_page_cache_diag.max_free_scan, free_scan);
 
-    for (uint32_t scan = 0U; scan < SAMPLE_PAGE_MAX_COUNT; ++scan)
+    if (role == SAMPLE_PAGE_ROLE_PRESOCLE)
     {
-        const uint32_t i = ((uint32_t)g_sample_page_evict_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
-        sample_page_desc_t *const page = &g_sample_page_desc[i];
-        evict_scan = scan + 1U;
-        if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U) || (page->pin_count != 0U)
-            || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-            || (sample_page_cache_page_is_multi_ready_anchor(page) != 0U)
-            || (sample_page_cache_can_evict_for_request(key, page->key) == 0U))
-        {
-            continue;
-        }
-
-        const sample_page_sample_desc_t *const sample =
-            &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
-        if ((sample->valid != 0U) && (sample->fully_loaded != 0U))
-        {
-            continue;
-        }
-
-        if ((evict_page == 0) || (page->last_touch < evict_page->last_touch))
-        {
-            evict_page = page;
-        }
+        g_sample_page_cache_diag.presocle_alloc_fail++;
     }
-
-    if (evict_page == 0)
+    else
     {
-        g_sample_page_cache_diag.evict_fail++;
-        sample_page_cache_diag_max(&g_sample_page_cache_diag.max_evict_scan, evict_scan);
-        return 0;
+        g_sample_page_cache_diag.active_alloc_fail++;
     }
-    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_evict_scan, evict_scan);
-
-    const uint32_t slot_index = (uint32_t)(evict_page - g_sample_page_desc);
-    sample_page_cache_clear_desc(evict_page, slot_index);
-    evict_page->key = key;
-    evict_page->sample_id = sample_page_cache_key_slot(key);
-    evict_page->page_index = page_index;
-    evict_page->start_frame = page_index * SAMPLE_PAGE_FRAMES;
-    evict_page->frame_count = frame_count;
-    evict_page->generation = ++g_sample_page_cache_state.generation_counter;
-    evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
-    evict_page->pin_count = 0U;
-    evict_page->use_count = 0U;
-    sample_page_cache_set_state(evict_page, SAMPLE_PAGE_QUEUED);
-    const uint16_t key_slot = sample_page_cache_key_slot(key);
-    if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-    {
-        sample_page_cache_index_put_key(key, page_index, (uint16_t)slot_index);
-        g_sample_page_last_slot[key_slot] = (uint16_t)slot_index;
-    }
-    g_sample_page_evict_cursor = (uint16_t)((slot_index + 1U) % SAMPLE_PAGE_MAX_COUNT);
-    return evict_page;
+    g_sample_page_cache_diag.evict_fail++;
+    return 0;
 }
 
 static uint32_t sample_page_cache_trim_path_copy(char *dst, uint32_t dst_size, const char *src)
@@ -576,12 +766,14 @@ static uint32_t sample_page_cache_trim_path_copy(char *dst, uint32_t dst_size, c
 
 static int32_t sample_page_cache_find_contiguous_empty_run(uint32_t page_count)
 {
-    if ((page_count == 0U) || (page_count > SAMPLE_PAGE_MAX_COUNT))
+    if ((page_count == 0U) || (page_count > BRICK6_PAGECACHE_ACTIVE_PAGES))
     {
         return -1;
     }
 
-    for (uint32_t start = 0U; (start + page_count) <= SAMPLE_PAGE_MAX_COUNT; ++start)
+    for (uint32_t start = BRICK6_PAGECACHE_PRESOCLE_PAGES;
+         (start + page_count) <= SAMPLE_PAGE_MAX_COUNT;
+         ++start)
     {
         uint32_t i = 0U;
         for (; i < page_count; ++i)
@@ -610,6 +802,7 @@ static void sample_page_cache_reclaim_stream_pages_for_full_load(void)
         sample_page_desc_t *const page = &g_sample_page_desc[i];
         if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U)
             || (page->pin_count != 0U)
+            || (page->role != SAMPLE_PAGE_ROLE_ACTIVE)
             || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
         {
             continue;
@@ -648,6 +841,9 @@ static sample_page_desc_t *sample_page_cache_assign_slot_key(uint32_t slot_index
     page->frame_count = frame_count;
     page->generation = ++g_sample_page_cache_state.generation_counter;
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    page->role = sample_page_cache_slot_in_presocle_zone(slot_index)
+                     ? SAMPLE_PAGE_ROLE_PRESOCLE
+                     : SAMPLE_PAGE_ROLE_ACTIVE;
     sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
@@ -803,8 +999,9 @@ void sample_page_cache_reset(void)
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
     memset(g_sample_page_queued_count, 0, sizeof(g_sample_page_queued_count));
     memset(&g_sample_page_cache_diag, 0, sizeof(g_sample_page_cache_diag));
-    g_sample_page_free_cursor = 0U;
-    g_sample_page_evict_cursor = 0U;
+    g_sample_page_presocle_cursor = 0U;
+    g_sample_page_active_cursor = 0U;
+    g_sample_page_cache_state.active_window_epoch = 1U;
     for (uint32_t i = 0U; i < SAMPLE_PAGE_CACHE_MAX_SAMPLES; ++i)
     {
         g_sample_page_last_slot[i] = UINT16_MAX;
@@ -815,14 +1012,13 @@ void sample_page_cache_reset(void)
     }
 }
 
-void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot)
+void sample_page_cache_begin_active_window_update(void)
 {
-    if (out_snapshot == 0)
+    g_sample_page_cache_state.active_window_epoch++;
+    if (g_sample_page_cache_state.active_window_epoch == 0U)
     {
-        return;
+        g_sample_page_cache_state.active_window_epoch = 1U;
     }
-
-    *out_snapshot = g_sample_page_cache_diag;
 }
 
 void sample_page_cache_clear_sample(uint16_t sample_id)
@@ -897,6 +1093,7 @@ uint8_t sample_page_cache_try_acquire_page_key(sample_audio_key_t key,
     sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
     if ((page == 0) || (page->state != SAMPLE_PAGE_READY) || (page->data == 0))
     {
+        g_sample_page_cache_diag.audio_attempted_non_ready_page++;
         return 0U;
     }
 
@@ -938,6 +1135,7 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
         || (page->generation != ref->page_generation) || (page->state != SAMPLE_PAGE_READY)
         || (page->data == 0))
     {
+        g_sample_page_cache_diag.audio_attempted_non_ready_page++;
         return 0U;
     }
 
@@ -1173,6 +1371,45 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
     out_info->total_frames = sample->total_frames;
     out_info->data_offset = sample->data_offset;
     out_info->raw_pcm24 = sample->raw_pcm24;
+    out_info->source = sample->source;
+    return 1U;
+}
+
+uint8_t sample_page_cache_get_stream_source_meta_key(sample_audio_key_t key,
+                                                     sample_stream_source_meta_t *out_meta)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (out_meta == 0))
+    {
+        return 0U;
+    }
+
+    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    if (sample->valid == 0U)
+    {
+        return 0U;
+    }
+
+    *out_meta = sample->source;
+    return 1U;
+}
+
+uint8_t sample_page_cache_set_stream_source_meta_key(sample_audio_key_t key,
+                                                     const sample_stream_source_meta_t *meta)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (meta == 0))
+    {
+        return 0U;
+    }
+
+    sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    if (sample->valid == 0U)
+    {
+        return 0U;
+    }
+
+    sample->source = *meta;
     return 1U;
 }
 
@@ -1291,7 +1528,10 @@ uint8_t sample_page_cache_request_page_key(sample_audio_key_t key, uint32_t page
     sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
     if (page == 0)
     {
-        page = sample_page_cache_alloc_empty_slot_key(key, page_index);
+        page = sample_page_cache_alloc_slot_key(key,
+                                                page_index,
+                                                SAMPLE_PAGE_ROLE_ACTIVE,
+                                                0U);
         if (page == 0)
         {
             return 0U;
@@ -1307,6 +1547,81 @@ uint8_t sample_page_cache_request_page_key(sample_audio_key_t key, uint32_t page
     if (page->frame_count == 0U)
     {
         sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
+        return 0U;
+    }
+
+    page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    return 1U;
+}
+
+uint8_t sample_page_cache_request_presocle_page_key(sample_audio_key_t key, uint32_t page_index)
+{
+    sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
+    if (page == 0)
+    {
+        page = sample_page_cache_alloc_slot_key(key,
+                                                page_index,
+                                                SAMPLE_PAGE_ROLE_PRESOCLE,
+                                                0U);
+        if (page == 0)
+        {
+            return 0U;
+        }
+    }
+
+    if (page->role != SAMPLE_PAGE_ROLE_PRESOCLE)
+    {
+        g_sample_page_cache_diag.invalid_role_transition_count++;
+        return 0U;
+    }
+
+    if (page->state == SAMPLE_PAGE_EMPTY)
+    {
+        sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
+    }
+
+    page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
+    if (page->frame_count == 0U)
+    {
+        sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
+        return 0U;
+    }
+
+    page->last_touch = ++g_sample_page_cache_state.touch_counter;
+    return 1U;
+}
+
+uint8_t sample_page_cache_request_active_window_page_key(sample_audio_key_t key,
+                                                         uint32_t page_index)
+{
+    sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
+    if (page == 0)
+    {
+        page = sample_page_cache_alloc_slot_key(key,
+                                                page_index,
+                                                SAMPLE_PAGE_ROLE_ACTIVE,
+                                                1U);
+        if (page == 0)
+        {
+            g_sample_page_cache_diag.active_window_miss_count++;
+            g_sample_page_cache_diag.underrun_cache_pressure_pages =
+                sample_page_cache_count_free_or_stream_evictable(1U);
+            return 0U;
+        }
+    }
+
+    page->active_window = 1U;
+    page->active_window_epoch = g_sample_page_cache_state.active_window_epoch;
+    if (page->state == SAMPLE_PAGE_EMPTY)
+    {
+        sample_page_cache_set_state(page, SAMPLE_PAGE_QUEUED);
+    }
+
+    page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
+    if (page->frame_count == 0U)
+    {
+        sample_page_cache_set_state(page, SAMPLE_PAGE_ERROR);
+        g_sample_page_cache_diag.active_window_miss_count++;
         return 0U;
     }
 
@@ -1330,7 +1645,10 @@ uint8_t sample_page_cache_request_page_ref_key(sample_audio_key_t key,
     sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
     if (page == 0)
     {
-        page = sample_page_cache_alloc_empty_slot_key(key, page_index);
+        page = sample_page_cache_alloc_slot_key(key,
+                                                page_index,
+                                                SAMPLE_PAGE_ROLE_ACTIVE,
+                                                0U);
         if (page == 0)
         {
             return 0U;
@@ -1395,7 +1713,10 @@ uint8_t sample_page_cache_pin_page_key(sample_audio_key_t key, uint32_t page_ind
     sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
     if (page == 0)
     {
-        page = sample_page_cache_alloc_empty_slot_key(key, page_index);
+        page = sample_page_cache_alloc_slot_key(key,
+                                                page_index,
+                                                SAMPLE_PAGE_ROLE_PRESOCLE,
+                                                0U);
         if (page == 0)
         {
             return 0U;
@@ -1468,6 +1789,13 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key(sample_audio_ke
     }
 
     const uint32_t page_count = (total_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    if (sample_page_cache_count_free_or_stream_evictable(0U)
+        <= (BRICK6_STREAMER_RESERVE_MIN_PAGES + page_count))
+    {
+        g_sample_page_cache_diag.evict_fail_no_streamer_reserve++;
+        return SAMPLE_PAGE_LOAD_NO_SPACE;
+    }
+
     int32_t start_slot = sample_page_cache_find_contiguous_empty_run(page_count);
     if (start_slot < 0)
     {
@@ -1521,6 +1849,8 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key(sample_audio_ke
     g_sample_page_sample_desc[key_slot].total_frames = total_frames;
     g_sample_page_sample_desc[key_slot].data_offset = data_offset;
     g_sample_page_sample_desc[key_slot].info = *info;
+    g_sample_page_sample_desc[key_slot].source =
+        sample_page_cache_make_default_source_meta(info, total_frames, data_offset);
     g_sample_page_sample_desc[key_slot].valid = 1U;
     g_sample_page_sample_desc[key_slot].fully_loaded = 1U;
     return SAMPLE_PAGE_LOAD_OK;
@@ -1563,9 +1893,11 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
     sample->info = *info;
     sample->total_frames = total_frames;
     sample->data_offset = data_offset;
+    sample->source = sample_page_cache_make_default_source_meta(info, total_frames, data_offset);
     sample->valid = 1U;
     sample->fully_loaded = 0U;
     sample->first_slot = UINT16_MAX;
+    sample_page_cache_scan_stream_source(key, sample);
     return 1U;
 }
 
@@ -1603,6 +1935,7 @@ uint8_t sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_
     sample->info.byte_rate = LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
     sample->total_frames = total_frames;
     sample->data_offset = 0U;
+    sample->source = sample_page_cache_make_default_source_meta(&sample->info, total_frames, 0U);
     sample->valid = 1U;
     sample->fully_loaded = 0U;
     sample->raw_pcm24 = 1U;

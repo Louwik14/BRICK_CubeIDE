@@ -2,6 +2,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:23:9:sd_access_fs_mount_if_needed	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:42:9:sd_access_gate_try_acquire	24	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:94:6:sd_access_gate_release	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:112:6:sd_access_trace_begin	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:117:6:sd_access_trace_end	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:124:6:sd_access_trace_timeout	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:112:9:sd_access_gate_is_owned	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:122:6:sd_access_trace_begin	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:127:6:sd_access_trace_end	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_access_gate.c:134:6:sd_access_trace_timeout	16	static

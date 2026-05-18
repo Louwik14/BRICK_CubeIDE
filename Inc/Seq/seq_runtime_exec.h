@@ -62,6 +62,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
                                                        seq_runtime_diag_t *diag,
                                                        uint32_t *track_loop_generation,
                                                        uint64_t pulse_sample_q16,
+                                                       seq_clock_src_t clock_src,
                                                        uint32_t now_tick,
                                                        uint64_t now_sample);
 /*

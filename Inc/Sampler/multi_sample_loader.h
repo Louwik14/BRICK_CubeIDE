@@ -29,6 +29,13 @@ typedef struct
     uint16_t total_samples;
     uint16_t pages_requested;
     uint16_t pages_ready;
+    uint16_t page1_requested;
+    uint16_t page1_ready;
+    uint16_t page1_refused_reserve;
+    uint16_t page1_protected;
+    uint16_t page1_protect_failed;
+    uint16_t multi_presocle_protected_pages;
+    uint16_t multi_presocle_pages_current;
     uint16_t last_failed_sample;
     multi_sample_load_result_t last_error;
     multi_sample_instrument_state_t state;

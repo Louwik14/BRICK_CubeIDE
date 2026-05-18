@@ -147,6 +147,11 @@ file(GLOB SRC_SAMPLER_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/*.cpp"
 )
+list(APPEND SRC_SAMPLER_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_fatfs_map.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_sector_scratch.c"
+)
+list(REMOVE_DUPLICATES SRC_SAMPLER_SRC)
 
 file(GLOB SRC_SEQ_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/*.c"
@@ -159,6 +164,7 @@ file(GLOB SRC_STORAGE_SRC
 )
 
 list(APPEND SRC_STORAGE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_block_device.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sd_preview.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"

@@ -16,7 +16,7 @@
 #define BRICK6_LOOPER_SHIFTER_CAP 4U
 #define BRICK6_LOOPER_SHIFTER_SLOT_NONE 0xFFU
 #define BRICK6_LOOPER_CACHE_ID_BASE SAMPLE_PAGE_CACHE_LOOPER_ID_BASE
-#define BRICK6_LOOPER_PREFETCH_PAGES 12U
+#define BRICK6_LOOPER_ACTIVE_WINDOW_PAGES BRICK6_STREAM_ACTIVE_WINDOW_PAGES
 #define BRICK6_LOOPER_PREROLL_FRAMES MULTI_RECORD_WRITER_SAMPLE_RATE_HZ
 #define BRICK6_LOOPER_PREROLL_CHANNELS MULTI_RECORD_WRITER_CHANNELS
 #define BRICK6_LOOPER_PCM24_FLOAT_SCALE (1.0f / 8388607.0f)
@@ -641,9 +641,9 @@ static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
     state->cache_registered = 1U;
     uint32_t page_count = (state->frames_total + SAMPLE_PAGE_FRAMES - 1U)
         / SAMPLE_PAGE_FRAMES;
-    if(page_count > BRICK6_LOOPER_PREFETCH_PAGES)
+    if(page_count > BRICK6_LOOPER_ACTIVE_WINDOW_PAGES)
     {
-        page_count = BRICK6_LOOPER_PREFETCH_PAGES;
+        page_count = BRICK6_LOOPER_ACTIVE_WINDOW_PAGES;
     }
     (void)sample_page_cache_request_start_pages_key(state->cache_key, 0U, page_count);
     looper_request_playhead_pages(state);
@@ -696,9 +696,10 @@ static void looper_request_playhead_pages(const brick6_looper_track_state_t *sta
 
     const uint32_t playhead = state->playhead;
     const uint32_t first_page = playhead / SAMPLE_PAGE_FRAMES;
-    for(uint32_t i = 0U; i < BRICK6_LOOPER_PREFETCH_PAGES; ++i)
+    for(uint32_t i = 0U; i < BRICK6_LOOPER_ACTIVE_WINDOW_PAGES; ++i)
     {
-        (void)sample_page_cache_request_page_key(state->cache_key, (first_page + i) % page_count);
+        (void)sample_page_cache_request_active_window_page_key(state->cache_key,
+                                                               (first_page + i) % page_count);
     }
 }
 

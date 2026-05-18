@@ -6,6 +6,7 @@
 #include "Seq/seq_types.h"
 
 #define SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE 0xF0U
+#define SEQ_RELOOP_UART_DEBUG 0U
 
 typedef struct
 {
@@ -22,6 +23,7 @@ typedef struct
     uint8_t play_step[SEQ_TRACK_COUNT];
     uint8_t prev_step[SEQ_TRACK_COUNT];
     uint8_t prev_step_valid[SEQ_TRACK_COUNT];
+    uint8_t step_advanced[SEQ_TRACK_COUNT];
     uint8_t active_lock_count[SEQ_TRACK_COUNT];
     uint8_t track_div_phase[SEQ_TRACK_COUNT];
     uint32_t last_tick_count;
@@ -128,6 +130,29 @@ uint8_t seq_runtime_rec_is_pattern_pending_start(void);
 uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
 void seq_runtime_diag_reset(void);
 void seq_runtime_diag_snapshot(seq_runtime_diag_t *out_diag);
+
+void seq_runtime_reloop_debug_log_step(seq_track_id_t track,
+                                        seq_step_id_t previous_step,
+                                        seq_step_id_t current_step,
+                                        uint8_t effective_length,
+                                        uint8_t model_length,
+                                        uint8_t did_wrap,
+                                        uint8_t boundary_hit,
+                                        uint32_t loop_generation,
+                                        uint64_t audio_sample,
+                                        uint16_t block_offset,
+                                        uint16_t block_frames,
+                                        uint32_t samples_per_step_q16,
+                                        uint8_t running,
+                                        uint8_t start_pending,
+                                        seq_clock_src_t clock_src);
+void seq_runtime_reloop_debug_log_length(seq_track_id_t track);
+void seq_runtime_reloop_debug_log_audio_event(uint8_t phase,
+                                              const seq_runtime_audio_event_t *event,
+                                              uint16_t block_frames,
+                                              uint16_t event_count,
+                                              uint64_t block_start_sample);
+void seq_runtime_reloop_debug_flush(void);
 
 #endif /* SEQ_RUNTIME_H */
 

@@ -14,6 +14,7 @@
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
+#include "Seq/seq_model.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_transport_fsm.h"
@@ -264,6 +265,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
         state->play_step[track] = 0U;
         state->prev_step_valid[track] = 0U;
         state->prev_step[track] = 0U;
+        state->step_advanced[track] = 0U;
         state->track_div_phase[track] = 0U;
         seq_boundary_engine_restore_all_active_locks(state, track);
     }
@@ -320,6 +322,7 @@ void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
     {
         seq_boundary_engine_restore_all_active_locks(state, track);
         state->prev_step_valid[track] = 0U;
+        state->step_advanced[track] = 0U;
         state->track_div_phase[track] = 0U;
     }
 }
@@ -350,6 +353,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
                                                        seq_runtime_diag_t *diag,
                                                        uint32_t *track_loop_generation,
                                                        uint64_t pulse_sample_q16,
+                                                       seq_clock_src_t clock_src,
                                                        uint32_t now_tick,
                                                        uint64_t now_sample)
 {
@@ -382,23 +386,18 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
         return;
     }
 
+    seq_step_id_t previous_steps[SEQ_TRACK_COUNT];
+    uint8_t effective_lengths[SEQ_TRACK_COUNT];
+    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        previous_steps[track] = state->play_step[track];
+        effective_lengths[track] = seq_model_get_track_playback_length(track);
+    }
+
     if (seq_transport_fsm_allow_advance(transport_fsm) != 0U)
     {
         /* Progression guard: only running transport may advance musical step position. */
-        uint8_t previous_step[SEQ_TRACK_COUNT];
-        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-        {
-            previous_step[track] = state->play_step[track];
-        }
-
         seq_boundary_engine_advance_one_step(state);
-        for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-        {
-            if ((state->play_step[track] == 0U) && (previous_step[track] != 0U))
-            {
-                track_loop_generation[track]++;
-            }
-        }
         seq_live_rec_session_on_step_advanced(state, now_sample);
     }
 
@@ -413,10 +412,42 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
             const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
+            const uint8_t hit_track = hits[i].track;
+            const uint16_t debug_block_frames = (uint16_t)(state->audio_timeline_sample - state->audio_block_start_sample);
+            uint16_t block_offset = 0xFFFFU;
+            if ((scheduled_sample_time >= state->audio_block_start_sample)
+                && (scheduled_sample_time < state->audio_timeline_sample))
+            {
+                block_offset = (uint16_t)(scheduled_sample_time - state->audio_block_start_sample);
+            }
+            uint8_t did_wrap = 0U;
+            const uint8_t effective_length = effective_lengths[hit_track];
+            if ((hits[i].step == 0U)
+                && ((previous_steps[hit_track] >= effective_length)
+                    || ((effective_length > 0U) && (previous_steps[hit_track] >= (uint8_t)(effective_length - 1U)))))
+            {
+                did_wrap = 1U;
+            }
             if (hits[i].step == 0U)
             {
-                seq_runtime_exec_push_boundary_edge(hits[i].track, scheduled_sample_time);
+                track_loop_generation[hit_track]++;
+                seq_runtime_exec_push_boundary_edge(hit_track, scheduled_sample_time);
             }
+            seq_runtime_reloop_debug_log_step(hit_track,
+                                              previous_steps[hit_track],
+                                              hits[i].step,
+                                              effective_length,
+                                              seq_model_get_track_playback_length(hit_track),
+                                              did_wrap,
+                                              1U,
+                                              track_loop_generation[hit_track],
+                                              scheduled_sample_time,
+                                              block_offset,
+                                              debug_block_frames,
+                                              state->samples_per_step_q16,
+                                              state->running,
+                                              seq_transport_fsm_is_start_pending(transport_fsm),
+                                              clock_src);
             seq_play_scheduler_schedule_step(hits[i].track,
                                              hits[i].step,
                                              state->ticks_per_step,
@@ -474,6 +505,7 @@ void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
                                                           diag,
                                                           track_loop_generation,
                                                           next_pulse_sample_q16,
+                                                          clock_src,
                                                           now_tick,
                                                           seq_runtime_exec_get_audio_timeline_sample());
         pulses_in_block++;
@@ -537,6 +569,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
                                                           &(seq_runtime_diag_t){0},
                                                           track_loop_generation,
                                                           pulse_sample_q16,
+                                                          clock_src,
                                                           now_tick,
                                                           seq_runtime_exec_get_audio_timeline_sample());
         pending_steps--;
@@ -562,6 +595,8 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
     }
 
     const uint64_t block_start_sample = seq_runtime_exec_begin_audio_block(block_frames);
+    state->audio_block_start_sample = block_start_sample;
+    state->audio_timeline_sample = block_start_sample + (uint64_t)block_frames;
     const uint32_t now_tick = 0U;
     /* Progression guard: audio block collection drives cadence first, then exports due events. */
     seq_runtime_exec_drive_external_steps_for_block(state,

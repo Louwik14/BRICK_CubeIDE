@@ -133,6 +133,26 @@ static void process_half(uint32_t half_index)
                                                                         AUDIO_FRAMES_PER_HALF);
     const uint64_t block_start_sample =
         seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)AUDIO_FRAMES_PER_HALF;
+    uint8_t seq_reloop_debug_block = 0U;
+    for (uint16_t i = 0U; i < event_count; ++i)
+    {
+        if (block_events[i].type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+        {
+            seq_reloop_debug_block = 1U;
+            break;
+        }
+    }
+    if (seq_reloop_debug_block != 0U)
+    {
+        for (uint16_t i = 0U; i < event_count; ++i)
+        {
+            seq_runtime_reloop_debug_log_audio_event(0U,
+                                                   &block_events[i],
+                                                   AUDIO_FRAMES_PER_HALF,
+                                                   event_count,
+                                                   block_start_sample);
+        }
+    }
     if (event_count > g_audio_seq_diag.max_events_collected_per_half)
     {
         g_audio_seq_diag.max_events_collected_per_half = event_count;
@@ -193,6 +213,14 @@ static void process_half(uint32_t half_index)
         while ((event_index < event_count)
                && (block_events[event_index].sample_offset_in_block == event_offset))
         {
+            if (seq_reloop_debug_block != 0U)
+            {
+                seq_runtime_reloop_debug_log_audio_event(1U,
+                                                       &block_events[event_index],
+                                                       AUDIO_FRAMES_PER_HALF,
+                                                       event_count,
+                                                       block_start_sample);
+            }
             if (block_events[event_index].type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
             {
                 brick6_looper_runtime_on_boundary_edge(block_events[event_index].track,

@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_block_device.c:13:13:sd_block_device_note_reject	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_block_device.c:19:26:sd_block_device_read_sectors	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_block_device.c:72:6:sd_block_device_diag_get_snapshot	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sd_block_device.c:82:6:sd_block_device_diag_reset	8	static

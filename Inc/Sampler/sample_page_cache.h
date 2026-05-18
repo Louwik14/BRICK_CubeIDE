@@ -27,10 +27,19 @@ typedef enum
 
 typedef enum
 {
+    SAMPLE_PAGE_ROLE_FREE = 0,
+    SAMPLE_PAGE_ROLE_PRESOCLE,
+    SAMPLE_PAGE_ROLE_ACTIVE
+} sample_page_role_t;
+
+typedef enum
+{
     SAMPLE_AUDIO_DOMAIN_CLASSIC = 0,
     SAMPLE_AUDIO_DOMAIN_LOOPER,
     SAMPLE_AUDIO_DOMAIN_MULTI
 } sample_audio_domain_t;
+
+#define SAMPLE_AUDIO_DOMAIN_COUNT (3U)
 
 typedef struct
 {
@@ -38,20 +47,76 @@ typedef struct
     uint16_t object_id;
 } sample_audio_key_t;
 
+typedef enum
+{
+    SAMPLE_STREAM_BACKEND_FATFS = 0,
+    SAMPLE_STREAM_BACKEND_CONTIGUOUS_SECTOR = 1
+} sample_stream_backend_kind_t;
+
+typedef enum
+{
+    SAMPLE_STREAM_SAFE_NONE = 0,
+    SAMPLE_STREAM_SAFE_CONTIGUOUS = 1
+} sample_stream_safe_state_t;
+
+typedef enum
+{
+    SAMPLE_STREAM_SAFE_REASON_NONE = 0,
+    SAMPLE_STREAM_SAFE_REASON_NOT_SCANNED,
+    SAMPLE_STREAM_SAFE_REASON_SCAN_FAIL,
+    SAMPLE_STREAM_SAFE_REASON_UNSUPPORTED_FORMAT,
+    SAMPLE_STREAM_SAFE_REASON_NON_CONTIGUOUS,
+    SAMPLE_STREAM_SAFE_REASON_UNALIGNED_OR_OFFSET,
+    SAMPLE_STREAM_SAFE_REASON_INVALID_SIZE,
+    SAMPLE_STREAM_SAFE_REASON_FATFS_ERROR
+} sample_stream_safe_reason_t;
+
+typedef struct
+{
+    uint8_t valid;
+    uint8_t safe_state;
+    uint8_t backend_kind;
+    uint8_t contig;
+
+    uint32_t first_file_lba;
+    uint32_t first_data_lba;
+    uint32_t data_sector_offset;
+
+    uint32_t file_size_low;
+    uint32_t data_offset_bytes;
+    uint32_t data_size_bytes;
+    uint32_t total_frames;
+    uint32_t bytes_per_frame;
+
+    uint32_t sample_rate;
+    uint16_t channels;
+    uint16_t bits_per_sample;
+    uint16_t block_align;
+
+    uint16_t fragment_count;
+    uint16_t reject_reason;
+
+    uint32_t generation;
+    uint32_t file_date_time_token;
+} sample_stream_source_meta_t;
+
 typedef struct
 {
     sample_audio_key_t key;
     uint16_t sample_id;
-    uint16_t reserved;
+    uint8_t active_window;
+    uint8_t reserved;
     uint32_t page_index;
     uint32_t start_frame;
     uint32_t frame_count;
     float *data;
     sample_page_state_t state;
+    sample_page_role_t role;
     uint16_t pin_count;
     uint16_t use_count;
     uint32_t generation;
     uint32_t last_touch;
+    uint32_t active_window_epoch;
 } sample_page_desc_t;
 
 typedef struct
@@ -95,6 +160,7 @@ typedef struct
     uint32_t total_frames;
     uint32_t data_offset;
     uint8_t raw_pcm24;
+    sample_stream_source_meta_t source;
 } sample_page_stream_info_t;
 
 typedef struct
@@ -119,23 +185,11 @@ typedef enum
     SAMPLE_PAGE_LOAD_DECODE_FAILED
 } sample_page_load_result_t;
 
-typedef struct
-{
-    uint32_t lookup_hits;
-    uint32_t lookup_misses;
-    uint32_t max_lookup_scan;
-    uint32_t max_free_scan;
-    uint32_t max_evict_scan;
-    uint32_t evict_fail;
-    uint32_t bounded_scan_yield;
-} sample_page_cache_diag_snapshot_t;
-
 /*
  * Query API: RAM-only, no SD side effect, no implicit page request.
  */
 void sample_page_cache_init(void);
 void sample_page_cache_reset(void);
-void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot);
 sample_audio_key_t sample_audio_key_classic(uint16_t sample_id);
 sample_audio_key_t sample_audio_key_looper(uint16_t looper_id);
 sample_audio_key_t sample_audio_key_multi(uint16_t multi_sample_id);
@@ -186,6 +240,10 @@ uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
                                           sample_page_stream_info_t *out_info);
 uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
                                               sample_page_stream_info_t *out_info);
+uint8_t sample_page_cache_get_stream_source_meta_key(sample_audio_key_t key,
+                                                     sample_stream_source_meta_t *out_meta);
+uint8_t sample_page_cache_set_stream_source_meta_key(sample_audio_key_t key,
+                                                     const sample_stream_source_meta_t *meta);
 uint8_t sample_page_cache_find_queued_load_target(uint16_t first_sample_id,
                                                   uint16_t sample_count,
                                                   sample_page_load_target_t *out_target);
@@ -208,6 +266,10 @@ uint8_t sample_page_cache_set_page_state_key(sample_audio_key_t key,
  */
 uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index);
 uint8_t sample_page_cache_request_page_key(sample_audio_key_t key, uint32_t page_index);
+uint8_t sample_page_cache_request_presocle_page_key(sample_audio_key_t key, uint32_t page_index);
+void sample_page_cache_begin_active_window_update(void);
+uint8_t sample_page_cache_request_active_window_page_key(sample_audio_key_t key,
+                                                         uint32_t page_index);
 uint8_t sample_page_cache_request_page_ref(uint16_t sample_id,
                                            uint32_t page_index,
                                            sample_page_ref_t *out_ref);

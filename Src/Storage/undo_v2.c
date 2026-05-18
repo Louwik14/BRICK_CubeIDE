@@ -11,6 +11,9 @@
 #include "Storage/memory_layout.h"
 #include "main.h"
 
+_Static_assert((sizeof(undo_v2_plock_delta_t) % 4U) == 0U,
+               "undo_v2_plock_delta_t array stride must keep word stores aligned");
+
 typedef struct
 {
     uint8_t tx_open;

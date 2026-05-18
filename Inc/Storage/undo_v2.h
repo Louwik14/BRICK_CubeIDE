@@ -74,6 +74,8 @@ typedef struct
     uint8_t after_flags;
     uint8_t after_trig;
     uint8_t used;
+    uint8_t reserved;
+    uint16_t align_pad;
 } undo_v2_plock_delta_t;
 
 typedef struct

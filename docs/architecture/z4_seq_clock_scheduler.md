@@ -495,7 +495,7 @@ Invariants prouves par le code:
 - Pas de mutation cachee dans getters principaux Z4:
   - `seq_runtime_get_playhead_step`, `seq_runtime_get_track_div/quant/swing`, `seq_runtime_get_tempo_bpm_milli`, `seq_model_get_*` lisent sans muter.
 - Conditions de boundary explicites:
-  - boundary hit si `prev_step_valid==0` ou `prev_step != current_step`.
+  - boundary hit si `prev_step_valid==0`, `prev_step != current_step`, ou si un pulse a effectivement avance une track sans changer son index visible (`length=1`).
   - `seq_boundary_engine_process` fait apply/restore locks avant emission hit.
   - les markers Q Rec/Q Play sont edge-based: seulement quand un `boundary_hit` expose `step==0`, jamais parce qu'un getter playhead reste a 0.
 - Integrite de parcours p-lock:
@@ -693,3 +693,14 @@ Points factuels observes:
 - Le NOTE OFF planifie par la duree PLAY route vers `brick6_sampler_runtime_note_off_multi_track_note(track,note)` afin de reutiliser le lifecycle release/VCA Multi.
 - Les autres types Sampler gardent le chemin Classic existant (`brick6_sampler_runtime_trigger_note_velocity`, puis note-off Classic/Clip selon contrat).
 - Aucun FatFs, malloc, cache/streaming ou import Multi n'est ajoute au scheduler; le trigger Multi reste le meme seam RAM/page-cache que le clavier.
+
+## Addendum 2026-05-18 - Diagnostic UART reloop
+
+Instrumentation temporaire activee par defaut pour observer le reloop sequenceur sans modifier le contrat musical:
+- macro d'activation: `SEQ_RELOOP_UART_DEBUG 1U` dans `Inc/Seq/seq_runtime.h`;
+- points producteurs IRQ/audio: progression step dans `seq_runtime_exec` et collecte/apply audio dans `audio.c`;
+- les producteurs ecrivent uniquement des snapshots bornes dans un ring statique, sans malloc, sans formatage et sans UART bloquant en IRQ;
+- le flush UART est fait hors IRQ par `seq_runtime_time_adapter_process` via `seq_runtime_reloop_debug_flush`;
+- formats UART: `SEQDBG` pour steps proches du wrap, `SEQ_LEN` pour changements de longueur, `SEQEVT` pour evenements audio dans un bloc contenant un boundary edge, `SEQDROP` pour pertes de ring.
+
+Cette instrumentation est une projection de diagnostic: elle ne devient pas autorite runtime, ne change pas longueur/pending/wrap, et doit rester detachable.

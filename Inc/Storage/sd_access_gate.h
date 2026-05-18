@@ -23,6 +23,7 @@ typedef enum
 void sd_access_gate_init(void);
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client);
 void sd_access_gate_release(sd_access_client_t client);
+uint8_t sd_access_gate_is_owned(void);
 
 uint8_t sd_access_fs_mount_if_needed(void);
 

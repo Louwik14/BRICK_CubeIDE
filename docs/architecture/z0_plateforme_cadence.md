@@ -192,7 +192,7 @@ Z0 appelle principalement:
 - `engine_tasklet_poll()`
 - `seq_runtime_time_adapter_process()`
 - `brick6_sampler_runtime_queue_stream_pages()`
-- `sample_cache_service(32768U)`
+- `sample_cache_service(65536U)`
 - `multi_record_writer_service(16384U)`
 - `pattern_load_service(4096U)`
 - `pattern_live_service()`
@@ -272,7 +272,7 @@ Z0 appelle principalement:
 ## 12. Addendum - ordre de service SD recording produit
 
 - Z0 porte uniquement l'ordre de service cooperatif hors IRQ; il ne devient pas l'autorite SD metier.
-- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` queue d'abord les pages STREAM Multi actives via `brick6_sampler_runtime_queue_stream_pages()`, puis sert `sample_cache_service(32768U)` avant le writer afin de charger les pages STREAM audio pending avant les clients SD moins critiques. `multi_record_writer_service(16384U)` passe ensuite pour terminer un drain/finalize deja actif. Si un SAVE Looper RAW -> WAV est actif, la superloop suspend ensuite `brick6_looper_runtime_service`, `pattern_load_service`, `waveform_cache_service` et `sd_preview_process`, puis appelle `looper_storage_raw_export_service(516096U)` comme operation SD prioritaire. Hors export actif, l'ordre reste `brick6_sampler_runtime_service()`, `brick6_looper_runtime_service(8192U)`, puis `looper_storage_raw_export_service(8192U)` et `multi_sample_service_load(32768U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
+- Implementation courante: `brick6_app_init()` appelle `multi_record_writer_init()`; `brick6_app_process()` queue d'abord les pages STREAM Multi actives via `brick6_sampler_runtime_queue_stream_pages()`, puis sert une seule tranche `sample_cache_service(65536U)` avant le writer afin de charger les pages STREAM audio pending avant les clients SD moins critiques. `sample_stream_manager_service()` borne cette tranche a un petit nombre de pages par appel et ne possede plus de boost urgent multi-page. `multi_record_writer_service(16384U)` passe ensuite pour terminer un drain/finalize deja actif. Si un SAVE Looper RAW -> WAV est actif, la superloop suspend ensuite `brick6_looper_runtime_service`, `pattern_load_service`, `waveform_cache_service` et `sd_preview_process`, puis appelle `looper_storage_raw_export_service(516096U)` comme operation SD prioritaire. Hors export actif, l'ordre continue avec `brick6_sampler_runtime_service()`, `brick6_looper_runtime_service(8192U)`, `looper_storage_raw_export_service(8192U)` et `multi_sample_service_load(32768U)` seulement si le refill Looper n'a pas de travail SD pending, avant `pattern_load_service(4096U)`.
 - `SAMPLE_WAV` reutilise ce meme service writer global; aucun second scheduler SD ni second writer FatFs n'est ajoute. `pattern_load_service()` reste cadence pendant Audio Rec; seuls les records/finalisations Looper RAW et exports Looper gardent les refus SD historiques.
 - Ordre cible pour la cohabitation SD audio:
   1. `brick6_sampler_runtime_queue_stream_pages()` pour publier les besoins STREAM Multi actifs avant arbitrage SD.
@@ -284,7 +284,7 @@ Z0 appelle principalement:
   7. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
 - Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
 - Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
-- Dimensionnement Looper record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 6.144 MiB pour les 4 clients statiques. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
+- Dimensionnement Looper record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 6.144 MiB pour les 4 clients statiques. Le budget writer de 16 KiB par service conserve `sample_cache_service(65536U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
 
 ## 13. Addendum - Audio Rec / Rec Edit skeleton
 

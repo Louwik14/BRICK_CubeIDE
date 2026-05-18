@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:14:16:brick6_perf_test_id_valid	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:19:13:brick6_perf_test_header_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:45:38:brick6_perf_test_select	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:36:38:brick6_perf_test_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:59:38:brick6_perf_test_arm	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:79:38:brick6_perf_test_stop	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:25:6:brick6_perf_test_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_perf_test.c:95:6:brick6_perf_test_process	8	static

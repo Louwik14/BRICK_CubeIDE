@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_fatfs_map.c:14:16:sample_stream_fatfs_map_format_supported	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_fatfs_map.c:39:13:sample_stream_fatfs_map_fill_wav_meta	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_fatfs_map.c:30:13:sample_stream_fatfs_map_meta_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_fatfs_map.c:56:34:sample_stream_fatfs_map_scan_wav	1040	static

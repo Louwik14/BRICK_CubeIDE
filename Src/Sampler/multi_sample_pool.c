@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+#include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Storage/memory_layout.h"
 
 typedef struct
@@ -245,6 +247,17 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
         ? g_multi_zone_count
         : ((uint32_t)instrument->first_zone_id + instrument->zone_count);
 
+    if (instrument->first_sample_id != MULTI_SAMPLE_POOL_INVALID_ID)
+    {
+        for (uint16_t i = 0U; i < instrument->sample_count; ++i)
+        {
+            const sample_audio_key_t key =
+                sample_audio_key_multi((uint16_t)(instrument->first_sample_id + i));
+            sample_stream_manager_release_key(key);
+            sample_page_cache_clear_key(key);
+        }
+    }
+
     if (sample_end == g_multi_sample_count)
     {
         g_multi_sample_count = (instrument->first_sample_id == MULTI_SAMPLE_POOL_INVALID_ID)
@@ -374,6 +387,10 @@ uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
     }
 
     multi_sample_instrument_slot_t *const slot = &g_multi_instruments[instrument_id];
+    if (slot->used != 0U)
+    {
+        (void)multi_sample_pool_clear_instrument(instrument_id);
+    }
     memset(slot, 0, sizeof(*slot));
     slot->used = 1U;
     slot->desc.id = instrument_id;

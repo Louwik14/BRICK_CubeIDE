@@ -109,6 +109,16 @@ void sd_access_gate_release(sd_access_client_t client)
     __enable_irq();
 }
 
+uint8_t sd_access_gate_is_owned(void)
+{
+    uint8_t owned;
+
+    __disable_irq();
+    owned = (g_sd_access_total_count != 0U) ? 1U : 0U;
+    __enable_irq();
+    return owned;
+}
+
 void sd_access_trace_begin(const char *op)
 {
     (void)op;

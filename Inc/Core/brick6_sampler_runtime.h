@@ -14,6 +14,7 @@
 #include "Core/track_runtime.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_voice_reader.h"
 
 #ifdef __cplusplus
@@ -24,12 +25,8 @@ extern "C" {
 #define BRICK6_SAMPLER_DIAG_ENABLE 0
 #endif
 
-#ifndef BRICK6_MULTI_DEBUG_UART
-#define BRICK6_MULTI_DEBUG_UART 1
-#endif
-
 #ifndef BRICK6_MULTI_DEBUG_SNAPSHOT
-#define BRICK6_MULTI_DEBUG_SNAPSHOT 1
+#define BRICK6_MULTI_DEBUG_SNAPSHOT 0
 #endif
 
 #define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (4U)
@@ -85,13 +82,9 @@ typedef struct
     uint32_t multi_no_instrument_assigned;
     uint32_t multi_invalid_instrument_id;
     uint32_t multi_instrument_not_ready;
-    uint32_t multi_prefetch_request_count;
+    uint32_t multi_active_window_request_count;
     uint32_t multi_diag_event_dropped;
     uint32_t multi_diag_event_pushed;
-    uint32_t multi_diag_flush_calls;
-    uint32_t multi_diag_uart_hal_ok;
-    uint32_t multi_diag_uart_hal_err;
-    uint32_t multi_diag_uart_lines_emitted;
     uint32_t multi_stop_done;
     uint32_t multi_stop_underrun;
     uint32_t multi_stop_steal;
@@ -109,7 +102,6 @@ typedef struct
     uint32_t multi_last_missing_page;
     uint32_t multi_last_ready_mask;
     uint8_t multi_diag_pending_events;
-    uint8_t multi_diag_last_hal_status;
     uint8_t multi_last_stolen_kind;
     uint8_t multi_last_stolen_track;
     uint8_t multi_last_reject_reason;
@@ -178,7 +170,6 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
                                          uint32_t frames);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
-void sampler_perf_diag_capture(void);
 
 #ifdef __cplusplus
 }

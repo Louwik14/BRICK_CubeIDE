@@ -235,6 +235,7 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
     {
         const uint8_t length = seq_boundary_engine_track_length(track);
         seq_step_id_t current_step = state->play_step[track];
+        const uint8_t step_advanced = state->step_advanced[track];
         if (current_step >= length)
         {
             current_step = 0U;
@@ -242,7 +243,8 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
         }
 
         if ((state->prev_step_valid[track] == 0U)
-            || (state->prev_step[track] != current_step))
+            || (state->prev_step[track] != current_step)
+            || (step_advanced != 0U))
         {
             seq_boundary_engine_step_apply_restore(state,
                                                    track,
@@ -251,6 +253,7 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
 
             state->prev_step[track] = current_step;
             state->prev_step_valid[track] = 1U;
+            state->step_advanced[track] = 0U;
 
             if (hit_count < max_hits)
             {
@@ -285,6 +288,7 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         if (phase >= (uint8_t)(div - 1U))
         {
             state->track_div_phase[track] = 0U;
+            state->step_advanced[track] = 1U;
         }
         else
         {
@@ -303,4 +307,3 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         state->play_step[track] = next;
     }
 }
-
