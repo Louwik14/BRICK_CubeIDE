@@ -3453,8 +3453,7 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     }
 
     const sample_audio_key_t key = brick6_sampler_runtime_multi_key(resolved.multi_sample_id);
-    const uint32_t required_pages =
-        (sample->total_frames > SAMPLE_PAGE_FRAMES) ? 2U : 1U;
+    const uint32_t required_pages = 1U;
     g_brick6_sampler_runtime_diag.multi_last_ready_mask =
         brick6_sampler_runtime_multi_ready_mask(key, 0U, required_pages);
     g_brick6_sampler_runtime_diag.multi_last_missing_page =

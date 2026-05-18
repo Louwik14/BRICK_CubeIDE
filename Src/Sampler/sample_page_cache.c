@@ -150,7 +150,7 @@ static uint8_t sample_page_cache_page_is_multi_ready_anchor(const sample_page_de
         return 0U;
     }
 
-    return ((page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI) && (page->page_index < 2U))
+    return ((page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI) && (page->page_index == 0U))
                ? 1U
                : 0U;
 }

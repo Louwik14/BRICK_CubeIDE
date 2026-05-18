@@ -99,9 +99,9 @@ Autorite import Sampler/Multi:
 
 Autorite LOAD Sampler/Multi:
 - `multi_sample_load_instrument()` + `multi_sample_service_load()`.
-- LOAD lit un `.brickmulti`, applique l'index au `multi_sample_pool`, enregistre chaque WAV relatif comme stream `sample_audio_key_t {domain=MULTI, object_id=multi_sample_id}`, queue page0 pour tous les samples reels et page1 pour les samples longs.
-- Le chargement page0/page1 est cooperatif hors IRQ via le `sample_stream_manager` unique et le `sample_page_cache` unique; `multi_sample_service_load(byte_budget)` tient `SD_ACCESS_CLIENT_SAMPLE_CACHE` pendant le service.
-- L'instrument reste `LOADING` tant que toutes les pages requises ne sont pas `READY`; toute page `ERROR`, tout manque de cache ou toute erreur d'enregistrement bascule l'instrument en `ERROR` avec diagnostic minimal. Budget maximal READY Multi: 512 * 2 pages = 1024 pages = 8 MiB; marge cache restante: 1024 pages = 8 MiB.
+- LOAD lit un `.brickmulti`, applique l'index au `multi_sample_pool`, enregistre chaque WAV relatif comme stream `sample_audio_key_t {domain=MULTI, object_id=multi_sample_id}`, et queue uniquement page0 pour chaque sample reel.
+- Le chargement page0 est cooperatif hors IRQ via le `sample_stream_manager` unique et le `sample_page_cache` unique; `multi_sample_service_load(byte_budget)` tient `SD_ACCESS_CLIENT_SAMPLE_CACHE` pendant le service. Page1 et les suivantes appartiennent au streaming runtime/prefetch apres trigger.
+- L'instrument reste `LOADING` tant que toutes les page0 requises ne sont pas `READY`; toute page0 `ERROR`, tout manque de cache ou toute erreur d'enregistrement bascule l'instrument en `ERROR` avec diagnostic minimal. Budget maximal READY Multi: 512 * 1 page = 512 pages = 8 MiB; marge cache restante: 512 pages = 8 MiB.
 - Placement memoire: la queue froide `g_multi_load_queue` est en SDRAM dediee `MULTI_LOAD_SDRAM`; elle n'est pas lue par l'IRQ audio et sert uniquement au LOAD cooperatif hors IRQ.
 
 Autorite writer SD audio multi-client:

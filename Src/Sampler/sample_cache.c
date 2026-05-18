@@ -13,7 +13,8 @@
 #define SAMPLE_CACHE_MAX_VOICES (16U)
 #define SAMPLE_CACHE_IO_BYTES (4096U)
 #define SAMPLE_CACHE_STREAM_START_PAGES (2U)
-#define SAMPLE_CACHE_STREAM_REVERSE_PAGES (4U)
+#define SAMPLE_CACHE_STREAM_TAIL_PAGES (1U)
+#define SAMPLE_CACHE_STREAM_REVERSE_PAGES SAMPLE_CACHE_STREAM_TAIL_PAGES
 #define SAMPLE_CACHE_STREAM_STATIC_PAGES (SAMPLE_CACHE_STREAM_START_PAGES \
                                           + SAMPLE_CACHE_STREAM_REVERSE_PAGES)
 #define SAMPLE_CACHE_FULL_MAX_BYTES (SAMPLE_CACHE_STREAM_STATIC_PAGES * SAMPLE_PAGE_BYTES)
@@ -590,6 +591,11 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
         SAMPLE_CACHE_DIAG_INC(prepare_stream_page0_not_ready);
     }
 
+    /*
+     * Long STREAM warm set stays capped at three 16 KiB pages:
+     * page0 for immediate start, page1 for initial forward lookahead, and
+     * the final page for reverse/pingpong entry near the tail.
+     */
     const uint32_t last_page = sample_cache_stream_last_page_index(desc);
     if (last_page != 0U)
     {

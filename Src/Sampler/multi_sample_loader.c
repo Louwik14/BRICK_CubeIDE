@@ -188,7 +188,8 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
 
 static uint8_t multi_loader_sample_required_pages(uint32_t total_frames)
 {
-    return (total_frames > SAMPLE_PAGE_FRAMES) ? 2U : 1U;
+    (void)total_frames;
+    return 1U;
 }
 
 static multi_sample_load_result_t multi_loader_start_instrument(const char *index_path,

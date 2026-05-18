@@ -14,7 +14,7 @@
  */
 
 #define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES (16U * 1024U * 1024U)
-#define SAMPLE_PAGE_FRAMES                    (1024U)
+#define SAMPLE_PAGE_FRAMES                    (2048U)
 #define SAMPLE_PAGE_CHANNELS                  (2U)
 #define SAMPLE_PAGE_SAMPLE_BYTES              (4U)
 #define SAMPLE_PAGE_FRAME_STRIDE_FLOATS       (SAMPLE_PAGE_CHANNELS)
