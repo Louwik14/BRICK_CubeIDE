@@ -247,7 +247,10 @@ static uint8_t led_macro_pressure_depth_scale(uint8_t hall, uint8_t base_scale)
 
 static button_id_t led_param_button_for_led(led_id_t led);
 
-static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets, button_id_t macro_button)
+static void led_apply_param_button_scene(led_id_t led,
+                                         uint8_t held_plock_sets,
+                                         button_id_t macro_button,
+                                         led_id_t active_param_led)
 {
     const button_id_t button = led_param_button_for_led(led);
     if (ui_navigation_is_ensemble_button_available(button) == 0U)
@@ -260,8 +263,7 @@ static void led_apply_param_button_scene(led_id_t led, uint8_t held_plock_sets, 
     uint8_t g = LED_FIXED_GREEN_G;
     uint8_t b = LED_FIXED_GREEN_B;
 
-    const button_id_t active_button = ui_navigation_get_button_for_page(ui_page_get_id());
-    if (led == led_remap_param_led_for_button(active_button))
+    if (led == active_param_led)
     {
         r = LED_FIXED_WHITE_R;
         g = LED_FIXED_WHITE_G;
@@ -612,9 +614,8 @@ static uint8_t led_apply_mute_hall_scene(uint8_t hall)
     return 1U;
 }
 
-static bool led_hall_mode_uses_keyboard_scene(void)
+static bool led_hall_mode_uses_keyboard_scene(ui_hall_mode_t mode)
 {
-    const ui_hall_mode_t mode = ui_get_hall_mode();
     return (mode == UI_HALL_MODE_KEYBOARD) || (mode == UI_HALL_MODE_ARP);
 }
 
@@ -647,9 +648,16 @@ static void led_apply_normal_rec_scene(led_id_t led)
 static void led_apply_fixed_scene(void)
 {
     led_layer_clear_all();
+
     const uint8_t held_plock_sets = led_seq_collect_held_plock_set_mask();
     button_id_t macro_button = BTN_COUNT;
     param_id_t macro_param = PARAM_COUNT;
+    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    const uint8_t active_track = ui_get_active_track();
+    const ui_hall_rout_context_t rout_context =
+        ui_hall_mode_resolve_rout_context(active_track, hall_mode);
+    const button_id_t active_button = ui_navigation_get_button_for_page(ui_page_get_id());
+    const led_id_t active_param_led = led_remap_param_led_for_button(active_button);
     if (ui_macro_interaction_get_active_slot_lock(&macro_param) != 0U)
     {
         macro_button = led_macro_param_to_button(macro_param);
@@ -680,7 +688,7 @@ static void led_apply_fixed_scene(void)
             led_apply_track_select_hall_scene(hall);
         }
     }
-    else if (ui_get_hall_mode() == UI_HALL_MODE_SEQ)
+    else if (hall_mode == UI_HALL_MODE_SEQ)
     {
         seq_led_render_active_track_page();
     }
@@ -688,29 +696,27 @@ static void led_apply_fixed_scene(void)
     {
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
-            const ui_hall_rout_context_t rout_context =
-                ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode());
             if (led_apply_mute_hall_scene(hall) != 0U)
             {
                 continue;
             }
-            if (ui_get_hall_mode() == UI_HALL_MODE_PATTERN)
+            if (hall_mode == UI_HALL_MODE_PATTERN)
             {
                 led_apply_pattern_hall_scene(hall);
             }
-            else if (ui_get_hall_mode() == UI_HALL_MODE_AUDIO_REC)
+            else if (hall_mode == UI_HALL_MODE_AUDIO_REC)
             {
                 led_apply_audio_rec_hall_scene(hall);
             }
             else if (rout_context == UI_HALL_ROUT_CONTEXT_MASTER_FX)
             {
-                led_apply_master_fx_routing_hall_scene(hall, ui_get_active_track());
+                led_apply_master_fx_routing_hall_scene(hall, active_track);
             }
             else if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
             {
-                led_apply_sampler_looper_routing_hall_scene(hall, ui_get_active_track());
+                led_apply_sampler_looper_routing_hall_scene(hall, active_track);
             }
-            else if (led_hall_mode_uses_keyboard_scene())
+            else if (led_hall_mode_uses_keyboard_scene(hall_mode))
             {
                 led_apply_keyboard_hall_scene(hall);
             }
@@ -729,7 +735,10 @@ static void led_apply_fixed_scene(void)
         }
         else if (led_remap_is_param_led((led_id_t)led))
         {
-            led_apply_param_button_scene((led_id_t)led, held_plock_sets, macro_button);
+            led_apply_param_button_scene((led_id_t)led,
+                                         held_plock_sets,
+                                         macro_button,
+                                         active_param_led);
         }
         else
         {

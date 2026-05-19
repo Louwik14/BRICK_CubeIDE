@@ -92,6 +92,8 @@ Contrats implicites d'ordre:
 - `audio_set_float_callback()` doit etre pose avant `audio_start()`.
 - `engine_tasklet_init()` doit preceder l'usage de `engine_tick_count` pour UI cadence.
 - `ui_tasklet_poll()` initialise UI au premier tick engine, pas pendant boot `brick6_app_init()`.
+- `engine_tasklet_poll()` consomme au plus `ENGINE_TASKLET_MAX_TICKS_PER_POLL` ticks par appel; le backlog restant est conserve pour les tours suivants.
+- `hall_loop_process()` consomme au plus `HALL_LOOP_MAX_SAMPLES_PER_POLL` samples Hall ADC FIFO par appel; le backlog restant reste dans la FIFO Hall.
 
 ## 4. API sortantes
 
@@ -135,6 +137,16 @@ Z0 appelle principalement:
   - Role: passerelle IRQ->main loop pour ticks.
 - `engine_frames_per_tick` (32), `engine_last_poll_ms`:
   - Role: quantification et dt_ms des ticks.
+- `g_engine_tasklet_metrics`:
+  - Ecriture: `engine_tasklet_init`, `engine_tasklet_poll`.
+  - Lecture: GDB/debug uniquement.
+  - Role: compteurs de cout cycles, ticks traites, backlog ticks et hits du cap fixe.
+
+### `Src/App/Hall/hall_loop.c` (service Hall hors IRQ rattache cadence superloop)
+- `g_hall_loop_metrics`:
+  - Ecriture: `hall_loop_init`, `hall_loop_process`.
+  - Lecture: GDB/debug uniquement.
+  - Role: compteurs de cout cycles, samples FIFO traites, backlog FIFO et hits du cap fixe.
 
 ### `Src/UI/ui_tasklet.c` (cadence UI rattachee Z0)
 - `g_ui_tasklet_init`:
@@ -220,7 +232,8 @@ Z0 appelle principalement:
   - audio IRQ traite pipeline hard-RT,
   - Z0 orchestre services bornes/bounded hors IRQ (USB host poll bounded, services SD hors IRQ).
 - Dependance forte a l'ordre d'init et au hardware clock/timer configure.
-- `engine_tasklet_poll()` utilise section critique IRQ courte pour transfert frames->ticks.
+- `engine_tasklet_poll()` utilise section critique IRQ courte pour transfert frames->ticks et applique un cap fixe permanent de ticks par appel.
+- `hall_loop_process()` applique un cap fixe permanent de samples FIFO Hall par appel; la FIFO Hall conserve le backlog non traite pour les tours suivants.
 - Buffers globaux statiques Looper/writer (`g_record_rings`, `g_looper_preroll_pcm`), pas de malloc dans Z0 observe.
 
 ## 8. Invariants a ne pas casser
