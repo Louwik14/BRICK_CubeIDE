@@ -10,6 +10,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef struct {
+  volatile uint32_t calls;
+  volatile uint32_t last_cycles;
+  volatile uint32_t max_cycles;
+  volatile uint32_t last_messages;
+  volatile uint32_t max_messages;
+  volatile uint32_t cap_hit_count;
+  volatile uint32_t not_ready_count;
+} midi_host_poll_metrics_t;
+
+extern volatile midi_host_poll_metrics_t g_midi_host_poll_metrics;
 
 void midi_host_poll(void);
 void midi_host_poll_bounded(uint32_t max_msgs);

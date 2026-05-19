@@ -38,6 +38,7 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 
 midi_tx_stats_t midi_tx_stats = {0};
 midi_rx_stats_t midi_rx_stats = {0};
+volatile midi_poll_metrics_t g_midi_poll_metrics = {0};
 
 volatile uint32_t midi_usb_rx_drops = 0;
 
@@ -485,21 +486,21 @@ static bool usb_rx_queue_pop(midi_usb_packet_t *out) {
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void midi_usb_try_flush_internal(bool allow_in_isr) {
+static uint32_t midi_usb_try_flush_internal(bool allow_in_isr) {
   uint8_t buffer[4U * MIDI_USB_MAX_BURST];
   uint16_t packets = 0U;
 
   if (!allow_in_isr && midi_in_isr()) {
-    return;
+    return 0U;
   }
 
   if (!usb_device_ready()) {
-    return;
+    return 0U;
   }
 
   midi_usb_packet_t first_packet;
   if (!usb_tx_queue_pop(&first_packet)) {
-    return;
+    return 0U;
   }
 
   memcpy(&buffer[0], first_packet.bytes, 4U);
@@ -554,10 +555,12 @@ static void midi_usb_try_flush_internal(bool allow_in_isr) {
       }
     }
   }
+
+  return packets;
 }
 
-static void midi_usb_try_flush(void) {
-  midi_usb_try_flush_internal(false);
+static uint32_t midi_usb_try_flush(void) {
+  return midi_usb_try_flush_internal(false);
 }
 
 static inline void midi_usb_request_deferred_flush_from_isr(void) {
@@ -677,7 +680,7 @@ static void midi_dispatch_rx_message(const midi_msg_t *msg) {
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void midi_process_usb_rx(void) {
+static uint32_t midi_process_usb_rx(void) {
   uint32_t processed = 0U;
   while (processed < MIDI_USB_MAX_BURST) {
     midi_usb_packet_t packet;
@@ -694,6 +697,7 @@ static void midi_process_usb_rx(void) {
     }
     processed++;
   }
+  return processed;
 }
 
 /* ====================================================================== */
@@ -1034,12 +1038,40 @@ midi_dest_t midi_get_rx_destination(void) {
  * - init / main loop / tasklet selon le module.
  */
 void midi_poll(void) {
+  const uint32_t start_cycles = DWT->CYCCNT;
   if (!midi_initialized) {
+    const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
+    g_midi_poll_metrics.calls++;
+    g_midi_poll_metrics.not_initialized_count++;
+    g_midi_poll_metrics.last_cycles = elapsed_cycles;
+    if (elapsed_cycles > g_midi_poll_metrics.max_cycles) {
+      g_midi_poll_metrics.max_cycles = elapsed_cycles;
+    }
+    g_midi_poll_metrics.last_rx_packets = 0U;
+    g_midi_poll_metrics.last_tx_packets = 0U;
     return;
   }
 
-  midi_process_usb_rx();
-  midi_usb_try_flush();
+  const uint32_t rx_packets = midi_process_usb_rx();
+  const uint32_t tx_packets = midi_usb_try_flush();
+  const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
+
+  g_midi_poll_metrics.calls++;
+  g_midi_poll_metrics.last_cycles = elapsed_cycles;
+  if (elapsed_cycles > g_midi_poll_metrics.max_cycles) {
+    g_midi_poll_metrics.max_cycles = elapsed_cycles;
+  }
+  g_midi_poll_metrics.last_rx_packets = rx_packets;
+  if (rx_packets > g_midi_poll_metrics.max_rx_packets) {
+    g_midi_poll_metrics.max_rx_packets = rx_packets;
+  }
+  g_midi_poll_metrics.last_tx_packets = tx_packets;
+  if (tx_packets > g_midi_poll_metrics.max_tx_packets) {
+    g_midi_poll_metrics.max_tx_packets = tx_packets;
+  }
+  if (rx_packets >= MIDI_USB_MAX_BURST) {
+    g_midi_poll_metrics.rx_cap_hit_count++;
+  }
 }
 
 /**

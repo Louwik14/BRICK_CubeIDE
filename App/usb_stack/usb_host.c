@@ -30,6 +30,7 @@
 /* USB Host core handle declaration */
 USBH_HandleTypeDef hUsbHostHS;
 ApplicationTypeDef Appli_state = APPLICATION_IDLE;
+volatile usb_host_service_metrics_t g_usb_host_service_metrics;
 
 /* USER CODE BEGIN 0 */
 /* USER CODE END 0 */
@@ -72,11 +73,27 @@ void MX_USB_HOST_Init(void)
  */
 void MX_USB_HOST_Process(void)
 {
+  const uint32_t start_cycles = DWT->CYCCNT;
   USBH_Process(&hUsbHostHS);
+  const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
+
+  g_usb_host_service_metrics.process_calls++;
+  g_usb_host_service_metrics.process_last_cycles = elapsed_cycles;
+  if (elapsed_cycles > g_usb_host_service_metrics.process_max_cycles)
+  {
+    g_usb_host_service_metrics.process_max_cycles = elapsed_cycles;
+  }
+  g_usb_host_service_metrics.last_host_state = (uint32_t)hUsbHostHS.gState;
+  if ((uint32_t)hUsbHostHS.gState > g_usb_host_service_metrics.max_host_state)
+  {
+    g_usb_host_service_metrics.max_host_state = (uint32_t)hUsbHostHS.gState;
+  }
+  g_usb_host_service_metrics.last_application_state = (uint32_t)Appli_state;
 }
 
 void usb_host_tasklet_poll_bounded(uint32_t max_packets)
 {
+  const uint32_t start_cycles = DWT->CYCCNT;
 #if BRICK6_ENABLE_DIAGNOSTICS
   brick6_usb_host_poll_count++;
 #endif
@@ -95,7 +112,27 @@ void usb_host_tasklet_poll_bounded(uint32_t max_packets)
 #if BRICK6_ENABLE_DIAGNOSTICS
     usb_budget_hit_count++;
 #endif
+    g_usb_host_service_metrics.tasklet_cap_hit_count++;
   }
+
+  const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
+  g_usb_host_service_metrics.tasklet_calls++;
+  g_usb_host_service_metrics.tasklet_last_cycles = elapsed_cycles;
+  if (elapsed_cycles > g_usb_host_service_metrics.tasklet_max_cycles)
+  {
+    g_usb_host_service_metrics.tasklet_max_cycles = elapsed_cycles;
+  }
+  g_usb_host_service_metrics.tasklet_last_iterations = n;
+  if (n > g_usb_host_service_metrics.tasklet_max_iterations)
+  {
+    g_usb_host_service_metrics.tasklet_max_iterations = n;
+  }
+  g_usb_host_service_metrics.last_host_state = (uint32_t)hUsbHostHS.gState;
+  if ((uint32_t)hUsbHostHS.gState > g_usb_host_service_metrics.max_host_state)
+  {
+    g_usb_host_service_metrics.max_host_state = (uint32_t)hUsbHostHS.gState;
+  }
+  g_usb_host_service_metrics.last_application_state = (uint32_t)Appli_state;
 }
 
 /*

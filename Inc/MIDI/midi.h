@@ -101,6 +101,20 @@ extern midi_rx_stats_t midi_rx_stats;
 extern volatile uint32_t midi_usb_rx_drops;
 
 typedef struct {
+  volatile uint32_t calls;
+  volatile uint32_t last_cycles;
+  volatile uint32_t max_cycles;
+  volatile uint32_t last_rx_packets;
+  volatile uint32_t max_rx_packets;
+  volatile uint32_t last_tx_packets;
+  volatile uint32_t max_tx_packets;
+  volatile uint32_t rx_cap_hit_count;
+  volatile uint32_t not_initialized_count;
+} midi_poll_metrics_t;
+
+extern volatile midi_poll_metrics_t g_midi_poll_metrics;
+
+typedef struct {
   uint8_t data[3];
   uint8_t len;
 } midi_msg_t;

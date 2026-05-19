@@ -35,6 +35,7 @@ extern USBH_HandleTypeDef hUsbHostHS;
 
 static uint8_t midi_host_rx_packet[USBH_MIDI_PACKET_SIZE];
 static uint8_t midi_host_tx_packet[USBH_MIDI_PACKET_SIZE];
+volatile midi_host_poll_metrics_t g_midi_host_poll_metrics;
 
 /**
  * @brief Point d'entrée midi_host_cin_to_length.
@@ -87,16 +88,27 @@ void midi_host_poll(void)
  */
 void midi_host_poll_bounded(uint32_t max_msgs)
 {
+  const uint32_t start_cycles = DWT->CYCCNT;
+  uint32_t n = 0U;
+
 #if BRICK6_ENABLE_DIAGNOSTICS
   brick6_midi_host_poll_count++;
 #endif
 
   if (!USBH_MIDI_IsReady(&hUsbHostHS))
   {
+    const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
+    g_midi_host_poll_metrics.calls++;
+    g_midi_host_poll_metrics.not_ready_count++;
+    g_midi_host_poll_metrics.last_cycles = elapsed_cycles;
+    if (elapsed_cycles > g_midi_host_poll_metrics.max_cycles)
+    {
+      g_midi_host_poll_metrics.max_cycles = elapsed_cycles;
+    }
+    g_midi_host_poll_metrics.last_messages = 0U;
     return;
   }
 
-  uint32_t n = 0U;
   for (; n < max_msgs; n++)
   {
     if (USBH_MIDI_ReadPacket(&hUsbHostHS, midi_host_rx_packet) != USBH_OK)
@@ -121,6 +133,23 @@ void midi_host_poll_bounded(uint32_t max_msgs)
     midi_budget_hit_count++;
   }
 #endif
+  if ((max_msgs > 0U) && (n >= max_msgs))
+  {
+    g_midi_host_poll_metrics.cap_hit_count++;
+  }
+
+  const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
+  g_midi_host_poll_metrics.calls++;
+  g_midi_host_poll_metrics.last_cycles = elapsed_cycles;
+  if (elapsed_cycles > g_midi_host_poll_metrics.max_cycles)
+  {
+    g_midi_host_poll_metrics.max_cycles = elapsed_cycles;
+  }
+  g_midi_host_poll_metrics.last_messages = n;
+  if (n > g_midi_host_poll_metrics.max_messages)
+  {
+    g_midi_host_poll_metrics.max_messages = n;
+  }
 }
 
 /**

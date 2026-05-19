@@ -59,6 +59,23 @@ typedef enum {
   APPLICATION_DISCONNECT
 }ApplicationTypeDef;
 
+typedef struct {
+  volatile uint32_t process_calls;
+  volatile uint32_t process_last_cycles;
+  volatile uint32_t process_max_cycles;
+  volatile uint32_t tasklet_calls;
+  volatile uint32_t tasklet_last_cycles;
+  volatile uint32_t tasklet_max_cycles;
+  volatile uint32_t tasklet_last_iterations;
+  volatile uint32_t tasklet_max_iterations;
+  volatile uint32_t tasklet_cap_hit_count;
+  volatile uint32_t last_host_state;
+  volatile uint32_t max_host_state;
+  volatile uint32_t last_application_state;
+} usb_host_service_metrics_t;
+
+extern volatile usb_host_service_metrics_t g_usb_host_service_metrics;
+
 /** @defgroup USBH_HOST_Exported_FunctionsPrototype USBH_HOST_Exported_FunctionsPrototype
   * @brief Declaration of public functions for Usb host.
   * @{

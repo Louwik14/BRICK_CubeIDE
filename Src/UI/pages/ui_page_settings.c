@@ -2106,7 +2106,6 @@ static void ui_page_settings_enter(void)
     {
         g_ui_settings.encoder_accum[i] = 0;
     }
-    ui_page_settings_refresh_project_slots();
     ui_page_settings_refresh_sampler_slots();
     ui_page_settings_status(0);
     ui_page_settings_push(UI_SETTINGS_VIEW_ROOT);
