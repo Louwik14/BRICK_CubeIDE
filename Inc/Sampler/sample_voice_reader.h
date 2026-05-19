@@ -4,36 +4,11 @@
 
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_play_plan.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef enum
-{
-    SAMPLE_KERNEL_FWD_1X = 0,
-    SAMPLE_KERNEL_REV_1X,
-    SAMPLE_KERNEL_PITCH_FWD_LINEAR,
-    SAMPLE_KERNEL_PITCH_REV_LINEAR
-} sample_kernel_type_t;
-
-typedef struct
-{
-    sample_audio_key_t key;
-    uint16_t sample_id;
-    uint32_t start_frame;
-    uint32_t region_begin;
-    uint32_t region_end;
-    uint32_t loop_begin;
-    uint32_t loop_end;
-    uint32_t fade_in_frames;
-    uint32_t fade_out_frames;
-    uint32_t step_q16;
-    uint8_t direction;
-    uint8_t loop_mode;
-    uint8_t stop_on_underrun;
-    sample_kernel_type_t kernel_type;
-} sample_play_plan_t;
 
 typedef enum
 {

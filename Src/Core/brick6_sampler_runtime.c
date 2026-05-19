@@ -30,6 +30,7 @@
 #define BRICK6_SAMPLER_CACHE_VOICE_NONE UINT8_MAX
 #define BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
 #define BRICK6_SAMPLER_MULTI_WINDOW_MASK_BITS (32U)
+#define BRICK6_SAMPLER_MIN_READY_TARGET_FRAMES (8192U)
 
 typedef struct
 {
@@ -127,6 +128,36 @@ enum
     BRICK6_SAMPLER_LOOP_FORWARD = 1,
     BRICK6_SAMPLER_LOOP_PINGPONG = 2
 };
+
+typedef enum
+{
+    BRICK6_SAMPLE_COMMON_TRIGGER_CLASSIC = 0,
+    BRICK6_SAMPLE_COMMON_TRIGGER_MULTI
+} brick6_sample_common_trigger_kind_t;
+
+typedef enum
+{
+    BRICK6_SAMPLE_COMMON_PLAN_OK = 0,
+    BRICK6_SAMPLE_COMMON_PLAN_INVALID_ARG,
+    BRICK6_SAMPLE_COMMON_PLAN_RESOLVE_FAIL,
+    BRICK6_SAMPLE_COMMON_PLAN_SOURCE_INVALID,
+    BRICK6_SAMPLE_COMMON_PLAN_BUILD_FAIL,
+    BRICK6_SAMPLE_COMMON_PLAN_PLAN_INVALID
+} brick6_sample_common_plan_result_t;
+
+typedef struct
+{
+    brick6_sample_common_trigger_kind_t kind;
+    const brick6_sampler_voice_t *voice;
+    const sample_play_plan_t *runtime_plan;
+    uint32_t total_frames;
+    uint32_t step_q16;
+    float render_gain;
+    uint16_t instrument_id;
+    uint8_t track_id;
+    uint8_t note;
+    uint8_t velocity;
+} brick6_sample_common_trigger_t;
 
 static AUDIO_HOT brick6_sampler_voice_t g_sampler_voice[SEQ_TRACK_COUNT];
 static AUDIO_HOT brick6_sampler_voice_t
@@ -242,6 +273,13 @@ static void brick6_sampler_runtime_multi_diag_note_page0_reject(
 static uint8_t brick6_sampler_runtime_oneshot_voice_is_stealable(uint8_t track_id);
 static brick6_sampler_voice_t *brick6_sampler_runtime_multi_alloc_voice(uint8_t track_id);
 static void brick6_sampler_runtime_multi_track_reset(uint8_t track_id);
+static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_play_plan(
+    const brick6_sample_common_trigger_t *trigger,
+    sample_resolved_source_t *out_source,
+    sample_play_plan_t *out_plan);
+static void brick6_sampler_runtime_note_common_play_plan_result(
+    brick6_sample_common_plan_result_t result,
+    uint8_t classic);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
 
@@ -319,6 +357,160 @@ static void brick6_sampler_runtime_diag_note_first_output(uint8_t track_id,
             return;
         }
     }
+}
+
+static uint32_t brick6_sampler_runtime_common_plan_reason(
+    brick6_sample_common_plan_result_t result)
+{
+    return (uint32_t)result;
+}
+
+static void brick6_sampler_runtime_note_common_play_plan_result(
+    brick6_sample_common_plan_result_t result,
+    uint8_t classic)
+{
+    if (result == BRICK6_SAMPLE_COMMON_PLAN_OK)
+    {
+        return;
+    }
+
+    g_brick6_sampler_runtime_diag.common_plan_last_reason =
+        brick6_sampler_runtime_common_plan_reason(result);
+    if (classic != 0U)
+    {
+        g_brick6_sampler_runtime_diag.common_plan_classic_build_fail++;
+    }
+    else
+    {
+        g_brick6_sampler_runtime_diag.common_plan_multi_build_fail++;
+    }
+}
+
+static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_play_plan(
+    const brick6_sample_common_trigger_t *trigger,
+    sample_resolved_source_t *out_source,
+    sample_play_plan_t *out_plan)
+{
+    if (out_source != NULL)
+    {
+        sample_resolved_source_init(out_source);
+    }
+    if (out_plan != NULL)
+    {
+        sample_play_plan_init(out_plan);
+    }
+    if ((trigger == NULL) || (out_source == NULL) || (out_plan == NULL)
+        || (trigger->track_id >= SEQ_TRACK_COUNT))
+    {
+        return BRICK6_SAMPLE_COMMON_PLAN_INVALID_ARG;
+    }
+
+    sample_play_plan_build_options_t options = {
+        .min_ready_frames = BRICK6_SAMPLER_MIN_READY_TARGET_FRAMES,
+        .target_window_frames = 0U,
+        .owner_generation = 0U,
+        .diagnostics_page = UINT32_MAX,
+        .flags = (uint8_t)(SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_REGION
+                           | SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_LOOP
+                           | SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_DIRECTION
+                           | SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_RATE),
+        .stop_on_underrun = 1U,
+        .owner_kind = 0U,
+        .owner_id = trigger->track_id,
+        .diagnostics_reason = 0U,
+        .start_gate_flags = 0U,
+    };
+
+    if (trigger->kind == BRICK6_SAMPLE_COMMON_TRIGGER_CLASSIC)
+    {
+        const brick6_sampler_voice_t *const voice = trigger->voice;
+        const sample_play_plan_t *const runtime_plan = trigger->runtime_plan;
+        if ((voice == NULL) || (voice->sample == NULL) || (runtime_plan == NULL))
+        {
+            return BRICK6_SAMPLE_COMMON_PLAN_INVALID_ARG;
+        }
+        if (sample_cache_resolve_classic_source(voice->sample_id, out_source) == 0U)
+        {
+            return BRICK6_SAMPLE_COMMON_PLAN_RESOLVE_FAIL;
+        }
+        out_source->region_begin = voice->region_begin;
+        out_source->region_end = voice->region_end;
+        out_source->loop_begin = runtime_plan->loop_begin;
+        out_source->loop_end = runtime_plan->loop_end;
+        out_source->loop_mode = voice->loop_mode;
+        out_source->reverse = voice->reverse;
+        out_source->rate = (voice->step_signed > 0.0f) ? voice->step_signed : 1.0f;
+        out_source->gain = voice->gain * voice->trigger_velocity_gain;
+        out_source->fine_tune_cents = (int16_t)(voice->tune * 100.0f);
+        out_source->owner_track_id = trigger->track_id;
+        out_source->note = voice->note;
+        out_source->velocity = voice->velocity;
+        out_source->source_kind = voice->source_kind;
+
+        options.start_frame = runtime_plan->start_frame;
+        options.end_frame = voice->region_end;
+        options.loop_begin = runtime_plan->loop_begin;
+        options.loop_end = runtime_plan->loop_end;
+        options.rate = out_source->rate;
+        options.reverse = voice->reverse;
+        options.loop_mode = voice->loop_mode;
+    }
+    else if (trigger->kind == BRICK6_SAMPLE_COMMON_TRIGGER_MULTI)
+    {
+        if ((trigger->instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            || (trigger->note > 127U) || (trigger->velocity > 127U)
+            || (trigger->total_frames == 0U))
+        {
+            return BRICK6_SAMPLE_COMMON_PLAN_INVALID_ARG;
+        }
+        if (multi_sample_pool_resolve_source(trigger->instrument_id,
+                                             trigger->note,
+                                             trigger->velocity,
+                                             out_source) == 0U)
+        {
+            return BRICK6_SAMPLE_COMMON_PLAN_RESOLVE_FAIL;
+        }
+        const float rate = (trigger->step_q16 != 0U)
+                               ? ((float)trigger->step_q16 / (float)BRICK6_SAMPLER_Q16_ONE)
+                               : 1.0f;
+        out_source->region_begin = 0U;
+        out_source->region_end = trigger->total_frames;
+        out_source->loop_begin = 0U;
+        out_source->loop_end = trigger->total_frames;
+        out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
+        out_source->reverse = 0U;
+        out_source->rate = rate;
+        out_source->gain = trigger->render_gain;
+        out_source->owner_track_id = trigger->track_id;
+        out_source->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_MULTI;
+
+        options.start_frame = 0U;
+        options.end_frame = trigger->total_frames;
+        options.loop_begin = 0U;
+        options.loop_end = trigger->total_frames;
+        options.rate = rate;
+        options.reverse = 0U;
+        options.loop_mode = SAMPLE_PLAY_LOOP_NONE;
+    }
+    else
+    {
+        return BRICK6_SAMPLE_COMMON_PLAN_INVALID_ARG;
+    }
+
+    if (sample_resolved_source_is_valid(out_source) == 0U)
+    {
+        return BRICK6_SAMPLE_COMMON_PLAN_SOURCE_INVALID;
+    }
+    if (sample_play_plan_build_from_source(out_source, &options, out_plan)
+        != SAMPLE_PLAY_PLAN_BUILD_OK)
+    {
+        return BRICK6_SAMPLE_COMMON_PLAN_BUILD_FAIL;
+    }
+    if (sample_play_plan_is_valid(out_plan) == 0U)
+    {
+        return BRICK6_SAMPLE_COMMON_PLAN_PLAN_INVALID;
+    }
+    return BRICK6_SAMPLE_COMMON_PLAN_OK;
 }
 
 static uint8_t brick6_sampler_runtime_multi_voice_index(const brick6_sampler_voice_t *voice)
@@ -1249,22 +1441,6 @@ static void brick6_sampler_runtime_trigger_slicer(uint8_t track_id)
     voice->active = 0U;
     voice->position = 0.0f;
 
-    if (sample_cache_start_voice_at(voice->sample_id, cache_voice_id, slice_begin)
-        == 0U)
-    {
-        return;
-    }
-
-    if (sample_voice_reader_bind_play_plan(&voice->reader, &play_plan, cache_voice_id)
-        == 0U)
-    {
-        sample_cache_stop_voice(cache_voice_id);
-        sample_voice_reader_reset(&voice->reader);
-        voice->active = 0U;
-        voice->position = 0.0f;
-        return;
-    }
-
     voice->sample = sample_pool_get(voice->sample_id);
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_CLASSIC;
     voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
@@ -1281,8 +1457,43 @@ static void brick6_sampler_runtime_trigger_slicer(uint8_t track_id)
     voice->use_slice = 0U;
     voice->use_segment_cursor = 1U;
     voice->play_plan = play_plan;
+    sample_resolved_source_t common_source;
+    sample_play_plan_t common_plan;
+    const brick6_sample_common_trigger_t common_trigger = {
+        .kind = BRICK6_SAMPLE_COMMON_TRIGGER_CLASSIC,
+        .voice = voice,
+        .runtime_plan = &voice->play_plan,
+        .track_id = track_id,
+    };
+    const brick6_sample_common_plan_result_t common_result =
+        brick6_sampler_runtime_build_common_play_plan(&common_trigger,
+                                                      &common_source,
+                                                      &common_plan);
+    brick6_sampler_runtime_note_common_play_plan_result(common_result, 1U);
+    if (common_result != BRICK6_SAMPLE_COMMON_PLAN_OK)
+    {
+        return;
+    }
+
+    if (sample_cache_start_voice_at(voice->sample_id, cache_voice_id, common_plan.start_frame)
+        == 0U)
+    {
+        return;
+    }
+
+    if (sample_voice_reader_bind_play_plan(&voice->reader, &common_plan, cache_voice_id)
+        == 0U)
+    {
+        sample_cache_stop_voice(cache_voice_id);
+        sample_voice_reader_reset(&voice->reader);
+        voice->active = 0U;
+        voice->position = 0.0f;
+        return;
+    }
+
+    voice->play_plan = common_plan;
     voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
-    voice->position = (float)slice_begin;
+    voice->position = (float)voice->play_plan.start_frame;
     voice->active = 1U;
 }
 
@@ -2036,28 +2247,39 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
         const uint32_t start_frame = (uint32_t)voice->position;
         const uint32_t sample_length_frames =
             (voice->sample != NULL) ? voice->sample->length_frames : 0U;
+        voice->play_plan.start_frame = start_frame;
+        voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_CLASSIC;
+        voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        voice->trigger_velocity_gain = trigger_velocity_gain;
+        sample_resolved_source_t common_source;
+        sample_play_plan_t common_plan;
+        const brick6_sample_common_trigger_t common_trigger = {
+            .kind = BRICK6_SAMPLE_COMMON_TRIGGER_CLASSIC,
+            .voice = voice,
+            .runtime_plan = &voice->play_plan,
+            .track_id = track_id,
+        };
+        const brick6_sample_common_plan_result_t common_result =
+            brick6_sampler_runtime_build_common_play_plan(&common_trigger,
+                                                          &common_source,
+                                                          &common_plan);
+        brick6_sampler_runtime_note_common_play_plan_result(common_result, 1U);
+        if (common_result != BRICK6_SAMPLE_COMMON_PLAN_OK)
+        {
+            voice->position = 0.0f;
+            sample_voice_reader_reset(&voice->reader);
+            g_sampler_voice[track_id].active = 0U;
+            return;
+        }
         if (sample_cache_start_voice_at(voice->sample_id,
                                         brick6_sampler_runtime_cache_voice_id(track_id),
-                                        start_frame) != 0U)
+                                        common_plan.start_frame) != 0U)
         {
-            uint8_t bind_ok = 0U;
-            if (voice->use_segment_cursor != 0U)
-            {
-                voice->play_plan.start_frame = start_frame;
-                bind_ok = sample_voice_reader_bind_play_plan(&voice->reader,
-                                                             &voice->play_plan,
-                                                             brick6_sampler_runtime_cache_voice_id(track_id));
-            }
-            else
-            {
-                sample_voice_reader_bind(&voice->reader,
-                                         voice->sample_id,
-                                         brick6_sampler_runtime_cache_voice_id(track_id),
-                                         start_frame);
-                sample_voice_reader_set_step(&voice->reader, voice->step_signed);
-                bind_ok = 1U;
-            }
-
+            const uint8_t bind_ok = sample_voice_reader_bind_play_plan(
+                &voice->reader,
+                &common_plan,
+                brick6_sampler_runtime_cache_voice_id(track_id));
             g_sampler_voice[track_id].active = bind_ok;
             if (bind_ok == 0U)
             {
@@ -2065,14 +2287,12 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
             }
             else
             {
-                voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_CLASSIC;
-                voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-                voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-                voice->trigger_velocity_gain = trigger_velocity_gain;
+                voice->play_plan = common_plan;
+                voice->position = (float)voice->play_plan.start_frame;
                 voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
                 brick6_sampler_runtime_diag_note_trigger(track_id,
                                                          voice,
-                                                         start_frame,
+                                                         voice->play_plan.start_frame,
                                                          sample_length_frames);
             }
         }
@@ -2751,10 +2971,38 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     play_plan.kernel_type = (play_plan.step_q16 == BRICK6_SAMPLER_Q16_ONE)
                                 ? SAMPLE_KERNEL_FWD_1X
                                 : SAMPLE_KERNEL_PITCH_FWD_LINEAR;
+    const float multi_trigger_velocity_gain =
+        (resolved.zone_is_single_velocity_layer != 0U)
+            ? brick6_sampler_runtime_velocity_gain(velocity)
+            : 1.0f;
+    const float expected_render_gain =
+        g_sampler_multi_track_state[track_id].gain * gain * multi_trigger_velocity_gain;
+    sample_resolved_source_t common_source;
+    sample_play_plan_t common_plan;
+    const brick6_sample_common_trigger_t common_trigger = {
+        .kind = BRICK6_SAMPLE_COMMON_TRIGGER_MULTI,
+        .runtime_plan = &play_plan,
+        .total_frames = sample->total_frames,
+        .step_q16 = play_plan.step_q16,
+        .render_gain = expected_render_gain,
+        .instrument_id = instrument_id,
+        .track_id = track_id,
+        .note = note,
+        .velocity = velocity,
+    };
+    const brick6_sample_common_plan_result_t common_result =
+        brick6_sampler_runtime_build_common_play_plan(&common_trigger,
+                                                      &common_source,
+                                                      &common_plan);
+    brick6_sampler_runtime_note_common_play_plan_result(common_result, 0U);
+    if (common_result != BRICK6_SAMPLE_COMMON_PLAN_OK)
+    {
+        return 0U;
+    }
 
     sample_voice_reader_reset(&multi_voice->reader);
     if (sample_voice_reader_bind_play_plan(&multi_voice->reader,
-                                           &play_plan,
+                                           &common_plan,
                                            BRICK6_SAMPLER_CACHE_VOICE_NONE) == 0U)
     {
         sample_voice_reader_reset(&multi_voice->reader);
@@ -2773,10 +3021,10 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     multi_voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
     sample_stream_manager_active_state_reset(&multi_voice->stream_state);
     const sample_stream_active_desc_t reserve_desc = {
-        .key = key,
-        .current_frame = 0U,
-        .end_frame = sample->total_frames,
-        .direction = 1,
+        .key = common_plan.key,
+        .current_frame = common_plan.start_frame,
+        .end_frame = common_plan.region_end,
+        .direction = (common_plan.direction != 0U) ? -1 : 1,
         .lookahead_pages = BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES,
         .request_current_page = 1U,
         .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
@@ -2799,28 +3047,26 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     multi_voice->multi_sample_id = resolved.multi_sample_id;
     multi_voice->owner_track_id = track_id;
     multi_voice->sample = NULL;
-    multi_voice->position = 0.0f;
+    multi_voice->position = (float)common_plan.start_frame;
     multi_voice->active = 1U;
     multi_voice->note = note;
     multi_voice->velocity = velocity;
     multi_voice->mode = 0U;
     multi_voice->gain = g_sampler_multi_track_state[track_id].gain * gain;
     multi_voice->trigger_velocity_gain =
-        (resolved.zone_is_single_velocity_layer != 0U)
-            ? brick6_sampler_runtime_velocity_gain(velocity)
-            : 1.0f;
-    multi_voice->region_begin = 0U;
-    multi_voice->region_end = sample->total_frames;
-    multi_voice->loop_frames = sample->total_frames;
-    multi_voice->fade_in_frames = 0U;
-    multi_voice->fade_out_frames = 0U;
-    multi_voice->step_signed = (float)play_plan.step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
-    multi_voice->reverse = 0U;
-    multi_voice->loop_mode = BRICK6_SAMPLER_LOOP_NONE;
+        multi_trigger_velocity_gain;
+    multi_voice->region_begin = common_plan.region_begin;
+    multi_voice->region_end = common_plan.region_end;
+    multi_voice->loop_frames = common_plan.region_end - common_plan.region_begin;
+    multi_voice->fade_in_frames = common_plan.fade_in_frames;
+    multi_voice->fade_out_frames = common_plan.fade_out_frames;
+    multi_voice->step_signed = (float)common_plan.step_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+    multi_voice->reverse = common_plan.direction;
+    multi_voice->loop_mode = common_plan.loop_mode;
     multi_voice->use_slice = 0U;
     multi_voice->use_segment_cursor = 1U;
     multi_voice->release_pending = 0U;
-    multi_voice->play_plan = play_plan;
+    multi_voice->play_plan = common_plan;
     brick6_sampler_runtime_multi_prefetch_trigger(multi_voice);
 
     g_brick6_sampler_runtime_diag.multi_instrument_id = instrument_id;

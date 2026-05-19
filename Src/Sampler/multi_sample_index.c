@@ -713,6 +713,16 @@ multi_sample_index_result_t multi_sample_index_apply_to_pool(
         {
             return MULTI_SAMPLE_INDEX_POOL_FAIL;
         }
+        if (multi_sample_pool_set_sample_format(pool_sample_id,
+                                                sample->data_offset,
+                                                sample->data_size,
+                                                sample->sample_rate,
+                                                sample->channels,
+                                                sample->bits_per_sample)
+            == 0U)
+        {
+            return MULTI_SAMPLE_INDEX_POOL_FAIL;
+        }
         g_apply_sample_map[i] = pool_sample_id;
     }
 

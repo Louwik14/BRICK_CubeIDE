@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_audio_key.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Sampler/sample_pool.h"
 #include "Storage/wav_parser.h"
@@ -24,19 +25,6 @@ typedef enum
     SAMPLE_PAGE_READY,
     SAMPLE_PAGE_ERROR
 } sample_page_state_t;
-
-typedef enum
-{
-    SAMPLE_AUDIO_DOMAIN_CLASSIC = 0,
-    SAMPLE_AUDIO_DOMAIN_LOOPER,
-    SAMPLE_AUDIO_DOMAIN_MULTI
-} sample_audio_domain_t;
-
-typedef struct
-{
-    sample_audio_domain_t domain;
-    uint16_t object_id;
-} sample_audio_key_t;
 
 typedef struct
 {

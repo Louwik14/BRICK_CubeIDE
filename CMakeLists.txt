@@ -148,6 +148,10 @@ file(GLOB SRC_SAMPLER_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/*.cpp"
 )
 
+list(APPEND SRC_SAMPLER_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
+)
+
 file(GLOB SRC_SEQ_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/*.cpp"
@@ -314,6 +318,7 @@ list(REMOVE_ITEM ALL_USER_SOURCES ${EXCLUDED_SOURCES})
 list(REMOVE_DUPLICATES ALL_USER_SOURCES)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
+
 # --------------------------------------------------------------------------
 # Include directories
 # --------------------------------------------------------------------------

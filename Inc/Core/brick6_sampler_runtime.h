@@ -84,6 +84,9 @@ typedef struct
     uint32_t multi_last_end_frame;
     uint32_t multi_last_missing_page;
     uint32_t multi_last_ready_mask;
+    uint32_t common_plan_classic_build_fail;
+    uint32_t common_plan_multi_build_fail;
+    uint32_t common_plan_last_reason;
     uint8_t multi_last_stolen_kind;
     uint8_t multi_last_stolen_track;
     uint8_t multi_last_reject_reason;

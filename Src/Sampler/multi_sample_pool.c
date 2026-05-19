@@ -446,6 +446,88 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
     return 1U;
 }
 
+uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
+                                            uint32_t data_offset,
+                                            uint32_t data_size,
+                                            uint32_t sample_rate,
+                                            uint16_t channels,
+                                            uint16_t bits_per_sample)
+{
+    if ((multi_sample_id >= g_multi_sample_count)
+        || (sample_rate == 0U)
+        || (channels == 0U)
+        || (bits_per_sample == 0U))
+    {
+        return 0U;
+    }
+
+    multi_sample_desc_t *const sample = &g_multi_samples[multi_sample_id];
+    sample->data_offset = data_offset;
+    sample->data_size = data_size;
+    sample->sample_rate = sample_rate;
+    sample->channels = channels;
+    sample->bits_per_sample = bits_per_sample;
+    sample->block_align = (uint16_t)((channels * bits_per_sample) / 8U);
+    return (sample->block_align != 0U) ? 1U : 0U;
+}
+
+uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
+                                         uint8_t note,
+                                         uint8_t velocity,
+                                         sample_resolved_source_t *out_source)
+{
+    if (out_source != 0)
+    {
+        sample_resolved_source_init(out_source);
+    }
+    if ((out_source == 0) || (note > 127U) || (velocity > 127U))
+    {
+        return 0U;
+    }
+
+    multi_sample_resolve_result_t resolved;
+    if (multi_sample_pool_resolve(instrument_id, note, velocity, &resolved) == 0U)
+    {
+        return 0U;
+    }
+
+    const multi_sample_desc_t *const sample =
+        multi_sample_pool_get_sample(resolved.multi_sample_id);
+    if ((sample == 0) || (sample->total_frames == 0U))
+    {
+        return 0U;
+    }
+
+    out_source->key.domain = SAMPLE_AUDIO_DOMAIN_MULTI;
+    out_source->key.object_id = resolved.multi_sample_id;
+    out_source->path = sample->path;
+    out_source->total_frames = sample->total_frames;
+    out_source->data_offset = sample->data_offset;
+    out_source->data_size = sample->data_size;
+    out_source->sample_rate = sample->sample_rate;
+    out_source->channels = sample->channels;
+    out_source->bits_per_sample = sample->bits_per_sample;
+    out_source->block_align = sample->block_align;
+    out_source->root_note = resolved.root_note;
+    out_source->fine_tune_cents = 0;
+    out_source->region_begin = 0U;
+    out_source->region_end = sample->total_frames;
+    out_source->loop_begin = 0U;
+    out_source->loop_end = sample->total_frames;
+    out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
+    out_source->reverse = 0U;
+    out_source->raw_pcm24 = 0U;
+    out_source->rate = 1.0f;
+    out_source->gain = 1.0f;
+    out_source->owner_track_id = UINT8_MAX;
+    out_source->note = note;
+    out_source->velocity = velocity;
+    out_source->source_kind = 0U;
+    out_source->instrument_id = instrument_id;
+    out_source->zone_id = resolved.zone_id;
+    return sample_resolved_source_is_valid(out_source);
+}
+
 uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
                                          const multi_sample_zone_t *zone)
 {

@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_play_plan.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,6 +44,12 @@ typedef struct
     uint16_t multi_sample_id;
     char path[MULTI_SAMPLE_POOL_PATH_MAX];
     uint32_t total_frames;
+    uint32_t data_offset;
+    uint32_t data_size;
+    uint32_t sample_rate;
+    uint16_t channels;
+    uint16_t bits_per_sample;
+    uint16_t block_align;
     uint8_t root_note;
     uint8_t vel_low;
     uint8_t vel_high;
@@ -86,6 +94,10 @@ uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
                                   uint8_t note,
                                   uint8_t velocity,
                                   multi_sample_resolve_result_t *out_result);
+uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
+                                         uint8_t note,
+                                         uint8_t velocity,
+                                         sample_resolved_source_t *out_source);
 
 uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
                                                   const char *name,
@@ -98,6 +110,12 @@ uint8_t multi_sample_pool_debug_add_sample(uint16_t instrument_id,
                                            uint8_t vel_high,
                                            uint16_t flags,
                                            uint16_t *out_multi_sample_id);
+uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
+                                            uint32_t data_offset,
+                                            uint32_t data_size,
+                                            uint32_t sample_rate,
+                                            uint16_t channels,
+                                            uint16_t bits_per_sample);
 uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
                                          const multi_sample_zone_t *zone);
 

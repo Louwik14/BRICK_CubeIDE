@@ -1400,6 +1400,56 @@ uint8_t sample_cache_get_last_fresult(uint16_t sample_id)
     return (uint8_t)g_sample_cache_last_fresult[sample_id];
 }
 
+uint8_t sample_cache_resolve_classic_source(uint16_t sample_id,
+                                            sample_resolved_source_t *out_source)
+{
+    if (out_source != 0)
+    {
+        sample_resolved_source_init(out_source);
+    }
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (out_source == 0))
+    {
+        return 0U;
+    }
+
+    const sample_cache_desc_t *const desc = &g_sample_cache[sample_id];
+    if ((desc->sample_id != sample_id)
+        || (desc->total_frames == 0U)
+        || (desc->state == SAMPLE_CACHE_EMPTY)
+        || (desc->state == SAMPLE_CACHE_ERROR))
+    {
+        return 0U;
+    }
+
+    out_source->key = sample_audio_key_classic(sample_id);
+    out_source->path = desc->path;
+    out_source->total_frames = desc->total_frames;
+    out_source->data_offset = desc->data_offset;
+    out_source->data_size = desc->info.data_size;
+    out_source->sample_rate = desc->info.sample_rate;
+    out_source->channels = desc->info.channels;
+    out_source->bits_per_sample = desc->info.bits_per_sample;
+    out_source->block_align = desc->info.block_align;
+    out_source->root_note = 60U;
+    out_source->fine_tune_cents = 0;
+    out_source->region_begin = 0U;
+    out_source->region_end = desc->total_frames;
+    out_source->loop_begin = 0U;
+    out_source->loop_end = desc->total_frames;
+    out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
+    out_source->reverse = 0U;
+    out_source->raw_pcm24 = 0U;
+    out_source->rate = 1.0f;
+    out_source->gain = 1.0f;
+    out_source->owner_track_id = UINT8_MAX;
+    out_source->note = 60U;
+    out_source->velocity = 127U;
+    out_source->source_kind = 0U;
+    out_source->instrument_id = UINT16_MAX;
+    out_source->zone_id = UINT16_MAX;
+    return sample_resolved_source_is_valid(out_source);
+}
+
 uint8_t sample_cache_start_voice_at(uint16_t sample_id, uint8_t voice_id, uint32_t frame_index)
 {
     if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (voice_id >= SAMPLE_CACHE_MAX_VOICES))

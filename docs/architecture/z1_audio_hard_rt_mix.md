@@ -282,7 +282,7 @@ Granular / fx_pool:
 - La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN/CUE` et accumulation bus.
 - Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`.
 - La memoire audio runtime Sampler reste locale au sous-systeme Sampler: `sample_page_cache` est l'owner memoire audio runtime, `sample_cache` garde la facade produit/orchestration prepare-service-compat, et `sample_voice_reader` porte la lecture musicale. `READY_FULL` est materialise par pages contigues en SDRAM; `READY_PARTIAL` signifie STREAM enregistre + pages initiales queuees, puis chargees hors audio par le `sample_stream_manager` via `sample_cache_service()`.
-- Le seuil `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = 12`, soit `12 * SAMPLE_PAGE_BYTES = 49152 B = 48 KiB`, donc `SAMPLE_CACHE_FULL_MAX_FRAMES = 6144` frames stereo float decodees. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM, meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient les 12 premieres petites pages pour le depart forward et les 8 dernieres petites pages pour les entrees reverse/pingpong pres de la fin.
+- Le seuil legacy `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = 12`, soit `12 * SAMPLE_PAGE_BYTES = 49152 B = 48 KiB`, donc `SAMPLE_CACHE_FULL_MAX_FRAMES = 6144` frames stereo float decodees. Cette valeur de 6144 frames decrit l'ancien seuil de classement full/stream et n'est plus la ration minimale produit cible. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM, meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient les 12 premieres petites pages pour le depart forward et les 8 dernieres petites pages pour les entrees reverse/pingpong pres de la fin.
 - Retrigger Sampler track-aware: `brick6_sampler_runtime_trigger()` coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` jugé rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.
 - Limitations actuelles `READY_PARTIAL`: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24/32-bit, forward simple, pitch lineaire, reverse simple, loop forward simple, ping-pong simple, slices v1 par note, partage multi-voix meme sample autorise en phase actuelle.
 - `sample_cache_read_voice()`, `sample_cache_read_voice_frame()`, `sample_cache_peek_frame()`, `sample_cache_begin_read_block()` et `sample_cache_commit_read_block()` sont RAM-only. FatFs reste limite a `sample_cache_prepare()` et `sample_cache_service()`.
@@ -594,3 +594,53 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Les mesures terrain conservent seulement la conclusion d'architecture: les mini-pages servies separement defavorisent le streaming SD; les pistes restantes sont les livraisons logiques plus grosses ou les pages physiques plus grosses, a trancher dans une passe dediee.
 - Les correctifs permanents conserves sont l'initialisation explicite des objets STREAM en SDRAM `NOLOAD`, le guard `file_open` + cookie avant `f_close()`, la remise a zero des `FIL`, le placement SDRAM des readers/pending/index page-cache, et la discipline d'alignement des structures STREAM/page-index.
 - Aucune commande GDB temporaire, compteur de profiling, option compile-time experimentale ni chemin de test de livraison n'appartient a l'architecture runtime active.
+
+## Addendum 2026-05-19 - contrats Sampler communs non branches
+
+- `Inc/Sampler/sample_play_plan.h` porte les contrats cibles `sample_resolved_source_t` et `sample_play_plan_t` pour converger vers `Classic/Multi resolve -> resolved_source -> play_plan -> reader/window`.
+- Cette passe ne branche ni Classic ni Multi sur une nouvelle resolution: le runtime existant continue d'utiliser les champs historiques de `sample_play_plan_t` via `sample_voice_reader`.
+- Les champs contractuels ajoutes restent preparatoires: ils n'imposent pas encore de nouvelle start gate, ration, fenetre, loop/reverse Multi, cache policy ou driver bas niveau.
+
+## Addendum 2026-05-19 - adaptateur Classic resolved_source non branche
+
+- `sample_cache_resolve_classic_source()` construit un `sample_resolved_source_t` depuis le descripteur Classic existant `sample_cache_desc_t`, sans acces SD, allocation, prefetch, start gate ni changement de reader.
+- L'adaptateur expose seulement le contrat source: key Classic, path, format WAV, frames totales et region complete. Les informations musicales portees par le runtime Classic actif restent neutres tant que la passe play-plan commune n'est pas branchee.
+
+## Addendum 2026-05-19 - adaptateur Multi resolved_source non branche
+
+- `multi_sample_pool_resolve_source()` construit un `sample_resolved_source_t` depuis la resolution note/velocite/zone Multi existante, sans changer le trigger Multi, le reader, le lookahead ni le cache.
+- Le pool Multi conserve maintenant les metadonnees format issues de l'index (`data_offset`, `data_size`, sample-rate, channels, bits-per-sample, block-align) afin que le contrat source puisse decrire le sample sans acces SD.
+- Loop/reverse Multi restent neutres dans ce contrat preparatoire: aucune feature musicale nouvelle n'est branchee dans cette passe.
+
+## Addendum 2026-05-19 - builder play-plan commun non branche
+
+- `sample_play_plan_build_from_source()` convertit un `sample_resolved_source_t` en `sample_play_plan_t` avec validation pure de source, region, boucle et rate; il ne fait aucun acces SD et n'est pas branche aux chemins Classic/Multi.
+- Le `sample_play_plan_t` porte maintenant les metadonnees contractuelles preparatoires `min_ready_frames`, `target_window_frames`, owner/generation, start-gate flags et diagnostic minimal. Ces champs restent neutres tant que le start gate et la fenetre commune ne sont pas migres.
+- Le builder derive seulement kernel/direction/loop/rate de maniere deterministe; il ne change pas les implementations runtime existantes de reverse, loop, ration, lookahead ou cache.
+
+## Addendum 2026-05-19 - validation start-gate/ration non branchee
+
+- `sample_play_plan_check_ready_requirements()` verifie un `sample_play_plan_t` contre le page-cache RAM et classe la ration minimale et la fenetre cible en `COMPLETE`, `PARTIAL`, `PENDING`, `MISSING` ou `INVALID`.
+- Seul `SAMPLE_PAGE_READY` compte comme audio disponible; `SAMPLE_PAGE_QUEUED` et `SAMPLE_PAGE_LOADING` sont reportes comme pending mais ne valident pas la ration minimale.
+- Le helper reste preparatoire: il ne refuse aucun trigger, ne modifie pas Classic/Multi, ne queue aucune page, ne touche pas le reader et ne change pas la policy de cache opportuniste.
+
+## Addendum 2026-05-19 - conversion ration/fenetre frames vers pages non branchee
+
+- `sample_play_plan_frames_to_page_span()` et `sample_play_plan_required_pages_for_frames()` expriment la conversion commune du contrat produit en frames vers un span de pages interne base sur `SAMPLE_PAGE_FRAMES`.
+- La conversion est directionnelle, bornee par `region_begin/region_end`, couvre les samples courts et retourne un span invalide si la demande en frames est nulle.
+- Ces helpers ne lisent pas la SD, ne modifient pas le cache, ne changent aucune constante runtime et ne tranchent pas le futur modele B/C.
+
+## Addendum 2026-05-19 - cible ration minimale 8192 frames
+
+- La cible produit pour `min_ready_frames` est maintenant 8192 frames, soit environ 170,7 ms a 48 kHz.
+- `target_window_frames` reste a definir dans une passe ulterieure si une fenetre de confort distincte de la ration minimale est retenue.
+- Les helpers frames->pages restent generiques et peuvent convertir n'importe quelle valeur; les anciennes valeurs comme 6144 frames ne sont plus une cible produit et ne doivent servir que d'exemples historiques/diagnostic si elles apparaissent dans de vieux documents.
+- Cette clarification ne branche pas Classic/Multi, ne modifie pas le start gate, ne change pas `SAMPLE_PAGE_FRAMES` et ne touche pas au cache/streamer.
+
+## Addendum 2026-05-19 - plan commun autorite playback Sampler
+
+- Les triggers Classic/Slicer et Multi utilisent maintenant le `sample_play_plan_t` commun comme autorite de bind reader/playback.
+- L'echafaudage de migration shadow/compare/fallback est retire: plus de flag CMake shadow, plus de compteurs GDB-only shadow, plus de comparaison stricte runtime/legacy, plus de fallback legacy de playback.
+- Les diagnostics conserves sont les echecs de construction du plan commun via `common_plan_classic_build_fail`, `common_plan_multi_build_fail` et `common_plan_last_reason`, ainsi que les diagnostics produit existants de reject, underrun, miss et stop.
+- Les anciens champs/structures legacy encore presents restent utilises pour calculer l'etat musical, construire la source resolue commune ou maintenir les chemins non concernes; ils ne sont plus un fallback de playback Sampler Classic/Slicer/Multi.
+- Cette passe ne modifie ni start gate strict READY, ni cache opportuniste, ni streamer/fenetre, ni loop/reverse Multi, ni parametres UI.
