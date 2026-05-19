@@ -402,6 +402,11 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
                 multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE, multi_sample_id);
                 return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
             }
+            if (sample_page_cache_pin_page_key(key, page) == 0U)
+            {
+                multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE, multi_sample_id);
+                return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
+            }
             g_multi_load_diag.pages_requested++;
         }
     }

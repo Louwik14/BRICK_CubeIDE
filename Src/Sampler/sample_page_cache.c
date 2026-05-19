@@ -147,16 +147,34 @@ static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t reques
     return 1U;
 }
 
-static uint8_t sample_page_cache_page_is_multi_ready_anchor(const sample_page_desc_t *page)
+static uint8_t sample_page_cache_page_is_full_contract(const sample_page_desc_t *page)
 {
     if (page == 0)
     {
         return 0U;
     }
 
-    return ((page->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI) && (page->page_index == 0U))
-               ? 1U
-               : 0U;
+    const uint16_t key_slot = sample_page_cache_key_slot(page->key);
+    if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        return 0U;
+    }
+
+    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    return ((sample->valid != 0U) && (sample->fully_loaded != 0U)) ? 1U : 0U;
+}
+
+static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *page)
+{
+    if (page == 0)
+    {
+        return 0U;
+    }
+
+    return ((page->use_count != 0U)
+            || (page->pin_count != 0U)
+            || (page->window_pin_count != 0U)
+            || (sample_page_cache_page_is_full_contract(page) != 0U)) ? 1U : 0U;
 }
 
 static uint32_t sample_page_cache_hash_key(sample_audio_key_t key, uint32_t page_index)
@@ -493,18 +511,10 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     {
         const uint32_t i = ((uint32_t)g_sample_page_evict_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
         sample_page_desc_t *const page = &g_sample_page_desc[i];
-        if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U) || (page->pin_count != 0U)
-            || (page->window_pin_count != 0U)
+        if ((page->state != SAMPLE_PAGE_READY)
+            || (sample_page_cache_page_is_contractual(page) != 0U)
             || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-            || (sample_page_cache_page_is_multi_ready_anchor(page) != 0U)
             || (sample_page_cache_can_evict_for_request(key, page->key) == 0U))
-        {
-            continue;
-        }
-
-        const sample_page_sample_desc_t *const sample =
-            &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
-        if ((sample->valid != 0U) && (sample->fully_loaded != 0U))
         {
             continue;
         }
@@ -608,8 +618,8 @@ static void sample_page_cache_reclaim_stream_pages_for_full_load(void)
     for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
     {
         sample_page_desc_t *const page = &g_sample_page_desc[i];
-        if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U)
-            || (page->pin_count != 0U)
+        if ((page->state != SAMPLE_PAGE_READY)
+            || (sample_page_cache_page_is_contractual(page) != 0U)
             || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
         {
             continue;

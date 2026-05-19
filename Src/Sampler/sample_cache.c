@@ -42,6 +42,8 @@ static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
                                                             FIL *fp);
 static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
                                                            sample_cache_desc_t *desc);
+static uint8_t sample_cache_request_pin_page_span(uint16_t sample_id,
+                                                  const sample_play_plan_page_span_t *span);
 static void sample_cache_cursor_reset(sample_stream_cursor_t *cursor);
 static void sample_cache_cursor_release(sample_stream_cursor_t *cursor);
 static void sample_cache_cursor_release_current_page(sample_stream_cursor_t *cursor);
@@ -502,13 +504,24 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
         return 0U;
     }
 
-    if (sample_stream_manager_request_range(sample_id, 0U, SAMPLE_CACHE_STREAM_START_PAGES) == 0U)
+    sample_play_plan_t forward_plan;
+    sample_play_plan_init(&forward_plan);
+    forward_plan.key = sample_audio_key_classic(sample_id);
+    forward_plan.sample_id = sample_id;
+    forward_plan.start_frame = 0U;
+    forward_plan.region_begin = 0U;
+    forward_plan.region_end = desc->total_frames;
+    forward_plan.min_ready_frames = SAMPLE_PREP_MIN_READY_FRAMES;
+    sample_play_plan_page_span_t forward_span;
+    if (sample_play_plan_frames_to_page_span(&forward_plan,
+                                             SAMPLE_PREP_MIN_READY_FRAMES,
+                                             &forward_span) == 0U)
     {
         desc->last_error = 8U;
         g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
         return 0U;
     }
-    if (sample_page_cache_pin_page(sample_id, 0U) == 0U)
+    if (sample_cache_request_pin_page_span(sample_id, &forward_span) == 0U)
     {
         desc->last_error = 8U;
         g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
@@ -517,47 +530,33 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     if (sample_page_cache_get_page_state(sample_id, 0U) != SAMPLE_PAGE_READY)
     {
     }
-    for (uint32_t page_index = 1U; page_index < SAMPLE_CACHE_STREAM_START_PAGES; ++page_index)
+
+    /*
+     * Long STREAM cold base follows the product minimum-ready contract on both
+     * entry sides. The reverse side uses the shared play-plan frame->page span
+     * helper because an unaligned tail start can require one more physical page
+     * than SAMPLE_PREP_MIN_READY_FRAMES / SAMPLE_PAGE_FRAMES.
+     */
+    sample_play_plan_t reverse_plan;
+    sample_play_plan_init(&reverse_plan);
+    reverse_plan.key = sample_audio_key_classic(sample_id);
+    reverse_plan.sample_id = sample_id;
+    reverse_plan.start_frame = desc->total_frames - 1U;
+    reverse_plan.region_begin = 0U;
+    reverse_plan.region_end = desc->total_frames;
+    reverse_plan.direction = 1U;
+    reverse_plan.min_ready_frames = SAMPLE_PREP_MIN_READY_FRAMES;
+    sample_play_plan_page_span_t reverse_span;
+    if ((sample_play_plan_frames_to_page_span(&reverse_plan,
+                                              SAMPLE_PREP_MIN_READY_FRAMES,
+                                              &reverse_span) != 0U)
+        && (reverse_span.page_count != 0U))
     {
-        if ((page_index * SAMPLE_PAGE_FRAMES) >= desc->total_frames)
-        {
-            break;
-        }
-        if (sample_page_cache_pin_page(sample_id, page_index) == 0U)
+        if (sample_cache_request_pin_page_span(sample_id, &reverse_span) == 0U)
         {
             desc->last_error = 8U;
             g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
             return 0U;
-        }
-    }
-
-    /*
-     * Long STREAM cold base now follows the product minimum-ready contract:
-     * the first 8192 frames are requested/pinned for forward starts. The final
-     * 8 pages still cover the current reverse/pingpong entry path until reverse
-     * rationing is moved to the common play_plan start frame.
-     */
-    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
-    if (last_page != 0U)
-    {
-        const uint32_t reverse_span = (last_page + 1U < SAMPLE_CACHE_STREAM_TAIL_PAGES)
-                                          ? (last_page + 1U)
-                                          : SAMPLE_CACHE_STREAM_TAIL_PAGES;
-        const uint32_t reverse_first_page = (last_page + 1U) - reverse_span;
-        for (uint32_t page_index = reverse_first_page; page_index <= last_page; ++page_index)
-        {
-            if (sample_stream_manager_request_page(sample_id, page_index) == 0U)
-            {
-                desc->last_error = 8U;
-                g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
-                return 0U;
-            }
-            if (sample_page_cache_pin_page(sample_id, page_index) == 0U)
-            {
-                desc->last_error = 8U;
-                g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
-                return 0U;
-            }
         }
     }
 
@@ -573,6 +572,30 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     desc->stream_active = 0U;
     desc->state = SAMPLE_CACHE_READY_PARTIAL;
     desc->last_error = 0U;
+    return 1U;
+}
+
+static uint8_t sample_cache_request_pin_page_span(uint16_t sample_id,
+                                                  const sample_play_plan_page_span_t *span)
+{
+    if ((span == 0) || (span->valid == 0U) || (span->page_count == 0U)
+        || (span->page_start > span->page_end))
+    {
+        return 0U;
+    }
+
+    for (uint32_t page_index = span->page_start; page_index <= span->page_end; ++page_index)
+    {
+        if (sample_stream_manager_request_page(sample_id, page_index) == 0U)
+        {
+            return 0U;
+        }
+        if (sample_page_cache_pin_page(sample_id, page_index) == 0U)
+        {
+            return 0U;
+        }
+    }
+
     return 1U;
 }
 

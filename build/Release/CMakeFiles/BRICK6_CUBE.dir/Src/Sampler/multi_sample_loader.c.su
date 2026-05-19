@@ -3,8 +3,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_l
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:197:16:multi_loader_sample_required_pages	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:186:13:multi_loader_set_error	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:274:35:multi_loader_start_instrument	504	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:431:13:multi_loader_start_next_queued	176	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:413:28:multi_sample_load_instrument	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:456:6:multi_sample_service_load	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:536:9:multi_sample_is_ready	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:543:6:multi_sample_get_load_diag	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:436:13:multi_loader_start_next_queued	176	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:418:28:multi_sample_load_instrument	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:461:6:multi_sample_service_load	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:541:9:multi_sample_is_ready	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c:548:6:multi_sample_get_load_diag	4	static
