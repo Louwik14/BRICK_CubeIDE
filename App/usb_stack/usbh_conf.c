@@ -103,7 +103,7 @@ void HAL_HCD_MspInit(HCD_HandleTypeDef* hcdHandle)
     __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
 
     /* Peripheral interrupt init */
-    HAL_NVIC_SetPriority(OTG_HS_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(OTG_HS_IRQn, 7, 0);
     HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
   /* USER CODE BEGIN USB_OTG_HS_MspInit 1 */
 
@@ -175,6 +175,7 @@ void HAL_HCD_Disconnect_Callback(HCD_HandleTypeDef *hhcd)
   */
 void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum, HCD_URBStateTypeDef urb_state)
 {
+  (void)urb_state;
   /* To be used with OS to sync URB state with the global state machine */
 #if (USBH_USE_OS == 1)
   USBH_LL_NotifyURBChange(hhcd->pData);

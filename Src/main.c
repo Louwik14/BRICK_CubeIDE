@@ -73,7 +73,7 @@ void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void MPU_Config(void);
 void MX_USB_HOST_Process(void);
-//void MX_USB_HOST_Init(void);
+void MX_USB_HOST_Init(void);
 void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
@@ -200,7 +200,6 @@ int main(void)
 	     brick6_app_process();
 
 	     MX_USB_HOST_Process();
-	     usb_host_tasklet_poll_bounded(4);
 	     midi_host_poll_bounded(8);
 
 	     uint32_t ui_ticks_processed = 0U;

@@ -39,7 +39,6 @@
 
 
 volatile uint32_t engine_tick_count = 0U;
-volatile engine_tasklet_metrics_t g_engine_tasklet_metrics;
 
 /* Shared between IRQ + main */
 static volatile uint32_t engine_frames_accum = 0U;
@@ -47,19 +46,6 @@ static volatile uint32_t engine_frames_accum = 0U;
 /* Tick fixed = 32 frames */
 static uint32_t engine_frames_per_tick = 32U;
 static uint32_t engine_last_poll_ms = 0U;
-
-static void engine_tasklet_record_stage(volatile uint32_t *last,
-                                        volatile uint32_t *max,
-                                        uint32_t cycles)
-{
-  *last = cycles;
-  if (cycles > *max)
-  {
-    *max = cycles;
-  }
-}
-
-
 
 /* ============================================================
    Internal tick
@@ -84,46 +70,12 @@ static void engine_tasklet_record_stage(volatile uint32_t *last,
  */
 static void engine_tick(uint32_t dt_ms)
 {
-  uint32_t t0;
-  uint32_t t1;
-  const uint32_t tick_start_cycles = DWT->CYCCNT;
-
-
   engine_tick_count++;
 
-  t0 = DWT->CYCCNT;
   buttons_update(dt_ms);
-  t1 = DWT->CYCCNT;
-  engine_tasklet_record_stage(&g_engine_tasklet_metrics.last_buttons_cycles,
-                              &g_engine_tasklet_metrics.max_buttons_cycles,
-                              t1 - t0);
-
-  t0 = DWT->CYCCNT;
   encoders_update(dt_ms);
-  t1 = DWT->CYCCNT;
-  engine_tasklet_record_stage(&g_engine_tasklet_metrics.last_encoders_cycles,
-                              &g_engine_tasklet_metrics.max_encoders_cycles,
-                              t1 - t0);
-
-  t0 = DWT->CYCCNT;
   led_service(dt_ms);
-  t1 = DWT->CYCCNT;
-  engine_tasklet_record_stage(&g_engine_tasklet_metrics.last_led_cycles,
-                              &g_engine_tasklet_metrics.max_led_cycles,
-                              t1 - t0);
-
-  t0 = DWT->CYCCNT;
   mux_pots_scan();
-  t1 = DWT->CYCCNT;
-  engine_tasklet_record_stage(&g_engine_tasklet_metrics.last_mux_pots_cycles,
-                              &g_engine_tasklet_metrics.max_mux_pots_cycles,
-                              t1 - t0);
-
-  engine_tasklet_record_stage(&g_engine_tasklet_metrics.last_tick_cycles,
-                              &g_engine_tasklet_metrics.max_tick_cycles,
-                              DWT->CYCCNT - tick_start_cycles);
-
-
 }
 
 /* ============================================================
@@ -157,24 +109,6 @@ void engine_tasklet_init(uint32_t sample_rate)
      => 48kHz / 32 = 1500 Hz stable */
   engine_frames_per_tick = 32U;
   engine_last_poll_ms = HAL_GetTick();
-  g_engine_tasklet_metrics.calls = 0U;
-  g_engine_tasklet_metrics.last_cycles = 0U;
-  g_engine_tasklet_metrics.max_cycles = 0U;
-  g_engine_tasklet_metrics.last_tick_cycles = 0U;
-  g_engine_tasklet_metrics.max_tick_cycles = 0U;
-  g_engine_tasklet_metrics.last_buttons_cycles = 0U;
-  g_engine_tasklet_metrics.max_buttons_cycles = 0U;
-  g_engine_tasklet_metrics.last_encoders_cycles = 0U;
-  g_engine_tasklet_metrics.max_encoders_cycles = 0U;
-  g_engine_tasklet_metrics.last_led_cycles = 0U;
-  g_engine_tasklet_metrics.max_led_cycles = 0U;
-  g_engine_tasklet_metrics.last_mux_pots_cycles = 0U;
-  g_engine_tasklet_metrics.max_mux_pots_cycles = 0U;
-  g_engine_tasklet_metrics.last_ticks = 0U;
-  g_engine_tasklet_metrics.max_ticks = 0U;
-  g_engine_tasklet_metrics.last_backlog_ticks = 0U;
-  g_engine_tasklet_metrics.max_backlog_ticks = 0U;
-  g_engine_tasklet_metrics.cap_hit_count = 0U;
 
   buttons_init();
   encoders_init();
@@ -231,9 +165,7 @@ void engine_tasklet_notify_frames(uint32_t frames)
  */
 void engine_tasklet_poll(void)
 {
-  const uint32_t start_cycles = DWT->CYCCNT;
   uint32_t ticks_processed = 0U;
-  uint32_t backlog_ticks = 0U;
 
   while (ticks_processed < ENGINE_TASKLET_MAX_TICKS_PER_POLL)
   {
@@ -263,38 +195,5 @@ void engine_tasklet_poll(void)
 
     engine_tick(dt_ms);
     ticks_processed++;
-  }
-
-  __disable_irq();
-  backlog_ticks = engine_frames_accum / engine_frames_per_tick;
-  __enable_irq();
-
-  {
-    const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
-
-    g_engine_tasklet_metrics.calls++;
-    g_engine_tasklet_metrics.last_cycles = elapsed_cycles;
-    if (elapsed_cycles > g_engine_tasklet_metrics.max_cycles)
-    {
-      g_engine_tasklet_metrics.max_cycles = elapsed_cycles;
-    }
-
-    g_engine_tasklet_metrics.last_ticks = ticks_processed;
-    if (ticks_processed > g_engine_tasklet_metrics.max_ticks)
-    {
-      g_engine_tasklet_metrics.max_ticks = ticks_processed;
-    }
-
-    g_engine_tasklet_metrics.last_backlog_ticks = backlog_ticks;
-    if (backlog_ticks > g_engine_tasklet_metrics.max_backlog_ticks)
-    {
-      g_engine_tasklet_metrics.max_backlog_ticks = backlog_ticks;
-    }
-
-    if ((ticks_processed >= ENGINE_TASKLET_MAX_TICKS_PER_POLL) &&
-        (backlog_ticks != 0U))
-    {
-      g_engine_tasklet_metrics.cap_hit_count++;
-    }
   }
 }

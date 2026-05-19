@@ -128,7 +128,7 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
        __HAL_RCC_SAI2_CLK_ENABLE();
 
     /* Peripheral interrupt init*/
-    HAL_NVIC_SetPriority(SAI2_IRQn, 5, 0);
+    HAL_NVIC_SetPriority(SAI2_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(SAI2_IRQn);
     }
     SAI2_client ++;
@@ -179,7 +179,7 @@ void HAL_SAI_MspInit(SAI_HandleTypeDef* saiHandle)
        __HAL_RCC_SAI2_CLK_ENABLE();
 
       /* Peripheral interrupt init*/
-      HAL_NVIC_SetPriority(SAI2_IRQn, 5, 0);
+      HAL_NVIC_SetPriority(SAI2_IRQn, 1, 0);
       HAL_NVIC_EnableIRQ(SAI2_IRQn);
       }
     SAI2_client ++;

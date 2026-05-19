@@ -13,8 +13,8 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/UI/ui_renderer_oled.c`: service periodique de rendu OLED complet (16 ms) appele en superloop.
 - `Src/UI/display_flush_service.c`: service periodique display flush (16 ms) appele en superloop, hors continuation d'un flush DMA deja actif.
 - `Src/MIDI/midi.c`: callback IRQ TIM12 et callback TIM5 utilises par la cadence globale.
-- `Src/MIDI/midi.c` + `Src/MIDI/midi_host.c`: services MIDI device/host cadences hors IRQ avec instrumentation GDB-only de cout et de budget.
-- `App/usb_stack/usb_host.c`: service USB Host CubeMX et tasklet host borne, avec instrumentation GDB-only de cout, iterations et etat host.
+- `Src/MIDI/midi.c` + `Src/MIDI/midi_host.c`: services MIDI device/host cadences hors IRQ.
+- `App/usb_stack/usb_host.c` + `App/usb_stack/usbh_conf.c` + `Src/MIDI/usbh_midi.c`: service USB Host CubeMX, IRQ HCD et classe MIDI host.
 - `Src/stm32h7xx_it.c`: branchement IRQ TIM12/TIM5 vers HAL, plus service `PendSV` pour flush TX USB MIDI differe.
 - `Src/tim.c`: configuration frequence TIM12 (1500 Hz) et activation IRQ associee.
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
@@ -72,6 +72,7 @@ Tasklets/timers periodiques observes:
 - TIM5 OC IRQ -> `HAL_TIM_OC_DelayElapsedCallback` -> `midi_clock_on_timer_tick()`.
 - `engine_tasklet_notify_frames()` (alimente depuis IRQ audio Z1) -> `engine_tasklet_poll()` en superloop.
 - `PendSV` -> `midi_usb_tx_deferred_service_from_isr()` pour lancer un premier flush TX USB MIDI hors superloop apres enqueue ISR.
+- `OTG_HS_IRQn` -> `HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS)` pour USB Host; priorite 7, sous SAI2/DMA audio a 1.
 
 Seconde autorite concurrente:
 - Aucune seconde autorite concurrente complete pour la sequence boot/system init/superloop.
@@ -108,7 +109,7 @@ Z0 appelle principalement:
 - Runtime via `brick6_app_process()`:
   - tasklets/services metier (`engine_tasklet_poll`, `seq_runtime_time_adapter_process`, `pattern_live_service`, `hall_loop_process`, `voice_manager_service`, etc.).
 - Boucle `main()` appelle en plus:
-  - `MX_USB_HOST_Process`, `usb_host_tasklet_poll_bounded(4)`, `midi_host_poll_bounded(8)`,
+  - `MX_USB_HOST_Process`, `midi_host_poll_bounded(8)`,
   - `ui_tasklet_poll` conditionne par `engine_tick_count`,
   - `ui_renderer_oled_service_poll`, `display_flush_service_poll` apres init UI.
 
@@ -140,28 +141,12 @@ Z0 appelle principalement:
   - Role: passerelle IRQ->main loop pour ticks.
 - `engine_frames_per_tick` (32), `engine_last_poll_ms`:
   - Role: quantification et dt_ms des ticks.
-- `g_engine_tasklet_metrics`:
-  - Ecriture: `engine_tasklet_init`, `engine_tasklet_poll`.
-  - Lecture: GDB/debug uniquement.
-  - Role: compteurs de cout cycles, ticks traites, backlog ticks et hits du cap fixe.
+- `ENGINE_TASKLET_MAX_TICKS_PER_POLL = 8U`:
+  - Role: borne dure du nombre de ticks engine consommes par passage superloop.
 
 ### `Src/App/Hall/hall_loop.c` (service Hall hors IRQ rattache cadence superloop)
-- `g_hall_loop_metrics`:
-  - Ecriture: `hall_loop_init`, `hall_loop_process`.
-  - Lecture: GDB/debug uniquement.
-  - Role: compteurs de cout cycles, samples FIFO traites, backlog FIFO et hits du cap fixe.
-- `g_usb_host_service_metrics`:
-  - Ecriture: `MX_USB_HOST_Process`, `usb_host_tasklet_poll_bounded`.
-  - Lecture: GDB/debug uniquement.
-  - Role: cout cycles last/max du process CubeMX et du tasklet, iterations tasklet, hits du cap et dernier etat `hUsbHostHS.gState` / `Appli_state`.
-- `g_midi_host_poll_metrics`:
-  - Ecriture: `midi_host_poll_bounded`.
-  - Lecture: GDB/debug uniquement.
-  - Role: cout cycles last/max, messages traites par appel, hits du cap et appels host non pret.
-- `g_midi_poll_metrics`:
-  - Ecriture: `midi_poll`.
-  - Lecture: GDB/debug uniquement.
-  - Role: cout cycles last/max du service MIDI device, paquets RX/TX traites, hits du cap RX `MIDI_USB_MAX_BURST`.
+- `HALL_LOOP_MAX_SAMPLES_PER_POLL = 32U`:
+  - Role: borne dure du nombre de samples Hall bruts consommes par passage superloop.
 
 ### `Src/UI/ui_tasklet.c` (cadence UI rattachee Z0)
 - `g_ui_tasklet_init`:
@@ -212,10 +197,9 @@ Z0 appelle principalement:
 - Dans `main while(1)` ordre observe:
   1) `brick6_app_process()`
   2) `MX_USB_HOST_Process()`
-  3) `usb_host_tasklet_poll_bounded(4)`
-  4) `midi_host_poll_bounded(8)`
-  5) si tick engine avance: `ui_tasklet_poll()`
-  6) si UI init: `ui_renderer_oled_service_poll()` puis `display_flush_service_poll()`.
+  3) `midi_host_poll_bounded(8)`
+  4) si tick engine avance: `ui_tasklet_poll()`
+  5) si UI init: `ui_renderer_oled_service_poll()` puis `display_flush_service_poll()`.
 
 6. Runtime continu `brick6_app_process()` ordre observe:
 - `engine_tasklet_poll()`
@@ -284,10 +268,16 @@ Z0 appelle principalement:
 - Service MIDI host autoritatif unique en superloop `main()`:
   - `midi_host_poll_bounded(8)` appele une fois par boucle,
   - `midi_host_poll()` reste un wrapper API de `midi_host_poll_bounded(8)` (budget effectif inchange).
-- `MX_USB_HOST_Process()` appelle directement `USBH_Process(&hUsbHostHS)`: pendant enumeration/connexion, la pile ST contient des `USBH_Delay(200/100/10/2 ms)` via `HAL_Delay`, donc le service peut bloquer ponctuellement la superloop. En etat `HOST_CLASS`, le driver MIDI host est une FSM courte RX/TX sans boucle longue interne.
-- `usb_host_tasklet_poll_bounded(4)` borne seulement le nombre d'appels `USBH_Process()` par passage; il ne borne pas le cout interne d'un appel `USBH_Process()`, et herite donc des delays possibles de la FSM host ST.
+- `MX_USB_HOST_Process()` appelle directement `USBH_Process(&hUsbHostHS)`: pendant enumeration/connexion, la pile ST contient des `USBH_Delay(200/100/10/2 ms)` via `HAL_Delay`, donc le service peut bloquer ponctuellement la superloop.
+- `usb_host_tasklet_poll_bounded(4)` reste disponible comme API mais n'est plus appele par la boucle principale: il etait redondant avec `MX_USB_HOST_Process()` et pouvait enchainer plusieurs `USBH_Process()` bloquants dans un meme tour (ex. 200 ms + 100 ms + transitions), aggravant le freeze UI sans borner le cout interne d'un appel.
 - `midi_host_poll_bounded(8)` borne le nombre de paquets USB-MIDI sortis de la queue host par passage; chaque message peut encore appeler le dispatch MIDI interne et le miroir `midi_send_raw(MIDI_DEST_USB, ...)`, donc le cout par message depend du chemin MIDI interne/USB device.
 - `midi_poll()` cote device traite au plus `MIDI_USB_MAX_BURST` paquets RX et tente au plus un flush TX batch jusqu'a `MIDI_USB_MAX_BURST` paquets; il est borne par compteur mais son cout par message depend du dispatch MIDI interne et de l'etat USB device.
+- Priorites IRQ actuelles observees dans le code:
+  - USB Host `OTG_HS_IRQn`: 7.
+  - USB Device `OTG_FS_IRQn`: 6.
+  - Audio SAI2 et DMA1 Stream3/4: 1.
+  - TIM5/TIM12: 5, TIM7 encodeurs: 6, PendSV MIDI USB TX differe: 15.
+- Consequence audit historique: un clavier USB Host branche peut generer une activite HCD continue (bulk IN arme puis etats URB/NAK/not-ready selon le peripherique). L'ancien placement `OTG_HS_IRQn` a 0 pouvait preempter l'IRQ audio; le placement courant met SAI2/DMA a 1 et OTG_HS a 7.
 - Contrat split seq mis a jour:
   - progression step interne en domaine audio bloc (deterministe sample),
   - progression step externe consommee en domaine audio bloc a partir de pulses MIDI pending,

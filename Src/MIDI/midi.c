@@ -38,7 +38,6 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 
 midi_tx_stats_t midi_tx_stats = {0};
 midi_rx_stats_t midi_rx_stats = {0};
-volatile midi_poll_metrics_t g_midi_poll_metrics = {0};
 
 volatile uint32_t midi_usb_rx_drops = 0;
 
@@ -1038,40 +1037,12 @@ midi_dest_t midi_get_rx_destination(void) {
  * - init / main loop / tasklet selon le module.
  */
 void midi_poll(void) {
-  const uint32_t start_cycles = DWT->CYCCNT;
   if (!midi_initialized) {
-    const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
-    g_midi_poll_metrics.calls++;
-    g_midi_poll_metrics.not_initialized_count++;
-    g_midi_poll_metrics.last_cycles = elapsed_cycles;
-    if (elapsed_cycles > g_midi_poll_metrics.max_cycles) {
-      g_midi_poll_metrics.max_cycles = elapsed_cycles;
-    }
-    g_midi_poll_metrics.last_rx_packets = 0U;
-    g_midi_poll_metrics.last_tx_packets = 0U;
     return;
   }
 
-  const uint32_t rx_packets = midi_process_usb_rx();
-  const uint32_t tx_packets = midi_usb_try_flush();
-  const uint32_t elapsed_cycles = DWT->CYCCNT - start_cycles;
-
-  g_midi_poll_metrics.calls++;
-  g_midi_poll_metrics.last_cycles = elapsed_cycles;
-  if (elapsed_cycles > g_midi_poll_metrics.max_cycles) {
-    g_midi_poll_metrics.max_cycles = elapsed_cycles;
-  }
-  g_midi_poll_metrics.last_rx_packets = rx_packets;
-  if (rx_packets > g_midi_poll_metrics.max_rx_packets) {
-    g_midi_poll_metrics.max_rx_packets = rx_packets;
-  }
-  g_midi_poll_metrics.last_tx_packets = tx_packets;
-  if (tx_packets > g_midi_poll_metrics.max_tx_packets) {
-    g_midi_poll_metrics.max_tx_packets = tx_packets;
-  }
-  if (rx_packets >= MIDI_USB_MAX_BURST) {
-    g_midi_poll_metrics.rx_cap_hit_count++;
-  }
+  (void)midi_process_usb_rx();
+  (void)midi_usb_try_flush();
 }
 
 /**

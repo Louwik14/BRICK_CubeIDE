@@ -85,7 +85,7 @@ void brick6_app_init(void)
     SDRAM_Init();
 
     MX_USB_DEVICE_Init();
-    //MX_USB_HOST_Init();
+    MX_USB_HOST_Init();
 
     CS42448_Init(0x48);
 

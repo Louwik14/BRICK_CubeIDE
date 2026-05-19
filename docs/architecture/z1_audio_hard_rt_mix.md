@@ -240,6 +240,7 @@ Contraintes CPU/worst-case:
 - Decoupe en sous-segments peut multiplier les appels `audio_process_block_int32` par half selon densite d'evenements seq.
 - Sends/reverb et inserts sont conditionnels mais dans le chemin IRQ.
 - Aucun calcul VU/peak meter produit n'est conserve dans le chemin IRQ (`mixer_process` ni `audio_io_pack_ramped`).
+- Le profiler `cpu_load` historique entoure l'IRQ audio avec `DWT->CYCCNT`. Les IRQ audio SAI2/DMA1 Stream3/4 sont placees a priorite 1 et USB Host OTG_HS a 7 afin que l'audio reste prioritaire.
 
 Memoire:
 - Scratch bus dans `mixer_process` en statique fonction.

@@ -24,9 +24,9 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "cpu_load.h"
 #include "encoders_hw.h"
 #include "Core/rec_live_debug.h"
+#include "usbh_conf.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

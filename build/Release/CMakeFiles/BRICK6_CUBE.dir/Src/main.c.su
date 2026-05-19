@@ -1,4 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:335:6:Error_Handler	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:235:6:SystemClock_Config	120	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:294:6:PeriphCommonClock_Config	200	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:118:5:main	48	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:334:6:Error_Handler	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:234:6:SystemClock_Config	120	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:293:6:PeriphCommonClock_Config	200	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/main.c:118:5:main	40	static,ignoring_inline_asm
