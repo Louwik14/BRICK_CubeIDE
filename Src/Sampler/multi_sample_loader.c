@@ -421,8 +421,7 @@ void multi_sample_service_load(uint32_t byte_budget)
 
     if ((byte_budget == 0U)
         || (multi_record_writer_any_active() != 0U)
-        || (looper_storage_raw_export_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U))
+        || (looper_storage_raw_export_is_active() != 0U))
     {
         return;
     }

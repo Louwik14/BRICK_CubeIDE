@@ -12,11 +12,11 @@
 
 #define SAMPLE_CACHE_MAX_VOICES (16U)
 #define SAMPLE_CACHE_IO_BYTES (4096U)
-#define SAMPLE_CACHE_STREAM_START_PAGES (2U)
-#define SAMPLE_CACHE_STREAM_TAIL_PAGES (1U)
-#define SAMPLE_CACHE_STREAM_REVERSE_PAGES SAMPLE_CACHE_STREAM_TAIL_PAGES
-#define SAMPLE_CACHE_STREAM_STATIC_PAGES (SAMPLE_CACHE_STREAM_START_PAGES \
-                                          + SAMPLE_CACHE_STREAM_REVERSE_PAGES)
+#define SAMPLE_CACHE_STREAM_START_PAGES SAMPLE_PAGE_CLASSIC_FORWARD_WINDOW_PAGES
+#define SAMPLE_CACHE_STREAM_TAIL_PAGES SAMPLE_PAGE_CLASSIC_REVERSE_WINDOW_PAGES
+#define SAMPLE_CACHE_STREAM_FORWARD_LOOKAHEAD_PAGES SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES
+#define SAMPLE_CACHE_STREAM_REVERSE_LOOKAHEAD_PAGES SAMPLE_PAGE_CLASSIC_REVERSE_LOOKAHEAD_PAGES
+#define SAMPLE_CACHE_STREAM_STATIC_PAGES SAMPLE_CACHE_STREAM_START_PAGES
 #define SAMPLE_CACHE_FULL_MAX_BYTES (SAMPLE_CACHE_STREAM_STATIC_PAGES * SAMPLE_PAGE_BYTES)
 #define SAMPLE_CACHE_FULL_MAX_FRAMES (SAMPLE_CACHE_STREAM_STATIC_PAGES * SAMPLE_PAGE_FRAMES)
 
@@ -24,6 +24,7 @@ SDRAM_SAMPLES static sample_cache_desc_t g_sample_cache[SAMPLE_CACHE_HOT_SAMPLE_
 static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
 static AUDIO_WARM uint8_t g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + 1U];
 static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
+static CTRL_STATE uint32_t g_sample_cache_voice_generation_counter;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -55,12 +56,14 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
 static void sample_cache_cursor_reset(sample_stream_cursor_t *cursor);
 static void sample_cache_cursor_release(sample_stream_cursor_t *cursor);
 static void sample_cache_cursor_release_current_page(sample_stream_cursor_t *cursor);
-static void sample_cache_cursor_clear_lookahead(sample_stream_cursor_t *cursor);
 static void sample_cache_voice_reset(sample_cache_voice_t *voice);
 static void sample_cache_voice_release(sample_cache_voice_t *voice);
 static void sample_cache_voice_bind(sample_cache_voice_t *voice,
                                     uint16_t sample_id,
                                     uint32_t frame_index);
+static uint8_t sample_cache_voice_reserve_start_window(const sample_cache_voice_t *voice,
+                                                       const sample_cache_desc_t *desc);
+static void sample_cache_release_pending_stream_owners(void);
 static void sample_cache_voice_seek(sample_cache_voice_t *voice, uint32_t frame_pos);
 void sample_cache_diag_reset(void);
 void sample_cache_diag_get_snapshot(sample_cache_diag_snapshot_t *out_snapshot);
@@ -68,9 +71,6 @@ static uint8_t sample_cache_voice_uses_page_cache_path(const sample_cache_desc_t
                                                        uint16_t sample_id);
 static uint8_t sample_cache_voice_cursor_has_valid_span(const sample_cache_voice_t *voice,
                                                         uint32_t frame_index);
-static uint8_t sample_cache_voice_cursor_request_lookahead(sample_stream_cursor_t *cursor,
-                                                           const sample_cache_desc_t *desc,
-                                                           uint32_t current_page_index);
 static uint8_t sample_cache_voice_cursor_resolve_page(sample_cache_voice_t *voice,
                                                       const sample_cache_desc_t *desc,
                                                       uint32_t frame_index);
@@ -85,6 +85,8 @@ static void sample_cache_queue_active_stream_pages(void);
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
 static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
                                                         const sample_cache_desc_t *desc);
+static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
+                                                    const sample_cache_desc_t *desc);
 
 static uint8_t *sample_cache_io_buffer(void)
 {
@@ -127,13 +129,7 @@ static void sample_cache_cursor_reset(sample_stream_cursor_t *cursor)
     cursor->current_span.frame_count = 0U;
     cursor->current_span.offset_frames = 0U;
     cursor->current_span.valid = 0U;
-    cursor->lookahead_page.page_index = UINT32_MAX;
-    cursor->lookahead_page.slot_index = UINT32_MAX;
-    cursor->lookahead_page.generation = 0U;
-    cursor->lookahead_page.valid = 0U;
-    cursor->lookahead_page.acquired = 0U;
     cursor->valid = 0U;
-    cursor->lookahead_requested = 0U;
 }
 
 static void sample_cache_cursor_release(sample_stream_cursor_t *cursor)
@@ -144,7 +140,6 @@ static void sample_cache_cursor_release(sample_stream_cursor_t *cursor)
     }
 
     sample_cache_cursor_release_current_page(cursor);
-    sample_cache_cursor_clear_lookahead(cursor);
     sample_cache_cursor_reset(cursor);
 }
 
@@ -178,21 +173,6 @@ static void sample_cache_cursor_release_current_page(sample_stream_cursor_t *cur
     cursor->current_span.valid = 0U;
 }
 
-static void sample_cache_cursor_clear_lookahead(sample_stream_cursor_t *cursor)
-{
-    if (cursor == 0)
-    {
-        return;
-    }
-
-    cursor->lookahead_page.page_index = UINT32_MAX;
-    cursor->lookahead_page.slot_index = UINT32_MAX;
-    cursor->lookahead_page.generation = 0U;
-    cursor->lookahead_page.valid = 0U;
-    cursor->lookahead_page.acquired = 0U;
-    cursor->lookahead_requested = 0U;
-}
-
 static void sample_cache_voice_reset(sample_cache_voice_t *voice)
 {
     if (voice == 0)
@@ -205,6 +185,7 @@ static void sample_cache_voice_reset(sample_cache_voice_t *voice)
     voice->frame_pos = 0U;
     voice->direction = 1;
     voice->stop_on_underrun = 1U;
+    voice->stream_release_pending = 0U;
     sample_cache_cursor_reset(&voice->cursor);
 }
 
@@ -215,11 +196,18 @@ static void sample_cache_voice_release(sample_cache_voice_t *voice)
         return;
     }
 
+    if ((voice->active != 0U) || (voice->stream_release_pending != 0U))
+    {
+        sample_stream_manager_release_owner((uint8_t)SAMPLE_STREAM_OWNER_CLASSIC_CACHE_VOICE,
+                                            voice->voice_id,
+                                            voice->generation);
+    }
     sample_cache_cursor_release(&voice->cursor);
     voice->active = 0U;
     voice->sample_id = UINT16_MAX;
     voice->frame_pos = 0U;
     voice->direction = 1;
+    voice->stream_release_pending = 0U;
 }
 
 static void sample_cache_voice_bind(sample_cache_voice_t *voice,
@@ -237,9 +225,43 @@ static void sample_cache_voice_bind(sample_cache_voice_t *voice,
     voice->direction = 1;
     voice->active = 1U;
     voice->stop_on_underrun = 1U;
+    voice->stream_release_pending = 0U;
+    voice->generation = ++g_sample_cache_voice_generation_counter;
     voice->cursor.sample_id = sample_id;
     voice->cursor.frame_pos = frame_index;
     voice->cursor.valid = 1U;
+}
+
+static uint8_t sample_cache_voice_reserve_start_window(const sample_cache_voice_t *voice,
+                                                       const sample_cache_desc_t *desc)
+{
+    if ((voice == 0) || (desc == 0) || (voice->active == 0U)
+        || (voice->sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
+    {
+        return 0U;
+    }
+
+    if ((desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->fully_cached != 0U))
+    {
+        return 1U;
+    }
+
+    const sample_stream_active_desc_t stream_desc = {
+        .key = sample_audio_key_classic(voice->sample_id),
+        .current_frame = voice->frame_pos,
+        .end_frame = desc->total_frames,
+        .direction = voice->direction,
+        .lookahead_pages = (voice->direction < 0)
+                               ? SAMPLE_CACHE_STREAM_REVERSE_LOOKAHEAD_PAGES
+                               : SAMPLE_CACHE_STREAM_FORWARD_LOOKAHEAD_PAGES,
+        .request_current_page = 1U,
+        .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_CLASSIC_CACHE_VOICE,
+        .owner_id = voice->voice_id,
+        .owner_generation = voice->generation,
+        .state = 0,
+    };
+
+    return sample_stream_manager_reserve_active_pages(&stream_desc);
 }
 
 static void sample_cache_voice_seek(sample_cache_voice_t *voice, uint32_t frame_pos)
@@ -296,52 +318,6 @@ static uint8_t sample_cache_voice_cursor_has_valid_span(const sample_cache_voice
     return 1U;
 }
 
-static uint8_t sample_cache_voice_cursor_request_lookahead(sample_stream_cursor_t *cursor,
-                                                           const sample_cache_desc_t *desc,
-                                                           uint32_t current_page_index)
-{
-    if ((cursor == 0) || (desc == 0))
-    {
-        return 0U;
-    }
-
-    if (!((desc->mode == SAMPLE_CACHE_MODE_STREAM) && (desc->fully_cached == 0U)))
-    {
-        sample_cache_cursor_clear_lookahead(cursor);
-        return 1U;
-    }
-
-    const uint32_t next_page_index = current_page_index + 1U;
-    const uint32_t next_page_start_frame = next_page_index * SAMPLE_PAGE_FRAMES;
-    if (next_page_start_frame >= desc->total_frames)
-    {
-        sample_cache_cursor_clear_lookahead(cursor);
-        return 1U;
-    }
-
-    if ((cursor->lookahead_requested != 0U) && (cursor->lookahead_page.valid != 0U)
-        && (cursor->lookahead_page.page_index == next_page_index))
-    {
-        return 1U;
-    }
-
-    sample_page_ref_t lookahead_ref;
-    SAMPLE_CACHE_DIAG_INC(lookahead_requests);
-    if (sample_page_cache_request_page_ref(cursor->sample_id, next_page_index, &lookahead_ref) == 0U)
-    {
-        sample_cache_cursor_clear_lookahead(cursor);
-        return 0U;
-    }
-
-    cursor->lookahead_page.page_index = lookahead_ref.page_index;
-    cursor->lookahead_page.slot_index = lookahead_ref.slot_index;
-    cursor->lookahead_page.generation = lookahead_ref.page_generation;
-    cursor->lookahead_page.valid = 1U;
-    cursor->lookahead_page.acquired = 0U;
-    cursor->lookahead_requested = 1U;
-    return 1U;
-}
-
 static uint8_t sample_cache_voice_cursor_resolve_page(sample_cache_voice_t *voice,
                                                       const sample_cache_desc_t *desc,
                                                       uint32_t frame_index)
@@ -355,27 +331,10 @@ static uint8_t sample_cache_voice_cursor_resolve_page(sample_cache_voice_t *voic
     const uint32_t page_index = frame_index / SAMPLE_PAGE_FRAMES;
 
     sample_page_span_t page_span;
-    if ((cursor->lookahead_requested != 0U) && (cursor->lookahead_page.valid != 0U)
-        && (cursor->lookahead_page.page_index == page_index)
-        && (cursor->lookahead_page.slot_index < SAMPLE_PAGE_MAX_COUNT))
+    SAMPLE_CACHE_DIAG_INC(page_resolve_acquire_calls);
+    if (sample_page_cache_try_acquire_page(voice->sample_id, page_index, &page_span) == 0U)
     {
-        sample_page_ref_t lookahead_ref;
-        lookahead_ref.page_index = cursor->lookahead_page.page_index;
-        lookahead_ref.page_generation = cursor->lookahead_page.generation;
-        lookahead_ref.slot_index = cursor->lookahead_page.slot_index;
-        SAMPLE_CACHE_DIAG_INC(page_resolve_acquire_calls);
-        if (sample_page_cache_try_acquire_page_ref(voice->sample_id, &lookahead_ref, &page_span) == 0U)
-        {
-            return 0U;
-        }
-    }
-    else
-    {
-        SAMPLE_CACHE_DIAG_INC(page_resolve_acquire_calls);
-        if (sample_page_cache_try_acquire_page(voice->sample_id, page_index, &page_span) == 0U)
-        {
-            return 0U;
-        }
+        return 0U;
     }
 
     SAMPLE_CACHE_DIAG_INC(page_cache_lookup_calls);
@@ -407,14 +366,6 @@ static uint8_t sample_cache_voice_cursor_resolve_page(sample_cache_voice_t *voic
     cursor->current_span.offset_frames = frame_index - page_span.start_frame;
     cursor->current_span.valid = 1U;
     cursor->valid = 1U;
-
-    if ((cursor->lookahead_requested != 0U) && (cursor->lookahead_page.valid != 0U)
-        && (cursor->lookahead_page.page_index == page_index))
-    {
-        sample_cache_cursor_clear_lookahead(cursor);
-    }
-
-    (void)sample_cache_voice_cursor_request_lookahead(cursor, desc, page_index);
     return 1U;
 }
 
@@ -590,18 +541,31 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     {
         SAMPLE_CACHE_DIAG_INC(prepare_stream_page0_not_ready);
     }
+    for (uint32_t page_index = 1U; page_index < SAMPLE_CACHE_STREAM_START_PAGES; ++page_index)
+    {
+        if ((page_index * SAMPLE_PAGE_FRAMES) >= desc->total_frames)
+        {
+            break;
+        }
+        if (sample_page_cache_pin_page(sample_id, page_index) == 0U)
+        {
+            desc->last_error = 8U;
+            g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
+            return 0U;
+        }
+    }
 
     /*
-     * Long STREAM warm set stays capped at three 16 KiB pages:
-     * page0 for immediate start, page1 for initial forward lookahead, and
-     * the final page for reverse/pingpong entry near the tail.
+     * Long STREAM warm set keeps the old time margin with 512-frame pages:
+     * the first 12 pages cover the forward start window and the final 8 pages
+     * cover reverse/pingpong entry near the tail.
      */
     const uint32_t last_page = sample_cache_stream_last_page_index(desc);
     if (last_page != 0U)
     {
-        const uint32_t reverse_span = (last_page + 1U < SAMPLE_CACHE_STREAM_REVERSE_PAGES)
+        const uint32_t reverse_span = (last_page + 1U < SAMPLE_CACHE_STREAM_TAIL_PAGES)
                                           ? (last_page + 1U)
-                                          : SAMPLE_CACHE_STREAM_REVERSE_PAGES;
+                                          : SAMPLE_CACHE_STREAM_TAIL_PAGES;
         const uint32_t reverse_first_page = (last_page + 1U) - reverse_span;
         for (uint32_t page_index = reverse_first_page; page_index <= last_page; ++page_index)
         {
@@ -909,6 +873,38 @@ static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
     return (sample_page_cache_get_page_state(sample_id, last_page) == SAMPLE_PAGE_READY) ? 1U : 0U;
 }
 
+static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
+                                                    const sample_cache_desc_t *desc)
+{
+    if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (desc == 0)
+        || (desc->total_frames == 0U))
+    {
+        return 0U;
+    }
+
+    if ((desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->fully_cached != 0U))
+    {
+        return sample_cache_start_frame_available(sample_id);
+    }
+
+    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
+    uint32_t required_pages = SAMPLE_CACHE_STREAM_START_PAGES;
+    if (required_pages > (last_page + 1U))
+    {
+        required_pages = last_page + 1U;
+    }
+
+    for (uint32_t page = 0U; page < required_pages; ++page)
+    {
+        if (sample_page_cache_get_page_state(sample_id, page) != SAMPLE_PAGE_READY)
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
 #if BRICK6_SAMPLER_DIAG_ENABLE
 static uint32_t sample_cache_diag_count_active_voices(void)
 {
@@ -958,16 +954,31 @@ static void sample_cache_queue_active_stream_pages(void)
 
         const sample_stream_active_desc_t stream_desc = {
             .key = sample_audio_key_classic(voice->sample_id),
-            .current_frame = voice->frame_pos,
-            .end_frame = desc->total_frames,
-            .direction = voice->direction,
-            .lookahead_pages = (voice->direction < 0)
-                                   ? SAMPLE_CACHE_STREAM_REVERSE_PAGES
-                                   : SAMPLE_CACHE_STREAM_START_PAGES,
-            .request_current_page = 0U,
+        .current_frame = voice->frame_pos,
+        .end_frame = desc->total_frames,
+        .direction = voice->direction,
+        .lookahead_pages = (voice->direction < 0)
+                                   ? SAMPLE_CACHE_STREAM_REVERSE_LOOKAHEAD_PAGES
+                                   : SAMPLE_CACHE_STREAM_FORWARD_LOOKAHEAD_PAGES,
+            .request_current_page = 1U,
+            .owner_kind = (uint8_t)SAMPLE_STREAM_OWNER_CLASSIC_CACHE_VOICE,
+            .owner_id = voice->voice_id,
+            .owner_generation = voice->generation,
             .state = 0,
         };
         (void)sample_stream_manager_queue_active_pages(&stream_desc);
+    }
+}
+
+static void sample_cache_release_pending_stream_owners(void)
+{
+    for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
+    {
+        sample_cache_voice_t *const voice = &g_sample_cache_voice[i];
+        if ((voice->active == 0U) && (voice->stream_release_pending != 0U))
+        {
+            sample_cache_voice_release(voice);
+        }
     }
 }
 
@@ -1104,9 +1115,11 @@ static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_b
 
 void sample_cache_init(void)
 {
+    sd_access_gate_set_streaming_critical(0U);
     sample_page_cache_reset();
     sample_stream_manager_init();
     sample_cache_diag_reset();
+    g_sample_cache_voice_generation_counter = 0U;
 
     for (uint32_t i = 0U; i < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY; ++i)
     {
@@ -1171,21 +1184,54 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
         return 0U;
     }
 
+    g_sample_cache_last_fresult[sample_id] = FR_OK;
+
+    char prepared_path[SAMPLE_POOL_PATH_MAX];
+    if (sample_cache_trim_path_copy(prepared_path, sizeof(prepared_path), path) == 0U)
+    {
+        g_sample_cache_last_fresult[sample_id] = FR_INVALID_NAME;
+        return 0U;
+    }
+
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
+    {
+        g_sample_cache_last_fresult[sample_id] = FR_TIMEOUT;
+        return 0U;
+    }
+
+    uint8_t preflight_ok = 0U;
+    if (sd_access_fs_mount_if_needed() != 0U)
+    {
+        FIL preflight_fp;
+        const FRESULT preflight_fr = f_open(&preflight_fp, prepared_path, FA_READ);
+        if (preflight_fr == FR_OK)
+        {
+            (void)f_close(&preflight_fp);
+            preflight_ok = 1U;
+        }
+        else
+        {
+            g_sample_cache_last_fresult[sample_id] = preflight_fr;
+        }
+    }
+    else
+    {
+        g_sample_cache_last_fresult[sample_id] = FR_DISK_ERR;
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+    if (preflight_ok == 0U)
+    {
+        return 0U;
+    }
+
     sample_cache_release_slot(sample_id);
     sample_cache_clear_desc(&g_sample_cache[sample_id]);
-    g_sample_cache_last_fresult[sample_id] = FR_OK;
 
     sample_cache_desc_t *const desc = &g_sample_cache[sample_id];
     desc->sample_id = sample_id;
     desc->state = SAMPLE_CACHE_PREPARING;
 
-    if (sample_cache_trim_path_copy(desc->path, sizeof(desc->path), path) == 0U)
-    {
-        desc->state = SAMPLE_CACHE_ERROR;
-        desc->last_error = 1U;
-        g_sample_cache_last_fresult[sample_id] = FR_INVALID_NAME;
-        return 0U;
-    }
+    memcpy(desc->path, prepared_path, strlen(prepared_path) + 1U);
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
     {
@@ -1281,21 +1327,29 @@ done:
 
 void sample_cache_service(uint32_t byte_budget)
 {
+    sample_cache_release_pending_stream_owners();
+    sample_cache_queue_active_stream_pages();
+    sd_access_gate_set_streaming_critical(sample_page_cache_has_window_locks());
+
     if (byte_budget == 0U)
     {
         return;
     }
 
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U)
     {
         return;
     }
 
-    sample_cache_queue_active_stream_pages();
     sample_stream_manager_service(byte_budget);
     if (sample_stream_manager_has_pending_sd_work() != 0U)
     {
-        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
+        return;
+    }
+    if (sd_access_gate_streaming_critical_active() != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
         return;
     }
 
@@ -1330,7 +1384,7 @@ void sample_cache_service(uint32_t byte_budget)
         break;
     }
 
-    sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+    sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
 }
 
 uint8_t sample_cache_has_pending_sd_work(void)
@@ -1346,23 +1400,46 @@ uint8_t sample_cache_has_pending_sd_work(void)
 
 uint8_t sample_cache_is_ready(uint16_t sample_id)
 {
+    return (sample_cache_get_slot_readiness(sample_id) == SAMPLE_CACHE_SLOT_PLAYABLE) ? 1U : 0U;
+}
+
+sample_cache_slot_readiness_t sample_cache_get_slot_readiness(uint16_t sample_id)
+{
     if (sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
     {
-        return 0U;
+        return SAMPLE_CACHE_SLOT_ERROR;
     }
 
-    const sample_cache_state_t state = g_sample_cache[sample_id].state;
-    if (state == SAMPLE_CACHE_READY_FULL)
+    const sample_cache_desc_t *const desc = &g_sample_cache[sample_id];
+    switch (desc->state)
     {
-        return 1U;
-    }
+        case SAMPLE_CACHE_EMPTY:
+            return SAMPLE_CACHE_SLOT_EMPTY;
 
-    if ((state == SAMPLE_CACHE_READY_PARTIAL) || (state == SAMPLE_CACHE_PLAYING))
-    {
-        return 1U;
-    }
+        case SAMPLE_CACHE_PREPARING:
+        case SAMPLE_CACHE_PREFILLING:
+            return SAMPLE_CACHE_SLOT_PREPARING;
 
-    return 0U;
+        case SAMPLE_CACHE_READY_FULL:
+            return SAMPLE_CACHE_SLOT_PLAYABLE;
+
+        case SAMPLE_CACHE_READY_PARTIAL:
+        case SAMPLE_CACHE_PLAYING:
+            if (sample_cache_stream_start_base_ready(sample_id, desc) == 0U)
+            {
+                return SAMPLE_CACHE_SLOT_START_PENDING;
+            }
+            return SAMPLE_CACHE_SLOT_PLAYABLE;
+
+        case SAMPLE_CACHE_DONE:
+        case SAMPLE_CACHE_NEEDS_REPREPARE:
+        case SAMPLE_CACHE_UNDERRUN:
+            return SAMPLE_CACHE_SLOT_NEEDS_REPREPARE;
+
+        case SAMPLE_CACHE_ERROR:
+        default:
+            return SAMPLE_CACHE_SLOT_ERROR;
+    }
 }
 
 sample_cache_state_t sample_cache_get_state(uint16_t sample_id)
@@ -1420,6 +1497,12 @@ uint8_t sample_cache_start_voice_at(uint16_t sample_id, uint8_t voice_id, uint32
     sample_cache_voice_t *const voice = &g_sample_cache_voice[voice_id];
     sample_cache_voice_bind(voice, sample_id, frame_index);
     voice->voice_id = voice_id;
+    if (sample_cache_voice_reserve_start_window(voice, desc) == 0U)
+    {
+        SAMPLE_CACHE_DIAG_INC(start_window_alloc_fail);
+        sample_cache_voice_release(voice);
+        return 0U;
+    }
     desc->stream_active = (desc->mode == SAMPLE_CACHE_MODE_STREAM) ? 1U : 0U;
     desc->state = SAMPLE_CACHE_PLAYING;
     return 1U;
@@ -1801,6 +1884,7 @@ uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, fl
             && (desc->state != SAMPLE_CACHE_READY_PARTIAL)
             && (desc->state != SAMPLE_CACHE_PLAYING)))
     {
+        voice->stream_release_pending = 1U;
         voice->active = 0U;
         desc->state = SAMPLE_CACHE_UNDERRUN;
         return 0U;

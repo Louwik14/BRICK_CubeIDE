@@ -25,11 +25,11 @@ extern "C" {
 #endif
 
 #ifndef BRICK6_MULTI_DEBUG_UART
-#define BRICK6_MULTI_DEBUG_UART 1
+#define BRICK6_MULTI_DEBUG_UART 0
 #endif
 
 #ifndef BRICK6_MULTI_DEBUG_SNAPSHOT
-#define BRICK6_MULTI_DEBUG_SNAPSHOT 1
+#define BRICK6_MULTI_DEBUG_SNAPSHOT 0
 #endif
 
 #define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (4U)
@@ -126,10 +126,6 @@ typedef struct
     uint8_t first_output_valid;
 } brick6_sampler_runtime_diag_snapshot_t;
 
-extern volatile sample_cache_diag_snapshot_t g_sample_cache_diag_snapshot;
-extern volatile sample_voice_reader_diag_snapshot_t g_sample_voice_reader_diag_snapshot;
-extern volatile brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag_snapshot;
-
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
 void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id);
@@ -171,14 +167,12 @@ void brick6_sampler_runtime_stop(uint8_t track_id);
 void brick6_sampler_runtime_stop_transport_clips(void);
 void brick6_sampler_runtime_queue_stream_pages(void);
 void brick6_sampler_runtime_service(void);
-void brick6_sampler_runtime_multi_debug_dump_request(void);
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
                                          float *out_l,
                                          float *out_r,
                                          uint32_t frames);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
-void sampler_perf_diag_capture(void);
 
 #ifdef __cplusplus
 }

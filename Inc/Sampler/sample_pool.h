@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "Storage/sd_access_gate.h"
+
 #define SAMPLE_POOL_PROJECT_CAPACITY (1024U)
 #define SAMPLE_CACHE_HOT_SAMPLE_CAPACITY (64U)
 
@@ -11,7 +13,7 @@
  * still capped at the hot cache size in this pass.
  */
 #define SAMPLE_POOL_SIZE (SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
-#define SAMPLE_POOL_PATH_MAX (64U)
+#define SAMPLE_POOL_PATH_MAX (160U)
 
 typedef enum
 {
@@ -35,6 +37,7 @@ typedef enum
     SAMPLE_POOL_LOAD_SD_OPEN_FAIL,
     SAMPLE_POOL_LOAD_WAV_PARSE_FAIL,
     SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT,
+    SAMPLE_POOL_LOAD_WAV_48K_REQUIRED,
     SAMPLE_POOL_LOAD_MEMORY_LIMIT,
     SAMPLE_POOL_LOAD_SD_READ_FAIL,
     SAMPLE_POOL_LOAD_SD_SEEK_FAIL,
@@ -77,6 +80,16 @@ typedef struct
     sample_pool_entry_snapshot_t slots[SAMPLE_POOL_SIZE];
 } sample_pool_project_snapshot_t;
 
+typedef struct
+{
+    uint32_t load_open_fail_count;
+    uint32_t gate_release_on_error_count;
+    char path[SAMPLE_POOL_PATH_MAX];
+    sd_access_client_t gate_owner;
+    sd_access_client_t gate_last_owner;
+    FRESULT fatfs_result;
+} sample_pool_diag_t;
+
 /*
  * sample_pool is the project/catalog owner only.
  * Runtime audio memory is owned by sample_cache; data is legacy compatibility
@@ -92,3 +105,4 @@ void sample_pool_capture_project_snapshot(sample_pool_project_snapshot_t *out_sn
 void sample_pool_restore_project_snapshot(const sample_pool_project_snapshot_t *snapshot);
 sample_pool_load_error_t sample_pool_get_last_load_error(void);
 uint8_t sample_pool_get_last_sd_error_code(void);
+const sample_pool_diag_t *sample_pool_get_diag(void);

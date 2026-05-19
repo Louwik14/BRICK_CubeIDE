@@ -29,6 +29,16 @@ typedef enum
 
 typedef enum
 {
+    SAMPLE_CACHE_SLOT_EMPTY = 0,
+    SAMPLE_CACHE_SLOT_PREPARING,
+    SAMPLE_CACHE_SLOT_START_PENDING,
+    SAMPLE_CACHE_SLOT_PLAYABLE,
+    SAMPLE_CACHE_SLOT_NEEDS_REPREPARE,
+    SAMPLE_CACHE_SLOT_ERROR
+} sample_cache_slot_readiness_t;
+
+typedef enum
+{
     SAMPLE_CACHE_MODE_FULL = 0,
     SAMPLE_CACHE_MODE_STREAM
 } sample_cache_mode_t;
@@ -77,9 +87,7 @@ typedef struct
     uint32_t frame_pos;
     sample_stream_page_handle_t current_page;
     sample_stream_span_t current_span;
-    sample_stream_page_handle_t lookahead_page;
     uint8_t valid;
-    uint8_t lookahead_requested;
 } sample_stream_cursor_t;
 
 typedef struct
@@ -87,9 +95,11 @@ typedef struct
     uint8_t voice_id;
     uint16_t sample_id;
     uint32_t frame_pos;
+    uint32_t generation;
     int8_t direction;
     uint8_t active;
     uint8_t stop_on_underrun;
+    uint8_t stream_release_pending;
     sample_stream_cursor_t cursor;
 } sample_cache_voice_t;
 
@@ -130,7 +140,6 @@ typedef struct
     uint32_t page_resolve_acquire_calls;
     uint32_t page_release_calls;
     uint32_t page_transitions;
-    uint32_t lookahead_requests;
     uint32_t slow_path_fallbacks;
     uint32_t peek_frame_calls;
     uint32_t page_cache_lookup_calls;
@@ -142,6 +151,7 @@ typedef struct
     uint32_t prepare_stream_async;
     uint32_t prepare_stream_initial_queued;
     uint32_t prepare_stream_page0_not_ready;
+    uint32_t start_window_alloc_fail;
 } sample_cache_diag_snapshot_t;
 
 void sample_cache_init(void);
@@ -151,6 +161,7 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path);
 void sample_cache_service(uint32_t byte_budget);
 uint8_t sample_cache_has_pending_sd_work(void);
 uint8_t sample_cache_is_ready(uint16_t sample_id);
+sample_cache_slot_readiness_t sample_cache_get_slot_readiness(uint16_t sample_id);
 sample_cache_state_t sample_cache_get_state(uint16_t sample_id);
 uint8_t sample_cache_get_last_error(uint16_t sample_id);
 uint8_t sample_cache_get_last_fresult(uint16_t sample_id);

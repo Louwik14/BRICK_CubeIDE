@@ -16,7 +16,7 @@ set "OPENOCD=C:\openocd\OpenOCD-20250710-0.12.0\bin\openocd.exe"
 REM ------------------------------------------------------------
 REM  ELF CubeIDE
 REM ------------------------------------------------------------
-set "ELF=C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\build\Debug\BRICK6_CUBE.elf"
+set "ELF=C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\build\Release\BRICK6_CUBE.elf"
 REM ------------------------------------------------------------
 REM  Flash
 REM ------------------------------------------------------------
@@ -59,6 +59,7 @@ start "GDB STM32H7" cmd /k ^
  -ex "monitor reset halt" ^
  -ex "load" ^
  -ex "break HardFault_Handler""
+
 
 echo.
 echo === DEBUG PRET ===

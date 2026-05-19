@@ -17,7 +17,7 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    26U /* Removes retired Synth engine params/runtime from prototype storage layout. */
+#define PROJECT_V1_FILE_VERSION    27U /* Extends Sampler sample paths to the catalogue V2 path contract. */
 #define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
 
 typedef enum

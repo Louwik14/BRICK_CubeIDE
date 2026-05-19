@@ -44,11 +44,39 @@ SDRAM_SAMPLES static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
 static CTRL_STATE int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
 static CTRL_STATE sample_pool_load_error_t g_sample_pool_last_load_error = SAMPLE_POOL_LOAD_OK;
 static CTRL_STATE uint8_t g_sample_pool_last_sd_error_code;
+STORAGE_STATE_SDRAM static sample_pool_diag_t g_sample_pool_diag;
 
 static void sample_pool_set_error(sample_pool_load_error_t error, FRESULT fr)
 {
     g_sample_pool_last_load_error = error;
     g_sample_pool_last_sd_error_code = (uint8_t)fr;
+}
+
+static void sample_pool_diag_record_open_fail(const char *path, FRESULT fr)
+{
+    g_sample_pool_diag.load_open_fail_count++;
+    g_sample_pool_diag.gate_owner = sd_access_gate_current_owner();
+    g_sample_pool_diag.gate_last_owner = sd_access_gate_last_owner();
+    g_sample_pool_diag.fatfs_result = fr;
+    if (path != 0)
+    {
+        const size_t path_len = strlen(path);
+        const size_t copy_len = (path_len < sizeof(g_sample_pool_diag.path))
+                                    ? path_len
+                                    : (sizeof(g_sample_pool_diag.path) - 1U);
+        memcpy(g_sample_pool_diag.path, path, copy_len);
+        g_sample_pool_diag.path[copy_len] = '\0';
+    }
+    else
+    {
+        g_sample_pool_diag.path[0] = '\0';
+    }
+}
+
+static void sample_pool_release_gate_on_error(void)
+{
+    g_sample_pool_diag.gate_release_on_error_count++;
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
 }
 
 static void sample_pool_set_read_error_from_fresult(FRESULT fr)
@@ -137,6 +165,17 @@ static void sample_pool_set_error_from_cache(uint8_t cache_error, FRESULT cache_
             sample_pool_set_error(SAMPLE_POOL_LOAD_SD_READ_FAIL, cache_fr);
             break;
     }
+}
+
+static uint8_t sample_pool_wav_container_supported(const wav_info_t *info)
+{
+    return ((info != 0)
+            && ((info->audio_format == 1U) || (info->audio_format == 65534U))
+            && ((info->channels == 1U) || (info->channels == 2U))
+            && ((info->bits_per_sample == 16U)
+                || (info->bits_per_sample == 24U)
+                || (info->bits_per_sample == 32U))
+            && (info->block_align != 0U)) ? 1U : 0U;
 }
 
 /**
@@ -377,7 +416,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         sd_access_trace_end("sample_pool_f_mount", (int)mount_fr, 0U);
         if(mount_fr != FR_OK)
         {            sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, mount_fr);
-            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+            sample_pool_release_gate_on_error();
             return false;
         }
 
@@ -397,7 +436,8 @@ bool sample_pool_load(uint16_t id, const char *path)
         {
             sample_pool_set_error(SAMPLE_POOL_LOAD_SD_OPEN_FAIL, open_fr);
         }
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        sample_pool_diag_record_open_fail(trimmed_path, open_fr);
+        sample_pool_release_gate_on_error();
         return false;
     }
 
@@ -407,14 +447,21 @@ bool sample_pool_load(uint16_t id, const char *path)
     if(!wav_parser_parse_info(&fp, &info))
     {        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_PARSE_FAIL, FR_INVALID_OBJECT);
         (void)f_close(&fp);
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        sample_pool_release_gate_on_error();
         return false;
     }
 
-    if (sample_cache_wav_format_supported(&info) == 0U)
+    if (sample_pool_wav_container_supported(&info) == 0U)
     {        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT, FR_INVALID_PARAMETER);
         (void)f_close(&fp);
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        sample_pool_release_gate_on_error();
+        return false;
+    }
+
+    if (info.sample_rate != 48000U)
+    {        sample_pool_set_error(SAMPLE_POOL_LOAD_WAV_48K_REQUIRED, FR_INVALID_PARAMETER);
+        (void)f_close(&fp);
+        sample_pool_release_gate_on_error();
         return false;
     }
 
@@ -446,16 +493,43 @@ bool sample_pool_load(uint16_t id, const char *path)
     }
 
     sample_desc_t *desc = &g_sample_pool[id];
-    sample_pool_release_slot(id);
     (void)waveform_cache_request_for_wav_known_duration(next_desc.path,
                                                         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
                                                         next_desc.length_frames,
                                                         next_desc.sample_rate);
     if (sample_cache_prepare(id, next_desc.path) == 0U)
     {
-        sample_pool_set_error_from_cache(sample_cache_get_last_error(id),
-                                         (FRESULT)sample_cache_get_last_fresult(id));
-        sample_pool_clear_entry(desc);
+        const uint8_t cache_error = sample_cache_get_last_error(id);
+        const FRESULT cache_fr = (FRESULT)sample_cache_get_last_fresult(id);
+        if ((cache_error == 0U) && (cache_fr != FR_OK))
+        {
+            if (cache_fr == FR_TIMEOUT)
+            {
+                sample_pool_set_error(SAMPLE_POOL_LOAD_SD_GATE_REFUSED, cache_fr);
+            }
+            else if (cache_fr == FR_DISK_ERR)
+            {
+                sample_pool_set_error(SAMPLE_POOL_LOAD_SD_MOUNT_FAIL, cache_fr);
+            }
+            else if (cache_fr == FR_INVALID_NAME)
+            {
+                sample_pool_set_error(SAMPLE_POOL_LOAD_INVALID_PATH, cache_fr);
+            }
+            else
+            {
+                sample_pool_set_error(SAMPLE_POOL_LOAD_SD_OPEN_FAIL, cache_fr);
+                sample_pool_diag_record_open_fail(next_desc.path, cache_fr);
+            }
+        }
+        else
+        {
+            sample_pool_set_error_from_cache(cache_error, cache_fr);
+        }
+        if (!((cache_error == 0U) && (cache_fr != FR_OK)))
+        {
+            sample_pool_clear_entry(desc);
+            g_sample_slot_by_sample[id] = -1;
+        }
         return false;
     }
 
@@ -507,23 +581,20 @@ sample_pool_slot_state_t sample_pool_get_state(uint16_t id)
 
     if ((desc->valid != 0U) && (desc->length_frames != 0U))
     {
-        const sample_cache_state_t state = sample_cache_get_state(id);
-        if ((sample_cache_is_ready(id) != 0U)
-            || (state == SAMPLE_CACHE_PLAYING))
+        const sample_cache_slot_readiness_t readiness = sample_cache_get_slot_readiness(id);
+        if (readiness == SAMPLE_CACHE_SLOT_PLAYABLE)
         {
             return SAMPLE_POOL_SLOT_LOADED;
         }
 
-        if ((state == SAMPLE_CACHE_PREPARING)
-            || (state == SAMPLE_CACHE_PREFILLING)
-            || (state == SAMPLE_CACHE_DONE)
-            || (state == SAMPLE_CACHE_UNDERRUN)
-            || (state == SAMPLE_CACHE_NEEDS_REPREPARE))
+        if ((readiness == SAMPLE_CACHE_SLOT_PREPARING)
+            || (readiness == SAMPLE_CACHE_SLOT_START_PENDING)
+            || (readiness == SAMPLE_CACHE_SLOT_NEEDS_REPREPARE))
         {
             return SAMPLE_POOL_SLOT_PREPARING;
         }
 
-        if (state == SAMPLE_CACHE_ERROR)
+        if (readiness == SAMPLE_CACHE_SLOT_ERROR)
         {
             return SAMPLE_POOL_SLOT_ERROR;
         }
@@ -542,3 +613,7 @@ uint8_t sample_pool_get_last_sd_error_code(void)
     return g_sample_pool_last_sd_error_code;
 }
 
+const sample_pool_diag_t *sample_pool_get_diag(void)
+{
+    return &g_sample_pool_diag;
+}

@@ -17,6 +17,7 @@ Elargissements necessaires (preuve de cadence et points periodiques):
 - `Src/Core/brick6_app_init.c`: service superloop preview SD (`sd_preview_process()`) hors IRQ.
 - `Src/Core/brick6_app_init.c`: init et service cooperatif du `multi_record_writer` global, hors IRQ et sans client actif par defaut; le writer porte maintenant `LOOPER_RAW` et le backend `SAMPLE_WAV` utilise par Audio Rec.
 - `Src/Core/brick6_app_init.c`: validation boot des reservoirs RAW systeme Looper via `looper_storage_raw_validate()`, hors IRQ et sans creation de fichier.
+- `Src/Core/brick6_app_init.c`: chargement boot de la photo catalogue samples persistante via `wav_loader_catalog_init_load()`, sans scan automatique de `0:/Samples`.
 - `Src/Core/brick6_app_init.c`: le recorder legacy `live_recorder` / `recorder_transport` n'est plus initialise ni servi; le record produit passe par Looper RAW + `multi_record_writer`.
 
 Sous-roles internes dans `brick6_app_init.c`:
@@ -164,6 +165,7 @@ Z0 appelle principalement:
   - mixer/fx policy,
   - audio float tracks,
   - gate SD,
+  - chargement de la photo catalogue Samples persistante si le fichier catalogue existe,
   - validation reservoirs RAW Looper systeme,
   - synths/hall bridge,
   - runtime audio + wiring callback DSP,
@@ -283,6 +285,7 @@ Z0 appelle principalement:
   6. `pattern_save_service(...)` opportuniste, seulement si les rings record ne sont pas critiques.
   7. `pattern_live_service()` / apply pattern uniquement apres que les preconditions Z6/Z4 soient satisfaites.
 - Les operations project save/load, preset load, preview SD, scan/import restent refusees ou differees pendant active recording/finalizing.
+- Pendant une fenetre Sampler STREAM protegee active, `sd_access_gate` refuse toute nouvelle possession SD autre que `SD_ACCESS_CLIENT_SAMPLE_STREAM`: preview, convert/import, waveform/editor cache, pattern/project save/load et chargements samples non-stream sont differes tant que les locks de fenetre voix existent.
 - Le service writer global doit rester hors IRQ et budgete; aucune attente longue ne doit etre deplacee dans Z1.
 - Dimensionnement Looper record produit: le ring writer reste a 4 s utiles par client a 48 kHz stereo `int32_t` (`192001` frames allouees, une frame sentinel), soit environ 1.536 MiB par client et 6.144 MiB pour les 4 clients statiques. Le budget writer de 16 KiB par service conserve `sample_cache_service(32768U)` prioritaire et limite la possession du gate SD a une tranche courte; le writer execute au plus un `f_write` audio par passage et abandonne son passage si le sample cache expose du travail SD pending. Les prises Looper utilisent le reservoir RAW systeme sans preallocation de prise intermediaire; les prises LEN fixe conservent seulement la borne dure `expected_frames` / `frame_limit`.
 

@@ -45,6 +45,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/wav_loader.h"
 #include "Core/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -99,6 +100,7 @@ void brick6_app_init(void)
     sd_access_gate_init();
     waveform_cache_init();
     (void)waveform_cache_ensure_dirs();
+    wav_loader_catalog_init_load();
     sd_preview_init();
     looper_storage_raw_init();
     (void)looper_storage_raw_validate();

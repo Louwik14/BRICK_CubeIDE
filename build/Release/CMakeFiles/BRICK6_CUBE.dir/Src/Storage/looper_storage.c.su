@@ -1,4 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c:90:13:looper_storage_raw_export_log	272	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c:90:13:looper_storage_raw_export_log	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c:117:13:looper_storage_write_le16	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c:123:13:looper_storage_write_le32	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/looper_storage.c:131:13:looper_storage_build_wav_header	24	static

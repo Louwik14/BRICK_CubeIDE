@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_pool.h"
+#include "Storage/sd_access_gate.h"
 #include "wav_parser.h"
 
 #ifdef __cplusplus
@@ -31,6 +33,16 @@ typedef enum
     SD_PREVIEW_ERROR_RECORD_ACTIVE
 } sd_preview_error_t;
 
+typedef struct
+{
+    uint32_t preview_open_fail_count;
+    uint32_t gate_release_on_error_count;
+    char path[SAMPLE_POOL_PATH_MAX];
+    sd_access_client_t gate_owner;
+    sd_access_client_t gate_last_owner;
+    FRESULT fatfs_result;
+} sd_preview_diag_t;
+
 /*
  * Responsibility boundary:
  * - catalog selection stays in UI / wav_loader
@@ -45,6 +57,7 @@ void sd_preview_stop(void);
 void sd_preview_process(void);
 sd_preview_state_t sd_preview_get_state(void);
 sd_preview_error_t sd_preview_get_last_error(void);
+const sd_preview_diag_t *sd_preview_get_diag(void);
 uint8_t sd_preview_is_active(void);
 const char *sd_preview_get_path(void);
 const wav_info_t *sd_preview_get_source_info(void);

@@ -23,6 +23,7 @@ Elargissements necessaires (preuve de contrats et frontieres):
 - `Src/Storage/multi_record_writer.c` + `Inc/Storage/multi_record_writer.h`: writer SD audio multi-client avec backend `LOOPER_RAW` actif cote Looper et backend distinct `SAMPLE_WAV` actif cote Audio Rec; rings RAM statiques, push IRQ RAM-only, drain SD hors IRQ vers le backend client.
 - `Src/Storage/looper_storage.c` + `Inc/Storage/looper_storage.h`: autorite des paths Looper; validation des reservoirs RAW systeme, creation dossier durable, scan borne et reservation anti-ecrasement du nom final.
 - `Src/Storage/wav_loader.c`: scan catalogue et import WAV refuses pendant record audio actif/finalizing.
+- `Src/Storage/wav_loader.c`: catalogue RAM WAV persistant pour le browser Settings/Sampler; le boot charge seulement le fichier catalogue SD versionne, sans rescan. La synchronisation reelle avec `0:/Samples` passe par `REFRESH`/`REBUILD` explicites et respecte `sd_access_gate`.
 - `Src/Core/brick6_app_init.c`: preuve du wiring runtime (`pattern_live_init`, `project_v1_init`, `project_v1_restore_boot_context`, `pattern_live_service`).
 - `Src/UI/ui_core.c`: preuve des appels UI vers `pattern_live_capture_to_slot` et `pattern_live_queue_slot`.
 - `Src/UI/pages/ui_page_settings.c`: preuve des appels UI vers `project_v1_save_slot/load_slot/delete_slot`.
@@ -71,6 +72,7 @@ Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
 - Le service conserve une session SD exclusive et alimente un ring buffer audio pre-rendu hors IRQ.
 - Placement memoire courant: `g_sd_preview_ring` et `g_sd_preview_io` sont en `AUDIO_COLD_SDRAM` avec alignement 32; le contexte froid `g_sd_preview` est en `STORAGE_STATE_SDRAM`. Gain D1 attendu: 16 KiB pour le ring, 4 KiB pour l'I/O et ~760 B pour le contexte. Le risque accepte cote ring est limite au cout SDRAM en IRQ pendant la preview UI; le risque restant cote I/O est SDMMC/FatFs/cache a valider par preview WAV/SD.
+- `sd_access_gate` expose un diagnostic minimal de contention: owner courant, dernier owner, max hold en ticks et compteurs de refus par client. Le browser Settings/Sampler l'utilise seulement pour qualifier `SD BUSY`; il ne masque pas un refus ni ne bloque l'UI.
 
 Autorite conversion WAV import Sampler:
 - `wav_convert_*`.
@@ -81,6 +83,15 @@ Autorite conversion WAV import Sampler:
 - Refus de demarrage si record/finalize/export Looper actif, si `sample_cache` a du travail SD pending, ou si le gate SD n'est pas disponible.
 - La conversion ne modifie pas `sample_cache`, `sample_page_cache`, le streamer ou le runtime audio; apres conversion, l'import relance `sample_pool_load()` sur le path original.
 - Placement memoire: le contexte `g_wav_convert` et le pack buffer `g_wav_convert_pack` sont en SDRAM dediee `STORAGE_SCRATCH_SDRAM`; ils sont froids, FatFs/SD uniquement, hors IRQ audio et non DMA-owned.
+
+Autorite catalogue WAV Settings/Sampler:
+- `wav_loader_catalog_init_load()` valide au boot le fichier persistant `0:/BRICK/SAMPLE.CAT` (magic/version/entry_size/count/checksum) et ne charge plus la table complete en RAM; aucun scan de `0:/Samples` n'est fait au boot.
+- `wav_loader_catalog_refresh()` et `wav_loader_catalog_rebuild()` sont les seuls chemins qui scannent reellement `0:/Samples`. Ils reconstruisent `SAMPLE.CAT` sequentiellement, avec `parent_id` global stable, sans garder le catalogue complet en SDRAM apres ecriture.
+- La navigation Sampler charge des pages de dossier depuis `SAMPLE.CAT` uniquement. Le cache RAM garde deux pages LRU de `WAV_LOADER_CATALOG_VIEW_MAX=256` entrees; le scroll/page dans une page chargee est RAM-only.
+- Lire une page de dossier non cachee ouvre seulement `SAMPLE.CAT` et filtre les entrees par `parent_id` + offset local de page; aucune navigation ne parcourt l'arborescence FAT reelle ni ne parse les WAV. Si `streaming_critical` est actif et que la page demandee n'est pas deja cachee, l'acces est refuse et l'UI expose `SD BUSY`.
+- Les entrees persistantes portent toujours `path`, `name`, `parent_id`, `type`, `size`, `date`, `time`; les champs `size/date/time` restent dans `SAMPLE.CAT` pour evolution/refresh, pas requis par la vue UI courante. Le format courant du catalogue est V2: `path` vaut `WAV_LOADER_CATALOG_PATH_MAX=160` et `name` vaut `WAV_LOADER_CATALOG_NAME_MAX=48`, afin que les sous-dossiers courants ne soient plus tronques par l'ancien buffer 64 du browser plat.
+- Capacite catalogue globale restante: 9999 entrees persistantes, liee au format V1 (`count/capacity/parent_id/index` en 16 bits), pas a une table RAM. La saturation globale positionne `truncated` (`LIB FULL`); les paths trop longs sont diagnostiques separement (`PATH LONG`) pour ne pas confondre capacite catalogue et taille de vue. Il n'y a plus de limite produit fixe par dossier dans la vue Sampler: les dossiers plus grands que 256 entrees sont pagines depuis `SAMPLE.CAT`.
+- Les operations firmware qui peuvent modifier la SD n'essaient plus de maintenir localement la photo; elles peuvent seulement appeler `wav_loader_catalog_mark_stale()` / `wav_loader_catalog_notify_file_created()`. Ce flag se manifeste dans le browser par `REFRESH LIB`. Les refus REFRESH/REBUILD dus a `streaming_critical`, writer actif, export Looper ou gate SD occupe ne detruisent plus la vue catalogue RAM courante; si une reconstruction echoue, Z5 garde l'emplacement courant autant que le cache existant le permet.
 
 Autorite index Sampler/Multi:
 - `multi_sample_index_*`.
@@ -103,6 +114,7 @@ Autorite LOAD Sampler/Multi:
 - Le chargement page0 est cooperatif hors IRQ via le `sample_stream_manager` unique et le `sample_page_cache` unique; `multi_sample_service_load(byte_budget)` tient `SD_ACCESS_CLIENT_SAMPLE_CACHE` pendant le service. Page1 et les suivantes appartiennent au streaming runtime/prefetch apres trigger.
 - L'instrument reste `LOADING` tant que toutes les page0 requises ne sont pas `READY`; toute page0 `ERROR`, tout manque de cache ou toute erreur d'enregistrement bascule l'instrument en `ERROR` avec diagnostic minimal. Budget maximal READY Multi: 512 * 1 page = 512 pages = 8 MiB; marge cache restante: 512 pages = 8 MiB.
 - Placement memoire: la queue froide `g_multi_load_queue` est en SDRAM dediee `MULTI_LOAD_SDRAM`; elle n'est pas lue par l'IRQ audio et sert uniquement au LOAD cooperatif hors IRQ.
+- Placement memoire STREAM: les chemins longs des readers actifs `sample_stream_manager` sont separes dans `g_sample_stream_reader_paths` en `SDRAM_SAMPLES`; les handles `FIL` et l'etat reader sont dans `g_sample_stream_readers` en `STORAGE_STATE_SDRAM`. Ces donnees servent uniquement au service SD cooperatif hors IRQ et ne sont pas lues par l'IRQ audio.
 
 Autorite writer SD audio multi-client:
 - `multi_record_writer_*`.
@@ -126,6 +138,7 @@ Autorite writer SD audio multi-client:
 - Le cache detail waveform Rec Edit est opportuniste: il ne se construit pas pendant record/finalize, preview active, export Looper, pattern load pending ou travail SD sample-cache pending; si le gate SD est occupe par un client prioritaire, le rendu garde l'overview RAM.
 - `sd_preview_begin_range()` refuse tout record/finalize writer actif et tout export Looper. Les operations Audio Rec qui doivent reprendre la main sur le fichier temporaire (`nouveau REC`, RETURN, SAVE, ASSIGN) stoppent la preview avant de continuer; un changement START/END s'applique a la prochaine audition declenchee.
 - Priorite SD effective dans la superloop: `multi_record_writer_service` draine/finalise d'abord; hors export Looper, `sample_cache_service`, refill Looper, load Multi et `pattern_load_service` passent avant `sd_preview_process`. Une preview active est stoppee si un travail sample cache devient pending, et `pattern_load_request/service` stoppe la preview avant son acces SD.
+- Le mode `streaming_critical` de `sd_access_gate` est active par les locks de fenetre voix Sampler: seuls les services STREAM sous `SD_ACCESS_CLIENT_SAMPLE_STREAM` peuvent demarrer une nouvelle possession SD. Preview, convert/import, editor/waveform cache, pattern, project et chargements samples non-stream sont differes. Une operation deja proprietaire du gate n'est pas preemptee dans cette passe.
 - Le writer interdit le demarrage simultane de deux clients actifs: Looper RAW actif bloque Sample Rec et Sample Rec actif bloque Looper REC. Le playback Looper peut rester source routee d'Audio Rec.
 - `multi_record_writer_service(byte_budget)` acquiert le gate sans bloquer seulement si le sample cache n'a pas de travail SD pending, packe `int32_t` stereo vers PCM 24-bit interleaved par chunk borne de 1024 frames, execute au plus un `f_write` audio par passage, puis relache le gate.
 - `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`; en SAMPLE_WAV, elle patch le header puis sync/close/rename.
@@ -261,9 +274,9 @@ Points de lecture principaux:
 
 ### `wav_loader.c`
 - `g_wav_pcm` reste en `AUDIO_COLD_SDRAM` pour le buffer PCM charge.
-- `g_wav_catalog` (`wav_loader_catalog_entry_t[WAV_LOADER_CATALOG_MAX]`) est place en `UI_SDRAM`: catalogue storage/UI froid, rafraichi par scan FatFs et consulte hors IRQ audio; ce n'est pas un payload DMA ni le ring preview SD critique.
+- `g_wav_catalog_views` garde deux pages LRU de catalogue Sampler en `UI_SDRAM`; le catalogue complet reste dans `0:/BRICK/SAMPLE.CAT`.
 - `g_wav_fs` est place en `STORAGE_STATE_SDRAM`: handle FatFs froid, non DMA-owned, monte par service storage hors IRQ audio.
-- Le catalogue scanne les WAV a la racine `0:/` et les prises Looper durables sous `0:/PROJECT/LOOPS`, exposees avec un prefixe visible `LOOPS/`.
+- Le catalogue scanne `0:/Samples` uniquement pendant `REFRESH` / `REBUILD`; les dossiers sont ecrits avant les fichiers dans chaque dossier pour que le browser les affiche en tete.
 
 ### `project_sd_bank.c`
 - `g_project_slot_has_data[16]`: presence des slots projet.
@@ -752,7 +765,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - La notification catalogue apres SAVE reste seulement pour l'affichage `Settings > SAMPLER > SD`; elle ne devient pas l'autorite du playback Looper.
 - Le service SD reste ordonne par `brick6_app_process`: le writer record est servi avant tout pour terminer un drain/finalize deja actif; quand un SAVE RAW -> WAV est actif, l'export devient prioritaire avec budget `516096U` et suspend sample cache, refill Looper, pattern load et preview SD. Hors export actif, l'ordre normal redevient sample cache, refill Looper, export opportuniste si aucun refill Looper n'est pending, puis pattern load. `sample_cache_service` ne service que la plage hot `0..SAMPLE_CACHE_HOT_SAMPLE_CAPACITY-1`; le Looper service la plage transient `SAMPLE_PAGE_CACHE_LOOPER_ID_BASE..SAMPLE_PAGE_CACHE_LOOPER_ID_BASE+SEQ_TRACK_COUNT-1`.
 - Pendant la phase COPY, l'export garde le gate SD pour une tranche budgetee complete et peut copier huit blocs de `64512` octets maximum par appel service. Le contexte `g_looper_raw_export`, le buffer I/O SAVE `g_looper_raw_export_io` et le diagnostic `g_looper_raw_export_diag` sont froids, hors IRQ, places en SDRAM dediee `RECORDER_SCRATCH_SDRAM` et alignes 32 pour preserver RAM_D1 aux etats audio hot. Le chunk est multiple de 512 octets et de 6 octets/frame PCM24 stereo, et le premier write audio commence a l'offset WAV 512, ce qui conserve les offsets secteur alignes. Le diagnostic export expose les compteurs `chunks_copied`, `bytes_copied`, `service_calls`, `gate_acquire_count`, les temps cumules open/read/write/copy/sync/verify/close/total et le dernier `FRESULT`.
-- Les logs UART SAVE Looper sont actifs par defaut hors IRQ audio sur USART1, prefixe `[LSAVE]`: reservation de path, start avec `data_offset`, phases, lignes COPY par service, DONE/FAIL avec resume read/write/sync/verify/close.
+- Les logs UART SAVE Looper sont des traces de debug compile-time desactivees par defaut (`LOOPER_STORAGE_EXPORT_UART_LOG=0`); le comportement produit garde uniquement le diagnostic froid `g_looper_raw_export_diag`.
 - Le demarrage SAVE refuse un writer recording/finalizing, refuse transport running cote UI, stoppe une preview SD active avant reservation du path final, puis bloque les entrees project/pattern/import/scan via `looper_storage_raw_export_is_active()`. L'export ne cede plus a `sample_cache_has_pending_sd_work()`; un refus prolonge avant ouverture bascule en erreur `WAIT_TIMEOUT` pour ne pas laisser l'etat actif indefiniment.
 - Limite restante: le refill Looper partage le budget global du `sample_page_cache`; une page manquante produit un silence local jusqu'au prochain refill.
 - Le silence de page manquante ne bloque pas la position de lecture Looper: le playhead continue, et la demande de pages couvre une fenetre ahead modulo pour anticiper les pages suivantes et le wrap de boucle.
@@ -812,3 +825,16 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 - PATTERN_VERSION=20 et PROJECT_V1_FILE_VERSION=26 marquent le retrait du moteur Synth prototype retire et de ses anciens params TONE de PARAM_COUNT.
 - Aucune migration legacy n'est conservee: les anciens patterns/projets prototype sont refuses par version/payload stricts.
+
+## Addendum 2026-05-18 - paths Sampler catalogue/load/preview
+
+- Le contrat path produit du Sampler classique est aligne sur le catalogue WAV V2: `SAMPLE_POOL_PATH_MAX=160`.
+- `sample_pool`, `sample_cache`, `sample_page_cache`, `sample_stream_manager` et `sd_preview` acceptent le meme path complet que `SAMPLE.CAT`; il n'y a plus de limite cachee a 64 ou 96 caracteres sur LOAD/preview apres affichage catalogue.
+- Les buffers path chauds restent des metadonnees froides SDRAM cote pool/cache/page-cache/preview; les strings de readers de stream actifs sont aussi separees en `SDRAM_SAMPLES`, hors IRQ audio critique, tandis que les handles `FIL` des readers STREAM sont en `STORAGE_STATE_SDRAM` avec init explicite au boot.
+- `PROJECT_V1_FILE_VERSION=27` marque la rupture prototype du snapshot projet `sample_pool` due a l'extension des paths de slots Sampler. Les anciens projets prototype sont refuses par version/payload stricts, sans migration legacy.
+
+## Addendum 2026-05-18 - erreurs catalogue/preview non destructives
+
+- `wav_loader_catalog_load_view()` construit une vue de dossier dans un scratch SDRAM et ne remplace une entree LRU valide qu'apres lecture complete de `SAMPLE.CAT`; un `f_open`/`f_read` en erreur conserve donc l'ancienne vue valide.
+- Les diagnostics froids `preview_open_fail_count`, `load_open_fail_count`, `catalog_open_fail_count`, `catalog_view_preserved_on_error_count` et `gate_release_on_error_count` gardent le path, le client gate courant/dernier et le `FRESULT` de la derniere erreur d'ouverture.
+- `sample_cache_prepare()` preflight le path avant de liberer l'ancien slot cache, afin qu'un refus gate/mount/open initial ne vide pas un slot deja charge.

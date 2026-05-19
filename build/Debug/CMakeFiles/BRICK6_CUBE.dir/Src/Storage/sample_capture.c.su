@@ -31,7 +31,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:2403:16:sample_capture_sign_crosses	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:2408:17:sample_capture_add_saturate_u32	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:365:13:sample_capture_debug_mark	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:290:13:sample_capture_debug_reset	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:463:13:sample_capture_waveform_reset	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:650:13:sample_capture_editor_cache_reset	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:662:13:sample_capture_global_overview_reset	8	static
@@ -58,7 +57,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:2592:16:sample_capture_prepare_paths	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:391:17:sample_capture_len_to_frames	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:339:16:sample_capture_path_is_temp	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:272:13:sample_capture_debug_log	272	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:719:16:sample_capture_global_overview_can_build	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:777:13:sample_capture_global_overview_service	632	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:1307:16:sample_capture_editor_cache_can_fill	16	static

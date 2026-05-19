@@ -42,6 +42,7 @@ Dependances de Z5 sans appartenir a Z5:
 - Z4 `seq_runtime/seq_edit/seq_model` (transport, pattern mode, clipboard seq).
 - Storage (`pattern_live_ram`, `undo_v1`) pour recall/store/undo.
 - Keyboard runtime/hall engine pour comportements mode hall.
+- Z6 `wav_loader` / `sample_pool` / `sd_preview` pour le browser Settings/Sampler: Z5 affiche les snapshots RAM et declenche seulement les operations SD explicites.
 
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
@@ -124,6 +125,7 @@ Autorite hall modes:
 
 Autorite navigation boutons param:
 - `ui_navigation_handle_event` (table `g_ui_nav_rules` data-driven).
+- Quand `UI_PAGE_SETTINGS` est ouverte, la navigation globale par boutons param est neutralisee afin que les actions locales Settings/Sampler restent proprietaires de leurs evenements locaux.
 - Disponibilité d'ensembles template:
   - `ui_navigation_is_page_available` combine:
     - contrat structurel Z2 (`track_runtime_is_ui_ensemble_available`),
@@ -204,6 +206,17 @@ Etat page active:
 - `g_ui_current_page_id` + `g_ui_pages[]` dans `ui_page_manager.c`.
 - Ecriture: `ui_page_manager_init`, `ui_page_manager_register`, `ui_page_set`.
 - Lecture: `ui_page_get`, `ui_page_get_id`, navigation/settings.
+
+Etat browser Settings/Sampler:
+- `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sampler courante sans relire la SD.
+- Le catalogue WAV global vient de Z6 `wav_loader`; l'entree dans le browser Sampler ne rescane plus automatiquement. Elle charge la vue racine depuis le cache de vues Z6 ou depuis `0:/BRICK/SAMPLE.CAT`, ou affiche `REFRESH LIB` si le catalogue est absent/stale.
+- Le browser Sampler intercepte les boutons physiques `BTN_PAGE_1..BTN_PAGE_4` uniquement dans `UI_SETTINGS_VIEW_SAMPLER`: `BTN_PAGE_1` = RETURN, `BTN_PAGE_2` sans SHIFT = OK sur l'entree sample courante, `BTN_PAGE_3` = reserve/no-op, `BTN_PAGE_4` = REFRESH sans SHIFT et REBUILD avec SHIFT. `BTN_COPY` et `BTN_PASTE` sont explicitement no-op dans le browser Sampler; les confirmations locales utilisent RETURN/OK. Hors browser Sampler, les boutons page gardent leur comportement normal de subpage.
+- La navigation fichier/dossier du browser Sampler ne scanne jamais `0:/Samples`: page de dossier deja cachee = RAM-only; page non cachee = lecture depuis `SAMPLE.CAT`; `streaming_critical` + page absente = refus `SD BUSY`.
+- Capacite catalogue Z6 courante: 9999 entrees persistantes. La vue locale Sampler est paginee par blocs de `WAV_LOADER_CATALOG_VIEW_MAX=256` lignes; un dossier de plus de 256 entrees reste navigable par chargements de pages depuis `SAMPLE.CAT`.
+- Dans chaque dossier, l'entree virtuelle `..` est affichee en tete hors racine, puis les dossiers prefixes `> `, puis les fichiers WAV; `LIB FULL` reste reserve a la saturation globale du catalogue V1. Les paths trop longs ne vident pas la vue: l'UI affiche `PATH LONG` seulement au moment d'une action sur une entree dont le path depasse le contrat backend Sampler officiel (`SAMPLE_POOL_PATH_MAX=160`, aligne avec `SAMPLE.CAT` V2).
+- Le footer du browser Sampler est decoupe en quatre zones egales alignees avec les boutons PAGE (`RETURN | OK | - | REFRESH/REBUILD`). La barre verticale centrale reste un rendu RAM-only et affiche un tiret de position selon le focus courant: `sample_selected/sample_child_count` cote bibliotheque ou `sample_slot_selected/SAMPLE_POOL_SIZE` cote slots.
+- Apres REFRESH/REBUILD Sampler, Z5 tente de restaurer le dossier courant par path catalogue, puis l'entree selectionnee; si le dossier a disparu, il remonte au parent existant le plus proche, sinon racine. Un refus SD/streaming garde l'emplacement courant et affiche `SD BUSY`.
+- Quand le refus vient du `sd_access_gate`, le feedback Settings/Sampler qualifie le bloqueur (`SD STREAM`, `SD CACHE`, `SD PREV`, etc.) a partir du diagnostic Z6 sans lancer de scan ni retry bloquant.
 
 Etat template families/subpages:
 - `g_ui_template_family_registry[...]` dans `ui_template_page.c`; placement `UI_SDRAM` car registry metadata UI non audio et non DMA.
@@ -517,20 +530,17 @@ Points factuels:
   - `Enc3`: focus gauche/droite borne, sans wrap;
   - `Enc4`: volume preview `sd_preview`;
   - focus gauche par defaut.
-- Actions focus gauche:
-  - `COPY` charge un fichier dans le premier slot libre; si la selection est un dossier, entre dans ce dossier;
-  - `SHIFT+COPY` remplace le slot selectionne a droite, avec confirmation si le slot est non vide;
-  - `PASTE` remonte au dossier parent ou sort du browser depuis `0:/Samples`;
-  - `SHIFT+PASTE` est ignore.
-- Actions focus droite:
-  - `COPY` clear le slot selectionne avec confirmation `COPY=YES / PASTE=NO`;
-  - `PASTE` remonte au dossier parent ou sort du browser depuis `0:/Samples`;
-  - `SHIFT+COPY` remplace le slot selectionne par le fichier gauche courant, avec confirmation si le slot est non vide;
-  - `SHIFT+PASTE` est ignore.
+- Actions PAGE:
+  - `PAGE 1` RETURN remonte au dossier parent ou sort du browser depuis `0:/Samples`;
+  - `PAGE 2` OK sur focus gauche entre dans un dossier, remonte sur `..`, ou charge un fichier dans le premier slot libre;
+  - `PAGE 2` OK sur focus droite conserve la grammaire d'action de slot existante;
+  - `PAGE 3` est reserve/no-op;
+  - `PAGE 4` REFRESH, `SHIFT+PAGE 4` REBUILD.
+- `BTN_COPY` et `BTN_PASTE` sont no-op dans ce browser.
 - Les appuis Hall dans ce browser declenchent la preview de la selection surlignee: fichier gauche si focus bibliotheque, sample du slot si focus slots; aucun acces FatFs n'est ajoute au chemin audio IRQ.
 - Le clear de slot ne supprime jamais le fichier SD. Les operations delete/rename/move de fichiers SD restent hors contrat UI.
 - Si un load vers slot Sampler refuse un WAV PCM convertible car incompatible avec le format runtime 48 kHz, le browser propose `CONVERT TO 48K ?`.
-- `COPY` confirme la conversion; `PASTE` annule.
+- `PAGE 2` confirme la conversion; `PAGE 1` annule.
 - Si transport, start pending, record writer ou export Looper est actif au moment du YES, l'UI affiche `STOP AUDIO TO CONVERT` et annule: l'utilisateur doit stopper l'audio lui-meme.
 - Conversion acceptee: la preview est stoppee, `wav_convert` convertit destructivement le fichier source en WAV PCM24 stereo 48 kHz avec progression `CONVERT n%`, puis l'UI relance le load du slot cible sur le meme path.
 - Pendant la conversion, les events du browser sont ignores pour eviter navigation/load concurrente; le chemin preview et le runtime audio restent inchanges.
@@ -549,12 +559,11 @@ Points factuels:
   - `Enc2`: navigation colonne droite + focus droite;
   - `Enc3` et `Enc4`: reserves/inutilises dans cette passe.
 - Actions:
-  - focus gauche `COPY`: prepare si besoin puis charge dans le premier slot Multi libre;
-  - focus gauche `SHIFT+COPY`: prepare si besoin puis charge/remplace le slot droit selectionne;
-  - focus droit `COPY`: unload du slot Multi selectionne avec confirmation `COPY=YES / PASTE=NO`;
-  - focus droit `SHIFT+COPY`: remplace le slot droit par l'instrument gauche, avec confirmation si le slot est occupe;
-  - `PASTE`: retour; `SHIFT+PASTE` ignore.
-- Si le dossier n'a pas encore d'index, la confirmation visible est `PREPARE <name>?`, `COPY=YES`, `PASTE=NO`; l'action appelle l'import Multi existant pour creer/mettre a jour `.brickmulti`.
+  - `PAGE 1` RETURN;
+  - `PAGE 2` OK sur focus gauche prepare si besoin puis charge dans le premier slot Multi libre;
+  - `PAGE 2` OK sur focus droit unload le slot Multi selectionne avec confirmation;
+  - `PAGE 3` et `PAGE 4` reserves/no-op.
+- Si le dossier n'a pas encore d'index, la confirmation visible est `PREPARE <name>?`, `OK=YES`, `RETURN=NO`; l'action appelle l'import Multi existant pour creer/mettre a jour `.brickmulti`.
 - Le load appelle le loader Multi cooperatif existant et reutilise un slot deja charge si le meme path `.brickmulti` est deja present; aucun nouveau cache, streamer ou acces FatFs IRQ n'est ajoute.
 - Quand la track active est `Sampler/Multi`, un load/reuse depuis ce browser assigne le slot instrument a cette track et enregistre le path projet associe; le pool global reste l'autorite des instruments charges.
 - Un manque de capacite sample du pool est refuse par feedback court `FULL need X`.
@@ -691,3 +700,9 @@ Points factuels:
 - Le renderer UI ne lit toujours pas la SD dans draw; les tuiles absentes gardent le fallback overview globale, ancienne line compatible ou cache audio RAM local.
 - L'ancien cache audio tuile editor-owned ne couvre plus les vues `>= 256` frames/pixel; ces vues larges/intermediaires appartiennent au `.brkwave`, et le cache audio local reste reserve aux zooms plus fins bornes.
 - Le browser ne doit pas exposer `0:/BRICK/.wavecache/`; le cache waveform est un detail systeme reconstructible, pas un asset utilisateur.
+
+## 25. Contrat Settings/Sampler erreurs SD locales
+
+- Un echec `OPEN FAIL` pendant LOAD ou PREVIEW reste local a l'action et ne relance pas de scan ni de refresh destructif du browser.
+- `ui_page_settings` conserve la derniere liste valide tant qu'une lecture catalogue demandee par la navigation n'a pas abouti; un refus SD ou une erreur I/O catalogue affiche un feedback court sans vider `sample_entries`, `sample_dir` ni `sample_parent_id`.
+- Le rendu Settings/Sampler reste RAM-only: il lit uniquement les snapshots UI et les vues catalogue deja chargees, jamais la SD.
