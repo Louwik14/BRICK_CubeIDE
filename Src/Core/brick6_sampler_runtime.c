@@ -386,6 +386,53 @@ static void brick6_sampler_runtime_note_common_play_plan_result(
     }
 }
 
+static uint8_t brick6_sampler_runtime_start_gate_check(
+    const sample_play_plan_t *plan,
+    uint8_t classic)
+{
+    sample_play_plan_ready_result_t ready;
+    const sample_play_plan_ready_status_t status =
+        sample_play_plan_check_ready_requirements(plan, &ready);
+
+    g_brick6_sampler_runtime_diag.start_gate_last_status = (uint32_t)status;
+    g_brick6_sampler_runtime_diag.start_gate_last_missing_page = ready.first_missing_page;
+    g_brick6_sampler_runtime_diag.start_gate_last_pending_page = ready.first_pending_page;
+
+    if (status == SAMPLE_PLAY_PLAN_READY_COMPLETE)
+    {
+        return 1U;
+    }
+
+    g_brick6_sampler_runtime_diag.start_gate_reject_count++;
+    if (classic != 0U)
+    {
+        g_brick6_sampler_runtime_diag.start_gate_reject_classic_count++;
+    }
+    else
+    {
+        g_brick6_sampler_runtime_diag.start_gate_reject_multi_count++;
+    }
+
+    switch (status)
+    {
+        case SAMPLE_PLAY_PLAN_READY_INVALID:
+            g_brick6_sampler_runtime_diag.start_gate_invalid_plan_count++;
+            break;
+        case SAMPLE_PLAY_PLAN_READY_PENDING:
+            g_brick6_sampler_runtime_diag.start_gate_pending_count++;
+            break;
+        case SAMPLE_PLAY_PLAN_READY_PARTIAL:
+            g_brick6_sampler_runtime_diag.start_gate_partial_count++;
+            break;
+        case SAMPLE_PLAY_PLAN_READY_MISSING:
+        default:
+            g_brick6_sampler_runtime_diag.start_gate_missing_count++;
+            break;
+    }
+
+    return 0U;
+}
+
 static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_play_plan(
     const brick6_sample_common_trigger_t *trigger,
     sample_resolved_source_t *out_source,
@@ -1474,6 +1521,10 @@ static void brick6_sampler_runtime_trigger_slicer(uint8_t track_id)
     {
         return;
     }
+    if (brick6_sampler_runtime_start_gate_check(&common_plan, 1U) == 0U)
+    {
+        return;
+    }
 
     if (sample_cache_start_voice_at(voice->sample_id, cache_voice_id, common_plan.start_frame)
         == 0U)
@@ -2272,6 +2323,13 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
             g_sampler_voice[track_id].active = 0U;
             return;
         }
+        if (brick6_sampler_runtime_start_gate_check(&common_plan, 1U) == 0U)
+        {
+            voice->position = 0.0f;
+            sample_voice_reader_reset(&voice->reader);
+            g_sampler_voice[track_id].active = 0U;
+            return;
+        }
         if (sample_cache_start_voice_at(voice->sample_id,
                                         brick6_sampler_runtime_cache_voice_id(track_id),
                                         common_plan.start_frame) != 0U)
@@ -2997,6 +3055,18 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
     brick6_sampler_runtime_note_common_play_plan_result(common_result, 0U);
     if (common_result != BRICK6_SAMPLE_COMMON_PLAN_OK)
     {
+        return 0U;
+    }
+    if (brick6_sampler_runtime_start_gate_check(&common_plan, 0U) == 0U)
+    {
+        brick6_sampler_runtime_multi_release_voice_stream_owner(multi_voice);
+        sample_voice_reader_reset(&multi_voice->reader);
+        multi_voice->active = 0U;
+        multi_voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+        multi_voice->trigger_order = 0U;
+        multi_voice->owner_track_id = UINT8_MAX;
+        multi_voice->release_pending = 0U;
+        sample_stream_manager_active_state_reset(&multi_voice->stream_state);
         return 0U;
     }
 

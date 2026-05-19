@@ -17,7 +17,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
-- `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare page0 uniquement pour chaque sample reel via le `sample_page_cache`/`sample_stream_manager` uniques.
+- `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
 - `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream, et le stockage/acquire/release des pages reste ici. Le lookup hot passe par un index statique borne keyed par `sample_audio_key_t {domain, object_id}` + `page_index`; les scans free/evict conservent un passage borne avec curseur.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
@@ -48,7 +48,7 @@ Contrat page-cache/streamer:
 - `sample_stream_manager` porte la meme cle pour readers, pending requests et load targets; il reste l'unique streamer FatFs et reste hors IRQ.
 - `Sampler/Looper` utilise `domain=LOOPER`; son `cache_id` restant est un identifiant legacy/diagnostic, pas l'autorite cache.
 - Capacites logiques: `CLASSIC` garde 64 ids, `LOOPER` garde une fenetre 64 ids, `MULTI` reserve 512 ids (`object_id 0..511`) sans reserver physiquement 512 pages au boot.
-- Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 16 MiB / pages stereo float de 512 frames, le plafond theorique est 4096 pages; charger page0 seul pour 512 samples Multi consomme au maximum 512 pages, soit 2 MiB, et laisse environ 3584 pages / 14 MiB pour Classic/Looper/lookahead.
+- Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 16 MiB / pages stereo float de 512 frames, le plafond theorique est 4096 pages; preparer 16 pages pour 512 samples Multi consommerait tout le budget theorique, donc les presets Multi reels doivent rester bornes par le nombre de samples declenchables et la taille des samples courts.
 - Le budget global reste fixe a 16 MiB; les pages stereo float font 512 frames / 4 KiB et le pool physique passe a 4096 pages sans augmenter la RAM audio globale.
 - Une requete `MULTI` ne peut pas evincer une page non-`MULTI`; si le pool est plein a cause de Classic/Looper, l'allocation Multi echoue proprement au lieu de degrader les comportements existants.
 
@@ -504,7 +504,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 - `brick6_sampler_runtime` expose un hook interne `brick6_sampler_runtime_trigger_multi_note_velocity()` pour declencher un instrument Multi deja `READY`, sans UI ni persistence projet.
 - Le playback Multi reutilise `sample_voice_reader` et le `sample_page_cache` key-based avec `domain=MULTI`; aucun second reader/cache/streamer n'est ajoute.
-- La capacite produit Multi finale est 512 samples max. Un instrument `READY` garantit page0 pour tous les samples reels. Page1 n'est plus requise au LOAD; elle est demandee ensuite par le prefetch runtime commun si une voix en a besoin.
+- La capacite produit Multi finale est 512 samples max. Un instrument `READY` garantit maintenant la ration froide 8192 frames pour tous les samples reels, ou toutes les pages d'un sample plus court. Le prefetch runtime commun entretient ensuite la fenetre active au-dela de cette ration.
 - La voix Multi est forward simple, sans loop/reverse/pingpong/stretch, avec varispeed lineaire derive de l'ecart note/root retourne par `multi_sample_pool_resolve()`.
 - L'IRQ audio lit uniquement les pages RAM READY. Une page manquante stoppe localement la voix et incremente le diagnostic underrun; aucun FatFs n'est appele depuis le rendu.
 - Le prefetch continu Multi est entretenu hors IRQ par le seam explicite `brick6_sampler_runtime_queue_stream_pages()`, appele tot dans la superloop avant `sample_cache_service()` et avant le writer SD; `sample_cache_service()` sert ensuite le `sample_stream_manager` avant les clients SD moins critiques. `brick6_sampler_runtime_service()` continue de refaire la queue Multi et de traiter les releases/diagnostics hors IRQ. Chaque voix Multi active expose sa position au noyau `sample_stream_manager_queue_active_pages()` avec une cle `domain=MULTI`, `object_id=multi_sample_id`, et demande jusqu'a `current_page + 27`.
@@ -524,7 +524,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `sample_stream_manager_queue_active_pages()` est le noyau commun minimal d'entretien des voix streamées actives, basé sur `sample_audio_key_t {domain, object_id}`, `current_frame`, `end_frame`, direction et lookahead.
 - `sample_cache_queue_active_stream_pages()` conserve son rôle legacy Classic/Clip/OneShot, mais délègue maintenant le calcul page courante/lookahead/priorité au noyau commun sans dépendance nouvelle à `sample_cache_voice_t`.
 - `Sampler/Multi` expose ses voix actives au même noyau via `domain=MULTI`, `object_id=multi_sample_id`, `current_frame=reader.position`, `end_frame=region_end`, direction forward et `SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES`; la policy locale page2/urgent séparée est retirée.
-- L'anti-spam monotone par voix Multi vit dans `sample_stream_active_state_t` et reste hors IRQ. READY Multi reste page0 seul, sans prechargement global page1.
+- L'anti-spam monotone par voix Multi vit dans `sample_stream_active_state_t` et reste hors IRQ. READY Multi n'est plus limite a page0: le LOAD prepare la ration froide 8192 frames avant de declarer l'instrument pret.
 - L'IRQ audio continue de lire uniquement RAM/page-cache via `sample_voice_reader`; aucune SD/FatFs/malloc/UART n'est ajoutée au rendu.
 - Quand une voix Multi s'arrête, la fermeture du reader STREAM et le nettoyage des pending associés sont différés vers `brick6_sampler_runtime_service()` hors IRQ; le rendu ne ferme jamais de `FIL` et ne touche pas FatFs.
 
@@ -644,3 +644,33 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Les diagnostics conserves sont les echecs de construction du plan commun via `common_plan_classic_build_fail`, `common_plan_multi_build_fail` et `common_plan_last_reason`, ainsi que les diagnostics produit existants de reject, underrun, miss et stop.
 - Les anciens champs/structures legacy encore presents restent utilises pour calculer l'etat musical, construire la source resolue commune ou maintenir les chemins non concernes; ils ne sont plus un fallback de playback Sampler Classic/Slicer/Multi.
 - Cette passe ne modifie ni start gate strict READY, ni cache opportuniste, ni streamer/fenetre, ni loop/reverse Multi, ni parametres UI.
+
+## Addendum 2026-05-19 - preparation froide 8192 frames Sampler
+
+- La ration minimale produit reste `SAMPLE_PREP_MIN_READY_FRAMES = 8192` frames. Avec l'implementation actuelle `SAMPLE_PAGE_FRAMES = 512`, cela donne 16 pages, mais la taille de page reste un detail interne.
+- `SAMPLE_PAGE_MIN_READY_PAGES` est seulement la conversion de la ration logique vers les pages internes actuelles.
+- Classic STREAM prepare maintenant la base forward correspondant a 8192 frames depuis le debut du sample, ou tout le sample s'il est plus court; le seuil FULL explicite suit donc 8192 frames.
+- Multi LOAD ne se limite plus a page0: chaque sample du preset demande la ration logique 8192 frames convertie en pages internes, ou toutes ses pages si le sample est plus court, avant de passer l'instrument en `READY`.
+- Cette passe ne branche pas encore le start gate strict: `sample_play_plan_check_ready_requirements()` reste non autoritaire, et `QUEUED/LOADING` ne doivent toujours pas etre comptes comme audio disponible dans le futur gate.
+- Reverse Classic garde provisoirement le socle tail historique de 8 pages; la ration reverse complete devra etre preparee depuis `play_plan.start_frame` avant activation stricte pour reverse/pingpong.
+- Slicer garde seulement ses demandes d'entree de slice existantes; une ration 8192 par slice start reste a traiter separement pour eviter un gonflement cache/load non borne.
+- Le cache opportuniste n'est pas encore supprime dans cette passe.
+
+## Addendum 2026-05-19 - profils de preparation Sampler
+
+- Le moteur playback reste commun (`sample_play_plan_t`, reader, page-cache, streamer), mais la policy de preparation est explicite par profil.
+- `SAMPLE_PREP_PROFILE_CLASSIC` couvre le sample creatif Classic/Slicer: le coût peut depasser la ration forward a cause des futurs start/end/reverse/loop/pingpong; cette passe ne change pas encore ces chemins.
+- `SAMPLE_PREP_PROFILE_MULTI` couvre l'instrument Multi: preparation predictable depuis frame 0, sans start/end/reverse utilisateur, avec ration 8192 frames ou sample court complet.
+- Option B est le modele privilegie: ration logique 8192 frames, implementee par plusieurs pages internes et potentiellement lisible/servie de facon groupee si les pages sont contigues.
+- Option C reste testable plus tard: une page physique/logique de 8192 frames ne doit pas changer le contrat produit, seulement la conversion interne.
+- Le budget Multi explicite est `SAMPLE_PREP_MULTI_BUDGET_BYTES = 8 MiB`, converti en `SAMPLE_PREP_MULTI_BUDGET_PAGES` selon `SAMPLE_PAGE_BYTES`; avec les pages actuelles de 4096 B, cela donne 2048 pages.
+- Le LOAD Multi additionne `ceil(min(total_frames, 8192) / SAMPLE_PAGE_FRAMES)` pour tous les samples du preset. Si le total depasse le budget, le preset est refuse avec `MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED`; il n'y a pas de fallback silencieux a page0.
+- Les diagnostics de load exposent les pages requises, le budget pages et le nombre de samples preparables.
+
+## Addendum 2026-05-19 - start-gate strict READY 8192
+
+- Le start gate strict est maintenant branche sur les triggers Classic/Slicer et Multi apres construction du `sample_play_plan_t` commun et avant demarrage/bind de voix.
+- `sample_play_plan_check_ready_requirements()` est autoritaire pour la ration minimale: seul `SAMPLE_PAGE_READY` valide le depart; `QUEUED`, `LOADING`, missing ou plan invalide refusent proprement le trigger.
+- Les refus incrementent les diagnostics runtime `start_gate_reject_*`, avec dernier statut, premiere page missing, premiere page pending et compteurs par raison invalid/missing/pending/partial.
+- L'echafaudage shadow start-gate est retire apres validation terrain du gate reel.
+- Cette passe ne modifie ni reader, ni cache opportuniste, ni streamer/fenetre, ni budget Multi, ni loop/reverse Multi.

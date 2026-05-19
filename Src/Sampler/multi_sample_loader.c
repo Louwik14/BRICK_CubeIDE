@@ -21,6 +21,14 @@ typedef struct
     char path[MULTI_SAMPLE_LOADER_PATH_MAX];
 } multi_sample_load_request_t;
 
+typedef struct
+{
+    uint16_t required_pages;
+    uint16_t budget_pages;
+    uint16_t samples_preparable;
+    uint16_t first_unpreparable_sample;
+} multi_sample_prep_budget_t;
+
 static multi_sample_load_diag_t g_multi_load_diag;
 static uint8_t g_multi_load_active;
 static uint16_t g_multi_load_first_sample_id;
@@ -188,8 +196,79 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
 
 static uint8_t multi_loader_sample_required_pages(uint32_t total_frames)
 {
-    (void)total_frames;
-    return 1U;
+    if (total_frames == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t contract_frames =
+        (total_frames < SAMPLE_PREP_MIN_READY_FRAMES) ? total_frames
+                                                      : SAMPLE_PREP_MIN_READY_FRAMES;
+    uint32_t pages = (contract_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    const uint32_t max_budget_pages =
+        SAMPLE_PREP_MULTI_BUDGET_BYTES / SAMPLE_PAGE_BYTES;
+    if (pages > max_budget_pages)
+    {
+        pages = max_budget_pages;
+    }
+    if (pages > UINT8_MAX)
+    {
+        pages = UINT8_MAX;
+    }
+    return (uint8_t)pages;
+}
+
+static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
+    const multi_sample_index_t *index)
+{
+    multi_sample_prep_budget_t budget = {
+        .budget_pages = SAMPLE_PREP_MULTI_BUDGET_PAGES,
+        .first_unpreparable_sample = MULTI_SAMPLE_POOL_INVALID_ID,
+    };
+    uint32_t required_pages = 0U;
+
+    if (index == 0)
+    {
+        return budget;
+    }
+
+    for (uint16_t i = 0U; i < index->sample_count; ++i)
+    {
+        const uint16_t pages =
+            (uint16_t)multi_loader_sample_required_pages(index->samples[i].total_frames);
+        if (pages == 0U)
+        {
+            if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)
+            {
+                budget.first_unpreparable_sample = i;
+            }
+            budget.required_pages = UINT16_MAX;
+            continue;
+        }
+
+        required_pages += pages;
+        if (required_pages > UINT16_MAX)
+        {
+            budget.required_pages = UINT16_MAX;
+        }
+        else
+        {
+            budget.required_pages = (uint16_t)required_pages;
+        }
+
+        if (required_pages > budget.budget_pages)
+        {
+            if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)
+            {
+                budget.first_unpreparable_sample = i;
+            }
+            continue;
+        }
+
+        budget.samples_preparable++;
+    }
+
+    return budget;
 }
 
 static multi_sample_load_result_t multi_loader_start_instrument(const char *index_path,
@@ -244,6 +323,26 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         return MULTI_SAMPLE_LOAD_POOL_FAIL;
     }
     (void)multi_sample_pool_set_index_path(instrument_id, index_path);
+
+    const multi_sample_prep_budget_t prep_budget =
+        multi_loader_calc_prep_budget(&index);
+    g_multi_load_diag.prep_pages_required = prep_budget.required_pages;
+    g_multi_load_diag.prep_pages_budget = prep_budget.budget_pages;
+    g_multi_load_diag.prep_samples_preparable = prep_budget.samples_preparable;
+    if ((prep_budget.required_pages > prep_budget.budget_pages)
+        || (prep_budget.samples_preparable < index.sample_count))
+    {
+        const multi_sample_instrument_t *const failed_instrument =
+            multi_sample_pool_get_instrument(instrument_id);
+        multi_loader_set_error(
+            MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED,
+            ((failed_instrument != 0)
+             && (prep_budget.first_unpreparable_sample != MULTI_SAMPLE_POOL_INVALID_ID))
+                ? (uint16_t)(failed_instrument->first_sample_id
+                             + prep_budget.first_unpreparable_sample)
+                : MULTI_SAMPLE_POOL_INVALID_ID);
+        return MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED;
+    }
 
     const multi_sample_instrument_t *const instrument =
         multi_sample_pool_get_instrument(instrument_id);

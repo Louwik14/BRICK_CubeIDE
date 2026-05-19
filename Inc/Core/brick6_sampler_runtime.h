@@ -87,6 +87,16 @@ typedef struct
     uint32_t common_plan_classic_build_fail;
     uint32_t common_plan_multi_build_fail;
     uint32_t common_plan_last_reason;
+    uint32_t start_gate_reject_count;
+    uint32_t start_gate_reject_classic_count;
+    uint32_t start_gate_reject_multi_count;
+    uint32_t start_gate_last_status;
+    uint32_t start_gate_last_missing_page;
+    uint32_t start_gate_last_pending_page;
+    uint32_t start_gate_invalid_plan_count;
+    uint32_t start_gate_missing_count;
+    uint32_t start_gate_pending_count;
+    uint32_t start_gate_partial_count;
     uint8_t multi_last_stolen_kind;
     uint8_t multi_last_stolen_track;
     uint8_t multi_last_reject_reason;

@@ -532,9 +532,10 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     }
 
     /*
-     * Long STREAM warm set keeps the old time margin with 512-frame pages:
-     * the first 12 pages cover the forward start window and the final 8 pages
-     * cover reverse/pingpong entry near the tail.
+     * Long STREAM cold base now follows the product minimum-ready contract:
+     * the first 8192 frames are requested/pinned for forward starts. The final
+     * 8 pages still cover the current reverse/pingpong entry path until reverse
+     * rationing is moved to the common play_plan start frame.
      */
     const uint32_t last_page = sample_cache_stream_last_page_index(desc);
     if (last_page != 0U)
