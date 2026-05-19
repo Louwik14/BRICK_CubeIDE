@@ -523,7 +523,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 - `sample_stream_manager_queue_active_pages()` est le noyau commun minimal d'entretien des voix streamées actives, basé sur `sample_audio_key_t {domain, object_id}`, `current_frame`, `end_frame`, direction et lookahead.
 - `sample_cache_queue_active_stream_pages()` conserve son rôle legacy Classic/Clip/OneShot, mais délègue maintenant le calcul page courante/lookahead/priorité au noyau commun sans dépendance nouvelle à `sample_cache_voice_t`.
-- `Sampler/Multi` expose ses voix actives au même noyau via `domain=MULTI`, `object_id=multi_sample_id`, `current_frame=reader.position`, `end_frame=region_end`, direction forward et lookahead `6`; la policy locale page2/urgent séparée est retirée.
+- `Sampler/Multi` expose ses voix actives au même noyau via `domain=MULTI`, `object_id=multi_sample_id`, `current_frame=reader.position`, `end_frame=region_end`, direction forward et `SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES`; la policy locale page2/urgent séparée est retirée.
 - L'anti-spam monotone par voix Multi vit dans `sample_stream_active_state_t` et reste hors IRQ. READY Multi reste page0 seul, sans prechargement global page1.
 - L'IRQ audio continue de lire uniquement RAM/page-cache via `sample_voice_reader`; aucune SD/FatFs/malloc/UART n'est ajoutée au rendu.
 - Quand une voix Multi s'arrête, la fermeture du reader STREAM et le nettoyage des pending associés sont différés vers `brick6_sampler_runtime_service()` hors IRQ; le rendu ne ferme jamais de `FIL` et ne touche pas FatFs.

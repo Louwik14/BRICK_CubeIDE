@@ -20,18 +20,6 @@
 extern "C" {
 #endif
 
-#ifndef BRICK6_SAMPLER_DIAG_ENABLE
-#define BRICK6_SAMPLER_DIAG_ENABLE 0
-#endif
-
-#ifndef BRICK6_MULTI_DEBUG_UART
-#define BRICK6_MULTI_DEBUG_UART 0
-#endif
-
-#ifndef BRICK6_MULTI_DEBUG_SNAPSHOT
-#define BRICK6_MULTI_DEBUG_SNAPSHOT 0
-#endif
-
 #define SAMPLER_MULTI_MAX_VOICES_PER_TRACK (4U)
 #define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (16U)
 
@@ -86,30 +74,16 @@ typedef struct
     uint32_t multi_invalid_instrument_id;
     uint32_t multi_instrument_not_ready;
     uint32_t multi_prefetch_request_count;
-    uint32_t multi_diag_event_dropped;
-    uint32_t multi_diag_event_pushed;
-    uint32_t multi_diag_flush_calls;
-    uint32_t multi_diag_uart_hal_ok;
-    uint32_t multi_diag_uart_hal_err;
-    uint32_t multi_diag_uart_lines_emitted;
     uint32_t multi_stop_done;
     uint32_t multi_stop_underrun;
     uint32_t multi_stop_steal;
     uint32_t multi_stop_rel_done;
-    uint32_t multi_snapshot_underrun_count;
-    uint32_t multi_snapshot_page_absent_count;
-    uint32_t multi_snapshot_page_queued_too_late_count;
-    uint32_t multi_snapshot_page_loading_too_late_count;
-    uint32_t multi_snapshot_allocfail_count;
-    uint32_t multi_snapshot_active_voice_max;
     uint32_t multi_rejected_track_voice_limit;
     uint32_t multi_rejected_global_voice_limit;
     uint32_t multi_last_current_frame;
     uint32_t multi_last_end_frame;
     uint32_t multi_last_missing_page;
     uint32_t multi_last_ready_mask;
-    uint8_t multi_diag_pending_events;
-    uint8_t multi_diag_last_hal_status;
     uint8_t multi_last_stolen_kind;
     uint8_t multi_last_stolen_track;
     uint8_t multi_last_reject_reason;

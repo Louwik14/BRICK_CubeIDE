@@ -65,28 +65,6 @@ static CTRL_STATE sample_page_window_lock_t g_sample_page_window_lock[SAMPLE_PAG
 static CTRL_STATE uint16_t g_sample_page_queued_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
-#ifndef SAMPLE_PAGE_CACHE_DIAG_ENABLE
-#define SAMPLE_PAGE_CACHE_DIAG_ENABLE 0
-#endif
-static CTRL_STATE sample_page_cache_diag_snapshot_t g_sample_page_cache_diag;
-#if SAMPLE_PAGE_CACHE_DIAG_ENABLE
-#define SAMPLE_PAGE_CACHE_DIAG_INC(field) (++g_sample_page_cache_diag.field)
-#else
-#define SAMPLE_PAGE_CACHE_DIAG_INC(field) ((void)0)
-#endif
-
-static void sample_page_cache_diag_max(uint32_t *field, uint32_t value)
-{
-#if SAMPLE_PAGE_CACHE_DIAG_ENABLE
-    if ((field != 0) && (value > *field))
-    {
-        *field = value;
-    }
-#else
-    (void)field;
-    (void)value;
-#endif
-}
 
 sample_audio_key_t sample_audio_key_classic(uint16_t sample_id)
 {
@@ -201,8 +179,6 @@ static uint8_t sample_page_cache_index_find_slot_key(sample_audio_key_t key,
         const sample_page_index_entry_t *const entry = &g_sample_page_index[index];
         if (entry->used == 0U)
         {
-            SAMPLE_PAGE_CACHE_DIAG_INC(lookup_misses);
-            sample_page_cache_diag_max(&g_sample_page_cache_diag.max_lookup_scan, probe + 1U);
             return 0U;
         }
 
@@ -213,15 +189,9 @@ static uint8_t sample_page_cache_index_find_slot_key(sample_audio_key_t key,
             {
                 *out_slot = entry->slot_index;
             }
-            SAMPLE_PAGE_CACHE_DIAG_INC(lookup_hits);
-            sample_page_cache_diag_max(&g_sample_page_cache_diag.max_lookup_scan, probe + 1U);
             return 1U;
         }
     }
-
-    SAMPLE_PAGE_CACHE_DIAG_INC(lookup_misses);
-    SAMPLE_PAGE_CACHE_DIAG_INC(bounded_scan_yield);
-    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_lookup_scan, SAMPLE_PAGE_INDEX_SIZE);
     return 0U;
 }
 
@@ -485,8 +455,6 @@ static uint16_t sample_page_cache_repair_queued_count_key(sample_audio_key_t key
 static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_key_t key, uint32_t page_index)
 {
     sample_page_desc_t *evict_page = 0;
-    uint32_t free_scan = 0U;
-    uint32_t evict_scan = 0U;
     const uint32_t frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (frame_count == 0U)
     {
@@ -497,7 +465,6 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     {
         const uint32_t i = ((uint32_t)g_sample_page_free_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
         sample_page_desc_t *const page = &g_sample_page_desc[i];
-        free_scan = scan + 1U;
         if (page->state == SAMPLE_PAGE_EMPTY)
         {
             page->key = key;
@@ -518,17 +485,14 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
                 g_sample_page_last_slot[key_slot] = (uint16_t)i;
             }
             g_sample_page_free_cursor = (uint16_t)((i + 1U) % SAMPLE_PAGE_MAX_COUNT);
-            sample_page_cache_diag_max(&g_sample_page_cache_diag.max_free_scan, free_scan);
             return page;
         }
     }
-    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_free_scan, free_scan);
 
     for (uint32_t scan = 0U; scan < SAMPLE_PAGE_MAX_COUNT; ++scan)
     {
         const uint32_t i = ((uint32_t)g_sample_page_evict_cursor + scan) % SAMPLE_PAGE_MAX_COUNT;
         sample_page_desc_t *const page = &g_sample_page_desc[i];
-        evict_scan = scan + 1U;
         if ((page->state != SAMPLE_PAGE_READY) || (page->use_count != 0U) || (page->pin_count != 0U)
             || (page->window_pin_count != 0U)
             || (sample_page_cache_key_slot(page->key) >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
@@ -553,11 +517,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
 
     if (evict_page == 0)
     {
-        SAMPLE_PAGE_CACHE_DIAG_INC(evict_fail);
-        sample_page_cache_diag_max(&g_sample_page_cache_diag.max_evict_scan, evict_scan);
         return 0;
     }
-    sample_page_cache_diag_max(&g_sample_page_cache_diag.max_evict_scan, evict_scan);
 
     const uint32_t slot_index = (uint32_t)(evict_page - g_sample_page_desc);
     sample_page_cache_clear_desc(evict_page, slot_index);
@@ -842,9 +803,6 @@ void sample_page_cache_reset(void)
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
     memset(g_sample_page_window_lock, 0, sizeof(g_sample_page_window_lock));
     memset(g_sample_page_queued_count, 0, sizeof(g_sample_page_queued_count));
-#if SAMPLE_PAGE_CACHE_DIAG_ENABLE
-    memset(&g_sample_page_cache_diag, 0, sizeof(g_sample_page_cache_diag));
-#endif
     g_sample_page_free_cursor = 0U;
     g_sample_page_evict_cursor = 0U;
     for (uint32_t i = 0U; i < SAMPLE_PAGE_CACHE_MAX_SAMPLES; ++i)
@@ -855,20 +813,6 @@ void sample_page_cache_reset(void)
     {
         sample_page_cache_clear_desc(&g_sample_page_desc[i], i);
     }
-}
-
-void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot)
-{
-    if (out_snapshot == 0)
-    {
-        return;
-    }
-
-#if SAMPLE_PAGE_CACHE_DIAG_ENABLE
-    *out_snapshot = g_sample_page_cache_diag;
-#else
-    memset(out_snapshot, 0, sizeof(*out_snapshot));
-#endif
 }
 
 void sample_page_cache_clear_sample(uint16_t sample_id)

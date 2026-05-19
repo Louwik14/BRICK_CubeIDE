@@ -4,13 +4,6 @@
 
 #include "Storage/wav_audio_codec.h"
 
-#if BRICK6_SAMPLER_DIAG_ENABLE
-static sample_voice_reader_diag_snapshot_t g_sample_voice_reader_diag;
-#define SAMPLE_VOICE_READER_DIAG_INC(field) (++g_sample_voice_reader_diag.field)
-#else
-#define SAMPLE_VOICE_READER_DIAG_INC(field) ((void)0)
-#endif
-
 #define SAMPLE_Q16_ONE (65536U)
 
 typedef struct
@@ -510,7 +503,6 @@ void sample_voice_reader_seek(sample_voice_reader_t *reader, uint32_t frame_pos)
     }
     reader->frame_pos = frame_pos;
     reader->position = (float)frame_pos;
-    SAMPLE_VOICE_READER_DIAG_INC(seek_calls);
     if (reader->cache_voice_valid != 0U)
     {
         sample_cache_set_voice_frame_pos(reader->cache_voice_id, frame_pos);
@@ -564,7 +556,6 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
                                           uint32_t max_frames,
                                           sample_audio_segment_t *out_segment)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(begin_segment_calls);
     if (out_segment == 0)
     {
         return 0U;
@@ -657,7 +648,6 @@ uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,
 void sample_voice_reader_commit_segment(sample_voice_reader_t *reader,
                                         uint32_t consumed_frames)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(commit_segment_calls);
     if ((reader == 0) || (reader->active == 0U))
     {
         return;
@@ -970,7 +960,6 @@ void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
                                     float *out_r,
                                     uint32_t out_offset)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(mix_fwd_1x_calls);
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
         return;
@@ -995,7 +984,6 @@ void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
                                     float *out_r,
                                     uint32_t out_offset)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(mix_rev_1x_calls);
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
         return;
@@ -1020,7 +1008,6 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
                                               float *out_r,
                                               uint32_t out_offset)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(mix_pitch_fwd_linear_calls);
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
         return;
@@ -1106,7 +1093,6 @@ void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segm
                                               float *out_r,
                                               uint32_t out_offset)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(mix_pitch_rev_linear_calls);
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
         return;
@@ -1182,7 +1168,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t frames,
                                                   uint8_t *out_underrun)
 {
-    SAMPLE_VOICE_READER_DIAG_INC(render_pitch_forward_calls);
     if (out_underrun != 0)
     {
         *out_underrun = 0U;
@@ -1217,7 +1202,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
 
         const uint32_t base_frame = (uint32_t)reader->position;
         sample_cache_span_t span;
-        SAMPLE_VOICE_READER_DIAG_INC(span_acquire_calls);
         if (sample_cache_try_acquire_span(reader->sample_id, base_frame, frames - produced, &span) == 0U)
         {
             if (out_underrun != 0)
@@ -1293,13 +1277,11 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         memset(&neighbor_span, 0, sizeof(neighbor_span));
         if (needs_neighbor_span != 0U)
         {
-            SAMPLE_VOICE_READER_DIAG_INC(neighbor_span_acquire_calls);
             (void)sample_cache_try_acquire_span(reader->sample_id, neighbor_frame_index, 1U, &neighbor_span);
         }
 
         float position = reader->position;
         uint8_t segment_reverse = reverse;
-        SAMPLE_VOICE_READER_DIAG_INC(segments_mixed);
         for (uint32_t i = 0U; i < segment_frames; ++i)
         {
             const uint32_t segment_base_frame = (uint32_t)position;
@@ -1364,24 +1346,4 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
     }
 
     return produced;
-}
-
-void sample_voice_reader_diag_reset(void)
-{
-#if BRICK6_SAMPLER_DIAG_ENABLE
-    memset(&g_sample_voice_reader_diag, 0, sizeof(g_sample_voice_reader_diag));
-#endif
-}
-
-void sample_voice_reader_diag_get_snapshot(sample_voice_reader_diag_snapshot_t *out_snapshot)
-{
-    if (out_snapshot == 0)
-    {
-        return;
-    }
-
-    memset(out_snapshot, 0, sizeof(*out_snapshot));
-#if BRICK6_SAMPLER_DIAG_ENABLE
-    *out_snapshot = g_sample_voice_reader_diag;
-#endif
 }

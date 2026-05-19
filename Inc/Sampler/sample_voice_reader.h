@@ -9,10 +9,6 @@
 extern "C" {
 #endif
 
-#ifndef BRICK6_SAMPLER_DIAG_ENABLE
-#define BRICK6_SAMPLER_DIAG_ENABLE 0
-#endif
-
 typedef enum
 {
     SAMPLE_KERNEL_FWD_1X = 0,
@@ -100,21 +96,6 @@ typedef struct
     uint8_t plan_valid;
 } sample_voice_reader_t;
 
-typedef struct
-{
-    uint32_t render_pitch_forward_calls;
-    uint32_t segments_mixed;
-    uint32_t span_acquire_calls;
-    uint32_t neighbor_span_acquire_calls;
-    uint32_t seek_calls;
-    uint32_t begin_segment_calls;
-    uint32_t commit_segment_calls;
-    uint32_t mix_fwd_1x_calls;
-    uint32_t mix_rev_1x_calls;
-    uint32_t mix_pitch_fwd_linear_calls;
-    uint32_t mix_pitch_rev_linear_calls;
-} sample_voice_reader_diag_snapshot_t;
-
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
 void sample_voice_reader_bind(sample_voice_reader_t *reader,
                               uint16_t sample_id,
@@ -176,8 +157,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   float *out_r,
                                                   uint32_t frames,
                                                   uint8_t *out_underrun);
-void sample_voice_reader_diag_reset(void);
-void sample_voice_reader_diag_get_snapshot(sample_voice_reader_diag_snapshot_t *out_snapshot);
 
 #ifdef __cplusplus
 }

@@ -36,17 +36,6 @@ _Static_assert(SAMPLE_CACHE_FULL_MAX_BYTES
                "FULL frame threshold must match decoded stereo float bytes");
 #endif
 
-#if BRICK6_SAMPLER_DIAG_ENABLE
-static CTRL_STATE sample_cache_diag_snapshot_t g_sample_cache_diag;
-#define SAMPLE_CACHE_DIAG_INC(field) (++g_sample_cache_diag.field)
-#define SAMPLE_CACHE_DIAG_ADD(field, value) (g_sample_cache_diag.field += (uint32_t)(value))
-#define SAMPLE_CACHE_DIAG_ADD64(field, value) (g_sample_cache_diag.field += (uint64_t)(value))
-#else
-#define SAMPLE_CACHE_DIAG_INC(field) ((void)0)
-#define SAMPLE_CACHE_DIAG_ADD(field, value) ((void)0)
-#define SAMPLE_CACHE_DIAG_ADD64(field, value) ((void)0)
-#endif
-
 static uint8_t sample_cache_open_source(uint16_t sample_id, FIL *fp);
 static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
                                                             sample_cache_desc_t *desc,
@@ -65,8 +54,6 @@ static uint8_t sample_cache_voice_reserve_start_window(const sample_cache_voice_
                                                        const sample_cache_desc_t *desc);
 static void sample_cache_release_pending_stream_owners(void);
 static void sample_cache_voice_seek(sample_cache_voice_t *voice, uint32_t frame_pos);
-void sample_cache_diag_reset(void);
-void sample_cache_diag_get_snapshot(sample_cache_diag_snapshot_t *out_snapshot);
 static uint8_t sample_cache_voice_uses_page_cache_path(const sample_cache_desc_t *desc,
                                                        uint16_t sample_id);
 static uint8_t sample_cache_voice_cursor_has_valid_span(const sample_cache_voice_t *voice,
@@ -78,9 +65,6 @@ static uint8_t sample_cache_voice_cursor_prepare(sample_cache_voice_t *voice,
                                                  const sample_cache_desc_t *desc,
                                                  uint32_t frame_index);
 static void sample_cache_invalidate_voices_for_sample(uint16_t sample_id);
-#if BRICK6_SAMPLER_DIAG_ENABLE
-static uint32_t sample_cache_diag_count_active_voices(void);
-#endif
 static void sample_cache_queue_active_stream_pages(void);
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
 static uint8_t sample_cache_stream_boundary_pages_ready(uint16_t sample_id,
@@ -153,7 +137,6 @@ static void sample_cache_cursor_release_current_page(sample_stream_cursor_t *cur
     if ((cursor->current_page.acquired != 0U) && (cursor->sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
         && (cursor->current_page.valid != 0U))
     {
-        SAMPLE_CACHE_DIAG_INC(page_release_calls);
         sample_page_ref_t page_ref;
         page_ref.page_index = cursor->current_page.page_index;
         page_ref.page_generation = cursor->current_page.generation;
@@ -331,13 +314,10 @@ static uint8_t sample_cache_voice_cursor_resolve_page(sample_cache_voice_t *voic
     const uint32_t page_index = frame_index / SAMPLE_PAGE_FRAMES;
 
     sample_page_span_t page_span;
-    SAMPLE_CACHE_DIAG_INC(page_resolve_acquire_calls);
     if (sample_page_cache_try_acquire_page(voice->sample_id, page_index, &page_span) == 0U)
     {
         return 0U;
     }
-
-    SAMPLE_CACHE_DIAG_INC(page_cache_lookup_calls);
     const sample_page_desc_t *const page_desc = sample_page_cache_get_page_desc(page_span.slot_index);
     if ((page_desc == 0) || (page_desc->data == 0)
         || (page_desc->sample_id != voice->sample_id)
@@ -412,7 +392,6 @@ static uint8_t sample_cache_voice_cursor_prepare(sample_cache_voice_t *voice,
 
     if (sample_cache_voice_cursor_has_valid_span(voice, frame_index) != 0U)
     {
-        SAMPLE_CACHE_DIAG_INC(cursor_span_hits);
         return 1U;
     }
 
@@ -529,8 +508,6 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
         g_sample_cache_last_fresult[sample_id] = FR_NOT_ENOUGH_CORE;
         return 0U;
     }
-    SAMPLE_CACHE_DIAG_INC(prepare_stream_async);
-    SAMPLE_CACHE_DIAG_INC(prepare_stream_initial_queued);
     if (sample_page_cache_pin_page(sample_id, 0U) == 0U)
     {
         desc->last_error = 8U;
@@ -539,7 +516,6 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
     }
     if (sample_page_cache_get_page_state(sample_id, 0U) != SAMPLE_PAGE_READY)
     {
-        SAMPLE_CACHE_DIAG_INC(prepare_stream_page0_not_ready);
     }
     for (uint32_t page_index = 1U; page_index < SAMPLE_CACHE_STREAM_START_PAGES; ++page_index)
     {
@@ -905,23 +881,6 @@ static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
     return 1U;
 }
 
-#if BRICK6_SAMPLER_DIAG_ENABLE
-static uint32_t sample_cache_diag_count_active_voices(void)
-{
-    uint32_t active = 0U;
-    for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
-    {
-        if ((g_sample_cache_voice[i].active != 0U)
-            && (g_sample_cache_voice[i].sample_id < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY))
-        {
-            active++;
-        }
-    }
-
-    return active;
-}
-#endif
-
 static uint8_t sample_cache_any_voice_active(uint16_t sample_id)
 {
     for (uint32_t i = 0U; i < SAMPLE_CACHE_MAX_VOICES; ++i)
@@ -1118,7 +1077,6 @@ void sample_cache_init(void)
     sd_access_gate_set_streaming_critical(0U);
     sample_page_cache_reset();
     sample_stream_manager_init();
-    sample_cache_diag_reset();
     g_sample_cache_voice_generation_counter = 0U;
 
     for (uint32_t i = 0U; i < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY; ++i)
@@ -1133,36 +1091,6 @@ void sample_cache_init(void)
         g_sample_cache_voice[i].voice_id = (uint8_t)i;
         sample_cache_voice_reset(&g_sample_cache_voice[i]);
     }
-}
-
-void sample_cache_diag_reset(void)
-{
-#if BRICK6_SAMPLER_DIAG_ENABLE
-    memset(&g_sample_cache_diag, 0, sizeof(g_sample_cache_diag));
-#endif
-}
-
-void sample_cache_diag_get_snapshot(sample_cache_diag_snapshot_t *out_snapshot)
-{
-    if (out_snapshot == 0)
-    {
-        return;
-    }
-
-    memset(out_snapshot, 0, sizeof(*out_snapshot));
-#if BRICK6_SAMPLER_DIAG_ENABLE
-    *out_snapshot = g_sample_cache_diag;
-    out_snapshot->active_voices = sample_cache_diag_count_active_voices();
-    if (out_snapshot->active_voices > out_snapshot->max_active_voices)
-    {
-        out_snapshot->max_active_voices = out_snapshot->active_voices;
-    }
-    if (out_snapshot->spans_returned != 0U)
-    {
-        out_snapshot->average_span_frames =
-            (uint32_t)(out_snapshot->span_frames_total / out_snapshot->spans_returned);
-    }
-#endif
 }
 
 void sample_cache_clear(uint16_t sample_id)
@@ -1499,7 +1427,6 @@ uint8_t sample_cache_start_voice_at(uint16_t sample_id, uint8_t voice_id, uint32
     voice->voice_id = voice_id;
     if (sample_cache_voice_reserve_start_window(voice, desc) == 0U)
     {
-        SAMPLE_CACHE_DIAG_INC(start_window_alloc_fail);
         sample_cache_voice_release(voice);
         return 0U;
     }
@@ -1521,23 +1448,10 @@ uint8_t sample_cache_begin_read_block(uint8_t voice_id,
     {
         return 0U;
     }
-
-    SAMPLE_CACHE_DIAG_INC(begin_read_block_calls);
     (void)sample_cache_inspect_voice_block(voice_id, max_frames, out_block);
     if ((out_block->status == SAMPLE_CACHE_BLOCK_OK) && (out_block->frames != 0U))
     {
-        SAMPLE_CACHE_DIAG_INC(spans_returned);
-        SAMPLE_CACHE_DIAG_ADD64(span_frames_total, out_block->frames);
     }
-#if BRICK6_SAMPLER_DIAG_ENABLE
-    {
-        const uint32_t active_voices = sample_cache_diag_count_active_voices();
-        if (active_voices > g_sample_cache_diag.max_active_voices)
-        {
-            g_sample_cache_diag.max_active_voices = active_voices;
-        }
-    }
-#endif
     return (voice_id < SAMPLE_CACHE_MAX_VOICES) ? 1U : 0U;
 }
 
@@ -1596,7 +1510,6 @@ void sample_cache_commit_read_block(uint8_t voice_id, uint32_t consumed_frames)
             }
             else if (cursor->current_span.offset_frames >= cursor->current_span.frame_count)
             {
-                SAMPLE_CACHE_DIAG_INC(page_transitions);
                 sample_cache_cursor_release_current_page(cursor);
                 cursor->frame_pos = voice->frame_pos;
                 if (sample_cache_voice_cursor_resolve_page(voice, desc, voice->frame_pos) == 0U)
@@ -1608,7 +1521,6 @@ void sample_cache_commit_read_block(uint8_t voice_id, uint32_t consumed_frames)
         }
         else
         {
-            SAMPLE_CACHE_DIAG_INC(slow_path_fallbacks);
             sample_cache_block_t block;
             const sample_cache_block_status_t status =
                 sample_cache_inspect_voice_block(voice_id, consumed_frames, &block);
@@ -1689,7 +1601,6 @@ uint8_t sample_cache_try_acquire_span(uint16_t sample_id,
         && (sample_id < SAMPLE_PAGE_CACHE_MAX_SAMPLES))
     {
         sample_page_span_t page_span;
-        SAMPLE_CACHE_DIAG_INC(page_cache_lookup_calls);
         if (sample_page_cache_try_acquire_page(sample_id,
                                                frame_index / SAMPLE_PAGE_FRAMES,
                                                &page_span) == 0U)
@@ -1705,8 +1616,6 @@ uint8_t sample_cache_try_acquire_span(uint16_t sample_id,
         out_span->backing_page_index = page_span.page_index;
         out_span->is_mono = (desc->info.channels == 1U) ? 1U : 0U;
         out_span->page_acquired = 1U;
-        SAMPLE_CACHE_DIAG_INC(spans_returned);
-        SAMPLE_CACHE_DIAG_ADD64(span_frames_total, out_span->frames);
         return 1U;
     }
 
@@ -1745,8 +1654,6 @@ uint8_t sample_cache_try_acquire_span(uint16_t sample_id,
     out_span->backing_page_index = 0U;
     out_span->is_mono = (desc->info.channels == 1U) ? 1U : 0U;
     out_span->page_acquired = 0U;
-    SAMPLE_CACHE_DIAG_INC(spans_returned);
-    SAMPLE_CACHE_DIAG_ADD64(span_frames_total, out_span->frames);
     return 1U;
 }
 
@@ -1899,7 +1806,6 @@ uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, fl
     if ((desc->mode == SAMPLE_CACHE_MODE_STREAM) && (desc->fully_cached == 0U))
     {
         sample_page_block_t page_block;
-        SAMPLE_CACHE_DIAG_INC(page_cache_lookup_calls);
         (void)sample_page_cache_begin_read_block(voice->sample_id, frame_index, 1U, &page_block);
         if ((page_block.status != SAMPLE_PAGE_BLOCK_OK) || (page_block.frame_count == 0U))
         {
@@ -1930,7 +1836,6 @@ uint8_t sample_cache_read_voice_frame(uint8_t voice_id, uint32_t frame_index, fl
 
 uint8_t sample_cache_peek_frame(uint16_t sample_id, uint32_t frame_index, float *out_l, float *out_r)
 {
-    SAMPLE_CACHE_DIAG_INC(peek_frame_calls);
     if ((sample_id >= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) || (out_l == 0) || (out_r == 0))
     {
         return 0U;
@@ -1952,7 +1857,6 @@ uint8_t sample_cache_peek_frame(uint16_t sample_id, uint32_t frame_index, float 
     if ((desc->mode == SAMPLE_CACHE_MODE_STREAM) && (desc->fully_cached == 0U))
     {
         sample_page_block_t page_block;
-        SAMPLE_CACHE_DIAG_INC(page_cache_lookup_calls);
         (void)sample_page_cache_begin_read_block(sample_id, frame_index, 1U, &page_block);
         if ((page_block.status != SAMPLE_PAGE_BLOCK_OK) || (page_block.frame_count == 0U))
         {

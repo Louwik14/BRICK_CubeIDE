@@ -121,23 +121,11 @@ typedef enum
     SAMPLE_PAGE_LOAD_DECODE_FAILED
 } sample_page_load_result_t;
 
-typedef struct
-{
-    uint32_t lookup_hits;
-    uint32_t lookup_misses;
-    uint32_t max_lookup_scan;
-    uint32_t max_free_scan;
-    uint32_t max_evict_scan;
-    uint32_t evict_fail;
-    uint32_t bounded_scan_yield;
-} sample_page_cache_diag_snapshot_t;
-
 /*
  * Query API: RAM-only, no SD side effect, no implicit page request.
  */
 void sample_page_cache_init(void);
 void sample_page_cache_reset(void);
-void sample_page_cache_diag_get_snapshot(sample_page_cache_diag_snapshot_t *out_snapshot);
 sample_audio_key_t sample_audio_key_classic(uint16_t sample_id);
 sample_audio_key_t sample_audio_key_looper(uint16_t looper_id);
 sample_audio_key_t sample_audio_key_multi(uint16_t multi_sample_id);
