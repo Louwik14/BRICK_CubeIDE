@@ -139,6 +139,8 @@ Autorite writer SD audio multi-client:
 - `sd_preview_begin_range()` refuse tout record/finalize writer actif et tout export Looper. Les operations Audio Rec qui doivent reprendre la main sur le fichier temporaire (`nouveau REC`, RETURN, SAVE, ASSIGN) stoppent la preview avant de continuer; un changement START/END s'applique a la prochaine audition declenchee.
 - Priorite SD effective dans la superloop: `multi_record_writer_service` draine/finalise d'abord; hors export Looper, `sample_cache_service`, refill Looper, load Multi et `pattern_load_service` passent avant `sd_preview_process`. Une preview active est stoppee si un travail sample cache devient pending, et `pattern_load_request/service` stoppe la preview avant son acces SD.
 - Le mode `streaming_critical` de `sd_access_gate` est active par les locks de fenetre voix Sampler: seuls les services STREAM sous `SD_ACCESS_CLIENT_SAMPLE_STREAM` peuvent demarrer une nouvelle possession SD. Preview, convert/import, editor/waveform cache, pattern, project et chargements samples non-stream sont differes. Une operation deja proprietaire du gate n'est pas preemptee dans cette passe.
+- Le backend Sampler `STREAM_SAFE_CONTIGUOUS` utilise une certification physique volatile construite au load STREAM par FatFs CLMT. Cette certification n'est pas persistante: toute operation BRICK qui ecrit, convertit, renomme, supprime ou remplace un WAV doit etre consideree comme invalidante; le prochain load rescanne et retombe sur FatFs si le fichier n'est pas certifie safe.
+- Les lectures secteurs directes du backend contigu ne contournent pas `sd_access_gate`: elles sont appelees uniquement par le streamer Sampler pendant une possession SD existante, et ne remplacent pas les chemins FatFs de browser/import/projets/export.
 - Le writer interdit le demarrage simultane de deux clients actifs: Looper RAW actif bloque Sample Rec et Sample Rec actif bloque Looper REC. Le playback Looper peut rester source routee d'Audio Rec.
 - `multi_record_writer_service(byte_budget)` acquiert le gate sans bloquer seulement si le sample cache n'a pas de travail SD pending, packe `int32_t` stereo vers PCM 24-bit interleaved par chunk borne de 1024 frames, execute au plus un `f_write` audio par passage, puis relache le gate.
 - `STOP_REQUESTED -> DRAINING -> FINALIZING -> TAKE_READY` draine le ring. En RAW, la finalisation fait sync/close et fixe `recorded_frames`; en SAMPLE_WAV, elle patch le header puis sync/close/rename.
@@ -307,6 +309,12 @@ Points de lecture principaux:
 - `g_undo_v1` (`undo_snapshot_v1_history_t`): ring buffer de 10 snapshots undo.
 - `g_undo_capture_work`: buffer de capture temporaire.
 - `g_undo_capture_suspended`: garde anti-recursion pendant restore undo.
+
+### `undo_v2.c` (sous-zone dependante)
+- Historique delta UI/p-lock en RAM froide `UI_SDRAM`: runtime, transactions, deltas param, deltas p-lock, deltas step et snapshots.
+- Les structs stockees en tableaux undo v2 ont un alignement minimal 4 octets et un stride multiple de 4, verifie par `_Static_assert`, pour rester compatibles avec `UNALIGN_TRP` actif.
+- Les free-lists undo v2 restent bornees par capacites fixes; toute tete/index hors pool est refusee avant dereferencement.
+- Le chemin UI p-lock n'applique pas une mutation seq sans entree undo v2 valide: en cas de refus/overflow undo, les locks deja appliques dans le geste courant sont rollbackes.
 
 ## 6. Flux runtime
 

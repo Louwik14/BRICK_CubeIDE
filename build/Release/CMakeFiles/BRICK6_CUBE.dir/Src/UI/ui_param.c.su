@@ -23,7 +23,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:768:6:ui
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:777:9:ui_param_get_active_bank_param	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:822:6:ui_param_seq_plock_feedback_frame_begin	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1020:7:ui_param_get_active_track_display_value	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1546:9:ui_param_try_get_seq_plock_feedback_with_frame	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1594:9:ui_param_try_get_seq_plock_feedback	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1620:9:ui_param_handle_encoder_with_context	368	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1613:6:ui_param_handle_encoder	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1574:9:ui_param_try_get_seq_plock_feedback_with_frame	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1622:9:ui_param_try_get_seq_plock_feedback	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1648:9:ui_param_handle_encoder_with_context	368	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_param.c:1641:6:ui_param_handle_encoder	32	static

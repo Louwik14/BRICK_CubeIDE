@@ -19,6 +19,9 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
 - `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
 - `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
+- `Src/Sampler/sample_stream_fatfs_map.c` + `Inc/Sampler/sample_stream_fatfs_map.h` : certification hors IRQ des WAV STREAM contigus via FatFs CLMT. Les acces aux champs internes FatFs restent confines ici. Un fichier non certifie conserve le backend FatFs historique.
+- `Src/Sampler/sample_stream_backend_contiguous.c` + `Inc/Sampler/sample_stream_backend_contiguous.h` : backend V1 `STREAM_SAFE_CONTIGUOUS`; remplit une page cache float stereo depuis des secteurs SD physiques deja certifies, hors IRQ et sous l'autorite du `sample_stream_manager`.
+- `Src/SD/sd_block_device.c` + `Inc/SD/sd_block_device.h` : wrapper minimal de lecture secteurs hors IRQ, utilise par le backend contigu uniquement pendant que `sd_access_gate` est deja tenu.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream, et le stockage/acquire/release des pages reste ici. Le lookup hot passe par un index statique borne keyed par `sample_audio_key_t {domain, object_id}` + `page_index`; les scans free/evict conservent un passage borne avec curseur.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
 - `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Clip` `Shifter`, port C borne sans import Clouds/FxEngine.
@@ -46,6 +49,9 @@ Contrat page-cache/streamer:
 - Domaines prevus: `CLASSIC` pour les samples Sampler existants, `LOOPER` pour les transients Looper, `MULTI` reserve au futur Sampler/Multi.
 - Les APIs historiques par `sample_id` restent des wrappers `CLASSIC` temporaires pour limiter le diff cote OneShot/Clip/Slicer.
 - `sample_stream_manager` porte la meme cle pour readers, pending requests et load targets; il reste l'unique streamer FatFs et reste hors IRQ.
+- `sample_stream_manager` reste l'unique streamer Sampler. Le backend `STREAM_SAFE_CONTIGUOUS` ne cree ni queue ni scheduler parallele: il remplace seulement la maniere de remplir une page `QUEUED -> LOADING -> READY` quand la metadata physique du sample est certifiee contigue.
+- La metadata de streaming safe est portee par le `sample_page_cache` par `sample_audio_key_t`; Classic et Multi la partagent via le meme stream info. Looper RAW reste sur le backend existant dans cette phase.
+- Le scratch du backend contigu est statique, aligne 32 octets, en SDRAM de scratch storage, et dimensionne a 9 secteurs de 512 octets pour couvrir une page source maximale actuelle plus un offset secteur.
 - `Sampler/Looper` utilise `domain=LOOPER`; son `cache_id` restant est un identifiant legacy/diagnostic, pas l'autorite cache.
 - Capacites logiques: `CLASSIC` garde 64 ids, `LOOPER` garde une fenetre 64 ids, `MULTI` reserve 512 ids (`object_id 0..511`) sans reserver physiquement 512 pages au boot.
 - Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 16 MiB / pages stereo float de 512 frames, le plafond theorique est 4096 pages; preparer 16 pages pour 512 samples Multi consommerait tout le budget theorique, donc les presets Multi reels doivent rester bornes par le nombre de samples declenchables et la taille des samples courts.
@@ -578,7 +584,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-19 - Sampler pages 512 frames
 
-- Configuration actuelle: `SAMPLE_PAGE_FRAMES = 512`, `SAMPLE_PAGE_BYTES = 4096`, `SAMPLE_PAGE_MAX_COUNT = 4096`; le pool audio decode reste 16 MiB.
+- Configuration actuelle: `SAMPLE_PAGE_FRAMES = 2048`, `SAMPLE_PAGE_BYTES = 16384`, `SAMPLE_PAGE_MAX_COUNT = 1024`; le pool audio decode reste 16 MiB.
 - Les fenetres temporelles suivent la ration produit actuelle: Classic forward = span 8192 frames, Classic reverse = span 8192 frames depuis la position reverse reelle (16 ou 17 petites pages selon alignement), Multi = 28 petites pages total (`current + 27`).
 - `SAMPLE_STREAM_SERVICE_MAX_PAGES` passe a 16 pour ne plus plafonner artificiellement le nombre de petites pages servies sous le budget existant; les caps FatFs ops (16), byte budget appelant et max 2 ms restent actifs.
 - Le pool de locks de fenetre suit la plus grande fenetre active (`SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES`) pour couvrir 16 voix Multi x 28 pages.

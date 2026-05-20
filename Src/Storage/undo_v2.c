@@ -6,6 +6,7 @@
 #include "Param/param_registry.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
+#include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Storage/memory_layout.h"
@@ -41,6 +42,21 @@ static uint16_t g_undo_v2_param_delta_head_free;
 static uint16_t g_undo_v2_plock_delta_head_free;
 static uint16_t g_undo_v2_step_delta_head_free;
 static uint16_t g_undo_v2_snapshot_head_free;
+
+static uint8_t undo_v2_param_delta_index_is_valid(uint16_t index)
+{
+    return (index < (uint16_t)UNDO_V2_MAX_PARAM_DELTAS) ? 1U : 0U;
+}
+
+static uint8_t undo_v2_plock_delta_index_is_valid(uint16_t index)
+{
+    return (index < (uint16_t)UNDO_V2_MAX_PLOCK_DELTAS) ? 1U : 0U;
+}
+
+static uint8_t undo_v2_step_delta_index_is_valid(uint16_t index)
+{
+    return (index < (uint16_t)UNDO_V2_MAX_STEP_DELTAS) ? 1U : 0U;
+}
 
 static undo_v2_tx_entry_t *undo_v2_current_tx(void)
 {
@@ -95,6 +111,10 @@ static void undo_v2_release_transaction_payload(undo_v2_tx_entry_t *tx)
 
             if (tx->kind == UNDO_V2_TX_KIND_PARAM)
             {
+                if (undo_v2_param_delta_index_is_valid(index) == 0U)
+                {
+                    break;
+                }
                 next = g_undo_v2_param_delta_next_free[index];
                 g_undo_v2_param_deltas[index].used = 0U;
                 g_undo_v2_param_delta_next_free[index] = g_undo_v2_param_delta_head_free;
@@ -102,6 +122,10 @@ static void undo_v2_release_transaction_payload(undo_v2_tx_entry_t *tx)
             }
             else if (tx->kind == UNDO_V2_TX_KIND_PLOCK)
             {
+                if (undo_v2_plock_delta_index_is_valid(index) == 0U)
+                {
+                    break;
+                }
                 next = g_undo_v2_plock_delta_next_free[index];
                 g_undo_v2_plock_deltas[index].used = 0U;
                 g_undo_v2_plock_delta_next_free[index] = g_undo_v2_plock_delta_head_free;
@@ -109,6 +133,10 @@ static void undo_v2_release_transaction_payload(undo_v2_tx_entry_t *tx)
             }
             else if (tx->kind == UNDO_V2_TX_KIND_STEP)
             {
+                if (undo_v2_step_delta_index_is_valid(index) == 0U)
+                {
+                    break;
+                }
                 next = g_undo_v2_step_delta_next_free[index];
                 g_undo_v2_step_deltas[index].used = 0U;
                 g_undo_v2_step_delta_next_free[index] = g_undo_v2_step_delta_head_free;
@@ -146,8 +174,9 @@ static void undo_v2_purge_redo_history(void)
 static uint16_t undo_v2_param_delta_alloc(void)
 {
     const uint16_t index = g_undo_v2_param_delta_head_free;
-    if (index == UNDO_V2_INVALID_INDEX)
+    if ((index == UNDO_V2_INVALID_INDEX) || (undo_v2_param_delta_index_is_valid(index) == 0U))
     {
+        g_undo_v2_param_delta_head_free = UNDO_V2_INVALID_INDEX;
         return UNDO_V2_INVALID_INDEX;
     }
 
@@ -159,8 +188,9 @@ static uint16_t undo_v2_param_delta_alloc(void)
 static uint16_t undo_v2_plock_delta_alloc(void)
 {
     const uint16_t index = g_undo_v2_plock_delta_head_free;
-    if (index == UNDO_V2_INVALID_INDEX)
+    if ((index == UNDO_V2_INVALID_INDEX) || (undo_v2_plock_delta_index_is_valid(index) == 0U))
     {
+        g_undo_v2_plock_delta_head_free = UNDO_V2_INVALID_INDEX;
         return UNDO_V2_INVALID_INDEX;
     }
 
@@ -172,8 +202,9 @@ static uint16_t undo_v2_plock_delta_alloc(void)
 static uint16_t undo_v2_step_delta_alloc(void)
 {
     const uint16_t index = g_undo_v2_step_delta_head_free;
-    if (index == UNDO_V2_INVALID_INDEX)
+    if ((index == UNDO_V2_INVALID_INDEX) || (undo_v2_step_delta_index_is_valid(index) == 0U))
     {
+        g_undo_v2_step_delta_head_free = UNDO_V2_INVALID_INDEX;
         return UNDO_V2_INVALID_INDEX;
     }
 
@@ -252,6 +283,10 @@ static undo_v2_param_delta_t *undo_v2_find_param_delta(undo_v2_tx_entry_t *tx,
     uint16_t index = tx->payload_index;
     for (uint16_t i = 0U; (i < tx->payload_count) && (index != UNDO_V2_INVALID_INDEX); ++i)
     {
+        if (undo_v2_param_delta_index_is_valid(index) == 0U)
+        {
+            return 0;
+        }
         undo_v2_param_delta_t *const delta = &g_undo_v2_param_deltas[index];
         if ((delta->used != 0U)
             && (delta->param_id == param_id)
@@ -281,6 +316,10 @@ static undo_v2_plock_delta_t *undo_v2_find_plock_delta(undo_v2_tx_entry_t *tx,
     uint16_t index = tx->payload_index;
     for (uint16_t i = 0U; (i < tx->payload_count) && (index != UNDO_V2_INVALID_INDEX); ++i)
     {
+        if (undo_v2_plock_delta_index_is_valid(index) == 0U)
+        {
+            return 0;
+        }
         undo_v2_plock_delta_t *const delta = &g_undo_v2_plock_deltas[index];
         if ((delta->used != 0U)
             && (delta->track == track)
@@ -310,6 +349,10 @@ static undo_v2_step_delta_t *undo_v2_find_step_delta(undo_v2_tx_entry_t *tx,
     uint16_t index = tx->payload_index;
     for (uint16_t i = 0U; (i < tx->payload_count) && (index != UNDO_V2_INVALID_INDEX); ++i)
     {
+        if (undo_v2_step_delta_index_is_valid(index) == 0U)
+        {
+            return 0;
+        }
         undo_v2_step_delta_t *const delta = &g_undo_v2_step_deltas[index];
         if ((delta->used != 0U)
             && (delta->track == track)
@@ -415,6 +458,10 @@ static undo_v2_status_t undo_v2_apply_param_transaction(const undo_v2_tx_entry_t
     uint16_t index = tx->payload_index;
     while ((count < tx->payload_count) && (count < UNDO_V2_MAX_PARAM_DELTAS) && (index != UNDO_V2_INVALID_INDEX))
     {
+        if (undo_v2_param_delta_index_is_valid(index) == 0U)
+        {
+            return UNDO_V2_STATUS_ERR_APPLY_FAILED;
+        }
         indices[count++] = index;
         index = g_undo_v2_param_delta_next_free[index];
     }
@@ -481,6 +528,10 @@ static undo_v2_status_t undo_v2_apply_plock_transaction(const undo_v2_tx_entry_t
     uint16_t index = tx->payload_index;
     while ((count < tx->payload_count) && (count < UNDO_V2_MAX_PLOCK_DELTAS) && (index != UNDO_V2_INVALID_INDEX))
     {
+        if (undo_v2_plock_delta_index_is_valid(index) == 0U)
+        {
+            return UNDO_V2_STATUS_ERR_APPLY_FAILED;
+        }
         indices[count++] = index;
         index = g_undo_v2_plock_delta_next_free[index];
     }
@@ -739,6 +790,14 @@ undo_v2_status_t undo_v2_record_plock_change(uint8_t track,
                                              uint8_t after_flags,
                                              uint8_t after_trig)
 {
+    if ((track >= (uint8_t)SEQ_TRACK_COUNT)
+        || (step >= (uint8_t)SEQ_MAX_STEPS)
+        || (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U))
+    {
+        undo_v2_set_status(UNDO_V2_STATUS_ERR_INVALID_ARG);
+        return g_undo_v2_runtime.last_status;
+    }
+
     undo_v2_tx_entry_t *const tx = undo_v2_current_tx();
     if ((tx == 0) || (tx->kind != UNDO_V2_TX_KIND_PLOCK) || (tx->mode != UNDO_V2_TX_MODE_DELTA))
     {
@@ -1002,4 +1061,3 @@ void undo_v2_set_capture_suspended(uint8_t suspended)
     g_undo_v2_runtime.capture_suspended = (suspended != 0U) ? 1U : 0U;
     undo_v2_set_status(UNDO_V2_STATUS_OK);
 }
-

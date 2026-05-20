@@ -5,6 +5,7 @@
 #include "Sampler/sample_audio_key.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Sampler/sample_pool.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 #include "Storage/wav_parser.h"
 
 #if defined(__has_include)
@@ -84,6 +85,7 @@ typedef struct
     wav_info_t info;
     uint32_t total_frames;
     uint32_t data_offset;
+    sample_stream_safe_metadata_t stream_safe;
     uint8_t raw_pcm24;
 } sample_page_stream_info_t;
 

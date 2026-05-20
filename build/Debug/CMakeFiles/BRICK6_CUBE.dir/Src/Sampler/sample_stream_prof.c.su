@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:16:6:streamer_service_prof_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:21:6:sample_cache_service_prof_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:26:6:sample_stream_manager_prof_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:31:6:stream_contiguous_backend_prof_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:36:6:stream_fatfs_backend_prof_reset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:41:10:sample_stream_prof_cycles_now	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:46:6:sample_stream_prof_record	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_prof.c:70:6:sample_stream_prof_record_stage	0	static

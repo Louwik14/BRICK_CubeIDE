@@ -5,6 +5,7 @@
 #include "Storage/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/wav_audio_codec.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 
 #define SAMPLE_PAGE_WINDOW_LOCK_MAX (SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES)
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
@@ -30,6 +31,7 @@ typedef struct
     uint16_t page_count;
     uint32_t total_frames;
     uint32_t data_offset;
+    sample_stream_safe_metadata_t stream_safe;
     uint8_t valid;
     uint8_t fully_loaded;
     uint8_t raw_pcm24;
@@ -1172,6 +1174,7 @@ uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
     out_info->info = sample->info;
     out_info->total_frames = sample->total_frames;
     out_info->data_offset = sample->data_offset;
+    out_info->stream_safe = sample->stream_safe;
     out_info->raw_pcm24 = sample->raw_pcm24;
     return 1U;
 }
@@ -1721,6 +1724,17 @@ uint8_t sample_page_cache_register_stream_sample_key(sample_audio_key_t key,
     sample->info = *info;
     sample->total_frames = total_frames;
     sample->data_offset = data_offset;
+    sample_stream_safe_metadata_init_fatfs(key,
+                                           info,
+                                           total_frames,
+                                           data_offset,
+                                           &sample->stream_safe);
+    (void)sample_stream_fatfs_map_certify_contiguous(key,
+                                                     sample->path,
+                                                     info,
+                                                     total_frames,
+                                                     data_offset,
+                                                     &sample->stream_safe);
     sample->valid = 1U;
     sample->fully_loaded = 0U;
     sample->first_slot = UINT16_MAX;
@@ -1761,6 +1775,11 @@ uint8_t sample_page_cache_register_raw_pcm24_stereo_sample_key(sample_audio_key_
     sample->info.byte_rate = LOOPER_STORAGE_RAW_SAMPLE_RATE_HZ * LOOPER_STORAGE_RAW_BYTES_PER_FRAME;
     sample->total_frames = total_frames;
     sample->data_offset = 0U;
+    sample_stream_safe_metadata_init_fatfs(key,
+                                           &sample->info,
+                                           total_frames,
+                                           0U,
+                                           &sample->stream_safe);
     sample->valid = 1U;
     sample->fully_loaded = 0U;
     sample->raw_pcm24 = 1U;

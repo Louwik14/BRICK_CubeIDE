@@ -57,6 +57,7 @@ typedef struct
     float before;
     float after;
     uint8_t used;
+    uint8_t reserved[3];
 } undo_v2_param_delta_t;
 
 typedef struct
@@ -74,6 +75,8 @@ typedef struct
     uint8_t after_flags;
     uint8_t after_trig;
     uint8_t used;
+    uint8_t reserved[3];
+    uint32_t align32;
 } undo_v2_plock_delta_t;
 
 typedef struct
@@ -84,6 +87,8 @@ typedef struct
     uint16_t before_value;
     uint16_t after_value;
     uint8_t used;
+    uint8_t reserved[3];
+    uint32_t align32;
 } undo_v2_step_delta_t;
 
 typedef struct
@@ -105,7 +110,19 @@ typedef struct
     uint16_t payload_index;
     uint16_t payload_count;
     uint8_t committed;
+    uint8_t reserved[3];
 } undo_v2_tx_entry_t;
+
+_Static_assert(_Alignof(undo_v2_param_delta_t) >= 4U, "undo_v2_param_delta_t alignment");
+_Static_assert((sizeof(undo_v2_param_delta_t) % 4U) == 0U, "undo_v2_param_delta_t stride");
+_Static_assert(_Alignof(undo_v2_plock_delta_t) >= 4U, "undo_v2_plock_delta_t alignment");
+_Static_assert((sizeof(undo_v2_plock_delta_t) % 4U) == 0U, "undo_v2_plock_delta_t stride");
+_Static_assert(_Alignof(undo_v2_step_delta_t) >= 4U, "undo_v2_step_delta_t alignment");
+_Static_assert((sizeof(undo_v2_step_delta_t) % 4U) == 0U, "undo_v2_step_delta_t stride");
+_Static_assert(_Alignof(undo_v2_snapshot_payload_t) >= 4U, "undo_v2_snapshot_payload_t alignment");
+_Static_assert((sizeof(undo_v2_snapshot_payload_t) % 4U) == 0U, "undo_v2_snapshot_payload_t stride");
+_Static_assert(_Alignof(undo_v2_tx_entry_t) >= 4U, "undo_v2_tx_entry_t alignment");
+_Static_assert((sizeof(undo_v2_tx_entry_t) % 4U) == 0U, "undo_v2_tx_entry_t stride");
 
 void undo_v2_init(void);
 void undo_v2_clear_all(void);
@@ -157,4 +174,3 @@ uint8_t undo_v2_is_redo_available(void);
 void undo_v2_set_capture_suspended(uint8_t suspended);
 
 #endif
-

@@ -1437,18 +1437,46 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         if ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED))
         {
             seq_edit_step_plock_commit(held_track, held_steps[applied_count], set_id, param_slot);
-            (void)undo_v2_record_plock_change(held_track,
-                                              held_steps[applied_count],
-                                              set_id,
-                                              param_slot,
-                                              before_present,
-                                              before_value16,
-                                              before_flags,
-                                              prior_trig[applied_count],
-                                              1U,
-                                              target_values[applied_count],
-                                              0U,
-                                              seq_model_get_trig(held_track, held_steps[applied_count]));
+            const undo_v2_status_t undo_status =
+                undo_v2_record_plock_change(held_track,
+                                            held_steps[applied_count],
+                                            set_id,
+                                            param_slot,
+                                            before_present,
+                                            before_value16,
+                                            before_flags,
+                                            prior_trig[applied_count],
+                                            1U,
+                                            target_values[applied_count],
+                                            0U,
+                                            seq_model_get_trig(held_track, held_steps[applied_count]));
+            if (undo_status != UNDO_V2_STATUS_OK)
+            {
+                uint8_t rollback_count = (uint8_t)(applied_count + 1U);
+                while (rollback_count > 0U)
+                {
+                    rollback_count--;
+                    if (had_prior_entry[rollback_count] != 0U)
+                    {
+                        (void)seq_model_step_plock_upsert(held_track,
+                                                          held_steps[rollback_count],
+                                                          set_id,
+                                                          param_slot,
+                                                          prior_entries[rollback_count].value16,
+                                                          prior_entries[rollback_count].flags);
+                    }
+                    else
+                    {
+                        (void)seq_model_step_plock_delete(held_track,
+                                                          held_steps[rollback_count],
+                                                          set_id,
+                                                          param_slot);
+                    }
+                }
+
+                undo_v2_cancel_transaction();
+                return 1U;
+            }
             continue;
         }
 
@@ -1706,4 +1734,3 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     }
     return 1U;
 }
-
