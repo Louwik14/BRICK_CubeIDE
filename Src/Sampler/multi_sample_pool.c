@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+#include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_manager.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
 
 typedef struct
@@ -244,6 +247,19 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
     const uint32_t zone_end = (instrument->first_zone_id == MULTI_SAMPLE_POOL_INVALID_ID)
         ? g_multi_zone_count
         : ((uint32_t)instrument->first_zone_id + instrument->zone_count);
+
+    if (instrument->first_sample_id != MULTI_SAMPLE_POOL_INVALID_ID)
+    {
+        for (uint32_t sample_id = instrument->first_sample_id;
+             (sample_id < sample_end) && (sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES);
+             ++sample_id)
+        {
+            const sample_audio_key_t key = sample_audio_key_multi((uint16_t)sample_id);
+            sample_stream_manager_release_key(key);
+            sample_page_cache_clear_key(key);
+        }
+        sd_access_gate_set_streaming_critical(sample_page_cache_has_window_locks());
+    }
 
     if (sample_end == g_multi_sample_count)
     {

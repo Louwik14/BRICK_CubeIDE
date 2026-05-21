@@ -711,6 +711,47 @@ uint8_t seq_model_step_plock_count(seq_track_id_t track, seq_step_id_t step)
     return s->lock_count;
 }
 
+uint8_t seq_model_step_plock_collect(seq_track_id_t track,
+                                     seq_step_id_t step,
+                                     seq_plock_entry_t *out_entries,
+                                     uint8_t max_entries,
+                                     uint8_t *out_count)
+{
+    const seq_step_t *const s = seq_model_get_step_const(track, step);
+    if ((s == 0) || (out_entries == 0) || (out_count == 0))
+    {
+        return 0U;
+    }
+
+    *out_count = 0U;
+    if (max_entries == 0U)
+    {
+        return 1U;
+    }
+
+    uint8_t count = 0U;
+    uint16_t idx = s->lock_head;
+    uint16_t guard = 0U;
+    while ((idx != SEQ_LOCK_NONE) && (count < s->lock_count) && (count < max_entries))
+    {
+        if (guard++ >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            return 0U;
+        }
+
+        if (idx >= (uint16_t)SEQ_PLOCK_POOL_CAP_PER_TRACK)
+        {
+            return 0U;
+        }
+
+        out_entries[count++] = g_seq_project.pool[track][idx];
+        idx = g_seq_project.pool[track][idx].next;
+    }
+
+    *out_count = count;
+    return 1U;
+}
+
 uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
                                     seq_step_id_t step,
                                     uint8_t ordinal,
@@ -749,4 +790,3 @@ uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
 
     return 0U;
 }
-

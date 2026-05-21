@@ -65,9 +65,12 @@ typedef struct
     uint8_t use_slice;
     uint8_t use_segment_cursor;
     uint8_t release_pending;
+    uint8_t stream_owner_release_pending;
+    uint16_t stream_owner_release_sample_id;
     sample_play_plan_t play_plan;
     sample_voice_reader_t reader;
     uint32_t trigger_order;
+    uint32_t stream_owner_release_generation;
     sample_stream_active_state_t stream_state;
     uint32_t pinned_first_page;
     uint32_t pinned_last_page;
@@ -174,6 +177,7 @@ static uint8_t g_sampler_multi_alloc_reject_reason =
     (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE;
 
 static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
+
 #define BRICK6_SAMPLER_RUNTIME_DIAG_INC(field) ((void)0)
 
 #define BRICK6_SAMPLER_STEP_EPSILON (0.0001f)
@@ -588,6 +592,33 @@ static void brick6_sampler_runtime_multi_release_voice_stream_owner(
     sample_stream_manager_release_owner((uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
                                         voice_index,
                                         voice->trigger_order);
+}
+
+static void brick6_sampler_runtime_multi_release_voice_stream_owner_generation(uint8_t voice_index,
+                                                                               uint32_t generation)
+{
+    if ((voice_index == UINT8_MAX) || (generation == 0U))
+    {
+        return;
+    }
+
+    sample_stream_manager_release_owner((uint8_t)SAMPLE_STREAM_OWNER_MULTI_VOICE,
+                                        voice_index,
+                                        generation);
+}
+
+static void brick6_sampler_runtime_multi_mark_voice_stream_owner_release(
+    brick6_sampler_voice_t *voice)
+{
+    const uint8_t voice_index = brick6_sampler_runtime_multi_voice_index(voice);
+    if ((voice == NULL) || (voice_index == UINT8_MAX) || (voice->trigger_order == 0U))
+    {
+        return;
+    }
+
+    voice->stream_owner_release_pending = 1U;
+    voice->stream_owner_release_generation = voice->trigger_order;
+    voice->stream_owner_release_sample_id = voice->multi_sample_id;
 }
 
 static void brick6_sampler_runtime_multi_diag_note_reject(uint8_t track_id,
@@ -2031,6 +2062,28 @@ void brick6_sampler_runtime_set_multi_instrument(uint8_t track_id, uint16_t inst
     g_sampler_multi_track_state[track_id].instrument_id = instrument_id;
 }
 
+void brick6_sampler_runtime_stop_multi_instrument(uint16_t instrument_id)
+{
+    if ((instrument_id == MULTI_SAMPLE_POOL_INVALID_ID)
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+    {
+        brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
+        if ((voice->active != 0U)
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_MULTI)
+            && (voice->multi_instrument_id == instrument_id))
+        {
+            brick6_sampler_runtime_multi_stop_voice(
+                voice,
+                (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL);
+        }
+    }
+}
+
 uint8_t brick6_sampler_runtime_get_multi_instrument(uint8_t track_id, uint16_t *out_instrument_id)
 {
     if ((track_id >= SEQ_TRACK_COUNT) || (out_instrument_id == NULL))
@@ -2430,7 +2483,14 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
     }
 
     const uint16_t stopped_multi_sample_id = voice->multi_sample_id;
-    brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+    if (__get_IPSR() != 0U)
+    {
+        brick6_sampler_runtime_multi_mark_voice_stream_owner_release(voice);
+    }
+    else
+    {
+        brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+    }
 
     if ((reason != (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE)
         && (voice->active != 0U)
@@ -2553,9 +2613,51 @@ static void brick6_sampler_runtime_multi_service_streaming(void)
     }
 }
 
+static void brick6_sampler_runtime_multi_release_inactive_stream_owners(void)
+{
+    if (__get_IPSR() != 0U)
+    {
+        return;
+    }
+
+    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+    {
+        brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
+        if (voice->stream_owner_release_pending == 0U)
+        {
+            continue;
+        }
+
+        const uint8_t voice_index = brick6_sampler_runtime_multi_voice_index(voice);
+        const uint32_t generation = voice->stream_owner_release_generation;
+        const uint16_t stopped_multi_sample_id = voice->stream_owner_release_sample_id;
+        brick6_sampler_runtime_multi_release_voice_stream_owner_generation(voice_index,
+                                                                           generation);
+        voice->stream_owner_release_pending = 0U;
+        voice->stream_owner_release_generation = 0U;
+        voice->stream_owner_release_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        if ((voice->active == 0U) || (voice->trigger_order == generation))
+        {
+            sample_stream_manager_active_state_reset(&voice->stream_state);
+        }
+        brick6_sampler_runtime_multi_defer_stream_release(stopped_multi_sample_id);
+        if (voice->active == 0U)
+        {
+            voice->trigger_order = 0U;
+            voice->release_pending = 0U;
+            voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+            voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+            voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+            voice->owner_track_id = UINT8_MAX;
+        }
+    }
+}
+
 void brick6_sampler_runtime_queue_stream_pages(void)
 {
+    brick6_sampler_runtime_multi_release_inactive_stream_owners();
     brick6_sampler_runtime_multi_service_streaming();
+    brick6_sampler_runtime_multi_release_inactive_stream_owners();
 }
 
 static uint8_t brick6_sampler_runtime_multi_sample_has_active_voice(uint16_t multi_sample_id)
@@ -2602,8 +2704,10 @@ static void brick6_sampler_runtime_multi_service_stream_releases(void)
 
 void brick6_sampler_runtime_service(void)
 {
+    brick6_sampler_runtime_multi_release_inactive_stream_owners();
     brick6_sampler_runtime_multi_service_stream_releases();
     brick6_sampler_runtime_multi_service_streaming();
+    brick6_sampler_runtime_multi_release_inactive_stream_owners();
 }
 
 static uint32_t brick6_sampler_runtime_multi_active_count(void)
@@ -3011,7 +3115,6 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
                                                       reason);
         return 0U;
     }
-
     sample_play_plan_t play_plan;
     memset(&play_plan, 0, sizeof(play_plan));
     play_plan.key = key;
@@ -3451,7 +3554,7 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
             brick6_sampler_runtime_multi_diag_note_stop(
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
-            brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+            brick6_sampler_runtime_multi_mark_voice_stream_owner_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
@@ -3470,7 +3573,7 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
                 g_brick6_sampler_runtime_diag.multi_page_underrun++;
             }
             brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
-            brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+            brick6_sampler_runtime_multi_mark_voice_stream_owner_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
@@ -3487,7 +3590,7 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
             brick6_sampler_runtime_multi_diag_note_stop(
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
-            brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+            brick6_sampler_runtime_multi_mark_voice_stream_owner_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
@@ -3501,7 +3604,7 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
             brick6_sampler_runtime_multi_diag_note_stop(
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
-            brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+            brick6_sampler_runtime_multi_mark_voice_stream_owner_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
@@ -3547,7 +3650,7 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
                 g_brick6_sampler_runtime_diag.multi_page_underrun++;
             }
             brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
-            brick6_sampler_runtime_multi_release_voice_stream_owner(voice);
+            brick6_sampler_runtime_multi_mark_voice_stream_owner_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
@@ -3611,6 +3714,7 @@ static void brick6_sampler_render_sample(const sample_desc_t *desc,
     {
         voice->active = 0U;
         voice->position = 0.0f;
+        sample_voice_reader_stop(&voice->reader);
         return;
     }
 
@@ -3823,6 +3927,7 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
         {
             voice->active = 0U;
             voice->position = 0.0f;
+            sample_voice_reader_stop(&voice->reader);
             return;
         }
 
@@ -3877,6 +3982,7 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
     {
         voice->active = 0U;
         voice->position = 0U;
+        sample_voice_reader_stop(&voice->reader);
         return;
     }
 

@@ -122,6 +122,13 @@ sample_audio_key_t sample_audio_key_multi(uint16_t multi_sample_id);
 uint8_t sample_audio_key_equal(const sample_audio_key_t *a, const sample_audio_key_t *b);
 void sample_page_cache_clear_key(sample_audio_key_t key);
 void sample_page_cache_clear_sample(uint16_t sample_id);
+uint8_t sample_page_cache_cancel_queued_page_key(sample_audio_key_t key,
+                                                 uint32_t page_index,
+                                                 uint8_t reason);
+uint32_t sample_page_cache_cancel_queued_key(sample_audio_key_t key,
+                                             uint8_t reason);
+uint32_t sample_page_cache_cancel_queued_domain(sample_audio_domain_t domain,
+                                                uint8_t reason);
 sample_page_state_t sample_page_cache_get_page_state_key(sample_audio_key_t key,
                                                          uint32_t page_index);
 sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_t page_index);

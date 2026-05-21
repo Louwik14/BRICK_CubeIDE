@@ -412,6 +412,7 @@ Etat scheduler audio (`seq_play_scheduler.c`):
 Etat modele sequenceur (`seq_model.c`):
 - `g_seq_project` (`seq_project_data_t`): tracks/steps/trigs/plock pool/free list.
 - Ecriture: APIs `seq_model_set_*`, `seq_model_step_plock_*`, `seq_model_load_project`, `seq_model_init_defaults`.
+- Lecture boundary p-lock: `seq_boundary_engine` collecte les locks d'un step via `seq_model_step_plock_collect`, en un seul parcours lineaire de la liste chainee du step.
 - Lecture: runtime boundary/scheduler/edit/UI/storage.
 
 ## 6. Flux runtime
@@ -499,7 +500,8 @@ Invariants prouves par le code:
   - `seq_boundary_engine_process` fait apply/restore locks avant emission hit.
   - les markers Q Rec/Q Play sont edge-based: seulement quand un `boundary_hit` expose `step==0`, jamais parce qu'un getter playhead reste a 0.
 - Integrite de parcours p-lock:
-  - les parcours de listes p-lock cote modele (`find/mask/get_at`) sont bornes par la capacite pool track pour eviter toute boucle non bornee en presence de structure corrompue.
+  - les parcours de listes p-lock cote modele (`find/mask/collect/get_at`) sont bornes par la capacite pool track pour eviter toute boucle non bornee en presence de structure corrompue.
+  - le boundary runtime ne doit pas collecter tous les locks d'un step par appels repetes a `seq_model_step_plock_get_at`; il utilise `seq_model_step_plock_collect` pour conserver un cout O(n) sur le nombre de locks du step.
   - le modele Seq stocke `set_id + param_slot + value16`; `param_slot` est un slot local et jamais un `param_id` tronque.
   - les chemins qui encodent un parametre vers un p-lock utilisent `seq_param_iface_param_to_slot(track,set,param,&slot)`; les chemins qui appliquent/relisent un lock utilisent `seq_param_iface_slot_to_param(track,set,slot,&param)`.
   - `seq_param_iface_map_param` reste hors contrat pour UI/live-rec/scheduler et pour les chemins TONE/runtime-specific.

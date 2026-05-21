@@ -116,6 +116,11 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
                                                    seq_param_slot_t param_slot);
 void seq_model_step_plock_clear(seq_track_id_t track, seq_step_id_t step);
 uint8_t seq_model_step_plock_count(seq_track_id_t track, seq_step_id_t step);
+uint8_t seq_model_step_plock_collect(seq_track_id_t track,
+                                     seq_step_id_t step,
+                                     seq_plock_entry_t *out_entries,
+                                     uint8_t max_entries,
+                                     uint8_t *out_count);
 uint8_t seq_model_step_plock_get_at(seq_track_id_t track,
                                     seq_step_id_t step,
                                     uint8_t ordinal,

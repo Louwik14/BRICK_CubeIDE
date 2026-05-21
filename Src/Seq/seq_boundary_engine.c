@@ -76,17 +76,19 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
         return 1U;
     }
 
-    uint8_t count = 0U;
-    const uint8_t lock_count = seq_model_step_plock_count(track, step);
-    for (uint8_t i = 0U; i < lock_count; ++i)
+    seq_plock_entry_t entries[SEQ_STEP_MAX_LOCKS];
+    uint8_t entry_count = 0U;
+    if (seq_model_step_plock_collect(track, step, entries, SEQ_STEP_MAX_LOCKS, &entry_count) == 0U)
     {
-        seq_plock_entry_t entry;
-        if (seq_model_step_plock_get_at(track, step, i, &entry) == 0U)
-        {
-            continue;
-        }
+        return 0U;
+    }
 
-        if (seq_param_iface_slot_is_supported(track, entry.set_id, entry.param_slot) == 0U)
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < entry_count; ++i)
+    {
+        const seq_plock_entry_t *const entry = &entries[i];
+
+        if (seq_param_iface_slot_is_supported(track, entry->set_id, entry->param_slot) == 0U)
         {
             continue;
         }
@@ -96,9 +98,9 @@ static uint8_t seq_boundary_engine_collect_step_locks(seq_track_id_t track,
             break;
         }
 
-        out_locks[count].set_id = entry.set_id;
-        out_locks[count].param_slot = entry.param_slot;
-        out_locks[count].value16 = entry.value16;
+        out_locks[count].set_id = entry->set_id;
+        out_locks[count].param_slot = entry->param_slot;
+        out_locks[count].value16 = entry->value16;
         out_locks[count].base_value16 = 0U;
         count++;
     }
@@ -303,4 +305,3 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         state->play_step[track] = next;
     }
 }
-

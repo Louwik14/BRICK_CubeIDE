@@ -688,3 +688,12 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - La ration Multi preparee au LOAD est maintenant pinnee page par page; page0 Multi n'a plus de protection speciale hors contrat distincte.
 - Le reclaim avant FULL load respecte aussi les locks de fenetre active et les pins contractuels.
 - Cette passe ne purge pas proactivement les pages hors contrat, ne modifie pas le reader, ne change pas le streamer FatFs et ne touche pas au start gate strict READY 8192.
+
+## Addendum 2026-05-21 - cleanup lifecycle window-locks Multi
+
+- Les locks de fenetre Multi restent indexes par `(owner_kind=MULTI_VOICE, owner_id=voice_index, owner_generation=trigger_order)`.
+- Le rendu IRQ peut terminer une voix pendant que la superloop entretient la fenetre STREAM; le cleanup final des owners inactifs est donc repasse hors IRQ dans `brick6_sampler_runtime_queue_stream_pages()` et `brick6_sampler_runtime_service()`, avant/apres l'entretien des fenetres.
+- Ce cleanup libere les window locks/pending de la generation de voix inactive, reset l'etat stream local et differe la liberation du reader/key via le chemin Multi existant; il ne clear pas globalement le page-cache et ne touche pas aux pins de ration Multi chargee.
+- Un unload/remplacement d'instrument Multi stoppe d'abord les voix de l'instrument, puis libere les readers/pending et clear les pages de chaque `sample_audio_key_multi(sample_id)`, ce qui retire les pins contractuels de la ration chargee.
+- Le rendu IRQ Multi ne parcourt pas la table des locks: lorsqu'une voix finit en IRQ, il conserve seulement en RAM le triplet owner `voice_index/generation` a liberer. La superloop libere ensuite les locks avec cette generation capturee, meme si la voix a ete reutilisee entre-temps avec un nouveau `trigger_order`.
+- Les descripteurs physiques du page-cache `g_sample_page_desc` restent en SDRAM dans une section dediee `.page_desc_sdram`; les pages audio `g_sample_page_data`, l'index hash `g_sample_page_index`, les readers/pending STREAM et les scratch SD restent dans leurs sections SDRAM existantes.

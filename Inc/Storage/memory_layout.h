@@ -79,6 +79,9 @@
 /* Dedicated SDRAM arena for resident samples. */
 #define SDRAM_SAMPLES SEC_ATTR(".sdram_samples") ALIGN32
 
+/* Dedicated SDRAM arena for page-cache descriptors. */
+#define SDRAM_SAMPLE_PAGE_DESC SEC_ATTR(".page_desc_sdram") ALIGN32
+
 /* Dedicated SDRAM arena for recorder/master-buffer history. */
 #define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
 

@@ -1138,6 +1138,7 @@ static void ui_page_settings_sample_confirm_accept(void)
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD)
     {
+        brick6_sampler_runtime_stop_multi_instrument(g_ui_settings.confirm_slot);
         if (multi_sample_pool_clear_instrument(g_ui_settings.confirm_slot) != 0U)
         {
             ui_page_settings_status("UNLOAD OK");
@@ -1489,6 +1490,7 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
 
     if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
     {
+        brick6_sampler_runtime_stop_multi_instrument(slot);
         (void)multi_sample_pool_clear_instrument(slot);
     }
 

@@ -56,7 +56,7 @@ typedef struct
     uint32_t owner_generation;
 } sample_page_window_lock_t;
 
-SDRAM_SAMPLES static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
+SDRAM_SAMPLE_PAGE_DESC static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
 SDRAM_SAMPLES static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_FRAMES
                                                                      * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
@@ -67,6 +67,11 @@ static CTRL_STATE sample_page_window_lock_t g_sample_page_window_lock[SAMPLE_PAG
 static CTRL_STATE uint16_t g_sample_page_queued_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
+
+static uint16_t sample_page_cache_key_slot(sample_audio_key_t key);
+static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *page);
+static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t request_key,
+                                                       sample_audio_key_t victim_key);
 
 sample_audio_key_t sample_audio_key_classic(uint16_t sample_id)
 {
@@ -854,6 +859,70 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
     g_sample_page_last_slot[key_slot] = UINT16_MAX;
 }
 
+uint8_t sample_page_cache_cancel_queued_page_key(sample_audio_key_t key,
+                                                 uint32_t page_index,
+                                                 uint8_t reason)
+{
+    (void)reason;
+    sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
+    if ((page == 0) || (page->state != SAMPLE_PAGE_QUEUED))
+    {
+        return 0U;
+    }
+    if ((page->pin_count != 0U) || (page->use_count != 0U) || (page->window_pin_count != 0U))
+    {
+        return 0U;
+    }
+
+    sample_page_cache_clear_desc(page, (uint32_t)(page - g_sample_page_desc));
+    return 1U;
+}
+
+uint32_t sample_page_cache_cancel_queued_key(sample_audio_key_t key, uint8_t reason)
+{
+    (void)reason;
+    uint32_t count = 0U;
+    if (sample_page_cache_key_valid(key) == 0U)
+    {
+        return 0U;
+    }
+
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->state == SAMPLE_PAGE_QUEUED)
+            && (sample_audio_key_equal(&page->key, &key) != 0U)
+            && (page->pin_count == 0U)
+            && (page->use_count == 0U)
+            && (page->window_pin_count == 0U))
+        {
+            sample_page_cache_clear_desc(page, i);
+            count++;
+        }
+    }
+    return count;
+}
+
+uint32_t sample_page_cache_cancel_queued_domain(sample_audio_domain_t domain, uint8_t reason)
+{
+    (void)reason;
+    uint32_t count = 0U;
+    for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
+    {
+        sample_page_desc_t *const page = &g_sample_page_desc[i];
+        if ((page->state == SAMPLE_PAGE_QUEUED)
+            && (page->key.domain == domain)
+            && (page->pin_count == 0U)
+            && (page->use_count == 0U)
+            && (page->window_pin_count == 0U))
+        {
+            sample_page_cache_clear_desc(page, i);
+            count++;
+        }
+    }
+    return count;
+}
+
 sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_t page_index)
 {
     return sample_page_cache_get_page_state_key(sample_audio_key_classic(sample_id), page_index);
@@ -1334,7 +1403,11 @@ uint8_t sample_page_cache_acquire_window_page_key(sample_audio_key_t key,
         }
     }
 
-    if ((free_lock == 0) || (page->window_pin_count == UINT16_MAX))
+    if (free_lock == 0)
+    {
+        return 0U;
+    }
+    if (page->window_pin_count == UINT16_MAX)
     {
         return 0U;
     }
@@ -1361,8 +1434,11 @@ void sample_page_cache_release_window_owner(uint8_t owner_kind,
     for (uint32_t i = 0U; i < SAMPLE_PAGE_WINDOW_LOCK_MAX; ++i)
     {
         sample_page_window_lock_t *const lock = &g_sample_page_window_lock[i];
-        if ((lock->used == 0U)
-            || (lock->owner_kind != owner_kind)
+        if (lock->used == 0U)
+        {
+            continue;
+        }
+        if ((lock->owner_kind != owner_kind)
             || (lock->owner_id != owner_id)
             || (lock->owner_generation != owner_generation))
         {
