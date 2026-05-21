@@ -98,28 +98,36 @@ void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
                                     uint32_t fade_count,
                                     float *out_l,
                                     float *out_r,
-                                    uint32_t out_offset);
+                                    uint32_t out_offset,
+                                    float *out_last_l,
+                                    float *out_last_r);
 void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
                                     float gain,
                                     const float *fade_gain,
                                     uint32_t fade_count,
                                     float *out_l,
                                     float *out_r,
-                                    uint32_t out_offset);
+                                    uint32_t out_offset,
+                                    float *out_last_l,
+                                    float *out_last_r);
 void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segment,
                                               float gain,
                                               const float *fade_gain,
                                               uint32_t fade_count,
                                               float *out_l,
                                               float *out_r,
-                                              uint32_t out_offset);
+                                              uint32_t out_offset,
+                                              float *out_last_l,
+                                              float *out_last_r);
 void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segment,
                                               float gain,
                                               const float *fade_gain,
                                               uint32_t fade_count,
                                               float *out_l,
                                               float *out_r,
-                                              uint32_t out_offset);
+                                              uint32_t out_offset,
+                                              float *out_last_l,
+                                              float *out_last_r);
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t region_start,
                                                   uint32_t region_end,
@@ -131,7 +139,9 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   float *out_l,
                                                   float *out_r,
                                                   uint32_t frames,
-                                                  uint8_t *out_underrun);
+                                                  uint8_t *out_underrun,
+                                                  float *out_last_l,
+                                                  float *out_last_r);
 
 #ifdef __cplusplus
 }

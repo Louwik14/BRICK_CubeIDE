@@ -23,6 +23,7 @@
 
 #include "main.h"
 #include "drv_display.h"
+#include "ui_boot_loading.h"
 #include "ui_page_manager.h"
 
 #define UI_RENDER_PERIOD_MS 16U
@@ -47,7 +48,12 @@ void ui_renderer_oled_draw(void)
 
     drv_display_clear();
 
-    if ((page != 0) && (page->render != 0))
+    if (ui_boot_loading_is_active() != 0U)
+    {
+        ui_boot_loading_render();
+        ui_boot_loading_note_frame_rendered();
+    }
+    else if ((page != 0) && (page->render != 0))
     {
         page->render();
     }

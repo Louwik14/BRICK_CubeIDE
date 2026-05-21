@@ -863,7 +863,63 @@ static multi_sample_import_result_t multi_import_index_write_result(
         : MULTI_SAMPLE_IMPORT_INDEX_WRITE_FAIL;
 }
 
-multi_sample_import_result_t multi_sample_import_folder(const char *instrument_dir)
+static void multi_import_notify_progress(multi_sample_import_progress_cb_t progress_cb,
+                                         void *progress_user,
+                                         uint16_t done,
+                                         uint16_t total)
+{
+    if (progress_cb != 0)
+    {
+        progress_cb(done, total, progress_user);
+    }
+}
+
+static multi_sample_import_result_t multi_import_count_direct_wavs(const char *scan_dir,
+                                                                   uint16_t *out_count)
+{
+    DIR dir;
+    FRESULT fr = f_opendir(&dir, scan_dir);
+    if (fr != FR_OK)
+    {
+        return MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL;
+    }
+
+    uint16_t count = 0U;
+    while (1)
+    {
+        FILINFO fno;
+        memset(&fno, 0, sizeof(fno));
+        fr = f_readdir(&dir, &fno);
+        if (fr != FR_OK)
+        {
+            (void)f_closedir(&dir);
+            return MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL;
+        }
+        if (fno.fname[0] == '\0')
+        {
+            break;
+        }
+        if (((fno.fattrib & AM_DIR) == 0U) && (multi_import_is_wav(fno.fname) != 0U))
+        {
+            if (count < UINT16_MAX)
+            {
+                count++;
+            }
+        }
+    }
+
+    (void)f_closedir(&dir);
+    if (out_count != 0)
+    {
+        *out_count = count;
+    }
+    return MULTI_SAMPLE_IMPORT_OK;
+}
+
+multi_sample_import_result_t multi_sample_import_folder_with_progress(
+    const char *instrument_dir,
+    multi_sample_import_progress_cb_t progress_cb,
+    void *progress_user)
 {
     g_import_last_result = MULTI_SAMPLE_IMPORT_OK;
     multi_import_clear_diag();
@@ -922,6 +978,20 @@ multi_sample_import_result_t multi_sample_import_folder(const char *instrument_d
         return g_import_last_result;
     }
 
+    uint16_t direct_wav_count = 0U;
+    multi_sample_import_result_t count_result =
+        multi_import_count_direct_wavs(g_import_scan_dir, &direct_wav_count);
+    if (count_result != MULTI_SAMPLE_IMPORT_OK)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        g_import_last_result = count_result;
+        return g_import_last_result;
+    }
+
+    const uint16_t progress_total = (uint16_t)(direct_wav_count + 2U);
+    uint16_t progress_done = 0U;
+    multi_import_notify_progress(progress_cb, progress_user, progress_done, progress_total);
+
     DIR dir;
     FRESULT fr = f_opendir(&dir, g_import_scan_dir);
     if (fr != FR_OK)
@@ -953,6 +1023,11 @@ multi_sample_import_result_t multi_sample_import_folder(const char *instrument_d
         }
 
         result = multi_import_add_wav(g_import_scan_dir, &fno, &path_cursor);
+        if (result == MULTI_SAMPLE_IMPORT_OK)
+        {
+            progress_done++;
+            multi_import_notify_progress(progress_cb, progress_user, progress_done, progress_total);
+        }
     }
 
     (void)f_closedir(&dir);
@@ -961,6 +1036,11 @@ multi_sample_import_result_t multi_sample_import_folder(const char *instrument_d
     if (result == MULTI_SAMPLE_IMPORT_OK)
     {
         result = multi_import_generate_zones();
+        if (result == MULTI_SAMPLE_IMPORT_OK)
+        {
+            progress_done = (uint16_t)(direct_wav_count + 1U);
+            multi_import_notify_progress(progress_cb, progress_user, progress_done, progress_total);
+        }
     }
 
     if (result == MULTI_SAMPLE_IMPORT_OK)
@@ -980,10 +1060,19 @@ multi_sample_import_result_t multi_sample_import_folder(const char *instrument_d
 
         result = multi_import_index_write_result(multi_sample_index_write(g_import_index_path,
                                                                           &src));
+        if (result == MULTI_SAMPLE_IMPORT_OK)
+        {
+            multi_import_notify_progress(progress_cb, progress_user, progress_total, progress_total);
+        }
     }
 
     g_import_last_result = result;
     return result;
+}
+
+multi_sample_import_result_t multi_sample_import_folder(const char *instrument_dir)
+{
+    return multi_sample_import_folder_with_progress(instrument_dir, 0, 0);
 }
 
 multi_sample_import_result_t multi_sample_import_get_last_result(void)

@@ -17,8 +17,22 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    27U /* Extends Sampler sample paths to the catalogue V2 path contract. */
+#define PROJECT_V1_FILE_VERSION    28U /* Adds project sample autoload slots for boot/project restore. */
 #define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
+#define PROJECT_V1_SAMPLE_AUTOLOAD_VERSION 1U
+#define PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX SAMPLE_POOL_PATH_MAX
+#define PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT \
+    (SAMPLE_POOL_SIZE + MULTI_SAMPLE_POOL_MAX_INSTRUMENTS + 1U)
+
+typedef enum
+{
+    PROJECT_V1_SAMPLE_AUTOLOAD_KIND_EMPTY = 0,
+    PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM,
+    PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI,
+    PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM_RESERVED_FUTURE
+} project_v1_sample_autoload_kind_t;
+
+#define PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED 0x01U
 
 typedef enum
 {
@@ -96,6 +110,23 @@ typedef struct
 
 typedef struct
 {
+    uint16_t slot_index;
+    uint8_t kind;
+    uint8_t flags;
+    char path[PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX];
+    uint32_t reserved;
+} project_v1_sample_autoload_slot_t;
+
+typedef struct
+{
+    uint16_t version;
+    uint16_t count;
+    uint32_t reserved;
+    project_v1_sample_autoload_slot_t slots[PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT];
+} project_v1_sample_autoload_block_t;
+
+typedef struct
+{
     char restored_multi_path[PROJECT_V1_MULTI_PATH_MAX];
     uint8_t restored_track;
     uint8_t restore_load_requested;
@@ -107,10 +138,19 @@ typedef struct
 {
     project_v1_state_block_t state;
     sample_pool_project_snapshot_t sample_pool;
+    project_v1_sample_autoload_block_t sample_autoload;
     project_v1_multi_track_t multi[SEQ_TRACK_COUNT];
     project_v1_macro_state_t macro;
     PatternSaveV1 live;
 } ProjectSaveV1;
+
+typedef struct
+{
+    uint16_t done;
+    uint16_t total;
+    uint8_t active;
+    uint8_t complete;
+} project_v1_autoload_progress_t;
 
 typedef struct __attribute__((packed))
 {
@@ -165,6 +205,7 @@ uint8_t project_v1_macro_set_slot(uint8_t bank,
 uint8_t project_v1_set_track_multi_path(uint8_t track, const char *path);
 uint8_t project_v1_get_track_multi_path(uint8_t track, char *out_path, uint32_t out_size);
 void project_v1_get_multi_restore_diag(project_v1_multi_restore_diag_t *out_diag);
+uint8_t project_v1_get_autoload_progress(project_v1_autoload_progress_t *out_progress);
 uint8_t project_v1_capture_current(ProjectSaveV1 *out_project);
 uint8_t project_v1_apply_snapshot(const ProjectSaveV1 *project, uint8_t resume_transport);
 uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,

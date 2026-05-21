@@ -28,6 +28,7 @@ typedef struct
 {
     uint16_t instrument_id;
     uint16_t total_samples;
+    uint16_t samples_ready;
     uint16_t pages_requested;
     uint16_t pages_ready;
     uint16_t prep_pages_required;
@@ -42,6 +43,7 @@ multi_sample_load_result_t multi_sample_load_instrument(const char *index_path,
                                                         uint16_t instrument_id);
 void multi_sample_service_load(uint32_t byte_budget);
 uint8_t multi_sample_is_ready(uint16_t instrument_id);
+uint8_t multi_sample_load_has_pending(void);
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag);
 
 #ifdef __cplusplus

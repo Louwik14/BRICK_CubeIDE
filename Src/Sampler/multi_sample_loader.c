@@ -474,6 +474,7 @@ void multi_sample_service_load(uint32_t byte_budget)
 
     uint16_t ready_pages = 0U;
     uint16_t required_pages_total = 0U;
+    uint16_t ready_samples = 0U;
     for (uint16_t i = 0U; i < g_multi_load_diag.total_samples; ++i)
     {
         const uint16_t multi_sample_id = (uint16_t)(g_multi_load_first_sample_id + i);
@@ -484,6 +485,7 @@ void multi_sample_service_load(uint32_t byte_budget)
         {
             multi_loader_set_error(MULTI_SAMPLE_LOAD_POOL_FAIL, multi_sample_id);
             g_multi_load_diag.pages_ready = ready_pages;
+            g_multi_load_diag.samples_ready = ready_samples;
             return;
         }
 
@@ -506,6 +508,7 @@ void multi_sample_service_load(uint32_t byte_budget)
                     sample_stream_manager_release_key(key);
                     multi_loader_set_error(MULTI_SAMPLE_LOAD_PAGE_ERROR, multi_sample_id);
                     g_multi_load_diag.pages_ready = ready_pages;
+                    g_multi_load_diag.samples_ready = ready_samples;
                     return;
                 }
             }
@@ -513,11 +516,13 @@ void multi_sample_service_load(uint32_t byte_budget)
 
         if (sample_ready != 0U)
         {
+            ready_samples++;
             sample_stream_manager_release_key(key);
         }
     }
 
     g_multi_load_diag.pages_ready = ready_pages;
+    g_multi_load_diag.samples_ready = ready_samples;
     if ((required_pages_total != 0U) && (ready_pages >= required_pages_total))
     {
         g_multi_load_active = 0U;
@@ -549,6 +554,24 @@ uint8_t multi_sample_is_ready(uint16_t instrument_id)
     return (multi_sample_pool_get_state(instrument_id) == MULTI_SAMPLE_INSTRUMENT_READY)
         ? 1U
         : 0U;
+}
+
+uint8_t multi_sample_load_has_pending(void)
+{
+    if (g_multi_load_active != 0U)
+    {
+        return 1U;
+    }
+
+    for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
+    {
+        if (g_multi_load_queue[i].used != 0U)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
 }
 
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag)

@@ -616,6 +616,74 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
     return result;
 }
 
+multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
+                                                           uint16_t *out_sample_count,
+                                                           uint16_t *out_zone_count)
+{
+    if ((path == 0) || (path[0] == '\0') || (out_sample_count == 0)
+        || (out_zone_count == 0))
+    {
+        return MULTI_SAMPLE_INDEX_INVALID_ARG;
+    }
+
+    *out_sample_count = 0U;
+    *out_zone_count = 0U;
+
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    {
+        return MULTI_SAMPLE_INDEX_SD_BUSY;
+    }
+
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        return MULTI_SAMPLE_INDEX_SD_MOUNT_FAIL;
+    }
+
+    FIL fp;
+    FRESULT fr = f_open(&fp, path, FA_READ);
+    if (fr != FR_OK)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        return MULTI_SAMPLE_INDEX_OPEN_FAIL;
+    }
+
+    multi_sample_index_result_t result = MULTI_SAMPLE_INDEX_OK;
+    multi_sample_index_header_t header;
+    if (multi_index_read_exact(&fp, g_index_io, MULTI_SAMPLE_INDEX_HEADER_SIZE) == 0U)
+    {
+        result = MULTI_SAMPLE_INDEX_READ_FAIL;
+    }
+    else
+    {
+        multi_index_decode_header(g_index_io, &header);
+        if (header.version != MULTI_SAMPLE_INDEX_VERSION)
+        {
+            result = MULTI_SAMPLE_INDEX_UNSUPPORTED_VERSION;
+        }
+        else if ((header.sample_count > MULTI_SAMPLE_MAX_SAMPLES)
+                 || (header.zone_count > MULTI_SAMPLE_POOL_MAX_ZONES)
+                 || (header.string_bytes > MULTI_SAMPLE_INDEX_STRING_MAX_BYTES))
+        {
+            result = MULTI_SAMPLE_INDEX_LIMIT;
+        }
+        else if ((multi_index_header_basic_valid(&header) == 0U)
+                 || (f_size(&fp) != header.file_size))
+        {
+            result = MULTI_SAMPLE_INDEX_BAD_FORMAT;
+        }
+        else
+        {
+            *out_sample_count = header.sample_count;
+            *out_zone_count = header.zone_count;
+        }
+    }
+
+    (void)f_close(&fp);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    return result;
+}
+
 uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)
 {
     if ((idx == 0)

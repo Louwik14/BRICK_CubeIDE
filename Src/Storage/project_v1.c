@@ -11,6 +11,7 @@
 #include "Storage/undo_v2.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Param/param_macro.h"
+#include "Sampler/multi_sample_index.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Seq/seq_runtime.h"
 #include "stm32h7xx_hal.h"
@@ -24,6 +25,9 @@ static uint8_t g_project_active_slot;
 static uint32_t g_project_save_counter;
 static project_v1_error_t g_project_last_error;
 static project_sd_bank_error_t g_project_last_sd_error;
+static uint8_t g_project_autoload_progress_active;
+static uint16_t g_project_autoload_progress_units[PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT];
+static uint8_t g_project_autoload_progress_units_known[PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT];
 
 static uint8_t project_v1_macro_scene_lock_is_valid(uint8_t scene, uint8_t lock)
 {
@@ -119,6 +123,258 @@ static uint8_t project_v1_text_equal(const char *a, const char *b)
     return 1U;
 }
 
+static uint8_t project_v1_sample_autoload_path_equal(const char *a, const char *b)
+{
+    if ((a == 0) || (b == 0))
+    {
+        return 0U;
+    }
+
+    for (uint32_t i = 0U; i < PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX; ++i)
+    {
+        if (a[i] != b[i])
+        {
+            return 0U;
+        }
+        if (a[i] == '\0')
+        {
+            return 1U;
+        }
+    }
+
+    return 1U;
+}
+
+static void project_v1_sample_autoload_clear(ProjectSaveV1 *project)
+{
+    if (project == 0)
+    {
+        return;
+    }
+
+    memset(&project->sample_autoload, 0, sizeof(project->sample_autoload));
+    project->sample_autoload.version = PROJECT_V1_SAMPLE_AUTOLOAD_VERSION;
+}
+
+static uint8_t project_v1_sample_autoload_add(ProjectSaveV1 *project,
+                                              project_v1_sample_autoload_kind_t kind,
+                                              uint16_t slot_index,
+                                              const char *path)
+{
+    if ((project == 0)
+        || (project->sample_autoload.count >= PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+        || ((kind != PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM_RESERVED_FUTURE)
+            && ((path == 0) || (path[0] == '\0'))))
+    {
+        return 0U;
+    }
+
+    project_v1_sample_autoload_slot_t *const slot =
+        &project->sample_autoload.slots[project->sample_autoload.count];
+    memset(slot, 0, sizeof(*slot));
+    slot->slot_index = slot_index;
+    slot->kind = (uint8_t)kind;
+    slot->flags = PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED;
+    if (path != 0)
+    {
+        if (project_v1_copy_text(slot->path, sizeof(slot->path), path) == 0U)
+        {
+            memset(slot, 0, sizeof(*slot));
+            return 0U;
+        }
+    }
+
+    project->sample_autoload.count++;
+    return 1U;
+}
+
+static void project_v1_capture_sample_autoload(ProjectSaveV1 *project)
+{
+    project_v1_sample_autoload_clear(project);
+    if (project == 0)
+    {
+        return;
+    }
+
+    for (uint16_t slot = 0U; slot < SAMPLE_POOL_SIZE; ++slot)
+    {
+        const sample_desc_t *const desc = sample_pool_get(slot);
+        if ((desc != 0) && (desc->path[0] != '\0'))
+        {
+            (void)project_v1_sample_autoload_add(project,
+                                                 PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM,
+                                                 slot,
+                                                 desc->path);
+        }
+    }
+
+    for (uint16_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
+    {
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(slot);
+        if ((instrument != 0) && (instrument->index_path[0] != '\0'))
+        {
+            (void)project_v1_sample_autoload_add(project,
+                                                 PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI,
+                                                 slot,
+                                                 instrument->index_path);
+        }
+    }
+}
+
+static void project_v1_clear_autoload_progress_units(void)
+{
+    memset(g_project_autoload_progress_units, 0, sizeof(g_project_autoload_progress_units));
+    memset(g_project_autoload_progress_units_known,
+           0,
+           sizeof(g_project_autoload_progress_units_known));
+}
+
+static void project_v1_prepare_autoload_progress_units(const ProjectSaveV1 *project)
+{
+    project_v1_clear_autoload_progress_units();
+    if ((project == 0)
+        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    {
+        return;
+    }
+
+    const uint16_t count =
+        (project->sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? project->sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &project->sample_autoload.slots[i];
+        if (((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
+            || (slot->path[0] == '\0'))
+        {
+            continue;
+        }
+
+        if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM)
+        {
+            g_project_autoload_progress_units[i] = 1U;
+            g_project_autoload_progress_units_known[i] = 1U;
+        }
+        else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI)
+        {
+            uint16_t sample_count = 0U;
+            uint16_t zone_count = 0U;
+            if ((multi_sample_index_peek_counts(slot->path, &sample_count, &zone_count)
+                 == MULTI_SAMPLE_INDEX_OK)
+                && (sample_count != 0U))
+            {
+                g_project_autoload_progress_units[i] = sample_count;
+                g_project_autoload_progress_units_known[i] = 1U;
+            }
+        }
+    }
+}
+
+static uint16_t project_v1_autoload_slot_units(uint16_t index,
+                                               const project_v1_sample_autoload_slot_t *slot)
+{
+    if ((index < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+        && (g_project_autoload_progress_units_known[index] != 0U)
+        && (g_project_autoload_progress_units[index] != 0U))
+    {
+        return g_project_autoload_progress_units[index];
+    }
+
+    if ((slot != 0)
+        && (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI)
+        && (slot->slot_index < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
+    {
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(slot->slot_index);
+        if ((instrument != 0) && (instrument->sample_count != 0U))
+        {
+            return instrument->sample_count;
+        }
+    }
+
+    return 1U;
+}
+
+static uint16_t project_v1_sample_autoload_find_multi_slot(const ProjectSaveV1 *project,
+                                                           const char *path)
+{
+    if ((project == 0) || (path == 0) || (path[0] == '\0')
+        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    {
+        return MULTI_SAMPLE_POOL_INVALID_ID;
+    }
+
+    const uint16_t count =
+        (project->sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? project->sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &project->sample_autoload.slots[i];
+        if ((slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI)
+            && ((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) != 0U)
+            && (slot->slot_index < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            && (project_v1_sample_autoload_path_equal(slot->path, path) != 0U))
+        {
+            return slot->slot_index;
+        }
+    }
+
+    return MULTI_SAMPLE_POOL_INVALID_ID;
+}
+
+static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project)
+{
+    for (uint16_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
+    {
+        if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
+        {
+            brick6_sampler_runtime_stop_multi_instrument(slot);
+            (void)multi_sample_pool_clear_instrument(slot);
+        }
+    }
+
+    if ((project == 0)
+        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    {
+        return;
+    }
+
+    const uint16_t count =
+        (project->sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? project->sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &project->sample_autoload.slots[i];
+        if ((slot->kind != (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI)
+            || ((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
+            || (slot->slot_index >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            || (slot->path[0] == '\0'))
+        {
+            continue;
+        }
+
+        const multi_sample_load_result_t result =
+            multi_sample_load_instrument(slot->path, slot->slot_index);
+        if ((result == MULTI_SAMPLE_LOAD_OK)
+            || (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+            || (result == MULTI_SAMPLE_LOAD_SD_BUSY))
+        {
+            g_project_multi_restore_diag.restore_load_requested = 1U;
+        }
+        else
+        {
+            g_project_multi_restore_diag.restore_load_error = 1U;
+        }
+    }
+}
+
 static void project_v1_multi_clear_assignments(void)
 {
     memset(&g_project_multi_assign, 0, sizeof(g_project_multi_assign));
@@ -137,6 +393,25 @@ static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *p
         || (project->multi[track].path[0] == '\0'))
     {
         return MULTI_SAMPLE_POOL_INVALID_ID;
+    }
+
+    const uint16_t autoload_slot =
+        project_v1_sample_autoload_find_multi_slot(project, project->multi[track].path);
+    if (autoload_slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+    {
+        return autoload_slot;
+    }
+
+    for (uint16_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
+    {
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(slot);
+        if ((instrument != 0) && (instrument->index_path[0] != '\0')
+            && (project_v1_sample_autoload_path_equal(instrument->index_path,
+                                                      project->multi[track].path) != 0U))
+        {
+            return slot;
+        }
     }
 
     for (uint8_t prev = 0U; prev < track; ++prev)
@@ -163,6 +438,7 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
     {
         return;
     }
+    project_v1_multi_restore_autoload_slots(project);
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -220,7 +496,8 @@ static void project_v1_multi_restore_from_snapshot(const ProjectSaveV1 *project)
             }
         }
 
-        if (shared_with_previous == 0U)
+        if ((shared_with_previous == 0U)
+            && (multi_sample_pool_get_state(instrument_id) == MULTI_SAMPLE_INSTRUMENT_EMPTY))
         {
             const multi_sample_load_result_t result =
                 multi_sample_load_instrument(dst->path, instrument_id);
@@ -547,6 +824,8 @@ void project_v1_init(void)
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_save_counter = 0U;
+    g_project_autoload_progress_active = 0U;
+    project_v1_clear_autoload_progress_units();
     project_v1_set_error(PROJECT_V1_ERR_NONE);
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_sd_bank_init();
@@ -563,6 +842,7 @@ uint8_t project_v1_capture_current(ProjectSaveV1 *out_project)
 
     memset(out_project, 0, sizeof(*out_project));
     sample_pool_capture_project_snapshot(&out_project->sample_pool);
+    project_v1_capture_sample_autoload(out_project);
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         out_project->multi[track] = g_project_multi_assign[track];
@@ -687,6 +967,117 @@ void project_v1_get_multi_restore_diag(project_v1_multi_restore_diag_t *out_diag
     }
 }
 
+uint8_t project_v1_get_autoload_progress(project_v1_autoload_progress_t *out_progress)
+{
+    if (out_progress == 0)
+    {
+        project_v1_set_error(PROJECT_V1_ERR_INVALID_ARG);
+        return 0U;
+    }
+
+    memset(out_progress, 0, sizeof(*out_progress));
+    out_progress->complete = 1U;
+
+    if ((g_project_autoload_progress_active == 0U)
+        || (g_project_work.sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    {
+        return 1U;
+    }
+
+    out_progress->active = 1U;
+    out_progress->complete = 0U;
+    const uint8_t multi_pending = multi_sample_load_has_pending();
+    multi_sample_load_diag_t multi_diag;
+    multi_sample_get_load_diag(&multi_diag);
+    const uint16_t count =
+        (g_project_work.sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? g_project_work.sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &g_project_work.sample_autoload.slots[i];
+        if (((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
+            || (slot->path[0] == '\0')
+            || (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM_RESERVED_FUTURE))
+        {
+            continue;
+        }
+
+        if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM)
+        {
+            out_progress->total = (uint16_t)(out_progress->total
+                                             + project_v1_autoload_slot_units(i, slot));
+            if (slot->slot_index >= SAMPLE_POOL_SIZE)
+            {
+                out_progress->done = (uint16_t)(out_progress->done
+                                                + project_v1_autoload_slot_units(i, slot));
+                continue;
+            }
+
+            if (sample_pool_get_state(slot->slot_index) != SAMPLE_POOL_SLOT_PREPARING)
+            {
+                out_progress->done = (uint16_t)(out_progress->done
+                                                + project_v1_autoload_slot_units(i, slot));
+            }
+        }
+        else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI)
+        {
+            const uint16_t slot_units = project_v1_autoload_slot_units(i, slot);
+            out_progress->total = (uint16_t)(out_progress->total + slot_units);
+            if (slot->slot_index >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            {
+                out_progress->done = (uint16_t)(out_progress->done + slot_units);
+                continue;
+            }
+
+            const multi_sample_instrument_state_t state =
+                multi_sample_pool_get_state(slot->slot_index);
+            if ((state == MULTI_SAMPLE_INSTRUMENT_READY)
+                || (state == MULTI_SAMPLE_INSTRUMENT_ERROR)
+                || ((multi_pending == 0U) && (state != MULTI_SAMPLE_INSTRUMENT_LOADING)))
+            {
+                out_progress->done = (uint16_t)(out_progress->done + slot_units);
+                continue;
+            }
+
+            if ((state == MULTI_SAMPLE_INSTRUMENT_LOADING)
+                && (multi_diag.instrument_id == slot->slot_index)
+                && (multi_diag.total_samples != 0U))
+            {
+                uint16_t ready_samples = multi_diag.samples_ready;
+                if (ready_samples > multi_diag.total_samples)
+                {
+                    ready_samples = multi_diag.total_samples;
+                }
+                if (multi_diag.total_samples == slot_units)
+                {
+                    out_progress->done = (uint16_t)(out_progress->done + ready_samples);
+                }
+                else
+                {
+                    const uint32_t scaled =
+                        ((uint32_t)ready_samples * (uint32_t)slot_units)
+                        / (uint32_t)multi_diag.total_samples;
+                    out_progress->done =
+                        (uint16_t)(out_progress->done
+                                   + ((scaled < slot_units) ? (uint16_t)scaled : slot_units));
+                }
+            }
+        }
+    }
+
+    if ((out_progress->done >= out_progress->total)
+        && (multi_sample_load_has_pending() == 0U))
+    {
+        out_progress->complete = 1U;
+        g_project_autoload_progress_active = 0U;
+    }
+
+    return 1U;
+}
+
 uint8_t project_v1_save_slot(uint8_t project_slot)
 {
     if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
@@ -749,7 +1140,9 @@ uint8_t project_v1_store_snapshot_to_slot(uint8_t project_slot,
 }
 
 uint8_t project_v1_load_slot(uint8_t project_slot)
-{    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
+{    g_project_autoload_progress_active = 0U;
+    project_v1_clear_autoload_progress_units();
+    if ((project_slot >= PROJECT_V1_SLOT_COUNT) || (__get_IPSR() != 0U))
     {
         project_v1_set_error((project_slot >= PROJECT_V1_SLOT_COUNT) ? PROJECT_V1_ERR_INVALID_SLOT : PROJECT_V1_ERR_ISR_CONTEXT);
         return 0U;
@@ -764,16 +1157,20 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     {
         project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);        return 0U;
     }
+    project_v1_prepare_autoload_progress_units(&g_project_work);
     sample_pool_restore_project_snapshot(&g_project_work.sample_pool);
 
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
-    {        return 0U;
+    {
+        project_v1_clear_autoload_progress_units();
+        return 0U;
     }
 
     undo_v2_clear_all();
 
     if (project_sd_bank_commit_slot_patterns(project_slot) == 0U)
     {
+        project_v1_clear_autoload_progress_units();
         project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);        return 0U;
     }
 
@@ -782,6 +1179,7 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
     g_project_active_slot = project_slot;
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;
     project_v1_set_error(PROJECT_V1_ERR_NONE);
+    g_project_autoload_progress_active = 1U;
     project_boot_ctx_commit_current_state_if_valid();    return 1U;
 }
 
@@ -798,6 +1196,14 @@ uint8_t project_v1_load_blank(void)
     }
 
     sample_pool_init();
+    for (uint16_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
+    {
+        if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
+        {
+            brick6_sampler_runtime_stop_multi_instrument(slot);
+            (void)multi_sample_pool_clear_instrument(slot);
+        }
+    }
     project_v1_macro_init();
     project_v1_multi_clear_assignments();
     memset(&g_project_multi_restore_diag, 0, sizeof(g_project_multi_restore_diag));
@@ -812,6 +1218,8 @@ uint8_t project_v1_load_blank(void)
     undo_v2_clear_all();
 
     g_project_save_counter = 0U;
+    g_project_autoload_progress_active = 0U;
+    project_v1_clear_autoload_progress_units();
     g_project_active_slot_valid = 0U;
     g_project_active_slot = 0U;
     g_project_last_sd_error = PROJECT_SD_BANK_ERR_NONE;

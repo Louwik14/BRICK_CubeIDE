@@ -21,6 +21,7 @@
 #include "cpu_load.h"
 #include "Audio/drum_synth.h"
 #include "ui_core.h"
+#include "ui_boot_loading.h"
 #include "ui_page_manager.h"
 
 #include "Sampler/voice_manager.h"
@@ -85,7 +86,7 @@ void brick6_app_init(void)
     SDRAM_Init();
 
     MX_USB_DEVICE_Init();
-    MX_USB_HOST_Init();
+    //MX_USB_HOST_Init();
 
     CS42448_Init(0x48);
 
@@ -131,7 +132,7 @@ void brick6_app_init(void)
     ui_core_init();
     pattern_live_init();
     project_v1_init();
-    (void)project_v1_restore_boot_context();
+    ui_boot_loading_begin();
     undo_v2_init();
     control_event_init();
 
@@ -189,7 +190,7 @@ void brick6_app_process(void)
         if (brick6_looper_runtime_has_pending_sd_work() == 0U)
         {
             looper_storage_raw_export_service(8192U);
-            multi_sample_service_load(32768U);
+            multi_sample_service_load((ui_boot_loading_is_active() != 0U) ? 4096U : 32768U);
         }
         pattern_load_service(4096U);
         waveform_cache_service(8192U);
@@ -198,7 +199,15 @@ void brick6_app_process(void)
     pattern_live_service();
     brick6_master_control_process();
 
-    brick6_process_hall_ui_keyboard_chain();
+    ui_boot_loading_service();
+    if (ui_boot_loading_is_active() != 0U)
+    {
+        hall_loop_process();
+    }
+    else
+    {
+        brick6_process_hall_ui_keyboard_chain();
+    }
 
     voice_manager_service();
 

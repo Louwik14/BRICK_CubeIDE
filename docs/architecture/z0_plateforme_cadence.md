@@ -153,6 +153,7 @@ Z0 appelle principalement:
   - Ecriture: premier `ui_tasklet_poll()`.
   - Lecture: `ui_tasklet_poll`, `ui_tasklet_is_initialized`.
   - Role: init lazy display+ui_core et gate des services render/flush.
+- Au premier `ui_tasklet_poll()`, `drv_display_init()` initialise le SSD1309 display OFF, vide le framebuffer puis la RAM controleur en full-screen synchrone, et active le display seulement apres ce clear complet. Le premier flush DMA normal vient ensuite du renderer OLED.
 
 ## 6. Flux runtime
 
@@ -188,6 +189,7 @@ Z0 appelle principalement:
   - politique UI boot explicite:
     - calibration hall invalide/absente -> page `CALIBRATION`,
     - calibration hall valide -> page `CFG` (`UI_PAGE_TEMPLATE_CFG`),
+  - demarrage de `ui_boot_loading`: le restore du dernier projet est differe jusqu'a une premiere frame OLED de loading,
   - start audio,
   - delay 200 ms,
   - reset peak CPU,
@@ -211,9 +213,10 @@ Z0 appelle principalement:
 - `pattern_live_service()`
 - `sd_preview_process()`
 - `brick6_master_control_process()`
-- `hall_loop_process()`
-- `ui_core_service_track_selection_inputs()`
-- `hall_keyboard_bridge_process()`
+- `ui_boot_loading_service()` apres la premiere frame loading: restore du boot context puis attente de `project_v1_get_autoload_progress()`.
+- pendant le boot loading, le budget `multi_sample_service_load` est reduit pour privilegier des passages UI/OLED plus reguliers; hors loading le budget normal est conserve.
+- si boot loading actif: `hall_loop_process()` seulement, sans navigation UI normale.
+- sinon: `hall_loop_process()`, `ui_core_service_track_selection_inputs()`, `hall_keyboard_bridge_process()`.
 - `voice_manager_service()`
 - `midi_poll()`
 

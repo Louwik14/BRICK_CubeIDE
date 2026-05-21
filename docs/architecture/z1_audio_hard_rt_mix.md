@@ -15,6 +15,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
 - `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Braids multi-instances (une instance mono par track Braids) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
+- `Src/Core/brick6_sampler_runtime.c` : declick minimal des stops/steals Sampler par capture du dernier echantillon rendu et tail RAM-only courte, mixee dans le buffer Sampler avant injection mixer.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
 - `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
@@ -147,6 +148,11 @@ Contrats timing sortants:
   - Role: gating des engines, modulation bloc et orchestration mix/master.
 - temporaires bloc `drum_tmp`, `plaits_tmp`, `braids_tmp`
   - Role: scratch per-block pour rendu engines.
+- `brick6_sampler_runtime` maintient un petit pool statique de tails de declick Sampler:
+  - Ecriture: stops/steals Sampler apres capture du dernier signal rendu par voix.
+  - Lecture/mix: `brick6_sampler_runtime_render_track`, dans le buffer Sampler pre-mixer.
+  - Role: eviter les discontinuites de coupure sans garder reader/cache/streamer vivant.
+  - Contraintes: RAM-only, pas de SD, pas d'allocation, pas de pression page-cache.
 
 ### `Src/Audio/mixer.c`
 - `g_tracks[MIXER_MAX_TRACKS]` (gain/pan/mute/routes/inserts/sends + smoothing)

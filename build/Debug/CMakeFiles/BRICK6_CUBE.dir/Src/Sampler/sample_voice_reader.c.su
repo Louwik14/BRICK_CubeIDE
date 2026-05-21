@@ -19,8 +19,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_r
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:539:6:sample_voice_reader_commit_block	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:555:9:sample_voice_reader_begin_segment	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:648:6:sample_voice_reader_commit_segment	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:955:6:sample_voice_reader_mix_fwd_1x	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:979:6:sample_voice_reader_mix_rev_1x	28	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:1003:6:sample_voice_reader_mix_pitch_fwd_linear	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:1088:6:sample_voice_reader_mix_pitch_rev_linear	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:1158:10:sample_voice_reader_render_pitch_forward	168	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:955:6:sample_voice_reader_mix_fwd_1x	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:990:6:sample_voice_reader_mix_rev_1x	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:1025:6:sample_voice_reader_mix_pitch_fwd_linear	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:1121:6:sample_voice_reader_mix_pitch_rev_linear	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c:1202:10:sample_voice_reader_render_pitch_forward	168	static

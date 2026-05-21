@@ -1,8 +1,11 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:176:16:multi_import_parse_u8_token	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:866:13:multi_import_notify_progress	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:105:16:multi_import_is_wav	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:77:13:multi_import_set_duplicate_pair_diag	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:209:16:multi_import_read_exact	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:866:30:multi_sample_import_folder	1312	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:989:30:multi_sample_import_get_last_result	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:994:13:multi_sample_import_get_last_diagnostic	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:999:10:multi_sample_import_get_last_sample_count	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:1004:10:multi_sample_import_get_last_zone_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:919:30:multi_sample_import_folder_with_progress	1328	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:1073:30:multi_sample_import_folder	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:1078:30:multi_sample_import_get_last_result	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:1083:13:multi_sample_import_get_last_diagnostic	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:1088:10:multi_sample_import_get_last_sample_count	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c:1093:10:multi_sample_import_get_last_zone_count	0	static

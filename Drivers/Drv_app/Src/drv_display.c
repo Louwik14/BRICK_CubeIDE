@@ -156,11 +156,39 @@ static uint8_t ssd1309_init_sequence(void)
         0xDBU, 0x20U,/* VCOMH */
         0x2EU,       /* Scroll OFF */
         0xA4U,       /* Resume RAM content display */
-        0xA6U,       /* Normal display */
-        0xAFU        /* Display ON */
+        0xA6U        /* Normal display */
     };
 
     if (send_cmd_burst(k_init_cmds, sizeof(k_init_cmds)) == 0U) return 0U;
+
+    return 1U;
+}
+
+static uint8_t ssd1309_display_on(void)
+{
+    static const uint8_t k_on_cmd = 0xAFU;
+    return send_cmd_burst(&k_on_cmd, sizeof(k_on_cmd));
+}
+
+static uint8_t ssd1309_clear_controller_ram(void)
+{
+    for (uint8_t page = 0U; page < 8U; ++page)
+    {
+        uint8_t page_cmds[3];
+        page_cmds[0] = (uint8_t)(0xB0U + page);
+        page_cmds[1] = 0x00U;
+        page_cmds[2] = 0x10U;
+
+        if (send_cmd_burst(page_cmds, sizeof(page_cmds)) == 0U)
+        {
+            return 0U;
+        }
+
+        if (transport_burst(1U, &buffer[page * OLED_WIDTH], OLED_WIDTH, 20U) == 0U)
+        {
+            return 0U;
+        }
+    }
 
     return 1U;
 }
@@ -332,13 +360,13 @@ void drv_display_init(void)
     u8g2_SetFont(&g_u8g2, g_active_font);
 
     drv_display_clear();
-    g_display_state = DRV_DISPLAY_STATE_READY;
-    drv_display_update();
-
-    if (g_display_state != DRV_DISPLAY_STATE_READY)
+    if ((ssd1309_clear_controller_ram() == 0U) || (ssd1309_display_on() == 0U))
     {
         g_display_state = DRV_DISPLAY_STATE_FAULT;
+        return;
     }
+
+    g_display_state = DRV_DISPLAY_STATE_READY;
 }
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)

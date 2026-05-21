@@ -958,7 +958,9 @@ void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
                                     uint32_t fade_count,
                                     float *out_l,
                                     float *out_r,
-                                    uint32_t out_offset)
+                                    uint32_t out_offset,
+                                    float *out_last_l,
+                                    float *out_last_r)
 {
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
@@ -967,12 +969,21 @@ void sample_voice_reader_mix_fwd_1x(const sample_audio_segment_t *segment,
 
     const float *src_l = segment->l;
     const float *src_r = segment->r;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
     for (uint32_t i = 0U; i < segment->frames; ++i)
     {
         const float fade = ((fade_gain != 0) && (i < fade_count)) ? fade_gain[i] : 1.0f;
         const float sample_gain = gain * fade;
-        out_l[out_offset + i] += src_l[i * segment->frame_stride] * sample_gain;
-        out_r[out_offset + i] += src_r[i * segment->frame_stride] * sample_gain;
+        last_l = src_l[i * segment->frame_stride] * sample_gain;
+        last_r = src_r[i * segment->frame_stride] * sample_gain;
+        out_l[out_offset + i] += last_l;
+        out_r[out_offset + i] += last_r;
+    }
+    if ((segment->frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
+    {
+        *out_last_l = last_l;
+        *out_last_r = last_r;
     }
 }
 
@@ -982,7 +993,9 @@ void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
                                     uint32_t fade_count,
                                     float *out_l,
                                     float *out_r,
-                                    uint32_t out_offset)
+                                    uint32_t out_offset,
+                                    float *out_last_l,
+                                    float *out_last_r)
 {
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
@@ -991,12 +1004,21 @@ void sample_voice_reader_mix_rev_1x(const sample_audio_segment_t *segment,
 
     const float *src_l = segment->l;
     const float *src_r = segment->r;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
     for (uint32_t i = 0U; i < segment->frames; ++i)
     {
         const float fade = ((fade_gain != 0) && (i < fade_count)) ? fade_gain[i] : 1.0f;
         const float sample_gain = gain * fade;
-        out_l[out_offset + i] += src_l[-((int32_t)i * (int32_t)segment->frame_stride)] * sample_gain;
-        out_r[out_offset + i] += src_r[-((int32_t)i * (int32_t)segment->frame_stride)] * sample_gain;
+        last_l = src_l[-((int32_t)i * (int32_t)segment->frame_stride)] * sample_gain;
+        last_r = src_r[-((int32_t)i * (int32_t)segment->frame_stride)] * sample_gain;
+        out_l[out_offset + i] += last_l;
+        out_r[out_offset + i] += last_r;
+    }
+    if ((segment->frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
+    {
+        *out_last_l = last_l;
+        *out_last_r = last_r;
     }
 }
 
@@ -1006,7 +1028,9 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
                                               uint32_t fade_count,
                                               float *out_l,
                                               float *out_r,
-                                              uint32_t out_offset)
+                                              uint32_t out_offset,
+                                              float *out_last_l,
+                                              float *out_last_r)
 {
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
@@ -1028,6 +1052,8 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
     const uint8_t has_neighbor = ((neighbor != 0) && (segment->neighbor_r != 0)) ? 1U : 0U;
     const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
     const float frac_scale = 1.0f / 65536.0f;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
 
     for (uint32_t i = 0U; i < frames; ++i)
     {
@@ -1079,9 +1105,16 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
         const float sample_l = curr_l + ((next_l - curr_l) * frac);
         const float sample_r = curr_r + ((next_r - curr_r) * frac);
         const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
-        dst_l[i] += sample_l * sample_gain;
-        dst_r[i] += sample_r * sample_gain;
+        last_l = sample_l * sample_gain;
+        last_r = sample_r * sample_gain;
+        dst_l[i] += last_l;
+        dst_r[i] += last_r;
         pos_q16 += step_q16;
+    }
+    if ((frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
+    {
+        *out_last_l = last_l;
+        *out_last_r = last_r;
     }
 }
 
@@ -1091,7 +1124,9 @@ void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segm
                                               uint32_t fade_count,
                                               float *out_l,
                                               float *out_r,
-                                              uint32_t out_offset)
+                                              uint32_t out_offset,
+                                              float *out_last_l,
+                                              float *out_last_r)
 {
     if ((segment == 0) || (out_l == 0) || (out_r == 0) || (segment->status != SAMPLE_AUDIO_SEGMENT_OK))
     {
@@ -1115,6 +1150,8 @@ void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segm
                                      : 0U;
     const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
     const float frac_scale = 1.0f / 65536.0f;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
 
     for (uint32_t i = 0U; i < frames; ++i)
     {
@@ -1149,9 +1186,16 @@ void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segm
         const float sample_l = curr_l + ((prev_l - curr_l) * frac);
         const float sample_r = curr_r + ((prev_r - curr_r) * frac);
         const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
-        dst_l[i] += sample_l * sample_gain;
-        dst_r[i] += sample_r * sample_gain;
+        last_l = sample_l * sample_gain;
+        last_r = sample_r * sample_gain;
+        dst_l[i] += last_l;
+        dst_r[i] += last_r;
         pos_q16 -= step_q16;
+    }
+    if ((frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
+    {
+        *out_last_l = last_l;
+        *out_last_r = last_r;
     }
 }
 
@@ -1166,7 +1210,9 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   float *out_l,
                                                   float *out_r,
                                                   uint32_t frames,
-                                                  uint8_t *out_underrun)
+                                                  uint8_t *out_underrun,
+                                                  float *out_last_l,
+                                                  float *out_last_r)
 {
     if (out_underrun != 0)
     {
@@ -1183,6 +1229,8 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
     const float loop_end = (float)region_end;
     const float loop_length = (float)(region_end - region_start);
     uint8_t reverse = ((io_reverse != 0) && (*io_reverse != 0U)) ? 1U : 0U;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
 
     while (produced < frames)
     {
@@ -1316,8 +1364,10 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
             wav_audio_codec_resample_linear(curr_l, curr_r, next_l, next_r, frac, &sample_l, &sample_r);
             const float fade =
                 (fade_gain != 0) && ((produced + i) < fade_count) ? fade_gain[produced + i] : 1.0f;
-            out_l[produced + i] += sample_l * gain * fade;
-            out_r[produced + i] += sample_r * gain * fade;
+            last_l = sample_l * gain * fade;
+            last_r = sample_r * gain * fade;
+            out_l[produced + i] += last_l;
+            out_r[produced + i] += last_r;
 
             position += (segment_reverse == 0U) ? reader->step : (-reader->step);
             sample_voice_reader_normalize_position(&position,
@@ -1343,6 +1393,11 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
     if (io_reverse != 0)
     {
         *io_reverse = reverse;
+    }
+    if ((produced != 0U) && (out_last_l != 0) && (out_last_r != 0))
+    {
+        *out_last_l = last_l;
+        *out_last_r = last_r;
     }
 
     return produced;

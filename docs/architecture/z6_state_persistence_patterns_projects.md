@@ -32,6 +32,7 @@ Elargissements necessaires (preuve de contrats et frontieres):
 Sous-roles internes identifies:
 - `pattern_live_ram.c`: capture/apply snapshot live + gestion active/queued pattern + service de bascule a boundary.
 - `project_v1.c`: orchestration projet (capture/apply/save/load/delete/active slot + boot context policy).
+- `project_v1.c`: capture aussi un bloc projet `sample_autoload` qui liste les slots sample a restaurer au boot/load projet.
 
 Dependances de Z6 sans appartenance:
 - Z2 `track_runtime` (classification domaine param pendant capture/apply).
@@ -60,6 +61,7 @@ Autorite orchestration projet:
 - `project_v1_apply_snapshot()`.
 - `project_v1_save_slot()`, `project_v1_load_slot()`, `project_v1_store_snapshot_to_slot()`, `project_v1_delete_slot()`.
 - `project_v1_restore_boot_context()`.
+- `project_v1_get_autoload_progress()` expose a Z5/Z0 la progression boot des slots `sample_autoload` sans devenir un service UI.
 
 Autorite persistence projet SD:
 - `project_sd_bank_store_slot()`, `project_sd_bank_load_slot()`, `project_sd_bank_delete_slot()`, `project_sd_bank_is_slot_equivalent_to_live()`.
@@ -67,6 +69,7 @@ Autorite persistence projet SD:
 Compat prototype:
 - quand `PARAM_COUNT` change et modifie `PatternSaveV1` / `ProjectSaveV1`, Z6 peut bumper les versions fichier sans migration.
 - pour Braids, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
+- pour le projet v28, les anciens projets v27 ne sont pas migres: `project_sd_bank` exige `PROJECT_V1_FILE_VERSION` exact et `sizeof(ProjectSaveV1)` avant de lire le payload.
 
 Autorite preview SD:
 - `sd_preview_begin()`, `sd_preview_process()`, `sd_preview_render_main()`, `sd_preview_stop()`.
@@ -113,8 +116,16 @@ Autorite LOAD Sampler/Multi:
 - LOAD lit un `.brickmulti`, applique l'index au `multi_sample_pool`, enregistre chaque WAV relatif comme stream `sample_audio_key_t {domain=MULTI, object_id=multi_sample_id}`, et queue uniquement page0 pour chaque sample reel.
 - Le chargement page0 est cooperatif hors IRQ via le `sample_stream_manager` unique et le `sample_page_cache` unique; `multi_sample_service_load(byte_budget)` tient `SD_ACCESS_CLIENT_SAMPLE_CACHE` pendant le service. Page1 et les suivantes appartiennent au streaming runtime/prefetch apres trigger.
 - L'instrument reste `LOADING` tant que toutes les page0 requises ne sont pas `READY`; toute page0 `ERROR`, tout manque de cache ou toute erreur d'enregistrement bascule l'instrument en `ERROR` avec diagnostic minimal. Budget maximal READY Multi: 512 * 1 page = 512 pages = 8 MiB; marge cache restante: 512 pages = 8 MiB.
+- `multi_sample_load_has_pending()` expose seulement l'activite du loader cooperatif (`active` ou queue non vide) pour permettre au boot loading de distinguer un instrument encore en cours d'un etat terminal. Cette API ne modifie pas le page-cache, le streamer, ni le runtime audio.
 - Placement memoire: la queue froide `g_multi_load_queue` est en SDRAM dediee `MULTI_LOAD_SDRAM`; elle n'est pas lue par l'IRQ audio et sert uniquement au LOAD cooperatif hors IRQ.
 - Placement memoire STREAM: les chemins longs des readers actifs `sample_stream_manager` sont separes dans `g_sample_stream_reader_paths` en `SDRAM_SAMPLES`; les handles `FIL` et l'etat reader sont dans `g_sample_stream_readers` en `STORAGE_STATE_SDRAM`. Ces donnees servent uniquement au service SD cooperatif hors IRQ et ne sont pas lues par l'IRQ audio.
+
+Contrat boot/autoload projet v28:
+- `project_v1_load_slot()` active une fenetre de progression autoload uniquement apres chargement SD, restore du snapshot sample pool et apply projet reussis.
+- Les slots `STREAM` attendus sont termines quand `sample_pool_get_state(slot)` n'est plus `PREPARING`: `LOADED`, `ERROR`, `MISSING` et `EMPTY` sont terminaux cote ecran boot.
+- Les slots `MULTI` attendus sont termines quand l'instrument est `READY` ou `ERROR`, ou quand le loader Multi n'a plus de travail pending et que le slot n'est plus `LOADING`. Avant de lancer les loads Multi, Z6 prelit les headers `.brickmulti` des slots autoload pour figer un total global en unites utilisateur: 1 unite par sample Multi, 1 unite par slot STREAM. Pendant le chargement actif, `multi_sample_get_load_diag()` expose `samples_ready/total_samples`; la progression visible additionne cet avancement au total global au lieu d'afficher les pages internes ou de repartir a 0 pour chaque Multi.
+- Les slots `RAM_RESERVED_FUTURE` sont ignores par la progression; aucun runtime RAM n'est active.
+- En cas d'absence de boot context, de projet refuse ou d'ancien payload v27, l'etat loading se ferme proprement sans restore partiel supplementaire.
 
 Autorite writer SD audio multi-client:
 - `multi_record_writer_*`.
@@ -194,7 +205,7 @@ Seconde autorite concurrente:
 ## 3. API entrantes
 
 Entrees depuis init/runtime global:
-- `brick6_app_init.c` appelle `pattern_live_init()`, `project_v1_init()`, `project_v1_restore_boot_context()`.
+- `brick6_app_init.c` appelle `pattern_live_init()`, `project_v1_init()` puis arme `ui_boot_loading`; le restore du boot context est declenche ensuite par le service loading apres une premiere frame OLED.
 - `brick6_app_init.c` appelle `multi_record_writer_init()`.
 - `brick6_app_init.c` appelle `looper_storage_raw_init()` puis `looper_storage_raw_validate()` hors IRQ; cette validation ne cree aucun dossier/fichier RAW.
 - Boucle superloop appelle `multi_record_writer_service(16384U)` puis `brick6_looper_runtime_service(8192U)` et `pattern_live_service()`.
@@ -267,7 +278,7 @@ Points de lecture principaux:
 - `g_pattern_write_chunk[4096]`: tampon chunk write pour payload pattern.
 
 ### `project_v1.c`
-- `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet et le bloc MACRO projet.
+- `g_project_work` (`ProjectSaveV1`): buffer travail pour save/load/apply, incluant le snapshot `sample_pool` du projet, le bloc `sample_autoload` et le bloc MACRO projet.
 - `g_project_multi_assign[SEQ_TRACK_COUNT]`: verite durable RAM projet pour l'assignation `Sampler/Multi` par track (`path .brickmulti` borne + gain); `instrument_id` reste runtime et n'est pas persiste.
 - `g_project_macro_state` (`project_v1_macro_state_t`): owner RAM canonique du chantier MACRO (scenes/pots/locks + `Mode`), distinct du payload pattern et du `undo_v1`; placement `UI_SDRAM` car etat froid projet/persistence non audio et non DMA.
 - `g_project_active_slot_valid`, `g_project_active_slot`: slot projet actif logique.
@@ -360,6 +371,7 @@ Points de lecture principaux:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
   - capture aussi le snapshot `sample_pool` courant du projet,
+  - capture la liste durable `sample_autoload`: slots `STREAM` issus du `sample_pool`, slots `MULTI` issus du `multi_sample_pool`, type `RAM_RESERVED_FUTURE` reserve sans runtime actif,
   - capture les assignations `Sampler/Multi` par track: path `.brickmulti` et gain Multi; aucun `instrument_id` runtime n'est sauvegarde,
   - capture le bloc MACRO projet (`Mode`, scenes liees aux pots, scenes/locks),
   - force active slot dans snapshot,
@@ -371,6 +383,7 @@ Points de lecture principaux:
 - `project_v1_load_slot()`:
   - charge depuis SD via `project_sd_bank_load_slot` (lecture + validation header/checksum + records, sans commit pattern-bank),
   - restaure le `sample_pool` du projet avant l'apply live,
+  - restaure les slots `MULTI` declares dans `sample_autoload` apres l'apply live via `multi_sample_load_instrument(path, slot_index)`; les refus restent non fatals et posent le diagnostic restore existant,
   - restaure le bloc MACRO projet depuis `ProjectSaveV1`,
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
   - restaure ensuite les assignations `Sampler/Multi`: gain par track, allocation runtime d'un `instrument_id`, appel `multi_sample_load_instrument(path, instrument_id)` hors IRQ, et track non jouable tant que `multi_sample_is_ready()` reste faux,
@@ -809,8 +822,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 
 ## Addendum 2026-05-15 - browser Multi-Sample Settings
 
-- Le browser Settings/Multi-Sample expose les dossiers instruments sous `0:/Multi/` et n'affiche pas les WAV internes.
+- Le browser Settings/Multi-Sample expose les dossiers sous `0:/Multi/` et n'affiche pas les WAV internes; un dossier avec WAV directs est un Multi chargeable, tandis qu'un dossier sans WAV direct mais avec sous-dossiers reste un dossier de navigation. La qualification ne descend pas recursivement.
 - La preparation d'un dossier non indexe appelle `multi_sample_import_folder()` et produit/met a jour `<instrument>/<instrument>.brickmulti`.
+- La variante UI `multi_sample_import_folder_with_progress()` expose uniquement une progression froide hors IRQ: nombre de WAV directs traites, puis finalisation zones/index. Elle ne change pas le format `.brickmulti` ni le chemin loader.
 - Le load de slot appelle `multi_sample_load_instrument()` sur le `.brickmulti` et s'appuie sur `multi_sample_service_load()` en superloop pour le chargement cooperatif page0.
 - Le pool projet affiche et borne la consommation `multi_sample_pool` en samples sur `MULTI_SAMPLE_POOL_MAX_SAMPLES=512`; un index/import dont le nombre de samples depasse 512 est refuse avant load.
 - Les slots instruments portent maintenant le path `.brickmulti` en RAM froide pour eviter les doublons dans la session projet courante; ce path ne modifie pas le layout fichier projet.
@@ -846,3 +860,11 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `wav_loader_catalog_load_view()` construit une vue de dossier dans un scratch SDRAM et ne remplace une entree LRU valide qu'apres lecture complete de `SAMPLE.CAT`; un `f_open`/`f_read` en erreur conserve donc l'ancienne vue valide.
 - Les diagnostics froids `preview_open_fail_count`, `load_open_fail_count`, `catalog_open_fail_count`, `catalog_view_preserved_on_error_count` et `gate_release_on_error_count` gardent le path, le client gate courant/dernier et le `FRESULT` de la derniere erreur d'ouverture.
 - `sample_cache_prepare()` preflight le path avant de liberer l'ancien slot cache, afin qu'un refus gate/mount/open initial ne vide pas un slot deja charge.
+
+## Addendum 2026-05-21 - autoload slots sample projet
+
+- `PROJECT_V1_FILE_VERSION=28` marque l'ajout du bloc `ProjectSaveV1.sample_autoload`. Les anciens projets prototype restent refuses par validation stricte `version/payload_size`, sans migration legacy.
+- Le bloc liste des entrees bornees `{slot_index, kind, flags, path}` avec `kind=STREAM`, `MULTI` ou `RAM_RESERVED_FUTURE`. `RAM_RESERVED_FUTURE` reserve seulement le format: aucun runtime RAM, OneShot ou Slicer n'est reactive par cette passe.
+- Les entrees `STREAM` mirroring les slots `sample_pool` portent le path WAV complet et restent restaurees par le chemin `sample_pool_restore_project_snapshot()` existant.
+- Les entrees `MULTI` portent le path `.brickmulti` et restaurent les slots `multi_sample_pool` par `multi_sample_load_instrument(path, slot_index)` apres apply projet. Le chargement page0 reste cooperatif via `multi_sample_service_load()`; un path absent/invalide met seulement le diagnostic restore en erreur et ne crashe pas.
+- Le bloc sert de source explicite pour la future phase boot/autoload UI: la lecture projet et les loads STREAM/MULTI sont les etapes longues synchrones/cooperatives qui alimenteront la progression, sans animation introduite ici.

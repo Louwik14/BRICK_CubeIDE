@@ -209,10 +209,11 @@ Etat page active:
 
 Etat browser Settings/Sample:
 - `ui_page_settings` expose une racine `Settings > Sample` avec trois entrees: `Multi`, `RAM`, `Stream`.
-- `Settings > Sample > Multi` reprend le browser split du pool projet `Sampler/Multi` et conserve `multi_sample_pool` comme autorite.
+- `Settings > Sample > Multi` reprend le browser split du pool projet `Sampler/Multi`, navigue dans les dossiers sous `0:/Multi/` et conserve `multi_sample_pool` comme autorite.
 - `Settings > Sample > RAM` est un placeholder UI pour le futur pool RAM OneShot/Slicer; il ne lance ni load, ni import, ni playback runtime.
 - `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Clip`.
-- `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sample courante sans relire la SD.
+- Les headers `Stream`, `Multi` et `RAM` affichent le meme budget global de slots produit et de memoire page-cache slot-pool; les entrees restent des categories de browser, pas des budgets separes.
+- `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sample courante; le browser Multi relit seulement le dossier courant et scanne les entrees directes des dossiers candidats pour les classifier.
 - Le catalogue WAV global vient de Z6 `wav_loader`; l'entree dans le browser Sampler ne rescane plus automatiquement. Elle charge la vue racine depuis le cache de vues Z6 ou depuis `0:/BRICK/SAMPLE.CAT`, ou affiche `REFRESH LIB` si le catalogue est absent/stale.
 - Le browser Sampler intercepte les boutons physiques `BTN_PAGE_1..BTN_PAGE_4` uniquement dans `UI_SETTINGS_VIEW_SAMPLER`: `BTN_PAGE_1` = RETURN, `BTN_PAGE_2` sans SHIFT = OK sur l'entree sample courante, `BTN_PAGE_3` = reserve/no-op, `BTN_PAGE_4` = REFRESH sans SHIFT et REBUILD avec SHIFT. `BTN_COPY` et `BTN_PASTE` sont explicitement no-op dans le browser Sampler; les confirmations locales utilisent RETURN/OK. Hors browser Sampler, les boutons page gardent leur comportement normal de subpage.
 - La navigation fichier/dossier du browser Sampler ne scanne jamais `0:/Samples`: page de dossier deja cachee = RAM-only; page non cachee = lecture depuis `SAMPLE.CAT`; `streaming_critical` + page absente = refus `SD BUSY`.
@@ -553,21 +554,30 @@ Points factuels:
 
 - `Settings > Sample > Multi` ouvre un browser split dedie au pool projet `Sampler/Multi`, sans modifier la page TONE `INST | GAIN`.
 - Surface OLED:
-  - header `MULTI used/512`, base sur la capacite sample du `multi_sample_pool`;
-  - colonne gauche: dossiers instruments sous `0:/Multi/`, sans exposition des WAV internes;
+  - header global de budget sample/page-cache partage avec les browsers `Stream` et `RAM`;
+  - colonne gauche: entrees du dossier courant sous `0:/Multi/`, sans exposition des WAV internes;
   - colonne droite: slots instruments `multi_sample_pool` `M01..M32`;
-  - la colonne gauche affiche le nom instrument et le nombre de samples si `.brickmulti` existe, sinon `NEW`;
+  - les entrees considerees comme dossiers par le browser Multi (`NAV_FOLDER` et `EMPTY_FOLDER`) sont regroupees en haut comme dans le browser Stream;
+  - la colonne gauche affiche un dossier de navigation avec le prefixe dossier `> `, et un dossier Multi chargeable sans prefixe dossier;
+  - un dossier Multi chargeable affiche le nom instrument et le nombre de samples si `.brickmulti` existe, sinon `NEW`;
   - la colonne droite affiche slot, nom instrument et samples consommes.
+- Classification gauche:
+  - WAV direct dans le dossier candidat: `MULTI_ITEM`, affichage item chargeable, `OK` charge ce dossier comme Multi;
+  - pas de WAV direct mais au moins un sous-dossier: `NAV_FOLDER`, affichage dossier, `OK` entre dans le dossier;
+  - ni WAV direct ni sous-dossier: `EMPTY_FOLDER`, affichage dossier vide, `OK` entre puis affiche `EMPTY`.
+  - la classification ne scanne pas recursivement: un WAV dans un sous-dossier ne rend pas le parent chargeable; un dossier mixte WAV directs + sous-dossiers est chargeable et les sous-dossiers ne sont pas inclus dans le Multi.
 - Controles:
   - `Enc1`: navigation colonne gauche + focus gauche;
   - `Enc2`: navigation colonne droite + focus droite;
   - `Enc3` et `Enc4`: reserves/inutilises dans cette passe.
 - Actions:
-  - `PAGE 1` RETURN;
-  - `PAGE 2` OK sur focus gauche prepare si besoin puis charge dans le premier slot Multi libre;
+  - `PAGE 1` RETURN remonte au parent Multi, ou quitte le browser depuis `0:/Multi`;
+  - `PAGE 2` OK sur focus gauche entre dans un dossier de navigation, sinon prepare si besoin puis charge le Multi dans le premier slot libre;
   - `PAGE 2` OK sur focus droit unload le slot Multi selectionne avec confirmation;
   - `PAGE 3` et `PAGE 4` reserves/no-op.
-- Si le dossier n'a pas encore d'index, la confirmation visible est `PREPARE <name>?`, `OK=YES`, `RETURN=NO`; l'action appelle l'import Multi existant pour creer/mettre a jour `.brickmulti`.
+- Si le dossier n'a pas encore d'index, la confirmation visible est seulement `Prepare multi ?`; les labels bas communs conservent `RETURN` et `OK`, et le nom courant reste porte par la barre de contexte.
+- Apres validation de cette confirmation, ou apres OK direct sur un Multi deja indexe, l'UI passe en etat bloquant `PREPARING`: les evenements et encodeurs du browser sont ignores. La barre basse couvre la sequence complete UI-control: import direct WAV (`Scan multi`), commit/index/pool (`Commit multi`), prechargement sample via `multi_sample_service_load` (`Prepare samples`) et refresh final du browser (`Refresh multi`). La sortie d'etat se fait seulement quand le slot Multi est `READY` ou `ERROR`, puis apres refresh des infos UI.
+- Si le Multi ne peut pas rentrer dans le pool sample courant, le browser refuse avant confirmation quand le nombre de WAV directs est deja connu, et refuse aussi le load direct d'un Multi deja indexe. Le controle utilise le cout net en slots produit `X/256`: cout du nouveau Multi moins le cout du slot remplace, afin de ne pas refuser un remplacement qui libere assez de budget. La zone header `X/256` clignote pour signaler la saturation.
 - Le load appelle le loader Multi cooperatif existant et reutilise un slot deja charge si le meme path `.brickmulti` est deja present; aucun nouveau cache, streamer ou acces FatFs IRQ n'est ajoute.
 - Quand la track active est `Sampler/Multi`, un load/reuse depuis ce browser assigne le slot instrument a cette track et enregistre le path projet associe; le pool global reste l'autorite des instruments charges.
 - Un manque de capacite sample du pool est refuse par feedback court `FULL need X`.
@@ -589,11 +599,30 @@ Points factuels:
 - Etat boot UI voulu:
   - track active logique = track 1 (index 0),
   - ensemble/page active = `CFG` (`UI_PAGE_TEMPLATE_CFG`) en boot normal.
+- Etat loading boot:
+  - `ui_boot_loading_begin()` arme un ecran transitoire avant l'UI normale,
+  - un variant de rendu est choisi une seule fois par `ui_boot_loading_select_variant()` avec un seed faible `HAL_GetTick() ^ SysTick->VAL`; le choix reste stable pendant toute la phase loading,
+  - les variants partagent le meme protocole, le meme logo bitmap 1-bit flash 107x19 `BRICK`, et lisent seulement `done/total/frame`.
+  - variant `Tetris`: scene de blocs type Tetris, pile de 42 cellules mappee sur `done/total`, bloc actif en chute deterministe vers la prochaine cellule cible,
+  - variant `Wall`: mur de briques 12x4 mappe sur `done/total`, brique active en chute simple,
+  - si le total depasse les cellules visibles du variant, le rendu reste proportionnel sans inventer de progression,
+  - si la progression stagne, seule l'animation idle continue sans remplir la pile/le mur,
+  - quand `total=0`, la pile reste vide avec bloc actif idle pendant la premiere frame transitoire avant sortie ou restore effectif,
+  - apres la premiere frame rendue, `ui_boot_loading_service()` lance le restore du dernier projet puis attend la fin des slots sample autoload,
+  - le restore projet attend aussi que le premier flush OLED complet soit termine (`drv_display_flush_in_progress()==0`) afin d'eviter de lancer une phase SD monolithique avant que l'ecran idle soit reellement visible,
+  - le texte bas choisit deux phrases courtes depuis une banque rodata de phrases boot/loading anglaises; le choix est fait une seule fois dans `ui_boot_loading_begin()` et alterne lentement entre ces deux phrases,
+  - le compteur bas affiche la progression globale `done/total` en unites autoload utilisateur: un slot STREAM vaut 1 unite, un slot MULTI vaut son nombre de samples si le header `.brickmulti` a pu etre prelu au restore; les pages internes ne sont jamais affichees comme compteur samples,
+  - pendant cet etat, `ui_tasklet_poll()` consomme/ignore les inputs et n'appelle pas `ui_core_tick()`.
+- Premier affichage propre:
+  - `drv_display_init()` garde le SSD1309 `Display OFF` pendant l'init,
+  - clear le framebuffer puis la RAM controleur en full-screen synchrone,
+  - active le display seulement apres ce clear complet; aucun flush DMA partiel ne precede ce premier etat noir propre.
 - Priorite hall/bootstrap:
   - `ui_bootstrap_init` pose l'etat initial `CALIBRATION`,
   - `brick6_app_init` decide ensuite selon `hall_calibration_load()`:
     - succes -> bascule vers `CFG`,
     - echec -> conserve `CALIBRATION`.
+- La sortie de loading rend la main au renderer de page normal seulement quand Z6 signale que tous les slots attendus sont terminaux et que le loader Multi n'a plus de travail pending.
 - Aucun fallback renderer n'est utilise pour masquer un etat UI invalide.
 - Les buffers median de calibration Hall (`g_min_buffer`, `g_max_buffer`) restent utilises uniquement par la page calibration / `hall_calibration_process()` et sont places en `CTRL_STATE` D3; ils ne sont ni audio hard-RT ni DMA-owned.
 

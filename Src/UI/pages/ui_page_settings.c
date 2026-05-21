@@ -17,6 +17,7 @@
 #include "Storage/project_v1.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Sampler/sample_pool.h"
+#include "Sampler/sample_page_cache_config.h"
 #include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/multi_sample_loader.h"
@@ -84,11 +85,19 @@ typedef enum
 
 typedef enum
 {
+    UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM = 0,
+    UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER,
+    UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER
+} ui_settings_multi_entry_type_t;
+
+typedef enum
+{
     UI_SETTINGS_SAMPLE_CONFIRM_NONE = 0,
     UI_SETTINGS_SAMPLE_CONFIRM_REPLACE,
     UI_SETTINGS_SAMPLE_CONFIRM_CLEAR,
     UI_SETTINGS_SAMPLE_CONFIRM_CONVERT,
     UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE,
+    UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING,
     UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE,
     UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD
 } ui_settings_sample_confirm_t;
@@ -99,6 +108,15 @@ typedef enum
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER,
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT
 } ui_settings_preview_stop_origin_t;
+
+typedef enum
+{
+    UI_SETTINGS_MULTI_PREP_PHASE_NONE = 0,
+    UI_SETTINGS_MULTI_PREP_PHASE_SCAN,
+    UI_SETTINGS_MULTI_PREP_PHASE_COMMIT,
+    UI_SETTINGS_MULTI_PREP_PHASE_PREPARE,
+    UI_SETTINGS_MULTI_PREP_PHASE_REFRESH
+} ui_settings_multi_prepare_phase_t;
 
 typedef struct
 {
@@ -115,9 +133,18 @@ typedef struct
 #define UI_SETTINGS_SAMPLE_ROOT "0:/Samples"
 #define UI_SETTINGS_MULTI_ROOT "0:/Multi"
 #define UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES 4U
-#define UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0 12U
+#define UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y 7U
+#define UI_SETTINGS_SAMPLE_BROWSER_PATH_LABEL_Y 9U
+#define UI_SETTINGS_SAMPLE_BROWSER_PATH_LINE_Y 15U
+#define UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0 22U
 #define UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH 8U
 #define UI_SETTINGS_SAMPLE_BROWSER_SELECT_H 8U
+#define UI_SETTINGS_MB_BYTES (1024UL * 1024UL)
+#define UI_SETTINGS_HEADER_SLOT_X 48U
+#define UI_SETTINGS_HEADER_SEP1_X 43U
+#define UI_SETTINGS_HEADER_MEM_RIGHT_X 127U
+#define UI_SETTINGS_FOOTER_LABEL_Y (OLED_HEIGHT - 6U)
+#define UI_SETTINGS_HEADER_FLASH_DURATION_MS 1200U
 
 typedef struct
 {
@@ -135,8 +162,10 @@ typedef struct
     char label[MULTI_SAMPLE_POOL_NAME_MAX];
     uint16_t sample_count;
     uint16_t zone_count;
+    uint16_t wav_count;
+    uint16_t slot_cost;
     uint8_t prepared;
-    uint8_t _pad;
+    ui_settings_multi_entry_type_t type;
 } ui_settings_multi_entry_t;
 
 typedef struct
@@ -163,6 +192,9 @@ typedef struct
     uint8_t sample_confirm;
     uint8_t confirm_slot;
     uint8_t sample_preview_volume;
+    uint16_t multi_prepare_progress_done;
+    uint16_t multi_prepare_progress_total;
+    uint8_t multi_prepare_phase;
     uint16_t sample_parent_id;
     uint8_t sampler_slots[SAMPLE_POOL_SIZE];
     uint8_t sampler_slot_count;
@@ -174,6 +206,7 @@ typedef struct
     uint8_t convert_slot_valid;
     uint8_t convert_slot;
     uint32_t status_until_ms;
+    uint32_t header_slot_flash_until_ms;
     int16_t encoder_accum[UI_SETTINGS_ENCODER_COUNT];
 } ui_settings_state_t;
 
@@ -205,6 +238,28 @@ static void ui_page_settings_copy_bounded(char *out, uint32_t out_size, const ch
 static const ui_settings_multi_entry_t *ui_page_settings_multi_find_entry_by_path(const char *path);
 static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry);
 static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry);
+static void ui_page_settings_multi_prepare_progress_cb(uint16_t done, uint16_t total, void *user);
+static void ui_page_settings_multi_prepare_begin(uint8_t slot,
+                                                 const char *path,
+                                                 ui_settings_multi_prepare_phase_t phase);
+static void ui_page_settings_multi_prepare_finish(const char *status);
+static void ui_page_settings_multi_prepare_poll(void);
+static void ui_page_settings_multi_prepare_flush_progress(void);
+static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
+static void ui_page_settings_flash_sample_header_slots(void);
+static uint32_t ui_page_settings_frames_to_prep_bytes(uint32_t frames);
+static uint16_t ui_page_settings_global_slot_count_used(void);
+static void ui_page_settings_draw_progress_bar(uint8_t x,
+                                               uint8_t y,
+                                               uint8_t w,
+                                               uint8_t h,
+                                               uint16_t done,
+                                               uint16_t total);
+static void ui_page_settings_draw_sample_header(const char *title,
+                                                uint16_t used_slots,
+                                                uint16_t max_slots,
+                                                uint32_t used_bytes,
+                                                uint32_t max_bytes);
 
 static const char *ui_page_settings_sampler_load_error_label(void)
 {
@@ -457,6 +512,72 @@ static uint8_t ui_page_settings_multi_index_name(const char *folder_path,
     return 1U;
 }
 
+static ui_settings_multi_entry_type_t ui_page_settings_multi_classify_folder(const char *folder_path,
+                                                                            uint16_t *out_wav_count)
+{
+    DIR dir;
+    FILINFO fno;
+    uint8_t has_subdir = 0U;
+    uint16_t wav_count = 0U;
+
+    if ((folder_path == 0) || (folder_path[0] == '\0'))
+    {
+        if (out_wav_count != 0)
+        {
+            *out_wav_count = 0U;
+        }
+        return UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER;
+    }
+
+    if (f_opendir(&dir, folder_path) != FR_OK)
+    {
+        if (out_wav_count != 0)
+        {
+            *out_wav_count = 0U;
+        }
+        return UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER;
+    }
+
+    while (1)
+    {
+        memset(&fno, 0, sizeof(fno));
+        const FRESULT fr = f_readdir(&dir, &fno);
+        if ((fr != FR_OK) || (fno.fname[0] == '\0'))
+        {
+            break;
+        }
+        if (fno.fname[0] == '.')
+        {
+            continue;
+        }
+        if ((fno.fattrib & AM_DIR) != 0U)
+        {
+            has_subdir = 1U;
+            continue;
+        }
+        if (ui_page_settings_wav_ext_is_wav(fno.fname) != 0U)
+        {
+            if (wav_count < UINT16_MAX)
+            {
+                wav_count++;
+            }
+        }
+    }
+
+    (void)f_closedir(&dir);
+    if (out_wav_count != 0)
+    {
+        *out_wav_count = wav_count;
+    }
+    if (wav_count != 0U)
+    {
+        return UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM;
+    }
+    return (has_subdir != 0U)
+        ? UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER
+        : UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER;
+}
+
 static uint8_t ui_page_settings_sample_browser_refresh(void)
 {
     if ((wav_loader_catalog_loaded() == 0U) || (wav_loader_catalog_stale() != 0U))
@@ -561,7 +682,11 @@ static uint8_t ui_page_settings_sample_browser_refresh(void)
         if (catalog_entry->type == WAV_LOADER_CATALOG_ENTRY_DIR)
         {
             char prefixed[24];
-            (void)snprintf(prefixed, sizeof(prefixed), "> %s", entry->label);
+            (void)snprintf(prefixed,
+                           sizeof(prefixed),
+                           "> %.*s",
+                           (int)(sizeof(prefixed) - 3U),
+                           entry->label);
             (void)snprintf(entry->label, sizeof(entry->label), "%s", prefixed);
         }
         entry->catalog_index = wav_loader_catalog_get_child_index(g_ui_settings.sample_parent_id, catalog_child);
@@ -585,7 +710,7 @@ static uint8_t ui_page_settings_sample_browser_refresh(void)
 
 static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entry)
 {
-    if (entry == 0)
+    if ((entry == 0) || (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM))
     {
         return;
     }
@@ -593,6 +718,7 @@ static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entr
     entry->prepared = 0U;
     entry->sample_count = 0U;
     entry->zone_count = 0U;
+    entry->slot_cost = entry->wav_count;
     if (entry->index_path[0] == '\0')
     {
         return;
@@ -604,12 +730,48 @@ static void ui_page_settings_multi_load_metadata(ui_settings_multi_entry_t *entr
         entry->prepared = 1U;
         entry->sample_count = index.sample_count;
         entry->zone_count = index.zone_count;
+        uint32_t used_bytes = 0U;
+        for (uint16_t i = 0U; i < index.sample_count; ++i)
+        {
+            used_bytes += ui_page_settings_frames_to_prep_bytes(index.samples[i].total_frames);
+        }
+        const uint32_t slot_bytes = SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
+        const uint32_t slots = (slot_bytes == 0U)
+            ? 0U
+            : ((used_bytes + slot_bytes - 1U) / slot_bytes);
+        entry->slot_cost = (slots > UINT16_MAX) ? UINT16_MAX : (uint16_t)slots;
         if (index.instrument_name[0] != '\0')
         {
             ui_page_settings_copy_bounded(entry->label,
                                           sizeof(entry->label),
                                           index.instrument_name);
         }
+    }
+}
+
+static uint8_t ui_page_settings_multi_entry_is_folder_like(const ui_settings_multi_entry_t *entry)
+{
+    return ((entry != 0) && (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)) ? 1U : 0U;
+}
+
+static void ui_page_settings_multi_sort_folders_first(void)
+{
+    for (uint16_t i = 1U; i < g_ui_settings.multi_entry_count; ++i)
+    {
+        ui_settings_multi_entry_t key = g_ui_settings.multi_entries[i];
+        if (ui_page_settings_multi_entry_is_folder_like(&key) == 0U)
+        {
+            continue;
+        }
+
+        uint16_t j = i;
+        while ((j > 0U)
+               && (ui_page_settings_multi_entry_is_folder_like(&g_ui_settings.multi_entries[j - 1U]) == 0U))
+        {
+            g_ui_settings.multi_entries[j] = g_ui_settings.multi_entries[j - 1U];
+            j--;
+        }
+        g_ui_settings.multi_entries[j] = key;
     }
 }
 
@@ -632,7 +794,7 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
         return 0U;
     }
 
-    FRESULT fr = f_opendir(&dir, UI_SETTINGS_MULTI_ROOT);
+    FRESULT fr = f_opendir(&dir, g_ui_settings.sample_dir);
     if (fr != FR_OK)
     {
         sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
@@ -655,17 +817,30 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
         ui_settings_multi_entry_t *const entry =
             &g_ui_settings.multi_entries[g_ui_settings.multi_entry_count];
         memset(entry, 0, sizeof(*entry));
-        if (ui_page_settings_join_path(entry->path, sizeof(entry->path), UI_SETTINGS_MULTI_ROOT, fno.fname) == 0U)
+        if (ui_page_settings_join_path(entry->path, sizeof(entry->path), g_ui_settings.sample_dir, fno.fname) == 0U)
         {
             continue;
         }
+        entry->type = ui_page_settings_multi_classify_folder(entry->path, &entry->wav_count);
         ui_page_settings_make_sample_label(entry->label, sizeof(entry->label), fno.fname, 1U);
+        if (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
+        {
+            char prefixed[MULTI_SAMPLE_POOL_NAME_MAX];
+            (void)snprintf(prefixed,
+                           sizeof(prefixed),
+                           "> %.*s",
+                           (int)(sizeof(prefixed) - 3U),
+                           entry->label);
+            (void)snprintf(entry->label, sizeof(entry->label), "%s", prefixed);
+        }
         (void)ui_page_settings_multi_index_name(entry->path, entry->index_path, sizeof(entry->index_path));
         g_ui_settings.multi_entry_count++;
     }
 
     (void)f_closedir(&dir);
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+
+    ui_page_settings_multi_sort_folders_first();
 
     for (uint8_t i = 0U; i < g_ui_settings.multi_entry_count; ++i)
     {
@@ -707,6 +882,7 @@ static void ui_page_settings_sample_browser_enter_root(void)
 static void ui_page_settings_multi_browser_enter_root(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", UI_SETTINGS_MULTI_ROOT);
     g_ui_settings.sample_selected = 0U;
     g_ui_settings.sample_slot_selected = 0U;
     g_ui_settings.sample_left_scroll = 0U;
@@ -715,6 +891,33 @@ static void ui_page_settings_multi_browser_enter_root(void)
     g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
     g_ui_settings.confirm_slot = 0U;
     g_ui_settings.confirm_path[0] = '\0';
+    g_ui_settings.multi_prepare_progress_done = 0U;
+    g_ui_settings.multi_prepare_progress_total = 0U;
+    g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_NONE;
+    (void)ui_page_settings_multi_browser_refresh();
+}
+
+static void ui_page_settings_multi_browser_parent_or_exit(void)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (strcmp(g_ui_settings.sample_dir, UI_SETTINGS_MULTI_ROOT) == 0)
+    {
+        ui_page_settings_back();
+        return;
+    }
+
+    char *slash = strrchr(g_ui_settings.sample_dir, '/');
+    if ((slash == 0) || (slash <= (g_ui_settings.sample_dir + strlen(UI_SETTINGS_MULTI_ROOT))))
+    {
+        (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", UI_SETTINGS_MULTI_ROOT);
+    }
+    else
+    {
+        *slash = '\0';
+    }
+
+    g_ui_settings.sample_selected = 0U;
+    g_ui_settings.sample_left_scroll = 0U;
     (void)ui_page_settings_multi_browser_refresh();
 }
 
@@ -1106,12 +1309,14 @@ static void ui_page_settings_sample_confirm_accept(void)
         const uint8_t slot = g_ui_settings.confirm_slot;
         char path[MULTI_SAMPLE_POOL_PATH_MAX];
         (void)snprintf(path, sizeof(path), "%s", g_ui_settings.confirm_path);
-        g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
-        g_ui_settings.confirm_path[0] = '\0';
+        ui_page_settings_multi_prepare_begin(slot,
+                                             path,
+                                             UI_SETTINGS_MULTI_PREP_PHASE_SCAN);
 
         const ui_settings_multi_entry_t *entry = ui_page_settings_multi_find_entry_by_path(path);
         if ((entry == 0) || (ui_page_settings_multi_prepare_entry(entry) == 0U))
         {
+            ui_page_settings_multi_prepare_finish(0);
             return;
         }
         entry = ui_page_settings_multi_find_entry_by_path(path);
@@ -1133,9 +1338,16 @@ static void ui_page_settings_sample_confirm_accept(void)
             ui_page_settings_status("NO MULTI");
             return;
         }
-        if ((entry->prepared == 0U) && (ui_page_settings_multi_prepare_entry(entry) == 0U))
+        if (entry->prepared == 0U)
         {
-            return;
+            ui_page_settings_multi_prepare_begin(slot,
+                                                 path,
+                                                 UI_SETTINGS_MULTI_PREP_PHASE_SCAN);
+            if (ui_page_settings_multi_prepare_entry(entry) == 0U)
+            {
+                ui_page_settings_multi_prepare_finish(0);
+                return;
+            }
         }
         entry = ui_page_settings_multi_find_entry_by_path(path);
         ui_page_settings_multi_load_entry_to_slot(slot, entry);
@@ -1258,9 +1470,290 @@ static const ui_settings_multi_entry_t *ui_page_settings_multi_find_entry_by_pat
     return 0;
 }
 
-static uint16_t ui_page_settings_multi_pool_used(void)
+static uint16_t ui_page_settings_multi_pool_slots_used(void)
 {
-    return multi_sample_pool_get_sample_capacity_used();
+    return ui_page_settings_global_slot_count_used();
+}
+
+static uint16_t ui_page_settings_multi_loaded_slot_cost(uint8_t slot)
+{
+    const multi_sample_instrument_t *const instrument = multi_sample_pool_get_instrument(slot);
+    if ((instrument == 0) || (instrument->sample_count == 0U)
+        || (instrument->first_sample_id == MULTI_SAMPLE_POOL_INVALID_ID))
+    {
+        return 0U;
+    }
+
+    uint32_t used_bytes = 0U;
+    for (uint16_t i = 0U; i < instrument->sample_count; ++i)
+    {
+        const multi_sample_desc_t *const desc =
+            multi_sample_pool_get_sample((uint16_t)(instrument->first_sample_id + i));
+        if (desc != 0)
+        {
+            used_bytes += ui_page_settings_frames_to_prep_bytes(desc->total_frames);
+        }
+    }
+
+    const uint32_t slot_bytes = SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
+    const uint32_t slots = (slot_bytes == 0U)
+        ? 0U
+        : ((used_bytes + slot_bytes - 1U) / slot_bytes);
+    return (slots > UINT16_MAX) ? UINT16_MAX : (uint16_t)slots;
+}
+
+static uint16_t ui_page_settings_multi_required_slots(const ui_settings_multi_entry_t *entry)
+{
+    if (entry == 0)
+    {
+        return 0U;
+    }
+    return (entry->slot_cost != 0U) ? entry->slot_cost : entry->wav_count;
+}
+
+static uint8_t ui_page_settings_multi_has_slot_capacity(const ui_settings_multi_entry_t *entry,
+                                                        uint8_t target_slot)
+{
+    const uint16_t required = ui_page_settings_multi_required_slots(entry);
+    const uint16_t used = ui_page_settings_multi_pool_slots_used();
+    const uint16_t old = ui_page_settings_multi_loaded_slot_cost(target_slot);
+    const uint16_t effective_used = (old > used) ? 0U : (uint16_t)(used - old);
+    return (required <= (uint16_t)(SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS - effective_used))
+        ? 1U
+        : 0U;
+}
+
+static void ui_page_settings_flash_sample_header_slots(void)
+{
+    g_ui_settings.header_slot_flash_until_ms =
+        HAL_GetTick() + UI_SETTINGS_HEADER_FLASH_DURATION_MS;
+}
+
+static void ui_page_settings_multi_prepare_progress_cb(uint16_t done, uint16_t total, void *user)
+{
+    (void)user;
+    g_ui_settings.multi_prepare_progress_done = done;
+    g_ui_settings.multi_prepare_progress_total = (total == 0U) ? 1U : total;
+    ui_page_settings_multi_prepare_flush_progress();
+}
+
+static void ui_page_settings_multi_prepare_begin(uint8_t slot,
+                                                 const char *path,
+                                                 ui_settings_multi_prepare_phase_t phase)
+{
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING;
+    g_ui_settings.confirm_slot = slot;
+    if (path != 0)
+    {
+        ui_page_settings_copy_bounded(g_ui_settings.confirm_path,
+                                      sizeof(g_ui_settings.confirm_path),
+                                      path);
+    }
+    g_ui_settings.multi_prepare_phase = (uint8_t)phase;
+    g_ui_settings.multi_prepare_progress_done = 0U;
+    g_ui_settings.multi_prepare_progress_total = 1U;
+    g_ui_settings.status_line[0] = '\0';
+    ui_page_settings_multi_prepare_flush_progress();
+}
+
+static void ui_page_settings_multi_prepare_finish(const char *status)
+{
+    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
+    g_ui_settings.confirm_path[0] = '\0';
+    g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_NONE;
+    g_ui_settings.multi_prepare_progress_done = 0U;
+    g_ui_settings.multi_prepare_progress_total = 0U;
+    if (status != 0)
+    {
+        ui_page_settings_status(status);
+    }
+}
+
+static void ui_page_settings_multi_prepare_poll(void)
+{
+    if (g_ui_settings.sample_confirm != (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
+    {
+        return;
+    }
+
+    const ui_settings_multi_prepare_phase_t phase =
+        (ui_settings_multi_prepare_phase_t)g_ui_settings.multi_prepare_phase;
+    if ((phase == UI_SETTINGS_MULTI_PREP_PHASE_SCAN)
+        || (phase == UI_SETTINGS_MULTI_PREP_PHASE_COMMIT))
+    {
+        return;
+    }
+
+    multi_sample_load_diag_t diag;
+    multi_sample_get_load_diag(&diag);
+    const multi_sample_instrument_state_t state =
+        multi_sample_pool_get_state(g_ui_settings.confirm_slot);
+
+    if (state == MULTI_SAMPLE_INSTRUMENT_LOADING)
+    {
+        g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
+        g_ui_settings.multi_prepare_progress_done = diag.pages_ready;
+        g_ui_settings.multi_prepare_progress_total =
+            (diag.pages_requested == 0U) ? 1U : diag.pages_requested;
+        return;
+    }
+
+    if (state == MULTI_SAMPLE_INSTRUMENT_READY)
+    {
+        g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_REFRESH;
+        g_ui_settings.multi_prepare_progress_done = 1U;
+        g_ui_settings.multi_prepare_progress_total = 1U;
+        (void)ui_page_settings_multi_browser_refresh();
+        ui_page_settings_multi_prepare_finish("LOAD OK");
+        return;
+    }
+
+    if (state == MULTI_SAMPLE_INSTRUMENT_ERROR)
+    {
+        ui_page_settings_multi_prepare_finish(ui_page_settings_multi_load_error_label(diag.last_error));
+    }
+}
+
+static uint32_t ui_page_settings_frames_to_prep_bytes(uint32_t frames)
+{
+    if (frames == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t prep_frames = (frames < SAMPLE_PREP_MIN_READY_FRAMES)
+        ? frames
+        : SAMPLE_PREP_MIN_READY_FRAMES;
+    const uint32_t pages = (prep_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    return pages * SAMPLE_PAGE_BYTES;
+}
+
+static uint32_t ui_page_settings_stream_memory_used_bytes(void)
+{
+    uint32_t used = 0U;
+    for (uint16_t slot = 0U; slot < SAMPLE_POOL_SIZE; ++slot)
+    {
+        const sample_desc_t *const desc = sample_pool_get(slot);
+        if ((desc != 0) && (desc->valid != 0U))
+        {
+            used += ui_page_settings_frames_to_prep_bytes(desc->length_frames);
+        }
+    }
+    return used;
+}
+
+static uint32_t ui_page_settings_multi_memory_used_bytes(void)
+{
+    uint32_t used = 0U;
+    const uint16_t count = multi_sample_pool_get_sample_capacity_used();
+    for (uint16_t sample_id = 0U; sample_id < count; ++sample_id)
+    {
+        const multi_sample_desc_t *const desc = multi_sample_pool_get_sample(sample_id);
+        if (desc != 0)
+        {
+            used += ui_page_settings_frames_to_prep_bytes(desc->total_frames);
+        }
+    }
+    return used;
+}
+
+static uint32_t ui_page_settings_global_memory_used_bytes(void)
+{
+    uint32_t used = ui_page_settings_stream_memory_used_bytes()
+                  + ui_page_settings_multi_memory_used_bytes();
+    const uint32_t max = SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES * SAMPLE_PAGE_BYTES;
+    return (used > max) ? max : used;
+}
+
+static uint16_t ui_page_settings_global_slot_count_used(void)
+{
+    const uint32_t slot_bytes = SAMPLE_PAGE_MIN_READY_PAGES * SAMPLE_PAGE_BYTES;
+    const uint32_t used_bytes = ui_page_settings_global_memory_used_bytes();
+    if (slot_bytes == 0U)
+    {
+        return 0U;
+    }
+    const uint32_t slots = (used_bytes + slot_bytes - 1U) / slot_bytes;
+    return (slots > SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS)
+        ? (uint16_t)SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS
+        : (uint16_t)slots;
+}
+
+static void ui_page_settings_draw_global_sample_header(const char *title)
+{
+    ui_page_settings_draw_sample_header(title,
+                                        ui_page_settings_global_slot_count_used(),
+                                        SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS,
+                                        ui_page_settings_global_memory_used_bytes(),
+                                        SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES * SAMPLE_PAGE_BYTES);
+}
+
+static void ui_page_settings_format_mb(char *out, uint32_t out_size, uint32_t bytes)
+{
+    if ((out == 0) || (out_size == 0U))
+    {
+        return;
+    }
+
+    const uint32_t deci_mb = (uint32_t)(((uint64_t)bytes * 10ULL
+                                         + (UI_SETTINGS_MB_BYTES / 2U))
+                                        / UI_SETTINGS_MB_BYTES);
+    (void)snprintf(out,
+                   out_size,
+                   "%lu.%lu",
+                   (unsigned long)(deci_mb / 10U),
+                   (unsigned long)(deci_mb % 10U));
+}
+
+static void ui_page_settings_draw_sample_header(const char *title,
+                                                uint16_t used_slots,
+                                                uint16_t max_slots,
+                                                uint32_t used_bytes,
+                                                uint32_t max_bytes)
+{
+    char used_mb[8];
+    char max_mb[8];
+    char slots[12];
+    char mem[20];
+
+    ui_page_settings_format_mb(used_mb, sizeof(used_mb), used_bytes);
+    ui_page_settings_format_mb(max_mb, sizeof(max_mb), max_bytes);
+    (void)snprintf(slots,
+                   sizeof(slots),
+                   "%u/%u",
+                   (unsigned)used_slots,
+                   (unsigned)max_slots);
+    (void)snprintf(mem,
+                   sizeof(mem),
+                   "%s/%sMB",
+                   used_mb,
+                   max_mb);
+
+    drv_display_set_font(&FONT_4X6);
+    drv_display_draw_text(0U, 0U, title);
+    drv_display_draw_line(UI_SETTINGS_HEADER_SEP1_X, 0, UI_SETTINGS_HEADER_SEP1_X, 5);
+    const uint8_t slots_w = drv_display_text_width(slots);
+    const uint8_t flash_slots =
+        ((int32_t)(g_ui_settings.header_slot_flash_until_ms - HAL_GetTick()) > 0)
+        && (((HAL_GetTick() / 120U) & 1U) == 0U)
+            ? 1U
+            : 0U;
+    if (flash_slots != 0U)
+    {
+        drv_display_fill_rect(UI_SETTINGS_HEADER_SLOT_X - 1U, 0, slots_w + 2U, 6);
+        drv_display_draw_text_inverted(UI_SETTINGS_HEADER_SLOT_X, 0U, slots);
+    }
+    else
+    {
+        drv_display_draw_text(UI_SETTINGS_HEADER_SLOT_X, 0U, slots);
+    }
+    const uint8_t sep2_x = (uint8_t)(UI_SETTINGS_HEADER_SLOT_X + slots_w + 4U);
+    drv_display_draw_line(sep2_x, 0, sep2_x, 5);
+    const uint8_t mem_w = drv_display_text_width(mem);
+    const uint8_t mem_x = (mem_w >= UI_SETTINGS_HEADER_MEM_RIGHT_X)
+        ? 0U
+        : (uint8_t)(UI_SETTINGS_HEADER_MEM_RIGHT_X - mem_w);
+    drv_display_draw_text(mem_x, 0U, mem);
 }
 
 static void ui_page_settings_append_u16(char *out, uint32_t out_size, uint16_t value)
@@ -1413,7 +1906,10 @@ static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entr
         return 1U;
     }
 
-    const multi_sample_import_result_t result = multi_sample_import_folder(entry->path);
+    const multi_sample_import_result_t result =
+        multi_sample_import_folder_with_progress(entry->path,
+                                                 ui_page_settings_multi_prepare_progress_cb,
+                                                 0);
     if (result != MULTI_SAMPLE_IMPORT_OK)
     {
         ui_page_settings_status(ui_page_settings_multi_import_error_label(result));
@@ -1428,7 +1924,7 @@ static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entr
 static void ui_page_settings_multi_confirm_prepare(uint8_t slot)
 {
     const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
-    if (entry == 0)
+    if ((entry == 0) || (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM))
     {
         return;
     }
@@ -1437,7 +1933,7 @@ static void ui_page_settings_multi_confirm_prepare(uint8_t slot)
     ui_page_settings_copy_bounded(g_ui_settings.confirm_path,
                                   sizeof(g_ui_settings.confirm_path),
                                   entry->path);
-    ui_page_settings_status("OK=YES RETURN=NO");
+    g_ui_settings.status_line[0] = '\0';
 }
 
 static void ui_page_settings_multi_confirm_replace(uint8_t slot)
@@ -1445,6 +1941,12 @@ static void ui_page_settings_multi_confirm_replace(uint8_t slot)
     const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
     if (entry == 0)
     {
+        return;
+    }
+    if (ui_page_settings_multi_has_slot_capacity(entry, slot) == 0U)
+    {
+        ui_page_settings_flash_sample_header_slots();
+        ui_page_settings_status("POOL FULL");
         return;
     }
     g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE;
@@ -1470,7 +1972,12 @@ static void ui_page_settings_multi_confirm_unload(uint8_t slot)
 
 static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry)
 {
-    if ((entry == 0) || (entry->index_path[0] == '\0'))
+    const uint8_t already_blocking =
+        (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING) ? 1U : 0U;
+
+    if ((entry == 0)
+        || (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
+        || (entry->index_path[0] == '\0'))
     {
         ui_page_settings_status("NO INDEX");
         return;
@@ -1485,13 +1992,31 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         return;
     }
 
-    if (entry->sample_count > (uint16_t)(MULTI_SAMPLE_POOL_MAX_SAMPLES - ui_page_settings_multi_pool_used()))
+    if (ui_page_settings_multi_has_slot_capacity(entry, slot) == 0U)
     {
         char status[24];
         ui_page_settings_copy_bounded(status, sizeof(status), "FULL need ");
-        ui_page_settings_append_u16(status, sizeof(status), entry->sample_count);
+        ui_page_settings_append_u16(status,
+                                    sizeof(status),
+                                    ui_page_settings_multi_required_slots(entry));
+        ui_page_settings_flash_sample_header_slots();
         ui_page_settings_status(status);
         return;
+    }
+
+    if (already_blocking == 0U)
+    {
+        ui_page_settings_multi_prepare_begin(slot,
+                                             entry->path,
+                                             UI_SETTINGS_MULTI_PREP_PHASE_COMMIT);
+    }
+    else
+    {
+        g_ui_settings.confirm_slot = slot;
+        g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_COMMIT;
+        g_ui_settings.multi_prepare_progress_done = 0U;
+        g_ui_settings.multi_prepare_progress_total = 1U;
+        ui_page_settings_multi_prepare_flush_progress();
     }
 
     if (multi_sample_pool_get_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
@@ -1506,11 +2031,14 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         (void)multi_sample_pool_set_index_path(slot, entry->index_path);
         g_ui_settings.sample_slot_selected = slot;
         (void)ui_page_settings_multi_assign_active_track(slot, entry->index_path);
-        ui_page_settings_status("LOAD QUEUED");
+        g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
+        g_ui_settings.multi_prepare_progress_done = 0U;
+        g_ui_settings.multi_prepare_progress_total = 1U;
+        ui_page_settings_multi_prepare_poll();
     }
     else
     {
-        ui_page_settings_status(ui_page_settings_multi_load_error_label(result));
+        ui_page_settings_multi_prepare_finish(ui_page_settings_multi_load_error_label(result));
     }
 }
 
@@ -1522,13 +2050,52 @@ static void ui_page_settings_multi_load_selected_to_slot(uint8_t slot)
         ui_page_settings_status("NO MULTI");
         return;
     }
+    if (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
+    {
+        ui_page_settings_status("NO MULTI");
+        return;
+    }
 
     if (entry->prepared == 0U)
     {
+        if (ui_page_settings_multi_has_slot_capacity(entry, slot) == 0U)
+        {
+            ui_page_settings_flash_sample_header_slots();
+            ui_page_settings_status("POOL FULL");
+            return;
+        }
         ui_page_settings_multi_confirm_prepare(slot);
         return;
     }
     ui_page_settings_multi_load_entry_to_slot(slot, entry);
+}
+
+static uint8_t ui_page_settings_multi_enter_selected_folder(const ui_settings_multi_entry_t *entry)
+{
+    char old_dir[WAV_LOADER_CATALOG_PATH_MAX];
+
+    if ((entry == 0)
+        || ((entry->type != UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER)
+            && (entry->type != UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER)))
+    {
+        return 0U;
+    }
+
+    (void)snprintf(old_dir, sizeof(old_dir), "%s", g_ui_settings.sample_dir);
+    (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", entry->path);
+    g_ui_settings.sample_selected = 0U;
+    g_ui_settings.sample_left_scroll = 0U;
+    if (ui_page_settings_multi_browser_refresh() == 0U)
+    {
+        (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", old_dir);
+        (void)ui_page_settings_multi_browser_refresh();
+        return 0U;
+    }
+    if (g_ui_settings.multi_entry_count == 0U)
+    {
+        ui_page_settings_status("EMPTY");
+    }
+    return 1U;
 }
 
 static void ui_page_settings_multi_copy_left(uint8_t shift_down)
@@ -1537,6 +2104,11 @@ static void ui_page_settings_multi_copy_left(uint8_t shift_down)
     if (entry == 0)
     {
         ui_page_settings_status("NO MULTI");
+        return;
+    }
+
+    if (ui_page_settings_multi_enter_selected_folder(entry) != 0U)
+    {
         return;
     }
 
@@ -1563,6 +2135,7 @@ static void ui_page_settings_multi_copy_left(uint8_t shift_down)
     const int16_t free_slot = ui_page_settings_multi_find_free_slot();
     if (free_slot < 0)
     {
+        ui_page_settings_flash_sample_header_slots();
         ui_page_settings_status("POOL FULL");
         return;
     }
@@ -2177,6 +2750,10 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
     {
         if (g_ui_settings.sample_confirm != (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE)
         {
+            if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
+            {
+                return;
+            }
             if (ev->id == (uint8_t)BTN_PAGE_2)
             {
                 ui_page_settings_sample_confirm_accept();
@@ -2230,7 +2807,7 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
         {
             if (ev->id == (uint8_t)BTN_PAGE_1)
             {
-                ui_page_settings_back();
+                ui_page_settings_multi_browser_parent_or_exit();
                 return;
             }
             if ((ev->id == (uint8_t)BTN_PAGE_2) && (button_down(BTN_SHIFT) == 0U))
@@ -2513,7 +3090,15 @@ static void ui_page_settings_multi_left_label(const ui_settings_multi_entry_t *e
         return;
     }
 
-    if (entry->prepared != 0U)
+    if (entry->type == UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER)
+    {
+        (void)snprintf(raw, sizeof(raw), "%s", entry->label);
+    }
+    else if (entry->type == UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER)
+    {
+        (void)snprintf(raw, sizeof(raw), "%s EMPTY", entry->label);
+    }
+    else if (entry->prepared != 0U)
     {
         (void)snprintf(raw, sizeof(raw), "%s %03u", entry->label, (unsigned)entry->sample_count);
     }
@@ -2588,14 +3173,43 @@ static void ui_page_settings_draw_centered_label(uint8_t x, uint8_t w, uint8_t y
     drv_display_draw_text(text_x, y, label);
 }
 
+static void ui_page_settings_draw_progress_bar(uint8_t x,
+                                               uint8_t y,
+                                               uint8_t w,
+                                               uint8_t h,
+                                               uint16_t done,
+                                               uint16_t total)
+{
+    if ((w < 3U) || (h < 3U))
+    {
+        return;
+    }
+
+    if (total == 0U)
+    {
+        total = 1U;
+    }
+    if (done > total)
+    {
+        done = total;
+    }
+
+    drv_display_draw_rect(x, y, w, h);
+    const uint8_t inner_w = (uint8_t)(w - 2U);
+    const uint8_t fill_w = (uint8_t)(((uint32_t)inner_w * done) / total);
+    if (fill_w != 0U)
+    {
+        drv_display_fill_rect((int)x + 1, (int)y + 1, fill_w, (int)h - 2);
+    }
+}
+
 static void ui_page_settings_draw_page_footer(const char *page4_label)
 {
-    const uint8_t y = 54U;
     drv_display_set_font(&FONT_4X6);
-    ui_page_settings_draw_centered_label(0U, 32U, y, "RETURN");
-    ui_page_settings_draw_centered_label(32U, 32U, y, "OK");
-    ui_page_settings_draw_centered_label(64U, 32U, y, "-");
-    ui_page_settings_draw_centered_label(96U, 32U, y, page4_label);
+    ui_page_settings_draw_centered_label(0U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "RETURN");
+    ui_page_settings_draw_centered_label(32U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "OK");
+    ui_page_settings_draw_centered_label(64U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "-");
+    ui_page_settings_draw_centered_label(96U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, page4_label);
 }
 
 static void ui_page_settings_draw_sample_footer(void)
@@ -2603,14 +3217,115 @@ static void ui_page_settings_draw_sample_footer(void)
     ui_page_settings_draw_page_footer((button_down(BTN_SHIFT) != 0U) ? "REBUILD" : "REFRESH");
 }
 
+static const char *ui_page_settings_basename(const char *path)
+{
+    if ((path == 0) || (path[0] == '\0'))
+    {
+        return "-";
+    }
+
+    const char *const slash = strrchr(path, '/');
+    return ((slash != 0) && (slash[1] != '\0')) ? (slash + 1) : path;
+}
+
+static void ui_page_settings_draw_browser_context_label(const char *tag, const char *label)
+{
+    char line[32];
+    char tag_buf[6];
+
+    drv_display_set_font(&FONT_4X6);
+    ui_page_settings_fit_label(tag_buf, sizeof(tag_buf), tag, 16U);
+    const uint8_t tag_box_w = (uint8_t)(drv_display_text_width(tag_buf) + 4U);
+    drv_display_fill_rect(0, UI_SETTINGS_SAMPLE_BROWSER_PATH_LABEL_Y - 1U, tag_box_w, 7);
+    drv_display_draw_text_inverted(2U, UI_SETTINGS_SAMPLE_BROWSER_PATH_LABEL_Y, tag_buf);
+    ui_page_settings_fit_label(line, sizeof(line), label, 106U);
+    drv_display_draw_text((uint8_t)(tag_box_w + 4U), UI_SETTINGS_SAMPLE_BROWSER_PATH_LABEL_Y, line);
+    drv_display_draw_line(0,
+                          UI_SETTINGS_SAMPLE_BROWSER_PATH_LINE_Y,
+                          127,
+                          UI_SETTINGS_SAMPLE_BROWSER_PATH_LINE_Y);
+}
+
+static void ui_page_settings_draw_stream_name_label(void)
+{
+    char slot_label[24];
+    const ui_settings_sample_entry_t *const entry = ui_page_settings_sample_selected_entry();
+    const char *label = ui_page_settings_basename(g_ui_settings.sample_dir);
+    const char *tag = "DIR";
+
+    if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
+    {
+        const sample_desc_t *const desc = sample_pool_get(g_ui_settings.sample_slot_selected);
+        const char *name = (desc != 0) ? strrchr(desc->path, '/') : 0;
+        name = (name != 0) ? (name + 1) : ((desc != 0) ? desc->path : "");
+        ui_page_settings_make_sample_label(slot_label, sizeof(slot_label), name, 0U);
+        label = (slot_label[0] != '\0') ? slot_label : "EMPTY";
+        tag = "SLOT";
+        ui_page_settings_draw_browser_context_label(tag, label);
+        return;
+    }
+
+    if (entry != 0)
+    {
+        label = entry->label;
+        tag = (entry->type == UI_SETTINGS_SAMPLE_ENTRY_FILE) ? "WAV" : "DIR";
+    }
+    ui_page_settings_draw_browser_context_label(tag, label);
+}
+
+static void ui_page_settings_draw_multi_name_label(void)
+{
+    const char *label = "NO MULTI";
+    const char *tag = "INS";
+    const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
+
+    if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
+    {
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(g_ui_settings.sample_slot_selected);
+        label = (instrument != 0) ? instrument->name : "EMPTY";
+        ui_page_settings_draw_browser_context_label("SLOT", label);
+        return;
+    }
+
+    if (entry != 0)
+    {
+        label = entry->label;
+        tag = (entry->type == UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM) ? "INS"
+            : (entry->type == UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER) ? "DIR"
+            : "EMPTY";
+    }
+    ui_page_settings_draw_browser_context_label(tag, label);
+}
+
+static const char *ui_page_settings_multi_prepare_phase_label(void)
+{
+    switch ((ui_settings_multi_prepare_phase_t)g_ui_settings.multi_prepare_phase)
+    {
+        case UI_SETTINGS_MULTI_PREP_PHASE_SCAN:
+            return "Scan multi";
+        case UI_SETTINGS_MULTI_PREP_PHASE_COMMIT:
+            return "Commit multi";
+        case UI_SETTINGS_MULTI_PREP_PHASE_PREPARE:
+            return "Prepare samples";
+        case UI_SETTINGS_MULTI_PREP_PHASE_REFRESH:
+            return "Refresh multi";
+        default:
+            return "Preparing multi";
+    }
+}
+
 static void ui_page_settings_draw_sample_split_position(uint16_t sample_total, uint16_t slot_total)
 {
     enum
     {
         UI_SETTINGS_SPLIT_X = 60,
-        UI_SETTINGS_SPLIT_Y0 = 10,
+        UI_SETTINGS_SPLIT_Y0 = UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0 - 1U,
         UI_SETTINGS_SPLIT_Y1 = 51,
-        UI_SETTINGS_SPLIT_H = UI_SETTINGS_SPLIT_Y1 - UI_SETTINGS_SPLIT_Y0
+        UI_SETTINGS_SPLIT_H = UI_SETTINGS_SPLIT_Y1 - UI_SETTINGS_SPLIT_Y0,
+        UI_SETTINGS_SPLIT_CURSOR_MAX_H = 9,
+        UI_SETTINGS_SPLIT_CURSOR_MIN_H = 3,
+        UI_SETTINGS_SPLIT_CURSOR_REF_ITEMS = 64
     };
 
     drv_display_draw_line(UI_SETTINGS_SPLIT_X, UI_SETTINGS_SPLIT_Y0, UI_SETTINGS_SPLIT_X, UI_SETTINGS_SPLIT_Y1);
@@ -2641,11 +3356,43 @@ static void ui_page_settings_draw_sample_split_position(uint16_t sample_total, u
         selected = (uint16_t)(total - 1U);
     }
 
-    const uint16_t y =
+    const uint16_t ref_total = (total > (uint16_t)UI_SETTINGS_SPLIT_CURSOR_REF_ITEMS)
+        ? total
+        : (uint16_t)UI_SETTINGS_SPLIT_CURSOR_REF_ITEMS;
+    uint8_t cursor_h =
+        (uint8_t)(((uint32_t)UI_SETTINGS_SPLIT_CURSOR_MAX_H
+                   * UI_SETTINGS_SPLIT_CURSOR_REF_ITEMS
+                   + ((uint32_t)ref_total / 2U))
+                  / ref_total);
+    if (cursor_h > (uint8_t)UI_SETTINGS_SPLIT_CURSOR_MAX_H)
+    {
+        cursor_h = (uint8_t)UI_SETTINGS_SPLIT_CURSOR_MAX_H;
+    }
+    if (cursor_h < (uint8_t)UI_SETTINGS_SPLIT_CURSOR_MIN_H)
+    {
+        cursor_h = (uint8_t)UI_SETTINGS_SPLIT_CURSOR_MIN_H;
+    }
+    if ((cursor_h & 1U) == 0U)
+    {
+        cursor_h--;
+    }
+
+    const uint16_t travel = (uint16_t)(UI_SETTINGS_SPLIT_H - cursor_h + 1U);
+    const uint16_t top =
         (uint16_t)(UI_SETTINGS_SPLIT_Y0
-                   + ((((uint32_t)selected * UI_SETTINGS_SPLIT_H) + ((uint32_t)(total - 1U) / 2U))
+                   + ((((uint32_t)selected * travel) + ((uint32_t)(total - 1U) / 2U))
                       / (uint32_t)(total - 1U)));
-    drv_display_draw_line(UI_SETTINGS_SPLIT_X - 3, (int)y, UI_SETTINGS_SPLIT_X + 3, (int)y);
+    const uint16_t bottom = (uint16_t)(top + cursor_h - 1U);
+    const uint16_t mid = (uint16_t)(top + (cursor_h / 2U));
+    drv_display_clear_rect(UI_SETTINGS_SPLIT_X - 1, (int)top, 3, cursor_h);
+    drv_display_draw_line(UI_SETTINGS_SPLIT_X - 1, (int)top, UI_SETTINGS_SPLIT_X - 1, (int)bottom);
+    drv_display_draw_line(UI_SETTINGS_SPLIT_X + 1, (int)top, UI_SETTINGS_SPLIT_X + 1, (int)bottom);
+    drv_display_draw_pixel(UI_SETTINGS_SPLIT_X, (int)top, true);
+    drv_display_draw_pixel(UI_SETTINGS_SPLIT_X, (int)bottom, true);
+    if (cursor_h <= 3U)
+    {
+        drv_display_draw_pixel(UI_SETTINGS_SPLIT_X, (int)mid, false);
+    }
 }
 
 static void ui_page_settings_render_multi_browser(void)
@@ -2658,29 +3405,33 @@ static void ui_page_settings_render_multi_browser(void)
         UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
     };
 
-    char header[32];
-    (void)snprintf(header,
-                   sizeof(header),
-                   "MULTI %u/%u",
-                   (unsigned)ui_page_settings_multi_pool_used(),
-                   (unsigned)MULTI_SAMPLE_POOL_MAX_SAMPLES);
-    drv_display_draw_text(0U, 0U, header);
-    drv_display_draw_line(0, 9, 127, 9);
+    ui_page_settings_multi_prepare_poll();
+
+    ui_page_settings_draw_global_sample_header("MULTI");
+    drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
+    ui_page_settings_draw_multi_name_label();
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE)
     {
-        const ui_settings_multi_entry_t *const entry =
-            ui_page_settings_multi_find_entry_by_path(g_ui_settings.confirm_path);
-        drv_display_set_font(&FONT_4X6);
-        drv_display_draw_text(0U, 14U, "PREPARE?");
-        if (entry != 0)
-        {
-            char name_line[32];
-            ui_page_settings_fit_label(name_line, sizeof(name_line), entry->label, 124U);
-            drv_display_draw_text(0U, 26U, name_line);
-        }
-        drv_display_draw_text(0U, 38U, "OK=YES");
-        drv_display_draw_text(0U, 50U, "RETURN=NO");
+        drv_display_set_font(&FONT_5X7);
+        ui_page_settings_draw_centered_label(0U, 128U, 34U, "Prepare multi ?");
+        ui_page_settings_draw_page_footer("-");
+        return;
+    }
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
+    {
+        drv_display_set_font(&FONT_5X7);
+        ui_page_settings_draw_centered_label(0U,
+                                             128U,
+                                             30U,
+                                             ui_page_settings_multi_prepare_phase_label());
+        ui_page_settings_draw_progress_bar(8U,
+                                           56U,
+                                           112U,
+                                           6U,
+                                           g_ui_settings.multi_prepare_progress_done,
+                                           g_ui_settings.multi_prepare_progress_total);
         drv_display_set_font(&FONT_5X7);
         return;
     }
@@ -2756,6 +3507,13 @@ static void ui_page_settings_render_multi_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
+static void ui_page_settings_multi_prepare_flush_progress(void)
+{
+    drv_display_clear();
+    ui_page_settings_render_multi_browser();
+    drv_display_update();
+}
+
 static void ui_page_settings_render_sample_browser(void)
 {
     enum
@@ -2766,8 +3524,9 @@ static void ui_page_settings_render_sample_browser(void)
         UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
     };
 
-    drv_display_draw_text(0U, 0U, "STREAM");
-    drv_display_draw_line(0, 9, 127, 9);
+    ui_page_settings_draw_global_sample_header("STREAM");
+    drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
+    ui_page_settings_draw_stream_name_label();
     ui_page_settings_draw_sample_split_position(g_ui_settings.sample_child_count, SAMPLE_POOL_SIZE);
     drv_display_set_font(&FONT_4X6);
 
@@ -2846,8 +3605,9 @@ static void ui_page_settings_render_sample_browser(void)
 
 static void ui_page_settings_render_ram_placeholder(void)
 {
-    drv_display_draw_text(0U, 0U, "SAMPLE > RAM");
-    drv_display_draw_line(0, 9, 127, 9);
+    ui_page_settings_draw_global_sample_header("RAM");
+    drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
+    ui_page_settings_draw_browser_context_label("RAM", "POOL PENDING");
     drv_display_set_font(&FONT_4X6);
     drv_display_draw_text(2U,
                           UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0,
@@ -2860,7 +3620,6 @@ static void ui_page_settings_render_ram_placeholder(void)
                           (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
                                     + (2U * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH)),
                           "NO LOAD/PLAY");
-    drv_display_set_font(&FONT_5X7);
     ui_page_settings_draw_page_footer("-");
 }
 
@@ -2869,7 +3628,9 @@ static void ui_page_settings_render(void)
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if (level == 0)
     {
+        drv_display_set_font(&FONT_5X7);
         drv_display_draw_text(0U, 0U, "SETTINGS");
+        drv_display_set_font(&FONT_4X6);
         drv_display_draw_text(0U, 12U, "EMPTY");
         return;
     }
@@ -2890,8 +3651,10 @@ static void ui_page_settings_render(void)
         return;
     }
 
+    drv_display_set_font(&FONT_5X7);
     drv_display_draw_text(0U, 0U, ui_page_settings_view_title(level->view));
     drv_display_draw_line(0, 9, 127, 9);
+    drv_display_set_font(&FONT_4X6);
 
     const uint8_t count = ui_page_settings_view_item_count(level->view);
     const uint8_t selected = (count > 0U) ? (uint8_t)(level->selected_index % count) : 0U;
@@ -2916,7 +3679,7 @@ static void ui_page_settings_render(void)
 
         if (item == selected)
         {
-            drv_display_fill_rect(0, y - 1U, 128, 10);
+            drv_display_fill_rect(0, y - 1U, 128, 8);
             drv_display_draw_text_inverted(2U, y, label);
         }
         else
@@ -3003,6 +3766,12 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
     if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
         || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE))
     {
+        if ((level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+            && (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING))
+        {
+            return;
+        }
+
         g_ui_settings.encoder_accum[encoder] = (int16_t)(g_ui_settings.encoder_accum[encoder] + delta);
         const int16_t step = (int16_t)(g_ui_settings.encoder_accum[encoder] / UI_SETTINGS_ENCODER_DIVIDER);
         g_ui_settings.encoder_accum[encoder] = (int16_t)(g_ui_settings.encoder_accum[encoder] - (step * UI_SETTINGS_ENCODER_DIVIDER));
