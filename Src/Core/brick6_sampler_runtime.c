@@ -182,35 +182,9 @@ static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
 
 #define BRICK6_SAMPLER_STEP_EPSILON (0.0001f)
 
-static uint8_t brick6_sampler_runtime_mode_is_reverse(uint8_t mode)
-{
-    return ((mode == 1U) || (mode == 5U)) ? 1U : 0U;
-}
-
-static uint8_t brick6_sampler_runtime_mode_loop_kind(uint8_t mode)
-{
-    if (mode == 2U)
-    {
-        return BRICK6_SAMPLER_LOOP_FORWARD;
-    }
-
-    if (mode == 3U)
-    {
-        return BRICK6_SAMPLER_LOOP_PINGPONG;
-    }
-
-    return BRICK6_SAMPLER_LOOP_NONE;
-}
-
-static uint8_t brick6_sampler_runtime_mode_uses_slice(uint8_t mode)
-{
-    return ((mode == 4U) || (mode == 5U)) ? 1U : 0U;
-}
-
 static uint8_t brick6_sampler_runtime_cache_voice_id(uint8_t track_id);
 static uint32_t brick6_sampler_runtime_multi_active_count(void);
 static uint32_t brick6_sampler_runtime_multi_active_count_for_track(uint8_t track_id);
-static uint8_t brick6_sampler_runtime_pick_slice_index(const brick6_sampler_voice_t *voice, uint8_t note);
 static uint8_t brick6_sampler_runtime_resolve_grid_count(uint8_t raw_grid_count);
 static float brick6_sampler_runtime_velocity_gain(uint8_t velocity);
 static uint32_t brick6_sampler_runtime_ratio_to_q16(float ratio);
@@ -1250,70 +1224,6 @@ static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id)
     brick6_sampler_runtime_clip_release_slot(track_id);
 }
 
-static uint8_t brick6_sampler_runtime_slicer_note_in_range(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    const uint8_t note = voice->note;
-    if (note < 60U)
-    {
-        return 0U;
-    }
-
-    const uint8_t grid_count = brick6_sampler_runtime_resolve_grid_count(voice->slice_count);
-    if (grid_count == 0U)
-    {
-        return (note == 60U) ? 1U : 0U;
-    }
-
-    return (((uint32_t)(note - 60U)) < (uint32_t)grid_count) ? 1U : 0U;
-}
-
-static void brick6_sampler_runtime_prepare_slicer_entry_pages(uint8_t track_id)
-{
-    if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_slicer(track_id) == 0U))
-    {
-        return;
-    }
-
-    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const sample_cache_state_t cache_state = sample_cache_get_state(voice->sample_id);
-    if ((cache_state != SAMPLE_CACHE_READY_PARTIAL) && (cache_state != SAMPLE_CACHE_PLAYING))
-    {
-        return;
-    }
-
-    const sample_desc_t *const desc = sample_pool_get(voice->sample_id);
-    if ((desc == NULL) || (desc->valid == 0U) || (desc->length_frames == 0U))
-    {
-        return;
-    }
-
-    const uint32_t sample_length = desc->length_frames;
-    const uint8_t grid_count = brick6_sampler_runtime_resolve_grid_count(voice->slice_count);
-    const uint32_t slice_total = (grid_count == 0U) ? 1U : (uint32_t)grid_count;
-    uint32_t last_page_index = UINT32_MAX;
-
-    for (uint32_t i = 0U; i < slice_total; ++i)
-    {
-        const uint32_t slice_begin = (grid_count == 0U) ? 0U : ((sample_length * i) / (uint32_t)grid_count);
-        const uint32_t page_index = slice_begin / SAMPLE_PAGE_FRAMES;
-        if (page_index == last_page_index)
-        {
-            continue;
-        }
-
-        (void)sample_stream_manager_request_page_key_alloc(
-            sample_audio_key_classic(voice->sample_id),
-            page_index,
-            SAMPLE_PAGE_ALLOC_MARGIN);
-        last_page_index = page_index;
-    }
-}
-
 static uint8_t brick6_sampler_runtime_resolve_grid_count(uint8_t raw_grid_count)
 {
     switch (raw_grid_count)
@@ -1393,303 +1303,27 @@ static uint32_t brick6_sampler_runtime_next_trigger_order(void)
     return g_sampler_voice_trigger_counter;
 }
 
-static float brick6_sampler_runtime_compute_global_tune_step(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 1.0f;
-    }
-
-    return powf(2.0f, voice->tune * (1.0f / 12.0f));
-}
-
-static uint8_t brick6_sampler_runtime_build_slicer_plan(uint8_t track_id,
-                                                        sample_play_plan_t *out_plan,
-                                                        uint32_t *out_region_begin,
-                                                        uint32_t *out_region_end,
-                                                        float *out_step_signed)
-{
-    if ((track_id >= SEQ_TRACK_COUNT) || (out_plan == NULL) || (out_region_begin == NULL)
-        || (out_region_end == NULL) || (out_step_signed == NULL))
-    {
-        return 0U;
-    }
-
-    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const sample_desc_t *const desc = sample_pool_get(voice->sample_id);
-    if ((desc == NULL) || (desc->valid == 0U) || (desc->length_frames == 0U)
-        || (sample_cache_is_ready(voice->sample_id) == 0U))
-    {
-        return 0U;
-    }
-
-    const uint32_t sample_length = desc->length_frames;
-    const uint8_t grid_count = brick6_sampler_runtime_resolve_grid_count(voice->slice_count);
-    const uint8_t note = voice->note;
-    uint32_t slice_begin = 0U;
-    uint32_t slice_end = sample_length;
-
-    if (note < 60U)
-    {
-        return 0U;
-    }
-
-    if (grid_count == 0U)
-    {
-        if (note != 60U)
-        {
-            return 0U;
-        }
-    }
-    else
-    {
-        const uint32_t slice_index = (uint32_t)(note - 60U);
-        if (slice_index >= grid_count)
-        {
-            return 0U;
-        }
-
-        slice_begin = (sample_length * slice_index) / (uint32_t)grid_count;
-        slice_end = (slice_index + 1U >= (uint32_t)grid_count)
-                        ? sample_length
-                        : ((sample_length * (slice_index + 1U)) / (uint32_t)grid_count);
-    }
-
-    if (slice_begin >= sample_length)
-    {
-        return 0U;
-    }
-    if (slice_end <= slice_begin)
-    {
-        slice_end = slice_begin + 1U;
-    }
-    if (slice_end > sample_length)
-    {
-        slice_end = sample_length;
-    }
-
-    memset(out_plan, 0, sizeof(*out_plan));
-    *out_step_signed = brick6_sampler_runtime_compute_global_tune_step(voice);
-    out_plan->sample_id = voice->sample_id;
-    out_plan->key = sample_audio_key_classic(voice->sample_id);
-    out_plan->start_frame = slice_begin;
-    out_plan->region_begin = slice_begin;
-    out_plan->region_end = slice_end;
-    out_plan->loop_begin = slice_begin;
-    out_plan->loop_end = slice_end;
-    out_plan->fade_in_frames = 0U;
-    out_plan->fade_out_frames = 0U;
-    out_plan->step_q16 = (uint32_t)((*out_step_signed * 65536.0f) + 0.5f);
-    out_plan->direction = 0U;
-    out_plan->loop_mode = BRICK6_SAMPLER_LOOP_NONE;
-    out_plan->stop_on_underrun = 1U;
-    out_plan->kernel_type =
-        (fabsf(*out_step_signed - 1.0f) <= BRICK6_SAMPLER_STEP_EPSILON) ? SAMPLE_KERNEL_FWD_1X
-                                                                         : SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-
-    *out_region_begin = slice_begin;
-    *out_region_end = slice_end;
-    return 1U;
-}
-
 static void brick6_sampler_runtime_trigger_slicer(uint8_t track_id)
 {
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
     const uint8_t cache_voice_id = brick6_sampler_runtime_cache_voice_id(track_id);
-    sample_play_plan_t play_plan;
-    uint32_t slice_begin = 0U;
-    uint32_t slice_end = 0U;
-    float step_signed = 1.0f;
-    const float trigger_velocity_gain = brick6_sampler_runtime_velocity_gain(voice->velocity);
-
-    if (brick6_sampler_runtime_slicer_note_in_range(voice) == 0U)
-    {
-        return;
-    }
-
-    if (brick6_sampler_runtime_build_slicer_plan(track_id,
-                                                 &play_plan,
-                                                 &slice_begin,
-                                                 &slice_end,
-                                                 &step_signed)
-        == 0U)
-    {
-        return;
-    }
 
     sample_cache_stop_voice(cache_voice_id);
     sample_voice_reader_reset(&voice->reader);
     voice->active = 0U;
     voice->position = 0.0f;
-
-    voice->sample = sample_pool_get(voice->sample_id);
-    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_CLASSIC;
+    voice->sample = NULL;
+    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    voice->region_begin = slice_begin;
-    voice->region_end = slice_end;
-    voice->loop_frames = slice_end - slice_begin;
-    voice->fade_in_frames = 0U;
-    voice->fade_out_frames = 0U;
-    voice->step_signed = step_signed;
-    voice->trigger_velocity_gain = trigger_velocity_gain;
-    voice->reverse = 0U;
-    voice->loop_mode = BRICK6_SAMPLER_LOOP_NONE;
-    voice->use_slice = 0U;
-    voice->use_segment_cursor = 1U;
-    voice->play_plan = play_plan;
-    sample_resolved_source_t common_source;
-    sample_play_plan_t common_plan;
-    const brick6_sample_common_trigger_t common_trigger = {
-        .kind = BRICK6_SAMPLE_COMMON_TRIGGER_CLASSIC,
-        .voice = voice,
-        .runtime_plan = &voice->play_plan,
-        .track_id = track_id,
-    };
-    const brick6_sample_common_plan_result_t common_result =
-        brick6_sampler_runtime_build_common_play_plan(&common_trigger,
-                                                      &common_source,
-                                                      &common_plan);
-    brick6_sampler_runtime_note_common_play_plan_result(common_result, 1U);
-    if (common_result != BRICK6_SAMPLE_COMMON_PLAN_OK)
-    {
-        return;
-    }
-    if (brick6_sampler_runtime_start_gate_check(&common_plan, 1U) == 0U)
-    {
-        return;
-    }
-
-    if (sample_cache_start_voice_at(voice->sample_id, cache_voice_id, common_plan.start_frame)
-        == 0U)
-    {
-        return;
-    }
-
-    if (sample_voice_reader_bind_play_plan(&voice->reader, &common_plan, cache_voice_id)
-        == 0U)
-    {
-        sample_cache_stop_voice(cache_voice_id);
-        sample_voice_reader_reset(&voice->reader);
-        voice->active = 0U;
-        voice->position = 0.0f;
-        return;
-    }
-
-    voice->play_plan = common_plan;
-    voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
-    voice->position = (float)voice->play_plan.start_frame;
-    voice->active = 1U;
+    voice->use_segment_cursor = 0U;
+    voice->release_pending = 0U;
+    memset(&voice->play_plan, 0, sizeof(voice->play_plan));
 }
 
 static uint8_t brick6_sampler_runtime_cache_voice_id(uint8_t track_id)
 {
     return (uint8_t)(BRICK6_SAMPLER_CACHE_VOICE_BASE + track_id);
-}
-
-static uint8_t brick6_sampler_runtime_supports_cache_forward_simple(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    return ((voice->mode == 0U) || (voice->mode == 1U) || (voice->mode == 2U)
-            || (voice->mode == 3U) || (voice->mode == 4U) || (voice->mode == 5U))
-               ? 1U
-               : 0U;
-}
-
-static uint8_t brick6_sampler_runtime_use_segment_cursor_path(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    return ((fabsf(voice->step_signed - 1.0f) <= BRICK6_SAMPLER_STEP_EPSILON)
-            && (((voice->mode == 0U) && (voice->reverse == 0U)
-                 && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE))
-                || ((voice->mode == 1U) && (voice->reverse != 0U)
-                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE))
-                || ((voice->mode == 2U) && (voice->reverse == 0U)
-                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD))
-                || ((voice->mode == 3U) && (voice->reverse == 0U)
-                    && (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
-                    && (voice->loop_frames >= 2U))))
-               ? 1U
-               : 0U;
-}
-
-static uint8_t brick6_sampler_runtime_use_segment_cursor_pitch_forward(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    return (((voice->mode == 0U) && (voice->reverse == 0U)
-             && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE) && (voice->use_slice == 0U)
-             && (voice->step_signed > 0.0f)
-             && (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)))
-               ? 1U
-               : 0U;
-}
-
-static uint8_t brick6_sampler_runtime_use_segment_cursor_pitch_loop_forward(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    return (((voice->mode == 2U) && (voice->reverse == 0U)
-             && (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD) && (voice->use_slice == 0U)
-             && (voice->step_signed > 0.0f)
-             && (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)))
-               ? 1U
-               : 0U;
-}
-
-static uint8_t brick6_sampler_runtime_use_segment_cursor_pitch_pingpong(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    return (((voice->mode == 3U) && (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
-             && (voice->use_slice == 0U) && (voice->step_signed > 0.0f)
-             && (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)
-             && (voice->loop_frames >= 2U)))
-               ? 1U
-               : 0U;
-}
-
-static uint8_t brick6_sampler_runtime_use_segment_cursor_pitch_reverse(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 0U;
-    }
-
-    return (((voice->mode == 1U) && (voice->reverse != 0U)
-             && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE) && (voice->use_slice == 0U)
-             && (voice->step_signed > 0.0f)
-             && (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)))
-               ? 1U
-               : 0U;
-}
-
-static float brick6_sampler_runtime_compute_step(const brick6_sampler_voice_t *voice)
-{
-    if (voice == NULL)
-    {
-        return 1.0f;
-    }
-
-    const float semitones = ((float)((int32_t)voice->note - 60)) + voice->tune;
-    return powf(2.0f, semitones * (1.0f / 12.0f));
 }
 
 static uint32_t brick6_sampler_runtime_clamp_region_begin(uint32_t length_frames, float start)
@@ -1710,141 +1344,6 @@ static uint32_t brick6_sampler_runtime_clamp_region_end(uint32_t length_frames, 
         resolved_end = length_frames;
     }
     return resolved_end;
-}
-
-static void brick6_sampler_runtime_compute_fade_frames(brick6_sampler_voice_t *voice)
-{
-    if ((voice == NULL) || (voice->loop_frames == 0U))
-    {
-        if (voice != NULL)
-        {
-            voice->fade_in_frames = 0U;
-            voice->fade_out_frames = 0U;
-        }
-        return;
-    }
-
-    uint32_t fade_in_frames = (uint32_t)(voice->fade_in * (float)voice->loop_frames + 0.5f);
-    uint32_t fade_out_frames = (uint32_t)(voice->fade_out * (float)voice->loop_frames + 0.5f);
-    if (fade_in_frames > voice->loop_frames)
-    {
-        fade_in_frames = voice->loop_frames;
-    }
-    if (fade_out_frames > voice->loop_frames)
-    {
-        fade_out_frames = voice->loop_frames;
-    }
-
-    voice->fade_in_frames = fade_in_frames;
-    voice->fade_out_frames = fade_out_frames;
-}
-
-static void brick6_sampler_runtime_build_render_plan(uint8_t track_id)
-{
-    if (track_id >= SEQ_TRACK_COUNT)
-    {
-        return;
-    }
-
-    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const sample_desc_t *const desc = sample_pool_get(voice->sample_id);
-    if ((desc == NULL) || (desc->valid == 0U) || (desc->length_frames == 0U)
-        || (sample_cache_is_ready(voice->sample_id) == 0U)
-        || (brick6_sampler_runtime_supports_cache_forward_simple(voice) == 0U))
-    {
-        voice->sample = NULL;
-        voice->active = 0U;
-        voice->position = 0.0f;
-        voice->loop_frames = 0U;
-        voice->fade_in_frames = 0U;
-        voice->fade_out_frames = 0U;
-        voice->use_segment_cursor = 0U;
-        memset(&voice->play_plan, 0, sizeof(voice->play_plan));
-        return;
-    }
-
-    const uint32_t length_frames = desc->length_frames;
-    uint32_t begin = brick6_sampler_runtime_clamp_region_begin(length_frames, voice->start);
-    uint32_t end = brick6_sampler_runtime_clamp_region_end(length_frames, voice->end);
-    uint8_t use_slice = brick6_sampler_runtime_mode_uses_slice(voice->mode);
-
-    if (use_slice != 0U)
-    {
-        const uint8_t slice_count = (voice->slice_count == 0U) ? 2U : voice->slice_count;
-        const uint8_t slice_index = brick6_sampler_runtime_pick_slice_index(voice, voice->note);
-        const uint8_t resolved_index = (slice_count == 0U) ? 0U : (uint8_t)(slice_index % slice_count);
-        uint32_t slice_begin = voice->slice_begin[resolved_index];
-        uint32_t slice_end = voice->slice_end[resolved_index];
-
-        if ((slice_end <= slice_begin) || (slice_begin >= length_frames))
-        {
-            slice_begin = 0U;
-            slice_end = length_frames;
-        }
-
-        begin = slice_begin;
-        end = (slice_end > begin) ? slice_end : (begin + 1U);
-        if (end > length_frames)
-        {
-            end = length_frames;
-        }
-    }
-
-    if (begin >= end)
-    {
-        begin = 0U;
-        end = length_frames;
-    }
-
-    voice->sample = desc;
-    voice->region_begin = begin;
-    voice->region_end = end;
-    voice->reverse = brick6_sampler_runtime_mode_is_reverse(voice->mode);
-    voice->loop_mode = brick6_sampler_runtime_mode_loop_kind(voice->mode);
-    voice->use_slice = use_slice;
-    voice->loop_frames = (end > begin) ? (end - begin) : 0U;
-    brick6_sampler_runtime_compute_fade_frames(voice);
-    voice->step_signed = brick6_sampler_runtime_compute_step(voice);
-    memset(&voice->play_plan, 0, sizeof(voice->play_plan));
-    voice->play_plan.sample_id = voice->sample_id;
-    voice->play_plan.key = sample_audio_key_classic(voice->sample_id);
-    voice->play_plan.start_frame = (voice->reverse != 0U) ? ((end > begin) ? (end - 1U) : begin) : begin;
-    voice->play_plan.region_begin = begin;
-    voice->play_plan.region_end = end;
-    voice->play_plan.loop_begin = begin;
-    voice->play_plan.loop_end = end;
-    voice->play_plan.fade_in_frames = voice->fade_in_frames;
-    voice->play_plan.fade_out_frames = voice->fade_out_frames;
-    const float step_q16 = voice->step_signed * 65536.0f;
-    voice->play_plan.step_q16 = (step_q16 > 0.0f) ? (uint32_t)(step_q16 + 0.5f) : 65536U;
-    voice->play_plan.direction = voice->reverse;
-    voice->play_plan.loop_mode = voice->loop_mode;
-    voice->play_plan.stop_on_underrun = 1U;
-    if (brick6_sampler_runtime_use_segment_cursor_pitch_forward(voice) != 0U)
-    {
-        voice->play_plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-        voice->use_segment_cursor = 1U;
-    }
-    else if (brick6_sampler_runtime_use_segment_cursor_pitch_loop_forward(voice) != 0U)
-    {
-        voice->play_plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-        voice->use_segment_cursor = 1U;
-    }
-    else if (brick6_sampler_runtime_use_segment_cursor_pitch_pingpong(voice) != 0U)
-    {
-        voice->play_plan.kernel_type = SAMPLE_KERNEL_PITCH_FWD_LINEAR;
-        voice->use_segment_cursor = 1U;
-    }
-    else if (brick6_sampler_runtime_use_segment_cursor_pitch_reverse(voice) != 0U)
-    {
-        voice->play_plan.kernel_type = SAMPLE_KERNEL_PITCH_REV_LINEAR;
-        voice->use_segment_cursor = 1U;
-    }
-    else
-    {
-        voice->play_plan.kernel_type = (voice->reverse != 0U) ? SAMPLE_KERNEL_REV_1X : SAMPLE_KERNEL_FWD_1X;
-        voice->use_segment_cursor = brick6_sampler_runtime_use_segment_cursor_path(voice);
-    }
 }
 
 static void brick6_sampler_runtime_rebuild_grid(uint8_t track_id)
@@ -1878,27 +1377,6 @@ static void brick6_sampler_runtime_rebuild_grid(uint8_t track_id)
         voice->slice_begin[i] = begin;
         voice->slice_end[i] = (end > begin) ? end : (begin + 1U);
     }
-}
-
-static float brick6_sampler_runtime_initial_position(uint32_t begin,
-                                                     uint32_t end,
-                                                     uint8_t reverse)
-{
-    if (reverse != 0U)
-    {
-        return (end > 0U) ? (float)(end - 1U) : 0.0f;
-    }
-
-    return (float)begin;
-}
-
-static uint8_t brick6_sampler_runtime_pick_slice_index(const brick6_sampler_voice_t *voice, uint8_t note)
-{
-    if ((voice == NULL) || (voice->slice_count == 0U))
-    {
-        return 0U;
-    }
-    return (uint8_t)(note % voice->slice_count);
 }
 
 static float brick6_sampler_runtime_fade_gain(uint32_t frame_index,
@@ -2030,7 +1508,6 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
     g_sampler_voice[track_id].note = 60U;
     g_sampler_voice[track_id].position = 0.0f;
     brick6_sampler_runtime_rebuild_grid(track_id);
-    brick6_sampler_runtime_prepare_slicer_entry_pages(track_id);
 }
 
 void brick6_sampler_runtime_set_gain(uint8_t track_id, float gain)
@@ -2206,7 +1683,6 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
 
     g_sampler_voice[track_id].slice_count = brick6_sampler_runtime_resolve_grid_count(slice_count);
     brick6_sampler_runtime_rebuild_grid(track_id);
-    brick6_sampler_runtime_prepare_slicer_entry_pages(track_id);
 }
 
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm)
@@ -2342,87 +1818,18 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
         return;
     }
 
-    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const float trigger_velocity_gain = brick6_sampler_runtime_velocity_gain(voice->velocity);
     sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
-    brick6_sampler_runtime_build_render_plan(track_id);
-    if (voice->sample != NULL)
-    {
-        voice->position = brick6_sampler_runtime_initial_position(voice->region_begin,
-                                                                  voice->region_end,
-                                                                  voice->reverse);
-        const uint32_t start_frame = (uint32_t)voice->position;
-        const uint32_t sample_length_frames =
-            (voice->sample != NULL) ? voice->sample->length_frames : 0U;
-        voice->play_plan.start_frame = start_frame;
-        voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_CLASSIC;
-        voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
-        voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-        voice->trigger_velocity_gain = trigger_velocity_gain;
-        sample_resolved_source_t common_source;
-        sample_play_plan_t common_plan;
-        const brick6_sample_common_trigger_t common_trigger = {
-            .kind = BRICK6_SAMPLE_COMMON_TRIGGER_CLASSIC,
-            .voice = voice,
-            .runtime_plan = &voice->play_plan,
-            .track_id = track_id,
-        };
-        const brick6_sample_common_plan_result_t common_result =
-            brick6_sampler_runtime_build_common_play_plan(&common_trigger,
-                                                          &common_source,
-                                                          &common_plan);
-        brick6_sampler_runtime_note_common_play_plan_result(common_result, 1U);
-        if (common_result != BRICK6_SAMPLE_COMMON_PLAN_OK)
-        {
-            voice->position = 0.0f;
-            sample_voice_reader_reset(&voice->reader);
-            g_sampler_voice[track_id].active = 0U;
-            return;
-        }
-        if (brick6_sampler_runtime_start_gate_check(&common_plan, 1U) == 0U)
-        {
-            voice->position = 0.0f;
-            sample_voice_reader_reset(&voice->reader);
-            g_sampler_voice[track_id].active = 0U;
-            return;
-        }
-        if (sample_cache_start_voice_at(voice->sample_id,
-                                        brick6_sampler_runtime_cache_voice_id(track_id),
-                                        common_plan.start_frame) != 0U)
-        {
-            const uint8_t bind_ok = sample_voice_reader_bind_play_plan(
-                &voice->reader,
-                &common_plan,
-                brick6_sampler_runtime_cache_voice_id(track_id));
-            g_sampler_voice[track_id].active = bind_ok;
-            if (bind_ok == 0U)
-            {
-                sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
-            }
-            else
-            {
-                voice->play_plan = common_plan;
-                voice->position = (float)voice->play_plan.start_frame;
-                voice->trigger_order = brick6_sampler_runtime_next_trigger_order();
-                brick6_sampler_runtime_diag_note_trigger(track_id,
-                                                         voice,
-                                                         voice->play_plan.start_frame,
-                                                         sample_length_frames);
-            }
-        }
-        else
-        {
-            voice->position = 0.0f;
-            sample_voice_reader_reset(&voice->reader);
-            g_sampler_voice[track_id].active = 0U;
-        }
-    }
-    else
-    {
-        voice->position = 0.0f;
-        sample_voice_reader_reset(&voice->reader);
-        g_sampler_voice[track_id].active = 0U;
-    }
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    sample_voice_reader_reset(&voice->reader);
+    voice->active = 0U;
+    voice->position = 0.0f;
+    voice->sample = NULL;
+    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+    voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    voice->use_segment_cursor = 0U;
+    voice->release_pending = 0U;
+    memset(&voice->play_plan, 0, sizeof(voice->play_plan));
 }
 
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note)

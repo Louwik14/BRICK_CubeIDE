@@ -207,8 +207,12 @@ Etat page active:
 - Ecriture: `ui_page_manager_init`, `ui_page_manager_register`, `ui_page_set`.
 - Lecture: `ui_page_get`, `ui_page_get_id`, navigation/settings.
 
-Etat browser Settings/Sampler:
-- `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sampler courante sans relire la SD.
+Etat browser Settings/Sample:
+- `ui_page_settings` expose une racine `Settings > Sample` avec trois entrees: `Multi`, `RAM`, `Stream`.
+- `Settings > Sample > Multi` reprend le browser split du pool projet `Sampler/Multi` et conserve `multi_sample_pool` comme autorite.
+- `Settings > Sample > RAM` est un placeholder UI pour le futur pool RAM OneShot/Slicer; il ne lance ni load, ni import, ni playback runtime.
+- `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Clip`.
+- `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sample courante sans relire la SD.
 - Le catalogue WAV global vient de Z6 `wav_loader`; l'entree dans le browser Sampler ne rescane plus automatiquement. Elle charge la vue racine depuis le cache de vues Z6 ou depuis `0:/BRICK/SAMPLE.CAT`, ou affiche `REFRESH LIB` si le catalogue est absent/stale.
 - Le browser Sampler intercepte les boutons physiques `BTN_PAGE_1..BTN_PAGE_4` uniquement dans `UI_SETTINGS_VIEW_SAMPLER`: `BTN_PAGE_1` = RETURN, `BTN_PAGE_2` sans SHIFT = OK sur l'entree sample courante, `BTN_PAGE_3` = reserve/no-op, `BTN_PAGE_4` = REFRESH sans SHIFT et REBUILD avec SHIFT. `BTN_COPY` et `BTN_PASTE` sont explicitement no-op dans le browser Sampler; les confirmations locales utilisent RETURN/OK. Hors browser Sampler, les boutons page gardent leur comportement normal de subpage.
 - La navigation fichier/dossier du browser Sampler ne scanne jamais `0:/Samples`: page de dossier deja cachee = RAM-only; page non cachee = lecture depuis `SAMPLE.CAT`; `streaming_critical` + page absente = refus `SD BUSY`.
@@ -434,7 +438,7 @@ Points factuels:
 - `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
 - `UI_TRACK_TYPE_ONE_SHOT` est le type canonique de cette famille; `UI_TRACK_TYPE_SAMPLER` reste un alias de compat snapshot.
 - `UI_TRACK_TYPE_CLIP` est expose comme type produit distinct dans la meme famille.
-- `UI_TRACK_TYPE_MULTI` est expose comme type produit distinct dans la meme famille; le workflow de gestion/import du pool projet passe par `Settings > Multi-Sample`.
+- `UI_TRACK_TYPE_MULTI` est expose comme type produit distinct dans la meme famille; le workflow de gestion/import du pool projet passe par `Settings > Sample > Multi`.
 - Les anciens labels/types UI `TB3` et `DX7` ne sont plus exposes ni conserves comme compat catalogue.
 - `UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Clip`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Clip`.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
@@ -457,7 +461,7 @@ Points factuels:
 - `VCA` n'est pas expose pour `Sampler/Clip`; le niveau utilisateur passe par `MIX/Level`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
 - `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.
-- `Settings > SAMPLER` porte la preecoute SD manuelle via le flux `PREVIEW / STOP`.
+- `Settings > Sample > Stream` porte la preecoute SD manuelle via le flux `PREVIEW / STOP` pour le pool STREAM de `Sampler/Clip`.
 - La preecoute s'arrete au changement de selection, au retour/back, et avant `Load/Replace`.
 - `Load/Replace` reste l'autorite d'import vers le pool projet; la preview reste hors slots projet.
 - Les etats visibles de slot Sampler suivent `sample_pool_get_state()`:
@@ -517,9 +521,9 @@ Points factuels:
 - `TIME_R` et `WID` sont visibles uniquement en DUAL; en `Tap`, `TIME_R` sert de temps principal.
 - `SWING` et `ACCENT` sont retires de la surface delay produit V1.
 
-## 14.d Contrat Settings Samples split browser
+## 14.d Contrat Settings Sample Stream split browser
 
-- `Settings > SAMPLES` ouvre directement le browser Sampler split, sans passer par l'ancien detail `Slot > Load/Preview/Clear`.
+- `Settings > Sample > Stream` ouvre directement le browser STREAM split, sans passer par l'ancien detail `Slot > Load/Preview/Clear`.
 - Surface OLED permanente:
   - colonne gauche: bibliotheque SD depuis `0:/Samples`, fichiers WAV et dossiers;
   - colonne droite: slots projet `sample_pool` existants;
@@ -545,9 +549,9 @@ Points factuels:
 - Conversion acceptee: la preview est stoppee, `wav_convert` convertit destructivement le fichier source en WAV PCM24 stereo 48 kHz avec progression `CONVERT n%`, puis l'UI relance le load du slot cible sur le meme path.
 - Pendant la conversion, les events du browser sont ignores pour eviter navigation/load concurrente; le chemin preview et le runtime audio restent inchanges.
 
-## 14.e Contrat Settings Multi-Sample split browser
+## 14.e Contrat Settings Sample Multi split browser
 
-- `Settings > Multi-Sample` ouvre un browser split dedie au pool projet `Sampler/Multi`, sans modifier la page TONE `INST | GAIN`.
+- `Settings > Sample > Multi` ouvre un browser split dedie au pool projet `Sampler/Multi`, sans modifier la page TONE `INST | GAIN`.
 - Surface OLED:
   - header `MULTI used/512`, base sur la capacite sample du `multi_sample_pool`;
   - colonne gauche: dossiers instruments sous `0:/Multi/`, sans exposition des WAV internes;
@@ -568,6 +572,12 @@ Points factuels:
 - Quand la track active est `Sampler/Multi`, un load/reuse depuis ce browser assigne le slot instrument a cette track et enregistre le path projet associe; le pool global reste l'autorite des instruments charges.
 - Un manque de capacite sample du pool est refuse par feedback court `FULL need X`.
 - L'unload retire le slot du pool projet; il ne supprime, renomme ni deplace aucun WAV SD.
+
+## 14.f Contrat Settings Sample RAM placeholder
+
+- `Settings > Sample > RAM` reserve l'entree produit du futur pool RAM OneShot/Slicer.
+- La page affiche un etat vide explicite et ne branche aucun runtime RAM, aucun import, aucun load et aucun preview.
+- OneShot/Slicer conservent leur UI/params/persistence existants, mais ne consomment pas le pool Stream.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.

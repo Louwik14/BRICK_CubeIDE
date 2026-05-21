@@ -32,6 +32,8 @@ typedef enum
 {
     UI_SETTINGS_VIEW_ROOT = 0,
     UI_SETTINGS_VIEW_PROJECT,
+    UI_SETTINGS_VIEW_SAMPLE,
+    UI_SETTINGS_VIEW_SAMPLE_RAM,
     UI_SETTINGS_VIEW_SAMPLER,
     UI_SETTINGS_VIEW_MULTI_SAMPLE,
     UI_SETTINGS_VIEW_SAMPLER_SLOT,
@@ -112,6 +114,10 @@ typedef struct
 #define UI_SETTINGS_MULTI_BROWSER_MAX 240U
 #define UI_SETTINGS_SAMPLE_ROOT "0:/Samples"
 #define UI_SETTINGS_MULTI_ROOT "0:/Multi"
+#define UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES 4U
+#define UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0 12U
+#define UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH 8U
+#define UI_SETTINGS_SAMPLE_BROWSER_SELECT_H 8U
 
 typedef struct
 {
@@ -1587,14 +1593,18 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "SETTINGS";
         case UI_SETTINGS_VIEW_PROJECT:
             return "PROJECT";
+        case UI_SETTINGS_VIEW_SAMPLE:
+            return "SAMPLE";
+        case UI_SETTINGS_VIEW_SAMPLE_RAM:
+            return "SAMPLE > RAM";
         case UI_SETTINGS_VIEW_SAMPLER:
-            return "SAMPLES";
+            return "SAMPLE > STREAM";
         case UI_SETTINGS_VIEW_MULTI_SAMPLE:
-            return "MULTI";
+            return "SAMPLE > MULTI";
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
-            return "SAMPLER > SLOT";
+            return "STREAM > SLOT";
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
-            return "SAMPLER > SD";
+            return "STREAM > SD";
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
             return "PROJECT > LOAD";
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
@@ -1613,9 +1623,13 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return 3U;
+            return 2U;
         case UI_SETTINGS_VIEW_PROJECT:
             return 3U;
+        case UI_SETTINGS_VIEW_SAMPLE:
+            return 3U;
+        case UI_SETTINGS_VIEW_SAMPLE_RAM:
+            return 0U;
         case UI_SETTINGS_VIEW_SAMPLER:
         case UI_SETTINGS_VIEW_MULTI_SAMPLE:
             return 0U;
@@ -1646,11 +1660,17 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return "SAMPLE";
             }
+            return "PROJECT";
+        case UI_SETTINGS_VIEW_SAMPLE:
+            if (index == 0U)
+            {
+                return "MULTI";
+            }
             if (index == 1U)
             {
-                return "MULTI-SAMPLE";
+                return "RAM";
             }
-            return "PROJECT";
+            return "STREAM";
         case UI_SETTINGS_VIEW_PROJECT:
             if (index == 0U)
             {
@@ -1862,18 +1882,29 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_ROOT:
             if (level->selected_index == 0U)
             {
-                ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_sample_browser_enter_root();
-                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
-            }
-            else if (level->selected_index == 1U)
-            {
-                ui_page_settings_multi_browser_enter_root();
-                ui_page_settings_push(UI_SETTINGS_VIEW_MULTI_SAMPLE);
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE);
             }
             else
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
+            }
+            break;
+
+        case UI_SETTINGS_VIEW_SAMPLE:
+            if (level->selected_index == 0U)
+            {
+                ui_page_settings_multi_browser_enter_root();
+                ui_page_settings_push(UI_SETTINGS_VIEW_MULTI_SAMPLE);
+            }
+            else if (level->selected_index == 1U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLE_RAM);
+            }
+            else
+            {
+                ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_sample_browser_enter_root();
+                ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
             }
             break;
 
@@ -2658,7 +2689,7 @@ static void ui_page_settings_render_multi_browser(void)
                                                 MULTI_SAMPLE_POOL_MAX_INSTRUMENTS);
     drv_display_set_font(&FONT_4X6);
 
-    const uint8_t visible_lines = 4U;
+    const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
     g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
                                                                      g_ui_settings.sample_selected,
                                                                      g_ui_settings.multi_entry_count,
@@ -2670,7 +2701,8 @@ static void ui_page_settings_render_multi_browser(void)
 
     for (uint8_t line = 0U; line < visible_lines; ++line)
     {
-        const uint8_t y = (uint8_t)(12U + (line * 10U));
+        const uint8_t y = (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
+                                    + (line * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH));
         const uint16_t left_index = (uint16_t)(g_ui_settings.sample_left_scroll + line);
         const uint8_t right_index = (uint8_t)(g_ui_settings.sample_right_scroll + line);
 
@@ -2684,7 +2716,7 @@ static void ui_page_settings_render_multi_browser(void)
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
             {
-                drv_display_fill_rect(0, y - 1U, 58, 9);
+                drv_display_fill_rect(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
                 drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
             }
             else
@@ -2703,7 +2735,7 @@ static void ui_page_settings_render_multi_browser(void)
             if ((right_index == g_ui_settings.sample_slot_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
             {
-                drv_display_fill_rect(62, y - 1U, 66, 9);
+                drv_display_fill_rect(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
                 drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
             }
             else
@@ -2734,12 +2766,12 @@ static void ui_page_settings_render_sample_browser(void)
         UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
     };
 
-    drv_display_draw_text(0U, 0U, "SAMPLES");
+    drv_display_draw_text(0U, 0U, "STREAM");
     drv_display_draw_line(0, 9, 127, 9);
     ui_page_settings_draw_sample_split_position(g_ui_settings.sample_child_count, SAMPLE_POOL_SIZE);
     drv_display_set_font(&FONT_4X6);
 
-    const uint8_t visible_lines = 4U;
+    const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
     g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
                                                                      g_ui_settings.sample_selected,
                                                                      g_ui_settings.sample_child_count,
@@ -2753,7 +2785,8 @@ static void ui_page_settings_render_sample_browser(void)
 
     for (uint8_t line = 0U; line < visible_lines; ++line)
     {
-        const uint8_t y = (uint8_t)(12U + (line * 10U));
+        const uint8_t y = (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
+                                    + (line * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH));
         const uint16_t left_index = (uint16_t)(left_start + line);
         const uint8_t right_index = (uint8_t)(right_start + line);
 
@@ -2771,7 +2804,7 @@ static void ui_page_settings_render_sample_browser(void)
             if ((left_index == g_ui_settings.sample_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY))
             {
-                drv_display_fill_rect(0, y - 1U, 58, 9);
+                drv_display_fill_rect(0, y - 1U, 58, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
                 drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_LEFT_TEXT_X, y, left);
             }
             else
@@ -2790,7 +2823,7 @@ static void ui_page_settings_render_sample_browser(void)
             if ((right_index == g_ui_settings.sample_slot_selected)
                 && (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS))
             {
-                drv_display_fill_rect(62, y - 1U, 66, 9);
+                drv_display_fill_rect(62, y - 1U, 66, UI_SETTINGS_SAMPLE_BROWSER_SELECT_H);
                 drv_display_draw_text_inverted((uint8_t)UI_SETTINGS_SAMPLE_RIGHT_TEXT_X, y, right);
             }
             else
@@ -2811,6 +2844,26 @@ static void ui_page_settings_render_sample_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
+static void ui_page_settings_render_ram_placeholder(void)
+{
+    drv_display_draw_text(0U, 0U, "SAMPLE > RAM");
+    drv_display_draw_line(0, 9, 127, 9);
+    drv_display_set_font(&FONT_4X6);
+    drv_display_draw_text(2U,
+                          UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0,
+                          "RAM POOL");
+    drv_display_draw_text(2U,
+                          (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
+                                    + UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH),
+                          "RUNTIME LATER");
+    drv_display_draw_text(2U,
+                          (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
+                                    + (2U * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH)),
+                          "NO LOAD/PLAY");
+    drv_display_set_font(&FONT_5X7);
+    ui_page_settings_draw_page_footer("-");
+}
+
 static void ui_page_settings_render(void)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
@@ -2829,6 +2882,11 @@ static void ui_page_settings_render(void)
     if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
     {
         ui_page_settings_render_multi_browser();
+        return;
+    }
+    if (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
+    {
+        ui_page_settings_render_ram_placeholder();
         return;
     }
 
