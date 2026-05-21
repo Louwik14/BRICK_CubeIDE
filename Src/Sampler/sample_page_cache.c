@@ -56,13 +56,13 @@ typedef struct
     uint32_t owner_generation;
 } sample_page_window_lock_t;
 
-SDRAM_SAMPLE_PAGE_DESC static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
-SDRAM_SAMPLES static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_FRAMES
-                                                                     * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
+SDRAM_PAGE_META static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
+SDRAM_PAGE_POOL static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_FRAMES
+                                                                   * SAMPLE_PAGE_FRAME_STRIDE_FLOATS];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
-SDRAM_SAMPLES static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+SDRAM_PAGE_META static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-STORAGE_STATE_SDRAM static sample_page_index_entry_t g_sample_page_index[SAMPLE_PAGE_INDEX_SIZE];
+SDRAM_PAGE_INDEX static sample_page_index_entry_t g_sample_page_index[SAMPLE_PAGE_INDEX_SIZE];
 static CTRL_STATE sample_page_window_lock_t g_sample_page_window_lock[SAMPLE_PAGE_WINDOW_LOCK_MAX];
 static CTRL_STATE uint16_t g_sample_page_queued_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;

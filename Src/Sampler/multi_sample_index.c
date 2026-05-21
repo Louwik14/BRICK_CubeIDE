@@ -28,12 +28,12 @@ typedef struct
     uint8_t reserved[20];
 } multi_sample_index_header_t;
 
-SDRAM_SAMPLES static multi_sample_index_sample_t
+SDRAM_MULTI_LOAD static multi_sample_index_sample_t
     g_index_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-SDRAM_SAMPLES static multi_sample_index_zone_t
+SDRAM_MULTI_LOAD static multi_sample_index_zone_t
     g_index_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
-UI_SDRAM static char g_index_strings[MULTI_SAMPLE_INDEX_STRING_MAX_BYTES];
-UI_SDRAM static uint8_t g_index_io[MULTI_SAMPLE_INDEX_HEADER_SIZE];
+SDRAM_MULTI_LOAD static char g_index_strings[MULTI_SAMPLE_INDEX_STRING_MAX_BYTES];
+SDRAM_MULTI_LOAD static uint8_t g_index_io[MULTI_SAMPLE_INDEX_HEADER_SIZE];
 static CTRL_STATE uint16_t g_apply_sample_map[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 
 static uint16_t multi_index_get_le16(const uint8_t *p)

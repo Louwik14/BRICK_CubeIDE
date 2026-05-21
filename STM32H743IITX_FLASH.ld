@@ -288,6 +288,78 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .sdram_sample_page_pool (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_sample_page_pool)
+    *(.sdram_sample_page_pool*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_page_meta (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_page_meta)
+    *(.sdram_page_meta*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_page_index (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_page_index)
+    *(.sdram_page_index*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_stream_service (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_stream_service)
+    *(.sdram_stream_service*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_stream_scratch (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_stream_scratch)
+    *(.sdram_stream_scratch*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_multi_pool (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_multi_pool)
+    *(.sdram_multi_pool*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_multi_load (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_multi_load)
+    *(.sdram_multi_load*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_multi_import (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_multi_import)
+    *(.sdram_multi_import*)
+    . = ALIGN(32);
+  } >SDRAM
+
+  .sdram_classic_pool (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_classic_pool)
+    *(.sdram_classic_pool*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram (NOLOAD) :
   {
     . = ALIGN(32);

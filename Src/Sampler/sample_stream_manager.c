@@ -89,10 +89,10 @@ _Static_assert(_Alignof(sample_stream_pending_t) >= 4U,
                "stream pending array elements must be 32-bit aligned");
 #endif
 
-STORAGE_STATE_SDRAM static sample_stream_reader_t g_sample_stream_readers[SAMPLE_STREAM_MAX_ACTIVE];
-SDRAM_SAMPLES static char g_sample_stream_reader_paths[SAMPLE_STREAM_MAX_ACTIVE][SAMPLE_PAGE_CACHE_PATH_MAX];
-STORAGE_STATE_SDRAM static sample_stream_pending_t g_sample_stream_pending[SAMPLE_STREAM_PENDING_MAX];
-STORAGE_SCRATCH_SDRAM static uint8_t g_sample_stream_fatfs_io_buffer[4096U];
+SDRAM_STREAM_SERVICE static sample_stream_reader_t g_sample_stream_readers[SAMPLE_STREAM_MAX_ACTIVE];
+SDRAM_STREAM_SERVICE static char g_sample_stream_reader_paths[SAMPLE_STREAM_MAX_ACTIVE][SAMPLE_PAGE_CACHE_PATH_MAX];
+SDRAM_STREAM_SERVICE static sample_stream_pending_t g_sample_stream_pending[SAMPLE_STREAM_PENDING_MAX];
+SDRAM_STREAM_SCRATCH static uint8_t g_sample_stream_fatfs_io_buffer[4096U];
 static uint32_t g_sample_stream_request_clock;
 static uint32_t g_sample_stream_service_fatfs_ops;
 static uint16_t g_sample_stream_next_sample_id;

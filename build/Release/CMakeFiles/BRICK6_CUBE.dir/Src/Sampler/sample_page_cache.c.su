@@ -11,9 +11,9 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_ca
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:84:20:sample_audio_key_looper	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:92:20:sample_audio_key_multi	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:100:9:sample_audio_key_equal	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:309:13:sample_page_cache_clear_desc	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:345:28:sample_page_cache_find_page_mut_key	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:223:13:sample_page_cache_index_put_key	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:309:13:sample_page_cache_clear_desc	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:345:28:sample_page_cache_find_page_mut_key	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:223:13:sample_page_cache_index_put_key	56	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:480:28:sample_page_cache_alloc_empty_slot_key	56	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:816:6:sample_page_cache_reset	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_page_cache.c:810:6:sample_page_cache_init	8	static

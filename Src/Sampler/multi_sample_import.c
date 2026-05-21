@@ -40,16 +40,16 @@ typedef struct
     uint8_t filename_vel_high;
 } multi_sample_import_metadata_t;
 
-SDRAM_SAMPLES static multi_sample_import_sample_t
+SDRAM_MULTI_IMPORT static multi_sample_import_sample_t
     g_import_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-SDRAM_SAMPLES static multi_sample_index_source_sample_t
+SDRAM_MULTI_IMPORT static multi_sample_index_source_sample_t
     g_import_source_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-SDRAM_SAMPLES static multi_sample_index_zone_t g_import_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
-UI_SDRAM static char g_import_paths[MULTI_SAMPLE_INDEX_STRING_MAX_BYTES];
-UI_SDRAM static char g_import_work_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
-UI_SDRAM static char g_import_scan_dir[MULTI_SAMPLE_IMPORT_PATH_MAX];
-UI_SDRAM static char g_import_index_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
-UI_SDRAM static char g_import_last_diag[MULTI_SAMPLE_IMPORT_DIAG_MAX];
+SDRAM_MULTI_IMPORT static multi_sample_index_zone_t g_import_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
+SDRAM_MULTI_IMPORT static char g_import_paths[MULTI_SAMPLE_INDEX_STRING_MAX_BYTES];
+SDRAM_MULTI_IMPORT static char g_import_work_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+SDRAM_MULTI_IMPORT static char g_import_scan_dir[MULTI_SAMPLE_IMPORT_PATH_MAX];
+SDRAM_MULTI_IMPORT static char g_import_index_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+SDRAM_MULTI_IMPORT static char g_import_last_diag[MULTI_SAMPLE_IMPORT_DIAG_MAX];
 static CTRL_STATE multi_sample_import_result_t g_import_last_result;
 static CTRL_STATE uint16_t g_import_sample_count;
 static CTRL_STATE uint16_t g_import_zone_count;

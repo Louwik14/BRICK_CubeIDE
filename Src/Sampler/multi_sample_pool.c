@@ -15,8 +15,8 @@ typedef struct
 
 static CTRL_STATE multi_sample_instrument_slot_t
     g_multi_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
-SDRAM_SAMPLES static multi_sample_desc_t g_multi_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-SDRAM_SAMPLES static multi_sample_zone_t g_multi_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
+SDRAM_MULTI_POOL static multi_sample_desc_t g_multi_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
+SDRAM_MULTI_POOL static multi_sample_zone_t g_multi_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
 static CTRL_STATE uint16_t g_multi_sample_count;
 static CTRL_STATE uint16_t g_multi_zone_count;
 

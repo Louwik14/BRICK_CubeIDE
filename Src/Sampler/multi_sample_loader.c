@@ -32,7 +32,7 @@ typedef struct
 static multi_sample_load_diag_t g_multi_load_diag;
 static uint8_t g_multi_load_active;
 static uint16_t g_multi_load_first_sample_id;
-MULTI_LOAD_SDRAM static multi_sample_load_request_t
+SDRAM_MULTI_LOAD static multi_sample_load_request_t
     g_multi_load_queue[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 
 static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size, const char *src)

@@ -82,6 +82,17 @@
 /* Dedicated SDRAM arena for page-cache descriptors. */
 #define SDRAM_SAMPLE_PAGE_DESC SEC_ATTR(".page_desc_sdram") ALIGN32
 
+/* Dedicated SDRAM arena for Sampler dynamic sample audio pages only. */
+#define SDRAM_PAGE_POOL SEC_ATTR(".sdram_sample_page_pool") ALIGN32
+#define SDRAM_PAGE_META SEC_ATTR(".sdram_page_meta") ALIGN32
+#define SDRAM_PAGE_INDEX SEC_ATTR(".sdram_page_index") ALIGN32
+#define SDRAM_STREAM_SERVICE SEC_ATTR(".sdram_stream_service") ALIGN32
+#define SDRAM_STREAM_SCRATCH SEC_ATTR(".sdram_stream_scratch") ALIGN32
+#define SDRAM_MULTI_POOL SEC_ATTR(".sdram_multi_pool") ALIGN32
+#define SDRAM_MULTI_LOAD SEC_ATTR(".sdram_multi_load") ALIGN32
+#define SDRAM_MULTI_IMPORT SEC_ATTR(".sdram_multi_import") ALIGN32
+#define SDRAM_CLASSIC_POOL SEC_ATTR(".sdram_classic_pool") ALIGN32
+
 /* Dedicated SDRAM arena for recorder/master-buffer history. */
 #define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
 

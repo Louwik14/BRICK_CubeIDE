@@ -39,7 +39,7 @@
 #define SAMPLE_POOL_HAS_FATFS 0
 #endif
 
-SDRAM_SAMPLES static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
+SDRAM_CLASSIC_POOL static sample_desc_t g_sample_pool[SAMPLE_POOL_SIZE];
 
 static CTRL_STATE int16_t g_sample_slot_by_sample[SAMPLE_POOL_SIZE];
 static CTRL_STATE sample_pool_load_error_t g_sample_pool_last_load_error = SAMPLE_POOL_LOAD_OK;
