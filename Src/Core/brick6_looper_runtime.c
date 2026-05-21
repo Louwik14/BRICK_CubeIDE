@@ -645,7 +645,10 @@ static uint8_t looper_register_raw_stream(brick6_looper_track_state_t *state)
     {
         page_count = BRICK6_LOOPER_PREFETCH_PAGES;
     }
-    (void)sample_page_cache_request_start_pages_key(state->cache_key, 0U, page_count);
+    (void)sample_page_cache_request_start_pages_key_alloc(state->cache_key,
+                                                          0U,
+                                                          page_count,
+                                                          SAMPLE_PAGE_ALLOC_MARGIN);
     looper_request_playhead_pages(state);
     return 1U;
 }
@@ -698,7 +701,9 @@ static void looper_request_playhead_pages(const brick6_looper_track_state_t *sta
     const uint32_t first_page = playhead / SAMPLE_PAGE_FRAMES;
     for(uint32_t i = 0U; i < BRICK6_LOOPER_PREFETCH_PAGES; ++i)
     {
-        (void)sample_page_cache_request_page_key(state->cache_key, (first_page + i) % page_count);
+        (void)sample_page_cache_request_page_key_alloc(state->cache_key,
+                                                       (first_page + i) % page_count,
+                                                       SAMPLE_PAGE_ALLOC_MARGIN);
     }
 }
 

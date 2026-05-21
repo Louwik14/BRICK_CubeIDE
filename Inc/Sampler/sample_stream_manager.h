@@ -53,10 +53,17 @@ void sample_stream_manager_release_owner(uint8_t owner_kind,
                                          uint8_t owner_id,
                                          uint32_t owner_generation);
 uint8_t sample_stream_manager_request_page_key(sample_audio_key_t key, uint32_t page_index);
+uint8_t sample_stream_manager_request_page_key_alloc(sample_audio_key_t key,
+                                                     uint32_t page_index,
+                                                     sample_page_alloc_type_t alloc_type);
 uint8_t sample_stream_manager_request_page(uint16_t sample_id, uint32_t page_index);
 uint8_t sample_stream_manager_request_range_key(sample_audio_key_t key,
                                                 uint32_t start_frame,
                                                 uint32_t page_count);
+uint8_t sample_stream_manager_request_range_key_alloc(sample_audio_key_t key,
+                                                      uint32_t start_frame,
+                                                      uint32_t page_count,
+                                                      sample_page_alloc_type_t alloc_type);
 uint8_t sample_stream_manager_request_range(uint16_t sample_id,
                                             uint32_t start_frame,
                                             uint32_t page_count);

@@ -397,12 +397,18 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
             multi_loader_sample_required_pages(sample->total_frames);
         for (uint8_t page = 0U; page < required_pages; ++page)
         {
-            if (sample_stream_manager_request_page_key(key, page) == 0U)
+            if (sample_stream_manager_request_page_key_alloc(
+                    key,
+                    page,
+                    SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
             {
                 multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE, multi_sample_id);
                 return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;
             }
-            if (sample_page_cache_pin_page_key(key, page) == 0U)
+            if (sample_page_cache_pin_page_key_alloc(
+                    key,
+                    page,
+                    SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
             {
                 multi_loader_set_error(MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE, multi_sample_id);
                 return MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE;

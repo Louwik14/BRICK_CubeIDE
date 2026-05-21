@@ -697,3 +697,10 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Un unload/remplacement d'instrument Multi stoppe d'abord les voix de l'instrument, puis libere les readers/pending et clear les pages de chaque `sample_audio_key_multi(sample_id)`, ce qui retire les pins contractuels de la ration chargee.
 - Le rendu IRQ Multi ne parcourt pas la table des locks: lorsqu'une voix finit en IRQ, il conserve seulement en RAM le triplet owner `voice_index/generation` a liberer. La superloop libere ensuite les locks avec cette generation capturee, meme si la voix a ete reutilisee entre-temps avec un nouveau `trigger_order`.
 - Les descripteurs physiques du page-cache `g_sample_page_desc` restent en SDRAM dans une section dediee `.page_desc_sdram`; les pages audio dynamiques `g_sample_page_data` sont seules dans `.sdram_sample_page_pool`; l'index hash `g_sample_page_index`, les readers/pending STREAM et les scratch SD restent dans leurs sections SDRAM dediees hors pool audio dynamique.
+
+## Addendum 2026-05-21 - page-cache allocator type par ranges
+
+- Le page-cache conserve une seule table de donnees `g_sample_page_data` et une seule table de descripteurs `g_sample_page_desc`, indexees 1:1.
+- Les nouveaux slots peuvent maintenant etre demandes avec un type d'allocation: `SLOT_PERMANENT`, `VOICE_WINDOW`, `MARGIN` ou `LEGACY_DEFAULT`.
+- `SLOT_PERMANENT` scanne uniquement le range slot produit, `VOICE_WINDOW` uniquement le range de fenetres voix, `MARGIN` uniquement le range marge/cache/transitions; `LEGACY_DEFAULT` conserve le scan historique global pour les chemins non migres.
+- Les presocles Multi passent par `SLOT_PERMANENT`; les reservations de fenetres voix actives passent par `VOICE_WINDOW`; les pages Classic STREAM cold base, les requetes opportunistes Slicer et les prefetchs Looper RAW passent par `MARGIN`; Classic FULL passe par `SLOT_PERMANENT`. Les wrappers historiques restent en `LEGACY_DEFAULT` seulement comme compat API, sans appel in-tree non migre observe.

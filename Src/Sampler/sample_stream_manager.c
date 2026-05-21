@@ -881,9 +881,10 @@ static uint8_t sample_stream_manager_request_page_with_priority_key(
     uint32_t page_index,
     sample_stream_priority_t priority,
     uint32_t deadline_frames,
-    const sample_stream_active_desc_t *owner)
+    const sample_stream_active_desc_t *owner,
+    sample_page_alloc_type_t alloc_type)
 {
-    const uint8_t ok = sample_page_cache_request_page_key(key, page_index);
+    const uint8_t ok = sample_page_cache_request_page_key_alloc(key, page_index, alloc_type);
     if (ok != 0U)
     {
         if (sample_stream_manager_note_requested_page_key(key, page_index, priority, deadline_frames, owner) == 0U)
@@ -900,12 +901,22 @@ static uint8_t sample_stream_manager_request_page_with_priority_key(
 
 uint8_t sample_stream_manager_request_page_key(sample_audio_key_t key, uint32_t page_index)
 {
+    return sample_stream_manager_request_page_key_alloc(key,
+                                                        page_index,
+                                                        SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT);
+}
+
+uint8_t sample_stream_manager_request_page_key_alloc(sample_audio_key_t key,
+                                                     uint32_t page_index,
+                                                     sample_page_alloc_type_t alloc_type)
+{
     return sample_stream_manager_request_page_with_priority_key(
         key,
         page_index,
         SAMPLE_STREAM_PRIORITY_NORMAL,
         UINT32_MAX,
-        0);
+        0,
+        alloc_type);
 }
 
 uint8_t sample_stream_manager_request_range(uint16_t sample_id,
@@ -921,12 +932,27 @@ uint8_t sample_stream_manager_request_range_key(sample_audio_key_t key,
                                                 uint32_t start_frame,
                                                 uint32_t page_count)
 {
+    return sample_stream_manager_request_range_key_alloc(
+        key,
+        start_frame,
+        page_count,
+        SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT);
+}
+
+uint8_t sample_stream_manager_request_range_key_alloc(sample_audio_key_t key,
+                                                      uint32_t start_frame,
+                                                      uint32_t page_count,
+                                                      sample_page_alloc_type_t alloc_type)
+{
     uint8_t ok = 1U;
     const uint32_t first_page = start_frame / SAMPLE_PAGE_FRAMES;
     for (uint32_t i = 0U; i < page_count; ++i)
     {
         const uint32_t page_index = first_page + i;
-        const uint8_t request_ok = sample_page_cache_request_page_key(key, page_index);
+        const uint8_t request_ok = sample_page_cache_request_page_key_alloc(
+            key,
+            page_index,
+            alloc_type);
         if (request_ok != 0U)
         {
             if (sample_stream_manager_note_requested_page_key(
@@ -1139,7 +1165,8 @@ uint8_t sample_stream_manager_queue_active_pages(const sample_stream_active_desc
                                                                  page_index,
                                                                  priority,
                                                                  deadline_frames,
-                                                                 desc);
+                                                                 desc,
+                                                                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW);
         if (ok != 0U)
         {
             sample_stream_manager_active_state_note(
@@ -1223,7 +1250,8 @@ uint8_t sample_stream_manager_reserve_active_pages(const sample_stream_active_de
                                                                      page_index,
                                                                      priority,
                                                                      deadline_frames,
-                                                                     desc) == 0U)
+                                                                     desc,
+                                                                     SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
             {
                 sample_stream_manager_release_owner(desc->owner_kind,
                                                     desc->owner_id,

@@ -73,6 +73,43 @@ typedef enum
 #define SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS \
     (SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES / SAMPLE_PAGE_MIN_READY_PAGES)
 
+#define SAMPLE_PAGE_SLOT_POOL_START          (0U)
+#define SAMPLE_PAGE_SLOT_POOL_COUNT          SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES
+#define SAMPLE_PAGE_VOICE_WINDOW_POOL_START  (SAMPLE_PAGE_SLOT_POOL_START \
+                                              + SAMPLE_PAGE_SLOT_POOL_COUNT)
+#define SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT  SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES
+#define SAMPLE_PAGE_MARGIN_POOL_START        (SAMPLE_PAGE_VOICE_WINDOW_POOL_START \
+                                              + SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT)
+#define SAMPLE_PAGE_MARGIN_POOL_COUNT        SAMPLE_PAGE_PRODUCT_MARGIN_PAGES
+#define SAMPLE_PAGE_POOL_RANGE_TOTAL         (SAMPLE_PAGE_SLOT_POOL_COUNT \
+                                              + SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT \
+                                              + SAMPLE_PAGE_MARGIN_POOL_COUNT)
+
+static inline uint8_t sample_page_slot_is_slot_pool(uint32_t slot)
+{
+    return ((slot >= SAMPLE_PAGE_SLOT_POOL_START)
+            && (slot < (SAMPLE_PAGE_SLOT_POOL_START + SAMPLE_PAGE_SLOT_POOL_COUNT)))
+               ? 1U
+               : 0U;
+}
+
+static inline uint8_t sample_page_slot_is_voice_window_pool(uint32_t slot)
+{
+    return ((slot >= SAMPLE_PAGE_VOICE_WINDOW_POOL_START)
+            && (slot < (SAMPLE_PAGE_VOICE_WINDOW_POOL_START
+                        + SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT)))
+               ? 1U
+               : 0U;
+}
+
+static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
+{
+    return ((slot >= SAMPLE_PAGE_MARGIN_POOL_START)
+            && (slot < (SAMPLE_PAGE_MARGIN_POOL_START + SAMPLE_PAGE_MARGIN_POOL_COUNT)))
+               ? 1U
+               : 0U;
+}
+
 #if (SAMPLE_PAGE_BYTES == 0U)
 #error "SAMPLE_PAGE_BYTES must be non-zero"
 #endif
@@ -84,6 +121,22 @@ typedef enum
 #if ((SAMPLE_PAGE_PRODUCT_MARGIN_PAGES + SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES) \
      >= SAMPLE_PAGE_MAX_COUNT)
 #error "product page-cache margin and voice reserve must fit in page cache"
+#endif
+
+#if (SAMPLE_PAGE_POOL_RANGE_TOTAL != SAMPLE_PAGE_MAX_COUNT)
+#error "sample page pool ranges must cover the full page pool"
+#endif
+
+#if (SAMPLE_PAGE_SLOT_POOL_COUNT != SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES)
+#error "sample slot pool range must match product slot pool pages"
+#endif
+
+#if (SAMPLE_PAGE_VOICE_WINDOW_POOL_COUNT != SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES)
+#error "sample voice window pool range must match product voice reserve pages"
+#endif
+
+#if (SAMPLE_PAGE_MARGIN_POOL_COUNT != SAMPLE_PAGE_PRODUCT_MARGIN_PAGES)
+#error "sample margin pool range must match product margin pages"
 #endif
 
 #if (SAMPLE_CACHE_HOT_SAMPLE_CAPACITY > SAMPLE_PAGE_CACHE_ID_CAPACITY)

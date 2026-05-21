@@ -1306,7 +1306,10 @@ static void brick6_sampler_runtime_prepare_slicer_entry_pages(uint8_t track_id)
             continue;
         }
 
-        (void)sample_stream_manager_request_page(voice->sample_id, page_index);
+        (void)sample_stream_manager_request_page_key_alloc(
+            sample_audio_key_classic(voice->sample_id),
+            page_index,
+            SAMPLE_PAGE_ALLOC_MARGIN);
         last_page_index = page_index;
     }
 }

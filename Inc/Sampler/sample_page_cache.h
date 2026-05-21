@@ -111,6 +111,14 @@ typedef enum
     SAMPLE_PAGE_LOAD_DECODE_FAILED
 } sample_page_load_result_t;
 
+typedef enum
+{
+    SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT = 0,
+    SAMPLE_PAGE_ALLOC_SLOT_PERMANENT,
+    SAMPLE_PAGE_ALLOC_VOICE_WINDOW,
+    SAMPLE_PAGE_ALLOC_MARGIN
+} sample_page_alloc_type_t;
+
 /*
  * Query API: RAM-only, no SD side effect, no implicit page request.
  */
@@ -210,6 +218,9 @@ uint8_t sample_page_cache_has_window_locks(void);
  */
 uint8_t sample_page_cache_request_page(uint16_t sample_id, uint32_t page_index);
 uint8_t sample_page_cache_request_page_key(sample_audio_key_t key, uint32_t page_index);
+uint8_t sample_page_cache_request_page_key_alloc(sample_audio_key_t key,
+                                                 uint32_t page_index,
+                                                 sample_page_alloc_type_t alloc_type);
 uint8_t sample_page_cache_request_page_ref(uint16_t sample_id,
                                            uint32_t page_index,
                                            sample_page_ref_t *out_ref);
@@ -222,8 +233,15 @@ uint8_t sample_page_cache_request_start_pages(uint16_t sample_id,
 uint8_t sample_page_cache_request_start_pages_key(sample_audio_key_t key,
                                                   uint32_t start_frame,
                                                   uint32_t page_count);
+uint8_t sample_page_cache_request_start_pages_key_alloc(sample_audio_key_t key,
+                                                        uint32_t start_frame,
+                                                        uint32_t page_count,
+                                                        sample_page_alloc_type_t alloc_type);
 uint8_t sample_page_cache_pin_page(uint16_t sample_id, uint32_t page_index);
 uint8_t sample_page_cache_pin_page_key(sample_audio_key_t key, uint32_t page_index);
+uint8_t sample_page_cache_pin_page_key_alloc(sample_audio_key_t key,
+                                             uint32_t page_index,
+                                             sample_page_alloc_type_t alloc_type);
 void sample_page_cache_unpin_page(uint16_t sample_id, uint32_t page_index);
 void sample_page_cache_unpin_page_key(sample_audio_key_t key, uint32_t page_index);
 sample_page_load_result_t sample_page_cache_load_full_sample(uint16_t sample_id,
@@ -240,6 +258,15 @@ sample_page_load_result_t sample_page_cache_load_full_sample_key(sample_audio_ke
                                                                  uint32_t data_offset,
                                                                  uint8_t *io_buffer,
                                                                  uint32_t io_buffer_size);
+sample_page_load_result_t sample_page_cache_load_full_sample_key_alloc(
+    sample_audio_key_t key,
+    FIL *fp,
+    const wav_info_t *info,
+    uint32_t total_frames,
+    uint32_t data_offset,
+    uint8_t *io_buffer,
+    uint32_t io_buffer_size,
+    sample_page_alloc_type_t alloc_type);
 uint8_t sample_page_cache_register_stream_sample(uint16_t sample_id,
                                                  const char *path,
                                                  const wav_info_t *info,

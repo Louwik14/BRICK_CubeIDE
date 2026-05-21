@@ -427,13 +427,14 @@ static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
     }
 
     const sample_page_load_result_t page_result =
-        sample_page_cache_load_full_sample(sample_id,
-                                           fp,
-                                           &desc->info,
-                                           desc->total_frames,
-                                           desc->data_offset,
-                                           sample_cache_io_buffer(),
-                                           SAMPLE_CACHE_IO_BYTES);
+        sample_page_cache_load_full_sample_key_alloc(sample_audio_key_classic(sample_id),
+                                                     fp,
+                                                     &desc->info,
+                                                     desc->total_frames,
+                                                     desc->data_offset,
+                                                     sample_cache_io_buffer(),
+                                                     SAMPLE_CACHE_IO_BYTES,
+                                                     SAMPLE_PAGE_ALLOC_SLOT_PERMANENT);
     if (page_result != SAMPLE_PAGE_LOAD_OK)
     {
         switch (page_result)
@@ -586,11 +587,16 @@ static uint8_t sample_cache_request_pin_page_span(uint16_t sample_id,
 
     for (uint32_t page_index = span->page_start; page_index <= span->page_end; ++page_index)
     {
-        if (sample_stream_manager_request_page(sample_id, page_index) == 0U)
+        if (sample_stream_manager_request_page_key_alloc(
+                sample_audio_key_classic(sample_id),
+                page_index,
+                SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
         {
             return 0U;
         }
-        if (sample_page_cache_pin_page(sample_id, page_index) == 0U)
+        if (sample_page_cache_pin_page_key_alloc(sample_audio_key_classic(sample_id),
+                                                 page_index,
+                                                 SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
         {
             return 0U;
         }
@@ -1065,13 +1071,18 @@ static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_b
         return 0U;
     }
 
-    if (sample_stream_manager_request_range(sample_id, start_frame, SAMPLE_CACHE_STREAM_START_PAGES) == 0U)
+    if (sample_stream_manager_request_range_key_alloc(sample_audio_key_classic(sample_id),
+                                                      start_frame,
+                                                      SAMPLE_CACHE_STREAM_START_PAGES,
+                                                      SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
     {
         desc->state = SAMPLE_CACHE_ERROR;
         desc->last_error = 8U;
         return 0U;
     }
-    if (sample_page_cache_pin_page(sample_id, start_frame / SAMPLE_PAGE_FRAMES) == 0U)
+    if (sample_page_cache_pin_page_key_alloc(sample_audio_key_classic(sample_id),
+                                             start_frame / SAMPLE_PAGE_FRAMES,
+                                             SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
     {
         desc->state = SAMPLE_CACHE_ERROR;
         desc->last_error = 8U;
