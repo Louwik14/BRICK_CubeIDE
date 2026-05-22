@@ -318,14 +318,18 @@ static void ui_renderer_template_draw_brick_frame(int x, int y, int w, int h)
 
 static void ui_renderer_template_draw_param_frame(int x, int y, int w, int h)
 {
-    ui_renderer_template_draw_open_corner_frame(x, y, w, h);
+    drv_display_draw_line(x + 2, y + 1, x + w - 3, y + 1);
+    drv_display_draw_line(x + 1, y + 3, x + 1, y + 7);
+    drv_display_draw_line(x + w - 2, y + 3, x + w - 2, y + 7);
 
-    drv_display_draw_line(x + 3, y + 1, x + w - 4, y + 1);
-    drv_display_draw_line(x + 3, y + h - 2, x + w - 4, y + h - 2);
-    drv_display_draw_pixel(x + 2, y + 3, true);
-    drv_display_draw_pixel(x + w - 3, y + 3, true);
-    drv_display_draw_pixel(x + 2, y + h - 4, true);
-    drv_display_draw_pixel(x + w - 3, y + h - 4, true);
+    drv_display_draw_line(x + 4, y + h - 2, x + w - 5, y + h - 2);
+    drv_display_draw_line(x + 1, y + h - 7, x + 1, y + h - 4);
+    drv_display_draw_line(x + w - 2, y + h - 7, x + w - 2, y + h - 4);
+
+    drv_display_draw_pixel(x + 3, y + 3, true);
+    drv_display_draw_pixel(x + w - 4, y + 3, true);
+    drv_display_draw_pixel(x + 3, y + h - 4, true);
+    drv_display_draw_pixel(x + w - 4, y + h - 4, true);
 }
 
 static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const char *txt, const font_t *font)
@@ -480,10 +484,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
     else if (draw_name_inverted != 0U)
     {
-        ui_renderer_template_draw_inverted_label((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
-                                                 (uint8_t)(y + 2),
-                                                 name_txt,
-                                                 &FONT_4X6);
+        const uint8_t name_x = (uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt);
+        drv_display_draw_text(name_x, (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), name_txt);
+        drv_display_draw_line(name_x, y + 10, name_x + drv_display_text_width(name_txt) - 1, y + 10);
     }
     else
     {
