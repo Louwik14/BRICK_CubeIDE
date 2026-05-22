@@ -745,3 +745,10 @@ Points factuels:
 - Un echec `OPEN FAIL` pendant LOAD ou PREVIEW reste local a l'action et ne relance pas de scan ni de refresh destructif du browser.
 - `ui_page_settings` conserve la derniere liste valide tant qu'une lecture catalogue demandee par la navigation n'a pas abouti; un refus SD ou une erreur I/O catalogue affiche un feedback court sans vider `sample_entries`, `sample_dir` ni `sample_parent_id`.
 - Le rendu Settings/Sampler reste RAM-only: il lit uniquement les snapshots UI et les vues catalogue deja chargees, jamais la SD.
+
+## 26. Contrat layout commun template OLED
+
+- `ui_renderer_template` porte le layout commun des pages template 128x64: header compact, quatre cartes parametres, footer quatre labels.
+- Le header conserve track, label runtime track-aware, mode hall, titre famille/page, CPU, tempo et pattern courant, avec ellipses pixel si la largeur reelle ne suffit pas.
+- Les cartes parametres restent quatre slots egaux de 32 px, sans debordement horizontal; titre et valeur sont bornes avant centrage.
+- Les pages `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `PLAY`, `VCA`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.

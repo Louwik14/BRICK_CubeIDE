@@ -18,13 +18,17 @@
 #include "Seq/seq_runtime_control.h"
 #include "Mod/mod_lfo_v1.h"
 
-#define UI_TEMPLATE_FRAME_W          31
-#define UI_TEMPLATE_FRAME_H          37
-#define UI_TEMPLATE_FRAME_Y          16
-#define UI_TEMPLATE_FOOTER_Y         54
-#define UI_TEMPLATE_FOOTER_H         10
-#define UI_TEMPLATE_NOTE_X           101
-#define UI_TEMPLATE_NOTE_Y           1
+#define UI_TEMPLATE_FRAME_W          32
+#define UI_TEMPLATE_FRAME_H          35
+#define UI_TEMPLATE_FRAME_Y          20
+#define UI_TEMPLATE_FOOTER_Y         56
+#define UI_TEMPLATE_FOOTER_H         8
+#define UI_TEMPLATE_FOOTER_TEXT_Y    57
+#define UI_TEMPLATE_CARD_LABEL_Y     3
+#define UI_TEMPLATE_CARD_VALUE_Y     (UI_TEMPLATE_FRAME_H - 8)
+#define UI_TEMPLATE_CARD_LABEL_MAX_PX 28U
+#define UI_TEMPLATE_HEADER_TITLE_X   45
+#define UI_TEMPLATE_HEADER_TITLE_W   38
 
 static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t out_len)
 {
@@ -41,9 +45,9 @@ static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t
     (void)snprintf(out, out_len, "%c-%02u", bank, (unsigned int)(pattern_state.active_pattern + 1U));
 }
 
-static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 65U, 97U};
-static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 65U, 97U};
-static const uint8_t g_ui_template_footer_w[4] = {31U, 31U, 31U, 31U};
+static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 64U, 96U};
+static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 64U, 96U};
+static const uint8_t g_ui_template_footer_w[4] = {32U, 32U, 32U, 32U};
 static const char *const g_ui_template_midi_note_names[12] = {"C", "C#", "D", "D#", "E", "F",
                                                                "F#", "G", "G#", "A", "A#", "B"};
 
@@ -258,6 +262,30 @@ static int ui_renderer_template_center_x(int x, int w, const char *txt)
     return out;
 }
 
+static void ui_renderer_template_fit_text(char *txt, uint8_t max_px)
+{
+    if ((txt == NULL) || (max_px == 0U))
+    {
+        return;
+    }
+
+    if (drv_display_text_width(txt) <= max_px)
+    {
+        return;
+    }
+
+    uint32_t len = (uint32_t)strlen(txt);
+    while ((len > 1U) && (drv_display_text_width(txt) > max_px))
+    {
+        if (len > 2U)
+        {
+            txt[len - 2U] = '.';
+        }
+        txt[len - 1U] = '\0';
+        len--;
+    }
+}
+
 static void ui_renderer_template_draw_open_corner_frame(int x, int y, int w, int h)
 {
     const int c = 2;
@@ -275,14 +303,29 @@ static void ui_renderer_template_draw_open_corner_frame(int x, int y, int w, int
     drv_display_draw_line(x + w - 1 - c, y + h - 1,     x + w - 1,     y + h - 1 - c);
 }
 
-static void ui_renderer_template_draw_note_icon(int x, int y)
+static void ui_renderer_template_draw_brick_frame(int x, int y, int w, int h)
 {
-    drv_display_draw_line(x + 2, y + 1, x + 2, y + 10);
-    drv_display_draw_line(x + 2, y + 1, x + 7, y + 3);
-    drv_display_draw_line(x + 7, y + 3, x + 7, y + 11);
-    drv_display_draw_line(x + 2, y + 6, x + 7, y + 8);
-    drv_display_draw_rect(x, y + 8, 3, 3);
-    drv_display_draw_rect(x + 5, y + 10, 3, 3);
+    ui_renderer_template_draw_open_corner_frame(x, y, w, h);
+
+    if ((w > 8) && (h > 8))
+    {
+        drv_display_draw_pixel(x + 2, y + 2, true);
+        drv_display_draw_pixel(x + w - 3, y + 2, true);
+        drv_display_draw_pixel(x + 2, y + h - 3, true);
+        drv_display_draw_pixel(x + w - 3, y + h - 3, true);
+    }
+}
+
+static void ui_renderer_template_draw_param_frame(int x, int y, int w, int h)
+{
+    ui_renderer_template_draw_open_corner_frame(x, y, w, h);
+
+    drv_display_draw_line(x + 3, y + 1, x + w - 4, y + 1);
+    drv_display_draw_line(x + 3, y + h - 2, x + w - 4, y + h - 2);
+    drv_display_draw_pixel(x + 2, y + 3, true);
+    drv_display_draw_pixel(x + w - 3, y + 3, true);
+    drv_display_draw_pixel(x + 2, y + h - 4, true);
+    drv_display_draw_pixel(x + w - 3, y + h - 4, true);
 }
 
 static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const char *txt, const font_t *font)
@@ -338,7 +381,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         drv_display_set_draw_color(0U);
     }
 
-    ui_renderer_template_draw_open_corner_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+    ui_renderer_template_draw_param_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
 
     if (id >= PARAM_COUNT)
     {
@@ -359,12 +402,14 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             if (has_virtual != 0U)
             {
                 drv_display_set_font(&FONT_4X6);
+                ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+                ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
                 drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
-                                      (uint8_t)(y + 3),
+                                      (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                                       virt_name);
                 uiw_draw_enum_text(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, virt_value);
                 drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_value),
-                                      (uint8_t)(y + UI_TEMPLATE_FRAME_H - 8),
+                                      (uint8_t)(y + UI_TEMPLATE_CARD_VALUE_Y),
                                       virt_value);
                 return;
             }
@@ -425,10 +470,12 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
 
     drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(name_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+    ui_renderer_template_fit_text(value_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
     if (slot_locked != 0U)
     {
         drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
-                              (uint8_t)(y + 3),
+                              (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                               name_txt);
     }
     else if (draw_name_inverted != 0U)
@@ -440,7 +487,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
     else
     {
-        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt), (uint8_t)(y + 3), name_txt);
+        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
+                              (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
+                              name_txt);
     }
 
     const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label, value_txt);
@@ -543,7 +592,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         drv_display_set_draw_color(0U);
     }
 
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, value_txt), (uint8_t)(y + UI_TEMPLATE_FRAME_H - 8), value_txt);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, value_txt),
+                          (uint8_t)(y + UI_TEMPLATE_CARD_VALUE_Y),
+                          value_txt);
 
     if (slot_locked != 0U)
     {
@@ -605,41 +656,64 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
                        (unsigned long)((bpm_milli % 1000U) / 100U));
     }
 
-    drv_display_set_font(&FONT_5X7);
-    ui_renderer_template_draw_inverted_label(0U, 1U, track_label, &FONT_5X7);
-    const uint8_t track_label_w = (uint8_t)(drv_display_text_width(track_label) + 2U);
-    drv_display_draw_text((uint8_t)(track_label_w + 1U), 1U, runtime_label);
-
-    drv_display_set_font(&FONT_4X6);
     const char *hall_mode_label = ui_get_hall_mode_short_label();
     const char *hall_mode_suffix = ui_get_hall_mode_suffix_label();
-    drv_display_draw_text((uint8_t)(track_label_w + 1U), 9U, hall_mode_label);
-    if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
-    {
-        const uint8_t suffix_x = (uint8_t)(track_label_w + 1U + drv_display_text_width(hall_mode_label) + 2U);
-        drv_display_draw_text(suffix_x, 9U, hall_mode_suffix);
-    }
+
+    ui_renderer_template_draw_brick_frame(0, 0, 15, 15);
+    ui_renderer_template_draw_brick_frame(UI_TEMPLATE_HEADER_TITLE_X, 0, UI_TEMPLATE_HEADER_TITLE_W, 15);
 
     drv_display_set_font(&FONT_5X7);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, family_title), 2U, family_title);
+    ui_renderer_template_draw_inverted_label(2U, 2U, track_label, &FONT_5X7);
 
     drv_display_set_font(&FONT_4X6);
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, cpu_avg_label), 9U, cpu_avg_label);
-    ui_renderer_template_draw_note_icon(UI_TEMPLATE_NOTE_X, UI_TEMPLATE_NOTE_Y);
+    char runtime_fit[12];
+    char hall_fit[12];
+    (void)snprintf(runtime_fit, sizeof(runtime_fit), "%s", runtime_label);
+    (void)snprintf(hall_fit, sizeof(hall_fit), "%s", hall_mode_label);
+    ui_renderer_template_fit_text(runtime_fit, 25U);
+    ui_renderer_template_fit_text(hall_fit, 20U);
+    drv_display_draw_text(17U, 1U, runtime_fit);
+    drv_display_draw_text(17U, 9U, hall_fit);
+    if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
+    {
+        char suffix_fit[8];
+        (void)snprintf(suffix_fit, sizeof(suffix_fit), "%s", hall_mode_suffix);
+        ui_renderer_template_fit_text(suffix_fit, 9U);
+        drv_display_draw_text(33U, 9U, suffix_fit);
+    }
+
+    char title_fit[16];
+    (void)snprintf(title_fit, sizeof(title_fit), "%s", family_title);
+    drv_display_set_font(&FONT_5X7);
+    if (drv_display_text_width(title_fit) > 34U)
+    {
+        drv_display_set_font(&FONT_4X6);
+    }
+    ui_renderer_template_fit_text(title_fit, 34U);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(UI_TEMPLATE_HEADER_TITLE_X,
+                                                                  UI_TEMPLATE_HEADER_TITLE_W,
+                                                                  title_fit),
+                          4U,
+                          title_fit);
+
+    drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(cpu_avg_label, 12U);
     if (draw_bpm != 0U)
     {
         if (bpm_inverted != 0U)
         {
-            ui_renderer_template_draw_inverted_label(109U, 1U, bpm_label, &FONT_5X7);
+            ui_renderer_template_draw_inverted_label(98U, 1U, bpm_label, &FONT_5X7);
         }
         else
         {
-            drv_display_draw_text(109U, 1U, bpm_label);
+            drv_display_draw_text(98U, 1U, bpm_label);
         }
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    drv_display_draw_text(113U, 9U, pattern_label);
+    const uint8_t cpu_x = (uint8_t)(104U - drv_display_text_width(cpu_avg_label) - 10U);
+    drv_display_draw_text(cpu_x, 9U, cpu_avg_label);
+    drv_display_draw_text(104U, 9U, pattern_label);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
@@ -666,7 +740,11 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
         }
 
 
-        const int x_label = ui_renderer_template_center_x(bx, bw, label);
+        char label_fit[12];
+        (void)snprintf(label_fit, sizeof(label_fit), "%s", label);
+        ui_renderer_template_fit_text(label_fit, 28U);
+
+        const int x_label = ui_renderer_template_center_x(bx, bw, label_fit);
 
         if (i == state->active_subpage)
         {
@@ -688,12 +766,12 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
             drv_display_draw_pixel(bx + bw - 2,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 1, false);
             drv_display_draw_pixel(bx + bw - 1,        UI_TEMPLATE_FOOTER_Y + UI_TEMPLATE_FOOTER_H - 2, false);
 
-            drv_display_draw_text_inverted((uint8_t)x_label, 56U, label);
+            drv_display_draw_text_inverted((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
         }
         else
         {
-            ui_renderer_template_draw_open_corner_frame(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H);
-            drv_display_draw_text((uint8_t)x_label, 56U, label);
+            ui_renderer_template_draw_brick_frame(bx, UI_TEMPLATE_FOOTER_Y, bw, UI_TEMPLATE_FOOTER_H);
+            drv_display_draw_text((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
         }
     }
 }
