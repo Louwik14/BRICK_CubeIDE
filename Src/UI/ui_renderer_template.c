@@ -19,16 +19,16 @@
 #include "Mod/mod_lfo_v1.h"
 
 #define UI_TEMPLATE_FRAME_W          32
-#define UI_TEMPLATE_FRAME_H          35
-#define UI_TEMPLATE_FRAME_Y          20
-#define UI_TEMPLATE_FOOTER_Y         56
-#define UI_TEMPLATE_FOOTER_H         8
+#define UI_TEMPLATE_FRAME_H          38
+#define UI_TEMPLATE_FRAME_Y          17
+#define UI_TEMPLATE_FOOTER_Y         55
+#define UI_TEMPLATE_FOOTER_H         9
 #define UI_TEMPLATE_FOOTER_TEXT_Y    57
 #define UI_TEMPLATE_CARD_LABEL_Y     3
-#define UI_TEMPLATE_CARD_VALUE_Y     (UI_TEMPLATE_FRAME_H - 8)
+#define UI_TEMPLATE_CARD_VALUE_Y     (UI_TEMPLATE_FRAME_H - 9)
 #define UI_TEMPLATE_CARD_LABEL_MAX_PX 28U
-#define UI_TEMPLATE_HEADER_TITLE_X   45
-#define UI_TEMPLATE_HEADER_TITLE_W   38
+#define UI_TEMPLATE_HEADER_TITLE_X   43
+#define UI_TEMPLATE_HEADER_TITLE_W   42
 
 static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t out_len)
 {
@@ -326,10 +326,6 @@ static void ui_renderer_template_draw_param_frame(int x, int y, int w, int h)
     drv_display_draw_line(x + 1, y + h - 7, x + 1, y + h - 4);
     drv_display_draw_line(x + w - 2, y + h - 7, x + w - 2, y + h - 4);
 
-    drv_display_draw_pixel(x + 3, y + 3, true);
-    drv_display_draw_pixel(x + w - 4, y + 3, true);
-    drv_display_draw_pixel(x + 3, y + h - 4, true);
-    drv_display_draw_pixel(x + w - 4, y + h - 4, true);
 }
 
 static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const char *txt, const font_t *font)
@@ -339,6 +335,15 @@ static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const
     const uint8_t h = (uint8_t)(drv_display_font_height() + 2U);
     drv_display_fill_rect(x, y, w, h);
     drv_display_draw_text_inverted((uint8_t)(x + 1U), (uint8_t)(y + 1U), txt);
+}
+
+static void ui_renderer_template_draw_track_badge(uint8_t x, uint8_t y, const char *txt)
+{
+    drv_display_set_font(&FONT_5X7);
+    const uint8_t w = 11U;
+    const uint8_t h = (uint8_t)(drv_display_font_height() + 2U);
+    drv_display_fill_rect(x, y, w, h);
+    drv_display_draw_text_inverted((uint8_t)(ui_renderer_template_center_x(x, w, txt) - 1), (uint8_t)(y + 1U), txt);
 }
 
 static uiw_widget_type_t ui_renderer_template_resolve_widget_type(const ui_template_page_state_t *state,
@@ -377,6 +382,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
 {
     const int x = g_ui_template_frame_x[slot];
     const int y = UI_TEMPLATE_FRAME_Y;
+    const int widget_y = y + 1;
     const uint8_t slot_locked = ui_macro_interaction_param_is_locked(id);
 
     if (slot_locked != 0U)
@@ -411,7 +417,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                 drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
                                       (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                                       virt_name);
-                uiw_draw_enum_text(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, virt_value);
+                uiw_draw_enum_text(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, virt_value);
                 drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_value),
                                       (uint8_t)(y + UI_TEMPLATE_CARD_VALUE_Y),
                                       virt_value);
@@ -507,7 +513,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_switch(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (value >= 0.5f) ? 1U : 0U);
+            uiw_draw_switch(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (value >= 0.5f) ? 1U : 0U);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -519,7 +525,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(1U);
             }
-            uiw_draw_enum_text(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (enum_label != NULL) ? enum_label : value_txt);
+            uiw_draw_enum_text(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (enum_label != NULL) ? enum_label : value_txt);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(0U);
@@ -531,7 +537,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_jack_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            uiw_draw_jack_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -543,7 +549,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_keyboard_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            uiw_draw_keyboard_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -555,7 +561,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_wave_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
+            uiw_draw_wave_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -567,7 +573,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_filter_icon(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
+            uiw_draw_filter_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -581,7 +587,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_knob(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, value, desc->min, desc->max);
+            uiw_draw_knob(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, value, desc->min, desc->max);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -665,8 +671,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     ui_renderer_template_draw_brick_frame(0, 0, 15, 15);
     ui_renderer_template_draw_brick_frame(UI_TEMPLATE_HEADER_TITLE_X, 0, UI_TEMPLATE_HEADER_TITLE_W, 15);
 
-    drv_display_set_font(&FONT_5X7);
-    ui_renderer_template_draw_inverted_label(2U, 2U, track_label, &FONT_5X7);
+    ui_renderer_template_draw_track_badge(2U, 2U, track_label);
 
     drv_display_set_font(&FONT_4X6);
     char runtime_fit[12];
@@ -688,11 +693,11 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     char title_fit[16];
     (void)snprintf(title_fit, sizeof(title_fit), "%s", family_title);
     drv_display_set_font(&FONT_5X7);
-    if (drv_display_text_width(title_fit) > 34U)
+    if (drv_display_text_width(title_fit) > 38U)
     {
         drv_display_set_font(&FONT_4X6);
     }
-    ui_renderer_template_fit_text(title_fit, 34U);
+    ui_renderer_template_fit_text(title_fit, 38U);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(UI_TEMPLATE_HEADER_TITLE_X,
                                                                   UI_TEMPLATE_HEADER_TITLE_W,
                                                                   title_fit),
@@ -714,7 +719,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    const uint8_t cpu_x = (uint8_t)(104U - drv_display_text_width(cpu_avg_label) - 10U);
+    const uint8_t cpu_x = (uint8_t)(104U - drv_display_text_width(cpu_avg_label) - 6U);
     drv_display_draw_text(cpu_x, 9U, cpu_avg_label);
     drv_display_draw_text(104U, 9U, pattern_label);
 }
