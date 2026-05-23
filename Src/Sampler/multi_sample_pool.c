@@ -487,6 +487,36 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
     return (sample->block_align != 0U) ? 1U : 0U;
 }
 
+uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
+                                          uint8_t has_loop,
+                                          uint32_t loop_begin,
+                                          uint32_t loop_end)
+{
+    if (multi_sample_id >= g_multi_sample_count)
+    {
+        return 0U;
+    }
+
+    multi_sample_desc_t *const sample = &g_multi_samples[multi_sample_id];
+    sample->has_loop = 0U;
+    sample->loop_begin = 0U;
+    sample->loop_end = sample->total_frames;
+
+    if (has_loop == 0U)
+    {
+        return 1U;
+    }
+    if ((loop_end <= loop_begin) || (loop_end > sample->total_frames))
+    {
+        return 0U;
+    }
+
+    sample->has_loop = 1U;
+    sample->loop_begin = loop_begin;
+    sample->loop_end = loop_end;
+    return 1U;
+}
+
 uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
                                          uint8_t note,
                                          uint8_t velocity,
@@ -528,8 +558,8 @@ uint8_t multi_sample_pool_resolve_source(uint16_t instrument_id,
     out_source->fine_tune_cents = 0;
     out_source->region_begin = 0U;
     out_source->region_end = sample->total_frames;
-    out_source->loop_begin = 0U;
-    out_source->loop_end = sample->total_frames;
+    out_source->loop_begin = (sample->has_loop != 0U) ? sample->loop_begin : 0U;
+    out_source->loop_end = (sample->has_loop != 0U) ? sample->loop_end : sample->total_frames;
     out_source->loop_mode = SAMPLE_PLAY_LOOP_NONE;
     out_source->reverse = 0U;
     out_source->raw_pcm24 = 0U;

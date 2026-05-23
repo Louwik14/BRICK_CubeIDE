@@ -120,6 +120,7 @@ void apply_sampler_sample(float v);
 void apply_sampler_slice_count(float v);
 void apply_sampler_start(float v);
 void apply_sampler_tune(float v);
+void apply_sampler_multi_loop(float v);
 void apply_sat_bias(float v);
 void apply_sat_drive(float v);
 void apply_sat_mix(float v);

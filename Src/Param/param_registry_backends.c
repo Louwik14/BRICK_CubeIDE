@@ -555,6 +555,21 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
             return 1U;
         }
+        case PARAM_SAMPLER_MULTI_LOOP:
+        {
+            const uint8_t enabled =
+                (param_backend_clamp_value(value, 0.0f, 1.0f) >= 0.5f) ? 1U : 0U;
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
+            {
+                return 0U;
+            }
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->multi.loop = enabled != 0U ? 1.0f : 0.0f;
+            }
+            brick6_sampler_runtime_set_multi_loop(track, enabled);
+            return 1U;
+        }
         default:
             return 0U;
     }

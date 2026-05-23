@@ -98,17 +98,18 @@ Autorite catalogue WAV Settings/Sampler:
 
 Autorite index Sampler/Multi:
 - `multi_sample_index_*`.
-- Format durable courant: fichier binaire little-endian `.brickmulti`, magic `BRKMULTI`, version `1`, header 96 octets, CRC32 sur header avec champ CRC nul + tables + string table.
+- Format durable courant: fichier binaire little-endian `.brickmulti`, magic `BRKMULTI`, version `2`, header 96 octets, CRC32 sur header avec champ CRC nul + tables + string table. La lecture accepte encore la version `1` sans metadonnees de loop.
 - Le fichier porte uniquement des metadonnees: instrument, samples, zones et paths WAV relatifs au dossier instrument; aucun audio brut, aucun path absolu obligatoire.
 - Tables bornees: 512 samples, 2048 zones, string table 65536 octets. Les WAV source restent directement sur SD dans le dossier instrument, typiquement `0:/Multi/<Instrument>/`.
 - `multi_sample_index_load()` lit et valide l'index hors IRQ via `sd_access_gate`; `multi_sample_index_apply_to_pool()` peuple `multi_sample_pool` en etat `INDEXED` uniquement. Il ne charge pas les page0, ne touche pas `sample_page_cache`, ne touche pas le streamer et ne branche pas le playback.
-- Le byte metadata du record sample `.brickmulti` trace la source root/velocity (`smpl`, `inst`, filename ou alpha) et est propage vers le champ `flags` du `multi_sample_pool`.
+- Le record sample `.brickmulti` v2 ajoute `has_loop`, `loop_begin` et `loop_end` en frames source absolues. Les bornes sont valides seulement si `loop_end > loop_begin` et `loop_end <= total_frames`; les records v1 sont charges avec `has_loop=0`. Le byte metadata trace toujours la source root/velocity (`smpl`, `inst`, filename ou alpha) et est propage vers le champ `flags` du `multi_sample_pool`.
 
 Autorite import Sampler/Multi:
 - `multi_sample_import_folder()`.
 - Importe uniquement `instrument_dir/*.wav`, hors IRQ, via `sd_access_gate`, ignore les sous-dossiers et refuse si record/export Looper ou travail SD `sample_cache` est actif.
 - Le mapping import suit l'ordre `filename numerique -> smpl -> inst -> filename legacy -> alpha` pour le root MIDI: le suffixe `prefix_NNN_VVV.wav` donne directement note MIDI `0..127` et centre velocite `1..127`; les centres d'une meme note sont ensuite etendus en plages par midpoint. Le filename legacy `prefix-NoteMidi-VelLow-VelHigh.wav` ou `prefix_NoteMidi_VelLow_VelHigh.wav` reste supporte, puis le fallback alpha demarre a C2/MIDI 36 avec velocite `1..127`.
 - Validation WAV import: PCM ou extensible PCM via `wav_parser`, 48 kHz obligatoire, mono/stereo, 16/24/32-bit, frames non nulles.
+- L'import lit le premier loop `smpl` forward valide (`dwType=0`) et le convertit de `dwEnd` inclusif vers `loop_end` exclusif. Si la loop `smpl` est absente ou invalide apres validation contre `total_frames`, le sample reste sans loop WAV et le runtime pourra seulement appliquer le fallback full-region quand `LOOP=ON`.
 - L'import genere les zones par layers de velocite, roots tries et bornes note par midpoint, refuse les doublons root+vel et les chevauchements note+velocity ambigus, puis ecrit `<instrument_dir>/<Instrument>.brickmulti`.
 
 Autorite LOAD Sampler/Multi:
@@ -868,3 +869,8 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - Les entrees `STREAM` mirroring les slots `sample_pool` portent le path WAV complet et restent restaurees par le chemin `sample_pool_restore_project_snapshot()` existant.
 - Les entrees `MULTI` portent le path `.brickmulti` et restaurent les slots `multi_sample_pool` par `multi_sample_load_instrument(path, slot_index)` apres apply projet. Le chargement page0 reste cooperatif via `multi_sample_service_load()`; un path absent/invalide met seulement le diagnostic restore en erreur et ne crashe pas.
 - Le bloc sert de source explicite pour la future phase boot/autoload UI: la lecture projet et les loads STREAM/MULTI sont les etapes longues synchrones/cooperatives qui alimenteront la progression, sans animation introduite ici.
+
+## Addendum 2026-05-23 - Sampler/Multi LOOP
+
+- `PATTERN_VERSION=21` et `PROJECT_V1_FILE_VERSION=29` marquent l'ajout append-only de `PARAM_SAMPLER_MULTI_LOOP` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.
+- `MULTI_SAMPLE_INDEX_VERSION=2` marque l'ajout des metadonnees de loop WAV par sample dans `.brickmulti`; la lecture v1 reste acceptee avec `has_loop=0`.

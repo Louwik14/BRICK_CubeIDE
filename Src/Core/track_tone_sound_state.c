@@ -51,6 +51,7 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->clip.grain_size = TRACK_TONE_CLIP_DEFAULT_GRAIN_SIZE;
     state->clip.hop_size = TRACK_TONE_CLIP_DEFAULT_HOP_SIZE;
     state->clip.search_size = TRACK_TONE_CLIP_DEFAULT_SEARCH_SIZE;
+    state->multi.loop = param_registry[PARAM_SAMPLER_MULTI_LOOP].default_value;
     state->looper.arm = param_registry[PARAM_LOOPER_ARM].default_value;
     state->looper.len = param_registry[PARAM_LOOPER_LEN].default_value;
     state->looper.play = param_registry[PARAM_LOOPER_PLAY].default_value;

@@ -267,11 +267,13 @@ Call-sites critiques:
   - `Sync Len` reste track-aware et stocke la longueur musicale clip exposee au niveau produit.
 - Params TONE exposes pour `UI_TRACK_TYPE_MULTI`:
   - `INST`, selecteur track-aware parmi `NONE` et les instruments deja presents dans le `multi_sample_pool`, sans browser, import, scan SD ni reload,
-  - `GAIN`, applique via `brick6_sampler_runtime_set_multi_gain`.
+  - `GAIN`, applique via `brick6_sampler_runtime_set_multi_gain`,
+  - `LOOP`, nouveau bool `PARAM_SAMPLER_MULTI_LOOP` append-only, default `OFF`, applique via `brick6_sampler_runtime_set_multi_loop`.
   - `INST` reutilise le slot param existant `PARAM_SAMPLER_SAMPLE` avec un chemin specialise `Sampler/Multi`: la valeur UI `0` desassigne la track, les valeurs `1..N` parcourent les instruments charges du pool, et l'apply ecrit `brick6_sampler_runtime_set_multi_instrument`; aucun changement de sample OneShot/Clip/Slicer n'est declenche en mode Multi.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
   - le backend Sampler track-aware met a jour `track_tone_sound_state` puis `brick6_sampler_runtime`.
+  - `track_tone_sound_state.multi.loop` porte la valeur canonique track-aware et persiste avec le layout global `PARAM_COUNT`.
 - `PARAM_SAMPLER_SAMPLE` met a jour la selection runtime sans retrigger automatique de preview.
 - P-locks:
   - les params Sampler de base restent p-lockables via le flux track-aware.

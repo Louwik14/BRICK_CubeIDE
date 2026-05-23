@@ -50,9 +50,12 @@ typedef struct
     uint16_t channels;
     uint16_t bits_per_sample;
     uint16_t block_align;
+    uint32_t loop_begin;
+    uint32_t loop_end;
     uint8_t root_note;
     uint8_t vel_low;
     uint8_t vel_high;
+    uint8_t has_loop;
     uint16_t flags;
 } multi_sample_desc_t;
 
@@ -116,6 +119,10 @@ uint8_t multi_sample_pool_set_sample_format(uint16_t multi_sample_id,
                                             uint32_t sample_rate,
                                             uint16_t channels,
                                             uint16_t bits_per_sample);
+uint8_t multi_sample_pool_set_sample_loop(uint16_t multi_sample_id,
+                                          uint8_t has_loop,
+                                          uint32_t loop_begin,
+                                          uint32_t loop_end);
 uint8_t multi_sample_pool_debug_add_zone(uint16_t instrument_id,
                                          const multi_sample_zone_t *zone);
 

@@ -7,7 +7,7 @@
 #include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 
-#define SAMPLE_PAGE_WINDOW_LOCK_MAX (SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES)
+#define SAMPLE_PAGE_WINDOW_LOCK_MAX (SAMPLE_PAGE_CACHE_MAX_VOICES * SAMPLE_PAGE_MULTI_WINDOW_PAGES * 2U)
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(float) == SAMPLE_PAGE_SAMPLE_BYTES, "sample_page_cache expects 32-bit float");
 #endif

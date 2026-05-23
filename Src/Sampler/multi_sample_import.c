@@ -28,6 +28,9 @@ typedef struct
 {
     uint8_t smpl_root_valid;
     uint8_t smpl_root;
+    uint8_t smpl_loop_valid;
+    uint32_t smpl_loop_begin;
+    uint32_t smpl_loop_end;
     uint8_t inst_root_valid;
     uint8_t inst_root;
     uint8_t inst_velocity_valid;
@@ -246,6 +249,34 @@ static uint8_t multi_import_parse_smpl_chunk(FIL *fp,
     {
         metadata->smpl_root_valid = 1U;
         metadata->smpl_root = (uint8_t)root;
+    }
+
+    const uint32_t loop_count = multi_import_le32(&buf[28]);
+    const uint32_t loop_bytes = (chunk_size > sizeof(buf)) ? (chunk_size - (uint32_t)sizeof(buf)) : 0U;
+    uint32_t loop_records = loop_bytes / 24U;
+    if (loop_records > loop_count)
+    {
+        loop_records = loop_count;
+    }
+    for (uint32_t i = 0U; i < loop_records; ++i)
+    {
+        uint8_t loop[24];
+        if (multi_import_read_exact(fp, loop, sizeof(loop)) == 0U)
+        {
+            return 0U;
+        }
+
+        const uint32_t loop_type = multi_import_le32(&loop[4]);
+        const uint32_t loop_begin = multi_import_le32(&loop[8]);
+        const uint32_t loop_end_inclusive = multi_import_le32(&loop[12]);
+        if ((loop_type == 0U) && (loop_end_inclusive != UINT32_MAX)
+            && (loop_end_inclusive >= loop_begin))
+        {
+            metadata->smpl_loop_valid = 1U;
+            metadata->smpl_loop_begin = loop_begin;
+            metadata->smpl_loop_end = loop_end_inclusive + 1U;
+            break;
+        }
     }
 
     return 1U;
@@ -679,6 +710,14 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
     item->sample.data_size = info.data_size - (info.data_size % info.block_align);
     item->sample.wav_size = (uint32_t)fno->fsize;
     item->sample.wav_mtime = ((uint32_t)fno->fdate << 16) | (uint32_t)fno->ftime;
+    if ((metadata.smpl_loop_valid != 0U)
+        && (metadata.smpl_loop_end > metadata.smpl_loop_begin)
+        && (metadata.smpl_loop_end <= item->sample.total_frames))
+    {
+        item->sample.has_loop = 1U;
+        item->sample.loop_begin = metadata.smpl_loop_begin;
+        item->sample.loop_end = metadata.smpl_loop_end;
+    }
 
     const uint8_t filename_metadata = multi_import_filename_metadata(fno->fname,
                                                                      &metadata.filename_root,

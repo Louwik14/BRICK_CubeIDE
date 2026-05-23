@@ -9,7 +9,8 @@ extern "C" {
 #endif
 
 #define MULTI_SAMPLE_INDEX_MAGIC_SIZE       (8U)
-#define MULTI_SAMPLE_INDEX_VERSION          (1U)
+#define MULTI_SAMPLE_INDEX_VERSION          (2U)
+#define MULTI_SAMPLE_INDEX_MIN_VERSION      (1U)
 #define MULTI_SAMPLE_INDEX_HEADER_SIZE      (96U)
 #define MULTI_SAMPLE_INDEX_STRING_MAX_BYTES (65536U)
 
@@ -46,9 +47,12 @@ typedef struct
     uint16_t bits_per_sample;
     uint32_t data_offset;
     uint32_t data_size;
+    uint32_t loop_begin;
+    uint32_t loop_end;
     uint8_t root_note;
     uint8_t vel_low;
     uint8_t vel_high;
+    uint8_t has_loop;
     uint8_t metadata_flags;
     uint32_t wav_size;
     uint32_t wav_mtime;
@@ -85,9 +89,12 @@ typedef struct
     uint16_t bits_per_sample;
     uint32_t data_offset;
     uint32_t data_size;
+    uint32_t loop_begin;
+    uint32_t loop_end;
     uint8_t root_note;
     uint8_t vel_low;
     uint8_t vel_high;
+    uint8_t has_loop;
     uint8_t metadata_flags;
     uint32_t wav_size;
     uint32_t wav_mtime;

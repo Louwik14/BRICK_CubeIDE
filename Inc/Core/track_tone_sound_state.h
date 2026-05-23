@@ -32,6 +32,10 @@ typedef struct
     } clip;
     struct
     {
+        float loop;
+    } multi;
+    struct
+    {
         float arm;
         float len;
         float play;

@@ -317,6 +317,7 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_LOOPER_STRETCH, "Stretch", PARAM_TYPE_ENUM, 0.0f, 2.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_stretch_mode_labels, NULL),
     PARAM_DESC_EX(PARAM_LOOPER_PITCH, "Pitch", PARAM_TYPE_BIPOLAR, -12.0f, 12.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "st", NULL, NULL),
     PARAM_DESC_EX(PARAM_LOOPER_GRAIN, "Grain", PARAM_TYPE_ENUM, 0.0f, 5.0f, 1.0f, 4.0f, PARAM_DISPLAY_ENUM, "", g_sampler_clip_grain_labels, NULL),
+    PARAM_DESC_EX(PARAM_SAMPLER_MULTI_LOOP, "Loop", PARAM_TYPE_BOOL, 0.0f, 1.0f, 1.0f, 0.0f, PARAM_DISPLAY_BOOL, "", g_bool_labels, apply_sampler_multi_loop),
     PARAM_DESC_EX(PARAM_BRAIDS_EDIT, "Edit", PARAM_TYPE_ENUM, 0.0f, 38.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_braids_edit_labels, NULL),
     PARAM_DESC_EX(PARAM_BRAIDS_FINE, "Fine", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),
     PARAM_DESC_EX(PARAM_BRAIDS_COARSE, "Coarse", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, NULL),

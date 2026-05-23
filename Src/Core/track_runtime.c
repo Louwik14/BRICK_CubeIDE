@@ -325,7 +325,8 @@ static const param_id_t g_track_runtime_tone_slots_looper[] = {
 
 static const param_id_t g_track_runtime_tone_slots_multi[] = {
     PARAM_SAMPLER_SAMPLE,
-    PARAM_SAMPLER_GAIN
+    PARAM_SAMPLER_GAIN,
+    PARAM_SAMPLER_MULTI_LOOP
 };
 
 static const param_id_t g_track_runtime_tone_slots_midi[] = {
@@ -1288,6 +1289,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_CLIP_GRAIN:
         case PARAM_SAMPLER_CLIP_HOP:
         case PARAM_SAMPLER_CLIP_SEARCH:
+        case PARAM_SAMPLER_MULTI_LOOP:
         case PARAM_LOOPER_ARM:
         case PARAM_LOOPER_LEN:
         case PARAM_LOOPER_PLAY:

@@ -457,7 +457,8 @@ Points factuels:
 - `STR` utilise les valeurs bornees `Grain = 384/512/768/1024/1536/2048`, avec default `Grain=1536`.
 - Le rendu UI `Multi` expose une page TONE minimale:
   - `INST`: selecteur local parmi `NONE` et les instruments deja presents dans le `multi_sample_pool`, sans scan SD, import, reload ni browser; l'edition assigne seulement l'id instrument a la track `Sampler/Multi` active,
-  - `GAIN`: edition du gain Multi runtime.
+  - `GAIN`: edition du gain Multi runtime,
+  - `LOOP`: edition `OFF/ON` du bool track-aware `PARAM_SAMPLER_MULTI_LOOP`, sans reutiliser le parametre Clip.
 - Le clavier live `Sampler/Multi` reutilise le dispatch track-aware `keyboard_engine`: note-on appelle le trigger Multi runtime de la track, note-off appelle `brick6_sampler_runtime_note_off_multi_track_note(track,note)` pour raccorder les voix Multi au lifecycle VCA existant.
 - `VCA` n'est pas expose pour `Sampler/Clip`; le niveau utilisateur passe par `MIX/Level`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.

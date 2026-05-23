@@ -7,7 +7,9 @@
 
 #include "ff.h"
 
-#define MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE (40U)
+#define MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V1 (40U)
+#define MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V2 (52U)
+#define MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE    MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V2
 #define MULTI_SAMPLE_INDEX_ZONE_RECORD_SIZE   (8U)
 
 typedef struct
@@ -204,9 +206,12 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
         g_index_samples[i].bits_per_sample = src->samples[i].bits_per_sample;
         g_index_samples[i].data_offset = src->samples[i].data_offset;
         g_index_samples[i].data_size = src->samples[i].data_size;
+        g_index_samples[i].loop_begin = src->samples[i].loop_begin;
+        g_index_samples[i].loop_end = src->samples[i].loop_end;
         g_index_samples[i].root_note = src->samples[i].root_note;
         g_index_samples[i].vel_low = src->samples[i].vel_low;
         g_index_samples[i].vel_high = src->samples[i].vel_high;
+        g_index_samples[i].has_loop = src->samples[i].has_loop;
         g_index_samples[i].metadata_flags = src->samples[i].metadata_flags;
         g_index_samples[i].wav_size = src->samples[i].wav_size;
         g_index_samples[i].wav_mtime = src->samples[i].wav_mtime;
@@ -274,6 +279,29 @@ static void multi_index_encode_sample(const multi_sample_index_sample_t *sample,
     multi_index_put_le16(&out[18], sample->bits_per_sample);
     multi_index_put_le32(&out[20], sample->data_offset);
     multi_index_put_le32(&out[24], sample->data_size);
+    multi_index_put_le32(&out[28], sample->loop_begin);
+    multi_index_put_le32(&out[32], sample->loop_end);
+    out[36] = sample->root_note;
+    out[37] = sample->vel_low;
+    out[38] = sample->vel_high;
+    out[39] = sample->has_loop;
+    out[40] = sample->metadata_flags;
+    multi_index_put_le32(&out[44], sample->wav_size);
+    multi_index_put_le32(&out[48], sample->wav_mtime);
+}
+
+static void multi_index_encode_sample_v1(const multi_sample_index_sample_t *sample, uint8_t *out)
+{
+    memset(out, 0, MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V1);
+    multi_index_put_le32(&out[0], sample->path_offset);
+    multi_index_put_le16(&out[4], sample->path_len);
+    multi_index_put_le16(&out[6], 0U);
+    multi_index_put_le32(&out[8], sample->total_frames);
+    multi_index_put_le32(&out[12], sample->sample_rate);
+    multi_index_put_le16(&out[16], sample->channels);
+    multi_index_put_le16(&out[18], sample->bits_per_sample);
+    multi_index_put_le32(&out[20], sample->data_offset);
+    multi_index_put_le32(&out[24], sample->data_size);
     out[28] = sample->root_note;
     out[29] = sample->vel_low;
     out[30] = sample->vel_high;
@@ -282,7 +310,9 @@ static void multi_index_encode_sample(const multi_sample_index_sample_t *sample,
     multi_index_put_le32(&out[36], sample->wav_mtime);
 }
 
-static void multi_index_decode_sample(const uint8_t *in, multi_sample_index_sample_t *sample)
+static void multi_index_decode_sample(const uint8_t *in,
+                                      uint16_t version,
+                                      multi_sample_index_sample_t *sample)
 {
     memset(sample, 0, sizeof(*sample));
     sample->path_offset = multi_index_get_le32(&in[0]);
@@ -293,12 +323,27 @@ static void multi_index_decode_sample(const uint8_t *in, multi_sample_index_samp
     sample->bits_per_sample = multi_index_get_le16(&in[18]);
     sample->data_offset = multi_index_get_le32(&in[20]);
     sample->data_size = multi_index_get_le32(&in[24]);
-    sample->root_note = in[28];
-    sample->vel_low = in[29];
-    sample->vel_high = in[30];
-    sample->metadata_flags = in[31];
-    sample->wav_size = multi_index_get_le32(&in[32]);
-    sample->wav_mtime = multi_index_get_le32(&in[36]);
+    if (version >= 2U)
+    {
+        sample->loop_begin = multi_index_get_le32(&in[28]);
+        sample->loop_end = multi_index_get_le32(&in[32]);
+        sample->root_note = in[36];
+        sample->vel_low = in[37];
+        sample->vel_high = in[38];
+        sample->has_loop = in[39];
+        sample->metadata_flags = in[40];
+        sample->wav_size = multi_index_get_le32(&in[44]);
+        sample->wav_mtime = multi_index_get_le32(&in[48]);
+    }
+    else
+    {
+        sample->root_note = in[28];
+        sample->vel_low = in[29];
+        sample->vel_high = in[30];
+        sample->metadata_flags = in[31];
+        sample->wav_size = multi_index_get_le32(&in[32]);
+        sample->wav_mtime = multi_index_get_le32(&in[36]);
+    }
 }
 
 static void multi_index_encode_zone(const multi_sample_index_zone_t *zone, uint8_t *out)
@@ -336,8 +381,16 @@ static uint32_t multi_index_crc_header_tables(const multi_sample_index_t *idx,
 
     for (uint16_t i = 0U; i < idx->sample_count; ++i)
     {
-        multi_index_encode_sample(&idx->samples[i], g_index_io);
-        crc = multi_index_crc32_update(crc, g_index_io, MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE);
+        if (header->version >= 2U)
+        {
+            multi_index_encode_sample(&idx->samples[i], g_index_io);
+            crc = multi_index_crc32_update(crc, g_index_io, MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V2);
+        }
+        else
+        {
+            multi_index_encode_sample_v1(&idx->samples[i], g_index_io);
+            crc = multi_index_crc32_update(crc, g_index_io, MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V1);
+        }
     }
 
     for (uint16_t i = 0U; i < idx->zone_count; ++i)
@@ -395,6 +448,8 @@ static uint8_t multi_index_header_basic_valid(const multi_sample_index_header_t 
 {
     if ((header == 0)
         || (memcmp(header->magic, "BRKMULTI", MULTI_SAMPLE_INDEX_MAGIC_SIZE) != 0)
+        || (header->version < MULTI_SAMPLE_INDEX_MIN_VERSION)
+        || (header->version > MULTI_SAMPLE_INDEX_VERSION)
         || (header->header_size != MULTI_SAMPLE_INDEX_HEADER_SIZE)
         || (header->sample_count > MULTI_SAMPLE_POOL_MAX_SAMPLES)
         || (header->zone_count > MULTI_SAMPLE_POOL_MAX_ZONES)
@@ -403,8 +458,11 @@ static uint8_t multi_index_header_basic_valid(const multi_sample_index_header_t 
         return 0U;
     }
 
+    const uint32_t sample_record_size = (header->version >= 2U)
+        ? MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V2
+        : MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V1;
     const uint32_t samples_size =
-        (uint32_t)header->sample_count * MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE;
+        (uint32_t)header->sample_count * sample_record_size;
     const uint32_t zones_size =
         (uint32_t)header->zone_count * MULTI_SAMPLE_INDEX_ZONE_RECORD_SIZE;
     return ((header->samples_offset == MULTI_SAMPLE_INDEX_HEADER_SIZE)
@@ -534,7 +592,8 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
     else
     {
         multi_index_decode_header(g_index_io, &header);
-        if (header.version != MULTI_SAMPLE_INDEX_VERSION)
+        if ((header.version < MULTI_SAMPLE_INDEX_MIN_VERSION)
+            || (header.version > MULTI_SAMPLE_INDEX_VERSION))
         {
             result = MULTI_SAMPLE_INDEX_UNSUPPORTED_VERSION;
         }
@@ -565,14 +624,17 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
         for (uint16_t i = 0U; (result == MULTI_SAMPLE_INDEX_OK) && (i < out->sample_count);
              ++i)
         {
-            if (multi_index_read_exact(&fp, g_index_io, MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE)
+            const uint32_t sample_record_size = (header.version >= 2U)
+                ? MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V2
+                : MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE_V1;
+            if (multi_index_read_exact(&fp, g_index_io, sample_record_size)
                 == 0U)
             {
                 result = MULTI_SAMPLE_INDEX_READ_FAIL;
             }
             else
             {
-                multi_index_decode_sample(g_index_io, &g_index_samples[i]);
+                multi_index_decode_sample(g_index_io, header.version, &g_index_samples[i]);
             }
         }
 
@@ -657,7 +719,8 @@ multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
     else
     {
         multi_index_decode_header(g_index_io, &header);
-        if (header.version != MULTI_SAMPLE_INDEX_VERSION)
+        if ((header.version < MULTI_SAMPLE_INDEX_MIN_VERSION)
+            || (header.version > MULTI_SAMPLE_INDEX_VERSION))
         {
             result = MULTI_SAMPLE_INDEX_UNSUPPORTED_VERSION;
         }
@@ -710,6 +773,9 @@ uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)
             || !((sample->channels == 1U) || (sample->channels == 2U))
             || !((sample->bits_per_sample == 16U) || (sample->bits_per_sample == 24U)
                  || (sample->bits_per_sample == 32U))
+            || ((sample->has_loop != 0U)
+                && ((sample->loop_end <= sample->loop_begin)
+                    || (sample->loop_end > sample->total_frames)))
             || (sample->root_note > 127U)
             || (sample->vel_low > sample->vel_high)
             || (sample->vel_high > 127U))
@@ -787,6 +853,14 @@ multi_sample_index_result_t multi_sample_index_apply_to_pool(
                                                 sample->sample_rate,
                                                 sample->channels,
                                                 sample->bits_per_sample)
+            == 0U)
+        {
+            return MULTI_SAMPLE_INDEX_POOL_FAIL;
+        }
+        if (multi_sample_pool_set_sample_loop(pool_sample_id,
+                                              sample->has_loop,
+                                              sample->loop_begin,
+                                              sample->loop_end)
             == 0U)
         {
             return MULTI_SAMPLE_INDEX_POOL_FAIL;
