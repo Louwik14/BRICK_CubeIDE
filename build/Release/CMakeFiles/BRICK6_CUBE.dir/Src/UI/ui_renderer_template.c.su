@@ -2,4 +2,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_templat
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:254:12:ui_renderer_template_center_x	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:306:13:ui_renderer_template_draw_brick_frame	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:265:13:ui_renderer_template_fit_text	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:787:6:ui_renderer_template_draw	216	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_renderer_template.c:783:6:ui_renderer_template_draw	216	static

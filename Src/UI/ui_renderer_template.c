@@ -318,14 +318,10 @@ static void ui_renderer_template_draw_brick_frame(int x, int y, int w, int h)
 
 static void ui_renderer_template_draw_param_frame(int x, int y, int w, int h)
 {
-    drv_display_draw_line(x + 2, y + 1, x + w - 3, y + 1);
-    drv_display_draw_line(x + 1, y + 3, x + 1, y + 7);
-    drv_display_draw_line(x + w - 2, y + 3, x + w - 2, y + 7);
-
-    drv_display_draw_line(x + 4, y + h - 2, x + w - 5, y + h - 2);
-    drv_display_draw_line(x + 1, y + h - 7, x + 1, y + h - 4);
-    drv_display_draw_line(x + w - 2, y + h - 7, x + w - 2, y + h - 4);
-
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
 }
 
 static void ui_renderer_template_draw_inverted_label(uint8_t x, uint8_t y, const char *txt, const font_t *font)
