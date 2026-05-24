@@ -1089,3 +1089,6 @@
 62199	62816	8013606639282684	cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_usb.c.obj	47a8c4ea37c72752
 62279	62860	8013606639646639	cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hcd.c.obj	8034289c5e5f1f18
 62860	65048	8013606661120445	BRICK6_CUBE.elf	e192e08eb6ad9b77
+78	439	8013636818494514	CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_lfo_v1.c.obj	b1a1b07a6af80e3
+74	803	8013636822133971	CMakeFiles/BRICK6_CUBE.dir/Src/Audio/mixer.c.obj	feef77e3287983df
+803	3064	8013636844332467	BRICK6_CUBE.elf	e192e08eb6ad9b77
