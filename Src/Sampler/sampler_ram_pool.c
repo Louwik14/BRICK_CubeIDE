@@ -79,7 +79,13 @@ static uint8_t sampler_ram_wav_supported(const wav_info_t *info)
     return (info->block_align == expected_align) ? 1U : 0U;
 }
 
-static int16_t sampler_ram_pcm24_to_s16(const uint8_t *p)
+static float sampler_ram_pcm16_to_float(const uint8_t *p)
+{
+    const int16_t v = (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+    return (float)v * (1.0f / 32768.0f);
+}
+
+static float sampler_ram_pcm24_to_float(const uint8_t *p)
 {
     int32_t v = (int32_t)((uint32_t)p[0]
                           | ((uint32_t)p[1] << 8)
@@ -88,7 +94,7 @@ static int16_t sampler_ram_pcm24_to_s16(const uint8_t *p)
     {
         v |= (int32_t)0xFF000000L;
     }
-    return (int16_t)(v >> 8);
+    return (float)v * (1.0f / 8388608.0f);
 }
 
 static void sampler_ram_slot_error_at(uint16_t ram_slot,
@@ -268,7 +274,7 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
     }
 
     const uint32_t frames = info.data_size / info.block_align;
-    const uint16_t bytes_per_frame = (uint16_t)(info.channels * sizeof(int16_t));
+    const uint16_t bytes_per_frame = (uint16_t)(2U * sizeof(float));
     if ((frames == 0U) || (frames > (UINT32_MAX / bytes_per_frame)))
     {
         (void)f_close(&fp);
@@ -323,8 +329,8 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
     slot->state = SAMPLER_RAM_SLOT_LOADING;
     slot->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     (void)sampler_ram_copy_path(slot->path, sizeof(slot->path), path);
-    slot->format = SAMPLER_RAM_FORMAT_S16_INTERLEAVED;
-    slot->channels = info.channels;
+    slot->format = SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED;
+    slot->channels = 2U;
     slot->sample_rate = info.sample_rate;
     slot->frames = frames;
     slot->bytes_per_frame = bytes_per_frame;
@@ -334,7 +340,7 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
     slot->generation = sampler_ram_next_generation();
     slot->data_bytes = data_bytes;
     slot->cost_bytes_aligned = allocation.capacity_bytes;
-    slot->data = (int16_t *)allocation.data;
+    slot->data = (float *)allocation.data;
     slot->error = SAMPLER_RAM_RESULT_OK;
 
     if (f_lseek(&fp, info.data_offset) != FR_OK)
@@ -370,23 +376,34 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
             return SAMPLER_RAM_RESULT_READ_FAIL;
         }
 
-        int16_t *dst = &slot->data[frames_done * info.channels];
+        float *dst = &slot->data[frames_done * 2U];
         const uint8_t *src = g_sampler_ram_io;
-        const uint32_t samples = frames_chunk * info.channels;
         if (info.bits_per_sample == 16U)
         {
-            for (uint32_t i = 0U; i < samples; ++i)
+            for (uint32_t i = 0U; i < frames_chunk; ++i)
             {
-                dst[i] = (int16_t)((uint16_t)src[0] | ((uint16_t)src[1] << 8));
+                const float left = sampler_ram_pcm16_to_float(src);
                 src += 2U;
+                const float right = (info.channels == 2U)
+                                        ? sampler_ram_pcm16_to_float(src)
+                                        : left;
+                src += (info.channels == 2U) ? 2U : 0U;
+                dst[(i * 2U) + 0U] = left;
+                dst[(i * 2U) + 1U] = right;
             }
         }
         else
         {
-            for (uint32_t i = 0U; i < samples; ++i)
+            for (uint32_t i = 0U; i < frames_chunk; ++i)
             {
-                dst[i] = sampler_ram_pcm24_to_s16(src);
+                const float left = sampler_ram_pcm24_to_float(src);
                 src += 3U;
+                const float right = (info.channels == 2U)
+                                        ? sampler_ram_pcm24_to_float(src)
+                                        : left;
+                src += (info.channels == 2U) ? 3U : 0U;
+                dst[(i * 2U) + 0U] = left;
+                dst[(i * 2U) + 1U] = right;
             }
         }
         frames_done += frames_chunk;
@@ -497,7 +514,7 @@ sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot)
     return (slot != 0) ? slot->state : SAMPLER_RAM_SLOT_ERROR;
 }
 
-const int16_t *sampler_ram_pool_get_data(uint16_t ram_slot)
+const float *sampler_ram_pool_get_data(uint16_t ram_slot)
 {
     const sampler_ram_slot_t *const slot = sampler_ram_pool_get_slot(ram_slot);
     return ((slot != 0) && (slot->state == SAMPLER_RAM_SLOT_READY)) ? slot->data : 0;

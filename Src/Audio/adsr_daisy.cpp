@@ -143,8 +143,11 @@ enum
     ADSR_DAISY_C_SEG_IDLE = 0,
     ADSR_DAISY_C_SEG_ATTACK = 1,
     ADSR_DAISY_C_SEG_DECAY = 2,
+    ADSR_DAISY_C_SEG_SUSTAIN = 3,
     ADSR_DAISY_C_SEG_RELEASE = 4
 };
+
+static constexpr float kAdsrDaisyCSustainEpsilon = 1.0e-5f;
 
 static void adsr_daisy_c_set_time_constant(float time_s, float sample_rate, float *time, float *coeff)
 {
@@ -330,6 +333,10 @@ float adsr_daisy_c_process(adsr_daisy_c_t *env, uint8_t gate)
         case ADSR_DAISY_C_SEG_IDLE:
             out = 0.0f;
             break;
+        case ADSR_DAISY_C_SEG_SUSTAIN:
+            env->x = env->sus_level;
+            out = env->x;
+            break;
         case ADSR_DAISY_C_SEG_ATTACK:
             env->x += d0 * (env->attack_target - env->x);
             out = env->x;
@@ -344,6 +351,13 @@ float adsr_daisy_c_process(adsr_daisy_c_t *env, uint8_t gate)
         case ADSR_DAISY_C_SEG_RELEASE:
             env->x += d0 * (target - env->x);
             out = env->x;
+            if((env->mode == ADSR_DAISY_C_SEG_DECAY)
+               && (fabsf(out - env->sus_level) <= kAdsrDaisyCSustainEpsilon))
+            {
+                env->x = env->sus_level;
+                out = env->x;
+                env->mode = ADSR_DAISY_C_SEG_SUSTAIN;
+            }
             if(out < 0.0f)
             {
                 env->x = 0.0f;
@@ -364,6 +378,22 @@ uint8_t adsr_daisy_c_is_running(const adsr_daisy_c_t *env)
         return 0U;
 
     return (env->mode != ADSR_DAISY_C_SEG_IDLE) ? 1U : 0U;
+}
+
+uint8_t adsr_daisy_c_is_sustaining(const adsr_daisy_c_t *env)
+{
+    if(env == nullptr)
+        return 0U;
+
+    return (env->mode == ADSR_DAISY_C_SEG_SUSTAIN) ? 1U : 0U;
+}
+
+float adsr_daisy_c_current_level(const adsr_daisy_c_t *env)
+{
+    if(env == nullptr)
+        return 0.0f;
+
+    return env->x;
 }
 
 } // extern "C"

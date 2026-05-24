@@ -37,6 +37,7 @@
 #define STEAL_DECLICK_TAIL_SLOTS (32U)
 #define STEAL_DECLICK_EPSILON (0.0000001f)
 #define BRICK6_SAMPLER_RAM_OUTPUT_SAMPLE_RATE_HZ (48000U)
+#define BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT (0)
 
 typedef struct
 {
@@ -48,7 +49,7 @@ typedef struct
     uint32_t ram_generation;
     uint8_t owner_track_id;
     const sample_desc_t *sample;
-    const int16_t *ram_data;
+    const float *ram_data;
     float position;
     uint64_t ram_position_q16;
     uint8_t active;
@@ -263,10 +264,50 @@ static uint8_t brick6_sampler_runtime_prepare_slicer_ram_grid(
     uint8_t track_id,
     const sampler_ram_slot_t **out_ram);
 static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id);
+static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint64_t *io_position_q16);
+#if BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT
+static uint8_t brick6_sampler_runtime_render_ram_forward_float_phase(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    float *io_position_f);
+#endif
+static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint64_t *io_position_q16);
+static uint64_t brick6_sampler_runtime_wrap_q16(uint64_t offset_q16, uint64_t span_q16);
+static inline float brick6_sampler_runtime_ram_fade_gain(brick6_sampler_voice_t *voice);
+static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint32_t position);
+static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint64_t *io_position_q16);
 static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                                               float *out_l,
                                               float *out_r,
                                               uint32_t frames);
+static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice);
 static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *voice,
                                                         float *out_l,
                                                         float *out_r,
@@ -1676,10 +1717,10 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     if ((ram == NULL)
         || (ram->state != SAMPLER_RAM_SLOT_READY)
         || (ram->global_slot != global_slot)
-        || (ram->format != SAMPLER_RAM_FORMAT_S16_INTERLEAVED)
+        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
         || (ram->data == NULL)
         || (ram->frames == 0U)
-        || !((ram->channels == 1U) || (ram->channels == 2U)))
+        || (ram->channels != 2U))
     {
         return 0U;
     }
@@ -1794,10 +1835,10 @@ static uint8_t brick6_sampler_runtime_ram_slot_valid(const brick6_sampler_voice_
         || (ram->state != SAMPLER_RAM_SLOT_READY)
         || (ram->global_slot != voice->sample_id)
         || (ram->generation != voice->ram_generation)
-        || (ram->format != SAMPLER_RAM_FORMAT_S16_INTERLEAVED)
+        || (ram->format != SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
         || (ram->data == NULL)
         || (ram->frames == 0U)
-        || !((ram->channels == 1U) || (ram->channels == 2U)))
+        || (ram->channels != 2U))
     {
         return 0U;
     }
@@ -4145,8 +4186,7 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
 {
     const uint32_t region_begin = voice->region_begin;
     const uint32_t region_end = voice->region_end;
-    const float render_gain = voice->gain * voice->trigger_velocity_gain
-                              * (1.0f / 32768.0f);
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
     float fade_buf[AUDIO_BLOCK_SIZE];
     const uint8_t use_fade = (voice->start_fade_remaining != 0U) ? 1U : 0U;
     if (use_fade != 0U)
@@ -4160,7 +4200,7 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
 
     float last_l = 0.0f;
     float last_r = 0.0f;
-    const int16_t *const data = ram->data;
+    const float *const data = ram->data;
     uint32_t produced = 0U;
     uint8_t terminal = 0U;
     while (produced < frames)
@@ -4196,42 +4236,21 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
             break;
         }
 
-        if (ram->channels == 1U)
+        for (uint32_t i = 0U; i < todo; ++i)
         {
-            for (uint32_t i = 0U; i < todo; ++i)
+            const uint32_t frame_index = (voice->reverse != 0U)
+                                             ? (position - i)
+                                             : (position + i);
+            float gain = render_gain;
+            if (use_fade != 0U)
             {
-                const uint32_t frame_index = (voice->reverse != 0U)
-                                                 ? (position - i)
-                                                 : (position + i);
-                float gain = render_gain;
-                if (use_fade != 0U)
-                {
-                    gain *= fade_buf[produced + i];
-                }
-                last_l = (float)data[frame_index] * gain;
-                last_r = last_l;
-                out_l[produced + i] += last_l;
-                out_r[produced + i] += last_r;
+                gain *= fade_buf[produced + i];
             }
-        }
-        else
-        {
-            for (uint32_t i = 0U; i < todo; ++i)
-            {
-                const uint32_t frame_index = (voice->reverse != 0U)
-                                                 ? (position - i)
-                                                 : (position + i);
-                float gain = render_gain;
-                if (use_fade != 0U)
-                {
-                    gain *= fade_buf[produced + i];
-                }
-                const uint32_t src = frame_index * 2U;
-                last_l = (float)data[src] * gain;
-                last_r = (float)data[src + 1U] * gain;
-                out_l[produced + i] += last_l;
-                out_r[produced + i] += last_r;
-            }
+            const uint32_t src = frame_index * 2U;
+            last_l = data[src] * gain;
+            last_r = data[src + 1U] * gain;
+            out_l[produced + i] += last_l;
+            out_r[produced + i] += last_r;
         }
 
         produced += todo;
@@ -4278,6 +4297,788 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
     }
     voice->ram_position_q16 = (uint64_t)position << 16U;
     voice->position = (float)position;
+}
+
+static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint64_t *io_position_q16)
+{
+    if ((voice == NULL) || (ram == NULL) || (out_l == NULL) || (out_r == NULL)
+        || (io_position_q16 == NULL) || (frames == 0U) || (voice->reverse != 0U)
+        || (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG))
+    {
+        return 0U;
+    }
+
+    const uint64_t begin_q16 = (uint64_t)voice->region_begin << 16U;
+    const uint64_t end_q16 = (uint64_t)voice->region_end << 16U;
+    const uint64_t span_q16 = end_q16 - begin_q16;
+    const uint64_t last_q16 = (uint64_t)(voice->region_end - 1U) << 16U;
+    const uint32_t step_q16 = (voice->ram_step_q16 != 0U)
+                                  ? voice->ram_step_q16
+                                  : BRICK6_SAMPLER_Q16_ONE;
+    if ((span_q16 == 0ULL) || (step_q16 == 0U))
+    {
+        return 0U;
+    }
+
+    uint64_t position_q16 = *io_position_q16;
+    const float *const data = ram->data;
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    const float frac_scale = 1.0f / (float)BRICK6_SAMPLER_Q16_ONE;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
+    uint32_t produced = 0U;
+    uint8_t terminal = 0U;
+
+    while (produced < frames)
+    {
+        if (position_q16 >= end_q16)
+        {
+            if (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD)
+            {
+                position_q16 = begin_q16
+                               + brick6_sampler_runtime_wrap_q16(position_q16 - begin_q16,
+                                                                 span_q16);
+            }
+            else
+            {
+                terminal = 1U;
+                break;
+            }
+        }
+
+        uint32_t todo = frames - produced;
+        uint32_t next_index = voice->region_begin;
+        uint8_t safe_segment = 0U;
+        if (position_q16 < last_q16)
+        {
+            const uint64_t distance_to_last_q16 = last_q16 - position_q16;
+            const uint32_t until_last =
+                (uint32_t)(((distance_to_last_q16 - 1ULL) / (uint64_t)step_q16) + 1ULL);
+            if (todo > until_last)
+            {
+                todo = until_last;
+            }
+            safe_segment = 1U;
+        }
+        else
+        {
+            const uint64_t distance_to_end_q16 = end_q16 - position_q16;
+            uint32_t until_end =
+                (uint32_t)((distance_to_end_q16 + (uint64_t)step_q16 - 1ULL)
+                           / (uint64_t)step_q16);
+            if (until_end == 0U)
+            {
+                until_end = 1U;
+            }
+            if (todo > until_end)
+            {
+                todo = until_end;
+            }
+            next_index = (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD)
+                             ? voice->region_begin
+                             : (voice->region_end - 1U);
+        }
+
+        if (voice->start_fade_remaining == 0U)
+        {
+            if (safe_segment != 0U)
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
+                    const uint32_t src0 = frame_index * 2U;
+                    const uint32_t src1 = src0 + 2U;
+                    const float frac =
+                        (float)(position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                        * frac_scale;
+                    const float l0 = data[src0];
+                    const float r0 = data[src0 + 1U];
+                    const float l1 = data[src1];
+                    const float r1 = data[src1 + 1U];
+                    last_l = (l0 + ((l1 - l0) * frac)) * render_gain;
+                    last_r = (r0 + ((r1 - r0) * frac)) * render_gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                    position_q16 += (uint64_t)step_q16;
+                }
+            }
+            else
+            {
+                const uint32_t src1 = next_index * 2U;
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
+                    const uint32_t src0 = frame_index * 2U;
+                    const float frac =
+                        (float)(position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                        * frac_scale;
+                    const float l0 = data[src0];
+                    const float r0 = data[src0 + 1U];
+                    const float l1 = data[src1];
+                    const float r1 = data[src1 + 1U];
+                    last_l = (l0 + ((l1 - l0) * frac)) * render_gain;
+                    last_r = (r0 + ((r1 - r0) * frac)) * render_gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                    position_q16 += (uint64_t)step_q16;
+                }
+            }
+        }
+        else
+        {
+            if (safe_segment != 0U)
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
+                    const uint32_t src0 = frame_index * 2U;
+                    const uint32_t src1 = src0 + 2U;
+                    const float frac =
+                        (float)(position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                        * frac_scale;
+                    const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                    const float l0 = data[src0];
+                    const float r0 = data[src0 + 1U];
+                    const float l1 = data[src1];
+                    const float r1 = data[src1 + 1U];
+                    last_l = (l0 + ((l1 - l0) * frac)) * gain;
+                    last_r = (r0 + ((r1 - r0) * frac)) * gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                    position_q16 += (uint64_t)step_q16;
+                }
+            }
+            else
+            {
+                const uint32_t src1 = next_index * 2U;
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t frame_index = (uint32_t)(position_q16 >> 16U);
+                    const uint32_t src0 = frame_index * 2U;
+                    const float frac =
+                        (float)(position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                        * frac_scale;
+                    const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                    const float l0 = data[src0];
+                    const float r0 = data[src0 + 1U];
+                    const float l1 = data[src1];
+                    const float r1 = data[src1 + 1U];
+                    last_l = (l0 + ((l1 - l0) * frac)) * gain;
+                    last_r = (r0 + ((r1 - r0) * frac)) * gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                    position_q16 += (uint64_t)step_q16;
+                }
+            }
+        }
+
+        produced += todo;
+        if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE) && (position_q16 >= end_q16))
+        {
+            terminal = 1U;
+            break;
+        }
+    }
+
+    if (produced != 0U)
+    {
+        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+    }
+    *io_position_q16 = position_q16;
+    return (terminal != 0U) ? 2U : 1U;
+}
+
+#if BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT
+static uint8_t brick6_sampler_runtime_render_ram_forward_float_phase(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    float *io_position_f)
+{
+    if ((voice == NULL) || (ram == NULL) || (out_l == NULL) || (out_r == NULL)
+        || (io_position_f == NULL) || (frames == 0U) || (voice->reverse != 0U)
+        || (voice->loop_mode != BRICK6_SAMPLER_LOOP_NONE))
+    {
+        return 0U;
+    }
+
+    const uint32_t region_begin = voice->region_begin;
+    const uint32_t region_end = voice->region_end;
+    if ((region_end <= region_begin) || (region_end > ram->frames))
+    {
+        return 0U;
+    }
+
+    const float step_f = ((voice->ram_step_q16 != 0U)
+                              ? (float)voice->ram_step_q16
+                              : (float)BRICK6_SAMPLER_Q16_ONE)
+                         * (1.0f / (float)BRICK6_SAMPLER_Q16_ONE);
+    if (!(step_f > 0.0f))
+    {
+        return 0U;
+    }
+
+    float position_f = *io_position_f;
+    const float end_f = (float)region_end;
+    const float *const data = ram->data;
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
+    uint32_t produced = 0U;
+    uint8_t terminal = 0U;
+
+    while (produced < frames)
+    {
+        if (position_f >= end_f)
+        {
+            terminal = 1U;
+            break;
+        }
+
+        const uint32_t frame_index = (uint32_t)position_f;
+        if ((frame_index < region_begin) || (frame_index >= region_end))
+        {
+            terminal = 1U;
+            break;
+        }
+
+        const uint32_t next_index = ((frame_index + 1U) < region_end)
+                                        ? (frame_index + 1U)
+                                        : frame_index;
+        const float frac = position_f - (float)frame_index;
+        float gain = render_gain;
+        if (voice->start_fade_remaining != 0U)
+        {
+            gain *= brick6_sampler_runtime_ram_fade_gain(voice);
+        }
+
+        const uint32_t src0 = frame_index * 2U;
+        const uint32_t src1 = next_index * 2U;
+        const float l0 = data[src0];
+        const float r0 = data[src0 + 1U];
+        const float l1 = data[src1];
+        const float r1 = data[src1 + 1U];
+        last_l = (l0 + ((l1 - l0) * frac)) * gain;
+        last_r = (r0 + ((r1 - r0) * frac)) * gain;
+        out_l[produced] += last_l;
+        out_r[produced] += last_r;
+
+        produced++;
+        position_f += step_f;
+        if (position_f >= end_f)
+        {
+            terminal = 1U;
+            break;
+        }
+    }
+
+    if (produced != 0U)
+    {
+        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+    }
+    *io_position_f = position_f;
+    return (terminal != 0U) ? 2U : 1U;
+}
+#endif
+
+static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint64_t *io_position_q16)
+{
+    if ((voice == NULL) || (ram == NULL) || (out_l == NULL) || (out_r == NULL)
+        || (io_position_q16 == NULL) || (frames == 0U) || (voice->reverse == 0U)
+        || (voice->loop_mode != BRICK6_SAMPLER_LOOP_NONE))
+    {
+        return 0U;
+    }
+
+    const uint64_t begin_q16 = (uint64_t)voice->region_begin << 16U;
+    const uint64_t last_q16 = (uint64_t)(voice->region_end - 1U) << 16U;
+    const uint32_t step_q16 = (voice->ram_step_q16 != 0U)
+                                  ? voice->ram_step_q16
+                                  : BRICK6_SAMPLER_Q16_ONE;
+    if (step_q16 == 0U)
+    {
+        return 0U;
+    }
+
+    uint64_t position_q16 = *io_position_q16;
+    const float *const data = ram->data;
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    const float frac_scale = 1.0f / (float)BRICK6_SAMPLER_Q16_ONE;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
+    uint32_t produced = 0U;
+    uint8_t terminal = 0U;
+
+    while (produced < frames)
+    {
+        if (position_q16 < begin_q16)
+        {
+            terminal = 1U;
+            break;
+        }
+
+        uint32_t todo = frames - produced;
+        uint8_t edge_segment = 0U;
+        if (position_q16 >= last_q16)
+        {
+            todo = 1U;
+            edge_segment = 1U;
+        }
+        else
+        {
+            const uint64_t distance_from_begin = position_q16 - begin_q16;
+            const uint32_t until_begin =
+                (uint32_t)((distance_from_begin / (uint64_t)step_q16) + 1ULL);
+            if (todo > until_begin)
+            {
+                todo = until_begin;
+            }
+        }
+
+        const uint64_t segment_start_q16 = position_q16;
+        if (voice->start_fade_remaining == 0U)
+        {
+            if (edge_segment != 0U)
+            {
+                const uint32_t frame_index = (uint32_t)(segment_start_q16 >> 16U);
+                const uint32_t src0 = frame_index * 2U;
+                const float l0 = data[src0];
+                const float r0 = data[src0 + 1U];
+                last_l = l0 * render_gain;
+                last_r = r0 * render_gain;
+                out_l[produced] += last_l;
+                out_r[produced] += last_r;
+            }
+            else
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint64_t render_position_q16 =
+                        segment_start_q16 - ((uint64_t)step_q16 * (uint64_t)i);
+                    const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
+                    const uint32_t src0 = frame_index * 2U;
+                    const uint32_t src1 = src0 + 2U;
+                    const float frac =
+                        (float)(render_position_q16
+                                & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                        * frac_scale;
+                    const float l0 = data[src0];
+                    const float r0 = data[src0 + 1U];
+                    const float l1 = data[src1];
+                    const float r1 = data[src1 + 1U];
+                    last_l = (l0 + ((l1 - l0) * frac)) * render_gain;
+                    last_r = (r0 + ((r1 - r0) * frac)) * render_gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                }
+            }
+        }
+        else
+        {
+            if (edge_segment != 0U)
+            {
+                const uint32_t frame_index = (uint32_t)(segment_start_q16 >> 16U);
+                const uint32_t src0 = frame_index * 2U;
+                const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                const float l0 = data[src0];
+                const float r0 = data[src0 + 1U];
+                last_l = l0 * gain;
+                last_r = r0 * gain;
+                out_l[produced] += last_l;
+                out_r[produced] += last_r;
+            }
+            else
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint64_t render_position_q16 =
+                        segment_start_q16 - ((uint64_t)step_q16 * (uint64_t)i);
+                    const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
+                    const uint32_t src0 = frame_index * 2U;
+                    const uint32_t src1 = src0 + 2U;
+                    const float frac =
+                        (float)(render_position_q16
+                                & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                        * frac_scale;
+                    const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                    const float l0 = data[src0];
+                    const float r0 = data[src0 + 1U];
+                    const float l1 = data[src1];
+                    const float r1 = data[src1 + 1U];
+                    last_l = (l0 + ((l1 - l0) * frac)) * gain;
+                    last_r = (r0 + ((r1 - r0) * frac)) * gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                }
+            }
+        }
+
+        produced += todo;
+        const uint64_t reverse_advance_q16 = (uint64_t)step_q16 * (uint64_t)todo;
+        const uint64_t distance_from_begin = segment_start_q16 - begin_q16;
+        if (reverse_advance_q16 > distance_from_begin)
+        {
+            position_q16 = begin_q16;
+            terminal = 1U;
+            break;
+        }
+        position_q16 = segment_start_q16 - reverse_advance_q16;
+    }
+
+    if (produced != 0U)
+    {
+        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+    }
+    *io_position_q16 = position_q16;
+    return (terminal != 0U) ? 2U : 1U;
+}
+
+static uint64_t brick6_sampler_runtime_wrap_q16(uint64_t offset_q16, uint64_t span_q16)
+{
+    while (offset_q16 >= span_q16)
+    {
+        offset_q16 -= span_q16;
+    }
+    return offset_q16;
+}
+
+static void brick6_sampler_runtime_reflect_pingpong_q16(uint64_t begin_q16,
+                                                        uint64_t last_offset_q16,
+                                                        uint64_t offset_q16,
+                                                        uint64_t *io_position_q16,
+                                                        uint8_t *io_reverse)
+{
+    const uint64_t period_q16 = last_offset_q16 * 2ULL;
+    const uint64_t phase_q16 = brick6_sampler_runtime_wrap_q16(offset_q16, period_q16);
+    if (phase_q16 <= last_offset_q16)
+    {
+        *io_reverse = 0U;
+        *io_position_q16 = begin_q16 + phase_q16;
+    }
+    else
+    {
+        *io_reverse = 1U;
+        *io_position_q16 = begin_q16 + (period_q16 - phase_q16);
+    }
+}
+
+static inline float brick6_sampler_runtime_ram_fade_gain(brick6_sampler_voice_t *voice)
+{
+    if (voice->start_fade_remaining == 0U)
+    {
+        return 1.0f;
+    }
+
+    const float fade_scale = (STEAL_DECLICK_SAMPLES > 1U)
+                                 ? (1.0f / (float)(STEAL_DECLICK_SAMPLES - 1U))
+                                 : 1.0f;
+    const uint8_t fade_pos = (uint8_t)(STEAL_DECLICK_SAMPLES - voice->start_fade_remaining);
+    voice->start_fade_remaining--;
+    return (float)fade_pos * fade_scale;
+}
+
+static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint32_t position)
+{
+    if ((voice == NULL) || (ram == NULL) || (out_l == NULL) || (out_r == NULL)
+        || (frames == 0U) || (voice->loop_mode != BRICK6_SAMPLER_LOOP_PINGPONG))
+    {
+        return 0U;
+    }
+
+    const uint32_t begin = voice->region_begin;
+    const uint32_t end = voice->region_end;
+    if ((end <= begin) || ((end - begin) <= 1U) || (position < begin) || (position >= end))
+    {
+        return 0U;
+    }
+
+    const float *const data = ram->data;
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
+    uint32_t produced = 0U;
+    uint8_t reverse = voice->reverse;
+
+    while (produced < frames)
+    {
+        uint32_t todo = frames - produced;
+        if (reverse == 0U)
+        {
+            const uint32_t available = end - position;
+            if (todo > available)
+            {
+                todo = available;
+            }
+            if (voice->start_fade_remaining == 0U)
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t src = (position + i) * 2U;
+                    last_l = data[src] * render_gain;
+                    last_r = data[src + 1U] * render_gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                }
+            }
+            else
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t src = (position + i) * 2U;
+                    const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                    last_l = data[src] * gain;
+                    last_r = data[src + 1U] * gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                }
+            }
+            produced += todo;
+            position += todo;
+            if (position >= end)
+            {
+                position = end - 2U;
+                reverse = 1U;
+            }
+        }
+        else
+        {
+            const uint32_t available = position - begin + 1U;
+            if (todo > available)
+            {
+                todo = available;
+            }
+            if (voice->start_fade_remaining == 0U)
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t src = (position - i) * 2U;
+                    last_l = data[src] * render_gain;
+                    last_r = data[src + 1U] * render_gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                }
+            }
+            else
+            {
+                for (uint32_t i = 0U; i < todo; ++i)
+                {
+                    const uint32_t src = (position - i) * 2U;
+                    const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                    last_l = data[src] * gain;
+                    last_r = data[src + 1U] * gain;
+                    out_l[produced + i] += last_l;
+                    out_r[produced + i] += last_r;
+                }
+            }
+            produced += todo;
+            if (todo > (position - begin))
+            {
+                position = begin + 1U;
+                reverse = 0U;
+            }
+            else
+            {
+                position -= todo;
+            }
+        }
+    }
+
+    if (produced != 0U)
+    {
+        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+    }
+    voice->reverse = reverse;
+    voice->ram_position_q16 = (uint64_t)position << 16U;
+    voice->position = (float)position;
+    return 1U;
+}
+
+static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
+    brick6_sampler_voice_t *voice,
+    const sampler_ram_slot_t *ram,
+    float *out_l,
+    float *out_r,
+    uint32_t frames,
+    uint64_t *io_position_q16)
+{
+    if ((voice == NULL) || (ram == NULL) || (out_l == NULL) || (out_r == NULL)
+        || (io_position_q16 == NULL) || (frames == 0U)
+        || (voice->loop_mode != BRICK6_SAMPLER_LOOP_PINGPONG))
+    {
+        return 0U;
+    }
+
+    const uint64_t begin_q16 = (uint64_t)voice->region_begin << 16U;
+    const uint32_t region_frames = voice->region_end - voice->region_begin;
+    if (region_frames <= 1U)
+    {
+        return 0U;
+    }
+
+    const uint64_t last_q16 = (uint64_t)(voice->region_end - 1U) << 16U;
+    const uint64_t last_offset_q16 = last_q16 - begin_q16;
+    const uint32_t step_q16 = (voice->ram_step_q16 != 0U)
+                                  ? voice->ram_step_q16
+                                  : BRICK6_SAMPLER_Q16_ONE;
+    if ((step_q16 == 0U) || (last_offset_q16 == 0ULL))
+    {
+        return 0U;
+    }
+
+    uint64_t position_q16 = *io_position_q16;
+    uint8_t reverse = voice->reverse;
+    if ((position_q16 < begin_q16) || (position_q16 > last_q16))
+    {
+        const uint64_t offset = (position_q16 >= begin_q16)
+                                    ? (position_q16 - begin_q16)
+                                    : (begin_q16 - position_q16);
+        brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                    last_offset_q16,
+                                                    offset,
+                                                    &position_q16,
+                                                    &reverse);
+    }
+
+    const float *const data = ram->data;
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
+    const float frac_scale = 1.0f / (float)BRICK6_SAMPLER_Q16_ONE;
+    float last_l = 0.0f;
+    float last_r = 0.0f;
+    uint32_t produced = 0U;
+
+    while (produced < frames)
+    {
+        uint32_t todo = frames - produced;
+        if (reverse == 0U)
+        {
+            const uint64_t distance_to_last = last_q16 - position_q16;
+            const uint32_t until_last =
+                (uint32_t)((distance_to_last / (uint64_t)step_q16) + 1ULL);
+            if (todo > until_last)
+            {
+                todo = until_last;
+            }
+            for (uint32_t i = 0U; i < todo; ++i)
+            {
+                const uint64_t render_position_q16 =
+                    position_q16 + ((uint64_t)step_q16 * (uint64_t)i);
+                const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
+                const uint32_t next_index = ((frame_index + 1U) < voice->region_end)
+                                                ? (frame_index + 1U)
+                                                : frame_index;
+                const float frac =
+                    (float)(render_position_q16
+                            & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                    * frac_scale;
+                const uint32_t src0 = frame_index * 2U;
+                const uint32_t src1 = next_index * 2U;
+                const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                const float l0 = data[src0];
+                const float r0 = data[src0 + 1U];
+                const float l1 = data[src1];
+                const float r1 = data[src1 + 1U];
+                last_l = (l0 + ((l1 - l0) * frac)) * gain;
+                last_r = (r0 + ((r1 - r0) * frac)) * gain;
+                out_l[produced + i] += last_l;
+                out_r[produced + i] += last_r;
+            }
+            position_q16 += (uint64_t)step_q16 * (uint64_t)todo;
+            produced += todo;
+            if (position_q16 > last_q16)
+            {
+                brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                            last_offset_q16,
+                                                            position_q16 - begin_q16,
+                                                            &position_q16,
+                                                            &reverse);
+            }
+        }
+        else
+        {
+            const uint64_t segment_distance_from_begin = position_q16 - begin_q16;
+            const uint32_t until_begin =
+                (uint32_t)((segment_distance_from_begin / (uint64_t)step_q16) + 1ULL);
+            if (todo > until_begin)
+            {
+                todo = until_begin;
+            }
+            const uint64_t segment_start_q16 = position_q16;
+            for (uint32_t i = 0U; i < todo; ++i)
+            {
+                const uint64_t render_position_q16 =
+                    segment_start_q16 - ((uint64_t)step_q16 * (uint64_t)i);
+                const uint32_t frame_index = (uint32_t)(render_position_q16 >> 16U);
+                const uint32_t next_index = ((frame_index + 1U) < voice->region_end)
+                                                ? (frame_index + 1U)
+                                                : frame_index;
+                const float frac =
+                    (float)(render_position_q16
+                            & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
+                    * frac_scale;
+                const uint32_t src0 = frame_index * 2U;
+                const uint32_t src1 = next_index * 2U;
+                const float gain = render_gain * brick6_sampler_runtime_ram_fade_gain(voice);
+                const float l0 = data[src0];
+                const float r0 = data[src0 + 1U];
+                const float l1 = data[src1];
+                const float r1 = data[src1 + 1U];
+                last_l = (l0 + ((l1 - l0) * frac)) * gain;
+                last_r = (r0 + ((r1 - r0) * frac)) * gain;
+                out_l[produced + i] += last_l;
+                out_r[produced + i] += last_r;
+            }
+            const uint64_t reverse_advance_q16 = (uint64_t)step_q16 * (uint64_t)todo;
+            const uint64_t distance_from_begin = segment_start_q16 - begin_q16;
+            uint8_t bounced = 0U;
+            if (reverse_advance_q16 > distance_from_begin)
+            {
+                bounced = 1U;
+            }
+            else
+            {
+                position_q16 = segment_start_q16 - reverse_advance_q16;
+            }
+            produced += todo;
+            if (bounced != 0U)
+            {
+                brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                            last_offset_q16,
+                                                            reverse_advance_q16 - distance_from_begin,
+                                                            &position_q16,
+                                                            &reverse);
+            }
+        }
+    }
+
+    if (produced != 0U)
+    {
+        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
+    }
+    voice->reverse = reverse;
+    *io_position_q16 = position_q16;
+    voice->ram_position_q16 = position_q16;
+    voice->position = (float)position_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+    return 1U;
 }
 
 static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
@@ -4333,6 +5134,34 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
     const uint32_t step_q16 = (voice->ram_step_q16 != 0U)
                                   ? voice->ram_step_q16
                                   : BRICK6_SAMPLER_Q16_ONE;
+    if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG) && (region_frames > 1U))
+    {
+        if ((step_q16 == BRICK6_SAMPLER_Q16_ONE)
+            && ((position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U)) == 0ULL))
+        {
+            if (brick6_sampler_runtime_render_ram_pingpong_unpitched(
+                    voice,
+                    ram,
+                    out_l,
+                    out_r,
+                    frames,
+                    (uint32_t)(position_q16 >> 16U)) != 0U)
+            {
+                return;
+            }
+        }
+        else if (brick6_sampler_runtime_render_ram_pingpong_pitched(
+                     voice,
+                     ram,
+                     out_l,
+                     out_r,
+                     frames,
+                     &position_q16) != 0U)
+        {
+            return;
+        }
+    }
+
     if ((step_q16 == BRICK6_SAMPLER_Q16_ONE)
         && ((position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U)) == 0ULL)
         && (voice->loop_mode != BRICK6_SAMPLER_LOOP_PINGPONG))
@@ -4345,11 +5174,102 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                                                     (uint32_t)(position_q16 >> 16U));
         return;
     }
-    const float render_gain = voice->gain * voice->trigger_velocity_gain
-                              * (1.0f / 32768.0f);
+
+    if ((voice->reverse == 0U)
+        && (voice->loop_mode != BRICK6_SAMPLER_LOOP_PINGPONG))
+    {
+#if BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT
+        if (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
+        {
+            float position_f = (float)position_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+            const uint8_t float_result =
+                brick6_sampler_runtime_render_ram_forward_float_phase(voice,
+                                                                      ram,
+                                                                      out_l,
+                                                                      out_r,
+                                                                      frames,
+                                                                      &position_f);
+            if (float_result != 0U)
+            {
+                if (float_result == 2U)
+                {
+                    voice->active = 0U;
+                    voice->position = 0.0f;
+                    voice->ram_position_q16 = 0ULL;
+                    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+                    voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+                    voice->ram_generation = 0U;
+                    voice->ram_data = NULL;
+                    voice->ram_channels = 0U;
+                    return;
+                }
+                voice->position = position_f;
+                voice->ram_position_q16 =
+                    (uint64_t)(position_f * (float)BRICK6_SAMPLER_Q16_ONE + 0.5f);
+                return;
+            }
+        }
+#endif
+        const uint8_t forward_result =
+            brick6_sampler_runtime_render_ram_forward_pitched(voice,
+                                                              ram,
+                                                              out_l,
+                                                              out_r,
+                                                              frames,
+                                                              &position_q16);
+        if (forward_result != 0U)
+        {
+            if (forward_result == 2U)
+            {
+                voice->active = 0U;
+                voice->position = 0.0f;
+                voice->ram_position_q16 = 0ULL;
+                voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+                voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+                voice->ram_generation = 0U;
+                voice->ram_data = NULL;
+                voice->ram_channels = 0U;
+                return;
+            }
+            voice->ram_position_q16 = position_q16;
+            voice->position = (float)position_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+            return;
+        }
+    }
+    else if ((voice->reverse != 0U)
+             && (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE))
+    {
+        const uint8_t reverse_result =
+            brick6_sampler_runtime_render_ram_reverse_pitched(voice,
+                                                              ram,
+                                                              out_l,
+                                                              out_r,
+                                                              frames,
+                                                              &position_q16);
+        if (reverse_result != 0U)
+        {
+            if (reverse_result == 2U)
+            {
+                voice->active = 0U;
+                voice->position = 0.0f;
+                voice->ram_position_q16 = 0ULL;
+                voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+                voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+                voice->ram_generation = 0U;
+                voice->ram_data = NULL;
+                voice->ram_channels = 0U;
+                return;
+            }
+            voice->ram_position_q16 = position_q16;
+            voice->position = (float)position_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+            return;
+        }
+    }
+
+    const float render_gain = voice->gain * voice->trigger_velocity_gain;
     float last_l = 0.0f;
     float last_r = 0.0f;
-    const int16_t *const data = ram->data;
+    const float *const data = ram->data;
     uint32_t produced = 0U;
     uint8_t terminal = 0U;
     while (produced < frames)
@@ -4358,24 +5278,19 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
         {
             if (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD)
             {
-                position_q16 = begin_q16 + ((position_q16 - begin_q16) % span_q16);
+                position_q16 = begin_q16
+                               + brick6_sampler_runtime_wrap_q16(position_q16 - begin_q16,
+                                                                 span_q16);
             }
             else if ((voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG)
                      && (region_frames > 1U)
                      && (last_offset_q16 > 0ULL))
             {
-                const uint64_t period_q16 = last_offset_q16 * 2ULL;
-                const uint64_t phase_q16 = (position_q16 - begin_q16) % period_q16;
-                if (phase_q16 <= last_offset_q16)
-                {
-                    voice->reverse = 0U;
-                    position_q16 = begin_q16 + phase_q16;
-                }
-                else
-                {
-                    voice->reverse = 1U;
-                    position_q16 = begin_q16 + (period_q16 - phase_q16);
-                }
+                brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                            last_offset_q16,
+                                                            position_q16 - begin_q16,
+                                                            &position_q16,
+                                                            &voice->reverse);
             }
             else
             {
@@ -4389,18 +5304,11 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                 && (region_frames > 1U)
                 && (last_offset_q16 > 0ULL))
             {
-                const uint64_t period_q16 = last_offset_q16 * 2ULL;
-                const uint64_t phase_q16 = (begin_q16 - position_q16) % period_q16;
-                if (phase_q16 <= last_offset_q16)
-                {
-                    voice->reverse = 0U;
-                    position_q16 = begin_q16 + phase_q16;
-                }
-                else
-                {
-                    voice->reverse = 1U;
-                    position_q16 = begin_q16 + (period_q16 - phase_q16);
-                }
+                brick6_sampler_runtime_reflect_pingpong_q16(begin_q16,
+                                                            last_offset_q16,
+                                                            begin_q16 - position_q16,
+                                                            &position_q16,
+                                                            &voice->reverse);
             }
             else
             {
@@ -4422,9 +5330,15 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
             break;
         }
 
-        const uint32_t next_index = ((frame_index + 1U) < voice->region_end)
-                                        ? (frame_index + 1U)
-                                        : frame_index;
+        uint32_t next_index = frame_index;
+        if ((frame_index + 1U) < voice->region_end)
+        {
+            next_index = frame_index + 1U;
+        }
+        else if (voice->loop_mode == BRICK6_SAMPLER_LOOP_FORWARD)
+        {
+            next_index = voice->region_begin;
+        }
         const float frac = (float)(position_q16 & (uint64_t)(BRICK6_SAMPLER_Q16_ONE - 1U))
                            * (1.0f / (float)BRICK6_SAMPLER_Q16_ONE);
         float gain = render_gain;
@@ -4437,24 +5351,14 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
             gain *= (float)fade_pos * fade_scale;
             voice->start_fade_remaining--;
         }
-        if (ram->channels == 1U)
-        {
-            const float s0 = (float)data[frame_index];
-            const float s1 = (float)data[next_index];
-            last_l = (s0 + ((s1 - s0) * frac)) * gain;
-            last_r = last_l;
-        }
-        else
-        {
-            const uint32_t src0 = frame_index * 2U;
-            const uint32_t src1 = next_index * 2U;
-            const float l0 = (float)data[src0];
-            const float r0 = (float)data[src0 + 1U];
-            const float l1 = (float)data[src1];
-            const float r1 = (float)data[src1 + 1U];
-            last_l = (l0 + ((l1 - l0) * frac)) * gain;
-            last_r = (r0 + ((r1 - r0) * frac)) * gain;
-        }
+        const uint32_t src0 = frame_index * 2U;
+        const uint32_t src1 = next_index * 2U;
+        const float l0 = data[src0];
+        const float r0 = data[src0 + 1U];
+        const float l1 = data[src1];
+        const float r1 = data[src1 + 1U];
+        last_l = (l0 + ((l1 - l0) * frac)) * gain;
+        last_r = (r0 + ((r1 - r0) * frac)) * gain;
 
         out_l[produced] += last_l;
         out_r[produced] += last_r;
@@ -4469,18 +5373,12 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                     && (region_frames > 1U)
                     && (last_offset_q16 > 0ULL))
                 {
-                    const uint64_t period_q16 = last_offset_q16 * 2ULL;
-                    const uint64_t phase_q16 =
-                        ((uint64_t)step_q16 - distance_from_begin) % period_q16;
-                    if (phase_q16 <= last_offset_q16)
-                    {
-                        voice->reverse = 0U;
-                        position_q16 = begin_q16 + phase_q16;
-                    }
-                    else
-                    {
-                        position_q16 = begin_q16 + (period_q16 - phase_q16);
-                    }
+                    brick6_sampler_runtime_reflect_pingpong_q16(
+                        begin_q16,
+                        last_offset_q16,
+                        (uint64_t)step_q16 - distance_from_begin,
+                        &position_q16,
+                        &voice->reverse);
                 }
                 else
                 {
@@ -4525,6 +5423,23 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
     }
     voice->ram_position_q16 = position_q16;
     voice->position = (float)position_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+}
+
+static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice)
+{
+    if (voice == NULL)
+    {
+        return;
+    }
+
+    voice->active = 0U;
+    voice->position = 0.0f;
+    voice->ram_position_q16 = 0ULL;
+    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
+    voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    voice->ram_generation = 0U;
+    voice->ram_data = NULL;
+    voice->ram_channels = 0U;
 }
 
 void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
@@ -4593,6 +5508,14 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
     }
 
     brick6_sampler_voice_t *const voice = &g_sampler_voice[ctx->track_id];
+    if ((voice->active != 0U)
+        && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+        && (ctx->mix_track_id < MIXER_MAX_TRACKS)
+        && (mixer_track_vca_is_running(ctx->mix_track_id) == 0U))
+    {
+        brick6_sampler_runtime_clear_ram_voice(voice);
+    }
+
     for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
     {
         brick6_sampler_voice_t *const multi_voice = &g_sampler_multi_voice[i];

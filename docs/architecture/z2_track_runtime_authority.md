@@ -183,7 +183,8 @@ Sorties de Z2:
   - autorite conservee dans `track_runtime`,
   - le backend Sampler existant reste reutilise tel quel.
 - Gate note/mix:
-  - le helper central `track_runtime_supports_vca_gate()` inclut `Sampler/OneShot` et `Sampler/Slicer`, mais exclut explicitement `Sampler/Clip` et `Sampler/Looper`.
+  - le helper central `track_runtime_supports_vca_gate()` arme le gate VCA pour `Sampler/OneShot` et `Sampler/Slicer`, afin que leur sortie RAM traverse l'etage VCA/gain mixer commun; note-on ouvre l'attaque VCA et note-off declenche la release VCA.
+  - `Sampler/Clip` et `Sampler/Looper` sont exclus du gate VCA mixer.
   - `Sampler/Clip` utilise `brick6_sampler_runtime_note_off()` pour son contrat `Trig`/`Launch`; il ne passe pas par le gate VCA mixer.
 - Invariants conserves:
   - pas de pipeline audio parallele,

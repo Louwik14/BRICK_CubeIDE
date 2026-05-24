@@ -24,7 +24,7 @@ typedef enum
 typedef enum
 {
     SAMPLER_RAM_FORMAT_NONE = 0,
-    SAMPLER_RAM_FORMAT_S16_INTERLEAVED
+    SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED
 } sampler_ram_format_t;
 
 typedef enum
@@ -56,7 +56,7 @@ typedef struct
     uint32_t sample_rate;
     uint32_t frames;
     uint16_t bytes_per_frame;
-    int16_t *data;
+    float *data;
     uint32_t data_offset;
     uint16_t first_page_slot;
     uint16_t page_count;
@@ -84,7 +84,7 @@ void sampler_ram_pool_clear(uint16_t ram_slot);
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot);
 sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot);
-const int16_t *sampler_ram_pool_get_data(uint16_t ram_slot);
+const float *sampler_ram_pool_get_data(uint16_t ram_slot);
 uint32_t sampler_ram_pool_get_cost(uint16_t ram_slot);
 uint32_t sampler_ram_pool_get_used_bytes(void);
 uint32_t sampler_ram_pool_get_free_bytes(void);
