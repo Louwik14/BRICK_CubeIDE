@@ -108,7 +108,8 @@ This separation is intentional. Do not add a second authority for the same state
 - stereo runtime playback through the normal track-aware mixer path
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
-- `OneShot` currently exposes only `Shot`, `RevShot`, `Loop`, and `PingPong`
+- `OneShot` currently exposes `Shot`, `RevShot`, `Loop`, and `PingPong`; the active minimal RAM path plays global `kind=RAM/READY` slots from `sampler_ram_pool`, honors p-locked `Start`/`End`, and supports p-locked `RevShot`
+- `Slicer` minimal playback is RAM-only: regular slices inside the p-locked `Start`/`End` region from global `kind=RAM/READY` slots, selected by `note % slice_count`
 - `Clip` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, and `Sync Len`
 - `Clip` supports forward `Gate`/`Launch` playback with three stretch modes:
   - `Off`: 1x playback
@@ -116,7 +117,8 @@ This separation is intentional. Do not add a second authority for the same state
   - `Shifter`: varispeed cursor followed by the local stereo pitch-shifter
 - `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
 - `Looper` TONE exposes `ARM` (`Off`/`Rec`/`Overd`), `LEN` (`Free`/`1`/`2`/`4`/`8`/`16`), and `PLAY` (`Off`/`Auto`); current implementation records simple `ARM=Rec` takes, keeps `ARM=Overd` as a bounded no-op until audio overdub exists, and streams playback from transient page-cache pages when `PLAY=Auto`
-- `Multi` exposes TONE `INST` / `GAIN` / `LOOP`; `LOOP=ON` loops active notes from valid WAV `smpl` bounds or the full sample region fallback
+- `Multi` exposes TONE `INST` / `GAIN` / `LOOP`; `LOOP=ON` loops active notes from valid WAV `smpl` bounds, otherwise forced import-time auto-loop bounds with a mechanical 40%/55% fallback for usable WAVs
+- Multi Browser page 3 `CLEAR` deletes only visible `.brickmulti` indexes in the current Multi folder, so indexes can be regenerated without deleting WAVs
 - legacy slice handling remains internal compatibility, not a product mode
 
 ### Braids

@@ -296,7 +296,9 @@ static const param_id_t g_track_runtime_tone_slots_slicer[] = {
     PARAM_SAMPLER_SAMPLE,
     PARAM_SAMPLER_SLICE_COUNT,
     PARAM_SAMPLER_TUNE,
-    PARAM_SAMPLER_GAIN
+    PARAM_SAMPLER_GAIN,
+    PARAM_SAMPLER_START,
+    PARAM_SAMPLER_END
 };
 
 static const param_id_t g_track_runtime_tone_slots_clip[] = {

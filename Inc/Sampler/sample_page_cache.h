@@ -119,6 +119,14 @@ typedef enum
     SAMPLE_PAGE_ALLOC_MARGIN
 } sample_page_alloc_type_t;
 
+typedef struct
+{
+    uint16_t first_slot;
+    uint16_t page_count;
+    uint32_t capacity_bytes;
+    void *data;
+} sample_page_raw_allocation_t;
+
 /*
  * Query API: RAM-only, no SD side effect, no implicit page request.
  */
@@ -157,6 +165,12 @@ void sample_page_cache_release_page_key(sample_audio_key_t key, uint32_t page_in
 void sample_page_cache_release_page(uint16_t sample_id, uint32_t page_index);
 void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample_page_ref_t *ref);
 void sample_page_cache_release_page_ref(uint16_t sample_id, const sample_page_ref_t *ref);
+uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
+                                                sample_page_raw_allocation_t *out_allocation);
+void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
+                                                    uint16_t page_count);
+uint32_t sample_page_cache_slot_pool_total_bytes(void);
+uint32_t sample_page_cache_slot_pool_free_bytes(void);
 const float *sample_page_cache_get_full_sample_base_key(sample_audio_key_t key,
                                                         uint32_t *out_frames);
 const float *sample_page_cache_get_full_sample_base(uint16_t sample_id, uint32_t *out_frames);

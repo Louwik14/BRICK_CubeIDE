@@ -29,6 +29,8 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
+#include "Sampler/sampler_ram_pool.h"
+#include "Sampler/sample_global_pool.h"
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_braids_runtime.h"
@@ -107,6 +109,8 @@ void brick6_app_init(void)
     (void)looper_storage_raw_validate();
     multi_record_writer_init();
     sample_page_cache_init();
+    sample_global_pool_init();
+    sampler_ram_pool_init();
     multi_sample_pool_init();
 
     brick6_sampler_bootstrap_load_pool();

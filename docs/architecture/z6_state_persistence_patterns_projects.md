@@ -102,14 +102,15 @@ Autorite index Sampler/Multi:
 - Le fichier porte uniquement des metadonnees: instrument, samples, zones et paths WAV relatifs au dossier instrument; aucun audio brut, aucun path absolu obligatoire.
 - Tables bornees: 512 samples, 2048 zones, string table 65536 octets. Les WAV source restent directement sur SD dans le dossier instrument, typiquement `0:/Multi/<Instrument>/`.
 - `multi_sample_index_load()` lit et valide l'index hors IRQ via `sd_access_gate`; `multi_sample_index_apply_to_pool()` peuple `multi_sample_pool` en etat `INDEXED` uniquement. Il ne charge pas les page0, ne touche pas `sample_page_cache`, ne touche pas le streamer et ne branche pas le playback.
-- Le record sample `.brickmulti` v2 ajoute `has_loop`, `loop_begin` et `loop_end` en frames source absolues. Les bornes sont valides seulement si `loop_end > loop_begin` et `loop_end <= total_frames`; les records v1 sont charges avec `has_loop=0`. Le byte metadata trace toujours la source root/velocity (`smpl`, `inst`, filename ou alpha) et est propage vers le champ `flags` du `multi_sample_pool`.
+- Le record sample `.brickmulti` v2 ajoute `has_loop`, `loop_begin` et `loop_end` en frames source absolues. Les bornes sont valides seulement si `loop_end > loop_begin` et `loop_end <= total_frames`; les records v1 sont charges avec `has_loop=0`. Le byte metadata trace toujours la source root/velocity (`smpl`, `inst`, filename ou alpha) et peut marquer une loop auto import (`MULTI_SAMPLE_INDEX_META_LOOP_AUTO`); il est propage vers le champ `flags` du `multi_sample_pool`.
 
 Autorite import Sampler/Multi:
 - `multi_sample_import_folder()`.
 - Importe uniquement `instrument_dir/*.wav`, hors IRQ, via `sd_access_gate`, ignore les sous-dossiers et refuse si record/export Looper ou travail SD `sample_cache` est actif.
+- Le browser Settings/Sampler/Multi expose une action maintenance `CLEAR` bornee au dossier courant: elle supprime seulement les `.brickmulti` des instruments directs visibles, jamais les WAV, et refuse si un index cible est deja charge ou si un travail SD concurrent est actif. La regeneration reste faite ensuite par l'import Multi normal.
 - Le mapping import suit l'ordre `filename numerique -> smpl -> inst -> filename legacy -> alpha` pour le root MIDI: le suffixe `prefix_NNN_VVV.wav` donne directement note MIDI `0..127` et centre velocite `1..127`; les centres d'une meme note sont ensuite etendus en plages par midpoint. Le filename legacy `prefix-NoteMidi-VelLow-VelHigh.wav` ou `prefix_NoteMidi_VelLow_VelHigh.wav` reste supporte, puis le fallback alpha demarre a C2/MIDI 36 avec velocite `1..127`.
 - Validation WAV import: PCM ou extensible PCM via `wav_parser`, 48 kHz obligatoire, mono/stereo, 16/24/32-bit, frames non nulles.
-- L'import lit le premier loop `smpl` forward valide (`dwType=0`) et le convertit de `dwEnd` inclusif vers `loop_end` exclusif. Si la loop `smpl` est absente ou invalide apres validation contre `total_frames`, le sample reste sans loop WAV et le runtime pourra seulement appliquer le fallback full-region quand `LOOP=ON`.
+- L'import lit le premier loop `smpl` forward valide (`dwType=0`) et le convertit de `dwEnd` inclusif vers `loop_end` exclusif. Si la loop `smpl` est absente ou invalide apres validation contre `total_frames`, l'import force une auto-loop hors IRQ: il lit uniquement deux petites fenetres PCM autour de 40% et 55% du sample, score les couples zero-cross pour choisir le meilleur couple meme direction, puis le meilleur couple direction quelconque, et retombe sinon sur des bornes mecaniques 40%/55%. Le score classe les candidats mais ne bloque plus la creation; `has_loop/loop_begin/loop_end` sont renseignes avec le flag metadata auto sauf sample techniquement inexploitable.
 - L'import genere les zones par layers de velocite, roots tries et bornes note par midpoint, refuse les doublons root+vel et les chevauchements note+velocity ambigus, puis ecrit `<instrument_dir>/<Instrument>.brickmulti`.
 
 Autorite LOAD Sampler/Multi:
@@ -121,11 +122,12 @@ Autorite LOAD Sampler/Multi:
 - Placement memoire: la queue froide `g_multi_load_queue` est en SDRAM dediee `MULTI_LOAD_SDRAM`; elle n'est pas lue par l'IRQ audio et sert uniquement au LOAD cooperatif hors IRQ.
 - Placement memoire STREAM: les chemins longs des readers actifs `sample_stream_manager` sont separes dans `g_sample_stream_reader_paths` en `SDRAM_SAMPLES`; les handles `FIL` et l'etat reader sont dans `g_sample_stream_readers` en `STORAGE_STATE_SDRAM`. Ces donnees servent uniquement au service SD cooperatif hors IRQ et ne sont pas lues par l'IRQ audio.
 
-Contrat boot/autoload projet v28:
+Contrat boot/autoload projet v32:
 - `project_v1_load_slot()` active une fenetre de progression autoload uniquement apres chargement SD, restore du snapshot sample pool et apply projet reussis.
 - Les slots `STREAM` attendus sont termines quand `sample_pool_get_state(slot)` n'est plus `PREPARING`: `LOADED`, `ERROR`, `MISSING` et `EMPTY` sont terminaux cote ecran boot.
 - Les slots `MULTI` attendus sont termines quand l'instrument est `READY` ou `ERROR`, ou quand le loader Multi n'a plus de travail pending et que le slot n'est plus `LOADING`. Avant de lancer les loads Multi, Z6 prelit les headers `.brickmulti` des slots autoload pour figer un total global en unites utilisateur: 1 unite par sample Multi, 1 unite par slot STREAM. Pendant le chargement actif, `multi_sample_get_load_diag()` expose `samples_ready/total_samples`; la progression visible additionne cet avancement au total global au lieu d'afficher les pages internes ou de repartir a 0 pour chaque Multi.
-- Les slots `RAM_RESERVED_FUTURE` sont ignores par la progression; aucun runtime RAM n'est active.
+- Les slots `RAM` attendus sont recharges synchroniquement hors IRQ par `sampler_ram_pool_load_wav_at(ram_slot, global_index, path)` pendant le load projet. La progression les compte comme une unite terminee apres l'appel; le cout produit est recalcule depuis les pages reelles allouees dans `SAMPLE_PAGE_SLOT_POOL`.
+- Un fichier RAM absent/invalide ou un refus SLOT_POOL/budget/backend pose un slot global `kind=RAM` en `ERROR` quand le slot global sauvegarde est disponible. Les tracks OneShot/Slicer gardent leur `PARAM_SAMPLER_SAMPLE` global et refusent ensuite proprement/silence via les validations runtime RAM.
 - En cas d'absence de boot context, de projet refuse ou d'ancien payload v27, l'etat loading se ferme proprement sans restore partiel supplementaire.
 
 Autorite writer SD audio multi-client:
@@ -372,7 +374,7 @@ Points de lecture principaux:
 - `project_v1_save_slot()`:
   - capture current project (`project_v1_capture_current`),
   - capture aussi le snapshot `sample_pool` courant du projet,
-  - capture la liste durable `sample_autoload`: slots `STREAM` issus du `sample_pool`, slots `MULTI` issus du `multi_sample_pool`, type `RAM_RESERVED_FUTURE` reserve sans runtime actif,
+  - capture la liste durable `sample_autoload`: slots `STREAM` issus du `sample_pool`, slots `MULTI` issus du `multi_sample_pool`, slots `RAM` READY/ERROR issus du `sampler_ram_pool`,
   - capture les assignations `Sampler/Multi` par track: path `.brickmulti` et gain Multi; aucun `instrument_id` runtime n'est sauvegarde,
   - capture le bloc MACRO projet (`Mode`, scenes liees aux pots, scenes/locks),
   - force active slot dans snapshot,
@@ -384,6 +386,7 @@ Points de lecture principaux:
 - `project_v1_load_slot()`:
   - charge depuis SD via `project_sd_bank_load_slot` (lecture + validation header/checksum + records, sans commit pattern-bank),
   - restaure le `sample_pool` du projet avant l'apply live,
+  - restaure les slots globaux `STREAM` depuis `sample_autoload`, puis recharge les slots `RAM` declares via `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` avant l'apply live,
   - restaure les slots `MULTI` declares dans `sample_autoload` apres l'apply live via `multi_sample_load_instrument(path, slot_index)`; les refus restent non fatals et posent le diagnostic restore existant,
   - restaure le bloc MACRO projet depuis `ProjectSaveV1`,
   - applique snapshot (`project_v1_apply_snapshot` -> `pattern_live_apply_snapshot`),
@@ -415,7 +418,7 @@ Effets aval:
 - `pattern_live_apply_snapshot` fait des boucles `PARAM_COUNT x SEQ_TRACK_COUNT` + seq full copy, cout variable mais hors IRQ audio.
 - Pas de malloc observe dans les fichiers Z6; buffers statiques (`UI_SDRAM`, `DMA_BUFFER`, globals).
 - Coordination SD via `sd_access_gate` evite collisions clients heterogenes (pattern/project/preview vs autres clients).
-- La preview SD lit les formats source WAV et ne touche jamais le pool projet 64 slots.
+- La preview SD lit les formats source WAV et ne touche jamais le pool projet Stream.
 - La preview SD ne participe pas au sample streaming principal: son ring SDRAM est seulement une audition temporaire vers MAIN, et son buffer I/O SDRAM reste limite au flux FatFs/decode WAV preview.
 
 ## 8. Invariants a ne pas casser
@@ -508,10 +511,10 @@ Plus petite prochaine passe utile:
   - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=OneShot`,
   - un ancien mode `Slice` / `RevSlice` est rabattu vers `Shot` au restore/apply runtime pour eviter toute exposition produit `OneShot`,
   - aucun bump de format snapshot n'est requis pour cette seule sortie de family.
-- La grille Slice n'est jamais persistée:
+- La grille Slice n'est jamais persistÃ©e:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
 - `Slice Count` reste hors p-lock.
-- `PROJECT_V1_FILE_VERSION` a ete incremente pour refl�ter le payload Sampler v1 et le bloc MACRO projet.
+- `PROJECT_V1_FILE_VERSION` a ete incremente pour reflï¿½ter le payload Sampler v1 et le bloc MACRO projet.
 - `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquaient une ancienne rupture prototype Synth historique; les anciens payloads incompatibles restent refuses via `version/payload_size`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
 - Au restore projet, le pool est reconstruit avant l'apply live pour que les params `Sample` retrouvent les slots residents quand c'est possible.
@@ -865,12 +868,22 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ## Addendum 2026-05-21 - autoload slots sample projet
 
 - `PROJECT_V1_FILE_VERSION=28` marque l'ajout du bloc `ProjectSaveV1.sample_autoload`. Les anciens projets prototype restent refuses par validation stricte `version/payload_size`, sans migration legacy.
-- Le bloc liste des entrees bornees `{slot_index, kind, flags, path}` avec `kind=STREAM`, `MULTI` ou `RAM_RESERVED_FUTURE`. `RAM_RESERVED_FUTURE` reserve seulement le format: aucun runtime RAM, OneShot ou Slicer n'est reactive par cette passe.
+- Migration Sampler Stream en cours: `PARAM_SAMPLER_SAMPLE` hors Multi porte deja un slot global actif. `PATTERN_VERSION=22` et `PROJECT_V1_FILE_VERSION=31` refusent les anciens payloads prototype dont cette valeur designait encore directement un index backend `sample_pool`.
+- `PROJECT_V1_SAMPLE_AUTOLOAD_VERSION=3` stocke l'identite `global_index` en plus du `slot_index` backend. Au restore Stream, le backend `sample_pool[SAMPLE_POOL_SIZE]` est restaure puis le slot global STREAM est force sur son `global_index` sauvegarde; Multi conserve son backend technique et capture aussi le `global_index`; RAM recharge son backend `sampler_ram_pool` au `slot_index` sauvegarde et force le slot global sauvegarde.
+- Le bloc liste des entrees bornees `{slot_index, global_index, kind, flags, path}` avec `kind=STREAM`, `MULTI` ou `RAM`. `PROJECT_V1_FILE_VERSION=32` marque la rupture prototype qui remplace la reservation RAM future par des slots RAM autoloadables.
 - Les entrees `STREAM` mirroring les slots `sample_pool` portent le path WAV complet et restent restaurees par le chemin `sample_pool_restore_project_snapshot()` existant.
 - Les entrees `MULTI` portent le path `.brickmulti` et restaurent les slots `multi_sample_pool` par `multi_sample_load_instrument(path, slot_index)` apres apply projet. Le chargement page0 reste cooperatif via `multi_sample_service_load()`; un path absent/invalide met seulement le diagnostic restore en erreur et ne crashe pas.
-- Le bloc sert de source explicite pour la future phase boot/autoload UI: la lecture projet et les loads STREAM/MULTI sont les etapes longues synchrones/cooperatives qui alimenteront la progression, sans animation introduite ici.
+- Les entrees `RAM` portent le path WAV complet et restaurent les slots `sampler_ram_pool` par `sampler_ram_pool_load_wav_at(slot_index, global_index, path)` hors IRQ. Aucun audio brut n'est sauvegarde; `cost_bytes` est recalcule au reload comme `pages allouees * SAMPLE_PAGE_BYTES`. Un echec d'ouverture/parse/decode/budget/SLOT_POOL/backend conserve si possible le slot global RAM en `ERROR` avec le path, sans pointeur audio stale.
+- Le bloc sert de source explicite pour la phase boot/autoload UI: la lecture projet, les loads STREAM/RAM synchrones et les loads MULTI cooperatifs alimentent la progression. RAM vaut une unite utilisateur terminee a la fin de son load synchrone.
 
 ## Addendum 2026-05-23 - Sampler/Multi LOOP
 
 - `PATTERN_VERSION=21` et `PROJECT_V1_FILE_VERSION=29` marquent l'ajout append-only de `PARAM_SAMPLER_MULTI_LOOP` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.
 - `MULTI_SAMPLE_INDEX_VERSION=2` marque l'ajout des metadonnees de loop WAV par sample dans `.brickmulti`; la lecture v1 reste acceptee avec `has_loop=0`.
+
+## Addendum 2026-05-24 - catalogue global sample produit
+
+- `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 240 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
+- `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, OneShot ou Slicer n'est remplace par cette couche.
+- Le cout permanent global compte uniquement les slots produits charges: Stream/Multi gardent le cout de presocle page-cache valide, RAM compte sa taille physique reelle en pages `SAMPLE_PAGE_SLOT_POOL` allouees. Les fenetres voix actives, Multi LOOP, window locks, pages queued/loading et marges runtime restent hors cout permanent.
+- `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v32: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades.

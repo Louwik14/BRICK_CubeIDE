@@ -9,12 +9,25 @@
 #include "Storage/memory_layout.h"
 #include "Storage/multi_record_writer.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
 
 #include "ff.h"
 
 #define MULTI_SAMPLE_IMPORT_PATH_MAX (160U)
 #define MULTI_SAMPLE_IMPORT_DIAG_MAX (80U)
+#define MULTI_SAMPLE_AUTO_LOOP_WINDOW_MS (150U)
+#define MULTI_SAMPLE_AUTO_LOOP_MIN_MS (150U)
+#define MULTI_SAMPLE_AUTO_LOOP_BEGIN_TARGET_NUM (2U)
+#define MULTI_SAMPLE_AUTO_LOOP_BEGIN_TARGET_DEN (5U)
+#define MULTI_SAMPLE_AUTO_LOOP_END_TARGET_NUM (11U)
+#define MULTI_SAMPLE_AUTO_LOOP_END_TARGET_DEN (20U)
+#define MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS (16U)
+#define MULTI_SAMPLE_AUTO_LOOP_MAX_WINDOW_FRAMES \
+    (((48000U * MULTI_SAMPLE_AUTO_LOOP_WINDOW_MS * 2U) / 1000U) \
+     + (MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS * 2U) + 4U)
+#define MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES (64U)
+#define MULTI_SAMPLE_AUTO_LOOP_IO_BYTES (4096U)
 
 typedef struct
 {
@@ -31,6 +44,9 @@ typedef struct
     uint8_t smpl_loop_valid;
     uint32_t smpl_loop_begin;
     uint32_t smpl_loop_end;
+    uint8_t auto_loop_valid;
+    uint32_t auto_loop_begin;
+    uint32_t auto_loop_end;
     uint8_t inst_root_valid;
     uint8_t inst_root;
     uint8_t inst_velocity_valid;
@@ -43,6 +59,30 @@ typedef struct
     uint8_t filename_vel_high;
 } multi_sample_import_metadata_t;
 
+typedef struct
+{
+    int16_t left;
+    int16_t right;
+} multi_sample_auto_loop_frame_t;
+
+typedef struct
+{
+    uint32_t start_frame;
+    uint32_t frame_count;
+    multi_sample_auto_loop_frame_t *frames;
+} multi_sample_auto_loop_window_t;
+
+typedef struct
+{
+    uint32_t frame;
+    uint32_t local;
+    uint32_t amp;
+    uint32_t energy;
+    int32_t slope_left;
+    int32_t slope_right;
+    int8_t direction;
+} multi_sample_auto_loop_candidate_t;
+
 SDRAM_MULTI_IMPORT static multi_sample_import_sample_t
     g_import_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 SDRAM_MULTI_IMPORT static multi_sample_index_source_sample_t
@@ -53,9 +93,20 @@ SDRAM_MULTI_IMPORT static char g_import_work_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
 SDRAM_MULTI_IMPORT static char g_import_scan_dir[MULTI_SAMPLE_IMPORT_PATH_MAX];
 SDRAM_MULTI_IMPORT static char g_import_index_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
 SDRAM_MULTI_IMPORT static char g_import_last_diag[MULTI_SAMPLE_IMPORT_DIAG_MAX];
+SDRAM_MULTI_IMPORT static multi_sample_auto_loop_frame_t
+    g_auto_loop_begin_frames[MULTI_SAMPLE_AUTO_LOOP_MAX_WINDOW_FRAMES];
+SDRAM_MULTI_IMPORT static multi_sample_auto_loop_frame_t
+    g_auto_loop_end_frames[MULTI_SAMPLE_AUTO_LOOP_MAX_WINDOW_FRAMES];
+SDRAM_MULTI_IMPORT static multi_sample_auto_loop_candidate_t
+    g_auto_loop_begin_candidates[MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES];
+SDRAM_MULTI_IMPORT static multi_sample_auto_loop_candidate_t
+    g_auto_loop_end_candidates[MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES];
+SDRAM_MULTI_IMPORT static uint8_t g_auto_loop_io[MULTI_SAMPLE_AUTO_LOOP_IO_BYTES];
 static CTRL_STATE multi_sample_import_result_t g_import_last_result;
 static CTRL_STATE uint16_t g_import_sample_count;
 static CTRL_STATE uint16_t g_import_zone_count;
+
+static uint8_t multi_import_validate_wav_info(const wav_info_t *info);
 
 static void multi_import_clear_diag(void)
 {
@@ -356,6 +407,466 @@ static void multi_import_read_wav_metadata(FIL *fp, multi_sample_import_metadata
             return;
         }
     }
+}
+
+static uint32_t multi_import_abs_i32(int32_t value)
+{
+    return (value < 0) ? (uint32_t)(-value) : (uint32_t)value;
+}
+
+static int16_t multi_import_float_to_i16(float value)
+{
+    if (value > 1.0f)
+    {
+        value = 1.0f;
+    }
+    else if (value < -1.0f)
+    {
+        value = -1.0f;
+    }
+
+    const int32_t scaled = (value >= 0.0f)
+        ? (int32_t)((value * 32767.0f) + 0.5f)
+        : (int32_t)((value * 32768.0f) - 0.5f);
+    if (scaled > 32767)
+    {
+        return 32767;
+    }
+    if (scaled < -32768)
+    {
+        return -32768;
+    }
+    return (int16_t)scaled;
+}
+
+static int32_t multi_import_auto_loop_mono(const multi_sample_auto_loop_frame_t *frame)
+{
+    return ((int32_t)frame->left + (int32_t)frame->right) / 2;
+}
+
+static uint32_t multi_import_auto_loop_amp(const multi_sample_auto_loop_frame_t *frame)
+{
+    return multi_import_abs_i32(frame->left) + multi_import_abs_i32(frame->right);
+}
+
+static uint32_t multi_import_auto_loop_energy(const multi_sample_auto_loop_window_t *window,
+                                              uint32_t local)
+{
+    if ((window == 0) || (window->frames == 0) || (window->frame_count == 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t radius = MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS;
+    const uint32_t begin = (local > radius) ? (local - radius) : 0U;
+    uint32_t end = local + radius + 1U;
+    if (end > window->frame_count)
+    {
+        end = window->frame_count;
+    }
+
+    uint64_t sum = 0U;
+    uint32_t count = 0U;
+    for (uint32_t i = begin; i < end; ++i)
+    {
+        sum += multi_import_auto_loop_amp(&window->frames[i]);
+        count++;
+    }
+
+    return (count != 0U) ? (uint32_t)(sum / count) : 0U;
+}
+
+static uint8_t multi_import_auto_loop_make_window(const wav_info_t *info,
+                                                  uint32_t center,
+                                                  multi_sample_auto_loop_frame_t *frames,
+                                                  multi_sample_auto_loop_window_t *out)
+{
+    if ((info == 0) || (frames == 0) || (out == 0) || (info->sample_rate == 0U)
+        || (info->block_align == 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t total_frames = info->data_size / info->block_align;
+    if (total_frames == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t half_window =
+        (uint32_t)(((uint64_t)info->sample_rate * MULTI_SAMPLE_AUTO_LOOP_WINDOW_MS) / 1000U);
+    const uint32_t margin = MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS + 1U;
+    const uint32_t left = half_window + margin;
+    const uint32_t right = half_window + margin + 1U;
+    const uint32_t start = (center > left) ? (center - left) : 0U;
+    uint32_t end = center + right;
+    if ((end < center) || (end > total_frames))
+    {
+        end = total_frames;
+    }
+    if ((end <= start) || ((end - start) > MULTI_SAMPLE_AUTO_LOOP_MAX_WINDOW_FRAMES))
+    {
+        return 0U;
+    }
+
+    out->start_frame = start;
+    out->frame_count = end - start;
+    out->frames = frames;
+    return 1U;
+}
+
+static uint8_t multi_import_auto_loop_mechanical_bounds(const wav_info_t *info,
+                                                        uint32_t *out_begin,
+                                                        uint32_t *out_end)
+{
+    if ((info == 0) || (out_begin == 0) || (out_end == 0) || (info->block_align == 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t total_frames = info->data_size / info->block_align;
+    if (total_frames < 2U)
+    {
+        return 0U;
+    }
+
+    const uint32_t min_loop_frames =
+        (uint32_t)(((uint64_t)info->sample_rate * MULTI_SAMPLE_AUTO_LOOP_MIN_MS) / 1000U);
+    uint32_t begin =
+        (uint32_t)(((uint64_t)total_frames * MULTI_SAMPLE_AUTO_LOOP_BEGIN_TARGET_NUM)
+                   / MULTI_SAMPLE_AUTO_LOOP_BEGIN_TARGET_DEN);
+    uint32_t end =
+        (uint32_t)(((uint64_t)total_frames * MULTI_SAMPLE_AUTO_LOOP_END_TARGET_NUM)
+                   / MULTI_SAMPLE_AUTO_LOOP_END_TARGET_DEN);
+
+    if ((min_loop_frames != 0U) && (total_frames > min_loop_frames)
+        && ((end <= begin) || ((end - begin) < min_loop_frames)))
+    {
+        end = begin + min_loop_frames;
+        if (end > total_frames)
+        {
+            end = total_frames;
+            begin = end - min_loop_frames;
+        }
+    }
+
+    if (end > total_frames)
+    {
+        end = total_frames;
+    }
+    if (begin >= end)
+    {
+        begin = (end > 1U) ? (end - 1U) : 0U;
+    }
+    if (begin >= end)
+    {
+        begin = 0U;
+        end = 1U;
+    }
+
+    *out_begin = begin;
+    *out_end = end;
+    return (begin < end) ? 1U : 0U;
+}
+
+static uint8_t multi_import_auto_loop_read_window(FIL *fp,
+                                                  const wav_info_t *info,
+                                                  multi_sample_auto_loop_window_t *window)
+{
+    if ((fp == 0) || (info == 0) || (window == 0) || (window->frames == 0)
+        || (window->frame_count == 0U) || (info->block_align == 0U))
+    {
+        return 0U;
+    }
+
+    const uint64_t byte_offset =
+        (uint64_t)info->data_offset + ((uint64_t)window->start_frame * info->block_align);
+    const uint64_t byte_end = byte_offset + ((uint64_t)window->frame_count * info->block_align);
+    const uint64_t data_end = (uint64_t)info->data_offset + info->data_size;
+    if ((byte_end < byte_offset) || (byte_end > data_end) || (byte_end > (uint64_t)f_size(fp)))
+    {
+        return 0U;
+    }
+    if (f_lseek(fp, (FSIZE_t)byte_offset) != FR_OK)
+    {
+        return 0U;
+    }
+
+    uint32_t frames_done = 0U;
+    while (frames_done < window->frame_count)
+    {
+        uint32_t request_frames = window->frame_count - frames_done;
+        uint32_t request_bytes = request_frames * info->block_align;
+        if (request_bytes > sizeof(g_auto_loop_io))
+        {
+            request_bytes = sizeof(g_auto_loop_io) - (sizeof(g_auto_loop_io) % info->block_align);
+        }
+        if (request_bytes == 0U)
+        {
+            return 0U;
+        }
+
+        UINT br = 0U;
+        if ((f_read(fp, g_auto_loop_io, request_bytes, &br) != FR_OK) || (br == 0U))
+        {
+            return 0U;
+        }
+
+        const uint32_t valid_bytes = br - (br % info->block_align);
+        if (valid_bytes == 0U)
+        {
+            return 0U;
+        }
+
+        uint32_t pos = 0U;
+        while ((pos + info->block_align <= valid_bytes) && (frames_done < window->frame_count))
+        {
+            float left = 0.0f;
+            float right = 0.0f;
+            wav_audio_codec_decode_stereo_frame(&g_auto_loop_io[pos],
+                                                info->channels,
+                                                info->bits_per_sample,
+                                                &left,
+                                                &right);
+            window->frames[frames_done].left = multi_import_float_to_i16(left);
+            window->frames[frames_done].right = multi_import_float_to_i16(right);
+            frames_done++;
+            pos += info->block_align;
+        }
+    }
+
+    return 1U;
+}
+
+static void multi_import_auto_loop_candidate_insert(
+    multi_sample_auto_loop_candidate_t *candidates,
+    uint32_t *count,
+    const multi_sample_auto_loop_candidate_t *candidate)
+{
+    if ((candidates == 0) || (count == 0) || (candidate == 0))
+    {
+        return;
+    }
+
+    if (*count < MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES)
+    {
+        candidates[*count] = *candidate;
+        (*count)++;
+        return;
+    }
+
+    uint32_t worst = 0U;
+    uint32_t worst_amp = candidates[0].amp;
+    for (uint32_t i = 1U; i < MULTI_SAMPLE_AUTO_LOOP_MAX_CANDIDATES; ++i)
+    {
+        if (candidates[i].amp > worst_amp)
+        {
+            worst = i;
+            worst_amp = candidates[i].amp;
+        }
+    }
+    if (candidate->amp < worst_amp)
+    {
+        candidates[worst] = *candidate;
+    }
+}
+
+static uint32_t multi_import_auto_loop_collect_candidates(
+    const multi_sample_auto_loop_window_t *window,
+    multi_sample_auto_loop_candidate_t *candidates)
+{
+    if ((window == 0) || (window->frames == 0) || (candidates == 0)
+        || (window->frame_count < ((MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS * 2U) + 3U)))
+    {
+        return 0U;
+    }
+
+    uint32_t count = 0U;
+    for (uint32_t i = 1U; (i + 1U) < window->frame_count; ++i)
+    {
+        const int32_t prev = multi_import_auto_loop_mono(&window->frames[i - 1U]);
+        const int32_t curr = multi_import_auto_loop_mono(&window->frames[i]);
+        int8_t direction = 0;
+        if ((prev <= 0) && (curr > 0))
+        {
+            direction = 1;
+        }
+        else if ((prev >= 0) && (curr < 0))
+        {
+            direction = -1;
+        }
+        else
+        {
+            continue;
+        }
+
+        const uint32_t amp = multi_import_auto_loop_amp(&window->frames[i]);
+        const uint32_t energy = multi_import_auto_loop_energy(window, i);
+
+        const multi_sample_auto_loop_candidate_t candidate = {
+            .frame = window->start_frame + i,
+            .local = i,
+            .amp = amp,
+            .energy = energy,
+            .slope_left = (int32_t)window->frames[i + 1U].left
+                          - (int32_t)window->frames[i - 1U].left,
+            .slope_right = (int32_t)window->frames[i + 1U].right
+                           - (int32_t)window->frames[i - 1U].right,
+            .direction = direction,
+        };
+        multi_import_auto_loop_candidate_insert(candidates, &count, &candidate);
+    }
+
+    return count;
+}
+
+static uint32_t multi_import_auto_loop_match_score(
+    const multi_sample_auto_loop_window_t *begin_window,
+    const multi_sample_auto_loop_candidate_t *begin,
+    const multi_sample_auto_loop_window_t *end_window,
+    const multi_sample_auto_loop_candidate_t *end)
+{
+    if ((begin_window == 0) || (begin == 0) || (end_window == 0) || (end == 0)
+        || (begin_window->frames == 0) || (end_window->frames == 0))
+    {
+        return UINT32_MAX;
+    }
+
+    const uint32_t radius = MULTI_SAMPLE_AUTO_LOOP_MATCH_RADIUS;
+    if ((begin->local < radius) || ((begin->local + radius) >= begin_window->frame_count)
+        || (end->local < radius) || ((end->local + radius) >= end_window->frame_count))
+    {
+        return UINT32_MAX;
+    }
+
+    uint64_t diff = 0U;
+    uint32_t count = 0U;
+    for (int32_t k = -(int32_t)radius; k <= (int32_t)radius; ++k)
+    {
+        const multi_sample_auto_loop_frame_t *const a =
+            &begin_window->frames[(uint32_t)((int32_t)begin->local + k)];
+        const multi_sample_auto_loop_frame_t *const b =
+            &end_window->frames[(uint32_t)((int32_t)end->local + k)];
+        diff += multi_import_abs_i32((int32_t)a->left - (int32_t)b->left);
+        diff += multi_import_abs_i32((int32_t)a->right - (int32_t)b->right);
+        count += 2U;
+    }
+
+    const uint32_t avg_diff = (count != 0U) ? (uint32_t)(diff / count) : UINT32_MAX;
+    const uint32_t slope_diff =
+        multi_import_abs_i32(begin->slope_left - end->slope_left)
+        + multi_import_abs_i32(begin->slope_right - end->slope_right);
+    return ((begin->amp + end->amp) / 2U)
+           + (slope_diff / 8U)
+           + (avg_diff * 4U);
+}
+
+static uint8_t multi_import_try_auto_loop(FIL *fp,
+                                          const wav_info_t *info,
+                                          uint32_t *out_begin,
+                                          uint32_t *out_end)
+{
+    if ((fp == 0) || (info == 0) || (out_begin == 0) || (out_end == 0)
+        || (multi_import_validate_wav_info(info) == 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t total_frames = info->data_size / info->block_align;
+    const uint32_t min_loop_frames =
+        (uint32_t)(((uint64_t)info->sample_rate * MULTI_SAMPLE_AUTO_LOOP_MIN_MS) / 1000U);
+    if (total_frames < 2U)
+    {
+        return 0U;
+    }
+
+    multi_sample_auto_loop_window_t begin_window;
+    multi_sample_auto_loop_window_t end_window;
+    const uint32_t begin_center =
+        (uint32_t)(((uint64_t)total_frames * MULTI_SAMPLE_AUTO_LOOP_BEGIN_TARGET_NUM)
+                   / MULTI_SAMPLE_AUTO_LOOP_BEGIN_TARGET_DEN);
+    const uint32_t end_center =
+        (uint32_t)(((uint64_t)total_frames * MULTI_SAMPLE_AUTO_LOOP_END_TARGET_NUM)
+                   / MULTI_SAMPLE_AUTO_LOOP_END_TARGET_DEN);
+    if ((multi_import_auto_loop_make_window(info,
+                                            begin_center,
+                                            g_auto_loop_begin_frames,
+                                            &begin_window) == 0U)
+        || (multi_import_auto_loop_make_window(info,
+                                               end_center,
+                                               g_auto_loop_end_frames,
+                                               &end_window) == 0U)
+        || (multi_import_auto_loop_read_window(fp, info, &begin_window) == 0U)
+        || (multi_import_auto_loop_read_window(fp, info, &end_window) == 0U))
+    {
+        return multi_import_auto_loop_mechanical_bounds(info, out_begin, out_end);
+    }
+
+    const uint32_t begin_count =
+        multi_import_auto_loop_collect_candidates(&begin_window, g_auto_loop_begin_candidates);
+    const uint32_t end_count =
+        multi_import_auto_loop_collect_candidates(&end_window, g_auto_loop_end_candidates);
+    if ((begin_count == 0U) || (end_count == 0U))
+    {
+        return multi_import_auto_loop_mechanical_bounds(info, out_begin, out_end);
+    }
+
+    uint32_t best_score = UINT32_MAX;
+    uint32_t best_begin = 0U;
+    uint32_t best_end = 0U;
+    uint32_t best_any_score = UINT32_MAX;
+    uint32_t best_any_begin = 0U;
+    uint32_t best_any_end = 0U;
+    for (uint32_t i = 0U; i < begin_count; ++i)
+    {
+        const multi_sample_auto_loop_candidate_t *const begin = &g_auto_loop_begin_candidates[i];
+        for (uint32_t j = 0U; j < end_count; ++j)
+        {
+            const multi_sample_auto_loop_candidate_t *const end = &g_auto_loop_end_candidates[j];
+            if (end->frame <= begin->frame)
+            {
+                continue;
+            }
+
+            uint32_t score =
+                multi_import_auto_loop_match_score(&begin_window, begin, &end_window, end);
+            if (score == UINT32_MAX)
+            {
+                continue;
+            }
+            if ((end->frame - begin->frame) < (min_loop_frames * 2U))
+            {
+                score += ((min_loop_frames * 2U) - (end->frame - begin->frame)) / 16U;
+            }
+            if (score < best_any_score)
+            {
+                best_any_score = score;
+                best_any_begin = begin->frame;
+                best_any_end = end->frame;
+            }
+            if ((begin->direction == end->direction) && (score < best_score))
+            {
+                best_score = score;
+                best_begin = begin->frame;
+                best_end = end->frame;
+            }
+        }
+    }
+
+    if ((best_score == UINT32_MAX) && (best_any_score != UINT32_MAX))
+    {
+        best_begin = best_any_begin;
+        best_end = best_any_end;
+    }
+
+    if ((best_end <= best_begin) || (best_end > total_frames))
+    {
+        return multi_import_auto_loop_mechanical_bounds(info, out_begin, out_end);
+    }
+
+    *out_begin = best_begin;
+    *out_end = best_end;
+    return 1U;
 }
 
 static uint8_t multi_import_filename_metadata(const char *filename,
@@ -671,6 +1182,24 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
     if (parsed != 0U)
     {
         multi_import_read_wav_metadata(&fp, &metadata);
+        const uint32_t parsed_total_frames =
+            (info.block_align != 0U) ? (info.data_size / info.block_align) : 0U;
+        const uint8_t smpl_loop_valid =
+            ((metadata.smpl_loop_valid != 0U)
+             && (metadata.smpl_loop_end > metadata.smpl_loop_begin)
+             && (metadata.smpl_loop_end <= parsed_total_frames))
+                ? 1U
+                : 0U;
+        if ((multi_import_validate_wav_info(&info) != 0U)
+            && (smpl_loop_valid == 0U)
+            && (multi_import_try_auto_loop(&fp,
+                                           &info,
+                                           &metadata.auto_loop_begin,
+                                           &metadata.auto_loop_end)
+                != 0U))
+        {
+            metadata.auto_loop_valid = 1U;
+        }
     }
     (void)f_close(&fp);
     if (parsed == 0U)
@@ -717,6 +1246,15 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
         item->sample.has_loop = 1U;
         item->sample.loop_begin = metadata.smpl_loop_begin;
         item->sample.loop_end = metadata.smpl_loop_end;
+    }
+    else if ((metadata.auto_loop_valid != 0U)
+             && (metadata.auto_loop_end > metadata.auto_loop_begin)
+             && (metadata.auto_loop_end <= item->sample.total_frames))
+    {
+        item->sample.has_loop = 1U;
+        item->sample.loop_begin = metadata.auto_loop_begin;
+        item->sample.loop_end = metadata.auto_loop_end;
+        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_LOOP_AUTO;
     }
 
     const uint8_t filename_metadata = multi_import_filename_metadata(fno->fname,

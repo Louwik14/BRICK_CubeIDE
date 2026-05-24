@@ -21,6 +21,7 @@ extern "C" {
 #define MULTI_SAMPLE_INDEX_META_VEL_INST       (0x10U)
 #define MULTI_SAMPLE_INDEX_META_VEL_FILENAME   (0x20U)
 #define MULTI_SAMPLE_INDEX_META_VEL_ALPHA      (0x40U)
+#define MULTI_SAMPLE_INDEX_META_LOOP_AUTO      (0x80U)
 
 typedef enum
 {

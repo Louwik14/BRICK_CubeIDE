@@ -11,6 +11,9 @@
 #include "Storage/undo_v2.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Param/param_macro.h"
+#include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_page_cache_config.h"
+#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Seq/seq_runtime.h"
@@ -159,12 +162,13 @@ static void project_v1_sample_autoload_clear(ProjectSaveV1 *project)
 static uint8_t project_v1_sample_autoload_add(ProjectSaveV1 *project,
                                               project_v1_sample_autoload_kind_t kind,
                                               uint16_t slot_index,
+                                              uint16_t global_index,
                                               const char *path)
 {
     if ((project == 0)
         || (project->sample_autoload.count >= PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
-        || ((kind != PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM_RESERVED_FUTURE)
-            && ((path == 0) || (path[0] == '\0'))))
+        || (path == 0)
+        || (path[0] == '\0'))
     {
         return 0U;
     }
@@ -173,6 +177,7 @@ static uint8_t project_v1_sample_autoload_add(ProjectSaveV1 *project,
         &project->sample_autoload.slots[project->sample_autoload.count];
     memset(slot, 0, sizeof(*slot));
     slot->slot_index = slot_index;
+    slot->global_index = global_index;
     slot->kind = (uint8_t)kind;
     slot->flags = PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED;
     if (path != 0)
@@ -201,9 +206,14 @@ static void project_v1_capture_sample_autoload(ProjectSaveV1 *project)
         const sample_desc_t *const desc = sample_pool_get(slot);
         if ((desc != 0) && (desc->path[0] != '\0'))
         {
+            uint16_t global_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+            (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,
+                                                     slot,
+                                                     &global_index);
             (void)project_v1_sample_autoload_add(project,
                                                  PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM,
                                                  slot,
+                                                 global_index,
                                                  desc->path);
         }
     }
@@ -214,11 +224,96 @@ static void project_v1_capture_sample_autoload(ProjectSaveV1 *project)
             multi_sample_pool_get_instrument(slot);
         if ((instrument != 0) && (instrument->index_path[0] != '\0'))
         {
+            uint16_t global_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+            (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_MULTI,
+                                                     slot,
+                                                     &global_index);
             (void)project_v1_sample_autoload_add(project,
                                                  PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI,
                                                  slot,
+                                                 global_index,
                                                  instrument->index_path);
         }
+    }
+
+    for (uint16_t slot = 0U; slot < SAMPLER_RAM_POOL_MAX_SLOTS; ++slot)
+    {
+        const sampler_ram_slot_t *const ram = sampler_ram_pool_get_slot(slot);
+        if ((ram != 0)
+            && (ram->path[0] != '\0')
+            && ((ram->state == SAMPLER_RAM_SLOT_READY)
+                || (ram->state == SAMPLER_RAM_SLOT_ERROR)))
+        {
+            uint16_t global_index = ram->global_slot;
+            if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            {
+                (void)sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_RAM,
+                                                         slot,
+                                                         &global_index);
+            }
+            (void)project_v1_sample_autoload_add(project,
+                                                 PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM,
+                                                 slot,
+                                                 global_index,
+                                                 ram->path);
+        }
+    }
+}
+
+static uint32_t project_v1_stream_product_cost_bytes(uint32_t frames)
+{
+    if (frames == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t prep_frames = (frames < SAMPLE_PREP_MIN_READY_FRAMES)
+        ? frames
+        : SAMPLE_PREP_MIN_READY_FRAMES;
+    const uint32_t pages = (prep_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    return pages * SAMPLE_PAGE_BYTES;
+}
+
+static void project_v1_restore_stream_global_slots(const ProjectSaveV1 *project)
+{
+    if ((project == 0)
+        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    {
+        return;
+    }
+
+    const uint16_t count =
+        (project->sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? project->sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+    for (uint16_t backend = 0U; backend < SAMPLE_POOL_SIZE; ++backend)
+    {
+        sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_STREAM, backend);
+    }
+
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &project->sample_autoload.slots[i];
+        if ((slot->kind != (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM)
+            || ((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
+            || (slot->slot_index >= SAMPLE_POOL_SIZE)
+            || (slot->global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
+        {
+            continue;
+        }
+
+        const sample_desc_t *const desc = sample_pool_get(slot->slot_index);
+        if ((desc == 0) || (desc->path[0] == '\0'))
+        {
+            continue;
+        }
+        const uint32_t cost_bytes =
+            project_v1_stream_product_cost_bytes(desc->length_frames);
+        (void)sample_global_pool_register_stream_at((uint16_t)slot->global_index,
+                                                    slot->slot_index,
+                                                    desc->path,
+                                                    cost_bytes);
     }
 }
 
@@ -254,6 +349,11 @@ static void project_v1_prepare_autoload_progress_units(const ProjectSaveV1 *proj
         }
 
         if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM)
+        {
+            g_project_autoload_progress_units[i] = 1U;
+            g_project_autoload_progress_units_known[i] = 1U;
+        }
+        else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM)
         {
             g_project_autoload_progress_units[i] = 1U;
             g_project_autoload_progress_units_known[i] = 1U;
@@ -366,12 +466,51 @@ static void project_v1_multi_restore_autoload_slots(const ProjectSaveV1 *project
             || (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
             || (result == MULTI_SAMPLE_LOAD_SD_BUSY))
         {
+            if ((result != MULTI_SAMPLE_LOAD_ALREADY_READY)
+                && (slot->global_index < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
+            {
+                (void)sample_global_pool_register_multi_loading_at((uint16_t)slot->global_index,
+                                                                   slot->slot_index,
+                                                                   slot->path);
+            }
             g_project_multi_restore_diag.restore_load_requested = 1U;
         }
         else
         {
             g_project_multi_restore_diag.restore_load_error = 1U;
         }
+    }
+}
+
+static void project_v1_ram_restore_autoload_slots(const ProjectSaveV1 *project)
+{
+    sampler_ram_pool_reset();
+    if ((project == 0)
+        || (project->sample_autoload.version != PROJECT_V1_SAMPLE_AUTOLOAD_VERSION))
+    {
+        return;
+    }
+
+    const uint16_t count =
+        (project->sample_autoload.count < PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT)
+            ? project->sample_autoload.count
+            : PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const project_v1_sample_autoload_slot_t *const slot =
+            &project->sample_autoload.slots[i];
+        if ((slot->kind != (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM)
+            || ((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
+            || (slot->slot_index >= SAMPLER_RAM_POOL_MAX_SLOTS)
+            || (slot->global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            || (slot->path[0] == '\0'))
+        {
+            continue;
+        }
+
+        (void)sampler_ram_pool_load_wav_at(slot->slot_index,
+                                           (uint16_t)slot->global_index,
+                                           slot->path);
     }
 }
 
@@ -1000,7 +1139,7 @@ uint8_t project_v1_get_autoload_progress(project_v1_autoload_progress_t *out_pro
             &g_project_work.sample_autoload.slots[i];
         if (((slot->flags & PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED) == 0U)
             || (slot->path[0] == '\0')
-            || (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM_RESERVED_FUTURE))
+            || (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_EMPTY))
         {
             continue;
         }
@@ -1065,6 +1204,13 @@ uint8_t project_v1_get_autoload_progress(project_v1_autoload_progress_t *out_pro
                                    + ((scaled < slot_units) ? (uint16_t)scaled : slot_units));
                 }
             }
+        }
+        else if (slot->kind == (uint8_t)PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM)
+        {
+            out_progress->total = (uint16_t)(out_progress->total
+                                             + project_v1_autoload_slot_units(i, slot));
+            out_progress->done = (uint16_t)(out_progress->done
+                                            + project_v1_autoload_slot_units(i, slot));
         }
     }
 
@@ -1158,7 +1304,11 @@ uint8_t project_v1_load_slot(uint8_t project_slot)
         project_v1_set_sd_operation_error(PROJECT_V1_ERR_SD_LOAD_FAIL);        return 0U;
     }
     project_v1_prepare_autoload_progress_units(&g_project_work);
+    sample_global_pool_reset();
+    sampler_ram_pool_reset();
     sample_pool_restore_project_snapshot(&g_project_work.sample_pool);
+    project_v1_restore_stream_global_slots(&g_project_work);
+    project_v1_ram_restore_autoload_slots(&g_project_work);
 
     if (project_v1_apply_snapshot(&g_project_work, 0U) == 0U)
     {
@@ -1195,6 +1345,8 @@ uint8_t project_v1_load_blank(void)
         return 0U;
     }
 
+    sample_global_pool_reset();
+    sampler_ram_pool_reset();
     sample_pool_init();
     for (uint16_t slot = 0U; slot < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++slot)
     {

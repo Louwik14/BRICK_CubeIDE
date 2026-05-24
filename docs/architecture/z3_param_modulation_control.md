@@ -89,6 +89,7 @@ Familles d'autorite:
   - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime,
   - source unique de re-projection des params Braids apres reset/rebind d'instance runtime.
+  - Pour `PARAM_SAMPLER_SAMPLE` hors Multi, la valeur canonique utilisateur est un slot `sample_global_pool` actif; l'apply Sampler resout ensuite `STREAM -> backend_index sample_pool` avant de toucher le runtime audio Classic.
 
 ## 2.c Contrat public du seam `param_registry`
 
@@ -277,6 +278,8 @@ Call-sites critiques:
 - `PARAM_SAMPLER_SAMPLE` met a jour la selection runtime sans retrigger automatique de preview.
 - P-locks:
   - les params Sampler de base restent p-lockables via le flux track-aware.
+  - Pour `Sampler/OneShot` RAM, les p-locks `START`, `END` et `MODE=RevShot` sont captures au trigger depuis l'etat runtime effectif et bornes avant rendu; `Loop`/`PingPong` ne branchent pas de boucle RAM.
+  - Pour `Sampler/Slicer` RAM, les p-locks `START`/`END` sont addressables dans le set TONE et exposes sur la subpage TONE/REG; ils definissent la region slicee du trig. `MODE`/reverse reste ignore en Slicer v1.
 - Invariants:
   - sample absent -> silence,
   - `Mode` pilote vraiment la direction et le type de lecture du moteur,

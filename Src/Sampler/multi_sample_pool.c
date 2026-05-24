@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
@@ -239,6 +240,8 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
     {
         return 0U;
     }
+
+    sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_MULTI, instrument_id);
 
     const multi_sample_instrument_t *const instrument = &g_multi_instruments[instrument_id].desc;
     const uint32_t sample_end = (instrument->first_sample_id == MULTI_SAMPLE_POOL_INVALID_ID)

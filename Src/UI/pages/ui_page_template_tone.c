@@ -35,10 +35,10 @@ static const ui_template_family_t g_ui_template_tone_family_sampler = {
 
 static const ui_template_family_t g_ui_template_tone_family_slicer = {
     .family_title = "TONE",
-    .nav_labels = { "SLICE", "-", "-", "-" },
+    .nav_labels = { "SLICE", "REG", "-", "-" },
     .subpages = {
         { .title = "SLICE", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_SLICE_COUNT, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_GAIN } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "REG", .param_bank = { .params = { PARAM_SAMPLER_START, PARAM_SAMPLER_END, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },

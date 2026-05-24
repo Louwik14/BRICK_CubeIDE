@@ -6,11 +6,12 @@
 #include "Storage/sd_access_gate.h"
 
 #define SAMPLE_POOL_PROJECT_CAPACITY (1024U)
-#define SAMPLE_CACHE_HOT_SAMPLE_CAPACITY (64U)
+#define SAMPLE_CACHE_HOT_SAMPLE_CAPACITY (240U)
 
 /*
- * Temporary compatibility alias: the visible project/UI/persistence path is
- * still capped at the hot cache size in this pass.
+ * Stream backend capacity follows the current active product catalogue size.
+ * The product authority is sample_global_pool; sample_pool remains the Classic
+ * Stream backend addressed by global STREAM slots.
  */
 #define SAMPLE_POOL_SIZE (SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)
 #define SAMPLE_POOL_PATH_MAX (160U)

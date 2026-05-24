@@ -6,11 +6,10 @@
 #include "Sampler/sample_pool.h"
 
 /*
- * Phase 1 page-cache sizing only.
+ * Product page-cache sizing.
  *
- * The current product path still uses sample_cache and its READY_FULL /
- * READY_PARTIAL ring logic. This config file only defines the target layout for
- * the future paged cache introduced in parallel.
+ * Classic Stream, Multi and RAM share the slot-pool product budget; voice
+ * windows and margin pages stay in their reserved ranges.
  */
 
 #define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES (19U * 1024U * 1024U)
@@ -47,8 +46,8 @@ typedef enum
     (SAMPLE_PAGE_MULTI_WINDOW_PAGES - 1U)
 
 /*
- * Page-cache contract sizing. This is intentionally independent from the
- * current sample_pool product path, which still exposes 64 slots today.
+ * Page-cache contract sizing. The Stream backend now covers the active global
+ * sample capacity; other domains use explicit id ranges.
  */
 #define SAMPLE_PAGE_CACHE_CLASSIC_ID_BASE     (0U)
 #define SAMPLE_PAGE_CACHE_CLASSIC_ID_CAPACITY (SAMPLE_CACHE_HOT_SAMPLE_CAPACITY)

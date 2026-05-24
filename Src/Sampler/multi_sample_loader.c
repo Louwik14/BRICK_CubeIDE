@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Sampler/multi_sample_index.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_cache.h"
@@ -344,6 +345,25 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         return MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED;
     }
 
+    const uint32_t product_cost_bytes =
+        (uint32_t)prep_budget.required_pages * SAMPLE_PAGE_BYTES;
+    uint16_t existing_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if ((sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_MULTI,
+                                            instrument_id,
+                                            &existing_global) == 0U)
+        && (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))
+    {
+        g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_POOL_FAIL;
+        return MULTI_SAMPLE_LOAD_POOL_FAIL;
+    }
+    if (sample_global_pool_validate_budget(SAMPLE_GLOBAL_KIND_MULTI,
+                                           instrument_id,
+                                           product_cost_bytes) == 0U)
+    {
+        g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED;
+        return MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED;
+    }
+
     const multi_sample_instrument_t *const instrument =
         multi_sample_pool_get_instrument(instrument_id);
     if ((instrument == 0) || (instrument->sample_count != index.sample_count)
@@ -525,6 +545,20 @@ void multi_sample_service_load(uint32_t byte_budget)
     g_multi_load_diag.samples_ready = ready_samples;
     if ((required_pages_total != 0U) && (ready_pages >= required_pages_total))
     {
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(g_multi_load_diag.instrument_id);
+        if ((instrument == 0)
+            || (sample_global_pool_register_multi(g_multi_load_diag.instrument_id,
+                                                  instrument->index_path,
+                                                  (uint32_t)required_pages_total * SAMPLE_PAGE_BYTES,
+                                                  0)
+                == 0U))
+        {
+            multi_loader_set_error(MULTI_SAMPLE_LOAD_POOL_FAIL,
+                                   MULTI_SAMPLE_POOL_INVALID_ID);
+            return;
+        }
+
         g_multi_load_active = 0U;
         g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_READY;
         g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_OK;

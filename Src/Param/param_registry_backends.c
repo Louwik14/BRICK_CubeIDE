@@ -9,6 +9,7 @@
 #include "Core/track_sound_state.h"
 #include "Param/param_filter.h"
 #include "Sampler/multi_sample_pool.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_pool.h"
 #include "midi.h"
 #include "mixer.h"
@@ -94,6 +95,52 @@ static uint16_t param_backend_multi_instrument_from_selector(float value)
     }
 
     return last_instrument_id;
+}
+
+static uint8_t param_backend_stream_backend_from_global_selector(float value,
+                                                                uint16_t *out_global_slot,
+                                                                uint16_t *out_stream_slot)
+{
+    const uint16_t active_slots = sample_global_pool_get_active_slot_capacity();
+    const float max_slot = (active_slots > 0U) ? (float)(active_slots - 1U) : 0.0f;
+    const uint16_t global_slot =
+        (uint16_t)(param_backend_clamp_value(value, 0.0f, max_slot) + 0.5f);
+    uint16_t stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+
+    if (out_global_slot != NULL)
+    {
+        *out_global_slot = global_slot;
+    }
+    if (out_stream_slot != NULL)
+    {
+        *out_stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    }
+
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
+    if ((slot == NULL)
+        || (slot->kind != SAMPLE_GLOBAL_KIND_STREAM)
+        || (slot->state != SAMPLE_GLOBAL_STATE_READY)
+        || (sample_global_pool_resolve_backend(global_slot,
+                                               SAMPLE_GLOBAL_KIND_STREAM,
+                                               &stream_slot) == 0U)
+        || (stream_slot >= SAMPLE_POOL_SIZE)
+        || (sample_pool_is_loaded(stream_slot) == 0U))
+    {
+        return 0U;
+    }
+
+    if (out_stream_slot != NULL)
+    {
+        *out_stream_slot = stream_slot;
+    }
+    return 1U;
+}
+
+static uint16_t param_backend_global_slot_from_selector(float value)
+{
+    const uint16_t active_slots = sample_global_pool_get_active_slot_capacity();
+    const float max_slot = (active_slots > 0U) ? (float)(active_slots - 1U) : 0.0f;
+    return (uint16_t)(param_backend_clamp_value(value, 0.0f, max_slot) + 0.5f);
 }
 
 static void param_backend_project_looper_stretch(uint8_t track,
@@ -335,17 +382,34 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
                                                             param_backend_multi_instrument_from_selector(value));
                 return 1U;
             }
-            if (sample_pool_is_loaded((uint16_t)(param_backend_clamp_value(value, 0.0f, 63.0f) + 0.5f)) == 0U)
+        {
+            uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+            uint16_t stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
             {
-                brick6_sampler_runtime_stop(track);
-                return 0U;
+                if (param_backend_stream_backend_from_global_selector(value,
+                                                                      &global_slot,
+                                                                      &stream_slot) == 0U)
+                {
+                    brick6_sampler_runtime_stop(track);
+                    return 0U;
+                }
+                if ((update_base_state != 0U) && (state != NULL))
+                {
+                    state->sample = (float)global_slot;
+                }
+                brick6_sampler_runtime_set_sample(track, stream_slot);
+                return 1U;
             }
+
+            global_slot = param_backend_global_slot_from_selector(value);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->sample = param_backend_clamp_value(value, 0.0f, 63.0f);
+                state->sample = (float)global_slot;
             }
-            brick6_sampler_runtime_set_sample(track, (uint16_t)(param_backend_clamp_value(value, 0.0f, 63.0f) + 0.5f));
+            brick6_sampler_runtime_set_sample(track, global_slot);
             return 1U;
+        }
         case PARAM_SAMPLER_GAIN:
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
             {

@@ -19,6 +19,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
 - `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
+- `Src/Sampler/sampler_ram_pool.c` + `Inc/Sampler/sampler_ram_pool.h` : backend resident RAM v1. Il charge explicitement des WAV PCM 16/24-bit mono/stereo hors IRQ vers un stockage interne `int16` interleaved alloue dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`, conserve sample_rate/channels/frames/cout/generation, et inscrit les slots comme `kind=RAM` dans `sample_global_pool`. Les consommateurs IRQ courants sont les playbacks minimaux `Sampler/OneShot` RAM et `Sampler/Slicer` RAM.
 - `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
 - `Src/Sampler/sample_stream_fatfs_map.c` + `Inc/Sampler/sample_stream_fatfs_map.h` : certification hors IRQ des WAV STREAM contigus via FatFs CLMT. Les acces aux champs internes FatFs restent confines ici. Un fichier non certifie conserve le backend FatFs historique.
 - `Src/Sampler/sample_stream_backend_contiguous.c` + `Inc/Sampler/sample_stream_backend_contiguous.h` : backend V1 `STREAM_SAFE_CONTIGUOUS`; remplit une page cache float stereo depuis des secteurs SD physiques deja certifies, hors IRQ et sous l'autorite du `sample_stream_manager`.
@@ -58,6 +59,9 @@ Contrat page-cache/streamer:
 - Capacite physique actuelle: `SAMPLE_PAGE_MAX_COUNT` reste le plafond de pages RAM READY/QUEUED/LOADING simultanees tous domaines confondus. Avec la config 16 MiB / pages stereo float de 512 frames, le plafond theorique est 4096 pages; preparer 16 pages pour 512 samples Multi consommerait tout le budget theorique, donc les presets Multi reels doivent rester bornes par le nombre de samples declenchables et la taille des samples courts.
 - Le budget global reste fixe a 16 MiB; les pages stereo float font 512 frames / 4 KiB et le pool physique passe a 4096 pages sans augmenter la RAM audio globale.
 - Une requete `MULTI` ne peut pas evincer une page non-`MULTI`; si le pool est plein a cause de Classic/Looper, l'allocation Multi echoue proprement au lieu de degrader les comportements existants.
+- Le pool produit partageable est strictement `SAMPLE_PAGE_SLOT_POOL_COUNT` pages, soit `SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES=960` pages de `SAMPLE_PAGE_BYTES=16384` octets dans la configuration courante: 15 728 640 octets (15 MiB). Les ranges `SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES=128` et `SAMPLE_PAGE_PRODUCT_MARGIN_PAGES=128` restent fixes et hors consommation permanente des samples RAM.
+- RAM v1 utilise ce meme `SAMPLE_PAGE_SLOT_POOL` que les presocles Stream/Multi: `sampler_ram_pool` demande des runs contigus de pages via `sample_page_cache_alloc_slot_pool_bytes()`, les garde pinnees comme pages permanentes brutes, stocke le WAV converti en `S16_INTERLEAVED`, et libere ces pages au clear/reset via `sample_page_cache_release_slot_pool_allocation()`.
+- Le cout RAM enregistre dans `sample_global_pool.cost_bytes` est la capacite physique reelle allouee en pages SLOT_POOL (`ceil(data_bytes / SAMPLE_PAGE_BYTES) * SAMPLE_PAGE_BYTES`), pas un alignement logique de petit buffer. Aucun fallback vers `sample_cache`, `sample_voice_reader`, `sample_cache_start_voice_at` ou le streamer Classic; `Sampler/OneShot` et `Sampler/Slicer` RAM lisent directement le `S16_INTERLEAVED` resident.
 
 ## 2. Autorite(s) de verite
 
@@ -717,4 +721,33 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `Sampler/OneShot` et `Sampler/Slicer` ne demarrent plus via le runtime Classic, meme si le sample est complet en RAM.
 - Les params OneShot/Slicer existants restent stockes/exposes pour le futur sampler RAM dedie, mais `Start`, `End`, `Mode`/reverse et `Slice Count` ne pilotent plus un reader stream.
 - Le prefetch opportuniste des entrees de slices est retire: Slicer ne queue plus de pages via `sample_stream_manager_request_page_key_alloc`.
+
+## Addendum 2026-05-24 - playback OneShot RAM minimal
+
+- `Sampler/OneShot` resout maintenant `PARAM_SAMPLER_SAMPLE` comme slot global produit et demarre uniquement si ce slot est `kind=RAM`, `READY`, avec un `backend_index` valide dans `sampler_ram_pool`.
+- La voix OneShot RAM est integree dans `g_sampler_voice[track]`: une voix max par track, donc 14 voix logiques actuelles sous le plafond produit de 16 voix RAM globales. Un nouveau trigger sur la meme track remplace l'ancienne voix avec declick court.
+- Le rendu IRQ OneShot RAM lit seulement le pointeur resident `S16_INTERLEAVED` du slot RAM valide, convertit `int16 -> float`, duplique mono vers L/R et lit stereo L/R. Il ne touche ni FatFs, ni malloc, ni decode, ni `sample_cache`, ni `sample_voice_reader`, ni `sample_stream_manager`.
+- Les voix RAM stockent la generation du slot RAM; clear/replace/reset invalident cette generation avant liberation physique. Au rendu suivant, une generation invalide stoppe la voix avec declick au lieu de lire un pointeur stale.
+- `Start`/`End` sont des pourcentages normalises `[0..1]` convertis au trigger en frames bornees. Si la region resolue est vide (`Start >= End` apres conversion), OneShot RAM retombe sur le sample complet. `Mode=RevShot` (`1`) lance la region en reverse; `Loop`/`PingPong` sont rendus par le moteur RAM resident.
+- Note-off OneShot est ignore. Stop/mute/reset coupent la voix RAM avec declick. P-lock start/end/reverse sont captures au trigger; persistence/autoload RAM est portee hors IRQ par Z6 via chemins WAV et slots globaux.
 - `Sampler/Clip` conserve le chemin Classic `sample_cache`/`sample_voice_reader`; `Sampler/Multi` conserve `domain=MULTI`; `Sampler/Looper` RAW conserve `domain=LOOPER`.
+
+## Addendum 2026-05-24 - modes OneShot/Slicer RAM
+
+- `Sampler/Slicer` resout `PARAM_SAMPLER_SAMPLE` comme slot global produit et demarre uniquement si ce slot est `kind=RAM`, `READY`, avec un `backend_index` valide dans `sampler_ram_pool`.
+- `Start`/`End` sont des pourcentages normalises `[0..1]` et definissent la region RAM de base a slicer. Si la region est vide, Slicer RAM retombe sur le sample complet.
+- `PARAM_SAMPLER_SLICE_COUNT` reste borne aux valeurs UI `Off, 2, 4, 8, 16, 32, 64`. `Off` est traite comme une seule region sur la fenetre `Start..End`; sinon les slices sont regulieres dans cette meme fenetre.
+- La table `slice_begin/end[64]` reste reconstruite hors IRQ au changement de sample/slice count/start/end et par le service runtime non IRQ si le slot RAM change de generation. Le trigger Slicer RAM ne depend pas de cette table pour les p-locks: il calcule directement la slice du trig a partir des valeurs effectives `Start`/`End`/`Slice Count`, avec quelques divisions bornees et sans scan.
+- Mapping note v1: `slice_index = note % slice_count` (`slice_count=1` quand `Off`). Ce mapping est explicite, borne et ne depend pas du reader Classic legacy.
+- Le rendu Slicer RAM reutilise le renderer RAM resident: lecture `S16_INTERLEAVED`, mono duplique L/R, stereo L/R, declick sur stop/steal/generation mismatch. Aucun `sample_cache_start_voice_at`, `sample_voice_reader_bind_play_plan`, pending stream ou page-cache Classic n'est utilise.
+- `MODE=Shot` lit OneShot ou slice en forward et stoppe a la fin de region. `MODE=RevShot` lit OneShot ou slice en reverse depuis `end-1` et stoppe au debut de region.
+- `MODE=Loop` boucle OneShot ou slice en forward entre `Start` et `End` resolus, sans crossfade automatique. `MODE=PingPong` lit OneShot ou slice en aller-retour; les regions d'une seule frame retombent sur une boucle forward bornee pour eviter une direction ambigue.
+- Note-off Slicer RAM est ignore comme OneShot RAM. Les p-locks Start/End/Mode/Slice Count sont captures au trigger et la persistence/autoload RAM reste hors IRQ via Z6.
+
+## Addendum 2026-05-24 - pitch OneShot/Slicer RAM
+
+- Les voix OneShot/Slicer RAM capturent maintenant un pas de lecture Q16 au trigger. La formule est `step = sample_rate / 48000 * 2^((note - 60 + Tune) / 12)`, bornee par le clamp runtime existant de ratio Q16.
+- `PARAM_SAMPLER_TUNE` reste en demi-tons et les p-locks Tune passent par le meme chemin de param effectif que les autres params Sampler avant le trigger.
+- Le rendu IRQ RAM garde uniquement le pointeur resident `S16_INTERLEAVED`, avance le playhead fractionnaire Q16 selon ce pas et applique une interpolation lineaire RAM-only. Aucun chemin Classic Stream, page-cache, FatFs, malloc ou decode n'est appele par OneShot/Slicer RAM.
+- Quand `step_q16 == 0x00010000`, que la phase Q16 est entiere et que le mode n'est pas PingPong, le rendu RAM reprend un fast path entier sans interpolation pour Shot, RevShot et Loop.
+- Les bornes `Start/End` et `slice_begin/end` restent capturees au trigger. Shot/RevShot stoppent a la limite de region, Loop wrappe dans la region, PingPong reflete le playhead dans la region meme avec un pas superieur a une frame.

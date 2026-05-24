@@ -6,6 +6,7 @@
 #include "Storage/pattern_live_ram.h"
 #include "Sampler/sample_pool.h"
 #include "Sampler/multi_sample_pool.h"
+#include "Sampler/sampler_ram_pool.h"
 
 #define PROJECT_V1_BANK_COUNT      16U
 #define PROJECT_V1_PATTERN_COUNT   16U
@@ -17,19 +18,19 @@
 #define PROJECT_V1_MACRO_PER_BANK         PROJECT_V1_MACRO_POT_COUNT
 #define PROJECT_V1_MACRO_SLOT_COUNT       PROJECT_V1_MACRO_SCENE_LOCK_COUNT
 #define PROJECT_V1_FILE_MAGIC      0x314A5250UL /* PRJ1 */
-#define PROJECT_V1_FILE_VERSION    29U /* Adds Sampler/Multi LOOP param state. */
+#define PROJECT_V1_FILE_VERSION    32U /* Sample autoload persists RAM slots. */
 #define PROJECT_V1_MULTI_PATH_MAX  MULTI_SAMPLE_POOL_PATH_MAX
-#define PROJECT_V1_SAMPLE_AUTOLOAD_VERSION 1U
+#define PROJECT_V1_SAMPLE_AUTOLOAD_VERSION 3U
 #define PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX SAMPLE_POOL_PATH_MAX
 #define PROJECT_V1_SAMPLE_AUTOLOAD_SLOT_COUNT \
-    (SAMPLE_POOL_SIZE + MULTI_SAMPLE_POOL_MAX_INSTRUMENTS + 1U)
+    (SAMPLE_POOL_SIZE + MULTI_SAMPLE_POOL_MAX_INSTRUMENTS + SAMPLER_RAM_POOL_MAX_SLOTS)
 
 typedef enum
 {
     PROJECT_V1_SAMPLE_AUTOLOAD_KIND_EMPTY = 0,
     PROJECT_V1_SAMPLE_AUTOLOAD_KIND_STREAM,
     PROJECT_V1_SAMPLE_AUTOLOAD_KIND_MULTI,
-    PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM_RESERVED_FUTURE
+    PROJECT_V1_SAMPLE_AUTOLOAD_KIND_RAM
 } project_v1_sample_autoload_kind_t;
 
 #define PROJECT_V1_SAMPLE_AUTOLOAD_FLAG_ENABLED 0x01U
@@ -114,7 +115,7 @@ typedef struct
     uint8_t kind;
     uint8_t flags;
     char path[PROJECT_V1_SAMPLE_AUTOLOAD_PATH_MAX];
-    uint32_t reserved;
+    uint32_t global_index;
 } project_v1_sample_autoload_slot_t;
 
 typedef struct

@@ -25,7 +25,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_page_cache_config.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_parser.h"
 #include "Storage/sd_access_gate.h"
@@ -242,9 +244,24 @@ void sample_pool_clear(uint16_t id)
     if(id >= SAMPLE_POOL_SIZE)
         return;
 
+    sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_STREAM, id);
     sample_pool_release_slot(id);
     sample_cache_clear(id);
     sample_pool_clear_entry(&g_sample_pool[id]);
+}
+
+static uint32_t sample_pool_product_cost_bytes(uint32_t frames)
+{
+    if (frames == 0U)
+    {
+        return 0U;
+    }
+
+    const uint32_t prep_frames = (frames < SAMPLE_PREP_MIN_READY_FRAMES)
+        ? frames
+        : SAMPLE_PREP_MIN_READY_FRAMES;
+    const uint32_t pages = (prep_frames + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
+    return pages * SAMPLE_PAGE_BYTES;
 }
 
 /**
@@ -492,6 +509,20 @@ bool sample_pool_load(uint16_t id, const char *path)
         return false;
     }
 
+    const uint32_t product_cost = sample_pool_product_cost_bytes(next_desc.length_frames);
+    uint16_t existing_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if ((sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM, id, &existing_global) == 0U)
+        && (sample_global_pool_find_free_slot() >= SAMPLE_GLOBAL_POOL_MAX_SLOTS))
+    {
+        sample_pool_set_error(SAMPLE_POOL_LOAD_NO_FREE_SLOT, FR_DENIED);
+        return false;
+    }
+    if (sample_global_pool_validate_budget(SAMPLE_GLOBAL_KIND_STREAM, id, product_cost) == 0U)
+    {
+        sample_pool_set_error(SAMPLE_POOL_LOAD_MEMORY_LIMIT, FR_DENIED);
+        return false;
+    }
+
     sample_desc_t *desc = &g_sample_pool[id];
     (void)waveform_cache_request_for_wav_known_duration(next_desc.path,
                                                         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
@@ -527,6 +558,7 @@ bool sample_pool_load(uint16_t id, const char *path)
         }
         if (!((cache_error == 0U) && (cache_fr != FR_OK)))
         {
+            sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_STREAM, id);
             sample_pool_clear_entry(desc);
             g_sample_slot_by_sample[id] = -1;
         }
@@ -547,6 +579,7 @@ bool sample_pool_load(uint16_t id, const char *path)
 
     desc->valid = 1U;
     g_sample_slot_by_sample[id] = (int16_t)id;
+    (void)sample_global_pool_register_stream(id, desc->path, product_cost, 0);
     sample_pool_set_error(SAMPLE_POOL_LOAD_OK, FR_OK);
 
     return true;

@@ -43,6 +43,7 @@ Dependances de Z5 sans appartenir a Z5:
 - Storage (`pattern_live_ram`, `undo_v1`) pour recall/store/undo.
 - Keyboard runtime/hall engine pour comportements mode hall.
 - Z6 `wav_loader` / `sample_pool` / `sd_preview` pour le browser Settings/Sampler: Z5 affiche les snapshots RAM et declenche seulement les operations SD explicites.
+- Z6 `multi_sample_index` / `multi_sample_import` / `multi_sample_pool` pour le browser Settings/Sampler/Multi: Z5 affiche les dossiers instrument, prepare/load les indexes et expose `CLEAR` page 3 pour supprimer uniquement les `.brickmulti` directs du dossier courant apres confirmation.
 
 Exclusions explicites:
 - Rendu audio hard-RT (Z1) hors possession UI.
@@ -210,16 +211,19 @@ Etat page active:
 Etat browser Settings/Sample:
 - `ui_page_settings` expose une racine `Settings > Sample` avec trois entrees: `Multi`, `RAM`, `Stream`.
 - `Settings > Sample > Multi` reprend le browser split du pool projet `Sampler/Multi`, navigue dans les dossiers sous `0:/Multi/` et conserve `multi_sample_pool` comme autorite.
-- `Settings > Sample > RAM` est un placeholder UI pour le futur pool RAM OneShot/Slicer; il ne lance ni load, ni import, ni playback runtime.
+- `Settings > Sample > RAM` est maintenant la vue filtre `kind=RAM` du catalogue global. Elle reutilise le browser catalogue WAV, charge un WAV vers `sampler_ram_pool`, affiche les slots RAM READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot RAM. Le playback produit associe est limite a `Sampler/OneShot` RAM et `Sampler/Slicer` RAM minimal.
 - `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Clip`.
 - Les headers `Stream`, `Multi` et `RAM` affichent le meme budget global de slots produit et de memoire page-cache slot-pool; les entrees restent des categories de browser, pas des budgets separes.
+- Les trois browsers sample sont des vues filtrees du catalogue global: Stream liste `kind=STREAM`, Multi liste `kind=MULTI`, RAM liste `kind=RAM`. Les actions utilisateur manipulent des slots globaux; les refs backend restent internes.
+- Le browser RAM ne cree pas de parametre parallele: il charge/remplace/clear des slots globaux `kind=RAM`, dont `backend_index` pointe vers un slot interne `sampler_ram_pool`.
+- Le selecteur TONE `PARAM_SAMPLER_SAMPLE` hors Multi edite un slot global actif. La selection n'est jouable en Stream que si ce slot global est `STREAM/READY` et pointe vers un backend `sample_pool` charge. Le backend Stream Classic couvre la capacite globale active courante.
 - `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sample courante; le browser Multi relit seulement le dossier courant et scanne les entrees directes des dossiers candidats pour les classifier.
 - Le catalogue WAV global vient de Z6 `wav_loader`; l'entree dans le browser Sampler ne rescane plus automatiquement. Elle charge la vue racine depuis le cache de vues Z6 ou depuis `0:/BRICK/SAMPLE.CAT`, ou affiche `REFRESH LIB` si le catalogue est absent/stale.
 - Le browser Sampler intercepte les boutons physiques `BTN_PAGE_1..BTN_PAGE_4` uniquement dans `UI_SETTINGS_VIEW_SAMPLER`: `BTN_PAGE_1` = RETURN, `BTN_PAGE_2` sans SHIFT = OK sur l'entree sample courante, `BTN_PAGE_3` = reserve/no-op, `BTN_PAGE_4` = REFRESH sans SHIFT et REBUILD avec SHIFT. `BTN_COPY` et `BTN_PASTE` sont explicitement no-op dans le browser Sampler; les confirmations locales utilisent RETURN/OK. Hors browser Sampler, les boutons page gardent leur comportement normal de subpage.
 - La navigation fichier/dossier du browser Sampler ne scanne jamais `0:/Samples`: page de dossier deja cachee = RAM-only; page non cachee = lecture depuis `SAMPLE.CAT`; `streaming_critical` + page absente = refus `SD BUSY`.
 - Capacite catalogue Z6 courante: 9999 entrees persistantes. La vue locale Sampler est paginee par blocs de `WAV_LOADER_CATALOG_VIEW_MAX=256` lignes; un dossier de plus de 256 entrees reste navigable par chargements de pages depuis `SAMPLE.CAT`.
 - Dans chaque dossier, l'entree virtuelle `..` est affichee en tete hors racine, puis les dossiers prefixes `> `, puis les fichiers WAV; `LIB FULL` reste reserve a la saturation globale du catalogue V1. Les paths trop longs ne vident pas la vue: l'UI affiche `PATH LONG` seulement au moment d'une action sur une entree dont le path depasse le contrat backend Sampler officiel (`SAMPLE_POOL_PATH_MAX=160`, aligne avec `SAMPLE.CAT` V2).
-- Le footer du browser Sampler est decoupe en quatre zones egales alignees avec les boutons PAGE (`RETURN | OK | - | REFRESH/REBUILD`). La barre verticale centrale reste un rendu RAM-only et affiche un tiret de position selon le focus courant: `sample_selected/sample_child_count` cote bibliotheque ou `sample_slot_selected/SAMPLE_POOL_SIZE` cote slots.
+- Le footer du browser Sampler est decoupe en quatre zones egales alignees avec les boutons PAGE (`RETURN | OK | - | REFRESH/REBUILD`). La barre verticale centrale reste un rendu RAM-only et affiche un tiret de position selon le focus courant: `sample_selected/sample_child_count` cote bibliotheque ou index filtre de slot global / nombre de slots visibles cote slots.
 - Apres REFRESH/REBUILD Sampler, Z5 tente de restaurer le dossier courant par path catalogue, puis l'entree selectionnee; si le dossier a disparu, il remonte au parent existant le plus proche, sinon racine. Un refus SD/streaming garde l'emplacement courant et affiche `SD BUSY`.
 - Quand le refus vient du `sd_access_gate`, le feedback Settings/Sampler qualifie le bloqueur (`SD STREAM`, `SD CACHE`, `SD PREV`, etc.) a partir du diagnostic Z6 sans lancer de scan ni retry bloquant.
 
@@ -584,11 +588,12 @@ Points factuels:
 - Un manque de capacite sample du pool est refuse par feedback court `FULL need X`.
 - L'unload retire le slot du pool projet; il ne supprime, renomme ni deplace aucun WAV SD.
 
-## 14.f Contrat Settings Sample RAM placeholder
+## 14.f Contrat Settings Sample RAM
 
-- `Settings > Sample > RAM` reserve l'entree produit du futur pool RAM OneShot/Slicer.
-- La page affiche un etat vide explicite et ne branche aucun runtime RAM, aucun import, aucun load et aucun preview.
-- OneShot/Slicer conservent leur UI/params/persistence existants, mais ne consomment pas le pool Stream.
+- `Settings > Sample > RAM` est la vue filtre `kind=RAM` du catalogue global sample.
+- La page peut charger un WAV vers `sampler_ram_pool`, afficher READY/ERROR/EMPTY et clear un slot RAM; la persistence projet sauvegarde ensuite les slots RAM par `global_index`, `ram_slot` et path WAV, sans dupliquer l'audio.
+- `Sampler/OneShot` peut jouer un slot global `kind=RAM/READY` avec `Start`/`End` et `RevShot`; `Sampler/Slicer` peut jouer des slices regulieres RAM dans la region `Start`/`End` depuis ce meme slot global. Aucun des deux ne consomme le pool Stream.
+- La page TONE de `Sampler/Slicer` expose `SLICE` (`Sample`, `Slice Count`, `Tune`, `Gain`) et `REG` (`Start`, `End`) pour rendre la region RAM editable et p-lockable sans ajouter `Mode`/reverse au Slicer.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.
@@ -612,7 +617,7 @@ Points factuels:
   - apres la premiere frame rendue, `ui_boot_loading_service()` lance le restore du dernier projet puis attend la fin des slots sample autoload,
   - le restore projet attend aussi que le premier flush OLED complet soit termine (`drv_display_flush_in_progress()==0`) afin d'eviter de lancer une phase SD monolithique avant que l'ecran idle soit reellement visible,
   - le texte bas choisit deux phrases courtes depuis une banque rodata de phrases boot/loading anglaises; le choix est fait une seule fois dans `ui_boot_loading_begin()` et alterne lentement entre ces deux phrases,
-  - le compteur bas affiche la progression globale `done/total` en unites autoload utilisateur: un slot STREAM vaut 1 unite, un slot MULTI vaut son nombre de samples si le header `.brickmulti` a pu etre prelu au restore; les pages internes ne sont jamais affichees comme compteur samples,
+  - le compteur bas affiche la progression globale `done/total` en unites autoload utilisateur: un slot STREAM vaut 1 unite, un slot RAM vaut 1 unite synchrone, un slot MULTI vaut son nombre de samples si le header `.brickmulti` a pu etre prelu au restore; les pages internes ne sont jamais affichees comme compteur samples,
   - pendant cet etat, `ui_tasklet_poll()` consomme/ignore les inputs et n'appelle pas `ui_core_tick()`.
 - Premier affichage propre:
   - `drv_display_init()` garde le SSD1309 `Display OFF` pendant l'init,
