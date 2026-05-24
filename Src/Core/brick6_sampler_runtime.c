@@ -37,7 +37,6 @@
 #define STEAL_DECLICK_TAIL_SLOTS (32U)
 #define STEAL_DECLICK_EPSILON (0.0000001f)
 #define BRICK6_SAMPLER_RAM_OUTPUT_SAMPLE_RATE_HZ (48000U)
-#define BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT (0)
 
 typedef struct
 {
@@ -271,15 +270,6 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
     float *out_r,
     uint32_t frames,
     uint64_t *io_position_q16);
-#if BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT
-static uint8_t brick6_sampler_runtime_render_ram_forward_float_phase(
-    brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
-    float *out_l,
-    float *out_r,
-    uint32_t frames,
-    float *io_position_f);
-#endif
 static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
     brick6_sampler_voice_t *voice,
     const sampler_ram_slot_t *ram,
@@ -4494,101 +4484,6 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
     return (terminal != 0U) ? 2U : 1U;
 }
 
-#if BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT
-static uint8_t brick6_sampler_runtime_render_ram_forward_float_phase(
-    brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
-    float *out_l,
-    float *out_r,
-    uint32_t frames,
-    float *io_position_f)
-{
-    if ((voice == NULL) || (ram == NULL) || (out_l == NULL) || (out_r == NULL)
-        || (io_position_f == NULL) || (frames == 0U) || (voice->reverse != 0U)
-        || (voice->loop_mode != BRICK6_SAMPLER_LOOP_NONE))
-    {
-        return 0U;
-    }
-
-    const uint32_t region_begin = voice->region_begin;
-    const uint32_t region_end = voice->region_end;
-    if ((region_end <= region_begin) || (region_end > ram->frames))
-    {
-        return 0U;
-    }
-
-    const float step_f = ((voice->ram_step_q16 != 0U)
-                              ? (float)voice->ram_step_q16
-                              : (float)BRICK6_SAMPLER_Q16_ONE)
-                         * (1.0f / (float)BRICK6_SAMPLER_Q16_ONE);
-    if (!(step_f > 0.0f))
-    {
-        return 0U;
-    }
-
-    float position_f = *io_position_f;
-    const float end_f = (float)region_end;
-    const float *const data = ram->data;
-    const float render_gain = voice->gain * voice->trigger_velocity_gain;
-    float last_l = 0.0f;
-    float last_r = 0.0f;
-    uint32_t produced = 0U;
-    uint8_t terminal = 0U;
-
-    while (produced < frames)
-    {
-        if (position_f >= end_f)
-        {
-            terminal = 1U;
-            break;
-        }
-
-        const uint32_t frame_index = (uint32_t)position_f;
-        if ((frame_index < region_begin) || (frame_index >= region_end))
-        {
-            terminal = 1U;
-            break;
-        }
-
-        const uint32_t next_index = ((frame_index + 1U) < region_end)
-                                        ? (frame_index + 1U)
-                                        : frame_index;
-        const float frac = position_f - (float)frame_index;
-        float gain = render_gain;
-        if (voice->start_fade_remaining != 0U)
-        {
-            gain *= brick6_sampler_runtime_ram_fade_gain(voice);
-        }
-
-        const uint32_t src0 = frame_index * 2U;
-        const uint32_t src1 = next_index * 2U;
-        const float l0 = data[src0];
-        const float r0 = data[src0 + 1U];
-        const float l1 = data[src1];
-        const float r1 = data[src1 + 1U];
-        last_l = (l0 + ((l1 - l0) * frac)) * gain;
-        last_r = (r0 + ((r1 - r0) * frac)) * gain;
-        out_l[produced] += last_l;
-        out_r[produced] += last_r;
-
-        produced++;
-        position_f += step_f;
-        if (position_f >= end_f)
-        {
-            terminal = 1U;
-            break;
-        }
-    }
-
-    if (produced != 0U)
-    {
-        brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
-    }
-    *io_position_f = position_f;
-    return (terminal != 0U) ? 2U : 1U;
-}
-#endif
-
 static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
     brick6_sampler_voice_t *voice,
     const sampler_ram_slot_t *ram,
@@ -5178,38 +5073,6 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
     if ((voice->reverse == 0U)
         && (voice->loop_mode != BRICK6_SAMPLER_LOOP_PINGPONG))
     {
-#if BRICK6_SAMPLER_RAM_FLOAT_PHASE_EXPERIMENT
-        if (voice->loop_mode == BRICK6_SAMPLER_LOOP_NONE)
-        {
-            float position_f = (float)position_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
-            const uint8_t float_result =
-                brick6_sampler_runtime_render_ram_forward_float_phase(voice,
-                                                                      ram,
-                                                                      out_l,
-                                                                      out_r,
-                                                                      frames,
-                                                                      &position_f);
-            if (float_result != 0U)
-            {
-                if (float_result == 2U)
-                {
-                    voice->active = 0U;
-                    voice->position = 0.0f;
-                    voice->ram_position_q16 = 0ULL;
-                    voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-                    voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-                    voice->ram_generation = 0U;
-                    voice->ram_data = NULL;
-                    voice->ram_channels = 0U;
-                    return;
-                }
-                voice->position = position_f;
-                voice->ram_position_q16 =
-                    (uint64_t)(position_f * (float)BRICK6_SAMPLER_Q16_ONE + 0.5f);
-                return;
-            }
-        }
-#endif
         const uint8_t forward_result =
             brick6_sampler_runtime_render_ram_forward_pitched(voice,
                                                               ram,
