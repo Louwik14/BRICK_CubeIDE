@@ -64,9 +64,89 @@ static const ui_template_family_t *ui_page_template_vca_resolve_family(void)
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_VCA);
 }
 
+static uint8_t ui_page_template_subpage_matches_adsr(const ui_template_subpage_t *subpage,
+                                                     param_id_t attack,
+                                                     param_id_t decay,
+                                                     param_id_t sustain,
+                                                     param_id_t release)
+{
+    return (uint8_t)((subpage != 0)
+            && (subpage->param_bank.params[0] == attack)
+            && (subpage->param_bank.params[1] == decay)
+            && (subpage->param_bank.params[2] == sustain)
+            && (subpage->param_bank.params[3] == release));
+}
+
+static ui_template_custom_widget_kind_t ui_page_template_filter_pick_custom_widget(uint8_t slot,
+                                                                                   const ui_template_subpage_t *subpage,
+                                                                                   param_id_t id)
+{
+    if ((subpage != 0)
+            && (subpage->param_bank.params[0] == PARAM_FILTER_TYPE)
+            && (slot == 0U)
+            && (id == PARAM_FILTER_TYPE))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE;
+    }
+
+    if ((subpage != 0)
+            && (subpage->param_bank.params[0] == PARAM_FILTER_TYPE)
+            && (slot == 1U)
+            && (id == PARAM_FILTER_CUTOFF))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
+    }
+
+    if ((subpage != 0)
+            && (subpage->param_bank.params[0] == PARAM_FILTER_TYPE)
+            && (slot == 2U)
+            && (id == PARAM_FILTER_RESONANCE))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
+    }
+
+    if (((id == PARAM_FILTER_ATTACK)
+            || (id == PARAM_FILTER_DECAY)
+            || (id == PARAM_FILTER_SUSTAIN)
+            || (id == PARAM_FILTER_RELEASE))
+            && (ui_page_template_subpage_matches_adsr(subpage,
+                                                      PARAM_FILTER_ATTACK,
+                                                      PARAM_FILTER_DECAY,
+                                                      PARAM_FILTER_SUSTAIN,
+                                                      PARAM_FILTER_RELEASE) != 0U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_ADSR_FILTER;
+    }
+
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
+static ui_template_custom_widget_kind_t ui_page_template_vca_pick_custom_widget(uint8_t slot,
+                                                                                const ui_template_subpage_t *subpage,
+                                                                                param_id_t id)
+{
+    (void)slot;
+
+    if (((id == PARAM_VCA_ATTACK)
+            || (id == PARAM_VCA_DECAY)
+            || (id == PARAM_VCA_SUSTAIN)
+            || (id == PARAM_VCA_RELEASE))
+            && (ui_page_template_subpage_matches_adsr(subpage,
+                                                      PARAM_VCA_ATTACK,
+                                                      PARAM_VCA_DECAY,
+                                                      PARAM_VCA_SUSTAIN,
+                                                      PARAM_VCA_RELEASE) != 0U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_ADSR_VCA;
+    }
+
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
 static ui_template_page_state_t g_ui_template_filter_state = {
     .family = 0,
     .family_resolver = ui_page_template_colors_resolve_family,
+    .custom_widget_picker = ui_page_template_filter_pick_custom_widget,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -86,6 +166,7 @@ static ui_page_template_colors_sync_cache_t g_ui_template_colors_sync_cache = { 
 static ui_template_page_state_t g_ui_template_vca_state = {
     .family = 0,
     .family_resolver = ui_page_template_vca_resolve_family,
+    .custom_widget_picker = ui_page_template_vca_pick_custom_widget,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

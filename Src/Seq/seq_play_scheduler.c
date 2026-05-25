@@ -384,7 +384,7 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
             drum_synth_note_off_for_instance(resolved.descriptor.instance_id, note);
         }
     }
-    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_BRAIDS)
+    else if (resolved.descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
     {
         if (is_note_on != 0U)
         {

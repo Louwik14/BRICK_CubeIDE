@@ -115,7 +115,6 @@ static uint8_t mod_lfo_is_direct_filter_dest(param_id_t dest)
         case PARAM_FILTER_DECAY:
         case PARAM_FILTER_SUSTAIN:
         case PARAM_FILTER_RELEASE:
-        case PARAM_FILTER_KEYTRK:
         case PARAM_FILTER_EQ_LOW:
         case PARAM_FILTER_EQ_MID:
         case PARAM_FILTER_EQ_HIGH:
@@ -159,7 +158,6 @@ static uint8_t mod_lfo_is_direct_sampler_dest(param_id_t dest)
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         case PARAM_SAMPLER_CLIP_GRAIN:
         case PARAM_SAMPLER_CLIP_HOP:
-        case PARAM_SAMPLER_CLIP_SEARCH:
         case PARAM_SAMPLER_MULTI_LOOP:
         case PARAM_LOOPER_XFADE:
             return 1U;
@@ -168,17 +166,17 @@ static uint8_t mod_lfo_is_direct_sampler_dest(param_id_t dest)
     }
 }
 
-static uint8_t mod_lfo_is_direct_braids_dest(param_id_t dest)
+static uint8_t mod_lfo_is_direct_wave_dest(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_BRAIDS_EDIT:
-        case PARAM_BRAIDS_FINE:
-        case PARAM_BRAIDS_COARSE:
-        case PARAM_BRAIDS_FM:
-        case PARAM_BRAIDS_TIMBRE:
-        case PARAM_BRAIDS_MODULATION:
-        case PARAM_BRAIDS_COLOR:
+        case PARAM_WAVE_EDIT:
+        case PARAM_WAVE_FINE:
+        case PARAM_WAVE_COARSE:
+        case PARAM_WAVE_FM:
+        case PARAM_WAVE_TIMBRE:
+        case PARAM_WAVE_MODULATION:
+        case PARAM_WAVE_COLOR:
             return 1U;
         default:
             return 0U;
@@ -354,7 +352,7 @@ static uint8_t mod_lfo_apply_vca_rt(uint8_t track,
         {
             const float release_s = param_filter_ui127_to_release_s(value);
             mixer_set_track_vca_release(ctx->mix_track_id, release_s);
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             {
                 brick6_braids_runtime_set_vca_release_seconds(ctx->instance_id, release_s);
             }
@@ -393,8 +391,7 @@ static uint8_t mod_lfo_apply_sampler_rt(uint8_t track,
             return 1U;
 
         case PARAM_SAMPLER_START:
-            if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
-                    && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SLICER))
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
             {
                 return 0U;
             }
@@ -402,8 +399,7 @@ static uint8_t mod_lfo_apply_sampler_rt(uint8_t track,
             return 1U;
 
         case PARAM_SAMPLER_END:
-            if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
-                    && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SLICER))
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
             {
                 return 0U;
             }
@@ -422,8 +418,7 @@ static uint8_t mod_lfo_apply_sampler_rt(uint8_t track,
         }
 
         case PARAM_SAMPLER_TUNE:
-            if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
-                    && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SLICER))
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
             {
                 return 0U;
             }
@@ -448,7 +443,7 @@ static uint8_t mod_lfo_apply_sampler_rt(uint8_t track,
 
         case PARAM_SAMPLER_SLICE_COUNT:
         {
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SLICER)
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_SAMPLER)
             {
                 return 0U;
             }
@@ -543,7 +538,7 @@ static uint8_t mod_lfo_apply_sampler_rt(uint8_t track,
     }
 }
 
-static uint8_t mod_lfo_apply_braids_rt(uint8_t track,
+static uint8_t mod_lfo_apply_wave_rt(uint8_t track,
                                        param_id_t dest,
                                        const track_runtime_ctx_t *ctx,
                                        float value)
@@ -552,39 +547,39 @@ static uint8_t mod_lfo_apply_braids_rt(uint8_t track,
 
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
     {
         return 0U;
     }
 
     switch (dest)
     {
-        case PARAM_BRAIDS_EDIT:
+        case PARAM_WAVE_EDIT:
             brick6_braids_runtime_set_edit(ctx->instance_id,
                                            (float)(uint8_t)(mod_lfo_clampf(value, 0.0f, 38.0f) + 0.5f));
             return 1U;
 
-        case PARAM_BRAIDS_FINE:
+        case PARAM_WAVE_FINE:
             brick6_braids_runtime_set_fine(ctx->instance_id, mod_lfo_clampf(value, 0.0f, 1.0f));
             return 1U;
 
-        case PARAM_BRAIDS_COARSE:
+        case PARAM_WAVE_COARSE:
             brick6_braids_runtime_set_coarse(ctx->instance_id, mod_lfo_clampf(value, 0.0f, 1.0f));
             return 1U;
 
-        case PARAM_BRAIDS_FM:
+        case PARAM_WAVE_FM:
             brick6_braids_runtime_set_fm(ctx->instance_id, mod_lfo_clampf(value, 0.0f, 1.0f));
             return 1U;
 
-        case PARAM_BRAIDS_TIMBRE:
+        case PARAM_WAVE_TIMBRE:
             brick6_braids_runtime_set_timbre(ctx->instance_id, mod_lfo_clampf(value, 0.0f, 1.0f));
             return 1U;
 
-        case PARAM_BRAIDS_MODULATION:
+        case PARAM_WAVE_MODULATION:
             brick6_braids_runtime_set_modulation(ctx->instance_id, mod_lfo_clampf(value, 0.0f, 1.0f));
             return 1U;
 
-        case PARAM_BRAIDS_COLOR:
+        case PARAM_WAVE_COLOR:
             brick6_braids_runtime_set_color(ctx->instance_id, mod_lfo_clampf(value, 0.0f, 1.0f));
             return 1U;
 
@@ -695,9 +690,9 @@ static uint8_t mod_lfo_apply_destination_rt(uint8_t track,
     {
         return mod_lfo_apply_sampler_rt(track, dest, ctx, value);
     }
-    if (mod_lfo_is_direct_braids_dest(dest) != 0U)
+    if (mod_lfo_is_direct_wave_dest(dest) != 0U)
     {
-        return mod_lfo_apply_braids_rt(track, dest, ctx, value);
+        return mod_lfo_apply_wave_rt(track, dest, ctx, value);
     }
     if (mod_lfo_is_direct_drum_dest(dest) != 0U)
     {
@@ -782,6 +777,7 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
                 || (dest == PARAM_LOOPER_PITCH)
                 || (dest == PARAM_LOOPER_GRAIN)
                 || (dest == PARAM_SAMPLER_SAMPLE)
+                || (dest == PARAM_SAMPLER_CLIP_SEARCH)
                 || ((dest >= PARAM_MASTER_FX1_TYPE) && (dest <= PARAM_MASTER_FX4_B))
                 || (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_DRUM_TRX_BD)
                     && (dest >= PARAM_DRUM_TRX_BD_PITCH)
@@ -789,7 +785,7 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
         {
             return 0U;
         }
-        if (dest == PARAM_BRAIDS_PHASE_RESET)
+        if (dest == PARAM_WAVE_PHASE_RESET)
         {
             return 0U;
         }
@@ -815,7 +811,8 @@ static uint8_t mod_lfo_param_matches_track_context(ui_track_family_t family,
         }
         if ((dest == PARAM_FILTER_TYPE)
                 || (dest == PARAM_FILTER_ENVRST)
-                || (dest == PARAM_FILTER_ENVDLY))
+                || (dest == PARAM_FILTER_ENVDLY)
+                || (dest == PARAM_FILTER_KEYTRK))
         {
             return 0U;
         }
@@ -1541,5 +1538,86 @@ uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uin
         }
     }
     out[i] = '\0';
+    return 1U;
+}
+
+static const char *mod_lfo_short_label_for_param(param_id_t dest)
+{
+    switch (dest)
+    {
+        case PARAM_MIX_LEVEL: return "Lvl";
+        case PARAM_MIX_SEND1: return "Snd1";
+        case PARAM_MIX_SEND2: return "Snd2";
+        case PARAM_FILTER_CUTOFF: return "Cutf";
+        case PARAM_FILTER_EG_AMT: return "EG";
+        case PARAM_SAMPLER_START: return "Strt";
+        case PARAM_SAMPLER_FADE_IN: return "Fin";
+        case PARAM_SAMPLER_FADE_OUT: return "Fout";
+        case PARAM_SAMPLER_SLICE_COUNT: return "Slic";
+        case PARAM_SAMPLER_CLIP_SOURCE_BPM: return "SrcB";
+        case PARAM_SAMPLER_CLIP_SYNC_LENGTH: return "Sync";
+        case PARAM_SAMPLER_CLIP_PITCH: return "Tune";
+        case PARAM_SAMPLER_CLIP_PLAY_MODE: return "Mode";
+        case PARAM_SAMPLER_CLIP_STRETCH_MODE: return "Strc";
+        case PARAM_SAMPLER_CLIP_GRAIN: return "Gra.";
+        case PARAM_WAVE_COARSE: return "Coa.";
+        case PARAM_WAVE_TIMBRE: return "Tmbr";
+        case PARAM_WAVE_MODULATION: return "Mod";
+        case PARAM_WAVE_COLOR: return "Colr";
+        default: return NULL;
+    }
+}
+
+static void mod_lfo_copy_short_label(const char *src, char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    if (src == NULL)
+    {
+        out[0] = '\0';
+        return;
+    }
+
+    uint32_t i = 0U;
+    for (; (i < 4U) && ((i + 1U) < out_len) && (src[i] != '\0'); ++i)
+    {
+        out[i] = src[i];
+    }
+    out[i] = '\0';
+}
+
+uint8_t mod_lfo_v1_dest_short_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return 0U;
+    }
+
+    const param_id_t dest = mod_lfo_dest_from_index(track, dest_index);
+    if (dest == MOD_LFO_DEST_NONE)
+    {
+        mod_lfo_copy_short_label("None", out, out_len);
+        return 1U;
+    }
+
+    if (dest >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const char *label = mod_lfo_short_label_for_param(dest);
+    if (label == NULL)
+    {
+        label = param_registry[dest].name;
+    }
+    if (label == NULL)
+    {
+        return 0U;
+    }
+
+    mod_lfo_copy_short_label(label, out, out_len);
     return 1U;
 }

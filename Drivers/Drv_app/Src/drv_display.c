@@ -401,6 +401,8 @@ const font_t FONT_4X6 = { .id = 1U };
 const font_t FONT_MINIMAL3X3 = { .id = 2U };
 const font_t FONT_3X3BASIC = { .id = 3U };
 const font_t FONT_PEAR = { .id = 4U };
+const font_t FONT_HELVB14 = { .id = 5U };
+const font_t FONT_OFF_COMPACT = { .id = 6U };
 
 void drv_display_set_font(const font_t *font)
 {
@@ -419,6 +421,14 @@ void drv_display_set_font(const font_t *font)
     else if (font == &FONT_PEAR)
     {
         g_active_font = u8g2_font_pearfont_tr;
+    }
+    else if (font == &FONT_HELVB14)
+    {
+        g_active_font = u8g2_font_helvB14_tf;
+    }
+    else if (font == &FONT_OFF_COMPACT)
+    {
+        g_active_font = u8g2_font_6x13B_tf;
     }
     else
     {

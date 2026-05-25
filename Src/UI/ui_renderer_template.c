@@ -6,6 +6,7 @@
 #include "cpu_load.h"
 #include "drv_display.h"
 #include "font.h"
+#include "mixer.h"
 #include "param_registry.h"
 #include "ui_core.h"
 #include "ui_macro_interaction.h"
@@ -24,11 +25,31 @@
 #define UI_TEMPLATE_FOOTER_Y         55
 #define UI_TEMPLATE_FOOTER_H         9
 #define UI_TEMPLATE_FOOTER_TEXT_Y    57
-#define UI_TEMPLATE_CARD_LABEL_Y     3
-#define UI_TEMPLATE_CARD_VALUE_Y     (UI_TEMPLATE_FRAME_H - 9)
+#define UI_TEMPLATE_CARD_TEXT_Y      (UI_TEMPLATE_FRAME_H - 7)
+#define UI_TEMPLATE_CARD_LABEL_Y     UI_TEMPLATE_CARD_TEXT_Y
+#define UI_TEMPLATE_CARD_LABEL_H     7
+#define UI_TEMPLATE_CARD_WIDGET_X_PAD 1
+#define UI_TEMPLATE_CARD_WIDGET_Y    1
+#define UI_TEMPLATE_CARD_WIDGET_W    (UI_TEMPLATE_FRAME_W - (2 * UI_TEMPLATE_CARD_WIDGET_X_PAD))
+#define UI_TEMPLATE_CARD_WIDGET_H    (UI_TEMPLATE_CARD_LABEL_Y - UI_TEMPLATE_CARD_WIDGET_Y - 1)
+#define UI_TEMPLATE_GROUP_WIDGET_X   1
+#define UI_TEMPLATE_GROUP_WIDGET_Y   (UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y)
+#define UI_TEMPLATE_GROUP_WIDGET_W   126
+#define UI_TEMPLATE_GROUP_WIDGET_H   UI_TEMPLATE_CARD_WIDGET_H
+#define UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST 1U
+#define UI_TEMPLATE_FILTER_GROUP_SLOT_COUNT 2U
 #define UI_TEMPLATE_CARD_LABEL_MAX_PX 28U
 #define UI_TEMPLATE_HEADER_TITLE_X   43
 #define UI_TEMPLATE_HEADER_TITLE_W   42
+
+typedef struct
+{
+    uint8_t attack;
+    uint8_t decay;
+    uint8_t sustain;
+    uint8_t release;
+    uint8_t locked[4];
+} ui_renderer_template_adsr_shape_t;
 
 static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t out_len)
 {
@@ -262,6 +283,16 @@ static int ui_renderer_template_center_x(int x, int w, const char *txt)
     return out;
 }
 
+static uint8_t ui_renderer_template_right_x(uint8_t right_margin_px, uint8_t text_w)
+{
+    if (text_w >= (uint8_t)(OLED_WIDTH - right_margin_px))
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(OLED_WIDTH - right_margin_px - text_w);
+}
+
 static void ui_renderer_template_fit_text(char *txt, uint8_t max_px)
 {
     if ((txt == NULL) || (max_px == 0U))
@@ -371,14 +402,1474 @@ static float ui_renderer_template_get_param_display_value(param_id_t id)
     return ui_param_get_active_track_display_value(id, ui_get_active_track());
 }
 
+static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                            param_id_t id,
+                                                            float *out_value,
+                                                            uint8_t *out_inverted)
+{
+    if ((id >= PARAM_COUNT) || (out_value == 0))
+    {
+        return 0U;
+    }
+
+    if (out_inverted != 0)
+    {
+        *out_inverted = 0U;
+    }
+
+    float value = ui_renderer_template_get_param_display_value(id);
+    uint8_t macro_slot_track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
+    float macro_slot_scene_value = 0.0f;
+    const uint8_t has_macro_slot_value =
+        ui_macro_interaction_get_param_lock_value(id,
+                                                  &macro_slot_track,
+                                                  &macro_slot_scene_value);
+    const uint8_t macro_value_visible =
+        (uint8_t)((has_macro_slot_value != 0U)
+                && (macro_slot_track == ui_get_active_track()));
+
+    if (macro_value_visible != 0U)
+    {
+        value = macro_slot_scene_value;
+    }
+    else
+    {
+        (void)ui_param_try_get_seq_plock_feedback_with_frame(plock_frame_ctx, id, &value, out_inverted);
+    }
+
+    *out_value = value;
+    return 1U;
+}
+
+static void ui_renderer_template_build_param_text(const ui_template_page_state_t *state,
+                                                  uint8_t slot,
+                                                  param_id_t id,
+                                                  float value,
+                                                  char *name_txt,
+                                                  uint32_t name_len,
+                                                  char *value_txt,
+                                                  uint32_t value_len)
+{
+    const param_desc_t *desc = &param_registry[id];
+
+    if ((name_txt != NULL) && (name_len > 0U))
+    {
+        (void)snprintf(name_txt, name_len, "%s", desc->name);
+    }
+    if ((value_txt != NULL) && (value_len > 0U))
+    {
+        ui_renderer_template_format_value(id, value, value_txt, value_len);
+    }
+
+    if ((state != NULL) && (state->param_text != NULL))
+    {
+        (void)state->param_text(slot,
+                                id,
+                                value,
+                                name_txt,
+                                name_len,
+                                value_txt,
+                                value_len);
+    }
+}
+
+static int ui_renderer_template_clamp_i32(int value, int min_value, int max_value)
+{
+    if (value < min_value)
+    {
+        return min_value;
+    }
+    if (value > max_value)
+    {
+        return max_value;
+    }
+    return value;
+}
+
+static uint8_t ui_renderer_template_value_to_u7(float value)
+{
+    int32_t v = (int32_t)(value + 0.5f);
+    if (v < 0)
+    {
+        v = 0;
+    }
+    if (v > 127)
+    {
+        v = 127;
+    }
+    return (uint8_t)v;
+}
+
+static uint8_t ui_renderer_template_filter_type_visible(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                        mixer_track_filter_type_t *out_type)
+{
+    float value = 0.0f;
+    if ((out_type == 0)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_TYPE, &value, 0) == 0U))
+    {
+        return 0U;
+    }
+
+    uint8_t type = (uint8_t)(value + 0.5f);
+    if (type > (uint8_t)MIXER_TRACK_FILTER_BP_BI)
+    {
+        type = (uint8_t)MIXER_TRACK_FILTER_BP_BI;
+    }
+    *out_type = (mixer_track_filter_type_t)type;
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_filter_param_supported(uint8_t active_track, param_id_t id)
+{
+    const track_runtime_param_status_t status = track_runtime_get_effective_param_status(active_track, id);
+    return (uint8_t)((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED));
+}
+
+static uint8_t ui_renderer_template_draw_filter_text(int x, int y, int w, int h, const char *txt, const font_t *font, int y_offset)
+{
+    if ((txt == 0) || (font == 0) || (w <= 0) || (h <= 0))
+    {
+        return 0U;
+    }
+
+    drv_display_set_font(font);
+    const int text_w = (int)drv_display_text_width(txt);
+    const int text_h = (int)drv_display_font_height();
+    int text_x = x + ((w - text_w) / 2);
+    int text_y = y + ((h - text_h) / 2) + y_offset;
+    if (text_x < x)
+    {
+        text_x = x;
+    }
+    if (text_y < y)
+    {
+        text_y = y;
+    }
+    drv_display_draw_text((uint8_t)text_x, (uint8_t)text_y, txt);
+    drv_display_set_font(&FONT_4X6);
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_filter_big_text(int x, int y, int w, int h, const char *txt, const font_t *font)
+{
+    return ui_renderer_template_draw_filter_text(x, y, w, h, txt, font, 4);
+}
+
+static uint8_t ui_renderer_template_draw_lfo_dest_text(int x, int y, int w, int h, float value)
+{
+    if ((w <= 0) || (h <= 0))
+    {
+        return 0U;
+    }
+
+    char label[20];
+    if (mod_lfo_v1_dest_short_label(ui_get_active_track(), (uint16_t)(value + 0.5f), label, (uint32_t)sizeof(label)) == 0U)
+    {
+        (void)snprintf(label, sizeof(label), "-");
+    }
+
+    drv_display_set_font(&FONT_OFF_COMPACT);
+    ui_renderer_template_fit_text(label, (uint8_t)((w > 2) ? (w - 2) : w));
+    return ui_renderer_template_draw_filter_text(x, y, w, h, label, &FONT_OFF_COMPACT, 4);
+}
+
+static uint8_t ui_renderer_template_draw_play_note_text(param_id_t id, int x, int y, int w, int h, float value)
+{
+    if ((w <= 0) || (h <= 0))
+    {
+        return 0U;
+    }
+
+    char label[8];
+    ui_renderer_template_format_value(id, value, label, (uint32_t)sizeof(label));
+
+    const font_t *font = &FONT_HELVB14;
+    drv_display_set_font(font);
+    if (drv_display_text_width(label) > (uint8_t)((w > 2) ? (w - 2) : w))
+    {
+        font = &FONT_OFF_COMPACT;
+        drv_display_set_font(font);
+        ui_renderer_template_fit_text(label, (uint8_t)((w > 2) ? (w - 2) : w));
+    }
+
+    return ui_renderer_template_draw_filter_text(x, y, w, h, label, font, 4);
+}
+
+static void ui_renderer_template_draw_point(int x, int y)
+{
+    drv_display_draw_line(x, y, x, y);
+}
+
+static void ui_renderer_template_draw_circle_points(int cx, int cy, int x, int y)
+{
+    ui_renderer_template_draw_point(cx + x, cy + y);
+    ui_renderer_template_draw_point(cx - x, cy + y);
+    ui_renderer_template_draw_point(cx + x, cy - y);
+    ui_renderer_template_draw_point(cx - x, cy - y);
+    ui_renderer_template_draw_point(cx + y, cy + x);
+    ui_renderer_template_draw_point(cx - y, cy + x);
+    ui_renderer_template_draw_point(cx + y, cy - x);
+    ui_renderer_template_draw_point(cx - y, cy - x);
+}
+
+static void ui_renderer_template_draw_circle_outline(int cx, int cy, int radius)
+{
+    int px = 0;
+    int py = radius;
+    int d = 1 - radius;
+
+    while (px <= py)
+    {
+        ui_renderer_template_draw_circle_points(cx, cy, px, py);
+        px++;
+        if (d < 0)
+        {
+            d += (2 * px) + 1;
+        }
+        else
+        {
+            py--;
+            d += (2 * (px - py)) + 1;
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_piano_icon(int x, int y, int w, int h)
+{
+    const int key_w = 26;
+    const int key_h = 15;
+    const int key_x = x + ((w - key_w) / 2);
+    const int key_y = y + ((h - key_h) / 2) + 2;
+    static const int8_t div_x[] = {4, 8, 12, 15, 19, 23};
+    static const int8_t black_x[] = {3, 7, 14, 18, 22};
+
+    drv_display_draw_rect(key_x, key_y, key_w, key_h);
+    for (uint8_t i = 0U; i < 6U; ++i)
+    {
+        drv_display_draw_line(key_x + div_x[i], key_y + 7, key_x + div_x[i], key_y + key_h - 1);
+    }
+    for (uint8_t i = 0U; i < 5U; ++i)
+    {
+        drv_display_fill_rect(key_x + black_x[i], key_y + 1, 3, 7);
+    }
+}
+
+static void ui_renderer_template_draw_cfg_input_icon(int x, int y, int w, int h)
+{
+    static const char *const input[29] = {
+        "WWWWWWWWWWWWWBBBWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWBBBWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBBBBBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBBBBBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBWWWBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWBBBBBBBWWWWWWWWWWWW",
+        "WWWWWWWWWWWBWWWWWBWWWWWWWWWWWW",
+        "WWWWWWWWWWWBWWWWWBWWWWWWWWWWWW",
+        "WWWWWWWWWWBBBBBBBBBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWWWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWWWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWWBWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWWBWWBWWWWWWWWWWW",
+        "WWWWWWWWWWBWWWBWWWBWWWWWWWWWWW",
+        "WWWWWWWWWWBBWWWWWBBWWWWWWWWWWW",
+        "WWWWWWWWWWWBBWWWBBWWWWWWWWWWWW",
+        "WWWWWWWWWWWWBBBBBWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWBBBWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2);
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (input[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_hybrid_icon(int x, int y, int w, int h)
+{
+    static const char *const hybrid[29] = {
+        "WWWWBBBWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWBBBWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBBBBBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBWWWBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBBBBBWWWWWWWWWBBBBBBBBBBBWW",
+        "WWWBWWWBWWWWWWWWWBWBBBWBBBWBWW",
+        "WWWBWWWBWWWWWWWWWBWBBBWBBBWBWW",
+        "WWWBWWWBWWWWWWWWWBWBBBWBBBWBWW",
+        "WWBBBBBBBWWWWBWWWBWBBBWBBBWBWW",
+        "WWBWWWWWBWWWWBWWWBWBBBWBBBWBWW",
+        "WWBWWWWWBWWBBBBBWBWWBWWWBWWBWW",
+        "WBBBBBBBBBWWWBWWWBWWBWWWBWWBWW",
+        "WBWWWWWWWBWWWBWWWBWWBWWWBWWBWW",
+        "WBWWWWWWWBWWWWWWWBWWBWWWBWWBWW",
+        "WBWWWWWBWBWWWWWWWBWWBWWWBWWBWW",
+        "WBWWWWWBWBWWWWWWWBWWBWWWBWWBWW",
+        "WBWWWWWBWBWWWWWWWBWWBWWWBWWBWW",
+        "WBWWWWWBWBWWWWWWWBBBBBBBBBBBWW",
+        "WBWWWWWBWBWWWWWWWWWWWWWWWWWWWW",
+        "WBWWWWBWWBWWWWWWWWWWWWWWWWWWWW",
+        "WBWWWBWWWBWWWWWWWWWWWWWWWWWWWW",
+        "WBBWWWWWBBWWWWWWWWWWWWWWWWWWWW",
+        "WWBBWWWBBWWWWWWWWWWWWWWWWWWWWW",
+        "WWWBBBBBWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWBBBWWWWWWWWWWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2);
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (hybrid[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static uint8_t ui_renderer_template_draw_cfg_midi_text(int x, int y, int w, int h)
+{
+    static const char label[] = "Midi";
+
+    drv_display_set_font(&FONT_OFF_COMPACT);
+    const int text_w = (int)drv_display_text_width(label);
+    const int text_h = (int)drv_display_font_height();
+    int text_x = x + ((w - text_w) / 2);
+    int text_y = y + ((h - text_h) / 2);
+
+    if (text_x < x)
+    {
+        text_x = x;
+    }
+    if (text_y < y)
+    {
+        text_y = y;
+    }
+
+    drv_display_draw_text((uint8_t)text_x, (uint8_t)text_y, label);
+    drv_display_set_font(&FONT_4X6);
+    return 1U;
+}
+
+static void ui_renderer_template_draw_cfg_midi_icon(int x, int y, int w, int h)
+{
+    static const char *const midi[29] = {
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWBBBBBBBBBBBWWWWWWWWWW",
+        "WWWWWWWWWBWBBBWBBBWBWWWWWWWWWW",
+        "WWWWWWWWWBWBBBWBBBWBWWWWWWWWWW",
+        "WWWWWWWWWBWBBBWBBBWBWWWWWWWWWW",
+        "WWWWWWWWWBWBBBWBBBWBWWWWWWWWWW",
+        "WWWWWWWWWBWBBBWBBBWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBWWBWWWBWWBWWWWWWWWWW",
+        "WWWWWWWWWBBBBBBBBBBBWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2);
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (midi[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_synth_icon(int x, int y, int w, int h)
+{
+    static const char *const synth[29] = {
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "BWWWWWWBWWWBWWWWWWWWWWWWWWWWWB",
+        "BWBBBBWBBBBBWBWBWBWBWBWBWBWBWB",
+        "BWWWWWWBWWWBWWWWWWWWWWWWWWWWWB",
+        "BWBWBBWBBBBBWBWBWBWBWBWBWBWBWB",
+        "BWBWBBWBWWWBWWWWWWWWWWWWWWWWWB",
+        "BWWWWWWBWWWBWWWWWWWWWWWWWWWWWB",
+        "BWWWWWWBWWWBWWWWWWWWWWWWWWWWWB",
+        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "BWWWWWWWWWWWWWWWWWWWWWWWWWWWWB",
+        "BWWBWBWWWBWBWBWWWBWBWWWBWBWBWB",
+        "BWWBWBWWWBWBWBWWWBWBWWWBWBWBWB",
+        "BWWWWWWWWWWWWWWWWWWWWWWWWWWWWB",
+        "BWBBWBBWBBWBBWBBWBBWBBWBBWBBWB",
+        "BWBBWBBWBBWBBWBBWBBWBBWBBWBBWB",
+        "BWBBWBBWBBWBBWBBWBBWBBWBBWBBWB",
+        "WBBBBBBBBBBBBBBBBBBBBBBBBBBBBW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2);
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (synth[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_wave_icon(int x, int y, int w, int h)
+{
+    static const char *const wave[29] = {
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWBWBWWBWWBWBWBBBWWWWWWWW",
+        "WWWWWWWBWBWBWBWBWBWBWWWWWWWWWW",
+        "WWWWWWWBWBWBBBWBWBWBBBWWWWWWWW",
+        "WWWWWWWBBBWBWBWBWBWBWWWWWWWWWW",
+        "WWWWWWWBWBWBWBWWBWWBBBWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWBWWWWWWWBWWWWWWWBWWWWW",
+        "WWWWWWBBWBWWWWBBWBWWWWBBWWWWWW",
+        "WWWWWBWWWWBBWBWWWWBBWBWWWWWWWW",
+        "WWWWBWWWWBWWBWWWWBWWBWWWWBWWWW",
+        "WWWWWWWBBWBWWWWBBWBWWWWBBWWWWW",
+        "WWWWWWBWWWWBBWBWWWWBBWBWWWWWWW",
+        "WWWWWBWWWWWWWBWWWWWWWBWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2);
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (wave[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_drum_icon(int x, int y, int w, int h)
+{
+    const int cx = x + (w / 2);
+    const int top = y + 12;
+    const int left = cx - 10;
+    const int right = cx + 10;
+    const int bottom = top + 11;
+
+    drv_display_draw_line(cx - 11, y + 4, cx - 2, y + 10);
+    drv_display_draw_line(cx + 11, y + 4, cx + 2, y + 10);
+    drv_display_draw_line(cx - 12, y + 4, cx - 10, y + 4);
+    drv_display_draw_line(cx + 10, y + 4, cx + 12, y + 4);
+    drv_display_draw_line(left + 2, top, right - 2, top);
+    drv_display_draw_line(left, top + 2, left, bottom - 3);
+    drv_display_draw_line(right, top + 2, right, bottom - 3);
+    drv_display_draw_line(left + 2, bottom, right - 2, bottom);
+    drv_display_draw_line(left, top + 2, left + 2, top);
+    drv_display_draw_line(right - 2, top, right, top + 2);
+    drv_display_draw_line(left, bottom - 3, left + 2, bottom);
+    drv_display_draw_line(right - 2, bottom, right, bottom - 3);
+    drv_display_draw_line(left + 1, top + 5, right - 1, top + 5);
+}
+
+static void ui_renderer_template_draw_cfg_sampler_icon(int x, int y, int w, int h)
+{
+    static const char *const vinyl[29] = {
+        "..............................",
+        "..............................",
+        "..............................",
+        "..............................",
+        "............#####.............",
+        "..........#########...........",
+        "........#############.........",
+        ".......###########W###........",
+        ".......############W##........",
+        "......###########W##W##.......",
+        "......############W#W##.......",
+        ".....#############W###W#......",
+        ".....########WWW######W#......",
+        ".....########W#W######W#......",
+        ".....########WWW#####W##......",
+        ".....###W#W#########W###......",
+        "......##W#W########W###.......",
+        "......##W##W######W####.......",
+        ".......##W####WWWW####........",
+        ".......###W###WWW#####........",
+        "........#############.........",
+        "..........#########...........",
+        "............#####.............",
+        "..............................",
+        "..............................",
+        "..............................",
+        "..............................",
+        "..............................",
+        "..............................",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2) ;
+    const int icon_y = y + ((h - icon_h) / 2) + 1;
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (vinyl[row][col] == '#')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_stream_icon(int x, int y, int w, int h)
+{
+    static const char *const stream[29] = {
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWBBBBBBBBBBBBBBBBWWWWWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWBBWWWWWWWWWWW",
+        "WBBWWWBBWBBWBBWBBWBBWWWWWWWWWW",
+        "WBBWWWBBWBBWBBWBBWWBBWWWWWWWWW",
+        "WBBWWWBBWBBWBBWBBWWWBBWWWWWWWW",
+        "WBBWWWBBWBBWBBWBBWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWBBWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWBBBWWWWWWWWWBBWWWWWWWW",
+        "WBBWWWWWBBBBBWWWWWWWBWWWWWWWWW",
+        "WBBWWWWWBBBBBBBWWWWWBWWWWWWWWW",
+        "WBBWWWWWBBBBBBBBWWWWBBWWWWWWWW",
+        "WBBWWWWWBBBBBBBBBWWWWBWWWWWWWW",
+        "WBBWWWWWBBBBBBBBWWWWWBWWWWWWWW",
+        "WBBWWWWWBBBBBBBWWWWWWBWWWWWWWW",
+        "WBBWWWWWBBBBBWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWBBBWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWBBWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBWWWWWWWWWWWWWWWWWWBWWWWWWWW",
+        "WBBBBBBBBBBBBBBBBBBBBBWWWWWWWW",
+        "WWBBBBBBBBBBBBBBBBBBBWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2) + 4;
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (stream[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_ram_icon(int x, int y, int w, int h)
+{
+    static const char *const ram[29] = {
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWBBWWBBWWBBWWBBWWBBWWWWWWW",
+        "WWWWWBBWWBBWWBBWWBBWWBBWWWWWWW",
+        "WWWWBBBBBBBBBBBBBBBBBBBBBWWWWW",
+        "WWWWBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBWWWWW",
+        "WWWWBWWWWWWWWWWWWWWWWWWWBWWWWW",
+        "WWWWBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBWWWWW",
+        "WWWWBWWBBBWWWBBWWBWWWBWWBWWWWW",
+        "WWWWBWWBWWBWBWWBWBBWBBWWBBBWWW",
+        "WWBBBWWBBBWWBBBBWBWBWBWWBBBWWW",
+        "WWBBBWWBWBWWBWWBWBWWWBWWBWWWWW",
+        "WWWWBWWBWWBWBWWBWBWWWBWWBWWWWW",
+        "WWWWBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBWWWWW",
+        "WWWWBWWWWWWWWWWWWWWWWWWWBWWWWW",
+        "WWWWBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBBBWWW",
+        "WWBBBWWWWWWWWWWWWWWWWWWWBWWWWW",
+        "WWWWBBBBBBBBBBBBBBBBBBBBBWWWWW",
+        "WWWWWWBBWWBBWWBBWWBBWWBBWWWWWW",
+        "WWWWWWBBWWBBWWBBWWBBWWBBWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    };
+    const int icon_w = 30;
+    const int icon_h = 29;
+    const int icon_x = x + ((w - icon_w) / 2);
+    const int icon_y = y + ((h - icon_h) / 2);
+
+    for (uint8_t row = 0U; row < 29U; ++row)
+    {
+        for (uint8_t col = 0U; col < 30U; ++col)
+        {
+            if (ram[row][col] == 'B')
+            {
+                drv_display_draw_line(icon_x + (int)col, icon_y + (int)row, icon_x + (int)col, icon_y + (int)row);
+            }
+        }
+    }
+}
+
+static void ui_renderer_template_draw_cfg_loop_icon(int x, int y, int w, int h)
+{
+    const int bx = x + 4;
+    const int by = y + 6;
+    const int bw = w - 8;
+    const int bh = h - 10;
+    const int r1x = bx + 7;
+    const int r2x = bx + bw - 8;
+    const int ry = by + 9;
+
+    drv_display_draw_rect(bx, by, bw, bh);
+    drv_display_draw_line(bx + 3, by + 3, bx + bw - 4, by + 3);
+    ui_renderer_template_draw_circle_outline(r1x, ry, 3);
+    ui_renderer_template_draw_circle_outline(r2x, ry, 3);
+    drv_display_draw_line(r1x + 3, ry, r2x - 3, ry);
+    drv_display_draw_line(bx + 5, by + bh - 4, bx + bw - 6, by + bh - 4);
+    drv_display_draw_line(bx + 8, by + bh - 7, bx + bw - 9, by + bh - 7);
+}
+
+static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
+                                                          int y,
+                                                          int w,
+                                                          int h,
+                                                          const char *top,
+                                                          const char *bottom)
+{
+    if ((top == 0) || (bottom == 0))
+    {
+        return 0U;
+    }
+
+    drv_display_set_font(&FONT_4X6);
+    const int font_h = (int)drv_display_font_height();
+    const int gap = 1;
+    int text_y = y + ((h - ((2 * font_h) + gap)) / 2);
+    if (text_y < y)
+    {
+        text_y = y;
+    }
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, w, top), (uint8_t)text_y, top);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, w, bottom), (uint8_t)(text_y + font_h + gap), bottom);
+    return 1U;
+}
+
+static ui_track_family_t ui_renderer_template_cfg_visible_family(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+{
+    float family_value = 0.0f;
+    if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_CFG_TRACK, &family_value, 0) == 0U)
+    {
+        return ui_get_track_family(ui_get_active_track());
+    }
+
+    int32_t family = (int32_t)(family_value + 0.5f);
+    if (family < 0)
+    {
+        family = 0;
+    }
+    if (family >= (int32_t)UI_TRACK_FAMILY_COUNT)
+    {
+        family = (int32_t)UI_TRACK_FAMILY_COUNT - 1;
+    }
+    return (ui_track_family_t)family;
+}
+
+static uint8_t ui_renderer_template_cfg_input_index(ui_track_family_t family)
+{
+    if ((family >= UI_TRACK_FAMILY_INPUT1) && (family <= UI_TRACK_FAMILY_INPUT4))
+    {
+        return (uint8_t)((uint8_t)family - (uint8_t)UI_TRACK_FAMILY_INPUT1 + 1U);
+    }
+    return 0U;
+}
+
+static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                          ui_template_custom_widget_kind_t kind,
+                                                          int x,
+                                                          int y,
+                                                          int w,
+                                                          int h,
+                                                          float value)
+{
+    if ((w <= 0) || (h <= 0))
+    {
+        return 0U;
+    }
+
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE)
+    {
+        return ui_renderer_template_draw_filter_text(x, y, w, h, "-", &FONT_4X6, 0);
+    }
+
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL)
+    {
+        uint8_t channel = (uint8_t)(value + 0.5f);
+        if (channel < 1U)
+        {
+            channel = 1U;
+        }
+        if (channel > 16U)
+        {
+            channel = 16U;
+        }
+
+        char label[4];
+        (void)snprintf(label, sizeof(label), "%u", (unsigned int)channel);
+        return ui_renderer_template_draw_filter_big_text(x, y, w, h, label, &FONT_HELVB14);
+    }
+
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE)
+    {
+        static const char *const labels[] = {"Int", "Ext", "All"};
+        uint8_t source = (uint8_t)(value + 0.5f);
+        if (source >= 3U)
+        {
+            source = 2U;
+        }
+        return ui_renderer_template_draw_filter_big_text(x, y, w, h, labels[source], &FONT_OFF_COMPACT);
+    }
+
+    const ui_track_family_t family = ui_renderer_template_cfg_visible_family(plock_frame_ctx);
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
+    {
+        const uint8_t input_index = ui_renderer_template_cfg_input_index(family);
+        if (family == UI_TRACK_FAMILY_OFF)
+        {
+            return ui_renderer_template_draw_filter_big_text(x, y, w, h, "OFF", &FONT_OFF_COMPACT);
+        }
+        if (input_index != 0U)
+        {
+            char label[6];
+            (void)snprintf(label, sizeof(label), "In%u", (unsigned int)input_index);
+            return ui_renderer_template_draw_filter_big_text(x, y, w, h, label, &FONT_OFF_COMPACT);
+        }
+        if (family == UI_TRACK_FAMILY_SYNTH)
+        {
+            ui_renderer_template_draw_cfg_synth_icon(x, y, w, h);
+            return 1U;
+        }
+        if (family == UI_TRACK_FAMILY_MIDI)
+        {
+            return ui_renderer_template_draw_cfg_midi_text(x, y, w, h);
+        }
+        if (family == UI_TRACK_FAMILY_DRUM)
+        {
+            ui_renderer_template_draw_cfg_drum_icon(x, y, w, h);
+            return 1U;
+        }
+        if (family == UI_TRACK_FAMILY_SAMPLER)
+        {
+            ui_renderer_template_draw_cfg_sampler_icon(x, y, w, h);
+            return 1U;
+        }
+        return ui_renderer_template_draw_filter_big_text(x, y, w, h, ui_get_track_family_display_name(family), &FONT_OFF_COMPACT);
+    }
+
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE)
+    {
+        const ui_track_type_t type = ui_get_track_type_from_family_index(family, (uint8_t)(value + 0.5f));
+        if (family == UI_TRACK_FAMILY_OFF)
+        {
+            return ui_renderer_template_draw_filter_text(x, y, w, h, "-", &FONT_4X6, 0);
+        }
+
+        switch (type)
+        {
+            case UI_TRACK_TYPE_WAVE:
+                ui_renderer_template_draw_cfg_wave_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_MULTI:
+                ui_renderer_template_draw_cfg_piano_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_MIDI:
+                ui_renderer_template_draw_cfg_midi_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_AUDIO:
+            {
+                const uint8_t input_index = ui_renderer_template_cfg_input_index(family);
+                if (input_index != 0U)
+                {
+                    ui_renderer_template_draw_cfg_input_icon(x, y, w, h);
+                    return 1U;
+                }
+                break;
+            }
+
+            case UI_TRACK_TYPE_HYBRID:
+                ui_renderer_template_draw_cfg_hybrid_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_SAMPLER:
+                ui_renderer_template_draw_cfg_ram_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_CLIP:
+                ui_renderer_template_draw_cfg_stream_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_LOOPER:
+                ui_renderer_template_draw_cfg_loop_icon(x, y, w, h);
+                return 1U;
+
+            case UI_TRACK_TYPE_DRUM_TRX_BD:
+                return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "TRX", "BD");
+
+            case UI_TRACK_TYPE_DRUM_BD_ANALOG:
+                return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "BD", "Ana");
+
+            case UI_TRACK_TYPE_MASTER_FX:
+                return ui_renderer_template_draw_filter_big_text(x, y, w, h, "FX", &FONT_OFF_COMPACT);
+
+            default:
+                break;
+        }
+
+        return ui_renderer_template_draw_filter_big_text(x, y, w, h, ui_get_track_type_short_name(family, type), &FONT_OFF_COMPACT);
+    }
+
+    return 0U;
+}
+
+static const char *ui_renderer_template_filter_type_short_label(mixer_track_filter_type_t filter_type)
+{
+    switch (filter_type)
+    {
+        case MIXER_TRACK_FILTER_OFF:
+            return "OFF";
+        case MIXER_TRACK_FILTER_EQ3:
+            return "DJ";
+        case MIXER_TRACK_FILTER_LP_BI:
+            return "LP";
+        case MIXER_TRACK_FILTER_HP_BI:
+            return "HP";
+        case MIXER_TRACK_FILTER_BP_BI:
+            return "BP";
+        default:
+            return NULL;
+    }
+}
+
+static void ui_renderer_template_draw_filter_curve_segment(int x0, int y0, int x1, int y1, int baseline_y)
+{
+    const int dx = (x1 >= x0) ? (x1 - x0) : (x0 - x1);
+    const int dy = (y1 >= y0) ? (y1 - y0) : (y0 - y1);
+
+    if ((dx == 0) && (dy == 0))
+    {
+        return;
+    }
+    if ((dy == 0) && (dx <= 1) && (y0 >= (baseline_y - 2)))
+    {
+        return;
+    }
+
+    drv_display_draw_line(x0, y0, x1, y1);
+}
+
+static uint8_t ui_renderer_template_draw_filter_group_curve(mixer_track_filter_type_t filter_type,
+                                                            float cutoff_value,
+                                                            float resonance_value,
+                                                            int x,
+                                                            int y,
+                                                            int w,
+                                                            int h)
+{
+    if ((w < 24) || (h < 10))
+    {
+        return 0U;
+    }
+
+    const uint8_t cutoff = ui_renderer_template_value_to_u7(cutoff_value);
+    const uint8_t resonance = ui_renderer_template_value_to_u7(resonance_value);
+    const int left = x + 2;
+    const int right = x + w - 3;
+    const int top = y + 2;
+    const int bottom = y + h - 3;
+    const int floor = bottom - 3;
+    const int high = top + 5;
+    const int lp_hp_high = high + 3;
+    const int x_mid = left + ((right - left) / 2);
+    const int cutoff_x = ui_renderer_template_clamp_i32(left + 6 + (((right - left - 12) * (int)cutoff) / 127), left + 6, right - 6);
+    const int lp_hp_peak = ui_renderer_template_clamp_i32(lp_hp_high - (((lp_hp_high - top - 1) * (int)resonance) / 127), top + 1, lp_hp_high);
+
+    drv_display_draw_line(left, bottom, right, bottom);
+
+    switch (filter_type)
+    {
+        case MIXER_TRACK_FILTER_EQ3:
+        {
+            const int band_w = (right - left) / 3;
+            const int x1 = left + band_w;
+            const int x2 = right - band_w;
+            const int y_left = high + (((floor - high) * (int)cutoff) / 127);
+            const int y_right = high + (((floor - high) * (127 - (int)cutoff)) / 127);
+            const int y_mid = ui_renderer_template_clamp_i32(floor - 2 - (((floor - top - 4) * (int)resonance) / 127),
+                                                             top + 2,
+                                                             floor - 2);
+            ui_renderer_template_draw_filter_curve_segment(left, y_left, x1, y_left, bottom);
+            ui_renderer_template_draw_filter_curve_segment(x1, y_left, x_mid, y_mid, bottom);
+            ui_renderer_template_draw_filter_curve_segment(x_mid, y_mid, x2, y_right, bottom);
+            ui_renderer_template_draw_filter_curve_segment(x2, y_right, right, y_right, bottom);
+            break;
+        }
+
+        case MIXER_TRACK_FILTER_HP_BI:
+            ui_renderer_template_draw_filter_curve_segment(left, floor, cutoff_x - 5, floor, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x - 5, floor, cutoff_x, lp_hp_peak, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x, lp_hp_peak, cutoff_x + 5, lp_hp_high, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x + 5, lp_hp_high, right, lp_hp_high, bottom);
+            break;
+
+        case MIXER_TRACK_FILTER_BP_BI:
+        {
+            const int half_w = 16 - (((int)resonance * 8) / 127);
+            const int band_left = ui_renderer_template_clamp_i32(cutoff_x - half_w, left, right);
+            const int band_right = ui_renderer_template_clamp_i32(cutoff_x + half_w, left, right);
+            const int peak = ui_renderer_template_clamp_i32(floor - 3 - (((floor - top - 5) * (int)resonance) / 127),
+                                                            top + 2,
+                                                            floor - 3);
+            ui_renderer_template_draw_filter_curve_segment(left, floor, band_left, floor, bottom);
+            ui_renderer_template_draw_filter_curve_segment(band_left, floor, cutoff_x, peak, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x, peak, band_right, floor, bottom);
+            ui_renderer_template_draw_filter_curve_segment(band_right, floor, right, floor, bottom);
+            break;
+        }
+
+        case MIXER_TRACK_FILTER_LP_BI:
+        default:
+            ui_renderer_template_draw_filter_curve_segment(left, lp_hp_high, cutoff_x - 5, lp_hp_high, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x - 5, lp_hp_high, cutoff_x, lp_hp_peak, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x, lp_hp_peak, cutoff_x + 6, floor, bottom);
+            ui_renderer_template_draw_filter_curve_segment(cutoff_x + 6, floor, right, floor, bottom);
+            break;
+    }
+
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_custom_filter(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                       ui_template_custom_widget_kind_t kind,
+                                                       int x,
+                                                       int y,
+                                                       int w,
+                                                       int h,
+                                                       float value,
+                                                       uint8_t allow_group_curve)
+{
+    mixer_track_filter_type_t filter_type = MIXER_TRACK_FILTER_OFF;
+    if (ui_renderer_template_filter_type_visible(plock_frame_ctx, &filter_type) == 0U)
+    {
+        return 0U;
+    }
+
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE)
+    {
+        const char *label = ui_renderer_template_filter_type_short_label(filter_type);
+        const font_t *font = (filter_type == MIXER_TRACK_FILTER_OFF) ? &FONT_OFF_COMPACT : &FONT_HELVB14;
+        return (label != NULL) ? ui_renderer_template_draw_filter_big_text(x, y, w, h, label, font) : 0U;
+    }
+
+    if ((kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CUTOFF)
+            && (ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_CUTOFF) == 0U))
+    {
+        return 0U;
+    }
+    if ((kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_RESONANCE)
+            && (ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_RESONANCE) == 0U))
+    {
+        return 0U;
+    }
+
+    if (filter_type == MIXER_TRACK_FILTER_OFF)
+    {
+        return ui_renderer_template_draw_filter_text(x, y, w, h, "-", &FONT_4X6, 0);
+    }
+
+    if ((kind == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP) && (allow_group_curve != 0U))
+    {
+        float cutoff_value = 64.0f;
+        float resonance_value = 0.0f;
+        if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_CUTOFF, &cutoff_value, 0) == 0U)
+                || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_FILTER_RESONANCE, &resonance_value, 0) == 0U))
+        {
+            return 0U;
+        }
+        return ui_renderer_template_draw_filter_group_curve(filter_type, cutoff_value, resonance_value, x, y, w, h);
+    }
+
+    (void)value;
+    return 0U;
+}
+
+static uint8_t ui_renderer_template_custom_adsr_params(ui_template_custom_widget_kind_t kind,
+                                                       param_id_t *out_attack,
+                                                       param_id_t *out_decay,
+                                                       param_id_t *out_sustain,
+                                                       param_id_t *out_release)
+{
+    if ((out_attack == 0) || (out_decay == 0) || (out_sustain == 0) || (out_release == 0))
+    {
+        return 0U;
+    }
+
+    switch (kind)
+    {
+        case UI_TEMPLATE_CUSTOM_WIDGET_ADSR_FILTER:
+            *out_attack = PARAM_FILTER_ATTACK;
+            *out_decay = PARAM_FILTER_DECAY;
+            *out_sustain = PARAM_FILTER_SUSTAIN;
+            *out_release = PARAM_FILTER_RELEASE;
+            return 1U;
+
+        case UI_TEMPLATE_CUSTOM_WIDGET_ADSR_VCA:
+            *out_attack = PARAM_VCA_ATTACK;
+            *out_decay = PARAM_VCA_DECAY;
+            *out_sustain = PARAM_VCA_SUSTAIN;
+            *out_release = PARAM_VCA_RELEASE;
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t ui_renderer_template_custom_adsr_supported(uint8_t active_track,
+                                                          param_id_t attack,
+                                                          param_id_t decay,
+                                                          param_id_t sustain,
+                                                          param_id_t release)
+{
+    const track_runtime_param_status_t attack_status = track_runtime_get_effective_param_status(active_track, attack);
+    const track_runtime_param_status_t decay_status = track_runtime_get_effective_param_status(active_track, decay);
+    const track_runtime_param_status_t sustain_status = track_runtime_get_effective_param_status(active_track, sustain);
+    const track_runtime_param_status_t release_status = track_runtime_get_effective_param_status(active_track, release);
+
+    return (uint8_t)(((attack_status == TRACK_RUNTIME_PARAM_ALLOWED) || (attack_status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+            && ((decay_status == TRACK_RUNTIME_PARAM_ALLOWED) || (decay_status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+            && ((sustain_status == TRACK_RUNTIME_PARAM_ALLOWED) || (sustain_status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+            && ((release_status == TRACK_RUNTIME_PARAM_ALLOWED) || (release_status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)));
+}
+
+static uint8_t ui_renderer_template_prepare_custom_adsr(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                        ui_template_custom_widget_kind_t kind,
+                                                        ui_renderer_template_adsr_shape_t *out_shape)
+{
+    if (out_shape == 0)
+    {
+        return 0U;
+    }
+
+    param_id_t attack_param = PARAM_COUNT;
+    param_id_t decay_param = PARAM_COUNT;
+    param_id_t sustain_param = PARAM_COUNT;
+    param_id_t release_param = PARAM_COUNT;
+    if (ui_renderer_template_custom_adsr_params(kind, &attack_param, &decay_param, &sustain_param, &release_param) == 0U)
+    {
+        return 0U;
+    }
+
+    if (ui_renderer_template_custom_adsr_supported(ui_get_active_track(), attack_param, decay_param, sustain_param, release_param) == 0U)
+    {
+        return 0U;
+    }
+
+    float attack_value = 0.0f;
+    float decay_value = 0.0f;
+    float sustain_value = 0.0f;
+    float release_value = 0.0f;
+    if ((ui_renderer_template_get_visible_param_value(plock_frame_ctx, attack_param, &attack_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, decay_param, &decay_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, sustain_param, &sustain_value, 0) == 0U)
+            || (ui_renderer_template_get_visible_param_value(plock_frame_ctx, release_param, &release_value, 0) == 0U))
+    {
+        return 0U;
+    }
+
+    const uint8_t attack = ui_renderer_template_value_to_u7(attack_value);
+    const uint8_t decay = ui_renderer_template_value_to_u7(decay_value);
+    const uint8_t sustain = ui_renderer_template_value_to_u7(sustain_value);
+    const uint8_t release = ui_renderer_template_value_to_u7(release_value);
+
+    out_shape->attack = attack;
+    out_shape->decay = decay;
+    out_shape->sustain = sustain;
+    out_shape->release = release;
+    out_shape->locked[0] = ui_macro_interaction_param_is_locked(attack_param);
+    out_shape->locked[1] = ui_macro_interaction_param_is_locked(decay_param);
+    out_shape->locked[2] = ui_macro_interaction_param_is_locked(sustain_param);
+    out_shape->locked[3] = ui_macro_interaction_param_is_locked(release_param);
+    return 1U;
+}
+
+static int ui_renderer_template_lerp_i32(int x, int x0, int y0, int x1, int y1)
+{
+    if (x1 == x0)
+    {
+        return y1;
+    }
+
+    const int dx = x1 - x0;
+    const int dy = y1 - y0;
+    const int num = (dy * (x - x0));
+    if (num >= 0)
+    {
+        return y0 + ((num + (dx / 2)) / dx);
+    }
+    return y0 + ((num - (dx / 2)) / dx);
+}
+
+static uint8_t ui_renderer_template_slot_for_x(int x)
+{
+    if (x < 32)
+    {
+        return 0U;
+    }
+    if (x < 64)
+    {
+        return 1U;
+    }
+    if (x < 96)
+    {
+        return 2U;
+    }
+    return 3U;
+}
+
+static int ui_renderer_template_adsr_y_for_x(int x,
+                                             int x0,
+                                             int x3,
+                                             int x4,
+                                             int ax,
+                                             int dx,
+                                             int rx,
+                                             int peak_y,
+                                             int sustain_y,
+                                             int bottom)
+{
+    if (x <= ax)
+    {
+        return ui_renderer_template_lerp_i32(x, x0, bottom, ax, peak_y);
+    }
+    if (x <= dx)
+    {
+        return ui_renderer_template_lerp_i32(x, ax, peak_y, dx, sustain_y);
+    }
+    if (x <= x3)
+    {
+        return sustain_y;
+    }
+    if (x <= rx)
+    {
+        return ui_renderer_template_lerp_i32(x, x3, sustain_y, rx, bottom);
+    }
+    (void)x4;
+    return bottom;
+}
+
+static uint8_t ui_renderer_template_draw_custom_adsr_shape(const ui_renderer_template_adsr_shape_t *shape,
+                                                           int x,
+                                                           int y,
+                                                           int w,
+                                                           int h,
+                                                           uint8_t segment_by_slot_lock)
+{
+    if ((shape == 0) || (w < 8) || (h < 8))
+    {
+        return 0U;
+    }
+
+    const int left = x + 2;
+    const int right = x + w - 3;
+    const int top = y + 2;
+    const int bottom = y + h - 3;
+    if ((right <= left) || (bottom <= top))
+    {
+        return 0U;
+    }
+
+    const int plot_w = right - left;
+    const int zone_w = plot_w / 4;
+    if (zone_w < 3)
+    {
+        return 0U;
+    }
+
+    const int amp_h = bottom - top;
+    const int x0 = left;
+    const int x1 = left + zone_w;
+    const int x2 = left + (2 * zone_w);
+    const int x3 = left + (3 * zone_w);
+    const int x4 = right;
+    const int peak_y = top + 1;
+    const int sustain_y = ui_renderer_template_clamp_i32((bottom - 1) - (((amp_h - 2) * (int)shape->sustain) / 127), top + 1, bottom - 1);
+    const int attack_x = ui_renderer_template_clamp_i32(x0 + 1 + (((zone_w - 2) * (int)shape->attack) / 127), x0 + 1, x1 - 1);
+    const int decay_x = ui_renderer_template_clamp_i32(x1 + 1 + (((zone_w - 2) * (int)shape->decay) / 127), x1 + 1, x2 - 1);
+    const int release_x = ui_renderer_template_clamp_i32(x3 + 1 + (((x4 - x3 - 2) * (int)shape->release) / 127), x3 + 1, x4 - 1);
+
+    if (segment_by_slot_lock == 0U)
+    {
+        drv_display_draw_line(x0, bottom, attack_x, peak_y);
+        drv_display_draw_line(attack_x, peak_y, decay_x, sustain_y);
+        drv_display_draw_line(decay_x, sustain_y, x3, sustain_y);
+        drv_display_draw_line(x3, sustain_y, release_x, bottom);
+        drv_display_draw_line(release_x, bottom, x4, bottom);
+
+        if ((bottom - top) >= 10)
+        {
+            drv_display_draw_pixel(x0, bottom, true);
+            drv_display_draw_pixel(x4, bottom, true);
+        }
+
+        return 1U;
+    }
+
+    int prev_x = x0;
+    int prev_y = bottom;
+    for (int draw_x = x0 + 1; draw_x <= x4; ++draw_x)
+    {
+        const int draw_y = ui_renderer_template_adsr_y_for_x(draw_x,
+                                                             x0,
+                                                             x3,
+                                                             x4,
+                                                             attack_x,
+                                                             decay_x,
+                                                             release_x,
+                                                             peak_y,
+                                                             sustain_y,
+                                                             bottom);
+        const uint8_t slot = ui_renderer_template_slot_for_x(draw_x);
+        drv_display_set_draw_color((shape->locked[slot] != 0U) ? 0U : 1U);
+        drv_display_draw_line(prev_x, prev_y, draw_x, draw_y);
+        prev_x = draw_x;
+        prev_y = draw_y;
+    }
+
+    if ((bottom - top) >= 10)
+    {
+        drv_display_set_draw_color((shape->locked[ui_renderer_template_slot_for_x(x0)] != 0U) ? 0U : 1U);
+        drv_display_draw_pixel(x0, bottom, true);
+        drv_display_set_draw_color((shape->locked[ui_renderer_template_slot_for_x(x4)] != 0U) ? 0U : 1U);
+        drv_display_draw_pixel(x4, bottom, true);
+    }
+
+    drv_display_set_draw_color(1U);
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_custom_adsr(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                     ui_template_custom_widget_kind_t kind,
+                                                     int x,
+                                                     int y,
+                                                     int w,
+                                                     int h)
+{
+    ui_renderer_template_adsr_shape_t shape;
+    if (ui_renderer_template_prepare_custom_adsr(plock_frame_ctx, kind, &shape) == 0U)
+    {
+        return 0U;
+    }
+
+    (void)ui_renderer_template_draw_custom_adsr_shape(&shape, x, y, w, h, 0U);
+    return 1U;
+}
+
+static ui_template_custom_widget_kind_t ui_renderer_template_resolve_custom_widget(const ui_template_page_state_t *state,
+                                                                                   const ui_template_subpage_t *subpage,
+                                                                                   uint8_t slot,
+                                                                                   param_id_t id)
+{
+    if ((state == 0) || (state->custom_widget_picker == 0))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    return state->custom_widget_picker(slot, subpage, id);
+}
+
+static ui_template_custom_widget_kind_t ui_renderer_template_resolve_grouped_custom_widget(const ui_template_page_state_t *state,
+                                                                                           const ui_template_subpage_t *subpage)
+{
+    if (subpage == 0)
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    const ui_template_custom_widget_kind_t kind =
+        ui_renderer_template_resolve_custom_widget(state, subpage, 0U, subpage->param_bank.params[0]);
+    if (kind == UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    for (uint8_t slot = 1U; slot < 4U; ++slot)
+    {
+        if (ui_renderer_template_resolve_custom_widget(state, subpage, slot, subpage->param_bank.params[slot]) != kind)
+        {
+            return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+        }
+    }
+
+    return kind;
+}
+
+static uint8_t ui_renderer_template_filter_curve_group_is_active(const ui_template_page_state_t *state,
+                                                                 const ui_template_subpage_t *subpage,
+                                                                 const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+{
+    if ((subpage == 0)
+            || (subpage->param_bank.params[UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST] != PARAM_FILTER_CUTOFF)
+            || (subpage->param_bank.params[UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST + 1U] != PARAM_FILTER_RESONANCE)
+            || (ui_renderer_template_resolve_custom_widget(state,
+                                                           subpage,
+                                                           UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST,
+                                                           PARAM_FILTER_CUTOFF) != UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP)
+            || (ui_renderer_template_resolve_custom_widget(state,
+                                                           subpage,
+                                                           UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST + 1U,
+                                                           PARAM_FILTER_RESONANCE) != UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP))
+    {
+        return 0U;
+    }
+
+    mixer_track_filter_type_t filter_type = MIXER_TRACK_FILTER_OFF;
+    if (ui_renderer_template_filter_type_visible(plock_frame_ctx, &filter_type) == 0U)
+    {
+        return 0U;
+    }
+    if (filter_type == MIXER_TRACK_FILTER_OFF)
+    {
+        return 0U;
+    }
+    if ((ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_CUTOFF) == 0U)
+            || (ui_renderer_template_filter_param_supported(ui_get_active_track(), PARAM_FILTER_RESONANCE) == 0U))
+    {
+        return 0U;
+    }
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_filter_curve_group(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+{
+    const int x = g_ui_template_frame_x[UI_TEMPLATE_FILTER_GROUP_SLOT_FIRST] + UI_TEMPLATE_CARD_WIDGET_X_PAD;
+    const int y = UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_WIDGET_Y;
+    const int w = (UI_TEMPLATE_FRAME_W * UI_TEMPLATE_FILTER_GROUP_SLOT_COUNT) - (2 * UI_TEMPLATE_CARD_WIDGET_X_PAD);
+    const int h = UI_TEMPLATE_CARD_WIDGET_H;
+    return ui_renderer_template_draw_custom_filter(plock_frame_ctx,
+                                                   UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP,
+                                                   x,
+                                                   y,
+                                                   w,
+                                                   h,
+                                                   0.0f,
+                                                   1U);
+}
+
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
                                                  const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                 const ui_template_subpage_t *subpage,
+                                                 ui_template_custom_widget_kind_t grouped_widget,
+                                                 uint8_t grouped_widget_drawn,
                                                  uint8_t slot,
                                                  param_id_t id)
 {
     const int x = g_ui_template_frame_x[slot];
     const int y = UI_TEMPLATE_FRAME_Y;
-    const int widget_y = y + 1;
+    const int widget_x = x + UI_TEMPLATE_CARD_WIDGET_X_PAD;
+    const int widget_y = y + UI_TEMPLATE_CARD_WIDGET_Y;
     const uint8_t slot_locked = ui_macro_interaction_param_is_locked(id);
 
     if (slot_locked != 0U)
@@ -410,13 +1901,11 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                 drv_display_set_font(&FONT_4X6);
                 ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
                 ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+                uiw_draw_enum_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, virt_value);
+                drv_display_set_font(&FONT_4X6);
                 drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
                                       (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                                       virt_name);
-                uiw_draw_enum_text(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, virt_value);
-                drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_value),
-                                      (uint8_t)(y + UI_TEMPLATE_CARD_VALUE_Y),
-                                      virt_value);
                 return;
             }
         }
@@ -427,26 +1916,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
 
     const param_desc_t *desc = &param_registry[id];
-    float value = ui_renderer_template_get_param_display_value(id);
+    float value = 0.0f;
     uint8_t draw_name_inverted = 0U;
-    uint8_t macro_slot_track = PROJECT_V1_MACRO_SLOT_TRACK_NONE;
-    float macro_slot_scene_value = 0.0f;
-    const uint8_t has_macro_slot_value =
-        ui_macro_interaction_get_param_lock_value(id,
-                                                  &macro_slot_track,
-                                                  &macro_slot_scene_value);
-    const uint8_t macro_value_visible =
-        (uint8_t)((has_macro_slot_value != 0U)
-                && (macro_slot_track == ui_get_active_track()));
-
-    if (macro_value_visible != 0U)
-    {
-        value = macro_slot_scene_value;
-    }
-    else
-    {
-        (void)ui_param_try_get_seq_plock_feedback_with_frame(plock_frame_ctx, id, &value, &draw_name_inverted);
-    }
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, id, &value, &draw_name_inverted);
 
     const char *enum_label = NULL;
     char value_txt[20];
@@ -460,41 +1932,128 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         }
     }
 
-    ui_renderer_template_format_value(id, value, value_txt, (uint32_t)sizeof(value_txt));
-
     char name_txt[24];
-    (void)snprintf(name_txt, sizeof(name_txt), "%s", desc->name);
-    if ((state != NULL) && (state->param_text != NULL))
-    {
-        (void)state->param_text(slot,
-                                id,
-                                value,
-                                name_txt,
-                                (uint32_t)sizeof(name_txt),
-                                value_txt,
-                                (uint32_t)sizeof(value_txt));
-    }
+    ui_renderer_template_build_param_text(state,
+                                          slot,
+                                          id,
+                                          value,
+                                          name_txt,
+                                          (uint32_t)sizeof(name_txt),
+                                          value_txt,
+                                          (uint32_t)sizeof(value_txt));
 
-    drv_display_set_font(&FONT_4X6);
-    ui_renderer_template_fit_text(name_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
-    ui_renderer_template_fit_text(value_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
-    if (slot_locked != 0U)
+    float flash_value = 0.0f;
+    ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
+    const uint8_t flash_active =
+        ui_param_get_slot_value_flash(slot, id, ui_get_active_track(), &flash_value, &flash_kind);
+    char bottom_txt[24];
+    if (flash_active != 0U)
     {
-        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
-                              (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
-                              name_txt);
-    }
-    else if (draw_name_inverted != 0U)
-    {
-        const uint8_t name_x = (uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt);
-        drv_display_draw_text(name_x, (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), name_txt);
-        drv_display_draw_line(name_x, y + 10, name_x + drv_display_text_width(name_txt) - 1, y + 10);
+        char flash_name[24];
+        (void)flash_kind;
+        ui_renderer_template_build_param_text(state,
+                                              slot,
+                                              id,
+                                              flash_value,
+                                              flash_name,
+                                              (uint32_t)sizeof(flash_name),
+                                              bottom_txt,
+                                              (uint32_t)sizeof(bottom_txt));
     }
     else
     {
-        drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, name_txt),
-                              (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
-                              name_txt);
+        (void)snprintf(bottom_txt, sizeof(bottom_txt), "%s", name_txt);
+    }
+
+    drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(value_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+    const ui_template_custom_widget_kind_t custom_widget =
+        ui_renderer_template_resolve_custom_widget(state, subpage, slot, id);
+    if ((flash_active == 0U) && (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP))
+    {
+        mixer_track_filter_type_t filter_type = MIXER_TRACK_FILTER_OFF;
+        if ((ui_renderer_template_filter_type_visible(plock_frame_ctx, &filter_type) != 0U)
+                && (filter_type == MIXER_TRACK_FILTER_OFF))
+        {
+            bottom_txt[0] = '\0';
+        }
+    }
+    if ((flash_active == 0U) && (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE))
+    {
+        bottom_txt[0] = '\0';
+    }
+    ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+
+    if (custom_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+    {
+        if (custom_widget == grouped_widget)
+        {
+            if (grouped_widget_drawn != 0U)
+            {
+                goto draw_bottom_label;
+            }
+        }
+        else
+        {
+        if (slot_locked != 0U)
+        {
+            drv_display_set_draw_color(0U);
+        }
+        if ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE)
+                ? (ui_renderer_template_draw_play_note_text(id,
+                                                            widget_x,
+                                                            widget_y,
+                                                            UI_TEMPLATE_CARD_WIDGET_W,
+                                                            UI_TEMPLATE_CARD_WIDGET_H,
+                                                            value) != 0U)
+                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST)
+                ? (ui_renderer_template_draw_lfo_dest_text(widget_x,
+                                                           widget_y,
+                                                           UI_TEMPLATE_CARD_WIDGET_W,
+                                                           UI_TEMPLATE_CARD_WIDGET_H,
+                                                           value) != 0U)
+                : (((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE))
+                ? (ui_renderer_template_draw_custom_track_cfg(plock_frame_ctx,
+                                                              custom_widget,
+                                                              widget_x,
+                                                              widget_y,
+                                                              UI_TEMPLATE_CARD_WIDGET_W,
+                                                              UI_TEMPLATE_CARD_WIDGET_H,
+                                                              value) != 0U)
+                : (((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CUTOFF)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_RESONANCE)
+                    || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP))
+                ? (ui_renderer_template_draw_custom_filter(plock_frame_ctx,
+                                                           custom_widget,
+                                                           widget_x,
+                                                           widget_y,
+                                                           UI_TEMPLATE_CARD_WIDGET_W,
+                                                           UI_TEMPLATE_CARD_WIDGET_H,
+                                                           value,
+                                                           0U) != 0U)
+                : (ui_renderer_template_draw_custom_adsr(plock_frame_ctx,
+                                                         custom_widget,
+                                                         widget_x,
+                                                         widget_y,
+                                                         UI_TEMPLATE_CARD_WIDGET_W,
+                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U)))))
+        {
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
+            goto draw_bottom_label;
+        }
+        if (slot_locked != 0U)
+        {
+            drv_display_set_draw_color(1U);
+        }
+        }
     }
 
     const uiw_widget_type_t widget_type = ui_renderer_template_resolve_widget_type(state, slot, id, desc, enum_label, value_txt);
@@ -509,7 +2068,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_switch(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (value >= 0.5f) ? 1U : 0U);
+            uiw_draw_switch(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, (value >= 0.5f) ? 1U : 0U);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -521,7 +2080,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(1U);
             }
-            uiw_draw_enum_text(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, (enum_label != NULL) ? enum_label : value_txt);
+            uiw_draw_enum_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, (enum_label != NULL) ? enum_label : value_txt);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(0U);
@@ -533,7 +2092,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_jack_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            uiw_draw_jack_icon(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -545,7 +2104,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_keyboard_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
+            uiw_draw_keyboard_icon(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -557,7 +2116,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_wave_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
+            uiw_draw_wave_icon(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, enum_label);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -569,7 +2128,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_filter_icon(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, enum_label);
+            uiw_draw_filter_icon(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, enum_label);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -583,7 +2142,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_knob(x, widget_y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H, value, desc->min, desc->max);
+            uiw_draw_knob(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
             if (slot_locked != 0U)
             {
                 drv_display_set_draw_color(1U);
@@ -592,14 +2151,32 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         }
     }
 
+draw_bottom_label:
     if (slot_locked != 0U)
     {
         drv_display_set_draw_color(0U);
     }
 
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, value_txt),
-                          (uint8_t)(y + UI_TEMPLATE_CARD_VALUE_Y),
-                          value_txt);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt),
+                          (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
+                          bottom_txt);
+    if (draw_name_inverted != 0U)
+    {
+        const uint8_t text_x = (uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt);
+        const uint8_t text_w = drv_display_text_width(bottom_txt);
+        if (text_w == 0U)
+        {
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(1U);
+            }
+            return;
+        }
+        drv_display_draw_line(text_x,
+                              y + UI_TEMPLATE_CARD_LABEL_Y + UI_TEMPLATE_CARD_LABEL_H,
+                              text_x + text_w - 1,
+                              y + UI_TEMPLATE_CARD_LABEL_Y + UI_TEMPLATE_CARD_LABEL_H);
+    }
 
     if (slot_locked != 0U)
     {
@@ -704,20 +2281,33 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     ui_renderer_template_fit_text(cpu_avg_label, 12U);
     if (draw_bpm != 0U)
     {
+        drv_display_set_font(&FONT_5X7);
+        const uint8_t bpm_text_w = drv_display_text_width(bpm_label);
         if (bpm_inverted != 0U)
         {
-            ui_renderer_template_draw_inverted_label(98U, 1U, bpm_label, &FONT_5X7);
+            const uint8_t bpm_box_w = (uint8_t)(bpm_text_w + 2U);
+            ui_renderer_template_draw_inverted_label(ui_renderer_template_right_x(0U, bpm_box_w),
+                                                     1U,
+                                                     bpm_label,
+                                                     &FONT_5X7);
         }
         else
         {
-            drv_display_draw_text(98U, 1U, bpm_label);
+            drv_display_draw_text(ui_renderer_template_right_x(0U, bpm_text_w), 1U, bpm_label);
         }
     }
     char pattern_label[6];
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
-    const uint8_t cpu_x = (uint8_t)(104U - drv_display_text_width(cpu_avg_label) - 6U);
+    drv_display_set_font(&FONT_4X6);
+    const uint8_t pattern_x = ui_renderer_template_right_x(0U, drv_display_text_width(pattern_label));
+    const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
+    uint8_t cpu_x = (uint8_t)(104U - cpu_text_w);
+    if ((uint8_t)(cpu_x + cpu_text_w + 1U) > pattern_x)
+    {
+        cpu_x = (pattern_x > (uint8_t)(cpu_text_w + 1U)) ? (uint8_t)(pattern_x - cpu_text_w - 1U) : 0U;
+    }
     drv_display_draw_text(cpu_x, 9U, cpu_avg_label);
-    drv_display_draw_text(104U, 9U, pattern_label);
+    drv_display_draw_text(pattern_x, 9U, pattern_label);
 }
 
 static void ui_renderer_template_draw_footer(const ui_template_page_state_t *state)
@@ -797,9 +2387,45 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage != NULL)
     {
+        ui_renderer_template_adsr_shape_t grouped_adsr_shape;
+        ui_template_custom_widget_kind_t grouped_widget =
+            ui_renderer_template_resolve_grouped_custom_widget(state, subpage);
+        uint8_t grouped_widget_drawn =
+            (uint8_t)((grouped_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+                    && (ui_renderer_template_prepare_custom_adsr(&plock_frame_ctx, grouped_widget, &grouped_adsr_shape) != 0U));
+
+        if (ui_renderer_template_filter_curve_group_is_active(state, subpage, &plock_frame_ctx) != 0U)
+        {
+            grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
+            grouped_widget_drawn = 1U;
+        }
+
         for (uint8_t i = 0U; i < 4U; i++)
         {
-            ui_renderer_template_draw_param_slot(state, &plock_frame_ctx, i, subpage->param_bank.params[i]);
+            ui_renderer_template_draw_param_slot(state,
+                                                 &plock_frame_ctx,
+                                                 subpage,
+                                                 grouped_widget,
+                                                 grouped_widget_drawn,
+                                                 i,
+                                                 subpage->param_bank.params[i]);
+        }
+
+        if (grouped_widget_drawn != 0U)
+        {
+            if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP)
+            {
+                (void)ui_renderer_template_draw_filter_curve_group(&plock_frame_ctx);
+            }
+            else
+            {
+                (void)ui_renderer_template_draw_custom_adsr_shape(&grouped_adsr_shape,
+                                                                  UI_TEMPLATE_GROUP_WIDGET_X,
+                                                                  UI_TEMPLATE_GROUP_WIDGET_Y,
+                                                                  UI_TEMPLATE_GROUP_WIDGET_W,
+                                                                  UI_TEMPLATE_GROUP_WIDGET_H,
+                                                                  1U);
+            }
         }
     }
 

@@ -211,8 +211,8 @@ Etat page active:
 Etat browser Settings/Sample:
 - `ui_page_settings` expose une racine `Settings > Sample` avec trois entrees: `Multi`, `RAM`, `Stream`.
 - `Settings > Sample > Multi` reprend le browser split du pool projet `Sampler/Multi`, navigue dans les dossiers sous `0:/Multi/` et conserve `multi_sample_pool` comme autorite.
-- `Settings > Sample > RAM` est maintenant la vue filtre `kind=RAM` du catalogue global. Elle reutilise le browser catalogue WAV, charge un WAV vers `sampler_ram_pool`, affiche les slots RAM READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot RAM. Le playback produit associe est limite a `Sampler/OneShot` RAM et `Sampler/Slicer` RAM minimal.
-- `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Clip`.
+- `Settings > Sample > RAM` est maintenant la vue filtre `kind=RAM` du catalogue global. Elle reutilise le browser catalogue WAV, charge un WAV vers `sampler_ram_pool`, affiche les slots RAM READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot RAM. Le playback produit associe est limite a `Sampler/RAM`, normal ou sliced via `Slice Count`.
+- `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Stream`.
 - Les headers `Stream`, `Multi` et `RAM` affichent le meme budget global de slots produit et de memoire page-cache slot-pool; les entrees restent des categories de browser, pas des budgets separes.
 - Les trois browsers sample sont des vues filtrees du catalogue global: Stream liste `kind=STREAM`, Multi liste `kind=MULTI`, RAM liste `kind=RAM`. Les actions utilisateur manipulent des slots globaux; les refs backend restent internes.
 - Le browser RAM ne cree pas de parametre parallele: il charge/remplace/clear des slots globaux `kind=RAM`, dont `backend_index` pointe vers un slot interne `sampler_ram_pool`.
@@ -441,33 +441,33 @@ Points factuels:
 
 ## 14. Contrat Sampler v0
 - `UI_TRACK_FAMILY_SAMPLER` est exposee en `CFG`.
-- `UI_TRACK_TYPE_ONE_SHOT` est le type canonique de cette famille; `UI_TRACK_TYPE_SAMPLER` reste un alias de compat snapshot.
-- `UI_TRACK_TYPE_CLIP` est expose comme type produit distinct dans la meme famille.
+- `UI_TRACK_TYPE_RAM` est l'alias produit de `UI_TRACK_TYPE_ONE_SHOT`/`UI_TRACK_TYPE_SAMPLER`, valeur persistente legacy conservee comme type canonique de cette famille.
+- `UI_TRACK_TYPE_STREAM` est l'alias produit de `UI_TRACK_TYPE_CLIP`, valeur persistente legacy conservee comme type distinct dans la meme famille.
 - `UI_TRACK_TYPE_MULTI` est expose comme type produit distinct dans la meme famille; le workflow de gestion/import du pool projet passe par `Settings > Sample > Multi`.
 - Les anciens labels/types UI `TB3` et `DX7` ne sont plus exposes ni conserves comme compat catalogue.
-- `UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Clip`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Clip`.
+- `UI_TRACK_TYPE_STREAM`/`UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Stream`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Stream`.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
   - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
   - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
-- Les modes produits exposes pour `OneShot` sont bornes a `Shot`, `RevShot`, `Loop`, `PingPong`.
-- Le rendu UI `Clip` expose quatre pages Tone dediees:
+- Les modes produits exposes pour `RAM` sont bornes a `Shot`, `RevShot`, `Loop`, `PingPong`.
+- Le rendu UI `Stream` expose quatre pages Tone dediees:
   - `PLAY`: `Sample`, `Gain`, `Src BPM`,
-  - `CLIP`: `Play Mode`, `Loop`, `Stretch`,
+  - `STRM`: `Play Mode`, `Loop`, `Stretch`, `Tune`,
   - `SYNC`: `Sync Len`,
-  - `STR`: `Grain`; `Hop` et `Search` restent reserves/non exposes produit.
-- `Stretch=Off` lit le clip a vitesse/pitch d'origine sans tempo-sync ni moteur stretch.
+  - `STR`: `Grain`; `Hop` et `Search` restent reserves/non exposes produit; `Search` n'est plus une destination LFO valide.
+- `Stretch=Off` lit le stream a vitesse/pitch d'origine sans tempo-sync ni moteur stretch.
 - `Stretch=Speed` conserve le varispeed courant; `Stretch=Shifter` conserve le cursor Speed puis applique le shifter stereo local.
-- En `Shifter`, `Grain` pilote la taille de fenetre; `Hop` et `Search` restent stockes mais non exposes et sans effet DSP.
+- En `Shifter`, `Grain` pilote la taille de fenetre; `Tune` est le libelle produit du pitch stream interne; `Hop` et `Search` restent stockes mais non exposes et sans effet DSP.
 - `STR` utilise les valeurs bornees `Grain = 384/512/768/1024/1536/2048`, avec default `Grain=1536`.
 - Le rendu UI `Multi` expose une page TONE minimale:
   - `INST`: selecteur local parmi `NONE` et les instruments deja presents dans le `multi_sample_pool`, sans scan SD, import, reload ni browser; l'edition assigne seulement l'id instrument a la track `Sampler/Multi` active,
   - `GAIN`: edition du gain Multi runtime,
-  - `LOOP`: edition `OFF/ON` du bool track-aware `PARAM_SAMPLER_MULTI_LOOP`, sans reutiliser le parametre Clip.
+  - `LOOP`: edition `OFF/ON` du bool track-aware `PARAM_SAMPLER_MULTI_LOOP`, sans reutiliser le parametre Stream.
 - Le clavier live `Sampler/Multi` reutilise le dispatch track-aware `keyboard_engine`: note-on appelle le trigger Multi runtime de la track, note-off appelle `brick6_sampler_runtime_note_off_multi_track_note(track,note)` pour raccorder les voix Multi au lifecycle VCA existant.
-- `VCA` n'est pas expose pour `Sampler/Clip`; le niveau utilisateur passe par `MIX/Level`.
+- `VCA` n'est pas expose pour `Sampler/Stream`; le niveau utilisateur passe par `MIX/Level`.
 - La rotation du parametre `Sample` dans `TONE` met seulement a jour l'etat runtime, sans preview audio implicite.
-- `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `OneShot`.
-- `Settings > Sample > Stream` porte la preecoute SD manuelle via le flux `PREVIEW / STOP` pour le pool STREAM de `Sampler/Clip`.
+- `Slice` / `RevSlice` restent en compat legacy interne uniquement, hors navigation produit `RAM`.
+- `Settings > Sample > Stream` porte la preecoute SD manuelle via le flux `PREVIEW / STOP` pour le pool STREAM de `Sampler/Stream`.
 - La preecoute s'arrete au changement de selection, au retour/back, et avant `Load/Replace`.
 - `Load/Replace` reste l'autorite d'import vers le pool projet; la preview reste hors slots projet.
 - Les etats visibles de slot Sampler suivent `sample_pool_get_state()`:
@@ -480,24 +480,24 @@ Points factuels:
   - pas de refonte de page,
   - pas de nouveau flux de navigation autonome.
 - Compat UI/restore:
-  - un ancien couple `Synth/Sampler` est remappe vers `Sampler/OneShot`,
-  - la famille `Synth` propose `Braids`,
-  - `Braids` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
+  - un ancien couple `Synth/Sampler` est remappe vers `Sampler/RAM`,
+  - la famille `Synth` propose `Wave`,
+  - `Wave` peut être sélectionné sur plusieurs tracks `Synth` (dans la limite runtime `BRICK6_BRAIDS_MAX_INSTANCES`).
 
 
 
-## 14.b Contrat UI Braids
-- `Synth/Braids` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
-- La famille template `TONE` Braids expose exactement 8 params dans l'ordre runtime:
+## 14.b Contrat UI Wave
+- `Synth/Wave` reste dans l'ensemble `TONE`, sans UI Mutable originale ni mode global dédié.
+- La famille template `TONE` Wave expose exactement 8 params dans l'ordre runtime:
   - `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`.
 - Le layout UI suit deux sous-pages:
   - `EDIT`: `EDIT`, `FINE`, `COARSE`, `FM`
   - `TONE`: `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`
-- L'ordre visible doit rester aligné avec `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()` pour le type runtime `Braids`.
+- L'ordre visible doit rester aligné avec `track_runtime_tone_slot_to_param()` / `track_runtime_tone_param_to_slot()` pour le type runtime `Wave`.
 - Le clavier live réutilise le même seam track-aware que le scheduler:
-  - `note on/off` Braids passent par `keyboard_engine` puis `brick6_braids_runtime`
+  - `note on/off` Wave passent par `keyboard_engine` puis `brick6_braids_runtime`
   - aucun chemin UI local parallèle n'est autorisé pour le jeu de notes.
-- `PHASE RESET=Off` conserve le comportement historique; `On` force une sync phase au premier sample rendu apres note-on pour les moteurs Braids sensibles a `sync_block`, sans reset random.
+- `PHASE RESET=Off` conserve le comportement historique; `On` force une sync phase au premier sample rendu apres note-on pour les moteurs Wave sensibles a `sync_block`, sans reset random.
 
 
 ## 14.c Contrat MIX send2 delay
@@ -592,8 +592,8 @@ Points factuels:
 
 - `Settings > Sample > RAM` est la vue filtre `kind=RAM` du catalogue global sample.
 - La page peut charger un WAV vers `sampler_ram_pool`, afficher READY/ERROR/EMPTY et clear un slot RAM; la persistence projet sauvegarde ensuite les slots RAM par `global_index`, `ram_slot` et path WAV, sans dupliquer l'audio.
-- `Sampler/OneShot` peut jouer un slot global `kind=RAM/READY` avec `Start`/`End` et `RevShot`; `Sampler/Slicer` peut jouer des slices regulieres RAM dans la region `Start`/`End` depuis ce meme slot global. Aucun des deux ne consomme le pool Stream.
-- La page TONE de `Sampler/Slicer` expose `SLICE` (`Sample`, `Slice Count`, `Tune`, `Gain`) et `REG` (`Start`, `End`) pour rendre la region RAM editable et p-lockable sans ajouter `Mode`/reverse au Slicer.
+- `Sampler/RAM` peut jouer un slot global `kind=RAM/READY` avec `Start`/`End` et `RevShot`; `Slice Count` active un slicing grille RAM dans cette meme region. RAM ne consomme pas le pool Stream.
+- La page TONE de `Sampler/RAM` expose `PLAY` (`Sample`, `Gain`, `Start`, `End`), `MODE` (`Mode`, `Tune`, `Fade In`, `Fade Out`) et `SLICE` (`Slice Count`). Elle n'expose pas d'edition par-slice.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.
@@ -757,4 +757,14 @@ Points factuels:
 - `ui_renderer_template` porte le layout commun des pages template 128x64: header compact, quatre cartes parametres, footer quatre labels.
 - Le header conserve track, label runtime track-aware, mode hall, titre famille/page, CPU, tempo et pattern courant, avec ellipses pixel si la largeur reelle ne suffit pas.
 - Les cartes parametres restent quatre slots egaux de 32 px, sans debordement horizontal; titre et valeur sont bornes avant centrage.
+- Chaque slot template affiche le widget en haut et une seule ligne de texte en bas.
+- La ligne basse affiche normalement le nom du parametre. Apres une edition utilisateur explicite du slot, elle affiche temporairement la valeur formatee pendant environ 800 ms, puis revient au nom.
+- L'etat de flash valeur est UI-only dans `ui_param`, statique, sans malloc, indexe par slot visible + parametre + track, et reset par changement de bank/page/track.
+- Le renderer ne deduit pas les causes de changement de valeur: il interroge seulement `ui_param` pour savoir si une valeur temporaire doit remplacer le nom.
+- Les valeurs temporaires reutilisent le formatage commun du renderer et les callbacks `param_text`, afin de conserver les labels dynamiques Master/FX, Multi/Sample/Stream et les overrides locaux.
+- Les widgets custom template sont optionnels via `custom_widget_picker`; ils se dessinent dans le rect utile du widget, ou dans un rect groupe explicite quand les quatre slots d'une sous-page declarent le meme custom widget, et doivent reutiliser la meme valeur visible que les widgets simples (base display, preview MACRO/scene, feedback p-lock), sans consommer le flash valeur comme source de courbe.
+- Custom actif: `COLORS/ADSR` et `VCA/ADSR` remplacent les quatre widgets simples A/D/S/R par une seule courbe ADSR groupee sur la zone haute commune; les quatre slots restent editables et gardent leurs labels/flash/underline locaux, avec fallback widget classique si le groupe attendu est incomplet ou non supporte runtime.
+- Le dessin ADSR groupe est decoupe en quatre zones horizontales stables A/D/S/R alignees sur les quatre slots; A/D/R n'entrent pas en competition de largeur globale et deplacent les points de transition de la courbe principale dans leur zone, tandis que S pilote la hauteur du plateau.
+- `COLORS/MAIN` peut declarer des widgets custom locaux pour `F Type`, `Cutoff` et `Res`: `F Type` affiche le label court du type (`OFF`, `DJ`, `LP`, `HP`, `BP`), avec `OFF` en police compacte et les types actifs en police large du widget. `Cutoff`/`Res` affichent `-` par slot et masquent leur label bas normal quand le filtre est coupe; sinon `Cutoff`/`Res` forment une seule courbe filtre groupee sur leurs deux slots, basee sur la meme valeur visible que les widgets standards. La silhouette est adaptee au type filtre supporte (`EQ3/DJ`, `LP`, `HP`, `BP`) et conserve une baseline unique sans segment parasite colle en bas. Le fallback widget classique reste obligatoire quand le contexte custom est incomplet ou non supporte.
+- Le flash est declenche uniquement par action utilisateur explicite sur le slot: edition directe encodeur, edition p-lock, live-rec p-lock issu de l'encodeur, ou edition de valeur scene/macro en assign. Playback p-lock, LFO, morph scene continu, macro pot physique, restore/recall et refresh UI ne declenchent pas le flash.
 - Les pages `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `PLAY`, `VCA`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.

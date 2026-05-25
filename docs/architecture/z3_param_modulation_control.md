@@ -39,7 +39,7 @@ Familles d'autorite:
 
 - `LFO-owned`:
   - Config LFO: `mod_lfo_v1_set_track_param`.
-  - Modulation runtime: `param_registry_apply_track_value_rt_fast`.
+  - Modulation runtime: chemins directs `mod_lfo_v1` quand une destination LFO effective est exposee; `param_registry_apply_track_value_rt_fast` reste fallback de securite/future destination.
   - Release: restaure la base, jamais la derniere valeur modulee.
 
 - `legacy-physical` (`PARAM_MIX_TRACK0..3_*`):
@@ -85,10 +85,10 @@ Familles d'autorite:
   - consommee par param_filter, param_registry_backends et mod_lfo_v1 comme source persistante distincte du runtime.
 - `track_tone_sound_state.*`:
   - base canonique par track pour les blocs TONE specifiques moteur,
-  - le bloc Braids est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
-  - `PARAM_BRAIDS_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
+  - le bloc Wave est borne a 8 params TONE: `EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`,
+  - `PARAM_WAVE_EDIT` expose une liste compacte de 39 shapes: variantes filtrees `LP`, `PEAK`, `BP`, `HP` et modes delay-line `COMB_FILTER`, `PLUCKED`, `BOWED`, `BLOWN`, `FLUTED` retires de la surface produit,
   - consommee par param_registry_backends et param_registry comme source persistante distincte du runtime,
-  - source unique de re-projection des params Braids apres reset/rebind d'instance runtime.
+  - source unique de re-projection des params Wave apres reset/rebind d'instance runtime.
   - Pour `PARAM_SAMPLER_SAMPLE` hors Multi, la valeur canonique utilisateur est un slot `sample_global_pool` actif; l'apply Sampler resout ensuite `STREAM -> backend_index sample_pool` avant de toucher le runtime audio Classic.
 
 ## 2.c Contrat public du seam `param_registry`
@@ -130,7 +130,7 @@ Ambiguite bornee restante:
 Call-sites critiques:
 - UI read paths use `param_registry_get_track_value` and `param_get` only.
 - UI edit paths use `param_registry_apply_track_value` / `param_registry_apply_track_edit`.
-- RT modulation uses `param_registry_apply_track_value_rt_fast`.
+- RT modulation uses `mod_lfo_v1` direct paths for known effective destinations; `param_registry_apply_track_value_rt_fast` is fallback-only.
 - Snapshot restore and structure changes use `param_registry_run_track_transition_pipeline`.
 
 ## 3. Statut des chemins sensibles
@@ -157,8 +157,8 @@ Call-sites critiques:
 2. Modulation:
 - Tick control-rate depuis audio bloc.
 - Capture base via `param_registry_get_track_value`.
-- Apply module via `_rt_fast`.
-- Release -> write base via `_rt_fast`.
+- Apply module via chemin direct `mod_lfo_v1` si la destination est connue/effective.
+- Release -> write base via le meme chemin direct; fallback `_rt_fast` uniquement pour une destination future non specialisee.
 
 3. MACRO:
 - Resolution lock via `param_macro_resolve_lock` sur la scene cible.
@@ -167,7 +167,7 @@ Call-sites critiques:
 - La source d'autorite d'assignabilite MACRO est volontairement la meme que les p-locks: domaine Z2 -> set `SEQ_PLOCK_SET_*`, puis `seq_param_iface_param_is_supported(track,set,param)`.
 - Contrat produit: `p-lockable => macro-assignable`; aucune table MACRO separee ne doit retirer un parametre p-lockable.
 - Les assignations MACRO deja existantes hors p-lock (`MIX`) restent conservees par compatibilite produit, sans devenir p-lockables.
-- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Braids et MIX.
+- Le preview MACRO applique les cibles non-FILTER via `param_backend_apply_track_value(..., update_base_state=0)` afin de partager le meme dispatcher actif que les writes track-aware sans modifier la base canonique; cela couvre Sampler, Drum, Wave et MIX.
 - Les cibles `PLAY`, `MOD` et `MIDI Program` passent par `param_registry_apply_track_value`, puis sont restaurees via la meme release MACRO que les autres locks.
 - Les amounts runtime des 4 macro pots sont re-projetés via `param_macro_set_amount` / `param_macro_sync_active_bank` sans passer par `param_store`; chaque pot pointe vers une scene projet.
 - Pendant un maintien de scene en overlay `M-Assign`, un mouvement de macro pot bind le pot a cette scene via un set projet sans recomposition runtime immediate; le morph audio du pot ne part pas pendant ce geste.
@@ -252,25 +252,26 @@ Call-sites critiques:
 - Params track-aware exposes pour `UI_TRACK_TYPE_SAMPLER`:
   - `Sample`, `Gain`, `Start`, `End`,
   - `Mode`, `Tune`, `Fade In`, `Fade Out`,
-  - `Slice Count` visible en UI.
-- Params track-aware exposes pour `UI_TRACK_TYPE_CLIP`:
+  - `Slice Count` visible en UI sur `Sampler/RAM`; `Off` garde RAM normal, `2..64` active un slicing grille de la fenetre globale `Start/End`.
+- Params track-aware exposes pour `UI_TRACK_TYPE_STREAM`/`UI_TRACK_TYPE_CLIP`:
   - `Sample`, `Gain`, `Src BPM`,
   - `Play Mode`, `Loop`, `Stretch`,
+  - `Tune` expose le parametre interne legacy `PARAM_SAMPLER_CLIP_PITCH` cote produit/UI sans changer le chemin DSP,
   - `Sync Len`,
-  - `Grain` expose pour `Stretch=Shifter`; `Hop` et `Search` restent des params reserves non exposes produit,
-  - `Clip` reste borne produit a `BRICK6_MAX_CLIP_TRACKS=4`; au-dela, le catalogue UI ne propose plus ce type aux tracks non deja `Clip`.
-  - `Stretch=Off` force une lecture clip a vitesse/pitch d'origine (`ratio=1.0`, pas de tempo-sync),
+  - `Grain` expose pour `Stretch=Shifter`; `Hop` et `Search` restent des params reserves non exposes produit; `Search` n'est plus une destination LFO valide,
+  - `Stream` reste borne produit a `BRICK6_MAX_CLIP_TRACKS=4`; au-dela, le catalogue UI ne propose plus ce type aux tracks non deja `Stream`.
+  - `Stretch=Off` force une lecture stream a vitesse/pitch d'origine (`ratio=1.0`, pas de tempo-sync),
   - `Stretch=Speed` garde le varispeed courant (`ratio = project_bpm / source_bpm`, pitch non preserve), sans nouvelle correction distribuee dans cette passe,
-  - `Stretch=Shifter` garde le cursor varispeed `Speed`, puis applique le pitch-shifter stereo local `brick6_clip_shifter`; `Pitch` et le ratio tempo alimentent `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la fenetre, `Hop/Search` restent stockes mais sans effet dans ce mode,
-  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..2`: `0=Off`, `1=Speed`, `2=Shifter`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Clip),
+  - `Stretch=Shifter` garde le cursor varispeed `Speed`, puis applique le pitch-shifter stereo local `brick6_clip_shifter`; `Tune` (`PARAM_SAMPLER_CLIP_PITCH` interne) et le ratio tempo alimentent `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la fenetre, `Hop/Search` restent stockes mais sans effet dans ce mode,
+  - `Stretch Mode` reste un param track-aware `PLAY` borne a `0..2`: `0=Off`, `1=Speed`, `2=Shifter`; l'edition UI ne doit pas reboucler via `param_set`, et le setter runtime Sampler reste passif (stockage seulement, effet applique au prochain start/restart Stream),
   - aucune retrocompatibilite n'est conservee pour les anciens projets utilisant l'ancien mode `Stretch`/WSOLA; `PROJECT_V1_FILE_VERSION` refuse ces fichiers,
-  - `Grain` reste un setter passif track-aware pris en compte au prochain start/restart `Shifter`; `Hop/Search` ne pilotent plus aucun runtime Sampler/Clip,
-  - `Sync Len` reste track-aware et stocke la longueur musicale clip exposee au niveau produit.
+  - `Grain` reste un setter passif track-aware pris en compte au prochain start/restart `Shifter`; `Hop/Search` ne pilotent plus aucun runtime Sampler/Stream,
+  - `Sync Len` reste track-aware et stocke la longueur musicale stream exposee au niveau produit.
 - Params TONE exposes pour `UI_TRACK_TYPE_MULTI`:
   - `INST`, selecteur track-aware parmi `NONE` et les instruments deja presents dans le `multi_sample_pool`, sans browser, import, scan SD ni reload,
   - `GAIN`, applique via `brick6_sampler_runtime_set_multi_gain`,
   - `LOOP`, nouveau bool `PARAM_SAMPLER_MULTI_LOOP` append-only, default `OFF`, applique via `brick6_sampler_runtime_set_multi_loop`.
-  - `INST` reutilise le slot param existant `PARAM_SAMPLER_SAMPLE` avec un chemin specialise `Sampler/Multi`: la valeur UI `0` desassigne la track, les valeurs `1..N` parcourent les instruments charges du pool, et l'apply ecrit `brick6_sampler_runtime_set_multi_instrument`; aucun changement de sample OneShot/Clip/Slicer n'est declenche en mode Multi.
+  - `INST` reutilise le slot param existant `PARAM_SAMPLER_SAMPLE` avec un chemin specialise `Sampler/Multi`: la valeur UI `0` desassigne la track, les valeurs `1..N` parcourent les instruments charges du pool, et l'apply ecrit `brick6_sampler_runtime_set_multi_instrument`; aucun changement de sample RAM/Stream n'est declenche en mode Multi.
 - Autorite:
   - `param_registry_apply_track_value` reste point d'entree unique.
   - le backend Sampler track-aware met a jour `track_tone_sound_state` puis `brick6_sampler_runtime`.
@@ -278,8 +279,8 @@ Call-sites critiques:
 - `PARAM_SAMPLER_SAMPLE` met a jour la selection runtime sans retrigger automatique de preview.
 - P-locks:
   - les params Sampler de base restent p-lockables via le flux track-aware.
-  - Pour `Sampler/OneShot` RAM, les p-locks `START`, `END` et `MODE=RevShot` sont captures au trigger depuis l'etat runtime effectif et bornes avant rendu; `Loop`/`PingPong` ne branchent pas de boucle RAM.
-  - Pour `Sampler/Slicer` RAM, les p-locks `START`/`END` sont addressables dans le set TONE et exposes sur la subpage TONE/REG; ils definissent la region slicee du trig. `MODE`/reverse reste ignore en Slicer v1.
+  - Pour `Sampler/RAM`, les p-locks `START`, `END` et `MODE=RevShot` sont captures au trigger depuis l'etat runtime effectif et bornes avant rendu; `Loop`/`PingPong` ne branchent pas de boucle RAM.
+  - Pour `Sampler/RAM` sliced, `START`/`END` restent des params globaux de la track et definissent la fenetre slicee du trig; `Slice Count` reste exclu du p-lock et aucun etat par-slice n'est introduit.
 - Invariants:
   - sample absent -> silence,
   - `Mode` pilote vraiment la direction et le type de lecture du moteur,
@@ -351,25 +352,26 @@ Call-sites critiques:
   - destinations LFO interdites: `PARAM_MIDI_PROGRAM`,
   - destinations LFO interdites: tout domaine `COLORS`.
 - Application modulation runtime:
-  - chemin `param_registry_apply_track_value_rt_fast`,
-  - emission CC via `midi_cc` pour les destinations MIDI CC,
+  - chemin direct `mod_lfo_v1` pour les destinations MIDI CC,
+  - emission CC via `midi_cc` seulement quand la valeur 7-bit change,
   - aucun backend audio ajoute.
 
-## 23.b Contrat LFO Braids / Drum direct
+## 23.b Contrat LFO Wave / Drum direct
 
-- Les destinations Braids directes sont `PARAM_BRAIDS_EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION` et `COLOR`.
-- `PARAM_BRAIDS_PHASE_RESET` reste exclu des destinations LFO directes et du catalogue LFO effectif: c'est un comportement de reset/trigger, pas un parametre continu.
+- Les destinations Wave directes sont `PARAM_WAVE_EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION` et `COLOR`.
+- `PARAM_WAVE_PHASE_RESET` reste exclu des destinations LFO directes et du catalogue LFO effectif: c'est un comportement de reset/trigger, pas un parametre continu.
 - Les destinations Drum directes actives sont les quatre controles `BD_ANALOG` exposes par le mapping TONE runtime: `PARAM_DRUM_TRX_BD_PITCH`, `DECAY`, `HARMONICS` et `PITCH_SWEEP`.
 - Les params Drum reserves/TRX (`SWEEP_DECAY`, `ATTACK`, `NOISE`, `DRIVE`) restent generiques/non exposes pour `BD_ANALOG`; ils n'ont pas de setter runtime actif clair dans `drum_synth`.
 - Application modulation runtime:
-  - `mod_lfo_v1` calcule toujours `base_value + modulation`, clamp avec les bornes catalogue, puis appelle le setter runtime Braids ou Drum,
+  - `mod_lfo_v1` calcule toujours `base_value + modulation`, clamp avec les bornes catalogue, puis appelle le setter runtime Wave ou Drum,
   - aucune mise a jour de base canonique `track_tone_sound_state`,
   - aucune emission UI/save/p-lock supplementaire,
   - release, changement de destination, depth 0 et double LFO meme destination conservent le contrat existant de restauration de la base.
 
-## 23.c Contrat LFO FILTER EQ / KEYTRK / MIDI CC direct
+## 23.c Contrat LFO FILTER EQ / MIDI CC direct
 
-- Les destinations FILTER directes supplementaires sont `PARAM_FILTER_KEYTRK`, `PARAM_FILTER_EQ_LOW`, `PARAM_FILTER_EQ_MID` et `PARAM_FILTER_EQ_HIGH`.
+- Les destinations FILTER directes supplementaires sont `PARAM_FILTER_EQ_LOW`, `PARAM_FILTER_EQ_MID` et `PARAM_FILTER_EQ_HIGH`.
+- `PARAM_FILTER_KEYTRK` reste un parametre filtre valide hors LFO, mais n'est plus expose dans le catalogue des destinations LFO.
 - `PARAM_FILTER_TYPE` est exclu du catalogue LFO: changement enum de structure DSP, meme si le setter mixer est idempotent sur type identique.
 - `PARAM_FILTER_ENVRST` est exclu du catalogue LFO: flag/reset d'enveloppe, pas une modulation continue.
 - `PARAM_FILTER_ENVDLY` est exclu du catalogue LFO: pas de setter runtime effectif dans le mixer courant.
@@ -380,7 +382,7 @@ Call-sites critiques:
   - aucun chemin ne modifie `track_sound_state`, `track_tone_sound_state`, `param_store` ou l'etat p-lock,
   - release et changement de destination restent geres par la base capturee dans `mod_lfo_v1`.
 - Nettoyage catalogue LFO:
-  - `PARAM_SAMPLER_SAMPLE` est exclu: selection/load/import possible selon type Sampler/Clip/Multi.
+  - `PARAM_SAMPLER_SAMPLE` est exclu: selection/load/import possible selon type Sampler/Stream/Multi.
   - `PARAM_MASTER_FX1_TYPE..PARAM_MASTER_FX4_B` sont exclus tant qu'il n'existe pas de setter runtime/overlay dedie; le fallback `rt_fast` courant ne modifie pas le son car `param_backend_apply_master_fx_track(..., update_base_state=0)` retourne sans changer `track_tone_sound_state`.
   - Les params Drum TRX reserves `PARAM_DRUM_TRX_BD_PITCH..PARAM_DRUM_TRX_BD_DRIVE` sont exclus pour `TRACK_RUNTIME_TYPE_DRUM_TRX_BD`: le type est reserve/silencieux et `drum_synth` n'a pas de modele actif TRX.
 
@@ -398,8 +400,8 @@ Call-sites critiques:
 - Hors scope: aucun nouveau backend audio, aucune seconde autorite runtime.
 
 ## 25. Contrat LFO COLORS + rebind MIX (runtime)
-- `param_registry_apply_track_value_rt_fast` est autorite d'application pour LFO sur `PARAM_FILTER_*` (COLORS mixer), pas uniquement pour COLORS engine-specifiques.
-- Le chemin RT fast applique `PARAM_FILTER_*` sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
+- `mod_lfo_v1` applique directement les destinations LFO FILTER continues exposees (`CUTOFF`, `RESONANCE`, `EQ_LOW`, `EQ_MID`, `EQ_HIGH`, `EG_AMT`, `ATTACK`, `DECAY`, `SUSTAIN`, `RELEASE`) sur la cible runtime resolue (`filter target`/`mix target`) sans ecraser la base UI/shadow-state track.
+- `param_registry_apply_track_value_rt_fast` reste fallback de securite pour destination future non specialisee; il n'est plus le chemin volontaire des destinations LFO FILTER effectives.
 - La page produit `COLORS/CRUNCH` est retiree: `PARAM_FILTER_DRIVE`, `PARAM_FILTER_DECIMATOR_BITS`, `PARAM_FILTER_DECIMATOR_RATE` et `PARAM_FILTER_DECIMATOR_RATE2` ne font plus partie du domaine COLORS effectif, ne sont plus p-lockables/macro-assignables et leurs wrappers d'apply ne branchent plus de runtime.
 - Le shadow-state `PARAM_FILTER_*` porte la base par track logique, jamais par lane mixer physique.
 - Le bloc MIX suit le meme principe: la base track-aware est portee par `track_sound_state`, la lane mixer n'est qu'une projection temporaire.
@@ -578,22 +580,23 @@ Dette explicite post-passe 4:
   - PLAY fournit `note_on`, note, velocity/accent et comportement de trigger,
   - COLORS reste le chemin commun filtre/EQ de track,
   - MIX reste niveau/pan/sends/mute,
-  - VCA reste amplitude/enveloppe dynamique mixer pour les types qui l'exposent encore; `Sampler/Clip` et `Sampler/Looper` bloquent `PARAM_VCA_*` et neutralisent tout state VCA stale,
-  - MOD atteint TONE et COLORS via `track_runtime_tone_param_to_slot()` et `param_registry_apply_track_value_rt_fast`, sans chemin special dans `drum_synth`.
+  - VCA reste amplitude/enveloppe dynamique mixer pour les types qui l'exposent encore; `Sampler/Stream` et `Sampler/Looper` bloquent `PARAM_VCA_*` et neutralisent tout state VCA stale,
+  - MOD atteint TONE et COLORS via `track_runtime_tone_param_to_slot()` et les chemins directs `mod_lfo_v1`; `drum_synth` est appele uniquement via ses setters runtime audites.
 
 ## 32. Contrat MIX page 1 p-lock / LFO
 
 - Les IDs existants `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2` restent les seules cibles MIX page 1 exposees au p-lock et au LFO.
-- Autorite de base: `track_sound_state` par track; projection runtime via `param_registry_apply_track_value` / `param_registry_apply_track_value_rt_fast` vers la lane mixer resolue par Z2.
+- Autorite de base: `track_sound_state` par track; projection runtime autoritative via `param_registry_apply_track_value`, modulation temporaire via chemins directs `mod_lfo_v1` vers la lane mixer resolue par Z2.
 - Stockage p-lock MIX: `seq_param_iface` garde un etat compact dedie a 4 slots reels, sans reserver la table 256 slots pour ce set.
 - Execution LFO MIX simple: `mod_lfo_v1` applique directement `LEVEL`, `PAN`, `SEND1` et `SEND2` sur la target mixer resolue par Z2, sans passer par `param_registry_apply_track_value_rt_fast`.
 - Ce chemin direct ne modifie pas `track_sound_state`, `param_store`, le cache runtime param ou l'etat UI: il reste une projection runtime modulee temporaire.
 - La release LFO de ces quatre destinations reapplique la base capturee par le meme chemin direct, sauf si un autre LFO actif de la meme track cible deja la meme destination.
 - Execution LFO directe etendue: `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE`, `PARAM_FILTER_EG_AMT`, `PARAM_FILTER_ATTACK`, `PARAM_FILTER_DECAY`, `PARAM_FILTER_SUSTAIN`, `PARAM_FILTER_RELEASE` et `PARAM_VCA_ATTACK`, `PARAM_VCA_DECAY`, `PARAM_VCA_SUSTAIN`, `PARAM_VCA_RELEASE` sont appliques par `mod_lfo_v1` directement vers la target mixer runtime, avec les memes conversions UI->runtime que `param_filter`.
 - Ces chemins directs ne mutent pas la base `track_sound_state`, le shadow FILTER, `param_store` ni le cache runtime param; la base capturee reste restauree sur release, sauf si l'autre LFO actif de la meme track cible encore la meme destination.
-- Execution LFO Sampler/Clip/Multi/Looper directe: `PARAM_SAMPLER_GAIN`, `PARAM_SAMPLER_START`, `PARAM_SAMPLER_END`, `PARAM_SAMPLER_MODE`, `PARAM_SAMPLER_TUNE`, `PARAM_SAMPLER_FADE_IN`, `PARAM_SAMPLER_FADE_OUT`, `PARAM_SAMPLER_SLICE_COUNT`, `PARAM_SAMPLER_CLIP_SOURCE_BPM`, `PARAM_SAMPLER_CLIP_SYNC_LENGTH`, `PARAM_SAMPLER_CLIP_PITCH`, `PARAM_SAMPLER_CLIP_PLAY_MODE`, `PARAM_SAMPLER_CLIP_LOOP`, `PARAM_SAMPLER_CLIP_STRETCH_MODE`, `PARAM_SAMPLER_CLIP_GRAIN`, `PARAM_SAMPLER_CLIP_HOP`, `PARAM_SAMPLER_CLIP_SEARCH`, `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE` sont routes directement vers les setters runtime existants quand le type runtime courant les supporte.
-- Les cibles de selection/chargement (`PARAM_SAMPLER_SAMPLE` / instrument Multi) restent hors chemin direct: elles conservent le fallback generique tant qu'elles restent listables, et ne doivent pas introduire d'acces SD/FatFs/import/load dans `mod_lfo_v1`.
-- Les autres destinations LFO restent sur le chemin RT fast generique.
+- Execution LFO Sampler/Stream/Multi/Looper directe: `PARAM_SAMPLER_GAIN`, `PARAM_SAMPLER_START`, `PARAM_SAMPLER_END`, `PARAM_SAMPLER_MODE`, `PARAM_SAMPLER_TUNE`, `PARAM_SAMPLER_FADE_IN`, `PARAM_SAMPLER_FADE_OUT`, `PARAM_SAMPLER_SLICE_COUNT`, `PARAM_SAMPLER_CLIP_SOURCE_BPM`, `PARAM_SAMPLER_CLIP_SYNC_LENGTH`, `PARAM_SAMPLER_CLIP_PITCH` expose `Tune`, `PARAM_SAMPLER_CLIP_PLAY_MODE`, `PARAM_SAMPLER_CLIP_LOOP`, `PARAM_SAMPLER_CLIP_STRETCH_MODE`, `PARAM_SAMPLER_CLIP_GRAIN`, `PARAM_SAMPLER_CLIP_HOP`, `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE` sont routes directement vers les setters runtime existants quand le type runtime courant les supporte.
+- `PARAM_SAMPLER_CLIP_SEARCH` reste stockable/reserve hors surface produit, mais n'est plus expose comme destination LFO valide.
+- Les cibles de selection/chargement (`PARAM_SAMPLER_SAMPLE` / instrument Multi), triggers, commandes, Master FX no-op, Drum TRX reserve et MIDI program sont exclues du catalogue LFO; elles ne doivent pas introduire d'acces SD/FatFs/import/load dans `mod_lfo_v1`.
+- Le chemin RT fast generique reste present uniquement comme fallback de securite pour future destination explicitement ajoutee.
 
 ## 33. Contrat Sampler/Looper TONE skeleton
 
@@ -606,14 +609,14 @@ Dette explicite post-passe 4:
 - Ces params sont stockes/restaurables via les flux `PARAM_COUNT`; `ARM=Rec` pilote le record simple existant cote Z5, `ARM=Overd` reste borne/no-op pour l'audio overdub non implemente, et `PLAY` est stocke sans lancer de playback Looper.
 - `seq_param_iface` et `mod_lfo_v1` excluent ces params du p-lock/LFO: ce sont des commandes de workflow, pas des modulations audio continues.
 
-## 34. Contrat Braids Phase Reset
+## 34. Contrat Wave Phase Reset
 
-- `PARAM_BRAIDS_PHASE_RESET` est un param TONE track-aware `Off/On`, default `Off`, stocke dans `track_tone_sound_state.braids.phase_reset`.
-- L'apply Braids met a jour la base canonique puis projette l'option vers `brick6_braids_runtime_set_phase_reset(instance_id, enabled)`.
+- `PARAM_WAVE_PHASE_RESET` est un param TONE track-aware `Off/On`, default `Off`, stocke dans `track_tone_sound_state.wave.phase_reset`.
+- L'apply Wave met a jour la base canonique puis projette l'option vers `brick6_braids_runtime_set_phase_reset(instance_id, enabled)`.
 - `Off` conserve le comportement historique: aucun reset de phase force au note-on.
 - `On` arme un reset phase one-shot au prochain `note_on`; l'execution audio passe par `sync_block[0]=1` sur le premier sous-bloc rendu.
 - Aucun reset random ni reinit locale complexe du moteur Mutable n'est associe a ce param.
-- `mod_lfo_v1` exclut `PARAM_BRAIDS_PHASE_RESET` des destinations LFO; ce param est une option de comportement de trigger, pas une modulation continue.
+- `mod_lfo_v1` exclut `PARAM_WAVE_PHASE_RESET` des destinations LFO; ce param est une option de comportement de trigger, pas une modulation continue.
 - `PARAM_COUNT` augmente; les snapshots/patterns/projets binaires produits par cette passe changent de layout parametre.
 
 ## 35. Contrat XFade Looper apres retrait buffer master
@@ -627,11 +630,11 @@ Dette explicite post-passe 4:
 ## 36. Contrat Looper STRETCH UI/state
 
 - `Sampler/Looper` ajoute trois params TONE stockes/projetes runtime: `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH`, `PARAM_LOOPER_GRAIN`.
-- `STRETCH` expose `Off` / `Speed` / `Shifter`, defaut `Off`; `PITCH` expose `-12..+12 st`, defaut `0`; `GRAIN` reutilise les tailles Clip `384` / `512` / `768` / `1024` / `1536` / `2048`, defaut index `4`.
+- `STRETCH` expose `Off` / `Speed` / `Shifter`, defaut `Off`; `PITCH` expose `-12..+12 st`, defaut `0`; `GRAIN` reutilise les tailles Stream `384` / `512` / `768` / `1024` / `1536` / `2048`, defaut index `4`.
 - `track_tone_sound_state.looper` porte maintenant `arm`, `len`, `play`, `xfade`, `stretch`, `pitch` et `grain`.
 - L'apply Looper projette `stretch`, `pitch` et `grain` vers `brick6_looper_runtime_set_stretch()` depuis le backend param, hors IRQ audio; l'IRQ lit seulement l'etat runtime Looper deja projete.
-- L'execution audio est en Z1: `Off` garde la lecture brute si `Pitch=0`, `Speed` applique le ratio tempo + pitch au read increment, et `Shifter` reutilise `brick6_clip_shifter` via un pool Looper dedie separe du pool Clip.
+- L'execution audio est en Z1: `Off` garde la lecture brute si `Pitch=0`, `Speed` applique le ratio tempo + pitch au read increment, et `Shifter` reutilise `brick6_clip_shifter` via un pool Looper dedie separe du pool Stream.
 - L'apply de `PARAM_LOOPER_STRETCH` / `PARAM_LOOPER_PITCH` projette seulement l'etat runtime et peut armer un resync one-shot quand `Pitch` arrive sur un point stable `-12`, `0` ou `+12`; il ne repositionne jamais directement le playhead hors IRQ audio.
 - Si la metadata de prise Looper est invalide, le runtime retombe sur `Off`; si le pool Shifter Looper est plein, il retombe sur `Speed`.
 - `seq_param_iface` et `mod_lfo_v1` excluent `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` du p-lock/LFO: ces controles restent projetes par write param autoritatif, pas par modulation continue.
-- `SRC BPM` et `SYNC LEN` restent des params Clip uniquement; le stretch Looper utilise la metadata de prise REC.
+- `SRC BPM` et `SYNC LEN` restent des params Stream uniquement; le stretch Looper utilise la metadata de prise REC.

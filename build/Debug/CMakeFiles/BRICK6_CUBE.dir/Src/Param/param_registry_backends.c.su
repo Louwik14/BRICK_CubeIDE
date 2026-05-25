@@ -9,8 +9,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_b
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:139:17:param_backend_global_slot_from_selector	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:100:16:param_backend_stream_backend_from_global_selector	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:146:13:param_backend_project_looper_stretch	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:186:9:param_backend_apply_tone_braids	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:286:9:param_backend_reapply_tone_braids_runtime	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:186:9:param_backend_apply_tone_wave	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:286:9:param_backend_reapply_tone_wave_runtime	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:310:9:param_backend_is_midi_cc_id	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:315:9:param_backend_midi_cc_number_from_id	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:325:9:param_backend_track_supports_midi_tone_ctx	0	static

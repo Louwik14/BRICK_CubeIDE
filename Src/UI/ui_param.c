@@ -38,16 +38,32 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_global_pool.h"
 #include "Storage/undo_v2.h"
+#include "stm32h7xx_hal.h"
+
+#define UI_PARAM_VALUE_FLASH_DURATION_MS 800U
+
 typedef struct
 {
     ui_param_bank_t bank;
     uint8_t valid;
 } ui_param_state_t;
 
+typedef struct
+{
+    param_id_t param;
+    uint8_t track;
+    float value;
+    uint8_t kind;
+    uint32_t until_ms;
+    uint8_t active;
+} ui_param_value_flash_slot_t;
+
 static ui_param_state_t g_ui_param = {
     .bank = { .params = { PARAM_GRAN_DENSITY, PARAM_GRAN_PITCH, PARAM_GRAN_MIX, PARAM_GRAN_FREEZE } },
     .valid = 0U,
 };
+static ui_param_value_flash_slot_t g_ui_param_value_flash[4];
+static uint8_t g_ui_param_bank_track = 0xFFU;
 static uint8_t g_ui_param_encoder_edit_group_active = 0U;
 static uint32_t g_ui_param_encoder_edit_group_key = 0U;
 
@@ -76,6 +92,85 @@ static uint8_t ui_param_master_fx_quantize_edit(uint8_t track,
                                                 float current_value,
                                                 int16_t delta,
                                                 float *out_value);
+
+static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
+{
+    if ((bank == 0) || (g_ui_param.valid == 0U))
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        if (g_ui_param.bank.params[i] != bank->params[i])
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+void ui_param_clear_value_flash(void)
+{
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        g_ui_param_value_flash[i].active = 0U;
+        g_ui_param_value_flash[i].param = PARAM_COUNT;
+        g_ui_param_value_flash[i].track = 0U;
+        g_ui_param_value_flash[i].value = 0.0f;
+        g_ui_param_value_flash[i].kind = (uint8_t)UI_PARAM_VALUE_FLASH_DIRECT;
+        g_ui_param_value_flash[i].until_ms = 0U;
+    }
+}
+
+void ui_param_note_user_value_flash(uint8_t slot,
+                                    param_id_t param,
+                                    uint8_t track,
+                                    float value,
+                                    ui_param_value_flash_kind_t kind)
+{
+    if ((slot >= 4U) || (param >= PARAM_COUNT) || (track >= UI_TRACK_COUNT))
+    {
+        return;
+    }
+
+    g_ui_param_value_flash[slot].param = param;
+    g_ui_param_value_flash[slot].track = track;
+    g_ui_param_value_flash[slot].value = value;
+    g_ui_param_value_flash[slot].kind = (uint8_t)kind;
+    g_ui_param_value_flash[slot].until_ms = HAL_GetTick() + UI_PARAM_VALUE_FLASH_DURATION_MS;
+    g_ui_param_value_flash[slot].active = 1U;
+}
+
+uint8_t ui_param_get_slot_value_flash(uint8_t slot,
+                                      param_id_t param,
+                                      uint8_t track,
+                                      float *out_value,
+                                      ui_param_value_flash_kind_t *out_kind)
+{
+    if ((slot >= 4U) || (param >= PARAM_COUNT) || (out_value == 0))
+    {
+        return 0U;
+    }
+
+    ui_param_value_flash_slot_t *const flash = &g_ui_param_value_flash[slot];
+    if ((flash->active == 0U)
+            || (flash->param != param)
+            || (flash->track != track)
+            || ((int32_t)(flash->until_ms - HAL_GetTick()) <= 0))
+    {
+        flash->active = 0U;
+        return 0U;
+    }
+
+    *out_value = flash->value;
+    if (out_kind != 0)
+    {
+        *out_kind = (ui_param_value_flash_kind_t)flash->kind;
+    }
+    return 1U;
+}
 
 /**
  * @brief Point d'entrée ui_param_clamp.
@@ -626,10 +721,16 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
     if (bank == 0)
     {
         g_ui_param.valid = 0U;
+        g_ui_param_bank_track = 0xFFU;
+        ui_param_clear_value_flash();
         return;
     }
 
+    const uint8_t same_bank = ui_param_bank_is_same(bank);
+    const uint8_t active_track = ui_get_active_track();
+    const uint8_t same_track = (g_ui_param_bank_track == active_track) ? 1U : 0U;
     g_ui_param.bank = *bank;
+    g_ui_param_bank_track = active_track;
     g_ui_param.valid = 0U;
 
     for (uint8_t i = 0U; i < 4U; i++)
@@ -640,11 +741,18 @@ void ui_param_set_bank(const ui_param_bank_t *bank)
             break;
         }
     }
+
+    if ((same_bank == 0U) || (same_track == 0U))
+    {
+        ui_param_clear_value_flash();
+    }
 }
 
 void ui_param_invalidate_bank(void)
 {
     g_ui_param.valid = 0U;
+    g_ui_param_bank_track = 0xFFU;
+    ui_param_clear_value_flash();
 }
 
 void ui_param_sync_active_bank_values(void)
@@ -1514,6 +1622,11 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
     }
 
     (void)undo_v2_commit_transaction();
+    ui_param_note_user_value_flash(encoder,
+                                   param,
+                                   active_track,
+                                   seq_param_iface_decode_param_value(param, target_values[0]),
+                                   UI_PARAM_VALUE_FLASH_PLOCK);
 
     return 1U;
 }
@@ -1526,7 +1639,6 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                  float max_value,
                                                  uint8_t active_track)
 {
-    (void)encoder;
     if ((desc == 0) || (ui_param_is_track_scoped(param) == 0U))
     {
         return 0U;
@@ -1576,6 +1688,11 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
     }
 
     param_store_set_active(param, next_value);
+    ui_param_note_user_value_flash(encoder,
+                                   param,
+                                   active_track,
+                                   next_value,
+                                   UI_PARAM_VALUE_FLASH_LIVE_REC_PLOCK);
     return 1U;
 }
 
@@ -1692,7 +1809,14 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         {
             return 0U;
         }
-        ui_param_set_active_track_value(encoder, param, value, ctx->active_track);
+        if (ui_param_set_active_track_value(encoder, param, value, ctx->active_track) != 0U)
+        {
+            ui_param_note_user_value_flash(encoder,
+                                           param,
+                                           ctx->active_track,
+                                           value,
+                                           UI_PARAM_VALUE_FLASH_DIRECT);
+        }
         if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
         {
             (void)undo_v2_commit_transaction();
@@ -1707,7 +1831,14 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         {
             return 0U;
         }
-        ui_param_set_active_track_value(encoder, param, value, ctx->active_track);
+        if (ui_param_set_active_track_value(encoder, param, value, ctx->active_track) != 0U)
+        {
+            ui_param_note_user_value_flash(encoder,
+                                           param,
+                                           ctx->active_track,
+                                           value,
+                                           UI_PARAM_VALUE_FLASH_DIRECT);
+        }
         if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
         {
             (void)undo_v2_commit_transaction();
@@ -1734,7 +1865,14 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         }
     }
 
-    ui_param_set_active_track_value(encoder, param, value, ctx->active_track);
+    if (ui_param_set_active_track_value(encoder, param, value, ctx->active_track) != 0U)
+    {
+        ui_param_note_user_value_flash(encoder,
+                                       param,
+                                       ctx->active_track,
+                                       value,
+                                       UI_PARAM_VALUE_FLASH_DIRECT);
+    }
     (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->active_track);
     if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
     {

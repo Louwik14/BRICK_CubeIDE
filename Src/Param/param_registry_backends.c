@@ -183,13 +183,13 @@ static uint8_t param_backend_clip_search_index(float value)
     return (index <= 4U) ? index : 4U;
 }
 
-uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
 {
     track_tone_sound_state_t *const state = track_tone_sound_state_get(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
     {
         return 0U;
     }
@@ -198,82 +198,82 @@ uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float valu
 
     switch (id)
     {
-        case PARAM_BRAIDS_EDIT:
+        case PARAM_WAVE_EDIT:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 47.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.edit = (float)(uint8_t)(clamped + 0.5f);
+                state->wave.edit = (float)(uint8_t)(clamped + 0.5f);
             }
             brick6_braids_runtime_set_edit(instance_id, (float)(uint8_t)(clamped + 0.5f));
             return 1U;
         }
-        case PARAM_BRAIDS_FINE:
+        case PARAM_WAVE_FINE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.fine = clamped;
+                state->wave.fine = clamped;
             }
             brick6_braids_runtime_set_fine(instance_id, clamped);
             return 1U;
         }
-        case PARAM_BRAIDS_COARSE:
+        case PARAM_WAVE_COARSE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.coarse = clamped;
+                state->wave.coarse = clamped;
             }
             brick6_braids_runtime_set_coarse(instance_id, clamped);
             return 1U;
         }
-        case PARAM_BRAIDS_FM:
+        case PARAM_WAVE_FM:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.fm = clamped;
+                state->wave.fm = clamped;
             }
             brick6_braids_runtime_set_fm(instance_id, clamped);
             return 1U;
         }
-        case PARAM_BRAIDS_TIMBRE:
+        case PARAM_WAVE_TIMBRE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.timbre = clamped;
+                state->wave.timbre = clamped;
             }
             brick6_braids_runtime_set_timbre(instance_id, clamped);
             return 1U;
         }
-        case PARAM_BRAIDS_MODULATION:
+        case PARAM_WAVE_MODULATION:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.modulation = clamped;
+                state->wave.modulation = clamped;
             }
             brick6_braids_runtime_set_modulation(instance_id, clamped);
             return 1U;
         }
-        case PARAM_BRAIDS_COLOR:
+        case PARAM_WAVE_COLOR:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.color = clamped;
+                state->wave.color = clamped;
             }
             brick6_braids_runtime_set_color(instance_id, clamped);
             return 1U;
         }
-        case PARAM_BRAIDS_PHASE_RESET:
+        case PARAM_WAVE_PHASE_RESET:
         {
             const float clamped = (value >= 0.5f) ? 1.0f : 0.0f;
             if ((update_base_state != 0U) && (state != NULL))
             {
-                state->braids.phase_reset = clamped;
+                state->wave.phase_reset = clamped;
             }
             brick6_braids_runtime_set_phase_reset(instance_id, (clamped >= 0.5f) ? 1U : 0U);
             return 1U;
@@ -283,27 +283,27 @@ uint8_t param_backend_apply_tone_braids(uint8_t track, param_id_t id, float valu
     }
 }
 
-uint8_t param_backend_reapply_tone_braids_runtime(uint8_t track)
+uint8_t param_backend_reapply_tone_wave_runtime(uint8_t track)
 {
     const track_tone_sound_state_t *const state = track_tone_sound_state_get_const(track);
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if ((state == NULL)
             || (ctx == NULL)
             || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+            || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
     {
         return 0U;
     }
 
     const uint8_t instance_id = ctx->instance_id;
-    brick6_braids_runtime_set_edit(instance_id, state->braids.edit);
-    brick6_braids_runtime_set_fine(instance_id, state->braids.fine);
-    brick6_braids_runtime_set_coarse(instance_id, state->braids.coarse);
-    brick6_braids_runtime_set_fm(instance_id, state->braids.fm);
-    brick6_braids_runtime_set_timbre(instance_id, state->braids.timbre);
-    brick6_braids_runtime_set_modulation(instance_id, state->braids.modulation);
-    brick6_braids_runtime_set_color(instance_id, state->braids.color);
-    brick6_braids_runtime_set_phase_reset(instance_id, (state->braids.phase_reset >= 0.5f) ? 1U : 0U);
+    brick6_braids_runtime_set_edit(instance_id, state->wave.edit);
+    brick6_braids_runtime_set_fine(instance_id, state->wave.fine);
+    brick6_braids_runtime_set_coarse(instance_id, state->wave.coarse);
+    brick6_braids_runtime_set_fm(instance_id, state->wave.fm);
+    brick6_braids_runtime_set_timbre(instance_id, state->wave.timbre);
+    brick6_braids_runtime_set_modulation(instance_id, state->wave.modulation);
+    brick6_braids_runtime_set_color(instance_id, state->wave.color);
+    brick6_braids_runtime_set_phase_reset(instance_id, (state->wave.phase_reset >= 0.5f) ? 1U : 0U);
     return 1U;
 }
 
@@ -949,7 +949,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
                 state->vca_release = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
             mixer_set_track_vca_release(ctx->mix_track_id, release_s);
-            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+            if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             {
                 brick6_braids_runtime_set_vca_release_seconds(ctx->instance_id, release_s);
             }

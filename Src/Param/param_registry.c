@@ -389,29 +389,29 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_MASTER_FX4_B:
             *out_value = state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)];
             return 1U;
-        case PARAM_BRAIDS_EDIT:
-            *out_value = state->braids.edit;
+        case PARAM_WAVE_EDIT:
+            *out_value = state->wave.edit;
             return 1U;
-        case PARAM_BRAIDS_FINE:
-            *out_value = state->braids.fine;
+        case PARAM_WAVE_FINE:
+            *out_value = state->wave.fine;
             return 1U;
-        case PARAM_BRAIDS_COARSE:
-            *out_value = state->braids.coarse;
+        case PARAM_WAVE_COARSE:
+            *out_value = state->wave.coarse;
             return 1U;
-        case PARAM_BRAIDS_FM:
-            *out_value = state->braids.fm;
+        case PARAM_WAVE_FM:
+            *out_value = state->wave.fm;
             return 1U;
-        case PARAM_BRAIDS_TIMBRE:
-            *out_value = state->braids.timbre;
+        case PARAM_WAVE_TIMBRE:
+            *out_value = state->wave.timbre;
             return 1U;
-        case PARAM_BRAIDS_MODULATION:
-            *out_value = state->braids.modulation;
+        case PARAM_WAVE_MODULATION:
+            *out_value = state->wave.modulation;
             return 1U;
-        case PARAM_BRAIDS_COLOR:
-            *out_value = state->braids.color;
+        case PARAM_WAVE_COLOR:
+            *out_value = state->wave.color;
             return 1U;
-        case PARAM_BRAIDS_PHASE_RESET:
-            *out_value = state->braids.phase_reset;
+        case PARAM_WAVE_PHASE_RESET:
+            *out_value = state->wave.phase_reset;
             return 1U;
         case PARAM_MIDI_PROGRAM:
             *out_value = state->midi_program;
@@ -594,29 +594,29 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_MASTER_FX4_B:
             state->master_fx.macro_b[(uint8_t)((id - PARAM_MASTER_FX1_B) / 4U)] = value;
             return 1U;
-        case PARAM_BRAIDS_EDIT:
-            state->braids.edit = value;
+        case PARAM_WAVE_EDIT:
+            state->wave.edit = value;
             return 1U;
-        case PARAM_BRAIDS_FINE:
-            state->braids.fine = value;
+        case PARAM_WAVE_FINE:
+            state->wave.fine = value;
             return 1U;
-        case PARAM_BRAIDS_COARSE:
-            state->braids.coarse = value;
+        case PARAM_WAVE_COARSE:
+            state->wave.coarse = value;
             return 1U;
-        case PARAM_BRAIDS_FM:
-            state->braids.fm = value;
+        case PARAM_WAVE_FM:
+            state->wave.fm = value;
             return 1U;
-        case PARAM_BRAIDS_TIMBRE:
-            state->braids.timbre = value;
+        case PARAM_WAVE_TIMBRE:
+            state->wave.timbre = value;
             return 1U;
-        case PARAM_BRAIDS_MODULATION:
-            state->braids.modulation = value;
+        case PARAM_WAVE_MODULATION:
+            state->wave.modulation = value;
             return 1U;
-        case PARAM_BRAIDS_COLOR:
-            state->braids.color = value;
+        case PARAM_WAVE_COLOR:
+            state->wave.color = value;
             return 1U;
-        case PARAM_BRAIDS_PHASE_RESET:
-            state->braids.phase_reset = clamp_value(value, 0.0f, 1.0f);
+        case PARAM_WAVE_PHASE_RESET:
+            state->wave.phase_reset = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_MIDI_PROGRAM:
             state->midi_program = value;

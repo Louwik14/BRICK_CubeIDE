@@ -38,6 +38,7 @@ void mod_lfo_v1_resync_base_on_authoritative_write(uint8_t track, param_id_t id,
 uint16_t mod_lfo_v1_dest_count(uint8_t track);
 uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t *out_param);
 uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len);
+uint8_t mod_lfo_v1_dest_short_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len);
 void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track);
 void mod_lfo_v1_invalidate_dest_cache_all(void);
 

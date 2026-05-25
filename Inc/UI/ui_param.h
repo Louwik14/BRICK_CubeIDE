@@ -25,13 +25,32 @@ typedef struct
     uint8_t ref_step;
 } ui_param_seq_plock_feedback_frame_t;
 
+typedef enum
+{
+    UI_PARAM_VALUE_FLASH_DIRECT = 0,
+    UI_PARAM_VALUE_FLASH_PLOCK,
+    UI_PARAM_VALUE_FLASH_LIVE_REC_PLOCK,
+    UI_PARAM_VALUE_FLASH_MACRO_SCENE_ASSIGN
+} ui_param_value_flash_kind_t;
+
 void ui_param_set_bank(const ui_param_bank_t *bank);
 void ui_param_invalidate_bank(void);
+void ui_param_clear_value_flash(void);
 void ui_param_sync_active_bank_values(void);
 void ui_param_sync_active_track_mirror_from_runtime(void);
 void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx);
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx);
 void ui_param_end_encoder_edit_group(void);
+void ui_param_note_user_value_flash(uint8_t slot,
+                                    param_id_t param,
+                                    uint8_t track,
+                                    float value,
+                                    ui_param_value_flash_kind_t kind);
+uint8_t ui_param_get_slot_value_flash(uint8_t slot,
+                                      param_id_t param,
+                                      uint8_t track,
+                                      float *out_value,
+                                      ui_param_value_flash_kind_t *out_kind);
 uint8_t ui_param_get_active_bank_param(uint8_t encoder, param_id_t *out_param);
 uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *ctx,
                                              uint8_t encoder,

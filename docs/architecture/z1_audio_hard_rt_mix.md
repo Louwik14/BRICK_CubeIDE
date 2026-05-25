@@ -13,20 +13,20 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Audio/audio_io.c` repacke MAIN/CUE sans calcul de VU/peak/clip produit; la saturation TX reste locale a la conversion int24.
 - `Src/Audio/dsp_engine.c` : preuve d'autorite callback DSP unique.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : point d'insertion unique du futur moteur Sampler, sans pipeline audio parallele.
-- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Braids multi-instances (une instance mono par track Braids) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
+- `Src/Core/brick6_braids_runtime.cpp` + `Inc/Core/brick6_braids_runtime.h` : runtime Wave multi-instances (une instance mono par track Wave) autour de `braids::MacroOscillator`, rendu en sous-blocs de 24 samples puis injecte via `mixer_submit_external_mono_native`.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : backend stereo du Sampler branche sur le point d'insertion unique, en lecture via `sample_cache` RAM.
 - `Src/Core/brick6_sampler_runtime.c` : declick minimal des stops/steals Sampler par capture du dernier echantillon rendu et tail RAM-only courte, mixee dans le buffer Sampler avant injection mixer.
 - `Src/Sampler/sample_cache.c` + `Inc/Sampler/sample_cache.h` : facade produit Sampler en RAM; `brick6_sampler_runtime` lit le cache uniquement, sans acces SD ni lecture directe `sample_desc->data`.
 - `Src/Sampler/multi_sample_pool.c` + `Inc/Sampler/multi_sample_pool.h` : autorite metadata RAM-only du futur `Sampler/Multi` (instruments, samples, zones, resolve note/velocity); aucun SD, aucun playback, aucun acces page-cache dans cette phase.
 - `Src/Sampler/multi_sample_loader.c` + `Inc/Sampler/multi_sample_loader.h` : LOAD cooperatif du futur `Sampler/Multi`, hors IRQ, qui mappe `.brickmulti` vers `multi_sample_pool` puis prepare la ration froide 8192 frames, ou tout le sample si plus court, via le `sample_page_cache`/`sample_stream_manager` uniques.
-- `Src/Sampler/sampler_ram_pool.c` + `Inc/Sampler/sampler_ram_pool.h` : backend resident RAM v1. Il charge explicitement des WAV PCM 16/24-bit mono/stereo hors IRQ vers un stockage interne `FLOAT32_INTERLEAVED` stereo alloue dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`, conserve sample_rate/frames/cout/generation, expose `channels=2`, et inscrit les slots comme `kind=RAM` dans `sample_global_pool`. Les consommateurs IRQ courants sont les playbacks minimaux `Sampler/OneShot` RAM et `Sampler/Slicer` RAM.
+- `Src/Sampler/sampler_ram_pool.c` + `Inc/Sampler/sampler_ram_pool.h` : backend resident RAM v1. Il charge explicitement des WAV PCM 16/24-bit mono/stereo hors IRQ vers un stockage interne `FLOAT32_INTERLEAVED` stereo alloue dans des pages permanentes du `SAMPLE_PAGE_SLOT_POOL`, conserve sample_rate/frames/cout/generation, expose `channels=2`, et inscrit les slots comme `kind=RAM` dans `sample_global_pool`. Le consommateur IRQ courant est `Sampler/RAM`, normal ou sliced via `Slice Count`.
 - `Src/Sampler/sample_stream_manager.c` + `Inc/Sampler/sample_stream_manager.h` : seam STREAM Sampler; phase courante = proprietaire de la policy service STREAM pool, d'un pool statique de readers FatFs persistants par cle audio STREAM active, et d'un scheduler simple fair/deadline par priorite de page. Son service est cooperatif: il limite pages/operations FatFs/ticks par appel et rend le gate SD rapidement si du travail STREAM reste pending.
 - `Src/Sampler/sample_stream_fatfs_map.c` + `Inc/Sampler/sample_stream_fatfs_map.h` : certification hors IRQ des WAV STREAM contigus via FatFs CLMT. Les acces aux champs internes FatFs restent confines ici. Un fichier non certifie conserve le backend FatFs historique.
 - `Src/Sampler/sample_stream_backend_contiguous.c` + `Inc/Sampler/sample_stream_backend_contiguous.h` : backend V1 `STREAM_SAFE_CONTIGUOUS`; remplit une page cache float stereo depuis des secteurs SD physiques deja certifies, hors IRQ et sous l'autorite du `sample_stream_manager`.
 - `Src/SD/sd_block_device.c` + `Inc/SD/sd_block_device.h` : wrapper minimal de lecture secteurs hors IRQ, utilise par le backend contigu uniquement pendant que `sd_access_gate` est deja tenu.
 - `Src/Sampler/sample_page_cache.c` + `Inc/Sampler/sample_page_cache.h` : seam local du cache pagine Sampler; en phase actuelle, `READY_FULL` peut etre charge par pages float stereo contigues en SDRAM sans modifier le chemin audio stream, et le stockage/acquire/release des pages reste ici. Le lookup hot passe par un index statique borne keyed par `sample_audio_key_t {domain, object_id}` + `page_index`; les scans free/evict conservent un passage borne avec curseur.
 - `Src/Sampler/sample_voice_reader.c` + `Inc/Sampler/sample_voice_reader.h` : helper local Sampler pour le fast path bloc RAM-only; aucune SD, aucune policy musicale globale.
-- `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Clip` `Shifter`, port C borne sans import Clouds/FxEngine.
+- `Src/Core/brick6_clip_shifter.c` + `Inc/Core/brick6_clip_shifter.h` : pitch-shifter stereo local du mode `Sampler/Stream` `Shifter`, port C borne sans import Clouds/FxEngine.
 - `Src/Core/brick6_sampler_runtime.c` + `Inc/Core/brick6_sampler_runtime.h` : slice grid v1 reconstruite hors IRQ, selection de slice par note en mode `Slice`.
 - `Inc/Audio/mixer.h` : cardinalite mixer (`MIXER_MAX_TRACKS = SEQ_TRACK_COUNT`) et contrat public.
 - `Src/Audio/fx_master_macro.c` + `Inc/Audio/fx_master_macro.h` : insert master leger pour les 4 slots `Master/FX` MacroFX, avec core delay mono statique par slot pour `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER` et `PITCH`, et formants SVF legers pour `TALK`.
@@ -34,7 +34,7 @@ Elargissements necessaires (preuves de frontiere et contrats):
 - `Src/Core/brick6_app_init.c` : preuve du wiring `audio_set_float_callback(brick6_audio_runtime_dsp)`.
 
 Dependances de Z1 sans appartenir a Z1:
-- Engines synth/sampler (`drum`, `voice_manager`, wrappers Braids/Sampler).
+- Engines synth/sampler (`drum`, `voice_manager`, wrappers Wave/Sampler).
 - `track_runtime` (mapping track logique -> cible mix).
 - `mod_lfo_v1` (modulation bloc).
 - `seq_runtime` (event scheduling audio).
@@ -49,7 +49,7 @@ Exclusions explicites:
 Contrat page-cache/streamer:
 - L'identite cache audio est `sample_audio_key_t {domain, object_id}` + `page_index`, pas un `sample_id` brut.
 - Domaines prevus: `CLASSIC` pour les samples Sampler existants, `LOOPER` pour les transients Looper, `MULTI` reserve au futur Sampler/Multi.
-- Les APIs historiques par `sample_id` restent des wrappers `CLASSIC` temporaires. En runtime courant, Clip conserve Classic STREAM; OneShot/Slicer ne les consomment plus.
+- Les APIs historiques par `sample_id` restent des wrappers `CLASSIC` temporaires. En runtime courant, Stream conserve Classic STREAM; RAM ne les consomment plus.
 - `sample_stream_manager` porte la meme cle pour readers, pending requests et load targets; il reste l'unique streamer FatFs et reste hors IRQ.
 - `sample_stream_manager` reste l'unique streamer Sampler. Le backend `STREAM_SAFE_CONTIGUOUS` ne cree ni queue ni scheduler parallele: il remplace seulement la maniere de remplir une page `QUEUED -> LOADING -> READY` quand la metadata physique du sample est certifiee contigue.
 - La metadata de streaming safe est portee par le `sample_page_cache` par `sample_audio_key_t`; Classic et Multi la partagent via le meme stream info. Looper RAW reste sur le backend existant dans cette phase.
@@ -61,7 +61,7 @@ Contrat page-cache/streamer:
 - Une requete `MULTI` ne peut pas evincer une page non-`MULTI`; si le pool est plein a cause de Classic/Looper, l'allocation Multi echoue proprement au lieu de degrader les comportements existants.
 - Le pool produit partageable est strictement `SAMPLE_PAGE_SLOT_POOL_COUNT` pages, soit `SAMPLE_PAGE_PRODUCT_SLOT_POOL_PAGES=960` pages de `SAMPLE_PAGE_BYTES=16384` octets dans la configuration courante: 15 728 640 octets (15 MiB). Les ranges `SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES=128` et `SAMPLE_PAGE_PRODUCT_MARGIN_PAGES=128` restent fixes et hors consommation permanente des samples RAM.
 - RAM v1 utilise ce meme `SAMPLE_PAGE_SLOT_POOL` que les presocles Stream/Multi: `sampler_ram_pool` demande des runs contigus de pages via `sample_page_cache_alloc_slot_pool_bytes()`, les garde pinnees comme pages permanentes brutes, stocke le WAV converti en `FLOAT32_INTERLEAVED` stereo, et libere ces pages au clear/reset via `sample_page_cache_release_slot_pool_allocation()`.
-- Le cout RAM enregistre dans `sample_global_pool.cost_bytes` est la capacite physique reelle allouee en pages SLOT_POOL (`ceil(data_bytes / SAMPLE_PAGE_BYTES) * SAMPLE_PAGE_BYTES`), pas un alignement logique de petit buffer. Aucun fallback vers `sample_cache`, `sample_voice_reader`, `sample_cache_start_voice_at` ou le streamer Classic; `Sampler/OneShot` et `Sampler/Slicer` RAM lisent directement le `FLOAT32_INTERLEAVED` stereo resident.
+- Le cout RAM enregistre dans `sample_global_pool.cost_bytes` est la capacite physique reelle allouee en pages SLOT_POOL (`ceil(data_bytes / SAMPLE_PAGE_BYTES) * SAMPLE_PAGE_BYTES`), pas un alignement logique de petit buffer. Aucun fallback vers `sample_cache`, `sample_voice_reader`, `sample_cache_start_voice_at` ou le streamer Classic; `Sampler/RAM` et `Sampler/RAM sliced mode` RAM lisent directement le `FLOAT32_INTERLEAVED` stereo resident.
 
 ## 2. Autorite(s) de verite
 
@@ -210,7 +210,7 @@ Flux nominal prouve par code:
 4) Collecte des events/sources
 - Dans `brick6_audio_runtime_dsp`:
   - refresh runtime tracks
-- rendu engines externes (Drum, Braids mono par instance, Sampler stereo) -> `mixer_submit_external_*`
+- rendu engines externes (Drum, Wave mono par instance, Sampler stereo) -> `mixer_submit_external_*`
   - `mod_lfo_v1_process_block`
   - `voice_manager_process`
 
@@ -296,23 +296,23 @@ Granular / fx_pool:
 - L'ordre DSP mono aligne le chemin stereo de reference: filtre/EQ puis inserts, puis `VCA+gain`, puis projection tardive `mono -> L/R`.
 - Un bloc mono ne doit jamais appeler un traitement stereo avec `L/R` identiques pour simuler du mono.
 - La projection mono -> stereo ne doit intervenir qu'aux frontieres qui l'exigent reellement: taps post-fader, sends stereo, routing `MAIN/CUE` et accumulation bus.
-- Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`. Depuis le retrait runtime OneShot/Slicer, ces comportements ne sont plus contractuels pour OneShot/Slicer; Clip garde le flux Classic provisoire.
+- Stabilisation actuelle `sample_cache`: le chemin Sampler track-aware supporte le playback forward simple, le pitch simple par interpolation lineaire en forward/reverse, la loop forward pitchee simple, le ping-pong pitche simple, le reverse simple, la loop forward simple, le ping-pong simple et la selection de slices v1 par note via `sample_voice_reader`. Depuis le retrait runtime RAM, ces comportements ne sont plus contractuels pour RAM; Stream garde le flux Classic provisoire.
 - La memoire audio runtime Sampler reste locale au sous-systeme Sampler: `sample_page_cache` est l'owner memoire audio runtime, `sample_cache` garde la facade produit/orchestration prepare-service-compat, et `sample_voice_reader` porte la lecture musicale. `READY_FULL` est materialise par pages contigues en SDRAM; `READY_PARTIAL` signifie STREAM enregistre + pages initiales queuees, puis chargees hors audio par le `sample_stream_manager` via `sample_cache_service()`.
-- Le seuil legacy `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = SAMPLE_PAGE_MIN_READY_PAGES`, soit 16 pages de 512 frames avec la configuration actuelle, donc 8192 frames stereo float decodees. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM pour les consommateurs Classic encore streamables (Clip), meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient le span forward 8192 calcule par le helper commun et le span reverse 8192 calcule depuis la frame tail; en reverse, un depart non aligne peut demander 17 pages physiques pour couvrir 8192 frames utiles.
-- Retrigger Classic streamable (Clip/compat): le runtime coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` juge rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.
-- Limitations actuelles `READY_PARTIAL` pour le chemin Classic streamable restant: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24/32-bit, forward simple et pitch lineaire selon le mode consommateur; reverse/slices historiques ne sont plus un contrat produit OneShot/Slicer.
+- Le seuil legacy `READY_FULL` Classic est borne par le cout statique d'un long-stream Classic: `SAMPLE_CACHE_STREAM_STATIC_PAGES = SAMPLE_PAGE_MIN_READY_PAGES`, soit 16 pages de 512 frames avec la configuration actuelle, donc 8192 frames stereo float decodees. Tout sample Classic au-dessus passe en `READY_PARTIAL`/STREAM pour les consommateurs Classic encore streamables (Stream), meme si l'ancien seuil 64 pages l'aurait charge en full. Le warm set STREAM initial contient le span forward 8192 calcule par le helper commun et le span reverse 8192 calcule depuis la frame tail; en reverse, un depart non aligne peut demander 17 pages physiques pour couvrir 8192 frames utiles.
+- Retrigger Classic streamable (Stream/compat): le runtime coupe d'abord la voix cache du track cible, puis ne rearme qu'apres `sample_cache` juge rejouable depuis la frame de depart. Un `READY_PARTIAL` dont la frame 0 n'est plus en fenetre passe par `NEEDS_REPREPARE -> PREFILLING -> READY_PARTIAL` hors audio, sans rester coince en `PLAYING`.
+- Limitations actuelles `READY_PARTIAL` pour le chemin Classic streamable restant: WAV PCM/extensible PCM, 48 kHz, mono/stereo, 16/24/32-bit, forward simple et pitch lineaire selon le mode consommateur; reverse/slices historiques ne sont plus un contrat produit RAM.
 - `sample_cache_read_voice()`, `sample_cache_read_voice_frame()`, `sample_cache_peek_frame()`, `sample_cache_begin_read_block()` et `sample_cache_commit_read_block()` sont RAM-only. FatFs reste limite a `sample_cache_prepare()` et `sample_cache_service()`.
 - Phase 1/2/3/4/5A/5B/6A/6B refonte locale Sampler: les modes `Shot` forward 1x (`mode=0`), `RevShot` reverse 1x (`mode=1`), `Loop` forward 1x (`mode=2`), `PingPong` 1x (`mode=3`), le `Shot` forward pitche simple (`mode=0`, `step != 1`, sans loop), le `RevShot` reverse pitche simple (`mode=1`, `step != 1`, sans loop), la `Loop` forward pitchee simple (`mode=2`, `step != 1`, sans ping-pong) et le `PingPong` pitche simple (`mode=3`, `step != 1`) ne passent plus par `sample_cache_begin_read_block()` dans l'IRQ. `brick6_sampler_runtime` construit un `play_plan` au trigger, `sample_voice_reader` porte un cursor audio local par voix, et l'IRQ consomme des segments page-bounds deja acquis via `sample_page_cache`.
 - Sur ce chemin Phase 1/2/3/4/5A/5B/6A/6B, aucun `request_page` n'est emis depuis le kernel audio. Le prefetch stream est queue hors IRQ par `sample_cache_service()` a partir des voix actives, et la transition de page du cursor se limite a un acquire/release RAM-only au boundary; en reverse, les demandes se font sur une fenetre precedente bornee (`current-1..current-4`). La loop forward 1x reste un wrap de cursor local (`loop_end -> loop_begin`), le ping-pong 1x une inversion locale de direction/kernels aux bounces, et le pitch simple forward/reverse/loop/ping-pong consomme des segments prepares avec voisin d'interpolation deja acquis.
-- Les samples longs en `READY_PARTIAL` gardent une preparation reverse tail legacy dans `sample_cache`, mais OneShot/Slicer ne la consomment plus. Le prefetch hors IRQ utilise aussi une fenetre reverse plus large que le forward pour couvrir les transitions `page N -> N-1`; les pages stream non pinnees peuvent etre reclamees avant un chargement `READY_FULL`, mais les pages de samples full deja chargees ne doivent pas etre evincees par le stream.
-- Les autres modes (`slice`) ne sont plus streamables et ne demarrent plus de reader Classic: Slicer attend le futur sampler RAM dedie.
+- Les samples longs en `READY_PARTIAL` gardent une preparation reverse tail legacy dans `sample_cache`, mais RAM ne la consomment plus. Le prefetch hors IRQ utilise aussi une fenetre reverse plus large que le forward pour couvrir les transitions `page N -> N-1`; les pages stream non pinnees peuvent etre reclamees avant un chargement `READY_FULL`, mais les pages de samples full deja chargees ne doivent pas etre evincees par le stream.
+- Les autres modes (`slice`) ne sont plus streamables et ne demarrent plus de reader Classic: RAM slicing attend le futur sampler RAM dedie.
 - Legacy restant: `voice_manager` peut encore traiter des voix anciennes et `Src/Audio/sampler.c` reste helper legacy; le chemin produit track-aware ne doit pas revenir a `sample_desc->data`.
 - Les delays MacroFX sont monophoniques par slot, statiques en `AUDIO_COLD_SDRAM`, avec lecture interpolee et historique logique `delay_filled` pour eviter de nettoyer de grands buffers en IRQ lors d'un reset de type. `STUTTER` et `PITCH` reutilisent ce core mono: `STUTTER` capture une fenetre recente bornee avec crossfade court de boucle, `PITCH` utilise deux lectures delay/grain simples. `TALK` utilise des formants fixes/morphables bornes, sans FFT ni analyse vocale.
-- Integration courante `Sampler/Clip`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
+- Integration courante `Sampler/Stream`: `Stretch Mode=Off` garde une lecture 1x entre micro-corrections locales distribuees, `Stretch Mode=Speed` garde le chemin cursor varispeed legacy, et `Stretch Mode=Shifter` garde le cursor `Speed` puis applique `brick6_clip_shifter` stereo avant accumulation.
 - `brick6_clip_shifter` porte un shifter deux taps delay/crossfade local; le ratio de correction est isole dans `brick6_clip_shifter_set_pitch_correction(pitch_ratio / timing_ratio)`, `Grain` pilote la taille de fenetre, `Hop` et `Search` restent sans effet dans ce mode.
-- Le runtime lourd `Sampler/Clip` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Clip` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Shifter` retombe explicitement sur `Speed` sans crash.
+- Le runtime lourd `Sampler/Stream` n'est plus porte par `SEQ_TRACK_COUNT`: il est borne a `BRICK6_MAX_CLIP_TRACKS=4` via un pool de slots locaux. Les tracks `Stream` supplementaires sont filtrees en amont par le catalogue UI; si aucun slot runtime n'est disponible au start, `Shifter` retombe explicitement sur `Speed` sans crash.
 - `REC/CLEAR/stop manuel/start transport` reset uniquement l'etat du shifter et conservent l'ownership brut du runtime Looper RAW courant.
-- STOP transport passe par Z4 et appelle `brick6_sampler_runtime_stop_transport_clips()` pour couper uniquement les tracks `Sampler/Clip`, y compris les clips en Launch, et remettre reader/playhead au debut du clip; OneShot/Slicer et Looper restent hors de ce reset.
+- STOP transport passe par Z4 et appelle `brick6_sampler_runtime_stop_transport_clips()` pour couper uniquement les tracks `Sampler/Stream`, y compris les streams en Launch, et remettre reader/playhead au debut du stream; RAM et Looper restent hors de ce reset.
 
 ## 9. Dependances inter-zones
 
@@ -471,12 +471,12 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le tampon `PREROLL_RAM` est une source de demarrage uniquement. Le runtime tente d'entrer dans le chemin normal `RAW/page-cache` avant d'utiliser START_RAM; START_RAM ne sert que de bridge post-REC quand la page RAW courante n'est pas encore disponible. Des que le playback Looper a lu un bloc depuis `RAW_PAGE_CACHE`, le take marque le relais RAW comme effectue et le preroll est consomme: les wraps suivants doivent repartir en `RAW_PAGE_CACHE` a la frame 0, jamais en `PREROLL_RAM`.
 - L'etat hot Looper `g_looper_tracks` est place en DTCM via `AUDIO_HOT` uniquement pour les metadonnees par track lues/ecrites par l'IRQ audio; les gros buffers restent hors DTCM (`g_looper_preroll_pcm` en `SDRAM_RECORDER`, rings writer en `SDRAM_RECORDER`, page-cache/buffers audio dans leurs sections existantes). Aucun DMA ne cible `g_looper_tracks`.
 
-## 19. Addendum - Braids Phase Reset
+## 19. Addendum - Wave Phase Reset
 
-- `Synth/Braids` conserve le comportement historique par defaut: `PHASE RESET=Off` laisse le `sync_block` nul et `MacroOscillator::Strike()` garde son contrat Mutable courant.
-- `PHASE RESET=On` arme un reset one-shot au `note_on` Braids, puis le premier sous-bloc rendu par `brick6_braids_runtime_render_instance()` pose `sync_block[0]=1` avant de consommer le flag.
-- Le reset reste track-aware par instance Braids et ne reset aucun generateur random.
-- Les moteurs Braids qui consomment deja `sync_block` reset leur phase au premier sample rendu; les moteurs sans entree sync pertinente restent des no-op implicites.
+- `Synth/Wave` conserve le comportement historique par defaut: `PHASE RESET=Off` laisse le `sync_block` nul et `MacroOscillator::Strike()` garde son contrat Mutable courant.
+- `PHASE RESET=On` arme un reset one-shot au `note_on` Wave, puis le premier sous-bloc rendu par `brick6_braids_runtime_render_instance()` pose `sync_block[0]=1` avant de consommer le flag.
+- Le reset reste track-aware par instance Wave et ne reset aucun generateur random.
+- Les moteurs Wave qui consomment deja `sync_block` reset leur phase au premier sample rendu; les moteurs sans entree sync pertinente restent des no-op implicites.
 - Le rendu reste borne en IRQ: buffers locaux de 24 samples, pas de malloc, pas de FatFs, pas de reset brutal du moteur Mutable.
 
 ## Addendum 2026-05-13 - retrait du buffer master
@@ -508,13 +508,13 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `Off + Pitch != 0` utilise le lecteur Looper varispeed Q16/fractionnaire sur le chemin normal `RAW/page-cache`, avec interpolation lineaire stereo; il transpose la boucle sans time-stretch.
 - `Speed` utilise la metadata de prise: `timing_ratio = source_samples_per_step_q16 / current_samples_per_step_q16`, clamp `0.5..2.0`, puis increment de lecture `timing_ratio * pitch_ratio`.
 - `Shifter` rend d'abord le Looper en varispeed `timing_ratio` depuis le chemin normal `RAW/page-cache` dans un scratch stereo bloc, puis applique `brick6_clip_shifter_process_stereo()` avec correction `pitch_ratio / timing_ratio` et fenetre `Grain`.
-- Le pool shifter Looper est dedie et separe du pool Clip prive: 4 instances bornees en RAM_D1, avec reset explicite au start playback et au changement mode/grain. Le scratch stereo bloc Looper Shifter (`g_looper_stretch_l/r`) reste aussi en RAM_D1 pour eviter les lectures/ecritures shifter par sample en SDRAM cold.
+- Le pool shifter Looper est dedie et separe du pool Stream prive: 4 instances bornees en RAM_D1, avec reset explicite au start playback et au changement mode/grain. Le scratch stereo bloc Looper Shifter (`g_looper_stretch_l/r`) reste aussi en RAM_D1 pour eviter les lectures/ecritures shifter par sample en SDRAM cold.
 - Si la metadata musicale est invalide (`recorded_frames`, `recorded_steps_q16`, `source_samples_per_step_q16` ou cadence courante nuls), `Speed/Shifter` retombent sur `Off`.
 - Si `Shifter` est demande mais qu'aucune instance Looper dediee n'est disponible, le runtime retombe sur `Speed` si la metadata est valide, sinon `Off`.
 - Quand `Pitch` revient sur un point stable `-12`, `0` ou `+12` apres une phase varispeed libre `Off` ou `Speed`, le runtime Looper peut armer un resync one-shot du playhead; il n'y a pas de correction permanente entre ces points.
 - Le resync est consomme cote audio uniquement apres une courte stabilite du ratio effectif stable: `Off` utilise le ratio pitch stable (`0.5`, `1.0`, `2.0`), `Speed` multiplie ce ratio par le `timing_ratio` courant.
 - La position attendue vient de la timeline audio depuis `playback_start_sample`, multipliee par le ratio stable effectif puis modulo `recorded_frames`; le jump relache la page courante, demande les pages autour du nouveau playhead et applique un mini crossfade local de 96 frames.
-- `Shifter`, Clip, REC/PLAY/WRAP/SAVE/XFADE/ROUT restent hors comportement de resync dans cette passe.
+- `Shifter`, Stream, REC/PLAY/WRAP/SAVE/XFADE/ROUT restent hors comportement de resync dans cette passe.
 
 ## Addendum 2026-05-15 - Sampler/Multi playback sans UI
 
@@ -528,18 +528,18 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - `sample_stream_manager_has_pending_sd_work()` tient compte des pending key-based, donc les requetes `MULTI` restent visibles au service SD/cache et ne dependent plus du scan legacy `CLASSIC`.
 - Le modele de voix Multi est borne a `SAMPLER_MULTI_MAX_VOICES_PER_TRACK = 4` par track. Une cinquieme note Multi sur la meme track vole la plus ancienne voix Multi de cette track.
 - Le stockage hot des voix Multi est un pool global DTCM de `SAMPLER_MULTI_MAX_GLOBAL_VOICES = 16` entrees, chaque entree portant son `owner_track_id`; le rendu parcourt le pool global et route chaque voix vers sa track proprietaire.
-- La limite globale volable du Sampler/Multi est `SAMPLER_MULTI_MAX_GLOBAL_VOICES = 16`: si elle est atteinte, Multi vole d'abord la plus ancienne voix Multi globale, puis la plus ancienne voix OneShot volable. Clip et Looper restent proteges.
+- La limite globale volable du Sampler/Multi est `SAMPLER_MULTI_MAX_GLOBAL_VOICES = 16`: si elle est atteinte, Multi vole d'abord la plus ancienne voix Multi globale, puis la plus ancienne voix RAM volable. Stream et Looper restent proteges.
 - L'etat produit minimal par track Multi est porte par `brick6_sampler_runtime`: `multi_instrument_id`, `gain` et `loop_enabled`. `multi_sample_pool` reste l'autorite globale des instruments/samples/zones et porte seulement les metadonnees sample/zone, dont `has_loop/loop_begin/loop_end`.
 - En absence d'UI/persistence Multi, le controle passe par les APIs runtime `set/get_multi_instrument`, `set/get_multi_gain`, `multi_instrument_is_ready` et le trigger track-aware qui utilise l'instrument assigne quand l'appelant passe `MULTI_SAMPLE_POOL_INVALID_ID`.
 - `Sampler/Multi` consomme maintenant le note-off clavier via `brick6_sampler_runtime_note_off_multi_track_note(track,note)`: les voix Multi actives du meme couple track/note passent en release pending et continuent a fournir du signal RAM/page-cache jusqu'a extinction du VCA mixer existant, puis sont stoppees/reset avec diagnostic `REL_DONE`. Aucun FatFs, malloc ni UART n'est ajoute en IRQ; les logs UART Multi sont desactives par defaut.
 - Le prefetch continu Multi reste hors IRQ et devient monotone par fenetre: chaque voix memorise la derniere page de lookahead demandee via le noyau STREAM commun, demande seulement les nouvelles pages jusqu'a `current_page + 27`, et reset cet etat au trigger/steal/stop/release done. Pour une voix loopee, une seconde fenetre active `owner_kind=MULTI_LOOP` maintient les pages autour de `loop_begin`; au wrap reel, la fenetre courante est reset pour autoriser une prochaine page source plus basse sans supposer une progression monotone.
 - La page d'ancrage Multi `page0` n'est plus candidate a l'eviction du `sample_page_cache`: le contrat `READY` reste donc stable pendant les prefetchs actifs page1+ et les refus `PAGE0` loguent hors IRQ une ligne ciblee par sample (`inst/zone/smp/obj/root/vel/state0/path`).
-- Le STOP transport/panic coupe toutes les voix Sampler runtime, pas seulement les Clips, afin de liberer les locks de fenetre STREAM et d'arreter les prefetchs SD devenus inutiles apres arret du sequenceur.
+- Le STOP transport/panic coupe toutes les voix Sampler runtime, pas seulement les Streams, afin de liberer les locks de fenetre STREAM et d'arreter les prefetchs SD devenus inutiles apres arret du sequenceur.
 
 ## Addendum 2026-05-15 - noyau STREAM actif commun
 
 - `sample_stream_manager_queue_active_pages()` est le noyau commun minimal d'entretien des voix streamées actives, basé sur `sample_audio_key_t {domain, object_id}`, `current_frame`, `end_frame`, direction et lookahead.
-- `sample_cache_queue_active_stream_pages()` conserve son role legacy Classic/Clip, mais delegue maintenant le calcul page courante/lookahead/priorite au noyau commun sans dependance nouvelle a `sample_cache_voice_t`; OneShot/Slicer ne creent plus de voix Classic STREAM.
+- `sample_cache_queue_active_stream_pages()` conserve son role legacy Classic/Stream, mais delegue maintenant le calcul page courante/lookahead/priorite au noyau commun sans dependance nouvelle a `sample_cache_voice_t`; RAM ne creent plus de voix Classic STREAM.
 - `Sampler/Multi` expose ses voix actives au même noyau via `domain=MULTI`, `object_id=multi_sample_id`, `current_frame=reader.position`, `end_frame=region_end`, direction forward et `SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES`; la policy locale page2/urgent séparée est retirée.
 - L'anti-spam monotone par voix Multi vit dans `sample_stream_active_state_t` et reste hors IRQ. READY Multi n'est plus limite a page0: le LOAD prepare la ration froide 8192 frames avant de declarer l'instrument pret.
 - L'IRQ audio continue de lire uniquement RAM/page-cache via `sample_voice_reader`; aucune SD/FatFs/malloc/UART n'est ajoutée au rendu.
@@ -556,7 +556,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-18 - Sampler fenetre de depart protegee
 
-- Un note-on Classic streamable restant (Clip) ou Multi doit reserver une fenetre minimale de pages protegee avant acceptation.
+- Un note-on Classic streamable restant (Stream) ou Multi doit reserver une fenetre minimale de pages protegee avant acceptation.
 - La protection de fenetre voix est distincte du `pin_count` de socle slot: `sample_page_cache` porte `window_pin_count` et des locks owner/generation separes.
 - Une page READY deja chaude comptee dans la fenetre est aussi protegee jusqu'au release de son owner; elle ne reste plus une garantie implicite de cache global.
 - `sample_stream_manager_release_owner()` libere uniquement les locks de fenetre et les pending de l'owner/generation; il ne libere pas les pins de socle slot.
@@ -565,7 +565,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-18 - Sampler fenetre active protegee
 
-- Les voix Classic streamables restantes (Clip) et Multi actives entretiennent maintenant leur fenetre courante via `sample_stream_manager_queue_active_pages()`: chaque page de la fenetre est verrouillee par owner/generation avant d'etre demandee ou consideree comme garantie.
+- Les voix Classic streamables restantes (Stream) et Multi actives entretiennent maintenant leur fenetre courante via `sample_stream_manager_queue_active_pages()`: chaque page de la fenetre est verrouillee par owner/generation avant d'etre demandee ou consideree comme garantie.
 - Les locks de fenetre sont idempotents par page/owner/generation et les pages sorties de la fenetre courante sont liberees explicitement par owner, sans toucher aux `pin_count` de socle slot.
 - Le chemin Classic ne demande plus de page lookahead depuis le cursor/read path; les demandes de streaming actif passent par le service STREAM hors IRQ.
 - Les pages READY deja presentes dans la fenetre active sont verrouillees elles aussi; le cache chaud peut aider la latence mais ne constitue plus une garantie implicite non protegee.
@@ -591,7 +591,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le streamer ne sert plus les pages `QUEUED` Classic trouvees par fallback global sans pending explicite; toute lecture STREAM servie par `sample_stream_manager` doit avoir une demande en queue.
 - Les wrappers publics urgent/normal et la classification par position de lecteur FatFs sont retires: les voix actives utilisent deadline audio, les demandes legacy explicites gardent une deadline infinie.
 - Le cursor Classic ne conserve plus de slot lookahead opportuniste; les transitions de page restent RAM-only via acquire direct de la page READY courante.
-- Les anciennes pages d'entree Slicer via `sample_stream_manager_request_page()` sont retirees du runtime STREAM: Slicer RAM-only ne cree plus de pending STREAM.
+- Les anciennes pages d'entree RAM slicing via `sample_stream_manager_request_page()` sont retirees du runtime STREAM: RAM sliced mode-only ne cree plus de pending STREAM.
 
 ## Addendum 2026-05-19 - Sampler pages 512 frames
 
@@ -656,27 +656,27 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-19 - plan commun autorite playback Sampler
 
-- Les triggers Multi utilisent maintenant le `sample_play_plan_t` commun comme autorite de bind reader/playback; OneShot/Slicer sont neutralises cote runtime jusqu'au futur sampler RAM dedie.
+- Les triggers Multi utilisent maintenant le `sample_play_plan_t` commun comme autorite de bind reader/playback; RAM sont neutralises cote runtime jusqu'au futur sampler RAM dedie.
 - L'echafaudage de migration shadow/compare/fallback est retire: plus de flag CMake shadow, plus de compteurs GDB-only shadow, plus de comparaison stricte runtime/legacy, plus de fallback legacy de playback.
 - Les diagnostics conserves sont les echecs de construction du plan commun via `common_plan_classic_build_fail`, `common_plan_multi_build_fail` et `common_plan_last_reason`, ainsi que les diagnostics produit existants de reject, underrun, miss et stop.
-- Les anciens champs/structures legacy encore presents restent utilises pour calculer l'etat musical, construire la source resolue commune ou maintenir les chemins non concernes; ils ne sont plus un fallback de playback OneShot/Slicer/Multi.
+- Les anciens champs/structures legacy encore presents restent utilises pour calculer l'etat musical, construire la source resolue commune ou maintenir les chemins non concernes; ils ne sont plus un fallback de playback RAM/Multi.
 - Cette passe ne modifie ni start gate strict READY, ni cache opportuniste, ni streamer/fenetre, ni loop/reverse Multi, ni parametres UI.
 
 ## Addendum 2026-05-19 - preparation froide 8192 frames Sampler
 
 - La ration minimale produit reste `SAMPLE_PREP_MIN_READY_FRAMES = 8192` frames. Avec l'implementation actuelle `SAMPLE_PAGE_FRAMES = 512`, cela donne 16 pages, mais la taille de page reste un detail interne.
 - `SAMPLE_PAGE_MIN_READY_PAGES` est seulement la conversion de la ration logique vers les pages internes actuelles.
-- Classic STREAM prepare encore la base forward correspondant a 8192 frames depuis le debut du sample, ou tout le sample s'il est plus court, pour les consommateurs Classic streamables restants; OneShot/Slicer refusent `READY_PARTIAL`.
+- Classic STREAM prepare encore la base forward correspondant a 8192 frames depuis le debut du sample, ou tout le sample s'il est plus court, pour les consommateurs Classic streamables restants; RAM refusent `READY_PARTIAL`.
 - Multi LOAD ne se limite plus a page0: chaque sample du preset demande la ration logique 8192 frames convertie en pages internes, ou toutes ses pages si le sample est plus court, avant de passer l'instrument en `READY`.
 - Cette passe ne branche pas encore le start gate strict: `sample_play_plan_check_ready_requirements()` reste non autoritaire, et `QUEUED/LOADING` ne doivent toujours pas etre comptes comme audio disponible dans le futur gate.
-- Reverse Classic STREAM reste une dette legacy de `sample_cache`; il n'est plus consomme par OneShot/Slicer.
-- Les demandes d'entree de slice Slicer sont retirees du runtime STREAM; le futur traitement par slice appartient au sampler RAM dedie.
+- Reverse Classic STREAM reste une dette legacy de `sample_cache`; il n'est plus consomme par RAM.
+- Les demandes d'entree de slice RAM slicing sont retirees du runtime STREAM; le futur traitement par slice appartient au sampler RAM dedie.
 - Le cache opportuniste n'est pas encore supprime dans cette passe.
 
 ## Addendum 2026-05-19 - profils de preparation Sampler
 
 - Le moteur playback reste commun (`sample_play_plan_t`, reader, page-cache, streamer), mais la policy de preparation est explicite par profil.
-- `SAMPLE_PREP_PROFILE_CLASSIC` reste une dette de nommage/preparation Classic; il couvre les consommateurs Classic streamables restants et ne doit plus etre interprete comme un contrat stream OneShot/Slicer.
+- `SAMPLE_PREP_PROFILE_CLASSIC` reste une dette de nommage/preparation Classic; il couvre les consommateurs Classic streamables restants et ne doit plus etre interprete comme un contrat stream RAM.
 - `SAMPLE_PREP_PROFILE_MULTI` couvre l'instrument Multi: preparation predictable depuis frame 0, sans start/end/reverse utilisateur, avec ration 8192 frames ou sample court complet.
 - Option B est le modele privilegie: ration logique 8192 frames, implementee par plusieurs pages internes et potentiellement lisible/servie de facon groupee si les pages sont contigues.
 - Option C reste testable plus tard: une page physique/logique de 8192 frames ne doit pas changer le contrat produit, seulement la conversion interne.
@@ -686,7 +686,7 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 
 ## Addendum 2026-05-19 - start-gate strict READY 8192
 
-- Le start gate strict reste branche sur Multi apres construction du `sample_play_plan_t` commun et avant demarrage/bind de voix; OneShot/Slicer refusent avant toute construction de reader Classic.
+- Le start gate strict reste branche sur Multi apres construction du `sample_play_plan_t` commun et avant demarrage/bind de voix; RAM refusent avant toute construction de reader Classic.
 - `sample_play_plan_check_ready_requirements()` est autoritaire pour la ration minimale: seul `SAMPLE_PAGE_READY` valide le depart; `QUEUED`, `LOADING`, missing ou plan invalide refusent proprement le trigger.
 - Les refus incrementent les diagnostics runtime `start_gate_reject_*`, avec dernier statut, premiere page missing, premiere page pending et compteurs par raison invalid/missing/pending/partial.
 - L'echafaudage shadow start-gate est retire apres validation terrain du gate reel.
@@ -714,42 +714,42 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le page-cache conserve une seule table de donnees `g_sample_page_data` et une seule table de descripteurs `g_sample_page_desc`, indexees 1:1.
 - Les nouveaux slots peuvent maintenant etre demandes avec un type d'allocation: `SLOT_PERMANENT`, `VOICE_WINDOW`, `MARGIN` ou `LEGACY_DEFAULT`.
 - `SLOT_PERMANENT` scanne uniquement le range slot produit, `VOICE_WINDOW` uniquement le range de fenetres voix, `MARGIN` uniquement le range marge/cache/transitions; `LEGACY_DEFAULT` conserve le scan historique global pour les chemins non migres.
-- Les presocles Multi passent par `SLOT_PERMANENT`; les reservations de fenetres voix actives passent par `VOICE_WINDOW`; les pages Classic STREAM cold base restantes et les prefetchs Looper RAW passent par `MARGIN`; Classic FULL passe par `SLOT_PERMANENT`. Les anciennes requetes opportunistes Slicer sont retirees du runtime actif. Les wrappers historiques restent en `LEGACY_DEFAULT` seulement comme compat API, sans appel in-tree non migre observe.
+- Les presocles Multi passent par `SLOT_PERMANENT`; les reservations de fenetres voix actives passent par `VOICE_WINDOW`; les pages Classic STREAM cold base restantes et les prefetchs Looper RAW passent par `MARGIN`; Classic FULL passe par `SLOT_PERMANENT`. Les anciennes requetes opportunistes RAM slicing sont retirees du runtime actif. Les wrappers historiques restent en `LEGACY_DEFAULT` seulement comme compat API, sans appel in-tree non migre observe.
 
-## Addendum 2026-05-21 - retrait runtime Classic One-shot/Slicer
+## Addendum 2026-05-21 - retrait runtime Classic RAM
 
-- `Sampler/OneShot` et `Sampler/Slicer` ne demarrent plus via le runtime Classic, meme si le sample est complet en RAM.
-- Les params OneShot/Slicer existants restent stockes/exposes pour le futur sampler RAM dedie, mais `Start`, `End`, `Mode`/reverse et `Slice Count` ne pilotent plus un reader stream.
-- Le prefetch opportuniste des entrees de slices est retire: Slicer ne queue plus de pages via `sample_stream_manager_request_page_key_alloc`.
+- `Sampler/RAM` et `Sampler/RAM sliced mode` ne demarrent plus via le runtime Classic, meme si le sample est complet en RAM.
+- Les params RAM existants restent stockes/exposes pour le futur sampler RAM dedie, mais `Start`, `End`, `Mode`/reverse et `Slice Count` ne pilotent plus un reader stream.
+- Le prefetch opportuniste des entrees de slices est retire: RAM slicing ne queue plus de pages via `sample_stream_manager_request_page_key_alloc`.
 
-## Addendum 2026-05-24 - playback OneShot RAM minimal
+## Addendum 2026-05-24 - playback RAM minimal
 
-- `Sampler/OneShot` resout maintenant `PARAM_SAMPLER_SAMPLE` comme slot global produit et demarre uniquement si ce slot est `kind=RAM`, `READY`, avec un `backend_index` valide dans `sampler_ram_pool`.
-- La voix OneShot RAM est integree dans `g_sampler_voice[track]`: une voix max par track, donc 14 voix logiques actuelles sous le plafond produit de 16 voix RAM globales. Un nouveau trigger sur la meme track remplace l'ancienne voix avec declick court.
-- Le rendu IRQ OneShot RAM lit seulement le pointeur resident `FLOAT32_INTERLEAVED` stereo du slot RAM valide. La conversion PCM 16/24-bit vers float et la duplication mono vers stereo sont faites au load WAV hors IRQ. Il ne touche ni FatFs, ni malloc, ni decode, ni `sample_cache`, ni `sample_voice_reader`, ni `sample_stream_manager`.
+- `Sampler/RAM` resout maintenant `PARAM_SAMPLER_SAMPLE` comme slot global produit et demarre uniquement si ce slot est `kind=RAM`, `READY`, avec un `backend_index` valide dans `sampler_ram_pool`.
+- La voix RAM est integree dans `g_sampler_voice[track]`: une voix max par track, donc 14 voix logiques actuelles sous le plafond produit de 16 voix RAM globales. Un nouveau trigger sur la meme track remplace l'ancienne voix avec declick court.
+- Le rendu IRQ RAM lit seulement le pointeur resident `FLOAT32_INTERLEAVED` stereo du slot RAM valide. La conversion PCM 16/24-bit vers float et la duplication mono vers stereo sont faites au load WAV hors IRQ. Il ne touche ni FatFs, ni malloc, ni decode, ni `sample_cache`, ni `sample_voice_reader`, ni `sample_stream_manager`.
 - Les voix RAM stockent la generation du slot RAM; clear/replace/reset invalident cette generation avant liberation physique. Au rendu suivant, une generation invalide stoppe la voix avec declick au lieu de lire un pointeur stale.
-- `Start`/`End` sont des pourcentages normalises `[0..1]` convertis au trigger en frames bornees. Si la region resolue est vide (`Start >= End` apres conversion), OneShot RAM retombe sur le sample complet. `Mode=RevShot` (`1`) lance la region en reverse; `Loop`/`PingPong` sont rendus par le moteur RAM resident.
-- Note-off OneShot RAM pilote le gate VCA mixer: relacher une note declenche la release VCA sans repasser par Classic Stream. Stop/mute/reset coupent la voix RAM avec declick. P-lock start/end/reverse sont captures au trigger; persistence/autoload RAM est portee hors IRQ par Z6 via chemins WAV et slots globaux.
-- Quand la release VCA OneShot/Slicer RAM est terminee avant la fin de la region, le runtime clear la voix RAM au bloc suivant pour eviter de rendre une loop/pingpong inaudible. Si le sample finit avant la release, la voix s'arrete par la fin de region normale.
-- `Sampler/Clip` conserve le chemin Classic `sample_cache`/`sample_voice_reader`; `Sampler/Multi` conserve `domain=MULTI`; `Sampler/Looper` RAW conserve `domain=LOOPER`.
+- `Start`/`End` sont des pourcentages normalises `[0..1]` convertis au trigger en frames bornees. Si la region resolue est vide (`Start >= End` apres conversion), RAM retombe sur le sample complet. `Mode=RevShot` (`1`) lance la region en reverse; `Loop`/`PingPong` sont rendus par le moteur RAM resident.
+- Note-off RAM pilote le gate VCA mixer: relacher une note declenche la release VCA sans repasser par Classic Stream. Stop/mute/reset coupent la voix RAM avec declick. P-lock start/end/reverse sont captures au trigger; persistence/autoload RAM est portee hors IRQ par Z6 via chemins WAV et slots globaux.
+- Quand la release VCA RAM RAM est terminee avant la fin de la region, le runtime clear la voix RAM au bloc suivant pour eviter de rendre une loop/pingpong inaudible. Si le sample finit avant la release, la voix s'arrete par la fin de region normale.
+- `Sampler/Stream` conserve le chemin Classic `sample_cache`/`sample_voice_reader`; `Sampler/Multi` conserve `domain=MULTI`; `Sampler/Looper` RAW conserve `domain=LOOPER`.
 
-## Addendum 2026-05-24 - modes OneShot/Slicer RAM
+## Addendum 2026-05-24 - modes RAM
 
-- `Sampler/Slicer` resout `PARAM_SAMPLER_SAMPLE` comme slot global produit et demarre uniquement si ce slot est `kind=RAM`, `READY`, avec un `backend_index` valide dans `sampler_ram_pool`.
-- `Start`/`End` sont des pourcentages normalises `[0..1]` et definissent la region RAM de base a slicer. Si la region est vide, Slicer RAM retombe sur le sample complet.
+- `Sampler/RAM` resout `PARAM_SAMPLER_SAMPLE` comme slot global produit et demarre uniquement si ce slot est `kind=RAM`, `READY`, avec un `backend_index` valide dans `sampler_ram_pool`; `Slice Count != Off` active le slicing grille du meme moteur RAM.
+- `Start`/`End` sont des pourcentages normalises `[0..1]` et definissent la region RAM de base a slicer. Si la region est vide, RAM sliced mode retombe sur le sample complet.
 - `PARAM_SAMPLER_SLICE_COUNT` reste borne aux valeurs UI `Off, 2, 4, 8, 16, 32, 64`. `Off` est traite comme une seule region sur la fenetre `Start..End`; sinon les slices sont regulieres dans cette meme fenetre.
-- La table `slice_begin/end[64]` reste reconstruite hors IRQ au changement de sample/slice count/start/end et par le service runtime non IRQ si le slot RAM change de generation. Le trigger Slicer RAM ne depend pas de cette table pour les p-locks: il calcule directement la slice du trig a partir des valeurs effectives `Start`/`End`/`Slice Count`, avec quelques divisions bornees et sans scan.
+- La table runtime `slice_begin/end[64]` reste reconstruite hors IRQ au changement de sample/slice count/start/end et par le service runtime non IRQ si le slot RAM change de generation. Le trigger RAM sliced mode ne depend pas de cette table pour les p-locks: il calcule directement la slice du trig a partir des valeurs effectives `Start`/`End`/`Slice Count`, avec quelques divisions bornees et sans scan.
 - Mapping note v1: `slice_index = note % slice_count` (`slice_count=1` quand `Off`). Ce mapping est explicite, borne et ne depend pas du reader Classic legacy.
-- Le rendu Slicer RAM reutilise le renderer RAM resident: lecture `FLOAT32_INTERLEAVED` stereo, declick sur stop/steal/generation mismatch. Aucun `sample_cache_start_voice_at`, `sample_voice_reader_bind_play_plan`, pending stream ou page-cache Classic n'est utilise.
-- `MODE=Shot` lit OneShot ou slice en forward et stoppe a la fin de region. `MODE=RevShot` lit OneShot ou slice en reverse depuis `end-1` et stoppe au debut de region.
-- `MODE=Loop` boucle OneShot ou slice en forward entre `Start` et `End` resolus, sans crossfade automatique. `MODE=PingPong` lit OneShot ou slice en aller-retour; les regions d'une seule frame retombent sur une boucle forward bornee pour eviter une direction ambigue.
-- Note-off Slicer RAM suit le meme contrat VCA que OneShot RAM: release musicale via le gate mixer, sans stop Classic. Les p-locks Start/End/Mode/Slice Count sont captures au trigger et la persistence/autoload RAM reste hors IRQ via Z6.
+- Le rendu RAM sliced mode reutilise le renderer RAM resident: lecture `FLOAT32_INTERLEAVED` stereo, declick sur stop/steal/generation mismatch. Aucun `sample_cache_start_voice_at`, `sample_voice_reader_bind_play_plan`, pending stream ou page-cache Classic n'est utilise.
+- `MODE=Shot` lit RAM ou slice en forward et stoppe a la fin de region. `MODE=RevShot` lit RAM ou slice en reverse depuis `end-1` et stoppe au debut de region.
+- `MODE=Loop` boucle RAM ou slice en forward entre `Start` et `End` resolus, sans crossfade automatique. `MODE=PingPong` lit RAM ou slice en aller-retour; les regions d'une seule frame retombent sur une boucle forward bornee pour eviter une direction ambigue.
+- Note-off RAM sliced mode suit le meme contrat VCA que RAM: release musicale via le gate mixer, sans stop Classic. Les params globaux `Start`/`End`/`Mode`/`Tune`/`Gain` sont captures au trigger; `Slice Count` reste non p-lockable et aucun etat par-slice utilisateur n'est introduit.
 
-## Addendum 2026-05-24 - pitch OneShot/Slicer RAM
+## Addendum 2026-05-24 - pitch RAM
 
-- Les voix OneShot/Slicer RAM capturent maintenant un pas de lecture Q16 au trigger. La formule est `step = sample_rate / 48000 * 2^((note - 60 + Tune) / 12)`, bornee par le clamp runtime existant de ratio Q16.
+- Les voix RAM capturent maintenant un pas de lecture Q16 au trigger. La formule est `step = sample_rate / 48000 * 2^((note - 60 + Tune) / 12)`, bornee par le clamp runtime existant de ratio Q16.
 - `PARAM_SAMPLER_TUNE` reste en demi-tons et les p-locks Tune passent par le meme chemin de param effectif que les autres params Sampler avant le trigger.
-- Le rendu IRQ RAM garde uniquement le pointeur resident `FLOAT32_INTERLEAVED` stereo, avance le playhead fractionnaire Q16 selon ce pas et applique une interpolation lineaire float RAM-only. Le cas forward pitché non-PingPong est rendu par segments jusqu'aux bornes pour sortir les checks wrap/terminal de la boucle sample. Aucun chemin Classic Stream, page-cache, FatFs, malloc ou decode n'est appele par OneShot/Slicer RAM.
+- Le rendu IRQ RAM garde uniquement le pointeur resident `FLOAT32_INTERLEAVED` stereo, avance le playhead fractionnaire Q16 selon ce pas et applique une interpolation lineaire float RAM-only. Le cas forward pitché non-PingPong est rendu par segments jusqu'aux bornes pour sortir les checks wrap/terminal de la boucle sample. Aucun chemin Classic Stream, page-cache, FatFs, malloc ou decode n'est appele par RAM.
 - Quand `step_q16 == 0x00010000`, que la phase Q16 est entiere et que le mode n'est pas PingPong, le rendu RAM reprend un fast path entier sans interpolation pour Shot, RevShot et Loop.
 - Les bornes `Start/End` et `slice_begin/end` restent capturees au trigger. Shot/RevShot stoppent a la limite de region, Loop wrappe dans la region, PingPong reflete le playhead dans la region meme avec un pas superieur a une frame.
 
@@ -765,8 +765,8 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le chemin direct est une projection runtime temporaire: il ne modifie pas les bases track-aware ni les miroirs UI, et la release LFO restaure la base capturee si aucune autre LFO de la track ne cible la meme destination.
 - Aucune ecriture directe de `*_current`, aucun recalcul filtre/EQ/VCA et aucune nouvelle autorite mixer ne sont introduits.
 
-## Addendum 2026-05-25 - LFO Sampler/Clip/Multi/Looper direct bornes
+## Addendum 2026-05-25 - LFO Sampler/Stream/Multi/Looper direct bornes
 
-- `mod_lfo_v1` applique directement les cibles Sampler continues ou deja projetees runtime (`Gain`, `Start`, `End`, `Tune`, fades), les cibles Clip runtime (`Src BPM`, `Sync Len`, `Pitch`, `PlayMode`, `Loop`, `Stretch`, `Grain`), `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE`.
+- `mod_lfo_v1` applique directement les cibles Sampler continues ou deja projetees runtime (`Gain`, `Start`, `End`, `Tune`, fades), les cibles Stream runtime (`Src BPM`, `Sync Len`, `Pitch`, `PlayMode`, `Loop`, `Stretch`, `Grain`), `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE`.
 - `PARAM_SAMPLER_SAMPLE` / selection instrument Multi restent exclus du chemin direct: aucune selection sample, import, load, SD/FatFs ou mutation de pool n'est ajoutee au chemin LFO.
 - `PARAM_SAMPLER_CLIP_HOP` et `PARAM_SAMPLER_CLIP_SEARCH` restent des no-op runtime comme dans le fallback RT-fast actuel quand `update_base_state=0`.

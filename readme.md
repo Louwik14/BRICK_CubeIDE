@@ -75,8 +75,8 @@ Current families:
 
 ### Notable types
 - `InputX`: `Audio`, `Hybrid`
-- `Synth`: `Braids`
-- `Sampler`: `OneShot`, `Slicer`, `Clip`, `Looper`, `Multi`
+- `Synth`: `Wave`
+- `Sampler`: `RAM`, `Stream`, `Looper`, `Multi`
 - `Drum`: dedicated drum catalog
 - `Master`: `FX`
 
@@ -108,25 +108,25 @@ This separation is intentional. Do not add a second authority for the same state
 - stereo runtime playback through the normal track-aware mixer path
 - paged sample cache with RAM-only audio reads
 - `READY_FULL` and `READY_PARTIAL` served from sampler-owned SDRAM pages
-- `OneShot` currently exposes `Shot`, `RevShot`, `Loop`, and `PingPong`; the active minimal RAM path plays global `kind=RAM/READY` slots from `sampler_ram_pool`, honors p-locked `Start`/`End`, and supports p-locked `RevShot`
-- `Slicer` minimal playback is RAM-only: regular slices inside the p-locked `Start`/`End` region from global `kind=RAM/READY` slots, selected by `note % slice_count`
-- `Clip` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, and `Sync Len`
-- `Clip` supports forward `Gate`/`Launch` playback with three stretch modes:
+- `RAM` currently exposes `Shot`, `RevShot`, `Loop`, and `PingPong`; it plays global `kind=RAM/READY` slots from `sampler_ram_pool`
+- RAM slicing is enabled by `Slice Count`: `Off` plays the global `Start`/`End` window normally, while `2..64` slices that same global window in a regular grid selected by `note % slice_count`; `Tune` and `Gain` remain global
+- `Stream` now exposes `Sample`, `Gain`, `Src BPM`, `Play Mode`, `Loop`, `Stretch`, `Tune`, and `Sync Len`
+- `Stream` supports forward `Gate`/`Launch` playback with three stretch modes:
   - `Off`: 1x playback
   - `Speed`: varispeed (`ratio = project_bpm / source_bpm`), pitch changes
   - `Shifter`: varispeed cursor followed by the local stereo pitch-shifter
-- `Sync Len` remains exposed for clip timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Grain` as the shifter window while `Hop/Search` are stored but inactive
+- `Sync Len` remains exposed for stream timing configuration; `Stretch=Off` stays 1x playback, `Stretch=Speed` keeps the existing varispeed path, and `Stretch=Shifter` uses `Tune` plus `Grain` as the shifter controls while `Hop/Search` are stored but inactive
 - `Looper` TONE exposes `ARM` (`Off`/`Rec`/`Overd`), `LEN` (`Free`/`1`/`2`/`4`/`8`/`16`), and `PLAY` (`Off`/`Auto`); current implementation records simple `ARM=Rec` takes, keeps `ARM=Overd` as a bounded no-op until audio overdub exists, and streams playback from transient page-cache pages when `PLAY=Auto`
 - `Multi` exposes TONE `INST` / `GAIN` / `LOOP`; `LOOP=ON` loops active notes from valid WAV `smpl` bounds, otherwise forced import-time auto-loop bounds with a mechanical 40%/55% fallback for usable WAVs
 - Multi Browser page 3 `CLEAR` deletes only visible `.brickmulti` indexes in the current Multi folder, so indexes can be regenerated without deleting WAVs
 - legacy slice handling remains internal compatibility, not a product mode
 
-### Braids
-- `Synth/Braids` is a track-aware mono engine exposed on `TONE`
+### Wave
+- `Synth/Wave` is a track-aware mono engine exposed on `TONE`
 - `TONE/EDIT`: `Edit`, `Fine`, `Coarse`, `FM`
 - `TONE/TONE`: `Timbre`, `Modulation`, `Color`, `Phase Reset`
-- `Phase Reset=Off` preserves the current Braids behavior
-- `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Braids models that consume sync; random state is not reset
+- `Phase Reset=Off` preserves the current Wave behavior
+- `Phase Reset=On` sends a one-shot sync pulse on the first rendered sample after note-on for Wave models that consume sync; random state is not reset
 
 ### Sequencer
 - integrated sequencer
@@ -140,6 +140,7 @@ This separation is intentional. Do not add a second authority for the same state
 - track-aware page exposure
 - hall-based interaction model
 - keyboard / arp / pattern / mute workflows
+- OLED template parameter slots show the widget first and the parameter name below; after explicit user edits, the bottom text temporarily shows the formatted edited value, then returns to the name
 - no product VU/peak meter in the mixer header
 - boot default (normal path): track 1 focused on `CFG` (hall calibration path stays prioritary)
 

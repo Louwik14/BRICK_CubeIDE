@@ -445,7 +445,7 @@ Flux nominal prouve:
 - Quand aucun plock `PLAY` n'est present, la valeur de base vient maintenant de l'autorite seq canonique (`seq_param_iface_get_base_value`) et non d'un fallback default descriptor.
 - Le dispatch note moteur reste resolu par track runtime effectif:
   - `Sampler` -> `brick6_sampler_runtime`
-  - `Braids` -> `brick6_braids_runtime`
+  - `Wave` -> `brick6_braids_runtime`
   - `Drum` -> `drum_synth`
 - Ce dispatch ne rederive pas de logique produit locale et reste borne a la projection Z2.
 
@@ -682,16 +682,16 @@ Points factuels observes:
 - La quantification musicale de `LEN=Free` Looper appartient au runtime Looper cote Z1/Z5: STOP arme un `REC_STOP`, puis le marker boundary audio fournit l'echantillon exact de fin.
 - Z4 ne persiste aucune prise Looper et ne branche aucun stretch; il expose uniquement la cadence necessaire au calcul `recorded_steps_q16`.
 
-## Addendum 2026-05-14 - STOP transport et Clip Launch
+## Addendum 2026-05-14 - STOP transport et Stream Launch
 
 - STOP transport reste l'autorite de coupure globale cote sequenceur via `seq_output_guard_panic()`.
-- Pour les tracks `Sampler/Clip`, le panic appelle `brick6_sampler_runtime_stop_transport_clips()`: seuls les clips sont stoppes, leur reader/playhead est remis au debut, et le PLAY suivant repart du debut du fichier/clip.
-- OneShot/Slicer gardent leur contrat note/scheduler existant; Looper reste hors de ce chemin.
+- Pour les tracks `Sampler/Stream`, le panic appelle `brick6_sampler_runtime_stop_transport_clips()`: seuls les streams sont stoppes, leur reader/playhead est remis au debut, et le PLAY suivant repart du debut du fichier/stream.
+- RAM garde son contrat note/scheduler existant, y compris en slicing grille via `Slice Count`; Looper reste hors de ce chemin.
 
 ## Addendum 2026-05-15 - PLAY vers Sampler/Multi
 
 - Le scheduler PLAY conserve son modele existant `V1..V4`: chaque sous-page PLAY correspond a un slot note/vel/len/mictim distinct, stocke comme p-lock PLAY sur le step.
 - Pour une track resolue `Sampler/Multi`, `seq_play_scheduler_emit_engine_note()` route NOTE ON vers `brick6_sampler_runtime_trigger_multi_track_note_velocity(track,note,velocity)`.
 - Le NOTE OFF planifie par la duree PLAY route vers `brick6_sampler_runtime_note_off_multi_track_note(track,note)` afin de reutiliser le lifecycle release/VCA Multi.
-- Les autres types Sampler gardent le chemin Classic existant (`brick6_sampler_runtime_trigger_note_velocity`, puis note-off Classic/Clip selon contrat).
+- Les autres types Sampler gardent le chemin Classic existant (`brick6_sampler_runtime_trigger_note_velocity`, puis note-off Classic/Stream selon contrat).
 - Aucun FatFs, malloc, cache/streaming ou import Multi n'est ajoute au scheduler; le trigger Multi reste le meme seam RAM/page-cache que le clavier.

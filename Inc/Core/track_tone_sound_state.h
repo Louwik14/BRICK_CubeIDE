@@ -61,7 +61,7 @@ typedef struct
         float modulation;
         float color;
         float phase_reset;
-    } braids;
+    } wave;
     float midi_program;
     float midi_cc[12];
     struct

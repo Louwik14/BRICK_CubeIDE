@@ -167,7 +167,10 @@ Ne pas ajouter une feature “globale” si elle dépend en réalité :
 - `Plaits`
 
 #### Pour `Sampler`
-- `OneShot`
+- `RAM`
+- `Stream`
+- `Multi`
+- `Looper`
 
 #### Pour `Drum`
 - `TRX BD`
@@ -326,7 +329,7 @@ toujours utiliser des tables explicites.
 - `SHIFT + PASTE` en scope ensemble/page clear les paramètres ciblés vers leur minimum
 
 ### Ressources exclusives
-- `Sampler/OneShot` : paste direct (non exclusif)
+- `Sampler/RAM` : paste direct (non exclusif)
 - `Input1..4` : priorité à un input libre, sinon move-on-paste
 - après move réussi, le clipboard reste chaînable
 

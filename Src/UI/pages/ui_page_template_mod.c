@@ -32,9 +32,24 @@ static const ui_template_family_t *ui_page_template_mod_resolve_family(void)
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_MOD);
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_mod_pick_custom_widget(uint8_t slot,
+                                                                                const ui_template_subpage_t *subpage,
+                                                                                param_id_t id)
+{
+    (void)subpage;
+
+    if ((slot == 0U) && ((id == PARAM_LFO1_DEST) || (id == PARAM_LFO2_DEST)))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST;
+    }
+
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
 static ui_template_page_state_t g_ui_template_mod_state = {
     .family = 0,
     .family_resolver = ui_page_template_mod_resolve_family,
+    .custom_widget_picker = ui_page_template_mod_pick_custom_widget,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

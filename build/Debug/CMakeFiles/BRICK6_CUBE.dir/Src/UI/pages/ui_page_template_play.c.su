@@ -1,4 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c:120:41:ui_page_template_play_pick_custom_widget	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c:66:16:ui_page_template_play_virtual_slot_text	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c:45:16:ui_page_template_play_subpage_enabled	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c:33:36:ui_page_template_play_resolve_family	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c:129:6:ui_page_template_play_register_families	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_play.c:147:6:ui_page_template_play_register_families	16	static

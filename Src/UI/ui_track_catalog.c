@@ -3,10 +3,9 @@
 static const ui_track_type_t *ui_track_catalog_get_types_for_family(ui_track_family_t family, uint8_t *out_count)
 {
     static const ui_track_type_t k_input_types[] = { UI_TRACK_TYPE_AUDIO, UI_TRACK_TYPE_HYBRID };
-    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_BRAIDS };
+    static const ui_track_type_t k_synth_types[] = { UI_TRACK_TYPE_WAVE };
     static const ui_track_type_t k_sampler_types[] = {
         UI_TRACK_TYPE_ONE_SHOT,
-        UI_TRACK_TYPE_SLICER,
         UI_TRACK_TYPE_CLIP,
         UI_TRACK_TYPE_LOOPER,
         UI_TRACK_TYPE_MULTI
@@ -479,17 +478,15 @@ const char *ui_track_catalog_type_display_name(ui_track_family_t family, ui_trac
             return "Hybrid";
 
         case UI_TRACK_TYPE_SAMPLER:
-            return (family == UI_TRACK_FAMILY_SAMPLER) ? "OneShot" : "Sampler";
-        case UI_TRACK_TYPE_SLICER:
-            return "Slicer";
+            return (family == UI_TRACK_FAMILY_SAMPLER) ? "RAM" : "Sampler";
         case UI_TRACK_TYPE_CLIP:
-            return "Clip";
+            return "Stream";
         case UI_TRACK_TYPE_LOOPER:
             return "Looper";
         case UI_TRACK_TYPE_MULTI:
             return "Multi";
-        case UI_TRACK_TYPE_BRAIDS:
-            return "Braids";
+        case UI_TRACK_TYPE_WAVE:
+            return "Wave";
 
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";
@@ -522,17 +519,15 @@ const char *ui_track_catalog_type_short_name(ui_track_family_t family, ui_track_
             return "Hyb";
 
         case UI_TRACK_TYPE_SAMPLER:
-            return (family == UI_TRACK_FAMILY_SAMPLER) ? "1Sht" : "Smp";
-        case UI_TRACK_TYPE_SLICER:
-            return "Slcr";
+            return (family == UI_TRACK_FAMILY_SAMPLER) ? "RAM" : "Smp";
         case UI_TRACK_TYPE_CLIP:
-            return "Clip";
+            return "STRM";
         case UI_TRACK_TYPE_LOOPER:
             return "Loop";
         case UI_TRACK_TYPE_MULTI:
             return "Mult";
-        case UI_TRACK_TYPE_BRAIDS:
-            return "Brd";
+        case UI_TRACK_TYPE_WAVE:
+            return "Wave";
 
         case UI_TRACK_TYPE_MASTER_FX:
             return "FX";

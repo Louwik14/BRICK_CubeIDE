@@ -30,7 +30,7 @@ typedef enum
     TRACK_RUNTIME_ENGINE_AUDIO_TRACK,
     TRACK_RUNTIME_ENGINE_SAMPLER,
     TRACK_RUNTIME_ENGINE_LOOPER,
-    TRACK_RUNTIME_ENGINE_BRAIDS,
+    TRACK_RUNTIME_ENGINE_WAVE,
     TRACK_RUNTIME_ENGINE_DRUM
 } track_runtime_engine_t;
 
@@ -73,11 +73,13 @@ typedef enum
     TRACK_RUNTIME_TYPE_HYBRID,
     TRACK_RUNTIME_TYPE_SAMPLER,
     TRACK_RUNTIME_TYPE_ONE_SHOT = TRACK_RUNTIME_TYPE_SAMPLER,
+    TRACK_RUNTIME_TYPE_RAM = TRACK_RUNTIME_TYPE_ONE_SHOT, /* product name for the legacy persisted OneShot value */
     TRACK_RUNTIME_TYPE_SLICER,
-    TRACK_RUNTIME_TYPE_BRAIDS,
+    TRACK_RUNTIME_TYPE_WAVE,
     TRACK_RUNTIME_TYPE_DRUM_TRX_BD,
     TRACK_RUNTIME_TYPE_MIDI,
     TRACK_RUNTIME_TYPE_CLIP,
+    TRACK_RUNTIME_TYPE_STREAM = TRACK_RUNTIME_TYPE_CLIP, /* product name for the legacy persisted Clip value */
     TRACK_RUNTIME_TYPE_MASTER_FX,
     TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG,
     TRACK_RUNTIME_TYPE_LOOPER,
@@ -224,7 +226,7 @@ uint8_t track_runtime_tone_param_to_slot(track_runtime_type_t type,
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_descriptor_t *descriptor);
-uint8_t track_runtime_is_track_braids_available(uint8_t track);
+uint8_t track_runtime_is_track_wave_available(uint8_t track);
 uint8_t track_runtime_get_voice_group_role(uint8_t track, uint8_t *out_role);
 uint8_t track_runtime_get_voice_group_effective_master(uint8_t track, uint8_t *out_master_track);
 uint8_t track_runtime_collect_voice_group_members(uint8_t master_track,

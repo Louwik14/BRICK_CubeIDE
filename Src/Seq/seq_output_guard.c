@@ -158,7 +158,7 @@ void seq_output_guard_panic(uint8_t send_transport_stop)
                 drum_synth_all_notes_off_for_instance(resolved.descriptor.instance_id);
             }
         }
-        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+        else if (resolved.descriptor.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
         {
             brick6_braids_runtime_all_notes_off(resolved.descriptor.instance_id);
         }

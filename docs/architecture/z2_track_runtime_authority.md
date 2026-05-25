@@ -100,8 +100,8 @@ Z2 dépend de `track_state` pour construire son état effectif.
 - map UI family/type -> runtime family/type
 - allocation mix_track
 - bind engine/instance avec quotas et reasons
-- `Synth/Braids` est le seul type Synth actif; il suit le meme contrat stable que les engines per-track: `instance_id == track_id` et `BRICK6_BRAIDS_MAX_INSTANCES == SEQ_TRACK_COUNT`. Il n'y a plus d'allocation dynamique par ordre de scan; une autre track qui change de family/type ne peut pas deplacer l'instance Braids d'une track existante.
-- Reset Braids: reset local par `runtime_instance` seulement quand l'owner reel de l'instance `track_id` change, puis re-projection immediate des params TONE depuis `track_tone_sound_state` pour le nouvel owner; une instance inchangee n'est ni reset ni replay inutilement.
+- `Synth/Wave` est le seul type Synth actif; il suit le meme contrat stable que les engines per-track: `instance_id == track_id` et `BRICK6_BRAIDS_MAX_INSTANCES == SEQ_TRACK_COUNT`. Il n'y a plus d'allocation dynamique par ordre de scan; une autre track qui change de family/type ne peut pas deplacer l'instance Wave d'une track existante.
+- Reset Wave: reset local par `runtime_instance` seulement quand l'owner reel de l'instance `track_id` change, puis re-projection immediate des params TONE depuis `track_tone_sound_state` pour le nouvel owner; une instance inchangee n'est ni reset ni replay inutilement.
 - binding Drum: `instance_id` stable par track logique (`instance_id == track_id`), pour eviter toute migration d'etat inter-track lors des reconfigurations de cardinalite Drum
 - calcul flags capabilities
 
@@ -178,26 +178,28 @@ Sorties de Z2:
 - Nouvelle identite runtime branchee:
   - `TRACK_RUNTIME_FAMILY_SAMPLER`,
   - `TRACK_RUNTIME_ENGINE_SAMPLER`,
-  - `TRACK_RUNTIME_TYPE_ONE_SHOT` (alias runtime du sampler actuel).
+  - `TRACK_RUNTIME_TYPE_RAM` est l'alias produit de `TRACK_RUNTIME_TYPE_ONE_SHOT` (alias runtime du sampler actuel).
 - Binding:
   - autorite conservee dans `track_runtime`,
   - le backend Sampler existant reste reutilise tel quel.
 - Gate note/mix:
-  - le helper central `track_runtime_supports_vca_gate()` arme le gate VCA pour `Sampler/OneShot` et `Sampler/Slicer`, afin que leur sortie RAM traverse l'etage VCA/gain mixer commun; note-on ouvre l'attaque VCA et note-off declenche la release VCA.
-  - `Sampler/Clip` et `Sampler/Looper` sont exclus du gate VCA mixer.
-  - `Sampler/Clip` utilise `brick6_sampler_runtime_note_off()` pour son contrat `Trig`/`Launch`; il ne passe pas par le gate VCA mixer.
+  - le helper central `track_runtime_supports_vca_gate()` arme le gate VCA pour `Sampler/RAM`, y compris quand `Slice Count` active le slicing grille; note-on ouvre l'attaque VCA et note-off declenche la release VCA.
+  - `Sampler/Stream` et `Sampler/Looper` sont exclus du gate VCA mixer.
+  - `Sampler/Stream` utilise `brick6_sampler_runtime_note_off()` pour son contrat `Trig`/`Launch`; il ne passe pas par le gate VCA mixer.
 - Invariants conserves:
   - pas de pipeline audio parallele,
   - pas de seconde autorite runtime,
   - le futur moteur Sampler reste track-aware et non global.
-- Slice v1:
-  - `Slice Count` est un parametre runtime local, non p-lockable,
-  - la grille de slices est reconstruite hors IRQ lors des changements de sample/compteur.
+- Slice RAM:
+  - `Slicer` n'est plus un type Track CFG visible; les anciens configs `Sampler/Slicer` sont normalises en `Sampler/RAM`,
+  - `Slice Count` est un parametre RAM global, non p-lockable: `Off` garde RAM normal, `2..64` active le slicing grille dans la fenetre globale `Start/End`,
+  - `Start`, `End`, `Tune` et `Gain` restent globaux, sans etat par-slice,
+  - la grille de slices est reconstruite hors IRQ lors des changements de sample/compteur/fenetre.
 
 ## 14. Contrat produit Synth / Sampler
 - La famille `Synth` ne porte plus le sampler produit.
-- La famille `Sampler` expose un seul type canonique: `OneShot`.
-- Compat restore: un ancien couple `family=Synth` + `type=Sampler` est remappe explicitement vers `family=Sampler` + `type=OneShot` avant le bind runtime.
+- La famille `Sampler` expose `RAM`, `Stream`, `Looper` et `Multi`; `RAM` est porte par l'alias legacy `OneShot`.
+- Compat restore: un ancien couple `family=Synth` + `type=Sampler` est remappe explicitement vers `family=Sampler` + `type=RAM` avant le bind runtime.
 
 ## 15. Contrat Passe 1 - Descriptor structurel explicite
 - Z2 expose un descriptor runtime stable par track:

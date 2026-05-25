@@ -110,6 +110,44 @@ static uiw_widget_type_t ui_page_template_cfg_pick_widget(uint8_t slot,
     return UIW_WIDGET_JACK;
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(uint8_t slot,
+                                                                                const ui_template_subpage_t *subpage,
+                                                                                param_id_t id)
+{
+    if ((subpage == NULL)
+            || (subpage->param_bank.params[0] != PARAM_CFG_TRACK)
+            || (ui_get_track_family(ui_get_active_track()) == UI_TRACK_FAMILY_OFF))
+    {
+        if ((subpage != NULL) && (subpage->param_bank.params[0] == PARAM_CFG_TRACK) && (slot == 0U) && (id == PARAM_CFG_TRACK))
+        {
+            return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK;
+        }
+        if ((subpage != NULL) && (subpage->param_bank.params[0] == PARAM_CFG_TRACK) && (slot < 4U))
+        {
+            return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE;
+        }
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    switch (id)
+    {
+        case PARAM_CFG_TRACK:
+            return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK;
+
+        case PARAM_CFG_TRACK_TYPE:
+            return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE;
+
+        case PARAM_CFG_MIDI_CH:
+            return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL;
+
+        case PARAM_CFG_MIDI_SRC:
+            return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE;
+
+        default:
+            return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+}
+
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
     uint8_t role_u8 = (uint8_t)TRACK_VOICE_GROUP_ROLE_SOLO;
@@ -167,6 +205,7 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
     .family = 0,
     .family_resolver = ui_page_template_cfg_resolve_family,
     .widget_picker = ui_page_template_cfg_pick_widget,
+    .custom_widget_picker = ui_page_template_cfg_pick_custom_widget,
     .virtual_slot_text = ui_page_template_cfg_virtual_slot_text,
     .active_subpage = 0U,
     .has_visited = 0U,

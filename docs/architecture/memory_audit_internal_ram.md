@@ -439,7 +439,7 @@ D1 mÃ©lange :
 Gros Ã©lÃ©ments notables :
 
 - `g_keyboard_arp` : 528 B
-- tables function pointers Braids : 384 B / 280 B / 72 B
+- tables function pointers Wave : 384 B / 280 B / 72 B
 - `_impure_data` : 76 B
 - USB descriptors et petits Ã©tats HAL/audio/master
 
@@ -544,7 +544,7 @@ Tous les symboles DTCM observÃ©s sont dans `.dtcm_audio` et relÃ¨vent du che
 | `g_external_track_r` | 3 584 B | `mixer.c` | ingress externe R | D1 possible avec mesure |
 | `g_external_track_l` | 3 584 B | `mixer.c` | ingress externe L | D1 possible avec mesure |
 | `g_external_track_mono` | 3 584 B | `mixer.c` | ingress externe mono | D1 possible avec mesure |
-| `g_braids_runtime` | 9 072 B | `brick6_braids_runtime.cpp` | runtime Braids | garder interne / D1 avec profiling |
+| `g_braids_runtime` | 9 072 B | `brick6_braids_runtime.cpp` | runtime Wave | garder interne / D1 avec profiling |
 | `g_sampler_voice` | 10 472 B | `brick6_sampler_runtime.c` | voix Sampler | garder interne / D1-D3 avec profiling |
 | `g_sample_cache_voice` | 1 216 B | `sample_cache.c` | curseurs voix sample-cache | garder / D3 avec vÃ©rification |
 | fill | 24 B | linker | alignement | N/A |
@@ -557,7 +557,7 @@ Tous les symboles DTCM observÃ©s sont dans `.dtcm_audio` et relÃ¨vent du che
 | Audio I/O / frontiÃ¨re float | ~2,1 KiB | `tracks`, gains |
 | Scratch mix bloc | ~14 KiB | mixer bus/external track buffers |
 | FX delay/reverb/master macro | ~23 KiB | Haas = plus gros levier thÃ©orique |
-| Engines synth | Braids runtime |
+| Engines synth | Wave runtime |
 | Sampler runtime/cache | ~11,7 KiB | voix/cursors Sampler |
 | Fill | 24 B | alignement |
 
@@ -728,7 +728,7 @@ Les meilleurs leviers DTCM observÃ©s sont :
 - `g_haas_l/r` ;
 - `g_external_track_*` ;
 - `g_sampler_voice` ;
-- engine Braids.
+- engine Wave.
 
 Mais tous sont audio hot. La sortie de DTCM doit Ãªtre validÃ©e par mesure CPU / underrun / worst-case.
 

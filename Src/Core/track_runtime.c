@@ -81,8 +81,8 @@ static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
             return TRACK_RUNTIME_TYPE_SLICER;
         case UI_TRACK_TYPE_CLIP:
             return TRACK_RUNTIME_TYPE_CLIP;
-        case UI_TRACK_TYPE_BRAIDS:
-            return TRACK_RUNTIME_TYPE_BRAIDS;
+        case UI_TRACK_TYPE_WAVE:
+            return TRACK_RUNTIME_TYPE_WAVE;
 
         case UI_TRACK_TYPE_DRUM_TRX_BD:
             return TRACK_RUNTIME_TYPE_DRUM_TRX_BD;
@@ -270,15 +270,15 @@ static uint8_t track_runtime_ctx_is_sampler_clip_or_looper(const track_runtime_c
                           || (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))) ? 1U : 0U);
 }
 
-static const param_id_t g_track_runtime_tone_slots_braids[] = {
-    PARAM_BRAIDS_EDIT,
-    PARAM_BRAIDS_FINE,
-    PARAM_BRAIDS_COARSE,
-    PARAM_BRAIDS_FM,
-    PARAM_BRAIDS_TIMBRE,
-    PARAM_BRAIDS_MODULATION,
-    PARAM_BRAIDS_COLOR,
-    PARAM_BRAIDS_PHASE_RESET
+static const param_id_t g_track_runtime_tone_slots_wave[] = {
+    PARAM_WAVE_EDIT,
+    PARAM_WAVE_FINE,
+    PARAM_WAVE_COARSE,
+    PARAM_WAVE_FM,
+    PARAM_WAVE_TIMBRE,
+    PARAM_WAVE_MODULATION,
+    PARAM_WAVE_COLOR,
+    PARAM_WAVE_PHASE_RESET
 };
 
 static const param_id_t g_track_runtime_tone_slots_sampler[] = {
@@ -289,7 +289,8 @@ static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_MODE,
     PARAM_SAMPLER_TUNE,
     PARAM_SAMPLER_FADE_IN,
-    PARAM_SAMPLER_FADE_OUT
+    PARAM_SAMPLER_FADE_OUT,
+    PARAM_SAMPLER_SLICE_COUNT
 };
 
 static const param_id_t g_track_runtime_tone_slots_slicer[] = {
@@ -371,9 +372,9 @@ static uint8_t track_runtime_tone_table_for_type(track_runtime_type_t type,
 
     switch (type)
     {
-        case TRACK_RUNTIME_TYPE_BRAIDS:
-            *out_table = g_track_runtime_tone_slots_braids;
-            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_braids) / sizeof(g_track_runtime_tone_slots_braids[0]));
+        case TRACK_RUNTIME_TYPE_WAVE:
+            *out_table = g_track_runtime_tone_slots_wave;
+            *out_count = (uint8_t)(sizeof(g_track_runtime_tone_slots_wave) / sizeof(g_track_runtime_tone_slots_wave[0]));
             return 1U;
 
         case TRACK_RUNTIME_TYPE_SAMPLER:
@@ -527,7 +528,7 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
     {
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_LOOPER:
-        case TRACK_RUNTIME_ENGINE_BRAIDS:
+        case TRACK_RUNTIME_ENGINE_WAVE:
         case TRACK_RUNTIME_ENGINE_NONE:
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_DRUM:
@@ -560,7 +561,7 @@ uint8_t track_runtime_get_play_voice_count_from_descriptor(const track_runtime_d
         case TRACK_RUNTIME_ENGINE_AUDIO_TRACK:
         case TRACK_RUNTIME_ENGINE_SAMPLER:
         case TRACK_RUNTIME_ENGINE_LOOPER:
-        case TRACK_RUNTIME_ENGINE_BRAIDS:
+        case TRACK_RUNTIME_ENGINE_WAVE:
         case TRACK_RUNTIME_ENGINE_DRUM:
         default:
             return 1U;
@@ -581,7 +582,7 @@ uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 
     if ((ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+            || (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
     {
         return 1U;
     }
@@ -732,7 +733,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
         return;
     }
 
-    if (type == TRACK_RUNTIME_TYPE_BRAIDS)
+    if (type == TRACK_RUNTIME_TYPE_WAVE)
     {
         if (ctx->track_id >= BRICK6_BRAIDS_MAX_INSTANCES)
         {
@@ -740,7 +741,7 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
             return;
         }
 
-        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_BRAIDS, ctx->track_id);
+        track_runtime_set_bound(ctx, TRACK_RUNTIME_ENGINE_WAVE, ctx->track_id);
         return;
     }
 
@@ -794,23 +795,23 @@ void track_runtime_refresh_all(void)
     uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
     uint8_t previous_mix_track[SEQ_TRACK_COUNT];
     uint8_t drum_count = 0U;
-    uint8_t previous_braids_owner[BRICK6_BRAIDS_MAX_INSTANCES];
-    uint8_t current_braids_owner[BRICK6_BRAIDS_MAX_INSTANCES];
+    uint8_t previous_wave_owner[BRICK6_BRAIDS_MAX_INSTANCES];
+    uint8_t current_wave_owner[BRICK6_BRAIDS_MAX_INSTANCES];
 
     memset(mix_track_used, 0, sizeof(mix_track_used));
     for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_MAX_INSTANCES; ++instance)
     {
-        previous_braids_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
-        current_braids_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
+        previous_wave_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
+        current_wave_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;
     }
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         previous_mix_track[track] = g_track_runtime_ctx[track].mix_track_id;
         if ((g_track_runtime_ctx[track].bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+                && (g_track_runtime_ctx[track].engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
                 && (g_track_runtime_ctx[track].instance_id < BRICK6_BRAIDS_MAX_INSTANCES))
         {
-            previous_braids_owner[g_track_runtime_ctx[track].instance_id] = track;
+            previous_wave_owner[g_track_runtime_ctx[track].instance_id] = track;
         }
     }
 
@@ -895,11 +896,11 @@ void track_runtime_refresh_all(void)
             {
                 drum_count++;
             }
-            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+            else if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             {
                 if (ctx->instance_id < BRICK6_BRAIDS_MAX_INSTANCES)
                 {
-                    current_braids_owner[ctx->instance_id] = track;
+                    current_wave_owner[ctx->instance_id] = track;
                 }
             }
         }
@@ -907,12 +908,12 @@ void track_runtime_refresh_all(void)
 
     for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_MAX_INSTANCES; ++instance)
     {
-        if (previous_braids_owner[instance] != current_braids_owner[instance])
+        if (previous_wave_owner[instance] != current_wave_owner[instance])
         {
             brick6_braids_runtime_reset_instance(instance);
-            if (current_braids_owner[instance] < SEQ_TRACK_COUNT)
+            if (current_wave_owner[instance] < SEQ_TRACK_COUNT)
             {
-                (void)param_backend_reapply_tone_braids_runtime(current_braids_owner[instance]);
+                (void)param_backend_reapply_tone_wave_runtime(current_wave_owner[instance]);
             }
         }
     }
@@ -927,7 +928,7 @@ void track_runtime_refresh_all(void)
     }
 }
 
-uint8_t track_runtime_is_track_braids_available(uint8_t track)
+uint8_t track_runtime_is_track_wave_available(uint8_t track)
 {
     uint8_t used = 0U;
     for (uint8_t other_track = 0U; other_track < SEQ_TRACK_COUNT; ++other_track)
@@ -939,7 +940,7 @@ uint8_t track_runtime_is_track_braids_available(uint8_t track)
 
         const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[other_track];
         if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS))
+                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE))
         {
             ++used;
         }
@@ -1232,14 +1233,14 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_TRX_BD_NOISE:
         case PARAM_DRUM_TRX_BD_HARMONICS:
         case PARAM_DRUM_TRX_BD_DRIVE:
-        case PARAM_BRAIDS_EDIT:
-        case PARAM_BRAIDS_FINE:
-        case PARAM_BRAIDS_COARSE:
-        case PARAM_BRAIDS_FM:
-        case PARAM_BRAIDS_TIMBRE:
-        case PARAM_BRAIDS_MODULATION:
-        case PARAM_BRAIDS_COLOR:
-        case PARAM_BRAIDS_PHASE_RESET:
+        case PARAM_WAVE_EDIT:
+        case PARAM_WAVE_FINE:
+        case PARAM_WAVE_COARSE:
+        case PARAM_WAVE_FM:
+        case PARAM_WAVE_TIMBRE:
+        case PARAM_WAVE_MODULATION:
+        case PARAM_WAVE_COLOR:
+        case PARAM_WAVE_PHASE_RESET:
         case PARAM_MASTER_FX1_TYPE:
         case PARAM_MASTER_FX1_LEVEL:
         case PARAM_MASTER_FX1_A:

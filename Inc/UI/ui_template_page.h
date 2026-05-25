@@ -37,11 +37,32 @@ typedef enum
     UI_TEMPLATE_FAMILY_COUNT
 } ui_template_family_id_t;
 
+typedef enum
+{
+    UI_TEMPLATE_CUSTOM_WIDGET_NONE = 0,
+    UI_TEMPLATE_CUSTOM_WIDGET_ADSR_FILTER,
+    UI_TEMPLATE_CUSTOM_WIDGET_ADSR_VCA,
+    UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE,
+    UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CUTOFF,
+    UI_TEMPLATE_CUSTOM_WIDGET_FILTER_RESONANCE,
+    UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP,
+    UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK,
+    UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE,
+    UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE,
+    UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL,
+    UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE,
+    UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST,
+    UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE
+} ui_template_custom_widget_kind_t;
+
 typedef const ui_template_family_t *(*ui_template_family_resolver_fn)(void);
 typedef uiw_widget_type_t (*ui_template_widget_picker_fn)(uint8_t slot,
                                                          param_id_t id,
                                                          const char *value_label,
                                                          uiw_widget_type_t suggested_widget);
+typedef ui_template_custom_widget_kind_t (*ui_template_custom_widget_picker_fn)(uint8_t slot,
+                                                                                const ui_template_subpage_t *subpage,
+                                                                                param_id_t id);
 typedef uint8_t (*ui_template_subpage_enabled_fn)(uint8_t subpage_index);
 typedef uint8_t (*ui_template_virtual_slot_text_fn)(uint8_t slot,
                                                     char *out_name,
@@ -61,6 +82,7 @@ typedef struct
     const ui_template_family_t *family;
     ui_template_family_resolver_fn family_resolver;
     ui_template_widget_picker_fn widget_picker;
+    ui_template_custom_widget_picker_fn custom_widget_picker;
     ui_template_subpage_enabled_fn subpage_enabled;
     ui_template_virtual_slot_text_fn virtual_slot_text;
     ui_template_param_text_fn param_text;

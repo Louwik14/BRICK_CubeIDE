@@ -1,6 +1,6 @@
 /**
  * @file brick6_braids_runtime.h
- * @brief Minimal track-aware Braids runtime wrapper.
+ * @brief Minimal track-aware Wave runtime wrapper around the internal Braids engine.
  */
 
 #pragma once

@@ -117,9 +117,27 @@ static uint8_t ui_page_template_play_virtual_slot_text(uint8_t slot,
     return 1U;
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_play_pick_custom_widget(uint8_t slot,
+                                                                                 const ui_template_subpage_t *subpage,
+                                                                                 param_id_t id)
+{
+    (void)subpage;
+    if ((slot == 0U)
+            && ((id == PARAM_SEQ_PLAY_V1_NOTE)
+                || (id == PARAM_SEQ_PLAY_V2_NOTE)
+                || (id == PARAM_SEQ_PLAY_V3_NOTE)
+                || (id == PARAM_SEQ_PLAY_V4_NOTE)))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE;
+    }
+
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
 static ui_template_page_state_t g_ui_template_play_state = {
     .family = 0,
     .family_resolver = ui_page_template_play_resolve_family,
+    .custom_widget_picker = ui_page_template_play_pick_custom_widget,
     .subpage_enabled = ui_page_template_play_subpage_enabled,
     .virtual_slot_text = ui_page_template_play_virtual_slot_text,
     .active_subpage = 0U,

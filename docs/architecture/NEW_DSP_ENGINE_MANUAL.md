@@ -108,8 +108,8 @@ Catalogue produit des families/types :
 - `Src/UI/ui_track_catalog.c`
 
 Exemples de familles/types actuels :
-- `Synth -> Braids`
-- `Sampler -> OneShot / Clip / Looper`
+- `Synth -> Wave`
+- `Sampler -> RAM / Stream / Looper`
 - `Drum -> TRX BD reserve / BD Analog`
 - `Master -> FX`
 - `MIDI -> MIDI`

@@ -59,7 +59,7 @@ Autorite wiring global inter-zones:
 - `brick6_app_init()`:
   - `audio_init(&hsai_BlockA2, &hsai_BlockB2)`
   - `audio_set_float_callback(brick6_audio_runtime_dsp)`
-  - ordre d'init runtime (drum/sampler/Braids, puis param/seq/storage/undo/control/hall/etc.).
+  - ordre d'init runtime (drum/sampler/Wave, puis param/seq/storage/undo/control/hall/etc.).
 - `brick6_audio_runtime_dsp()`:
   - point d'injection MAIN pour la preview SD via le buffer de lecture pre-resample.
 

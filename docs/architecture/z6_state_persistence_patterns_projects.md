@@ -68,7 +68,7 @@ Autorite persistence projet SD:
 
 Compat prototype:
 - quand `PARAM_COUNT` change et modifie `PatternSaveV1` / `ProjectSaveV1`, Z6 peut bumper les versions fichier sans migration.
-- pour Braids, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
+- pour Wave, les anciens patterns/projets sont explicitement consideres jetables; la charge minimale consiste a refuser proprement les anciens `version/payload_size`.
 - pour le projet v28, les anciens projets v27 ne sont pas migres: `project_sd_bank` exige `PROJECT_V1_FILE_VERSION` exact et `sizeof(ProjectSaveV1)` avant de lire le payload.
 
 Autorite preview SD:
@@ -127,7 +127,7 @@ Contrat boot/autoload projet v32:
 - Les slots `STREAM` attendus sont termines quand `sample_pool_get_state(slot)` n'est plus `PREPARING`: `LOADED`, `ERROR`, `MISSING` et `EMPTY` sont terminaux cote ecran boot.
 - Les slots `MULTI` attendus sont termines quand l'instrument est `READY` ou `ERROR`, ou quand le loader Multi n'a plus de travail pending et que le slot n'est plus `LOADING`. Avant de lancer les loads Multi, Z6 prelit les headers `.brickmulti` des slots autoload pour figer un total global en unites utilisateur: 1 unite par sample Multi, 1 unite par slot STREAM. Pendant le chargement actif, `multi_sample_get_load_diag()` expose `samples_ready/total_samples`; la progression visible additionne cet avancement au total global au lieu d'afficher les pages internes ou de repartir a 0 pour chaque Multi.
 - Les slots `RAM` attendus sont recharges synchroniquement hors IRQ par `sampler_ram_pool_load_wav_at(ram_slot, global_index, path)` pendant le load projet. La progression les compte comme une unite terminee apres l'appel; le cout produit est recalcule depuis les pages reelles allouees dans `SAMPLE_PAGE_SLOT_POOL`.
-- Un fichier RAM absent/invalide ou un refus SLOT_POOL/budget/backend pose un slot global `kind=RAM` en `ERROR` quand le slot global sauvegarde est disponible. Les tracks OneShot/Slicer gardent leur `PARAM_SAMPLER_SAMPLE` global et refusent ensuite proprement/silence via les validations runtime RAM.
+- Un fichier RAM absent/invalide ou un refus SLOT_POOL/budget/backend pose un slot global `kind=RAM` en `ERROR` quand le slot global sauvegarde est disponible. Les tracks RAM gardent leur `PARAM_SAMPLER_SAMPLE` global et refusent ensuite proprement/silence via les validations runtime RAM.
 - En cas d'absence de boot context, de projet refuse ou d'ancien payload v27, l'etat loading se ferme proprement sans restore partiel supplementaire.
 
 Autorite writer SD audio multi-client:
@@ -508,12 +508,12 @@ Plus petite prochaine passe utile:
   - `Sample`, `Gain`, `Start`, `End`, `Mode`, `Tune`, `Fade In`, `Fade Out`, `Slice Count`.
 - Compat restore:
   - les payloads pattern/projet gardent les memes champs family/type,
-  - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=OneShot`,
-  - un ancien mode `Slice` / `RevSlice` est rabattu vers `Shot` au restore/apply runtime pour eviter toute exposition produit `OneShot`,
+  - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=RAM`,
+  - un ancien mode `Slice` / `RevSlice` est rabattu vers `Shot` au restore/apply runtime pour eviter toute exposition produit `RAM`,
   - aucun bump de format snapshot n'est requis pour cette seule sortie de family.
 - La grille Slice n'est jamais persistÃ©e:
   - elle est reconstruite au restore depuis `sample_id` et `Slice Count`.
-- `Slice Count` reste hors p-lock.
+- `Slice Count` reste hors p-lock; `Slicer` n'est plus un type Track CFG visible et les configs legacy `Sampler/Slicer` sont normalisees en `Sampler/RAM` sans changer `PARAM_COUNT`.
 - `PROJECT_V1_FILE_VERSION` a ete incremente pour reflï¿½ter le payload Sampler v1 et le bloc MACRO projet.
 - `PATTERN_VERSION=6` et `PROJECT_V1_FILE_VERSION=10` marquaient une ancienne rupture prototype Synth historique; les anciens payloads incompatibles restent refuses via `version/payload_size`.
 - Le `sample_pool` du projet est persiste comme references de slots (paths WAV), pas comme audio brut.
@@ -772,7 +772,7 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `ARM=Overd` reste borne/no-op: aucun overdub audio reel n'est branche.
 - `PATTERN_VERSION=15` et `PROJECT_V1_FILE_VERSION=20` marquent le changement de layout `PARAM_COUNT`, l'ajout du type `Looper` et l'ajout de `PatternSaveV1.track_cfg.looper_route_enabled`.
 - `PATTERN_VERSION=16` et `PROJECT_V1_FILE_VERSION=21` marquent la rupture prototype du contrat TONE Looper: `MODE` est retire, `ARM` devient `Off/Rec/Overd`, `PLAY Off/Auto` remplace l'ancien slot; les anciens fichiers sont refuses par version/payload stricts.
-- `PATTERN_VERSION=17` et `PROJECT_V1_FILE_VERSION=22` marquent l'ajout de `PARAM_BRAIDS_PHASE_RESET` et le changement de layout `PARAM_COUNT`; les anciens fichiers prototype sont refuses par version/payload stricts.
+- `PATTERN_VERSION=17` et `PROJECT_V1_FILE_VERSION=22` marquent l'ajout de `PARAM_WAVE_PHASE_RESET` et le changement de layout `PARAM_COUNT`; les anciens fichiers prototype sont refuses par version/payload stricts.
 - La selection ROUT `Sampler/Looper` est capturee/restauree par matrice `looper track -> source track` dans le snapshot pattern; les projets la portent via leur snapshot live embarque.
 - Les etats internes writer (`TAKE_READY`, `FINALIZING`, etc.) restent caches; aucun etat `Temp/Saved/Finalizing` n'est expose comme param utilisateur Looper.
 - Aucun parametre SAVE/STAT Looper n'est expose en TONE.
@@ -884,6 +884,6 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ## Addendum 2026-05-24 - catalogue global sample produit
 
 - `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 240 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
-- `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, OneShot ou Slicer n'est remplace par cette couche.
+- `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, RAM normal ou sliced n'est remplace par cette couche.
 - Le cout permanent global compte uniquement les slots produits charges: Stream/Multi gardent le cout de presocle page-cache valide, RAM compte sa taille physique reelle en pages `SAMPLE_PAGE_SLOT_POOL` allouees. RAM est stocke en `FLOAT32_INTERLEAVED` stereo au load WAV; les anciens slots residents sont volatils et sont donc simplement recharges depuis leur path projet/autoload. Les fenetres voix actives, Multi LOOP, window locks, pages queued/loading et marges runtime restent hors cout permanent.
 - `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v32: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades.

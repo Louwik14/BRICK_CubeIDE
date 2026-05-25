@@ -518,6 +518,11 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
     }
 
     g_ui_macro_interaction.scene_value = current_value;
+    ui_param_note_user_value_flash(encoder,
+                                   param,
+                                   g_ui_macro_interaction.capture_track,
+                                   current_value,
+                                   UI_PARAM_VALUE_FLASH_MACRO_SCENE_ASSIGN);
     return 1U;
 }
 

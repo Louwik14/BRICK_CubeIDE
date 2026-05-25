@@ -23,34 +23,23 @@ static const ui_template_family_t g_ui_template_tone_family_master_fx = {
 
 static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .family_title = "TONE",
-    .nav_labels = { "PLAY", "FX", "-", "-" },
+    .nav_labels = { "PLAY", "MODE", "SLICE", "-" },
     .subpages = {
         { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_START, PARAM_SAMPLER_END } } },
-        { .title = "FX", .param_bank = { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "MODE", .param_bank = { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } } },
+        { .title = "SLICE", .param_bank = { .params = { PARAM_SAMPLER_SLICE_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_slicer = {
-    .family_title = "TONE",
-    .nav_labels = { "SLICE", "REG", "-", "-" },
-    .subpages = {
-        { .title = "SLICE", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_SLICE_COUNT, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_GAIN } } },
-        { .title = "REG", .param_bank = { .params = { PARAM_SAMPLER_START, PARAM_SAMPLER_END, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-    },
-    .default_subpage = 0U,
-};
 
 static const ui_template_family_t g_ui_template_tone_family_clip = {
     .family_title = "TONE",
-    .nav_labels = { "PLAY", "CLIP", "SYNC", "STR" },
+    .nav_labels = { "PLAY", "STRM", "SYNC", "STR" },
     .subpages = {
         { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_CLIP_SOURCE_BPM, PARAM_COUNT } } },
-        { .title = "CLIP", .param_bank = { .params = { PARAM_SAMPLER_CLIP_PLAY_MODE, PARAM_SAMPLER_CLIP_LOOP, PARAM_SAMPLER_CLIP_STRETCH_MODE, PARAM_SAMPLER_CLIP_PITCH } } },
+        { .title = "STRM", .param_bank = { .params = { PARAM_SAMPLER_CLIP_PLAY_MODE, PARAM_SAMPLER_CLIP_LOOP, PARAM_SAMPLER_CLIP_STRETCH_MODE, PARAM_SAMPLER_CLIP_PITCH } } },
         { .title = "SYNC", .param_bank = { .params = { PARAM_SAMPLER_CLIP_SYNC_LENGTH, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "STR", .param_bank = { .params = { PARAM_SAMPLER_CLIP_GRAIN, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -81,12 +70,12 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
     .default_subpage = 0U,
 };
 
-static const ui_template_family_t g_ui_template_tone_family_braids = {
+static const ui_template_family_t g_ui_template_tone_family_wave = {
     .family_title = "TONE",
     .nav_labels = { "EDIT", "TONE", "-", "-" },
     .subpages = {
-        { .title = "EDIT", .param_bank = { .params = { PARAM_BRAIDS_EDIT, PARAM_BRAIDS_FINE, PARAM_BRAIDS_COARSE, PARAM_BRAIDS_FM } } },
-        { .title = "TONE", .param_bank = { .params = { PARAM_BRAIDS_TIMBRE, PARAM_BRAIDS_MODULATION, PARAM_BRAIDS_COLOR, PARAM_BRAIDS_PHASE_RESET } } },
+        { .title = "EDIT", .param_bank = { .params = { PARAM_WAVE_EDIT, PARAM_WAVE_FINE, PARAM_WAVE_COARSE, PARAM_WAVE_FM } } },
+        { .title = "TONE", .param_bank = { .params = { PARAM_WAVE_TIMBRE, PARAM_WAVE_MODULATION, PARAM_WAVE_COLOR, PARAM_WAVE_PHASE_RESET } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -678,18 +667,15 @@ void ui_page_template_tone_register_families(void)
             {
                 family_template = &g_ui_template_tone_family_master_fx;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_BRAIDS))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_WAVE))
             {
-                family_template = &g_ui_template_tone_family_braids;
+                family_template = &g_ui_template_tone_family_wave;
             }
             else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_SAMPLER))
             {
                 family_template = &g_ui_template_tone_family_sampler;
             }
-            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_SLICER))
-            {
-                family_template = &g_ui_template_tone_family_slicer;
-            }
+
             else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_CLIP))
             {
                 family_template = &g_ui_template_tone_family_clip;

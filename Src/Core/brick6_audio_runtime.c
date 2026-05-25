@@ -1,13 +1,13 @@
-ï»¿/**
+/**
  * @file brick6_audio_runtime.c
  * @brief Callback DSP runtime extrait de brick6_app_init.
  *
- * RÃ´le du module:
+ * Rôle du module:
  * - Regrouper le traitement audio bloc (synth, sampler, looper, mixer, master FX).
  *
- * FrontiÃ¨re:
+ * Frontière:
  * - Ne fait pas l'init applicative globale.
- * - Ne gÃ¨re pas la policy de boot.
+ * - Ne gère pas la policy de boot.
  */
 
 #include "brick6_audio_runtime.h"
@@ -173,30 +173,30 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
     }
 }
 
-static void brick6_render_braids_tracks(uint32_t frames, uint8_t *out_braids_tracks)
+static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
 {
-    static float braids_tmp[AUDIO_BLOCK_SIZE];
-    uint8_t braids_tracks = 0U;
+    static float wave_tmp[AUDIO_BLOCK_SIZE];
+    uint8_t wave_tracks = 0U;
 
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
                 || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_BRAIDS)
+                || (ctx->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
                 || (track_runtime_is_audio_routable(track) == 0U))
         {
             continue;
         }
 
-        brick6_braids_runtime_render_instance(ctx->instance_id, braids_tmp, frames);
-        mixer_submit_external_mono_native(ctx->mix_track_id, braids_tmp, frames);
-        braids_tracks++;
+        brick6_braids_runtime_render_instance(ctx->instance_id, wave_tmp, frames);
+        mixer_submit_external_mono_native(ctx->mix_track_id, wave_tmp, frames);
+        wave_tracks++;
     }
 
-    if (out_braids_tracks != NULL)
+    if (out_wave_tracks != NULL)
     {
-        *out_braids_tracks = braids_tracks;
+        *out_wave_tracks = wave_tracks;
     }
 }
 
@@ -248,9 +248,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     }
 
     {
-        uint8_t braids_tracks = 0U;
-        brick6_render_braids_tracks(frames, &braids_tracks);
-        (void)braids_tracks;
+        uint8_t wave_tracks = 0U;
+        brick6_render_wave_tracks(frames, &wave_tracks);
+        (void)wave_tracks;
     }
 
     mod_lfo_v1_process_block(frames);
