@@ -367,6 +367,85 @@ static float mixer_smooth_block(float current, float target, float alpha)
     return current + ((target - current) * alpha);
 }
 
+enum
+{
+    MIXER_FILTER_TIME_LUT_SIZE = 512U
+};
+
+#define MIXER_FILTER_LOG2_MIN_TIME (-9.965784284662087f)
+#define MIXER_FILTER_INV_LOG2_TIME_RANGE 0.08138130233100371f
+#define MIXER_FILTER_INV_LOG2 1.4426950408889634f
+
+static uint16_t g_mixer_filter_time_lut[MIXER_FILTER_TIME_LUT_SIZE + 1U];
+static float g_mixer_filter_log2_lut[257U];
+static uint8_t g_mixer_filter_time_lut_ready = 0U;
+
+static void mixer_track_filter_init_time_lut(void)
+{
+    if(g_mixer_filter_time_lut_ready != 0U)
+        return;
+
+    const float time_log_ratio = logf(MIXER_FILTER_ATTACK_MAX_S / MIXER_FILTER_ATTACK_MIN_S);
+    const float max_segment_samples = MIXER_FILTER_SAMPLE_RATE_DEFAULT * MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS;
+
+    for(uint32_t i = 0U; i <= 256U; ++i)
+    {
+        const float x = 1.0f + ((float)i * (1.0f / 256.0f));
+        g_mixer_filter_log2_lut[i] = logf(x) * MIXER_FILTER_INV_LOG2;
+    }
+
+    for(uint32_t i = 0U; i <= MIXER_FILTER_TIME_LUT_SIZE; ++i)
+    {
+        const float norm = (float)i * (1.0f / (float)MIXER_FILTER_TIME_LUT_SIZE);
+        const float time_s = MIXER_FILTER_ATTACK_MIN_S * expf(time_log_ratio * norm);
+        const float desired_samples = clampf_local(time_s * MIXER_FILTER_SAMPLE_RATE_DEFAULT, 1.0f, max_segment_samples);
+        const float normalized = cbrtf((desired_samples - 1.0f) / max_segment_samples);
+        const float scaled = clampf_local(normalized, 0.0f, 1.0f) * 65535.0f;
+        g_mixer_filter_time_lut[i] = (uint16_t)(scaled + 0.5f);
+    }
+
+    g_mixer_filter_time_lut_ready = 1U;
+}
+
+static float mixer_track_filter_log2_lut(float x)
+{
+    union
+    {
+        float f;
+        uint32_t u;
+    } bits;
+
+    bits.f = clampf_local(x, 1.0e-20f, 1.0e20f);
+    const int32_t exponent = (int32_t)((bits.u >> 23) & 0xffU) - 127;
+    const uint32_t mantissa_bits = bits.u & 0x7fffffU;
+    uint32_t index = mantissa_bits >> 15;
+    if(index >= 256U)
+        index = 255U;
+
+    const float frac = (float)(mantissa_bits & 0x7fffU) * (1.0f / 32768.0f);
+    const float a = g_mixer_filter_log2_lut[index];
+    const float b = g_mixer_filter_log2_lut[index + 1U];
+    return (float)exponent + a + ((b - a) * frac);
+}
+
+static uint16_t mixer_track_filter_time_lut_lookup(float time_s)
+{
+    const float clamped = clampf_local(time_s, MIXER_FILTER_ATTACK_MIN_S, MIXER_FILTER_ATTACK_MAX_S);
+    float pos = (mixer_track_filter_log2_lut(clamped) - MIXER_FILTER_LOG2_MIN_TIME)
+                * MIXER_FILTER_INV_LOG2_TIME_RANGE
+                * (float)MIXER_FILTER_TIME_LUT_SIZE;
+    if(pos <= 0.0f)
+        return g_mixer_filter_time_lut[0];
+    if(pos >= (float)MIXER_FILTER_TIME_LUT_SIZE)
+        return g_mixer_filter_time_lut[MIXER_FILTER_TIME_LUT_SIZE];
+
+    const uint32_t index = (uint32_t)pos;
+    const float frac = pos - (float)index;
+    const float a = (float)g_mixer_filter_time_lut[index];
+    const float b = (float)g_mixer_filter_time_lut[index + 1U];
+    return (uint16_t)(a + ((b - a) * frac) + 0.5f);
+}
+
 static uint8_t mixer_track_filter_type_is_biquad(mixer_track_filter_type_t type)
 {
     return ((type == MIXER_TRACK_FILTER_LP_BI)
@@ -398,13 +477,8 @@ static float mixer_track_filter_resonance_to_biquad_q(float resonance)
 
 static uint16_t mixer_track_filter_time_s_to_peaks(float time_s, float sample_rate)
 {
-    const float clamped = clampf_local(time_s, MIXER_FILTER_ATTACK_MIN_S, MIXER_FILTER_ATTACK_MAX_S);
-    const float sr = (sample_rate > 1.0f) ? sample_rate : MIXER_FILTER_SAMPLE_RATE_DEFAULT;
-    const float max_segment_samples = sr * MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS;
-    const float desired_samples = clampf_local(clamped * sr, 1.0f, max_segment_samples);
-    const float normalized = cbrtf((desired_samples - 1.0f) / max_segment_samples);
-    const float scaled = clampf_local(normalized, 0.0f, 1.0f) * 65535.0f;
-    return (uint16_t)(scaled + 0.5f);
+    (void)sample_rate;
+    return mixer_track_filter_time_lut_lookup(time_s);
 }
 
 static uint16_t mixer_track_filter_sustain_to_peaks(float sustain)
@@ -1117,6 +1191,7 @@ static float clamp_pan(float pan)
  */
 void mixer_init(void)
 {
+    mixer_track_filter_init_time_lut();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     memset(&g_reverb_input_filter, 0, sizeof(g_reverb_input_filter));
     fx_reverb_global_set_type(g_reverb.type);

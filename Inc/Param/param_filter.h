@@ -20,6 +20,11 @@ float param_filter_ui127_to_attack_s(float v);
 float param_filter_ui127_to_decay_s(float v);
 float param_filter_ui127_to_sustain(float v);
 float param_filter_ui127_to_release_s(float v);
+float param_filter_ui127_to_cutoff_hz(float v);
+float param_filter_ui127_to_resonance(float v);
+float param_filter_ui127_to_eg_amount(float v);
+float param_filter_ui127_to_keytrack(float v);
+float param_filter_eq_ui127_to_db(float v);
 
 void apply_filter_type(float v);
 void apply_filter_cutoff(float v);

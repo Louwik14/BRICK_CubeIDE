@@ -26,14 +26,66 @@ static float filter_ui127_to_unit(float v)
     return filter_ui127_clamp(v) * (1.0f / 127.0f);
 }
 
+enum
+{
+    FILTER_EXP2_LUT_SIZE = 256U
+};
+
+#define FILTER_LOG2_CUTOFF_RATIO 9.6438561897747247f
+#define FILTER_LOG2_TIME_RATIO   12.287712379549449f
+
+static float g_filter_exp2_lut[FILTER_EXP2_LUT_SIZE + 1U];
+static uint8_t g_filter_exp2_lut_ready = 0U;
+
+static void filter_init_exp2_lut(void)
+{
+    if (g_filter_exp2_lut_ready != 0U)
+    {
+        return;
+    }
+
+    for (uint32_t i = 0U; i <= FILTER_EXP2_LUT_SIZE; ++i)
+    {
+        g_filter_exp2_lut[i] = powf(2.0f, (float)i * (1.0f / (float)FILTER_EXP2_LUT_SIZE));
+    }
+
+    g_filter_exp2_lut_ready = 1U;
+}
+
+static float filter_exp2_lut(float x)
+{
+    if (x <= 0.0f)
+    {
+        return 1.0f;
+    }
+
+    uint32_t integer = (uint32_t)x;
+    if (integer > 15U)
+    {
+        integer = 15U;
+    }
+
+    const float frac = x - (float)integer;
+    const float pos = frac * (float)FILTER_EXP2_LUT_SIZE;
+    uint32_t index = (uint32_t)pos;
+    if (index >= FILTER_EXP2_LUT_SIZE)
+    {
+        index = FILTER_EXP2_LUT_SIZE - 1U;
+    }
+
+    const float lerp = pos - (float)index;
+    const float a = g_filter_exp2_lut[index];
+    const float b = g_filter_exp2_lut[index + 1U];
+    const float mantissa = a + ((b - a) * lerp);
+    return mantissa * (float)(1UL << integer);
+}
+
 static float filter_ui127_to_cutoff_hz(float v)
 {
     const float t = filter_ui127_to_unit(v);
     const float min_hz = 20.0f;
-    const float max_hz = 16000.0f;
-    const float ratio = max_hz / min_hz;
 
-    return min_hz * powf(ratio, t);
+    return min_hz * filter_exp2_lut(FILTER_LOG2_CUTOFF_RATIO * t);
 }
 
 static float filter_ui127_to_resonance(float v)
@@ -52,9 +104,9 @@ static float filter_ui127_to_eg_amount(float v)
 static float filter_ui127_to_time_s(float v, float min_s, float max_s)
 {
     const float t = filter_ui127_to_unit(v);
-    const float ratio = max_s / min_s;
 
-    return min_s * powf(ratio, t);
+    (void)max_s;
+    return min_s * filter_exp2_lut(FILTER_LOG2_TIME_RATIO * t);
 }
 
 static float filter_ui127_to_attack_s(float v)
@@ -104,6 +156,7 @@ typedef track_sound_state_t filter_ui_state_t;
 
 void param_filter_init(void)
 {
+    filter_init_exp2_lut();
     track_sound_state_init();
     track_tone_sound_state_init();
 }
@@ -635,6 +688,11 @@ float param_filter_ui127_to_attack_s(float v) { return filter_ui127_to_attack_s(
 float param_filter_ui127_to_decay_s(float v) { return filter_ui127_to_decay_s(v); }
 float param_filter_ui127_to_sustain(float v) { return filter_ui127_to_sustain(v); }
 float param_filter_ui127_to_release_s(float v) { return filter_ui127_to_release_s(v); }
+float param_filter_ui127_to_cutoff_hz(float v) { return filter_ui127_to_cutoff_hz(v); }
+float param_filter_ui127_to_resonance(float v) { return filter_ui127_to_resonance(v); }
+float param_filter_ui127_to_eg_amount(float v) { return filter_ui127_to_eg_amount(v); }
+float param_filter_ui127_to_keytrack(float v) { return filter_ui127_to_keytrack(v); }
+float param_filter_eq_ui127_to_db(float v) { return filter_eq_ui127_to_db(v); }
 
 
 

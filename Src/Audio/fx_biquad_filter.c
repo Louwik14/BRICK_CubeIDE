@@ -44,6 +44,56 @@ static inline uint16_t fx_biquad_filter_interpolate824(const uint16_t *table, ui
     return a + (((b - a) * ((phase >> 8) & 0xffffU)) >> 16);
 }
 
+enum
+{
+    FX_BIQUAD_FILTER_LOG2_LUT_SIZE = 256U
+};
+
+#define FX_BIQUAD_FILTER_INV_LOG2 1.4426950408889634f
+#define FX_BIQUAD_FILTER_LOG2_440 8.7813597135246596f
+
+static float g_fx_biquad_filter_log2_lut[FX_BIQUAD_FILTER_LOG2_LUT_SIZE + 1U];
+static uint8_t g_fx_biquad_filter_log2_lut_ready = 0U;
+
+static void fx_biquad_filter_init_log2_lut(void)
+{
+    if(g_fx_biquad_filter_log2_lut_ready != 0U)
+    {
+        return;
+    }
+
+    for(uint32_t i = 0U; i <= FX_BIQUAD_FILTER_LOG2_LUT_SIZE; ++i)
+    {
+        const float x = 1.0f + ((float)i * (1.0f / (float)FX_BIQUAD_FILTER_LOG2_LUT_SIZE));
+        g_fx_biquad_filter_log2_lut[i] = logf(x) * FX_BIQUAD_FILTER_INV_LOG2;
+    }
+
+    g_fx_biquad_filter_log2_lut_ready = 1U;
+}
+
+static float fx_biquad_filter_log2_lut(float x)
+{
+    union
+    {
+        float f;
+        uint32_t u;
+    } bits;
+
+    bits.f = fx_biquad_filter_clamp(x, 1.0e-20f, 1.0e20f);
+    const int32_t exponent = (int32_t)((bits.u >> 23) & 0xffU) - 127;
+    const uint32_t mantissa_bits = bits.u & 0x7fffffU;
+    uint32_t index = mantissa_bits >> 15;
+    if(index >= FX_BIQUAD_FILTER_LOG2_LUT_SIZE)
+    {
+        index = FX_BIQUAD_FILTER_LOG2_LUT_SIZE - 1U;
+    }
+
+    const float frac = (float)(mantissa_bits & 0x7fffU) * (1.0f / 32768.0f);
+    const float a = g_fx_biquad_filter_log2_lut[index];
+    const float b = g_fx_biquad_filter_log2_lut[index + 1U];
+    return (float)exponent + a + ((b - a) * frac);
+}
+
 static inline int16_t fx_biquad_filter_cutoff_to_peaks_frequency(float cutoff_hz, float sample_rate)
 {
     const float sr = (sample_rate > 1000.0f) ? sample_rate : FX_BIQUAD_FILTER_DEFAULT_SR;
@@ -52,7 +102,7 @@ static inline int16_t fx_biquad_filter_cutoff_to_peaks_frequency(float cutoff_hz
 
     const float normalized_to_48k = cutoff * (FX_BIQUAD_FILTER_DEFAULT_SR / sr);
     const float safe_hz = fx_biquad_filter_clamp(normalized_to_48k, 8.1757989156f, FX_BIQUAD_FILTER_MAX_FREQ);
-    const float midi_note = 69.0f + (12.0f * (logf(safe_hz / 440.0f) / logf(2.0f)));
+    const float midi_note = 69.0f + (12.0f * (fx_biquad_filter_log2_lut(safe_hz) - FX_BIQUAD_FILTER_LOG2_440));
     const float q15 = fx_biquad_filter_clamp(midi_note * 128.0f, 0.0f, 32767.0f);
     return (int16_t)(q15 + 0.5f);
 }
@@ -67,6 +117,7 @@ static inline int16_t fx_biquad_filter_q_to_peaks_resonance(float q)
 
 void fx_biquad_filter_init(fx_biquad_filter_t *filter, float sample_rate)
 {
+    fx_biquad_filter_init_log2_lut();
     if(filter == NULL) return;
 
     memset(filter, 0, sizeof(*filter));
@@ -203,6 +254,7 @@ static inline int32_t fx_biquad_filter_process_sample_mono(fx_biquad_filter_mono
 
 void fx_biquad_filter_mono_init(fx_biquad_filter_mono_t *filter, float sample_rate)
 {
+    fx_biquad_filter_init_log2_lut();
     if(filter == NULL) return;
 
     memset(filter, 0, sizeof(*filter));

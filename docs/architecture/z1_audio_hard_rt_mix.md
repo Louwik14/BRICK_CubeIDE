@@ -752,3 +752,21 @@ Aucune double autorite concurrente du flux IRQ->mix final n'est constatee.
 - Le rendu IRQ RAM garde uniquement le pointeur resident `FLOAT32_INTERLEAVED` stereo, avance le playhead fractionnaire Q16 selon ce pas et applique une interpolation lineaire float RAM-only. Le cas forward pitché non-PingPong est rendu par segments jusqu'aux bornes pour sortir les checks wrap/terminal de la boucle sample. Aucun chemin Classic Stream, page-cache, FatFs, malloc ou decode n'est appele par OneShot/Slicer RAM.
 - Quand `step_q16 == 0x00010000`, que la phase Q16 est entiere et que le mode n'est pas PingPong, le rendu RAM reprend un fast path entier sans interpolation pour Shot, RevShot et Loop.
 - Les bornes `Start/End` et `slice_begin/end` restent capturees au trigger. Shot/RevShot stoppent a la limite de region, Loop wrappe dans la region, PingPong reflete le playhead dans la region meme avec un pas superieur a une frame.
+
+## Addendum 2026-05-25 - LFO MIX direct simple
+
+- Les targets mixer `gain`, `pan` et `send_level[0..1]` restent les seules valeurs ecrites par le chemin LFO direct pour `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2`.
+- Le mixer conserve le smoothing existant: le LFO ecrit les targets, puis `mixer_process()` rampe `gain_current`, `pan_current` et `send_level_current` vers ces targets sur le bloc courant.
+
+## Addendum 2026-05-25 - LFO FILTER/VCA direct bornes
+
+- `mod_lfo_v1` applique maintenant directement `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE`, `PARAM_FILTER_EG_AMT`, `PARAM_FILTER_ATTACK`, `PARAM_FILTER_DECAY`, `PARAM_FILTER_SUSTAIN`, `PARAM_FILTER_RELEASE` et `PARAM_VCA_ATTACK`, `PARAM_VCA_DECAY`, `PARAM_VCA_SUSTAIN`, `PARAM_VCA_RELEASE` sur la lane mixer resolue, sans detour par `param_registry_apply_track_value_rt_fast`.
+- Les conversions restent celles de `param_filter`: cutoff via LUT `exp2`, resonance quadratique, EG/sustain lineaire 0..1, temps A/D/R via LUT `exp2`.
+- Le chemin direct est une projection runtime temporaire: il ne modifie pas les bases track-aware ni les miroirs UI, et la release LFO restaure la base capturee si aucune autre LFO de la track ne cible la meme destination.
+- Aucune ecriture directe de `*_current`, aucun recalcul filtre/EQ/VCA et aucune nouvelle autorite mixer ne sont introduits.
+
+## Addendum 2026-05-25 - LFO Sampler/Clip/Multi/Looper direct bornes
+
+- `mod_lfo_v1` applique directement les cibles Sampler continues ou deja projetees runtime (`Gain`, `Start`, `End`, `Tune`, fades), les cibles Clip runtime (`Src BPM`, `Sync Len`, `Pitch`, `PlayMode`, `Loop`, `Stretch`, `Grain`), `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE`.
+- `PARAM_SAMPLER_SAMPLE` / selection instrument Multi restent exclus du chemin direct: aucune selection sample, import, load, SD/FatFs ou mutation de pool n'est ajoutee au chemin LFO.
+- `PARAM_SAMPLER_CLIP_HOP` et `PARAM_SAMPLER_CLIP_SEARCH` restent des no-op runtime comme dans le fallback RT-fast actuel quand `update_base_state=0`.

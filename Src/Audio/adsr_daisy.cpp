@@ -148,6 +148,86 @@ enum
 };
 
 static constexpr float kAdsrDaisyCSustainEpsilon = 1.0e-5f;
+static constexpr uint32_t kAdsrDaisyCLutSize = 512U;
+static constexpr float kAdsrDaisyCMinTimeS = 0.001f;
+static constexpr float kAdsrDaisyCMaxTimeS = 5.0f;
+static constexpr float kAdsrDaisyCDefaultSampleRate = 48000.0f;
+static constexpr float kAdsrDaisyCLog2MinTime = -9.965784284662087f;
+static constexpr float kAdsrDaisyCInvLog2TimeRange = 0.08138130233100371f;
+static constexpr float kAdsrDaisyCInvLog2 = 1.4426950408889634f;
+
+static float g_adsr_daisy_c_time_coeff_lut[kAdsrDaisyCLutSize + 1U];
+static float g_adsr_daisy_c_attack_coeff_lut[kAdsrDaisyCLutSize + 1U];
+static float g_adsr_daisy_c_log2_lut[257U];
+static uint8_t g_adsr_daisy_c_lut_ready = 0U;
+
+static float adsr_daisy_c_clampf(float v, float lo, float hi)
+{
+    return (v < lo) ? lo : (v > hi) ? hi : v;
+}
+
+static void adsr_daisy_c_init_luts()
+{
+    if(g_adsr_daisy_c_lut_ready != 0U)
+        return;
+
+    constexpr float attack_target = 1.01f;
+    const float attack_log_target = logf(1.0f - (1.0f / attack_target));
+    const float time_log_ratio = logf(kAdsrDaisyCMaxTimeS / kAdsrDaisyCMinTimeS);
+
+    for(uint32_t i = 0U; i <= 256U; ++i)
+    {
+        const float x = 1.0f + ((float)i * (1.0f / 256.0f));
+        g_adsr_daisy_c_log2_lut[i] = logf(x) * kAdsrDaisyCInvLog2;
+    }
+
+    for(uint32_t i = 0U; i <= kAdsrDaisyCLutSize; ++i)
+    {
+        const float norm = (float)i * (1.0f / (float)kAdsrDaisyCLutSize);
+        const float time_s = kAdsrDaisyCMinTimeS * expf(time_log_ratio * norm);
+        g_adsr_daisy_c_time_coeff_lut[i] = 1.0f - expf(-1.0f / (time_s * kAdsrDaisyCDefaultSampleRate));
+        g_adsr_daisy_c_attack_coeff_lut[i] = 1.0f - expf(attack_log_target / (time_s * kAdsrDaisyCDefaultSampleRate));
+    }
+
+    g_adsr_daisy_c_lut_ready = 1U;
+}
+
+static float adsr_daisy_c_log2_lut(float x)
+{
+    union
+    {
+        float f;
+        uint32_t u;
+    } bits;
+
+    bits.f = adsr_daisy_c_clampf(x, 1.0e-20f, 1.0e20f);
+    const int32_t exponent = (int32_t)((bits.u >> 23) & 0xffU) - 127;
+    const uint32_t mantissa_bits = bits.u & 0x7fffffU;
+    uint32_t index = mantissa_bits >> 15;
+    if(index >= 256U)
+        index = 255U;
+
+    const float frac = (float)(mantissa_bits & 0x7fffU) * (1.0f / 32768.0f);
+    const float a = g_adsr_daisy_c_log2_lut[index];
+    const float b = g_adsr_daisy_c_log2_lut[index + 1U];
+    return (float)exponent + a + ((b - a) * frac);
+}
+
+static float adsr_daisy_c_time_lut_lookup(const float *table, float time_s)
+{
+    const float clamped = adsr_daisy_c_clampf(time_s, kAdsrDaisyCMinTimeS, kAdsrDaisyCMaxTimeS);
+    float pos = (adsr_daisy_c_log2_lut(clamped) - kAdsrDaisyCLog2MinTime) * kAdsrDaisyCInvLog2TimeRange * (float)kAdsrDaisyCLutSize;
+    if(pos <= 0.0f)
+        return table[0];
+    if(pos >= (float)kAdsrDaisyCLutSize)
+        return table[kAdsrDaisyCLutSize];
+
+    const uint32_t index = (uint32_t)pos;
+    const float frac = pos - (float)index;
+    const float a = table[index];
+    const float b = table[index + 1U];
+    return a + ((b - a) * frac);
+}
 
 static void adsr_daisy_c_set_time_constant(float time_s, float sample_rate, float *time, float *coeff)
 {
@@ -159,8 +239,14 @@ static void adsr_daisy_c_set_time_constant(float time_s, float sample_rate, floa
         *time = time_s;
         if(time_s > 0.0f)
         {
-            const float target = logf(1.0f / M_E);
-            *coeff = 1.0f - expf(target / (time_s * sample_rate));
+            if((sample_rate > 47999.0f) && (sample_rate < 48001.0f))
+            {
+                *coeff = adsr_daisy_c_time_lut_lookup(g_adsr_daisy_c_time_coeff_lut, time_s);
+            }
+            else
+            {
+                *coeff = 1.0f - expf(-1.0f / (time_s * sample_rate));
+            }
         }
         else
         {
@@ -203,6 +289,7 @@ static void adsr_daisy_c_recover_state_if_needed(adsr_daisy_c_t *env)
 
 void adsr_daisy_c_init(adsr_daisy_c_t *env, float sample_rate, uint32_t block_size)
 {
+    adsr_daisy_c_init_luts();
     if(env == nullptr)
         return;
 
@@ -246,13 +333,18 @@ void adsr_daisy_c_set_attack(adsr_daisy_c_t *env, float time_s)
     {
         env->attack_time = time_s;
         env->attack_shape = shape;
+        env->attack_target = 1.01f;
         if(time_s > 0.0f)
         {
-            const float x = shape;
-            const float target = 9.0f * powf(x, 10.0f) + 0.3f * x + 1.01f;
-            env->attack_target = target;
-            const float log_target = logf(1.0f - (1.0f / target));
-            env->attack_d0 = 1.0f - expf(log_target / (time_s * env->sample_rate));
+            if((env->sample_rate > 47999.0f) && (env->sample_rate < 48001.0f))
+            {
+                env->attack_d0 = adsr_daisy_c_time_lut_lookup(g_adsr_daisy_c_attack_coeff_lut, time_s);
+            }
+            else
+            {
+                const float log_target = logf(1.0f - (1.0f / env->attack_target));
+                env->attack_d0 = 1.0f - expf(log_target / (time_s * env->sample_rate));
+            }
         }
         else
         {

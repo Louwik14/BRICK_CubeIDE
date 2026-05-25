@@ -355,6 +355,35 @@ Call-sites critiques:
   - emission CC via `midi_cc` pour les destinations MIDI CC,
   - aucun backend audio ajoute.
 
+## 23.b Contrat LFO Braids / Drum direct
+
+- Les destinations Braids directes sont `PARAM_BRAIDS_EDIT`, `FINE`, `COARSE`, `FM`, `TIMBRE`, `MODULATION` et `COLOR`.
+- `PARAM_BRAIDS_PHASE_RESET` reste exclu des destinations LFO directes et du catalogue LFO effectif: c'est un comportement de reset/trigger, pas un parametre continu.
+- Les destinations Drum directes actives sont les quatre controles `BD_ANALOG` exposes par le mapping TONE runtime: `PARAM_DRUM_TRX_BD_PITCH`, `DECAY`, `HARMONICS` et `PITCH_SWEEP`.
+- Les params Drum reserves/TRX (`SWEEP_DECAY`, `ATTACK`, `NOISE`, `DRIVE`) restent generiques/non exposes pour `BD_ANALOG`; ils n'ont pas de setter runtime actif clair dans `drum_synth`.
+- Application modulation runtime:
+  - `mod_lfo_v1` calcule toujours `base_value + modulation`, clamp avec les bornes catalogue, puis appelle le setter runtime Braids ou Drum,
+  - aucune mise a jour de base canonique `track_tone_sound_state`,
+  - aucune emission UI/save/p-lock supplementaire,
+  - release, changement de destination, depth 0 et double LFO meme destination conservent le contrat existant de restauration de la base.
+
+## 23.c Contrat LFO FILTER EQ / KEYTRK / MIDI CC direct
+
+- Les destinations FILTER directes supplementaires sont `PARAM_FILTER_KEYTRK`, `PARAM_FILTER_EQ_LOW`, `PARAM_FILTER_EQ_MID` et `PARAM_FILTER_EQ_HIGH`.
+- `PARAM_FILTER_TYPE` est exclu du catalogue LFO: changement enum de structure DSP, meme si le setter mixer est idempotent sur type identique.
+- `PARAM_FILTER_ENVRST` est exclu du catalogue LFO: flag/reset d'enveloppe, pas une modulation continue.
+- `PARAM_FILTER_ENVDLY` est exclu du catalogue LFO: pas de setter runtime effectif dans le mixer courant.
+- Les destinations MIDI directes sont `PARAM_MIDI_CC1_1..PARAM_MIDI_CC3_4` pour tracks `MIDI` et `Input/Hybrid`; `PARAM_MIDI_PROGRAM` reste exclu des destinations LFO.
+- Application modulation runtime:
+  - FILTER direct appelle les setters mixer sur la cible runtime resolue, avec conversions `param_filter`,
+  - MIDI CC direct appelle l'emission CC existante sans ecrire la base, et n'emet que si la valeur CC 7-bit arrondie change,
+  - aucun chemin ne modifie `track_sound_state`, `track_tone_sound_state`, `param_store` ou l'etat p-lock,
+  - release et changement de destination restent geres par la base capturee dans `mod_lfo_v1`.
+- Nettoyage catalogue LFO:
+  - `PARAM_SAMPLER_SAMPLE` est exclu: selection/load/import possible selon type Sampler/Clip/Multi.
+  - `PARAM_MASTER_FX1_TYPE..PARAM_MASTER_FX4_B` sont exclus tant qu'il n'existe pas de setter runtime/overlay dedie; le fallback `rt_fast` courant ne modifie pas le son car `param_backend_apply_master_fx_track(..., update_base_state=0)` retourne sans changer `track_tone_sound_state`.
+  - Les params Drum TRX reserves `PARAM_DRUM_TRX_BD_PITCH..PARAM_DRUM_TRX_BD_DRIVE` sont exclus pour `TRACK_RUNTIME_TYPE_DRUM_TRX_BD`: le type est reserve/silencieux et `drum_synth` n'a pas de modele actif TRX.
+
 ## 24. Contrat Hybrid v1 (param/runtime borne)
 - `PARAM_HYBRID_GATE` ajoute (bool: `OFF/ON`) pour `Input1/2/3` en mode `Hybrid` uniquement.
 - `PARAM_HYBRID_GATE` pilote le gate VCA runtime du mix-track Hybrid:
@@ -557,6 +586,14 @@ Dette explicite post-passe 4:
 - Les IDs existants `PARAM_MIX_LEVEL`, `PARAM_MIX_PAN`, `PARAM_MIX_SEND1` et `PARAM_MIX_SEND2` restent les seules cibles MIX page 1 exposees au p-lock et au LFO.
 - Autorite de base: `track_sound_state` par track; projection runtime via `param_registry_apply_track_value` / `param_registry_apply_track_value_rt_fast` vers la lane mixer resolue par Z2.
 - Stockage p-lock MIX: `seq_param_iface` garde un etat compact dedie a 4 slots reels, sans reserver la table 256 slots pour ce set.
+- Execution LFO MIX simple: `mod_lfo_v1` applique directement `LEVEL`, `PAN`, `SEND1` et `SEND2` sur la target mixer resolue par Z2, sans passer par `param_registry_apply_track_value_rt_fast`.
+- Ce chemin direct ne modifie pas `track_sound_state`, `param_store`, le cache runtime param ou l'etat UI: il reste une projection runtime modulee temporaire.
+- La release LFO de ces quatre destinations reapplique la base capturee par le meme chemin direct, sauf si un autre LFO actif de la meme track cible deja la meme destination.
+- Execution LFO directe etendue: `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE`, `PARAM_FILTER_EG_AMT`, `PARAM_FILTER_ATTACK`, `PARAM_FILTER_DECAY`, `PARAM_FILTER_SUSTAIN`, `PARAM_FILTER_RELEASE` et `PARAM_VCA_ATTACK`, `PARAM_VCA_DECAY`, `PARAM_VCA_SUSTAIN`, `PARAM_VCA_RELEASE` sont appliques par `mod_lfo_v1` directement vers la target mixer runtime, avec les memes conversions UI->runtime que `param_filter`.
+- Ces chemins directs ne mutent pas la base `track_sound_state`, le shadow FILTER, `param_store` ni le cache runtime param; la base capturee reste restauree sur release, sauf si l'autre LFO actif de la meme track cible encore la meme destination.
+- Execution LFO Sampler/Clip/Multi/Looper directe: `PARAM_SAMPLER_GAIN`, `PARAM_SAMPLER_START`, `PARAM_SAMPLER_END`, `PARAM_SAMPLER_MODE`, `PARAM_SAMPLER_TUNE`, `PARAM_SAMPLER_FADE_IN`, `PARAM_SAMPLER_FADE_OUT`, `PARAM_SAMPLER_SLICE_COUNT`, `PARAM_SAMPLER_CLIP_SOURCE_BPM`, `PARAM_SAMPLER_CLIP_SYNC_LENGTH`, `PARAM_SAMPLER_CLIP_PITCH`, `PARAM_SAMPLER_CLIP_PLAY_MODE`, `PARAM_SAMPLER_CLIP_LOOP`, `PARAM_SAMPLER_CLIP_STRETCH_MODE`, `PARAM_SAMPLER_CLIP_GRAIN`, `PARAM_SAMPLER_CLIP_HOP`, `PARAM_SAMPLER_CLIP_SEARCH`, `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE` sont routes directement vers les setters runtime existants quand le type runtime courant les supporte.
+- Les cibles de selection/chargement (`PARAM_SAMPLER_SAMPLE` / instrument Multi) restent hors chemin direct: elles conservent le fallback generique tant qu'elles restent listables, et ne doivent pas introduire d'acces SD/FatFs/import/load dans `mod_lfo_v1`.
+- Les autres destinations LFO restent sur le chemin RT fast generique.
 
 ## 33. Contrat Sampler/Looper TONE skeleton
 
