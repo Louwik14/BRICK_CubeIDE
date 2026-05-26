@@ -13,6 +13,7 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
 #include "Storage/memory_layout.h"
+#include "Core/brick6_audio_event_grid.h"
 #include "Core/engine_tasklet.h"
 #include "midi.h"
 
@@ -31,6 +32,8 @@
 #define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
+
+static uint32_t seq_runtime_snap_q16_to_audio_grid(uint32_t value_q16);
 
 /* Shared execution state lives in seq_runtime_exec. */
 #define g_seq_runtime (*seq_runtime_exec_state())
@@ -177,6 +180,12 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     }
 }
 
+static uint32_t seq_runtime_snap_q16_to_audio_grid(uint32_t value_q16)
+{
+    const uint32_t grid_q16 = brick6_audio_event_grid_q16_u32();
+    uint32_t snapped = ((value_q16 + (grid_q16 >> 1U)) / grid_q16) * grid_q16;
+    return (snapped != 0U) ? snapped : grid_q16;
+}
 static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli)
 {
     if (bpm_milli == 0U)
@@ -191,7 +200,7 @@ static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli)
     {
         q16 = 1U;
     }
-    return q16;
+    return seq_runtime_snap_q16_to_audio_grid(q16);
 }
 
 static void seq_runtime_update_samples_per_step_from_tempo(void)

@@ -695,3 +695,10 @@ Points factuels observes:
 - Le NOTE OFF planifie par la duree PLAY route vers `brick6_sampler_runtime_note_off_multi_track_note(track,note)` afin de reutiliser le lifecycle release/VCA Multi.
 - Les autres types Sampler gardent le chemin Classic existant (`brick6_sampler_runtime_trigger_note_velocity`, puis note-off Classic/Stream selon contrat).
 - Aucun FatFs, malloc, cache/streaming ou import Multi n'est ajoute au scheduler; le trigger Multi reste le meme seam RAM/page-cache que le clavier.
+
+## Addendum 2026-05-26 - prototype grille PLAY partagee
+
+- `BRICK6_AUDIO_EVENT_GRID_FRAMES` est la grille experimentale commune entre Z1 et Z4 pour le sequenceur interne PLAY.
+- `seq_runtime` quantifie `samples_per_step_q16`; `seq_runtime_exec` snappe les pulses/start/step anchors; `seq_play_scheduler` snappe note-on/note-off/program events sur cette meme grille.
+- Note, velocity, len, microtiming et p-locks PLAY associes partagent donc le meme referentiel bloc-stable.
+- Les chemins live clavier/pads, MIDI externe live, Looper/Q Rec/Q Play et la cadence `mod_lfo_v1` restent hors de ce contrat experimental.

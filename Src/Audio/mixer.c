@@ -724,22 +724,25 @@ static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t 
                                                            float *right,
                                                            uint32_t frames)
 {
-    uint32_t cutoff_update_countdown = 0U;
-
-    for(uint32_t i = 0U; i < frames; ++i)
+    uint32_t i = 0U;
+    while(i < frames)
     {
         const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-        if(cutoff_update_countdown == 0U)
+        fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
+
+        uint32_t chunk = frames - i;
+        if(chunk > MIXER_FILTER_UPDATE_PERIOD)
         {
-            fx_biquad_filter_set_cutoff(&filter->biquad, mixer_track_filter_compute_modulated_cutoff(filter, env));
-            cutoff_update_countdown = MIXER_FILTER_UPDATE_PERIOD - 1U;
-        }
-        else
-        {
-            --cutoff_update_countdown;
+            chunk = MIXER_FILTER_UPDATE_PERIOD;
         }
 
-        fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], 1U);
+        for(uint32_t j = 1U; j < chunk; ++j)
+        {
+            (void)env_adsr_process_step(&filter->filter_env);
+        }
+
+        fx_biquad_filter_process_block(&filter->biquad, &left[i], &right[i], chunk);
+        i += chunk;
     }
 }
 
@@ -747,22 +750,25 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
                                                          float *mono,
                                                          uint32_t frames)
 {
-    uint32_t cutoff_update_countdown = 0U;
-
-    for(uint32_t i = 0U; i < frames; ++i)
+    uint32_t i = 0U;
+    while(i < frames)
     {
         const float env = (float)env_adsr_process_step(&filter->filter_env) * (1.0f / 32767.0f);
-        if(cutoff_update_countdown == 0U)
+        fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, mixer_track_filter_compute_modulated_cutoff(filter, env));
+
+        uint32_t chunk = frames - i;
+        if(chunk > MIXER_FILTER_UPDATE_PERIOD)
         {
-            fx_biquad_filter_mono_set_cutoff(&filter->biquad_mono, mixer_track_filter_compute_modulated_cutoff(filter, env));
-            cutoff_update_countdown = MIXER_FILTER_UPDATE_PERIOD - 1U;
-        }
-        else
-        {
-            --cutoff_update_countdown;
+            chunk = MIXER_FILTER_UPDATE_PERIOD;
         }
 
-        fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], 1U);
+        for(uint32_t j = 1U; j < chunk; ++j)
+        {
+            (void)env_adsr_process_step(&filter->filter_env);
+        }
+
+        fx_biquad_filter_mono_process_block(&filter->biquad_mono, &mono[i], chunk);
+        i += chunk;
     }
 }
 

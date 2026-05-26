@@ -24,6 +24,7 @@
 #include "cpu_load.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
+#include "Core/brick6_audio_event_grid.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -126,114 +127,50 @@ static void process_half(uint32_t half_index)
     /* RX DMA -> CPU: invalider avant lecture CPU du half-buffer traité. */
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
 
-    /* Audio-block seam: collect runtime projection, then keep apply separate from block DSP. */
-    seq_runtime_audio_event_t block_events[AUDIO_SEQ_MAX_BLOCK_EVENTS];
-    const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
-                                                                        AUDIO_SEQ_MAX_BLOCK_EVENTS,
-                                                                        AUDIO_FRAMES_PER_HALF);
-    const uint64_t block_start_sample =
-        seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)AUDIO_FRAMES_PER_HALF;
-    if (event_count > g_audio_seq_diag.max_events_collected_per_half)
-    {
-        g_audio_seq_diag.max_events_collected_per_half = event_count;
-    }
-    uint32_t cursor = 0U;
-    uint16_t event_index = 0U;
     uint16_t segment_count = 0U;
-    while (event_index < event_count)
+    uint16_t half_event_count = 0U;
+    const uint32_t event_grid_frames = brick6_audio_event_grid_frames();
+    for (uint32_t cursor = 0U; cursor < AUDIO_FRAMES_PER_HALF; cursor += event_grid_frames)
     {
-        uint16_t event_offset = block_events[event_index].sample_offset_in_block;
-        if (event_offset > AUDIO_FRAMES_PER_HALF)
+        uint32_t segment_frames = event_grid_frames;
+        if (segment_frames > (AUDIO_FRAMES_PER_HALF - cursor))
         {
-            event_offset = AUDIO_FRAMES_PER_HALF;
+            segment_frames = AUDIO_FRAMES_PER_HALF - cursor;
         }
 
-        while ((uint32_t)event_offset > cursor)
-        {
-            uint16_t start_offset = 0U;
-            const uint32_t remaining_to_event = (uint32_t)event_offset - cursor;
-            if (brick6_looper_runtime_next_start_offset(block_start_sample + (uint64_t)cursor,
-                                                        remaining_to_event,
-                                                        &start_offset) == 0U)
-            {
-                const uint32_t segment_frames = remaining_to_event;
-                process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      block_start_sample + (uint64_t)cursor,
-                                      segment_frames);
-                cursor = (uint32_t)event_offset;
-                segment_count++;
-                break;
-            }
+        seq_runtime_audio_event_t block_events[AUDIO_SEQ_MAX_BLOCK_EVENTS];
+        const uint16_t event_count = seq_runtime_audio_collect_block_events(block_events,
+                                                                            AUDIO_SEQ_MAX_BLOCK_EVENTS,
+                                                                            (uint16_t)segment_frames);
+        const uint64_t block_start_sample =
+            seq_runtime_exec_get_audio_timeline_sample() - (uint64_t)segment_frames;
+        half_event_count = (uint16_t)(half_event_count + event_count);
 
-            if (start_offset != 0U)
-            {
-                const uint32_t segment_frames = (uint32_t)start_offset;
-                process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                      block_start_sample + (uint64_t)cursor,
-                                      segment_frames);
-                cursor += segment_frames;
-                segment_count++;
-            }
-            brick6_looper_runtime_on_scheduled_start(block_start_sample + (uint64_t)cursor);
-        }
-
-        if ((uint32_t)event_offset > cursor)
+        for (uint16_t event_index = 0U; event_index < event_count; ++event_index)
         {
-            const uint32_t segment_frames = (uint32_t)event_offset - cursor;
-            process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                  block_start_sample + (uint64_t)cursor,
-                                  segment_frames);
-            cursor = (uint32_t)event_offset;
-            segment_count++;
-        }
-
-        while ((event_index < event_count)
-               && (block_events[event_index].sample_offset_in_block == event_offset))
-        {
+            block_events[event_index].sample_offset_in_block = 0U;
             if (block_events[event_index].type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
             {
                 brick6_looper_runtime_on_boundary_edge(block_events[event_index].track,
-                                                       block_start_sample + (uint64_t)event_offset);
+                                                       block_start_sample);
             }
             else
             {
-                /* Audio apply seam: runtime event dispatch stays separate from block scheduling and block DSP. */
                 seq_runtime_audio_apply_event(&block_events[event_index]);
             }
-            event_index++;
         }
+
+        brick6_looper_runtime_on_scheduled_start(block_start_sample);
+        process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
+                              &tx[cursor * AUDIO_WORDS_PER_FRAME],
+                              block_start_sample,
+                              segment_frames);
+        segment_count++;
     }
 
-    while (cursor < AUDIO_FRAMES_PER_HALF)
+    if (half_event_count > g_audio_seq_diag.max_events_collected_per_half)
     {
-        uint16_t start_offset = 0U;
-        const uint32_t remaining = AUDIO_FRAMES_PER_HALF - cursor;
-        if (brick6_looper_runtime_next_start_offset(block_start_sample + (uint64_t)cursor,
-                                                    remaining,
-                                                    &start_offset) == 0U)
-        {
-            process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                  block_start_sample + (uint64_t)cursor,
-                                  remaining);
-            cursor = AUDIO_FRAMES_PER_HALF;
-            segment_count++;
-            break;
-        }
-
-        if (start_offset != 0U)
-        {
-            process_audio_segment(&rx[cursor * AUDIO_WORDS_PER_FRAME],
-                                  &tx[cursor * AUDIO_WORDS_PER_FRAME],
-                                  block_start_sample + (uint64_t)cursor,
-                                  (uint32_t)start_offset);
-            cursor += (uint32_t)start_offset;
-            segment_count++;
-        }
-        brick6_looper_runtime_on_scheduled_start(block_start_sample + (uint64_t)cursor);
+        g_audio_seq_diag.max_events_collected_per_half = half_event_count;
     }
 
     /* CPU -> TX DMA: clean après écriture CPU et avant lecture DMA. */

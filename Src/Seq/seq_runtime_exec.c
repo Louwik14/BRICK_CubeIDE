@@ -11,6 +11,7 @@
 
 #include "Seq/seq_runtime_exec.h"
 
+#include "Core/brick6_audio_event_grid.h"
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
@@ -43,6 +44,13 @@ static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event
                                                          uint16_t block_frames,
                                                          uint64_t block_start_sample);
 static void seq_runtime_exec_sort_audio_events(seq_runtime_audio_event_t *events, uint16_t count);
+static uint64_t seq_runtime_exec_snap_q16_to_grid(uint64_t sample_q16);
+
+static uint64_t seq_runtime_exec_snap_q16_to_grid(uint64_t sample_q16)
+{
+    const uint64_t grid_q16 = brick6_audio_event_grid_q16_u64();
+    return ((sample_q16 + (grid_q16 >> 1U)) / grid_q16) * grid_q16;
+}
 
 seq_runtime_state_t *seq_runtime_exec_state(void)
 {
@@ -180,7 +188,7 @@ void seq_runtime_exec_prepare_start_lifecycle(seq_runtime_state_t *state,
     state->last_tick_count = now_tick;
     state->ext_clock_tick_accum = 0U;
     state->running = 0U;
-    state->step_sample_q16 = (seq_runtime_exec_get_audio_timeline_sample() << 16);
+    state->step_sample_q16 = seq_runtime_exec_snap_q16_to_grid(seq_runtime_exec_get_audio_timeline_sample() << 16);
     seq_runtime_exec_set_external_step_pulses_pending(0U);
     seq_play_scheduler_clear();
     seq_output_guard_reset();
@@ -271,7 +279,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
     state->ticks_per_step = (uint16_t)((clock_bridge->internal_next_step_ticks == 0U)
                                            ? 1U
                                            : clock_bridge->internal_next_step_ticks);
-    state->step_sample_q16 = start_sample_q16;
+    state->step_sample_q16 = seq_runtime_exec_snap_q16_to_grid(start_sample_q16);
     state->running = 1U;
 
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
@@ -370,7 +378,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
     if (seq_transport_fsm_is_start_pending(transport_fsm) != 0U)
     {
         /* Progression guard: a pending-start pulse owns the transition into RUNNING and anchors step zero. */
-        state->step_sample_q16 = pulse_sample_q16;
+        state->step_sample_q16 = seq_runtime_exec_snap_q16_to_grid(pulse_sample_q16);
         if (seq_transport_fsm_on_step_pulse(transport_fsm) != 0U)
         {
             seq_runtime_exec_begin_running_at_sample_q16(state,
@@ -402,7 +410,7 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
         seq_live_rec_session_on_step_advanced(state, now_sample);
     }
 
-    state->step_sample_q16 = pulse_sample_q16;
+    state->step_sample_q16 = seq_runtime_exec_snap_q16_to_grid(pulse_sample_q16);
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
         /* Progression guard: scheduling follows the same transport running state as advancement. */
@@ -473,7 +481,7 @@ void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
                                                           clock_bridge,
                                                           diag,
                                                           track_loop_generation,
-                                                          next_pulse_sample_q16,
+                                                          seq_runtime_exec_snap_q16_to_grid(next_pulse_sample_q16),
                                                           now_tick,
                                                           seq_runtime_exec_get_audio_timeline_sample());
         pulses_in_block++;
@@ -528,7 +536,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
         return;
     }
 
-    const uint64_t pulse_sample_q16 = block_start_sample << 16;
+    const uint64_t pulse_sample_q16 = seq_runtime_exec_snap_q16_to_grid(block_start_sample << 16);
     while (pending_steps > 0U)
     {
         seq_runtime_exec_process_step_pulse_at_sample_q16(state,
