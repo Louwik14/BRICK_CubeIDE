@@ -170,14 +170,34 @@ void fx_biquad_filter_set_cutoff(fx_biquad_filter_t *filter, float cutoff_hz)
 {
     if(filter == NULL) return;
     filter->cutoff_hz = cutoff_hz;
-    fx_biquad_filter_update_coeffs(filter);
+
+    const int16_t frequency_q15 = fx_biquad_filter_cutoff_to_peaks_frequency(filter->cutoff_hz, filter->sample_rate);
+    if(frequency_q15 == filter->frequency_q15)
+    {
+        return;
+    }
+
+    filter->frequency_q15 = frequency_q15;
+    filter->f_q15 = (int32_t)fx_biquad_filter_interpolate824(fx_peaks_lut_svf_cutoff,
+                                                             ((uint32_t)(uint16_t)filter->frequency_q15) << 17);
+    filter->coeffs_pending_update = 1U;
 }
 
 void fx_biquad_filter_set_q(fx_biquad_filter_t *filter, float q)
 {
     if(filter == NULL) return;
     filter->q = q;
-    fx_biquad_filter_update_coeffs(filter);
+
+    const int16_t resonance_q15 = fx_biquad_filter_q_to_peaks_resonance(filter->q);
+    if(resonance_q15 == filter->resonance_q15)
+    {
+        return;
+    }
+
+    filter->resonance_q15 = resonance_q15;
+    filter->damp_q15 = (int32_t)fx_biquad_filter_interpolate824(fx_peaks_lut_svf_damp,
+                                                                ((uint32_t)(uint16_t)filter->resonance_q15) << 17);
+    filter->coeffs_pending_update = 1U;
 }
 
 void fx_biquad_filter_set_bypass(fx_biquad_filter_t *filter, uint8_t bypass)
@@ -305,14 +325,34 @@ void fx_biquad_filter_mono_set_cutoff(fx_biquad_filter_mono_t *filter, float cut
 {
     if(filter == NULL) return;
     filter->cutoff_hz = cutoff_hz;
-    fx_biquad_filter_mono_update_coeffs(filter);
+
+    const int16_t frequency_q15 = fx_biquad_filter_cutoff_to_peaks_frequency(filter->cutoff_hz, filter->sample_rate);
+    if(frequency_q15 == filter->frequency_q15)
+    {
+        return;
+    }
+
+    filter->frequency_q15 = frequency_q15;
+    filter->f_q15 = (int32_t)fx_biquad_filter_interpolate824(fx_peaks_lut_svf_cutoff,
+                                                             ((uint32_t)(uint16_t)filter->frequency_q15) << 17);
+    filter->coeffs_pending_update = 1U;
 }
 
 void fx_biquad_filter_mono_set_q(fx_biquad_filter_mono_t *filter, float q)
 {
     if(filter == NULL) return;
     filter->q = q;
-    fx_biquad_filter_mono_update_coeffs(filter);
+
+    const int16_t resonance_q15 = fx_biquad_filter_q_to_peaks_resonance(filter->q);
+    if(resonance_q15 == filter->resonance_q15)
+    {
+        return;
+    }
+
+    filter->resonance_q15 = resonance_q15;
+    filter->damp_q15 = (int32_t)fx_biquad_filter_interpolate824(fx_peaks_lut_svf_damp,
+                                                                ((uint32_t)(uint16_t)filter->resonance_q15) << 17);
+    filter->coeffs_pending_update = 1U;
 }
 
 void fx_biquad_filter_mono_set_bypass(fx_biquad_filter_mono_t *filter, uint8_t bypass)
