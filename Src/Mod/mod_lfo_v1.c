@@ -54,6 +54,7 @@ typedef struct
     float current;
     uint32_t rng_state;
     float sh_value;
+    uint8_t sh_valid;
     uint16_t last_dest;
     float base_value;
     float dest_min;
@@ -1322,9 +1323,13 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             const uint32_t phase_prev = rt->phase;
             rt->phase += (uint32_t)(((uint64_t)rt->phase_inc) * (uint64_t)elapsed_frames);
 
-            if (((mod_lfo_shape_t)((uint8_t)(shape + 0.5f)) == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_prev))
+            if ((mod_lfo_shape_t)((uint8_t)(shape + 0.5f)) == MOD_LFO_SHAPE_RANDOM_SH)
             {
-                rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+                if ((rt->sh_valid == 0U) || (rt->phase < phase_prev))
+                {
+                    rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+                    rt->sh_valid = 1U;
+                }
             }
 
             rt->current = mod_lfo_wave((mod_lfo_shape_t)((uint8_t)(shape + 0.5f)), phase_prev, rt);
@@ -1358,6 +1363,7 @@ void mod_lfo_v1_init(void)
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
             g_mod_lfo_runtime[track][lfo].rng_state = 0xA341316CU ^ ((uint32_t)track << 8) ^ (uint32_t)lfo;
             g_mod_lfo_runtime[track][lfo].sh_value = 0.0f;
+            g_mod_lfo_runtime[track][lfo].sh_valid = 0U;
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].base_value = 0.0f;
@@ -1388,6 +1394,7 @@ void mod_lfo_v1_reset_runtime(void)
                 g_mod_lfo_runtime[track][lfo].phase_inc = mod_lfo_phase_inc_from_rate(rate);
             }
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
+            g_mod_lfo_runtime[track][lfo].sh_valid = 0U;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             g_mod_lfo_runtime[track][lfo].depth_scale = 0.0f;
@@ -1450,6 +1457,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
         case MOD_LFO_PARAM_SHAPE:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
+            rt->sh_valid = 0U;
             return 1U;
 
         default:
@@ -1508,6 +1516,7 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
 
         case MOD_LFO_PARAM_SHAPE:
             rt->temp.shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
+            rt->sh_valid = 0U;
             break;
 
         default:

@@ -659,3 +659,9 @@ Dette explicite post-passe 4:
 - Le tick est place avant le rendu des engines dans `brick6_audio_runtime_dsp`; les destinations moteur et mixer consomment donc la valeur de la fenetre courante, sans decalage volontaire d'un bloc.
 - `MOD_LFO_WINDOW_RATE_EXPERIMENT=0` conserve le chemin legacy 3000 Hz / stride 16 frames.
 - Cette passe ne change ni les destinations LFO, ni les params utilisateur, ni les formes d'onde, ni le routing runtime direct existant.
+
+## 38. Contrat LFO RANDOM/S&H
+
+- `MOD_LFO_SHAPE_RANDOM_SH` est un sample-and-hold bipolaire, pas un bruit aleatoire par tick.
+- La valeur aleatoire est tenue entre deux wraps de phase LFO et regeneree au premier tick actif apres init/reset/changement de shape, puis a chaque wrap de phase.
+- En mode window-rate, si une fenetre traverse le wrap, la nouvelle valeur est appliquee a toute la fenetre courante, comme les autres formes tenues par fenetre; aucun ramp ni interpolation random n'est introduit.
