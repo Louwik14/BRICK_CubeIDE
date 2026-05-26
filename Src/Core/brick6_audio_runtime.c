@@ -222,6 +222,8 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
     g_runtime_track_enabled = synth_runtime_enabled;
 
     mixer_external_inputs_clear();
+    mod_lfo_v1_process_block(frames);
+
     if (synth_runtime_enabled != 0U)
     {
         uint8_t drum_processed = 0U;
@@ -252,8 +254,6 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         brick6_render_wave_tracks(frames, &wave_tracks);
         (void)wave_tracks;
     }
-
-    mod_lfo_v1_process_block(frames);
 
     if((track_count > 0U) && (tracks[0].enabled != 0U))
     {

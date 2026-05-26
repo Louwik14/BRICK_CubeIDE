@@ -796,3 +796,12 @@ Clarification START/END/LOOP live:
 - Les clears mixer/sends/delay restent complets; aucun clear partiel de `send_l/send_r` ou buffers delay n'est introduit.
 - Les filtres track biquad LP/HP/BP stereo et mono sont traites par chunks de `MIXER_FILTER_UPDATE_PERIOD`: l'enveloppe ADSR avance toujours a la cadence sample, mais les appels `fx_biquad_filter*_process_block()` ne sont plus relances sample par sample.
 - `mod_lfo_v1` n'est pas modifie dans cette passe; sa cadence de controle reste celle du code courant.
+
+## Addendum 2026-05-26 - LFO window-rate experimental
+
+- `mod_lfo_v1_process_block(frames)` est appele apres le clear des entrees externes mixer et avant le rendu des engines, afin que les destinations moteur voient la valeur LFO de la fenetre courante et que les destinations mixer restent appliquees avant `mixer_process()`.
+- En mode experimental, le LFO traite une valeur par fenetre audio recue par `mod_lfo_v1_process_block(frames)`, typiquement la fenetre `BRICK6_AUDIO_EVENT_GRID_FRAMES`; une valeur de grille 32 ou 64 permet de tester le cout pire cas de 28 LFO actifs sans changer les destinations.
+- La phase LFO avance par nombre de frames ecoulees, pas par nombre fixe de ticks 3000 Hz; un LFO rapide ne declenche donc pas plus d'updates qu'un LFO lent.
+- La valeur LFO est tenue sur la fenetre de controle; aucun ramp supplementaire ni instrumentation IRQ n'est ajoute dans cette passe.
+- Correction 2026-05-26: le mode experimental n'attend plus un accumulateur `MOD_LFO_WINDOW_RATE_FRAMES`; il applique immediatement un tick LFO avec le `frames` du bloc courant pour eviter un retard d'une fenetre au demarrage/reset et respecter les sous-fenetres eventuelles.
+- Correction 2026-05-26: le tick LFO est avance avant le rendu Drum/Sampler/Looper/Wave; les modulations moteur ne restent plus decalees d'une fenetre audio par rapport au rendu.

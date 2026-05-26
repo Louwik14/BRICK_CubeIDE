@@ -649,3 +649,13 @@ Dette explicite post-passe 4:
 - Si la metadata de prise Looper est invalide, le runtime retombe sur `Off`; si le pool Shifter Looper est plein, il retombe sur `Speed`.
 - `seq_param_iface` et `mod_lfo_v1` excluent `PARAM_LOOPER_STRETCH`, `PARAM_LOOPER_PITCH` et `PARAM_LOOPER_GRAIN` du p-lock/LFO: ces controles restent projetes par write param autoritatif, pas par modulation continue.
 - `SRC BPM` et `SYNC LEN` restent des params Stream uniquement; le stretch Looper utilise la metadata de prise REC.
+
+## 37. Contrat experimental LFO window-rate
+
+- `mod_lfo_v1` possede maintenant un mode compile-time experimental `MOD_LFO_WINDOW_RATE_EXPERIMENT`.
+- Quand ce mode vaut `1`, la cadence de modulation suit la fenetre audio recue par `mod_lfo_v1_process_block(frames)`, typiquement alignee sur `BRICK6_AUDIO_EVENT_GRID_FRAMES`.
+- Le LFO calcule une seule valeur tenue par fenetre audio courante et avance la phase par `phase_inc_per_sample * frames`, afin que le cout d'un LFO rapide ne depende pas de sa frequence.
+- Le mode experimental applique le tick immediatement sur chaque appel bloc; il ne passe pas par l'accumulateur legacy, ce qui evite de garder une valeur ancienne jusqu'a la prochaine fenetre complete et preserve les sous-fenetres eventuelles.
+- Le tick est place avant le rendu des engines dans `brick6_audio_runtime_dsp`; les destinations moteur et mixer consomment donc la valeur de la fenetre courante, sans decalage volontaire d'un bloc.
+- `MOD_LFO_WINDOW_RATE_EXPERIMENT=0` conserve le chemin legacy 3000 Hz / stride 16 frames.
+- Cette passe ne change ni les destinations LFO, ni les params utilisateur, ni les formes d'onde, ni le routing runtime direct existant.

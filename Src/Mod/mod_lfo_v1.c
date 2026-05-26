@@ -5,6 +5,7 @@
 
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
+#include "Core/brick6_audio_event_grid.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/track_sound_state.h"
@@ -21,8 +22,18 @@
 #define MOD_LFO_RATE_STEP_COUNT 15U
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
-#define MOD_LFO_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))
-#define MOD_LFO_CONTROL_DT (1.0f / MOD_LFO_CONTROL_RATE_HZ)
+#define MOD_LFO_LEGACY_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))
+#define MOD_LFO_WINDOW_RATE_EXPERIMENT 1U
+#ifndef MOD_LFO_WINDOW_RATE_FRAMES
+#define MOD_LFO_WINDOW_RATE_FRAMES BRICK6_AUDIO_EVENT_GRID_FRAMES
+#endif
+#if MOD_LFO_WINDOW_RATE_EXPERIMENT
+#define MOD_LFO_CONTROL_STRIDE ((uint32_t)MOD_LFO_WINDOW_RATE_FRAMES)
+#define MOD_LFO_PHASE_DT (1.0f / MOD_LFO_AUDIO_SAMPLE_RATE)
+#else
+#define MOD_LFO_CONTROL_STRIDE MOD_LFO_LEGACY_CONTROL_STRIDE
+#define MOD_LFO_PHASE_DT (1.0f / MOD_LFO_CONTROL_RATE_HZ)
+#endif
 #define MOD_LFO_DEST_NONE ((param_id_t)PARAM_COUNT)
 #define MOD_LFO_SINE_LUT_SIZE 256U
 
@@ -1108,7 +1119,7 @@ static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(uint8_t rate_index, uint32_
     const float bars_per_cycle = g_mod_lfo_rate_bars_per_cycle[idx];
     const float seconds_per_cycle = bars_per_cycle * (240.0f / mod_lfo_clampf(bpm, 40.0f, 300.0f));
     const float hz = 1.0f / mod_lfo_clampf(seconds_per_cycle, 0.0005f, 60.0f);
-    const double phase_f = (double)hz * (4294967296.0 * (double)MOD_LFO_CONTROL_DT);
+    const double phase_f = (double)hz * (4294967296.0 * (double)MOD_LFO_PHASE_DT);
     if (phase_f <= 1.0)
     {
         return 1U;
@@ -1253,7 +1264,7 @@ static void mod_lfo_release_last_destination(uint8_t track,
     rt->depth_scale = 0.0f;
 }
 
-static void mod_lfo_process_control_tick(void)
+static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 {
     if (param_registry_track_structure_transition_is_active() != 0U)
     {
@@ -1309,7 +1320,7 @@ static void mod_lfo_process_control_tick(void)
 
             rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm((uint8_t)(rate + 0.5f), bpm_milli);
             const uint32_t phase_prev = rt->phase;
-            rt->phase += rt->phase_inc;
+            rt->phase += (uint32_t)(((uint64_t)rt->phase_inc) * (uint64_t)elapsed_frames);
 
             if (((mod_lfo_shape_t)((uint8_t)(shape + 0.5f)) == MOD_LFO_SHAPE_RANDOM_SH) && (rt->phase < phase_prev))
             {
@@ -1604,12 +1615,17 @@ void mod_lfo_v1_process_block(uint32_t frames)
         return;
     }
 
+#if MOD_LFO_WINDOW_RATE_EXPERIMENT
+    g_mod_lfo_control_counter = 0U;
+    mod_lfo_process_control_tick(frames);
+#else
     g_mod_lfo_control_counter += frames;
     while (g_mod_lfo_control_counter >= MOD_LFO_CONTROL_STRIDE)
     {
         g_mod_lfo_control_counter -= MOD_LFO_CONTROL_STRIDE;
-        mod_lfo_process_control_tick();
+        mod_lfo_process_control_tick(1U);
     }
+#endif
 }
 
 uint16_t mod_lfo_v1_dest_count(uint8_t track)
