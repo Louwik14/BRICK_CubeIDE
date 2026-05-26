@@ -129,6 +129,23 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
             continue;
         }
 
+        if ((brick6_sampler_runtime_track_has_active_ram_voice(ctx->track_id) != 0U)
+                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_CLIP)
+                && ((track_runtime_type_t)ctx->type != TRACK_RUNTIME_TYPE_MULTI))
+        {
+            float *direct_l = NULL;
+            float *direct_r = NULL;
+            if (mixer_begin_external_stereo(ctx->mix_track_id, frames, &direct_l, &direct_r) != 0U)
+            {
+                memset(direct_l, 0, frames * sizeof(float));
+                memset(direct_r, 0, frames * sizeof(float));
+                brick6_sampler_runtime_render_track(ctx, direct_l, direct_r, frames);
+                mixer_commit_external_stereo(ctx->mix_track_id, frames);
+                sampler_tracks++;
+                continue;
+            }
+        }
+
         memset(sampler_tmp_l, 0, frames * sizeof(float));
         memset(sampler_tmp_r, 0, frames * sizeof(float));
         brick6_sampler_runtime_render_track(ctx, sampler_tmp_l, sampler_tmp_r, frames);

@@ -2,9 +2,29 @@
 
 #include <string.h>
 
-#include "Storage/wav_audio_codec.h"
-
 #define SAMPLE_Q16_ONE (65536U)
+#define SAMPLE_Q16_FRAC_MASK (SAMPLE_Q16_ONE - 1U)
+
+static inline uint16_t sample_voice_reader_stochastic_threshold(uint32_t frame_index,
+                                                                uint32_t pos_q16,
+                                                                uint16_t seed)
+{
+    uint32_t x = frame_index * 747796405UL;
+    x ^= pos_q16 * 2891336453UL;
+    x ^= (uint32_t)seed * 277803737UL;
+    x ^= x >> 16U;
+    x *= 2246822519UL;
+    x ^= x >> 13U;
+    return (uint16_t)(x >> 16U);
+}
+
+static inline uint8_t sample_voice_reader_pick_next(uint32_t pos_q16,
+                                                    uint32_t frame_index,
+                                                    uint16_t seed)
+{
+    const uint16_t frac = (uint16_t)(pos_q16 & SAMPLE_Q16_FRAC_MASK);
+    return (frac > sample_voice_reader_stochastic_threshold(frame_index, pos_q16, seed)) ? 1U : 0U;
+}
 
 typedef struct
 {
@@ -1051,65 +1071,106 @@ void sample_voice_reader_mix_pitch_fwd_linear(const sample_audio_segment_t *segm
     float *dst_r = &out_r[out_offset];
     const uint8_t has_neighbor = ((neighbor != 0) && (segment->neighbor_r != 0)) ? 1U : 0U;
     const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
-    const float frac_scale = 1.0f / 65536.0f;
     float last_l = 0.0f;
     float last_r = 0.0f;
 
-    for (uint32_t i = 0U; i < frames; ++i)
+    if (frames == 0U)
     {
-        const uint32_t base_offset = pos_q16 >> 16;
-        const uint32_t base_frame = segment->source_start_frame + base_offset;
-        const float frac = (float)(pos_q16 & 0xFFFFU) * frac_scale;
-        const uint32_t current_index = base_offset;
-        const float *const curr_ptr = &src[current_index * 2U];
-        const float curr_l = curr_ptr[0];
-        const float curr_r = curr_ptr[1];
-        float next_l = curr_l;
-        float next_r = curr_r;
+        return;
+    }
 
-        if (((base_frame + 1U) < source_limit_frame) && ((base_frame + 1U) < source_end_frame))
+    const uint64_t last_pos_q16 =
+        (uint64_t)pos_q16 + ((uint64_t)step_q16 * (uint64_t)(frames - 1U));
+    const uint32_t last_base_offset = (uint32_t)(last_pos_q16 >> 16U);
+    const uint8_t same_span =
+        ((last_base_offset + 1U) < segment->source_frame_count)
+        && ((source_start_frame + last_base_offset + 1U) < source_limit_frame) ? 1U : 0U;
+
+    if (same_span != 0U)
+    {
+        uint32_t cached_next_index = UINT32_MAX;
+        float cached_next_l = 0.0f;
+        float cached_next_r = 0.0f;
+
+        for (uint32_t i = 0U; i < frames; ++i)
         {
-            const float *const next_ptr = &src[(current_index + 1U) * 2U];
-            next_l = next_ptr[0];
-            next_r = next_ptr[1];
-        }
-        else if ((base_frame + 1U) >= source_limit_frame)
-        {
-            const uint32_t wrap_frame = segment->source_region_begin;
-            const float *next_ptr = 0;
-            if ((wrap_frame >= source_start_frame) && (wrap_frame < source_end_frame))
+            const uint32_t base_offset = pos_q16 >> 16U;
+            const uint32_t base_frame = source_start_frame + base_offset;
+            uint32_t read_index = base_offset;
+            if (sample_voice_reader_pick_next(pos_q16, base_frame, segment->start_frame) != 0U)
             {
-                next_ptr = &src[(wrap_frame - source_start_frame) * 2U];
-            }
-            else if (has_neighbor != 0U)
-            {
-                const uint32_t neighbor_index = wrap_frame - neighbor_start_frame;
-                next_ptr = &neighbor[neighbor_index * 2U];
+                read_index = base_offset + 1U;
             }
 
-            if (next_ptr != 0)
+            const uint32_t src0 = read_index * 2U;
+            float sample_l = 0.0f;
+            float sample_r = 0.0f;
+            if (read_index == cached_next_index)
             {
-                next_l = next_ptr[0];
-                next_r = next_ptr[1];
+                sample_l = cached_next_l;
+                sample_r = cached_next_r;
             }
-        }
-        else if (has_neighbor != 0U)
-        {
-            const uint32_t neighbor_frame = base_frame + 1U;
-            const uint32_t neighbor_index = neighbor_frame - neighbor_start_frame;
-            const float *const next_ptr = &neighbor[neighbor_index * 2U];
-            next_l = next_ptr[0];
-            next_r = next_ptr[1];
-        }
+            else
+            {
+                sample_l = src[src0];
+                sample_r = src[src0 + 1U];
+            }
 
-        const float sample_l = curr_l + ((next_l - curr_l) * frac);
-        const float sample_r = curr_r + ((next_r - curr_r) * frac);
-        const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
-        last_l = sample_l * sample_gain;
-        last_r = sample_r * sample_gain;
-        dst_l[i] += last_l;
-        dst_r[i] += last_r;
-        pos_q16 += step_q16;
+            const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+            last_l = sample_l * sample_gain;
+            last_r = sample_r * sample_gain;
+            dst_l[i] += last_l;
+            dst_r[i] += last_r;
+            cached_next_index = read_index;
+            cached_next_l = sample_l;
+            cached_next_r = sample_r;
+            pos_q16 += step_q16;
+        }
+    }
+    else
+    {
+        for (uint32_t i = 0U; i < frames; ++i)
+        {
+            const uint32_t base_offset = pos_q16 >> 16U;
+            const uint32_t base_frame = source_start_frame + base_offset;
+            const float *read_ptr = &src[base_offset * 2U];
+
+            if (sample_voice_reader_pick_next(pos_q16, base_frame, segment->start_frame) != 0U)
+            {
+                if (((base_frame + 1U) < source_limit_frame) && ((base_frame + 1U) < source_end_frame))
+                {
+                    read_ptr = &src[(base_offset + 1U) * 2U];
+                }
+                else if ((base_frame + 1U) >= source_limit_frame)
+                {
+                    const uint32_t wrap_frame = segment->source_region_begin;
+                    if ((wrap_frame >= source_start_frame) && (wrap_frame < source_end_frame))
+                    {
+                        read_ptr = &src[(wrap_frame - source_start_frame) * 2U];
+                    }
+                    else if (has_neighbor != 0U)
+                    {
+                        const uint32_t neighbor_index = wrap_frame - neighbor_start_frame;
+                        read_ptr = &neighbor[neighbor_index * 2U];
+                    }
+                }
+                else if (has_neighbor != 0U)
+                {
+                    const uint32_t neighbor_frame = base_frame + 1U;
+                    const uint32_t neighbor_index = neighbor_frame - neighbor_start_frame;
+                    read_ptr = &neighbor[neighbor_index * 2U];
+                }
+            }
+
+            const float sample_l = read_ptr[0];
+            const float sample_r = read_ptr[1];
+            const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+            last_l = sample_l * sample_gain;
+            last_r = sample_r * sample_gain;
+            dst_l[i] += last_l;
+            dst_r[i] += last_r;
+            pos_q16 += step_q16;
+        }
     }
     if ((frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
     {
@@ -1149,54 +1210,198 @@ void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segm
                                      ? 1U
                                      : 0U;
     const uint8_t has_fade = ((fade_gain != 0) && (fade_count != 0U)) ? 1U : 0U;
-    const float frac_scale = 1.0f / 65536.0f;
     float last_l = 0.0f;
     float last_r = 0.0f;
 
-    for (uint32_t i = 0U; i < frames; ++i)
+    if (frames == 0U)
     {
-        const uint32_t base_offset = pos_q16 >> 16;
-        const uint32_t base_frame = source_start_frame + base_offset;
-        const float frac = (float)(pos_q16 & 0xFFFFU) * frac_scale;
-        const uint32_t current_index = base_offset;
-        const float *const curr_ptr = &src[current_index * 2U];
-        const float curr_l = curr_ptr[0];
-        const float curr_r = curr_ptr[1];
-        float prev_l = curr_l;
-        float prev_r = curr_r;
+        return;
+    }
 
-        if (base_frame > source_region_begin)
+    const uint64_t reverse_span_q16 = (uint64_t)step_q16 * (uint64_t)(frames - 1U);
+    const uint32_t end_pos_q16 = (reverse_span_q16 < (uint64_t)pos_q16)
+                                     ? (pos_q16 - (uint32_t)reverse_span_q16)
+                                     : 0U;
+    const uint32_t min_base_offset = end_pos_q16 >> 16U;
+    const uint8_t same_span =
+        ((min_base_offset > 0U) && ((source_start_frame + min_base_offset) > source_region_begin)) ? 1U : 0U;
+
+    if (same_span != 0U)
+    {
+        for (uint32_t i = 0U; i < frames; ++i)
         {
-            if (base_frame > source_start_frame)
-            {
-                const float *const prev_ptr = &src[(current_index - 1U) * 2U];
-                prev_l = prev_ptr[0];
-                prev_r = prev_ptr[1];
-            }
-            else if (has_neighbor != 0U)
-            {
-                const uint32_t prev_frame = base_frame - 1U;
-                const uint32_t prev_index = prev_frame - neighbor_start_frame;
-                const float *const prev_ptr = &neighbor[prev_index * 2U];
-                prev_l = prev_ptr[0];
-                prev_r = prev_ptr[1];
-            }
+            const uint32_t base_offset = pos_q16 >> 16U;
+            const uint32_t base_frame = source_start_frame + base_offset;
+            const uint32_t read_offset =
+                (sample_voice_reader_pick_next(pos_q16, base_frame, segment->start_frame) != 0U)
+                    ? (base_offset - 1U)
+                    : base_offset;
+            const uint32_t src0 = read_offset * 2U;
+            const float sample_l = src[src0];
+            const float sample_r = src[src0 + 1U];
+            const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+            last_l = sample_l * sample_gain;
+            last_r = sample_r * sample_gain;
+            dst_l[i] += last_l;
+            dst_r[i] += last_r;
+            pos_q16 -= step_q16;
         }
+    }
+    else
+    {
+        for (uint32_t i = 0U; i < frames; ++i)
+        {
+            const uint32_t base_offset = pos_q16 >> 16U;
+            const uint32_t base_frame = source_start_frame + base_offset;
+            const float *read_ptr = &src[base_offset * 2U];
 
-        const float sample_l = curr_l + ((prev_l - curr_l) * frac);
-        const float sample_r = curr_r + ((prev_r - curr_r) * frac);
-        const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
-        last_l = sample_l * sample_gain;
-        last_r = sample_r * sample_gain;
-        dst_l[i] += last_l;
-        dst_r[i] += last_r;
-        pos_q16 -= step_q16;
+            if ((base_frame > source_region_begin)
+                && (sample_voice_reader_pick_next(pos_q16, base_frame, segment->start_frame) != 0U))
+            {
+                if (base_frame > source_start_frame)
+                {
+                    read_ptr = &src[(base_offset - 1U) * 2U];
+                }
+                else if (has_neighbor != 0U)
+                {
+                    const uint32_t prev_frame = base_frame - 1U;
+                    const uint32_t prev_index = prev_frame - neighbor_start_frame;
+                    read_ptr = &neighbor[prev_index * 2U];
+                }
+            }
+
+            const float sample_l = read_ptr[0];
+            const float sample_r = read_ptr[1];
+            const float sample_gain = (has_fade != 0U) ? (gain_base * fade_gain[i]) : gain_base;
+            last_l = sample_l * sample_gain;
+            last_r = sample_r * sample_gain;
+            dst_l[i] += last_l;
+            dst_r[i] += last_r;
+            pos_q16 -= step_q16;
+        }
     }
     if ((frames != 0U) && (out_last_l != 0) && (out_last_r != 0))
     {
         *out_last_l = last_l;
         *out_last_r = last_r;
     }
+}
+
+uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *reader,
+                                                       float gain,
+                                                       float *out_l,
+                                                       float *out_r,
+                                                       uint32_t frames,
+                                                       uint32_t out_offset,
+                                                       uint32_t *out_rendered,
+                                                       float *out_last_l,
+                                                       float *out_last_r)
+{
+    if (out_rendered != 0)
+    {
+        *out_rendered = 0U;
+    }
+    if ((reader == 0) || (out_l == 0) || (out_r == 0) || (frames == 0U)
+        || (reader->active == 0U))
+    {
+        return 0U;
+    }
+
+    sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+    if ((state->plan_valid == 0U)
+        || (state->plan.kernel_type != SAMPLE_KERNEL_FWD_1X)
+        || (state->plan.direction != 0U)
+        || (state->plan.loop_mode != SAMPLE_PLAY_LOOP_NONE)
+        || (state->plan.step_q16 != SAMPLE_Q16_ONE))
+    {
+        return 0U;
+    }
+
+    const uint32_t forward_end = sample_voice_reader_forward_end_frame(state);
+    if (state->frame_pos >= forward_end)
+    {
+        state->position = (float)forward_end;
+        state->active = 0U;
+        sample_voice_reader_release_audio_cursor(state);
+        return 0U;
+    }
+
+    if (state->audio_cursor.current_acquired == 0U)
+    {
+        if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    if ((state->frame_pos < state->audio_cursor.current_start_frame)
+        || (state->frame_pos
+            >= (state->audio_cursor.current_start_frame + state->audio_cursor.current_frame_count)))
+    {
+        sample_voice_reader_release_audio_cursor(state);
+        if (sample_voice_reader_acquire_audio_page(state, state->frame_pos) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    const uint32_t offset_frames = state->frame_pos - state->audio_cursor.current_start_frame;
+    uint32_t todo = state->audio_cursor.current_frame_count - offset_frames;
+    const uint32_t region_remaining = forward_end - state->frame_pos;
+    if (todo > region_remaining)
+    {
+        todo = region_remaining;
+    }
+    if (todo > frames)
+    {
+        todo = frames;
+    }
+    if (todo == 0U)
+    {
+        return 0U;
+    }
+
+    const float *src = &state->audio_cursor.current_base[offset_frames * 2U];
+    float *dst_l = &out_l[out_offset];
+    float *dst_r = &out_r[out_offset];
+    float last_l = 0.0f;
+    float last_r = 0.0f;
+    for (uint32_t i = 0U; i < todo; ++i)
+    {
+        last_l = src[(i * 2U)] * gain;
+        last_r = src[(i * 2U) + 1U] * gain;
+        dst_l[i] += last_l;
+        dst_r[i] += last_r;
+    }
+
+    state->frame_pos += todo;
+    state->position = (float)state->frame_pos;
+    if (state->cache_voice_valid != 0U)
+    {
+        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
+    }
+    state->audio_cursor.current_offset_frames = state->frame_pos - state->audio_cursor.current_start_frame;
+
+    if (state->frame_pos >= forward_end)
+    {
+        state->active = 0U;
+        sample_voice_reader_release_audio_cursor(state);
+    }
+    else if (state->audio_cursor.current_offset_frames >= state->audio_cursor.current_frame_count)
+    {
+        sample_voice_reader_release_audio_cursor(state);
+    }
+
+    if (out_rendered != 0)
+    {
+        *out_rendered = todo;
+    }
+    if ((out_last_l != 0) && (out_last_r != 0))
+    {
+        *out_last_l = last_l;
+        *out_last_r = last_r;
+    }
+    return 1U;
 }
 
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
@@ -1333,35 +1538,43 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         for (uint32_t i = 0U; i < segment_frames; ++i)
         {
             const uint32_t segment_base_frame = (uint32_t)position;
-            const float frac = position - (float)segment_base_frame;
-            const float curr_l = sample_voice_reader_span_sample_l(&span, segment_base_frame);
-            const float curr_r = sample_voice_reader_span_sample_r(&span, segment_base_frame);
-            float next_l = curr_l;
-            float next_r = curr_r;
-            const uint8_t needs_neighbor =
-                ((segment_reverse == 0U) && ((segment_base_frame + 1U) < region_end))
-                || ((segment_reverse != 0U) && (segment_base_frame > region_start));
-            if (needs_neighbor != 0U)
+            uint32_t read_frame = segment_base_frame;
+            const uint32_t pos_q16 =
+                (uint32_t)((position - (float)segment_base_frame) * (float)SAMPLE_Q16_ONE);
+            if (sample_voice_reader_pick_next(pos_q16,
+                                              segment_base_frame,
+                                              reader->sample_id) != 0U)
             {
-                const uint32_t current_neighbor_frame =
-                    (segment_reverse == 0U) ? (segment_base_frame + 1U) : (segment_base_frame - 1U);
-                if ((current_neighbor_frame >= span.start_frame) && (current_neighbor_frame < span_end))
+                const uint8_t can_choose_neighbor =
+                    ((segment_reverse == 0U) && ((segment_base_frame + 1U) < region_end))
+                    || ((segment_reverse != 0U) && (segment_base_frame > region_start));
+                if (can_choose_neighbor != 0U)
                 {
-                    next_l = sample_voice_reader_span_sample_l(&span, current_neighbor_frame);
-                    next_r = sample_voice_reader_span_sample_r(&span, current_neighbor_frame);
-                }
-                else if ((neighbor_span.frames != 0U)
-                         && (current_neighbor_frame >= neighbor_span.start_frame)
-                         && (current_neighbor_frame < (neighbor_span.start_frame + neighbor_span.frames)))
-                {
-                    next_l = sample_voice_reader_span_sample_l(&neighbor_span, current_neighbor_frame);
-                    next_r = sample_voice_reader_span_sample_r(&neighbor_span, current_neighbor_frame);
+                    read_frame = (segment_reverse == 0U) ? (segment_base_frame + 1U)
+                                                         : (segment_base_frame - 1U);
                 }
             }
 
             float sample_l = 0.0f;
             float sample_r = 0.0f;
-            wav_audio_codec_resample_linear(curr_l, curr_r, next_l, next_r, frac, &sample_l, &sample_r);
+            if ((read_frame >= span.start_frame) && (read_frame < span_end))
+            {
+                sample_l = sample_voice_reader_span_sample_l(&span, read_frame);
+                sample_r = sample_voice_reader_span_sample_r(&span, read_frame);
+            }
+            else if ((neighbor_span.frames != 0U)
+                     && (read_frame >= neighbor_span.start_frame)
+                     && (read_frame < (neighbor_span.start_frame + neighbor_span.frames)))
+            {
+                sample_l = sample_voice_reader_span_sample_l(&neighbor_span, read_frame);
+                sample_r = sample_voice_reader_span_sample_r(&neighbor_span, read_frame);
+            }
+            else
+            {
+                sample_l = sample_voice_reader_span_sample_l(&span, segment_base_frame);
+                sample_r = sample_voice_reader_span_sample_r(&span, segment_base_frame);
+            }
+
             const float fade =
                 (fade_gain != 0) && ((produced + i) < fade_count) ? fade_gain[produced + i] : 1.0f;
             last_l = sample_l * gain * fade;

@@ -1981,6 +1981,50 @@ void __attribute__((used)) mixer_submit_external_stereo(uint32_t track_id,
     g_external_track_enabled[track_id] = 1U;
 }
 
+uint8_t __attribute__((used)) mixer_begin_external_stereo(uint32_t track_id,
+                                                          uint32_t frames,
+                                                          float **out_left,
+                                                          float **out_right)
+{
+    if (out_left != NULL)
+    {
+        *out_left = NULL;
+    }
+    if (out_right != NULL)
+    {
+        *out_right = NULL;
+    }
+
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (out_left == NULL)
+            || (out_right == NULL)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return 0U;
+    }
+
+    *out_left = g_external_track_l[track_id];
+    *out_right = g_external_track_r[track_id];
+    return 1U;
+}
+
+void __attribute__((used)) mixer_commit_external_stereo(uint32_t track_id, uint32_t frames)
+{
+    if ((track_id >= MIXER_MAX_TRACKS)
+            || (frames == 0U)
+            || (frames > AUDIO_BLOCK_SIZE)
+            || (g_external_track_enabled[track_id] != 0U))
+    {
+        return;
+    }
+
+    g_external_track_format[track_id] = MIXER_EXTERNAL_FORMAT_STEREO;
+    g_external_track_frames_valid[track_id] = (uint16_t)frames;
+    g_external_track_enabled[track_id] = 1U;
+}
+
 /**
  * @brief Traite un bloc de mixage final MAIN/CUE.
  *

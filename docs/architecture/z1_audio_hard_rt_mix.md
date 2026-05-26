@@ -805,3 +805,31 @@ Clarification START/END/LOOP live:
 - La valeur LFO est tenue sur la fenetre de controle; aucun ramp supplementaire ni instrumentation IRQ n'est ajoute dans cette passe.
 - Correction 2026-05-26: le mode experimental n'attend plus un accumulateur `MOD_LFO_WINDOW_RATE_FRAMES`; il applique immediatement un tick LFO avec le `frames` du bloc courant pour eviter un retard d'une fenetre au demarrage/reset et respecter les sous-fenetres eventuelles.
 - Correction 2026-05-26: le tick LFO est avance avant le rendu Drum/Sampler/Looper/Wave; les modulations moteur ne restent plus decalees d'une fenetre audio par rapport au rendu.
+
+## Addendum 2026-05-27 - fast path Sampler/RAM actif
+
+- Dans `brick6_sampler_runtime_render_track()`, une voix `BRICK6_SAMPLER_VOICE_RAM` active est rendue directement par `brick6_sampler_runtime_render_ram()` avant le scan des voix Multi globales et avant les fallbacks Classic/Stream.
+- Le gate VCA RAM reste teste avant ce fast path: si la release VCA est terminee, la voix RAM est toujours clear avant rendu.
+- Le rendu RAM resident, les bornes, le loop/reverse/pingpong, les fades de declick, le diagnostic first-output et le mix des tails restent inchanges.
+- Le chemin `Sampler/Multi` conserve son scan global; le fast path RAM ne s'applique pas aux tracks de type `TRACK_RUNTIME_TYPE_MULTI`.
+
+## Addendum 2026-05-27 - no-copy Sampler/RAM actif vers mixer
+
+- `mixer_begin_external_stereo()` / `mixer_commit_external_stereo()` exposent un chemin limite de reservation des buffers externes stereo mixer, sans copie intermediaire.
+- `brick6_render_sampler_tracks()` utilise ce chemin seulement pour une track Sampler non-Clip/non-Multi dont `g_sampler_voice[track]` contient une voix `BRICK6_SAMPLER_VOICE_RAM` active.
+- Les buffers externes mixer sont clear avant rendu, car `brick6_sampler_runtime_render_track()` et les tails de declick accumulent avec `+=`.
+- Les chemins Stream, Multi, Clip et les cas sans voix RAM active gardent le chemin historique `sampler_tmp_l/r` + `mixer_submit_external_stereo()`.
+- Mono-native RAM reste hors patch: les slots RAM residentiels conservent le format `SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED` stereo, y compris pour les WAV mono dupliques au load.
+
+## Addendum 2026-05-27 - linear pitch Sampler optimise
+
+- Le pitch Sampler conserve strictement l'interpolation CLEAN lineaire `a + (b - a) * frac`; aucun mode nearest/stochastic/sinc ni parametre utilisateur n'est ajoute.
+- Le rendu RAM forward pitch segmente toujours les boundaries comme avant, mais la boucle hot sans boundary reutilise localement la paire stereo `N+1` quand elle devient `N` a la frame suivante. Les cas boundary/loop/end/reverse/pingpong/fade gardent leurs guards locaux.
+- Le mixer Stream/Multi pitch lineaire garde les acquisitions spans/pages existantes et ne modifie pas la policy `sample_page_cache`, window-lock ou `STREAM_SAFE`; les spans entierement internes utilisent une boucle sans checks page/loop par sample, sinon le fallback boundary existant reste actif.
+
+## Addendum 2026-05-27 - pitch stochastic nearest experimental
+
+- Le pitch Sampler experimental remplace l'interpolation lineaire des chemins pitch couverts par un nearest distribue deterministe: pour chaque position Q16, le code choisit `N` ou le voisin selon `frac > threshold`, puis lit une seule frame source stereo.
+- Le seuil est produit par un hash entier borne et sans etat global. RAM melange frame courante, position Q16, track/note/slot/trigger; Stream/Multi reader melange frame courante, fraction Q16 et seed de segment/sample.
+- Les chemins non pitch 1x et les fast paths RAM/Stream entiers restent inchanges. Le patch n'ajoute aucun mode utilisateur et ne pretend pas etre CLEAN.
+- Les guards de region, loop, reverse, pingpong et page boundary restent conserves: si le voisin stochastic n'est pas dans le span/page deja acquis, le rendu retombe sur la frame de base sans modifier `sample_page_cache`, window-lock ou `STREAM_SAFE`.

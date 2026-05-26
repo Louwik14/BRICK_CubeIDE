@@ -128,6 +128,15 @@ void sample_voice_reader_mix_pitch_rev_linear(const sample_audio_segment_t *segm
                                               uint32_t out_offset,
                                               float *out_last_l,
                                               float *out_last_r);
+uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *reader,
+                                                       float gain,
+                                                       float *out_l,
+                                                       float *out_r,
+                                                       uint32_t frames,
+                                                       uint32_t out_offset,
+                                                       uint32_t *out_rendered,
+                                                       float *out_last_l,
+                                                       float *out_last_r);
 uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                   uint32_t region_start,
                                                   uint32_t region_end,

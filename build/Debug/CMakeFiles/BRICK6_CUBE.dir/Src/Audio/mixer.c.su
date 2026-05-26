@@ -109,4 +109,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:1198:6:m
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:1898:28:mixer_submit_external_mono	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:1926:28:mixer_submit_external_mono_native	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:1953:28:mixer_submit_external_stereo	12	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:2007:6:mixer_process	200	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:1984:31:mixer_begin_external_stereo	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:2013:28:mixer_commit_external_stereo	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c:2051:6:mixer_process	200	static
