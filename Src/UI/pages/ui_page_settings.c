@@ -211,6 +211,7 @@ typedef struct
     uint16_t convert_slot;
     uint32_t status_until_ms;
     uint32_t header_slot_flash_until_ms;
+    uint32_t header_mem_flash_until_ms;
     int16_t encoder_accum[UI_SETTINGS_ENCODER_COUNT];
 } ui_settings_state_t;
 
@@ -258,6 +259,7 @@ static void ui_page_settings_multi_prepare_poll(void);
 static void ui_page_settings_multi_prepare_flush_progress(void);
 static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);
+static void ui_page_settings_flash_sample_header_memory(void);
 static uint32_t ui_page_settings_frames_to_prep_bytes(uint32_t frames);
 static uint16_t ui_page_settings_global_slot_count_used(void);
 static void ui_page_settings_draw_progress_bar(uint8_t x,
@@ -1039,6 +1041,7 @@ static void ui_page_settings_multi_browser_enter_root(void)
     g_ui_settings.multi_prepare_progress_total = 0U;
     g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_NONE;
     g_ui_settings.header_slot_flash_until_ms = 0U;
+    g_ui_settings.header_mem_flash_until_ms = 0U;
     (void)ui_page_settings_multi_browser_refresh();
 }
 
@@ -1286,11 +1289,15 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
 
     ui_page_settings_refresh_ram_slots();
     if ((result == SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL)
-        || (result == SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL)
-        || (result == SAMPLER_RAM_RESULT_RAM_POOL_FULL)
-        || (result == SAMPLER_RAM_RESULT_TOO_LARGE))
+        || (result == SAMPLER_RAM_RESULT_POOL_FULL))
     {
         ui_page_settings_flash_sample_header_slots();
+    }
+    else if ((result == SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL)
+             || (result == SAMPLER_RAM_RESULT_RAM_POOL_FULL)
+             || (result == SAMPLER_RAM_RESULT_TOO_LARGE))
+    {
+        ui_page_settings_flash_sample_header_memory();
     }
     ui_page_settings_status(sampler_ram_pool_result_label(result));
 }
@@ -1850,6 +1857,12 @@ static void ui_page_settings_flash_sample_header_slots(void)
         HAL_GetTick() + UI_SETTINGS_HEADER_FLASH_DURATION_MS;
 }
 
+static void ui_page_settings_flash_sample_header_memory(void)
+{
+    g_ui_settings.header_mem_flash_until_ms =
+        HAL_GetTick() + UI_SETTINGS_HEADER_FLASH_DURATION_MS;
+}
+
 static void ui_page_settings_multi_prepare_progress_cb(uint16_t done, uint16_t total, void *user)
 {
     (void)user;
@@ -2021,9 +2034,10 @@ static void ui_page_settings_draw_sample_header(const char *title,
     drv_display_draw_text(0U, 0U, title);
     drv_display_draw_line(UI_SETTINGS_HEADER_SEP1_X, 0, UI_SETTINGS_HEADER_SEP1_X, 5);
     const uint8_t slots_w = drv_display_text_width(slots);
+    const uint32_t now = HAL_GetTick();
     const uint8_t flash_slots =
-        ((int32_t)(g_ui_settings.header_slot_flash_until_ms - HAL_GetTick()) > 0)
-        && (((HAL_GetTick() / 120U) & 1U) == 0U)
+        ((int32_t)(g_ui_settings.header_slot_flash_until_ms - now) > 0)
+        && (((now / 120U) & 1U) == 0U)
             ? 1U
             : 0U;
     if (flash_slots != 0U)
@@ -2041,7 +2055,23 @@ static void ui_page_settings_draw_sample_header(const char *title,
     const uint8_t mem_x = (mem_w >= UI_SETTINGS_HEADER_MEM_RIGHT_X)
         ? 0U
         : (uint8_t)(UI_SETTINGS_HEADER_MEM_RIGHT_X - mem_w);
-    drv_display_draw_text(mem_x, 0U, mem);
+    const uint8_t flash_mem =
+        ((int32_t)(g_ui_settings.header_mem_flash_until_ms - now) > 0)
+        && (((now / 120U) & 1U) == 0U)
+            ? 1U
+            : 0U;
+    if (flash_mem != 0U)
+    {
+        drv_display_fill_rect((mem_x > 0U) ? (uint8_t)(mem_x - 1U) : 0U,
+                              0,
+                              mem_w + 2U,
+                              6);
+        drv_display_draw_text_inverted(mem_x, 0U, mem);
+    }
+    else
+    {
+        drv_display_draw_text(mem_x, 0U, mem);
+    }
 }
 
 static void ui_page_settings_append_u16(char *out, uint32_t out_size, uint16_t value)
@@ -3082,6 +3112,7 @@ static void ui_page_settings_enter(void)
     g_ui_settings.convert_slot = 0U;
     g_ui_settings.convert_path[0] = '\0';
     g_ui_settings.header_slot_flash_until_ms = 0U;
+    g_ui_settings.header_mem_flash_until_ms = 0U;
     for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
     {
         g_ui_settings.encoder_accum[i] = 0;

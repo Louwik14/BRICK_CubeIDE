@@ -190,6 +190,7 @@ void brick6_app_process(void)
     else
     {
         brick6_sampler_runtime_service();
+        sampler_ram_pool_waveform_service(4096U);
         brick6_looper_runtime_service(8192U);
         if (brick6_looper_runtime_has_pending_sd_work() == 0U)
         {

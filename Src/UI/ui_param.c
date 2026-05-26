@@ -25,6 +25,7 @@
 #include "ui_core.h"
 #include "ui_track_catalog.h"
 #include "Audio/fx_master_macro.h"
+#include "buttons.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
@@ -866,6 +867,7 @@ void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx)
     out_ctx->bank = g_ui_param.bank;
     out_ctx->valid = g_ui_param.valid;
     out_ctx->active_track = ui_get_active_track();
+    out_ctx->shift_down = (uint8_t)(button_down(BTN_SHIFT) != 0U);
 }
 
 void ui_param_begin_encoder_edit_group(const ui_param_encoder_context_t *ctx)
@@ -1418,9 +1420,28 @@ static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param
     return ui_param_set_track_value(encoder, param, value, active_track, 1U);
 }
 
+static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param_encoder_context_t *ctx)
+{
+    if ((desc == 0) || (ctx == 0))
+    {
+        return 0.0f;
+    }
+
+    if ((desc->display_type == PARAM_DISPLAY_PERCENT)
+            && (desc->type == PARAM_TYPE_FLOAT)
+            && (desc->max > desc->min))
+    {
+        const float range = desc->max - desc->min;
+        return (ctx->shift_down != 0U) ? (range / 12700.0f) : (range / 127.0f);
+    }
+
+    return desc->step;
+}
+
 static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
                                                              param_id_t param,
                                                              int16_t delta,
+                                                             float edit_step,
                                                              uint8_t active_track)
 {
     if ((delta == 0) || (ui_is_track_modifier_held() == 0U)
@@ -1430,8 +1451,7 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
         return 0U;
     }
 
-    const param_desc_t *const desc = &param_registry[param];
-    const float requested_delta = (float)delta * desc->step;
+    const float requested_delta = (float)delta * edit_step;
     uint8_t applied = 0U;
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -1475,6 +1495,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                             param_id_t param,
                                             const param_desc_t *desc,
                                             int16_t delta,
+                                            float edit_step,
                                             float min_value,
                                             float max_value,
                                             uint8_t active_track)
@@ -1502,7 +1523,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         return 0U;
     }
 
-    const float delta_value = (float)delta * desc->step;
+    const float delta_value = (float)delta * edit_step;
     const float base_track_value = ui_param_get_active_track_value(param, active_track);
     seq_plock_entry_t prior_entries[SEQ_STEPS_PER_PAGE];
     seq_value16_t target_values[SEQ_STEPS_PER_PAGE];
@@ -1635,6 +1656,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                  param_id_t param,
                                                  const param_desc_t *desc,
                                                  int16_t delta,
+                                                 float edit_step,
                                                  float min_value,
                                                  float max_value,
                                                  uint8_t active_track)
@@ -1672,7 +1694,7 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
         source_value = seq_param_iface_decode_param_value(param, existing.value16);
     }
 
-    float next_value = source_value + ((float)delta * desc->step);
+    float next_value = source_value + ((float)delta * edit_step);
     if (ui_param_master_fx_quantize_edit(active_track, param, source_value, delta, &next_value) == 0U)
     {
         next_value = ui_param_clamp(next_value, min_value, max_value);
@@ -1786,16 +1808,17 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     }
 
     const param_desc_t *desc = &param_registry[param];
+    const float edit_step = ui_param_encoder_edit_step(desc, ctx);
     float min_value = 0.0f;
     float max_value = 0.0f;
     (void)ui_param_resolve_edit_bounds(param, ctx->active_track, &min_value, &max_value);
 
-    if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, min_value, max_value, ctx->active_track) != 0U)
+    if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, edit_step, min_value, max_value, ctx->active_track) != 0U)
     {
         return 1U;
     }
 
-    if (ui_param_try_apply_live_rec_plock(encoder, param, desc, delta, min_value, max_value, ctx->active_track) != 0U)
+    if (ui_param_try_apply_live_rec_plock(encoder, param, desc, delta, edit_step, min_value, max_value, ctx->active_track) != 0U)
     {
         return 1U;
     }
@@ -1850,13 +1873,13 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         const float current_value = value;
         if (ui_param_master_fx_quantize_edit(ctx->active_track, param, current_value, delta, &value) == 0U)
         {
-            value += (float)delta * desc->step;
+            value += (float)delta * edit_step;
             value = ui_param_clamp(value, min_value, max_value);
         }
 
         if (ui_param_value_is_same(value, current_value) != 0U)
         {
-            const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->active_track);
+            const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, ctx->active_track);
             if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
             {
                 (void)undo_v2_commit_transaction();
@@ -1873,7 +1896,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                        value,
                                        UI_PARAM_VALUE_FLASH_DIRECT);
     }
-    (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->active_track);
+    (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, ctx->active_track);
     if ((g_ui_param_encoder_edit_group_active == 0U) && (undo_v2_is_transaction_open() != 0U))
     {
         (void)undo_v2_commit_transaction();

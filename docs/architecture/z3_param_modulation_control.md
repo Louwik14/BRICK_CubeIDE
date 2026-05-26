@@ -132,6 +132,7 @@ Call-sites critiques:
 - UI edit paths use `param_registry_apply_track_value` / `param_registry_apply_track_edit`.
 - RT modulation uses `mod_lfo_v1` direct paths for known effective destinations; `param_registry_apply_track_value_rt_fast` is fallback-only.
 - Snapshot restore and structure changes use `param_registry_run_track_transition_pipeline`.
+- Playback p-locks use a runtime-temp apply surface: they project the locked value to the engine/runtime only, never to the canonical base stores read by UI (`track_sound_state`, `track_tone_sound_state`, FILTER shadow, LFO config, seq PLAY base). Restore reprojects the base to runtime without changing the displayed/editable value.
 
 ## 3. Statut des chemins sensibles
 
@@ -202,6 +203,11 @@ Call-sites critiques:
   - sert de premiere base du modele parametrique commun par track, distincte de `track_state`.
 - `track_tone_sound_state`:
   - source autoritative par track pour les blocs TONE specifiques moteur deja extraits,
+- P-lock playback:
+  - la valeur UI est toujours la base canonique editable,
+  - la valeur p-lock est une projection runtime temporaire,
+  - les p-locks ne mettent pas a jour le miroir UI, les bases track-scoped ni le cache runtime autoritatif,
+  - les p-locks ne pilotent pas l'affichage live; seul un feedback volontaire de p-lock en edition/step context peut afficher une valeur de lock.
 - `PARAM_MIX_TRACK0..3_*` reste un ilot tombstone/load-only borne.
 - Pour les emissions MIDI CC/Program depuis Z3, la resolution du channel track passe par Z2 (`track_runtime_get_midi_channel_*`) et non par une lecture directe d'etat UI.
 
@@ -250,8 +256,10 @@ Call-sites critiques:
 ## 10. Contrat Sampler Tone
 
 - Params track-aware exposes pour `UI_TRACK_TYPE_SAMPLER`:
-  - `Sample`, `Gain`, `Start`, `End`,
-  - `Mode`, `Tune`, `Fade In`, `Fade Out`,
+  - page 1: `Sample`, `Mode`, `Start`, `End`,
+  - page 2: `Gain`, `Tune`, `Loop`, `Slice`,
+  - `Fade In`/`Fade Out` sont retires du contrat Sampler RAM; l'enveloppe d'amplitude reste VCA,
+  - `Loop` expose `PARAM_SAMPLER_LOOP_START`, un marqueur/edit position track-aware stocke comme ratio `0..1` et projete vers le runtime RAM sans modifier `Start` ni `End`,
   - `Slice Count` visible en UI sur `Sampler/RAM`; `Off` garde RAM normal, `2..64` active un slicing grille de la fenetre globale `Start/End`.
 - Params track-aware exposes pour `UI_TRACK_TYPE_STREAM`/`UI_TRACK_TYPE_CLIP`:
   - `Sample`, `Gain`, `Src BPM`,
@@ -279,7 +287,8 @@ Call-sites critiques:
 - `PARAM_SAMPLER_SAMPLE` met a jour la selection runtime sans retrigger automatique de preview.
 - P-locks:
   - les params Sampler de base restent p-lockables via le flux track-aware.
-  - Pour `Sampler/RAM`, les p-locks `START`, `END` et `MODE=RevShot` sont captures au trigger depuis l'etat runtime effectif et bornes avant rendu; `Loop`/`PingPong` ne branchent pas de boucle RAM.
+  - Pour `Sampler/RAM`, les p-locks `START`, `END`, `MODE` et `LOOP` projettent une valeur runtime temporaire: ils peuvent atteindre les voix RAM actives, mais ne modifient pas `track_tone_sound_state`, `param_store.active[]` ni l'affichage UI.
+  - `PARAM_SAMPLER_LOOP_START` reste independant de `START/END`: si le marqueur est hors plage fonctionnelle, le runtime ignore la boucle sans corriger la valeur stockee/visible.
   - Pour `Sampler/RAM` sliced, `START`/`END` restent des params globaux de la track et definissent la fenetre slicee du trig; `Slice Count` reste exclu du p-lock et aucun etat par-slice n'est introduit.
 - Invariants:
   - sample absent -> silence,
@@ -593,10 +602,12 @@ Dette explicite post-passe 4:
 - La release LFO de ces quatre destinations reapplique la base capturee par le meme chemin direct, sauf si un autre LFO actif de la meme track cible deja la meme destination.
 - Execution LFO directe etendue: `PARAM_FILTER_CUTOFF`, `PARAM_FILTER_RESONANCE`, `PARAM_FILTER_EG_AMT`, `PARAM_FILTER_ATTACK`, `PARAM_FILTER_DECAY`, `PARAM_FILTER_SUSTAIN`, `PARAM_FILTER_RELEASE` et `PARAM_VCA_ATTACK`, `PARAM_VCA_DECAY`, `PARAM_VCA_SUSTAIN`, `PARAM_VCA_RELEASE` sont appliques par `mod_lfo_v1` directement vers la target mixer runtime, avec les memes conversions UI->runtime que `param_filter`.
 - Ces chemins directs ne mutent pas la base `track_sound_state`, le shadow FILTER, `param_store` ni le cache runtime param; la base capturee reste restauree sur release, sauf si l'autre LFO actif de la meme track cible encore la meme destination.
-- Execution LFO Sampler/Stream/Multi/Looper directe: `PARAM_SAMPLER_GAIN`, `PARAM_SAMPLER_START`, `PARAM_SAMPLER_END`, `PARAM_SAMPLER_MODE`, `PARAM_SAMPLER_TUNE`, `PARAM_SAMPLER_FADE_IN`, `PARAM_SAMPLER_FADE_OUT`, `PARAM_SAMPLER_SLICE_COUNT`, `PARAM_SAMPLER_CLIP_SOURCE_BPM`, `PARAM_SAMPLER_CLIP_SYNC_LENGTH`, `PARAM_SAMPLER_CLIP_PITCH` expose `Tune`, `PARAM_SAMPLER_CLIP_PLAY_MODE`, `PARAM_SAMPLER_CLIP_LOOP`, `PARAM_SAMPLER_CLIP_STRETCH_MODE`, `PARAM_SAMPLER_CLIP_GRAIN`, `PARAM_SAMPLER_CLIP_HOP`, `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE` sont routes directement vers les setters runtime existants quand le type runtime courant les supporte.
+- Execution LFO Sampler/Stream/Multi/Looper directe: `PARAM_SAMPLER_GAIN`, `PARAM_SAMPLER_START`, `PARAM_SAMPLER_END`, `PARAM_SAMPLER_MODE`, `PARAM_SAMPLER_TUNE`, `PARAM_SAMPLER_SLICE_COUNT`, `PARAM_SAMPLER_CLIP_SOURCE_BPM`, `PARAM_SAMPLER_CLIP_SYNC_LENGTH`, `PARAM_SAMPLER_CLIP_PITCH` expose `Tune`, `PARAM_SAMPLER_CLIP_PLAY_MODE`, `PARAM_SAMPLER_CLIP_LOOP`, `PARAM_SAMPLER_CLIP_STRETCH_MODE`, `PARAM_SAMPLER_CLIP_GRAIN`, `PARAM_SAMPLER_CLIP_HOP`, `PARAM_SAMPLER_MULTI_LOOP` et `PARAM_LOOPER_XFADE` sont routes directement vers les setters runtime existants quand le type runtime courant les supporte. `PARAM_SAMPLER_LOOP_START` reste hors catalogue LFO: il est live par edit/p-lock, mais pas une destination LFO produit.
 - `PARAM_SAMPLER_CLIP_SEARCH` reste stockable/reserve hors surface produit, mais n'est plus expose comme destination LFO valide.
 - Les cibles de selection/chargement (`PARAM_SAMPLER_SAMPLE` / instrument Multi), triggers, commandes, Master FX no-op, Drum TRX reserve et MIDI program sont exclues du catalogue LFO; elles ne doivent pas introduire d'acces SD/FatFs/import/load dans `mod_lfo_v1`.
 - Le chemin RT fast generique reste present uniquement comme fallback de securite pour future destination explicitement ajoutee.
+- `PARAM_SAMPLER_TUNE` partage le meme setter runtime `brick6_sampler_runtime_set_tune()` pour les edits UI, p-locks, LFO et restore de base: la base canonique `track_tone_sound_state` n'est mutee que par les writes autoritatifs, tandis que les projections p-lock/LFO/restore recalculent le pas RAM actif sans animer le miroir UI.
+- Pour `Sampler/RAM`, ce setter reprojette le pitch live sur les voix actives du track: chromatique = note + Tune, slice actif = note->slice uniquement et Tune->pitch global.
 
 ## 33. Contrat Sampler/Looper TONE skeleton
 

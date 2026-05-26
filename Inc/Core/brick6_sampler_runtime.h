@@ -113,6 +113,18 @@ typedef struct
     uint8_t first_output_valid;
 } brick6_sampler_runtime_diag_snapshot_t;
 
+typedef struct
+{
+    uint8_t active;
+    uint8_t reverse;
+    uint16_t sample_id;
+    uint16_t ram_slot;
+    uint32_t ram_generation;
+    uint32_t frame;
+    uint32_t frame_count;
+    uint32_t trigger_order;
+} brick6_sampler_ram_playhead_snapshot_t;
+
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
 void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id);
@@ -128,8 +140,7 @@ void brick6_sampler_runtime_set_start(uint8_t track_id, float start);
 void brick6_sampler_runtime_set_end(uint8_t track_id, float end);
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode);
 void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune);
-void brick6_sampler_runtime_set_fade_in(uint8_t track_id, float fade_in);
-void brick6_sampler_runtime_set_fade_out(uint8_t track_id, float fade_out);
+void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start);
 void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_count);
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm);
 void brick6_sampler_runtime_set_clip_sync_length(uint8_t track_id, uint8_t sync_length);
@@ -162,6 +173,10 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
                                          uint32_t frames);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
+uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
+uint8_t brick6_sampler_runtime_get_ram_playhead(uint8_t track_id,
+                                                uint16_t sample_id,
+                                                brick6_sampler_ram_playhead_snapshot_t *out_snapshot);
 
 #ifdef __cplusplus
 }

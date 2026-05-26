@@ -15,9 +15,8 @@ typedef struct
     float end;
     float mode;
     float tune;
-    float fade_in;
-    float fade_out;
     float slice_count;
+    float loop_start;
     struct
     {
         float source_bpm;

@@ -27,7 +27,10 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
             {
                 return 0U;
             }
-            param_registry_runtime_commit_authoritative_write(track, id, value, 0U);
+            if (update_base_state != 0U)
+            {
+                param_registry_runtime_commit_authoritative_write(track, id, value, 0U);
+            }
             return 1U;
         }
 
@@ -65,7 +68,7 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
         applied = param_backend_apply_tone_drum(track, ctx, id, value, update_base_state);
     }
 
-    if (applied != 0U)
+    if ((applied != 0U) && (update_base_state != 0U))
     {
         param_registry_runtime_commit_authoritative_write(track, id, value, 0U);
     }

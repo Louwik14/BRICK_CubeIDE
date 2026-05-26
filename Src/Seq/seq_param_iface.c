@@ -721,18 +721,13 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
 
     if (seq_param_iface_is_play_param(param) != 0U)
     {
-        if (seq_param_iface_set_base_value(track, set_id, param_slot, value16) == 0U)
-        {
-            return 0U;
-        }
-
         state->runtime_value = value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
         return 1U;
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, value16);
-    if (param_registry_apply_track_value(param, track, decoded) == 0U)
+    if (param_registry_apply_track_value_runtime_temp(param, track, decoded) == 0U)
     {
         return 0U;
     }
@@ -765,23 +760,18 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 
     if (seq_param_iface_is_play_param(param) != 0U)
     {
-        if (seq_param_iface_set_base_value(track, set_id, param_slot, base_value16) == 0U)
-        {
-            return 0U;
-        }
-
-        state->base_value = base_value16;
-        seq_param_set_base_valid(track, set_id, param_slot, 1U);
         state->runtime_value = base_value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
         return 1U;
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, base_value16);
-    if (param_registry_apply_track_value(param, track, decoded) == 0U)
+    if (param_registry_apply_track_value_runtime_temp(param, track, decoded) == 0U)
     {
         return 0U;
     }
+
+    param_registry_release_track_value_runtime_temp(param, track);
 
     state->base_value = base_value16;
     seq_param_set_base_valid(track, set_id, param_slot, 1U);

@@ -305,14 +305,11 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_TUNE:
             *out_value = state->tune;
             return 1U;
-        case PARAM_SAMPLER_FADE_IN:
-            *out_value = state->fade_in;
-            return 1U;
-        case PARAM_SAMPLER_FADE_OUT:
-            *out_value = state->fade_out;
-            return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
             *out_value = state->slice_count;
+            return 1U;
+        case PARAM_SAMPLER_LOOP_START:
+            *out_value = state->loop_start;
             return 1U;
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
             *out_value = state->clip.source_bpm;
@@ -510,14 +507,11 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_TUNE:
             state->tune = value;
             return 1U;
-        case PARAM_SAMPLER_FADE_IN:
-            state->fade_in = value;
-            return 1U;
-        case PARAM_SAMPLER_FADE_OUT:
-            state->fade_out = value;
-            return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
             state->slice_count = value;
+            return 1U;
+        case PARAM_SAMPLER_LOOP_START:
+            state->loop_start = clamp_value(value, 0.0f, 1.0f);
             return 1U;
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
             state->clip.source_bpm = value;
@@ -1024,6 +1018,43 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
     }
 
     return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
+}
+
+uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value)
+{
+    if (id >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const param_desc_t *const desc = &param_registry[id];
+    const float clamped = clamp_value(value, desc->min, desc->max);
+
+    {
+        uint8_t lfo_index = 0U;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+        if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+        {
+            return mod_lfo_v1_apply_track_param_temp(track, lfo_index, lfo_param, clamped);
+        }
+    }
+
+    if (param_filter_is_param(id) != 0U)
+    {
+        return param_filter_apply_value(id, track, clamped, 0U, 0U);
+    }
+
+    return param_apply_non_filter_track_value_rt_fast(id, track, clamped);
+}
+
+void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t track)
+{
+    uint8_t lfo_index = 0U;
+    mod_lfo_param_t lfo_param = MOD_LFO_PARAM_DEST;
+    if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+    {
+        mod_lfo_v1_clear_track_param_temp(track, lfo_index, lfo_param);
+    }
 }
 
 /* Command surface: track-aware apply and post-commit routing. */

@@ -12,12 +12,15 @@
 #include "ui_macro_interaction.h"
 #include "ui_param.h"
 #include "ui_widgets.h"
+#include "Core/brick6_sampler_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
 #include "Storage/project_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Sampler/sample_global_pool.h"
+#include "Sampler/sampler_ram_pool.h"
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38
@@ -41,6 +44,15 @@
 #define UI_TEMPLATE_CARD_LABEL_MAX_PX 28U
 #define UI_TEMPLATE_HEADER_TITLE_X   43
 #define UI_TEMPLATE_HEADER_TITLE_W   42
+#define UI_TEMPLATE_SAMPLER_NAME_Y   17
+#define UI_TEMPLATE_SAMPLER_WAVE_X   1
+#define UI_TEMPLATE_SAMPLER_WAVE_Y   25
+#define UI_TEMPLATE_SAMPLER_WAVE_W   126
+#define UI_TEMPLATE_SAMPLER_WAVE_H   17
+#define UI_TEMPLATE_SAMPLER_LABEL_Y  (UI_TEMPLATE_FRAME_Y + UI_TEMPLATE_CARD_LABEL_Y)
+#define UI_TEMPLATE_SAMPLER_TEXT_MAX_PX UI_TEMPLATE_CARD_LABEL_MAX_PX
+#define UI_TEMPLATE_SAMPLER_WAVE_INNER_W (UI_TEMPLATE_SAMPLER_WAVE_W - 2)
+#define UI_TEMPLATE_SAMPLER_WAVE_INNER_H (UI_TEMPLATE_SAMPLER_WAVE_H - 2)
 
 typedef struct
 {
@@ -128,6 +140,30 @@ static void ui_renderer_template_format_fixed(float value, uint8_t decimals, con
     {
         (void)snprintf(out, out_len, "%s%ld.%02ld%s", sign, (long)whole, (long)frac, suffix);
     }
+}
+
+void ui_format_param_127_00(float value, float min_value, float max_value, char *out, uint32_t out_len)
+{
+    float normalized = 0.0f;
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    if (max_value > min_value)
+    {
+        if (value < min_value)
+        {
+            value = min_value;
+        }
+        else if (value > max_value)
+        {
+            value = max_value;
+        }
+        normalized = ((value - min_value) * 127.0f) / (max_value - min_value);
+    }
+
+    ui_renderer_template_format_fixed(normalized, 2U, "", out, out_len);
 }
 
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
@@ -229,7 +265,7 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         }
 
         case PARAM_DISPLAY_PERCENT:
-            (void)snprintf(out, out_len, "%3lu%%", (unsigned long)(value * 100.0f + 0.5f));
+            ui_format_param_127_00(value, desc->min, desc->max, out, out_len);
             break;
 
         case PARAM_DISPLAY_DB:
@@ -471,6 +507,69 @@ static void ui_renderer_template_build_param_text(const ui_template_page_state_t
                                 value_txt,
                                 value_len);
     }
+}
+
+static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_page_state_t *state,
+                                                             const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                             uint8_t slot,
+                                                             param_id_t id,
+                                                             float *out_value,
+                                                             uint8_t *out_draw_name_inverted,
+                                                             char *name_txt,
+                                                             uint32_t name_len,
+                                                             char *value_txt,
+                                                             uint32_t value_len,
+                                                             char *bottom_txt,
+                                                             uint32_t bottom_len,
+                                                             uint8_t *out_flash_active)
+{
+    if ((id >= PARAM_COUNT) || (out_value == NULL) || (out_draw_name_inverted == NULL)
+            || (name_txt == NULL) || (name_len == 0U)
+            || (value_txt == NULL) || (value_len == 0U)
+            || (bottom_txt == NULL) || (bottom_len == 0U))
+    {
+        return 0U;
+    }
+
+    *out_draw_name_inverted = 0U;
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, id, out_value, out_draw_name_inverted);
+
+    ui_renderer_template_build_param_text(state,
+                                          slot,
+                                          id,
+                                          *out_value,
+                                          name_txt,
+                                          name_len,
+                                          value_txt,
+                                          value_len);
+
+    float flash_value = 0.0f;
+    ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
+    const uint8_t flash_active =
+        ui_param_get_slot_value_flash(slot, id, ui_get_active_track(), &flash_value, &flash_kind);
+    if (out_flash_active != NULL)
+    {
+        *out_flash_active = flash_active;
+    }
+    if (flash_active != 0U)
+    {
+        char flash_name[24];
+        (void)flash_kind;
+        ui_renderer_template_build_param_text(state,
+                                              slot,
+                                              id,
+                                              flash_value,
+                                              flash_name,
+                                              (uint32_t)sizeof(flash_name),
+                                              bottom_txt,
+                                              bottom_len);
+    }
+    else
+    {
+        (void)snprintf(bottom_txt, bottom_len, "%s", name_txt);
+    }
+
+    return 1U;
 }
 
 static int ui_renderer_template_clamp_i32(int value, int min_value, int max_value)
@@ -1858,6 +1957,518 @@ static uint8_t ui_renderer_template_draw_filter_curve_group(const ui_param_seq_p
                                                    1U);
 }
 
+static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_state_t *state,
+                                                        const ui_template_family_t *family)
+{
+    const uint8_t active_track = ui_get_active_track();
+
+    if ((state == NULL) || (family == NULL) || (family->family_title == NULL))
+    {
+        return 0U;
+    }
+    if (strcmp(family->family_title, "TONE") != 0)
+    {
+        return 0U;
+    }
+
+    return (uint8_t)(((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
+                      && (ui_get_track_type(active_track) == UI_TRACK_TYPE_SAMPLER)) ? 1U : 0U);
+}
+
+static const char *ui_renderer_template_path_basename(const char *path)
+{
+    const char *base = path;
+
+    if (path == NULL)
+    {
+        return NULL;
+    }
+
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if ((*p == '/') || (*p == '\\') || (*p == ':'))
+        {
+            base = p + 1;
+        }
+    }
+
+    return base;
+}
+
+static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
+{
+    const float sample_value = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_SAMPLE);
+    uint16_t sample_index = 0U;
+    if (sample_value > 0.0f)
+    {
+        sample_index = (uint16_t)(sample_value + 0.5f);
+    }
+    return sample_index;
+}
+
+static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t out_len)
+{
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    (void)snprintf(out, out_len, "NO SAMPLE");
+
+    const uint16_t sample_index = ui_renderer_template_sampler_ram_selected_global_slot();
+    const sample_global_slot_t *const sample_slot = sample_global_pool_get_slot(sample_index);
+    if ((sample_slot == NULL)
+            || (sample_slot->kind != SAMPLE_GLOBAL_KIND_RAM)
+            || (sample_slot->state != SAMPLE_GLOBAL_STATE_READY)
+            || (sample_slot->path[0] == '\0'))
+    {
+        return;
+    }
+
+    const char *const base = ui_renderer_template_path_basename(sample_slot->path);
+    if ((base == NULL) || (base[0] == '\0'))
+    {
+        return;
+    }
+
+    uint32_t i = 0U;
+    while ((base[i] != '\0') && (base[i] != '.') && ((i + 1U) < out_len))
+    {
+        out[i] = base[i];
+        i++;
+    }
+    out[i] = '\0';
+    ui_renderer_template_fit_text(out, 96U);
+}
+
+static int ui_renderer_template_sampler_ram_amp_to_y(int16_t value,
+                                                     uint16_t peak,
+                                                     int top,
+                                                     int inner_h)
+{
+    const int center = top + (inner_h / 2);
+    const int half = (inner_h > 1) ? ((inner_h - 1) / 2) : 0;
+    if ((peak == 0U) || (half == 0))
+    {
+        return center;
+    }
+
+    int y = center - (int)(((int32_t)value * half) / (int32_t)peak);
+    const int bottom = top + inner_h - 1;
+    if (y < top)
+    {
+        y = top;
+    }
+    else if (y > bottom)
+    {
+        y = bottom;
+    }
+    return y;
+}
+
+static int ui_renderer_template_sampler_ram_marker_x(float value,
+                                                     uint32_t total_frames,
+                                                     int inner_x,
+                                                     int inner_w)
+{
+    if ((total_frames == 0U) || (inner_w <= 0))
+    {
+        return -1;
+    }
+    if (value < 0.0f)
+    {
+        value = 0.0f;
+    }
+    else if (value > 1.0f)
+    {
+        value = 1.0f;
+    }
+
+    const uint32_t max_frame = (total_frames > 1U) ? (total_frames - 1U) : 0U;
+    uint32_t frame = (uint32_t)((value * (float)max_frame) + 0.5f);
+    if (frame > max_frame)
+    {
+        frame = max_frame;
+    }
+    if (max_frame == 0U)
+    {
+        return inner_x;
+    }
+    return inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1)) / max_frame);
+}
+
+static void ui_renderer_template_draw_sampler_ram_marker_label(int x, char label)
+{
+    char txt[2] = { label, '\0' };
+    const uint8_t text_w = drv_display_text_width(txt);
+    const int label_y = UI_TEMPLATE_SAMPLER_WAVE_Y + UI_TEMPLATE_SAMPLER_WAVE_H;
+    int label_x = x - ((int)text_w / 2);
+    label_x = ui_renderer_template_clamp_i32(label_x, 0, (int)OLED_WIDTH - (int)text_w);
+
+    drv_display_set_font(&FONT_4X6);
+    drv_display_draw_text((uint8_t)label_x, (uint8_t)label_y, txt);
+}
+
+static void ui_renderer_template_draw_sampler_ram_marker_line(int x,
+                                                              int inner_y,
+                                                              int inner_h,
+                                                              uint8_t dotted)
+{
+    if (dotted != 0U)
+    {
+        const int bottom = inner_y + inner_h - 1;
+        for (int y = inner_y; y <= bottom; y += 4)
+        {
+            const int y1 = ((y + 1) <= bottom) ? (y + 1) : bottom;
+            drv_display_draw_line(x, y, x, y1);
+        }
+        return;
+    }
+
+    drv_display_draw_line(x, inner_y, x, inner_y + inner_h - 1);
+}
+
+static void ui_renderer_template_draw_sampler_ram_marker(float value,
+                                                         uint32_t total_frames,
+                                                         int inner_x,
+                                                         int inner_y,
+                                                         int inner_w,
+                                                         int inner_h,
+                                                         char label,
+                                                         uint8_t dotted)
+{
+    const int x = ui_renderer_template_sampler_ram_marker_x(value, total_frames, inner_x, inner_w);
+    if (x < 0)
+    {
+        return;
+    }
+
+    drv_display_set_draw_color(2U);
+    ui_renderer_template_draw_sampler_ram_marker_line(x, inner_y, inner_h, dotted);
+    drv_display_set_draw_color(1U);
+    ui_renderer_template_draw_sampler_ram_marker_label(x, label);
+}
+
+static uint16_t ui_renderer_template_sampler_ram_slice_divisions(float slice_value)
+{
+    static const uint16_t k_slice_counts[] = {1U, 2U, 4U, 8U, 16U, 32U, 64U};
+    int32_t index = (int32_t)(slice_value + 0.5f);
+    if (index < 0)
+    {
+        index = 0;
+    }
+    if (index >= (int32_t)(sizeof(k_slice_counts) / sizeof(k_slice_counts[0])))
+    {
+        index = (int32_t)((sizeof(k_slice_counts) / sizeof(k_slice_counts[0])) - 1U);
+    }
+    return k_slice_counts[index];
+}
+
+static void ui_renderer_template_draw_sampler_ram_slice_divisions(uint16_t divisions,
+                                                                  float start_value,
+                                                                  float end_value,
+                                                                  uint32_t frame_count,
+                                                                  int inner_x,
+                                                                  int inner_y,
+                                                                  int inner_w,
+                                                                  int inner_h)
+{
+    if ((divisions <= 1U) || (inner_w <= 1) || (inner_h <= 2))
+    {
+        return;
+    }
+
+    if (start_value < 0.0f)
+    {
+        start_value = 0.0f;
+    }
+    else if (start_value > 1.0f)
+    {
+        start_value = 1.0f;
+    }
+    if (end_value < 0.0f)
+    {
+        end_value = 0.0f;
+    }
+    else if (end_value > 1.0f)
+    {
+        end_value = 1.0f;
+    }
+
+    uint32_t region_begin = 0U;
+    uint32_t region_end = frame_count;
+    if (frame_count != 0U)
+    {
+        region_begin = (uint32_t)(start_value * (float)frame_count);
+        region_end = (uint32_t)(end_value * (float)frame_count);
+        if ((region_end == 0U) || (region_end > frame_count))
+        {
+            region_end = frame_count;
+        }
+        if (region_begin >= frame_count)
+        {
+            region_begin = frame_count - 1U;
+        }
+        if (region_end <= region_begin)
+        {
+            region_begin = 0U;
+            region_end = frame_count;
+        }
+    }
+    const uint32_t region_frames = region_end - region_begin;
+    const int bottom = inner_y + inner_h - 2;
+    drv_display_set_draw_color(2U);
+    for (uint16_t i = 1U; i < divisions; ++i)
+    {
+        const uint32_t frame =
+            region_begin + (uint32_t)(((uint64_t)region_frames * (uint64_t)i)
+                                      / (uint64_t)divisions);
+        const int x = inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1))
+                                      / (uint64_t)frame_count);
+        if ((x <= inner_x) || (x >= (inner_x + inner_w)))
+        {
+            continue;
+        }
+        for (int y = inner_y + 1; y <= bottom; y += 5)
+        {
+            drv_display_draw_pixel(x, y, true);
+        }
+    }
+    drv_display_set_draw_color(1U);
+}
+
+static int ui_renderer_template_sampler_ram_frame_to_x(uint32_t frame,
+                                                       uint32_t frame_count,
+                                                       int inner_x,
+                                                       int inner_w)
+{
+    if ((frame_count == 0U) || (inner_w <= 0))
+    {
+        return -1;
+    }
+    if (frame >= frame_count)
+    {
+        frame = frame_count - 1U;
+    }
+    return inner_x + (int)(((uint64_t)frame * (uint32_t)(inner_w - 1)) / frame_count);
+}
+
+static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
+                                                           uint32_t frame_count,
+                                                           int inner_x,
+                                                           int inner_y,
+                                                           int inner_w,
+                                                           int inner_h)
+{
+    brick6_sampler_ram_playhead_snapshot_t playhead;
+    if ((brick6_sampler_runtime_get_ram_playhead(ui_get_active_track(),
+                                                 global_slot,
+                                                 &playhead) == 0U)
+        || (playhead.active == 0U)
+        || (playhead.frame_count == 0U))
+    {
+        return;
+    }
+
+    const uint32_t scale_frames = (frame_count != 0U) ? frame_count : playhead.frame_count;
+    const int x = ui_renderer_template_sampler_ram_frame_to_x(playhead.frame,
+                                                              scale_frames,
+                                                              inner_x,
+                                                              inner_w);
+    if (x < 0)
+    {
+        return;
+    }
+
+    const int bottom = inner_y + inner_h - 1;
+    drv_display_set_draw_color(2U);
+    for (int y = inner_y; y <= bottom; y += 3)
+    {
+        drv_display_draw_pixel(x, y, true);
+    }
+    drv_display_set_draw_color(1U);
+}
+
+static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+{
+    const int wave_x = UI_TEMPLATE_SAMPLER_WAVE_X;
+    const int wave_y = UI_TEMPLATE_SAMPLER_WAVE_Y;
+    const int wave_w = UI_TEMPLATE_SAMPLER_WAVE_W;
+    const int wave_h = UI_TEMPLATE_SAMPLER_WAVE_H;
+    const int inner_x = wave_x + 1;
+    const int inner_y = wave_y + 1;
+    const int inner_w = UI_TEMPLATE_SAMPLER_WAVE_INNER_W;
+    const int inner_h = UI_TEMPLATE_SAMPLER_WAVE_INNER_H;
+    const int center_y = inner_y + (inner_h / 2);
+    const uint16_t global_slot = ui_renderer_template_sampler_ram_selected_global_slot();
+    const sample_ram_waveform_overview_t *const overview =
+        sampler_ram_pool_get_waveform_for_global(global_slot);
+
+    drv_display_draw_rect(wave_x, wave_y, wave_w, wave_h);
+
+    for (int x = inner_x; x < (inner_x + inner_w); x += 2)
+    {
+        drv_display_draw_pixel(x, center_y, true);
+    }
+
+    if (overview == NULL)
+    {
+        return;
+    }
+    if (!((overview->state == SAMPLE_RAM_WAVEFORM_READY)
+          || (overview->state == SAMPLE_RAM_WAVEFORM_BUILDING))
+        || (overview->columns == 0U)
+        || (overview->frame_count == 0U))
+    {
+        return;
+    }
+
+    const uint16_t peak = overview->global_peak;
+    if (peak > 1U)
+    {
+        uint16_t columns = (overview->state == SAMPLE_RAM_WAVEFORM_READY)
+                               ? overview->columns
+                               : overview->ready_columns;
+        if (columns > (uint16_t)inner_w)
+        {
+            columns = (uint16_t)inner_w;
+        }
+        for (uint16_t col = 0U; col < columns; ++col)
+        {
+            const int y_top = ui_renderer_template_sampler_ram_amp_to_y(overview->max[col],
+                                                                        peak,
+                                                                        inner_y,
+                                                                        inner_h);
+            const int y_bottom = ui_renderer_template_sampler_ram_amp_to_y(overview->min[col],
+                                                                           peak,
+                                                                           inner_y,
+                                                                           inner_h);
+            drv_display_draw_line(inner_x + (int)col, y_top, inner_x + (int)col, y_bottom);
+        }
+    }
+
+    float start_value = 0.0f;
+    float end_value = 1.0f;
+    float loop_value = 0.0f;
+    float slice_value = 0.0f;
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_START, &start_value, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_END, &end_value, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_LOOP_START, &loop_value, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_SLICE_COUNT, &slice_value, 0);
+    ui_renderer_template_draw_sampler_ram_slice_divisions(
+        ui_renderer_template_sampler_ram_slice_divisions(slice_value),
+        start_value,
+        end_value,
+        overview->frame_count,
+        inner_x,
+        inner_y,
+        inner_w,
+        inner_h);
+    ui_renderer_template_draw_sampler_ram_playhead(global_slot,
+                                                  overview->frame_count,
+                                                  inner_x,
+                                                  inner_y,
+                                                  inner_w,
+                                                  inner_h);
+    ui_renderer_template_draw_sampler_ram_marker(start_value,
+                                                 overview->frame_count,
+                                                 inner_x,
+                                                 inner_y,
+                                                 inner_w,
+                                                 inner_h,
+                                                 'S',
+                                                 0U);
+    ui_renderer_template_draw_sampler_ram_marker(end_value,
+                                                 overview->frame_count,
+                                                 inner_x,
+                                                 inner_y,
+                                                 inner_w,
+                                                 inner_h,
+                                                 'E',
+                                                 0U);
+    if (brick6_sampler_runtime_ram_slice_mode_active(ui_get_active_track()) == 0U)
+    {
+        ui_renderer_template_draw_sampler_ram_marker(loop_value,
+                                                     overview->frame_count,
+                                                     inner_x,
+                                                     inner_y,
+                                                     inner_w,
+                                                     inner_h,
+                                                     'L',
+                                                     1U);
+    }
+}
+
+static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_page_state_t *state,
+                                                           const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                           uint8_t slot,
+                                                           param_id_t id)
+{
+    const int x = g_ui_template_frame_x[slot];
+    char name_txt[24] = "-";
+    char value_txt[20] = "---";
+    char bottom_txt[24] = "-";
+    uint8_t draw_name_inverted = 0U;
+    float value = 0.0f;
+
+    (void)ui_renderer_template_prepare_param_slot_texts(state,
+                                                        plock_frame_ctx,
+                                                        slot,
+                                                        id,
+                                                        &value,
+                                                        &draw_name_inverted,
+                                                        name_txt,
+                                                        (uint32_t)sizeof(name_txt),
+                                                        value_txt,
+                                                        (uint32_t)sizeof(value_txt),
+                                                        bottom_txt,
+                                                        (uint32_t)sizeof(bottom_txt),
+                                                        NULL);
+    (void)value;
+
+    drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_SAMPLER_TEXT_MAX_PX);
+
+    const uint8_t text_x = (uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt);
+    drv_display_draw_text(text_x, UI_TEMPLATE_SAMPLER_LABEL_Y, bottom_txt);
+
+    if ((draw_name_inverted != 0U) && (drv_display_text_width(bottom_txt) != 0U))
+    {
+        const uint8_t text_w = drv_display_text_width(bottom_txt);
+        drv_display_draw_line(text_x,
+                              UI_TEMPLATE_SAMPLER_LABEL_Y + 6,
+                              text_x + text_w - 1U,
+                              UI_TEMPLATE_SAMPLER_LABEL_Y + 6);
+    }
+}
+
+static void ui_renderer_template_draw_sampler_ram_wave_placeholder(const ui_template_page_state_t *state,
+                                                                   const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+                                                                   const ui_template_subpage_t *subpage)
+{
+    char sample_label[40];
+    ui_renderer_template_sampler_ram_sample_label(sample_label, (uint32_t)sizeof(sample_label));
+
+    drv_display_set_font(&FONT_4X6);
+    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, sample_label),
+                          UI_TEMPLATE_SAMPLER_NAME_Y,
+                          sample_label);
+    ui_renderer_template_draw_sampler_ram_waveform(plock_frame_ctx);
+
+    if (subpage == NULL)
+    {
+        return;
+    }
+
+    for (uint8_t slot = 0U; slot < 4U; ++slot)
+    {
+        ui_renderer_template_draw_sampler_ram_slot_text(state,
+                                                        plock_frame_ctx,
+                                                        slot,
+                                                        subpage->param_bank.params[slot]);
+    }
+}
+
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
                                                  const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
                                                  const ui_template_subpage_t *subpage,
@@ -1918,10 +2529,28 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     const param_desc_t *desc = &param_registry[id];
     float value = 0.0f;
     uint8_t draw_name_inverted = 0U;
-    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, id, &value, &draw_name_inverted);
-
     const char *enum_label = NULL;
     char value_txt[20];
+    char name_txt[24];
+    char bottom_txt[24];
+    uint8_t flash_active = 0U;
+
+    if (ui_renderer_template_prepare_param_slot_texts(state,
+                                                      plock_frame_ctx,
+                                                      slot,
+                                                      id,
+                                                      &value,
+                                                      &draw_name_inverted,
+                                                      name_txt,
+                                                      (uint32_t)sizeof(name_txt),
+                                                      value_txt,
+                                                      (uint32_t)sizeof(value_txt),
+                                                      bottom_txt,
+                                                      (uint32_t)sizeof(bottom_txt),
+                                                      &flash_active) == 0U)
+    {
+        return;
+    }
 
     if ((desc->display_type == PARAM_DISPLAY_ENUM) && (desc->labels != NULL))
     {
@@ -1930,39 +2559,6 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         {
             enum_label = desc->labels[index];
         }
-    }
-
-    char name_txt[24];
-    ui_renderer_template_build_param_text(state,
-                                          slot,
-                                          id,
-                                          value,
-                                          name_txt,
-                                          (uint32_t)sizeof(name_txt),
-                                          value_txt,
-                                          (uint32_t)sizeof(value_txt));
-
-    float flash_value = 0.0f;
-    ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
-    const uint8_t flash_active =
-        ui_param_get_slot_value_flash(slot, id, ui_get_active_track(), &flash_value, &flash_kind);
-    char bottom_txt[24];
-    if (flash_active != 0U)
-    {
-        char flash_name[24];
-        (void)flash_kind;
-        ui_renderer_template_build_param_text(state,
-                                              slot,
-                                              id,
-                                              flash_value,
-                                              flash_name,
-                                              (uint32_t)sizeof(flash_name),
-                                              bottom_txt,
-                                              (uint32_t)sizeof(bottom_txt));
-    }
-    else
-    {
-        (void)snprintf(bottom_txt, sizeof(bottom_txt), "%s", name_txt);
     }
 
     drv_display_set_font(&FONT_4X6);
@@ -2387,44 +2983,51 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
     if (subpage != NULL)
     {
-        ui_renderer_template_adsr_shape_t grouped_adsr_shape;
-        ui_template_custom_widget_kind_t grouped_widget =
-            ui_renderer_template_resolve_grouped_custom_widget(state, subpage);
-        uint8_t grouped_widget_drawn =
-            (uint8_t)((grouped_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
-                    && (ui_renderer_template_prepare_custom_adsr(&plock_frame_ctx, grouped_widget, &grouped_adsr_shape) != 0U));
-
-        if (ui_renderer_template_filter_curve_group_is_active(state, subpage, &plock_frame_ctx) != 0U)
+        if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
         {
-            grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
-            grouped_widget_drawn = 1U;
+            ui_renderer_template_draw_sampler_ram_wave_placeholder(state, &plock_frame_ctx, subpage);
         }
-
-        for (uint8_t i = 0U; i < 4U; i++)
+        else
         {
-            ui_renderer_template_draw_param_slot(state,
-                                                 &plock_frame_ctx,
-                                                 subpage,
-                                                 grouped_widget,
-                                                 grouped_widget_drawn,
-                                                 i,
-                                                 subpage->param_bank.params[i]);
-        }
+            ui_renderer_template_adsr_shape_t grouped_adsr_shape;
+            ui_template_custom_widget_kind_t grouped_widget =
+                ui_renderer_template_resolve_grouped_custom_widget(state, subpage);
+            uint8_t grouped_widget_drawn =
+                (uint8_t)((grouped_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+                        && (ui_renderer_template_prepare_custom_adsr(&plock_frame_ctx, grouped_widget, &grouped_adsr_shape) != 0U));
 
-        if (grouped_widget_drawn != 0U)
-        {
-            if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP)
+            if (ui_renderer_template_filter_curve_group_is_active(state, subpage, &plock_frame_ctx) != 0U)
             {
-                (void)ui_renderer_template_draw_filter_curve_group(&plock_frame_ctx);
+                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
+                grouped_widget_drawn = 1U;
             }
-            else
+
+            for (uint8_t i = 0U; i < 4U; i++)
             {
-                (void)ui_renderer_template_draw_custom_adsr_shape(&grouped_adsr_shape,
-                                                                  UI_TEMPLATE_GROUP_WIDGET_X,
-                                                                  UI_TEMPLATE_GROUP_WIDGET_Y,
-                                                                  UI_TEMPLATE_GROUP_WIDGET_W,
-                                                                  UI_TEMPLATE_GROUP_WIDGET_H,
-                                                                  1U);
+                ui_renderer_template_draw_param_slot(state,
+                                                     &plock_frame_ctx,
+                                                     subpage,
+                                                     grouped_widget,
+                                                     grouped_widget_drawn,
+                                                     i,
+                                                     subpage->param_bank.params[i]);
+            }
+
+            if (grouped_widget_drawn != 0U)
+            {
+                if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP)
+                {
+                    (void)ui_renderer_template_draw_filter_curve_group(&plock_frame_ctx);
+                }
+                else
+                {
+                    (void)ui_renderer_template_draw_custom_adsr_shape(&grouped_adsr_shape,
+                                                                      UI_TEMPLATE_GROUP_WIDGET_X,
+                                                                      UI_TEMPLATE_GROUP_WIDGET_Y,
+                                                                      UI_TEMPLATE_GROUP_WIDGET_W,
+                                                                      UI_TEMPLATE_GROUP_WIDGET_H,
+                                                                      1U);
+                }
             }
         }
     }

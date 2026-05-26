@@ -1460,7 +1460,7 @@ static void ui_page_rec_edit_render(void)
     const uint8_t encoder_label_y =
         (uint8_t)(UI_REC_EDIT_TITLE_Y + title_height + UI_REC_EDIT_TITLE_GAP);
     const uint8_t page_label_y = (uint8_t)(OLED_HEIGHT - drv_display_font_height() + 1U);
-    const uint8_t alt_held = button_down(BTN_PAGE_4);
+    const uint8_t alt_held = button_down(BTN_SHIFT);
     if(alt_held != 0U)
     {
         ui_page_audio_rec_draw_label(0U, encoder_label_y, "VZOOM", 1U);
@@ -1497,7 +1497,7 @@ static void ui_page_rec_edit_render(void)
         drv_display_draw_text(0U, page_label_y, "RETURN");
         drv_display_draw_text(34U, page_label_y, "SAVE");
         ui_page_audio_rec_draw_label(62U, page_label_y, "ZCROSS", state.edit_zcross_enabled);
-        ui_page_audio_rec_draw_label(108U, page_label_y, "ALT", alt_held);
+        ui_page_audio_rec_draw_label(108U, page_label_y, "SHFT", alt_held);
     }
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
     sample_capture_model_debug_note_draw_cost(HAL_GetTick() - page_draw_start_ms,
@@ -1520,7 +1520,7 @@ uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)
         {
             return 1U;
         }
-        return sample_capture_model_step_edit(encoder, delta, button_down(BTN_PAGE_4));
+        return sample_capture_model_step_edit(encoder, delta, button_down(BTN_SHIFT));
     }
 
     switch(encoder)

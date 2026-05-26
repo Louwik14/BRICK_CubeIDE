@@ -7,6 +7,7 @@
 #include "Param/param_registry.h"
 #include "Sampler/multi_sample_pool.h"
 #include "ui_core.h"
+#include "ui_renderer_template.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_tone_family_master_fx = {
@@ -23,11 +24,11 @@ static const ui_template_family_t g_ui_template_tone_family_master_fx = {
 
 static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .family_title = "TONE",
-    .nav_labels = { "PLAY", "MODE", "SLICE", "-" },
+    .nav_labels = { "PLAY", "LOOP", "-", "-" },
     .subpages = {
-        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_START, PARAM_SAMPLER_END } } },
-        { .title = "MODE", .param_bank = { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } } },
-        { .title = "SLICE", .param_bank = { .params = { PARAM_SAMPLER_SLICE_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_END } } },
+        { .title = "LOOP", .param_bank = { .params = { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_LOOP_START, PARAM_SAMPLER_SLICE_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -82,6 +83,68 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
     .default_subpage = 0U,
 };
 
+typedef enum
+{
+    UI_WAVE_VALUE_PERCENT = 0,
+    UI_WAVE_VALUE_BIPOLAR_PERCENT,
+    UI_WAVE_VALUE_INTERVAL,
+    UI_WAVE_VALUE_STEPPED,
+    UI_WAVE_VALUE_ENUM,
+    UI_WAVE_VALUE_MORPH,
+    UI_WAVE_VALUE_RATE,
+    UI_WAVE_VALUE_NONE
+} ui_wave_value_kind_t;
+
+typedef struct
+{
+    const char *label_a;
+    const char *label_b;
+    ui_wave_value_kind_t kind_a;
+    ui_wave_value_kind_t kind_b;
+} ui_wave_param_label_t;
+
+static const ui_wave_param_label_t g_wave_param_labels[] = {
+    { "NWidth", "NDepth", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_BIPOLAR_PERCENT },
+    { "Shape", "ToneDrv", UI_WAVE_VALUE_MORPH, UI_WAVE_VALUE_PERCENT },
+    { "Shape", "-", UI_WAVE_VALUE_MORPH, UI_WAVE_VALUE_NONE },
+    { "Fold", "SinTri", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Density", "Detune", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_INTERVAL },
+    { "PW", "Sub Mix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_MORPH },
+    { "Saw Shape", "Sub Mix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_MORPH },
+    { "Slave", "Balance", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_PERCENT },
+    { "Slave", "Balance", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_PERCENT },
+    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
+    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
+    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
+    { "Osc2", "Osc3", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
+    { "Mod1", "Mod2", UI_WAVE_VALUE_INTERVAL, UI_WAVE_VALUE_INTERVAL },
+    { "Detune", "Tone", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Rate", "Mask", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
+    { "Formant 1", "Formant 2", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Vowel", "FShift", UI_WAVE_VALUE_MORPH, UI_WAVE_VALUE_PERCENT },
+    { "Formant Y", "Formant X", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Peak", "Spread", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Index", "Ratio", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
+    { "Index", "Ratio", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
+    { "Chaos", "Ratio", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
+    { "Decay", "Inharm", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Decay", "ToneNz", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Decay", "Tone", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Cutoff", "NzMix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Body", "Snappy", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Wave", "Bank", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_ENUM },
+    { "X", "Y", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Wave", "Interp", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_STEPPED },
+    { "Wave", "Chord", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_ENUM },
+    { "Resonance", "FltMix", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_MORPH },
+    { "Q", "Spread", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_INTERVAL },
+    { "Rate", "Steps", UI_WAVE_VALUE_RATE, UI_WAVE_VALUE_STEPPED },
+    { "Grain", "PVar", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Density", "Spread", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+    { "Baud", "Data", UI_WAVE_VALUE_RATE, UI_WAVE_VALUE_PERCENT },
+    { "Speed", "Noise", UI_WAVE_VALUE_PERCENT, UI_WAVE_VALUE_PERCENT },
+};
+
 static const ui_template_family_t g_ui_template_tone_family_midi = {
     .family_title = "TONE",
     .nav_labels = { "PROG", "CC1", "CC2", "CC3" },
@@ -131,10 +194,15 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                                                 uint32_t out_name_len,
                                                 char *out_value,
                                                 uint32_t out_value_len);
+static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
+                                                           param_id_t id,
+                                                           const char *value_label,
+                                                           uiw_widget_type_t suggested_widget);
 
 static ui_template_page_state_t g_ui_template_tone_state = {
     .family = 0,
     .family_resolver = ui_page_template_tone_resolve_family,
+    .widget_picker = ui_page_template_tone_pick_widget,
     .param_text = ui_page_template_tone_param_text,
     .active_subpage = 0U,
     .has_visited = 0U,
@@ -187,14 +255,580 @@ static uint8_t ui_page_template_tone_master_fx_u7(float value)
     return (uint8_t)(value + 0.5f);
 }
 
+#define UI_WAVE_PARAM_LABEL_COUNT ((uint8_t)(sizeof(g_wave_param_labels) / sizeof(g_wave_param_labels[0])))
+
+static const int16_t g_wave_triple_intervals_q7[] = {
+    -3072, -3072, -3068, -2944, -2816, -2688, -2560, -2432,
+    -2304, -2180, -2176, -2048, -1920, -1792, -1664, -1540,
+    -1536, -1408, -1280, -1152, -1024, -900, -896, -768,
+    -640, -512, -384, -256, -128, -24, -8, -4,
+    0, 4, 8, 24, 128, 256, 384, 512,
+    640, 768, 896, 900, 1024, 1152, 1280, 1408,
+    1536, 1540, 1664, 1792, 1920, 2048, 2176, 2180,
+    2304, 2432, 2560, 2688, 2816, 2944, 3068, 3072,
+    3072
+};
+
+static const uint16_t g_wave_fm_frequency_quantizer[] = {
+    7168, 7168, 7168, 7360, 7552, 7744, 7936, 8128,
+    8320, 8512, 8704, 8896, 9088, 9280, 9472, 9664,
+    9856, 10048, 10240, 10240, 10240, 10432, 10624, 10816,
+    11008, 11200, 11392, 11584, 11776, 11968, 12160, 12352,
+    12544, 12736, 12928, 13312, 13312, 13312, 13352, 13352,
+    13352, 13726, 14100, 14474, 14848, 14848, 14848, 15080,
+    15313, 15313, 15313, 15581, 15848, 16116, 16384, 16384,
+    16384, 16424, 16424, 16424, 16798, 17172, 17546, 17920,
+    17920, 17920, 18152, 18385, 18385, 18385, 18624, 18864,
+    18864, 18864, 19160, 19456, 19456, 19456, 19496, 19496,
+    19496, 19737, 19978, 19978, 19978, 20200, 20422, 20645,
+    20867, 20867, 20867, 20992, 20992, 20992, 21253, 21253,
+    21253, 21457, 21457, 21457, 21673, 21890, 21890, 21890,
+    22209, 22528, 22528, 22528, 22789, 22789, 22789, 23021,
+    23254, 23254, 23254, 23516, 23516, 23516, 23790, 24064,
+    24064, 24064, 24448, 24832, 25216, 25600, 25600, 25600,
+    25600
+};
+
+static const ui_wave_param_label_t *ui_page_template_tone_wave_labels_for_active_track(uint8_t *out_edit_index)
+{
+    const uint8_t active_track = ui_get_active_track();
+    float edit_value = 0.0f;
+    uint8_t edit_index = 0U;
+
+    if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_WAVE)
+            || (param_registry_get_track_value(PARAM_WAVE_EDIT, active_track, &edit_value) == 0U))
+    {
+        return NULL;
+    }
+
+    if (edit_value > 0.0f)
+    {
+        edit_index = (uint8_t)(edit_value + 0.5f);
+    }
+    if (edit_index >= UI_WAVE_PARAM_LABEL_COUNT)
+    {
+        edit_index = (uint8_t)(UI_WAVE_PARAM_LABEL_COUNT - 1U);
+    }
+    if (out_edit_index != NULL)
+    {
+        *out_edit_index = edit_index;
+    }
+
+    return &g_wave_param_labels[edit_index];
+}
+
+static uint16_t ui_page_template_tone_wave_u15(float value)
+{
+    if (value < 0.0f)
+    {
+        return 0U;
+    }
+    if (value > 1.0f)
+    {
+        return 32767U;
+    }
+    return (uint16_t)(value * 32767.0f + 0.5f);
+}
+
+static void ui_page_template_tone_wave_format_percent(uint16_t raw,
+                                                      char *out,
+                                                      uint32_t out_len)
+{
+    ui_format_param_127_00((float)raw, 0.0f, 32767.0f, out, out_len);
+}
+
+static void ui_page_template_tone_wave_format_bipolar_percent(uint16_t raw,
+                                                              char *out,
+                                                              uint32_t out_len)
+{
+    int32_t scaled = ((int32_t)raw * 200L + 16383L) / 32767L;
+    scaled -= 100L;
+    if ((scaled > -1L) && (scaled < 1L))
+    {
+        scaled = 0L;
+    }
+    (void)snprintf(out, out_len, "%+ld%%", (long)scaled);
+}
+
+static void ui_page_template_tone_wave_format_bipolar_float(float value,
+                                                            float span,
+                                                            const char *unit,
+                                                            char *out,
+                                                            uint32_t out_len)
+{
+    int32_t display = (int32_t)(((value - 0.5f) * span * 2.0f) + ((value >= 0.5f) ? 0.5f : -0.5f));
+    if ((display > -1L) && (display < 1L))
+    {
+        display = 0L;
+    }
+    if (display == 0L)
+    {
+        (void)snprintf(out, out_len, "0%s", (unit != NULL) ? unit : "");
+    }
+    else
+    {
+        (void)snprintf(out, out_len, "%+ld%s", (long)display, (unit != NULL) ? unit : "");
+    }
+}
+
+static void ui_page_template_tone_wave_format_model(float value,
+                                                    char *out,
+                                                    uint32_t out_len)
+{
+    uint8_t index = 0U;
+    const char *label = NULL;
+
+    if (value > 0.0f)
+    {
+        index = (uint8_t)(value + 0.5f);
+    }
+    if (index >= UI_WAVE_PARAM_LABEL_COUNT)
+    {
+        index = (uint8_t)(UI_WAVE_PARAM_LABEL_COUNT - 1U);
+    }
+
+    if (param_registry[PARAM_WAVE_EDIT].labels != NULL)
+    {
+        label = param_registry[PARAM_WAVE_EDIT].labels[index];
+    }
+    (void)snprintf(out, out_len, "%s", (label != NULL) ? label : "---");
+}
+
+static void ui_page_template_tone_wave_format_q7_interval(int32_t q7,
+                                                          char *out,
+                                                          uint32_t out_len)
+{
+    const int32_t abs_q7 = (q7 < 0) ? -q7 : q7;
+    if (abs_q7 < 64L)
+    {
+        (void)snprintf(out, out_len, "0st");
+        return;
+    }
+
+    if (abs_q7 < 128L)
+    {
+        const int32_t cents = (q7 * 100L + ((q7 >= 0) ? 64L : -64L)) / 128L;
+        (void)snprintf(out, out_len, "%+ldct", (long)cents);
+        return;
+    }
+
+    const int32_t semitones = (q7 + ((q7 >= 0) ? 64L : -64L)) / 128L;
+    (void)snprintf(out, out_len, "%+ldst", (long)semitones);
+}
+
+static int16_t ui_page_template_tone_wave_triple_interval_q7(uint16_t raw)
+{
+    uint8_t index_a = (uint8_t)(raw >> 9);
+    uint8_t index_b = (uint8_t)(((raw >> 8) + 1U) >> 1);
+    uint16_t xfade = (uint16_t)(raw << 8);
+    const uint8_t last = (uint8_t)((sizeof(g_wave_triple_intervals_q7) / sizeof(g_wave_triple_intervals_q7[0])) - 1U);
+
+    if (index_a > last)
+    {
+        index_a = last;
+    }
+    if (index_b > last)
+    {
+        index_b = last;
+    }
+
+    return (int16_t)(g_wave_triple_intervals_q7[index_a]
+                    + (((int32_t)(g_wave_triple_intervals_q7[index_b] - g_wave_triple_intervals_q7[index_a])
+                        * (int32_t)xfade) >> 16));
+}
+
+static void ui_page_template_tone_wave_format_interval(uint8_t edit_index,
+                                                       param_id_t id,
+                                                       uint16_t raw,
+                                                       char *out,
+                                                       uint32_t out_len)
+{
+    int32_t q7 = 0L;
+
+    if ((edit_index == 4U) && (id == PARAM_WAVE_COLOR))
+    {
+        q7 = (int32_t)(raw >> 8);
+    }
+    else if (((edit_index == 7U) || (edit_index == 8U)) && (id == PARAM_WAVE_TIMBRE))
+    {
+        q7 = (int32_t)(raw >> 2);
+    }
+    else if ((edit_index >= 9U) && (edit_index <= 12U))
+    {
+        q7 = (int32_t)ui_page_template_tone_wave_triple_interval_q7(raw);
+    }
+    else if ((edit_index == 13U) && ((id == PARAM_WAVE_TIMBRE) || (id == PARAM_WAVE_COLOR)))
+    {
+        q7 = ((int32_t)raw - 16384L) >> 2;
+    }
+    else if ((edit_index == 33U) && (id == PARAM_WAVE_COLOR))
+    {
+        q7 = ((int32_t)raw - 16384L) >> 1;
+    }
+    else
+    {
+        ui_page_template_tone_wave_format_percent(raw, out, out_len);
+        return;
+    }
+
+    ui_page_template_tone_wave_format_q7_interval(q7, out, out_len);
+}
+
+static void ui_page_template_tone_wave_format_vowel(uint16_t raw,
+                                                    char *out,
+                                                    uint32_t out_len)
+{
+    uint8_t vowel = (uint8_t)(raw >> 12);
+    const uint16_t balance = (uint16_t)(raw & 0x0fffU);
+    if (vowel > 7U)
+    {
+        vowel = 7U;
+    }
+
+    if ((balance < 512U) || (vowel >= 7U))
+    {
+        (void)snprintf(out, out_len, "V%u", (unsigned int)(vowel + 1U));
+    }
+    else
+    {
+        (void)snprintf(out, out_len, "V%u>%u", (unsigned int)(vowel + 1U), (unsigned int)(vowel + 2U));
+    }
+}
+
+static void ui_page_template_tone_wave_format_noise_mix(uint16_t raw,
+                                                        char *out,
+                                                        uint32_t out_len)
+{
+    if (raw < 4096U)
+    {
+        (void)snprintf(out, out_len, "LP");
+    }
+    else if (raw < 12288U)
+    {
+        (void)snprintf(out, out_len, "LP>BP");
+    }
+    else if (raw < 20480U)
+    {
+        (void)snprintf(out, out_len, "BP");
+    }
+    else if (raw < 28672U)
+    {
+        (void)snprintf(out, out_len, "BP>HP");
+    }
+    else
+    {
+        (void)snprintf(out, out_len, "HP");
+    }
+}
+
+static void ui_page_template_tone_wave_format_morph(uint8_t edit_index,
+                                                    param_id_t id,
+                                                    uint16_t raw,
+                                                    char *out,
+                                                    uint32_t out_len)
+{
+    if ((edit_index == 17U) && (id == PARAM_WAVE_TIMBRE))
+    {
+        ui_page_template_tone_wave_format_vowel(raw, out, out_len);
+    }
+    else if ((edit_index == 32U) && (id == PARAM_WAVE_COLOR))
+    {
+        ui_page_template_tone_wave_format_noise_mix(raw, out, out_len);
+    }
+    else
+    {
+        ui_page_template_tone_wave_format_percent(raw, out, out_len);
+    }
+}
+
+static void ui_page_template_tone_wave_format_stepped(uint8_t edit_index,
+                                                      param_id_t id,
+                                                      uint16_t raw,
+                                                      char *out,
+                                                      uint32_t out_len)
+{
+    if ((edit_index == 15U) && (id == PARAM_WAVE_COLOR))
+    {
+        (void)snprintf(out, out_len, "M%02X", (unsigned int)(raw >> 8));
+    }
+    else if (((edit_index == 20U) || (edit_index == 21U) || (edit_index == 22U)) && (id == PARAM_WAVE_COLOR))
+    {
+        uint8_t index = (uint8_t)(raw >> 8);
+        if (index >= (uint8_t)(sizeof(g_wave_fm_frequency_quantizer) / sizeof(g_wave_fm_frequency_quantizer[0])))
+        {
+            index = (uint8_t)((sizeof(g_wave_fm_frequency_quantizer) / sizeof(g_wave_fm_frequency_quantizer[0])) - 1U);
+        }
+        ui_page_template_tone_wave_format_q7_interval(((int32_t)g_wave_fm_frequency_quantizer[index] - 16384L) >> 1,
+                                                      out,
+                                                      out_len);
+    }
+    else if ((edit_index == 30U) && (id == PARAM_WAVE_COLOR))
+    {
+        static const char *const k_labels[] = { "SMTH", "XFADE", "ROUGH", "LOFI" };
+        uint8_t index = (uint8_t)(raw >> 13);
+        if (index > 3U)
+        {
+            index = 3U;
+        }
+        (void)snprintf(out, out_len, "%s", k_labels[index]);
+    }
+    else if ((edit_index == 34U) && (id == PARAM_WAVE_COLOR))
+    {
+        uint8_t steps = (uint8_t)(1U + (raw >> 10));
+        if (steps == 1U)
+        {
+            steps = 2U;
+        }
+        (void)snprintf(out, out_len, "%u", (unsigned int)steps);
+    }
+    else
+    {
+        (void)snprintf(out, out_len, "S%02u", (unsigned int)(1U + (raw >> 10)));
+    }
+}
+
+static void ui_page_template_tone_wave_format_enum(uint8_t edit_index,
+                                                   param_id_t id,
+                                                   uint16_t raw,
+                                                   char *out,
+                                                   uint32_t out_len)
+{
+    if ((edit_index == 28U) && (id == PARAM_WAVE_COLOR))
+    {
+        uint8_t bank = (uint8_t)(((uint32_t)raw * 20U) >> 15);
+        if (bank > 19U)
+        {
+            bank = 19U;
+        }
+        (void)snprintf(out, out_len, "%u/20", (unsigned int)(bank + 1U));
+    }
+    else if ((edit_index == 31U) && (id == PARAM_WAVE_COLOR))
+    {
+        uint8_t chord = (uint8_t)(raw >> 11);
+        if (chord > 16U)
+        {
+            chord = 16U;
+        }
+        (void)snprintf(out, out_len, "CH%u", (unsigned int)(chord + 1U));
+    }
+    else
+    {
+        (void)snprintf(out, out_len, "E%02u", (unsigned int)(1U + (raw >> 10)));
+    }
+}
+
+static void ui_page_template_tone_wave_format_value(uint8_t edit_index,
+                                                    param_id_t id,
+                                                    ui_wave_value_kind_t kind,
+                                                    float value,
+                                                    char *out,
+                                                    uint32_t out_len)
+{
+    const uint16_t raw = ui_page_template_tone_wave_u15(value);
+
+    if ((out == NULL) || (out_len == 0U))
+    {
+        return;
+    }
+
+    switch (kind)
+    {
+        case UI_WAVE_VALUE_NONE:
+            (void)snprintf(out, out_len, "---");
+            break;
+        case UI_WAVE_VALUE_BIPOLAR_PERCENT:
+            ui_page_template_tone_wave_format_bipolar_percent(raw, out, out_len);
+            break;
+        case UI_WAVE_VALUE_INTERVAL:
+            ui_page_template_tone_wave_format_interval(edit_index, id, raw, out, out_len);
+            break;
+        case UI_WAVE_VALUE_STEPPED:
+            ui_page_template_tone_wave_format_stepped(edit_index, id, raw, out, out_len);
+            break;
+        case UI_WAVE_VALUE_ENUM:
+            ui_page_template_tone_wave_format_enum(edit_index, id, raw, out, out_len);
+            break;
+        case UI_WAVE_VALUE_MORPH:
+            ui_page_template_tone_wave_format_morph(edit_index, id, raw, out, out_len);
+            break;
+        case UI_WAVE_VALUE_RATE:
+        case UI_WAVE_VALUE_PERCENT:
+        default:
+            ui_page_template_tone_wave_format_percent(raw, out, out_len);
+            break;
+    }
+}
+
+static uint8_t ui_page_template_tone_wave_kind_for_param(param_id_t id,
+                                                         const ui_wave_param_label_t *labels,
+                                                         const char **out_name,
+                                                         ui_wave_value_kind_t *out_kind)
+{
+    if (labels == NULL)
+    {
+        return 0U;
+    }
+
+    if (id == PARAM_WAVE_TIMBRE)
+    {
+        if (out_name != NULL)
+        {
+            *out_name = labels->label_a;
+        }
+        if (out_kind != NULL)
+        {
+            *out_kind = labels->kind_a;
+        }
+        return 1U;
+    }
+
+    if (id == PARAM_WAVE_COLOR)
+    {
+        if (out_name != NULL)
+        {
+            *out_name = labels->label_b;
+        }
+        if (out_kind != NULL)
+        {
+            *out_kind = labels->kind_b;
+        }
+        return 1U;
+    }
+
+    return 0U;
+}
+
+static uint8_t ui_page_template_tone_wave_param_text(param_id_t id,
+                                                     float value,
+                                                     char *out_name,
+                                                     uint32_t out_name_len,
+                                                     char *out_value,
+                                                     uint32_t out_value_len)
+{
+    uint8_t edit_index = 0U;
+    const ui_wave_param_label_t *const labels = ui_page_template_tone_wave_labels_for_active_track(&edit_index);
+    const char *name = NULL;
+    ui_wave_value_kind_t kind = UI_WAVE_VALUE_PERCENT;
+
+    if (labels == NULL)
+    {
+        return 0U;
+    }
+
+    switch (id)
+    {
+        case PARAM_WAVE_EDIT:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "MODEL");
+            }
+            ui_page_template_tone_wave_format_model(value, out_value, out_value_len);
+            return 1U;
+
+        case PARAM_WAVE_FINE:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "FINE");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                ui_page_template_tone_wave_format_bipolar_float(value, 100.0f, "ct", out_value, out_value_len);
+            }
+            return 1U;
+
+        case PARAM_WAVE_COARSE:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "PITCH");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                ui_page_template_tone_wave_format_bipolar_float(value, 24.0f, "st", out_value, out_value_len);
+            }
+            return 1U;
+
+        case PARAM_WAVE_FM:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "FM AMT");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                ui_page_template_tone_wave_format_percent(ui_page_template_tone_wave_u15(value), out_value, out_value_len);
+            }
+            return 1U;
+
+        case PARAM_WAVE_MODULATION:
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "A MOD");
+            }
+            if ((out_value != NULL) && (out_value_len > 0U))
+            {
+                ui_page_template_tone_wave_format_bipolar_percent(ui_page_template_tone_wave_u15(value), out_value, out_value_len);
+            }
+            return 1U;
+
+        default:
+            break;
+    }
+
+    if (ui_page_template_tone_wave_kind_for_param(id, labels, &name, &kind) == 0U)
+    {
+        return 0U;
+    }
+
+    if ((out_name != NULL) && (out_name_len > 0U))
+    {
+        (void)snprintf(out_name, out_name_len, "%s", (name != NULL) ? name : "-");
+    }
+
+    ui_page_template_tone_wave_format_value(edit_index, id, kind, value, out_value, out_value_len);
+
+    return 1U;
+}
+
+static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
+                                                           param_id_t id,
+                                                           const char *value_label,
+                                                           uiw_widget_type_t suggested_widget)
+{
+    const ui_wave_param_label_t *const labels = ui_page_template_tone_wave_labels_for_active_track(NULL);
+    ui_wave_value_kind_t kind = UI_WAVE_VALUE_PERCENT;
+
+    (void)slot;
+    (void)value_label;
+
+    if (ui_page_template_tone_wave_kind_for_param(id, labels, NULL, &kind) == 0U)
+    {
+        if (id == PARAM_WAVE_EDIT)
+        {
+            return UIW_WIDGET_ENUM_TEXT;
+        }
+        return suggested_widget;
+    }
+
+    switch (kind)
+    {
+        case UI_WAVE_VALUE_NONE:
+            return UIW_WIDGET_EMPTY;
+        case UI_WAVE_VALUE_STEPPED:
+        case UI_WAVE_VALUE_ENUM:
+            return UIW_WIDGET_ENUM_TEXT;
+        case UI_WAVE_VALUE_PERCENT:
+        case UI_WAVE_VALUE_BIPOLAR_PERCENT:
+        case UI_WAVE_VALUE_INTERVAL:
+        case UI_WAVE_VALUE_MORPH:
+        case UI_WAVE_VALUE_RATE:
+        default:
+            return UIW_WIDGET_KNOB;
+    }
+}
+
 static uint8_t ui_page_template_tone_master_fx_index(uint8_t raw, uint8_t max_index)
 {
     return (uint8_t)(((uint32_t)raw * (uint32_t)max_index + 63U) / 127U);
-}
-
-static uint8_t ui_page_template_tone_master_fx_percent(uint8_t raw, uint8_t max_percent)
-{
-    return (uint8_t)(((uint32_t)raw * (uint32_t)max_percent + 63U) / 127U);
 }
 
 static void ui_page_template_tone_master_fx_format_signed(uint8_t raw,
@@ -214,10 +848,8 @@ static void ui_page_template_tone_master_fx_format_percent(uint8_t raw,
                                                            char *out,
                                                            uint32_t out_len)
 {
-    (void)snprintf(out,
-                   out_len,
-                   "%u%%",
-                   (unsigned int)ui_page_template_tone_master_fx_percent(raw, max_percent));
+    (void)max_percent;
+    ui_format_param_127_00((float)raw, 0.0f, 127.0f, out, out_len);
 }
 
 static void ui_page_template_tone_master_fx_format_choice(uint8_t raw,
@@ -442,6 +1074,53 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 {
     const uint8_t active_track = ui_get_active_track();
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_SAMPLER))
+    {
+        const char *name = NULL;
+        switch (id)
+        {
+            case PARAM_SAMPLER_SAMPLE:
+                name = "SAMPLE";
+                break;
+            case PARAM_SAMPLER_MODE:
+                name = "MODE";
+                break;
+            case PARAM_SAMPLER_START:
+                name = "START";
+                break;
+            case PARAM_SAMPLER_END:
+                name = "END";
+                break;
+            case PARAM_SAMPLER_GAIN:
+                name = "GAIN";
+                break;
+            case PARAM_SAMPLER_TUNE:
+                name = "TUNE";
+                break;
+            case PARAM_SAMPLER_LOOP_START:
+                name = "LOOP";
+                break;
+            case PARAM_SAMPLER_SLICE_COUNT:
+                name = "SLICE";
+                break;
+            default:
+                break;
+        }
+        if (name != NULL)
+        {
+            if ((out_name != NULL) && (out_name_len > 0U))
+            {
+                (void)snprintf(out_name, out_name_len, "%s", name);
+            }
+            (void)slot;
+            (void)value;
+            (void)out_value;
+            (void)out_value_len;
+            return 1U;
+        }
+    }
+
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
             && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
     {
         if (id == PARAM_SAMPLER_SAMPLE)
@@ -509,10 +1188,18 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 {
                     display = 2.0f;
                 }
-                (void)snprintf(out_value, out_value_len, "%u%%", (unsigned int)(display * 100.0f + 0.5f));
+                ui_format_param_127_00(display, 0.0f, 2.0f, out_value, out_value_len);
             }
             return 1U;
         }
+    }
+
+    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE)
+            && (ui_page_template_tone_wave_param_text(id, value, out_name, out_name_len, out_value, out_value_len) != 0U))
+    {
+        (void)slot;
+        return 1U;
     }
 
     if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)

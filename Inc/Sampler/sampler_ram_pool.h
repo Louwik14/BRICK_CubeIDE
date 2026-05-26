@@ -8,10 +8,12 @@
 extern "C" {
 #endif
 
-#define SAMPLER_RAM_POOL_MAX_SLOTS      (16U)
+#define SAMPLER_RAM_POOL_MAX_SLOTS      SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
 #define SAMPLER_RAM_POOL_BYTES          (SAMPLE_PAGE_SLOT_POOL_COUNT * SAMPLE_PAGE_BYTES)
 #define SAMPLER_RAM_POOL_PATH_MAX       SAMPLE_GLOBAL_POOL_PATH_MAX
 #define SAMPLER_RAM_POOL_INVALID_SLOT   (0xFFFFU)
+#define SAMPLE_RAM_WAVEFORM_MAX_COLUMNS (128U)
+#define SAMPLE_RAM_WAVEFORM_COLUMNS     (124U)
 
 typedef enum
 {
@@ -46,6 +48,30 @@ typedef enum
     SAMPLER_RAM_RESULT_REGISTER_FAIL
 } sampler_ram_result_t;
 
+typedef enum
+{
+    SAMPLE_RAM_WAVEFORM_EMPTY = 0,
+    SAMPLE_RAM_WAVEFORM_BUILDING,
+    SAMPLE_RAM_WAVEFORM_READY,
+    SAMPLE_RAM_WAVEFORM_ERROR
+} sample_ram_waveform_state_t;
+
+typedef struct
+{
+    sample_ram_waveform_state_t state;
+    uint32_t sample_generation;
+    uint32_t frame_count;
+    uint8_t channels;
+    uint8_t format;
+    uint16_t columns;
+    uint16_t ready_columns;
+    uint16_t global_peak;
+    uint32_t build_next_column;
+    uint32_t build_next_frame;
+    int16_t min[SAMPLE_RAM_WAVEFORM_MAX_COLUMNS];
+    int16_t max[SAMPLE_RAM_WAVEFORM_MAX_COLUMNS];
+} sample_ram_waveform_overview_t;
+
 typedef struct
 {
     sampler_ram_slot_state_t state;
@@ -65,6 +91,7 @@ typedef struct
     uint32_t cost_bytes_aligned;
     sampler_ram_result_t error;
     uint32_t flags;
+    sample_ram_waveform_overview_t waveform;
 } sampler_ram_slot_t;
 
 void sampler_ram_pool_init(void);
@@ -90,6 +117,9 @@ uint32_t sampler_ram_pool_get_used_bytes(void);
 uint32_t sampler_ram_pool_get_free_bytes(void);
 sampler_ram_result_t sampler_ram_pool_get_last_result(void);
 const char *sampler_ram_pool_result_label(sampler_ram_result_t result);
+void sampler_ram_pool_waveform_service(uint32_t frame_budget);
+const sample_ram_waveform_overview_t *sampler_ram_pool_get_waveform(uint16_t ram_slot);
+const sample_ram_waveform_overview_t *sampler_ram_pool_get_waveform_for_global(uint16_t global_slot);
 
 #ifdef __cplusplus
 }

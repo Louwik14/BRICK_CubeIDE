@@ -9,6 +9,7 @@
 #include "Sampler/sample_page_cache.h"
 
 #define SAMPLER_RAM_IO_BYTES (1536U)
+#define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)
 
 typedef struct
 {
@@ -19,6 +20,231 @@ typedef struct
 
 STORAGE_STATE_SDRAM static sampler_ram_pool_state_t g_sampler_ram_pool;
 STORAGE_SCRATCH_SDRAM static uint8_t g_sampler_ram_io[SAMPLER_RAM_IO_BYTES];
+
+static uint16_t sampler_ram_waveform_abs_i16(int16_t value)
+{
+    if (value >= 0)
+    {
+        return (uint16_t)value;
+    }
+    if (value == (int16_t)-32768)
+    {
+        return 32768U;
+    }
+    return (uint16_t)(-value);
+}
+
+static int16_t sampler_ram_waveform_float_to_i16(float value)
+{
+    if (value >= 1.0f)
+    {
+        return 32767;
+    }
+    if (value <= -1.0f)
+    {
+        return -32768;
+    }
+    if (value >= 0.0f)
+    {
+        return (int16_t)((value * 32767.0f) + 0.5f);
+    }
+    return (int16_t)((value * 32768.0f) - 0.5f);
+}
+
+static void sampler_ram_waveform_set_empty(sampler_ram_slot_t *slot)
+{
+    if (slot == 0)
+    {
+        return;
+    }
+    memset(&slot->waveform, 0, sizeof(slot->waveform));
+    slot->waveform.state = SAMPLE_RAM_WAVEFORM_EMPTY;
+}
+
+static void sampler_ram_waveform_set_error(sampler_ram_slot_t *slot)
+{
+    if (slot == 0)
+    {
+        return;
+    }
+    memset(&slot->waveform, 0, sizeof(slot->waveform));
+    slot->waveform.state = SAMPLE_RAM_WAVEFORM_ERROR;
+    slot->waveform.sample_generation = slot->generation;
+}
+
+static uint8_t sampler_ram_waveform_slot_ready(const sampler_ram_slot_t *slot)
+{
+    return (uint8_t)((slot != 0)
+                    && (slot->state == SAMPLER_RAM_SLOT_READY)
+                    && (slot->format == SAMPLER_RAM_FORMAT_FLOAT32_INTERLEAVED)
+                    && (slot->data != 0)
+                    && (slot->frames != 0U)
+                    && (slot->channels != 0U));
+}
+
+static void sampler_ram_waveform_begin(sampler_ram_slot_t *slot)
+{
+    if (slot == 0)
+    {
+        return;
+    }
+
+    memset(&slot->waveform, 0, sizeof(slot->waveform));
+    slot->waveform.state = SAMPLE_RAM_WAVEFORM_BUILDING;
+    slot->waveform.sample_generation = slot->generation;
+    slot->waveform.frame_count = slot->frames;
+    slot->waveform.channels = (uint8_t)slot->channels;
+    slot->waveform.format = (uint8_t)slot->format;
+    slot->waveform.columns = SAMPLE_RAM_WAVEFORM_COLUMNS;
+    for (uint16_t i = 0U; i < SAMPLE_RAM_WAVEFORM_COLUMNS; ++i)
+    {
+        slot->waveform.min[i] = 32767;
+        slot->waveform.max[i] = -32768;
+    }
+}
+
+static uint8_t sampler_ram_waveform_matches_slot(const sampler_ram_slot_t *slot)
+{
+    if (slot == 0)
+    {
+        return 0U;
+    }
+
+    const sample_ram_waveform_overview_t *const waveform = &slot->waveform;
+    return (uint8_t)((waveform->state != SAMPLE_RAM_WAVEFORM_EMPTY)
+                    && (waveform->state != SAMPLE_RAM_WAVEFORM_ERROR)
+                    && (waveform->sample_generation == slot->generation)
+                    && (waveform->frame_count == slot->frames)
+                    && (waveform->channels == (uint8_t)slot->channels)
+                    && (waveform->format == (uint8_t)slot->format)
+                    && (waveform->columns == SAMPLE_RAM_WAVEFORM_COLUMNS));
+}
+
+static void sampler_ram_waveform_finish(sampler_ram_slot_t *slot)
+{
+    sample_ram_waveform_overview_t *const waveform = &slot->waveform;
+    uint16_t peak = 0U;
+
+    for (uint16_t col = 0U; col < waveform->columns; ++col)
+    {
+        if (waveform->min[col] > waveform->max[col])
+        {
+            waveform->min[col] = 0;
+            waveform->max[col] = 0;
+        }
+
+        const uint16_t min_peak = sampler_ram_waveform_abs_i16(waveform->min[col]);
+        const uint16_t max_peak = sampler_ram_waveform_abs_i16(waveform->max[col]);
+        if (min_peak > peak)
+        {
+            peak = min_peak;
+        }
+        if (max_peak > peak)
+        {
+            peak = max_peak;
+        }
+    }
+
+    waveform->ready_columns = waveform->columns;
+    waveform->global_peak = peak;
+    waveform->build_next_column = waveform->columns;
+    waveform->build_next_frame = waveform->frame_count;
+    waveform->state = SAMPLE_RAM_WAVEFORM_READY;
+}
+
+static void sampler_ram_waveform_service_slot(sampler_ram_slot_t *slot,
+                                              uint32_t *frames_left)
+{
+    if ((slot == 0) || (frames_left == 0) || (*frames_left == 0U))
+    {
+        return;
+    }
+
+    if (sampler_ram_waveform_slot_ready(slot) == 0U)
+    {
+        if (slot->state == SAMPLER_RAM_SLOT_ERROR)
+        {
+            sampler_ram_waveform_set_error(slot);
+        }
+        else
+        {
+            sampler_ram_waveform_set_empty(slot);
+        }
+        return;
+    }
+
+    if (sampler_ram_waveform_matches_slot(slot) == 0U)
+    {
+        sampler_ram_waveform_begin(slot);
+    }
+
+    sample_ram_waveform_overview_t *const waveform = &slot->waveform;
+    if (waveform->state != SAMPLE_RAM_WAVEFORM_BUILDING)
+    {
+        return;
+    }
+
+    while ((*frames_left > 0U) && (waveform->build_next_frame < slot->frames))
+    {
+        const uint32_t frame = waveform->build_next_frame;
+        uint32_t col = (uint32_t)(((uint64_t)frame * waveform->columns) / slot->frames);
+        if (col >= waveform->columns)
+        {
+            col = waveform->columns - 1U;
+        }
+
+        const float *const src = &slot->data[frame * slot->channels];
+        const int16_t left = sampler_ram_waveform_float_to_i16(src[0]);
+        int16_t right = left;
+        if (slot->channels > 1U)
+        {
+            right = sampler_ram_waveform_float_to_i16(src[1]);
+        }
+
+        const int16_t frame_min = (left < right) ? left : right;
+        const int16_t frame_max = (left > right) ? left : right;
+        if (frame_min < waveform->min[col])
+        {
+            waveform->min[col] = frame_min;
+        }
+        if (frame_max > waveform->max[col])
+        {
+            waveform->max[col] = frame_max;
+        }
+
+        const uint16_t min_peak = sampler_ram_waveform_abs_i16(frame_min);
+        const uint16_t max_peak = sampler_ram_waveform_abs_i16(frame_max);
+        if (min_peak > waveform->global_peak)
+        {
+            waveform->global_peak = min_peak;
+        }
+        if (max_peak > waveform->global_peak)
+        {
+            waveform->global_peak = max_peak;
+        }
+
+        waveform->build_next_frame++;
+        (*frames_left)--;
+
+        if (waveform->build_next_frame < slot->frames)
+        {
+            uint32_t next_col =
+                (uint32_t)(((uint64_t)waveform->build_next_frame * waveform->columns)
+                           / slot->frames);
+            if (next_col > waveform->columns)
+            {
+                next_col = waveform->columns;
+            }
+            waveform->build_next_column = next_col;
+            waveform->ready_columns = (uint16_t)next_col;
+        }
+    }
+
+    if (waveform->build_next_frame >= slot->frames)
+    {
+        sampler_ram_waveform_finish(slot);
+    }
+}
 
 static void sampler_ram_set_last(sampler_ram_result_t result)
 {
@@ -120,6 +346,7 @@ static void sampler_ram_slot_error_at(uint16_t ram_slot,
         g_sampler_ram_pool.slots[ram_slot].cost_bytes_aligned = 0U;
         g_sampler_ram_pool.slots[ram_slot].state = SAMPLER_RAM_SLOT_ERROR;
         g_sampler_ram_pool.slots[ram_slot].error = result;
+        sampler_ram_waveform_set_error(&g_sampler_ram_pool.slots[ram_slot]);
         const uint8_t registered =
             (forced_global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
                 ? sample_global_pool_register_ram_error_at(
@@ -169,6 +396,7 @@ void sampler_ram_pool_reset(void)
         g_sampler_ram_pool.slots[i].global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
         g_sampler_ram_pool.slots[i].error = SAMPLER_RAM_RESULT_OK;
         g_sampler_ram_pool.slots[i].generation = sampler_ram_next_generation();
+        sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[i]);
     }
     sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
 }
@@ -433,6 +661,7 @@ static sampler_ram_result_t sampler_ram_pool_load_wav_impl(uint16_t ram_slot,
     slot->global_slot = (forced_global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
                             ? forced_global_slot
                             : global_slot;
+    sampler_ram_waveform_begin(slot);
     sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
     if (out_global_slot != 0)
     {
@@ -497,6 +726,7 @@ void sampler_ram_pool_clear(uint16_t ram_slot)
     g_sampler_ram_pool.slots[ram_slot].global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     g_sampler_ram_pool.slots[ram_slot].first_page_slot = UINT16_MAX;
     g_sampler_ram_pool.slots[ram_slot].generation = generation;
+    sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[ram_slot]);
 }
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot)
@@ -551,10 +781,12 @@ const char *sampler_ram_pool_result_label(sampler_ram_result_t result)
             return "LOAD OK";
         case SAMPLER_RAM_RESULT_POOL_FULL:
         case SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL:
+            return "SLOT FULL";
         case SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL:
         case SAMPLER_RAM_RESULT_RAM_POOL_FULL:
+            return "MEM FULL";
         case SAMPLER_RAM_RESULT_TOO_LARGE:
-            return "POOL FULL";
+            return "TOO LARGE";
         case SAMPLER_RAM_RESULT_PATH_TOO_LONG:
             return "PATH LONG";
         case SAMPLER_RAM_RESULT_SD_BUSY:
@@ -574,4 +806,37 @@ const char *sampler_ram_pool_result_label(sampler_ram_result_t result)
         default:
             return "LOAD FAIL";
     }
+}
+
+void sampler_ram_pool_waveform_service(uint32_t frame_budget)
+{
+    uint32_t frames_left = (frame_budget != 0U)
+                               ? frame_budget
+                               : SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES;
+    for (uint16_t i = 0U; (i < SAMPLER_RAM_POOL_MAX_SLOTS) && (frames_left > 0U); ++i)
+    {
+        sampler_ram_waveform_service_slot(&g_sampler_ram_pool.slots[i], &frames_left);
+    }
+}
+
+const sample_ram_waveform_overview_t *sampler_ram_pool_get_waveform(uint16_t ram_slot)
+{
+    const sampler_ram_slot_t *const slot = sampler_ram_pool_get_slot(ram_slot);
+    if ((slot == 0) || (sampler_ram_waveform_matches_slot(slot) == 0U))
+    {
+        return 0;
+    }
+    return &slot->waveform;
+}
+
+const sample_ram_waveform_overview_t *sampler_ram_pool_get_waveform_for_global(uint16_t global_slot)
+{
+    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    if (sample_global_pool_resolve_backend(global_slot,
+                                           SAMPLE_GLOBAL_KIND_RAM,
+                                           &ram_slot) == 0U)
+    {
+        return 0;
+    }
+    return sampler_ram_pool_get_waveform(ram_slot);
 }

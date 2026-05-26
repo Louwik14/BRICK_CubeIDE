@@ -15,6 +15,7 @@ typedef struct
     ui_param_bank_t bank;
     uint8_t valid;
     uint8_t active_track;
+    uint8_t shift_down;
 } ui_param_encoder_context_t;
 
 typedef struct

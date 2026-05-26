@@ -143,9 +143,8 @@ void apply_sampler_clip_search(float v) { apply_tone_live_track(PARAM_SAMPLER_CL
 void apply_sampler_start(float v) { apply_tone_live_track(PARAM_SAMPLER_START, v); }
 void apply_sampler_end(float v) { apply_tone_live_track(PARAM_SAMPLER_END, v); }
 void apply_sampler_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_MODE, v); }
+void apply_sampler_loop_start(float v) { apply_tone_live_track(PARAM_SAMPLER_LOOP_START, v); }
 void apply_sampler_tune(float v) { apply_tone_live_track(PARAM_SAMPLER_TUNE, v); }
-void apply_sampler_fade_in(float v) { apply_tone_live_track(PARAM_SAMPLER_FADE_IN, v); }
-void apply_sampler_fade_out(float v) { apply_tone_live_track(PARAM_SAMPLER_FADE_OUT, v); }
 void apply_sampler_slice_count(float v) { apply_tone_live_track(PARAM_SAMPLER_SLICE_COUNT, v); }
 void apply_sampler_multi_loop(float v) { apply_tone_live_track(PARAM_SAMPLER_MULTI_LOOP, v); }
 void apply_midi_cc1_1(float v) { apply_tone_live_track(PARAM_MIDI_CC1_1, v); }

@@ -33,6 +33,8 @@ void mod_lfo_v1_reset_runtime(void);
 
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value);
+uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
+void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param);
 void mod_lfo_v1_resync_base_on_authoritative_write(uint8_t track, param_id_t id, float value);
 
 uint16_t mod_lfo_v1_dest_count(uint8_t track);

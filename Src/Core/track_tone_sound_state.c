@@ -39,9 +39,8 @@ static void track_tone_sound_state_set_defaults(track_tone_sound_state_t *state)
     state->end = param_registry[PARAM_SAMPLER_END].default_value;
     state->mode = param_registry[PARAM_SAMPLER_MODE].default_value;
     state->tune = param_registry[PARAM_SAMPLER_TUNE].default_value;
-    state->fade_in = param_registry[PARAM_SAMPLER_FADE_IN].default_value;
-    state->fade_out = param_registry[PARAM_SAMPLER_FADE_OUT].default_value;
     state->slice_count = param_registry[PARAM_SAMPLER_SLICE_COUNT].default_value;
+    state->loop_start = param_registry[PARAM_SAMPLER_LOOP_START].default_value;
     state->clip.source_bpm = TRACK_TONE_CLIP_DEFAULT_SOURCE_BPM;
     state->clip.sync_length = TRACK_TONE_CLIP_DEFAULT_SYNC_LENGTH;
     state->clip.pitch = TRACK_TONE_CLIP_DEFAULT_PITCH;

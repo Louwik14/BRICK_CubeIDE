@@ -27,11 +27,12 @@
 #include "drv_display.h"
 #include "param_registry.h"
 #include "ui_param.h"
+#include "ui_renderer_template.h"
 
 static const ui_param_bank_t g_tone_param_banks[] = {
-    { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_START, PARAM_SAMPLER_END } },
-    { .params = { PARAM_SAMPLER_MODE, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_FADE_IN, PARAM_SAMPLER_FADE_OUT } },
-    { .params = { PARAM_SAMPLER_SLICE_COUNT, PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_VCA_ATTACK } },
+    { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_END } },
+    { .params = { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_LOOP_START, PARAM_SAMPLER_SLICE_COUNT } },
+    { .params = { PARAM_MIX_LEVEL, PARAM_MIX_PAN, PARAM_VCA_ATTACK, PARAM_COUNT } },
     { .params = { PARAM_MIDI_PROGRAM, PARAM_MIDI_CC1_1, PARAM_MIDI_CC1_2, PARAM_MIDI_CC1_3 } },
 };
 
@@ -113,7 +114,7 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
         }
 
         case PARAM_DISPLAY_PERCENT:
-            (void)snprintf(out, out_len, "%3lu%%", (unsigned long)(value * 100.0f + 0.5f));
+            ui_format_param_127_00(value, desc->min, desc->max, out, out_len);
             break;
 
         case PARAM_DISPLAY_DB:

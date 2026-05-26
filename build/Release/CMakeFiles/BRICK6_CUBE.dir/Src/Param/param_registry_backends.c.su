@@ -7,8 +7,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_b
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:341:9:param_backend_track_supports_midi_tone_descriptor	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:353:9:param_backend_send_midi_cc	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:371:9:param_backend_apply_tone_sampler	56	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:642:9:param_backend_apply_tone_looper	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:714:9:param_backend_apply_tone_drum	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:769:9:param_backend_apply_master_fx_track	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:814:9:param_backend_apply_mix_track	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:964:9:param_backend_apply_colors_track	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:635:9:param_backend_apply_tone_looper	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:707:9:param_backend_apply_tone_drum	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:762:9:param_backend_apply_master_fx_track	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:807:9:param_backend_apply_mix_track	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_backends.c:957:9:param_backend_apply_colors_track	8	static

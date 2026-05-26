@@ -288,8 +288,7 @@ static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_END,
     PARAM_SAMPLER_MODE,
     PARAM_SAMPLER_TUNE,
-    PARAM_SAMPLER_FADE_IN,
-    PARAM_SAMPLER_FADE_OUT,
+    PARAM_SAMPLER_LOOP_START,
     PARAM_SAMPLER_SLICE_COUNT
 };
 
@@ -1280,9 +1279,8 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_END:
         case PARAM_SAMPLER_MODE:
         case PARAM_SAMPLER_TUNE:
-        case PARAM_SAMPLER_FADE_IN:
-        case PARAM_SAMPLER_FADE_OUT:
         case PARAM_SAMPLER_SLICE_COUNT:
+        case PARAM_SAMPLER_LOOP_START:
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
         case PARAM_SAMPLER_CLIP_PITCH:

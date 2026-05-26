@@ -462,20 +462,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
             brick6_sampler_runtime_set_tune(track, param_backend_clamp_value(value, -24.0f, 24.0f));
             return 1U;
-        case PARAM_SAMPLER_FADE_IN:
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->fade_in = param_backend_clamp_value(value, 0.0f, 1.0f);
-            }
-            brick6_sampler_runtime_set_fade_in(track, param_backend_clamp_value(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_SAMPLER_FADE_OUT:
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->fade_out = param_backend_clamp_value(value, 0.0f, 1.0f);
-            }
-            brick6_sampler_runtime_set_fade_out(track, param_backend_clamp_value(value, 0.0f, 1.0f));
-            return 1U;
         case PARAM_SAMPLER_SLICE_COUNT:
         {
             static const uint8_t counts[] = {0U, 2U, 4U, 8U, 16U, 32U, 64U};
@@ -487,6 +473,13 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_slice_count(track, counts[idx]);
             return 1U;
         }
+        case PARAM_SAMPLER_LOOP_START:
+            if ((update_base_state != 0U) && (state != NULL))
+            {
+                state->loop_start = param_backend_clamp_value(value, 0.0f, 1.0f);
+            }
+            brick6_sampler_runtime_set_loop_start(track, param_backend_clamp_value(value, 0.0f, 1.0f));
+            return 1U;
         case PARAM_SAMPLER_CLIP_SOURCE_BPM:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_CLIP))
             {
@@ -910,7 +903,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
         case PARAM_VCA_ATTACK:
         {
             track_sound_state_t *state = track_sound_state_get(track);
-            if (state != NULL)
+            if ((update_base_state != 0U) && (state != NULL))
             {
                 state->vca_attack = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
@@ -921,7 +914,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
         case PARAM_VCA_DECAY:
         {
             track_sound_state_t *state = track_sound_state_get(track);
-            if (state != NULL)
+            if ((update_base_state != 0U) && (state != NULL))
             {
                 state->vca_decay = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
@@ -932,7 +925,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
         case PARAM_VCA_SUSTAIN:
         {
             track_sound_state_t *state = track_sound_state_get(track);
-            if (state != NULL)
+            if ((update_base_state != 0U) && (state != NULL))
             {
                 state->vca_sustain = param_backend_clamp_value(value, 0.0f, 127.0f);
             }
@@ -944,7 +937,7 @@ uint8_t param_backend_apply_mix_track(const track_runtime_ctx_t *ctx,
         {
             track_sound_state_t *state = track_sound_state_get(track);
             const float release_s = param_filter_ui127_to_release_s(value);
-            if (state != NULL)
+            if ((update_base_state != 0U) && (state != NULL))
             {
                 state->vca_release = param_backend_clamp_value(value, 0.0f, 127.0f);
             }

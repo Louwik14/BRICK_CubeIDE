@@ -214,9 +214,19 @@ Etat browser Settings/Sample:
 - `Settings > Sample > RAM` est maintenant la vue filtre `kind=RAM` du catalogue global. Elle reutilise le browser catalogue WAV, charge un WAV vers `sampler_ram_pool`, affiche les slots RAM READY/ERROR/EMPTY via `sample_global_pool`, et peut clear un slot RAM. Le playback produit associe est limite a `Sampler/RAM`, normal ou sliced via `Slice Count`.
 - `Settings > Sample > Stream` reprend le browser split historique du pool `sample_pool`/STREAM utilise provisoirement par `Sampler/Stream`.
 - Les headers `Stream`, `Multi` et `RAM` affichent le meme budget global de slots produit et de memoire page-cache slot-pool; les entrees restent des categories de browser, pas des budgets separes.
+- Dans ces headers, `X/240` represente la capacite de slots actifs du catalogue global sample (`sample_global_pool`); `X/16MB` represente le budget memoire produit RAM/page-cache du meme pool. Un refus de chargement par saturation de slots fait flasher seulement `X/240`; un refus par budget memoire RAM/page-cache fait flasher seulement `X/16MB`. Le backend remonte la cause exacte (`GLOBAL_SLOT_FULL` vs `GLOBAL_BUDGET_FULL`/`RAM_POOL_FULL`), l'UI ne la devine pas apres coup.
 - Les trois browsers sample sont des vues filtrees du catalogue global: Stream liste `kind=STREAM`, Multi liste `kind=MULTI`, RAM liste `kind=RAM`. Les actions utilisateur manipulent des slots globaux; les refs backend restent internes.
 - Le browser RAM ne cree pas de parametre parallele: il charge/remplace/clear des slots globaux `kind=RAM`, dont `backend_index` pointe vers un slot interne `sampler_ram_pool`.
 - Le selecteur TONE `PARAM_SAMPLER_SAMPLE` hors Multi edite un slot global actif. La selection n'est jouable en Stream que si ce slot global est `STREAM/READY` et pointe vers un backend `sample_pool` charge. Le backend Stream Classic couvre la capacite globale active courante.
+- La page `Sampler/RAM` `TONE` affiche l'overview waveform deja portee par le slot `sampler_ram_pool`: elle ne scanne jamais le sample, ne declenche aucune construction, et dessine seulement les colonnes pretes/READY du cache min/max 124 colonnes associe au sample RAM. Aucun acces SD/STREAM ni autorite audio nouvelle n'est introduit par cette waveform.
+- Dans cette waveform, `START`, `END` et `LOOP` sont des curseurs independants: chacun affiche sa propre valeur parametre. Modifier `START` ou `END` n'embarque pas `LOOP`; un `LOOP` hors plage fonctionnelle utilise `START` comme point de retour runtime effectif, mais l'UI continue d'afficher la vraie valeur `LOOP` avec clamp d'ecran seulement en mode non-slice.
+- Les edits `START`, `END` et `MODE` depuis cette page sont audibles sans retrigger sur la voix RAM active du track; en `Loop`/`PingPong`, la tete est repliee dans la nouvelle plage valide plutot que stopper. `LOOP` reste audible sans retrigger seulement en mode non-slice; en mode slice, la valeur reste editable mais n'affecte pas les slices. Ce feedback live reste une projection runtime: les p-locks n'animent pas les curseurs et ne modifient pas la base visible.
+- Les edits `TUNE` depuis cette page sont audibles sans retrigger sur la voix RAM active du track: `Slice Count=Off` conserve la transposition chromatique par note + `Tune`, tandis que `Slice Count!=Off` conserve note->slice et applique `Tune` comme pitch global de toutes les slices. Les p-locks/LFO/restore `TUNE` suivent le meme chemin runtime sans animer la valeur UI.
+- Si `END <= START` ou si `LOOP` tombe hors region, l'UI ne corrige aucun curseur: seul le runtime construit une region effective minimale et replie la tete active sans tuer la voix.
+- `LOOP` reste affiche comme repere editable des qu'un sample RAM valide existe en mode non-slice, y compris quand LOOP est OFF, et garde un style unique: ligne verticale pointillee XOR/inversee et lettre `L` sous le cadre. En mode slice (`brick6_sampler_runtime_ram_slice_mode_active(track) != 0`), le marqueur `L` est cache.
+- `Slice Count` ajoute des divisions visuelles dans la waveform TONE: l'enum `Off, 2, 4, 8, 16, 32, 64` est mappe en `1, 2, 4, 8, 16, 32, 64` zones egales dans la plage `START/END`. Les separateurs internes sont des points XOR discrets dessines apres la waveform et avant les marqueurs `START`/`END`/`LOOP`; ils ne modifient ni overview, ni parametre.
+- Clavier `Sampler/RAM`: `Slice Count=Off` garde le jeu chromatique/pitch existant; `Slice Count!=Off` transforme le clavier en selection de slices regulieres dans `START/END`, sans pitch par note. `TUNE` reste l'offset global commun a toutes les slices.
+- La waveform `Sampler/RAM` affiche aussi un playhead runtime indicatif sans lettre, dessine en points XOR legers apres les divisions slice et avant les marqueurs. Il suit uniquement la voix RAM active du track selectionne pour le slot global affiche; les autres tracks/samples ne sont pas projetes.
 - `ui_page_settings` conserve les listes UI froides en RAM (`sample_entries`, `multi_entries`) et navigue dans la vue Sample courante; le browser Multi relit seulement le dossier courant et scanne les entrees directes des dossiers candidats pour les classifier.
 - Le catalogue WAV global vient de Z6 `wav_loader`; l'entree dans le browser Sampler ne rescane plus automatiquement. Elle charge la vue racine depuis le cache de vues Z6 ou depuis `0:/BRICK/SAMPLE.CAT`, ou affiche `REFRESH LIB` si le catalogue est absent/stale.
 - Le browser Sampler intercepte les boutons physiques `BTN_PAGE_1..BTN_PAGE_4` uniquement dans `UI_SETTINGS_VIEW_SAMPLER`: `BTN_PAGE_1` = RETURN, `BTN_PAGE_2` sans SHIFT = OK sur l'entree sample courante, `BTN_PAGE_3` = reserve/no-op, `BTN_PAGE_4` = REFRESH sans SHIFT et REBUILD avec SHIFT. `BTN_COPY` et `BTN_PASTE` sont explicitement no-op dans le browser Sampler; les confirmations locales utilisent RETURN/OK. Hors browser Sampler, les boutons page gardent leur comportement normal de subpage.
@@ -291,6 +301,7 @@ Flux nominal prouve:
   capture des mix targets -> mutation dans le pipeline -> rebind lanes -> reapply lane-bound -> neutralisation runtime -> sync UI structurelle.
 - Pour une mutation structurelle `CFG_TRACK` / `CFG_TRACK_TYPE` / restore bulk, Z5 delegue le corridor a Z3 via `param_registry_apply_track_structure_transition(...)`; la resync UI active-track reste explicite cote Z5 (`ui_param_sync_active_track_mirror_from_runtime` puis `ui_param_sync_active_bank_values`) apres finalisation runtime Z3.
 - Les valeurs visibles des params track-aware passent par `ui_param_get_active_track_display_value`: la lecture relit l'autorite track-scoped (`param_registry_get_track_value`, donc `track_tone_sound_state` pour TONE engines) et `param_store.active[]` reste seulement un miroir/fallback UI, jamais la verite d'affichage entre deux tracks.
+- Pendant le playback, un p-lock sequenceur ne change pas cette source d'affichage: l'UI continue de lire la base canonique editable, tandis que la valeur lockee reste une projection runtime temporaire cote Z3/Z4. Aucun redraw/invalidation UI ne doit etre declenche par le passage d'un step p-locke hors feedback d'edition explicite.
 - Restore bulk track config:
   - validation snapshot all-or-nothing,
   - ecriture de `track_state` comme autorite par-track,
@@ -447,8 +458,8 @@ Points factuels:
 - Les anciens labels/types UI `TB3` et `DX7` ne sont plus exposes ni conserves comme compat catalogue.
 - `UI_TRACK_TYPE_STREAM`/`UI_TRACK_TYPE_CLIP` est borne a `BRICK6_MAX_CLIP_TRACKS=4` tracks simultanees: si 4 tracks sont deja `Stream`, le catalogue `CFG` cesse de le proposer aux autres tracks, tout en le laissant visible/editable pour une track deja `Stream`.
 - Le rendu UI complet du Sampler expose maintenant deux pages Tone de base:
-  - `PLAY`: `Sample`, `Gain`, `Start`, `End`,
-  - `FX`: `Mode`, `Tune`, `Fade In`, `Fade Out`.
+  - `PLAY`: `Sample`, `Mode`, `Start`, `End`,
+  - `LOOP`: `Gain`, `Tune`, `Loop`, `Slice`.
 - Les modes produits exposes pour `RAM` sont bornes a `Shot`, `RevShot`, `Loop`, `PingPong`.
 - Le rendu UI `Stream` expose quatre pages Tone dediees:
   - `PLAY`: `Sample`, `Gain`, `Src BPM`,
@@ -592,8 +603,11 @@ Points factuels:
 
 - `Settings > Sample > RAM` est la vue filtre `kind=RAM` du catalogue global sample.
 - La page peut charger un WAV vers `sampler_ram_pool`, afficher READY/ERROR/EMPTY et clear un slot RAM; la persistence projet sauvegarde ensuite les slots RAM par `global_index`, `ram_slot` et path WAV, sans dupliquer l'audio.
-- `Sampler/RAM` peut jouer un slot global `kind=RAM/READY` avec `Start`/`End` et `RevShot`; `Slice Count` active un slicing grille RAM dans cette meme region. RAM ne consomme pas le pool Stream.
-- La page TONE de `Sampler/RAM` expose `PLAY` (`Sample`, `Gain`, `Start`, `End`), `MODE` (`Mode`, `Tune`, `Fade In`, `Fade Out`) et `SLICE` (`Slice Count`). Elle n'expose pas d'edition par-slice.
+- Le backend interne `sampler_ram_pool` est dimensionne sur la capacite active du pool global sample, pas sur les 16 pads/voix/pages UI. Avec la configuration courante, le 17e sample RAM doit donc charger si un slot global et le budget memoire restent disponibles.
+- `Sampler/RAM` peut jouer un slot global `kind=RAM/READY` avec `Start`/`End` et `RevShot`; `Slice Count` active un slicing grille RAM dans cette meme region. En mode slice, la note selectionne la slice, ne transpose plus le sample, et le `Loop` global n'affecte ni le debut de boucle ni les bornes de la slice. RAM ne consomme pas le pool Stream.
+- La page TONE de `Sampler/RAM` expose `PLAY` (`Sample`, `Mode`, `Start`, `End`) et `LOOP` (`Gain`, `Tune`, `Loop`, `Slice`). `Fade In`/`Fade Out` ne font plus partie du contrat RAM; l'enveloppe d'amplitude reste portee par VCA.
+- Le rendu TONE `Sampler/RAM` garde les memes params et les memes edits encodeurs, mais remplace uniquement la zone potards par le cadre/waveform RAM stable entre pages; le nom du slot RAM actif est affiche au-dessus depuis `sample_global_pool.path`, sans scan SD/FatFs.
+- Les textes des 4 slots `Sampler/RAM` reutilisent la grammaire template commune: label au repos, valeur temporaire au meme emplacement via le flash `ui_param_get_slot_value_flash`.
 
 ## 15. Contrat UI Settings - Load Project
 - `PROJECT > LOAD` expose une entree explicite `BLANK PROJECT` (index 0), distincte des slots SD.
@@ -723,9 +737,9 @@ Points factuels:
 - Apres finalisation writer `TAKE_READY`, l'UI bascule vers `Rec Edit` restreint immediatement: cette transition ne valide pas le `.brkwave`, ne lit pas le WAV et ne prend pas le gate SD pour le cache waveform. Les services waveform/overview reprennent hors chemin d'entree a la passe suivante.
 - `Rec Edit` n'est pas le Sample Editor complet: E1/E2 reglent zoom/scroll UI bornes sans mutation audio persistante, E3/E4 reglent `START/END`, et un appui hall toggle l'audition de la fenetre `START..END` via le chemin preview SD existant. Cette audition n'est autorisee que sur une prise temporaire finalisee/fermee (`TAKE_READY` deja passe). La waveform Rec Edit separe la carte globale et la loupe locale: zoom global ou vue plus large que le cache tuile utilise l'overview globale min/max editor-owned; les vues locales demandent un cache line derive depuis les tuiles audio RAM pretes quand la fenetre visible est couverte. Le cache line stocke des points signes ordonnes dimensionnes a la largeur ecran et devient le renderer detail Rec Edit sous forme de polyline. Pendant le remplissage des tuiles, l'ancienne line reste affichable si elle est compatible ou proche de la nouvelle vue pour eviter un saut de scale; sinon l'overview globale sert de fallback propre. L'echelle verticale Rec Edit est stable sur la prise courante, avec occupation accrue visant environ 4 px de marge haut/bas pour les pics forts. Au zoom maximum, la fenetre vise une zone courte bornee par la resolution line plutot qu'une fraction longue de toute la prise.
 - Le zoom Rec Edit est proportionnel a la duree: 25 crans de diviseur quasi logarithmique de `1` a `1048576`, avec fenetre minimale bornee a 256 frames si la prise est plus longue. Un changement de zoom conserve le centre visuel de la fenetre puis clamp le start.
-- PAGE 1 retourne a Audio Rec en conservant la prise temporaire et stoppe la preview active; PAGE 2 sauvegarde un WAV final trimme a nom automatique borne apres avoir stoppe la preview; PAGE 3 toggle `ZCROSS`; PAGE 4 est `ALT` momentane.
+- PAGE 1 retourne a Audio Rec en conservant la prise temporaire et stoppe la preview active; PAGE 2 sauvegarde un WAV final trimme a nom automatique borne apres avoir stoppe la preview; PAGE 3 toggle `ZCROSS`; `SHIFT` est le modificateur momentane des fonctions secondaires Rec Edit.
 - Apres SAVE reussi, Rec Edit affiche une confirmation courte `ASSIGN?`: PAGE 1 annule, PAGE 2 charge le WAV deja sauvegarde dans le premier slot libre `sample_pool` sans refaire SAVE.
-- En Rec Edit, les encodeurs normaux sont `ZOOM`, `POS`, `START`, `END`. Avec `ALT` maintenu: `VZOOM`, `FINE`, `L.ST`, `L.END`. `ALT` n'est jamais toggle ni persiste; son affichage et les labels ALT sont inverses pendant l'appui. `VZOOM` est un scale vertical UI-only en crans `x0.5/x0.75/x1/x1.5/x2/x3/x4/x6/x8`; il est applique comme facteur autour de la ligne zero puis clippe geometriquement au cadre de waveform.
+- En Rec Edit, les encodeurs normaux sont `ZOOM`, `POS`, `START`, `END`. Avec `SHIFT` maintenu: `VZOOM`, `FINE`, `L.ST`, `L.END`. `SHIFT` n'est jamais toggle ni persiste; son affichage et les labels `SHFT` sont inverses pendant l'appui. `VZOOM` est un scale vertical UI-only en crans `x0.5/x0.75/x1/x1.5/x2/x3/x4/x6/x8`; il est applique comme facteur autour de la ligne zero puis clippe geometriquement au cadre de waveform.
 - `ZCROSS` est un toggle UI/session non destructif: il ne modifie ni WAV, ni `.brkwave`, ni cache waveform, et ne snappe que les marqueurs `START/END/L.ST/L.END` depuis les donnees RAM editor deja disponibles. Le snap est directionnel: un delta encodeur positif cherche le prochain zero-cross strictement a droite du marqueur courant, un delta negatif le precedent a gauche, avec garde anti-retour au meme zero-cross.
 - Les loop points Rec Edit sont UI/session uniquement: `LOOP START/END` restent bornes dans `START/END`, ne pilotent pas encore le playback et ne sont pas persistants.
 - Aucune UI de nommage improvisee, aucun sidecar asset et aucun cache waveform persistant nouveau ne sont ajoutes.
@@ -755,6 +769,14 @@ Points factuels:
 ## 26. Contrat layout commun template OLED
 
 - `ui_renderer_template` porte le layout commun des pages template 128x64: header compact, quatre cartes parametres, footer quatre labels.
+- Formatage des valeurs parametres:
+  - les params continus abstraits encore declares `PARAM_DISPLAY_PERCENT` sont affiches en echelle normalisee `0.00..127.00` via le helper central `ui_format_param_127_00`, sans changer leur stockage ni leur apply DSP,
+  - les params discrets (`BOOL`, `ENUM`, modes, slots, divisions, ratios nommes) conservent leurs labels texte,
+  - les params ayant deja une unite metier explicite (`st`, `ct`, `ms`, `s`, `Hz`, `dB`, divisions tempo, pan/largeur bipolaire) conservent leur format dedie.
+- Edition encodeur des pages potards classiques:
+  - pour les continus abstraits `PARAM_DISPLAY_PERCENT`, un detent normal vaut environ `1.00` sur l'echelle affichee `0.00..127.00`,
+  - `SHIFT + encodeur` vaut environ `0.01` sur cette meme echelle,
+  - cette finesse est limitee au chemin template/`ui_param`; `Settings`, `Audio Rec` et `Rec Edit` gardent leurs handlers encodeurs locaux et leurs fonctions secondaires `SHIFT`.
 - Le header conserve track, label runtime track-aware, mode hall, titre famille/page, CPU, tempo et pattern courant, avec ellipses pixel si la largeur reelle ne suffit pas.
 - Les cartes parametres restent quatre slots egaux de 32 px, sans debordement horizontal; titre et valeur sont bornes avant centrage.
 - Chaque slot template affiche le widget en haut et une seule ligne de texte en bas.
@@ -768,3 +790,13 @@ Points factuels:
 - `COLORS/MAIN` peut declarer des widgets custom locaux pour `F Type`, `Cutoff` et `Res`: `F Type` affiche le label court du type (`OFF`, `DJ`, `LP`, `HP`, `BP`), avec `OFF` en police compacte et les types actifs en police large du widget. `Cutoff`/`Res` affichent `-` par slot et masquent leur label bas normal quand le filtre est coupe; sinon `Cutoff`/`Res` forment une seule courbe filtre groupee sur leurs deux slots, basee sur la meme valeur visible que les widgets standards. La silhouette est adaptee au type filtre supporte (`EQ3/DJ`, `LP`, `HP`, `BP`) et conserve une baseline unique sans segment parasite colle en bas. Le fallback widget classique reste obligatoire quand le contexte custom est incomplet ou non supporte.
 - Le flash est declenche uniquement par action utilisateur explicite sur le slot: edition directe encodeur, edition p-lock, live-rec p-lock issu de l'encodeur, ou edition de valeur scene/macro en assign. Playback p-lock, LFO, morph scene continu, macro pot physique, restore/recall et refresh UI ne declenchent pas le flash.
 - Les pages `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `PLAY`, `VCA`, `KEYBOARD`, `ARP`, `SEQ` et `MACRO` heritent du style commun tant qu'elles utilisent `ui_template_page_render`.
+
+## 27. Contrat UI Wave labels moteur
+
+- La page `TONE` de `Synth/Wave` conserve les IDs et l'ordre existants: `EDIT`, `FINE`, `COARSE`, `FM`, puis `TIMBRE`, `MODULATION`, `COLOR`, `PHASE RESET`.
+- Les slots herites `TIMBRE` et `COLOR` affichent des labels UI dynamiques, un widget local et une valeur formatee derives de la valeur courante de `PARAM_WAVE_EDIT`; les valeurs stockees, l'ordre des params et le format projet/pattern ne changent pas.
+- La table UI couvre les 39 moteurs actifs de `brick6_braids_runtime.cpp::kBraidsShapeMap`, incluant `Harm` et sans entree `Warm`.
+- Les formats locaux Wave sont bornes a `PARAM_WAVE_TIMBRE` et `PARAM_WAVE_COLOR`: continu unipolaire normalise `0.00..127.00`, pourcent bipolaire conserve, intervalle en demi-tons/centiemes quand le mapping Braids est prouve, enum discret, stepped, morph et rate normalise.
+- Les controles globaux visibles de `Synth/Wave` sont aussi formates localement dans TONE: `EDIT` devient `MODEL` avec le nom du moteur, `COARSE` devient `PITCH` en demi-tons, `FINE` en cents, `FM` suit l'echelle normalisee `0.00..127.00`, et `MODULATION` devient `A MOD` en pourcent bipolaire.
+- `SawSq` garde `PARAM_WAVE_COLOR` en banque pour compatibilite d'edition/stockage, mais son affichage est neutralise en label `-`, valeur `---` et widget vide car aucun effet DSP n'a ete observe pour ce parametre.
+- Les filtres Braids `ZLPF/ZPKF/ZBPF/ZHPF` restent hors surface UI Wave car ils ne sont pas dans le mapping runtime actif.

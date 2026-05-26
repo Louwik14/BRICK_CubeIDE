@@ -505,7 +505,7 @@ Plus petite prochaine passe utile:
 ## 14. Contrat Sampler v1
 
 - Le snapshot projet/pattern transporte les params Sampler via le flux param track-aware existant:
-  - `Sample`, `Gain`, `Start`, `End`, `Mode`, `Tune`, `Fade In`, `Fade Out`, `Slice Count`.
+  - `Sample`, `Mode`, `Start`, `End`, `Gain`, `Tune`, `Loop Start`, `Slice Count`.
 - Compat restore:
   - les payloads pattern/projet gardent les memes champs family/type,
   - un ancien couple `family=Synth` + `type=Sampler` est remappe au restore vers `family=Sampler` + `type=RAM`,
@@ -884,6 +884,10 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 ## Addendum 2026-05-24 - catalogue global sample produit
 
 - `sample_global_pool` ajoute l'autorite catalogue/budget produit au-dessus des backends existants: catalogue final 256 slots globaux, capacite active derivee du pool page-cache produit courant (`SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS`, 240 avec la config actuelle), budget utilisateur 16 MiB, kinds `EMPTY/STREAM/MULTI/RAM`, avec `backend_index` separe du slot global.
-- `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, RAM normal ou sliced n'est remplace par cette couche.
+- `STREAM` reste represente par un slot backend `sample_pool`, dimensionne a la capacite active courante pour que le backend Classic couvre les slots globaux `STREAM`; `MULTI` reste represente par un `multi_sample_pool` instrument id; `RAM` est represente par un slot interne volatile `sampler_ram_pool`, lui aussi dimensionne sur la capacite active courante. Les limites de 16 pads/voix/pages UI ne bornent pas le nombre de samples RAM residents. Aucun chemin audio Stream/Multi, page-cache, runtime Multi, RAM normal ou sliced n'est remplace par cette couche.
 - Le cout permanent global compte uniquement les slots produits charges: Stream/Multi gardent le cout de presocle page-cache valide, RAM compte sa taille physique reelle en pages `SAMPLE_PAGE_SLOT_POOL` allouees. RAM est stocke en `FLOAT32_INTERLEAVED` stereo au load WAV; les anciens slots residents sont volatils et sont donc simplement recharges depuis leur path projet/autoload. Les fenetres voix actives, Multi LOOP, window locks, pages queued/loading et marges runtime restent hors cout permanent.
-- `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v32: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades.
+- `Settings > Sample` lit maintenant l'en-tete budget depuis `sample_global_pool` (`used_slots/capacite active`, `used_bytes/16 MiB`). Le format projet courant est v35: le restore reset le catalogue global puis restaure explicitement les slots globaux Stream sauvegardes et les slots RAM autoloades.
+
+- `PATTERN_VERSION=23` et `PROJECT_V1_FILE_VERSION=33` marquent le retrait prototype de `PARAM_SAMPLER_FADE_IN` / `PARAM_SAMPLER_FADE_OUT` de `PARAM_COUNT`; aucune migration ancienne valeur fade n'est conservee.
+- `PATTERN_VERSION=24` et `PROJECT_V1_FILE_VERSION=34` marquent l'ajout append-only de `PARAM_SAMPLER_LOOP_START` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.
+- `PROJECT_V1_FILE_VERSION=35` marque l'alignement du backend volatile `sampler_ram_pool` sur la capacite active du catalogue global sample; les anciens projets prototype sont refuses par version/payload stricts.
