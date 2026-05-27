@@ -139,7 +139,7 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
             {
                 memset(direct_l, 0, frames * sizeof(float));
                 memset(direct_r, 0, frames * sizeof(float));
-                brick6_sampler_runtime_render_track(ctx, direct_l, direct_r, frames);
+                brick6_sampler_runtime_render_ram_track(ctx, direct_l, direct_r, frames);
                 mixer_commit_external_stereo(ctx->mix_track_id, frames);
                 sampler_tracks++;
                 continue;

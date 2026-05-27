@@ -42,7 +42,6 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_ru
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4144:13:brick6_sampler_render_multi	400	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:3979:13:brick6_sampler_render_sample_segment_cursor	424	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:4427:13:brick6_sampler_render_sample	408	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5541:13:brick6_sampler_runtime_render_ram	168	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:380:9:brick6_sampler_runtime_ram_slice_mode_active	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:1784:16:brick6_sampler_runtime_prepare_ram_slice_grid	80	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:2335:13:brick6_sampler_runtime_rebuild_grid	24	static
@@ -86,5 +85,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_ru
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:3958:6:brick6_sampler_runtime_diag_reset	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:2398:6:brick6_sampler_runtime_init	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:3969:6:brick6_sampler_runtime_diag_get_snapshot	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5877:9:brick6_sampler_runtime_track_has_active_ram_voice	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5889:6:brick6_sampler_runtime_render_track	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5749:9:brick6_sampler_runtime_track_has_active_ram_voice	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5761:6:brick6_sampler_runtime_render_ram_track	176	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5799:6:brick6_sampler_runtime_render_stream_track	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5861:6:brick6_sampler_runtime_render_multi_track	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/brick6_sampler_runtime.c:5893:6:brick6_sampler_runtime_render_track	32	static

@@ -171,6 +171,18 @@ void brick6_sampler_runtime_render_track(const track_runtime_ctx_t *ctx,
                                          float *out_l,
                                          float *out_r,
                                          uint32_t frames);
+void brick6_sampler_runtime_render_ram_track(const track_runtime_ctx_t *ctx,
+                                             float *out_l,
+                                             float *out_r,
+                                             uint32_t frames);
+void brick6_sampler_runtime_render_stream_track(const track_runtime_ctx_t *ctx,
+                                                float *out_l,
+                                                float *out_r,
+                                                uint32_t frames);
+void brick6_sampler_runtime_render_multi_track(const track_runtime_ctx_t *ctx,
+                                               float *out_l,
+                                               float *out_r,
+                                               uint32_t frames);
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id);
 void brick6_sampler_runtime_diag_reset(void);
 void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);

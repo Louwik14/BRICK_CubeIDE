@@ -830,6 +830,31 @@ Clarification START/END/LOOP live:
 ## Addendum 2026-05-27 - pitch stochastic nearest experimental
 
 - Le pitch Sampler experimental remplace l'interpolation lineaire des chemins pitch couverts par un nearest distribue deterministe: pour chaque position Q16, le code choisit `N` ou le voisin selon `frac > threshold`, puis lit une seule frame source stereo.
-- Le seuil est produit par un hash entier borne et sans etat global. RAM melange frame courante, position Q16, track/note/slot/trigger; Stream/Multi reader melange frame courante, fraction Q16 et seed de segment/sample.
+- Le seuil est produit par un hash entier borne et sans etat global, base sur la cellule source et un seed stable. RAM melange frame source, track/note/slot/trigger; Stream/Multi reader melange frame source et seed de segment/sample. La fraction Q16 ne participe pas au hash et sert uniquement a comparer `frac > threshold`.
 - Les chemins non pitch 1x et les fast paths RAM/Stream entiers restent inchanges. Le patch n'ajoute aucun mode utilisateur et ne pretend pas etre CLEAN.
 - Les guards de region, loop, reverse, pingpong et page boundary restent conserves: si le voisin stochastic n'est pas dans le span/page deja acquis, le rendu retombe sur la frame de base sans modifier `sample_page_cache`, window-lock ou `STREAM_SAFE`.
+
+## Addendum 2026-05-27 - pitch nearest brut experimental
+
+- Le pitch Sampler experimental courant remplace le nearest distribue par un nearest brut minimal: l'index lu est toujours `position_q16 >> 16` / `floor(position)` pour les chemins pitch couverts.
+- Aucun hash, seuil, dither, smoothing de sortie ou interpolation lineaire n'est utilise dans ces chemins. Le rendu lit une seule frame source stereo par frame audio, applique le gain et accumule.
+- Les chemins non pitch 1x restent inchanges. Les bounds region/page/span et les politiques `sample_page_cache`, window-lock et `STREAM_SAFE` restent inchanges.
+
+## Addendum 2026-05-27 - extraction renderer Sampler/RAM
+
+- `brick6_sampler_runtime_render_ram_track()` isole le chemin IRQ `Sampler/RAM`: validation RAM, gate VCA RAM, rendu resident, diagnostic first-output et tails de declick.
+- `brick6_sampler_runtime_render_track()` reste le point d'entree generique et route une voix `BRICK6_SAMPLER_VOICE_RAM` active vers ce renderer dedie avant le scan Multi et les fallbacks Classic/Stream.
+- `brick6_render_sampler_tracks()` conserve le no-copy stereo mixer pour RAM actif, mais appelle maintenant le renderer RAM dedie apres `mixer_begin_external_stereo()`.
+- Stream/Clip, Multi, page-cache/window-lock et policy SD restent inchanges dans cette extraction.
+
+## Addendum 2026-05-27 - extraction renderer Sampler/Stream
+
+- `brick6_sampler_runtime_render_stream_track()` isole le chemin IRQ `Sampler/Stream` encore nomme `Clip` en interne: etat clip/stream, shifter/stretch, `brick6_sampler_render_sample()`, reader Stream et tails de declick.
+- `brick6_sampler_runtime_render_track()` route maintenant `TRACK_RUNTIME_TYPE_CLIP` vers ce renderer dedie avant les chemins RAM/Multi/fallback.
+- Les noms legacy `CLIP`, la policy page-cache/window-lock/STREAM_SAFE, Multi, RAM et Looper restent inchanges dans cette extraction.
+
+## Addendum 2026-05-27 - extraction renderer Sampler/Multi
+
+- `brick6_sampler_runtime_render_multi_track()` isole le chemin IRQ `Sampler/Multi`: scan borne de `g_sampler_multi_voice[]`, filtrage `owner_track_id`, rendu des voix Multi, diagnostic first-output et tails de declick.
+- `brick6_sampler_runtime_render_track()` devient un dispatcher court: `Clip/Stream` vers `brick6_sampler_runtime_render_stream_track()`, `Multi` vers `brick6_sampler_runtime_render_multi_track()`, voix RAM active vers `brick6_sampler_runtime_render_ram_track()`, puis fallback legacy Classic si present.
+- Les regles de voice steal/release, page-cache/window-lock/STREAM_SAFE, RAM, Stream/Clip, Looper et LFO restent inchanges.
