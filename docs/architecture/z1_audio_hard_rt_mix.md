@@ -789,13 +789,14 @@ Clarification START/END/LOOP live:
 - En mode RAM slice (`Slice Count!=Off`), la note conserve son role de selection de slice et ne transpose pas; le pas effectif reste `sample_rate / 48000 * 2^(Tune / 12)`.
 - `Start`/`End`/`Loop` gardent leur reconciliation live separee; le changement de `Tune` ne revalide pas les bornes et ne modifie pas la region active.
 
-## Addendum 2026-05-26 - prototype bloc-stable PLAY sans recalage LFO
+## Addendum 2026-05-26 - grille audio conservee, offsets sequenceur restaures
 
-- `BRICK6_AUDIO_EVENT_GRID_FRAMES` dans `Inc/Core/brick6_audio_event_grid.h` pilote la grille experimentale des evenements PLAY internes. Valeurs visees: `32` pour deux blocs par demi-buffer 64, `64` pour un bloc par demi-buffer 64.
-- Z1 rend le demi-buffer audio en blocs fixes de cette grille et applique les evenements sequenceur collectes au debut du bloc, sans recoupe intra-bloc par offset musical PLAY.
+- `BRICK6_AUDIO_EVENT_GRID_FRAMES` dans `Inc/Core/brick6_audio_event_grid.h` reste disponible pour les traitements audio/modulation qui en dependent, notamment le LFO window-rate.
+- Z1 ne force plus les evenements sequenceur PLAY au debut d'une fenetre 64: `audio.c` collecte les events avec offsets relatifs reels, rend le segment avant event, applique les events au sample de segment, puis rend la suite.
+- Quand aucun event ni boundary interne ne tombe dans le demi-buffer, le rendu peut rester un demi-buffer complet de 64 frames.
+- Pour eviter que les p-locks non-PLAY de boundary soient appliques trop tot, `audio.c` coupe aussi la collecte avant le prochain pulse interne connu, puis collecte/applique le boundary au segment suivant.
 - Les clears mixer/sends/delay restent complets; aucun clear partiel de `send_l/send_r` ou buffers delay n'est introduit.
-- Les filtres track biquad LP/HP/BP stereo et mono sont traites par chunks de `MIXER_FILTER_UPDATE_PERIOD`: l'enveloppe ADSR avance toujours a la cadence sample, mais les appels `fx_biquad_filter*_process_block()` ne sont plus relances sample par sample.
-- `mod_lfo_v1` n'est pas modifie dans cette passe; sa cadence de controle reste celle du code courant.
+- Les filtres track biquad LP/HP/BP stereo et mono restent traites par chunks de `MIXER_FILTER_UPDATE_PERIOD`: l'enveloppe ADSR avance toujours a la cadence sample, mais les appels `fx_biquad_filter*_process_block()` ne sont plus relances sample par sample.
 
 ## Addendum 2026-05-26 - LFO window-rate experimental
 

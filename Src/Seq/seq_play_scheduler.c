@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 #include "stm32h7xx_hal.h"
-#include "Core/brick6_audio_event_grid.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
@@ -73,7 +72,6 @@ static const param_id_t g_seq_play_voice_mictim_ids[SEQ_PLAY_SCHEDULER_VOICE_COU
     PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM
 };
 static void seq_play_scheduler_refresh_track(uint8_t track);
-static uint64_t seq_play_scheduler_snap_sample_to_grid(uint64_t sample_time);
 static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t type,
                                     seq_track_id_t track,
@@ -242,11 +240,6 @@ static void seq_play_scheduler_refresh_track(uint8_t track)
 }
 
 
-static uint64_t seq_play_scheduler_snap_sample_to_grid(uint64_t sample_time)
-{
-    const uint64_t grid = (uint64_t)brick6_audio_event_grid_frames();
-    return ((sample_time + (grid >> 1U)) / grid) * grid;
-}
 static void seq_play_scheduler_push(uint64_t due_sample_time,
                                     uint8_t type,
                                     seq_track_id_t track,
@@ -263,7 +256,7 @@ static void seq_play_scheduler_push(uint64_t due_sample_time,
     }
 
     seq_play_scheduler_evt_t *const evt = &g_seq_play_events[g_seq_play_event_count++];
-    evt->due_sample_time = seq_play_scheduler_snap_sample_to_grid(due_sample_time);
+    evt->due_sample_time = due_sample_time;
     evt->type = type;
     evt->track = track;
     evt->note = note;
@@ -619,7 +612,7 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
             microtiming_samples = 0;
         }
         microtiming_samples = seq_play_scheduler_apply_quant_percent(microtiming_samples, track_quant);
-        uint64_t note_on_sample_time = seq_play_scheduler_snap_sample_to_grid(step_sample_time + (uint64_t)microtiming_samples);
+        uint64_t note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
         if ((has_first_note == 0U) || (note_on_sample_time < first_note_sample_time))
         {
             has_first_note = 1U;
@@ -631,10 +624,10 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         {
             len_samples = 1U;
         }
-        uint64_t note_off_sample_time = seq_play_scheduler_snap_sample_to_grid(note_on_sample_time + len_samples);
+        uint64_t note_off_sample_time = note_on_sample_time + len_samples;
         if (note_off_sample_time <= note_on_sample_time)
         {
-            note_off_sample_time = note_on_sample_time + (uint64_t)brick6_audio_event_grid_frames();
+            note_off_sample_time = note_on_sample_time + 1ULL;
         }
 
         const seq_track_id_t target_track = (seq_track_id_t)seq_play_scheduler_resolve_note_target_track(track, note);

@@ -696,9 +696,11 @@ Points factuels observes:
 - Les autres types Sampler gardent le chemin Classic existant (`brick6_sampler_runtime_trigger_note_velocity`, puis note-off Classic/Stream selon contrat).
 - Aucun FatFs, malloc, cache/streaming ou import Multi n'est ajoute au scheduler; le trigger Multi reste le meme seam RAM/page-cache que le clavier.
 
-## Addendum 2026-05-26 - prototype grille PLAY partagee
+## Addendum 2026-05-26 - prototype grille PLAY partagee retire de Z4
 
-- `BRICK6_AUDIO_EVENT_GRID_FRAMES` est la grille experimentale commune entre Z1 et Z4 pour le sequenceur interne PLAY.
-- `seq_runtime` quantifie `samples_per_step_q16`; `seq_runtime_exec` snappe les pulses/start/step anchors; `seq_play_scheduler` snappe note-on/note-off/program events sur cette meme grille.
-- Note, velocity, len, microtiming et p-locks PLAY associes partagent donc le meme referentiel bloc-stable.
-- Les chemins live clavier/pads, MIDI externe live, Looper/Q Rec/Q Play et la cadence `mod_lfo_v1` restent hors de ce contrat experimental.
+- `BRICK6_AUDIO_EVENT_GRID_FRAMES` ne fait plus autorite musicale pour Z4.
+- `seq_runtime` conserve `samples_per_step_q16` dans le domaine BPM/Q16 exact, sans snap sur la grille audio.
+- `seq_runtime_exec` conserve les start/pending-start/pulses/anchors dans le domaine sample/Q16 exact.
+- `seq_play_scheduler` planifie note-on/note-off/program en `due_sample_time` reel; la collecte audio convertit seulement en offset relatif au bloc courant.
+- Z1 peut toujours utiliser une grille audio pour ses traitements propres, mais les boundaries et events PLAY exposent des offsets intra-buffer reels.
+- Le microtiming negatif reste limite par l'absence de lookahead scheduler dedie: le chemin courant garde le clamp a zero pour eviter de planifier un event deja passe au moment du boundary.
