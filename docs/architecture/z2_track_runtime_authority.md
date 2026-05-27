@@ -258,6 +258,13 @@ Sorties de Z2:
 - Nouvelle identite structurelle: `TRACK_RUNTIME_FAMILY_MASTER` + `TRACK_RUNTIME_TYPE_MASTER_FX`.
 - Binding runtime: `TRACK_RUNTIME_ENGINE_NONE`, bind `BOUND`; Z2 reste l'autorite d'identite, tandis que l'insert DSP master est execute en Z1 via les params TONE stockes.
 - Ensembles exposes: `CFG`, `COLORS`, `TONE`, `MOD`, `MIX`, `VCA`, `KEYBOARD`, `ARP/ROUT`, `SEQ`; `PLAY` reste masque.
+
+## 21. Contrat refresh local de track
+- `track_runtime_invalidate_track(track)` invalide uniquement la track cible; `track_runtime_invalidate_all()` reste reserve aux restore/load/init globaux.
+- `track_runtime_refresh_track(track)` reconstruit uniquement le contexte runtime de la track cible quand seul son dirty local est pose.
+- `track_runtime_refresh_track(track)` ne fait full refresh que si un dirty global est pose et que l'appel n'est pas en IRQ.
+- `track_runtime_refresh_if_dirty()` ne lance pas de `track_runtime_refresh_all()` depuis l'IRQ audio; un dirty observe en IRQ est ignore pour le bloc courant et compte comme diagnostic.
+- Les instances Wave restent stables par track logique (`instance_id == track_id`); un refresh local ne reset que l'instance dont l'owner reel change.
 - Les params `PARAM_MASTER_FX1_*` a `PARAM_MASTER_FX4_*` sont des params `TONE` track-aware stockes; `DRIVE`, `CRUSH`, `RING`, `CHOP`, `PUMP`, `COMB`, `WOBBLE`, `ECHO`, `FREEZE`, `STUTTER`, `TALK` et `PITCH` sont consommes par le DSP master.
 
 ## 21. Contrat Drum Plaits direct

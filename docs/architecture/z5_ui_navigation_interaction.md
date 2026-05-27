@@ -251,6 +251,8 @@ Etat queue events UI:
 Frontiere commit runtime UI:
 - `ui_core_runtime_bridge` porte les effets runtime, la transition track structurelle et les callbacks de commit explicitement appeles depuis `ui_core`.
 - `ui_core_runtime_bridge` porte aussi le post-commit visible UI: miroir active-track, sync edit-context, mirror MIDI actif et reconfiguration post-structure.
+- Pour un changement local family/type, le bridge construit une requete system-sync ciblee track et appelle le pipeline Z3 local; il n'invalide pas tout le runtime et n'invalide pas tous les caches LFO.
+- Les restore/load/bulk gardent la requete globale et le pipeline global.
 - `ui_core_runtime_bridge` porte aussi les lectures runtime encore consommees par l'UI centrale (`seq_edit_step_hold_update`, `track_runtime_resolve_track`, `seq_edit_get_page`, `keyboard_runtime_get_octave_shift`, `pattern_live_*`) afin de garder `ui_core.c` du cote arbitrage.
 - `ui_hall_mode_contract` porte la table de contrat hall mode centrale (trigger, page cible, label brut).
 - `ui_hall_mode_flow` porte la politique d'activation hall et le double-tap/ciblage associe.
@@ -800,3 +802,13 @@ Points factuels:
 - Les controles globaux visibles de `Synth/Wave` sont aussi formates localement dans TONE: `EDIT` devient `MODEL` avec le nom du moteur, `COARSE` devient `PITCH` en demi-tons, `FINE` en cents, `FM` suit l'echelle normalisee `0.00..127.00`, et `MODULATION` devient `A MOD` en pourcent bipolaire.
 - `SawSq` garde `PARAM_WAVE_COLOR` en banque pour compatibilite d'edition/stockage, mais son affichage est neutralise en label `-`, valeur `---` et widget vide car aucun effet DSP n'a ete observe pour ce parametre.
 - Les filtres Braids `ZLPF/ZPKF/ZBPF/ZHPF` restent hors surface UI Wave car ils ne sont pas dans le mapping runtime actif.
+
+## 28. Surface MOD LFO finale
+
+- L'ensemble `MOD` expose quatre sous-pages dans cet ordre: `LFO1`, `LFO1#`, `LFO2`, `LFO2#`.
+- `LFO1`/`LFO2`: `DEST`, `RATE`, `DEPTH`, `SHAPE`.
+- `LFO1#`/`LFO2#`: `DELAY`, `TRIG`, `FADE`, `PHASE` ou `SLEW`.
+- `RATE` affiche `OFF` au centre, `x.xxHz` a gauche et les divisions musicales a droite. L'encodeur sans SHIFT avance le cote Hz par pas lisibles de 1Hz; avec SHIFT il edite le cote Hz au pas fin de `0.01Hz`. Le cote sync reste discret par index.
+- `DELAY` affiche toujours une valeur en secondes `x.xxs`; sans SHIFT l'edition avance par pas de 1s en conservant la fraction, avec SHIFT par pas de `0.01s`.
+- Le slot `PHASE_SLEW` renomme dynamiquement le label en `PHASE` ou `SLEW` selon la shape du LFO concerne, meme si `SHAPE` est sur la page precedente.
+- Le widget `PHASE/SLEW` dessine une miniature legere de la forme courante; en mode phase, un curseur indique le decalage horizontal, en mode `RND` le widget n'affiche pas de phase.

@@ -772,6 +772,13 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `ARM=Overd` reste borne/no-op: aucun overdub audio reel n'est branche.
 - `PATTERN_VERSION=15` et `PROJECT_V1_FILE_VERSION=20` marquent le changement de layout `PARAM_COUNT`, l'ajout du type `Looper` et l'ajout de `PatternSaveV1.track_cfg.looper_route_enabled`.
 - `PATTERN_VERSION=16` et `PROJECT_V1_FILE_VERSION=21` marquent la rupture prototype du contrat TONE Looper: `MODE` est retire, `ARM` devient `Off/Rec/Overd`, `PLAY Off/Auto` remplace l'ancien slot; les anciens fichiers sont refuses par version/payload stricts.
+
+## 34. Versioning LFO final
+
+- `PATTERN_VERSION=25` et `PROJECT_V1_FILE_VERSION=36` marquent la rupture prototype du contrat LFO final.
+- `PatternSaveV1.mod` persiste maintenant, par LFO, `dest`, `rate`, `depth`, `shape`, `delay`, `trig`, `fade`, `phase_slew`.
+- Les anciennes sauvegardes prototype sont refusees par version/payload stricts; aucune migration produit complexe n'est requise.
+- La restauration LFO reste mono-autorite: `pattern_live_apply_snapshot` appelle uniquement `mod_lfo_v1_set_track_param`.
 - `PATTERN_VERSION=17` et `PROJECT_V1_FILE_VERSION=22` marquent l'ajout de `PARAM_WAVE_PHASE_RESET` et le changement de layout `PARAM_COUNT`; les anciens fichiers prototype sont refuses par version/payload stricts.
 - La selection ROUT `Sampler/Looper` est capturee/restauree par matrice `looper track -> source track` dans le snapshot pattern; les projets la portent via leur snapshot live embarque.
 - Les etats internes writer (`TAKE_READY`, `FINALIZING`, etc.) restent caches; aucun etat `Temp/Saved/Finalizing` n'est expose comme param utilisateur Looper.

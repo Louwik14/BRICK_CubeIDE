@@ -92,8 +92,12 @@ void param_registry_batch_begin(void);
 void param_registry_batch_end(void);
 /* Internal transition pipeline: structural mutation + reapply/sync callbacks. */
 uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd);
+uint8_t param_registry_run_track_transition_pipeline_for_track(const param_registry_track_transition_pipeline_cmd_t *cmd,
+                                                              uint8_t track);
 void param_registry_apply_track_structure_transition(const param_registry_track_structure_transition_cmd_t *cmd);
 uint8_t param_registry_track_structure_transition_is_active(void);
+uint8_t param_registry_track_structure_transition_is_global_active(void);
+uint8_t param_registry_track_structure_transition_is_track_active(uint8_t track);
 uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *cmd);
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value);

@@ -703,4 +703,15 @@ Points factuels observes:
 - `seq_runtime_exec` conserve les start/pending-start/pulses/anchors dans le domaine sample/Q16 exact.
 - `seq_play_scheduler` planifie note-on/note-off/program en `due_sample_time` reel; la collecte audio convertit seulement en offset relatif au bloc courant.
 - Z1 peut toujours utiliser une grille audio pour ses traitements propres, mais les boundaries et events PLAY exposent des offsets intra-buffer reels.
-- Le microtiming negatif reste limite par l'absence de lookahead scheduler dedie: le chemin courant garde le clamp a zero pour eviter de planifier un event deja passe au moment du boundary.
+- Le microtiming negatif n'est pas traite par snap au boundary: il passe par le contrat lookahead dedie ci-dessous.
+
+## Addendum 2026-05-27 - microtiming negatif par lookahead PLAY
+
+- `seq_runtime_exec` planifie, a chaque boundary PLAY reelle, le step courant pour les voix a microtiming nul/positif et le prochain step de la track pour les voix a microtiming negatif.
+- Le lookahead est borne a un step musical de track, calcule avec `samples_per_step_q16 * div`; il ne scanne pas la pattern complete et ne cree pas d'allocation.
+- `seq_play_scheduler_schedule_step()` ignore les voix PLAY negatives; `seq_play_scheduler_schedule_step_lookahead_negative()` ignore les voix nulles/positives. Cette separation evite le double trigger.
+- Le wrap utilise le meme referentiel que les steps: le prochain step est calcule modulo `seq_model_get_track_playback_length()`. Un step 0 avec microtiming negatif est donc planifie depuis la boundary du dernier step du tour precedent.
+- Les note-on, note-off et program PLAY d'une voix negative sont horodates depuis le vrai `note_on_sample_time` anticipe. La duree note part de cet instant reel; le token note-on/note-off conserve le guard anti double-off existant.
+- Les p-locks PLAY restent lus sur le step cible anticipe et sont donc groupes avec la note anticipee. Les p-locks non-PLAY restent appliques uniquement par `seq_boundary_engine` a la boundary officielle du step.
+- L'ordre a sample identique reste: boundary collectee avant scheduler, puis dans le scheduler note-off avant program avant note-on. Le tri runtime conserve l'ordre stable pour les events de meme offset.
+- Les retrigs dedies ne sont pas un sous-systeme separe dans le code courant; le comportement couvert ici concerne les voix PLAY existantes, leurs note lengths, program changes et forced note-off/token guards.

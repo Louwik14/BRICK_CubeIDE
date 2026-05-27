@@ -52,9 +52,13 @@ typedef struct
 typedef struct
 {
     uint16_t dest;
-    uint8_t rate;
+    float rate;
     uint8_t depth;
     uint8_t shape;
+    float delay;
+    uint8_t trig;
+    float fade;
+    float phase_slew;
 } pattern_v1_lfo_lane_t;
 
 typedef struct

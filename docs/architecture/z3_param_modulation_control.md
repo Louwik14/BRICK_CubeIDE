@@ -55,6 +55,7 @@ Familles d'autorite:
 - `param_registry_transition.c`:
   - pipeline structurel unique pour les mutations `CFG_TRACK` / `CFG_TRACK_TYPE`,
   - capture/rebind/neutralisation/reapply lane-bound hors du coeur d'apply courant.
+  - les transitions structurelles distinguent explicitement un scope global et un scope local par track; une transition locale ne bloque plus les traitements MOD/LFO des autres tracks.
 - `param_registry_catalog.*`:
   - catalogue statique des descripteurs param (`param_registry[]`), labels, bornes, bindings `apply`.
 - `param_filter.*`:
@@ -76,6 +77,7 @@ Familles d'autorite:
 - `param_registry_apply_wrappers.*`:
   - wrappers `apply_*` produit (CFG/SEQ/KBD/ARP/FX/LFO...), hors coeur d'execution track-aware.
   - pour les wrappers CFG track-aware, lecture post-apply sur `track_state` comme source autoritative de famille/type/MIDI.
+  - les commandes CFG avec track explicite passent par `param_registry_apply_track_value(..., track, ...)` et n'utilisent pas l'active track implicite des wrappers.
   - les wrappers ARP ecrivent maintenant l'etat ARP de la track active via `keyboard_runtime`; l'autorite config ARP est par track dans `keyboard_arp`, pas `param_store.active[]`.
   - le runtime de jeu ARP est aussi par track cote `keyboard_arp`; les writes HOLD/ARP ne doivent pas couper les autres tracks.
 - `track_sound_state.*`:
@@ -145,6 +147,14 @@ Call-sites critiques:
   - Autorite unique: `mod_lfo_v1_set_track_param`.
   - Double write via `param_registry_apply_track_value(PARAM_LFO*)` supprime.
 
+- Trig LFO BRICK6:
+  - Les evenements trig LFO actuels sont les note-on valides emis par le scheduler sequenceur et le clavier runtime; il n'existe pas encore de parametre separe type `LFO.T`.
+  - `FREE` ignore ces trigs: phase/delay ne sont pas relances par les notes. Le delay s'applique une fois a l'activation effective du LFO (`DEST` valide + `DEPTH != 0` + `RATE != OFF`) puis la modulation continue.
+  - `TRIG` ne gate pas le LFO: avec une destination, une depth et un rate valides, le LFO reste actif; chaque trig LFO rephase selon `PHASE` et relance `DELAY`/`FADE`.
+  - `HOLD` tient la derniere valeur capturee; chaque trig LFO relance `DELAY`, puis capture une nouvelle valeur. Entre deux captures, la sortie appliquee reste stable.
+  - `ONE` arme un cycle a l'activation effective et a chaque trig LFO; apres un cycle complet, la destination est relachee vers sa base, donc la modulation revient a zero jusqu'au prochain trig.
+  - Pour `RND`, le slot dynamique est `SLEW`: aucun offset de phase n'est applique, et `HOLD` capture une nouvelle valeur sample-and-hold.
+
 - Coexistence base write / modulation RT:
   - Contrat: un write track-aware autoritatif resynchronise la base LFO active (`mod_lfo_v1_resync_base_on_authoritative_write`).
   - A la release (dest change / depth=0 / dest non supportee): restauration de cette base.
@@ -157,6 +167,7 @@ Call-sites critiques:
 
 2. Modulation:
 - Tick control-rate depuis audio bloc.
+- Une transition structurelle globale peut suspendre le tick LFO complet; une transition locale suspend uniquement la track cible, les autres tracks continuent leur modulation.
 - Capture base via `param_registry_get_track_value`.
 - Apply module via chemin direct `mod_lfo_v1` si la destination est connue/effective.
 - Release -> write base via le meme chemin direct; fallback `_rt_fast` uniquement pour une destination future non specialisee.
@@ -258,6 +269,15 @@ Call-sites critiques:
 - Params track-aware exposes pour `UI_TRACK_TYPE_SAMPLER`:
   - page 1: `Sample`, `Mode`, `Start`, `End`,
   - page 2: `Gain`, `Tune`, `Loop`, `Slice`,
+
+## 11. Contrat transition structurelle locale
+
+- Les edits locaux `CFG_TRACK` / `CFG_TRACK_TYPE` passent par `param_registry_run_track_transition_pipeline_for_track(cmd, track)`.
+- Le pipeline local capture uniquement le mix target de la track cible, refresh uniquement cette track, rebind uniquement sa lane mixer et re-apply uniquement les params runtime de cette track.
+- La re-application locale couvre les params communs lane-bound (`COLORS/FILTER`, `MIX`, `VCA`, `HYBRID_GATE`) puis les params `TONE` du type runtime courant, sans toucher les autres tracks et sans repasser par `refresh_all()`.
+- Apres re-application locale, le mixer snap les valeurs lissees de la lane cible vers les targets reappliquees pour eviter qu'un rebind neuf joue un bloc avec les defaults internes du mixer alors que l'UI/base track-aware garde les bonnes valeurs.
+- Le pipeline global `param_registry_run_track_transition_pipeline(cmd)` reste le chemin restore/load/init et conserve le refresh/rebind global.
+- Le rebind mixer local ne reset pas les lanes des autres tracks; les lanes inchangees sont no-op.
   - `Fade In`/`Fade Out` sont retires du contrat Sampler RAM; l'enveloppe d'amplitude reste VCA,
   - `Loop` expose `PARAM_SAMPLER_LOOP_START`, un marqueur/edit position track-aware stocke comme ratio `0..1` et projete vers le runtime RAM sans modifier `Start` ni `End`,
   - `Slice Count` visible en UI sur `Sampler/RAM`; `Off` garde RAM normal, `2..64` active un slicing grille de la fenetre globale `Start/End`.
@@ -664,4 +684,17 @@ Dette explicite post-passe 4:
 
 - `MOD_LFO_SHAPE_RANDOM_SH` est un sample-and-hold bipolaire, pas un bruit aleatoire par tick.
 - La valeur aleatoire est tenue entre deux wraps de phase LFO et regeneree au premier tick actif apres init/reset/changement de shape, puis a chaque wrap de phase.
+
+## 39. Contrat LFO final
+
+- Chaque track possede 2 LFO symetriques; la config canonique reste dans `track_sound_state.mod_lfo[2]` et l'execution dans `mod_lfo_v1`.
+- Surface par LFO: `DEST`, `RATE`, `DEPTH`, `SHAPE`, puis `DELAY`, `TRIG`, `FADE`, `PHASE_SLEW`.
+- `RATE` est bipolaire: valeur negative = Hz libre continu `0..12.00Hz`, `0` = `OFF`, valeur positive `1..15` = table sync stable `8BAR, 4BAR, 2BAR, 1BAR, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T, 1/32, 1/32T, 1/64`.
+- Le mode Hz convertit directement la frequence en `phase_inc`, sans dependance BPM; le mode sync convertit la division via le BPM courant. `OFF` libere la destination et restaure la base.
+- `SHAPE` expose `SIN`, `TRI`, `SAW`, `SQR`, `RND`, `SIN+`, `TRI+`, `SQR+`, `RSAW`. Les formes `+` sont unipolaires `0..1`; les autres restent bipolaires `-1..1`. La modulation applique `base + shape * depth_scale` puis clamp destination.
+- `TRIG`: `FREE` tourne sans reset; `TRIG` reset la phase au note/trig sans servir de gate ON/OFF; `HOLD` capture la valeur LFO au trig et la tient; `ONE` joue un cycle a l'activation effective et a chaque trig puis stoppe/restaure la base.
+- `DELAY` retarde l'effectivite une fois a l'activation effective du LFO. Les modes `TRIG`, `HOLD` et `ONE` relancent aussi ce delay a chaque trig LFO; `FREE` ignore les trigs note/clavier et ne relance pas son delay.
+- `FADE` est bipolaire: negatif = fade-in d'amplitude, `0` = direct/OFF, positif = fade-out. Il agit sur l'amplitude LFO effective, jamais sur la base destination.
+- `PHASE_SLEW` est `PHASE` en degres pour les shapes non random et `SLEW` pour `RND`; le slew lisse la valeur sample-and-hold par tick borne.
+- Les triggers LFO arrivent par `mod_lfo_v1_note_trigger(track)`, appele depuis les chemins note sequenceur et clavier apres resolution track, sans dependance UI fragile.
 - En mode window-rate, si une fenetre traverse le wrap, la nouvelle valeur est appliquee a toute la fenetre courante, comme les autres formes tenues par fenetre; aucun ramp ni interpolation random n'est introduit.

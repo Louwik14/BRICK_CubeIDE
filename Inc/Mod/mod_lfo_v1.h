@@ -16,8 +16,21 @@ typedef enum
     MOD_LFO_SHAPE_SAW,
     MOD_LFO_SHAPE_SQUARE,
     MOD_LFO_SHAPE_RANDOM_SH,
+    MOD_LFO_SHAPE_SINE_POS,
+    MOD_LFO_SHAPE_TRIANGLE_POS,
+    MOD_LFO_SHAPE_SQUARE_POS,
+    MOD_LFO_SHAPE_REVERSE_SAW,
     MOD_LFO_SHAPE_COUNT
 } mod_lfo_shape_t;
+
+typedef enum
+{
+    MOD_LFO_TRIG_FREE = 0,
+    MOD_LFO_TRIG_TRIG,
+    MOD_LFO_TRIG_HOLD,
+    MOD_LFO_TRIG_ONE,
+    MOD_LFO_TRIG_COUNT
+} mod_lfo_trig_mode_t;
 
 typedef enum
 {
@@ -25,6 +38,10 @@ typedef enum
     MOD_LFO_PARAM_RATE,
     MOD_LFO_PARAM_DEPTH,
     MOD_LFO_PARAM_SHAPE,
+    MOD_LFO_PARAM_DELAY,
+    MOD_LFO_PARAM_TRIG,
+    MOD_LFO_PARAM_FADE,
+    MOD_LFO_PARAM_PHASE_SLEW,
     MOD_LFO_PARAM_COUNT
 } mod_lfo_param_t;
 
@@ -46,6 +63,9 @@ void mod_lfo_v1_invalidate_dest_cache_all(void);
 
 void mod_lfo_v1_process_sample_all(void);
 void mod_lfo_v1_process_block(uint32_t frames);
+void mod_lfo_v1_note_trigger(uint8_t track);
+uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index);
+uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, uint8_t width, int8_t *out_y_q7);
 
 #ifdef __cplusplus
 }

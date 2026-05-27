@@ -122,6 +122,7 @@ static AUDIO_HOT float g_external_track_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
 static uint8_t g_external_track_enabled[MIXER_MAX_TRACKS];
 static uint8_t g_external_track_format[MIXER_MAX_TRACKS];
 static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
+volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
 
@@ -638,6 +639,18 @@ static void mixer_track_state_reset(mixer_track_t *track)
     }
 }
 
+static void mixer_external_input_clear_lane(uint32_t lane)
+{
+    if (lane >= MIXER_MAX_TRACKS)
+    {
+        return;
+    }
+
+    g_external_track_enabled[lane] = 0U;
+    g_external_track_format[lane] = MIXER_EXTERNAL_FORMAT_NONE;
+    g_external_track_frames_valid[lane] = 0U;
+}
+
 void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
                                const uint8_t *next_mix_tracks,
                                uint32_t track_count)
@@ -679,6 +692,79 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
     }
 
     mixer_external_inputs_clear();
+}
+
+void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track)
+{
+    mixer_track_t previous_track = { 0 };
+    mixer_track_filter_t previous_filter = { 0 };
+    const uint8_t has_previous = (previous_mix_track < MIXER_MAX_TRACKS) ? 1U : 0U;
+    const uint8_t has_next = (next_mix_track < MIXER_MAX_TRACKS) ? 1U : 0U;
+
+    if ((has_previous != 0U) && (has_next != 0U) && (previous_mix_track == next_mix_track))
+    {
+        return;
+    }
+
+    if (has_previous != 0U)
+    {
+        previous_track = g_tracks[previous_mix_track];
+        previous_filter = g_track_filters[previous_mix_track];
+        mixer_track_state_reset(&g_tracks[previous_mix_track]);
+        mixer_track_filter_init(&g_track_filters[previous_mix_track], previous_filter.sample_rate);
+        mixer_external_input_clear_lane(previous_mix_track);
+    }
+
+    if (has_next != 0U)
+    {
+        const float sample_rate = (has_previous != 0U)
+            ? previous_filter.sample_rate
+            : g_track_filters[next_mix_track].sample_rate;
+        mixer_track_state_reset(&g_tracks[next_mix_track]);
+        mixer_track_filter_init(&g_track_filters[next_mix_track], sample_rate);
+        mixer_external_input_clear_lane(next_mix_track);
+    }
+
+    if ((has_previous != 0U) && (has_next != 0U))
+    {
+        g_tracks[next_mix_track] = previous_track;
+        g_track_filters[next_mix_track] = previous_filter;
+        mixer_track_filter_rebind_dsp_storage(&g_track_filters[next_mix_track]);
+    }
+
+    if (has_next != 0U)
+    {
+        g_mixer_lane_rebind_count[next_mix_track]++;
+    }
+    else if (has_previous != 0U)
+    {
+        g_mixer_lane_rebind_count[previous_mix_track]++;
+    }
+}
+
+void mixer_snap_track_runtime_state(uint32_t track_id)
+{
+    if (track_id >= MIXER_MAX_TRACKS)
+    {
+        return;
+    }
+
+    mixer_track_t *const track = &g_tracks[track_id];
+    mixer_track_filter_t *const filter = &g_track_filters[track_id];
+
+    track->gain_current = track->gain;
+    track->pan_current = track->pan;
+    for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+    {
+        track->send_level_current[s] = track->send_level[s];
+    }
+
+    filter->cutoff_hz = filter->cutoff_target_hz;
+    filter->resonance = filter->resonance_target;
+    filter->eq_low_db = filter->eq_low_target_db;
+    filter->eq_mid_db = filter->eq_mid_target_db;
+    filter->eq_high_db = filter->eq_high_target_db;
+    mixer_track_filter_apply_core_params(filter);
 }
 
 static void mixer_track_filter_process_block(mixer_track_filter_t *filter,

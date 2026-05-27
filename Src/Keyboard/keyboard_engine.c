@@ -23,6 +23,7 @@
 #include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Core/track_state.h"
+#include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include <string.h>
@@ -244,6 +245,11 @@ static void keyboard_engine_emit_note_for_track(uint8_t track, uint8_t note, uin
     if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return;
+    }
+
+    if (is_note_on != 0U)
+    {
+        mod_lfo_v1_note_trigger(track);
     }
 
     uint8_t filter_track = 0U;

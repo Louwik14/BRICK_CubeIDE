@@ -203,10 +203,18 @@ void apply_lfo1_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_t
 void apply_lfo1_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_RATE, v); }
 void apply_lfo1_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DEPTH, v); }
 void apply_lfo1_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_SHAPE, v); }
+void apply_lfo1_delay(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_DELAY, v); }
+void apply_lfo1_trig(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_TRIG, v); }
+void apply_lfo1_fade(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_FADE, v); }
+void apply_lfo1_phase_slew(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 0U, MOD_LFO_PARAM_PHASE_SLEW, v); }
 void apply_lfo2_dest(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEST, v); }
 void apply_lfo2_rate(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_RATE, v); }
 void apply_lfo2_depth(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DEPTH, v); }
 void apply_lfo2_shape(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_SHAPE, v); }
+void apply_lfo2_delay(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_DELAY, v); }
+void apply_lfo2_trig(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_TRIG, v); }
+void apply_lfo2_fade(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_FADE, v); }
+void apply_lfo2_phase_slew(float v) { (void)mod_lfo_v1_set_track_param(ui_get_active_track(), 1U, MOD_LFO_PARAM_PHASE_SLEW, v); }
 
 void apply_cfg_track(float v)
 {

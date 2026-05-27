@@ -83,8 +83,8 @@ static void ui_core_runtime_bridge_looper_copy_diag_path(char *dst, const char *
 static uint8_t ui_core_runtime_bridge_looper_snapshot_matches(
     const brick6_looper_runtime_diag_snapshot_t *before,
     const brick6_looper_runtime_diag_snapshot_t *after);
-static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sync_request_t *request,
-                                                                    uint8_t active_track_touched);
+static void ui_core_runtime_bridge_prepare_restore_transition_request(ui_system_sync_request_t *request,
+                                                                      uint8_t active_track_touched);
 static void ui_core_runtime_bridge_init_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
                                                              const ui_system_sync_request_t *request,
                                                              uint8_t sync_active_track_ui_context,
@@ -971,8 +971,8 @@ void ui_core_runtime_bridge_get_looper_save_diag(ui_core_runtime_bridge_looper_s
     *out_diag = g_looper_save_diag;
 }
 
-static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sync_request_t *request,
-                                                                    uint8_t active_track_touched)
+static void ui_core_runtime_bridge_prepare_restore_transition_request(ui_system_sync_request_t *request,
+                                                                      uint8_t active_track_touched)
 {
     if (request == 0)
     {
@@ -981,6 +981,30 @@ static void ui_core_runtime_bridge_prepare_track_transition_request(ui_system_sy
 
     *request = ui_system_sync_make_request_restore_bulk();
     request->notify_keyboard_after_runtime_sync = active_track_touched;
+}
+
+static void ui_core_runtime_bridge_prepare_track_family_transition_request(ui_system_sync_request_t *request,
+                                                                          uint8_t track,
+                                                                          uint8_t active_track_touched)
+{
+    if (request == 0)
+    {
+        return;
+    }
+
+    *request = ui_system_sync_make_request_track_family_change(track, active_track_touched);
+}
+
+static void ui_core_runtime_bridge_prepare_track_type_transition_request(ui_system_sync_request_t *request,
+                                                                        uint8_t track,
+                                                                        uint8_t active_track_touched)
+{
+    if (request == 0)
+    {
+        return;
+    }
+
+    *request = ui_system_sync_make_request_track_type_change(track, active_track_touched);
 }
 
 static void ui_core_runtime_bridge_init_track_transition_ctx(ui_core_runtime_bridge_track_transition_ctx_t *ctx,
@@ -1043,7 +1067,9 @@ static void ui_core_runtime_bridge_sync_audio_runtime_enables(void)
 
 static void ui_core_runtime_bridge_notify_keyboard_active_track_changed(void)
 {
-    if (param_registry_track_structure_transition_is_active() != 0U)
+    const uint8_t active_track = ui_get_active_track();
+    if ((param_registry_track_structure_transition_is_global_active() != 0U)
+            || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
     {
         return;
     }
@@ -1056,9 +1082,15 @@ static void ui_core_runtime_bridge_invalidate_runtime_all(void)
     track_runtime_invalidate_all();
 }
 
+static void ui_core_runtime_bridge_invalidate_runtime_track(uint8_t track)
+{
+    track_runtime_invalidate_track(track);
+}
+
 static const ui_system_sync_adapter_t g_ui_core_runtime_bridge_system_sync_adapter = {
     .notify_keyboard_active_track_changed = ui_core_runtime_bridge_notify_keyboard_active_track_changed,
     .invalidate_runtime_all = ui_core_runtime_bridge_invalidate_runtime_all,
+    .invalidate_runtime_track = ui_core_runtime_bridge_invalidate_runtime_track,
     .sync_audio_runtime_enables = ui_core_runtime_bridge_sync_audio_runtime_enables
 };
 
@@ -1071,7 +1103,15 @@ static uint8_t ui_core_runtime_bridge_track_transition_ui_sync_apply(void *ctx_p
         return 0U;
     }
 
-    mod_lfo_v1_invalidate_dest_cache_all();
+    if ((ctx->request != 0)
+            && (ctx->request->runtime_track != UI_SYSTEM_SYNC_RUNTIME_TRACK_ALL))
+    {
+        mod_lfo_v1_invalidate_dest_cache_track(ctx->request->runtime_track);
+    }
+    else
+    {
+        mod_lfo_v1_invalidate_dest_cache_all();
+    }
     if (ctx->post_sync != 0)
     {
         ctx->post_sync(ctx->sync_active_track_ui_context);
@@ -1166,7 +1206,8 @@ static uint8_t ui_core_runtime_bridge_track_transition_mutate_bulk_restore(void 
 
 static uint8_t ui_core_runtime_bridge_run_track_transition_pipeline(
     param_registry_track_transition_stage_fn_t mutate_fn,
-    void *ctx_ptr)
+    void *ctx_ptr,
+    uint8_t target_track)
 {
     if ((mutate_fn == 0) || (ctx_ptr == 0))
     {
@@ -1183,7 +1224,7 @@ static uint8_t ui_core_runtime_bridge_run_track_transition_pipeline(
         .ctx = ctx_ptr
     };
 
-    return param_registry_run_track_transition_pipeline(&transition_cmd);
+    return param_registry_run_track_transition_pipeline_for_track(&transition_cmd, target_track);
 }
 
 bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
@@ -1193,7 +1234,7 @@ bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
 {
     ui_system_sync_request_t request;
     ui_core_runtime_bridge_track_transition_ctx_t transition_ctx;
-    ui_core_runtime_bridge_prepare_track_transition_request(&request, active_track_touched);
+    ui_core_runtime_bridge_prepare_track_family_transition_request(&request, track, active_track_touched);
     ui_core_runtime_bridge_init_track_transition_ctx(&transition_ctx,
                                                      &request,
                                                      active_track_touched,
@@ -1203,7 +1244,8 @@ bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
     keyboard_runtime_clear_arp_track(track);
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_family_change_mutate,
-                                                              (void *)&transition_ctx) == 0U)
+                                                             (void *)&transition_ctx,
+                                                             track) == 0U)
     {
         return false;
     }
@@ -1218,7 +1260,7 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
 {
     ui_system_sync_request_t request;
     ui_core_runtime_bridge_track_transition_ctx_t transition_ctx;
-    ui_core_runtime_bridge_prepare_track_transition_request(&request, active_track_touched);
+    ui_core_runtime_bridge_prepare_track_type_transition_request(&request, track, active_track_touched);
     ui_core_runtime_bridge_init_track_transition_ctx(&transition_ctx,
                                                      &request,
                                                      active_track_touched,
@@ -1228,7 +1270,8 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
     keyboard_runtime_clear_arp_track(track);
 
     if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_type_change_mutate,
-                                                              (void *)&transition_ctx) == 0U)
+                                                             (void *)&transition_ctx,
+                                                             track) == 0U)
     {
         return false;
     }
@@ -1244,7 +1287,7 @@ bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TR
 {
     ui_system_sync_request_t request;
     ui_core_runtime_bridge_track_transition_ctx_t transition_ctx;
-    ui_core_runtime_bridge_prepare_track_transition_request(&request, 1U);
+    ui_core_runtime_bridge_prepare_restore_transition_request(&request, 1U);
     ui_core_runtime_bridge_init_bulk_track_transition_ctx(&transition_ctx,
                                                           &request,
                                                           family,
@@ -1253,8 +1296,15 @@ bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TR
                                                           midi_source,
                                                           post_sync);
 
-    if (ui_core_runtime_bridge_run_track_transition_pipeline(ui_core_runtime_bridge_track_transition_mutate_bulk_restore,
-                                                              (void *)&transition_ctx) == 0U)
+    if (param_registry_run_track_transition_pipeline(&(const param_registry_track_transition_pipeline_cmd_t){
+            .prepare_fn = NULL,
+            .mutate_fn = ui_core_runtime_bridge_track_transition_mutate_bulk_restore,
+            .reapply_fn = NULL,
+            .seq_runtime_sync_fn = NULL,
+            .ui_sync_fn = ui_core_runtime_bridge_track_transition_ui_sync_apply,
+            .resume_fn = NULL,
+            .ctx = (void *)&transition_ctx
+        }) == 0U)
     {
         return false;
     }

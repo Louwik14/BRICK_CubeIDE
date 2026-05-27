@@ -129,6 +129,7 @@ Doc :
 - Z3 applique des valeurs en s’appuyant sur Z2
 - En PLAY+REC actif, les edits param track-aware sont redirigés vers Z4 (écriture p-lock live), sans write runtime direct Z3 en parallèle
 - Z4 produit les événements temporels consommés par Z1
+- Z4 et Z5 peuvent notifier Z3 des note/trig runtime via le seam explicite LFO, sans devenir autorité de modulation
 - Z5 pilote Z2, Z3, Z4 et Z6 via l’interaction utilisateur
 - Z6 capture/restaure de l’état qui réimpacte Z2, Z3, Z4 et Z5
 

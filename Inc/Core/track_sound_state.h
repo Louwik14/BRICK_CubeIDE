@@ -13,6 +13,10 @@ typedef struct
     float rate;
     float depth;
     float shape;
+    float delay;
+    float trig;
+    float fade;
+    float phase_slew;
 } track_mod_lfo_state_t;
 
 typedef struct

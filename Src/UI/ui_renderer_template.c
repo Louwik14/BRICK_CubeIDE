@@ -83,6 +83,10 @@ static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 64U, 96U};
 static const uint8_t g_ui_template_footer_w[4] = {32U, 32U, 32U, 32U};
 static const char *const g_ui_template_midi_note_names[12] = {"C", "C#", "D", "D#", "E", "F",
                                                                "F#", "G", "G#", "A", "A#", "B"};
+static const char *const g_ui_template_lfo_sync_labels[15] = {
+    "8BAR", "4BAR", "2BAR", "1BAR", "1/2", "1/2T", "1/4", "1/4T",
+    "1/8", "1/8T", "1/16", "1/16T", "1/32", "1/32T", "1/64"
+};
 
 static void ui_renderer_template_format_semitones(float value, char *out, uint32_t out_len)
 {
@@ -198,6 +202,56 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         {
             return;
         }
+    }
+
+    if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE))
+    {
+        if (value < -0.0001f)
+        {
+            (void)snprintf(out, out_len, "%.2fHz", (double)(-value));
+            return;
+        }
+        if (value > 0.0001f)
+        {
+            uint8_t idx = (uint8_t)(value + 0.5f);
+            if (idx > 0U)
+            {
+                idx--;
+            }
+            if (idx < 15U)
+            {
+                (void)snprintf(out, out_len, "%s", g_ui_template_lfo_sync_labels[idx]);
+                return;
+            }
+        }
+        (void)snprintf(out, out_len, "OFF");
+        return;
+    }
+
+    if ((id == PARAM_LFO1_FADE) || (id == PARAM_LFO2_FADE))
+    {
+        if ((value > -0.0001f) && (value < 0.0001f))
+        {
+            (void)snprintf(out, out_len, "OFF");
+            return;
+        }
+        const char *prefix = (value < 0.0f) ? "IN " : "OUT ";
+        const float seconds = (value < 0.0f) ? -value : value;
+        if (seconds < 1.0f)
+        {
+            (void)snprintf(out, out_len, "%s%lums", prefix, (unsigned long)((seconds * 1000.0f) + 0.5f));
+        }
+        else
+        {
+            (void)snprintf(out, out_len, "%s%.2fs", prefix, (double)seconds);
+        }
+        return;
+    }
+
+    if ((id == PARAM_LFO1_DELAY) || (id == PARAM_LFO2_DELAY))
+    {
+        ui_renderer_template_format_fixed(value, 2U, "s", out, out_len);
+        return;
     }
 
     if ((id == PARAM_SEQ_PLAY_V1_VEL) || (id == PARAM_SEQ_PLAY_V2_VEL) || (id == PARAM_SEQ_PLAY_V3_VEL) || (id == PARAM_SEQ_PLAY_V4_VEL))
@@ -670,6 +724,263 @@ static uint8_t ui_renderer_template_draw_lfo_dest_text(int x, int y, int w, int 
     drv_display_set_font(&FONT_OFF_COMPACT);
     ui_renderer_template_fit_text(label, (uint8_t)((w > 2) ? (w - 2) : w));
     return ui_renderer_template_draw_filter_text(x, y, w, h, label, &FONT_OFF_COMPACT, 4);
+}
+
+static uint8_t ui_renderer_template_lfo_shape_from_value(float value)
+{
+    int32_t shape = (int32_t)(value + 0.5f);
+    if (shape < 0)
+    {
+        shape = 0;
+    }
+    if (shape >= (int32_t)MOD_LFO_SHAPE_COUNT)
+    {
+        shape = (int32_t)MOD_LFO_SHAPE_COUNT - 1;
+    }
+    return (uint8_t)shape;
+}
+
+static int8_t ui_renderer_template_lfo_sine_q7(uint8_t phase, uint8_t positive)
+{
+    static const int8_t sine_q7[17] = {
+        0, 24, 45, 58, 63, 58, 45, 24, 0, -24, -45, -58, -63, -58, -45, -24, 0
+    };
+    const uint8_t segment = (uint8_t)(phase >> 4);
+    const uint8_t frac = (uint8_t)(phase & 0x0FU);
+    const int16_t y0 = sine_q7[segment];
+    const int16_t y1 = sine_q7[segment + 1U];
+    int16_t y = (int16_t)(y0 + (((y1 - y0) * (int16_t)frac) / 16));
+    if (positive != 0U)
+    {
+        y = (int16_t)((y + 63) / 2);
+    }
+    return (int8_t)y;
+}
+
+static int8_t ui_renderer_template_lfo_wave_q7(uint8_t shape, uint8_t x, uint8_t width)
+{
+    static const int8_t rnd_q7[8] = { -36, 22, 52, -12, -56, 4, 40, -24 };
+    const uint16_t denom = (width > 1U) ? (uint16_t)(width - 1U) : 1U;
+    const uint8_t phase = (uint8_t)(((uint16_t)x * 255U) / denom);
+
+    switch ((mod_lfo_shape_t)shape)
+    {
+        case MOD_LFO_SHAPE_SINE:
+            return ui_renderer_template_lfo_sine_q7(phase, 0U);
+        case MOD_LFO_SHAPE_SINE_POS:
+            return ui_renderer_template_lfo_sine_q7(phase, 1U);
+        case MOD_LFO_SHAPE_TRIANGLE:
+            if (phase < 128U)
+            {
+                return (int8_t)(-63 + (((int16_t)phase * 126) / 128));
+            }
+            return (int8_t)(63 - ((((int16_t)phase - 128) * 126) / 127));
+        case MOD_LFO_SHAPE_TRIANGLE_POS:
+            if (phase < 128U)
+            {
+                return (int8_t)(((uint16_t)phase * 63U) / 128U);
+            }
+            return (int8_t)(63U - ((((uint16_t)phase - 128U) * 63U) / 127U));
+        case MOD_LFO_SHAPE_SAW:
+            return (int8_t)(-63 + (((int16_t)phase * 126) / 255));
+        case MOD_LFO_SHAPE_REVERSE_SAW:
+            return (int8_t)(63 - (((int16_t)phase * 126) / 255));
+        case MOD_LFO_SHAPE_SQUARE:
+            return (phase < 128U) ? 63 : -63;
+        case MOD_LFO_SHAPE_SQUARE_POS:
+            return (phase < 128U) ? 63 : 0;
+        case MOD_LFO_SHAPE_RANDOM_SH:
+            return rnd_q7[((uint16_t)x * 8U) / ((width > 0U) ? width : 1U)];
+        default:
+            return 0;
+    }
+}
+
+static uint8_t ui_renderer_template_lfo_shape_is_step(uint8_t shape)
+{
+    return ((shape == (uint8_t)MOD_LFO_SHAPE_SQUARE)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_SQUARE_POS)
+            || (shape == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH)) ? 1U : 0U;
+}
+
+static int ui_renderer_template_lfo_wave_y(int y, int h, int8_t q7)
+{
+    const int mid = y + (h / 2);
+    const int amp = (h > 4) ? ((h - 4) / 2) : 1;
+    return mid - (((int)q7 * amp) / 63);
+}
+
+static void ui_renderer_template_draw_lfo_baseline(int x, int y, int w, int h)
+{
+    const int mid = y + (h / 2);
+    for (int px = x + 1; px < (x + w - 1); px += 2)
+    {
+        drv_display_draw_pixel(px, mid, true);
+    }
+}
+
+static uint8_t ui_renderer_template_draw_lfo_wave_shape(int x, int y, int w, int h, uint8_t shape)
+{
+    if ((w <= 2) || (h <= 2))
+    {
+        return 0U;
+    }
+
+    const uint8_t plot_w = (uint8_t)((w > 2) ? (w - 2) : w);
+    ui_renderer_template_draw_lfo_baseline(x, y, w, h);
+
+    int prev_x = x + 1;
+    int prev_y = ui_renderer_template_lfo_wave_y(y, h, ui_renderer_template_lfo_wave_q7(shape, 0U, plot_w));
+    const uint8_t step_shape = ui_renderer_template_lfo_shape_is_step(shape);
+    for (uint8_t px = 1U; px < plot_w; ++px)
+    {
+        const int xx = x + 1 + (int)px;
+        const int yy = ui_renderer_template_lfo_wave_y(y, h, ui_renderer_template_lfo_wave_q7(shape, px, plot_w));
+        if (step_shape != 0U)
+        {
+            drv_display_draw_line(prev_x, prev_y, xx, prev_y);
+            if (yy != prev_y)
+            {
+                drv_display_draw_line(xx, prev_y, xx, yy);
+            }
+        }
+        else
+        {
+            drv_display_draw_line(prev_x, prev_y, xx, yy);
+        }
+        prev_x = xx;
+        prev_y = yy;
+    }
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_draw_lfo_shape_widget(int x, int y, int w, int h, float value)
+{
+    return ui_renderer_template_draw_lfo_wave_shape(x, y, w, h, ui_renderer_template_lfo_shape_from_value(value));
+}
+
+static uint8_t ui_renderer_template_draw_lfo_phase_slew(int x, int y, int w, int h, param_id_t id, float value)
+{
+    if ((w <= 2) || (h <= 2))
+    {
+        return 0U;
+    }
+
+    const uint8_t lfo = (id == PARAM_LFO1_PHASE_SLEW) ? 0U : 1U;
+    const uint8_t track = ui_get_active_track();
+    float shape_value = 0.0f;
+    (void)mod_lfo_v1_get_track_param(track, lfo, MOD_LFO_PARAM_SHAPE, &shape_value);
+    const uint8_t shape = ui_renderer_template_lfo_shape_from_value(shape_value);
+    const uint8_t plot_w = (uint8_t)((w > 2) ? (w - 2) : w);
+    if (ui_renderer_template_draw_lfo_wave_shape(x, y, w, h, shape) == 0U)
+    {
+        return 0U;
+    }
+
+    if (shape != (uint8_t)MOD_LFO_SHAPE_RANDOM_SH)
+    {
+        const float phase = (value < 0.0f) ? 0.0f : ((value > 360.0f) ? 360.0f : value);
+        const int cursor_x = x + 1 + (int)((phase * (float)(plot_w - 1U)) / 360.0f);
+        drv_display_draw_line(cursor_x, y + 1, cursor_x, y + h - 2);
+    }
+    return 1U;
+}
+
+static void ui_renderer_template_draw_lfo_center_indicator(int x, int y, int w, int h, float value, float max_abs)
+{
+    const int cy = y + (h / 2);
+    const int center = x + (w / 2);
+    const int left_span = (center - x) - 2;
+    const int right_span = (x + w - center) - 2;
+    ui_renderer_template_draw_lfo_baseline(x, y, w, h);
+    drv_display_draw_line(center, y + 2, center, y + h - 3);
+
+    if ((value < -0.0001f) && (left_span > 0))
+    {
+        int len = (int)(((-value) * (float)left_span / max_abs) + 0.5f);
+        if (len > left_span)
+        {
+            len = left_span;
+        }
+        if (len > 0)
+        {
+            drv_display_fill_rect(center - len, cy - 1, len, 3);
+        }
+    }
+    else if ((value > 0.0001f) && (right_span > 0))
+    {
+        int len = (int)(((value * (float)right_span) / max_abs) + 0.5f);
+        if (len > right_span)
+        {
+            len = right_span;
+        }
+        if (len > 0)
+        {
+            drv_display_fill_rect(center + 1, cy - 1, len, 3);
+        }
+    }
+}
+
+static void ui_renderer_template_draw_lfo_unipolar_bar(int x, int y, int w, int h, float value, float min_value, float max_value)
+{
+    const int bx = x + 3;
+    const int by = y + (h / 2) - 3;
+    const int bw = (w > 8) ? (w - 6) : w;
+    const int bh = 7;
+    float norm = 0.0f;
+    if (max_value > min_value)
+    {
+        norm = (value - min_value) / (max_value - min_value);
+    }
+    if (norm < 0.0f)
+    {
+        norm = 0.0f;
+    }
+    if (norm > 1.0f)
+    {
+        norm = 1.0f;
+    }
+
+    drv_display_draw_rect(bx, by, bw, bh);
+    const int fill_w = (int)((norm * (float)(bw - 2)) + 0.5f);
+    if (fill_w > 0)
+    {
+        drv_display_fill_rect(bx + 1, by + 1, fill_w, bh - 2);
+    }
+}
+
+static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_widget_kind_t kind,
+                                                           int x,
+                                                           int y,
+                                                           int w,
+                                                           int h,
+                                                           param_id_t id,
+                                                           float value)
+{
+    switch (kind)
+    {
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE:
+        {
+            const float max_abs = (value > 0.0001f) ? 15.0f : 12.0f;
+            ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, max_abs);
+            return 1U;
+        }
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH:
+            ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 127.0f);
+            return 1U;
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE:
+            return ui_renderer_template_draw_lfo_shape_widget(x, y, w, h, value);
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DELAY:
+            ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 10.0f);
+            return 1U;
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_FADE:
+            ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, 10.0f);
+            return 1U;
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE_SLEW:
+            return ui_renderer_template_draw_lfo_phase_slew(x, y, w, h, id, value);
+        default:
+            return 0U;
+    }
 }
 
 static uint8_t ui_renderer_template_draw_play_note_text(param_id_t id, int x, int y, int w, int h, float value)
@@ -2595,6 +2906,20 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         {
             drv_display_set_draw_color(0U);
         }
+        if (ui_renderer_template_draw_lfo_custom_widget(custom_widget,
+                                                        widget_x,
+                                                        widget_y,
+                                                        UI_TEMPLATE_CARD_WIDGET_W,
+                                                        UI_TEMPLATE_CARD_WIDGET_H,
+                                                        id,
+                                                        value) != 0U)
+        {
+            if (slot_locked != 0U)
+            {
+                drv_display_set_draw_color(0U);
+            }
+            goto draw_bottom_label;
+        }
         if ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE)
                 ? (ui_renderer_template_draw_play_note_text(id,
                                                             widget_x,
@@ -2608,6 +2933,13 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                            UI_TEMPLATE_CARD_WIDGET_W,
                                                            UI_TEMPLATE_CARD_WIDGET_H,
                                                            value) != 0U)
+                : ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE_SLEW)
+                ? (ui_renderer_template_draw_lfo_phase_slew(widget_x,
+                                                            widget_y,
+                                                            UI_TEMPLATE_CARD_WIDGET_W,
+                                                            UI_TEMPLATE_CARD_WIDGET_H,
+                                                            id,
+                                                            value) != 0U)
                 : (((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
                     || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE)
                     || (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE)
@@ -2637,7 +2969,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                          widget_x,
                                                          widget_y,
                                                          UI_TEMPLATE_CARD_WIDGET_W,
-                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U)))))
+                                                         UI_TEMPLATE_CARD_WIDGET_H) != 0U))))))
         {
             if (slot_locked != 0U)
             {

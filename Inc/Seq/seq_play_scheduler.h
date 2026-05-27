@@ -42,6 +42,10 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                       uint32_t step_tick,
                                       uint64_t step_sample_time,
                                       uint32_t samples_per_step_q16);
+void seq_play_scheduler_schedule_step_lookahead_negative(seq_track_id_t track,
+                                                         seq_step_id_t step,
+                                                         uint64_t step_sample_time,
+                                                         uint32_t samples_per_step_q16);
 /*
  * Contract surface:
  * - audio-block projection of the scheduler queue.

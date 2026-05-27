@@ -8,6 +8,7 @@
 #include "Core/track_state.h"
 #include "Param/param_registry_backends.h"
 #include "UI/ui_track_catalog.h"
+#include "stm32h7xx_hal.h"
 
 #define TRACK_RUNTIME_FLAG_CAN_FILTER  (1U << 0)
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
@@ -23,6 +24,10 @@ static volatile uint8_t g_track_runtime_track_dirty[SEQ_TRACK_COUNT];
 static uint32_t g_track_runtime_revision = 0U;
 static uint32_t g_track_runtime_track_revision[SEQ_TRACK_COUNT];
 static track_runtime_synth_usage_t g_track_runtime_synth_usage;
+volatile uint32_t g_track_runtime_refresh_all_count;
+volatile uint32_t g_track_runtime_refresh_in_irq_count;
+volatile uint32_t g_track_runtime_refresh_track_count[SEQ_TRACK_COUNT];
+volatile uint32_t g_track_runtime_braids_reset_count[BRICK6_BRAIDS_MAX_INSTANCES];
 
 typedef struct
 {
@@ -748,6 +753,110 @@ static void track_runtime_bind_ctx(track_runtime_ctx_t *ctx,
     track_runtime_set_unbound(ctx, TRACK_RUNTIME_BIND_REASON_UNSUPPORTED);
 }
 
+static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *ctx)
+{
+    if ((ctx == NULL) || (track >= SEQ_TRACK_COUNT))
+    {
+        return;
+    }
+
+    const ui_track_config_t config = track_state_get_config(track);
+    const ui_track_family_t ui_family = config.family;
+    const ui_track_type_t ui_type = config.type;
+    const track_runtime_family_t family = track_runtime_family_from_ui(ui_family);
+    const track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
+
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->track_id = track;
+    ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
+    ctx->midi_channel_1_16 = track_state_get_midi_channel(track);
+    ctx->midi_source = (uint8_t)track_state_get_midi_source(track);
+    ctx->family = (uint8_t)family;
+    ctx->type = (uint8_t)type;
+    ctx->flags = track_runtime_compute_flags(family, type);
+    ctx->engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
+    ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
+    ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
+    ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
+
+    uint8_t input_mix_track = TRACK_RUNTIME_MIX_TRACK_NONE;
+    if (track_runtime_input_family_mix_track(family, ui_family, &input_mix_track) != 0U)
+    {
+        if (input_mix_track < TRACK_RUNTIME_MIX_TRACK_COUNT)
+        {
+            ctx->mix_track_id = input_mix_track;
+        }
+    }
+}
+
+static void track_runtime_mark_used_mix_tracks_except(uint8_t except_track,
+                                                      uint8_t *mix_track_used,
+                                                      uint8_t used_len)
+{
+    if (mix_track_used == NULL)
+    {
+        return;
+    }
+
+    memset(mix_track_used, 0, used_len);
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (track == except_track)
+        {
+            continue;
+        }
+
+        const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        if (ctx->mix_track_id < used_len)
+        {
+            mix_track_used[ctx->mix_track_id] = 1U;
+        }
+    }
+}
+
+static void track_runtime_recompute_synth_usage(void)
+{
+    uint8_t drum_count = 0U;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
+        {
+            drum_count++;
+        }
+    }
+
+    g_track_runtime_synth_usage.drum_tracks = drum_count;
+}
+
+static void track_runtime_reset_wave_if_owner_changed(uint8_t previous_engine,
+                                                      uint8_t previous_instance,
+                                                      const track_runtime_ctx_t *current_ctx)
+{
+    const uint8_t current_is_wave = ((current_ctx != NULL)
+            && (current_ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            && (current_ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            && (current_ctx->instance_id < BRICK6_BRAIDS_MAX_INSTANCES)) ? 1U : 0U;
+    const uint8_t previous_is_wave = ((previous_engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            && (previous_instance < BRICK6_BRAIDS_MAX_INSTANCES)) ? 1U : 0U;
+
+    if ((previous_is_wave != 0U)
+            && ((current_is_wave == 0U) || (current_ctx->instance_id != previous_instance)))
+    {
+        brick6_braids_runtime_reset_instance(previous_instance);
+        g_track_runtime_braids_reset_count[previous_instance]++;
+    }
+
+    if ((current_is_wave != 0U)
+            && ((previous_is_wave == 0U) || (previous_instance != current_ctx->instance_id)))
+    {
+        brick6_braids_runtime_reset_instance(current_ctx->instance_id);
+        g_track_runtime_braids_reset_count[current_ctx->instance_id]++;
+        (void)param_backend_reapply_tone_wave_runtime(current_ctx->track_id);
+    }
+}
+
 void track_runtime_init(void)
 {
     memset(&g_track_runtime_ctx, 0, sizeof(g_track_runtime_ctx));
@@ -764,14 +873,25 @@ void track_runtime_invalidate_all(void)
 
 void track_runtime_invalidate_track(uint8_t track)
 {
-    (void)track;
-    track_runtime_invalidate_all();
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    g_track_runtime_track_dirty[track] = 1U;
 }
 
 uint8_t track_runtime_refresh_if_dirty(void)
 {
+    const uint8_t in_irq = (__get_IPSR() != 0U) ? 1U : 0U;
+
     if (g_track_runtime_global_dirty != 0U)
     {
+        if (in_irq != 0U)
+        {
+            g_track_runtime_refresh_in_irq_count++;
+            return 0U;
+        }
         track_runtime_refresh_all();
         return 1U;
     }
@@ -780,7 +900,12 @@ uint8_t track_runtime_refresh_if_dirty(void)
     {
         if (g_track_runtime_track_dirty[track] != 0U)
         {
-            track_runtime_refresh_all();
+            if (in_irq != 0U)
+            {
+                g_track_runtime_refresh_in_irq_count++;
+                return 0U;
+            }
+            track_runtime_refresh_track(track);
             return 1U;
         }
     }
@@ -797,6 +922,7 @@ void track_runtime_refresh_all(void)
     uint8_t previous_wave_owner[BRICK6_BRAIDS_MAX_INSTANCES];
     uint8_t current_wave_owner[BRICK6_BRAIDS_MAX_INSTANCES];
 
+    g_track_runtime_refresh_all_count++;
     memset(mix_track_used, 0, sizeof(mix_track_used));
     for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_MAX_INSTANCES; ++instance)
     {
@@ -817,33 +943,7 @@ void track_runtime_refresh_all(void)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
-        const ui_track_config_t config = track_state_get_config(track);
-        const ui_track_family_t ui_family = config.family;
-        const ui_track_type_t ui_type = config.type;
-
-        const track_runtime_family_t family = track_runtime_family_from_ui(ui_family);
-        const track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
-
-        ctx->track_id = track;
-        ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
-        ctx->midi_channel_1_16 = track_state_get_midi_channel(track);
-        ctx->midi_source = (uint8_t)track_state_get_midi_source(track);
-        ctx->family = (uint8_t)family;
-        ctx->type = (uint8_t)type;
-        ctx->flags = track_runtime_compute_flags(family, type);
-        ctx->engine = (uint8_t)TRACK_RUNTIME_ENGINE_NONE;
-        ctx->instance_id = TRACK_RUNTIME_INSTANCE_NONE;
-        ctx->bind_state = TRACK_RUNTIME_BIND_UNBOUND;
-        ctx->bind_reason = TRACK_RUNTIME_BIND_REASON_NONE;
-
-        uint8_t input_mix_track = TRACK_RUNTIME_MIX_TRACK_NONE;
-        if (track_runtime_input_family_mix_track(family, ui_family, &input_mix_track) != 0U)
-        {
-            if (input_mix_track < TRACK_RUNTIME_MIX_TRACK_COUNT)
-            {
-                ctx->mix_track_id = input_mix_track;
-            }
-        }
+        track_runtime_prepare_ctx_base(track, ctx);
     }
 
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -910,6 +1010,7 @@ void track_runtime_refresh_all(void)
         if (previous_wave_owner[instance] != current_wave_owner[instance])
         {
             brick6_braids_runtime_reset_instance(instance);
+            g_track_runtime_braids_reset_count[instance]++;
             if (current_wave_owner[instance] < SEQ_TRACK_COUNT)
             {
                 (void)param_backend_reapply_tone_wave_runtime(current_wave_owner[instance]);
@@ -955,10 +1056,55 @@ void track_runtime_refresh_track(uint8_t track)
         return;
     }
 
-    if ((g_track_runtime_global_dirty != 0U) || (g_track_runtime_track_dirty[track] != 0U))
+    if (g_track_runtime_global_dirty != 0U)
     {
-        /* Quotas remain global for now, so a dirty refresh still performs a full pass. */
+        if (__get_IPSR() != 0U)
+        {
+            g_track_runtime_refresh_in_irq_count++;
+            return;
+        }
         track_runtime_refresh_all();
+        return;
+    }
+
+    if (g_track_runtime_track_dirty[track] != 0U)
+    {
+        track_runtime_allocator_state_t allocator = { 0U };
+        uint8_t mix_track_used[TRACK_RUNTIME_MIX_TRACK_COUNT];
+        const uint8_t previous_engine = g_track_runtime_ctx[track].engine;
+        const uint8_t previous_instance = g_track_runtime_ctx[track].instance_id;
+        const uint8_t previous_mix_track = g_track_runtime_ctx[track].mix_track_id;
+        track_runtime_ctx_t next_ctx;
+
+        g_track_runtime_refresh_track_count[track]++;
+        track_runtime_prepare_ctx_base(track, &next_ctx);
+        track_runtime_mark_used_mix_tracks_except(track,
+                                                  mix_track_used,
+                                                  (uint8_t)sizeof(mix_track_used));
+
+        if (((track_runtime_family_t)next_ctx.family != TRACK_RUNTIME_FAMILY_MIDI)
+                && ((track_runtime_family_t)next_ctx.family != TRACK_RUNTIME_FAMILY_OFF)
+                && (next_ctx.mix_track_id == TRACK_RUNTIME_MIX_TRACK_NONE))
+        {
+            if (track_runtime_mix_try_reserve_exact(&next_ctx,
+                                                    previous_mix_track,
+                                                    mix_track_used,
+                                                    (uint8_t)sizeof(mix_track_used)) == 0U)
+            {
+                (void)track_runtime_mix_reserve_track(&next_ctx,
+                                                      track,
+                                                      mix_track_used,
+                                                      (uint8_t)sizeof(mix_track_used));
+            }
+        }
+
+        track_runtime_bind_ctx(&next_ctx, &allocator);
+        g_track_runtime_ctx[track] = next_ctx;
+        track_runtime_reset_wave_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
+        track_runtime_recompute_synth_usage();
+        g_track_runtime_track_dirty[track] = 0U;
+        ++g_track_runtime_revision;
+        g_track_runtime_track_revision[track] = g_track_runtime_revision;
     }
 }
 
@@ -1340,10 +1486,18 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_LFO1_RATE:
         case PARAM_LFO1_DEPTH:
         case PARAM_LFO1_SHAPE:
+        case PARAM_LFO1_DELAY:
+        case PARAM_LFO1_TRIG:
+        case PARAM_LFO1_FADE:
+        case PARAM_LFO1_PHASE_SLEW:
         case PARAM_LFO2_DEST:
         case PARAM_LFO2_RATE:
         case PARAM_LFO2_DEPTH:
         case PARAM_LFO2_SHAPE:
+        case PARAM_LFO2_DELAY:
+        case PARAM_LFO2_TRIG:
+        case PARAM_LFO2_FADE:
+        case PARAM_LFO2_PHASE_SLEW:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_MOD;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             return rule;

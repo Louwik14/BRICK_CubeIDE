@@ -19,7 +19,7 @@
 #include "ui_core.h"
 
 #define MOD_LFO_COUNT_PER_TRACK 2U
-#define MOD_LFO_RATE_STEP_COUNT 15U
+#define MOD_LFO_SYNC_RATE_COUNT 15U
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
 #define MOD_LFO_LEGACY_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))
@@ -36,11 +36,17 @@
 #endif
 #define MOD_LFO_DEST_NONE ((param_id_t)PARAM_COUNT)
 #define MOD_LFO_SINE_LUT_SIZE 256U
+#define MOD_LFO_RATE_OFF_EPS 0.0001f
 
-/* Musical rate table: bars per cycle (4/4), bounded to 1/128. */
-static const float g_mod_lfo_rate_bars_per_cycle[MOD_LFO_RATE_STEP_COUNT] = {
-    128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f,
-    0.5f, 0.25f, 0.125f, 0.0625f, 0.03125f, 0.015625f, 0.0078125f
+/* Positive RATE values index this tempo-sync table: 1=8BAR ... 15=1/64. */
+static const float g_mod_lfo_sync_bars_per_cycle[MOD_LFO_SYNC_RATE_COUNT] = {
+    8.0f, 4.0f, 2.0f, 1.0f,
+    0.5f, 0.33333334f,
+    0.25f, 0.16666667f,
+    0.125f, 0.08333334f,
+    0.0625f, 0.04166667f,
+    0.03125f, 0.020833334f,
+    0.015625f
 };
 
 static const float g_mod_lfo_sine_lut[MOD_LFO_SINE_LUT_SIZE + 1U] = {
@@ -51,10 +57,21 @@ typedef struct
 {
     uint32_t phase;
     uint32_t phase_inc;
+    uint32_t delay_remaining_frames;
+    uint32_t fade_elapsed_frames;
     float current;
+    float hold_value;
+    float slew_value;
     uint32_t rng_state;
     float sh_value;
     uint8_t sh_valid;
+    uint8_t triggered;
+    uint8_t one_running;
+    uint8_t one_done;
+    uint8_t hold_valid;
+    uint8_t hold_capture_pending;
+    uint8_t slew_valid;
+    uint8_t active;
     uint16_t last_dest;
     float base_value;
     float dest_min;
@@ -89,6 +106,8 @@ typedef struct
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 static mod_lfo_dest_cache_t g_mod_lfo_dest_cache[SEQ_TRACK_COUNT];
 static mod_lfo_midi_cc_cache_t g_mod_lfo_midi_cc_cache[SEQ_TRACK_COUNT][12U];
+volatile uint32_t g_mod_lfo_dest_cache_invalidate_all_count;
+volatile uint32_t g_mod_lfo_dest_cache_invalidate_track_count[SEQ_TRACK_COUNT];
 static uint32_t g_mod_lfo_control_counter = 0U;
 
 static float mod_lfo_clampf(float v, float lo, float hi)
@@ -774,6 +793,14 @@ static float mod_lfo_effective_field(const mod_lfo_runtime_state_t *rt,
             return source->depth;
         case MOD_LFO_PARAM_SHAPE:
             return source->shape;
+        case MOD_LFO_PARAM_DELAY:
+            return source->delay;
+        case MOD_LFO_PARAM_TRIG:
+            return source->trig;
+        case MOD_LFO_PARAM_FADE:
+            return source->fade;
+        case MOD_LFO_PARAM_PHASE_SLEW:
+            return source->phase_slew;
         default:
             return 0.0f;
     }
@@ -801,10 +828,18 @@ static uint8_t mod_lfo_is_internal_param(param_id_t id)
         case PARAM_LFO1_RATE:
         case PARAM_LFO1_DEPTH:
         case PARAM_LFO1_SHAPE:
+        case PARAM_LFO1_DELAY:
+        case PARAM_LFO1_TRIG:
+        case PARAM_LFO1_FADE:
+        case PARAM_LFO1_PHASE_SLEW:
         case PARAM_LFO2_DEST:
         case PARAM_LFO2_RATE:
         case PARAM_LFO2_DEPTH:
         case PARAM_LFO2_SHAPE:
+        case PARAM_LFO2_DELAY:
+        case PARAM_LFO2_TRIG:
+        case PARAM_LFO2_FADE:
+        case PARAM_LFO2_PHASE_SLEW:
             return 1U;
         default:
             return 0U;
@@ -987,10 +1022,15 @@ static void mod_lfo_dest_cache_invalidate_track_internal(uint8_t track)
 void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track)
 {
     mod_lfo_dest_cache_invalidate_track_internal(track);
+    if (track < SEQ_TRACK_COUNT)
+    {
+        g_mod_lfo_dest_cache_invalidate_track_count[track]++;
+    }
 }
 
 void mod_lfo_v1_invalidate_dest_cache_all(void)
 {
+    g_mod_lfo_dest_cache_invalidate_all_count++;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         mod_lfo_dest_cache_invalidate_track_internal(track);
@@ -1113,13 +1153,13 @@ static uint16_t mod_lfo_dest_to_index(uint8_t track, param_id_t dest)
     return cache->param_to_index[(uint16_t)dest];
 }
 
-static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(uint8_t rate_index, uint32_t bpm_milli)
+static uint32_t mod_lfo_phase_inc_from_hz(float hz)
 {
-    const uint8_t idx = (rate_index < MOD_LFO_RATE_STEP_COUNT) ? rate_index : (MOD_LFO_RATE_STEP_COUNT - 1U);
-    const float bpm = (float)bpm_milli * 0.001f;
-    const float bars_per_cycle = g_mod_lfo_rate_bars_per_cycle[idx];
-    const float seconds_per_cycle = bars_per_cycle * (240.0f / mod_lfo_clampf(bpm, 40.0f, 300.0f));
-    const float hz = 1.0f / mod_lfo_clampf(seconds_per_cycle, 0.0005f, 60.0f);
+    hz = mod_lfo_clampf(hz, 0.0f, 12000.0f);
+    if (hz <= MOD_LFO_RATE_OFF_EPS)
+    {
+        return 0U;
+    }
     const double phase_f = (double)hz * (4294967296.0 * (double)MOD_LFO_PHASE_DT);
     if (phase_f <= 1.0)
     {
@@ -1132,9 +1172,92 @@ static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(uint8_t rate_index, uint32_
     return (uint32_t)(phase_f + 0.5);
 }
 
-static uint32_t mod_lfo_phase_inc_from_rate(uint8_t rate_index)
+static float mod_lfo_quantize_sync_rate(float rate)
 {
-    return mod_lfo_phase_inc_from_rate_with_bpm(rate_index, seq_runtime_get_tempo_bpm_milli());
+    if (rate <= MOD_LFO_RATE_OFF_EPS)
+    {
+        return rate;
+    }
+
+    uint8_t sync = (uint8_t)(rate + 0.5f);
+    if (sync == 0U)
+    {
+        sync = 1U;
+    }
+    if (sync > MOD_LFO_SYNC_RATE_COUNT)
+    {
+        sync = MOD_LFO_SYNC_RATE_COUNT;
+    }
+    return (float)sync;
+}
+
+static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(float rate, uint32_t bpm_milli)
+{
+    if (rate < -MOD_LFO_RATE_OFF_EPS)
+    {
+        return mod_lfo_phase_inc_from_hz(-rate);
+    }
+    if (rate > MOD_LFO_RATE_OFF_EPS)
+    {
+        uint8_t idx = (uint8_t)mod_lfo_quantize_sync_rate(rate);
+        idx--;
+        if (idx >= MOD_LFO_SYNC_RATE_COUNT)
+        {
+            idx = MOD_LFO_SYNC_RATE_COUNT - 1U;
+        }
+        const float bpm = (float)bpm_milli * 0.001f;
+        const float bars_per_cycle = g_mod_lfo_sync_bars_per_cycle[idx];
+        const float seconds_per_cycle = bars_per_cycle * (240.0f / mod_lfo_clampf(bpm, 40.0f, 300.0f));
+        return mod_lfo_phase_inc_from_hz(1.0f / mod_lfo_clampf(seconds_per_cycle, 0.0005f, 60.0f));
+    }
+    return 0U;
+}
+
+static uint32_t mod_lfo_phase_inc_from_rate(float rate)
+{
+    return mod_lfo_phase_inc_from_rate_with_bpm(rate, seq_runtime_get_tempo_bpm_milli());
+}
+
+static uint32_t mod_lfo_seconds_to_frames(float seconds)
+{
+    if (seconds <= 0.0f)
+    {
+        return 0U;
+    }
+    if (seconds > 60.0f)
+    {
+        seconds = 60.0f;
+    }
+    return (uint32_t)((seconds * MOD_LFO_AUDIO_SAMPLE_RATE) + 0.5f);
+}
+
+static uint32_t mod_lfo_phase_from_degrees(float degrees)
+{
+    degrees = mod_lfo_clampf(degrees, 0.0f, 360.0f);
+    if (degrees >= 360.0f)
+    {
+        return 0U;
+    }
+    return (uint32_t)(((double)degrees / 360.0) * 4294967296.0);
+}
+
+static void mod_lfo_start_phase(mod_lfo_runtime_state_t *rt, mod_lfo_shape_t shape, float phase_slew)
+{
+    if (rt == NULL)
+    {
+        return;
+    }
+
+    if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+    {
+        rt->phase = 0U;
+        rt->sh_valid = 0U;
+    }
+    else
+    {
+        rt->phase = mod_lfo_phase_from_degrees(phase_slew);
+    }
+    rt->slew_valid = 0U;
 }
 
 static uint32_t mod_lfo_xorshift32(uint32_t x)
@@ -1158,29 +1281,48 @@ static float mod_lfo_sh_next_value(uint32_t *state)
     return (ua + ub) - 1.0f;
 }
 
+static uint8_t mod_lfo_shape_is_positive(mod_lfo_shape_t shape)
+{
+    return ((shape == MOD_LFO_SHAPE_SINE_POS)
+            || (shape == MOD_LFO_SHAPE_TRIANGLE_POS)
+            || (shape == MOD_LFO_SHAPE_SQUARE_POS)) ? 1U : 0U;
+}
+
 static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime_state_t *state)
 {
     switch (shape)
     {
         case MOD_LFO_SHAPE_SINE:
+        case MOD_LFO_SHAPE_SINE_POS:
         {
             const uint32_t lut_pos = phase >> 24;
             const uint32_t frac = (phase >> 8) & 0xFFFFU;
             const float y0 = g_mod_lfo_sine_lut[lut_pos];
             const float y1 = g_mod_lfo_sine_lut[lut_pos + 1U];
-            return y0 + (y1 - y0) * ((float)frac * (1.0f / 65535.0f));
+            const float y = y0 + (y1 - y0) * ((float)frac * (1.0f / 65535.0f));
+            return (shape == MOD_LFO_SHAPE_SINE_POS) ? ((y + 1.0f) * 0.5f) : y;
         }
 
         case MOD_LFO_SHAPE_TRIANGLE:
+        case MOD_LFO_SHAPE_TRIANGLE_POS:
         {
             const float p = (float)phase * (1.0f / 4294967296.0f);
-            return 1.0f - 4.0f * fabsf(p - 0.5f);
+            const float y = 1.0f - 4.0f * fabsf(p - 0.5f);
+            return (shape == MOD_LFO_SHAPE_TRIANGLE_POS) ? ((y + 1.0f) * 0.5f) : y;
         }
 
         case MOD_LFO_SHAPE_SAW:
             return ((float)phase * (2.0f / 4294967296.0f)) - 1.0f;
 
+        case MOD_LFO_SHAPE_REVERSE_SAW:
+            return 1.0f - ((float)phase * (2.0f / 4294967296.0f));
+
         case MOD_LFO_SHAPE_SQUARE:
+        case MOD_LFO_SHAPE_SQUARE_POS:
+            if (shape == MOD_LFO_SHAPE_SQUARE_POS)
+            {
+                return (phase < 0x80000000U) ? 1.0f : 0.0f;
+            }
             return (phase < 0x80000000U) ? 1.0f : -1.0f;
 
         case MOD_LFO_SHAPE_RANDOM_SH:
@@ -1189,6 +1331,24 @@ static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime
         default:
             return 0.0f;
     }
+}
+
+static void mod_lfo_capture_hold_value(mod_lfo_runtime_state_t *rt, mod_lfo_shape_t shape)
+{
+    if (rt == NULL)
+    {
+        return;
+    }
+
+    if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+    {
+        rt->sh_value = mod_lfo_sh_next_value(&rt->rng_state);
+        rt->sh_valid = 1U;
+    }
+
+    rt->hold_value = mod_lfo_wave(shape, rt->phase, rt);
+    rt->hold_valid = 1U;
+    rt->hold_capture_pending = 0U;
 }
 
 static uint8_t mod_lfo_is_effectively_active(uint8_t track,
@@ -1204,7 +1364,8 @@ static uint8_t mod_lfo_is_effectively_active(uint8_t track,
 
     const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
     const param_id_t dest = mod_lfo_track_settings_dest(track, lfo_index);
-    if ((s == NULL) || (dest == MOD_LFO_DEST_NONE) || (s->depth == 0.0f))
+    if ((s == NULL) || (dest == MOD_LFO_DEST_NONE) || (s->depth == 0.0f)
+            || (mod_lfo_phase_inc_from_rate(s->rate) == 0U))
     {
         return 0U;
     }
@@ -1267,7 +1428,7 @@ static void mod_lfo_release_last_destination(uint8_t track,
 
 static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 {
-    if (param_registry_track_structure_transition_is_active() != 0U)
+    if (param_registry_track_structure_transition_is_global_active() != 0U)
     {
         return;
     }
@@ -1275,6 +1436,11 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
     const uint32_t bpm_milli = seq_runtime_get_tempo_bpm_milli();
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        if (param_registry_track_structure_transition_is_track_active(track) != 0U)
+        {
+            continue;
+        }
+
         track_runtime_refresh_track(track);
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         const ui_track_family_t family = ui_get_track_family(track);
@@ -1301,6 +1467,8 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
             if ((dest == MOD_LFO_DEST_NONE) || (depth == 0.0f)
                     || (mod_lfo_dest_supported_fast(track, dest, family, type, ctx) == 0U))
             {
+                rt->active = 0U;
+                rt->hold_capture_pending = 0U;
                 mod_lfo_release_last_destination(track, lfo, family, type, ctx);
                 continue;
             }
@@ -1318,12 +1486,70 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
 
             const float rate = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_RATE);
             const float shape = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_SHAPE);
+            const float trig_f = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG);
+            const float fade = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_FADE);
+            const float phase_slew = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_PHASE_SLEW);
+            const float delay = mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_DELAY);
+            const mod_lfo_shape_t shape_id = (mod_lfo_shape_t)((uint8_t)(shape + 0.5f));
+            const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)(trig_f + 0.5f));
 
-            rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm((uint8_t)(rate + 0.5f), bpm_milli);
+            rt->phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(rate, bpm_milli);
+            if (rt->phase_inc == 0U)
+            {
+                rt->active = 0U;
+                rt->hold_capture_pending = 0U;
+                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                continue;
+            }
+
+            if (rt->active == 0U)
+            {
+                rt->active = 1U;
+                rt->delay_remaining_frames = mod_lfo_seconds_to_frames(delay);
+                rt->fade_elapsed_frames = 0U;
+                rt->one_done = 0U;
+                rt->one_running = (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U;
+                rt->hold_capture_pending = 0U;
+                mod_lfo_start_phase(rt, shape_id, phase_slew);
+                if (trig == MOD_LFO_TRIG_HOLD)
+                {
+                    if (rt->delay_remaining_frames > 0U)
+                    {
+                        rt->hold_capture_pending = 1U;
+                    }
+                    else
+                    {
+                        mod_lfo_capture_hold_value(rt, shape_id);
+                    }
+                }
+            }
+
+            if ((trig == MOD_LFO_TRIG_ONE) && (rt->one_done != 0U))
+            {
+                mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                continue;
+            }
+
+            if (rt->delay_remaining_frames > 0U)
+            {
+                if (rt->delay_remaining_frames > elapsed_frames)
+                {
+                    rt->delay_remaining_frames -= elapsed_frames;
+                    mod_lfo_release_last_destination(track, lfo, family, type, ctx);
+                    continue;
+                }
+                rt->delay_remaining_frames = 0U;
+                rt->fade_elapsed_frames = 0U;
+                if ((trig == MOD_LFO_TRIG_HOLD) && (rt->hold_capture_pending != 0U))
+                {
+                    mod_lfo_capture_hold_value(rt, shape_id);
+                }
+            }
+
             const uint32_t phase_prev = rt->phase;
             rt->phase += (uint32_t)(((uint64_t)rt->phase_inc) * (uint64_t)elapsed_frames);
 
-            if ((mod_lfo_shape_t)((uint8_t)(shape + 0.5f)) == MOD_LFO_SHAPE_RANDOM_SH)
+            if (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
             {
                 if ((rt->sh_valid == 0U) || (rt->phase < phase_prev))
                 {
@@ -1332,7 +1558,36 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 }
             }
 
-            rt->current = mod_lfo_wave((mod_lfo_shape_t)((uint8_t)(shape + 0.5f)), phase_prev, rt);
+            if ((trig == MOD_LFO_TRIG_ONE) && (rt->phase < phase_prev))
+            {
+                rt->one_done = 1U;
+            }
+
+            if ((trig == MOD_LFO_TRIG_HOLD) && (rt->hold_valid != 0U))
+            {
+                rt->current = rt->hold_value;
+            }
+            else
+            {
+                rt->current = mod_lfo_wave(shape_id, phase_prev, rt);
+            }
+
+            if (shape_id == MOD_LFO_SHAPE_RANDOM_SH)
+            {
+                const float slew_norm = mod_lfo_clampf(phase_slew / 360.0f, 0.0f, 1.0f);
+                const float coeff = 1.0f - (slew_norm * 0.95f);
+                if (rt->slew_valid == 0U)
+                {
+                    rt->slew_value = rt->current;
+                    rt->slew_valid = 1U;
+                }
+                else
+                {
+                    rt->slew_value += (rt->current - rt->slew_value) * coeff;
+                }
+                rt->current = rt->slew_value;
+            }
+
             if ((rt->calib_valid == 0U) || (rt->last_dest != (uint16_t)(dest + 0.5f)))
             {
                 const param_desc_t *const desc = &param_registry[dest];
@@ -1340,7 +1595,19 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames)
                 rt->dest_max = desc->max;
                 rt->calib_valid = 1U;
             }
-            rt->depth_scale = (depth / 127.0f) * (rt->dest_max - rt->dest_min);
+            float amp = 1.0f;
+            const uint32_t fade_frames = mod_lfo_seconds_to_frames(fabsf(fade));
+            if (fade_frames > 0U)
+            {
+                rt->fade_elapsed_frames += elapsed_frames;
+                if (rt->fade_elapsed_frames > fade_frames)
+                {
+                    rt->fade_elapsed_frames = fade_frames;
+                }
+                const float pos = (float)rt->fade_elapsed_frames / (float)fade_frames;
+                amp = (fade < 0.0f) ? pos : (1.0f - pos);
+            }
+            rt->depth_scale = (depth / 127.0f) * (rt->dest_max - rt->dest_min) * amp;
             const float modulated = mod_lfo_clampf(rt->base_value + (rt->current * rt->depth_scale), rt->dest_min, rt->dest_max);
             (void)mod_lfo_apply_destination_rt(track, dest, ctx, modulated);
         }
@@ -1360,10 +1627,21 @@ void mod_lfo_v1_init(void)
         {
             g_mod_lfo_runtime[track][lfo].phase = 0U;
             g_mod_lfo_runtime[track][lfo].phase_inc = 1U;
+            g_mod_lfo_runtime[track][lfo].delay_remaining_frames = 0U;
+            g_mod_lfo_runtime[track][lfo].fade_elapsed_frames = 0U;
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
+            g_mod_lfo_runtime[track][lfo].hold_value = 0.0f;
+            g_mod_lfo_runtime[track][lfo].slew_value = 0.0f;
             g_mod_lfo_runtime[track][lfo].rng_state = 0xA341316CU ^ ((uint32_t)track << 8) ^ (uint32_t)lfo;
             g_mod_lfo_runtime[track][lfo].sh_value = 0.0f;
             g_mod_lfo_runtime[track][lfo].sh_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].triggered = 0U;
+            g_mod_lfo_runtime[track][lfo].one_running = 0U;
+            g_mod_lfo_runtime[track][lfo].one_done = 0U;
+            g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
+            g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].active = 0U;
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].base_value = 0.0f;
@@ -1390,11 +1668,20 @@ void mod_lfo_v1_reset_runtime(void)
             g_mod_lfo_runtime[track][lfo].phase = 0U;
             {
                 const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
-                const uint8_t rate = (s != NULL) ? (uint8_t)(s->rate + 0.5f) : 7U;
+                const float rate = (s != NULL) ? s->rate : 0.0f;
                 g_mod_lfo_runtime[track][lfo].phase_inc = mod_lfo_phase_inc_from_rate(rate);
             }
             g_mod_lfo_runtime[track][lfo].current = 0.0f;
             g_mod_lfo_runtime[track][lfo].sh_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].triggered = 0U;
+            g_mod_lfo_runtime[track][lfo].one_running = 0U;
+            g_mod_lfo_runtime[track][lfo].one_done = 0U;
+            g_mod_lfo_runtime[track][lfo].hold_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].hold_capture_pending = 0U;
+            g_mod_lfo_runtime[track][lfo].slew_valid = 0U;
+            g_mod_lfo_runtime[track][lfo].active = 0U;
+            g_mod_lfo_runtime[track][lfo].delay_remaining_frames = 0U;
+            g_mod_lfo_runtime[track][lfo].fade_elapsed_frames = 0U;
             g_mod_lfo_runtime[track][lfo].base_valid = 0U;
             g_mod_lfo_runtime[track][lfo].last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             g_mod_lfo_runtime[track][lfo].depth_scale = 0.0f;
@@ -1435,13 +1722,24 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             rt->calib_valid = 0U;
             rt->depth_scale = 0.0f;
+            rt->active = 0U;
+            rt->hold_capture_pending = 0U;
             return 1U;
         }
 
         case MOD_LFO_PARAM_RATE:
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
-            s->rate = mod_lfo_clampf(value, 0.0f, (float)(MOD_LFO_RATE_STEP_COUNT - 1U));
-            rt->phase_inc = mod_lfo_phase_inc_from_rate((uint8_t)(s->rate + 0.5f));
+            s->rate = mod_lfo_clampf(value, -12.0f, (float)MOD_LFO_SYNC_RATE_COUNT);
+            if (s->rate > 0.0f)
+            {
+                s->rate = mod_lfo_quantize_sync_rate(s->rate);
+            }
+            rt->phase_inc = mod_lfo_phase_inc_from_rate(s->rate);
+            if (rt->phase_inc == 0U)
+            {
+                rt->active = 0U;
+                rt->hold_capture_pending = 0U;
+            }
             return 1U;
 
         case MOD_LFO_PARAM_DEPTH:
@@ -1450,6 +1748,8 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             if (s->depth == 0.0f)
             {
                 track_runtime_refresh_track(track);
+                rt->active = 0U;
+                rt->hold_capture_pending = 0U;
                 mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
             }
             return 1U;
@@ -1458,6 +1758,36 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
             rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
             s->shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
             rt->sh_valid = 0U;
+            rt->slew_valid = 0U;
+            return 1U;
+
+        case MOD_LFO_PARAM_DELAY:
+            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
+            s->delay = mod_lfo_clampf(value, 0.0f, 10.0f);
+            return 1U;
+
+        case MOD_LFO_PARAM_TRIG:
+            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
+            s->trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
+            rt->triggered = 0U;
+            rt->one_running = 0U;
+            rt->one_done = 0U;
+            rt->hold_valid = 0U;
+            rt->hold_capture_pending = 0U;
+            rt->active = 0U;
+            rt->fade_elapsed_frames = 0U;
+            return 1U;
+
+        case MOD_LFO_PARAM_FADE:
+            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
+            s->fade = mod_lfo_clampf(value, -10.0f, 10.0f);
+            rt->fade_elapsed_frames = 0U;
+            return 1U;
+
+        case MOD_LFO_PARAM_PHASE_SLEW:
+            rt->temp_valid_mask &= (uint8_t)~mod_lfo_runtime_param_mask(param);
+            s->phase_slew = mod_lfo_clampf(value, 0.0f, 360.0f);
+            rt->slew_valid = 0U;
             return 1U;
 
         default:
@@ -1497,12 +1827,23 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
             rt->calib_valid = 0U;
             rt->depth_scale = 0.0f;
+            rt->active = 0U;
+            rt->hold_capture_pending = 0U;
             break;
         }
 
         case MOD_LFO_PARAM_RATE:
-            rt->temp.rate = mod_lfo_clampf(value, 0.0f, (float)(MOD_LFO_RATE_STEP_COUNT - 1U));
-            rt->phase_inc = mod_lfo_phase_inc_from_rate((uint8_t)(rt->temp.rate + 0.5f));
+            rt->temp.rate = mod_lfo_clampf(value, -12.0f, (float)MOD_LFO_SYNC_RATE_COUNT);
+            if (rt->temp.rate > 0.0f)
+            {
+                rt->temp.rate = mod_lfo_quantize_sync_rate(rt->temp.rate);
+            }
+            rt->phase_inc = mod_lfo_phase_inc_from_rate(rt->temp.rate);
+            if (rt->phase_inc == 0U)
+            {
+                rt->active = 0U;
+                rt->hold_capture_pending = 0U;
+            }
             break;
 
         case MOD_LFO_PARAM_DEPTH:
@@ -1510,6 +1851,8 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             if (rt->temp.depth == 0.0f)
             {
                 track_runtime_refresh_track(track);
+                rt->active = 0U;
+                rt->hold_capture_pending = 0U;
                 mod_lfo_release_last_destination(track, lfo_index, ui_get_track_family(track), ui_get_track_type(track), track_runtime_get_ctx(track));
             }
             break;
@@ -1517,6 +1860,32 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
         case MOD_LFO_PARAM_SHAPE:
             rt->temp.shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
             rt->sh_valid = 0U;
+            rt->slew_valid = 0U;
+            break;
+
+        case MOD_LFO_PARAM_DELAY:
+            rt->temp.delay = mod_lfo_clampf(value, 0.0f, 10.0f);
+            break;
+
+        case MOD_LFO_PARAM_TRIG:
+            rt->temp.trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
+            rt->triggered = 0U;
+            rt->one_running = 0U;
+            rt->one_done = 0U;
+            rt->hold_valid = 0U;
+            rt->hold_capture_pending = 0U;
+            rt->active = 0U;
+            rt->fade_elapsed_frames = 0U;
+            break;
+
+        case MOD_LFO_PARAM_FADE:
+            rt->temp.fade = mod_lfo_clampf(value, -10.0f, 10.0f);
+            rt->fade_elapsed_frames = 0U;
+            break;
+
+        case MOD_LFO_PARAM_PHASE_SLEW:
+            rt->temp.phase_slew = mod_lfo_clampf(value, 0.0f, 360.0f);
+            rt->slew_valid = 0U;
             break;
 
         default:
@@ -1542,6 +1911,8 @@ void mod_lfo_v1_clear_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo
         rt->last_dest = (uint16_t)MOD_LFO_DEST_NONE;
         rt->calib_valid = 0U;
         rt->depth_scale = 0.0f;
+        rt->active = 0U;
+        rt->hold_capture_pending = 0U;
     }
 }
 
@@ -1575,6 +1946,22 @@ uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_par
 
         case MOD_LFO_PARAM_SHAPE:
             *out_value = s->shape;
+            return 1U;
+
+        case MOD_LFO_PARAM_DELAY:
+            *out_value = s->delay;
+            return 1U;
+
+        case MOD_LFO_PARAM_TRIG:
+            *out_value = s->trig;
+            return 1U;
+
+        case MOD_LFO_PARAM_FADE:
+            *out_value = s->fade;
+            return 1U;
+
+        case MOD_LFO_PARAM_PHASE_SLEW:
+            *out_value = s->phase_slew;
             return 1U;
 
         default:
@@ -1635,6 +2022,97 @@ void mod_lfo_v1_process_block(uint32_t frames)
         mod_lfo_process_control_tick(1U);
     }
 #endif
+}
+
+void mod_lfo_v1_note_trigger(uint8_t track)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return;
+    }
+
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo);
+        mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo];
+        if (s == NULL)
+        {
+            continue;
+        }
+
+        const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)((uint8_t)(s->trig + 0.5f));
+        const mod_lfo_shape_t shape = (mod_lfo_shape_t)((uint8_t)(s->shape + 0.5f));
+        if (trig == MOD_LFO_TRIG_FREE)
+        {
+            continue;
+        }
+
+        rt->triggered = 1U;
+        rt->delay_remaining_frames = mod_lfo_seconds_to_frames(s->delay);
+        rt->fade_elapsed_frames = 0U;
+        rt->one_done = 0U;
+        rt->one_running = (trig == MOD_LFO_TRIG_ONE) ? 1U : 0U;
+
+        if ((trig == MOD_LFO_TRIG_TRIG) || (trig == MOD_LFO_TRIG_ONE))
+        {
+            mod_lfo_start_phase(rt, shape, s->phase_slew);
+        }
+        else if (trig == MOD_LFO_TRIG_HOLD)
+        {
+            if (rt->delay_remaining_frames > 0U)
+            {
+                rt->hold_capture_pending = 1U;
+            }
+            else
+            {
+                mod_lfo_capture_hold_value(rt, shape);
+            }
+        }
+    }
+}
+
+uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index)
+{
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    if (s == NULL)
+    {
+        return 0U;
+    }
+    return ((uint8_t)(s->shape + 0.5f) == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH) ? 1U : 0U;
+}
+
+uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, uint8_t width, int8_t *out_y_q7)
+{
+    if ((out_y_q7 == NULL) || (width == 0U))
+    {
+        return 0U;
+    }
+
+    const track_mod_lfo_state_t *const s = mod_lfo_track_settings_const(track, lfo_index);
+    if (s == NULL)
+    {
+        return 0U;
+    }
+
+    const mod_lfo_shape_t shape = (mod_lfo_shape_t)((uint8_t)(s->shape + 0.5f));
+    if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+    {
+        const int8_t rnd_pattern[8] = {-48, 32, 84, -16, -80, 4, 56, -28};
+        *out_y_q7 = rnd_pattern[(width > 1U) ? ((x * 8U) / width) & 7U : 0U];
+        return 1U;
+    }
+
+    mod_lfo_runtime_state_t preview = {0};
+    preview.sh_value = 0.0f;
+    const uint32_t phase = (uint32_t)(((uint64_t)x * 4294967296ULL) / (uint64_t)width);
+    float y = mod_lfo_wave(shape, phase, &preview);
+    if (mod_lfo_shape_is_positive(shape) != 0U)
+    {
+        y = (y * 2.0f) - 1.0f;
+    }
+    y = mod_lfo_clampf(y, -1.0f, 1.0f);
+    *out_y_q7 = (int8_t)(y * 63.0f);
+    return 1U;
 }
 
 uint16_t mod_lfo_v1_dest_count(uint8_t track)

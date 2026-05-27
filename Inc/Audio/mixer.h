@@ -114,6 +114,8 @@ void mixer_track_filter_all_notes_off(uint32_t track_id);
 void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
                                const uint8_t *next_mix_tracks,
                                uint32_t track_count);
+void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track);
+void mixer_snap_track_runtime_state(uint32_t track_id);
 void mixer_external_inputs_clear(void);
 void mixer_submit_external_mono(uint32_t track_id, const float *mono, uint32_t frames);
 void mixer_submit_external_mono_native(uint32_t track_id, const float *mono, uint32_t frames);

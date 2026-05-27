@@ -758,7 +758,9 @@ void ui_param_invalidate_bank(void)
 
 void ui_param_sync_active_bank_values(void)
 {
-    if (param_registry_track_structure_transition_is_active() != 0U)
+    const uint8_t active_track = ui_get_active_track();
+    if ((param_registry_track_structure_transition_is_global_active() != 0U)
+            || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
     {
         return;
     }
@@ -768,7 +770,6 @@ void ui_param_sync_active_bank_values(void)
         return;
     }
 
-    const uint8_t active_track = ui_get_active_track();
     for (uint8_t i = 0U; i < 4U; ++i)
     {
         const param_id_t id = g_ui_param.bank.params[i];
@@ -794,12 +795,13 @@ void ui_param_sync_active_bank_values(void)
 
 void ui_param_sync_active_track_mirror_from_runtime(void)
 {
-    if (param_registry_track_structure_transition_is_active() != 0U)
+    const uint8_t active_track = ui_get_active_track();
+    if ((param_registry_track_structure_transition_is_global_active() != 0U)
+            || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
     {
         return;
     }
 
-    const uint8_t active_track = ui_get_active_track();
     const float seq_length = (float)seq_model_get_track_length(active_track);
     uint8_t track_div = 1U;
     uint8_t track_quant = 0U;
@@ -1438,6 +1440,81 @@ static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param
     return desc->step;
 }
 
+static uint8_t ui_param_is_lfo_rate(param_id_t param)
+{
+    return ((param == PARAM_LFO1_RATE) || (param == PARAM_LFO2_RATE)) ? 1U : 0U;
+}
+
+static uint8_t ui_param_is_lfo_delay(param_id_t param)
+{
+    return ((param == PARAM_LFO1_DELAY) || (param == PARAM_LFO2_DELAY)) ? 1U : 0U;
+}
+
+static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t shift_down)
+{
+    if (delta == 0)
+    {
+        return current_value;
+    }
+
+    const int8_t dir = ui_param_signum(delta);
+    if (current_value > 0.0001f)
+    {
+        float next = current_value + (float)dir;
+        if (next < 0.5f)
+        {
+            next = 0.0f;
+        }
+        return ui_param_clamp(next, 0.0f, 15.0f);
+    }
+
+    if (current_value < -0.0001f)
+    {
+        const float step = (shift_down != 0U) ? 0.01f : 1.0f;
+        float next = current_value + ((float)delta * step);
+        if (next > -0.0001f)
+        {
+            next = 0.0f;
+        }
+        return ui_param_clamp(next, -12.0f, 0.0f);
+    }
+
+    if (dir > 0)
+    {
+        return 1.0f;
+    }
+    return (shift_down != 0U) ? -0.01f : -1.0f;
+}
+
+static float ui_param_step_lfo_delay(float current_value,
+                                     int16_t delta,
+                                     uint8_t shift_down,
+                                     float min_value,
+                                     float max_value)
+{
+    const float step = (shift_down != 0U) ? 0.01f : 1.0f;
+    return ui_param_clamp(current_value + ((float)delta * step), min_value, max_value);
+}
+
+static float ui_param_apply_delta_value(param_id_t param,
+                                        float current_value,
+                                        int16_t delta,
+                                        float edit_step,
+                                        float min_value,
+                                        float max_value,
+                                        uint8_t shift_down)
+{
+    if (ui_param_is_lfo_rate(param) != 0U)
+    {
+        return ui_param_step_lfo_rate(current_value, delta, shift_down);
+    }
+    if (ui_param_is_lfo_delay(param) != 0U)
+    {
+        return ui_param_step_lfo_delay(current_value, delta, shift_down, min_value, max_value);
+    }
+    return ui_param_clamp(current_value + ((float)delta * edit_step), min_value, max_value);
+}
+
 static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
                                                              param_id_t param,
                                                              int16_t delta,
@@ -1475,8 +1552,9 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
             continue;
         }
 
-        float next_value = current_value + requested_delta;
-        next_value = ui_param_clamp(next_value, min_value, max_value);
+        float next_value = ((ui_param_is_lfo_rate(param) != 0U) || (ui_param_is_lfo_delay(param) != 0U))
+            ? ui_param_apply_delta_value(param, current_value, delta, edit_step, min_value, max_value, 0U)
+            : ui_param_clamp(current_value + requested_delta, min_value, max_value);
         if (ui_param_value_is_same(next_value, current_value) != 0U)
         {
             continue;
@@ -1554,7 +1632,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         float next_value = source_value + delta_value;
         if (ui_param_master_fx_quantize_edit(held_track, param, source_value, delta, &next_value) == 0U)
         {
-            next_value = ui_param_clamp(next_value, min_value, max_value);
+            next_value = ui_param_apply_delta_value(param, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
         }
         target_values[i] = seq_param_iface_encode_param_value(param, next_value);
     }
@@ -1694,10 +1772,22 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
         source_value = seq_param_iface_decode_param_value(param, existing.value16);
     }
 
-    float next_value = source_value + ((float)delta * edit_step);
+    float next_value = ui_param_apply_delta_value(param,
+                                                  source_value,
+                                                  delta,
+                                                  edit_step,
+                                                  min_value,
+                                                  max_value,
+                                                  button_down(BTN_SHIFT) != 0U);
     if (ui_param_master_fx_quantize_edit(active_track, param, source_value, delta, &next_value) == 0U)
     {
-        next_value = ui_param_clamp(next_value, min_value, max_value);
+        next_value = ui_param_apply_delta_value(param,
+                                                source_value,
+                                                delta,
+                                                edit_step,
+                                                min_value,
+                                                max_value,
+                                                button_down(BTN_SHIFT) != 0U);
     }
     const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
 
@@ -1873,8 +1963,13 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         const float current_value = value;
         if (ui_param_master_fx_quantize_edit(ctx->active_track, param, current_value, delta, &value) == 0U)
         {
-            value += (float)delta * edit_step;
-            value = ui_param_clamp(value, min_value, max_value);
+            value = ui_param_apply_delta_value(param,
+                                               current_value,
+                                               delta,
+                                               edit_step,
+                                               min_value,
+                                               max_value,
+                                               ctx->shift_down);
         }
 
         if (ui_param_value_is_same(value, current_value) != 0U)

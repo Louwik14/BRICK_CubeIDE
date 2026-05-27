@@ -14,8 +14,10 @@
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
+#include "Seq/seq_model.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_play_scheduler.h"
+#include "Seq/seq_runtime_control.h"
 #include "Seq/seq_transport_fsm.h"
 #include "midi.h"
 
@@ -43,6 +45,12 @@ static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event
                                                          uint16_t block_frames,
                                                          uint64_t block_start_sample);
 static void seq_runtime_exec_sort_audio_events(seq_runtime_audio_event_t *events, uint16_t count);
+static uint64_t seq_runtime_exec_track_step_span_q16(seq_track_id_t track,
+                                                     uint32_t samples_per_step_q16);
+static seq_step_id_t seq_runtime_exec_next_play_step(seq_track_id_t track, seq_step_id_t step);
+static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_state_t *state,
+                                                            const seq_boundary_hit_t *hit,
+                                                            uint32_t now_tick);
 
 
 seq_runtime_state_t *seq_runtime_exec_state(void)
@@ -132,6 +140,63 @@ static uint16_t seq_runtime_exec_collect_boundary_events(seq_runtime_audio_event
     }
 
     return count;
+}
+
+static uint64_t seq_runtime_exec_track_step_span_q16(seq_track_id_t track,
+                                                     uint32_t samples_per_step_q16)
+{
+    uint8_t div = 1U;
+    (void)seq_runtime_get_track_div(track, &div);
+    if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
+    {
+        div = 1U;
+    }
+
+    const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
+    return (uint64_t)sps_q16 * (uint64_t)div;
+}
+
+static seq_step_id_t seq_runtime_exec_next_play_step(seq_track_id_t track, seq_step_id_t step)
+{
+    uint8_t length = seq_model_get_track_playback_length(track);
+    if (length == 0U)
+    {
+        length = 1U;
+    }
+
+    seq_step_id_t next = (seq_step_id_t)(step + 1U);
+    if (next >= length)
+    {
+        next = 0U;
+    }
+    return next;
+}
+
+static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_state_t *state,
+                                                            const seq_boundary_hit_t *hit,
+                                                            uint32_t now_tick)
+{
+    if ((state == 0) || (hit == 0))
+    {
+        return;
+    }
+
+    const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
+    seq_play_scheduler_schedule_step(hit->track,
+                                     hit->step,
+                                     state->ticks_per_step,
+                                     now_tick,
+                                     scheduled_sample_time,
+                                     state->samples_per_step_q16);
+
+    const seq_step_id_t next_step = seq_runtime_exec_next_play_step(hit->track, hit->step);
+    const uint64_t next_step_sample_q16 = state->step_sample_q16
+                                          + seq_runtime_exec_track_step_span_q16(hit->track,
+                                                                                state->samples_per_step_q16);
+    seq_play_scheduler_schedule_step_lookahead_negative(hit->track,
+                                                        next_step,
+                                                        (next_step_sample_q16 >> 16),
+                                                        state->samples_per_step_q16);
 }
 
 static void seq_runtime_exec_sort_audio_events(seq_runtime_audio_event_t *events, uint16_t count)
@@ -287,12 +352,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
             {
                 seq_runtime_exec_push_boundary_edge(hits[i].track, (state->step_sample_q16 >> 16));
             }
-            seq_play_scheduler_schedule_step(hits[i].track,
-                                             hits[i].step,
-                                             state->ticks_per_step,
-                                             now_tick,
-                                             (state->step_sample_q16 >> 16),
-                                             state->samples_per_step_q16);
+            seq_runtime_exec_schedule_hit_play_and_lookahead(state, &hits[i], now_tick);
         }
     }
 
@@ -413,17 +473,11 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
 
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
-            const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
             if (hits[i].step == 0U)
             {
-                seq_runtime_exec_push_boundary_edge(hits[i].track, scheduled_sample_time);
+                seq_runtime_exec_push_boundary_edge(hits[i].track, (state->step_sample_q16 >> 16));
             }
-            seq_play_scheduler_schedule_step(hits[i].track,
-                                             hits[i].step,
-                                             state->ticks_per_step,
-                                             now_tick,
-                                             scheduled_sample_time,
-                                             state->samples_per_step_q16);
+            seq_runtime_exec_schedule_hit_play_and_lookahead(state, &hits[i], now_tick);
         }
     }
 

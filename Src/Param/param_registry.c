@@ -33,6 +33,7 @@
 #include "Core/track_state.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Sampler/multi_sample_pool.h"
+#include "UI/ui_core.h"
 #include "UI/ui_track_catalog.h"
 #include <stddef.h>
 #include <string.h>
@@ -42,6 +43,69 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        float clamped,
                                                        uint8_t rt_fast);
 static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped);
+static float clamp_value(float v, float lo, float hi);
+
+static void param_registry_sync_active_cfg_mirror_for_track(uint8_t track)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (track != ui_get_active_track()))
+    {
+        return;
+    }
+
+    const ui_track_family_t family = track_state_get_family(track);
+    param_store_set_active(PARAM_CFG_TRACK, (float)family);
+    param_store_set_active(PARAM_CFG_TRACK_TYPE,
+                           (float)ui_track_catalog_type_index_for_family(family,
+                                                                         track_state_get_type(track),
+                                                                         track,
+                                                                         track_state_get_configs()));
+}
+
+static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float clamped)
+{
+    if (track >= SEQ_TRACK_COUNT)
+    {
+        return 0U;
+    }
+
+    if (id == PARAM_CFG_TRACK)
+    {
+        const ui_track_family_t requested_family =
+            (ui_track_family_t)((uint8_t)(clamp_value(clamped,
+                                                      0.0f,
+                                                      (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
+        if (ui_set_track_family(track, requested_family) == false)
+        {
+            param_registry_sync_active_cfg_mirror_for_track(track);
+            return 0U;
+        }
+
+        param_registry_sync_active_cfg_mirror_for_track(track);
+        return 1U;
+    }
+
+    if (id == PARAM_CFG_TRACK_TYPE)
+    {
+        const ui_track_family_t family = track_state_get_family(track);
+        const uint8_t requested_index =
+            (uint8_t)(clamp_value(clamped, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
+        const ui_track_type_t requested_type =
+            ui_track_catalog_type_from_family_index(family,
+                                                    requested_index,
+                                                    track,
+                                                    track_state_get_configs());
+        if (ui_set_track_type(track, requested_type) == false)
+        {
+            param_registry_sync_active_cfg_mirror_for_track(track);
+            return 0U;
+        }
+
+        param_registry_sync_active_cfg_mirror_for_track(track);
+        return 1U;
+    }
+
+    return 0U;
+}
 
 static uint8_t param_registry_track_is_sampler_multi(uint8_t track)
 {
@@ -154,6 +218,22 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
             *out_lfo_index = 0U;
             *out_lfo_param = MOD_LFO_PARAM_SHAPE;
             return 1U;
+        case PARAM_LFO1_DELAY:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_DELAY;
+            return 1U;
+        case PARAM_LFO1_TRIG:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_TRIG;
+            return 1U;
+        case PARAM_LFO1_FADE:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_FADE;
+            return 1U;
+        case PARAM_LFO1_PHASE_SLEW:
+            *out_lfo_index = 0U;
+            *out_lfo_param = MOD_LFO_PARAM_PHASE_SLEW;
+            return 1U;
         case PARAM_LFO2_DEST:
             *out_lfo_index = 1U;
             *out_lfo_param = MOD_LFO_PARAM_DEST;
@@ -169,6 +249,22 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
         case PARAM_LFO2_SHAPE:
             *out_lfo_index = 1U;
             *out_lfo_param = MOD_LFO_PARAM_SHAPE;
+            return 1U;
+        case PARAM_LFO2_DELAY:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_DELAY;
+            return 1U;
+        case PARAM_LFO2_TRIG:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_TRIG;
+            return 1U;
+        case PARAM_LFO2_FADE:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_FADE;
+            return 1U;
+        case PARAM_LFO2_PHASE_SLEW:
+            *out_lfo_index = 1U;
+            *out_lfo_param = MOD_LFO_PARAM_PHASE_SLEW;
             return 1U;
         default:
             return 0U;
@@ -1071,6 +1167,11 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
     }
     const param_desc_t *const desc = &param_registry[id];
     const float clamped = clamp_value(value, desc->min, desc->max);
+
+    if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
+    {
+        return param_apply_cfg_track_value(id, track, clamped);
+    }
 
     {
         uint8_t lfo_index = 0U;

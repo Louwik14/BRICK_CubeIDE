@@ -71,8 +71,8 @@ static const char *const g_arp_accent_labels[] = {"Off", "1st", "Alt", "Rnd", NU
 static const char *const g_arp_strum_labels[] = {"Off", "Up", "Down", "Alt", "Rnd", NULL};
 static const char *const g_arp_dir_labels[] = {"Normal", "PingPong", "RndWalk", NULL};
 static const char *const g_arp_sync_labels[] = {"Int", "Clock", "Free", NULL};
-static const char *const g_lfo_shape_labels[] = {"Sine", "Triangle", "Saw", "Square", "Random S&H", NULL};
-static const char *const g_lfo_rate_labels[] = {"128", "64", "32", "16", "8", "4", "2", "1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/128", NULL};
+static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
+static const char *const g_lfo_trig_labels[] = {"FREE", "TRIG", "HOLD", "ONE", NULL};
 
 const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_GRAN_DENSITY, "Gran Density", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.5f, PARAM_DISPLAY_PERCENT, "", NULL, apply_gran_density),
@@ -243,13 +243,21 @@ const param_desc_t param_registry[PARAM_COUNT] = {
     PARAM_DESC_EX(PARAM_DRUM_TRX_BD_DRIVE, "Drive", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, NULL),
 
     PARAM_DESC_EX(PARAM_LFO1_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_dest),
-    PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 14.0f, 1.0f, 7.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo1_rate),
+    PARAM_DESC_EX(PARAM_LFO1_RATE, "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_lfo1_rate),
     PARAM_DESC_EX(PARAM_LFO1_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo1_depth),
-    PARAM_DESC_EX(PARAM_LFO1_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo1_shape),
+    PARAM_DESC_EX(PARAM_LFO1_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo1_shape),
+    PARAM_DESC_EX(PARAM_LFO1_DELAY, "Delay", PARAM_TYPE_FLOAT, 0.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo1_delay),
+    PARAM_DESC_EX(PARAM_LFO1_TRIG, "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, apply_lfo1_trig),
+    PARAM_DESC_EX(PARAM_LFO1_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo1_fade),
+    PARAM_DESC_EX(PARAM_LFO1_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo1_phase_slew),
     PARAM_DESC_EX(PARAM_LFO2_DEST, "Dest", PARAM_TYPE_INT, 0.0f, (float)PARAM_COUNT, 1.0f, (float)PARAM_COUNT, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_dest),
-    PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_ENUM, 0.0f, 14.0f, 1.0f, 7.0f, PARAM_DISPLAY_ENUM, "", g_lfo_rate_labels, apply_lfo2_rate),
+    PARAM_DESC_EX(PARAM_LFO2_RATE, "Rate", PARAM_TYPE_FLOAT, -12.0f, 15.0f, 0.01f, 0.0f, PARAM_DISPLAY_FLOAT, "", NULL, apply_lfo2_rate),
     PARAM_DESC_EX(PARAM_LFO2_DEPTH, "Depth", PARAM_TYPE_INT, 0.0f, 127.0f, 1.0f, 0.0f, PARAM_DISPLAY_INT, "", NULL, apply_lfo2_depth),
-    PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 4.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
+    PARAM_DESC_EX(PARAM_LFO2_SHAPE, "Shape", PARAM_TYPE_ENUM, 0.0f, 8.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_shape_labels, apply_lfo2_shape),
+    PARAM_DESC_EX(PARAM_LFO2_DELAY, "Delay", PARAM_TYPE_FLOAT, 0.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_delay),
+    PARAM_DESC_EX(PARAM_LFO2_TRIG, "Trig", PARAM_TYPE_ENUM, 0.0f, 3.0f, 1.0f, 0.0f, PARAM_DISPLAY_ENUM, "", g_lfo_trig_labels, apply_lfo2_trig),
+    PARAM_DESC_EX(PARAM_LFO2_FADE, "Fade", PARAM_TYPE_BIPOLAR, -10.0f, 10.0f, 0.01f, 0.0f, PARAM_DISPLAY_TIME_MS, "s", NULL, apply_lfo2_fade),
+    PARAM_DESC_EX(PARAM_LFO2_PHASE_SLEW, "Phase", PARAM_TYPE_FLOAT, 0.0f, 360.0f, 1.0f, 0.0f, PARAM_DISPLAY_FLOAT, "deg", NULL, apply_lfo2_phase_slew),
 
     PARAM_DESC_EX(PARAM_MIX_REVERB_WET, "Wet", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_wet),
     PARAM_DESC_EX(PARAM_MIX_REVERB_SIZE, "Size", PARAM_TYPE_FLOAT, 0.0f, 1.0f, 0.01f, 0.0f, PARAM_DISPLAY_PERCENT, "", NULL, apply_mix_reverb_size),

@@ -16,6 +16,7 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
+#include "Mod/mod_lfo_v1.h"
 #include "param_registry.h"
 #include "midi.h"
 
@@ -350,6 +351,11 @@ static void seq_play_scheduler_emit_engine_note(seq_track_id_t track,
         return;
     }
 
+    if (is_note_on != 0U)
+    {
+        mod_lfo_v1_note_trigger(track);
+    }
+
     if (resolved.has_filter_target != 0U)
     {
         if (is_note_on != 0U)
@@ -509,17 +515,12 @@ void seq_play_scheduler_clear(void)
     seq_play_scheduler_exit_critical(primask);
 }
 
-void seq_play_scheduler_schedule_step(seq_track_id_t track,
-                                      seq_step_id_t step,
-                                      uint16_t ticks_per_step,
-                                      uint32_t step_tick,
-                                      uint64_t step_sample_time,
-                                      uint32_t samples_per_step_q16)
+static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
+                                                     seq_step_id_t step,
+                                                     uint64_t step_sample_time,
+                                                     uint32_t samples_per_step_q16,
+                                                     uint8_t negative_lookahead)
 {
-    /* Scheduling seam: consume resolved step boundaries and queue sample-domain events only. */
-    (void)ticks_per_step;
-    (void)step_tick;
-
     seq_play_scheduler_refresh_track(track);
 
     if (seq_model_step_is_active(track, step) == 0U)
@@ -607,12 +608,29 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
         const float mictim_f = seq_param_iface_decode_param_value(mictim_id,
                                                                   seq_play_scheduler_get_locked_or_default(track, step, mictim_id));
         int32_t microtiming_samples = (int32_t)((mictim_f * samples_per_step_f) / 96.0f);
+        if (((negative_lookahead != 0U) && (microtiming_samples >= 0))
+            || ((negative_lookahead == 0U) && (microtiming_samples < 0)))
+        {
+            continue;
+        }
+
+        microtiming_samples = seq_play_scheduler_apply_quant_percent(microtiming_samples, track_quant);
+        if (((negative_lookahead != 0U) && (microtiming_samples >= 0))
+            || ((negative_lookahead == 0U) && (microtiming_samples < 0)))
+        {
+            continue;
+        }
+
+        uint64_t note_on_sample_time = step_sample_time;
         if (microtiming_samples < 0)
         {
-            microtiming_samples = 0;
+            const uint64_t early = (uint64_t)(-microtiming_samples);
+            note_on_sample_time = (early < step_sample_time) ? (step_sample_time - early) : 0U;
         }
-        microtiming_samples = seq_play_scheduler_apply_quant_percent(microtiming_samples, track_quant);
-        uint64_t note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
+        else
+        {
+            note_on_sample_time = step_sample_time + (uint64_t)microtiming_samples;
+        }
         if ((has_first_note == 0U) || (note_on_sample_time < first_note_sample_time))
         {
             has_first_note = 1U;
@@ -664,6 +682,34 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     }
 }
 
+void seq_play_scheduler_schedule_step(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      uint16_t ticks_per_step,
+                                      uint32_t step_tick,
+                                      uint64_t step_sample_time,
+                                      uint32_t samples_per_step_q16)
+{
+    /* Scheduling seam: consume resolved step boundaries and queue sample-domain events only. */
+    (void)ticks_per_step;
+    (void)step_tick;
+    seq_play_scheduler_schedule_step_filtered(track,
+                                              step,
+                                              step_sample_time,
+                                              samples_per_step_q16,
+                                              0U);
+}
+
+void seq_play_scheduler_schedule_step_lookahead_negative(seq_track_id_t track,
+                                                         seq_step_id_t step,
+                                                         uint64_t step_sample_time,
+                                                         uint32_t samples_per_step_q16)
+{
+    seq_play_scheduler_schedule_step_filtered(track,
+                                              step,
+                                              step_sample_time,
+                                              samples_per_step_q16,
+                                              1U);
+}
 uint16_t seq_play_scheduler_audio_collect_block_events(seq_play_scheduler_audio_event_t *out_events,
                                                        uint16_t max_events,
                                                        uint16_t block_frames,

@@ -132,7 +132,9 @@ This separation is intentional. Do not add a second authority for the same state
 - integrated sequencer
 - transport / clock / scheduler
 - parameter locks
-- modulation baseline
+- modulation baseline with two LFOs per track
+- MOD LFO pages are `LFO1`, `LFO1#`, `LFO2`, `LFO2#`; `RATE` is Hz-left / OFF-center / tempo-sync-right
+- LFO shapes include bipolar `SIN/TRI/SAW/SQR/RND/RSAW` and positive `SIN+/TRI+/SQR+`; trig modes are `FREE/TRIG/HOLD/ONE`
 - live-performance oriented behavior
 
 ### UI
