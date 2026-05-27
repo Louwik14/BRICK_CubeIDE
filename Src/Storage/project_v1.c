@@ -8,10 +8,19 @@
 #include "Storage/multi_record_writer.h"
 #include "Storage/pattern_sd_bank.h"
 #include "Storage/project_sd_bank.h"
+#include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
+#include "Audio/drum_synth.h"
+#include "Audio/fx_master_macro.h"
+#include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/track_sound_state.h"
+#include "Core/track_tone_sound_state.h"
+#include "mixer.h"
 #include "Param/param_macro.h"
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_pool.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/multi_sample_index.h"
@@ -523,6 +532,24 @@ static void project_v1_multi_clear_assignments(void)
         brick6_sampler_runtime_set_multi_gain(track, 1.0f);
         brick6_sampler_runtime_set_multi_instrument(track, MULTI_SAMPLE_POOL_INVALID_ID);
     }
+}
+
+static void project_v1_reset_blank_transient_runtime(void)
+{
+    sd_preview_stop();
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        brick6_sampler_runtime_reset_track(track);
+    }
+    brick6_sampler_runtime_service();
+    brick6_looper_runtime_init();
+    brick6_braids_runtime_init();
+    drum_synth_all_notes_off_all();
+    mixer_reset_runtime_state();
+    fx_master_macro_init(48000.0f);
+    track_sound_state_init();
+    track_tone_sound_state_init();
 }
 
 static uint16_t project_v1_multi_find_restored_instrument(const ProjectSaveV1 *project,
@@ -1345,6 +1372,7 @@ uint8_t project_v1_load_blank(void)
         return 0U;
     }
 
+    project_v1_reset_blank_transient_runtime();
     sample_global_pool_reset();
     sampler_ram_pool_reset();
     sample_pool_init();

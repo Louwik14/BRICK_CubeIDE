@@ -105,16 +105,9 @@ static inline float hpf_alpha(float hpf)
     return 0.995f - (0.94f * t * t);
 }
 
-static inline float process_hpf(float input, float hpf, float *state, float *prev_input)
+static inline float process_hpf(float input, float alpha, float *state, float *prev_input)
 {
-    if(hpf <= 0.001f)
-    {
-        *prev_input = input;
-        *state = input;
-        return input;
-    }
-
-    const float y = hpf_alpha(hpf) * (*state + input - *prev_input);
+    const float y = alpha * (*state + input - *prev_input);
     *prev_input = input;
     *state = y;
     return y;
@@ -220,8 +213,10 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
     const float target_l = target_delay_samples(g_delay.time_target_s, g_delay.sample_rate);
     const float target_r = target_l;
     const float fb = g_delay.feedback;
-    const float lpf_a = lpf_alpha(g_delay.lpf);
-    const float hpf = g_delay.hpf;
+    const uint8_t hpf_active = (g_delay.hpf > 0.001f) ? 1U : 0U;
+    const uint8_t lpf_active = (g_delay.lpf > 0.001f) ? 1U : 0U;
+    const float hpf_a = (hpf_active != 0U) ? hpf_alpha(g_delay.hpf) : 0.0f;
+    const float lpf_a = (lpf_active != 0U) ? lpf_alpha(g_delay.lpf) : 0.0f;
     const float vol = g_delay.volume;
     const float rev = g_delay.reverb_send;
     const float width = g_delay.width;
@@ -243,10 +238,31 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
             fb_src_r = dl;
         }
 
-        fb_src_l = process_hpf(fb_src_l, hpf, &g_delay.feedback_hpf_l, &g_delay.feedback_hpf_prev_l);
-        fb_src_r = process_hpf(fb_src_r, hpf, &g_delay.feedback_hpf_r, &g_delay.feedback_hpf_prev_r);
-        g_delay.feedback_lp_l += (fb_src_l - g_delay.feedback_lp_l) * lpf_a;
-        g_delay.feedback_lp_r += (fb_src_r - g_delay.feedback_lp_r) * lpf_a;
+        if(hpf_active != 0U)
+        {
+            fb_src_l = process_hpf(fb_src_l, hpf_a, &g_delay.feedback_hpf_l, &g_delay.feedback_hpf_prev_l);
+            fb_src_r = process_hpf(fb_src_r, hpf_a, &g_delay.feedback_hpf_r, &g_delay.feedback_hpf_prev_r);
+        }
+        else
+        {
+            g_delay.feedback_hpf_prev_l = fb_src_l;
+            g_delay.feedback_hpf_prev_r = fb_src_r;
+            g_delay.feedback_hpf_l = fb_src_l;
+            g_delay.feedback_hpf_r = fb_src_r;
+        }
+
+        if(lpf_active != 0U)
+        {
+            g_delay.feedback_lp_l += (fb_src_l - g_delay.feedback_lp_l) * lpf_a;
+            g_delay.feedback_lp_r += (fb_src_r - g_delay.feedback_lp_r) * lpf_a;
+            fb_src_l = g_delay.feedback_lp_l;
+            fb_src_r = g_delay.feedback_lp_r;
+        }
+        else
+        {
+            g_delay.feedback_lp_l = fb_src_l;
+            g_delay.feedback_lp_r = fb_src_r;
+        }
 
         float input_l = in_l[i];
         float input_r = in_r[i];
@@ -255,8 +271,8 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
             input_r = 0.0f;
         }
 
-        g_delay_buffer_l[g_delay.write_index] = input_l + (g_delay.feedback_lp_l * fb);
-        g_delay_buffer_r[g_delay.write_index] = input_r + (g_delay.feedback_lp_r * fb);
+        g_delay_buffer_l[g_delay.write_index] = input_l + (fb_src_l * fb);
+        g_delay_buffer_r[g_delay.write_index] = input_r + (fb_src_r * fb);
 
         float wet_l = 0.0f;
         float wet_r = 0.0f;

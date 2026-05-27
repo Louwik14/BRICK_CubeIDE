@@ -234,16 +234,9 @@ static float mixer_reverb_input_hpf_alpha(float hpf)
     return 0.995f - (0.94f * clamped * clamped);
 }
 
-static float mixer_reverb_input_process_hpf(float input, float hpf, float *state, float *prev_input)
+static float mixer_reverb_input_process_hpf(float input, float alpha, float *state, float *prev_input)
 {
-    if(hpf <= 0.001f)
-    {
-        *prev_input = input;
-        *state = input;
-        return input;
-    }
-
-    const float y = mixer_reverb_input_hpf_alpha(hpf) * (*state + input - *prev_input);
+    const float y = alpha * (*state + input - *prev_input);
     *prev_input = input;
     *state = y;
     return y;
@@ -314,43 +307,66 @@ static void mixer_process_reverb_input_filter(float *left, float *right, uint32_
         return;
     }
 
-    const float hpf = g_reverb.hpf;
-    const float lpf = g_reverb.lpf;
-    if((hpf <= 0.001f) && (lpf <= 0.001f))
+    const uint8_t hpf_active = (g_reverb.hpf > 0.001f) ? 1U : 0U;
+    const uint8_t lpf_active = (g_reverb.lpf > 0.001f) ? 1U : 0U;
+    if((hpf_active == 0U) && (lpf_active == 0U))
     {
-        for(uint32_t i = 0U; i < frames; ++i)
+        if(frames > 0U)
         {
-            g_reverb_input_filter.hpf_prev_l = left[i];
-            g_reverb_input_filter.hpf_prev_r = right[i];
-            g_reverb_input_filter.hpf_l = left[i];
-            g_reverb_input_filter.hpf_r = right[i];
-            g_reverb_input_filter.lp_l = left[i];
-            g_reverb_input_filter.lp_r = right[i];
+            const uint32_t last = frames - 1U;
+            g_reverb_input_filter.hpf_prev_l = left[last];
+            g_reverb_input_filter.hpf_prev_r = right[last];
+            g_reverb_input_filter.hpf_l = left[last];
+            g_reverb_input_filter.hpf_r = right[last];
+            g_reverb_input_filter.lp_l = left[last];
+            g_reverb_input_filter.lp_r = right[last];
         }
         return;
     }
 
-    const float lpf_a = mixer_reverb_input_lpf_alpha(lpf);
-    for(uint32_t i = 0U; i < frames; ++i)
+    const float hpf_a = (hpf_active != 0U) ? mixer_reverb_input_hpf_alpha(g_reverb.hpf) : 0.0f;
+    const float lpf_a = (lpf_active != 0U) ? mixer_reverb_input_lpf_alpha(g_reverb.lpf) : 0.0f;
+    if((hpf_active != 0U) && (lpf_active != 0U))
     {
-        float l = mixer_reverb_input_process_hpf(left[i], hpf, &g_reverb_input_filter.hpf_l, &g_reverb_input_filter.hpf_prev_l);
-        float r = mixer_reverb_input_process_hpf(right[i], hpf, &g_reverb_input_filter.hpf_r, &g_reverb_input_filter.hpf_prev_r);
-
-        if(lpf > 0.001f)
+        for(uint32_t i = 0U; i < frames; ++i)
         {
+            float l = mixer_reverb_input_process_hpf(left[i], hpf_a, &g_reverb_input_filter.hpf_l, &g_reverb_input_filter.hpf_prev_l);
+            float r = mixer_reverb_input_process_hpf(right[i], hpf_a, &g_reverb_input_filter.hpf_r, &g_reverb_input_filter.hpf_prev_r);
+
             g_reverb_input_filter.lp_l += (l - g_reverb_input_filter.lp_l) * lpf_a;
             g_reverb_input_filter.lp_r += (r - g_reverb_input_filter.lp_r) * lpf_a;
-            l = g_reverb_input_filter.lp_l;
-            r = g_reverb_input_filter.lp_r;
+            left[i] = g_reverb_input_filter.lp_l;
+            right[i] = g_reverb_input_filter.lp_r;
         }
-        else
+        return;
+    }
+
+    if(hpf_active != 0U)
+    {
+        for(uint32_t i = 0U; i < frames; ++i)
         {
+            const float l = mixer_reverb_input_process_hpf(left[i], hpf_a, &g_reverb_input_filter.hpf_l, &g_reverb_input_filter.hpf_prev_l);
+            const float r = mixer_reverb_input_process_hpf(right[i], hpf_a, &g_reverb_input_filter.hpf_r, &g_reverb_input_filter.hpf_prev_r);
             g_reverb_input_filter.lp_l = l;
             g_reverb_input_filter.lp_r = r;
+            left[i] = l;
+            right[i] = r;
         }
+        return;
+    }
 
-        left[i] = l;
-        right[i] = r;
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        const float l = left[i];
+        const float r = right[i];
+        g_reverb_input_filter.hpf_prev_l = l;
+        g_reverb_input_filter.hpf_prev_r = r;
+        g_reverb_input_filter.hpf_l = l;
+        g_reverb_input_filter.hpf_r = r;
+        g_reverb_input_filter.lp_l += (l - g_reverb_input_filter.lp_l) * lpf_a;
+        g_reverb_input_filter.lp_r += (r - g_reverb_input_filter.lp_r) * lpf_a;
+        left[i] = g_reverb_input_filter.lp_l;
+        right[i] = g_reverb_input_filter.lp_r;
     }
 }
 
@@ -1281,9 +1297,21 @@ static float clamp_pan(float pan)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void mixer_init(void)
+static void mixer_reverb_state_reset_defaults(void)
 {
-    mixer_track_filter_init_time_lut();
+    g_reverb.type = FX_REVERB_GLOBAL_TYPE_REVB;
+    g_reverb.wet = 0.0f;
+    g_reverb.size = 0.0f;
+    g_reverb.decay = 0.50f;
+    g_reverb.pre_delay = 0.50f;
+    g_reverb.surround = 0.50f;
+    g_reverb.hpf = 0.0f;
+    g_reverb.lpf = 0.0f;
+}
+
+void mixer_reset_runtime_state(void)
+{
+    mixer_reverb_state_reset_defaults();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     memset(&g_reverb_input_filter, 0, sizeof(g_reverb_input_filter));
     fx_reverb_global_set_type(g_reverb.type);
@@ -1296,6 +1324,9 @@ void mixer_init(void)
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
+    audio_xfade_set(0.0f);
+    g_looper_xfade_smoothed = 0.0f;
+    g_looper_xfade_prev = 0.0f;
 
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
@@ -1327,6 +1358,12 @@ void mixer_init(void)
         g_send_fx_slot[s] = -1;
 
     mixer_external_inputs_clear();
+}
+
+void mixer_init(void)
+{
+    mixer_track_filter_init_time_lut();
+    mixer_reset_runtime_state();
 }
 
 /**

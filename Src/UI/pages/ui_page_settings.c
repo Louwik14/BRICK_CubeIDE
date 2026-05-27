@@ -2900,7 +2900,8 @@ static void ui_page_settings_apply_action(void)
             {
                 if (project_v1_load_blank() != 0U)
                 {
-                    ui_page_settings_status("BLANK OK");
+                    g_ui_settings.return_page_id = UI_PAGE_TEMPLATE_CFG;
+                    ui_page_set(UI_PAGE_TEMPLATE_CFG);
                 }
                 else
                 {

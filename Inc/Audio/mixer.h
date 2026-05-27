@@ -50,6 +50,7 @@ typedef enum
 } mixer_route_t;
 
 void mixer_init(void);
+void mixer_reset_runtime_state(void);
 void mixer_set_master(float gain);
 float mixer_get_master(void);
 

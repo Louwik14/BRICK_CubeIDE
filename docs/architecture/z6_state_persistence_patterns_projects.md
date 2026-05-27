@@ -898,3 +898,9 @@ Aucun nombre de records simultanes ne doit etre promis sans benchmark sur carte 
 - `PATTERN_VERSION=23` et `PROJECT_V1_FILE_VERSION=33` marquent le retrait prototype de `PARAM_SAMPLER_FADE_IN` / `PARAM_SAMPLER_FADE_OUT` de `PARAM_COUNT`; aucune migration ancienne valeur fade n'est conservee.
 - `PATTERN_VERSION=24` et `PROJECT_V1_FILE_VERSION=34` marquent l'ajout append-only de `PARAM_SAMPLER_LOOP_START` dans le layout `PARAM_COUNT`; les anciens patterns/projets prototype sont refuses par version/payload stricts.
 - `PROJECT_V1_FILE_VERSION=35` marque l'alignement du backend volatile `sampler_ram_pool` sur la capacite active du catalogue global sample; les anciens projets prototype sont refuses par version/payload stricts.
+
+## Addendum 2026-05-27 - contrat runtime du projet blank
+
+- `project_v1_load_blank()` neutralise maintenant hors IRQ les etats transitoires non persistables avant de recharger le boot snapshot: preview SD, voix/readers Sampler, runtime Looper, runtime Wave/Braids, voix Drum, mixer lanes/sends, buffers reverb/delay, XFade Looper, MacroFX et bases track sound/tone.
+- Le reset lourd precede `pattern_live_apply_boot_snapshot()`; le boot snapshot reste l'autorite des defaults persistables et reprojette ensuite UI/runtime/params.
+- Depuis `Settings > Project > Load > Blank`, le retour UI force `CFG` pour eviter de rendre une page template devenue invalide apres remise a `Off` des tracks.

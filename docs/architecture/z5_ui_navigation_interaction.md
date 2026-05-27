@@ -812,3 +812,7 @@ Points factuels:
 - `DELAY` affiche toujours une valeur en secondes `x.xxs`; sans SHIFT l'edition avance par pas de 1s en conservant la fraction, avec SHIFT par pas de `0.01s`.
 - Le slot `PHASE_SLEW` renomme dynamiquement le label en `PHASE` ou `SLEW` selon la shape du LFO concerne, meme si `SHAPE` est sur la page precedente.
 - Le widget `PHASE/SLEW` dessine une miniature legere de la forme courante; en mode phase, un curseur indique le decalage horizontal, en mode `RND` le widget n'affiche pas de phase.
+
+## 29. Retour UI apres load blank
+
+- `Settings > Project > Load > Blank` revient directement sur `CFG` apres succes. Ce retour est le point produit sur apres remise a blanc des tracks, car une page template precedente (`TONE`, `MIX`, etc.) peut ne plus etre disponible quand la track active repasse sur `Off`.
