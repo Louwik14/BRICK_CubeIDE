@@ -84,6 +84,11 @@ Z2 dépend de `track_state` pour construire son état effectif.
   - Écriture: init/invalidate_all/refresh_all.
   - Lecture: refresh_track uniquement.
 
+- g_track_runtime_logical_track_by_mix_track[MIXER_MAX_TRACKS]
+  - Ecriture: Z2 reconstruit la table apres refresh global ou local.
+  - Lecture: hot path mixer via `track_runtime_get_logical_track_for_mix_track()`.
+  - Role: projection inverse O(1) `mix_track -> logical_track`, sans scan dans l'IRQ.
+
 ## 6. Flux runtime
 1) Source config:
 - refresh_all lit family/type/midi depuis `track_state`.

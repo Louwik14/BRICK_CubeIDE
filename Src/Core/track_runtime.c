@@ -25,6 +25,7 @@ static volatile uint8_t g_track_runtime_track_dirty[SEQ_TRACK_COUNT];
 static uint32_t g_track_runtime_revision = 0U;
 static uint32_t g_track_runtime_track_revision[SEQ_TRACK_COUNT];
 static track_runtime_synth_usage_t g_track_runtime_synth_usage;
+static uint8_t g_track_runtime_logical_track_by_mix_track[MIXER_MAX_TRACKS];
 volatile uint32_t g_track_runtime_refresh_all_count;
 volatile uint32_t g_track_runtime_refresh_in_irq_count;
 volatile uint32_t g_track_runtime_refresh_track_count[SEQ_TRACK_COUNT];
@@ -34,6 +35,24 @@ typedef struct
 {
     uint8_t drum_used;
 } track_runtime_allocator_state_t;
+
+static void track_runtime_rebuild_mix_track_reverse_map(void)
+{
+    for (uint8_t mix_track = 0U; mix_track < MIXER_MAX_TRACKS; ++mix_track)
+    {
+        g_track_runtime_logical_track_by_mix_track[mix_track] = 0xFFU;
+    }
+
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[track];
+        if ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (ctx->mix_track_id < MIXER_MAX_TRACKS))
+        {
+            g_track_runtime_logical_track_by_mix_track[ctx->mix_track_id] = track;
+        }
+    }
+}
 
 static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
 {
@@ -878,6 +897,7 @@ static void track_runtime_reset_wave_if_owner_changed(uint8_t previous_engine,
 void track_runtime_init(void)
 {
     memset(&g_track_runtime_ctx, 0, sizeof(g_track_runtime_ctx));
+    track_runtime_rebuild_mix_track_reverse_map();
     memset((void *)g_track_runtime_track_dirty, 1, sizeof(g_track_runtime_track_dirty));
     g_track_runtime_global_dirty = 1U;
     track_runtime_refresh_all();
@@ -1038,6 +1058,7 @@ void track_runtime_refresh_all(void)
     }
 
     g_track_runtime_synth_usage.drum_tracks = drum_count;
+    track_runtime_rebuild_mix_track_reverse_map();
     g_track_runtime_global_dirty = 0U;
     ++g_track_runtime_revision;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
@@ -1121,6 +1142,7 @@ void track_runtime_refresh_track(uint8_t track)
         g_track_runtime_ctx[track] = next_ctx;
         track_runtime_reset_wave_if_owner_changed(previous_engine, previous_instance, &g_track_runtime_ctx[track]);
         track_runtime_recompute_synth_usage();
+        track_runtime_rebuild_mix_track_reverse_map();
         g_track_runtime_track_dirty[track] = 0U;
         ++g_track_runtime_revision;
         g_track_runtime_track_revision[track] = g_track_runtime_revision;
@@ -1200,16 +1222,9 @@ uint8_t track_runtime_get_logical_track_for_mix_track(uint8_t mix_track, uint8_t
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    const uint8_t track = g_track_runtime_logical_track_by_mix_track[mix_track];
+    if (track < SEQ_TRACK_COUNT)
     {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL)
-                || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
-                || (ctx->mix_track_id != mix_track))
-        {
-            continue;
-        }
-
         *out_track = track;
         return 1U;
     }

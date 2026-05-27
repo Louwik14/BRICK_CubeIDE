@@ -862,3 +862,9 @@ Clarification START/END/LOOP live:
 - `brick6_sampler_runtime_render_multi_track()` isole le chemin IRQ `Sampler/Multi`: scan borne de `g_sampler_multi_voice[]`, filtrage `owner_track_id`, rendu des voix Multi, diagnostic first-output et tails de declick.
 - `brick6_sampler_runtime_render_track()` devient un dispatcher court: `Clip/Stream` vers `brick6_sampler_runtime_render_stream_track()`, `Multi` vers `brick6_sampler_runtime_render_multi_track()`, voix RAM active vers `brick6_sampler_runtime_render_ram_track()`, puis fallback legacy Classic si present.
 - Les regles de voice steal/release, page-cache/window-lock/STREAM_SAFE, RAM, Stream/Clip, Looper et LFO restent inchanges.
+
+## Addendum 2026-05-27 - micro-optimisations hot path
+
+- `brick6_audio_runtime_dsp()` lit le cache `track_runtime_get_cached_synth_usage()` au lieu de rescanner les tracks pour le comptage Drum.
+- Le chemin Drum IRQ ne lit plus `ui_get_active_track()`; le diagnostic local suit seulement le nombre de drums effectivement rendus.
+- `mixer_process()` conserve l'appel de projection `mix_track -> logical_track`, mais celui-ci est maintenant une lecture O(1) d'une table Z2 reconstruite hors IRQ.

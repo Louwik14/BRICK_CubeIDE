@@ -23,42 +23,11 @@
 #include "Sampler/voice_manager.h"
 #include "Storage/sd_preview.h"
 #include "mixer.h"
-#include "ui_core.h"
 #include "Core/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
-static uint8_t g_runtime_last_ui_active_track = 0xFFU;
-typedef struct
-{
-    uint8_t drum_tracks;
-} brick6_synth_usage_t;
-
-static void brick6_collect_runtime_synth_usage(brick6_synth_usage_t *out_usage)
-{
-    uint8_t drum_count = 0U;
-
-    (void)track_runtime_refresh_if_dirty();
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
-        {
-            continue;
-        }
-
-        if (ctx->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-        {
-            drum_count++;
-        }
-    }
-
-    if (out_usage != NULL)
-    {
-        out_usage->drum_tracks = drum_count;
-    }
-}
 
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
 {
@@ -77,7 +46,7 @@ static void brick6_render_synth_tracks(uint32_t frames,
     static float drum_tmp[AUDIO_BLOCK_SIZE];
     uint8_t drum_tracks = 0U;
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
@@ -118,7 +87,7 @@ static void brick6_render_sampler_tracks(uint32_t frames, uint8_t *out_sampler_t
     static float sampler_tmp_r[AUDIO_BLOCK_SIZE];
     uint8_t sampler_tracks = 0U;
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
@@ -165,7 +134,7 @@ static void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tra
     static float looper_tmp_r[AUDIO_BLOCK_SIZE];
     uint8_t looper_tracks = 0U;
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
@@ -195,7 +164,7 @@ static void brick6_render_wave_tracks(uint32_t frames, uint8_t *out_wave_tracks)
     static float wave_tmp[AUDIO_BLOCK_SIZE];
     uint8_t wave_tracks = 0U;
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
         if ((ctx == NULL)
@@ -227,8 +196,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
-    brick6_synth_usage_t synth_usage = { 0U };
-    brick6_collect_runtime_synth_usage(&synth_usage);
+    track_runtime_synth_usage_t synth_usage = { 0U };
+    (void)track_runtime_refresh_if_dirty();
+    track_runtime_get_cached_synth_usage(&synth_usage);
     const uint8_t synth_runtime_enabled = (synth_usage.drum_tracks > 0U) ? 1U : 0U;
 
     if (((synth_runtime_enabled == 0U) && (g_runtime_track_enabled != 0U))
@@ -246,11 +216,9 @@ void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t drum_processed = 0U;
         brick6_render_synth_tracks(frames, &drum_processed);
 
-        if ((drum_processed != g_runtime_last_drum_processed)
-                || (ui_get_active_track() != g_runtime_last_ui_active_track))
+        if (drum_processed != g_runtime_last_drum_processed)
         {
             g_runtime_last_drum_processed = drum_processed;
-            g_runtime_last_ui_active_track = ui_get_active_track();
         }
     }
 

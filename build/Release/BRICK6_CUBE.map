@@ -13721,8 +13721,6 @@ Discarded input sections
  .bss           0x00000000        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text.track_runtime_is_track_wave_available
                 0x00000000       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- .text.track_runtime_get_cached_synth_usage
-                0x00000000       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text.track_runtime_get_revision
                 0x00000000        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text          0x00000000        0x0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
@@ -19605,1247 +19603,1251 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x08021704       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
                 0x08021704                brick6_audio_runtime_init
  .text.brick6_audio_runtime_dsp
-                0x08021720      0x338 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
+                0x08021720      0x300 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
                 0x08021720                brick6_audio_runtime_dsp
  .text.brick6_boot_apply_param_defaults
-                0x08021a58       0x52 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_boot_defaults.c.obj
-                0x08021a58                brick6_boot_apply_param_defaults
+                0x08021a20       0x52 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_boot_defaults.c.obj
+                0x08021a20                brick6_boot_apply_param_defaults
  .text.brick6_boot_fx_policy_init
-                0x08021aaa       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_boot_fx_policy.c.obj
-                0x08021aaa                brick6_boot_fx_policy_init
- *fill*         0x08021ace        0x2 
+                0x08021a72       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_boot_fx_policy.c.obj
+                0x08021a72                brick6_boot_fx_policy_init
+ *fill*         0x08021a96        0x2 
  .text._ZN12_GLOBAL__N_1L33brick6_braids_runtime_pitch_to_q7EPK29brick6_braids_runtime_voice_t
-                0x08021ad0       0x94 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021a98       0x94 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
  .text._ZN12_GLOBAL__N_1L35brick6_braids_runtime_init_instanceEPNS_32brick6_braids_runtime_instance_tE.part.0
-                0x08021b64      0x134 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021b2c      0x134 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
  .text.brick6_braids_runtime_init
-                0x08021c98       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021c98                brick6_braids_runtime_init
+                0x08021c60       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021c60                brick6_braids_runtime_init
  .text.brick6_braids_runtime_reset_instance
-                0x08021cb8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021cb8                brick6_braids_runtime_reset_instance
+                0x08021c80       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021c80                brick6_braids_runtime_reset_instance
  .text.brick6_braids_runtime_set_edit
-                0x08021cd0       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021cd0                brick6_braids_runtime_set_edit
+                0x08021c98       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021c98                brick6_braids_runtime_set_edit
  .text.brick6_braids_runtime_set_fine
-                0x08021d34       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021d34                brick6_braids_runtime_set_fine
+                0x08021cfc       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021cfc                brick6_braids_runtime_set_fine
  .text.brick6_braids_runtime_set_coarse
-                0x08021d60       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021d60                brick6_braids_runtime_set_coarse
+                0x08021d28       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021d28                brick6_braids_runtime_set_coarse
  .text.brick6_braids_runtime_set_fm
-                0x08021d8c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021d8c                brick6_braids_runtime_set_fm
+                0x08021d54       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021d54                brick6_braids_runtime_set_fm
  .text.brick6_braids_runtime_set_timbre
-                0x08021db8       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021db8                brick6_braids_runtime_set_timbre
+                0x08021d80       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021d80                brick6_braids_runtime_set_timbre
  .text.brick6_braids_runtime_set_modulation
-                0x08021de4       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021de4                brick6_braids_runtime_set_modulation
+                0x08021dac       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021dac                brick6_braids_runtime_set_modulation
  .text.brick6_braids_runtime_set_color
-                0x08021e10       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021e10                brick6_braids_runtime_set_color
+                0x08021dd8       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021dd8                brick6_braids_runtime_set_color
  .text.brick6_braids_runtime_set_phase_reset
-                0x08021e3c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021e3c                brick6_braids_runtime_set_phase_reset
+                0x08021e04       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021e04                brick6_braids_runtime_set_phase_reset
  .text.brick6_braids_runtime_set_vca_release_seconds
-                0x08021e6c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021e6c                brick6_braids_runtime_set_vca_release_seconds
+                0x08021e34       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021e34                brick6_braids_runtime_set_vca_release_seconds
  .text.brick6_braids_runtime_note_off
-                0x08021e98       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021e98                brick6_braids_runtime_note_off
+                0x08021e60       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021e60                brick6_braids_runtime_note_off
  .text.brick6_braids_runtime_note_on
-                0x08021f18       0x94 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021f18                brick6_braids_runtime_note_on
+                0x08021ee0       0x94 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021ee0                brick6_braids_runtime_note_on
  .text.brick6_braids_runtime_all_notes_off
-                0x08021fac       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021fac                brick6_braids_runtime_all_notes_off
+                0x08021f74       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021f74                brick6_braids_runtime_all_notes_off
  .text.brick6_braids_runtime_render_instance
-                0x08021fd8      0x2e4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
-                0x08021fd8                brick6_braids_runtime_render_instance
+                0x08021fa0      0x2e4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_braids_runtime.cpp.obj
+                0x08021fa0                brick6_braids_runtime_render_instance
  .text.brick6_clip_shifter_read_interp
-                0x080222bc       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
+                0x08022284       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
  .text.brick6_clip_shifter_reset
-                0x08022310       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
-                0x08022310                brick6_clip_shifter_reset
+                0x080222d8       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
+                0x080222d8                brick6_clip_shifter_reset
  .text.brick6_clip_shifter_init
-                0x0802233c       0x1e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
-                0x0802233c                brick6_clip_shifter_init
+                0x08022304       0x1e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
+                0x08022304                brick6_clip_shifter_init
  .text.brick6_clip_shifter_set_window_frames
-                0x0802235a       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
-                0x0802235a                brick6_clip_shifter_set_window_frames
+                0x08022322       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
+                0x08022322                brick6_clip_shifter_set_window_frames
  .text.brick6_clip_shifter_set_pitch_correction
-                0x0802237e       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
-                0x0802237e                brick6_clip_shifter_set_pitch_correction
+                0x08022346       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
+                0x08022346                brick6_clip_shifter_set_pitch_correction
  .text.brick6_clip_shifter_process_stereo
-                0x0802239a      0x138 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
-                0x0802239a                brick6_clip_shifter_process_stereo
- *fill*         0x080224d2        0x2 
+                0x08022362      0x138 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_clip_shifter.c.obj
+                0x08022362                brick6_clip_shifter_process_stereo
+ *fill*         0x0802249a        0x2 
  .text.looper_diag_update_take
-                0x080224d4       0xb0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802249c       0xb0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_timing_ratio
-                0x08022584       0x4e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
- *fill*         0x080225d2        0x2 
+                0x0802254c       0x4e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+ *fill*         0x0802259a        0x2 
  .text.looper_shifter_get
-                0x080225d4       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802259c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_adopt_preroll_take
-                0x08022604       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080225cc       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_advance_playhead
-                0x08022658       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022620       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_record_clear_boundary_state
-                0x08022688       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022650       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_advance_playhead_q16
-                0x080226c0       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022688       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_shifter_release
-                0x08022718       0x1e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080226e0       0x1e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_release_reader
-                0x08022736       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080226fe       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_clear_stream
-                0x0802277e       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
- *fill*         0x080227a6        0x2 
+                0x08022746       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+ *fill*         0x0802276e        0x2 
  .text.looper_fail
-                0x080227a8       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022770       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_request_playhead_pages
-                0x0802280c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080227d4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_register_raw_stream
-                0x08022854       0x66 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
- *fill*         0x080228ba        0x2 
+                0x0802281c       0x66 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+ *fill*         0x08022882        0x2 
  .text.looper_start_playback
-                0x080228bc       0xf4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022884       0xf4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_acquire_page_for_frame
-                0x080229b0       0x98 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022978       0x98 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_try_enter_normal_playback
-                0x08022a48       0x32 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022a10       0x32 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_read_frame_normal
-                0x08022a7a       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022a42       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_read_interp_normal
-                0x08022ad6       0xac CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
- *fill*         0x08022b82        0x2 
+                0x08022a9e       0xac CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+ *fill*         0x08022b4a        0x2 
  .text.looper_render_varispeed
-                0x08022b84      0x140 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022b4c      0x140 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.looper_pitch_stable_ratio
-                0x08022cc4       0xb4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022c8c       0xb4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.brick6_looper_runtime_init
-                0x08022d78       0xa8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08022d78                brick6_looper_runtime_init
+                0x08022d40       0xa8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022d40                brick6_looper_runtime_init
  .text.brick6_looper_runtime_service
-                0x08022e20      0x1d4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08022e20                brick6_looper_runtime_service
+                0x08022de8      0x1d4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022de8                brick6_looper_runtime_service
  .text.brick6_looper_runtime_has_pending_sd_work
-                0x08022ff4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08022ff4                brick6_looper_runtime_has_pending_sd_work
+                0x08022fbc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022fbc                brick6_looper_runtime_has_pending_sd_work
  .text.brick6_looper_runtime_notify_raw_take_ready
-                0x08023018      0x260 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023018                brick6_looper_runtime_notify_raw_take_ready
+                0x08022fe0      0x260 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08022fe0                brick6_looper_runtime_notify_raw_take_ready
  .text.brick6_looper_runtime_notify_preroll_take_ready
-                0x08023278      0x12c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023278                brick6_looper_runtime_notify_preroll_take_ready
+                0x08023240      0x12c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023240                brick6_looper_runtime_notify_preroll_take_ready
  .text.looper_record_stop_at_boundary
-                0x080233a4       0xf0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802336c       0xf0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
  .text.brick6_looper_runtime_stop_playback
-                0x08023494       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023494                brick6_looper_runtime_stop_playback
+                0x0802345c       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802345c                brick6_looper_runtime_stop_playback
  .text.brick6_looper_runtime_prepare_replace
-                0x08023514       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023514                brick6_looper_runtime_prepare_replace
+                0x080234dc       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080234dc                brick6_looper_runtime_prepare_replace
  .text.brick6_looper_runtime_arm_record_start
-                0x080235b8       0x70 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x080235b8                brick6_looper_runtime_arm_record_start
+                0x08023580       0x70 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023580                brick6_looper_runtime_arm_record_start
  .text.brick6_looper_runtime_arm_record_stop
-                0x08023628       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023628                brick6_looper_runtime_arm_record_stop
+                0x080235f0       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080235f0                brick6_looper_runtime_arm_record_stop
  .text.brick6_looper_runtime_record_is_active_or_armed
-                0x08023660       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023660                brick6_looper_runtime_record_is_active_or_armed
+                0x08023628       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023628                brick6_looper_runtime_record_is_active_or_armed
  .text.brick6_looper_runtime_get_record_capture_track
-                0x08023674       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023674                brick6_looper_runtime_get_record_capture_track
+                0x0802363c       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802363c                brick6_looper_runtime_get_record_capture_track
  .text.brick6_looper_runtime_preroll_begin
-                0x080236b8       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x080236b8                brick6_looper_runtime_preroll_begin
+                0x08023680       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023680                brick6_looper_runtime_preroll_begin
  .text.brick6_looper_runtime_preroll_capture_from_irq
-                0x080236f8       0x84 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x080236f8                brick6_looper_runtime_preroll_capture_from_irq
+                0x080236c0       0x84 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080236c0                brick6_looper_runtime_preroll_capture_from_irq
  .text.brick6_looper_runtime_set_play_auto
-                0x0802377c       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x0802377c                brick6_looper_runtime_set_play_auto
+                0x08023744       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023744                brick6_looper_runtime_set_play_auto
  .text.brick6_looper_runtime_set_stretch
-                0x080237cc      0x178 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x080237cc                brick6_looper_runtime_set_stretch
+                0x08023794      0x178 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023794                brick6_looper_runtime_set_stretch
  .text.brick6_looper_runtime_on_transport_start
-                0x08023944       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023944                brick6_looper_runtime_on_transport_start
+                0x0802390c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802390c                brick6_looper_runtime_on_transport_start
  .text.brick6_looper_runtime_on_transport_stop
-                0x08023970       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023970                brick6_looper_runtime_on_transport_stop
- *fill*         0x08023982        0x2 
+                0x08023938       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023938                brick6_looper_runtime_on_transport_stop
+ *fill*         0x0802394a        0x2 
  .text.brick6_looper_runtime_on_boundary_edge
-                0x08023984      0x110 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023984                brick6_looper_runtime_on_boundary_edge
- *fill*         0x08023a94        0x4 
+                0x0802394c      0x110 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x0802394c                brick6_looper_runtime_on_boundary_edge
+ *fill*         0x08023a5c        0x4 
  .text.brick6_looper_runtime_on_scheduled_start
-                0x08023a98       0xac CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023a98                brick6_looper_runtime_on_scheduled_start
+                0x08023a60       0xac CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023a60                brick6_looper_runtime_on_scheduled_start
  .text.brick6_looper_runtime_is_playing
-                0x08023b44       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023b44                brick6_looper_runtime_is_playing
+                0x08023b0c       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023b0c                brick6_looper_runtime_is_playing
  .text.brick6_looper_runtime_render_track
-                0x08023b64      0xac8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x08023b64                brick6_looper_runtime_render_track
+                0x08023b2c      0xac8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x08023b2c                brick6_looper_runtime_render_track
  .text.brick6_looper_runtime_diag_get_snapshot
-                0x0802462c       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
-                0x0802462c                brick6_looper_runtime_diag_get_snapshot
+                0x080245f4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_looper_runtime.c.obj
+                0x080245f4                brick6_looper_runtime_diag_get_snapshot
  .text.brick6_master_control_process
-                0x08024640      0x148 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
-                0x08024640                brick6_master_control_process
+                0x08024608      0x148 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
+                0x08024608                brick6_master_control_process
  .text.brick6_sampler_bootstrap_load_pool
-                0x08024788        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_bootstrap.c.obj
-                0x08024788                brick6_sampler_bootstrap_load_pool
+                0x08024750        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_bootstrap.c.obj
+                0x08024750                brick6_sampler_bootstrap_load_pool
  .text.brick6_sampler_bootstrap_init_voices
-                0x08024790        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_bootstrap.c.obj
-                0x08024790                brick6_sampler_bootstrap_init_voices
+                0x08024758        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_bootstrap.c.obj
+                0x08024758                brick6_sampler_bootstrap_init_voices
  .text.brick6_sampler_runtime_begin_declick_tail
-                0x08024798       0xb4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024760       0xb4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_apply_start_fade
-                0x0802484c       0x78 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024814       0x78 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_mix_declick_tails
-                0x080248c4       0xcc CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x0802488c       0xcc CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_track_reset
-                0x08024990       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024958       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_voice_index
-                0x080249b8       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024980       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_mark_voice_stream_owner_release
-                0x080249e0       0x26 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080249a8       0x26 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_sanitize_grain_size
-                0x08024a06       0x32 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080249ce       0x32 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_get_slot
-                0x08024a38       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024a00       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_resolve_grid_count
-                0x08024a7c       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024a44       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_next_trigger_order
-                0x08024af0       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024ab8       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clamp_region_begin
-                0x08024b04       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024acc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_build_effective_ram_slice_region
-                0x08024b28       0x7e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
- *fill*         0x08024ba6        0x2 
+                0x08024af0       0x7e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+ *fill*         0x08024b6e        0x2 
  .text.brick6_sampler_runtime_fade_gain
-                0x08024ba8       0x68 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024b70       0x68 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_is_terminal_position
-                0x08024c10       0x46 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
- *fill*         0x08024c56        0x2 
+                0x08024bd8       0x46 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+ *fill*         0x08024c1e        0x2 
  .text.brick6_sampler_runtime_multi_defer_stream_release
-                0x08024c58       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024c20       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_active_count
-                0x08024c6c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024c34       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_active_count_for_track
-                0x08024c98       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024c60       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_diag_note_stop
-                0x08024cd8       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024ca0       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_diag_note_steal
-                0x08024d58       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024d20       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_diag_note_page0_reject
-                0x08024d7c       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024d44       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_oldest_global
-                0x08024ddc       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024da4       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_render_ram_unpitched
-                0x08024e40      0x1c0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024e08      0x1c0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_track_is_clip
-                0x08025000       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024fc8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_release_slot
-                0x08025018       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08024fe0       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_reset
-                0x0802504c       0x90 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08025014       0x90 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_stop_playback
-                0x080250dc       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080250a4       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_release_voice_stream_owner
-                0x08025134       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080250fc       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_stop_voice
-                0x08025162       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
- *fill*         0x080251ee        0x2 
+                0x0802512a       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+ *fill*         0x080251b6        0x2 
  .text.brick6_sampler_runtime_multi_stop_track
-                0x080251f0       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080251b8       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_release_inactive_stream_owners
-                0x08025224       0xb4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080251ec       0xb4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_resolve_ram_source
-                0x080252d8       0xac CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080252a0       0xac CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_ram_slot_valid
-                0x08025384       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x0802534c       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_ram_slice_step_q16
-                0x08025410       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080253d8       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_configure_shifter
-                0x0802549c       0xaa CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
- *fill*         0x08025546        0x2 
+                0x08025464       0xaa CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+ *fill*         0x0802550e        0x2 
  .text.brick6_sampler_runtime_diag_note_first_output
-                0x08025548       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08025510       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_build_effective_ram_bounds
-                0x080255ac       0xf4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08025574       0xf4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_reconcile_ram_voice_bounds_live
-                0x080256a0      0x2b4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08025668      0x2b4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_ram_step_q16
-                0x08025954       0xa0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x0802591c       0xa0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_prefetch_loop_begin
-                0x080259f4       0xc0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080259bc       0xc0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_multi_service_streaming
-                0x08025ab4       0xb8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08025a7c       0xb8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_clip_start_playback
-                0x08025b6c      0x590 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08025b34      0x590 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_render_multi
-                0x080260fc      0x280 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080260c4      0x280 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_render_sample_segment_cursor
-                0x0802637c      0x2f8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026344      0x2f8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_render_sample
-                0x08026674      0x580 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x0802663c      0x580 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_ram_slice_mode_active
-                0x08026bf4       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026bf4                brick6_sampler_runtime_ram_slice_mode_active
+                0x08026bbc       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026bbc                brick6_sampler_runtime_ram_slice_mode_active
  .text.brick6_sampler_runtime_prepare_ram_slice_grid
-                0x08026c44      0x1cc CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026c0c      0x1cc CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_rebuild_grid
-                0x08026e10       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026dd8       0x58 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_oneshot_voice_is_stealable
-                0x08026e68       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026e30       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
  .text.brick6_sampler_runtime_set_sample
-                0x08026eb8       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026eb8                brick6_sampler_runtime_set_sample
+                0x08026e80       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026e80                brick6_sampler_runtime_set_sample
  .text.brick6_sampler_runtime_set_gain
-                0x08026f08       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026f08                brick6_sampler_runtime_set_gain
+                0x08026ed0       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026ed0                brick6_sampler_runtime_set_gain
  .text.brick6_sampler_runtime_set_multi_instrument
-                0x08026f4c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026f4c                brick6_sampler_runtime_set_multi_instrument
+                0x08026f14       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026f14                brick6_sampler_runtime_set_multi_instrument
  .text.brick6_sampler_runtime_stop_multi_instrument
-                0x08026f7c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026f7c                brick6_sampler_runtime_stop_multi_instrument
+                0x08026f44       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026f44                brick6_sampler_runtime_stop_multi_instrument
  .text.brick6_sampler_runtime_get_multi_instrument
-                0x08026fbc       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026fbc                brick6_sampler_runtime_get_multi_instrument
+                0x08026f84       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026f84                brick6_sampler_runtime_get_multi_instrument
  .text.brick6_sampler_runtime_set_multi_gain
-                0x08026fdc       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08026fdc                brick6_sampler_runtime_set_multi_gain
+                0x08026fa4       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026fa4                brick6_sampler_runtime_set_multi_gain
  .text.brick6_sampler_runtime_get_multi_gain
-                0x08027008       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027008                brick6_sampler_runtime_get_multi_gain
+                0x08026fd0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026fd0                brick6_sampler_runtime_get_multi_gain
  .text.brick6_sampler_runtime_set_multi_loop
-                0x0802702c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802702c                brick6_sampler_runtime_set_multi_loop
+                0x08026ff4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08026ff4                brick6_sampler_runtime_set_multi_loop
  .text.brick6_sampler_runtime_set_start
-                0x08027048       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027048                brick6_sampler_runtime_set_start
+                0x08027010       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027010                brick6_sampler_runtime_set_start
  .text.brick6_sampler_runtime_set_end
-                0x0802707c       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802707c                brick6_sampler_runtime_set_end
+                0x08027044       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027044                brick6_sampler_runtime_set_end
  .text.brick6_sampler_runtime_set_mode
-                0x080270b0       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080270b0                brick6_sampler_runtime_set_mode
+                0x08027078       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027078                brick6_sampler_runtime_set_mode
  .text.brick6_sampler_runtime_set_tune
-                0x080270d8       0x88 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080270d8                brick6_sampler_runtime_set_tune
+                0x080270a0       0x88 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080270a0                brick6_sampler_runtime_set_tune
  .text.brick6_sampler_runtime_set_loop_start
-                0x08027160       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027160                brick6_sampler_runtime_set_loop_start
+                0x08027128       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027128                brick6_sampler_runtime_set_loop_start
  .text.brick6_sampler_runtime_set_slice_count
-                0x0802718c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802718c                brick6_sampler_runtime_set_slice_count
+                0x08027154       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027154                brick6_sampler_runtime_set_slice_count
  .text.brick6_sampler_runtime_get_ram_playhead
-                0x080271b8      0x118 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080271b8                brick6_sampler_runtime_get_ram_playhead
+                0x08027180      0x118 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027180                brick6_sampler_runtime_get_ram_playhead
  .text.brick6_sampler_runtime_set_clip_source_bpm
-                0x080272d0       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080272d0                brick6_sampler_runtime_set_clip_source_bpm
+                0x08027298       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027298                brick6_sampler_runtime_set_clip_source_bpm
  .text.brick6_sampler_runtime_set_clip_sync_length
-                0x080272f8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080272f8                brick6_sampler_runtime_set_clip_sync_length
+                0x080272c0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080272c0                brick6_sampler_runtime_set_clip_sync_length
  .text.brick6_sampler_runtime_set_clip_pitch
-                0x0802731c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802731c                brick6_sampler_runtime_set_clip_pitch
+                0x080272e4       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080272e4                brick6_sampler_runtime_set_clip_pitch
  .text.brick6_sampler_runtime_set_clip_play_mode
-                0x0802735c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802735c                brick6_sampler_runtime_set_clip_play_mode
+                0x08027324       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027324                brick6_sampler_runtime_set_clip_play_mode
  .text.brick6_sampler_runtime_set_clip_loop
-                0x08027388       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027388                brick6_sampler_runtime_set_clip_loop
+                0x08027350       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027350                brick6_sampler_runtime_set_clip_loop
  .text.brick6_sampler_runtime_set_clip_stretch_mode
-                0x080273cc       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080273cc                brick6_sampler_runtime_set_clip_stretch_mode
+                0x08027394       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027394                brick6_sampler_runtime_set_clip_stretch_mode
  .text.brick6_sampler_runtime_set_clip_grain_size
-                0x080273f8       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080273f8                brick6_sampler_runtime_set_clip_grain_size
+                0x080273c0       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080273c0                brick6_sampler_runtime_set_clip_grain_size
  .text.brick6_sampler_runtime_trigger
-                0x08027424      0x5d0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027424                brick6_sampler_runtime_trigger
+                0x080273ec      0x5d0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080273ec                brick6_sampler_runtime_trigger
  .text.brick6_sampler_runtime_trigger_note_velocity
-                0x080279f4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080279f4                brick6_sampler_runtime_trigger_note_velocity
+                0x080279bc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080279bc                brick6_sampler_runtime_trigger_note_velocity
  .text.brick6_sampler_runtime_queue_stream_pages
-                0x08027a18       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027a18                brick6_sampler_runtime_queue_stream_pages
+                0x080279e0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080279e0                brick6_sampler_runtime_queue_stream_pages
  .text.brick6_sampler_runtime_service
-                0x08027a28       0x94 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027a28                brick6_sampler_runtime_service
+                0x080279f0       0x94 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080279f0                brick6_sampler_runtime_service
  .text.brick6_sampler_runtime_note_off_multi_track_note
-                0x08027abc       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027abc                brick6_sampler_runtime_note_off_multi_track_note
+                0x08027a84       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027a84                brick6_sampler_runtime_note_off_multi_track_note
  .text.brick6_sampler_runtime_note_off
-                0x08027b04       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027b04                brick6_sampler_runtime_note_off
+                0x08027acc       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027acc                brick6_sampler_runtime_note_off
  .text.brick6_sampler_runtime_stop
-                0x08027b40       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027b40                brick6_sampler_runtime_stop
+                0x08027b08       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027b08                brick6_sampler_runtime_stop
  .text.brick6_sampler_runtime_trigger_multi_note_velocity
-                0x08027bb4      0xb80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08027bb4                brick6_sampler_runtime_trigger_multi_note_velocity
+                0x08027b7c      0xb80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08027b7c                brick6_sampler_runtime_trigger_multi_note_velocity
  .text.brick6_sampler_runtime_trigger_multi_track_note_velocity
-                0x08028734       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08028734                brick6_sampler_runtime_trigger_multi_track_note_velocity
+                0x080286fc       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080286fc                brick6_sampler_runtime_trigger_multi_track_note_velocity
  .text.brick6_sampler_runtime_note_off_note
-                0x08028748       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08028748                brick6_sampler_runtime_note_off_note
+                0x08028710       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08028710                brick6_sampler_runtime_note_off_note
  .text.brick6_sampler_runtime_stop_transport_clips
-                0x0802879c       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802879c                brick6_sampler_runtime_stop_transport_clips
- *fill*         0x080287ae        0x2 
+                0x08028764       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08028764                brick6_sampler_runtime_stop_transport_clips
+ *fill*         0x08028776        0x2 
  .text.brick6_sampler_runtime_diag_reset
-                0x080287b0       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080287b0                brick6_sampler_runtime_diag_reset
+                0x08028778       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08028778                brick6_sampler_runtime_diag_reset
  .text.brick6_sampler_runtime_init
-                0x080287e4      0x154 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x080287e4                brick6_sampler_runtime_init
+                0x080287ac      0x154 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x080287ac                brick6_sampler_runtime_init
  .text.brick6_sampler_runtime_track_has_active_ram_voice
-                0x08028938       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08028938                brick6_sampler_runtime_track_has_active_ram_voice
+                0x08028900       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08028900                brick6_sampler_runtime_track_has_active_ram_voice
  .text.brick6_sampler_runtime_render_ram_track
-                0x08028968     0x1660 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08028968                brick6_sampler_runtime_render_ram_track
+                0x08028930     0x1660 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08028930                brick6_sampler_runtime_render_ram_track
  .text.brick6_sampler_runtime_render_stream_track
-                0x08029fc8      0x214 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x08029fc8                brick6_sampler_runtime_render_stream_track
+                0x08029f90      0x214 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x08029f90                brick6_sampler_runtime_render_stream_track
  .text.brick6_sampler_runtime_render_multi_track
-                0x0802a1dc       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802a1dc                brick6_sampler_runtime_render_multi_track
+                0x0802a1a4       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x0802a1a4                brick6_sampler_runtime_render_multi_track
  .text.brick6_sampler_runtime_render_track
-                0x0802a25c      0x12c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
-                0x0802a25c                brick6_sampler_runtime_render_track
+                0x0802a224      0x12c CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_sampler_runtime.c.obj
+                0x0802a224                brick6_sampler_runtime_render_track
  .text.cpu_load_init
-                0x0802a388       0xdc CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
-                0x0802a388                cpu_load_init
+                0x0802a350       0xdc CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
+                0x0802a350                cpu_load_init
  .text.cpu_load_irq_begin
-                0x0802a464       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
-                0x0802a464                cpu_load_irq_begin
+                0x0802a42c       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
+                0x0802a42c                cpu_load_irq_begin
  .text.cpu_load_irq_end
-                0x0802a4b4      0x130 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
-                0x0802a4b4                cpu_load_irq_end
+                0x0802a47c      0x130 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
+                0x0802a47c                cpu_load_irq_end
  .text.cpu_load_get_avg_permille
-                0x0802a5e4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
-                0x0802a5e4                cpu_load_get_avg_permille
+                0x0802a5ac       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
+                0x0802a5ac                cpu_load_get_avg_permille
  .text.cpu_load_is_valid
-                0x0802a5f4        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
-                0x0802a5f4                cpu_load_is_valid
+                0x0802a5bc        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
+                0x0802a5bc                cpu_load_is_valid
  .text.cpu_load_reset_peak
-                0x0802a600       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
-                0x0802a600                cpu_load_reset_peak
+                0x0802a5c8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/cpu_load.c.obj
+                0x0802a5c8                cpu_load_reset_peak
  .text.engine_tasklet_init
-                0x0802a618       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
-                0x0802a618                engine_tasklet_init
+                0x0802a5e0       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
+                0x0802a5e0                engine_tasklet_init
  .text.engine_tasklet_notify_frames
-                0x0802a650       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
-                0x0802a650                engine_tasklet_notify_frames
+                0x0802a618       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
+                0x0802a618                engine_tasklet_notify_frames
  .text.engine_tasklet_poll
-                0x0802a660       0x6c CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
-                0x0802a660                engine_tasklet_poll
+                0x0802a628       0x6c CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
+                0x0802a628                engine_tasklet_poll
  .text.rec_live_debug_ensure_init
-                0x0802a6cc       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
+                0x0802a694       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
  .text.rec_live_debug_path_hash
-                0x0802a704       0x4c CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
-                0x0802a704                rec_live_debug_path_hash
+                0x0802a6cc       0x4c CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
+                0x0802a6cc                rec_live_debug_path_hash
  .text.rec_live_debug_mark
-                0x0802a750       0xa0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
-                0x0802a750                rec_live_debug_mark
+                0x0802a718       0xa0 CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
+                0x0802a718                rec_live_debug_mark
  .text.rec_live_debug_hardfault
-                0x0802a7f0       0xc4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
-                0x0802a7f0                rec_live_debug_hardfault
+                0x0802a7b8       0xc4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/rec_live_debug.c.obj
+                0x0802a7b8                rec_live_debug_hardfault
+ .text.track_runtime_rebuild_mix_track_reverse_map
+                0x0802a87c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text.track_runtime_tone_table_for_type
-                0x0802a8b4       0xe8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802a8bc       0xe8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text.track_runtime_prepare_ctx_base
-                0x0802a99c      0x138 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802a9a4      0x138 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text.track_runtime_bind_ctx
-                0x0802aad4      0x136 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802aadc      0x136 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .text.track_runtime_get_voice_mode
-                0x0802ac0a       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802ac0a                track_runtime_get_voice_mode
+                0x0802ac12       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802ac12                track_runtime_get_voice_mode
  .text.track_runtime_get_play_voice_count
-                0x0802ac26       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802ac26                track_runtime_get_play_voice_count
+                0x0802ac2e       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802ac2e                track_runtime_get_play_voice_count
  .text.track_runtime_get_play_voice_count_from_descriptor
-                0x0802ac36       0x16 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802ac36                track_runtime_get_play_voice_count_from_descriptor
+                0x0802ac3e       0x16 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802ac3e                track_runtime_get_play_voice_count_from_descriptor
  .text.track_runtime_supports_vca_gate
-                0x0802ac4c       0x4e CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802ac4c                track_runtime_supports_vca_gate
- *fill*         0x0802ac9a        0x2 
+                0x0802ac54       0x4e CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802ac54                track_runtime_supports_vca_gate
+ *fill*         0x0802aca2        0x2 
  .text.track_runtime_invalidate_all
-                0x0802ac9c       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802ac9c                track_runtime_invalidate_all
+                0x0802aca4       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802aca4                track_runtime_invalidate_all
  .text.track_runtime_invalidate_track
-                0x0802acbc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802acbc                track_runtime_invalidate_track
+                0x0802acc4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802acc4                track_runtime_invalidate_track
  .text.track_runtime_refresh_all
-                0x0802accc      0x208 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802accc                track_runtime_refresh_all
+                0x0802acd4      0x20c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802acd4                track_runtime_refresh_all
  .text.track_runtime_init
-                0x0802aed4       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802aed4                track_runtime_init
+                0x0802aee0       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802aee0                track_runtime_init
  .text.track_runtime_refresh_track
-                0x0802af08      0x258 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802af08                track_runtime_refresh_track
+                0x0802af18      0x25c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802af18                track_runtime_refresh_track
  .text.track_runtime_refresh_if_dirty
-                0x0802b160       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b160                track_runtime_refresh_if_dirty
+                0x0802b174       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b174                track_runtime_refresh_if_dirty
+ .text.track_runtime_get_cached_synth_usage
+                0x0802b1d4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b1d4                track_runtime_get_cached_synth_usage
  .text.track_runtime_get_track_revision
-                0x0802b1c0       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b1c0                track_runtime_get_track_revision
+                0x0802b1e4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b1e4                track_runtime_get_track_revision
  .text.track_runtime_get_ctx
-                0x0802b1d4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b1d4                track_runtime_get_ctx
+                0x0802b1f8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b1f8                track_runtime_get_ctx
  .text.track_runtime_is_audio_routable
-                0x0802b1f0       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b1f0                track_runtime_is_audio_routable
+                0x0802b214       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b214                track_runtime_is_audio_routable
  .text.track_runtime_get_mix_target_track
-                0x0802b224       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b224                track_runtime_get_mix_target_track
+                0x0802b248       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b248                track_runtime_get_mix_target_track
  .text.track_runtime_get_logical_track_for_mix_track
-                0x0802b25c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b25c                track_runtime_get_logical_track_for_mix_track
+                0x0802b280       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b280                track_runtime_get_logical_track_for_mix_track
  .text.track_runtime_resolve_filter_target_track
-                0x0802b29c       0x4c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b29c                track_runtime_resolve_filter_target_track
+                0x0802b2a0       0x4c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b2a0                track_runtime_resolve_filter_target_track
  .text.track_runtime_get_midi_channel_1_16
-                0x0802b2e8       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b2e8                track_runtime_get_midi_channel_1_16
+                0x0802b2ec       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b2ec                track_runtime_get_midi_channel_1_16
  .text.track_runtime_get_midi_channel_zero_based
-                0x0802b310        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b310                track_runtime_get_midi_channel_zero_based
+                0x0802b314        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b314                track_runtime_get_midi_channel_zero_based
  .text.track_runtime_get_midi_source
-                0x0802b31c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b31c                track_runtime_get_midi_source
+                0x0802b320       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b320                track_runtime_get_midi_source
  .text.track_runtime_get_descriptor
-                0x0802b340      0x118 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b340                track_runtime_get_descriptor
+                0x0802b344      0x118 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b344                track_runtime_get_descriptor
  .text.track_runtime_resolve_track
-                0x0802b458       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b458                track_runtime_resolve_track
+                0x0802b45c       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b45c                track_runtime_resolve_track
  .text.track_runtime_is_ui_ensemble_available
-                0x0802b4fc       0x2a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b4fc                track_runtime_is_ui_ensemble_available
+                0x0802b500       0x2a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b500                track_runtime_is_ui_ensemble_available
  .text.track_runtime_get_param_rule
-                0x0802b526      0x156 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b526                track_runtime_get_param_rule
+                0x0802b52a      0x156 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b52a                track_runtime_get_param_rule
  .text.track_runtime_tone_slot_to_param
-                0x0802b67c       0x5a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b67c                track_runtime_tone_slot_to_param
+                0x0802b680       0x5a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b680                track_runtime_tone_slot_to_param
  .text.track_runtime_tone_param_to_slot
-                0x0802b6d6       0x72 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b6d6                track_runtime_tone_param_to_slot
+                0x0802b6da       0x72 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b6da                track_runtime_tone_param_to_slot
  .text.track_runtime_get_effective_param_status
-                0x0802b748      0x260 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b748                track_runtime_get_effective_param_status
+                0x0802b74c      0x260 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b74c                track_runtime_get_effective_param_status
  .text.track_runtime_get_voice_group_role
-                0x0802b9a8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b9a8                track_runtime_get_voice_group_role
+                0x0802b9ac       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b9ac                track_runtime_get_voice_group_role
  .text.track_runtime_get_voice_group_effective_master
-                0x0802b9c4       0x4c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802b9c4                track_runtime_get_voice_group_effective_master
+                0x0802b9c8       0x4c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802b9c8                track_runtime_get_voice_group_effective_master
  .text.track_runtime_collect_voice_group_members
-                0x0802ba10       0x8a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
-                0x0802ba10                track_runtime_collect_voice_group_members
- *fill*         0x0802ba9a        0x2 
+                0x0802ba14       0x8a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x0802ba14                track_runtime_collect_voice_group_members
+ *fill*         0x0802ba9e        0x2 
  .text.track_sound_state_init
-                0x0802ba9c      0x1f4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
-                0x0802ba9c                track_sound_state_init
+                0x0802baa0      0x1f4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
+                0x0802baa0                track_sound_state_init
  .text.track_sound_state_get
-                0x0802bc90       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
-                0x0802bc90                track_sound_state_get
+                0x0802bc94       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
+                0x0802bc94                track_sound_state_get
  .text.track_sound_state_get_const
-                0x0802bca8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
-                0x0802bca8                track_sound_state_get_const
+                0x0802bcac       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_sound_state.c.obj
+                0x0802bcac                track_sound_state_get_const
  .text.track_state_normalize_config
-                0x0802bcc0       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
- *fill*         0x0802bcee        0x2 
+                0x0802bcc4       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+ *fill*         0x0802bcf2        0x2 
  .text.track_state_bump_revision
-                0x0802bcf0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bcf4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  .text.track_state_voice_group_roles_are_valid
-                0x0802bd14       0x6a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
- *fill*         0x0802bd7e        0x2 
+                0x0802bd18       0x6a CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+ *fill*         0x0802bd82        0x2 
  .text.track_state_commit_entry
-                0x0802bd80       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bd84       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  .text.track_state_init
-                0x0802bddc       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802bddc                track_state_init
+                0x0802bde0       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bde0                track_state_init
  .text.track_state_get_configs
-                0x0802be3c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802be3c                track_state_get_configs
+                0x0802be40        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802be40                track_state_get_configs
  .text.track_state_get_config
-                0x0802be44       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802be44                track_state_get_config
+                0x0802be48       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802be48                track_state_get_config
  .text.track_state_get_family
-                0x0802be7c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802be7c                track_state_get_family
+                0x0802be80       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802be80                track_state_get_family
  .text.track_state_get_type
-                0x0802be8c       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802be8c                track_state_get_type
- *fill*         0x0802be9e        0x2 
+                0x0802be90       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802be90                track_state_get_type
+ *fill*         0x0802bea2        0x2 
  .text.track_state_get_midi_channel
-                0x0802bea0       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802bea0                track_state_get_midi_channel
+                0x0802bea4       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bea4                track_state_get_midi_channel
  .text.track_state_get_midi_source
-                0x0802bec0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802bec0                track_state_get_midi_source
+                0x0802bec4       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bec4                track_state_get_midi_source
  .text.track_state_get_voice_group_role
-                0x0802bed8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802bed8                track_state_get_voice_group_role
+                0x0802bedc       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bedc                track_state_get_voice_group_role
  .text.track_state_set_track_family
-                0x0802bef0       0xc8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802bef0                track_state_set_track_family
+                0x0802bef4       0xc8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bef4                track_state_set_track_family
  .text.track_state_set_track_type
-                0x0802bfb8       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802bfb8                track_state_set_track_type
+                0x0802bfbc       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802bfbc                track_state_set_track_type
  .text.track_state_set_track_midi_channel
-                0x0802c044       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802c044                track_state_set_track_midi_channel
+                0x0802c048       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802c048                track_state_set_track_midi_channel
  .text.track_state_set_track_midi_source
-                0x0802c074       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802c074                track_state_set_track_midi_source
+                0x0802c078       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802c078                track_state_set_track_midi_source
  .text.track_state_apply_bulk
-                0x0802c0a0      0x1f6 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802c0a0                track_state_apply_bulk
- *fill*         0x0802c296        0x2 
+                0x0802c0a4      0x1f6 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802c0a4                track_state_apply_bulk
+ *fill*         0x0802c29a        0x2 
  .text.track_state_apply_voice_group_roles_bulk
-                0x0802c298       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802c298                track_state_apply_voice_group_roles_bulk
+                0x0802c29c       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802c29c                track_state_apply_voice_group_roles_bulk
  .text.track_state_count_tracks_with_family
-                0x0802c2fc       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
-                0x0802c2fc                track_state_count_tracks_with_family
+                0x0802c300       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x0802c300                track_state_count_tracks_with_family
  .text.track_tone_sound_state_init
-                0x0802c330      0x254 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_tone_sound_state.c.obj
-                0x0802c330                track_tone_sound_state_init
+                0x0802c334      0x254 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_tone_sound_state.c.obj
+                0x0802c334                track_tone_sound_state_init
  .text.track_tone_sound_state_get
-                0x0802c584       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_tone_sound_state.c.obj
-                0x0802c584                track_tone_sound_state_get
+                0x0802c588       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_tone_sound_state.c.obj
+                0x0802c588                track_tone_sound_state_get
  .text.track_tone_sound_state_get_const
-                0x0802c59c       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_tone_sound_state.c.obj
-                0x0802c59c                track_tone_sound_state_get_const
+                0x0802c5a0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_tone_sound_state.c.obj
+                0x0802c5a0                track_tone_sound_state_get_const
  .text.kbd_add_components
-                0x0802c5b4       0x78 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x0802c5b8       0x78 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
  .text.kbd_chords_dict_build
-                0x0802c62c       0x90 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
-                0x0802c62c                kbd_chords_dict_build
+                0x0802c630       0x90 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x0802c630                kbd_chords_dict_build
  .text.kbd_scale_slot_semitone_offset
-                0x0802c6bc       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
-                0x0802c6bc                kbd_scale_slot_semitone_offset
+                0x0802c6c0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_chords_dict.c.obj
+                0x0802c6c0                kbd_scale_slot_semitone_offset
  .text.kbd_input_mapper_init
-                0x0802c6d4        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
-                0x0802c6d4                kbd_input_mapper_init
+                0x0802c6d8        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
+                0x0802c6d8                kbd_input_mapper_init
  .text.kbd_input_mapper_set_omnichord_state
-                0x0802c6e0        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
-                0x0802c6e0                kbd_input_mapper_set_omnichord_state
+                0x0802c6e4        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
+                0x0802c6e4                kbd_input_mapper_set_omnichord_state
  .text.kbd_input_mapper_process
-                0x0802c6ec       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
-                0x0802c6ec                kbd_input_mapper_process
+                0x0802c6f0       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
+                0x0802c6f0                kbd_input_mapper_process
  .text.keyboard_arp_ensure_config_initialized
-                0x0802c748       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c74c       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_select_track
-                0x0802c798       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c79c       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_state_is_hold_owned
-                0x0802c7c0       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c7c4       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_load_config
-                0x0802c804       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c808       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_rng
-                0x0802c84c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c850       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_copy_notes
-                0x0802c870       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c874       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_insert_sorted_unique
-                0x0802c89e       0x72 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c8a2       0x72 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_activate_from_phys
-                0x0802c910       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c914       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_activate_from_latched
-                0x0802c940       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c944       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_schedule_note_off
-                0x0802c980       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c984       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_try_start
-                0x0802c9a8       0x68 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802c9ac       0x68 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_apply_step_accent
-                0x0802ca10       0x68 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802ca14       0x68 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_reset_phrase
-                0x0802ca78       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802ca7c       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_update_active_config
-                0x0802cac8       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802cacc       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .text.keyboard_arp_init
-                0x0802caf8       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802caf8                keyboard_arp_init
+                0x0802cafc       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802cafc                keyboard_arp_init
  .text.keyboard_arp_sync_track
-                0x0802cb58       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802cb58                keyboard_arp_sync_track
+                0x0802cb5c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802cb5c                keyboard_arp_sync_track
  .text.keyboard_arp_tick
-                0x0802cb88      0x6bc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802cb88                keyboard_arp_tick
+                0x0802cb8c      0x6bc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802cb8c                keyboard_arp_tick
  .text.keyboard_arp_note_on
-                0x0802d244       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d244                keyboard_arp_note_on
+                0x0802d248       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d248                keyboard_arp_note_on
  .text.keyboard_arp_note_off
-                0x0802d2e8       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d2e8                keyboard_arp_note_off
+                0x0802d2ec       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d2ec                keyboard_arp_note_off
  .text.keyboard_arp_note_on_for_track
-                0x0802d38c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d38c                keyboard_arp_note_on_for_track
+                0x0802d390       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d390                keyboard_arp_note_on_for_track
  .text.keyboard_arp_note_off_for_track
-                0x0802d3cc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d3cc                keyboard_arp_note_off_for_track
+                0x0802d3d0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d3d0                keyboard_arp_note_off_for_track
  .text.keyboard_arp_all_notes_off_track
-                0x0802d3f0       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d3f0                keyboard_arp_all_notes_off_track
+                0x0802d3f4       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d3f4                keyboard_arp_all_notes_off_track
  .text.keyboard_arp_all_notes_off
-                0x0802d430       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d430                keyboard_arp_all_notes_off
+                0x0802d434       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d434                keyboard_arp_all_notes_off
  .text.keyboard_arp_has_hold_activity
-                0x0802d450       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d450                keyboard_arp_has_hold_activity
+                0x0802d454       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d454                keyboard_arp_has_hold_activity
  .text.keyboard_arp_set_hold
-                0x0802d484       0x98 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d484                keyboard_arp_set_hold
+                0x0802d488       0x98 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d488                keyboard_arp_set_hold
  .text.keyboard_arp_set_hold_for_track
-                0x0802d51c       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d51c                keyboard_arp_set_hold_for_track
+                0x0802d520       0x60 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d520                keyboard_arp_set_hold_for_track
  .text.keyboard_arp_set_rate_for_track
-                0x0802d57c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d57c                keyboard_arp_set_rate_for_track
+                0x0802d580       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d580                keyboard_arp_set_rate_for_track
  .text.keyboard_arp_set_oct_for_track
-                0x0802d5ac       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d5ac                keyboard_arp_set_oct_for_track
+                0x0802d5b0       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d5b0                keyboard_arp_set_oct_for_track
  .text.keyboard_arp_set_pattern_for_track
-                0x0802d5dc       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d5dc                keyboard_arp_set_pattern_for_track
+                0x0802d5e0       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d5e0                keyboard_arp_set_pattern_for_track
  .text.keyboard_arp_set_gate_for_track
-                0x0802d608       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d608                keyboard_arp_set_gate_for_track
+                0x0802d60c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d60c                keyboard_arp_set_gate_for_track
  .text.keyboard_arp_set_swing_for_track
-                0x0802d638       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d638                keyboard_arp_set_swing_for_track
+                0x0802d63c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d63c                keyboard_arp_set_swing_for_track
  .text.keyboard_arp_set_accent_for_track
-                0x0802d668       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d668                keyboard_arp_set_accent_for_track
+                0x0802d66c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d66c                keyboard_arp_set_accent_for_track
  .text.keyboard_arp_set_vel_acc_for_track
-                0x0802d694       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d694                keyboard_arp_set_vel_acc_for_track
+                0x0802d698       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d698                keyboard_arp_set_vel_acc_for_track
  .text.keyboard_arp_set_strum_for_track
-                0x0802d6c4       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d6c4                keyboard_arp_set_strum_for_track
+                0x0802d6c8       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d6c8                keyboard_arp_set_strum_for_track
  .text.keyboard_arp_set_offset_for_track
-                0x0802d6f0       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d6f0                keyboard_arp_set_offset_for_track
+                0x0802d6f4       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d6f4                keyboard_arp_set_offset_for_track
  .text.keyboard_arp_set_transpose_for_track
-                0x0802d724       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d724                keyboard_arp_set_transpose_for_track
+                0x0802d728       0x3c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d728                keyboard_arp_set_transpose_for_track
  .text.keyboard_arp_set_spread_for_track
-                0x0802d760       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d760                keyboard_arp_set_spread_for_track
+                0x0802d764       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d764                keyboard_arp_set_spread_for_track
  .text.keyboard_arp_set_dir_for_track
-                0x0802d790       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d790                keyboard_arp_set_dir_for_track
+                0x0802d794       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d794                keyboard_arp_set_dir_for_track
  .text.keyboard_arp_set_sync_for_track
-                0x0802d7bc       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d7bc                keyboard_arp_set_sync_for_track
+                0x0802d7c0       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d7c0                keyboard_arp_set_sync_for_track
  .text.keyboard_arp_get_hold_for_track
-                0x0802d820       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d820                keyboard_arp_get_hold_for_track
+                0x0802d824       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d824                keyboard_arp_get_hold_for_track
  .text.keyboard_arp_get_rate_for_track
-                0x0802d840       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d840                keyboard_arp_get_rate_for_track
+                0x0802d844       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d844                keyboard_arp_get_rate_for_track
  .text.keyboard_arp_get_oct_for_track
-                0x0802d864       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d864                keyboard_arp_get_oct_for_track
+                0x0802d868       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d868                keyboard_arp_get_oct_for_track
  .text.keyboard_arp_get_pattern_for_track
-                0x0802d888       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d888                keyboard_arp_get_pattern_for_track
+                0x0802d88c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d88c                keyboard_arp_get_pattern_for_track
  .text.keyboard_arp_get_gate_for_track
-                0x0802d8ac       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d8ac                keyboard_arp_get_gate_for_track
+                0x0802d8b0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d8b0                keyboard_arp_get_gate_for_track
  .text.keyboard_arp_get_swing_for_track
-                0x0802d8d0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d8d0                keyboard_arp_get_swing_for_track
+                0x0802d8d4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d8d4                keyboard_arp_get_swing_for_track
  .text.keyboard_arp_get_accent_for_track
-                0x0802d8f4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d8f4                keyboard_arp_get_accent_for_track
+                0x0802d8f8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d8f8                keyboard_arp_get_accent_for_track
  .text.keyboard_arp_get_vel_acc_for_track
-                0x0802d918       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d918                keyboard_arp_get_vel_acc_for_track
+                0x0802d91c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d91c                keyboard_arp_get_vel_acc_for_track
  .text.keyboard_arp_get_strum_for_track
-                0x0802d93c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d93c                keyboard_arp_get_strum_for_track
+                0x0802d940       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d940                keyboard_arp_get_strum_for_track
  .text.keyboard_arp_get_offset_for_track
-                0x0802d960       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d960                keyboard_arp_get_offset_for_track
+                0x0802d964       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d964                keyboard_arp_get_offset_for_track
  .text.keyboard_arp_get_transpose_for_track
-                0x0802d984       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d984                keyboard_arp_get_transpose_for_track
+                0x0802d988       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d988                keyboard_arp_get_transpose_for_track
  .text.keyboard_arp_get_spread_for_track
-                0x0802d9a8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d9a8                keyboard_arp_get_spread_for_track
+                0x0802d9ac       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d9ac                keyboard_arp_get_spread_for_track
  .text.keyboard_arp_get_dir_for_track
-                0x0802d9cc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d9cc                keyboard_arp_get_dir_for_track
+                0x0802d9d0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d9d0                keyboard_arp_get_dir_for_track
  .text.keyboard_arp_get_sync_for_track
-                0x0802d9f0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802d9f0                keyboard_arp_get_sync_for_track
+                0x0802d9f4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802d9f4                keyboard_arp_get_sync_for_track
  .text.keyboard_arp_on_mode_enter
-                0x0802da14       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802da14                keyboard_arp_on_mode_enter
+                0x0802da18       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802da18                keyboard_arp_on_mode_enter
  .text.keyboard_arp_on_mode_enter_silent
-                0x0802da2c       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802da2c                keyboard_arp_on_mode_enter_silent
+                0x0802da30       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802da30                keyboard_arp_on_mode_enter_silent
  .text.keyboard_arp_on_mode_leave
-                0x0802da44       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802da44                keyboard_arp_on_mode_leave
+                0x0802da48       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802da48                keyboard_arp_on_mode_leave
  .text.keyboard_arp_clear_track
-                0x0802da78       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802da78                keyboard_arp_clear_track
+                0x0802da7c       0x64 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802da7c                keyboard_arp_clear_track
  .text.keyboard_arp_clear_state_silent
-                0x0802dadc       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
-                0x0802dadc                keyboard_arp_clear_state_silent
+                0x0802dae0       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x0802dae0                keyboard_arp_clear_state_silent
  .text.keyboard_engine_mono_remove_at
-                0x0802dafc       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802db00       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_live_rec_push_internal_channel
-                0x0802db4c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802db50       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_live_rec_pop_internal_channel
-                0x0802db8c       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802db90       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_get_play_owner_track
-                0x0802dbb8       0x22 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802dbbc       0x22 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_get_track_midi_channel_zero_based
-                0x0802dbda        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802dbde        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_active_track_has_midi_note_path
-                0x0802dbe8       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802dbec       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_track_has_midi_note_path
-                0x0802dc16       0x32 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802dc1a       0x32 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_emit_note_for_track
-                0x0802dc48      0x174 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802dc4c      0x174 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_send_note_for_owner_track
-                0x0802ddbc      0x184 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802ddc0      0x184 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_dispatch_note_to_matching_tracks
-                0x0802df40       0xd2 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
- *fill*         0x0802e012        0x2 
+                0x0802df44       0xd2 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+ *fill*         0x0802e016        0x2 
  .text.keyboard_engine_note_on_internal
-                0x0802e014       0xd8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e018       0xd8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_all_notes_off_local_track
-                0x0802e0ec       0x84 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e0f0       0x84 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_all_notes_off_for_owner
-                0x0802e170       0x5e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
- *fill*         0x0802e1ce        0x2 
+                0x0802e174       0x5e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+ *fill*         0x0802e1d2        0x2 
  .text.keyboard_engine_note_off_internal
-                0x0802e1d0       0xf4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e1d4       0xf4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .text.keyboard_engine_note_on
-                0x0802e2c4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e2c4                keyboard_engine_note_on
+                0x0802e2c8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e2c8                keyboard_engine_note_on
  .text.keyboard_engine_note_off
-                0x0802e2e0       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e2e0                keyboard_engine_note_off
+                0x0802e2e4       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e2e4                keyboard_engine_note_off
  .text.keyboard_engine_note_on_for_track
-                0x0802e2f8       0x8e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e2f8                keyboard_engine_note_on_for_track
+                0x0802e2fc       0x8e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e2fc                keyboard_engine_note_on_for_track
  .text.keyboard_engine_note_off_for_track
-                0x0802e386       0x8a CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e386                keyboard_engine_note_off_for_track
+                0x0802e38a       0x8a CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e38a                keyboard_engine_note_off_for_track
  .text.keyboard_engine_all_notes_off_for_track
-                0x0802e410       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e410                keyboard_engine_all_notes_off_for_track
+                0x0802e414       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e414                keyboard_engine_all_notes_off_for_track
  .text.keyboard_engine_clear_state_silent
-                0x0802e490       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e490                keyboard_engine_clear_state_silent
+                0x0802e494       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e494                keyboard_engine_clear_state_silent
  .text.keyboard_engine_midi_receive
-                0x0802e4e4      0x1b6 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
-                0x0802e4e4                keyboard_engine_midi_receive
+                0x0802e4e8      0x1b6 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x0802e4e8                keyboard_engine_midi_receive
  .text.keyboard_input_all_notes_off_sink
-                0x0802e69a       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
+                0x0802e69e       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
  .text.keyboard_input_note_off_sink
-                0x0802e6ba       0x3a CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
+                0x0802e6be       0x3a CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
  .text.keyboard_input_note_on_sink
-                0x0802e6f4       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
+                0x0802e6f8       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
  .text.keyboard_input_init
-                0x0802e738       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
-                0x0802e738                keyboard_input_init
+                0x0802e73c       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
+                0x0802e73c                keyboard_input_init
  .text.keyboard_input_process_hall
-                0x0802e760       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
-                0x0802e760                keyboard_input_process_hall
+                0x0802e764       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_input.c.obj
+                0x0802e764                keyboard_input_process_hall
  .text.keyboard_params_apply
-                0x0802e778       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e77c       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
  .text.keyboard_params_init
-                0x0802e7b8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e7b8                keyboard_params_init
+                0x0802e7bc        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e7bc                keyboard_params_init
  .text.keyboard_params_set_root
-                0x0802e7c0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e7c0                keyboard_params_set_root
+                0x0802e7c4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e7c4                keyboard_params_set_root
  .text.keyboard_params_set_scale
-                0x0802e7e4       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e7e4                keyboard_params_set_scale
+                0x0802e7e8       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e7e8                keyboard_params_set_scale
  .text.keyboard_params_set_omnichord
-                0x0802e7fc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e7fc                keyboard_params_set_omnichord
+                0x0802e800       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e800                keyboard_params_set_omnichord
  .text.keyboard_params_set_note_order
-                0x0802e80c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e80c                keyboard_params_set_note_order
+                0x0802e810       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e810                keyboard_params_set_note_order
  .text.keyboard_params_set_chord_override
-                0x0802e81c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e81c                keyboard_params_set_chord_override
+                0x0802e820       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e820                keyboard_params_set_chord_override
  .text.keyboard_params_set_mono_last
-                0x0802e82c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e82c                keyboard_params_set_mono_last
+                0x0802e830        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e830                keyboard_params_set_mono_last
  .text.keyboard_params_get_omnichord
-                0x0802e838        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e838                keyboard_params_get_omnichord
+                0x0802e83c        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e83c                keyboard_params_get_omnichord
  .text.keyboard_params_get_mono_last
-                0x0802e844        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
-                0x0802e844                keyboard_params_get_mono_last
+                0x0802e848        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+                0x0802e848                keyboard_params_get_mono_last
  .text.keyboard_runtime_reset_midi_state
-                0x0802e850       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e854       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
  .text.keyboard_runtime_hall_mode_uses_arp_engine
-                0x0802e884       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e888       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
  .text.keyboard_runtime_handle_note_off
-                0x0802e894       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e898       0x5c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
  .text.keyboard_runtime_init
-                0x0802e8f0       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e8f0                keyboard_runtime_init
+                0x0802e8f4       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e8f4                keyboard_runtime_init
  .text.keyboard_runtime_tick
-                0x0802e904       0x1e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e904                keyboard_runtime_tick
+                0x0802e908       0x1e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e908                keyboard_runtime_tick
  .text.keyboard_runtime_set_root
-                0x0802e922        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e922                keyboard_runtime_set_root
+                0x0802e926        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e926                keyboard_runtime_set_root
  .text.keyboard_runtime_set_scale
-                0x0802e92a        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e92a                keyboard_runtime_set_scale
+                0x0802e92e        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e92e                keyboard_runtime_set_scale
  .text.keyboard_runtime_set_omnichord
-                0x0802e932        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e932                keyboard_runtime_set_omnichord
+                0x0802e936        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e936                keyboard_runtime_set_omnichord
  .text.keyboard_runtime_set_note_order
-                0x0802e93a        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e93a                keyboard_runtime_set_note_order
+                0x0802e93e        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e93e                keyboard_runtime_set_note_order
  .text.keyboard_runtime_set_chord_override
-                0x0802e942        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e942                keyboard_runtime_set_chord_override
+                0x0802e946        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e946                keyboard_runtime_set_chord_override
  .text.keyboard_runtime_set_mono_last
-                0x0802e94a       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e94a                keyboard_runtime_set_mono_last
+                0x0802e94e       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e94e                keyboard_runtime_set_mono_last
  .text.keyboard_runtime_set_arp_hold
-                0x0802e95c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e95c                keyboard_runtime_set_arp_hold
+                0x0802e960       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e960                keyboard_runtime_set_arp_hold
  .text.keyboard_runtime_set_arp_rate
-                0x0802e96c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e96c                keyboard_runtime_set_arp_rate
+                0x0802e970       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e970                keyboard_runtime_set_arp_rate
  .text.keyboard_runtime_set_arp_oct
-                0x0802e97c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e97c                keyboard_runtime_set_arp_oct
+                0x0802e980       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e980                keyboard_runtime_set_arp_oct
  .text.keyboard_runtime_set_arp_pattern
-                0x0802e98c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e98c                keyboard_runtime_set_arp_pattern
+                0x0802e990       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e990                keyboard_runtime_set_arp_pattern
  .text.keyboard_runtime_set_arp_gate
-                0x0802e99c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e99c                keyboard_runtime_set_arp_gate
+                0x0802e9a0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e9a0                keyboard_runtime_set_arp_gate
  .text.keyboard_runtime_set_arp_swing
-                0x0802e9ac       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e9ac                keyboard_runtime_set_arp_swing
+                0x0802e9b0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e9b0                keyboard_runtime_set_arp_swing
  .text.keyboard_runtime_set_arp_accent
-                0x0802e9bc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e9bc                keyboard_runtime_set_arp_accent
+                0x0802e9c0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e9c0                keyboard_runtime_set_arp_accent
  .text.keyboard_runtime_set_arp_vel_acc
-                0x0802e9cc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e9cc                keyboard_runtime_set_arp_vel_acc
+                0x0802e9d0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e9d0                keyboard_runtime_set_arp_vel_acc
  .text.keyboard_runtime_set_arp_strum
-                0x0802e9dc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e9dc                keyboard_runtime_set_arp_strum
+                0x0802e9e0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e9e0                keyboard_runtime_set_arp_strum
  .text.keyboard_runtime_set_arp_offset
-                0x0802e9ec       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e9ec                keyboard_runtime_set_arp_offset
+                0x0802e9f0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802e9f0                keyboard_runtime_set_arp_offset
  .text.keyboard_runtime_set_arp_transpose
-                0x0802e9fc       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802e9fc                keyboard_runtime_set_arp_transpose
+                0x0802ea00       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea00                keyboard_runtime_set_arp_transpose
  .text.keyboard_runtime_set_arp_spread
-                0x0802ea0c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea0c                keyboard_runtime_set_arp_spread
+                0x0802ea10       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea10                keyboard_runtime_set_arp_spread
  .text.keyboard_runtime_set_arp_dir
-                0x0802ea1c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea1c                keyboard_runtime_set_arp_dir
+                0x0802ea20       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea20                keyboard_runtime_set_arp_dir
  .text.keyboard_runtime_set_arp_sync
-                0x0802ea2c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea2c                keyboard_runtime_set_arp_sync
+                0x0802ea30       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea30                keyboard_runtime_set_arp_sync
  .text.keyboard_runtime_set_arp_hold_for_track
-                0x0802ea3c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea3c                keyboard_runtime_set_arp_hold_for_track
+                0x0802ea40        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea40                keyboard_runtime_set_arp_hold_for_track
  .text.keyboard_runtime_set_arp_rate_for_track
-                0x0802ea44        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea44                keyboard_runtime_set_arp_rate_for_track
+                0x0802ea48        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea48                keyboard_runtime_set_arp_rate_for_track
  .text.keyboard_runtime_set_arp_oct_for_track
-                0x0802ea4c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea4c                keyboard_runtime_set_arp_oct_for_track
+                0x0802ea50        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea50                keyboard_runtime_set_arp_oct_for_track
  .text.keyboard_runtime_set_arp_pattern_for_track
-                0x0802ea54        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea54                keyboard_runtime_set_arp_pattern_for_track
+                0x0802ea58        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea58                keyboard_runtime_set_arp_pattern_for_track
  .text.keyboard_runtime_set_arp_gate_for_track
-                0x0802ea5c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea5c                keyboard_runtime_set_arp_gate_for_track
+                0x0802ea60        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea60                keyboard_runtime_set_arp_gate_for_track
  .text.keyboard_runtime_set_arp_swing_for_track
-                0x0802ea64        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea64                keyboard_runtime_set_arp_swing_for_track
+                0x0802ea68        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea68                keyboard_runtime_set_arp_swing_for_track
  .text.keyboard_runtime_set_arp_accent_for_track
-                0x0802ea6c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea6c                keyboard_runtime_set_arp_accent_for_track
+                0x0802ea70        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea70                keyboard_runtime_set_arp_accent_for_track
  .text.keyboard_runtime_set_arp_vel_acc_for_track
-                0x0802ea74        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea74                keyboard_runtime_set_arp_vel_acc_for_track
+                0x0802ea78        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea78                keyboard_runtime_set_arp_vel_acc_for_track
  .text.keyboard_runtime_set_arp_strum_for_track
-                0x0802ea7c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea7c                keyboard_runtime_set_arp_strum_for_track
+                0x0802ea80        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea80                keyboard_runtime_set_arp_strum_for_track
  .text.keyboard_runtime_set_arp_offset_for_track
-                0x0802ea84        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea84                keyboard_runtime_set_arp_offset_for_track
+                0x0802ea88        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea88                keyboard_runtime_set_arp_offset_for_track
  .text.keyboard_runtime_set_arp_transpose_for_track
-                0x0802ea8c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea8c                keyboard_runtime_set_arp_transpose_for_track
+                0x0802ea90        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea90                keyboard_runtime_set_arp_transpose_for_track
  .text.keyboard_runtime_set_arp_spread_for_track
-                0x0802ea94        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea94                keyboard_runtime_set_arp_spread_for_track
+                0x0802ea98        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ea98                keyboard_runtime_set_arp_spread_for_track
  .text.keyboard_runtime_set_arp_dir_for_track
-                0x0802ea9c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ea9c                keyboard_runtime_set_arp_dir_for_track
+                0x0802eaa0        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802eaa0                keyboard_runtime_set_arp_dir_for_track
  .text.keyboard_runtime_set_arp_sync_for_track
-                0x0802eaa4        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802eaa4                keyboard_runtime_set_arp_sync_for_track
+                0x0802eaa8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802eaa8                keyboard_runtime_set_arp_sync_for_track
  .text.keyboard_runtime_step_octave
-                0x0802eaac       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802eaac                keyboard_runtime_step_octave
- *fill*         0x0802eabe        0x2 
+                0x0802eab0       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802eab0                keyboard_runtime_step_octave
+ *fill*         0x0802eac2        0x2 
  .text.keyboard_runtime_process_midi
-                0x0802eac0      0x140 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802eac0                keyboard_runtime_process_midi
+                0x0802eac4      0x140 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802eac4                keyboard_runtime_process_midi
  .text.keyboard_runtime_process_hall
-                0x0802ec00        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ec00                keyboard_runtime_process_hall
+                0x0802ec04        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ec04                keyboard_runtime_process_hall
  .text.keyboard_runtime_clear_arp_track
-                0x0802ec08        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ec08                keyboard_runtime_clear_arp_track
+                0x0802ec0c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ec0c                keyboard_runtime_clear_arp_track
  .text.keyboard_runtime_sync_track_focus_context
-                0x0802ec10       0x4a CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ec10                keyboard_runtime_sync_track_focus_context
+                0x0802ec14       0x4a CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ec14                keyboard_runtime_sync_track_focus_context
  .text.keyboard_runtime_on_hall_mode_changed
-                0x0802ec5a       0x6e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ec5a                keyboard_runtime_on_hall_mode_changed
+                0x0802ec5e       0x6e CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ec5e                keyboard_runtime_on_hall_mode_changed
  .text.keyboard_runtime_get_omnichord
-                0x0802ecc8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ecc8                keyboard_runtime_get_omnichord
+                0x0802eccc        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802eccc                keyboard_runtime_get_omnichord
  .text.keyboard_runtime_get_octave_shift
-                0x0802ecd0        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ecd0                keyboard_runtime_get_octave_shift
+                0x0802ecd4        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ecd4                keyboard_runtime_get_octave_shift
  .text.keyboard_runtime_get_arp_hold_for_track
-                0x0802ecd8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ecd8                keyboard_runtime_get_arp_hold_for_track
+                0x0802ecdc        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ecdc                keyboard_runtime_get_arp_hold_for_track
  .text.keyboard_runtime_get_arp_rate_for_track
-                0x0802ece0        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ece0                keyboard_runtime_get_arp_rate_for_track
+                0x0802ece4        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ece4                keyboard_runtime_get_arp_rate_for_track
  .text.keyboard_runtime_get_arp_oct_for_track
-                0x0802ece8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ece8                keyboard_runtime_get_arp_oct_for_track
+                0x0802ecec        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ecec                keyboard_runtime_get_arp_oct_for_track
  .text.keyboard_runtime_get_arp_pattern_for_track
-                0x0802ecf0        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ecf0                keyboard_runtime_get_arp_pattern_for_track
+                0x0802ecf4        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ecf4                keyboard_runtime_get_arp_pattern_for_track
  .text.keyboard_runtime_get_arp_gate_for_track
-                0x0802ecf8        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ecf8                keyboard_runtime_get_arp_gate_for_track
+                0x0802ecfc        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ecfc                keyboard_runtime_get_arp_gate_for_track
  .text.keyboard_runtime_get_arp_swing_for_track
-                0x0802ed00        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed00                keyboard_runtime_get_arp_swing_for_track
+                0x0802ed04        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed04                keyboard_runtime_get_arp_swing_for_track
  .text.keyboard_runtime_get_arp_accent_for_track
-                0x0802ed08        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed08                keyboard_runtime_get_arp_accent_for_track
+                0x0802ed0c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed0c                keyboard_runtime_get_arp_accent_for_track
  .text.keyboard_runtime_get_arp_vel_acc_for_track
-                0x0802ed10        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed10                keyboard_runtime_get_arp_vel_acc_for_track
+                0x0802ed14        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed14                keyboard_runtime_get_arp_vel_acc_for_track
  .text.keyboard_runtime_get_arp_strum_for_track
-                0x0802ed18        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed18                keyboard_runtime_get_arp_strum_for_track
+                0x0802ed1c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed1c                keyboard_runtime_get_arp_strum_for_track
  .text.keyboard_runtime_get_arp_offset_for_track
-                0x0802ed20        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed20                keyboard_runtime_get_arp_offset_for_track
+                0x0802ed24        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed24                keyboard_runtime_get_arp_offset_for_track
  .text.keyboard_runtime_get_arp_transpose_for_track
-                0x0802ed28        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed28                keyboard_runtime_get_arp_transpose_for_track
+                0x0802ed2c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed2c                keyboard_runtime_get_arp_transpose_for_track
  .text.keyboard_runtime_get_arp_spread_for_track
-                0x0802ed30        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed30                keyboard_runtime_get_arp_spread_for_track
+                0x0802ed34        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed34                keyboard_runtime_get_arp_spread_for_track
  .text.keyboard_runtime_get_arp_dir_for_track
-                0x0802ed38        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed38                keyboard_runtime_get_arp_dir_for_track
+                0x0802ed3c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed3c                keyboard_runtime_get_arp_dir_for_track
  .text.keyboard_runtime_get_arp_sync_for_track
-                0x0802ed40        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
-                0x0802ed40                keyboard_runtime_get_arp_sync_for_track
+                0x0802ed44        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x0802ed44                keyboard_runtime_get_arp_sync_for_track
  .text.kbd_flush_sounding_notes
-                0x0802ed48       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802ed4c       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .text.kbd_slot_to_semitone_offset
-                0x0802ed8c       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802ed90       0x50 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .text.kbd_pc_in_current_scale
-                0x0802eddc       0x6c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802ede0       0x6c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .text.kbd_quantize_to_current_scale
-                0x0802ee48       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802ee4c       0xa4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .text.kbd_refresh_sounding_state
-                0x0802eeec      0x2d4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802eef0      0x2d4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .text.ui_keyboard_app_init
-                0x0802f1c0       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f1c0                ui_keyboard_app_init
+                0x0802f1c4       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f1c4                ui_keyboard_app_init
  .text.ui_keyboard_app_set_params
-                0x0802f1ec       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f1ec                ui_keyboard_app_set_params
+                0x0802f1f0       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f1f0                ui_keyboard_app_set_params
  .text.ui_keyboard_app_set_note_order
-                0x0802f224       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f224                ui_keyboard_app_set_note_order
+                0x0802f228       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f228                ui_keyboard_app_set_note_order
  .text.ui_keyboard_app_set_chord_override
-                0x0802f244       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f244                ui_keyboard_app_set_chord_override
+                0x0802f248       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f248                ui_keyboard_app_set_chord_override
  .text.ui_keyboard_app_set_velocity
-                0x0802f268       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f268                ui_keyboard_app_set_velocity
+                0x0802f26c       0x14 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f26c                ui_keyboard_app_set_velocity
  .text.ui_keyboard_app_set_octave_shift
-                0x0802f27c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f27c                ui_keyboard_app_set_octave_shift
+                0x0802f280       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f280                ui_keyboard_app_set_octave_shift
  .text.ui_keyboard_app_get_octave_shift
-                0x0802f2ac        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f2ac                ui_keyboard_app_get_octave_shift
+                0x0802f2b0        0xc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f2b0                ui_keyboard_app_get_octave_shift
  .text.ui_keyboard_app_note_button
-                0x0802f2b8       0xbc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f2b8                ui_keyboard_app_note_button
+                0x0802f2bc       0xbc CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f2bc                ui_keyboard_app_note_button
  .text.ui_keyboard_app_chord_button
-                0x0802f374       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f374                ui_keyboard_app_chord_button
+                0x0802f378       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f378                ui_keyboard_app_chord_button
  .text.ui_keyboard_app_clear_state_silent
-                0x0802f400       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f400                ui_keyboard_app_clear_state_silent
+                0x0802f404       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f404                ui_keyboard_app_clear_state_silent
  .text.ui_keyboard_app_tick
-                0x0802f418        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
-                0x0802f418                ui_keyboard_app_tick
- *fill*         0x0802f41a        0x2 
+                0x0802f41c        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x0802f41c                ui_keyboard_app_tick
+ *fill*         0x0802f41e        0x2 
  .text.midi_clock_hw_stop
-                0x0802f41c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f420       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.usb_tx_queue_pop
-                0x0802f440       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f444       0x54 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.usb_tx_queue_push_front
-                0x0802f494       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f498       0x74 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.midi_clock_recompute_period
-                0x0802f508       0xd4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f50c       0xd4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.usb_device_send_packets
-                0x0802f5dc       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f5e0       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.midi_clock_hw_start
-                0x0802f65c       0x70 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f660       0x70 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.midi_usb_try_flush_internal
-                0x0802f6cc      0x150 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f6d0      0x150 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.backend_usb_device_send
-                0x0802f81c      0x3a8 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802f820      0x3a8 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.midi_send
-                0x0802fbc4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fbc8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.midi_channel_mode_cc
-                0x0802fbe0       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fbe4       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .text.midi_internal_receive_with_source
-                0x0802fc0e       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fc0e                midi_internal_receive_with_source
+                0x0802fc12       0x44 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fc12                midi_internal_receive_with_source
  .text.midi_internal_receive
-                0x0802fc52        0xa CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fc52                midi_internal_receive
+                0x0802fc56        0xa CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fc56                midi_internal_receive
  .text.HAL_TIM_PeriodElapsedCallback
-                0x0802fc5c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fc5c                HAL_TIM_PeriodElapsedCallback
+                0x0802fc60       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fc60                HAL_TIM_PeriodElapsedCallback
  .text.midi_poll
-                0x0802fc78      0x140 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fc78                midi_poll
+                0x0802fc7c      0x140 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fc7c                midi_poll
  .text.midi_send_raw
-                0x0802fdb8        0xe CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fdb8                midi_send_raw
- *fill*         0x0802fdc6        0x2 
+                0x0802fdbc        0xe CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fdbc                midi_send_raw
+ *fill*         0x0802fdca        0x2 
  .text.midi_clock_set_mode
-                0x0802fdc8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fdc8                midi_clock_set_mode
+                0x0802fdcc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fdcc                midi_clock_set_mode
  .text.midi_clock_set_bpm_milli
-                0x0802fdec       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fdec                midi_clock_set_bpm_milli
- *fill*         0x0802fdfe        0x2 
+                0x0802fdf0       0x12 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fdf0                midi_clock_set_bpm_milli
+ *fill*         0x0802fe02        0x2 
  .text.midi_clock_set_running
-                0x0802fe00       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fe00                midi_clock_set_running
+                0x0802fe04       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fe04                midi_clock_set_running
  .text.midi_note_off
-                0x0802fe30       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fe30                midi_note_off
+                0x0802fe34       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fe34                midi_note_off
  .text.midi_note_on
-                0x0802fe5e       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fe5e                midi_note_on
- .text.midi_cc  0x0802fe96       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fe96                midi_cc
+                0x0802fe62       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fe62                midi_note_on
+ .text.midi_cc  0x0802fe9a       0x2e CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fe9a                midi_cc
  .text.midi_program_change
-                0x0802fec4       0x26 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fec4                midi_program_change
+                0x0802fec8       0x26 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fec8                midi_program_change
  .text.midi_clock
-                0x0802feea       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802feea                midi_clock
- *fill*         0x0802ff02        0x2 
+                0x0802feee       0x18 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802feee                midi_clock
+ *fill*         0x0802ff06        0x2 
  .text.midi_clock_on_timer_tick
-                0x0802ff04       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802ff04                midi_clock_on_timer_tick
+                0x0802ff08       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802ff08                midi_clock_on_timer_tick
  .text.HAL_TIM_OC_DelayElapsedCallback
-                0x0802ff90       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802ff90                HAL_TIM_OC_DelayElapsedCallback
+                0x0802ff94       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802ff94                HAL_TIM_OC_DelayElapsedCallback
  .text.midi_stop
-                0x0802ffb0       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802ffb0                midi_stop
+                0x0802ffb4       0x2c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802ffb4                midi_stop
  .text.midi_all_sound_off
-                0x0802ffdc        0xc CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802ffdc                midi_all_sound_off
+                0x0802ffe0        0xc CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802ffe0                midi_all_sound_off
  .text.midi_all_notes_off
-                0x0802ffe8        0xc CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802ffe8                midi_all_notes_off
+                0x0802ffec        0xc CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802ffec                midi_all_notes_off
  .text.midi_clock_tx_probe_reset
-                0x0802fff4       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x0802fff4                midi_clock_tx_probe_reset
+                0x0802fff8       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x0802fff8                midi_clock_tx_probe_reset
  .text.midi_stats_reset
-                0x08030010       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x08030010                midi_stats_reset
+                0x08030014       0x34 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x08030014                midi_stats_reset
  .text.midi_init
-                0x08030044       0x88 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x08030044                midi_init
+                0x08030048       0x88 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x08030048                midi_init
  .text.midi_usb_rx_submit_from_isr
-                0x080300cc       0xe0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x080300cc                midi_usb_rx_submit_from_isr
+                0x080300d0       0xe0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x080300d0                midi_usb_rx_submit_from_isr
  .text.USBD_MIDI_OnPacketsReceived
-                0x080301ac        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x080301ac                USBD_MIDI_OnPacketsReceived
+                0x080301b0        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x080301b0                USBD_MIDI_OnPacketsReceived
  .text.USBD_MIDI_OnPacketsSent
-                0x080301b4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x080301b4                USBD_MIDI_OnPacketsSent
+                0x080301b8       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x080301b8                USBD_MIDI_OnPacketsSent
  .text.midi_usb_tx_deferred_service_from_isr
-                0x080301fc       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x080301fc                midi_usb_tx_deferred_service_from_isr
+                0x08030200       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x08030200                midi_usb_tx_deferred_service_from_isr
  .text.midi_host_poll_bounded
-                0x08030224       0x6c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi_host.c.obj
-                0x08030224                midi_host_poll_bounded
+                0x08030228       0x6c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi_host.c.obj
+                0x08030228                midi_host_poll_bounded
  .text.USBH_MIDI_SOFProcess
-                0x08030290        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
- .text.USBH_MIDI_ClassRequest
                 0x08030294        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+ .text.USBH_MIDI_ClassRequest
+                0x08030298        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
  .text.USBH_MIDI_Process
-                0x08030298      0x1d0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+                0x0803029c      0x1d0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
  .text.USBH_MIDI_InterfaceDeInit
-                0x08030468       0x66 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
- *fill*         0x080304ce        0x2 
+                0x0803046c       0x66 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+ *fill*         0x080304d2        0x2 
  .text.USBH_MIDI_InterfaceInit
-                0x080304d0      0x1dc CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+                0x080304d4      0x1dc CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
  .text.USBH_MIDI_ReadPacket
-                0x080306ac       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
-                0x080306ac                USBH_MIDI_ReadPacket
+                0x080306b0       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+                0x080306b0                USBH_MIDI_ReadPacket
  .text.USBH_MIDI_IsReady
-                0x0803072c       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
-                0x0803072c                USBH_MIDI_IsReady
- *fill*         0x0803075c        0x4 
+                0x08030730       0x30 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+                0x08030730                USBH_MIDI_IsReady
  .text.mod_lfo_phase_inc_from_hz
                 0x08030760       0x8c CMakeFiles/BRICK6_CUBE.dir/Src/Mod/mod_lfo_v1.c.obj
  .text.mod_lfo_quantize_sync_rate
@@ -27318,7 +27320,7 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x081c0000                        . = ALIGN (0x20)
                 0x0809650c                        _sidata = LOADADDR (.data)
 
-.data           0x24000000      0x96c load address 0x0809650c
+.data           0x24000000      0x968 load address 0x0809650c
                 0x24000000                        . = ALIGN (0x4)
                 0x24000000                        _sdata = .
  *(.data)
@@ -27375,131 +27377,127 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x24000158        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_master_macro.c.obj
  .data._ZL15g_reverb_global
                 0x2400015c       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/Audio/fx_reverb.cpp.obj
- .data.g_runtime_last_ui_active_track
-                0x24000184        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
  .data.g_runtime_last_drum_processed
-                0x24000185        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
+                0x24000184        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
  .data.g_runtime_track_enabled
-                0x24000186        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
- *fill*         0x24000187        0x1 
+                0x24000185        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_audio_runtime.c.obj
  .data.last_step.0
-                0x24000188        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
- *fill*         0x2400018a        0x2 
+                0x24000186        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
  .data.macro_last_step.2
-                0x2400018c        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
+                0x24000188        0x8 CMakeFiles/BRICK6_CUBE.dir/Src/Core/brick6_master_control.c.obj
  .data.engine_frames_per_tick
-                0x24000194        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
+                0x24000190        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/engine_tasklet.c.obj
  .data.g_track_runtime_global_dirty
-                0x24000198        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x24000199        0x3 
+                0x24000194        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x24000195        0x3 
  .data.g_keyboard_arp_current
-                0x2400019c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x24000198        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .data.midi_clock_period_den
-                0x240001a0        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x2400019c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .data.midi_clock_timer_hz
-                0x240001a4        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240001a0        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .data.midi_clock_bpm_milli
-                0x240001a8        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240001a4        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .data.midi_clock_dest
-                0x240001ac        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240001a8        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .data.midi_clock_mode
-                0x240001ad        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- *fill*         0x240001ae        0x2 
+                0x240001a9        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ *fill*         0x240001aa        0x2 
  .data.USBH_MIDI_Class
-                0x240001b0       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
-                0x240001b0                USBH_MIDI_Class
- .data.Stat     0x240001d0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
+                0x240001ac       0x20 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
+                0x240001ac                USBH_MIDI_Class
+ .data.Stat     0x240001cc        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/SD/sd_diskio.c.obj
  .data.g_looper_storage_raw_last_error
-                0x240001d1        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj
+                0x240001cd        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj
  .data.g_looper_storage_raw_last_failed_slot
-                0x240001d2        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj
- *fill*         0x240001d3        0x1 
+                0x240001ce        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/looper_storage.c.obj
+ *fill*         0x240001cf        0x1 
  .data.g_wav_catalog_lookup_index
-                0x240001d4        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj
- *fill*         0x240001d6        0x2 
+                0x240001d0        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/Storage/wav_loader.c.obj
+ *fill*         0x240001d2        0x2 
  .data.g_ui_template_arp_state
-                0x240001d8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
+                0x240001d4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_arp.c.obj
  .data.g_ui_template_rec_cfg_state
-                0x240001fc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x240001f8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
  .data.g_ui_template_cfg_state
-                0x24000220       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
+                0x2400021c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_cfg.c.obj
  .data.g_ui_template_vca_state
-                0x24000244       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x24000240       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
  .data.g_ui_template_filter_state
-                0x24000268       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x24000264       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
  .data.g_ui_template_vca_family
-                0x2400028c       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x24000288       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
  .data.g_ui_template_filter_family_audio
-                0x240002d4       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
+                0x240002d0       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_filter.c.obj
  .data.g_ui_template_keyboard_state
-                0x2400031c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
+                0x24000318       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_keyboard.c.obj
  .data.g_ui_template_macro_state
-                0x24000340       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
+                0x2400033c       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_macro.c.obj
  .data.g_ui_template_mix_state
-                0x24000364       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
+                0x24000360       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mix.c.obj
  .data.g_ui_template_mod_state
-                0x24000388       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
+                0x24000384       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_mod.c.obj
  .data.g_ui_template_play_state
-                0x240003ac       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
+                0x240003a8       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_play.c.obj
  .data.g_ui_template_seq_state
-                0x240003d0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
+                0x240003cc       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_seq.c.obj
  .data.g_ui_template_tone_state
-                0x240003f4       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x240003f0       0x24 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .data.g_ui_template_tone_family_drum
-                0x24000418       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
+                0x24000414       0x48 CMakeFiles/BRICK6_CUBE.dir/Src/UI/pages/ui_page_template_tone.c.obj
  .data.g_looper_export_last_progress
-                0x24000460        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x2400045c        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
  .data.g_looper_take_track
-                0x24000461        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x2400045d        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
  .data.g_active_looper_record_track
-                0x24000462        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
+                0x2400045e        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_core_runtime_bridge.c.obj
  .data.g_ui_requested_ensemble_page
-                0x24000463        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_navigation.c.obj
+                0x2400045f        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_navigation.c.obj
  .data.g_ui_param_bank_track
-                0x24000464        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_param.c.obj
- *fill*         0x24000465        0x3 
+                0x24000460        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_param.c.obj
+ *fill*         0x24000461        0x3 
  .data.g_ui_param
-                0x24000468        0xa CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_param.c.obj
- *fill*         0x24000472        0x2 
+                0x24000464        0xa CMakeFiles/BRICK6_CUBE.dir/Src/UI/ui_param.c.obj
+ *fill*         0x2400046e        0x2 
  .data._ZN6braids16AnalogOscillator9fn_table_E
-                0x24000474       0x48 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/analog_oscillator.cc.obj
-                0x24000474                braids::AnalogOscillator::fn_table_
+                0x24000470       0x48 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/analog_oscillator.cc.obj
+                0x24000470                braids::AnalogOscillator::fn_table_
  .data._ZN6braids17DigitalOscillator9fn_table_E
-                0x240004bc      0x118 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
-                0x240004bc                braids::DigitalOscillator::fn_table_
+                0x240004b8      0x118 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/digital_oscillator.cc.obj
+                0x240004b8                braids::DigitalOscillator::fn_table_
  .data._ZN6braids15MacroOscillator9fn_table_E
-                0x240005d4      0x180 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/macro_oscillator.cc.obj
-                0x240005d4                braids::MacroOscillator::fn_table_
+                0x240005d0      0x180 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/macro_oscillator.cc.obj
+                0x240005d0                braids::MacroOscillator::fn_table_
  .data._ZN6braids14waveform_tableE
-                0x24000754       0x48 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
-                0x24000754                braids::waveform_table
+                0x24000750       0x48 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/braids/resources.cc.obj
+                0x24000750                braids::waveform_table
  .data._ZN6stmlib6Random10rng_state_E
-                0x2400079c        0x4 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/stmlib/utils/random.cc.obj
-                0x2400079c                stmlib::Random::rng_state_
- .data.__sglue  0x240007a0        0xc C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-findfp.o)
-                0x240007a0                __sglue
+                0x24000798        0x4 CMakeFiles/BRICK6_CUBE.dir/mutable_instruments/stmlib/utils/random.cc.obj
+                0x24000798                stmlib::Random::rng_state_
+ .data.__sglue  0x2400079c        0xc C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-findfp.o)
+                0x2400079c                __sglue
  .data._impure_ptr
-                0x240007ac        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-impure.o)
-                0x240007ac                _impure_ptr
+                0x240007a8        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-impure.o)
+                0x240007a8                _impure_ptr
  .data._impure_data
-                0x240007b0       0x4c C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-impure.o)
-                0x240007b0                _impure_data
+                0x240007ac       0x4c C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-impure.o)
+                0x240007ac                _impure_data
  .data.__atexit_recursive_mutex
-                0x240007fc        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-__call_atexit.o)
-                0x240007fc                __atexit_recursive_mutex
+                0x240007f8        0x4 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-__call_atexit.o)
+                0x240007f8                __atexit_recursive_mutex
  .data.__global_locale
-                0x24000800      0x16c C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-locale.o)
-                0x24000800                __global_locale
+                0x240007fc      0x16c C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/../../../../arm-none-eabi/lib/thumb/v7e-m+dp/hard\libc_nano.a(libc_a-locale.o)
+                0x240007fc                __global_locale
  *(.RamFunc)
  *(.RamFunc*)
-                0x2400096c                        . = ALIGN (0x4)
-                0x2400096c                        _edata = .
+                0x24000968                        . = ALIGN (0x4)
+                0x24000968                        _edata = .
 
-.igot.plt       0x2400096c        0x0 load address 0x08096e78
- .igot.plt      0x2400096c        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
-                0x2400096c                        . = ALIGN (0x4)
+.igot.plt       0x24000968        0x0 load address 0x08096e74
+ .igot.plt      0x24000968        0x0 C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712/tools/bin/../lib/gcc/arm-none-eabi/13.3.1/thumb/v7e-m+dp/hard/crtbegin.o
+                0x24000968                        . = ALIGN (0x4)
 
-.bss            0x24000980    0x430d8 load address 0x08096e78
+.bss            0x24000980    0x430d8 load address 0x08096e74
                 0x24000980                        _sbss = .
                 0x24000980                        __bss_start__ = _sbss
  *(.bss)
@@ -27899,135 +27897,138 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
  .bss.g_track_runtime_refresh_all_count
                 0x2402dd2c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
                 0x2402dd2c                g_track_runtime_refresh_all_count
+ .bss.g_track_runtime_logical_track_by_mix_track
+                0x2402dd30        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x2402dd3e        0x2 
  .bss.g_track_runtime_synth_usage
-                0x2402dd30        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x2402dd31        0x3 
+                0x2402dd40        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x2402dd41        0x3 
  .bss.g_track_runtime_track_revision
-                0x2402dd34       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x2402dd44       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .bss.g_track_runtime_revision
-                0x2402dd6c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+                0x2402dd7c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
  .bss.g_track_runtime_track_dirty
-                0x2402dd70        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
- *fill*         0x2402dd7e        0x2 
+                0x2402dd80        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_runtime.c.obj
+ *fill*         0x2402dd8e        0x2 
  .bss.g_track_state_global_revision
-                0x2402dd80        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x2402dd90        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  .bss.g_track_revision
-                0x2402dd84       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x2402dd94       0x38 CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  .bss.g_track_voice_group_role
-                0x2402ddbc        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
- *fill*         0x2402ddca        0x2 
- .bss.g_track_midi_source
                 0x2402ddcc        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  *fill*         0x2402ddda        0x2 
- .bss.g_track_midi_channel
+ .bss.g_track_midi_source
                 0x2402dddc        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  *fill*         0x2402ddea        0x2 
+ .bss.g_track_midi_channel
+                0x2402ddec        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+ *fill*         0x2402ddfa        0x2 
  .bss.g_track_configs
-                0x2402ddec       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
+                0x2402ddfc       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/Core/track_state.c.obj
  .bss.g_kbd_mapper_omnichord
-                0x2402de08        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
+                0x2402de18        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/kbd_input_mapper.c.obj
  .bss.g_keyboard_arp_current_track
-                0x2402de09        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x2402de19        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .bss.g_keyboard_arp_active_track
-                0x2402de0a        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x2402de1a        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .bss.g_keyboard_arp_config_initialized
-                0x2402de0b        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x2402de1b        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .bss.g_keyboard_arp_config
-                0x2402de0c       0xc4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
+                0x2402de1c       0xc4 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_arp.c.obj
  .bss.g_keyboard_engine_mono_active_note
-                0x2402ded0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x2402dee0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_keyboard_engine_mono_active_valid
-                0x2402ded1        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x2402dee1        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_keyboard_engine_mono_held_count
-                0x2402ded2        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
- *fill*         0x2402ded3        0x1 
+                0x2402dee2        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+ *fill*         0x2402dee3        0x1 
  .bss.g_keyboard_engine_mono_held
-                0x2402ded4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x2402dee4       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_keyboard_engine_group_rr_cursor
-                0x2402dee4        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
- *fill*         0x2402def2        0x2 
- .bss.g_keyboard_engine_group_track_active_count
                 0x2402def4        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  *fill*         0x2402df02        0x2 
+ .bss.g_keyboard_engine_group_track_active_count
+                0x2402df04        0xe CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+ *fill*         0x2402df12        0x2 
  .bss.g_keyboard_engine_group_note_count
-                0x2402df04      0x700 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x2402df14      0x700 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_keyboard_engine_group_note_track
-                0x2402e604     0x3800 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x2402e614     0x3800 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_kbd_rec_note_stack_count
-                0x24031e04       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x24031e14       0x80 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_kbd_rec_note_stack_ch
-                0x24031e84      0x400 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+                0x24031e94      0x400 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
  .bss.g_keyboard_engine_sounding_active
-                0x24032284        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
- *fill*         0x24032285        0x3 
+                0x24032294        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_engine.c.obj
+ *fill*         0x24032295        0x3 
  .bss.g_keyboard_params
-                0x24032288        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
- *fill*         0x2403228e        0x2 
+                0x24032298        0x6 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_params.c.obj
+ *fill*         0x2403229e        0x2 
  .bss.g_keyboard_runtime_midi_sustain_down
-                0x24032290       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x240322a0       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
  .bss.g_keyboard_runtime_midi_sustained_release
-                0x240322a0      0x800 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x240322b0      0x800 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
  .bss.g_keyboard_runtime_midi_held_count
-                0x24032aa0      0x800 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
+                0x24032ab0      0x800 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/keyboard_runtime.c.obj
  .bss.g_keyboard_state
-                0x240332a0       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
+                0x240332b0       0x40 CMakeFiles/BRICK6_CUBE.dir/Src/Keyboard/ui_keyboard_app.c.obj
  .bss.midi_usb_tx_deferred_pending
-                0x240332e0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- *fill*         0x240332e1        0x1 
+                0x240332f0        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ *fill*         0x240332f1        0x1 
  .bss.midi_usb_rx_high_water
-                0x240332e2        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332f2        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_rx_count
-                0x240332e4        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332f4        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_rx_tail
-                0x240332e6        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332f6        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_rx_head
-                0x240332e8        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332f8        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_tx_high_water
-                0x240332ea        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332fa        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_tx_count
-                0x240332ec        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332fc        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_tx_tail
-                0x240332ee        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x240332fe        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_tx_head
-                0x240332f0        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- *fill*         0x240332f2        0x2 
+                0x24033300        0x2 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ *fill*         0x24033302        0x2 
  .bss.midi_usb_rx_queue
-                0x240332f4      0x200 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x24033304      0x200 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_usb_tx_queue
-                0x240334f4      0x200 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x24033504      0x200 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_clock_f8_inflight_pending
-                0x240336f4        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x24033704        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_clock_tx_probe
-                0x240336f8       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x240336f8                midi_clock_tx_probe
+                0x24033708       0x28 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x24033708                midi_clock_tx_probe
  .bss.midi_clock_timer_armed
-                0x24033720        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- *fill*         0x24033721        0x3 
+                0x24033730        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ *fill*         0x24033731        0x3 
  .bss.midi_clock_next_ccr
-                0x24033724        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x24033734        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
  .bss.midi_clock_rem_accum
-                0x24033728        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- .bss.midi_clock_period_rem
-                0x2403372c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- .bss.midi_clock_period_ticks
-                0x24033730        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- .bss.midi_clock_running
-                0x24033734        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- .bss.midi_initialized
-                0x24033735        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
- *fill*         0x24033736        0x2 
- .bss.midi_usb_rx_drops
                 0x24033738        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x24033738                midi_usb_rx_drops
+ .bss.midi_clock_period_rem
+                0x2403373c        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ .bss.midi_clock_period_ticks
+                0x24033740        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ .bss.midi_clock_running
+                0x24033744        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ .bss.midi_initialized
+                0x24033745        0x1 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+ *fill*         0x24033746        0x2 
+ .bss.midi_usb_rx_drops
+                0x24033748        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x24033748                midi_usb_rx_drops
  .bss.midi_rx_stats
-                0x2403373c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x2403373c                midi_rx_stats
+                0x2403374c       0x10 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x2403374c                midi_rx_stats
  .bss.midi_tx_stats
-                0x2403374c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
-                0x2403374c                midi_tx_stats
+                0x2403375c       0x1c CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi.c.obj
+                0x2403375c                midi_tx_stats
  .bss.midi_host_rx_packet
-                0x24033768        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi_host.c.obj
- *fill*         0x2403376c       0x14 
+                0x24033778        0x4 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/midi_host.c.obj
+ *fill*         0x2403377c        0x4 
  .bss.midi_handle
                 0x24033780      0x2e0 CMakeFiles/BRICK6_CUBE.dir/Src/MIDI/usbh_midi.c.obj
  .bss.g_mod_lfo_dest_cache_invalidate_track_count
@@ -28439,7 +28440,7 @@ LOAD C:/ST/STM32CubeIDE_2.0.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.exte
                 0x24043a58                        _ebss = .
                 0x24043a58                        __bss_end__ = _ebss
 
-.ram_d1         0x24043a60    0x253c0 load address 0x08096e78
+.ram_d1         0x24043a60    0x253c0 load address 0x08096e74
                 0x24043a60                        . = ALIGN (0x20)
  *(.ram_d1)
  *(.ram_d1*)
