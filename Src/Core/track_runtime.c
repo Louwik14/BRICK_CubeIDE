@@ -17,6 +17,7 @@
 #define TRACK_RUNTIME_MIX_TRACK_NONE   0xFFU
 #define TRACK_RUNTIME_DRUM_MAX_INSTANCES SEQ_TRACK_COUNT
 #define TRACK_RUNTIME_MIX_TRACK_COUNT SEQ_TRACK_COUNT
+#define TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT 3U
 
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_TRACK_COUNT];
 static volatile uint8_t g_track_runtime_global_dirty = 1U;
@@ -173,6 +174,22 @@ static uint8_t track_runtime_mix_reserve_track(track_runtime_ctx_t *ctx,
 
     ctx->mix_track_id = TRACK_RUNTIME_MIX_TRACK_NONE;
     return 0U;
+}
+
+static void track_runtime_mark_reserved_input_mix_tracks(uint8_t *used, uint8_t used_len)
+{
+    if (used == NULL)
+    {
+        return;
+    }
+
+    const uint8_t count = (TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT < used_len)
+        ? TRACK_RUNTIME_FIXED_INPUT_MIX_TRACK_COUNT
+        : used_len;
+    for (uint8_t lane = 0U; lane < count; ++lane)
+    {
+        used[lane] = 1U;
+    }
 }
 
 static uint8_t track_runtime_mix_try_reserve_exact(track_runtime_ctx_t *ctx,
@@ -799,6 +816,7 @@ static void track_runtime_mark_used_mix_tracks_except(uint8_t except_track,
     }
 
     memset(mix_track_used, 0, used_len);
+    track_runtime_mark_reserved_input_mix_tracks(mix_track_used, used_len);
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         if (track == except_track)
@@ -924,6 +942,7 @@ void track_runtime_refresh_all(void)
 
     g_track_runtime_refresh_all_count++;
     memset(mix_track_used, 0, sizeof(mix_track_used));
+    track_runtime_mark_reserved_input_mix_tracks(mix_track_used, (uint8_t)sizeof(mix_track_used));
     for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_MAX_INSTANCES; ++instance)
     {
         previous_wave_owner[instance] = TRACK_RUNTIME_INSTANCE_NONE;

@@ -168,6 +168,7 @@ Contrats timing sortants:
   - Role: etat filter/EQ/VCA par track.
   - Contrat `mixer_set_track_filter_type`: idempotent sur type identique (no-op) et reconfiguration sans reset DSP brutal, pour eviter les transitoires audibles sur re-apply redondant.
 - Lors d'un rebind logique->lane, la migration du state lane-bound (`g_tracks` + `g_track_filters`) doit etre faite explicitement avant re-apply des params autoritatifs; sinon le state FILTER/VCA reste attache a l'ancienne lane.
+- Les lanes mixer 0..2 restent reservees aux entrees Input proto; une track moteur ne doit pas y stocker son state lane-bound, sinon un scroll CFG passant par `Input1..3` peut reinitialiser la lane d'une autre track.
 - Les changements structurels locaux utilisent le rebind cible d'une seule lane logique; les lanes des autres tracks restent no-op et ne sont plus reset/recopiees.
 - Apres un rebind local neuf, `mixer_snap_track_runtime_state()` aligne uniquement la lane cible sur les targets reappliquees (`gain/pan/sends`, cutoff/resonance/EQ) pour ne pas entendre les defaults internes du mixer avant la prochaine rampe.
 - Apres copie d'un `g_track_filters` vers une nouvelle lane, les instances DSP internes qui portent des pointeurs vers leur stockage local (notamment `EQ3` CMSIS stereo/mono) doivent etre rebindees vers le stockage de la lane destination avant tout traitement audio.
